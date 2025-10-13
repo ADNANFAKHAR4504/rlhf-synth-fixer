@@ -79,6 +79,14 @@ Resources:
           Value: !Sub '${StackName}-key-pair'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   # =============================================
   # NETWORKING INFRASTRUCTURE
@@ -95,6 +103,10 @@ Resources:
           Value: !Sub '${StackName}-vpc'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -104,6 +116,10 @@ Resources:
           Value: !Sub '${StackName}-igw'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -123,6 +139,10 @@ Resources:
           Value: !Sub '${StackName}-public-subnet-1'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -136,6 +156,10 @@ Resources:
           Value: !Sub '${StackName}-public-subnet-2'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   PublicSubnet3:
     Type: AWS::EC2::Subnet
@@ -149,6 +173,10 @@ Resources:
           Value: !Sub '${StackName}-public-subnet-3'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -161,6 +189,10 @@ Resources:
           Value: !Sub '${StackName}-private-subnet-1'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -173,6 +205,10 @@ Resources:
           Value: !Sub '${StackName}-private-subnet-2'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   PrivateSubnet3:
     Type: AWS::EC2::Subnet
@@ -185,6 +221,10 @@ Resources:
           Value: !Sub '${StackName}-private-subnet-3'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   NATGateway1EIP:
     Type: AWS::EC2::EIP
@@ -196,6 +236,10 @@ Resources:
           Value: !Sub '${StackName}-nat-1-eip'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   NATGateway2EIP:
     Type: AWS::EC2::EIP
@@ -207,6 +251,10 @@ Resources:
           Value: !Sub '${StackName}-nat-2-eip'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   NATGateway3EIP:
     Type: AWS::EC2::EIP
@@ -218,6 +266,10 @@ Resources:
           Value: !Sub '${StackName}-nat-3-eip'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   NATGateway1:
     Type: AWS::EC2::NatGateway
@@ -255,6 +307,10 @@ Resources:
           Value: !Sub '${StackName}-public-rt'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   DefaultPublicRoute:
     Type: AWS::EC2::Route
@@ -367,6 +423,10 @@ Resources:
           Value: !Sub '${StackName}-vpc-flow-logs-group'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   VPCFlowLogRole:
     Type: AWS::IAM::Role
@@ -405,6 +465,10 @@ Resources:
           Value: !Sub '${StackName}-vpc-flow-logs-role'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   VPCFlowLog:
     Type: AWS::EC2::FlowLog
@@ -420,6 +484,10 @@ Resources:
           Value: !Sub '${StackName}-vpc-flow-logs'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   # =============================================
   # SECURITY GROUPS (Constraint 6 - Least Privilege)
@@ -457,6 +525,10 @@ Resources:
           Value: !Sub '${StackName}-bastion-sg'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   AppSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -495,6 +567,10 @@ Resources:
           Value: !Sub '${StackName}-app-sg'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   BastionToAppSecurityGroupRule:
     Type: AWS::EC2::SecurityGroupIngress
@@ -527,6 +603,10 @@ Resources:
           Value: !Sub '${StackName}-alb-sg'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -549,6 +629,10 @@ Resources:
           Value: !Sub '${StackName}-rds-sg'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   AppToRDSMySQLSecurityGroupRule:
     Type: AWS::EC2::SecurityGroupIngress
@@ -596,6 +680,10 @@ Resources:
           Value: !Sub '${StackName}-lambda-sg'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   LambdaToRDSMySQLSecurityGroupRule:
     Type: AWS::EC2::SecurityGroupIngress
@@ -654,6 +742,10 @@ Resources:
           Value: !Sub '${StackName}-s3-access-logs'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   AppS3Bucket:
     Type: AWS::S3::Bucket
@@ -686,6 +778,10 @@ Resources:
           Value: !Sub '${StackName}-app-bucket'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   CloudTrailBucket:
     Type: AWS::S3::Bucket
@@ -727,6 +823,10 @@ Resources:
           Value: !Sub '${StackName}-cloudtrail'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   CloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -741,9 +841,6 @@ Resources:
               Service: cloudtrail.amazonaws.com
             Action: s3:GetBucketAcl
             Resource: !GetAtt CloudTrailBucket.Arn
-            Condition:
-              StringEquals:
-                'aws:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${StackName}-cloudtrail'
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
@@ -753,7 +850,6 @@ Resources:
             Condition:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
-                'aws:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${StackName}-cloudtrail'
 
   # =============================================
   # SYSTEMS MANAGER PARAMETERS (Constraint 10)
@@ -782,6 +878,10 @@ Resources:
           Value: !Sub '${StackName}-rds-secret'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   # =============================================
   # IAM ROLES (Constraints 2, 9)
@@ -829,6 +929,10 @@ Resources:
           Value: !Sub '${StackName}-ec2-role'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -853,6 +957,10 @@ Resources:
           Value: !Sub '${StackName}-db-subnet-group'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   RDSInstance:
     Type: AWS::RDS::DBInstance
@@ -881,6 +989,10 @@ Resources:
           Value: !Sub '${StackName}-rds'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   # =============================================
   # BASTION HOST (Constraint 7, 12)
@@ -909,6 +1021,10 @@ Resources:
           Value: !Sub '${StackName}-bastion-host'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   # =============================================
   # APPLICATION LOAD BALANCER (ALB)
@@ -932,6 +1048,10 @@ Resources:
           Value: !Sub '${StackName}-alb'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -953,6 +1073,10 @@ Resources:
           Value: !Sub '${StackName}-tg'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -1006,6 +1130,10 @@ Resources:
           Value: !Sub '${StackName}-web-acl'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   WAFWebACLAssociation:
     Type: AWS::WAFv2::WebACLAssociation
@@ -1034,6 +1162,10 @@ Resources:
           Value: !Sub '${StackName}-cloudtrail'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   # =============================================
   # SECURITY HUB (Constraint 14) - Custom Resource
@@ -1068,6 +1200,10 @@ Resources:
           Value: !Sub '${StackName}-securityhub-lambda-role'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   SecurityHubLambdaFunction:
     Type: AWS::Lambda::Function
@@ -1102,6 +1238,10 @@ Resources:
           Value: !Sub '${StackName}-securityhub-lambda'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   SecurityHubCustomResource:
     Type: AWS::CloudFormation::CustomResource
@@ -1141,6 +1281,10 @@ Resources:
           Value: !Sub '${StackName}-lambda-execution-role'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   LambdaFunction:
     Type: AWS::Lambda::Function
@@ -1172,6 +1316,10 @@ Resources:
           Value: !Sub '${StackName}-lambda'
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   # =============================================
   # APPLICATION EC2 INSTANCES (Auto Scaling Group)
@@ -1245,6 +1393,10 @@ Resources:
           PropagateAtLaunch: true
         - Key: Environment
           Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
           PropagateAtLaunch: true
 
   # =============================================
