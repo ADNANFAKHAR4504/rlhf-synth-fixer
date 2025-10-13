@@ -1051,6 +1051,7 @@ Resources:
 
   CorpApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: CorpLogsBucketPolicy
     Properties:
       Scheme: internet-facing
       Type: application
