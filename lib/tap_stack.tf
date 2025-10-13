@@ -73,7 +73,7 @@ resource "random_id" "deployment" {
 resource "random_password" "db_master" {
   length           = 24
   special          = true
-  override_special = "!#$%&*()-_=+"
+  override_special = "!#$&*()-_=+"
 }
 
 locals {
@@ -695,7 +695,7 @@ resource "aws_instance" "app_primary" {
     app_source    = local.app_source
     db_write_host = aws_db_instance.primary.address
     db_read_host  = aws_db_instance.primary.address
-    db_password   = replace(random_password.db_master.result, "%", "%%")
+    db_password   = random_password.db_master.result
     cw_log_group  = aws_cloudwatch_log_group.app_primary.name
     app_log_path  = "/var/log/example-app/app.log"
   })
