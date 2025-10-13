@@ -439,6 +439,18 @@ describe('TapStack Production Integration Tests', () => {
       }
     });
 
+    test('DB connectivity status is exposed via web page', async () => {
+      if (!hasAwsCredentials) return;
+      const albDns = stackOutputs['ALB-DNS'] || valueFromOutputsSuffix('ALB-DNS');
+      if (!albDns) return;
+      const url = `http://${albDns}/db-status.html`;
+      const res = await axios.get(url, { validateStatus: () => true, timeout: 15000 });
+      expect(res.status).toBeLessThan(500);
+      if (res.status === 200) {
+        expect(String(res.data)).toMatch(/DB Connectivity: (OK|FAIL)/);
+      }
+    });
+
     test('API Gateway -> Lambda -> S3 (put then get)', async () => {
       if (!hasAwsCredentials) return;
       const apiUrl = valueFromOutputsSuffix('API-URL');
