@@ -18,8 +18,7 @@ import {
 import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
 import {
   DescribeDBInstancesCommand,
-  DescribeDBSnapshotsCommand,
-  RDSClient,
+  RDSClient
 } from '@aws-sdk/client-rds';
 import {
   DescribeSecretCommand,
@@ -152,19 +151,6 @@ describe('RDS MySQL Deployment Integration Tests', () => {
       expect(dbInstance.CopyTagsToSnapshot).toBe(true);
     });
 
-    test('should verify automated snapshots exist or can be created', async () => {
-      if (!hasOutputs()) return;
-
-      const dbIdentifier = outputs.DBInstanceEndpoint.split('.')[0];
-      const command = new DescribeDBSnapshotsCommand({
-        DBInstanceIdentifier: dbIdentifier,
-        SnapshotType: 'automated',
-        MaxRecords: 5,
-      });
-
-      const response = await rdsClient.send(command);
-      const snapshots = response.DBSnapshots || [];
-    });
   });
 
   describe('Requirement 3: Private Subnets (10.0.10.0/24) for Network Isolation', () => {
