@@ -164,7 +164,8 @@ resource "random_string" "suffix" {
 
   keepers = {
     # Increment this to force a new random suffix and avoid conflicts
-    run_id = "8"
+    # Incremented to 9 to avoid KMS key pending deletion conflicts
+    run_id = "9"
   }
 }
 
@@ -173,29 +174,53 @@ locals {
   unique_prefix = "${local.resource_prefix}-${local.name_suffix}"
 }
 
-# KMS keys
+# KMS keys with aliases for better management
 resource "aws_kms_key" "s3" {
-  description         = "S3 data"
-  enable_key_rotation = true
-  tags                = local.common_tags
+  description             = "KMS key for S3 bucket encryption"
+  enable_key_rotation     = true
+  deletion_window_in_days = 7
+  tags                    = merge(local.common_tags, { Name = "${local.resource_prefix}-s3-key" })
+}
+
+resource "aws_kms_alias" "s3" {
+  name          = "alias/${local.resource_prefix}-s3"
+  target_key_id = aws_kms_key.s3.key_id
 }
 
 resource "aws_kms_key" "dynamodb" {
-  description         = "DynamoDB"
-  enable_key_rotation = true
-  tags                = local.common_tags
+  description             = "KMS key for DynamoDB encryption"
+  enable_key_rotation     = true
+  deletion_window_in_days = 7
+  tags                    = merge(local.common_tags, { Name = "${local.resource_prefix}-dynamodb-key" })
+}
+
+resource "aws_kms_alias" "dynamodb" {
+  name          = "alias/${local.resource_prefix}-dynamodb"
+  target_key_id = aws_kms_key.dynamodb.key_id
 }
 
 resource "aws_kms_key" "sagemaker" {
-  description         = "SageMaker"
-  enable_key_rotation = true
-  tags                = local.common_tags
+  description             = "KMS key for SageMaker encryption"
+  enable_key_rotation     = true
+  deletion_window_in_days = 7
+  tags                    = merge(local.common_tags, { Name = "${local.resource_prefix}-sagemaker-key" })
+}
+
+resource "aws_kms_alias" "sagemaker" {
+  name          = "alias/${local.resource_prefix}-sagemaker"
+  target_key_id = aws_kms_key.sagemaker.key_id
 }
 
 resource "aws_kms_key" "cloudwatch" {
-  description         = "CloudWatch"
-  enable_key_rotation = true
-  tags                = local.common_tags
+  description             = "KMS key for CloudWatch encryption"
+  enable_key_rotation     = true
+  deletion_window_in_days = 7
+  tags                    = merge(local.common_tags, { Name = "${local.resource_prefix}-cloudwatch-key" })
+}
+
+resource "aws_kms_alias" "cloudwatch" {
+  name          = "alias/${local.resource_prefix}-cloudwatch"
+  target_key_id = aws_kms_key.cloudwatch.key_id
 }
 
 # S3 buckets (raw, processed, artifacts, logs)
@@ -858,5 +883,25 @@ output "kms_keys" {
     dynamodb   = aws_kms_key.dynamodb.id
     sagemaker  = aws_kms_key.sagemaker.id
     cloudwatch = aws_kms_key.cloudwatch.id
+  }
+}
+
+output "kms_key_arns" {
+  description = "ARNs of KMS keys for reference"
+  value = {
+    s3         = aws_kms_key.s3.arn
+    dynamodb   = aws_kms_key.dynamodb.arn
+    sagemaker  = aws_kms_key.sagemaker.arn
+    cloudwatch = aws_kms_key.cloudwatch.arn
+  }
+}
+
+output "kms_aliases" {
+  description = "Aliases of KMS keys"
+  value = {
+    s3         = aws_kms_alias.s3.name
+    dynamodb   = aws_kms_alias.dynamodb.name
+    sagemaker  = aws_kms_alias.sagemaker.name
+    cloudwatch = aws_kms_alias.cloudwatch.name
   }
 }
