@@ -60,7 +60,7 @@ Conditions:
 
 Mappings:
   RegionMap:
-    us-east-1:
+    eu-central-1:
       AMI: ami-01f38db8b018d21de  # Amazon Linux 2 AMI (update as needed)
 
 Resources:
