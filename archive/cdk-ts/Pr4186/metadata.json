@@ -10,5 +10,17 @@
   "subject_labels": [
     "Security Configuration as Code"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, CloudWatch LogGroup"
+  "aws_services": [
+    "S3",
+    "IAM",
+    "Lambda",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-creator",
+  "dockerS3Location": ""
 }
