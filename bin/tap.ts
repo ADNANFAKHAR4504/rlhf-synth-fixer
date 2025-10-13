@@ -9,7 +9,7 @@ const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 const primaryRegion = 'us-east-1';
-const secondaryRegion = 'us-east-2';
+const secondaryRegion = 'us-west-1';
 const globalClusterId = `global-financial-${environmentSuffix}`;
 const globalTableName = `metadata-table-${environmentSuffix}`;
 // Only enable Security Hub if not already enabled in the account

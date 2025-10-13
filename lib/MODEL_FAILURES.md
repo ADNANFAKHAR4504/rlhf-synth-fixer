@@ -2,7 +2,7 @@
 
 ## 1. Multi-Region Architecture Incompatibility
 
-The model implemented a multi-region architecture with separate primary and secondary stacks in us-east-1 and us-east-2. This design is incompatible with the CI/CD pipeline which deploys to a single region based on environment variables.
+The model implemented a multi-region architecture with separate primary and secondary stacks in us-east-1 and us-west-1. This design is incompatible with the CI/CD pipeline which deploys to a single region based on environment variables.
 
 Change the bin/tap.ts from creating two stacks with isPrimary property to creating a single stack with environmentSuffix property that aligns with the CI/CD pipeline's ENVIRONMENT_SUFFIX variable.
 
