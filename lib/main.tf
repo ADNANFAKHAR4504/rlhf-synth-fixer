@@ -1,635 +1,640 @@
-    # main.tf - Complete AWS Infrastructure Configuration
+# VARIABLES & DATA SOURCES
 
-    
-    # VARIABLES & DATA SOURCES
-    
+variable "aws_region" {
+  description = "AWS region for deployment"
+  type        = string
+  default     = "us-west-2"
+}
 
-    variable "aws_region" {
-    description = "AWS region for deployment"
-    type        = string
-    default     = "us-west-2"
-    }
+variable "project_name" {
+  description = "Project name for resource naming"
+  type        = string
+  default     = "production-app"
+}
 
-    variable "project_name" {
-    description = "Project name for resource naming"
-    type        = string
-    default     = "production-app"
-    }
+variable "environment" {
+  description = "Environment name"
+  type        = string
+  default     = "production"
+}
 
-    variable "environment" {
-    description = "Environment name"
-    type        = string
-    default     = "production"
-    }
+variable "domain_name" {
+  description = "Domain name for Route 53"
+  type        = string
+  default     = "myapp-prod.internal"  # Changed from example.com
+}
 
-    variable "domain_name" {
-    description = "Domain name for Route 53"
-    type        = string
-    default     = "example.com"  # Change this to your actual domain
-    }
+variable "db_master_username" {
+  description = "RDS master username"
+  type        = string
+  default     = "dbadmin"
+  sensitive   = true
+}
 
-    variable "db_master_username" {
-    description = "RDS master username"
-    type        = string
-    default     = "dbadmin"
-    sensitive   = true
-    }
+locals {
+  common_tags = {
+    Environment = var.environment
+    Application = var.project_name
+    Owner       = "DevOps-Team"
+    ManagedBy   = "Terraform"
+    CreatedAt   = timestamp()
+  }
+  
+  vpc_cidr = "10.0.0.0/16"
+  azs      = ["us-west-2a", "us-west-2b"]
+  
+  public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
+  private_subnet_cidrs = ["10.0.10.0/24", "10.0.20.0/24"]
+  db_subnet_cidrs      = ["10.0.30.0/24", "10.0.40.0/24"]
+}
 
-    locals {
-    common_tags = {
-        Environment = var.environment
-        Application = var.project_name
-        Owner       = "DevOps-Team"
-        ManagedBy   = "Terraform"
-        CreatedAt   = timestamp()
-    }
-    
-    vpc_cidr = "10.0.0.0/16"
-    azs      = ["us-west-2a", "us-west-2b"]
-    
-    public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
-    private_subnet_cidrs = ["10.0.10.0/24", "10.0.20.0/24"]
-    db_subnet_cidrs      = ["10.0.30.0/24", "10.0.40.0/24"]
-    }
+# Get latest Amazon Linux 2 AMI
+data "aws_ami" "amazon_linux_2" {
+  most_recent = true
+  owners      = ["amazon"]
 
-    # Get latest Amazon Linux 2 AMI
-    data "aws_ami" "amazon_linux_2" {
-    most_recent = true
-    owners      = ["amazon"]
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
 
-    filter {
-        name   = "name"
-        values = ["amzn2-ami-hvm-*-x86_64-gp2"]
-    }
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
 
-    filter {
-        name   = "virtualization-type"
-        values = ["hvm"]
-    }
-    }
+# Get current AWS account ID
+data "aws_caller_identity" "current" {}
 
-    # Get current AWS account ID
-    data "aws_caller_identity" "current" {}
+# Get available RDS engine versions for PostgreSQL
+data "aws_rds_engine_version" "postgresql" {
+  engine = "postgres"
+  preferred_versions = ["15.3", "14.9", "13.12"]  # Use available versions
+}
 
-    
-    # KMS KEYS
-    
+# KMS KEYS
 
-    resource "aws_kms_key" "main" {
-    description             = "KMS key for ${var.project_name} encryption"
-    deletion_window_in_days = 30
-    enable_key_rotation     = true
+resource "aws_kms_key" "main" {
+  description             = "KMS key for ${var.project_name} encryption"
+  deletion_window_in_days = 30
+  enable_key_rotation     = true
+  
+  # Add policy for CloudWatch Logs
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${var.aws_region}.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt*",
+          "kms:Decrypt*",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnLike = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
+          }
+        }
+      }
+    ]
+  })
 
-    tags = merge(local.common_tags, {
-        Name = "${var.project_name}-kms-key"
-    })
-    }
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-kms-key"
+  })
+}
 
-    resource "aws_kms_alias" "main" {
-    name          = "alias/${var.project_name}-key"
-    target_key_id = aws_kms_key.main.key_id
-    }
+resource "aws_kms_alias" "main" {
+  name          = "alias/${var.project_name}-key"
+  target_key_id = aws_kms_key.main.key_id
+}
 
-    
-    # NETWORKING - VPC & SUBNETS
-    
+# NETWORKING - VPC & SUBNETS
 
-    # VPC
-    resource "aws_vpc" "main" {
-    cidr_block           = local.vpc_cidr
-    enable_dns_hostnames = true
-    enable_dns_support   = true
+# VPC
+resource "aws_vpc" "main" {
+  cidr_block           = local.vpc_cidr
+  enable_dns_hostnames = true
+  enable_dns_support   = true
 
-    tags = merge(local.common_tags, {
-        Name = "${var.project_name}-vpc"
-    })
-    }
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-vpc"
+  })
+}
 
-    # Internet Gateway
-    resource "aws_internet_gateway" "main" {
-    vpc_id = aws_vpc.main.id
+# Internet Gateway
+resource "aws_internet_gateway" "main" {
+  vpc_id = aws_vpc.main.id
 
-    tags = merge(local.common_tags, {
-        Name = "${var.project_name}-igw"
-    })
-    }
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-igw"
+  })
+}
 
-    # Elastic IPs for NAT Gateways
-    resource "aws_eip" "nat" {
-    count  = length(local.azs)
-    domain = "vpc"
+# Elastic IPs for NAT Gateways
+resource "aws_eip" "nat" {
+  count  = length(local.azs)
+  domain = "vpc"
 
-    tags = merge(local.common_tags, {
-        Name = "${var.project_name}-nat-eip-${count.index + 1}"
-    })
-    }
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-nat-eip-${count.index + 1}"
+  })
+}
 
-    # Public Subnets
-    resource "aws_subnet" "public" {
-    count                   = length(local.public_subnet_cidrs)
-    vpc_id                  = aws_vpc.main.id
-    cidr_block              = local.public_subnet_cidrs[count.index]
-    availability_zone       = local.azs[count.index]
-    map_public_ip_on_launch = true
+# Public Subnets
+resource "aws_subnet" "public" {
+  count                   = length(local.public_subnet_cidrs)
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = local.public_subnet_cidrs[count.index]
+  availability_zone       = local.azs[count.index]
+  map_public_ip_on_launch = true
 
-    tags = merge(local.common_tags, {
-        Name = "${var.project_name}-public-subnet-${count.index + 1}"
-        Type = "Public"
-    })
-    }
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-public-subnet-${count.index + 1}"
+    Type = "Public"
+  })
+}
 
-    # Private Subnets
-    resource "aws_subnet" "private" {
-    count             = length(local.private_subnet_cidrs)
-    vpc_id            = aws_vpc.main.id
-    cidr_block        = local.private_subnet_cidrs[count.index]
-    availability_zone = local.azs[count.index]
+# Private Subnets
+resource "aws_subnet" "private" {
+  count             = length(local.private_subnet_cidrs)
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = local.private_subnet_cidrs[count.index]
+  availability_zone = local.azs[count.index]
 
-    tags = merge(local.common_tags, {
-        Name = "${var.project_name}-private-subnet-${count.index + 1}"
-        Type = "Private"
-    })
-    }
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-private-subnet-${count.index + 1}"
+    Type = "Private"
+  })
+}
 
-    # Database Subnets
-    resource "aws_subnet" "database" {
-    count             = length(local.db_subnet_cidrs)
-    vpc_id            = aws_vpc.main.id
-    cidr_block        = local.db_subnet_cidrs[count.index]
-    availability_zone = local.azs[count.index]
+# Database Subnets
+resource "aws_subnet" "database" {
+  count             = length(local.db_subnet_cidrs)
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = local.db_subnet_cidrs[count.index]
+  availability_zone = local.azs[count.index]
 
-    tags = merge(local.common_tags, {
-        Name = "${var.project_name}-db-subnet-${count.index + 1}"
-        Type = "Database"
-    })
-    }
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-db-subnet-${count.index + 1}"
+    Type = "Database"
+  })
+}
 
-    # NAT Gateways
-    resource "aws_nat_gateway" "main" {
-    count         = length(local.azs)
-    allocation_id = aws_eip.nat[count.index].id
-    subnet_id     = aws_subnet.public[count.index].id
+# NAT Gateways
+resource "aws_nat_gateway" "main" {
+  count         = length(local.azs)
+  allocation_id = aws_eip.nat[count.index].id
+  subnet_id     = aws_subnet.public[count.index].id
 
-    tags = merge(local.common_tags, {
-        Name = "${var.project_name}-nat-gateway-${count.index + 1}"
-    })
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-nat-gateway-${count.index + 1}"
+  })
 
-    depends_on = [aws_internet_gateway.main]
-    }
+  depends_on = [aws_internet_gateway.main]
+}
 
-    # Route Tables - Public
-    resource "aws_route_table" "public" {
-    vpc_id = aws_vpc.main.id
+# Route Tables - Public
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
 
-    route {
-        cidr_block = "0.0.0.0/0"
-        gateway_id = aws_internet_gateway.main.id
-    }
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
+  }
 
-    tags = merge(local.common_tags, {
-        Name = "${var.project_name}-public-rt"
-    })
-    }
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-public-rt"
+  })
+}
 
-    # Route Tables - Private
-    resource "aws_route_table" "private" {
-    count  = length(local.azs)
-    vpc_id = aws_vpc.main.id
+# Route Tables - Private
+resource "aws_route_table" "private" {
+  count  = length(local.azs)
+  vpc_id = aws_vpc.main.id
 
-    route {
-        cidr_block     = "0.0.0.0/0"
-        nat_gateway_id = aws_nat_gateway.main[count.index].id
-    }
-
-    tags = merge(local.common_tags, {
-        Name = "${var.project_name}-private-rt-${count.index + 1}"
-    })
-    }
-
-    # Route Table Associations
-    resource "aws_route_table_association" "public" {
-    count          = length(aws_subnet.public)
-    subnet_id      = aws_subnet.public[count.index].id
-    route_table_id = aws_route_table.public.id
-    }
-
-    resource "aws_route_table_association" "private" {
-    count          = length(aws_subnet.private)
-    subnet_id      = aws_subnet.private[count.index].id
-    route_table_id = aws_route_table.private[count.index].id
-    }
-
-    resource "aws_route_table_association" "database" {
-    count          = length(aws_subnet.database)
-    subnet_id      = aws_subnet.database[count.index].id
-    route_table_id = aws_route_table.private[count.index].id
-    }
-
-    # Network ACLs
-    resource "aws_network_acl_rule" "public_inbound" {
-    network_acl_id = aws_vpc.main.default_network_acl_id
-    rule_number    = 100
-    protocol       = -1
-    rule_action    = "allow"
+  route {
     cidr_block     = "0.0.0.0/0"
-    from_port      = 0
-    to_port        = 0
-    }
+    nat_gateway_id = aws_nat_gateway.main[count.index].id
+  }
 
-    resource "aws_network_acl_rule" "public_outbound" {
-    network_acl_id = aws_vpc.main.default_network_acl_id
-    rule_number    = 100
-    egress         = true
-    protocol       = -1
-    rule_action    = "allow"
-    cidr_block     = "0.0.0.0/0"
-    from_port      = 0
-    to_port        = 0
-    }
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-private-rt-${count.index + 1}"
+  })
+}
 
-    # VPC Flow Logs
-    resource "aws_flow_log" "main" {
-    iam_role_arn    = aws_iam_role.flow_log.arn
-    log_destination = aws_cloudwatch_log_group.flow_log.arn
-    traffic_type    = "ALL"
-    vpc_id          = aws_vpc.main.id
+# Route Table Associations
+resource "aws_route_table_association" "public" {
+  count          = length(aws_subnet.public)
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public.id
+}
 
-    tags = merge(local.common_tags, {
-        Name = "${var.project_name}-vpc-flow-logs"
-    })
-    }
+resource "aws_route_table_association" "private" {
+  count          = length(aws_subnet.private)
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private[count.index].id
+}
 
-    resource "aws_cloudwatch_log_group" "flow_log" {
-    name              = "/aws/vpc/${var.project_name}"
-    retention_in_days = 30
-    kms_key_id        = aws_kms_key.main.arn
+resource "aws_route_table_association" "database" {
+  count          = length(aws_subnet.database)
+  subnet_id      = aws_subnet.database[count.index].id
+  route_table_id = aws_route_table.private[count.index].id
+}
 
-    tags = local.common_tags
-    }
+# Remove the Network ACL rules that were causing conflicts
+# The default network ACL already has the necessary rules
 
-    resource "aws_iam_role" "flow_log" {
-    name = "${var.project_name}-flow-log-role"
+# VPC Flow Logs
+resource "aws_flow_log" "main" {
+  iam_role_arn    = aws_iam_role.flow_log.arn
+  log_destination = aws_cloudwatch_log_group.flow_log.arn
+  traffic_type    = "ALL"
+  vpc_id          = aws_vpc.main.id
 
-    assume_role_policy = jsonencode({
-        Version = "2012-10-17"
-        Statement = [
-        {
-            Action = "sts:AssumeRole"
-            Effect = "Allow"
-            Principal = {
-            Service = "vpc-flow-logs.amazonaws.com"
-            }
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-vpc-flow-logs"
+  })
+}
+
+resource "aws_cloudwatch_log_group" "flow_log" {
+  name              = "/aws/vpc/${var.project_name}"
+  retention_in_days = 30
+  kms_key_id        = aws_kms_key.main.arn
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role" "flow_log" {
+  name = "${var.project_name}-flow-log-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "vpc-flow-logs.amazonaws.com"
         }
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy" "flow_log" {
+  name = "${var.project_name}-flow-log-policy"
+  role = aws_iam_role.flow_log.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogGroups",
+          "logs:DescribeLogStreams"
         ]
-    })
+        Effect = "Allow"
+        Resource = "*"
+      }
+    ]
+  })
+}
 
-    tags = local.common_tags
-    }
+# SECURITY GROUPS
 
-    resource "aws_iam_role_policy" "flow_log" {
-    name = "${var.project_name}-flow-log-policy"
-    role = aws_iam_role.flow_log.id
+# ALB Security Group
+resource "aws_security_group" "alb" {
+  name        = "${var.project_name}-alb-sg"
+  description = "Security group for ALB"
+  vpc_id      = aws_vpc.main.id
 
-    policy = jsonencode({
-        Version = "2012-10-17"
-        Statement = [
-        {
-            Action = [
-            "logs:CreateLogGroup",
-            "logs:CreateLogStream",
-            "logs:PutLogEvents",
-            "logs:DescribeLogGroups",
-            "logs:DescribeLogStreams"
-            ]
-            Effect = "Allow"
-            Resource = "*"
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-alb-sg"
+  })
+}
+
+# EC2 Security Group
+resource "aws_security_group" "ec2" {
+  name        = "${var.project_name}-ec2-sg"
+  description = "Security group for EC2 instances"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-ec2-sg"
+  })
+}
+
+# RDS Security Group
+resource "aws_security_group" "rds" {
+  name        = "${var.project_name}-rds-sg"
+  description = "Security group for RDS"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.ec2.id]
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-rds-sg"
+  })
+}
+
+# IAM ROLES & POLICIES
+
+# EC2 Instance Role
+resource "aws_iam_role" "ec2" {
+  name = "${var.project_name}-ec2-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
         }
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy" "ec2_ssm" {
+  name = "${var.project_name}-ec2-ssm-policy"
+  role = aws_iam_role.ec2.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter",
+          "ssm:GetParameters",
+          "ssm:GetParametersByPath"
         ]
-    })
-    }
-
-    
-    # SECURITY GROUPS
-    
-
-    # ALB Security Group
-    resource "aws_security_group" "alb" {
-    name        = "${var.project_name}-alb-sg"
-    description = "Security group for ALB"
-    vpc_id      = aws_vpc.main.id
-
-    ingress {
-        from_port   = 80
-        to_port     = 80
-        protocol    = "tcp"
-        cidr_blocks = ["0.0.0.0/0"]
-    }
-
-    ingress {
-        from_port   = 443
-        to_port     = 443
-        protocol    = "tcp"
-        cidr_blocks = ["0.0.0.0/0"]
-    }
-
-    egress {
-        from_port   = 0
-        to_port     = 0
-        protocol    = "-1"
-        cidr_blocks = ["0.0.0.0/0"]
-    }
-
-    tags = merge(local.common_tags, {
-        Name = "${var.project_name}-alb-sg"
-    })
-    }
-
-    # EC2 Security Group
-    resource "aws_security_group" "ec2" {
-    name        = "${var.project_name}-ec2-sg"
-    description = "Security group for EC2 instances"
-    vpc_id      = aws_vpc.main.id
-
-    ingress {
-        from_port       = 80
-        to_port         = 80
-        protocol        = "tcp"
-        security_groups = [aws_security_group.alb.id]
-    }
-
-    egress {
-        from_port   = 0
-        to_port     = 0
-        protocol    = "-1"
-        cidr_blocks = ["0.0.0.0/0"]
-    }
-
-    tags = merge(local.common_tags, {
-        Name = "${var.project_name}-ec2-sg"
-    })
-    }
-
-    # RDS Security Group
-    resource "aws_security_group" "rds" {
-    name        = "${var.project_name}-rds-sg"
-    description = "Security group for RDS"
-    vpc_id      = aws_vpc.main.id
-
-    ingress {
-        from_port       = 5432
-        to_port         = 5432
-        protocol        = "tcp"
-        security_groups = [aws_security_group.ec2.id]
-    }
-
-    tags = merge(local.common_tags, {
-        Name = "${var.project_name}-rds-sg"
-    })
-    }
-
-    
-    # IAM ROLES & POLICIES
-    
-
-    # EC2 Instance Role
-    resource "aws_iam_role" "ec2" {
-    name = "${var.project_name}-ec2-role"
-
-    assume_role_policy = jsonencode({
-        Version = "2012-10-17"
-        Statement = [
-        {
-            Action = "sts:AssumeRole"
-            Effect = "Allow"
-            Principal = {
-            Service = "ec2.amazonaws.com"
-            }
-        }
+        Resource = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${var.project_name}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt"
         ]
-    })
+        Resource = aws_kms_key.main.arn
+      }
+    ]
+  })
+}
 
-    tags = local.common_tags
+resource "aws_iam_role_policy_attachment" "ec2_cloudwatch" {
+  role       = aws_iam_role.ec2.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
+
+resource "aws_iam_role_policy_attachment" "ec2_ssm" {
+  role       = aws_iam_role.ec2.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_instance_profile" "ec2" {
+  name = "${var.project_name}-ec2-profile"
+  role = aws_iam_role.ec2.name
+}
+
+# SSM PARAMETER STORE
+
+resource "random_password" "db_password" {
+  length  = 32
+  special = true
+}
+
+resource "aws_ssm_parameter" "db_endpoint" {
+  name  = "/${var.project_name}/database/endpoint"
+  type  = "String"
+  value = aws_db_instance.main.endpoint
+
+  tags = local.common_tags
+}
+
+resource "aws_ssm_parameter" "db_username" {
+  name  = "/${var.project_name}/database/username"
+  type  = "String"
+  value = var.db_master_username
+
+  tags = local.common_tags
+}
+
+resource "aws_ssm_parameter" "db_password" {
+  name   = "/${var.project_name}/database/password"
+  type   = "SecureString"
+  value  = random_password.db_password.result
+  key_id = aws_kms_key.main.id
+
+  tags = local.common_tags
+}
+
+resource "aws_ssm_parameter" "app_config" {
+  name  = "/${var.project_name}/app/config"
+  type  = "String"
+  value = jsonencode({
+    environment = var.environment
+    region      = var.aws_region
+    log_level   = "INFO"
+  })
+
+  tags = local.common_tags
+}
+
+# APPLICATION LOAD BALANCER
+
+resource "aws_lb" "main" {
+  name               = "${var.project_name}-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets           = aws_subnet.public[*].id
+
+  enable_deletion_protection = false
+  enable_http2              = true
+  enable_cross_zone_load_balancing = true
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-alb"
+  })
+}
+
+resource "aws_lb_target_group" "main" {
+  name     = "${var.project_name}-tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.main.id
+
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    timeout             = 5
+    interval            = 30
+    path                = "/"
+    matcher             = "200"
+  }
+
+  deregistration_delay = 30
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-tg"
+  })
+}
+
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.main.arn
+  }
+}
+
+# AWS WAF
+
+resource "aws_wafv2_web_acl" "main" {
+  name  = "${var.project_name}-waf-acl"
+  scope = "REGIONAL"
+
+  default_action {
+    allow {}
+  }
+
+  rule {
+    name     = "RateLimitRule"
+    priority = 1
+
+    action {
+      block {}
     }
 
-    resource "aws_iam_role_policy" "ec2_ssm" {
-    name = "${var.project_name}-ec2-ssm-policy"
-    role = aws_iam_role.ec2.id
-
-    policy = jsonencode({
-        Version = "2012-10-17"
-        Statement = [
-        {
-            Effect = "Allow"
-            Action = [
-            "ssm:GetParameter",
-            "ssm:GetParameters",
-            "ssm:GetParametersByPath"
-            ]
-            Resource = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${var.project_name}/*"
-        },
-        {
-            Effect = "Allow"
-            Action = [
-            "kms:Decrypt"
-            ]
-            Resource = aws_kms_key.main.arn
-        }
-        ]
-    })
-    }
-
-    resource "aws_iam_role_policy_attachment" "ec2_cloudwatch" {
-    role       = aws_iam_role.ec2.name
-    policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
-    }
-
-    resource "aws_iam_role_policy_attachment" "ec2_ssm" {
-    role       = aws_iam_role.ec2.name
-    policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-    }
-
-    resource "aws_iam_instance_profile" "ec2" {
-    name = "${var.project_name}-ec2-profile"
-    role = aws_iam_role.ec2.name
-    }
-
-    
-    # SSM PARAMETER STORE
-    
-
-    resource "random_password" "db_password" {
-    length  = 32
-    special = true
-    }
-
-    resource "aws_ssm_parameter" "db_endpoint" {
-    name  = "/${var.project_name}/database/endpoint"
-    type  = "String"
-    value = aws_db_instance.main.endpoint
-
-    tags = local.common_tags
-    }
-
-    resource "aws_ssm_parameter" "db_username" {
-    name  = "/${var.project_name}/database/username"
-    type  = "String"
-    value = var.db_master_username
-
-    tags = local.common_tags
-    }
-
-    resource "aws_ssm_parameter" "db_password" {
-    name   = "/${var.project_name}/database/password"
-    type   = "SecureString"
-    value  = random_password.db_password.result
-    key_id = aws_kms_key.main.id
-
-    tags = local.common_tags
-    }
-
-    resource "aws_ssm_parameter" "app_config" {
-    name  = "/${var.project_name}/app/config"
-    type  = "String"
-    value = jsonencode({
-        environment = var.environment
-        region      = var.aws_region
-        log_level   = "INFO"
-    })
-
-    tags = local.common_tags
-    }
-
-    
-    # APPLICATION LOAD BALANCER
-    
-
-    resource "aws_lb" "main" {
-    name               = "${var.project_name}-alb"
-    internal           = false
-    load_balancer_type = "application"
-    security_groups    = [aws_security_group.alb.id]
-    subnets           = aws_subnet.public[*].id
-
-    enable_deletion_protection = false
-    enable_http2              = true
-    enable_cross_zone_load_balancing = true
-
-    tags = merge(local.common_tags, {
-        Name = "${var.project_name}-alb"
-    })
-    }
-
-    resource "aws_lb_target_group" "main" {
-    name     = "${var.project_name}-tg"
-    port     = 80
-    protocol = "HTTP"
-    vpc_id   = aws_vpc.main.id
-
-    health_check {
-        enabled             = true
-        healthy_threshold   = 2
-        unhealthy_threshold = 2
-        timeout             = 5
-        interval            = 30
-        path                = "/"
-        matcher             = "200"
-    }
-
-    deregistration_delay = 30
-
-    tags = merge(local.common_tags, {
-        Name = "${var.project_name}-tg"
-    })
-    }
-
-    resource "aws_lb_listener" "http" {
-    load_balancer_arn = aws_lb.main.arn
-    port              = 80
-    protocol          = "HTTP"
-
-    default_action {
-        type             = "forward"
-        target_group_arn = aws_lb_target_group.main.arn
-    }
-    }
-
-    
-    # AWS WAF
-    
-
-    resource "aws_wafv2_web_acl" "main" {
-    name  = "${var.project_name}-waf-acl"
-    scope = "REGIONAL"
-
-    default_action {
-        allow {}
-    }
-
-    rule {
-        name     = "RateLimitRule"
-        priority = 1
-
-        action {
-        block {}
-        }
-
-        statement {
-        rate_based_statement {
-            limit              = 2000
-            aggregate_key_type = "IP"
-        }
-        }
-
-        visibility_config {
-        cloudwatch_metrics_enabled = true
-        metric_name                = "${var.project_name}-rate-limit"
-        sampled_requests_enabled   = true
-        }
-    }
-
-    rule {
-        name     = "AWSManagedRulesCommonRuleSet"
-        priority = 2
-
-        override_action {
-        none {}
-        }
-
-        statement {
-        managed_rule_group_statement {
-            name        = "AWSManagedRulesCommonRuleSet"
-            vendor_name = "AWS"
-        }
-        }
-
-        visibility_config {
-        cloudwatch_metrics_enabled = true
-        metric_name                = "${var.project_name}-common-rules"
-        sampled_requests_enabled   = true
-        }
+    statement {
+      rate_based_statement {
+        limit              = 2000
+        aggregate_key_type = "IP"
+      }
     }
 
     visibility_config {
-        cloudwatch_metrics_enabled = true
-        metric_name                = "${var.project_name}-waf"
-        sampled_requests_enabled   = true
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${var.project_name}-rate-limit"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  rule {
+    name     = "AWSManagedRulesCommonRuleSet"
+    priority = 2
+
+    override_action {
+      none {}
     }
 
-    tags = local.common_tags
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesCommonRuleSet"
+        vendor_name = "AWS"
+      }
     }
 
-    resource "aws_wafv2_web_acl_association" "main" {
-    resource_arn = aws_lb.main.arn
-    web_acl_arn  = aws_wafv2_web_acl.main.arn
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${var.project_name}-common-rules"
+      sampled_requests_enabled   = true
     }
+  }
 
-    
-    # AUTO SCALING GROUP & LAUNCH TEMPLATE
-    
-    resource "aws_launch_template" "main" {
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = "${var.project_name}-waf"
+    sampled_requests_enabled   = true
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_wafv2_web_acl_association" "main" {
+  resource_arn = aws_lb.main.arn
+  web_acl_arn  = aws_wafv2_web_acl.main.arn
+}
+
+# AUTO SCALING GROUP & LAUNCH TEMPLATE
+
+resource "aws_launch_template" "main" {
   name_prefix   = "${var.project_name}-"
   image_id      = data.aws_ami.amazon_linux_2.id
-  instance_type = "t3.medium"
+  instance_type = "t3.micro"  # Changed to t3.micro for cost savings and faster startup
 
   vpc_security_group_ids = [aws_security_group.ec2.id]
 
@@ -649,30 +654,45 @@
     }
   }
 
-  # Use inline user_data instead of templatefile
+  # Improved user_data with proper nginx installation
   user_data = base64encode(<<-EOF
 #!/bin/bash
+set -e
+exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+
+# Update system
+yum update -y
+
+# Install nginx
+amazon-linux-extras install -y nginx1
+
+# Create a simple index page
+cat > /usr/share/nginx/html/index.html <<HTML
+<!DOCTYPE html>
+<html>
+<head><title>Welcome</title></head>
+<body>
+<h1>Hello from ${var.project_name}</h1>
+<p>Instance ID: $(ec2-metadata --instance-id | cut -d " " -f 2)</p>
+<p>Environment: ${var.environment}</p>
+</body>
+</html>
+HTML
+
+# Start and enable nginx
+systemctl start nginx
+systemctl enable nginx
+
 # Install CloudWatch Agent
 wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
 rpm -U ./amazon-cloudwatch-agent.rpm
 
-# Install SSM Agent
-yum install -y amazon-ssm-agent
+# Install SSM Agent (already installed on AL2 but ensure it's running)
 systemctl start amazon-ssm-agent
+systemctl enable amazon-ssm-agent
 
-# Install nginx for demo
-yum update -y
-yum install -y nginx
-
-# Get parameters from SSM
-aws ssm get-parameter --name "/${var.project_name}/database/endpoint" --region ${var.aws_region} --query 'Parameter.Value' --output text > /tmp/db_endpoint.txt
-
-# Start nginx
-systemctl start nginx
-systemctl enable nginx
-
-# Create a simple index page
-echo "<h1>Hello from ${var.project_name}</h1>" > /usr/share/nginx/html/index.html
+# Signal success
+/opt/aws/bin/cfn-signal --exit-code 0 --stack ${var.project_name} --resource AutoScalingGroup --region ${var.aws_region} || true
 EOF
   )
 
@@ -699,14 +719,15 @@ EOF
     })
   }
 }
+
 resource "aws_autoscaling_group" "main" {
   name               = "${var.project_name}-asg"
   vpc_zone_identifier = aws_subnet.private[*].id
   target_group_arns   = [aws_lb_target_group.main.arn]
   health_check_type   = "ELB"
   health_check_grace_period = 300
-  min_size            = 2
-  max_size            = 6
+  min_size            = 1  # Reduced to 1 for faster deployment
+  max_size            = 4  # Reduced max size
   desired_capacity    = 2
 
   launch_template {
@@ -737,6 +758,8 @@ resource "aws_autoscaling_group" "main" {
       propagate_at_launch = true
     }
   }
+
+  depends_on = [aws_lb.main]
 }
 
 # Auto Scaling Policies
@@ -756,9 +779,7 @@ resource "aws_autoscaling_policy" "scale_down" {
   autoscaling_group_name = aws_autoscaling_group.main.name
 }
 
- 
 # RDS DATABASE
- 
 
 resource "aws_db_subnet_group" "main" {
   name       = "${var.project_name}-db-subnet-group"
@@ -772,11 +793,10 @@ resource "aws_db_subnet_group" "main" {
 resource "aws_db_instance" "main" {
   identifier     = "${var.project_name}-db"
   engine         = "postgres"
-  engine_version = "15.4"
-  instance_class = "db.t3.medium"
+  instance_class = "db.t3.micro"  # Changed to smaller instance for cost and faster provisioning
   
-  allocated_storage     = 100
-  max_allocated_storage = 200
+  allocated_storage     = 20  # Reduced initial storage
+  max_allocated_storage = 100  # Reduced max storage
   storage_type          = "gp3"
   storage_encrypted     = true
   kms_key_id           = aws_kms_key.main.arn
@@ -788,7 +808,7 @@ resource "aws_db_instance" "main" {
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
 
-  multi_az               = true
+  multi_az               = false  # Set to false for faster provisioning
   backup_retention_period = 7
   backup_window          = "03:00-04:00"
   maintenance_window     = "sun:04:00-sun:05:00"
@@ -803,12 +823,14 @@ resource "aws_db_instance" "main" {
   })
 }
 
- 
-# ROUTE 53
- 
+# ROUTE 53 (Create Private Hosted Zone instead)
 
 resource "aws_route53_zone" "main" {
   name = var.domain_name
+
+  vpc {
+    vpc_id = aws_vpc.main.id
+  }
 
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-zone"
@@ -827,12 +849,10 @@ resource "aws_route53_record" "app" {
   }
 }
 
- 
 # CLOUDTRAIL
- 
 
 resource "aws_s3_bucket" "cloudtrail" {
-  bucket = "${var.project_name}-cloudtrail-${data.aws_caller_identity.current.account_id}"
+  bucket_prefix = "${var.project_name}-cloudtrail-"  # Use prefix to avoid naming conflicts
 
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-cloudtrail-bucket"
@@ -900,9 +920,10 @@ resource "aws_cloudtrail" "main" {
     read_write_type           = "All"
     include_management_events = true
 
+    # Fixed data_resource format
     data_resource {
       type   = "AWS::S3::Object"
-      values = ["arn:aws:s3:::*/*"]
+      values = ["arn:aws:s3:::*/"]  # Changed from "arn:aws:s3:::*/*"
     }
   }
 
@@ -918,9 +939,7 @@ resource "aws_cloudtrail" "main" {
   })
 }
 
- 
 # CLOUDWATCH MONITORING & ALARMS
- 
 
 # SNS Topic for Alarms
 resource "aws_sns_topic" "alarms" {
@@ -935,7 +954,7 @@ resource "aws_sns_topic" "alarms" {
 resource "aws_sns_topic_subscription" "alarm_email" {
   topic_arn = aws_sns_topic.alarms.arn
   protocol  = "email"
-  endpoint  = "devops@example.com"  # Change to your email
+  endpoint  = "devops@yourcompany.com"  # Change to your actual email
 }
 
 # EC2 CPU Alarm
@@ -1008,8 +1027,8 @@ resource "aws_cloudwatch_metric_alarm" "rds_storage" {
   namespace          = "AWS/RDS"
   period             = 300
   statistic          = "Average"
-  threshold          = 10737418240  # 10GB in bytes
-  alarm_description  = "Alert when RDS free storage is less than 10GB"
+  threshold          = 2147483648  # 2GB in bytes
+  alarm_description  = "Alert when RDS free storage is less than 2GB"
   alarm_actions      = [aws_sns_topic.alarms.arn]
 
   dimensions = {
@@ -1043,9 +1062,7 @@ resource "aws_cloudwatch_dashboard" "main" {
   })
 }
 
- 
 # OUTPUTS
- 
 
 output "alb_dns_name" {
   description = "DNS name of the load balancer"
