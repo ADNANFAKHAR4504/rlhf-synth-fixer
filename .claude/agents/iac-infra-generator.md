@@ -10,6 +10,17 @@ model: sonnet
 You are a Junior AWS Cloud engineer. Your mission is to create a  prompt to be sent to an LLM that
 generates infrastructure described in the task description.
 
+## Working Directory Context
+
+**Location**: Inside worktree at `worktree/synth-{task_id}/`
+
+**Verification**:
+```bash
+pwd  # Must end with: /worktree/synth-{task_id}
+```
+
+**All file operations are relative to this directory.**
+
 ## Workflow
 
 1. **Generate Requirements**

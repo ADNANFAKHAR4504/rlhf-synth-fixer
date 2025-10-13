@@ -1,0 +1,33 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "356230",
+  "team": "1",
+  "startedAt": "2025-10-02T12:01:10.609Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "IAM",
+    "EventBridge",
+    "SNS",
+    "CloudWatch",
+    "SES",
+    "Personalize",
+    "Comprehend Medical"
+  ],
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "satyapal-lab",
+  "dockerS3Location": ""
+}

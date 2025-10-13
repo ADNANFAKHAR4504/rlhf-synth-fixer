@@ -1,0 +1,40 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349039",
+  "team": "4",
+  "startedAt": "2025-10-12T07:04:00.393Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Table",
+    "Security Group",
+    "RDS",
+    "Secrets Manager",
+    "IAM",
+    "S3",
+    "Elastic Beanstalk",
+    "Route 53",
+    "ACM",
+    "CloudFront",
+    "WAF",
+    "CloudWatch",
+    "SNS",
+    "EC2"
+  ],
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
+}
