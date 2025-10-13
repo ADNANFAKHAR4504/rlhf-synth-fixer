@@ -393,11 +393,6 @@ export class TapStack extends TerraformStack {
       description: 'Public subnet IDs',
     });
 
-    new TerraformOutput(this, 'rds-endpoint', {
-      value: rdsModule.instance.endpoint,
-      description: 'RDS instance endpoint',
-    });
-
     new TerraformOutput(this, 'private-subnet-ids', {
       value: vpcModule.privateSubnets.map(subnet => subnet.id),
       description: 'Private subnet IDs',
