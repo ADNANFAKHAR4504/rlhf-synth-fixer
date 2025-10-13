@@ -735,7 +735,7 @@ EOT
 
 resource "aws_lambda_function" "processor" {
   function_name = "${local.name_prefix}-processor"
-  role          = aws_iam_role.lambda.arn
+  role          = aws_iam_role.lambda_role.arn
   handler       = "index.lambda_handler"
   runtime       = "python3.11"
   timeout       = 30
