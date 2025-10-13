@@ -9,6 +9,21 @@ model: sonnet
 
 This agent is responsible for selecting a task to perform. if `tasks.csv` is present, use option 1, otherwise use option 2.
 
+## ⚠️ CRITICAL: CSV Data Integrity
+
+**BEFORE modifying tasks.csv:**
+1. READ the "CSV File Corruption Prevention" section in `lessons_learnt.md`
+2. READ the complete guide in `.claude/csv_safety_guide.md`
+3. RUN the safety check: `./scripts/check-csv-safety.sh`
+
+ALL CSV operations MUST:
+1. Create backup before ANY modification
+2. Read ALL rows, modify specific row(s), write ALL rows back
+3. Validate row counts before and after
+4. Restore from backup if ANY validation fails
+
+**Failure to follow these rules will corrupt the tasks.csv file and lose all task data!**
+
 ## Working Directory Context
 
 **Initial Location**: Main repository root (where tasks.csv is located)
@@ -39,23 +54,61 @@ If `tasks.csv` is present:
     - Parse the subject_labels as a JSON array
     - Pass these values to the task-coordinator for inclusion in metadata.json
 
-3. **Update status column to "in_progress"**:
+3. **Update status column to "in_progress"** (with backup and validation):
    ```python
    import csv
+   import shutil
+   import sys
    
+   # CRITICAL: Create backup before modifying
+   shutil.copy2('tasks.csv', 'tasks.csv.backup')
+   
+   # Read all rows
    rows = []
+   original_count = 0
    with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
        reader = csv.DictReader(f)
        fieldnames = reader.fieldnames
        for row in reader:
+           original_count += 1
            if row['task_id'] == selected_task_id:
                row['status'] = 'in_progress'
            rows.append(row)
    
+   # VALIDATION: Ensure we haven't lost any rows
+   if len(rows) != original_count:
+       print(f"❌ ERROR: Row count mismatch. Original: {original_count}, Current: {len(rows)}")
+       print("Restoring from backup...")
+       shutil.copy2('tasks.csv.backup', 'tasks.csv')
+       sys.exit(1)
+   
+   # VALIDATION: Ensure we have all fieldnames
+   if not fieldnames or len(fieldnames) == 0:
+       print("❌ ERROR: No fieldnames found in CSV")
+       print("Restoring from backup...")
+       shutil.copy2('tasks.csv.backup', 'tasks.csv')
+       sys.exit(1)
+   
+   # Write back all rows
    with open('tasks.csv', 'w', newline='', encoding='utf-8') as f:
        writer = csv.DictWriter(f, fieldnames=fieldnames)
        writer.writeheader()
        writer.writerows(rows)
+   
+   # VALIDATION: Verify the write was successful
+   verify_count = 0
+   with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
+       reader = csv.DictReader(f)
+       for row in reader:
+           verify_count += 1
+   
+   if verify_count != original_count:
+       print(f"❌ ERROR: Write verification failed. Expected {original_count} rows, found {verify_count}")
+       print("Restoring from backup...")
+       shutil.copy2('tasks.csv.backup', 'tasks.csv')
+       sys.exit(1)
+   
+   print(f"✅ Successfully updated task {selected_task_id} status to 'in_progress' ({verify_count} total rows preserved)")
    ```
 
 4. **Validate task complexity matches requirements** (Quality assurance):
