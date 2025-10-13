@@ -1,25 +1,3 @@
-### Reasoning Trace
----
-
-This is a comprehensive request for creating an AWS CloudFormation template with multiple components. Let me break down the requirements:
-
-1. VPC with public and private subnets
-2. EC2 instance in private subnet with IAM role for limited S3 access
-3. Security groups allowing SSH from specified IP range
-4. Naming convention: projectName-environment-resourceName
-5. Tags: Project, Owner, Environment
-6. S3 buckets with KMS encryption
-7. Auto Scaling in public subnet
-8. CloudFront with SSL/TLS certificates
-9. CloudWatch alarms for EC2 CPU monitoring
-10. RDS instance in private subnet with dedicated database subnet group
-
-Let me create a comprehensive CloudFormation template that addresses all these requirements.
-### Answer 
----
-
-I'll create a comprehensive CloudFormation template that meets all your requirements. This template will establish a secure, scalable AWS infrastructure with proper networking, security, and monitoring.
-
 ```yaml
 AWSTemplateFormatVersion: "2010-09-09"
 Description: "Secure and scalable AWS infrastructure for web application"
@@ -55,14 +33,6 @@ Parameters:
     NoEcho: true
     Description: "Database master username"
 
-  DBPassword:
-    Type: String
-    Default: "ChangeMe123!"
-    NoEcho: true
-    MinLength: 8
-    Description: "Database master password"
-    ConstraintDescription: "Must be at least 8 characters"
-
   InstanceType:
     Type: String
     Default: "t3.micro"
@@ -76,17 +46,6 @@ Parameters:
     Type: "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>"
     Default: "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
     Description: "Latest Amazon Linux 2023 AMI ID via SSM"
-
-Mappings:
-  RegionAMI:
-    us-east-1:
-      AMI: "ami-0c02fb55731490381"
-    us-west-2:
-      AMI: "ami-0a54c984b9f908c81"
-    eu-west-1:
-      AMI: "ami-0f29c8402f8cce65c"
-    ap-south-1:
-      AMI: "ami-0d2692b6acea72ee6"
 
 Resources:
   # ==================== SSH Key Pair ====================
@@ -733,7 +692,7 @@ Resources:
       Engine: mysql
       EngineVersion: "8.0.41"
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      ManageMasterUserPassword: true
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
@@ -744,6 +703,7 @@ Resources:
       PreferredBackupWindow: "03:00-04:00"
       PreferredMaintenanceWindow: "sun:04:00-sun:05:00"
       MultiAZ: false
+      PubliclyAccessible: false
       DeleteAutomatedBackups: true
       Tags:
         - Key: Name
@@ -876,69 +836,3 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-SSH-Key-Name"
 ```
-
-## Key Features Implemented:
-
-### 1. Networking Architecture
-- VPC with public, private, and database subnets across two AZs
-- NAT Gateway for private subnet egress
-- Route tables and associations for clear traffic control
-
-### 2. Security Implementation
-- Security groups with least-privilege ingress
-- IAM role and instance profile for EC2 with scoped S3 access
-- S3 KMS encryption with dedicated KMS key and alias
-
-### 3. High Availability & Scalability
-- Auto Scaling Group across multiple subnets
-- Application Load Balancer distributing traffic to targets
-- Health checks and target tracking scaling policy
-
-### 4. Content Delivery & TLS
-- CloudFront distribution enforcing HTTPS and caching
-- ALB as origin with viewer protocol redirects
-
-### 5. Monitoring & Alerting
-- CloudWatch alarms for EC2 CPU utilization (high/low)
-
-### 6. Best Practices & Operations
-- Consistent naming: `${ProjectName}-${Environment}-resource`
-- Parameterized for environment portability
-- Outputs exported for cross-stack references
-- RDS deletion behavior configured to fully clean up in test environments
-- AMI resolution via SSM Parameter for region-safe, up-to-date images
-
-## Deployment Instructions
-
-1) Prerequisites
-- AWS CLI configured with appropriate permissions
-- Node.js/Python tooling if using helper scripts
-
-2) Validate template
-```bash
-aws cloudformation validate-template --template-body file://lib/TapStack.yml
-```
-
-3) Deploy stack
-```bash
-aws cloudformation create-stack \
-  --stack-name myapp-prod-infrastructure \
-  --template-body file://lib/TapStack.yml \
-  --parameters \
-    ParameterKey=ProjectName,ParameterValue=myapp \
-    ParameterKey=Environment,ParameterValue=prod \
-    ParameterKey=Owner,ParameterValue=DevOpsTeam \
-    ParameterKey=SSHAllowedIP,ParameterValue=10.0.0.0/8 \
-    ParameterKey=DBUsername,ParameterValue=admin \
-    ParameterKey=DBPassword,ParameterValue=ChangeMe123! \
-    ParameterKey=InstanceType,ParameterValue=t3.micro \
-  --capabilities CAPABILITY_NAMED_IAM
-```
-
-4) Retrieve outputs
-```bash
-aws cloudformation describe-stacks --stack-name myapp-prod-infrastructure \
-  --query 'Stacks[0].Outputs' --output table
-```
-
-These instructions mirror the model-friendly response while reflecting the ideal, deployable state of the template.
