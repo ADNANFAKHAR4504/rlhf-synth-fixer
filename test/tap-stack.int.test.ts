@@ -118,7 +118,6 @@ describe("TapProject Integration Tests - Complete Infrastructure", () => {
     rdsEndpoint = stackOutputs["rds-endpoint"];
     route53ZoneId = stackOutputs["route53-zone-id"];
 
-    // Extract bucket name from ARN
     privateS3BucketName = privateS3BucketArn?.split(':::')[1];
 
     // Extract ALB ARN from DNS name (we'll query this later)
