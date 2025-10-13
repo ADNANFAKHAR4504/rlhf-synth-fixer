@@ -121,7 +121,6 @@ class TestTapStackIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up AWS clients and load outputs once for all tests"""
-        cls.aws_tester = AWSResourceTester()
         cls.outputs = flat_outputs
 
         # Extract key outputs for easier access
@@ -134,6 +133,24 @@ class TestTapStackIntegration(unittest.TestCase):
         cls.instance_ids = [id.strip() for id in cls.instance_ids_str.split(",") if id.strip()]
         cls.instance_count = int(cls.outputs.get("TapStackInstanceCount", "0"))
         cls.environment_suffix = cls.outputs.get("TapStackEnvironmentSuffix", "dev")
+
+        # Extract region from SNS topic ARN or use default
+        cls.region = cls._extract_region_from_arn(cls.sns_topic_arn) if cls.sns_topic_arn else "us-east-1"
+
+        # Initialize AWS tester with the detected region
+        cls.aws_tester = AWSResourceTester(region=cls.region)
+
+    @staticmethod
+    def _extract_region_from_arn(arn: str) -> str:
+        """Extract AWS region from an ARN string"""
+        try:
+            # ARN format: arn:aws:service:region:account-id:resource
+            parts = arn.split(":")
+            if len(parts) >= 4:
+                return parts[3]
+        except Exception:
+            pass
+        return "us-east-1"  # Default fallback
 
     def setUp(self):
         """Set up each test case"""
