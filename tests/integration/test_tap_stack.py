@@ -256,7 +256,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
                 f"Output '{output_name}' should be present in stack outputs"
             )
 
-
 if __name__ == '__main__':
     # Run only if INTEGRATION_TESTS environment variable is set
     if os.getenv('INTEGRATION_TESTS', 'false').lower() == 'true':
