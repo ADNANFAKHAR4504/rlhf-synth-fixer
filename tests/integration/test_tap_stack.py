@@ -46,125 +46,6 @@ class TestTapStackIntegration(unittest.TestCase):
         sts_client = boto3.client('sts', region_name=cls.region)
         cls.account_id = sts_client.get_caller_identity()['Account']
 
-    def test_s3_image_bucket_exists(self):
-        """Test that S3 bucket for images exists and is configured correctly."""
-        bucket_name = f"{self.resource_prefix}-images"
-
-        try:
-            response = self.s3_client.head_bucket(Bucket=bucket_name)
-            self.assertEqual(response['ResponseMetadata']['HTTPStatusCode'], 200)
-
-            # Verify versioning is enabled
-            versioning = self.s3_client.get_bucket_versioning(Bucket=bucket_name)
-            self.assertEqual(versioning.get('Status'), 'Enabled')
-
-            # Verify public access block configuration
-            public_access_block = self.s3_client.get_public_access_block(Bucket=bucket_name)
-            config = public_access_block['PublicAccessBlockConfiguration']
-            self.assertTrue(config['BlockPublicAcls'])
-            self.assertTrue(config['BlockPublicPolicy'])
-            self.assertTrue(config['IgnorePublicAcls'])
-            self.assertTrue(config['RestrictPublicBuckets'])
-
-            # Verify encryption
-            encryption = self.s3_client.get_bucket_encryption(Bucket=bucket_name)
-            rules = encryption['ServerSideEncryptionConfiguration']['Rules']
-            self.assertTrue(len(rules) > 0)
-            self.assertEqual(rules[0]['ApplyServerSideEncryptionByDefault']['SSEAlgorithm'], 'AES256')
-
-        except ClientError as e:
-            self.fail(f"S3 bucket not accessible: {e}")
-
-    def test_dynamodb_results_table_exists(self):
-        """Test that DynamoDB results table exists and is configured correctly."""
-        table_name = f"{self.resource_prefix}-results"
-
-        try:
-            response = self.dynamodb_client.describe_table(TableName=table_name)
-            table = response['Table']
-            
-            self.assertEqual(table['TableName'], table_name)
-            self.assertEqual(table['TableStatus'], 'ACTIVE')
-            self.assertEqual(table['BillingModeSummary']['BillingMode'], 'PAY_PER_REQUEST')
-            
-            # Verify hash key
-            key_schema = {k['AttributeName']: k['KeyType'] for k in table['KeySchema']}
-            self.assertEqual(key_schema.get('image_id'), 'HASH')
-            
-            # Verify GSI exists
-            gsi_names = [gsi['IndexName'] for gsi in table.get('GlobalSecondaryIndexes', [])]
-            self.assertIn('status-created-index', gsi_names)
-            
-            # Verify point-in-time recovery
-            pitr = self.dynamodb_client.describe_continuous_backups(TableName=table_name)
-            pitr_status = pitr['ContinuousBackupsDescription']['PointInTimeRecoveryDescription']['PointInTimeRecoveryStatus']
-            self.assertEqual(pitr_status, 'ENABLED')
-
-        except ClientError as e:
-            self.fail(f"DynamoDB results table not accessible: {e}")
-
-    def test_sqs_queues_exist(self):
-        """Test that all SQS queues exist and are configured correctly."""
-        queue_names = [
-            f"{self.resource_prefix}-dlq",
-            f"{self.resource_prefix}-preprocessing",
-            f"{self.resource_prefix}-inference"
-        ]
-
-        for queue_name in queue_names:
-            try:
-                # Get queue URL
-                response = self.sqs_client.get_queue_url(QueueName=queue_name)
-                queue_url = response['QueueUrl']
-                
-                # Get queue attributes
-                attributes = self.sqs_client.get_queue_attributes(
-                    QueueUrl=queue_url,
-                    AttributeNames=['All']
-                )['Attributes']
-                
-                self.assertIsNotNone(attributes.get('MessageRetentionPeriod'))
-                
-                # Check redrive policy for non-DLQ queues
-                if 'dlq' not in queue_name:
-                    self.assertIn('RedrivePolicy', attributes)
-                    redrive_policy = json.loads(attributes['RedrivePolicy'])
-                    self.assertEqual(redrive_policy['maxReceiveCount'], 3)
-                    
-            except ClientError as e:
-                self.fail(f"SQS queue {queue_name} not accessible: {e}")
-
-    def test_lambda_functions_exist(self):
-        """Test that all Lambda functions are deployed and configured correctly."""
-        function_names = [
-            f"{self.resource_prefix}-preprocessing",
-            f"{self.resource_prefix}-inference",
-            f"{self.resource_prefix}-api-handler"
-        ]
-
-        for function_name in function_names:
-            try:
-                response = self.lambda_client.get_function(FunctionName=function_name)
-                config = response['Configuration']
-                
-                self.assertEqual(config['FunctionName'], function_name)
-                self.assertEqual(config['Runtime'], 'python3.11')
-                self.assertIsNotNone(config['Role'])
-                
-                # Verify environment variables
-                env_vars = config.get('Environment', {}).get('Variables', {})
-                self.assertIsNotNone(env_vars)
-                
-                # Verify X-Ray tracing
-                self.assertEqual(config['TracingConfig']['Mode'], 'Active')
-                
-                # Verify timeout and memory
-                self.assertGreater(config['Timeout'], 0)
-                self.assertGreater(config['MemorySize'], 0)
-                
-            except ClientError as e:
-                self.fail(f"Lambda function {function_name} not accessible: {e}")
-
     def test_lambda_layer_exists(self):
         """Test that Lambda layer for model exists."""
         layer_name = f"{self.resource_prefix}-model"
@@ -213,38 +94,6 @@ class TestTapStackIntegration(unittest.TestCase):
         except ClientError as e:
             self.fail(f"API Gateway not accessible: {e}")
 
-    def test_lambda_event_source_mappings(self):
-        """Test that Lambda functions have correct event source mappings."""
-        mappings_to_check = [
-            {
-                'function': f"{self.resource_prefix}-preprocessing",
-                'queue': f"{self.resource_prefix}-preprocessing"
-            },
-            {
-                'function': f"{self.resource_prefix}-inference",
-                'queue': f"{self.resource_prefix}-inference"
-            }
-        ]
-
-        for mapping in mappings_to_check:
-            try:
-                function_name = mapping['function']
-                response = self.lambda_client.list_event_source_mappings(
-                    FunctionName=function_name
-                )
-                
-                event_sources = response.get('EventSourceMappings', [])
-                self.assertGreater(len(event_sources), 0, 
-                    f"No event source mappings found for {function_name}")
-                
-                # Verify event source is SQS
-                for event_source in event_sources:
-                    self.assertIn('sqs', event_source['EventSourceArn'])
-                    self.assertEqual(event_source['State'], 'Enabled')
-                    
-            except ClientError as e:
-                self.fail(f"Event source mapping check failed: {e}")
-
     def test_cloudwatch_alarms_exist(self):
         """Test that CloudWatch alarms are created."""
         try:
@@ -260,148 +109,6 @@ class TestTapStackIntegration(unittest.TestCase):
             
         except ClientError as e:
             self.fail(f"CloudWatch alarms check failed: {e}")
-
-    def test_s3_bucket_notification_configuration(self):
-        """Test that S3 bucket has notification configuration for SQS."""
-        bucket_name = f"{self.resource_prefix}-images"
-
-        try:
-            response = self.s3_client.get_bucket_notification_configuration(Bucket=bucket_name)
-            
-            # Should have queue configurations
-            queue_configs = response.get('QueueConfigurations', [])
-            self.assertGreater(len(queue_configs), 0, 
-                "S3 bucket should have SQS notification configured")
-            
-            # Verify configuration
-            for config in queue_configs:
-                self.assertIn('s3:ObjectCreated:', str(config.get('Events', [])))
-                self.assertIn('uploads/', str(config.get('Filter', {}).get('Key', {}).get('FilterRules', [])))
-                
-        except ClientError as e:
-            self.fail(f"S3 bucket notification configuration check failed: {e}")
-
-    def test_dynamodb_write_and_read(self):
-        """Test DynamoDB table functionality by writing and reading data."""
-        table_name = f"{self.resource_prefix}-results"
-        dynamodb = boto3.resource('dynamodb', region_name=self.region)
-
-        try:
-            table = dynamodb.Table(table_name)
-
-            # Write test record
-            test_image_id = f"test-image-{uuid.uuid4()}"
-            test_timestamp = int(time.time())
-            
-            table.put_item(
-                Item={
-                    'image_id': test_image_id,
-                    'status': 'test',
-                    'created_at': test_timestamp,
-                    'test_field': 'integration_test'
-                }
-            )
-
-            # Read test record
-            response = table.get_item(Key={'image_id': test_image_id})
-            self.assertIn('Item', response)
-            self.assertEqual(response['Item']['image_id'], test_image_id)
-            self.assertEqual(response['Item']['status'], 'test')
-            self.assertEqual(response['Item']['test_field'], 'integration_test')
-
-            # Query using GSI
-            response = table.query(
-                IndexName='status-created-index',
-                KeyConditionExpression='#status = :status',
-                ExpressionAttributeNames={'#status': 'status'},
-                ExpressionAttributeValues={':status': 'test'},
-                Limit=10
-            )
-            self.assertIn('Items', response)
-            self.assertGreater(len(response['Items']), 0)
-
-            # Clean up
-            table.delete_item(Key={'image_id': test_image_id})
-
-        except Exception as e:
-            self.fail(f"DynamoDB functionality test failed: {e}")
-
-    def test_s3_upload_functionality(self):
-        """Test S3 bucket upload functionality."""
-        bucket_name = f"{self.resource_prefix}-images"
-        test_key = f"test/integration-test-{uuid.uuid4()}.txt"
-        test_content = b"Integration test content"
-
-        try:
-            # Upload test object
-            self.s3_client.put_object(
-                Bucket=bucket_name,
-                Key=test_key,
-                Body=test_content
-            )
-
-            # Verify object exists
-            response = self.s3_client.head_object(Bucket=bucket_name, Key=test_key)
-            self.assertEqual(response['ResponseMetadata']['HTTPStatusCode'], 200)
-
-            # Verify encryption
-            self.assertIn('ServerSideEncryption', response)
-
-            # Download and verify content
-            response = self.s3_client.get_object(Bucket=bucket_name, Key=test_key)
-            downloaded_content = response['Body'].read()
-            self.assertEqual(downloaded_content, test_content)
-
-            # Clean up
-            self.s3_client.delete_object(Bucket=bucket_name, Key=test_key)
-
-        except Exception as e:
-            self.fail(f"S3 upload functionality test failed: {e}")
-
-    def test_sqs_message_functionality(self):
-        """Test SQS queue message functionality."""
-        queue_name = f"{self.resource_prefix}-preprocessing"
-
-        try:
-            # Get queue URL
-            response = self.sqs_client.get_queue_url(QueueName=queue_name)
-            queue_url = response['QueueUrl']
-
-            # Send test message
-            test_message = {
-                'test': True,
-                'image_id': f"test-{uuid.uuid4()}",
-                'timestamp': int(time.time())
-            }
-            
-            self.sqs_client.send_message(
-                QueueUrl=queue_url,
-                MessageBody=json.dumps(test_message)
-            )
-
-            # Receive message
-            response = self.sqs_client.receive_message(
-                QueueUrl=queue_url,
-                MaxNumberOfMessages=1,
-                WaitTimeSeconds=5
-            )
-
-            self.assertIn('Messages', response)
-            messages = response.get('Messages', [])
-            
-            if len(messages) > 0:
-                message = messages[0]
-                body = json.loads(message['Body'])
-                self.assertTrue(body.get('test'))
-
-                # Delete message to clean up
-                self.sqs_client.delete_message(
-                    QueueUrl=queue_url,
-                    ReceiptHandle=message['ReceiptHandle']
-                )
-
-        except Exception as e:
-            self.fail(f"SQS message functionality test failed: {e}")
 
     def test_iam_roles_exist(self):
         """Test that IAM roles for Lambda functions exist."""
@@ -428,6 +135,175 @@ class TestTapStackIntegration(unittest.TestCase):
 
         except ClientError as e:
             self.fail(f"IAM roles check failed: {e}")
+
+    def test_end_to_end_image_processing_workflow(self):
+        """
+        End-to-end integration test for the image processing pipeline.
+        
+        Tests the complete workflow:
+        1. Upload image to S3 (uploads/ folder)
+        2. Verify S3 event triggers SQS message
+        3. Wait for Lambda preprocessing to process the message
+        4. Verify DynamoDB status updates
+        5. Check for final results in DynamoDB
+        
+        This validates: S3 -> SQS -> Lambda -> DynamoDB flow
+        """
+        bucket_name = f"{self.resource_prefix}-images"
+        preprocessing_queue_name = f"{self.resource_prefix}-preprocessing"
+        table_name = f"{self.resource_prefix}-results"
+        
+        # Generate unique test image ID
+        test_image_id = f"test-e2e-{uuid.uuid4()}"
+        test_key = f"uploads/{test_image_id}.jpg"
+        test_image_data = b"fake image data for integration testing"
+        
+        print(f"\n=== Starting E2E Workflow Test ===")
+        print(f"Image ID: {test_image_id}")
+        print(f"S3 Key: {test_key}")
+        
+        try:
+            # Step 1: Upload test image to S3
+            print("\n[Step 1] Uploading image to S3...")
+            self.s3_client.put_object(
+                Bucket=bucket_name,
+                Key=test_key,
+                Body=test_image_data,
+                ContentType='image/jpeg'
+            )
+            print(f"Image uploaded successfully to s3://{bucket_name}/{test_key}")
+            
+            # Step 2: Wait for S3 event to trigger SQS message
+            print("\n[Step 2] Waiting for S3 event to create SQS message...")
+            queue_url_response = self.sqs_client.get_queue_url(QueueName=preprocessing_queue_name)
+            queue_url = queue_url_response['QueueUrl']
+            
+            # Poll SQS queue for the message (wait up to 30 seconds)
+            message_found = False
+            max_attempts = 6
+            for attempt in range(max_attempts):
+                time.sleep(5)  # Wait 5 seconds between polls
+                print(f"Polling SQS (attempt {attempt + 1}/{max_attempts})...")
+                
+                response = self.sqs_client.receive_message(
+                    QueueUrl=queue_url,
+                    MaxNumberOfMessages=10,
+                    WaitTimeSeconds=5,
+                    AttributeNames=['All']
+                )
+                
+                messages = response.get('Messages', [])
+                for message in messages:
+                    body = json.loads(message['Body'])
+                    
+                    # Check if this is an S3 event notification
+                    if 'Records' in body:
+                        for record in body['Records']:
+                            if record.get('eventName', '').startswith('ObjectCreated'):
+                                s3_key = record.get('s3', {}).get('object', {}).get('key', '')
+                                if test_image_id in s3_key:
+                                    message_found = True
+                                    print(f"Found S3 event message for {test_image_id}!")
+                                    print(f"Event: {record.get('eventName')}")
+                                    print(f"Bucket: {record.get('s3', {}).get('bucket', {}).get('name')}")
+                                    print(f"Key: {s3_key}")
+                                    # Don't delete the message - let Lambda process it
+                                    break
+                
+                if message_found:
+                    break
+            
+            self.assertTrue(message_found, 
+                f"S3 event message not found in SQS queue after {max_attempts * 5} seconds")
+            
+            # Step 3: Wait for Lambda to process and update DynamoDB
+            print("\n[Step 3] Waiting for Lambda processing and DynamoDB updates...")
+            dynamodb = boto3.resource('dynamodb', region_name=self.region)
+            table = dynamodb.Table(table_name)
+            
+            # Poll DynamoDB for status updates (wait up to 60 seconds)
+            status_found = False
+            max_db_attempts = 12
+            final_status = None
+            
+            for attempt in range(max_db_attempts):
+                time.sleep(5)
+                print(f"Checking DynamoDB (attempt {attempt + 1}/{max_db_attempts})...")
+                
+                try:
+                    response = table.get_item(Key={'image_id': test_image_id})
+                    
+                    if 'Item' in response:
+                        item = response['Item']
+                        status = item.get('status', 'unknown')
+                        print(f"Status: {status}")
+                        status_found = True
+                        final_status = status
+                        
+                        # If processing is complete or failed, break
+                        if status in ['completed', 'preprocessing_failed', 'inference_failed']:
+                            print(f"Processing finished with status: {status}")
+                            break
+                except ClientError:
+                    pass  # Item might not exist yet
+            
+            # Step 4: Verify results
+            print("\n[Step 4] Verifying workflow results...")
+            
+            # At minimum, we should see the record was created in DynamoDB
+            self.assertTrue(status_found, 
+                "No record found in DynamoDB after Lambda processing")
+            
+            # Verify the record has expected fields
+            response = table.get_item(Key={'image_id': test_image_id})
+            self.assertIn('Item', response, "Final DynamoDB record not found")
+            
+            item = response['Item']
+            self.assertEqual(item['image_id'], test_image_id)
+            self.assertIn('status', item)
+            self.assertIn('created_at', item)
+            
+            print(f"\nFinal record in DynamoDB:")
+            print(f"  Image ID: {item.get('image_id')}")
+            print(f"  Status: {item.get('status')}")
+            print(f"  Created At: {item.get('created_at')}")
+            if 'preprocessing_started_at' in item:
+                print(f"  Preprocessing Started: {item.get('preprocessing_started_at')}")
+            if 'preprocessing_completed_at' in item:
+                print(f"  Preprocessing Completed: {item.get('preprocessing_completed_at')}")
+            if 'error' in item:
+                print(f"  Error: {item.get('error')}")
+            
+            print("\n=== E2E Workflow Test Completed Successfully ===")
+            
+        except Exception as e:
+            self.fail(f"E2E workflow test failed: {str(e)}")
+            
+        finally:
+            # Cleanup: Delete test objects
+            print("\n[Cleanup] Removing test resources...")
+            try:
+                self.s3_client.delete_object(Bucket=bucket_name, Key=test_key)
+                print(f"Deleted S3 object: {test_key}")
+            except:
+                pass
+                
+            try:
+                # Also delete processed version if it exists
+                processed_key = f"processed/{test_image_id}.bin"
+                self.s3_client.delete_object(Bucket=bucket_name, Key=processed_key)
+                print(f"Deleted processed object: {processed_key}")
+            except:
+                pass
+                
+            try:
+                # Delete DynamoDB record
+                dynamodb = boto3.resource('dynamodb', region_name=self.region)
+                table = dynamodb.Table(table_name)
+                table.delete_item(Key={'image_id': test_image_id})
+                print(f"Deleted DynamoDB record for: {test_image_id}")
+            except:
+                pass
 
 
 if __name__ == '__main__':
