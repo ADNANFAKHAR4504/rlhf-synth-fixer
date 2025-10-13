@@ -791,6 +791,9 @@ Resources:
                 !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
               ],
           }
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
       VersioningConfiguration:
         Status: Enabled
       PublicAccessBlockConfiguration:
@@ -843,9 +846,6 @@ Resources:
               Service: cloudtrail.amazonaws.com
             Action: s3:PutObject
             Resource: !Sub '${CloudTrailBucket.Arn}/AWSLogs/${AWS::AccountId}/*'
-            Condition:
-              StringEquals:
-                's3:x-amz-acl': bucket-owner-full-control
 
   # =============================================
   # SYSTEMS MANAGER PARAMETERS (Constraint 10)
