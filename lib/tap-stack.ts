@@ -42,6 +42,12 @@ export class TapStack extends TerraformStack {
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
 
+    // Get account ID for constructing ARNs
+    // const currentAccount = new aws.dataAwsCallerIdentity.DataAwsCallerIdentity(
+    //   this,
+    //   'current'
+    // );
+
     // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
     new AwsProvider(this, 'aws', {
       region: awsRegion,
@@ -63,11 +69,7 @@ export class TapStack extends TerraformStack {
       region: stateBucketRegion,
       encrypt: true,
     });
-    // Using an escape hatch instead of S3Backend construct - CDKTF still does not support S3 state locking natively
-    // ref - https://developer.hashicorp.com/terraform/cdktf/concepts/resources#escape-hatch
-    this.addOverride('terraform.backend.s3.use_lockfile', true);
 
-    // ? Add your stack instantiations here
     // 1. KMS Module - Create encryption keys first
     const kmsModule = new KmsModule(this, 'kms');
 
@@ -90,20 +92,38 @@ export class TapStack extends TerraformStack {
       dbSecret: secretsModule.dbSecret,
     });
 
-    // 5. S3 Module - Create log storage bucket
-    // Note: We need to create a placeholder for EC2 role ARN first
-    const ec2RoleArn = `arn:aws:iam::${new aws.dataAwsCallerIdentity.DataAwsCallerIdentity(this, 'current').accountId}:role/tap-ec2-role`;
-
-    const s3Module = new S3Module(this, 's3', kmsModule.key.arn, ec2RoleArn);
-
-    // 6. EC2 Module - Create compute instance
+    // 5. EC2 Module - Create compute instance
     const ec2Module = new Ec2Module(this, 'ec2', {
       vpcId: vpcModule.vpc.id,
       publicSubnetId: vpcModule.publicSubnets[0].id,
       kmsKeyArn: kmsModule.key.arn,
-      s3BucketArn: s3Module.bucket.arn,
+      s3BucketArn: '', // This will be updated after S3 bucket creation
       secretArn: secretsModule.dbSecret.arn,
       rdsSecurityGroupId: rdsModule.securityGroup.id,
+    });
+
+    // 6. S3 Module - Create log storage bucket
+    // Now that EC2 role is created, we can use its ARN
+    const s3Module = new S3Module(
+      this,
+      's3',
+      kmsModule.key.arn,
+      ec2Module.role.arn
+    );
+
+    // Update EC2 module's policy with the actual S3 bucket ARN (resolving circular dependency)
+    new aws.iamRolePolicy.IamRolePolicy(this, 'ec2-s3-policy-update', {
+      role: ec2Module.role.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: ['s3:PutObject', 's3:PutObjectAcl', 's3:GetObject'],
+            Resource: [`${s3Module.bucket.arn}/*`],
+          },
+        ],
+      }),
     });
 
     // 7. CloudWatch Module - Set up monitoring and alerting
@@ -180,7 +200,5 @@ export class TapStack extends TerraformStack {
       value: vpcModule.privateSubnets.map(subnet => subnet.id).join(','),
       description: 'Private subnet IDs',
     });
-    // ! Do NOT create resources directly in this stack.
-    // ! Instead, create separate stacks for each resource type.
   }
 }

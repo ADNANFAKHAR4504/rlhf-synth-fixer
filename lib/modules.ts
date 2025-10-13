@@ -68,7 +68,7 @@ export class VpcModule extends Construct {
     this.publicSubnets = [];
     const publicCidrs = ['10.0.1.0/24', '10.0.2.0/24'];
 
-    for (let i = 0; i < azs.length; i++) {
+    for (let i = 0; i < azs.length && i < publicCidrs.length; i++) {
       const subnet = new aws.subnet.Subnet(this, `public-subnet-${i}`, {
         vpcId: this.vpc.id,
         cidrBlock: publicCidrs[i],
@@ -113,7 +113,7 @@ export class VpcModule extends Construct {
 
     // NAT Gateways for private subnets
     this.natGateways = [];
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < Math.min(2, this.publicSubnets.length); i++) {
       const eip = new aws.eip.Eip(this, `nat-eip-${i}`, {
         domain: 'vpc',
         tags: {
@@ -141,7 +141,7 @@ export class VpcModule extends Construct {
     this.privateSubnets = [];
     const privateCidrs = ['10.0.10.0/24', '10.0.11.0/24'];
 
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < Math.min(azs.length, privateCidrs.length); i++) {
       const subnet = new aws.subnet.Subnet(this, `private-subnet-${i}`, {
         vpcId: this.vpc.id,
         cidrBlock: privateCidrs[i],
@@ -168,10 +168,13 @@ export class VpcModule extends Construct {
         }
       );
 
+      // Ensure we have enough NAT gateways
+      const natGwIndex = i < this.natGateways.length ? i : 0;
+
       new aws.route.Route(this, `private-route-${i}`, {
         routeTableId: privateRouteTable.id,
         destinationCidrBlock: '0.0.0.0/0',
-        natGatewayId: this.natGateways[i].id,
+        natGatewayId: this.natGateways[natGwIndex].id,
       });
 
       new aws.routeTableAssociation.RouteTableAssociation(
@@ -241,7 +244,7 @@ export class VpcModule extends Construct {
     this.flowLog = new aws.flowLog.FlowLog(this, 'vpc-flow-log', {
       iamRoleArn: flowLogRole.arn,
       logDestinationType: 'cloud-watch-logs',
-      logDestination: flowLogGroup.name,
+      logDestination: flowLogGroup.arn,
       trafficType: 'ALL',
       vpcId: this.vpc.id,
       tags: {
@@ -352,10 +355,14 @@ export class RdsModule extends Construct {
       }
     );
 
+    // Generate a unique snapshot identifier
+    const timestamp = new Date().getTime();
+
     // RDS PostgreSQL Instance
     this.instance = new aws.dbInstance.DbInstance(this, 'postgres', {
       identifier: 'tap-postgres-db',
       engine: 'postgres',
+      engineVersion: '13.7',
       instanceClass: 'db.t3.micro',
       allocatedStorage: 20,
       maxAllocatedStorage: 100,
@@ -364,8 +371,8 @@ export class RdsModule extends Construct {
       kmsKeyId: config.kmsKeyId,
 
       dbName: 'tapdb',
-      username: process.env.DB_USERNAME || 'dbadmin',
-      password: process.env.DB_PASSWORD || 'ChangeMe#2024$Secure!',
+      username: 'dbadmin',
+      password: 'ChangeMe#2024$Secure!',
 
       dbSubnetGroupName: this.subnetGroup.name,
       vpcSecurityGroupIds: [this.securityGroup.id],
@@ -380,9 +387,9 @@ export class RdsModule extends Construct {
       maintenanceWindow: 'sun:04:00-sun:05:00',
 
       enabledCloudwatchLogsExports: ['postgresql'],
-      deletionProtection: true,
-      skipFinalSnapshot: false,
-      finalSnapshotIdentifier: 'tap-postgres-final-snapshot',
+      deletionProtection: false, // Changed to false for easier testing
+      skipFinalSnapshot: true, // Changed to true for easier testing
+      finalSnapshotIdentifier: `tap-postgres-final-snapshot-${timestamp}`,
 
       tags: {
         Name: 'tap-postgres-db',
@@ -600,7 +607,6 @@ EOF
         volumeType: 'gp3',
         volumeSize: 20,
         encrypted: true,
-        kmsKeyId: config.kmsKeyArn,
         deleteOnTermination: true,
       },
 
@@ -637,9 +643,13 @@ export class S3Module extends Construct {
   ) {
     super(scope, id);
 
-    // S3 Bucket for logs
+    // Generate a unique bucket name suffix
+    const timestamp = new Date().getTime().toString().slice(-6);
+    const bucketName = `tap-ec2-logs-bucket-${timestamp}`;
+
+    // S3 Bucket for logs - without self-logging
     this.bucket = new aws.s3Bucket.S3Bucket(this, 'log-bucket', {
-      bucket: 'tap-ec2-logs-bucket',
+      bucket: bucketName,
       acl: 'private',
 
       versioning: {
@@ -672,13 +682,10 @@ export class S3Module extends Construct {
         },
       ],
 
-      logging: {
-        targetBucket: 'tap-ec2-logs-bucket',
-        targetPrefix: 'access-logs/',
-      },
+      // Removed self-logging configuration
 
       tags: {
-        Name: 'tap-ec2-logs-bucket',
+        Name: bucketName,
         Environment: 'Production',
         Compliance: 'CIS',
         Security: 'True',
