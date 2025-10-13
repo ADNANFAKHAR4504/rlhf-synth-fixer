@@ -30,7 +30,7 @@ pwd  # Must end with: /worktree/synth-{task_id}
 - Confirm integration tests in `test/` folder
 - Return "PR is not ready" if missing
 
-### Phase 1.5: Metadata Enhancement
+### Phase 1.5: Metadata Enhancement & Compliance Validation
 
 - **Identify Latest Files**: 
   - Read all PROMPT files in `lib/` directory (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.) and the MODEL_RESPONSE files
@@ -41,18 +41,37 @@ pwd  # Must end with: /worktree/synth-{task_id}
 - **Verify metadata.json already contains `subtask` and `subject_labels`**:
   - These fields should have been populated from tasks.csv during task setup
   - If missing, report BLOCKED status - these must be set from the source CSV
+
+**CRITICAL: Platform/Language Compliance Validation**
+- **Verify IDEAL_RESPONSE.md matches metadata.json constraints**:
+  - Check that platform in metadata.json matches the IaC tool used in IDEAL_RESPONSE.md
+  - Check that language in metadata.json matches the programming language in IDEAL_RESPONSE.md
+  - **If mismatch detected**: This is a CRITICAL QUALITY FAILURE
+    - Reduce training_quality score by 5 points minimum
+    - Report this as a blocking issue in the review
+    - Example failures to catch:
+      - metadata.json: `"platform": "pulumi", "language": "go"` but IDEAL_RESPONSE has CDK TypeScript code
+      - metadata.json: `"platform": "terraform", "language": "hcl"` but IDEAL_RESPONSE has Pulumi Python code
+
 - Add `training_quality` to `metadata.json` from the latest PROMPT file, `lib/MODEL_FAILURES.md` and `lib/IDEAL_RESPONSE.md`.
   - This metric should reflect the potential training quality that this data will provide when used for retraining the model
   that generated the MODEL_RESPONSE.
   - **Detailed Scoring Rubric** (0-10):
+    - **AUTOMATIC PENALTIES**:
+      - Platform/Language mismatch with metadata.json: -5 points (CRITICAL FAILURE)
+      - Missing required AWS services from task description: -2 points per missing service
+      - Wrong region deployment: -3 points
     - **8-10 (Excellent)**: Significant model knowledge gaps identified, complex multi-service integration, novel failure patterns, 
-      security/performance issues uncovered, real-world edge cases discovered
+      security/performance issues uncovered, real-world edge cases discovered, ALL requirements met correctly
     - **6-7 (Good)**: Moderate improvements, standard service integrations with some complexity, common failure patterns 
-      with clear fixes, useful deployment insights
-    - **4-5 (Fair)**: Minor fixes, simple configurations, trivial errors (typos, missing imports), basic resource setup
-    - **0-3 (Poor)**: Minimal training value, no meaningful improvements, only formatting changes, consider excluding from training set
+      with clear fixes, useful deployment insights, minor requirement mismatches
+    - **4-5 (Fair)**: Minor fixes, simple configurations, trivial errors (typos, missing imports), basic resource setup,
+      some requirements not fully met
+    - **0-3 (Poor)**: Minimal training value, no meaningful improvements, only formatting changes, platform/language mismatch,
+      major requirements not met, consider excluding from training set
   - The score should reflect: "How much would a model learn from the MODEL_FAILURES.md differences?"
   - **Quality Impact**: Higher quality scores mean more valuable training data for model improvement
+  - **Requirement Completeness**: Verify ALL task requirements are implemented before assigning score ≥6
 - Add `aws_services` to `metadata.json`, extracting from `lib/IDEAL_RESPONSE.md` an array of
 strings of AWS Services used in the task.
 - Provide report on the training_quality metric and it's justification.

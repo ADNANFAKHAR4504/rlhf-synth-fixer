@@ -25,7 +25,7 @@ git branch --show-current  # Must output: synth-{task_id}
 
 **Before Starting**: Review `.claude/lessons_learnt.md` for common deployment failures and quick fixes.
 
-### 1. Project Analysis
+### 1. Project Analysis & Validation
 
 - **Identify Latest Files**: 
   - Read all PROMPT files in `lib/` directory (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.) and the MODEL_RESPONSE files
@@ -34,6 +34,22 @@ git branch --show-current  # Must output: synth-{task_id}
   - If only MODEL_RESPONSE.md exists, use that file
 - Read the PROMPT files, `metadata.json`, and the latest MODEL_RESPONSE file
 - Detect platform (CDK/CDKTF/CFN/Terraform/Pulumi) and language
+
+**CRITICAL: Platform/Language Compliance Check**
+- **Compare metadata.json vs actual code**:
+  - metadata.json says `"platform": "pulumi"` → lib/ code MUST use Pulumi syntax
+  - metadata.json says `"language": "go"` → lib/ code MUST be in Go
+  - metadata.json says `"platform": "cdk"` → lib/ code MUST use CDK constructs
+  - metadata.json says `"language": "ts"` → lib/ code MUST be TypeScript
+- **If platform/language MISMATCH detected**:
+  - Report CRITICAL FAILURE immediately
+  - Document the mismatch in MODEL_FAILURES.md as a Critical failure
+  - This counts as a severe quality issue affecting training_quality score
+  - Example: Task requires Pulumi+Go but code is in CDK+TypeScript = CRITICAL FAILURE
+- **Validation passes if**:
+  - Code platform matches metadata.json platform
+  - Code language matches metadata.json language
+  - PROMPT.md explicitly mentions the correct platform and language
 
 ### 2. Code Quality
 

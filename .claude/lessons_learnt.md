@@ -2,6 +2,77 @@
 
 This document contains common patterns, failures, and solutions discovered during synthetic task generation. Reference this before starting tasks to avoid known pitfalls and reduce deployment attempts.
 
+## Critical Quality Requirements (MUST READ FIRST)
+
+### 1. Platform and Language Compliance (CRITICAL)
+
+**Symptom**: Task requires Pulumi+Go but generated code is CDK+TypeScript, or task requires Terraform but code is in Pulumi
+
+**Root Cause**: Not reading or honoring the platform/language constraints from metadata.json or tasks.csv
+
+**Quick Fix**:
+- **ALWAYS read metadata.json FIRST** before generating any code
+- metadata.json platform and language are MANDATORY, NON-NEGOTIABLE constraints
+- PROMPT.md MUST explicitly state the platform and language in the opening paragraph
+- Example: "Create infrastructure using **Pulumi with Go**" or "Use **AWS CDK with TypeScript**"
+- Verify generated code matches the required platform/language before proceeding
+
+**Validation**:
+```bash
+# Check metadata
+cat metadata.json | jq -r '"\(.platform) - \(.language)"'
+
+# Verify code matches
+# For Pulumi Go: should have package main, pulumi.Run()
+# For CDK TypeScript: should have import * as cdk
+# For Terraform: should have resource "aws_..." blocks
+```
+
+**Applies to**: ALL platforms, ALL agents
+
+---
+
+### 2. Complete Task Requirements (CRITICAL)
+
+**Symptom**: Generated infrastructure missing AWS services explicitly mentioned in task description
+
+**Root Cause**: Summarizing or simplifying task requirements during PROMPT.md generation
+
+**Quick Fix**:
+- Include ALL AWS services mentioned in task description
+- Include ALL constraints (region, security, compliance, performance)
+- Include ALL specific configurations mentioned
+- Do NOT simplify or assume "similar" services are acceptable
+- If task says "ECS Fargate", don't use EC2 instances
+- If task says "RDS PostgreSQL", don't use Aurora MySQL
+
+**Validation**: Cross-check PROMPT.md against original task description for completeness
+
+---
+
+### 3. Training Quality Standards (IMPORTANT)
+
+**Symptom**: Training quality scores consistently low (< 6) or tasks provide minimal learning value
+
+**Root Cause**: Generated code too simple, missing best practices, or doesn't exercise model's capabilities
+
+**Guidelines**:
+- Training quality score < 6 = Poor training data (should be rare)
+- Target range: 7-9 for most tasks
+- Score 10 reserved for exceptional learning opportunities
+- Include 1-2 AWS best practices or features relevant to the task
+- Security, compliance, and monitoring should be included when applicable
+- Avoid trivial implementations that don't teach meaningful patterns
+
+**Red Flags for Low Quality**:
+- Only basic resources with no integrations
+- No security configurations
+- No monitoring or logging
+- Missing error handling
+- Hardcoded values instead of proper configuration
+
+---
+
 ## Common Deployment Failures & Quick Fixes
 
 ### 1. Lambda Reserved Concurrency Issues
