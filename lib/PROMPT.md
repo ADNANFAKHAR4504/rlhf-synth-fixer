@@ -84,3 +84,6 @@ The environment includes a VPC, EC2 instances, load balancers, RDS, and S3, loca
 
 Expected Output:
 A single TypeScript file, `cloudSetup.ts`, implementing all requirements and constraints above, ready for deployment as a CloudFormation stack.
+
+
+.
