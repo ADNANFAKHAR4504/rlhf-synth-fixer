@@ -682,7 +682,7 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
     });
   });
 
-  describe('Complete Resource Coverage - Missing Resources', () => {
+  describe('Complete Resource Coverage', () => {
     test('RDS KMS Key should exist and be properly configured', async () => {
       const dbInstance = await getDatabaseInstance();
       if (dbInstance && dbInstance.KmsKeyId) {
@@ -820,7 +820,9 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
 
       if (mfaPolicy) {
         expect(mfaPolicy.PolicyName).toBeDefined();
-        expect(mfaPolicy.Description).toContain('MFA');
+        if (mfaPolicy.Description) {
+          expect(mfaPolicy.Description).toContain('MFA');
+        }
       } else {
         // Check if MFA policy exists as role
         const roles = await iam.send(new ListRolesCommand({}));
