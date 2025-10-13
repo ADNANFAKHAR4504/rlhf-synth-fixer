@@ -23,7 +23,9 @@ git branch --show-current  # Must output: synth-{task_id}
 
 ## QA Pipeline Workflow
 
-**Before Starting**: Review `.claude/lessons_learnt.md` for common deployment failures and quick fixes.
+**Before Starting**: 
+- Review `.claude/lessons_learnt.md` for common deployment failures and quick fixes.
+- Review `.claude/validation_and_testing_guide.md` for comprehensive testing and validation procedures.
 
 ### 1. Project Analysis & Validation
 
@@ -55,27 +57,31 @@ git branch --show-current  # Must output: synth-{task_id}
 
 **CRITICAL GATE: NO DEPLOYMENT WITHOUT CLEAN BUILD**
 
-Important: Use the commands in `package.json` and `pipfile` to run these tasks per platform and langage.
+Important: Use the commands in `package.json` and `pipfile` to run these tasks per platform and language.
 
 - **Lint**: Run platform-specific linters and fix ALL issues
   - **MANDATORY**: Must pass with zero errors before proceeding
   - If linting fails, fix all issues before moving forward
   - Report lint status clearly
+  - See `.claude/validation_and_testing_guide.md` Phase 2.2 for platform-specific commands
   
 - **Build**: Compile code and fix ALL errors
   - **MANDATORY**: Must complete successfully before proceeding
   - If build fails, fix all compilation errors before moving forward
   - Report build status clearly
+  - See `.claude/validation_and_testing_guide.md` Phase 2.3 for platform-specific commands
   
 - **Synthesize**: Generate deployment templates (CDK/Terraform/Pulumi)
   - **MANDATORY**: Must synthesize successfully before proceeding
   - If synthesis fails, fix all configuration/syntax errors before moving forward
   - Report synthesis status clearly
+  - See `.claude/validation_and_testing_guide.md` Phase 2.4 for platform-specific commands
 
 **CHECKPOINT**: Verify ALL three steps (lint, build, synth) pass successfully before proceeding to Pre-Deployment Validation.
 - If ANY step fails, STOP and fix issues
 - Report blocking status if unable to resolve after multiple attempts
 - Do NOT proceed to deployment with failing lint/build/synth
+- Reference common fixes in `.claude/validation_and_testing_guide.md` Phase 2
 
 ### 2.5. Pre-Deployment Validation
 
@@ -167,6 +173,10 @@ The result should be similar to this (an object based on plain key, value).
     - Report coverage percentage clearly
     - If coverage < 90%, add more tests until requirement is met
     - Test all critical code paths, error handling, and edge cases
+  - **Reference**: See `.claude/validation_and_testing_guide.md` Phase 3 for:
+    - Platform-specific testing patterns and examples
+    - Coverage calculation methods
+    - Testing best practices (what to test vs what NOT to test)
   
 - **Integration Tests**: End-to-end testing with real AWS outputs
   - Use the commands in `package.json` and `pipfile` to run the integration tests
@@ -181,11 +191,16 @@ The result should be similar to this (an object based on plain key, value).
     - Test resource connections and integrations between services
     - Verify that resources work together as expected
     - Test typical use cases and data flows
+  - **Reference**: See `.claude/validation_and_testing_guide.md` Phase 5 for:
+    - Complete integration test patterns by platform/language
+    - Example tests for common AWS services (S3, RDS, Lambda, etc.)
+    - Best practices for workflow testing
   
 **CHECKPOINT**: Both unit tests (90%+ coverage) and integration tests must pass before proceeding to Final Steps.
 - Report test results with coverage percentage
 - Report any test failures immediately
 - Do NOT proceed without meeting testing requirements
+- Use `.claude/validation_and_testing_guide.md` Common Failure Patterns for troubleshooting
 
 ### 5. Final Steps
 
@@ -197,6 +212,8 @@ in structure to the latest MODEL_RESPONSE file.
 - Generate `lib/MODEL_FAILURES.md` explaining the fixes made to reach the `lib/IDEAL_RESPONSE.md` from the
 conversation logged in the PROMPT and MODEL_RESPONSE files. Do not mention the QA process. Only focus in
 the infrastructure changes needed to fix the latest MODEL_RESPONSE.
+
+**Note**: Do NOT destroy resources. Resource cleanup is handled after manual PR review.
 
 **MODEL_FAILURES.md Structure** (for quality improvement):
 
@@ -244,33 +261,28 @@ the infrastructure changes needed to fix the latest MODEL_RESPONSE.
 - **Medium**: Suboptimal configurations, missing best practices, moderate cost impact ($10-50/month)
 - **Low**: Naming conventions, minor optimizations, code style issues
 
-### 6. Cleanup
-
-- Destroy all AWS resources (empty S3 buckets first)
-- Ensure complete cleanup regardless of success/failure
-
 ## Key Constraints
 
 - For commands, use the existing scripts in `package.json` and `Pipfile`. based on the platform and language.
   - Dont use custom commands unless you cannot find them in those files.
 - **Max 5 deployment attempts** (reduced for cost optimization)
 - **MANDATORY: Pass lint, build, and synth before any deployment attempt**
-- No Retain policies allowed. Every resource created should be destroyable.
 - Use real AWS outputs generated on deployment in integration tests (no mocking). These should come from cfn-outputs/flat-outputs.json
-- DO NOT create or update fildes outside of the lib/ and tests/ folder.
+- DO NOT create or update files outside of the lib/ and tests/ folder.
   - Except you need to install new packages.
 - Keep the file structure as simple as possible. But avoid creating files with too many lines.
 Use your best judgement to decide.
-- Never create or updated code outside of the lib, bin, test folders. That should be your working space to do the QA task.
+- Never create or update code outside of the lib, bin, test folders. That should be your working space to do the QA task.
 - Do not create specific github actions or workflows. Those are already created.
 - Do not create any file outside lib/ folder. You can install packages if you need, but DO NOT create garbage files outside
 the lib/ folder
+- **Do NOT destroy resources** - Resource cleanup is handled after manual PR review
 
 ### Agent-Specific Reporting
 - Report start of each QA pipeline stage with current infrastructure being tested
 - Report deployment attempt results (success/failure with attempt number)
 - Report any deployment blockers (missing dependencies, AWS access issues, resource conflicts)
 - Report test execution progress and coverage metrics with current test being run
-- Report cleanup completion status and any cleanup failures
 - Report blocking conditions if infrastructure deployment fails repeatedly
-- Report unit-test coverage.
+- Report unit-test coverage
+- **Note**: Do NOT report cleanup/destroy status - resources remain deployed for manual PR review

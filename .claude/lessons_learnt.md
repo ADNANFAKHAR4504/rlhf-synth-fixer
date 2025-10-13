@@ -2,6 +2,9 @@
 
 This document contains common patterns, failures, and solutions discovered during synthetic task generation. Reference this before starting tasks to avoid known pitfalls and reduce deployment attempts.
 
+**For comprehensive validation procedures, see `.claude/validation_and_testing_guide.md`**  
+**For quick reference, see `.claude/quick_validation_checklist.md`**
+
 ## Critical Data Integrity Requirements (MUST READ FIRST)
 
 ### CSV File Corruption Prevention (CRITICAL)
@@ -200,18 +203,9 @@ const key = event.Records[0].s3.object.key;
 
 ---
 
-### 4. S3 Bucket Deletion Failures
+### 4. S3 Bucket Considerations
 
-**Symptom**: Stack deletion fails with "Bucket must be empty" error
-
-**Root Cause**: S3 buckets with objects cannot be deleted
-
-**Quick Fix**:
-- CDK: Set `autoDeleteObjects: true` and `removalPolicy: RemovalPolicy.DESTROY`
-- CloudFormation: Add Lambda custom resource to empty bucket before deletion
-- Terraform: Use `force_destroy = true`
-
-**CRITICAL**: All synthetic tasks MUST create destroyable resources
+**Note**: Resource cleanup (including S3 bucket deletion) is handled after manual PR review. The infrastructure code does not need special deletion configurations for synthetic tasks.
 
 ---
 
