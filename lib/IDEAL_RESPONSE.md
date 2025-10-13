@@ -136,7 +136,7 @@ import com.pulumi.aws.s3.BucketPublicAccessBlockArgs;import com.pulumi.aws.s3.Bu
 
     public static String getDefaultRegion() {
 
-        return "us-east-2";import com.pulumi.aws.iam.Policy;import com.pulumi.aws.iam.RolePolicy;
+        return "us-east-1";
 
     }
 
@@ -276,7 +276,19 @@ import java.util.Map;import com.pulumi.resources.CustomResourceOptions;
 
                                     "kms:GenerateDataKey*",
 
-                                    "kms:DecryptDataKey"        return "us-east-2";                .enableKeyRotation(true)
+                                    "kms:DecryptDataKey"
+                                ],
+                                "Resource": "*"
+            },
+                            {
+                                "Sid": "Allow S3 to use the key",
+                                "Effect": "Allow",
+                                "Principal": {
+                                    "Service": "s3.amazonaws.com"
+                                },
+                                "Action": [
+                                    "kms:Decrypt",
+                                    "kms:GenerateDataKey"
 
                                 ],
 
