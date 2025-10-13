@@ -1,0 +1,14 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "CLO_YML_HRD_BATCH_PROC_9w5x2y_3l4m7n1tST",
+  "team": "5",
+  "startedAt": "2025-10-13T13:05:58.539Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "SQS, Dynamo, Cloudwatch, S3, IAM"
+}
