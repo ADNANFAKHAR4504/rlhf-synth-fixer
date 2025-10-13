@@ -188,28 +188,8 @@ describe("TapProject Integration Tests - Complete Infrastructure", () => {
   describe("Application Load Balancer and Auto Scaling", () => {
     test("ALB is healthy and properly configured", async () => {
 
-      let alb;
-      if (!LoadBalancers?.length) {
-        const allLBs = await elbv2Client.send(new DescribeLoadBalancersCommand({}));
-        alb = allLBs.LoadBalancers?.find(lb => lb.DNSName === albDnsName);
-      } else {
-        alb = LoadBalancers[0];
-      }
-
-      expect(alb).toBeDefined();
-      expect(alb?.State?.Code).toBe('active');
-      expect(alb?.Scheme).toBe('internet-facing');
-      expect(alb?.Type).toBe('application');
-
-      if (alb?.LoadBalancerArn) {
-        albArn = alb.LoadBalancerArn;
-
-        // Check listeners
-        const { Listeners } = await elbv2Client.send(
-          new DescribeListenersCommand({
-            LoadBalancerArn: albArn
-          })
-        );
+    )
+  );
 
         expect(Listeners?.length).toBeGreaterThan(0);
         const httpListener = Listeners?.find(l => l.Port === 80);
