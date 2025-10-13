@@ -13,8 +13,8 @@ interface MonitoringStackProps {
   environmentSuffix: string;
   ecsCluster: ecs.Cluster;
   ecsService: ecs.FargateService;
-  loadBalancer: elbv2.ApplicationLoadBalancer;
-  targetGroup: elbv2.ApplicationTargetGroup;
+  loadBalancer: elbv2.NetworkLoadBalancer;
+  targetGroup: elbv2.NetworkTargetGroup;
   database: rds.DatabaseInstance;
   api: apigateway.RestApi;
   kinesisStream: kinesis.Stream;
@@ -57,20 +57,31 @@ export class MonitoringStack extends Construct {
     });
 
     // Load Balancer Metrics
-    const albRequestCountWidget = new cloudwatch.GraphWidget({
-      title: 'ALB Request Count',
+    const nlbRequestCountWidget = new cloudwatch.GraphWidget({
+      title: 'NLB Active Connections',
       left: [
-        props.loadBalancer.metricRequestCount({
+        new cloudwatch.Metric({
+          namespace: 'AWS/NetworkELB',
+          metricName: 'ActiveConnectionCount',
+          dimensionsMap: {
+            LoadBalancer: props.loadBalancer.loadBalancerFullName,
+          },
           statistic: 'Sum',
           period: cdk.Duration.minutes(5),
         }),
       ],
     });
 
-    const albTargetResponseTimeWidget = new cloudwatch.GraphWidget({
+    const nlbTargetResponseTimeWidget = new cloudwatch.GraphWidget({
       title: 'Target Response Time',
       left: [
-        props.targetGroup.metricTargetResponseTime({
+        new cloudwatch.Metric({
+          namespace: 'AWS/NetworkELB',
+          metricName: 'TargetResponseTime',
+          dimensionsMap: {
+            TargetGroup: props.targetGroup.targetGroupFullName,
+            LoadBalancer: props.loadBalancer.loadBalancerFullName,
+          },
           statistic: 'Average',
           period: cdk.Duration.minutes(5),
         }),
@@ -144,10 +155,10 @@ export class MonitoringStack extends Construct {
     dashboard.addWidgets(
       ecsServiceCpuWidget,
       ecsServiceMemoryWidget,
-      albRequestCountWidget
+      nlbRequestCountWidget
     );
     dashboard.addWidgets(
-      albTargetResponseTimeWidget,
+      nlbTargetResponseTimeWidget,
       dbCpuWidget,
       dbConnectionsWidget
     );
@@ -213,23 +224,29 @@ export class MonitoringStack extends Construct {
     });
     dbCpuAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(alarmTopic));
 
-    // ALB Target Health Alarm
-    const albUnhealthyHostAlarm = new cloudwatch.Alarm(
+    // NLB Target Health Alarm
+    const nlbUnhealthyHostAlarm = new cloudwatch.Alarm(
       this,
-      'AlbUnhealthyHostAlarm',
+      'NlbUnhealthyHostAlarm',
       {
-        metric: props.targetGroup.metricUnhealthyHostCount({
+        metric: new cloudwatch.Metric({
+          namespace: 'AWS/NetworkELB',
+          metricName: 'UnHealthyHostCount',
+          dimensionsMap: {
+            TargetGroup: props.targetGroup.targetGroupFullName,
+            LoadBalancer: props.loadBalancer.loadBalancerFullName,
+          },
           statistic: 'Average',
           period: cdk.Duration.minutes(1),
         }),
         threshold: 1,
         evaluationPeriods: 2,
-        alarmDescription: 'ALB has unhealthy targets',
-        alarmName: `payment-alb-unhealthy-${props.environmentSuffix}`,
+        alarmDescription: 'NLB has unhealthy targets',
+        alarmName: `payment-nlb-unhealthy-${props.environmentSuffix}`,
         treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
       }
     );
-    albUnhealthyHostAlarm.addAlarmAction(
+    nlbUnhealthyHostAlarm.addAlarmAction(
       new cloudwatch_actions.SnsAction(alarmTopic)
     );
 

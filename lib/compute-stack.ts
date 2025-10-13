@@ -25,8 +25,8 @@ interface ComputeStackProps {
 export class ComputeStack extends Construct {
   public readonly cluster: ecs.Cluster;
   public readonly service: ecs.FargateService;
-  public readonly loadBalancer: elbv2.ApplicationLoadBalancer;
-  public readonly targetGroup: elbv2.ApplicationTargetGroup;
+  public readonly loadBalancer: elbv2.NetworkLoadBalancer;
+  public readonly targetGroup: elbv2.NetworkTargetGroup;
   public readonly vpcLink: apigateway.VpcLink;
 
   constructor(scope: Construct, id: string, props: ComputeStackProps) {
@@ -40,33 +40,31 @@ export class ComputeStack extends Construct {
       enableFargateCapacityProviders: true,
     });
 
-    // Create Application Load Balancer
-    this.loadBalancer = new elbv2.ApplicationLoadBalancer(this, 'PaymentALB', {
+    // Create Network Load Balancer for VPC Link compatibility
+    this.loadBalancer = new elbv2.NetworkLoadBalancer(this, 'PaymentNLB', {
       vpc: props.vpc,
       internetFacing: true,
-      securityGroup: props.loadBalancerSecurityGroup,
       vpcSubnets: {
         subnetType: ec2.SubnetType.PUBLIC,
       },
-      dropInvalidHeaderFields: true,
-      http2Enabled: true,
+      crossZoneEnabled: true,
     });
 
-    // Create target group
-    this.targetGroup = new elbv2.ApplicationTargetGroup(
+    // Create target group for Network Load Balancer
+    this.targetGroup = new elbv2.NetworkTargetGroup(
       this,
       'PaymentTargetGroup',
       {
         vpc: props.vpc,
         port: 8080,
-        protocol: elbv2.ApplicationProtocol.HTTP,
+        protocol: elbv2.Protocol.TCP,
         targetType: elbv2.TargetType.IP,
         healthCheck: {
-          path: '/health',
-          interval: cdk.Duration.seconds(30),
-          timeout: cdk.Duration.seconds(5),
+          enabled: true,
           healthyThresholdCount: 2,
           unhealthyThresholdCount: 3,
+          interval: cdk.Duration.seconds(30),
+          timeout: cdk.Duration.seconds(5),
         },
         deregistrationDelay: cdk.Duration.seconds(30),
       }
@@ -76,7 +74,7 @@ export class ComputeStack extends Construct {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const listener = this.loadBalancer.addListener('HttpListener', {
       port: 80,
-      protocol: elbv2.ApplicationProtocol.HTTP,
+      protocol: elbv2.Protocol.TCP,
       defaultTargetGroups: [this.targetGroup],
     });
 
@@ -226,7 +224,7 @@ export class ComputeStack extends Construct {
     });
 
     // Attach service to target group
-    this.service.attachToApplicationTargetGroup(this.targetGroup);
+    this.service.attachToNetworkTargetGroup(this.targetGroup);
 
     // Grant EFS access to ECS task
     props.fileSystem.grantRootAccess(taskRole);
@@ -250,20 +248,9 @@ export class ComputeStack extends Construct {
     });
 
     // Create VPC Link for API Gateway
-    const vpcLinkSecurityGroup = new ec2.SecurityGroup(
-      this,
-      'VpcLinkSecurityGroup',
-      {
-        vpc: props.vpc,
-        description: 'Security group for VPC Link',
-        allowAllOutbound: true,
-      }
-    );
-
     this.vpcLink = new apigateway.VpcLink(this, 'VpcLink', {
       vpcLinkName: `payment-vpc-link-${props.environmentSuffix}`,
       targets: [this.loadBalancer],
-      vpcLinkSecurityGroups: [vpcLinkSecurityGroup],
     });
 
     // Tags for compliance

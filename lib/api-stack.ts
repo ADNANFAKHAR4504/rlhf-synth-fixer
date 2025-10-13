@@ -10,7 +10,7 @@ interface ApiStackProps {
   environmentSuffix: string;
   vpc: ec2.Vpc;
   vpcLink: apigateway.VpcLink;
-  loadBalancer: elbv2.ApplicationLoadBalancer;
+  loadBalancer: elbv2.NetworkLoadBalancer;
 }
 
 export class ApiStack extends Construct {
