@@ -10,5 +10,15 @@
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
-  "aws_services": "S3, CloudWatch, Load Balancer, VPC"
+  "training_quality": "high",
+  "aws_services": [
+    "EC2",
+    "AutoScaling",
+    "ApplicationLoadBalancer",
+    "VPC",
+    "S3",
+    "CloudWatch",
+    "IAM",
+    "SecurityGroups"
+  ]
 }
