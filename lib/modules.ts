@@ -13,6 +13,36 @@ export class KmsModule extends Construct {
       description: 'Main KMS key for infrastructure encryption',
       enableKeyRotation: true,
       deletionWindowInDays: 10,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Id: 'key-policy',
+        Statement: [
+          {
+            Sid: 'Enable IAM User Permissions',
+            Effect: 'Allow',
+            Principal: {
+              AWS: '*', // This allows the AWS account to manage the key
+            },
+            Action: 'kms:*',
+            Resource: '*',
+          },
+          {
+            Sid: 'Allow CloudWatch Logs',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'logs.amazonaws.com',
+            },
+            Action: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+            ],
+            Resource: '*',
+          },
+        ],
+      }),
       tags: {
         Environment: 'Production',
         Compliance: 'CIS',
@@ -315,6 +345,7 @@ export class RdsModule extends Construct {
       vpcId: string;
       privateSubnetIds: string[];
       kmsKeyId: string;
+      kmsKeyArn: string;
       dbSecret: aws.secretsmanagerSecret.SecretsmanagerSecret;
     }
   ) {
@@ -368,7 +399,7 @@ export class RdsModule extends Construct {
       maxAllocatedStorage: 100,
       storageType: 'gp3',
       storageEncrypted: true,
-      kmsKeyId: config.kmsKeyId,
+      kmsKeyId: config.kmsKeyArn,
 
       dbName: 'tapdb',
       username: 'dbadmin',
@@ -423,7 +454,7 @@ export class Ec2Module extends Construct {
 
     // EC2 IAM Role
     this.role = new aws.iamRole.IamRole(this, 'ec2-role', {
-      name: 'tap-ec2-role',
+      name: 'tap-ec2-role-ts-1234',
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -485,7 +516,7 @@ export class Ec2Module extends Construct {
       this,
       'ec2-profile',
       {
-        name: 'tap-ec2-profile',
+        name: 'tap-ec2-profile-ts-1234',
         role: this.role.name,
       }
     );
