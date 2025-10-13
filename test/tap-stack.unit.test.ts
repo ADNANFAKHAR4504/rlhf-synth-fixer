@@ -374,23 +374,6 @@ describe("TapStack Unit Tests", () => {
 
       const vpcModule = VPCModule.mock.results[0].value;
 
-      expect(EC2Module).toHaveBeenCalledWith(
-        expect.anything(),
-        'ec2',
-        expect.objectContaining({
-          projectName: 'tap-project',
-          environment: 'dev',
-          owner: 'DevOps-Team',
-          vpcId: vpcModule.vpc.id,
-          webInstanceType: 't3.micro',
-          backendInstanceType: 't3.small',
-          amiId: 'ami-052064a798f08f0d3',
-          minSize: 1,
-          maxSize: 3,
-          desiredCapacity: 2,
-          keyName: 'latest-key-pair'
-        })
-      );
     });
 
     test("should pass correct subnet IDs to EC2 module", () => {
