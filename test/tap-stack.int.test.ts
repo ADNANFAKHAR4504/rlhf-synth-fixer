@@ -290,9 +290,10 @@ describe('Turn Around Prompt API Integration Tests', () => {
       const dnsHost = await ec2.send(new DescribeVpcAttributeCommand({ VpcId: vpcId, Attribute: 'enableDnsHostnames' }));
       expect(dnsSupport.EnableDnsSupport?.Value).toBe(true);
       expect(dnsHost.EnableDnsHostnames?.Value).toBe(true);
-      // IGW attached
+      // IGW attached (AWS often reports state "available" rather than "attached")
       const igw = await ec2.send(new DescribeInternetGatewaysCommand({ InternetGatewayIds: [igwId] }));
-      const attached = igw.InternetGateways?.[0]?.Attachments?.some(a => a.VpcId === vpcId && a.State === 'attached');
+      const att = igw.InternetGateways?.[0]?.Attachments || [];
+      const attached = att.some(a => a.VpcId === vpcId && ['available', 'attached'].includes((a.State || '').toLowerCase()));
       expect(attached).toBe(true);
       // NAT GW available
       const nat = await ec2.send(new DescribeNatGatewaysCommand({ NatGatewayIds: [nat1Id] }));
