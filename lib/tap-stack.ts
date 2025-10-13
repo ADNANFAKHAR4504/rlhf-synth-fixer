@@ -283,8 +283,9 @@ export class TapStack extends TerraformStack {
         {
           id: 'expire-old-versions',
           status: 'Enabled',
+          filter: {}, // Add empty filter
           noncurrentVersionExpiration: {
-            days: 90,
+            noncurrentDays: 90, // Change from 'days' to 'noncurrentDays'
           },
         },
       ],
@@ -300,6 +301,7 @@ export class TapStack extends TerraformStack {
         {
           id: 'transition-to-ia',
           status: 'Enabled',
+          filter: {}, // Add empty filter
           transition: [
             {
               days: 30,

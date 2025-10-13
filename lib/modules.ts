@@ -291,9 +291,15 @@ export class EncryptedS3Bucket extends Construct {
 
     // Configure lifecycle rules
     if (config.lifecycleRules && config.lifecycleRules.length > 0) {
+      const rulesWithFilter = config.lifecycleRules.map(rule => ({
+        ...rule,
+        // Add filter if not present
+        filter: rule.filter || {},
+      }));
+
       new S3BucketLifecycleConfiguration(this, 'lifecycle', {
         bucket: this.bucket.id,
-        rule: config.lifecycleRules,
+        rule: rulesWithFilter,
       });
     }
 
@@ -552,8 +558,10 @@ export class SecureVpc extends Construct {
 
     // DB Subnet Group
     this.dbSubnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
-      name: `${config.name}-db-subnet-group`,
-      subnetIds: this.privateSubnets.map(s => s.id), // This should be fine as privateSubnets is a known array
+      name:
+        config.name.toLowerCase().replace(/[^a-z0-9\-_.]/g, '-') +
+        '-db-subnet-group',
+      subnetIds: this.privateSubnets.map(s => s.id),
       tags: { ...config.tags, Name: `${config.name}-db-subnet-group` },
     });
   }
@@ -703,6 +711,7 @@ export class AuditTrail extends Construct {
         {
           id: 'expire-old-logs',
           status: 'Enabled',
+          filter: {}, // Add empty filter to apply to all objects
           expiration: {
             days: 90,
           },
