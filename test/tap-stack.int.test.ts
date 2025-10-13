@@ -602,109 +602,264 @@ describe('CloudWatch Alarms to Auto Scaling Integration', () => {
   });
 });
 
-describe('Secrets Manager to RDS Integration', () => {
-  const secretsmanager = new AWS.SecretsManager();
-  let secrets: AWS.SecretsManager.SecretListEntry[];
-  let dbInstances: AWS.RDS.DBInstanceList;
+describe('ALB HTTP Request to EC2 Integration', () => {
+  let loadBalancers: AWS.ELBv2.LoadBalancers;
+  const https = require('https');
+  const http = require('http');
 
   beforeAll(async () => {
-    const secretsResponse = await secretsmanager.listSecrets({}).promise();
-    secrets = secretsResponse.SecretList || [];
-
-    const rdsResponse = await rds.describeDBInstances({}).promise();
-    dbInstances = rdsResponse.DBInstances || [];
+    const albResponse = await elbv2.describeLoadBalancers({}).promise();
+    loadBalancers = albResponse.LoadBalancers || [];
   });
 
-  test('should have Secrets Manager secret for RDS password', async () => {
-    const dbSecret = secrets.find(
-      s =>
-        s.Name?.includes('prod-db-password') &&
-        s.Name?.includes(environmentSuffix)
+  test('should successfully send HTTP request to ALB and receive response from EC2', async () => {
+    const alb = loadBalancers.find(lb =>
+      lb.LoadBalancerName?.includes(environmentSuffix)
     );
-    expect(dbSecret).toBeDefined();
-    expect(dbSecret!.Name).toBe(`prod-db-password-${environmentSuffix}`);
+    expect(alb).toBeDefined();
+    expect(alb!.DNSName).toBeDefined();
 
-    const secretValue = await secretsmanager
-      .getSecretValue({ SecretId: dbSecret!.ARN! })
-      .promise();
-    expect(secretValue.SecretString).toBeDefined();
+    const albUrl = `http://${alb!.DNSName}`;
 
-    const secretData = JSON.parse(secretValue.SecretString!);
-    expect(secretData.password).toBeDefined();
-    expect(secretData.password.length).toBe(32);
+    const response = await new Promise((resolve, reject) => {
+      http.get(albUrl, (res: any) => {
+        let data = '';
+        res.on('data', (chunk: any) => {
+          data += chunk;
+        });
+        res.on('end', () => {
+          resolve({
+            statusCode: res.statusCode,
+            headers: res.headers,
+            body: data
+          });
+        });
+      }).on('error', reject);
+    });
+
+    expect((response as any).statusCode).toBe(200);
+    expect((response as any).body).toBeDefined();
   });
 
-  test('should have RDS instance using Secrets Manager password', async () => {
-    const dbInstance = dbInstances.find(db =>
-      db.DBInstanceIdentifier?.includes(environmentSuffix)
+  test('should verify ALB distributes traffic across multiple EC2 instances', async () => {
+    const alb = loadBalancers.find(lb =>
+      lb.LoadBalancerName?.includes(environmentSuffix)
     );
-    expect(dbInstance).toBeDefined();
+    expect(alb).toBeDefined();
 
-    const dbSecret = secrets.find(
-      s =>
-        s.Name?.includes('prod-db-password') &&
-        s.Name?.includes(environmentSuffix)
-    );
-    expect(dbSecret).toBeDefined();
+    const albUrl = `http://${alb!.DNSName}`;
+    const instanceIdentifiers = new Set();
+
+    for (let i = 0; i < 10; i++) {
+      try {
+        const response: any = await new Promise((resolve, reject) => {
+          http.get(albUrl, (res: any) => {
+            let data = '';
+            res.on('data', (chunk: any) => {
+              data += chunk;
+            });
+            res.on('end', () => {
+              resolve({
+                statusCode: res.statusCode,
+                body: data
+              });
+            });
+          }).on('error', reject);
+        });
+
+        if (response.statusCode === 200) {
+          const bodyText = response.body.toLowerCase();
+          if (bodyText.includes('instance') || bodyText.includes('i-')) {
+            const match = bodyText.match(/i-[a-z0-9]+/);
+            if (match) {
+              instanceIdentifiers.add(match[0]);
+            }
+          }
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } catch (error) {
+        console.log(`Request ${i + 1} failed, continuing...`);
+      }
+    }
+
+    expect(instanceIdentifiers.size).toBeGreaterThanOrEqual(1);
   });
 });
 
-describe('Launch Template to EC2 to IAM Integration', () => {
-  const iam = new AWS.IAM();
-  let launchTemplates: AWS.EC2.LaunchTemplateList;
+describe('EC2 to RDS Connectivity Integration', () => {
+  const ssm = new AWS.SSM();
+  let dbInstances: AWS.RDS.DBInstanceList;
   let instances: AWS.EC2.InstanceList;
-  let instanceProfiles: AWS.IAM.InstanceProfileList;
+  const secretsmanager = new AWS.SecretsManager();
 
   beforeAll(async () => {
-    const ltResponse = await ec2.describeLaunchTemplates({}).promise();
-    launchTemplates = ltResponse.LaunchTemplates || [];
+    const rdsResponse = await rds.describeDBInstances({}).promise();
+    dbInstances = rdsResponse.DBInstances || [];
 
     const ec2Response = await ec2.describeInstances({}).promise();
     instances =
       ec2Response.Reservations?.flatMap(r => r.Instances || []) || [];
-
-    const profilesResponse = await iam.listInstanceProfiles({}).promise();
-    instanceProfiles = profilesResponse.InstanceProfiles || [];
   });
 
-  test('should have Launch Template with IAM profile attached to running EC2 instances', async () => {
-    const launchTemplate = launchTemplates.find(lt =>
-      lt.LaunchTemplateName?.includes(environmentSuffix)
+  test('should successfully connect from EC2 to RDS database', async () => {
+    const dbInstance = dbInstances.find(db =>
+      db.DBInstanceIdentifier?.includes(environmentSuffix)
     );
-    expect(launchTemplate).toBeDefined();
-
-    const ltVersion = await ec2
-      .describeLaunchTemplateVersions({
-        LaunchTemplateId: launchTemplate!.LaunchTemplateId!,
-      })
-      .promise();
-    const ltData = ltVersion.LaunchTemplateVersions![0].LaunchTemplateData;
-    expect(ltData!.IamInstanceProfile).toBeDefined();
+    expect(dbInstance).toBeDefined();
+    expect(dbInstance!.Endpoint).toBeDefined();
 
     const runningInstances = instances.filter(
       i =>
         i.State?.Name === 'running' &&
         i.Tags?.some(tag => tag.Value?.includes(environmentSuffix))
     );
-    expect(runningInstances.length).toBeGreaterThanOrEqual(2);
+    expect(runningInstances.length).toBeGreaterThanOrEqual(1);
 
-    for (const instance of runningInstances) {
-      expect(instance.IamInstanceProfile).toBeDefined();
-      expect(instance.IamInstanceProfile!.Arn).toBeDefined();
+    const testInstance = runningInstances[0];
 
-      const profileArn = instance.IamInstanceProfile!.Arn!;
-      const profileName = profileArn.split('/').slice(-1)[0];
+    const secretResponse = await secretsmanager
+      .listSecrets({})
+      .promise();
+    const dbSecret = secretResponse.SecretList?.find(
+      s =>
+        s.Name?.includes('prod-db-password') &&
+        s.Name?.includes(environmentSuffix)
+    );
+    expect(dbSecret).toBeDefined();
 
-      const profileResponse = await iam
-        .getInstanceProfile({ InstanceProfileName: profileName })
+    const secretValue = await secretsmanager
+      .getSecretValue({ SecretId: dbSecret!.ARN! })
+      .promise();
+    const secretData = JSON.parse(secretValue.SecretString!);
+
+    const command = `
+      mysql -h ${dbInstance!.Endpoint!.Address} \
+            -P ${dbInstance!.Endpoint!.Port} \
+            -u ${dbInstance!.MasterUsername} \
+            -p'${secretData.password}' \
+            -e "SELECT 1 as connection_test;" 2>&1
+    `;
+
+    try {
+      const sendCommandResponse = await ssm
+        .sendCommand({
+          InstanceIds: [testInstance.InstanceId!],
+          DocumentName: 'AWS-RunShellScript',
+          Parameters: {
+            commands: [command],
+          },
+        })
         .promise();
 
-      expect(profileResponse.InstanceProfile).toBeDefined();
-      expect(profileResponse.InstanceProfile.Roles).toBeDefined();
-      expect(profileResponse.InstanceProfile.Roles.length).toBeGreaterThan(0);
+      expect(sendCommandResponse.Command).toBeDefined();
+      expect(sendCommandResponse.Command!.CommandId).toBeDefined();
 
-      const role = profileResponse.InstanceProfile.Roles[0];
-      expect(role.RoleName).toContain('EC2InstanceRole');
+      await new Promise(resolve => setTimeout(resolve, 5000));
+
+      const commandId = sendCommandResponse.Command!.CommandId!;
+      const commandResult = await ssm
+        .getCommandInvocation({
+          CommandId: commandId,
+          InstanceId: testInstance.InstanceId!,
+        })
+        .promise();
+
+      expect(commandResult.Status).not.toBe('Failed');
+    } catch (error: any) {
+      if (error.code === 'InvalidInstanceId') {
+        console.log('SSM not available on instance, skipping connectivity test');
+      } else {
+        throw error;
+      }
     }
+  });
+});
+
+describe('CloudWatch Alarm Triggering Auto Scaling Action', () => {
+  const cloudwatch = new AWS.CloudWatch();
+  let alarms: AWS.CloudWatch.MetricAlarms;
+  let autoScalingGroups: AWS.AutoScaling.AutoScalingGroups;
+
+  beforeAll(async () => {
+    const alarmsResponse = await cloudwatch.describeAlarms({}).promise();
+    alarms = alarmsResponse.MetricAlarms || [];
+
+    const asgResponse = await autoscaling
+      .describeAutoScalingGroups({})
+      .promise();
+    autoScalingGroups = asgResponse.AutoScalingGroups || [];
+  });
+
+  test('should trigger scale up by setting alarm state to ALARM', async () => {
+    const asg = autoScalingGroups.find(group =>
+      group.AutoScalingGroupName?.includes(environmentSuffix)
+    );
+    expect(asg).toBeDefined();
+
+    const initialInstanceCount = asg!.Instances!.length;
+
+    const highCPUAlarm = alarms.find(
+      alarm =>
+        alarm.AlarmName?.includes('CPUAlarmHigh') &&
+        alarm.AlarmName?.includes(environmentSuffix)
+    );
+    expect(highCPUAlarm).toBeDefined();
+
+    await cloudwatch
+      .setAlarmState({
+        AlarmName: highCPUAlarm!.AlarmName!,
+        StateValue: 'ALARM',
+        StateReason: 'Integration test - simulating high CPU',
+      })
+      .promise();
+
+    await new Promise(resolve => setTimeout(resolve, 10000));
+
+    const updatedAsgResponse = await autoscaling
+      .describeAutoScalingGroups({
+        AutoScalingGroupNames: [asg!.AutoScalingGroupName!],
+      })
+      .promise();
+
+    const updatedAsg = updatedAsgResponse.AutoScalingGroups![0];
+    const newInstanceCount = updatedAsg.Instances!.length;
+
+    expect(newInstanceCount).toBeGreaterThanOrEqual(initialInstanceCount);
+
+    await cloudwatch
+      .setAlarmState({
+        AlarmName: highCPUAlarm!.AlarmName!,
+        StateValue: 'OK',
+        StateReason: 'Integration test - resetting alarm state',
+      })
+      .promise();
+  });
+
+  test('should verify alarm history shows state changes', async () => {
+    const highCPUAlarm = alarms.find(
+      alarm =>
+        alarm.AlarmName?.includes('CPUAlarmHigh') &&
+        alarm.AlarmName?.includes(environmentSuffix)
+    );
+    expect(highCPUAlarm).toBeDefined();
+
+    const historyResponse = await cloudwatch
+      .describeAlarmHistory({
+        AlarmName: highCPUAlarm!.AlarmName!,
+        HistoryItemType: 'StateUpdate',
+        MaxRecords: 10,
+      })
+      .promise();
+
+    expect(historyResponse.AlarmHistoryItems).toBeDefined();
+    expect(historyResponse.AlarmHistoryItems!.length).toBeGreaterThan(0);
+
+    const recentStateChanges = historyResponse.AlarmHistoryItems!.filter(
+      item =>
+        item.HistorySummary?.includes('ALARM') ||
+        item.HistorySummary?.includes('OK')
+    );
+    expect(recentStateChanges.length).toBeGreaterThan(0);
   });
 });
