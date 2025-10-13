@@ -730,10 +730,10 @@ Resources:
 
   CloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
-    DependsOn: CloudTrailBucket
     Properties:
       Bucket: !Ref CloudTrailBucket
       PolicyDocument:
+        Version: '2012-10-17'
         Statement:
           - Sid: AWSCloudTrailAclCheck
             Effect: Allow
@@ -741,6 +741,9 @@ Resources:
               Service: cloudtrail.amazonaws.com
             Action: s3:GetBucketAcl
             Resource: !GetAtt CloudTrailBucket.Arn
+            Condition:
+              StringEquals:
+                'aws:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${StackName}-cloudtrail'
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
@@ -750,9 +753,7 @@ Resources:
             Condition:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
-                'aws:SourceAccount': !Ref 'AWS::AccountId'
-              StringLike:
-                'aws:SourceArn': !Sub 'arn:aws:cloudtrail:*:${AWS::AccountId}:trail/*'
+                'aws:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${StackName}-cloudtrail'
 
   # =============================================
   # SYSTEMS MANAGER PARAMETERS (Constraint 10)
