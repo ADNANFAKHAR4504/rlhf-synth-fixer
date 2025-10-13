@@ -220,6 +220,10 @@ Resources:
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 10.0.0.0/16
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-SecureEnvWebSecurityGroup'
@@ -448,15 +452,24 @@ Resources:
             Encrypted: true
             DeleteOnTermination: true
       UserData:
-        Fn::Base64: |
-          #!/bin/bash
-          set -euxo pipefail
-          yum update -y
-          amazon-linux-extras enable nginx1 || true
-          yum install -y nginx amazon-cloudwatch-agent
-          systemctl enable nginx
-          echo "<html><body><h1>Hello from SecureEnv web server</h1></body></html>" > /usr/share/nginx/html/index.html
-          systemctl start nginx
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash
+            set -euxo pipefail
+            yum update -y
+            amazon-linux-extras enable nginx1 || true
+            yum install -y nginx amazon-cloudwatch-agent
+            systemctl enable nginx
+            echo "<html><body><h1>Hello from SecureEnv web server</h1></body></html>" > /usr/share/nginx/html/index.html
+            # RDS connectivity status page
+            DB_ENDPOINT="${SecureEnvDatabase.Endpoint.Address}"
+            DB_PORT=3306
+            if timeout 3 bash -c "</dev/tcp/$DB_ENDPOINT/$DB_PORT"; then
+              echo "<html><body><h2>DB Connectivity: OK</h2><p>$DB_ENDPOINT:$DB_PORT reachable</p></body></html>" > /usr/share/nginx/html/db-status.html
+            else
+              echo "<html><body><h2>DB Connectivity: FAIL</h2><p>$DB_ENDPOINT:$DB_PORT unreachable</p></body></html>" > /usr/share/nginx/html/db-status.html
+            fi
+            systemctl start nginx
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-SecureEnvWebServer'
@@ -930,5 +943,6 @@ Outputs:
     Value: !Ref SecureEnvDBSecret
     Export:
       Name: !Sub '${AWS::StackName}-Database-Secret-ARN'
+
 
 ```

@@ -403,6 +403,12 @@
                         "FromPort": 80,
                         "ToPort": 80,
                         "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3306,
+                        "ToPort": 3306,
+                        "CidrIp": "10.0.0.0/16"
                     }
                 ],
                 "Tags": [
@@ -845,7 +851,9 @@
                     }
                 ],
                 "UserData": {
-                    "Fn::Base64": "#!/bin/bash\nset -euxo pipefail\nyum update -y\namazon-linux-extras enable nginx1 || true\nyum install -y nginx amazon-cloudwatch-agent\nsystemctl enable nginx\necho \"<html><body><h1>Hello from SecureEnv web server</h1></body></html>\" > /usr/share/nginx/html/index.html\nsystemctl start nginx\n"
+                    "Fn::Base64": {
+                        "Fn::Sub": "#!/bin/bash\nset -euxo pipefail\nyum update -y\namazon-linux-extras enable nginx1 || true\nyum install -y nginx amazon-cloudwatch-agent\nsystemctl enable nginx\necho \"<html><body><h1>Hello from SecureEnv web server</h1></body></html>\" > /usr/share/nginx/html/index.html\n# RDS connectivity status page\nDB_ENDPOINT=\"${SecureEnvDatabase.Endpoint.Address}\"\nDB_PORT=3306\nif timeout 3 bash -c \"</dev/tcp/$DB_ENDPOINT/$DB_PORT\"; then\n  echo \"<html><body><h2>DB Connectivity: OK</h2><p>$DB_ENDPOINT:$DB_PORT reachable</p></body></html>\" > /usr/share/nginx/html/db-status.html\nelse\n  echo \"<html><body><h2>DB Connectivity: FAIL</h2><p>$DB_ENDPOINT:$DB_PORT unreachable</p></body></html>\" > /usr/share/nginx/html/db-status.html\nfi\nsystemctl start nginx\n"
+                    }
                 },
                 "Tags": [
                     {
