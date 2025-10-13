@@ -1,46 +1,46 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: 'IoT Analytics and Dashboard System for Smart City Traffic Monitoring'
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "IoT Analytics and Dashboard System for Smart City Traffic Monitoring"
 
 Parameters:
   EnvironmentSuffix:
     Type: String
-    Default: 'dev'
-    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
-    AllowedPattern: '^[a-zA-Z0-9]+$'
-    ConstraintDescription: 'Must contain only alphanumeric characters'
+    Default: "dev"
+    Description: "Environment suffix for resource naming (e.g., dev, staging, prod)"
+    AllowedPattern: "^[a-zA-Z0-9]+$"
+    ConstraintDescription: "Must contain only alphanumeric characters"
 
   EnvironmentName:
     Type: String
     Default: production
     AllowedValues: [development, staging, production]
     Description: Environment name for resource naming
-  
+
   KinesisShardCount:
     Type: Number
     Default: 10
     MinValue: 1
     MaxValue: 100
     Description: Number of shards for Kinesis Data Stream
-  
+
   DynamoDBReadCapacity:
     Type: Number
     Default: 100
     MinValue: 5
     Description: Read capacity units for DynamoDB table
-  
+
   DynamoDBWriteCapacity:
     Type: Number
     Default: 1000
     MinValue: 5
     Description: Write capacity units for DynamoDB table
-  
+
   AlertThresholdCongestionIndex:
     Type: Number
     Default: 80
     MinValue: 0
     MaxValue: 100
     Description: Congestion index threshold for triggering alerts (0-100)
-  
+
   NotificationEmail:
     Type: String
     Default: traffic-alerts@smartcity.com
@@ -53,31 +53,31 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      PolicyName: !Sub 'TapStack${EnvironmentSuffix}-TrafficSensorPolicy'
+      PolicyName: !Sub "TapStack${EnvironmentSuffix}-TrafficSensorPolicy"
       PolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Action:
               - iot:Connect
               - iot:Publish
             Resource:
-              - !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:client/${!iot:Certificate.Subject.CommonName}'
-              - !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/traffic/sensors/*'
-  
+              - !Sub "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:client/${!iot:Certificate.Subject.CommonName}"
+              - !Sub "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/traffic/sensors/*"
+
   IoTTopicRule:
     Type: AWS::IoT::TopicRule
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      RuleName: !Sub 'TapStack${EnvironmentSuffix}TrafficDataRule'
+      RuleName: !Sub "TapStack${EnvironmentSuffix}TrafficDataRule"
       TopicRulePayload:
         RuleDisabled: false
         Sql: "SELECT * FROM 'traffic/sensors/+'"
         Actions:
           - Kinesis:
               StreamName: !Ref KinesisDataStream
-              PartitionKey: '${topic(3)}'
+              PartitionKey: "${topic(3)}"
               RoleArn: !GetAtt IoTRuleRole.Arn
         ErrorAction:
           CloudwatchLogs:
@@ -89,18 +89,18 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      RoleName: !Sub 'TapStack${EnvironmentSuffix}-IoTRuleRole'
+      RoleName: !Sub "TapStack${EnvironmentSuffix}-IoTRuleRole"
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               Service: iot.amazonaws.com
-            Action: 'sts:AssumeRole'
+            Action: "sts:AssumeRole"
       Policies:
         - PolicyName: KinesisWritePolicy
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
@@ -119,7 +119,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      Name: !Sub 'TapStack${EnvironmentSuffix}-TrafficDataStream'
+      Name: !Sub "TapStack${EnvironmentSuffix}-TrafficDataStream"
       ShardCount: !Ref KinesisShardCount
       RetentionPeriodHours: 24
       StreamEncryption:
@@ -128,6 +128,8 @@ Resources:
       StreamModeDetails:
         StreamMode: PROVISIONED
       Tags:
+        - Key: Project
+          Value: iac-rlhf-amazon
         - Key: Environment
           Value: !Ref EnvironmentName
 
@@ -137,20 +139,20 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      RoleName: !Sub 'TapStack${EnvironmentSuffix}-LambdaExecutionRole'
+      RoleName: !Sub "TapStack${EnvironmentSuffix}-LambdaExecutionRole"
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               Service: lambda.amazonaws.com
-            Action: 'sts:AssumeRole'
+            Action: "sts:AssumeRole"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
       Policies:
         - PolicyName: DynamoDBAccessPolicy
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
@@ -161,10 +163,10 @@ Resources:
                   - dynamodb:BatchWriteItem
                 Resource:
                   - !GetAtt TrafficAnalyticsTable.Arn
-                  - !Sub '${TrafficAnalyticsTable.Arn}/index/*'
+                  - !Sub "${TrafficAnalyticsTable.Arn}/index/*"
         - PolicyName: EventBridgePolicy
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
@@ -172,21 +174,21 @@ Resources:
                 Resource: !GetAtt CongestionEventBus.Arn
         - PolicyName: CloudWatchLogsPolicy
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: '*'
+                Resource: "*"
 
   ProcessingLambdaFunction:
     Type: AWS::Lambda::Function
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      FunctionName: !Sub 'TapStack${EnvironmentSuffix}-TrafficDataProcessor'
+      FunctionName: !Sub "TapStack${EnvironmentSuffix}-TrafficDataProcessor"
       Runtime: python3.9
       Handler: lambda_handler.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -214,11 +216,11 @@ Resources:
 
           dynamodb = boto3.resource('dynamodb')
           events = boto3.client('events')
-          
+
           table_name = os.environ['DYNAMODB_TABLE_NAME']
           alert_threshold = int(os.environ['ALERT_THRESHOLD'])
           event_bus_name = os.environ['EVENT_BUS_NAME']
-          
+
           def lambda_handler(event, context):
               table = dynamodb.Table(table_name)
               batch_items = []
@@ -301,6 +303,11 @@ Resources:
                   'batchItemsProcessed': len(batch_items),
                   'alertsSent': len(alerts)
               }
+      Tags:
+        - Key: Project
+          Value: iac-rlhf-amazon
+        - Key: Environment
+          Value: !Ref EnvironmentName
 
   KinesisEventSourceMapping:
     Type: AWS::Lambda::EventSourceMapping
@@ -321,7 +328,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      TableName: !Sub 'TapStack${EnvironmentSuffix}-TrafficAnalytics'
+      TableName: !Sub "TapStack${EnvironmentSuffix}-TrafficAnalytics"
       AttributeDefinitions:
         - AttributeName: sensor_id
           AttributeType: S
@@ -359,6 +366,11 @@ Resources:
         PointInTimeRecoveryEnabled: true
       SSESpecification:
         SSEEnabled: true
+      Tags:
+        - Key: Project
+          Value: iac-rlhf-amazon
+        - Key: Environment
+          Value: !Ref EnvironmentName
 
   # ========== EventBridge ==========
   CongestionEventBus:
@@ -366,14 +378,19 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      Name: !Sub 'TapStack${EnvironmentSuffix}-CongestionAlerts'
+      Name: !Sub "TapStack${EnvironmentSuffix}-CongestionAlerts"
+      Tags:
+        - Key: Project
+          Value: iac-rlhf-amazon
+        - Key: Environment
+          Value: !Ref EnvironmentName
 
   CongestionAlertRule:
     Type: AWS::Events::Rule
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      Name: !Sub 'TapStack${EnvironmentSuffix}-CongestionAlertRule'
+      Name: !Sub "TapStack${EnvironmentSuffix}-CongestionAlertRule"
       EventBusName: !Ref CongestionEventBus
       EventPattern:
         source:
@@ -391,9 +408,14 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      TopicName: !Sub 'TapStack${EnvironmentSuffix}-CongestionAlerts'
+      TopicName: !Sub "TapStack${EnvironmentSuffix}-CongestionAlerts"
       DisplayName: Traffic Congestion Alerts
       KmsMasterKeyId: alias/aws/sns
+      Tags:
+        - Key: Project
+          Value: iac-rlhf-amazon
+        - Key: Environment
+          Value: !Ref EnvironmentName
 
   AlertEmailSubscription:
     Type: AWS::SNS::Subscription
@@ -410,7 +432,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      LogGroupName: !Sub '/aws/iot/TapStack${EnvironmentSuffix}/errors'
+      LogGroupName: !Sub "/aws/iot/TapStack${EnvironmentSuffix}/errors"
       RetentionInDays: 7
 
   LambdaLogGroup:
@@ -418,7 +440,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      LogGroupName: !Sub '/aws/lambda/TapStack${EnvironmentSuffix}-TrafficDataProcessor'
+      LogGroupName: !Sub "/aws/lambda/TapStack${EnvironmentSuffix}-TrafficDataProcessor"
       RetentionInDays: 7
 
   ProcessingErrorsAlarm:
@@ -426,8 +448,8 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      AlarmName: !Sub 'TapStack${EnvironmentSuffix}-ProcessingErrors'
-      AlarmDescription: 'Alert when Lambda processing errors exceed threshold'
+      AlarmName: !Sub "TapStack${EnvironmentSuffix}-ProcessingErrors"
+      AlarmDescription: "Alert when Lambda processing errors exceed threshold"
       MetricName: Errors
       Namespace: AWS/Lambda
       Statistic: Sum
@@ -446,8 +468,8 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      AlarmName: !Sub 'TapStack${EnvironmentSuffix}-NoIncomingData'
-      AlarmDescription: 'Alert when no data is received for 5 minutes'
+      AlarmName: !Sub "TapStack${EnvironmentSuffix}-NoIncomingData"
+      AlarmDescription: "Alert when no data is received for 5 minutes"
       MetricName: IncomingRecords
       Namespace: AWS/Kinesis
       Statistic: Sum
@@ -467,18 +489,18 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      RoleName: !Sub 'TapStack${EnvironmentSuffix}-QuickSightDataSourceRole'
+      RoleName: !Sub "TapStack${EnvironmentSuffix}-QuickSightDataSourceRole"
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               Service: quicksight.amazonaws.com
-            Action: 'sts:AssumeRole'
+            Action: "sts:AssumeRole"
       Policies:
         - PolicyName: DynamoDBReadPolicy
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
@@ -488,7 +510,7 @@ Resources:
                   - dynamodb:GetItem
                 Resource:
                   - !GetAtt TrafficAnalyticsTable.Arn
-                  - !Sub '${TrafficAnalyticsTable.Arn}/index/*'
+                  - !Sub "${TrafficAnalyticsTable.Arn}/index/*"
 
   # ========== Dashboard Metrics ==========
   DashboardMetricsFunction:
@@ -496,7 +518,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      FunctionName: !Sub 'TapStack${EnvironmentSuffix}-DashboardMetrics'
+      FunctionName: !Sub "TapStack${EnvironmentSuffix}-DashboardMetrics"
       Runtime: python3.9
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -511,15 +533,15 @@ Resources:
           import os
           from datetime import datetime, timedelta
           from decimal import Decimal
-          
+
           dynamodb = boto3.resource('dynamodb')
           cloudwatch = boto3.client('cloudwatch')
-          
+
           def decimal_default(obj):
               if isinstance(obj, Decimal):
                   return float(obj)
               raise TypeError
-          
+
           def lambda_handler(event, context):
               table_name = os.environ['TABLE_NAME']
               table = dynamodb.Table(table_name)
@@ -575,14 +597,19 @@ Resources:
                   'statusCode': 200,
                   'body': json.dumps({'message': 'Metrics published successfully'})
               }
+      Tags:
+        - Key: Project
+          Value: iac-rlhf-amazon
+        - Key: Environment
+          Value: !Ref EnvironmentName
 
   MetricsScheduleRule:
     Type: AWS::Events::Rule
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      Name: !Sub 'TapStack${EnvironmentSuffix}-MetricsSchedule'
-      ScheduleExpression: 'rate(5 minutes)'
+      Name: !Sub "TapStack${EnvironmentSuffix}-MetricsSchedule"
+      ScheduleExpression: "rate(5 minutes)"
       State: ENABLED
       Targets:
         - Arn: !GetAtt DashboardMetricsFunction.Arn
@@ -601,46 +628,46 @@ Resources:
 Outputs:
   IoTEndpoint:
     Description: AWS IoT Core endpoint for device connections
-    Value: !Sub 'https://${AWS::AccountId}.iot.${AWS::Region}.amazonaws.com'
-  
+    Value: !Sub "https://${AWS::AccountId}.iot.${AWS::Region}.amazonaws.com"
+
   KinesisStreamArn:
     Description: ARN of the Kinesis Data Stream
     Value: !GetAtt KinesisDataStream.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-KinesisStreamArn'
-  
+      Name: !Sub "${AWS::StackName}-KinesisStreamArn"
+
   DynamoDBTableName:
     Description: Name of the DynamoDB table storing analytics data
     Value: !Ref TrafficAnalyticsTable
     Export:
-      Name: !Sub '${AWS::StackName}-DynamoDBTableName'
-  
+      Name: !Sub "${AWS::StackName}-DynamoDBTableName"
+
   QuickSightDataSourceRoleArn:
     Description: IAM role ARN for QuickSight data source
     Value: !GetAtt QuickSightDataSourceRole.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-QuickSightDataSourceRoleArn'
-  
+      Name: !Sub "${AWS::StackName}-QuickSightDataSourceRoleArn"
+
   AlertTopicArn:
     Description: SNS topic ARN for congestion alerts
     Value: !Ref AlertTopic
     Export:
-      Name: !Sub '${AWS::StackName}-AlertTopicArn'
-  
+      Name: !Sub "${AWS::StackName}-AlertTopicArn"
+
   DashboardMetricsNamespace:
     Description: CloudWatch namespace for custom traffic metrics
     Value: TrafficAnalytics
     Export:
-      Name: !Sub '${AWS::StackName}-DashboardMetricsNamespace'
+      Name: !Sub "${AWS::StackName}-DashboardMetricsNamespace"
 
   LambdaFunctionName:
     Description: Name of the Lambda function processing traffic data
     Value: !Ref ProcessingLambdaFunction
     Export:
-      Name: !Sub '${AWS::StackName}-LambdaFunctionName'
+      Name: !Sub "${AWS::StackName}-LambdaFunctionName"
 
   EventBusName:
     Description: Name of the EventBridge custom event bus
     Value: !Ref CongestionEventBus
     Export:
-      Name: !Sub '${AWS::StackName}-EventBusName'
+      Name: !Sub "${AWS::StackName}-EventBusName"

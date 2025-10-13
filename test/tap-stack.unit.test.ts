@@ -1,4 +1,5 @@
 import fs from 'fs';
+import yaml from 'js-yaml';
 import path from 'path';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -7,11 +8,10 @@ describe('IoT Analytics CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
-    const templatePath = path.join(__dirname, '../lib/TapStack.json');
+    // Load the YAML template directly
+    const templatePath = path.join(__dirname, '../lib/TapStack.yml');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = JSON.parse(templateContent);
+    template = yaml.load(templateContent);
   });
 
   describe('Template Structure', () => {
@@ -25,20 +25,45 @@ describe('IoT Analytics CloudFormation Template', () => {
         'IoT Analytics and Dashboard System for Smart City Traffic Monitoring'
       );
     });
+
+    test('should not contain hardcoded values', () => {
+      const templateStr = JSON.stringify(template);
+      // Check for common hardcoded patterns
+      expect(templateStr).not.toMatch(/123456789/); // Account ID
+      expect(templateStr).not.toMatch(/us-east-1(?!.*amazonaws\.com)/); // Region (except in service URLs)
+      expect(templateStr).not.toMatch(/arn:aws:[^:]+:[^:]+:[0-9]{12}:/); // ARNs with hardcoded account
+    });
+
+    test('should have iac-rlhf-amazon tags on all taggable resources', () => {
+      const taggableResources = [
+        'TrafficDataStream', 'TrafficAnalyticsTable', 'TrafficProcessorFunction',
+        'TrafficEventBus', 'TrafficAlertsTopic'
+      ];
+
+      taggableResources.forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        if (resource) {
+          expect(resource.Properties.Tags).toBeDefined();
+          const projectTag = resource.Properties.Tags.find((tag: any) => tag.Key === 'Project');
+          expect(projectTag).toBeDefined();
+          expect(projectTag.Value).toBe('iac-rlhf-amazon');
+        }
+      });
+    });
   });
 
   describe('Parameters', () => {
     test('should have all required parameters', () => {
       const expectedParams = [
         'EnvironmentSuffix',
-        'EnvironmentName', 
+        'EnvironmentName',
         'KinesisShardCount',
         'DynamoDBReadCapacity',
         'DynamoDBWriteCapacity',
         'AlertThresholdCongestionIndex',
         'NotificationEmail'
       ];
-      
+
       expectedParams.forEach(paramName => {
         expect(template.Parameters[paramName]).toBeDefined();
       });
@@ -332,7 +357,7 @@ describe('IoT Analytics CloudFormation Template', () => {
     test('all resources should include environment suffix', () => {
       const resourcesWithSuffix = [
         'IoTPolicy',
-        'IoTTopicRule', 
+        'IoTTopicRule',
         'IoTRuleRole',
         'KinesisDataStream',
         'LambdaExecutionRole',

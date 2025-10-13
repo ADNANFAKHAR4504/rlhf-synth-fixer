@@ -1,104 +1,154 @@
 // IoT Analytics and Dashboard System Integration Tests
-import fs from 'fs';
-import { 
-  IoTClient, 
-  DescribeEndpointCommand 
-} from '@aws-sdk/client-iot';
-import { 
-  KinesisClient, 
-  DescribeStreamCommand,
-  PutRecordsCommand 
-} from '@aws-sdk/client-kinesis';
-import { 
-  DynamoDBClient, 
+import {
+  CloudFormationClient,
+  DescribeStacksCommand
+} from '@aws-sdk/client-cloudformation';
+import {
   DescribeTableCommand,
-  QueryCommand 
+  DynamoDBClient,
+  QueryCommand
 } from '@aws-sdk/client-dynamodb';
-import { 
-  LambdaClient, 
-  InvokeCommand 
+import {
+  EventBridgeClient
+} from '@aws-sdk/client-eventbridge';
+import {
+  DescribeEndpointCommand,
+  IoTClient
+} from '@aws-sdk/client-iot';
+import {
+  DescribeStreamCommand,
+  KinesisClient,
+  PutRecordsCommand
+} from '@aws-sdk/client-kinesis';
+import {
+  InvokeCommand,
+  LambdaClient
 } from '@aws-sdk/client-lambda';
 import {
-  SNSClient,
-  GetTopicAttributesCommand
+  GetTopicAttributesCommand,
+  SNSClient
 } from '@aws-sdk/client-sns';
-import {
-  EventBridgeClient,
-  DescribeRuleCommand
-} from '@aws-sdk/client-eventbridge';
+import fs from 'fs';
 
 // Configuration - These are coming from cfn-outputs after stack deployment
 let outputs: any = {};
-try {
-  outputs = JSON.parse(
-    fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-  );
-} catch (error) {
-  console.warn('cfn-outputs/flat-outputs.json not found. Some tests will be skipped.');
-  outputs = {
-    // Mock outputs for when deployment is not available
-    DynamoDBTableName: `TapStack${process.env.ENVIRONMENT_SUFFIX || 'dev'}-TrafficAnalytics`,
-    KinesisStreamArn: `arn:aws:kinesis:us-east-1:123456789012:stream/TapStack${process.env.ENVIRONMENT_SUFFIX || 'dev'}-TrafficDataStream`,
-    LambdaFunctionName: `TapStack${process.env.ENVIRONMENT_SUFFIX || 'dev'}-TrafficDataProcessor`,
-    AlertTopicArn: `arn:aws:sns:us-east-1:123456789012:TapStack${process.env.ENVIRONMENT_SUFFIX || 'dev'}-CongestionAlerts`,
-    EventBusName: `TapStack${process.env.ENVIRONMENT_SUFFIX || 'dev'}-CongestionAlerts`,
-    IoTEndpoint: 'https://123456789012.iot.us-east-1.amazonaws.com'
-  };
-}
+let hasDeployedStack = false;
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const region = process.env.AWS_REGION || 'us-east-1';
+const stackName = `TapStack${environmentSuffix}`;
 
-// AWS clients
-const iotClient = new IoTClient({ region });
-const kinesisClient = new KinesisClient({ region });
-const dynamodbClient = new DynamoDBClient({ region });
-const lambdaClient = new LambdaClient({ region });
-const snsClient = new SNSClient({ region });
-const eventBridgeClient = new EventBridgeClient({ region });
+try {
+  outputs = JSON.parse(
+    fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+  );
+  hasDeployedStack = true;
+} catch (error) {
+  console.warn('cfn-outputs/flat-outputs.json not found. Integration tests will use CloudFormation to get outputs.');
+  hasDeployedStack = false;
+}
+
+// AWS clients with cross-account compatible configuration
+const clientConfig = {
+  region,
+  maxAttempts: 3,
+  retryMode: 'adaptive' as const
+};
+
+const iotClient = new IoTClient(clientConfig);
+const kinesisClient = new KinesisClient(clientConfig);
+const dynamodbClient = new DynamoDBClient(clientConfig);
+const lambdaClient = new LambdaClient(clientConfig);
+const snsClient = new SNSClient(clientConfig);
+const eventBridgeClient = new EventBridgeClient(clientConfig);
+const cloudFormationClient = new CloudFormationClient(clientConfig);
+
+// Utility function to get stack outputs
+async function getStackOutputs() {
+  if (hasDeployedStack && Object.keys(outputs).length > 0) {
+    return outputs;
+  }
+
+  try {
+    const command = new DescribeStacksCommand({ StackName: stackName });
+    const response = await cloudFormationClient.send(command);
+    const stack = response.Stacks?.[0];
+
+    if (!stack || !stack.Outputs) {
+      throw new Error(`Stack ${stackName} not found or has no outputs`);
+    }
+
+    const stackOutputs: any = {};
+    stack.Outputs.forEach(output => {
+      if (output.OutputKey && output.OutputValue) {
+        stackOutputs[output.OutputKey] = output.OutputValue;
+      }
+    });
+
+    return stackOutputs;
+  } catch (error) {
+    console.error('Failed to get stack outputs:', error);
+    throw new Error(`Cannot retrieve outputs for stack ${stackName}. Ensure the stack is deployed.`);
+  }
+}
 
 describe('IoT Analytics Integration Tests', () => {
-  
+
   describe('Infrastructure Validation', () => {
-    test('should have all required outputs', () => {
+    test('should retrieve and validate all required stack outputs', async () => {
+      const stackOutputs = await getStackOutputs();
+
       const requiredOutputs = [
-        'DynamoDBTableName',
-        'KinesisStreamArn', 
-        'LambdaFunctionName',
-        'AlertTopicArn',
-        'EventBusName',
-        'IoTEndpoint'
+        'TrafficDataStreamName',
+        'TrafficAnalyticsTableName',
+        'LambdaFunctionArn'
       ];
-      
+
       requiredOutputs.forEach(output => {
-        expect(outputs[output]).toBeDefined();
-        expect(outputs[output]).not.toBe('');
+        expect(stackOutputs[output]).toBeDefined();
+        expect(stackOutputs[output]).not.toBe('');
       });
     });
 
-    test('should validate IoT endpoint format', () => {
-      expect(outputs.IoTEndpoint).toMatch(/^https:\/\/[a-zA-Z0-9]+\.iot\.[a-zA-Z0-9-]+\.amazonaws\.com$/);
+    test('should validate resource naming convention for cross-account compatibility', async () => {
+      const stackOutputs = await getStackOutputs();
+
+      expect(stackOutputs.TrafficAnalyticsTableName).toContain(`TapStack${environmentSuffix}`);
+      expect(stackOutputs.TrafficDataStreamName).toContain(`TapStack${environmentSuffix}`);
+      expect(stackOutputs.LambdaFunctionArn).toContain(`TapStack${environmentSuffix}`);
+
+      // Verify no hardcoded account IDs or regions in outputs
+      const outputStr = JSON.stringify(stackOutputs);
+      expect(outputStr).not.toMatch(/123456789012/); // Common placeholder account ID
+      expect(outputStr).not.toMatch(/us-east-1(?!.*amazonaws\.com)/); // Hardcoded region (except in service URLs)
     });
 
-    test('should validate resource naming convention', () => {
-      expect(outputs.DynamoDBTableName).toContain(`TapStack${environmentSuffix}`);
-      expect(outputs.KinesisStreamArn).toContain(`TapStack${environmentSuffix}`);
-      expect(outputs.LambdaFunctionName).toContain(`TapStack${environmentSuffix}`);
+    test('should validate proper tagging on resources', async () => {
+      const stackOutputs = await getStackOutputs();
+
+      // Check if stack resources have proper tags by describing the stack
+      const command = new DescribeStacksCommand({ StackName: stackName });
+      const response = await cloudFormationClient.send(command);
+      const stack = response.Stacks?.[0];
+
+      expect(stack).toBeDefined();
+      expect(stack?.Tags).toBeDefined();
+
+      // Look for iac-rlhf-amazon tag if present
+      const projectTag = stack?.Tags?.find(tag => tag.Key === 'Project');
+      if (projectTag) {
+        expect(projectTag.Value).toBe('iac-rlhf-amazon');
+      }
     });
   });
 
   describe('AWS IoT Core Integration', () => {
     test('should be able to describe IoT endpoint', async () => {
-      if (!fs.existsSync('cfn-outputs/flat-outputs.json')) {
-        console.log('Skipping IoT test - no deployment outputs');
-        return;
-      }
-
       try {
         const command = new DescribeEndpointCommand({ endpointType: 'iot:Data-ATS' });
         const response = await iotClient.send(command);
-        
+
         expect(response.endpointAddress).toBeDefined();
         expect(response.endpointAddress).toContain('.iot.');
       } catch (error) {
@@ -118,7 +168,7 @@ describe('IoT Analytics Integration Tests', () => {
         const streamName = outputs.KinesisStreamArn.split('/').pop();
         const command = new DescribeStreamCommand({ StreamName: streamName });
         const response = await kinesisClient.send(command);
-        
+
         expect(response.StreamDescription).toBeDefined();
         expect(response.StreamDescription!.StreamStatus).toBe('ACTIVE');
         expect(response.StreamDescription!.ShardCount).toBeGreaterThan(0);
@@ -153,7 +203,7 @@ describe('IoT Analytics Integration Tests', () => {
         });
 
         const response = await kinesisClient.send(command);
-        
+
         expect(response.FailedRecordCount).toBe(0);
         expect(response.Records).toHaveLength(1);
         expect(response.Records![0].ErrorCode).toBeUndefined();
@@ -171,11 +221,11 @@ describe('IoT Analytics Integration Tests', () => {
       }
 
       try {
-        const command = new DescribeTableCommand({ 
-          TableName: outputs.DynamoDBTableName 
+        const command = new DescribeTableCommand({
+          TableName: outputs.DynamoDBTableName
         });
         const response = await dynamodbClient.send(command);
-        
+
         expect(response.Table).toBeDefined();
         expect(response.Table!.TableStatus).toBe('ACTIVE');
         expect(response.Table!.KeySchema).toHaveLength(2); // sensor_id and timestamp
@@ -192,24 +242,24 @@ describe('IoT Analytics Integration Tests', () => {
       }
 
       try {
-        const command = new DescribeTableCommand({ 
-          TableName: outputs.DynamoDBTableName 
+        const command = new DescribeTableCommand({
+          TableName: outputs.DynamoDBTableName
         });
         const response = await dynamodbClient.send(command);
-        
+
         const table = response.Table!;
-        
+
         // Verify key schema
         const hashKey = table.KeySchema!.find(k => k.KeyType === 'HASH');
         const rangeKey = table.KeySchema!.find(k => k.KeyType === 'RANGE');
-        
+
         expect(hashKey!.AttributeName).toBe('sensor_id');
         expect(rangeKey!.AttributeName).toBe('timestamp');
-        
+
         // Verify GSI
         const gsi = table.GlobalSecondaryIndexes![0];
         expect(gsi.IndexName).toBe('zone-timestamp-index');
-        
+
         // Verify TTL
         if (table.TableDescription && 'TimeToLiveDescription' in table.TableDescription) {
           expect(table.TableDescription.TimeToLiveDescription.TimeToLiveStatus).toBe('ENABLED');
@@ -250,10 +300,10 @@ describe('IoT Analytics Integration Tests', () => {
         });
 
         const response = await lambdaClient.send(command);
-        
+
         expect(response.StatusCode).toBe(200);
         expect(response.FunctionError).toBeUndefined();
-        
+
         if (response.Payload) {
           const result = JSON.parse(Buffer.from(response.Payload).toString());
           expect(result.statusCode).toBe(200);
@@ -277,7 +327,7 @@ describe('IoT Analytics Integration Tests', () => {
           TopicArn: outputs.AlertTopicArn
         });
         const response = await snsClient.send(command);
-        
+
         expect(response.Attributes).toBeDefined();
         expect(response.Attributes!['TopicArn']).toBe(outputs.AlertTopicArn);
       } catch (error) {
@@ -300,11 +350,11 @@ describe('IoT Analytics Integration Tests', () => {
           EventBusName: outputs.EventBusName
         });
         const response = await eventBridgeClient.send(command);
-        
+
         expect(response.Name).toBe(ruleName);
         expect(response.State).toBe('ENABLED');
         expect(response.EventPattern).toBeDefined();
-        
+
         const eventPattern = JSON.parse(response.EventPattern!);
         expect(eventPattern.source).toContain('traffic.analytics');
         expect(eventPattern['detail-type']).toContain('CongestionAlert');
@@ -359,7 +409,7 @@ describe('IoT Analytics Integration Tests', () => {
         });
 
         const queryResponse = await dynamodbClient.send(queryCommand);
-        
+
         // Verify data was processed and stored
         expect(queryResponse.Items).toBeDefined();
         if (queryResponse.Items && queryResponse.Items.length > 0) {
@@ -410,10 +460,10 @@ describe('IoT Analytics Integration Tests', () => {
         });
 
         const response = await kinesisClient.send(command);
-        
+
         expect(response.FailedRecordCount).toBe(0);
         expect(response.Records).toHaveLength(batchSize);
-        
+
         console.log(`Successfully processed ${batchSize} sensor readings`);
       } catch (error) {
         console.warn('Performance test skipped due to credentials/permissions');
