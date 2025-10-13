@@ -339,6 +339,7 @@ export class TapStack extends TerraformStack {
       this,
       'audit-trail',
       `${id}-${environmentSuffix}`,
+      current.accountId,
       kmsModule.keyArn,
       commonTags
     );

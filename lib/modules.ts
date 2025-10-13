@@ -737,6 +737,7 @@ export class AuditTrail extends Construct {
     scope: Construct,
     id: string,
     name: string,
+    accountId: string, // Add this parameter
     kmsKeyArn: string | undefined,
     tags: CommonTags
   ) {
@@ -744,14 +745,14 @@ export class AuditTrail extends Construct {
 
     // Create S3 bucket for CloudTrail logs
     this.bucket = new EncryptedS3Bucket(this, 'audit-bucket', {
-      name: `${name.toLowerCase()}-audit-logs`, // Add .toLowerCase()
+      name: `${name.toLowerCase()}-audit-logs`,
       versioning: true,
       kmsKeyArn,
       lifecycleRules: [
         {
           id: 'expire-old-logs',
           status: 'Enabled',
-          filter: {}, // Add empty filter to apply to all objects
+          filter: {},
           expiration: {
             days: 90,
           },
@@ -769,13 +770,7 @@ export class AuditTrail extends Construct {
       ],
       tags,
     });
-
-    // Bucket policy for CloudTrail
-    new DataAwsSsmParameter(this, 'account-id', {
-      name: '/aws/account-id',
-    });
-
-    const trailBucketPolicy = {
+const trailBucketPolicy = {
       Version: '2012-10-17',
       Statement: [
         {
@@ -814,11 +809,12 @@ export class AuditTrail extends Construct {
       this,
       'trail-log-group',
       `/aws/cloudtrail/${name}`,
-      7, // 7 days retention for CloudTrail logs in CloudWatch
+      7,
       tags
     );
 
     // IAM role for CloudTrail to write to CloudWatch
+// IAM role for CloudTrail to write to CloudWatch
     const trailRole = new IamRoleConstruct(this, 'trail-role', {
       name: `${name}-cloudtrail-role`,
       assumeRolePolicy: {
@@ -852,7 +848,7 @@ export class AuditTrail extends Construct {
       tags,
     });
 
-    this.trail = new Cloudtrail(this, 'trail', {
+   this.trail = new Cloudtrail(this, 'trail', {
       name,
       s3BucketName: this.bucket.bucket.id,
       includeGlobalServiceEvents: true,
@@ -875,6 +871,7 @@ export class AuditTrail extends Construct {
         },
       ],
       tags,
+      dependsOn: [this.bucket.bucketPolicy], // Add explicit dependency
     });
   }
 }
