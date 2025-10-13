@@ -1,13 +1,12 @@
 import * as cdk from 'aws-cdk-lib';
+import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
-import * as rds from 'aws-cdk-lib/aws-rds';
-import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as kinesis from 'aws-cdk-lib/aws-kinesis';
+import * as rds from 'aws-cdk-lib/aws-rds';
 import * as sns from 'aws-cdk-lib/aws-sns';
-import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
-import * as config from 'aws-cdk-lib/aws-config';
 import { Construct } from 'constructs';
 
 interface MonitoringStackProps {

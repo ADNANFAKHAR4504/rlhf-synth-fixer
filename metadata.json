@@ -1,8 +1,8 @@
 {
   "po_id": "7973446690",
   "task_id": "7973446690",
-  "platform": "CDK",
-  "language": "TypeScript",
+  "platform": "cdk",
+  "language": "typescript",
   "turn_type": "single",
   "complexity": "hard",
   "team": "synth",
