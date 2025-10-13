@@ -8,7 +8,7 @@ set -euo pipefail
 CSV_FILE="${CSV_FILE:-tasks.csv}"
 BACKUP_FILE="${BACKUP_FILE:-tasks.csv.backup}"
 LOCK_FILE="${LOCK_FILE:-tasks.csv.lock}"
-LOCK_TIMEOUT="${LOCK_TIMEOUT:-30}"  # Maximum seconds to wait for lock
+LOCK_TIMEOUT="${LOCK_TIMEOUT:-60}"  # Maximum seconds to wait for lock
 
 # Colors
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
@@ -352,7 +352,7 @@ Environment:
     CSV_FILE        CSV path (default: tasks.csv)
     BACKUP_FILE     Backup path (default: tasks.csv.backup)
     LOCK_FILE       Lock file path (default: tasks.csv.lock)
-    LOCK_TIMEOUT    Lock timeout in seconds (default: 30)
+    LOCK_TIMEOUT    Lock timeout in seconds (default: 60)
 
 Examples:
     # Atomic select and update (recommended for parallel workflows)
