@@ -1115,7 +1115,759 @@ describe('TapStack Infrastructure - Comprehensive Integration Tests', () => {
   });
 
   // ===========================================================================
-  // K. Regional Migration Tests
+  // K. Cross-Service Integration Scenarios
+  // ===========================================================================
+  describe('Cross-Service Integration Scenarios', () => {
+    // IAM & EC2 Integration Tests
+    test('EC2 instances should have IAM instance profile attached', async () => {
+      const command = new DescribeInstancesCommand({
+        InstanceIds: [outputs.PrivateInstance1Id, outputs.PrivateInstance2Id],
+      });
+      const response = await ec2Client.send(command);
+
+      response.Reservations!.forEach((reservation) => {
+        const instance = reservation.Instances![0];
+        expect(instance.IamInstanceProfile).toBeDefined();
+        expect(instance.IamInstanceProfile!.Arn).toContain('instance-profile');
+        expect(instance.IamInstanceProfile!.Arn).toContain('EC2InstanceProfile');
+      });
+    });
+
+    test('IAM role should grant EC2 access to CloudWatch Logs', async () => {
+      const roleName = outputs.EC2InstanceRoleArn.split('/').pop();
+      const command = new GetRolePolicyCommand({
+        RoleName: roleName,
+        PolicyName: 'EC2MinimalAccess',
+      });
+      const response = await iamClient.send(command);
+
+      const policyDoc = JSON.parse(
+        decodeURIComponent(response.PolicyDocument!)
+      );
+      const logsStatement = policyDoc.Statement.find((stmt: any) =>
+        stmt.Action.some((action: string) => action.startsWith('logs:'))
+      );
+
+      expect(logsStatement).toBeDefined();
+      expect(logsStatement.Action).toContain('logs:CreateLogGroup');
+      expect(logsStatement.Action).toContain('logs:CreateLogStream');
+      expect(logsStatement.Action).toContain('logs:PutLogEvents');
+      expect(logsStatement.Resource).toContain('/aws/ec2/');
+    });
+
+    test('IAM role should grant EC2 access to CloudWatch metrics', async () => {
+      const roleName = outputs.EC2InstanceRoleArn.split('/').pop();
+      const command = new GetRolePolicyCommand({
+        RoleName: roleName,
+        PolicyName: 'EC2MinimalAccess',
+      });
+      const response = await iamClient.send(command);
+
+      const policyDoc = JSON.parse(
+        decodeURIComponent(response.PolicyDocument!)
+      );
+      const cwStatement = policyDoc.Statement.find((stmt: any) =>
+        stmt.Action.some((action: string) => action.startsWith('cloudwatch:'))
+      );
+
+      expect(cwStatement).toBeDefined();
+      expect(cwStatement.Action).toContain('cloudwatch:PutMetricData');
+      expect(cwStatement.Action).toContain('cloudwatch:GetMetricStatistics');
+      expect(cwStatement.Action).toContain('cloudwatch:ListMetrics');
+    });
+
+    test('IAM role should include Systems Manager (SSM) access', async () => {
+      const roleName = outputs.EC2InstanceRoleArn.split('/').pop();
+      const command = new ListAttachedRolePoliciesCommand({
+        RoleName: roleName,
+      });
+      const response = await iamClient.send(command);
+
+      const policyNames = response.AttachedPolicies!.map(
+        (policy) => policy.PolicyName
+      );
+      expect(policyNames).toContain('AmazonSSMManagedInstanceCore');
+    });
+
+    test('IAM policies should use scoped resource ARNs', async () => {
+      const roleName = outputs.EC2InstanceRoleArn.split('/').pop();
+      const command = new GetRolePolicyCommand({
+        RoleName: roleName,
+        PolicyName: 'EC2MinimalAccess',
+      });
+      const response = await iamClient.send(command);
+
+      const policyDoc = JSON.parse(
+        decodeURIComponent(response.PolicyDocument!)
+      );
+
+      // Check that logs statement uses scoped ARN
+      const logsStatement = policyDoc.Statement.find((stmt: any) =>
+        stmt.Action.some((action: string) => action.startsWith('logs:'))
+      );
+      expect(logsStatement.Resource).toContain('log-group:/aws/ec2/');
+      expect(logsStatement.Resource).not.toBe('*');
+    });
+
+    // S3 & Security Integration Tests
+    test('S3 bucket encryption should use correct algorithm', async () => {
+      const command = new GetBucketEncryptionCommand({
+        Bucket: outputs.S3BucketName,
+      });
+      const response = await s3Client.send(command);
+
+      expect(response.ServerSideEncryptionConfiguration).toBeDefined();
+      const rule =
+        response.ServerSideEncryptionConfiguration!.Rules![0];
+      expect(
+        rule.ApplyServerSideEncryptionByDefault!.SSEAlgorithm
+      ).toBe('AES256');
+      expect(rule.BucketKeyEnabled).toBeDefined();
+    });
+
+    test('S3 bucket policy should enforce SSL/TLS connections', async () => {
+      const command = new GetBucketPolicyCommand({
+        Bucket: outputs.S3BucketName,
+      });
+      const response = await s3Client.send(command);
+
+      const policy = JSON.parse(response.Policy!);
+      const denyStatement = policy.Statement.find(
+        (stmt: any) => stmt.Effect === 'Deny' && stmt.Sid === 'DenyInsecureConnections'
+      );
+
+      expect(denyStatement).toBeDefined();
+      expect(denyStatement.Action).toBe('s3:*');
+      expect(denyStatement.Condition.Bool['aws:SecureTransport']).toBe('false');
+      expect(denyStatement.Resource).toHaveLength(2);
+      expect(denyStatement.Resource[0]).toContain(outputs.S3BucketName);
+    });
+
+    test('S3 bucket should have versioning enabled', async () => {
+      const command = new GetBucketVersioningCommand({
+        Bucket: outputs.S3BucketName,
+      });
+      const response = await s3Client.send(command);
+
+      expect(response.Status).toBe('Enabled');
+    });
+
+    test('S3 bucket should block all public access', async () => {
+      const command = new GetPublicAccessBlockCommand({
+        Bucket: outputs.S3BucketName,
+      });
+      const response = await s3Client.send(command);
+
+      const config = response.PublicAccessBlockConfiguration!;
+      expect(config.BlockPublicAcls).toBe(true);
+      expect(config.BlockPublicPolicy).toBe(true);
+      expect(config.IgnorePublicAcls).toBe(true);
+      expect(config.RestrictPublicBuckets).toBe(true);
+    });
+
+    // CloudWatch Alarms & SNS Integration Tests
+    test('All CloudWatch alarms should publish to SNS topic', async () => {
+      const command = new DescribeAlarmsCommand({
+        AlarmNamePrefix: environmentSuffix,
+      });
+      const response = await cwClient.send(command);
+
+      expect(response.MetricAlarms!.length).toBeGreaterThanOrEqual(4);
+      response.MetricAlarms!.forEach((alarm) => {
+        expect(alarm.AlarmActions).toBeDefined();
+        expect(alarm.AlarmActions).toHaveLength(1);
+        expect(alarm.AlarmActions![0]).toBe(outputs.SNSTopicArn);
+      });
+    });
+
+    test('SNS topic policy should allow CloudWatch to publish', async () => {
+      const command = new GetTopicAttributesCommand({
+        TopicArn: outputs.SNSTopicArn,
+      });
+      const response = await snsClient.send(command);
+
+      const policy = JSON.parse(response.Attributes!.Policy!);
+      const cwStatement = policy.Statement.find((stmt: any) =>
+        stmt.Principal?.Service?.includes('cloudwatch.amazonaws.com')
+      );
+
+      expect(cwStatement).toBeDefined();
+      expect(cwStatement.Effect).toBe('Allow');
+      expect(cwStatement.Action).toContain('SNS:Publish');
+      expect(cwStatement.Resource).toBe(outputs.SNSTopicArn);
+    });
+
+    test('Alarm actions should be properly configured', async () => {
+      const command = new DescribeAlarmsCommand({
+        AlarmNamePrefix: environmentSuffix,
+      });
+      const response = await cwClient.send(command);
+
+      response.MetricAlarms!.forEach((alarm) => {
+        expect(alarm.ActionsEnabled).toBe(true);
+        expect(alarm.AlarmActions).toBeDefined();
+        expect(alarm.AlarmActions!.length).toBeGreaterThan(0);
+        expect(alarm.TreatMissingData).toBe('breaching');
+      });
+    });
+
+    // EventBridge & SNS Integration Tests
+    test('EventBridge rule should target SNS topic', async () => {
+      const ruleName = `${environmentSuffix}-StackEventRule`;
+      const command = new ListTargetsByRuleCommand({
+        Rule: ruleName,
+      });
+      const response = await eventsClient.send(command);
+
+      expect(response.Targets).toBeDefined();
+      expect(response.Targets!.length).toBeGreaterThan(0);
+      const snsTarget = response.Targets!.find(
+        (target) => target.Arn === outputs.SNSTopicArn
+      );
+      expect(snsTarget).toBeDefined();
+      expect(snsTarget!.Id).toBe('SNSTopic');
+    });
+
+    test('SNS topic policy should allow EventBridge to publish', async () => {
+      const command = new GetTopicAttributesCommand({
+        TopicArn: outputs.SNSTopicArn,
+      });
+      const response = await snsClient.send(command);
+
+      const policy = JSON.parse(response.Attributes!.Policy!);
+      const eventsStatement = policy.Statement.find((stmt: any) =>
+        stmt.Principal?.Service?.includes('events.amazonaws.com')
+      );
+
+      expect(eventsStatement).toBeDefined();
+      expect(eventsStatement.Effect).toBe('Allow');
+      expect(eventsStatement.Action).toContain('SNS:Publish');
+      expect(eventsStatement.Resource).toBe(outputs.SNSTopicArn);
+    });
+
+    // EC2 & Security Groups Integration Tests
+    test('EC2 instances should use private security group', async () => {
+      const command = new DescribeInstancesCommand({
+        InstanceIds: [outputs.PrivateInstance1Id, outputs.PrivateInstance2Id],
+      });
+      const response = await ec2Client.send(command);
+
+      response.Reservations!.forEach((reservation) => {
+        const instance = reservation.Instances![0];
+        expect(instance.SecurityGroups).toHaveLength(1);
+        const sg = instance.SecurityGroups![0];
+        expect(sg.GroupName).toContain('PrivateSecurityGroup');
+      });
+    });
+
+    test('Security group should allow VPC CIDR ingress only', async () => {
+      const instancesCommand = new DescribeInstancesCommand({
+        InstanceIds: [outputs.PrivateInstance1Id],
+      });
+      const instancesResponse = await ec2Client.send(instancesCommand);
+      const sgId = instancesResponse.Reservations![0].Instances![0].SecurityGroups![0].GroupId!;
+
+      const sgCommand = new DescribeSecurityGroupsCommand({
+        GroupIds: [sgId],
+      });
+      const sgResponse = await ec2Client.send(sgCommand);
+      const sg = sgResponse.SecurityGroups![0];
+
+      // Verify ingress rules only allow VPC CIDR
+      sg.IpPermissions!.forEach((rule) => {
+        if (rule.IpRanges && rule.IpRanges.length > 0) {
+          rule.IpRanges.forEach((ipRange) => {
+            expect(ipRange.CidrIp).toMatch(/^10\.0\./);
+          });
+        }
+      });
+
+      // Verify common ports are allowed from VPC
+      const sshRule = sg.IpPermissions!.find(
+        (rule) => rule.FromPort === 22 && rule.ToPort === 22
+      );
+      expect(sshRule).toBeDefined();
+
+      const httpsRule = sg.IpPermissions!.find(
+        (rule) => rule.FromPort === 443 && rule.ToPort === 443
+      );
+      expect(httpsRule).toBeDefined();
+    });
+
+    test('Security group should allow all egress traffic', async () => {
+      const instancesCommand = new DescribeInstancesCommand({
+        InstanceIds: [outputs.PrivateInstance1Id],
+      });
+      const instancesResponse = await ec2Client.send(instancesCommand);
+      const sgId = instancesResponse.Reservations![0].Instances![0].SecurityGroups![0].GroupId!;
+
+      const sgCommand = new DescribeSecurityGroupsCommand({
+        GroupIds: [sgId],
+      });
+      const sgResponse = await ec2Client.send(sgCommand);
+      const sg = sgResponse.SecurityGroups![0];
+
+      expect(sg.IpPermissionsEgress).toBeDefined();
+      const allEgressRule = sg.IpPermissionsEgress!.find(
+        (rule) => rule.IpProtocol === '-1' && rule.IpRanges?.[0]?.CidrIp === '0.0.0.0/0'
+      );
+      expect(allEgressRule).toBeDefined();
+    });
+
+    // VPC & Network Integration Tests
+    test('Private instances should route through NAT Gateways', async () => {
+      const instancesCommand = new DescribeInstancesCommand({
+        InstanceIds: [outputs.PrivateInstance1Id, outputs.PrivateInstance2Id],
+      });
+      const instancesResponse = await ec2Client.send(instancesCommand);
+
+      const subnetIds = instancesResponse.Reservations!.map(
+        (res) => res.Instances![0].SubnetId!
+      );
+
+      const rtCommand = new DescribeRouteTablesCommand({
+        Filters: [
+          {
+            Name: 'association.subnet-id',
+            Values: subnetIds,
+          },
+        ],
+      });
+      const rtResponse = await ec2Client.send(rtCommand);
+
+      // Each private subnet should have a route to NAT Gateway
+      rtResponse.RouteTables!.forEach((rt) => {
+        const natRoute = rt.Routes!.find(
+          (route) =>
+            route.DestinationCidrBlock === '0.0.0.0/0' &&
+            route.NatGatewayId?.startsWith('nat-')
+        );
+        expect(natRoute).toBeDefined();
+      });
+    });
+
+    test('Subnets should be properly associated with route tables', async () => {
+      const rtCommand = new DescribeRouteTablesCommand({
+        Filters: [
+          {
+            Name: 'vpc-id',
+            Values: [outputs.VPCId],
+          },
+        ],
+      });
+      const response = await ec2Client.send(rtCommand);
+
+      const allSubnetIds = [
+        outputs.PublicSubnet1Id,
+        outputs.PublicSubnet2Id,
+        outputs.PrivateSubnet1Id,
+        outputs.PrivateSubnet2Id,
+      ];
+
+      const associatedSubnetIds = new Set<string>();
+      response.RouteTables!.forEach((rt) => {
+        rt.Associations?.forEach((assoc) => {
+          if (assoc.SubnetId) {
+            associatedSubnetIds.add(assoc.SubnetId);
+          }
+        });
+      });
+
+      allSubnetIds.forEach((subnetId) => {
+        expect(associatedSubnetIds.has(subnetId)).toBe(true);
+      });
+    });
+
+    test('NAT Gateways should have Elastic IPs attached', async () => {
+      const natCommand = new DescribeNatGatewaysCommand({
+        Filter: [
+          {
+            Name: 'vpc-id',
+            Values: [outputs.VPCId],
+          },
+        ],
+      });
+      const natResponse = await ec2Client.send(natCommand);
+
+      expect(natResponse.NatGateways!.length).toBeGreaterThanOrEqual(2);
+      natResponse.NatGateways!.forEach((nat) => {
+        expect(nat.NatGatewayAddresses).toHaveLength(1);
+        const natAddress = nat.NatGatewayAddresses![0];
+        expect(natAddress.AllocationId).toBeDefined();
+        expect(natAddress.PublicIp).toBeDefined();
+        expect(natAddress.PublicIp).toMatch(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/);
+      });
+
+      // Verify EIPs are actually allocated
+      const allocationIds = natResponse.NatGateways!.map(
+        (nat) => nat.NatGatewayAddresses![0].AllocationId!
+      );
+      const eipCommand = new DescribeAddressesCommand({
+        AllocationIds: allocationIds,
+      });
+      const eipResponse = await ec2Client.send(eipCommand);
+      expect(eipResponse.Addresses).toHaveLength(allocationIds.length);
+    });
+
+    test('Internet Gateway should route public subnet traffic', async () => {
+      const igwCommand = new DescribeInternetGatewaysCommand({
+        Filters: [
+          {
+            Name: 'attachment.vpc-id',
+            Values: [outputs.VPCId],
+          },
+        ],
+      });
+      const igwResponse = await ec2Client.send(igwCommand);
+      const igwId = igwResponse.InternetGateways![0].InternetGatewayId!;
+
+      const rtCommand = new DescribeRouteTablesCommand({
+        Filters: [
+          {
+            Name: 'route.gateway-id',
+            Values: [igwId],
+          },
+        ],
+      });
+      const rtResponse = await ec2Client.send(rtCommand);
+
+      expect(rtResponse.RouteTables).toBeDefined();
+      expect(rtResponse.RouteTables!.length).toBeGreaterThan(0);
+
+      // Verify IGW route table has associations to public subnets
+      const publicSubnetIds = [
+        outputs.PublicSubnet1Id,
+        outputs.PublicSubnet2Id,
+      ];
+      const associatedSubnetIds = new Set<string>();
+      rtResponse.RouteTables!.forEach((rt) => {
+        rt.Associations?.forEach((assoc) => {
+          if (assoc.SubnetId) {
+            associatedSubnetIds.add(assoc.SubnetId);
+          }
+        });
+      });
+
+      publicSubnetIds.forEach((subnetId) => {
+        expect(associatedSubnetIds.has(subnetId)).toBe(true);
+      });
+    });
+
+    // End-to-End Integration Scenarios
+    test('Complete deployment health check', async () => {
+      // Check VPC is available
+      const vpcCommand = new DescribeVpcsCommand({
+        VpcIds: [outputs.VPCId],
+      });
+      const vpcResponse = await ec2Client.send(vpcCommand);
+      expect(vpcResponse.Vpcs![0].State).toBe('available');
+
+      // Check NAT Gateways are available
+      const natCommand = new DescribeNatGatewaysCommand({
+        Filter: [
+          {
+            Name: 'vpc-id',
+            Values: [outputs.VPCId],
+          },
+        ],
+      });
+      const natResponse = await ec2Client.send(natCommand);
+      natResponse.NatGateways!.forEach((nat) => {
+        expect(nat.State).toBe('available');
+      });
+
+      // Check instances are running or pending
+      const instanceCommand = new DescribeInstancesCommand({
+        InstanceIds: [
+          outputs.PrivateInstance1Id,
+          outputs.PrivateInstance2Id,
+        ],
+      });
+      const instanceResponse = await ec2Client.send(instanceCommand);
+      instanceResponse.Reservations!.forEach((res) => {
+        expect(['running', 'pending']).toContain(
+          res.Instances![0].State!.Name!
+        );
+      });
+
+      // Check S3 bucket is accessible
+      const s3Command = new HeadBucketCommand({
+        Bucket: outputs.S3BucketName,
+      });
+      await expect(s3Client.send(s3Command)).resolves.not.toThrow();
+
+      // Check SNS topic exists
+      const snsCommand = new GetTopicAttributesCommand({
+        TopicArn: outputs.SNSTopicArn,
+      });
+      await expect(snsClient.send(snsCommand)).resolves.toBeDefined();
+    });
+
+    test('All resources should have consistent tagging', async () => {
+      // Check VPC tags
+      const vpcCommand = new DescribeVpcsCommand({
+        VpcIds: [outputs.VPCId],
+      });
+      const vpcResponse = await ec2Client.send(vpcCommand);
+      const vpcTags = vpcResponse.Vpcs![0].Tags || [];
+      const vpcTagKeys = vpcTags.map((tag) => tag.Key);
+      expect(vpcTagKeys).toContain('Environment');
+
+      // Check instance tags
+      const instanceCommand = new DescribeInstancesCommand({
+        InstanceIds: [outputs.PrivateInstance1Id],
+      });
+      const instanceResponse = await ec2Client.send(instanceCommand);
+      const instanceTags =
+        instanceResponse.Reservations![0].Instances![0].Tags || [];
+      const instanceTagKeys = instanceTags.map((tag) => tag.Key);
+      expect(instanceTagKeys).toContain('Environment');
+      expect(instanceTagKeys).toContain('Name');
+
+      // Verify consistent environment tag value
+      const vpcEnvTag = vpcTags.find((tag) => tag.Key === 'Environment');
+      const instanceEnvTag = instanceTags.find(
+        (tag) => tag.Key === 'Environment'
+      );
+      if (vpcEnvTag && instanceEnvTag) {
+        expect(vpcEnvTag.Value).toBe(instanceEnvTag.Value);
+      }
+    });
+
+    test('Cross-stack exports should be accessible', async () => {
+      const command = new DescribeStacksCommand({
+        StackName: stackName,
+      });
+      const response = await cfnClient.send(command);
+
+      const stack = response.Stacks![0];
+      const exportsCount = stack.Outputs!.filter(
+        (output) => output.ExportName
+      ).length;
+      expect(exportsCount).toBeGreaterThan(0);
+
+      // Verify key exports exist
+      const exportNames = stack.Outputs!.filter((o) => o.ExportName).map(
+        (o) => o.ExportName!
+      );
+      expect(exportNames.some((name) => name.includes('VPC-ID'))).toBe(true);
+      expect(exportNames.some((name) => name.includes('SNSTopic-ARN'))).toBe(
+        true
+      );
+    });
+
+    test('Regional resource references should be dynamic', async () => {
+      // Verify instances use region-specific AMI
+      const instanceCommand = new DescribeInstancesCommand({
+        InstanceIds: [outputs.PrivateInstance1Id],
+      });
+      const instanceResponse = await ec2Client.send(instanceCommand);
+      const instance = instanceResponse.Reservations![0].Instances![0];
+      expect(instance.ImageId).toMatch(/^ami-[a-f0-9]+$/);
+
+      // Verify subnets use region-specific AZs
+      const subnetCommand = new DescribeSubnetsCommand({
+        SubnetIds: [outputs.PublicSubnet1Id, outputs.PublicSubnet2Id],
+      });
+      const subnetResponse = await ec2Client.send(subnetCommand);
+      subnetResponse.Subnets!.forEach((subnet) => {
+        expect(subnet.AvailabilityZone).toBeDefined();
+        expect(subnet.AvailabilityZone!.startsWith(region)).toBe(true);
+      });
+
+      // Verify ARNs use correct partition
+      expect(outputs.SNSTopicArn).toMatch(/^arn:aws:/);
+      expect(outputs.EC2InstanceRoleArn).toMatch(/^arn:aws:/);
+    });
+
+    test('All critical services should be operational', async () => {
+      const checks = [];
+
+      // VPC networking
+      checks.push(
+        ec2Client
+          .send(new DescribeVpcsCommand({ VpcIds: [outputs.VPCId] }))
+          .then((res) => expect(res.Vpcs![0].State).toBe('available'))
+      );
+
+      // EC2 instances
+      checks.push(
+        ec2Client
+          .send(
+            new DescribeInstancesCommand({
+              InstanceIds: [outputs.PrivateInstance1Id],
+            })
+          )
+          .then((res) =>
+            expect(['running', 'pending']).toContain(
+              res.Reservations![0].Instances![0].State!.Name!
+            )
+          )
+      );
+
+      // S3 storage
+      checks.push(
+        s3Client
+          .send(new HeadBucketCommand({ Bucket: outputs.S3BucketName }))
+          .then(() => expect(true).toBe(true))
+      );
+
+      // SNS notifications
+      checks.push(
+        snsClient
+          .send(
+            new GetTopicAttributesCommand({ TopicArn: outputs.SNSTopicArn })
+          )
+          .then((res) => expect(res.Attributes).toBeDefined())
+      );
+
+      // CloudWatch alarms
+      checks.push(
+        cwClient
+          .send(
+            new DescribeAlarmsCommand({ AlarmNamePrefix: environmentSuffix })
+          )
+          .then((res) =>
+            expect(res.MetricAlarms!.length).toBeGreaterThanOrEqual(4)
+          )
+      );
+
+      // Wait for all checks to complete
+      await Promise.all(checks);
+    });
+  });
+
+  // ===========================================================================
+  // L. Security Compliance Validation
+  // ===========================================================================
+  describe('Security Compliance Validation', () => {
+    test('All data at rest should be encrypted', async () => {
+      // Check S3 bucket encryption
+      const s3Command = new GetBucketEncryptionCommand({
+        Bucket: outputs.S3BucketName,
+      });
+      const s3Response = await s3Client.send(s3Command);
+      expect(s3Response.ServerSideEncryptionConfiguration).toBeDefined();
+
+      // Check EBS volume encryption
+      const instanceCommand = new DescribeInstancesCommand({
+        InstanceIds: [outputs.PrivateInstance1Id],
+      });
+      const instanceResponse = await ec2Client.send(instanceCommand);
+      const instance = instanceResponse.Reservations![0].Instances![0];
+      const volumeIds = instance.BlockDeviceMappings!.map(
+        (bdm) => bdm.Ebs!.VolumeId!
+      );
+
+      const volumesCommand = new DescribeVolumesCommand({
+        VolumeIds: volumeIds,
+      });
+      const volumesResponse = await ec2Client.send(volumesCommand);
+      volumesResponse.Volumes!.forEach((volume) => {
+        expect(volume.Encrypted).toBe(true);
+      });
+
+      // Check SNS topic encryption
+      const snsCommand = new GetTopicAttributesCommand({
+        TopicArn: outputs.SNSTopicArn,
+      });
+      const snsResponse = await snsClient.send(snsCommand);
+      expect(snsResponse.Attributes!.KmsMasterKeyId).toBeDefined();
+    });
+
+    test('No resources should be publicly accessible', async () => {
+      // Check S3 bucket blocks public access
+      const s3Command = new GetPublicAccessBlockCommand({
+        Bucket: outputs.S3BucketName,
+      });
+      const s3Response = await s3Client.send(s3Command);
+      const config = s3Response.PublicAccessBlockConfiguration!;
+      expect(config.BlockPublicAcls).toBe(true);
+      expect(config.BlockPublicPolicy).toBe(true);
+      expect(config.IgnorePublicAcls).toBe(true);
+      expect(config.RestrictPublicBuckets).toBe(true);
+
+      // Check instances are in private subnets
+      const instanceCommand = new DescribeInstancesCommand({
+        InstanceIds: [outputs.PrivateInstance1Id, outputs.PrivateInstance2Id],
+      });
+      const instanceResponse = await ec2Client.send(instanceCommand);
+      instanceResponse.Reservations!.forEach((res) => {
+        const instance = res.Instances![0];
+        expect(instance.PublicIpAddress).toBeUndefined();
+      });
+    });
+
+    test('Audit logging should be enabled', async () => {
+      // Check CloudWatch log group exists
+      const logsCommand = new DescribeLogGroupsCommand({
+        logGroupNamePrefix: '/aws/ec2/',
+      });
+      const logsResponse = await logsClient.send(logsCommand);
+      const logGroup = logsResponse.logGroups!.find((lg) =>
+        lg.logGroupName!.includes(environmentSuffix)
+      );
+      expect(logGroup).toBeDefined();
+      expect(logGroup!.retentionInDays).toBe(30);
+    });
+
+    test('Network isolation should be enforced', async () => {
+      // Check private security group rules
+      const instanceCommand = new DescribeInstancesCommand({
+        InstanceIds: [outputs.PrivateInstance1Id],
+      });
+      const instanceResponse = await ec2Client.send(instanceCommand);
+      const sgId =
+        instanceResponse.Reservations![0].Instances![0].SecurityGroups![0]
+          .GroupId!;
+
+      const sgCommand = new DescribeSecurityGroupsCommand({
+        GroupIds: [sgId],
+      });
+      const sgResponse = await ec2Client.send(sgCommand);
+      const sg = sgResponse.SecurityGroups![0];
+
+      // Verify no ingress from 0.0.0.0/0 on sensitive ports
+      const publicIngress = sg.IpPermissions!.filter(
+        (rule) =>
+          rule.IpRanges?.some((range) => range.CidrIp === '0.0.0.0/0')
+      );
+      expect(publicIngress.length).toBe(0);
+
+      // Verify ingress is limited to VPC CIDR
+      sg.IpPermissions!.forEach((rule) => {
+        if (rule.IpRanges && rule.IpRanges.length > 0) {
+          rule.IpRanges.forEach((ipRange) => {
+            expect(ipRange.CidrIp).toMatch(/^10\.0\./);
+          });
+        }
+      });
+    });
+
+    test('Backup policies should be configured', async () => {
+      // Check S3 versioning
+      const s3Command = new GetBucketVersioningCommand({
+        Bucket: outputs.S3BucketName,
+      });
+      const s3Response = await s3Client.send(s3Command);
+      expect(s3Response.Status).toBe('Enabled');
+
+      // Check CloudWatch log retention
+      const logsCommand = new DescribeLogGroupsCommand({
+        logGroupNamePrefix: '/aws/ec2/',
+      });
+      const logsResponse = await logsClient.send(logsCommand);
+      const logGroup = logsResponse.logGroups!.find((lg) =>
+        lg.logGroupName!.includes(environmentSuffix)
+      );
+      if (logGroup) {
+        expect(logGroup.retentionInDays).toBe(30);
+      }
+    });
+  });
+
+  // ===========================================================================
+  // M. Regional Migration Tests
   // ===========================================================================
   describe('Regional Migration Tests', () => {
     test('AMI should exist for deployed region', async () => {
