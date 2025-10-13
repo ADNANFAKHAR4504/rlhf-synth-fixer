@@ -213,7 +213,7 @@ export class TapStack extends cdk.Stack {
 
     // Use explicit AMI mapping to satisfy fixed-AMI requirement
     const ami = ec2.MachineImage.genericLinux({
-      'us-east-1': defaultAmiId,
+      'us-west-2': defaultAmiId,
     });
 
     const asg = new autoscaling.AutoScalingGroup(this, `ASG-${suffix}`, {
