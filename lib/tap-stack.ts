@@ -229,8 +229,9 @@ export class TapStack extends Construct {
     logBucket.grantWrite(ec2Role);
 
     // Create CloudWatch Log Group
+    const timestamp = Date.now().toString();
     const logGroup = new logs.LogGroup(stack, 'AppLogGroup', {
-      logGroupName: `/aws/ec2/prod-app-${stringSuffix}`,
+      logGroupName: `/aws/ec2/prod-app-${stringSuffix}-${timestamp}`,
       retention: logs.RetentionDays.ONE_MONTH,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
