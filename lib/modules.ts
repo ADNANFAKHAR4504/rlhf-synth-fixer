@@ -1,5 +1,6 @@
 // lib/modules.ts
 import { Construct } from 'constructs';
+import { Fn } from 'cdktf'; // Add this impor
 // IAM
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
@@ -427,7 +428,7 @@ export class SecureVpc extends Construct {
       const subnet = new Subnet(this, `public-subnet-${index}`, {
         vpcId: this.vpc.id,
         cidrBlock: cidr,
-        availabilityZone: azs.names[index % config.azCount],
+        availabilityZone: Fn.element(azs.names, index % config.azCount), // Use Fn.element instead of array access
         mapPublicIpOnLaunch: true,
         tags: { ...config.tags, Name: `${config.name}-public-${index + 1}` },
       });
@@ -459,7 +460,7 @@ export class SecureVpc extends Construct {
       const subnet = new Subnet(this, `private-subnet-${index}`, {
         vpcId: this.vpc.id,
         cidrBlock: cidr,
-        availabilityZone: azs.names[index % config.azCount],
+        availabilityZone: Fn.element(azs.names, index % config.azCount), // Use Fn.element instead of array access
         tags: { ...config.tags, Name: `${config.name}-private-${index + 1}` },
       });
       this.privateSubnets.push(subnet);
@@ -552,7 +553,7 @@ export class SecureVpc extends Construct {
     // DB Subnet Group
     this.dbSubnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
       name: `${config.name}-db-subnet-group`,
-      subnetIds: this.privateSubnets.map(s => s.id),
+      subnetIds: this.privateSubnets.map(s => s.id), // This should be fine as privateSubnets is a known array
       tags: { ...config.tags, Name: `${config.name}-db-subnet-group` },
     });
   }
