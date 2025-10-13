@@ -383,7 +383,9 @@ export class IaCNovaStack extends NestedStack {
       roleName: formatResourceName('lambda-role'),
       description: 'IAM role for the email event processor Lambda function.',
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaVPCAccessExecutionRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSLambdaVPCAccessExecutionRole'
+        ),
       ],
     });
     applyCommonTags(lambdaRole, formatResourceName('lambda-role'));
@@ -440,14 +442,14 @@ export class IaCNovaStack extends NestedStack {
     const rdsCredentialsSecret =
       rdsCredentialsSecretArn !== undefined && rdsCredentialsSecretArn !== ''
         ? secretsmanager.Secret.fromSecretCompleteArn(
-          this,
-          'ImportedRdsCredentialsSecret',
-          rdsCredentialsSecretArn
-        )
+            this,
+            'ImportedRdsCredentialsSecret',
+            rdsCredentialsSecretArn
+          )
         : this.createManagedDatabaseSecret(
-          formatResourceName('db-credentials', true),
-          dbMasterUsername
-        );
+            formatResourceName('db-credentials', true),
+            dbMasterUsername
+          );
     if (rdsCredentialsSecret instanceof secretsmanager.Secret) {
       applyCommonTags(
         rdsCredentialsSecret,
@@ -617,11 +619,7 @@ export class IaCNovaStack extends NestedStack {
   }
 
   public formatResourceName(purpose: string, lowercase = false): string {
-    // Avoid duplication when environmentId and stringSuffix are the same
-    const suffix =
-      this.environmentIdToken === this.stringSuffixToken
-        ? this.stringSuffixToken
-        : `${this.environmentIdToken}-${this.stringSuffixToken}`;
+    const suffix = `${this.environmentIdToken}-${this.stringSuffixToken}`;
     const composed = `app-${purpose}-${suffix}`;
     return lowercase ? composed.toLowerCase() : composed;
   }
