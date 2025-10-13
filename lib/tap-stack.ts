@@ -269,7 +269,7 @@ export class TapStack extends cdk.Stack {
         unhealthyThresholdCount: 3,
       },
       stickinessCookieDuration: cdk.Duration.minutes(5),
-      stickinessCookieName: 'AWSALBAPP',
+      stickinessCookieName: 'MyAppSession',
     });
 
     // Create ACM Certificate for HTTPS
