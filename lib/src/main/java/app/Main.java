@@ -79,6 +79,9 @@ public final class Main {
         // Get AWS account ID dynamically
         var callerIdentity = AwsFunctions.getCallerIdentity();
         var accountId = callerIdentity.applyValue(identity -> identity.accountId());
+        
+        // Get environment suffix for unique resource naming
+        String environmentSuffix = System.getenv().getOrDefault("ENVIRONMENT_SUFFIX", "dev");
 
         // Create encryption resources
         var kmsResources = createKmsResources(accountId);
@@ -95,10 +98,10 @@ public final class Main {
 
         // Create CloudTrail resources
         var cloudtrailResources = createCloudTrailResources(
-                cloudtrailBucket, kmsKey, monitoringResources.cloudtrailLogGroup);
+                cloudtrailBucket, kmsKey, monitoringResources.cloudtrailLogGroup, environmentSuffix);
 
         // Create IAM policies
-        var accessPolicy = createDocumentAccessPolicy(documentBucket, kmsKey);
+        var accessPolicy = createDocumentAccessPolicy(documentBucket, kmsKey, environmentSuffix);
 
         // Export outputs
         exportOutputs(ctx, documentBucket, kmsKey, cloudtrailResources.trail, 
@@ -289,7 +292,8 @@ public final class Main {
     }
 
     private static CloudTrailResources createCloudTrailResources(
-            final Bucket cloudtrailBucket, final Key kmsKey, final LogGroup cloudtrailLogGroup) {
+            final Bucket cloudtrailBucket, final Key kmsKey, final LogGroup cloudtrailLogGroup, 
+            final String environmentSuffix) {
         
         // CloudTrail bucket policy
         var cloudtrailBucketPolicyDoc = cloudtrailBucket.arn()
@@ -373,7 +377,7 @@ public final class Main {
 
         // Create CloudTrail
         var trail = new Trail("legal-documents-trail", TrailArgs.builder()
-                .name("legal-documents-audit-trail")
+                .name("legal-documents-audit-trail-" + environmentSuffix)
                 .s3BucketName(cloudtrailBucket.id())
                 .includeGlobalServiceEvents(true)
                 .isMultiRegionTrail(true)
@@ -398,9 +402,9 @@ public final class Main {
         return new CloudTrailResources(trail, cloudtrailRole, cloudtrailBucketPolicy);
     }
 
-    private static Policy createDocumentAccessPolicy(final Bucket documentBucket, final Key kmsKey) {
+    private static Policy createDocumentAccessPolicy(final Bucket documentBucket, final Key kmsKey, final String environmentSuffix) {
         return new Policy("document-access-policy", PolicyArgs.builder()
-                .name("LegalDocumentAccessPolicy")
+                .name("LegalDocumentAccessPolicy-" + environmentSuffix)
                 .description("Policy for accessing legal documents with MFA requirement for deletion")
                 .policy(Output.tuple(documentBucket.arn(), kmsKey.arn()).applyValue(tuple -> {
                     String bucketArn = tuple.t1;
