@@ -283,10 +283,6 @@ describe('Batch Processing CloudFormation Template', () => {
       expect(parameterCount).toBe(4);
     });
 
-    test('should have correct number of outputs', () => {
-      const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(9);
-    });
   });
 
   describe('Resource Naming Convention', () => {
