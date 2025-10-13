@@ -39,15 +39,15 @@ export class TapStack extends Construct {
     });
     this.createResources(primaryStack, 'primary');
 
-    // Create secondary stack (us-west-2)
-    const secondaryEnv: cdk.Environment = {
-      region: 'us-west-2',
-      ...(account && { account }),
-    };
-    const secondaryStack = new cdk.Stack(this, 'SecondaryStack', {
-      env: secondaryEnv,
-    });
-    this.createResources(secondaryStack, 'secondary');
+    // Create secondary stack (us-west-2) - commented out until region is bootstrapped
+    // const secondaryEnv: cdk.Environment = {
+    //   region: 'us-west-2',
+    //   ...(account && { account }),
+    // };
+    // const secondaryStack = new cdk.Stack(this, 'SecondaryStack', {
+    //   env: secondaryEnv,
+    // });
+    // this.createResources(secondaryStack, 'secondary');
   }
 
   private createResources(
