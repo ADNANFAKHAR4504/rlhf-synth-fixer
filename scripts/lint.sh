@@ -16,7 +16,7 @@ echo "Running linting for platform: $PLATFORM, language: $LANGUAGE"
 
 if [ "$LANGUAGE" = "ts" ]; then
     echo "✅ TypeScript project detected, running ESLint..."
-    NODE_OPTIONS="--max-old-space-size=4096" npm run lint
+    npm run lint
 
 elif [ "$LANGUAGE" = "go" ]; then
     echo "✅ Go project detected, running go fmt and go vet..."
