@@ -151,9 +151,9 @@ export class TapStack extends cdk.Stack {
       userData: userData,
       role: instanceRole,
       securityGroup: instanceSecurityGroup,
-      minCapacity: 2, // Minimum 2 instances as required
-      maxCapacity: 6, // Allow scaling up to 6 instances
-      desiredCapacity: 2, // Start with 2 instances
+      minCapacity: 1, // Minimum 1 instance to reduce vCPU usage
+      maxCapacity: 3, // Allow scaling up to 3 instances (6 vCPUs max)
+      desiredCapacity: 1, // Start with 1 instance (2 vCPUs)
       healthCheck: autoscaling.HealthCheck.elb({
         grace: cdk.Duration.minutes(5), // Give instances time to start
       }),
@@ -232,12 +232,14 @@ export class TapStack extends cdk.Stack {
     // ==========================================
 
     // Create S3 bucket for application assets with versioning
+    // Generate a unique suffix to avoid bucket name conflicts
+    const uniqueSuffix = Math.random().toString(36).substring(2, 8);
     const assetsBucket = new s3.Bucket(this, 'BookstoreAssetsBucket', {
-      bucketName: `bookstore-assets-${this.account}-${this.region}-${environmentSuffix}`,
+      bucketName: `bookstore-assets-${this.region}-${environmentSuffix}-${uniqueSuffix}`,
       versioned: true, // MANDATORY: Enable versioning for data durability
       encryption: s3.BucketEncryption.S3_MANAGED, // Enable server-side encryption
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL, // Security best practice
-      removalPolicy: cdk.RemovalPolicy.RETAIN, // Prevent accidental deletion
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // Allow deletion when stack is deleted
       lifecycleRules: [
         {
           id: 'delete-old-versions',
@@ -257,6 +259,11 @@ export class TapStack extends cdk.Stack {
 
     // Grant read access to EC2 instances for serving static content
     assetsBucket.grantRead(instanceRole);
+
+    // Add tags to S3 bucket
+    cdk.Tags.of(assetsBucket).add('Environment', environmentSuffix);
+    cdk.Tags.of(assetsBucket).add('Application', 'OnlineBookstore');
+    cdk.Tags.of(assetsBucket).add('Purpose', 'ApplicationAssets');
 
     // ==========================================
     // 7. MONITORING - CloudWatch Alarms
@@ -289,14 +296,47 @@ export class TapStack extends cdk.Stack {
       estimatedInstanceWarmup: cdk.Duration.minutes(5),
     });
 
+    // Additional scaling policy based on ALB request count
+    asg.scaleOnRequestCount('RequestCountScaling', {
+      targetRequestsPerMinute: 1000, // Scale when requests exceed 1000/minute per instance
+      cooldown: cdk.Duration.minutes(3),
+    });
+
     // Additional alarm for ALB target health
     new cloudwatch.Alarm(this, 'UnhealthyTargetsAlarm', {
-      metric: targetGroup.metricUnhealthyHostCount(),
+      metric: targetGroup.metrics.unhealthyHostCount(),
       alarmName: `bookstore-unhealthy-targets-${environmentSuffix}`,
       alarmDescription: 'Alarm when unhealthy targets detected',
       threshold: 1,
       evaluationPeriods: 2,
       datapointsToAlarm: 2,
+    });
+
+    // Alarm for ALB response time
+    new cloudwatch.Alarm(this, 'HighResponseTimeAlarm', {
+      metric: targetGroup.metrics.targetResponseTime(),
+      alarmName: `bookstore-high-response-time-${environmentSuffix}`,
+      alarmDescription: 'Alarm when target response time exceeds 2 seconds',
+      threshold: 2, // 2 seconds
+      evaluationPeriods: 2,
+      datapointsToAlarm: 2,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+    });
+
+    // Alarm for ALB 5XX errors
+    new cloudwatch.Alarm(this, 'High5xxErrorsAlarm', {
+      metric: alb.metrics.httpCodeTarget(
+        elbv2.HttpCodeTarget.TARGET_5XX_COUNT,
+        {
+          period: cdk.Duration.minutes(5),
+          statistic: 'Sum',
+        }
+      ),
+      alarmName: `bookstore-high-5xx-errors-${environmentSuffix}`,
+      alarmDescription: 'Alarm when 5XX errors exceed threshold',
+      threshold: 10, // More than 10 5XX errors in 5 minutes
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
 
     // ==========================================

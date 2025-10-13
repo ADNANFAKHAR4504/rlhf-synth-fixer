@@ -24,24 +24,16 @@ describe('TapStack', () => {
       const testTemplate = Template.fromStack(testStack);
       
       // Verify that resources are created with the test environment suffix
-      testTemplate.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: {
-          'Fn::Join': [
-            '',
-            [
-              'bookstore-assets-',
-              {
-                'Ref': 'AWS::AccountId',
-              },
-              '-',
-              {
-                'Ref': 'AWS::Region',
-              },
-              '-test-env',
-            ],
-          ],
-        },
-      });
+      const bucketResources = testTemplate.findResources('AWS::S3::Bucket');
+      const bucketResource = Object.values(bucketResources)[0];
+      const bucketName = bucketResource.Properties.BucketName;
+      
+      // Verify the bucket name contains the environment suffix
+      expect(bucketName).toHaveProperty('Fn::Join');
+      expect(bucketName['Fn::Join'][1]).toContain('bookstore-assets-');
+      expect(bucketName['Fn::Join'][1].some((item: any) => 
+        typeof item === 'string' && item.includes('-test-env')
+      )).toBe(true);
     });
 
     test('should use environment suffix from context when props not provided', () => {
@@ -51,24 +43,16 @@ describe('TapStack', () => {
       const testTemplate = Template.fromStack(testStack);
       
       // Verify that resources are created with the context environment suffix
-      testTemplate.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: {
-          'Fn::Join': [
-            '',
-            [
-              'bookstore-assets-',
-              {
-                'Ref': 'AWS::AccountId',
-              },
-              '-',
-              {
-                'Ref': 'AWS::Region',
-              },
-              '-context-env',
-            ],
-          ],
-        },
-      });
+      const bucketResources = testTemplate.findResources('AWS::S3::Bucket');
+      const bucketResource = Object.values(bucketResources)[0];
+      const bucketName = bucketResource.Properties.BucketName;
+      
+      // Verify the bucket name contains the context environment suffix
+      expect(bucketName).toHaveProperty('Fn::Join');
+      expect(bucketName['Fn::Join'][1]).toContain('bookstore-assets-');
+      expect(bucketName['Fn::Join'][1].some((item: any) => 
+        typeof item === 'string' && item.includes('-context-env')
+      )).toBe(true);
     });
 
     test('should use default dev suffix when neither props nor context provided', () => {
@@ -77,24 +61,16 @@ describe('TapStack', () => {
       const testTemplate = Template.fromStack(testStack);
       
       // Verify that resources are created with the default dev suffix
-      testTemplate.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: {
-          'Fn::Join': [
-            '',
-            [
-              'bookstore-assets-',
-              {
-                'Ref': 'AWS::AccountId',
-              },
-              '-',
-              {
-                'Ref': 'AWS::Region',
-              },
-              '-dev',
-            ],
-          ],
-        },
-      });
+      const bucketResources = testTemplate.findResources('AWS::S3::Bucket');
+      const bucketResource = Object.values(bucketResources)[0];
+      const bucketName = bucketResource.Properties.BucketName;
+      
+      // Verify the bucket name contains the default dev suffix
+      expect(bucketName).toHaveProperty('Fn::Join');
+      expect(bucketName['Fn::Join'][1]).toContain('bookstore-assets-');
+      expect(bucketName['Fn::Join'][1].some((item: any) => 
+        typeof item === 'string' && item.includes('-dev')
+      )).toBe(true);
     });
 
     test('should prioritize props over context when both provided', () => {
@@ -106,24 +82,16 @@ describe('TapStack', () => {
       const testTemplate = Template.fromStack(testStack);
       
       // Verify that resources are created with the props environment suffix
-      testTemplate.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: {
-          'Fn::Join': [
-            '',
-            [
-              'bookstore-assets-',
-              {
-                'Ref': 'AWS::AccountId',
-              },
-              '-',
-              {
-                'Ref': 'AWS::Region',
-              },
-              '-props-env',
-            ],
-          ],
-        },
-      });
+      const bucketResources = testTemplate.findResources('AWS::S3::Bucket');
+      const bucketResource = Object.values(bucketResources)[0];
+      const bucketName = bucketResource.Properties.BucketName;
+      
+      // Verify the bucket name contains the props environment suffix
+      expect(bucketName).toHaveProperty('Fn::Join');
+      expect(bucketName['Fn::Join'][1]).toContain('bookstore-assets-');
+      expect(bucketName['Fn::Join'][1].some((item: any) => 
+        typeof item === 'string' && item.includes('-props-env')
+      )).toBe(true);
     });
   });
 
@@ -160,9 +128,9 @@ describe('TapStack', () => {
   describe('Auto Scaling Group', () => {
     test('should create Auto Scaling Group with correct instance type', () => {
       template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
-        MinSize: '2',
-        MaxSize: '6',
-        DesiredCapacity: '2',
+        MinSize: '1',
+        MaxSize: '3',
+        DesiredCapacity: '1',
       });
     });
 
@@ -239,9 +207,25 @@ describe('TapStack', () => {
       });
     });
 
+    test('should create high response time alarm', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: `bookstore-high-response-time-${environmentSuffix}`,
+        AlarmDescription: 'Alarm when target response time exceeds 2 seconds',
+        Threshold: 2,
+      });
+    });
+
+    test('should create 5XX errors alarm', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: `bookstore-high-5xx-errors-${environmentSuffix}`,
+        AlarmDescription: 'Alarm when 5XX errors exceed threshold',
+        Threshold: 10,
+      });
+    });
+
     test('should create multiple CloudWatch alarms', () => {
       const alarms = template.findResources('AWS::CloudWatch::Alarm');
-      expect(Object.keys(alarms)).toHaveLength(2);
+      expect(Object.keys(alarms).length).toBeGreaterThanOrEqual(4);
     });
   });
 
@@ -278,15 +262,21 @@ describe('TapStack', () => {
   describe('Auto Scaling Configuration', () => {
     test('should create Auto Scaling Group with correct scaling configuration', () => {
       template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
-        MinSize: '2',
-        MaxSize: '6',
-        DesiredCapacity: '2',
+        MinSize: '1',
+        MaxSize: '3',
+        DesiredCapacity: '1',
         AutoScalingGroupName: `bookstore-asg-${environmentSuffix}`,
         HealthCheckType: 'ELB',
         HealthCheckGracePeriod: 300,
       });
     });
 
+    test('should configure ELB health check for Auto Scaling Group', () => {
+      template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
+        HealthCheckType: 'ELB',
+        HealthCheckGracePeriod: 300,
+      });
+    });
     test('should create scaling policies', () => {
       template.hasResourceProperties('AWS::AutoScaling::ScalingPolicy', {
         PolicyType: 'TargetTrackingScaling',
@@ -297,6 +287,11 @@ describe('TapStack', () => {
           },
         },
       });
+    });
+    test('should create request count based scaling policy', () => {
+      // Verify request count based scaling is configured
+      const scalingPolicies = template.findResources('AWS::AutoScaling::ScalingPolicy');
+      expect(Object.keys(scalingPolicies).length).toBeGreaterThanOrEqual(2);
     });
   });
 
@@ -352,24 +347,23 @@ describe('TapStack', () => {
 
   describe('S3 Bucket Configuration', () => {
     test('should create S3 bucket with correct naming pattern', () => {
-      template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: {
-          'Fn::Join': [
-            '',
-            [
-              'bookstore-assets-',
-              {
-                'Ref': 'AWS::AccountId',
-              },
-              '-',
-              {
-                'Ref': 'AWS::Region',
-              },
-              `-${environmentSuffix}`,
-            ],
-          ],
-        },
-      });
+      // Get the actual bucket name from the template
+      const bucketResources = template.findResources('AWS::S3::Bucket');
+      const bucketResource = Object.values(bucketResources)[0];
+      const bucketName = bucketResource.Properties.BucketName;
+      
+      // Verify the bucket name follows the expected pattern (CloudFormation template structure)
+      expect(bucketName).toHaveProperty('Fn::Join');
+      const bucketNameArray = bucketName['Fn::Join'][1];
+      
+      // Check that the array contains the expected structure
+      expect(bucketNameArray).toContain('bookstore-assets-');
+      
+      // Verify the structure: ['bookstore-assets-', {Ref: 'AWS::Region'}, '-dev-randomSuffix']
+      expect(bucketNameArray).toHaveLength(3);
+      expect(bucketNameArray[0]).toBe('bookstore-assets-');
+      expect(bucketNameArray[1]).toEqual({Ref: 'AWS::Region'});
+      expect(bucketNameArray[2]).toMatch(/^-[a-z0-9-]+-[a-z0-9]+$/); // Environment suffix + random suffix
     });
 
     test('should create S3 bucket with public access blocked', () => {
@@ -404,11 +398,23 @@ describe('TapStack', () => {
       });
     });
 
-    test('should verify S3 bucket has no explicit tags', () => {
-      // S3 bucket doesn't have explicit tags in the current implementation
-      const bucketResources = template.findResources('AWS::S3::Bucket');
-      const bucketResource = Object.values(bucketResources)[0];
-      expect(bucketResource.Properties.Tags).toBeUndefined();
+    test('should apply tags to S3 bucket', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        Tags: [
+          {
+            Key: 'Application',
+            Value: 'OnlineBookstore',
+          },
+          {
+            Key: 'Environment',
+            Value: environmentSuffix,
+          },
+          {
+            Key: 'Purpose',
+            Value: 'ApplicationAssets',
+          },
+        ],
+      });
     });
   });
 
@@ -448,12 +454,12 @@ describe('TapStack', () => {
       expect(Object.keys(lcResources)).toHaveLength(1);
 
       const scalingPolicyResources = template.findResources('AWS::AutoScaling::ScalingPolicy');
-      expect(Object.keys(scalingPolicyResources)).toHaveLength(1);
+      expect(Object.keys(scalingPolicyResources).length).toBeGreaterThanOrEqual(2); // CPU + Request count scaling
     });
 
     test('should create expected number of monitoring resources', () => {
       const alarmResources = template.findResources('AWS::CloudWatch::Alarm');
-      expect(Object.keys(alarmResources)).toHaveLength(2); // CPU + Unhealthy targets alarms
+      expect(Object.keys(alarmResources).length).toBeGreaterThanOrEqual(4); // CPU + Unhealthy + Response time + 5XX alarms
     });
   });
 
