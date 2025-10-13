@@ -2,7 +2,7 @@ import { ACMClient, ListCertificatesCommand } from '@aws-sdk/client-acm';
 import { CloudTrailClient, DescribeTrailsCommand } from '@aws-sdk/client-cloudtrail';
 import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';
 import { DescribeInstancesCommand, DescribeInternetGatewaysCommand, DescribeNatGatewaysCommand, DescribeRouteTablesCommand, DescribeSecurityGroupsCommand, DescribeSubnetsCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
-import { IAMClient, ListRolesCommand, GetRoleCommand } from '@aws-sdk/client-iam';
+import { IAMClient, ListRolesCommand, GetRoleCommand, ListPoliciesCommand } from '@aws-sdk/client-iam';
 import { DescribeKeyCommand, GetKeyPolicyCommand, GetKeyRotationStatusCommand, KMSClient } from '@aws-sdk/client-kms';
 import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
 import { GetBucketEncryptionCommand, GetBucketLifecycleConfigurationCommand, GetBucketPolicyStatusCommand, GetBucketTaggingCommand, GetBucketVersioningCommand, GetPublicAccessBlockCommand, HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
@@ -16,6 +16,17 @@ const outputs = JSON.parse(
 );
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const ec2 = new EC2Client({ region: process.env.AWS_REGION || 'us-east-1' });
+const rds = new RDSClient({ region: process.env.AWS_REGION || 'us-east-1' });
+const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
+const kms = new KMSClient({ region: process.env.AWS_REGION || 'us-east-1' });
+const elbv2 = new ELBv2({ region: process.env.AWS_REGION || 'us-east-1' });
+const wafv2 = new WAFV2Client({ region: process.env.AWS_REGION || 'us-east-1' });
+const cloudtrail = new CloudTrailClient({ region: process.env.AWS_REGION || 'us-east-1' });
+const sns = new SNSClient({ region: process.env.AWS_REGION || 'us-east-1' });
+const logs = new CloudWatchLogsClient({ region: process.env.AWS_REGION || 'us-east-1' });
+const iam = new IAMClient({ region: process.env.AWS_REGION || 'us-east-1' });
+const acm = new ACMClient({ region: process.env.AWS_REGION || 'us-east-1' });
 
 // Helper function to get VPC ID from outputs or discover it
 async function getVpcId(): Promise<string> {
@@ -48,18 +59,6 @@ async function getDatabaseInstance(): Promise<any> {
     db.DBInstanceIdentifier?.includes('enterpriseapp')
   );
 }
-
-const ec2 = new EC2Client({ region: process.env.AWS_REGION || 'us-east-1' });
-const rds = new RDSClient({ region: process.env.AWS_REGION || 'us-east-1' });
-const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
-const kms = new KMSClient({ region: process.env.AWS_REGION || 'us-east-1' });
-const elbv2 = new ELBv2({ region: process.env.AWS_REGION || 'us-east-1' });
-const wafv2 = new WAFV2Client({ region: process.env.AWS_REGION || 'us-east-1' });
-const cloudtrail = new CloudTrailClient({ region: process.env.AWS_REGION || 'us-east-1' });
-const sns = new SNSClient({ region: process.env.AWS_REGION || 'us-east-1' });
-const logs = new CloudWatchLogsClient({ region: process.env.AWS_REGION || 'us-east-1' });
-const iam = new IAMClient({ region: process.env.AWS_REGION || 'us-east-1' });
-const acm = new ACMClient({ region: process.env.AWS_REGION || 'us-east-1' });
 
 describe('TapStack Integration Tests - End-to-End Workflows', () => {
   beforeAll(async () => {
