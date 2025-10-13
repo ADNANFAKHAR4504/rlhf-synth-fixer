@@ -7,7 +7,10 @@
   "team": "synth",
   "startedAt": "2025-10-13T18:43:21+05:30",
   "subtask": "Failure Recovery and High Availability",
-  "subject_labels": ["Failure Recovery Automation", "Security Configuration as Code"],
+  "subject_labels": [
+    "Failure Recovery Automation",
+    "Security Configuration as Code"
+  ],
   "training_quality": 8,
   "aws_services": [
     "VPC",
@@ -21,5 +24,11 @@
     "Secrets Manager",
     "CloudWatch Logs",
     "IAM"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
