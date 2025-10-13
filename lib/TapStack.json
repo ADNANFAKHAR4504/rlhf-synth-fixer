@@ -1,0 +1,378 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Batch Processing System for Financial Transactions with Complete Audit Trail and Monitoring",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "Default": "dev"
+    },
+    "NotificationEmail": {
+      "Type": "String",
+      "Description": "Email address for SNS notifications",
+      "Default": "admin@example.com",
+      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+      "ConstraintDescription": "Must be a valid email address"
+    },
+    "MaxvCpus": {
+      "Type": "Number",
+      "Description": "Maximum vCPUs for batch compute environment",
+      "Default": 256,
+      "MinValue": 16,
+      "MaxValue": 512
+    },
+    "JobTimeout": {
+      "Type": "Number",
+      "Description": "Job timeout in seconds",
+      "Default": 14400,
+      "MinValue": 3600,
+      "MaxValue": 28800
+    }
+  },
+  "Resources": {
+    "TransactionDataBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": { "Fn::Sub": "transaction-data-${EnvironmentSuffix}-${AWS::AccountId}" },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [{
+            "ServerSideEncryptionByDefault": {
+              "SSEAlgorithm": "AES256"
+            }
+          }]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        }
+      }
+    },
+    "ProcessedDataBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": { "Fn::Sub": "processed-data-${EnvironmentSuffix}-${AWS::AccountId}" },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [{
+            "ServerSideEncryptionByDefault": {
+              "SSEAlgorithm": "AES256"
+            }
+          }]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        }
+      }
+    },
+    "JobStatusTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": { "Fn::Sub": "job-status-${EnvironmentSuffix}" },
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "jobId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "submittedAt",
+            "AttributeType": "N"
+          },
+          {
+            "AttributeName": "status",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [{
+          "AttributeName": "jobId",
+          "KeyType": "HASH"
+        }],
+        "GlobalSecondaryIndexes": [{
+          "IndexName": "StatusIndex",
+          "KeySchema": [
+            {
+              "AttributeName": "status",
+              "KeyType": "HASH"
+            },
+            {
+              "AttributeName": "submittedAt",
+              "KeyType": "RANGE"
+            }
+          ],
+          "Projection": {
+            "ProjectionType": "ALL"
+          }
+        }],
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "Tags": [{
+          "Key": "Environment",
+          "Value": { "Ref": "EnvironmentSuffix" }
+        }]
+      }
+    },
+    "AuditLogTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": { "Fn::Sub": "audit-log-${EnvironmentSuffix}" },
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "auditId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "timestamp",
+            "AttributeType": "N"
+          },
+          {
+            "AttributeName": "jobId",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "auditId",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "timestamp",
+            "KeyType": "RANGE"
+          }
+        ],
+        "GlobalSecondaryIndexes": [{
+          "IndexName": "JobIdIndex",
+          "KeySchema": [
+            {
+              "AttributeName": "jobId",
+              "KeyType": "HASH"
+            },
+            {
+              "AttributeName": "timestamp",
+              "KeyType": "RANGE"
+            }
+          ],
+          "Projection": {
+            "ProjectionType": "ALL"
+          }
+        }],
+        "TimeToLiveSpecification": {
+          "AttributeName": "ttl",
+          "Enabled": true
+        },
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "Tags": [{
+          "Key": "Environment",
+          "Value": { "Ref": "EnvironmentSuffix" }
+        }]
+      }
+    },
+    "BatchProcessingTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": { "Fn::Sub": "batch-processing-alerts-${EnvironmentSuffix}" },
+        "DisplayName": "Batch Processing Alerts",
+        "Subscription": [{
+          "Endpoint": { "Ref": "NotificationEmail" },
+          "Protocol": "email"
+        }],
+        "Tags": [{
+          "Key": "Environment",
+          "Value": { "Ref": "EnvironmentSuffix" }
+        }]
+      }
+    },
+    "BatchServiceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [{
+            "Effect": "Allow",
+            "Principal": {
+              "Service": "batch.amazonaws.com"
+            },
+            "Action": "sts:AssumeRole"
+          }]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSBatchServiceRole"
+        ]
+      }
+    },
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "batch-vpc-${EnvironmentSuffix}" }
+          },
+          {
+            "Key": "Environment",
+            "Value": { "Ref": "EnvironmentSuffix" }
+          }
+        ]
+      }
+    },
+    "BatchComputeEnvironment": {
+      "Type": "AWS::Batch::ComputeEnvironment",
+      "Properties": {
+        "ComputeEnvironmentName": { "Fn::Sub": "transaction-compute-env-${EnvironmentSuffix}" },
+        "Type": "MANAGED",
+        "State": "ENABLED",
+        "ServiceRole": { "Fn::GetAtt": ["BatchServiceRole", "Arn"] },
+        "ComputeResources": {
+          "Type": "EC2",
+          "MinvCpus": 0,
+          "MaxvCpus": { "Ref": "MaxvCpus" },
+          "DesiredvCpus": 0,
+          "InstanceTypes": ["optimal"],
+          "Tags": {
+            "Environment": { "Ref": "EnvironmentSuffix" }
+          }
+        }
+      }
+    },
+    "BatchJobQueue": {
+      "Type": "AWS::Batch::JobQueue",
+      "Properties": {
+        "JobQueueName": { "Fn::Sub": "transaction-job-queue-${EnvironmentSuffix}" },
+        "State": "ENABLED",
+        "Priority": 1,
+        "ComputeEnvironmentOrder": [{
+          "Order": 1,
+          "ComputeEnvironment": { "Ref": "BatchComputeEnvironment" }
+        }]
+      }
+    },
+    "BatchJobDefinition": {
+      "Type": "AWS::Batch::JobDefinition",
+      "Properties": {
+        "JobDefinitionName": { "Fn::Sub": "transaction-processor-${EnvironmentSuffix}" },
+        "Type": "container",
+        "ContainerProperties": {
+          "Image": { "Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/transaction-processor:latest" },
+          "Vcpus": 2,
+          "Memory": 4096,
+          "Environment": [
+            {
+              "Name": "JOB_STATUS_TABLE",
+              "Value": { "Ref": "JobStatusTable" }
+            },
+            {
+              "Name": "AUDIT_LOG_TABLE",
+              "Value": { "Ref": "AuditLogTable" }
+            },
+            {
+              "Name": "SOURCE_BUCKET",
+              "Value": { "Ref": "TransactionDataBucket" }
+            },
+            {
+              "Name": "DEST_BUCKET",
+              "Value": { "Ref": "ProcessedDataBucket" }
+            },
+            {
+              "Name": "SNS_TOPIC_ARN",
+              "Value": { "Ref": "BatchProcessingTopic" }
+            },
+            {
+              "Name": "ENVIRONMENT",
+              "Value": { "Ref": "EnvironmentSuffix" }
+            }
+          ]
+        },
+        "RetryStrategy": {
+          "Attempts": 3
+        },
+        "Timeout": {
+          "AttemptDurationSeconds": { "Ref": "JobTimeout" }
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "TransactionDataBucketName": {
+      "Description": "S3 bucket for raw transaction data",
+      "Value": { "Ref": "TransactionDataBucket" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-TransactionDataBucket" }
+      }
+    },
+    "ProcessedDataBucketName": {
+      "Description": "S3 bucket for processed transaction data",
+      "Value": { "Ref": "ProcessedDataBucket" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-ProcessedDataBucket" }
+      }
+    },
+    "JobStatusTableName": {
+      "Description": "DynamoDB table for job status tracking",
+      "Value": { "Ref": "JobStatusTable" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-JobStatusTable" }
+      }
+    },
+    "AuditLogTableName": {
+      "Description": "DynamoDB table for audit logs",
+      "Value": { "Ref": "AuditLogTable" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-AuditLogTable" }
+      }
+    },
+    "BatchJobQueueArn": {
+      "Description": "ARN of the Batch job queue",
+      "Value": { "Ref": "BatchJobQueue" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-BatchJobQueue" }
+      }
+    },
+    "BatchJobDefinitionArn": {
+      "Description": "ARN of the Batch job definition",
+      "Value": { "Ref": "BatchJobDefinition" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-BatchJobDefinition" }
+      }
+    },
+    "SNSTopicArn": {
+      "Description": "ARN of the SNS topic for notifications",
+      "Value": { "Ref": "BatchProcessingTopic" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-SNSTopic" }
+      }
+    },
+    "VPCId": {
+      "Description": "VPC ID for the batch processing environment",
+      "Value": { "Ref": "VPC" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-VPC" }
+      }
+    },
+    "ComputeEnvironmentArn": {
+      "Description": "ARN of the Batch compute environment",
+      "Value": { "Ref": "BatchComputeEnvironment" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-ComputeEnvironment" }
+      }
+    }
+  }
+}
