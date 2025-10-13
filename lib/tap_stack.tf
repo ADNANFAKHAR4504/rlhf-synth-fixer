@@ -57,7 +57,6 @@ locals {
     bucket      = aws_s3_bucket.app.bucket
     log_level   = "info"
   })
-  canary_user_data = file("${path.module}/user_data/canary.sh")
 }
 
 #############################################

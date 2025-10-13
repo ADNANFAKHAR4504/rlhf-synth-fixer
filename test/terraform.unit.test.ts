@@ -48,12 +48,11 @@ function cidrContains(outer: string, inner: string): boolean {
 describe('Terraform stack unit tests (static content & safety)', () => {
   let tf = '';
   let webUd = '';
-  let canaryUd = '';
+
 
   beforeAll(() => {
     tf = readTfFile('tap_stack.tf');
     webUd = fs.existsSync(path.join(UD_DIR, 'web.sh')) ? readUserData('web.sh') : '';
-    canaryUd = fs.existsSync(path.join(UD_DIR, 'canary.sh')) ? readUserData('canary.sh') : '';
   });
 
   // ---------------- Variables ----------------

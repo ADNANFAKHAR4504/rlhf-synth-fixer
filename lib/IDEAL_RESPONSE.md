@@ -1,4 +1,3 @@
-
 # IDEAL RESPONSE — Terraform Stack (Custom VPC + EC2 + S3, CI-Ready)
 
 This document is the authoritative answer for the `tap_stack.tf` task. It matches the prompt and the repo’s unit + live integration checks, and it’s suitable for ephemeral CI deploys.
@@ -364,8 +363,8 @@ resource "aws_security_group" "web" {
   })
 }
 
-\
-# ADD this instead:
+```hcl
+
 resource "aws_vpc_security_group_ingress_rule" "http" {
   security_group_id            = aws_security_group.web.id
   description                  = "HTTP from ALB only"
@@ -384,6 +383,7 @@ resource "aws_vpc_security_group_ingress_rule" "ssh" {
   cidr_ipv4         = each.value
   # If ssh_cidrs is empty, no rule is created and SSH is disabled.
 }
+```
 
 #############################################
 # S3 Buckets (app + logs) and policies
@@ -1053,7 +1053,6 @@ output "alb_sg_id" {
 ```bash
 #!/bin/bash
 set -euxo pipefail
-
 # Log all output for debugging
 exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 
@@ -1177,29 +1176,5 @@ if ! sudo lsof -i :80; then
   echo "Python HTTP server failed to start" >&2
   exit 1
 fi
+```
 
----
-
-## user_data/canary.sh (embedded)
-
-```bash
-resource "aws_lb_target_group" "web" {
-  name        = "tap-tg-${var.environment}"
-  port        = 80
-  protocol    = "HTTP"
-  target_type = "instance"
-  vpc_id      = aws_vpc.this.id
-
-  health_check {
-    path                = "/health"
-    matcher             = "200-299"
-    interval            = 15
-    timeout             = 5
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
-  }
-
-  tags = merge(local.tags, {
-    Name = "tap-tg-${var.environment}${var.environment_suffix}"
-  })
-}
