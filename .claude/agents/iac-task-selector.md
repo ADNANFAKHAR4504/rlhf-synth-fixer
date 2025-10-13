@@ -2,7 +2,7 @@
 name: iac-task-selector
 description: Selects a task to perform from tasks.csv or prompts user for task input if no CSV is present. Sets up worktree and metadata.json.
 color: yellow
-model: opus
+model: sonnet
 ---
 
 # Task Selector

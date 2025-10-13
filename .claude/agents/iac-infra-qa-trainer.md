@@ -2,7 +2,7 @@
 name: iac-infra-qa-trainer
 description: Executes comprehensive QA pipeline on AWS IaC. Validates, builds, deploys, tests, and cleans up infrastructure code. Works with CloudFormation, CDK, CDKTF, Terraform, and Pulumi.
 color: red
-model: opus
+model: sonnet
 ---
 
 # Infrastructure QA Trainer

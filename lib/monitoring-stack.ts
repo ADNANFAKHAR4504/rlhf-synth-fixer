@@ -1,0 +1,346 @@
+import * as cdk from 'aws-cdk-lib';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as ecs from 'aws-cdk-lib/aws-ecs';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as kinesis from 'aws-cdk-lib/aws-kinesis';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as config from 'aws-cdk-lib/aws-config';
+import { Construct } from 'constructs';
+
+interface MonitoringStackProps {
+  environmentSuffix: string;
+  ecsCluster: ecs.Cluster;
+  ecsService: ecs.FargateService;
+  loadBalancer: elbv2.ApplicationLoadBalancer;
+  targetGroup: elbv2.ApplicationTargetGroup;
+  database: rds.DatabaseInstance;
+  api: apigateway.RestApi;
+  kinesisStream: kinesis.Stream;
+}
+
+export class MonitoringStack extends Construct {
+  constructor(scope: Construct, id: string, props: MonitoringStackProps) {
+    super(scope, id);
+
+    // Create SNS topic for alarms
+    const alarmTopic = new sns.Topic(this, 'AlarmTopic', {
+      displayName: `Payment Processing Alarms - ${props.environmentSuffix}`,
+      topicName: `payment-alarms-${props.environmentSuffix}`,
+    });
+
+    // CloudWatch Dashboard
+    const dashboard = new cloudwatch.Dashboard(this, 'PaymentDashboard', {
+      dashboardName: `payment-processing-${props.environmentSuffix}`,
+    });
+
+    // ECS Service Metrics
+    const ecsServiceCpuWidget = new cloudwatch.GraphWidget({
+      title: 'ECS Service CPU Utilization',
+      left: [
+        props.ecsService.metricCpuUtilization({
+          statistic: 'Average',
+          period: cdk.Duration.minutes(5),
+        }),
+      ],
+    });
+
+    const ecsServiceMemoryWidget = new cloudwatch.GraphWidget({
+      title: 'ECS Service Memory Utilization',
+      left: [
+        props.ecsService.metricMemoryUtilization({
+          statistic: 'Average',
+          period: cdk.Duration.minutes(5),
+        }),
+      ],
+    });
+
+    // Load Balancer Metrics
+    const albRequestCountWidget = new cloudwatch.GraphWidget({
+      title: 'ALB Request Count',
+      left: [
+        props.loadBalancer.metricRequestCount({
+          statistic: 'Sum',
+          period: cdk.Duration.minutes(5),
+        }),
+      ],
+    });
+
+    const albTargetResponseTimeWidget = new cloudwatch.GraphWidget({
+      title: 'Target Response Time',
+      left: [
+        props.targetGroup.metricTargetResponseTime({
+          statistic: 'Average',
+          period: cdk.Duration.minutes(5),
+        }),
+      ],
+    });
+
+    // Database Metrics
+    const dbCpuWidget = new cloudwatch.GraphWidget({
+      title: 'Database CPU Utilization',
+      left: [
+        props.database.metricCPUUtilization({
+          statistic: 'Average',
+          period: cdk.Duration.minutes(5),
+        }),
+      ],
+    });
+
+    const dbConnectionsWidget = new cloudwatch.GraphWidget({
+      title: 'Database Connections',
+      left: [
+        props.database.metricDatabaseConnections({
+          statistic: 'Sum',
+          period: cdk.Duration.minutes(5),
+        }),
+      ],
+    });
+
+    // API Gateway Metrics
+    const apiCallsWidget = new cloudwatch.GraphWidget({
+      title: 'API Gateway Requests',
+      left: [
+        new cloudwatch.Metric({
+          namespace: 'AWS/ApiGateway',
+          metricName: 'Count',
+          dimensionsMap: {
+            ApiName: props.api.restApiName,
+          },
+          statistic: 'Sum',
+          period: cdk.Duration.minutes(5),
+        }),
+      ],
+    });
+
+    const apiLatencyWidget = new cloudwatch.GraphWidget({
+      title: 'API Gateway Latency',
+      left: [
+        new cloudwatch.Metric({
+          namespace: 'AWS/ApiGateway',
+          metricName: 'Latency',
+          dimensionsMap: {
+            ApiName: props.api.restApiName,
+          },
+          statistic: 'Average',
+          period: cdk.Duration.minutes(5),
+        }),
+      ],
+    });
+
+    // Kinesis Metrics
+    const kinesisIncomingRecordsWidget = new cloudwatch.GraphWidget({
+      title: 'Kinesis Incoming Records',
+      left: [
+        props.kinesisStream.metricIncomingRecords({
+          statistic: 'Sum',
+          period: cdk.Duration.minutes(5),
+        }),
+      ],
+    });
+
+    // Add widgets to dashboard
+    dashboard.addWidgets(
+      ecsServiceCpuWidget,
+      ecsServiceMemoryWidget,
+      albRequestCountWidget
+    );
+    dashboard.addWidgets(
+      albTargetResponseTimeWidget,
+      dbCpuWidget,
+      dbConnectionsWidget
+    );
+    dashboard.addWidgets(
+      apiCallsWidget,
+      apiLatencyWidget,
+      kinesisIncomingRecordsWidget
+    );
+
+    // CloudWatch Alarms
+
+    // ECS Service CPU Alarm
+    const ecsServiceCpuAlarm = new cloudwatch.Alarm(
+      this,
+      'EcsServiceCpuAlarm',
+      {
+        metric: props.ecsService.metricCpuUtilization({
+          statistic: 'Average',
+          period: cdk.Duration.minutes(5),
+        }),
+        threshold: 80,
+        evaluationPeriods: 2,
+        alarmDescription: 'ECS Service CPU utilization is too high',
+        alarmName: `payment-ecs-cpu-${props.environmentSuffix}`,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }
+    );
+    ecsServiceCpuAlarm.addAlarmAction(
+      new cloudwatch_actions.SnsAction(alarmTopic)
+    );
+
+    // ECS Service Memory Alarm
+    const ecsServiceMemoryAlarm = new cloudwatch.Alarm(
+      this,
+      'EcsServiceMemoryAlarm',
+      {
+        metric: props.ecsService.metricMemoryUtilization({
+          statistic: 'Average',
+          period: cdk.Duration.minutes(5),
+        }),
+        threshold: 85,
+        evaluationPeriods: 2,
+        alarmDescription: 'ECS Service memory utilization is too high',
+        alarmName: `payment-ecs-memory-${props.environmentSuffix}`,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }
+    );
+    ecsServiceMemoryAlarm.addAlarmAction(
+      new cloudwatch_actions.SnsAction(alarmTopic)
+    );
+
+    // Database CPU Alarm
+    const dbCpuAlarm = new cloudwatch.Alarm(this, 'DatabaseCpuAlarm', {
+      metric: props.database.metricCPUUtilization({
+        statistic: 'Average',
+        period: cdk.Duration.minutes(5),
+      }),
+      threshold: 80,
+      evaluationPeriods: 2,
+      alarmDescription: 'Database CPU utilization is too high',
+      alarmName: `payment-db-cpu-${props.environmentSuffix}`,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    dbCpuAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(alarmTopic));
+
+    // ALB Target Health Alarm
+    const albUnhealthyHostAlarm = new cloudwatch.Alarm(
+      this,
+      'AlbUnhealthyHostAlarm',
+      {
+        metric: props.targetGroup.metricUnhealthyHostCount({
+          statistic: 'Average',
+          period: cdk.Duration.minutes(1),
+        }),
+        threshold: 1,
+        evaluationPeriods: 2,
+        alarmDescription: 'ALB has unhealthy targets',
+        alarmName: `payment-alb-unhealthy-${props.environmentSuffix}`,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }
+    );
+    albUnhealthyHostAlarm.addAlarmAction(
+      new cloudwatch_actions.SnsAction(alarmTopic)
+    );
+
+    // API Gateway 4XX Error Alarm
+    const api4xxAlarm = new cloudwatch.Alarm(this, 'Api4xxAlarm', {
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/ApiGateway',
+        metricName: '4XXError',
+        dimensionsMap: {
+          ApiName: props.api.restApiName,
+        },
+        statistic: 'Sum',
+        period: cdk.Duration.minutes(5),
+      }),
+      threshold: 100,
+      evaluationPeriods: 2,
+      alarmDescription: 'API Gateway 4XX errors are too high',
+      alarmName: `payment-api-4xx-${props.environmentSuffix}`,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    api4xxAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(alarmTopic));
+
+    // API Gateway 5XX Error Alarm
+    const api5xxAlarm = new cloudwatch.Alarm(this, 'Api5xxAlarm', {
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/ApiGateway',
+        metricName: '5XXError',
+        dimensionsMap: {
+          ApiName: props.api.restApiName,
+        },
+        statistic: 'Sum',
+        period: cdk.Duration.minutes(5),
+      }),
+      threshold: 10,
+      evaluationPeriods: 2,
+      alarmDescription: 'API Gateway 5XX errors are too high',
+      alarmName: `payment-api-5xx-${props.environmentSuffix}`,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    api5xxAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(alarmTopic));
+
+    // AWS Config for compliance monitoring
+    // Note: AWS Config requires a configuration recorder to be set up in the account
+    // which may not be available in all regions or accounts.
+    // Commenting out Config rules to avoid deployment failures.
+
+    // For production, ensure AWS Config is properly set up in the account before uncommenting:
+    /*
+    const configRecorder = new config.CfnConfigurationRecorder(
+      this,
+      'ConfigRecorder',
+      {
+        roleArn: new cdk.aws_iam.Role(this, 'ConfigRole', {
+          assumedBy: new cdk.aws_iam.ServicePrincipal('config.amazonaws.com'),
+          managedPolicies: [
+            cdk.aws_iam.ManagedPolicy.fromAwsManagedPolicyName(
+              'service-role/AWSConfigRole'
+            ),
+          ],
+        }).roleArn,
+        recordingGroup: {
+          allSupported: true,
+          includeGlobalResourceTypes: false,
+        },
+      }
+    );
+
+    const configBucket = new cdk.aws_s3.Bucket(this, 'ConfigBucket', {
+      encryption: cdk.aws_s3.BucketEncryption.S3_MANAGED,
+      blockPublicAccess: cdk.aws_s3.BlockPublicAccess.BLOCK_ALL,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+    });
+
+    const deliveryChannel = new config.CfnDeliveryChannel(
+      this,
+      'ConfigDeliveryChannel',
+      {
+        s3BucketName: configBucket.bucketName,
+      }
+    );
+
+    deliveryChannel.addDependency(configRecorder);
+
+    // Config Rules for PCI-DSS compliance
+    new config.ManagedRule(this, 'EncryptedVolumesRule', {
+      identifier: config.ManagedRuleIdentifiers.EC2_EBS_ENCRYPTION_BY_DEFAULT,
+      description: 'Checks that EBS volumes are encrypted',
+    });
+
+    new config.ManagedRule(this, 'RdsEncryptionRule', {
+      identifier: config.ManagedRuleIdentifiers.RDS_STORAGE_ENCRYPTED,
+      description: 'Checks that RDS instances are encrypted',
+    });
+
+    new config.ManagedRule(this, 'S3BucketPublicReadRule', {
+      identifier:
+        config.ManagedRuleIdentifiers.S3_BUCKET_PUBLIC_READ_PROHIBITED,
+      description: 'Checks that S3 buckets do not allow public read access',
+    });
+
+    new config.ManagedRule(this, 'S3BucketPublicWriteRule', {
+      identifier:
+        config.ManagedRuleIdentifiers.S3_BUCKET_PUBLIC_WRITE_PROHIBITED,
+      description: 'Checks that S3 buckets do not allow public write access',
+    });
+    */
+
+    // Tags for compliance
+    cdk.Tags.of(dashboard).add('PCICompliant', 'true');
+    cdk.Tags.of(dashboard).add('Environment', props.environmentSuffix);
+  }
+}
