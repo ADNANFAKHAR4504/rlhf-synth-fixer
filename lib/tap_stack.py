@@ -86,7 +86,7 @@ class TapStack(pulumi.ComponentResource):
         # Bucket for raw transaction data
         raw_data_bucket = aws.s3.Bucket(
             "raw-transactions-bucket",
-            bucket=f"financial-raw-transactions-{environment}-{pulumi.get_stack()}",
+            bucket=f"financial-raw-transactions-{environment}-{pulumi.get_stack().lower()}",
             versioning=aws.s3.BucketVersioningArgs(enabled=True),
             server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
                 rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
@@ -118,7 +118,7 @@ class TapStack(pulumi.ComponentResource):
         # Bucket for processed transaction data
         processed_data_bucket = aws.s3.Bucket(
             "processed-transactions-bucket",
-            bucket=f"financial-processed-transactions-{environment}-{pulumi.get_stack()}",
+            bucket=f"financial-processed-transactions-{environment}-{pulumi.get_stack().lower()}",
             versioning=aws.s3.BucketVersioningArgs(enabled=True),
             server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
                 rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
