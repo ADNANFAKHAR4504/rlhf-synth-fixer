@@ -53,11 +53,29 @@ git branch --show-current  # Must output: synth-{task_id}
 
 ### 2. Code Quality
 
+**CRITICAL GATE: NO DEPLOYMENT WITHOUT CLEAN BUILD**
+
 Important: Use the commands in `package.json` and `pipfile` to run these tasks per platform and langage.
 
-- **Lint**: Run platform-specific linters and fix issues
-- **Build**: Compile code and fix errors
+- **Lint**: Run platform-specific linters and fix ALL issues
+  - **MANDATORY**: Must pass with zero errors before proceeding
+  - If linting fails, fix all issues before moving forward
+  - Report lint status clearly
+  
+- **Build**: Compile code and fix ALL errors
+  - **MANDATORY**: Must complete successfully before proceeding
+  - If build fails, fix all compilation errors before moving forward
+  - Report build status clearly
+  
 - **Synthesize**: Generate deployment templates (CDK/Terraform/Pulumi)
+  - **MANDATORY**: Must synthesize successfully before proceeding
+  - If synthesis fails, fix all configuration/syntax errors before moving forward
+  - Report synthesis status clearly
+
+**CHECKPOINT**: Verify ALL three steps (lint, build, synth) pass successfully before proceeding to Pre-Deployment Validation.
+- If ANY step fails, STOP and fix issues
+- Report blocking status if unable to resolve after multiple attempts
+- Do NOT proceed to deployment with failing lint/build/synth
 
 ### 2.5. Pre-Deployment Validation
 
@@ -79,13 +97,15 @@ Important: Use the commands in `package.json` and `pipfile` to run these tasks p
 
 ### 3. Deployment
 
+**CRITICAL: Only proceed if Code Quality gate passed (lint + build + synth all successful)**
+
 - Use the commands in `package.json` and `pipfile` to run the deployment job per platform and language.
 - Ensure that all resources that will be created are destroyable (no Retain policies or protected
  from deletion). Make changes in the IaC code if needed to guarantee this.
 - Ensure that all resources names have the ENVIRONMENT_SUFFIX to avoid conflicts with other deployments.
 - You can never change the ci-cd .yml files that are deploying this project. Your mission is to create code
 that can be deployed with the current configuration of the ci-cd pipelines.
-- Deploy to AWS (max 10 attempts)
+- Deploy to AWS (**max 5 attempts** - reduced limit for cost optimization)
   - e.g. If there are refereces to SSM parameters, include those params as part of the deployed resources.
   - If ENVIRONMENT_SUFFIX env variable is not present, set it as `synth{TaskId}`:
     - If running in a github action, use `pr{github_pr_number}` as ENVIRONMENT_SUFFIX
@@ -134,23 +154,38 @@ The result should be similar to this (an object based on plain key, value).
 
 ### 4. Testing
 
+**CRITICAL: Comprehensive testing is MANDATORY before proceeding**
+
 - **Unit Tests**: Write tests for all `lib/` code
   - Use the commands in `package.json` and `pipfile` to run the unit tests
   - Use the files and folder structure existent inside test or tests folder.
     - You can create new files, but use the existing ones.
   - Don't test hardcoded environmentSuffix
   - Convert YAML to JSON before testing if platform is cfn and language is yml
-  - Run until 90% Coverage is reached. You cannot bypass this. Is mandatory to pass unit test coverage.
+  - **MANDATORY: 90% Coverage Required**
+    - You cannot bypass this requirement
+    - Report coverage percentage clearly
+    - If coverage < 90%, add more tests until requirement is met
+    - Test all critical code paths, error handling, and edge cases
+  
 - **Integration Tests**: End-to-end testing with real AWS outputs
   - Use the commands in `package.json` and `pipfile` to run the integration tests
   - Use the files and folder structure existent inside test or tests folder.
     - You can create new files, but use the existing ones.
-  - Do not make assertions including environment names or suffixes. We need integration tests to be
-  highly reproducible when deploying to different environments or AWS accounts. Use the outputs generated
-  in the deployment step.
-  - No mocking - use actual deployment results coming from the cfn-outputs generated in the deployment
-  - Validate complete workflows, not only individual resources. If there are connections between
-   resources, assert on those connections.
+  - **MANDATORY: Proper Integration Testing**
+    - Do not make assertions including environment names or suffixes
+    - Tests must be highly reproducible across different environments or AWS accounts
+    - Use the outputs from `cfn-outputs/flat-outputs.json` for all assertions
+    - No mocking - use actual deployment results from cfn-outputs
+    - Validate complete workflows, not only individual resources
+    - Test resource connections and integrations between services
+    - Verify that resources work together as expected
+    - Test typical use cases and data flows
+  
+**CHECKPOINT**: Both unit tests (90%+ coverage) and integration tests must pass before proceeding to Final Steps.
+- Report test results with coverage percentage
+- Report any test failures immediately
+- Do NOT proceed without meeting testing requirements
 
 ### 5. Final Steps
 
@@ -218,7 +253,8 @@ the infrastructure changes needed to fix the latest MODEL_RESPONSE.
 
 - For commands, use the existing scripts in `package.json` and `Pipfile`. based on the platform and language.
   - Dont use custom commands unless you cannot find them in those files.
-- Max 10 deployment attempts
+- **Max 5 deployment attempts** (reduced for cost optimization)
+- **MANDATORY: Pass lint, build, and synth before any deployment attempt**
 - No Retain policies allowed. Every resource created should be destroyable.
 - Use real AWS outputs generated on deployment in integration tests (no mocking). These should come from cfn-outputs/flat-outputs.json
 - DO NOT create or update fildes outside of the lib/ and tests/ folder.
