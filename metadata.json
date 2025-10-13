@@ -1,0 +1,14 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350047",
+  "team": "2",
+  "startedAt": "2025-10-09T14:45:27.460Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": "CloudFormation, VPC, Subnets, Internet Gateway, NAT Gateway, EC2, Auto Scaling, Load Balancer, RDS, IAM, S3, KMS, CloudFront, CloudWatch, CodePipeline, CodeBuild, Security Groups"
+}
