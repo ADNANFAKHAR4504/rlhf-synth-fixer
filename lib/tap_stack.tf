@@ -670,12 +670,82 @@ resource "aws_iam_role_policy" "lambda_policy" {
 }
 
 # Lambda Function
+that closes the Lambda resource — roughly **line 721–725**, depending on spacing/comments.
+
+---
+
+### ✅ Replace that entire block with this code **(starting at line 688)**
+
+```hcl
+# -----------------------------------------------------------------------------
+# Lambda Function for Event Processing
+# -----------------------------------------------------------------------------
+
+data "archive_file" "lambda_code" {
+  type        = "zip"
+  output_path = "/tmp/lambda_function.zip"
+
+  source {
+    content  = <<-EOT
+import json
+import boto3
+import os
+from datetime import datetime
+
+def lambda_handler(event, context):
+    """
+    Inline Lambda for processing events and logging security activity.
+    """
+
+    # Initialize AWS SDK clients
+    cloudwatch = boto3.client('cloudwatch')
+    sns = boto3.client('sns')
+
+    # Prepare structured log
+    security_event = {
+        "timestamp": datetime.now().isoformat(),
+        "environment": os.environ.get("ENVIRONMENT", "unknown"),
+        "project": os.environ.get("PROJECT", "unknown"),
+        "event_type": event.get("detail-type", "unknown"),
+        "details": event
+    }
+
+    print(f"Security Event: {json.dumps(security_event)}")
+
+    # Detect unauthorized access
+    if event.get("detail", {}).get("errorCode") in ["UnauthorizedAccess", "AccessDenied"]:
+        cloudwatch.put_metric_data(
+            Namespace="Security/Monitoring",
+            MetricData=[{
+                "MetricName": "UnauthorizedAPIAccess",
+                "Value": 1,
+                "Unit": "Count",
+                "Timestamp": datetime.now()
+            }]
+        )
+        return {
+            "statusCode": 200,
+            "body": json.dumps({"message": "Unauthorized access detected"})
+        }
+
+    return {
+        "statusCode": 200,
+        "body": json.dumps({"message": "Event processed successfully"})
+    }
+EOT
+    filename = "index.py"
+  }
+}
+
 resource "aws_lambda_function" "processor" {
-  function_name = local.lambda_function_name
-  role          = aws_iam_role.lambda_role.arn
-  handler       = "index.handler"
-  runtime       = "python3.9"
-  timeout       = 60
+  function_name = "${local.name_prefix}-processor"
+  role          = aws_iam_role.lambda.arn
+  handler       = "index.lambda_handler"
+  runtime       = "python3.11"
+  timeout       = 30
+
+  filename         = data.archive_file.lambda_code.output_path
+  source_code_hash = data.archive_file.lambda_code.output_base64sha256
 
   vpc_config {
     subnet_ids         = aws_subnet.private[*].id
@@ -684,37 +754,13 @@ resource "aws_lambda_function" "processor" {
 
   environment {
     variables = {
-      BUCKET_NAME = aws_s3_bucket.main.id
+      ENVIRONMENT = var.environment
+      PROJECT     = var.project_name
     }
   }
 
-  # Inline code for Lambda function
-  inline_code = <<EOF
-import json
-import boto3
-import os
-
-def handler(event, context):
-    print("Processing S3 event")
-    bucket_name = os.environ.get('BUCKET_NAME')
-    
-    for record in event['Records']:
-        s3_bucket = record['s3']['bucket']['name']
-        s3_key = record['s3']['object']['key']
-        
-        print(f"Processing file: {s3_key} from bucket: {s3_bucket}")
-        
-        # Add your custom processing logic here
-        # This is a basic example that logs the event
-        
-    return {
-        'statusCode': 200,
-        'body': json.dumps('Processing complete')
-    }
-EOF
-
   tags = merge(local.common_tags, {
-    Name = local.lambda_function_name
+    Name = "${local.name_prefix}-lambda-function"
   })
 }
 
