@@ -1,0 +1,12 @@
+Build a cloud environment infrastructure in AWS using CDK TypeScript that sets up a complete web application stack with the following requirements:
+
+The solution should define a Virtual Private Cloud (VPC) with a CIDR block of 10.0.0.0/16 with accompanying public and private subnets distributed across separate availability zones for redundancy. Create an Auto Scaling group of EC2 instances located in private subnets with an Application Load Balancer (ALB) in front to handle incoming traffic. Integrate an Amazon RDS instance within the setup for database purposes, maintaining data backups and enabling encryption.
+
+Implement a CloudFront distribution that serves content from an S3 bucket with public read-only access for the website. Use a custom domain via Route 53 for the CloudFront distribution. Set up monitoring with CloudWatch and automate deployments using AWS CodePipeline linked to an S3 bucket as the source.
+
+Configure a NAT Gateway to allow instances in private subnets to access the internet. Deploy Security Groups to allow HTTP and HTTPS traffic to the ALB and SSH access to EC2 instances only from a specific IP range. Implement IAM Roles to allow EC2 instances to access S3 for storing logs. Encrypt all data at rest using AWS KMS and implement an AWS Lambda function triggered by CloudWatch logs to handle routing misconfigurations.
+
+Use CloudWatch to monitor CPU utilization, memory usage, and disk space for EC2 instances. Define an AWS CodePipeline to automate the continuous deployment of application code from an S3 bucket. All resources must be configured to operate within the us-west-1 region.
+
+Design:
+The solution should be implemented entirely within the existing TapStack class in lib/tap-stack.ts. All resources must use the environmentSuffix parameter for consistent naming and tagging. If the environmentSuffix does not contain "prod", every resource should be configured for destruction to ensure proper cleanup of non-production environments. Everything input parameter except for environmentSuffix should be optional - if there is no custom domain, custom domain config is skipped and AWS generated names are used. For code source use S3. Do not create separate stacks or files outside the lib directory. The design should emphasize clean separation of components, reusable constructs, and compliance with the stated constraints. Follow AWS CDK best practices for TypeScript development and ensure the infrastructure is production-ready with proper error handling.

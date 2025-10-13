@@ -182,13 +182,22 @@ dependencies {
     integrationTestImplementation 'software.amazon.awssdk:codedeploy'
     integrationTestImplementation 'software.amazon.awssdk:cognitoidentityprovider'
     integrationTestImplementation 'software.amazon.awssdk:ecs'
-    
+    integrationTestImplementation 'software.amazon.awssdk:servicediscovery'
+    integrationTestImplementation 'software.amazon.awssdk:kinesis'
+
     // Additional AWS SDK dependencies for comprehensive integration tests
     integrationTestImplementation 'software.amazon.awssdk:kendra'
     integrationTestImplementation 'software.amazon.awssdk:sfn'
     integrationTestImplementation 'software.amazon.awssdk:eventbridge'
     integrationTestImplementation 'software.amazon.awssdk:auth'
     integrationTestImplementation 'software.amazon.awssdk:regions'
+    
+    // NEW: AWS AI/ML Services for integration tests
+    integrationTestImplementation 'software.amazon.awssdk:comprehend'
+    integrationTestImplementation 'software.amazon.awssdk:translate'
+    
+    // NEW: SES for email testing
+    integrationTestImplementation 'software.amazon.awssdk:ses'
 
 
     integrationTestImplementation 'software.amazon.awssdk:cloudfront'
