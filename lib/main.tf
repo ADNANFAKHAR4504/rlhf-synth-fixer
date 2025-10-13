@@ -91,7 +91,7 @@ locals {
 }
 
 # ============================================================================
-# KMS KEYS - Customer-managed encryption keys
+# KMS KEYS - Customer-managed encryption key
 # ============================================================================
 
 # KMS key in us-east-1 for source bucket
