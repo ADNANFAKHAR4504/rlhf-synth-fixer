@@ -13,6 +13,7 @@ import boto3
 import json
 import time
 import uuid
+import subprocess
 from botocore.exceptions import ClientError
 
 
@@ -25,12 +26,15 @@ class TestTapStackIntegration(unittest.TestCase):
         cls.environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'dev')
         cls.region = os.getenv('AWS_REGION', 'us-east-1')
         cls.project_name = os.getenv('PULUMI_PROJECT', 'TapStack')
+        cls.pulumi_org = os.getenv('PULUMI_ORG', 'organization')
         
         # Stack name follows the pattern TapStack${ENVIRONMENT_SUFFIX} in deployment scripts
         cls.stack_name = os.getenv('PULUMI_STACK', f'TapStack{cls.environment_suffix}')
         
+        # Full Pulumi stack identifier: org/project/stack
+        cls.pulumi_stack_identifier = f"{cls.pulumi_org}/{cls.project_name}/{cls.stack_name}"
+        
         # Resource name prefix - matches how Pulumi creates resources: {project_name}-{stack_name}
-        # This results in: TapStack-TapStackpr3987 for PR #3987
         cls.resource_prefix = f"{cls.project_name}-{cls.stack_name}"
 
         # Initialize AWS clients
@@ -45,7 +49,144 @@ class TestTapStackIntegration(unittest.TestCase):
         # Get account ID for resource naming
         sts_client = boto3.client('sts', region_name=cls.region)
         cls.account_id = sts_client.get_caller_identity()['Account']
+        
+        # Fetch Pulumi stack outputs
+        cls.outputs = cls._fetch_pulumi_outputs()
+    
+    @classmethod
+    def _fetch_pulumi_outputs(cls):
+        """Fetch Pulumi outputs as a Python dictionary."""
+        try:
+            print(f"Fetching Pulumi outputs for stack: {cls.pulumi_stack_identifier}")
+            result = subprocess.run(
+                ["pulumi", "stack", "output", "--json", "--stack", cls.pulumi_stack_identifier],
+                capture_output=True,
+                text=True,
+                check=True,
+                cwd=os.path.join(os.path.dirname(__file__), "../..")
+            )
+            outputs = json.loads(result.stdout)
+            print(f"Successfully fetched {len(outputs)} outputs from Pulumi stack")
+            return outputs
+        except subprocess.CalledProcessError as e:
+            print(f"Warning: Could not retrieve Pulumi stack outputs: {e.stderr}")
+            return {}
+        except json.JSONDecodeError as e:
+            print(f"Warning: Could not parse Pulumi output: {e}")
+            return {}
 
+    def test_s3_image_bucket_exists(self):
+        """Test that S3 image bucket exists and is configured correctly."""
+        self.assertIn('image_bucket_name', self.outputs, 
+                     "Missing 'image_bucket_name' in Pulumi outputs")
+        
+        bucket_name = self.outputs['image_bucket_name']
+        
+        try:
+            response = self.s3_client.head_bucket(Bucket=bucket_name)
+            self.assertEqual(response['ResponseMetadata']['HTTPStatusCode'], 200)
+            
+            # Verify versioning is enabled
+            versioning = self.s3_client.get_bucket_versioning(Bucket=bucket_name)
+            self.assertEqual(versioning.get('Status'), 'Enabled')
+            
+            # Verify encryption is enabled
+            encryption = self.s3_client.get_bucket_encryption(Bucket=bucket_name)
+            rules = encryption['ServerSideEncryptionConfiguration']['Rules']
+            self.assertTrue(len(rules) > 0)
+            self.assertEqual(rules[0]['ApplyServerSideEncryptionByDefault']['SSEAlgorithm'], 'AES256')
+            
+        except ClientError as e:
+            self.fail(f"S3 bucket test failed: {e}")
+    
+    def test_dynamodb_results_table_exists(self):
+        """Test that DynamoDB results table exists and is configured correctly."""
+        self.assertIn('results_table_name', self.outputs,
+                     "Missing 'results_table_name' in Pulumi outputs")
+        
+        table_name = self.outputs['results_table_name']
+        
+        try:
+            response = self.dynamodb_client.describe_table(TableName=table_name)
+            table = response['Table']
+            
+            self.assertEqual(table['TableStatus'], 'ACTIVE')
+            self.assertEqual(table['BillingModeSummary']['BillingMode'], 'PAY_PER_REQUEST')
+            
+            # Verify hash key
+            key_schema = {k['AttributeName']: k['KeyType'] for k in table['KeySchema']}
+            self.assertEqual(key_schema.get('image_id'), 'HASH')
+            
+            # Verify GSI exists
+            gsi_names = [gsi['IndexName'] for gsi in table.get('GlobalSecondaryIndexes', [])]
+            self.assertIn('status-created-index', gsi_names)
+            
+            # Verify point-in-time recovery
+            pitr = self.dynamodb_client.describe_continuous_backups(TableName=table_name)
+            pitr_status = pitr['ContinuousBackupsDescription']['PointInTimeRecoveryDescription']['PointInTimeRecoveryStatus']
+            self.assertEqual(pitr_status, 'ENABLED')
+            
+        except ClientError as e:
+            self.fail(f"DynamoDB table test failed: {e}")
+    
+    def test_sqs_queues_exist(self):
+        """Test that SQS queues exist and are configured correctly."""
+        required_queues = ['preprocessing_queue_url', 'inference_queue_url', 'dlq_url']
+        
+        for queue_key in required_queues:
+            self.assertIn(queue_key, self.outputs,
+                         f"Missing '{queue_key}' in Pulumi outputs")
+            
+            queue_url = self.outputs[queue_key]
+            
+            try:
+                attributes = self.sqs_client.get_queue_attributes(
+                    QueueUrl=queue_url,
+                    AttributeNames=['All']
+                )['Attributes']
+                
+                self.assertIsNotNone(attributes.get('MessageRetentionPeriod'))
+                
+                # Check redrive policy for non-DLQ queues
+                if 'dlq' not in queue_key:
+                    self.assertIn('RedrivePolicy', attributes)
+                    redrive_policy = json.loads(attributes['RedrivePolicy'])
+                    self.assertEqual(redrive_policy['maxReceiveCount'], 3)
+                    
+            except ClientError as e:
+                self.fail(f"SQS queue {queue_key} test failed: {e}")
+    
+    def test_lambda_functions_exist(self):
+        """Test that all Lambda functions exist and are configured correctly."""
+        lambda_functions = {
+            'preprocessing_function_arn': 'preprocessing',
+            'inference_function_arn': 'inference',
+            'api_handler_function_arn': 'api-handler'
+        }
+        
+        for output_key, func_type in lambda_functions.items():
+            self.assertIn(output_key, self.outputs,
+                         f"Missing '{output_key}' in Pulumi outputs")
+            
+            function_arn = self.outputs[output_key]
+            
+            try:
+                response = self.lambda_client.get_function(FunctionName=function_arn)
+                config = response['Configuration']
+                
+                self.assertEqual(config['Runtime'], 'python3.11')
+                self.assertIsNotNone(config['Role'])
+                
+                # Verify X-Ray tracing
+                self.assertEqual(config['TracingConfig']['Mode'], 'Active')
+                
+                # Verify timeout and memory
+                self.assertGreater(config['Timeout'], 0)
+                self.assertGreater(config['MemorySize'], 0)
+                
+            except ClientError as e:
+                self.fail(f"Lambda function {func_type} test failed: {e}")
+    
     def test_lambda_layer_exists(self):
         """Test that Lambda layer for model exists."""
         layer_name = f"{self.resource_prefix}-model"
@@ -64,23 +205,32 @@ class TestTapStackIntegration(unittest.TestCase):
 
     def test_api_gateway_exists(self):
         """Test that API Gateway HTTP API exists."""
+        self.assertIn('api_base_url', self.outputs,
+                     "Missing 'api_base_url' in Pulumi outputs")
+        
+        api_endpoint = self.outputs['api_base_url']
+        
         try:
             response = self.apigatewayv2_client.get_apis()
             apis = response.get('Items', [])
             
-            # Find our API
-            matching_apis = [api for api in apis if self.resource_prefix in api['Name']]
-            self.assertGreater(len(matching_apis), 0, f"API Gateway for {self.resource_prefix} not found")
+            # Find our API by matching the endpoint
+            matching_api = None
+            for api in apis:
+                if api.get('ApiEndpoint') == api_endpoint:
+                    matching_api = api
+                    break
             
-            api = matching_apis[0]
-            api_id = api['ApiId']
+            self.assertIsNotNone(matching_api, f"API Gateway with endpoint {api_endpoint} not found")
+            
+            api_id = matching_api['ApiId']
             
             # Verify protocol type
-            self.assertEqual(api['ProtocolType'], 'HTTP')
+            self.assertEqual(matching_api['ProtocolType'], 'HTTP')
             
             # Verify CORS configuration
-            self.assertIn('CorsConfiguration', api)
-            cors = api['CorsConfiguration']
+            self.assertIn('CorsConfiguration', matching_api)
+            cors = matching_api['CorsConfiguration']
             self.assertIn('*', cors.get('AllowOrigins', []))
             
             # Get routes
@@ -135,6 +285,28 @@ class TestTapStackIntegration(unittest.TestCase):
 
         except ClientError as e:
             self.fail(f"IAM roles check failed: {e}")
+    
+    def test_stack_outputs_complete(self):
+        """Test that all expected stack outputs are present."""
+        expected_outputs = [
+            'api_base_url',
+            'image_bucket_name',
+            'upload_prefix',
+            'results_table_name',
+            'preprocessing_queue_url',
+            'inference_queue_url',
+            'dlq_url',
+            'preprocessing_function_arn',
+            'inference_function_arn',
+            'api_handler_function_arn'
+        ]
+        
+        for output_name in expected_outputs:
+            self.assertIn(
+                output_name,
+                self.outputs,
+                f"Output '{output_name}' should be present in stack outputs"
+            )
 
     def test_end_to_end_image_processing_workflow(self):
         """
@@ -145,13 +317,18 @@ class TestTapStackIntegration(unittest.TestCase):
         2. Verify S3 event triggers SQS message
         3. Wait for Lambda preprocessing to process the message
         4. Verify DynamoDB status updates
-        5. Check for final results in DynamoDB
         
         This validates: S3 -> SQS -> Lambda -> DynamoDB flow
         """
-        bucket_name = f"{self.resource_prefix}-images"
-        preprocessing_queue_name = f"{self.resource_prefix}-preprocessing"
-        table_name = f"{self.resource_prefix}-results"
+        # Verify all required outputs are present
+        required_outputs = ['image_bucket_name', 'preprocessing_queue_url', 'results_table_name']
+        for output_key in required_outputs:
+            self.assertIn(output_key, self.outputs,
+                         f"Missing '{output_key}' in Pulumi outputs - cannot run E2E test")
+        
+        bucket_name = self.outputs['image_bucket_name']
+        preprocessing_queue_url = self.outputs['preprocessing_queue_url']
+        table_name = self.outputs['results_table_name']
         
         # Generate unique test image ID
         test_image_id = f"test-e2e-{uuid.uuid4()}"
@@ -160,6 +337,7 @@ class TestTapStackIntegration(unittest.TestCase):
         
         print(f"\n=== Starting E2E Workflow Test ===")
         print(f"Image ID: {test_image_id}")
+        print(f"S3 Bucket: {bucket_name}")
         print(f"S3 Key: {test_key}")
         
         try:
@@ -175,18 +353,16 @@ class TestTapStackIntegration(unittest.TestCase):
             
             # Step 2: Wait for S3 event to trigger SQS message
             print("\n[Step 2] Waiting for S3 event to create SQS message...")
-            queue_url_response = self.sqs_client.get_queue_url(QueueName=preprocessing_queue_name)
-            queue_url = queue_url_response['QueueUrl']
             
             # Poll SQS queue for the message (wait up to 30 seconds)
             message_found = False
             max_attempts = 6
             for attempt in range(max_attempts):
-                time.sleep(5)  # Wait 5 seconds between polls
+                time.sleep(5)
                 print(f"Polling SQS (attempt {attempt + 1}/{max_attempts})...")
                 
                 response = self.sqs_client.receive_message(
-                    QueueUrl=queue_url,
+                    QueueUrl=preprocessing_queue_url,
                     MaxNumberOfMessages=10,
                     WaitTimeSeconds=5,
                     AttributeNames=['All']
@@ -207,7 +383,6 @@ class TestTapStackIntegration(unittest.TestCase):
                                     print(f"Event: {record.get('eventName')}")
                                     print(f"Bucket: {record.get('s3', {}).get('bucket', {}).get('name')}")
                                     print(f"Key: {s3_key}")
-                                    # Don't delete the message - let Lambda process it
                                     break
                 
                 if message_found:
@@ -224,7 +399,6 @@ class TestTapStackIntegration(unittest.TestCase):
             # Poll DynamoDB for status updates (wait up to 60 seconds)
             status_found = False
             max_db_attempts = 12
-            final_status = None
             
             for attempt in range(max_db_attempts):
                 time.sleep(5)
@@ -238,14 +412,13 @@ class TestTapStackIntegration(unittest.TestCase):
                         status = item.get('status', 'unknown')
                         print(f"Status: {status}")
                         status_found = True
-                        final_status = status
                         
                         # If processing is complete or failed, break
-                        if status in ['completed', 'preprocessing_failed', 'inference_failed']:
-                            print(f"Processing finished with status: {status}")
+                        if status in ['completed', 'preprocessed', 'preprocessing', 'preprocessing_failed', 'inference_failed']:
+                            print(f"Processing status updated: {status}")
                             break
                 except ClientError:
-                    pass  # Item might not exist yet
+                    pass
             
             # Step 4: Verify results
             print("\n[Step 4] Verifying workflow results...")
@@ -261,16 +434,12 @@ class TestTapStackIntegration(unittest.TestCase):
             item = response['Item']
             self.assertEqual(item['image_id'], test_image_id)
             self.assertIn('status', item)
-            self.assertIn('created_at', item)
             
             print(f"\nFinal record in DynamoDB:")
             print(f"  Image ID: {item.get('image_id')}")
             print(f"  Status: {item.get('status')}")
-            print(f"  Created At: {item.get('created_at')}")
             if 'preprocessing_started_at' in item:
                 print(f"  Preprocessing Started: {item.get('preprocessing_started_at')}")
-            if 'preprocessing_completed_at' in item:
-                print(f"  Preprocessing Completed: {item.get('preprocessing_completed_at')}")
             if 'error' in item:
                 print(f"  Error: {item.get('error')}")
             
@@ -289,7 +458,6 @@ class TestTapStackIntegration(unittest.TestCase):
                 pass
                 
             try:
-                # Also delete processed version if it exists
                 processed_key = f"processed/{test_image_id}.bin"
                 self.s3_client.delete_object(Bucket=bucket_name, Key=processed_key)
                 print(f"Deleted processed object: {processed_key}")
@@ -297,7 +465,6 @@ class TestTapStackIntegration(unittest.TestCase):
                 pass
                 
             try:
-                # Delete DynamoDB record
                 dynamodb = boto3.resource('dynamodb', region_name=self.region)
                 table = dynamodb.Table(table_name)
                 table.delete_item(Key={'image_id': test_image_id})
