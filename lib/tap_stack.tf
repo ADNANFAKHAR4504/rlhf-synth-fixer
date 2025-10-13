@@ -1651,3 +1651,8 @@ output "security_group_lambda_id" {
   description = "ID of Lambda security group"
   value       = aws_security_group.lambda.id
 }
+
+output "region" {
+  description = "Primary AWS region"
+  value       = var.region
+}
