@@ -232,7 +232,6 @@ export class TapStack extends Construct {
     const logGroup = new logs.LogGroup(stack, 'AppLogGroup', {
       logGroupName: `/aws/ec2/prod-app-${stringSuffix}`,
       retention: logs.RetentionDays.ONE_MONTH,
-      encryptionKey: kmsKey,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
