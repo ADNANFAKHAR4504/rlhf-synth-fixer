@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349021",
+  "team": "6",
+  "startedAt": "2025-10-10T15:57:31.809Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Internet Gateway",
+    "Route Table",
+    "Security Group",
+    "CloudWatch",
+    "Lambda",
+    "IAM",
+    "EventBridge",
+    "CloudWatch Logs",
+    "VPC Flow Logs"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Chandan-devs-tech",
+  "dockerS3Location": ""
+}
