@@ -13,7 +13,7 @@ This is a comprehensive CloudFormation template request. I need to create a YAML
 8. Security Groups (ports 80 and 443)
 9. CodePipeline and CodeBuild for CI/CD
 10. Proper tagging (Environment: Production)
-11. Region: us-east-1
+11. Region: eu-central-1
 
 This is a large template, so I'll structure it properly with all components. Let me create a comprehensive CloudFormation template.
 ### Answer 
@@ -66,7 +66,7 @@ Parameters:
 
 Mappings:
   RegionMap:
-    us-east-1:
+    eu-central-1:
       AMI: ami-0b72821e2f351e396  # Amazon Linux 2 AMI (update as needed)
 
 Resources:
@@ -940,13 +940,13 @@ Outputs:
 ### 6. **Compliance & Best Practices**
 - All resources tagged with 'Environment: Production'
 - CloudFormation naming conventions
-- Region-specific deployment (us-east-1)
+- Region-specific deployment (eu-central-1)
 - 7-day RDS backup retention
 
 ## Deployment Instructions:
 
 1. **Prerequisites**:
-   - Create an EC2 Key Pair in us-east-1
+   - Create an EC2 Key Pair in eu-central-1
    - Obtain a GitHub personal access token
    - Update the AMI ID in the Mappings section if needed
 
@@ -961,7 +961,7 @@ aws cloudformation create-stack \
     ParameterKey=GitHubRepo,ParameterValue=owner/repo \
     ParameterKey=GitHubToken,ParameterValue=your-github-token \
   --capabilities CAPABILITY_IAM \
-  --region us-east-1
+  --region eu-central-1
 ```
 
 3. **Post-Deployment**:

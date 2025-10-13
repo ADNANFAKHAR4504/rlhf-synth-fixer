@@ -1,58 +1,55 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
-import fs from 'fs';
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeInternetGatewaysCommand,
-  DescribeNatGatewaysCommand,
-  DescribeRouteTablesCommand,
-  DescribeInstancesCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  ElasticLoadBalancingV2Client,
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand,
-  DescribeTargetHealthCommand,
-  DescribeListenersCommand,
-} from '@aws-sdk/client-elastic-load-balancing-v2';
-import {
-  RDSClient,
-  DescribeDBInstancesCommand,
-  DescribeDBSubnetGroupsCommand,
-} from '@aws-sdk/client-rds';
-import {
-  S3Client,
-  HeadBucketCommand,
-  GetBucketEncryptionCommand,
-  GetBucketVersioningCommand,
-  GetBucketLoggingCommand,
-  GetPublicAccessBlockCommand,
-  PutObjectCommand,
-  GetObjectCommand,
-  DeleteObjectCommand,
-} from '@aws-sdk/client-s3';
+  AutoScalingClient,
+  DescribeAutoScalingGroupsCommand
+} from '@aws-sdk/client-auto-scaling';
 import {
   CloudFrontClient,
   GetDistributionCommand,
   ListDistributionsCommand,
 } from '@aws-sdk/client-cloudfront';
 import {
-  IAMClient,
+  DescribeInstancesCommand,
+  DescribeInternetGatewaysCommand,
+  DescribeNatGatewaysCommand,
+  DescribeRouteTablesCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeListenersCommand,
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  ElasticLoadBalancingV2Client
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
   GetRoleCommand,
+  IAMClient,
   ListAttachedRolePoliciesCommand,
 } from '@aws-sdk/client-iam';
 import {
-  AutoScalingClient,
-  DescribeAutoScalingGroupsCommand,
-  DescribeLaunchConfigurationsCommand,
-} from '@aws-sdk/client-auto-scaling';
+  DescribeDBInstancesCommand,
+  DescribeDBSubnetGroupsCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
 import {
-  SecretsManagerClient,
+  DeleteObjectCommand,
+  GetBucketEncryptionCommand,
+  GetBucketVersioningCommand,
+  GetObjectCommand,
+  GetPublicAccessBlockCommand,
+  HeadBucketCommand,
+  PutObjectCommand,
+  S3Client
+} from '@aws-sdk/client-s3';
+import {
   DescribeSecretCommand,
   GetSecretValueCommand,
+  SecretsManagerClient,
 } from '@aws-sdk/client-secrets-manager';
+import fs from 'fs';
 
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')

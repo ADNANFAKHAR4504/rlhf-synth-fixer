@@ -13,7 +13,7 @@ This is a comprehensive CloudFormation template request requiring a highly avail
 8. Security Groups restricting traffic to ports 80 and 443
 9. CodePipeline and CodeBuild for automated CI/CD
 10. Comprehensive tagging with Environment parameter
-11. Deployment in us-east-1 region
+11. Deployment in eu-central-1 region
 12. Secrets Manager integration for secure database password management
 
 The template must be production-ready, following AWS best practices for security, scalability, and high availability. All resources should be configurable through parameters and support conditional CI/CD resource creation.
@@ -86,7 +86,7 @@ Conditions:
 
 Mappings:
   RegionMap:
-    us-east-1:
+    eu-central-1:
       AMI: ami-0b72821e2f351e396  # Amazon Linux 2 AMI (update as needed)
 
 Resources:
@@ -984,7 +984,7 @@ Outputs:
 ### 6. Compliance and Best Practices
 - Parameterized configuration with Environment suffix tagging
 - CloudFormation naming conventions throughout
-- Region-specific deployment (us-east-1)
+- Region-specific deployment (eu-central-1)
 - 7-day RDS backup retention with automated backups
 - DeletionPolicy configured for safe resource cleanup
 - Comprehensive resource tagging for cost allocation
@@ -1018,7 +1018,7 @@ aws cloudformation deploy \
     GitHubBranch=main \
     GitHubToken="" \
   --capabilities CAPABILITY_IAM \
-  --region us-east-1
+  --region eu-central-1
 ```
 
 3. Post-deployment:

@@ -130,9 +130,9 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(template.Mappings.RegionMap).toBeDefined();
     });
 
-    test('RegionMap should have us-east-1 region', () => {
-      expect(template.Mappings.RegionMap['us-east-1']).toBeDefined();
-      expect(template.Mappings.RegionMap['us-east-1'].AMI).toBeDefined();
+    test('RegionMap should have eu-central-1 region', () => {
+      expect(template.Mappings.RegionMap['eu-central-1']).toBeDefined();
+      expect(template.Mappings.RegionMap['eu-central-1'].AMI).toBeDefined();
     });
   });
 
