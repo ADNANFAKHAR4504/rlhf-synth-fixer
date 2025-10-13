@@ -278,30 +278,26 @@ export class TapStack extends Construct {
     });
 
     // Create ACM Certificate for HTTPS
-    const certificate = new acm.Certificate(stack, 'Certificate', {
-      domainName: domainName,
-      subjectAlternativeNames: [`*.${domainName}`],
-      validation: acm.CertificateValidation.fromDns(),
-    });
+    // const certificate = new acm.Certificate(stack, 'Certificate', {
+    //   domainName: domainName,
+    //   subjectAlternativeNames: [`*.${domainName}`],
+    //   validation: acm.CertificateValidation.fromDns(),
+    // });
 
     // Add HTTP Listener (redirect to HTTPS)
     alb.addListener('HttpListener', {
       port: 80,
       protocol: elbv2.ApplicationProtocol.HTTP,
-      defaultAction: elbv2.ListenerAction.redirect({
-        protocol: 'HTTPS',
-        port: '443',
-        permanent: true,
-      }),
+      defaultAction: elbv2.ListenerAction.forward([targetGroup]),
     });
 
     // Add HTTPS Listener
-    alb.addListener('HttpsListener', {
-      port: 443,
-      protocol: elbv2.ApplicationProtocol.HTTPS,
-      certificates: [certificate],
-      defaultTargetGroups: [targetGroup],
-    });
+    // alb.addListener('HttpsListener', {
+    //   port: 443,
+    //   protocol: elbv2.ApplicationProtocol.HTTPS,
+    //   certificates: [certificate],
+    //   defaultTargetGroups: [targetGroup],
+    // });
 
     // Create Launch Template with improved logging
     const userData = ec2.UserData.forLinux();
