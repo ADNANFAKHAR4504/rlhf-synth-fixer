@@ -14,7 +14,7 @@ terraform {
 }
 
 # ============================================================================
-# PROVIDERS - Multi-region configurations
+# PROVIDERS - Multi-region configuration
 # ============================================================================
 
 provider "aws" {
