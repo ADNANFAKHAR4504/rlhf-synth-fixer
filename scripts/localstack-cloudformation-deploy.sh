@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# LocalStack CloudFormation Deploy Script
-# This script deploys CloudFormation infrastructure to LocalStack
+# LocalStack CloudFormation Deploy Script with Real-time Logging
+# This script deploys CloudFormation infrastructure to LocalStack with detailed progress monitoring
 
 set -e
 
@@ -10,6 +10,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 echo -e "${GREEN}🚀 Starting CloudFormation Deploy to LocalStack...${NC}"
@@ -24,29 +25,6 @@ echo -e "${GREEN}✅ LocalStack is running${NC}"
 
 # Clean LocalStack before deployment
 echo -e "${YELLOW}🧹 Cleaning LocalStack resources...${NC}"
-SCRIPT_DIR="$(dirname "$0")"
-
-# Run LocalStack clean without confirmation prompt
-export AWS_ACCESS_KEY_ID=test
-export AWS_SECRET_ACCESS_KEY=test
-export AWS_DEFAULT_REGION=us-east-1
-export AWS_ENDPOINT_URL=http://localhost:4566
-
-# Clean CloudFormation stacks
-STACKS=$(awslocal cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE ROLLBACK_COMPLETE CREATE_FAILED UPDATE_ROLLBACK_COMPLETE --query 'StackSummaries[].StackName' --output text 2>/dev/null || echo '')
-if [ ! -z "$STACKS" ]; then
-    for stack in $STACKS; do
-        echo -e "${BLUE}  🗑️  Deleting CloudFormation stack: $stack${NC}"
-        awslocal cloudformation delete-stack --stack-name $stack 2>/dev/null || true
-    done
-    sleep 5
-fi
-
-# Use LocalStack's reset endpoint
-echo -e "${YELLOW}🔄 Resetting LocalStack state...${NC}"
-curl -X POST http://localhost:4566/_localstack/state/reset 2>/dev/null && echo -e "${GREEN}✅ LocalStack state reset successful${NC}" || echo -e "${YELLOW}⚠️  LocalStack state reset not available${NC}"
-
-echo -e "${GREEN}✅ LocalStack cleaned${NC}"
 
 # Set up environment variables for LocalStack
 export AWS_ACCESS_KEY_ID=test
@@ -54,13 +32,24 @@ export AWS_SECRET_ACCESS_KEY=test
 export AWS_DEFAULT_REGION=us-east-1
 export AWS_ENDPOINT_URL=http://localhost:4566
 
+# Clean existing stack
+STACKS=$(awslocal cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE ROLLBACK_COMPLETE CREATE_FAILED UPDATE_ROLLBACK_COMPLETE --query 'StackSummaries[].StackName' --output text 2>/dev/null || echo '')
+if [ ! -z "$STACKS" ]; then
+    for stack in $STACKS; do
+        echo -e "${BLUE}  🗑️  Deleting CloudFormation stack: $stack${NC}"
+        awslocal cloudformation delete-stack --stack-name $stack 2>/dev/null || true
+    done
+    sleep 3
+fi
+
+# Reset LocalStack state
+curl -X POST http://localhost:4566/_localstack/state/reset 2>/dev/null && echo -e "${GREEN}✅ LocalStack state reset${NC}" || echo -e "${YELLOW}⚠️  State reset not available${NC}"
+
 # Change to lib directory
 cd "$(dirname "$0")/../lib"
-
 echo -e "${YELLOW}📁 Working directory: $(pwd)${NC}"
 
-# Check if CloudFormation template exists
-# Use LocalStack-compatible template if available, otherwise use main template
+# Check template
 if [ -f "TapStack.yml" ]; then
     TEMPLATE_FILE="TapStack.yml"
 else
@@ -70,265 +59,249 @@ fi
 
 echo -e "${GREEN}✅ CloudFormation template found: $TEMPLATE_FILE${NC}"
 
-# Set stack name and parameters
+# Set parameters
 STACK_NAME="tap-stack-localstack"
 ENVIRONMENT_SUFFIX="${ENVIRONMENT_SUFFIX:-dev}"
 
-echo -e "${YELLOW}🔧 Deploying CloudFormation stack...${NC}"
+echo -e "${CYAN}🔧 Deploying CloudFormation stack:${NC}"
 echo -e "${BLUE}  • Stack Name: $STACK_NAME${NC}"
-echo -e "${BLUE}  • Environment Suffix: $ENVIRONMENT_SUFFIX${NC}"
+echo -e "${BLUE}  • Environment: $ENVIRONMENT_SUFFIX${NC}"
+echo -e "${BLUE}  • Template: $TEMPLATE_FILE${NC}"
 
-# Check if stack exists and clean it up
-if awslocal cloudformation describe-stacks --stack-name $STACK_NAME > /dev/null 2>&1; then
-    echo -e "${YELLOW}🗑️  Stack exists, cleaning up before redeployment...${NC}"
-
-    awslocal cloudformation delete-stack --stack-name $STACK_NAME
-
-    echo -e "${YELLOW}⏳ Waiting for stack deletion to complete...${NC}"
-
-    # Monitor stack deletion
-    while true; do
-        STACK_STATUS=$(awslocal cloudformation describe-stacks --stack-name $STACK_NAME --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DELETE_COMPLETE")
-
-        if [[ "$STACK_STATUS" == "DELETE_COMPLETE" ]] || [[ "$STACK_STATUS" == "UNKNOWN" ]]; then
-            echo -e "${GREEN}✅ Stack deletion completed${NC}"
-            break
-        elif [[ "$STACK_STATUS" == "DELETE_FAILED" ]]; then
-            echo -e "${RED}❌ Stack deletion failed${NC}"
-            echo -e "${YELLOW}📋 Failed resources:${NC}"
-            awslocal cloudformation describe-stack-events --stack-name $STACK_NAME \
-                --query 'StackEvents[?ResourceStatus==`DELETE_FAILED`].[LogicalResourceId,ResourceType,ResourceStatusReason]' \
-                --output table
-            exit 1
-        else
-            echo -e "${BLUE}⏳ Stack status: $STACK_STATUS${NC}"
-        fi
-
-        sleep 3
-    done
-fi
-
-echo -e "${YELLOW}📦 Creating new stack...${NC}"
-
-awslocal cloudformation create-stack \
-    --stack-name $STACK_NAME \
-    --template-body file://$TEMPLATE_FILE \
-    --parameters ParameterKey=EnvironmentSuffix,ParameterValue=$ENVIRONMENT_SUFFIX \
-    --capabilities CAPABILITY_IAM
-
-echo -e "${YELLOW}⏳ Waiting for stack creation to complete...${NC}"
-
-# Monitor stack creation with detailed progress updates
-LAST_RESOURCE_COUNT=0
 DEPLOYMENT_START_TIME=$(date +%s)
 
-while true; do
-    STACK_STATUS=$(awslocal cloudformation describe-stacks --stack-name $STACK_NAME --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "UNKNOWN")
+# Create the stack
+echo -e "${YELLOW}📦 Creating CloudFormation stack...${NC}"
 
-    # Get detailed resource information for proper completion checking
-    CURRENT_RESOURCES=$(awslocal cloudformation list-stack-resources --stack-name $STACK_NAME 2>/dev/null || echo '{"StackResourceSummaries":[]}')
-    
-    # Count resources by status
-    COMPLETED_COUNT=$(echo "$CURRENT_RESOURCES" | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    completed = [r for r in data.get('StackResourceSummaries', []) if r.get('ResourceStatus') == 'CREATE_COMPLETE']
-    print(len(completed))
-except:
-    print('0')
-" 2>/dev/null || echo "0")
-    
-    IN_PROGRESS_COUNT=$(echo "$CURRENT_RESOURCES" | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    in_progress = [r for r in data.get('StackResourceSummaries', []) if r.get('ResourceStatus') == 'CREATE_IN_PROGRESS']
-    print(len(in_progress))
-except:
-    print('0')
-" 2>/dev/null || echo "0")
+CREATE_RESULT=$(awslocal cloudformation create-stack \
+    --stack-name $STACK_NAME \
+    --template-body file://$TEMPLATE_FILE \
+    --parameters ParameterKey=Environment,ParameterValue=$ENVIRONMENT_SUFFIX \
+    --capabilities CAPABILITY_IAM \
+    --output json)
 
-    TOTAL_COUNT=$(echo "$CURRENT_RESOURCES" | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    print(len(data.get('StackResourceSummaries', [])))
-except:
-    print('0')
-" 2>/dev/null || echo "0")
-
-    # Check for final states - stack must be complete AND all resources must be complete
-    if [[ "$STACK_STATUS" == "CREATE_COMPLETE" ]] && [[ "$IN_PROGRESS_COUNT" -eq 0 ]]; then
-        echo -e "${GREEN}✅ Stack creation completed successfully${NC}"
-        echo -e "${GREEN}📊 All $TOTAL_COUNT resources created successfully${NC}"
-        
-        DEPLOYMENT_END_TIME=$(date +%s)
-        DEPLOYMENT_DURATION=$((DEPLOYMENT_END_TIME - DEPLOYMENT_START_TIME))
-        echo -e "${GREEN}⏱️  Deployment time: ${DEPLOYMENT_DURATION}s${NC}"
-        break
-        
-    elif [[ "$STACK_STATUS" == "ROLLBACK_COMPLETE" ]] || [[ "$STACK_STATUS" == "UPDATE_ROLLBACK_COMPLETE" ]]; then
-        echo -e "${RED}❌ Stack creation failed and rolled back (Status: $STACK_STATUS)${NC}"
-        echo -e "${YELLOW}📋 Analyzing failures...${NC}"
-        
-        # Show failed resources
-        FAILED_RESOURCES=$(awslocal cloudformation describe-stack-events --stack-name $STACK_NAME \
-            --query 'StackEvents[?ResourceStatus==`CREATE_FAILED`].[LogicalResourceId,ResourceType,ResourceStatusReason]' \
-            --output table 2>/dev/null)
-            
-        if [ ! -z "$FAILED_RESOURCES" ] && [ "$FAILED_RESOURCES" != "None" ]; then
-            echo -e "${YELLOW}📋 Failed resources:${NC}"
-            echo "$FAILED_RESOURCES"
-        else
-            echo -e "${YELLOW}📋 No specific resource failures found. Checking rollback events...${NC}"
-            awslocal cloudformation describe-stack-events --stack-name $STACK_NAME \
-                --query 'StackEvents[?contains(ResourceStatus,`ROLLBACK`) || contains(ResourceStatus,`FAILED`)].[Timestamp,LogicalResourceId,ResourceStatus,ResourceStatusReason]' \
-                --output table --max-items 20
-        fi
-        exit 1
-        
-    elif [[ "$STACK_STATUS" == "CREATE_FAILED" ]] || [[ "$STACK_STATUS" == "DELETE_COMPLETE" ]]; then
-        echo -e "${RED}❌ Stack creation failed with status: $STACK_STATUS${NC}"
-        echo -e "${YELLOW}📋 Failed resources:${NC}"
-        awslocal cloudformation describe-stack-events --stack-name $STACK_NAME \
-            --query 'StackEvents[?ResourceStatus==`CREATE_FAILED`].[LogicalResourceId,ResourceType,ResourceStatusReason]' \
-            --output table
-        exit 1
-        
-    elif [[ "$STACK_STATUS" == "CREATE_IN_PROGRESS" ]] || [[ "$IN_PROGRESS_COUNT" -gt 0 ]]; then
-        # Show progress if resources changed or there are still resources in progress
-        if [ "$COMPLETED_COUNT" != "$LAST_RESOURCE_COUNT" ] || [ "$IN_PROGRESS_COUNT" -gt 0 ]; then
-            if [[ "$STACK_STATUS" == "CREATE_COMPLETE" ]] && [[ "$IN_PROGRESS_COUNT" -gt 0 ]]; then
-                echo -e "${BLUE}⏳ Stack marked complete but waiting for remaining resources: $COMPLETED_COUNT/$TOTAL_COUNT completed, $IN_PROGRESS_COUNT still in progress${NC}"
-            else
-                echo -e "${BLUE}⏳ Stack status: $STACK_STATUS - Progress: $COMPLETED_COUNT/$TOTAL_COUNT completed, $IN_PROGRESS_COUNT in progress${NC}"
-            fi
-            
-            # Show currently creating resources
-            if [ "$IN_PROGRESS_COUNT" -gt 0 ]; then
-                echo -e "${YELLOW}🔄 Currently creating:${NC}"
-                awslocal cloudformation list-stack-resources --stack-name $STACK_NAME \
-                    --query 'StackResourceSummaries[?ResourceStatus==`CREATE_IN_PROGRESS`].[LogicalResourceId,ResourceType]' \
-                    --output table 2>/dev/null || true
-            fi
-            
-            LAST_RESOURCE_COUNT="$COMPLETED_COUNT"
-        fi
-        
-    else
-        echo -e "${YELLOW}⏳ Stack status: $STACK_STATUS${NC}"
-    fi
-
-    sleep 5
-done
-
-# Final validation - only report actual failures for successful stacks
-if [[ "$STACK_STATUS" == "CREATE_COMPLETE" ]]; then
-    echo -e "${YELLOW}🔍 Validating successful deployment...${NC}"
-    
-    # Check for any resources that failed but stack still completed
-    FAILED_RESOURCES=$(awslocal cloudformation describe-stack-events --stack-name $STACK_NAME \
-        --query 'StackEvents[?ResourceStatus==`CREATE_FAILED`]' \
-        --output json 2>/dev/null)
-
-    if [ "$FAILED_RESOURCES" != "[]" ] && [ ! -z "$FAILED_RESOURCES" ]; then
-        echo -e "${YELLOW}⚠️  Note: Some individual resources failed but stack completed successfully:${NC}"
-        awslocal cloudformation describe-stack-events --stack-name $STACK_NAME \
-            --query 'StackEvents[?ResourceStatus==`CREATE_FAILED`].[Timestamp,LogicalResourceId,ResourceType,ResourceStatusReason]' \
-            --output table
-        echo -e "${GREEN}✅ Stack overall status: SUCCESS (non-critical resource failures)${NC}"
-    else
-        echo -e "${GREEN}✅ All resources created successfully with no failures${NC}"
-    fi
+if [ $? -eq 0 ]; then
+    STACK_ID=$(echo "$CREATE_RESULT" | python3 -c "import sys, json; print(json.load(sys.stdin).get('StackId', 'unknown'))")
+    echo -e "${GREEN}✅ Stack creation initiated${NC}"
+    echo -e "${BLUE}📋 Stack ID: ${STACK_ID}${NC}"
 else
-    echo -e "${YELLOW}🔍 Final deployment status check complete${NC}"
+    echo -e "${RED}❌ Failed to create stack${NC}"
+    exit 1
 fi
 
-echo -e "${GREEN}✅ CloudFormation stack deployment completed${NC}"
+# Monitor deployment with real-time events
+echo -e "${CYAN}📊 Monitoring deployment progress...${NC}"
 
-# Show deployed resources summary
-echo -e "${YELLOW}📋 Deployed Resources Summary:${NC}"
+LAST_EVENT_COUNT=0
+COMPLETED_RESOURCES=0
+FAILED_RESOURCES=0
+
+while true; do
+    # Get stack status
+    STACK_STATUS=$(awslocal cloudformation describe-stacks --stack-name $STACK_NAME --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "UNKNOWN")
+    
+    # Get all events
+    EVENTS=$(awslocal cloudformation describe-stack-events --stack-name $STACK_NAME --output json 2>/dev/null || echo '{"StackEvents":[]}')
+    
+    # Process and display new events
+    CURRENT_EVENT_COUNT=$(echo "$EVENTS" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    print(len(data.get('StackEvents', [])))
+except:
+    print('0')
+")
+    
+    if [ "$CURRENT_EVENT_COUNT" -gt "$LAST_EVENT_COUNT" ]; then
+        # Show new events
+        echo "$EVENTS" | python3 -c "
+import sys, json
+from datetime import datetime
+
+try:
+    data = json.load(sys.stdin)
+    events = data.get('StackEvents', [])
+    last_count = int('$LAST_EVENT_COUNT')
+    
+    # Show newest events first, but only the new ones
+    new_events = events[:len(events)-last_count] if last_count > 0 else events
+    
+    completed = 0
+    failed = 0
+    
+    for event in reversed(new_events):  # Show in chronological order
+        timestamp = event.get('Timestamp', '')
+        resource_id = event.get('LogicalResourceId', '')
+        resource_type = event.get('ResourceType', '')
+        status = event.get('ResourceStatus', '')
+        reason = event.get('ResourceStatusReason', '')
+        
+        # Skip stack-level events for cleaner output
+        if resource_type == 'AWS::CloudFormation::Stack' and resource_id == '$STACK_NAME':
+            continue
+            
+        # Format timestamp
+        try:
+            dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+            time_str = dt.strftime('%H:%M:%S')
+        except:
+            time_str = timestamp[:8] if timestamp else ''
+            
+        # Color code and icon based on status
+        if 'COMPLETE' in status:
+            color = '\033[0;32m'  # Green
+            icon = '✅'
+            if 'CREATE_COMPLETE' in status:
+                completed += 1
+        elif 'IN_PROGRESS' in status:
+            color = '\033[0;34m'  # Blue
+            icon = '🔄'
+        elif 'FAILED' in status:
+            color = '\033[0;31m'  # Red  
+            icon = '❌'
+            failed += 1
+        else:
+            color = '\033[1;33m'  # Yellow
+            icon = '⚠️'
+            
+        nc = '\033[0m'
+        
+        print(f'{color}{icon} [{time_str}] {resource_id} ({resource_type}): {status}{nc}')
+        if reason and reason.strip() and reason != 'None':
+            print(f'    └─ {reason}')
+    
+    print(f'RESOURCE_COUNTS={completed},{failed}', file=sys.stderr)
+    
+except Exception as e:
+    print(f'Error processing events: {e}', file=sys.stderr)
+" 2>/tmp/resource_counts
+
+        LAST_EVENT_COUNT="$CURRENT_EVENT_COUNT"
+        
+        # Update resource counts
+        if [ -f /tmp/resource_counts ]; then
+            source /tmp/resource_counts 2>/dev/null || true
+            rm -f /tmp/resource_counts
+        fi
+    fi
+    
+    # Check for completion
+    if [[ "$STACK_STATUS" == "CREATE_COMPLETE" ]]; then
+        # Check if any resources failed even though stack completed
+        FAILED_COUNT=$(awslocal cloudformation describe-stack-events --stack-name $STACK_NAME \
+            --query 'length(StackEvents[?ResourceStatus==`CREATE_FAILED`])' --output text 2>/dev/null || echo "0")
+        
+        if [ "$FAILED_COUNT" -gt 0 ]; then
+            echo -e "${YELLOW}⚠️  Stack completed with $FAILED_COUNT failed resources${NC}"
+            echo -e "${YELLOW}📋 Failed resources:${NC}"
+            awslocal cloudformation describe-stack-events --stack-name $STACK_NAME \
+                --query 'StackEvents[?ResourceStatus==`CREATE_FAILED`].[LogicalResourceId,ResourceType,ResourceStatusReason]' \
+                --output table --max-items 10 2>/dev/null || true
+            echo -e "${YELLOW}⚠️  Deployment completed with warnings - some resources failed${NC}"
+        else
+            echo -e "${GREEN}✅ Stack deployment completed successfully!${NC}"
+        fi
+        break
+    elif [[ "$STACK_STATUS" =~ ^(CREATE_FAILED|ROLLBACK_COMPLETE|ROLLBACK_FAILED)$ ]]; then
+        echo -e "${RED}❌ Stack deployment failed with status: $STACK_STATUS${NC}"
+        
+        # Show failure summary
+        echo -e "${YELLOW}📋 Failure Summary:${NC}"
+        awslocal cloudformation describe-stack-events --stack-name $STACK_NAME \
+            --query 'StackEvents[?contains(ResourceStatus,`FAILED`)].[Timestamp,LogicalResourceId,ResourceType,ResourceStatusReason]' \
+            --output table --max-items 10 2>/dev/null || true
+        exit 1
+    elif [[ "$STACK_STATUS" == "CREATE_IN_PROGRESS" ]]; then
+        # Show periodic progress update
+        RESOURCE_SUMMARY=$(awslocal cloudformation list-stack-resources --stack-name $STACK_NAME 2>/dev/null | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    resources = data.get('StackResourceSummaries', [])
+    complete = len([r for r in resources if 'COMPLETE' in r.get('ResourceStatus', '')])
+    total = len(resources)
+    in_progress = len([r for r in resources if 'IN_PROGRESS' in r.get('ResourceStatus', '')])
+    print(f'{complete}/{total} complete, {in_progress} in progress')
+except:
+    print('Status unknown')
+" 2>/dev/null || echo "Status unknown")
+        
+        echo -e "${CYAN}📈 Progress: $RESOURCE_SUMMARY${NC}"
+    fi
+    
+    sleep 4
+done
+
+DEPLOYMENT_END_TIME=$(date +%s)
+DEPLOYMENT_DURATION=$((DEPLOYMENT_END_TIME - DEPLOYMENT_START_TIME))
+
+echo -e "${GREEN}⏱️  Total deployment time: ${DEPLOYMENT_DURATION}s${NC}"
+
+# Final resource summary
+echo -e "${CYAN}📊 Final Resource Summary:${NC}"
 awslocal cloudformation list-stack-resources --stack-name $STACK_NAME \
     --query 'StackResourceSummaries[?ResourceStatus==`CREATE_COMPLETE`].[LogicalResourceId,ResourceType,ResourceStatus]' \
-    --output table 2>/dev/null | head -20 || echo -e "${YELLOW}⚠️  Could not retrieve resource summary${NC}"
+    --output table 2>/dev/null || echo -e "${YELLOW}⚠️  Could not retrieve resource summary${NC}"
 
-TOTAL_CREATED=$(awslocal cloudformation list-stack-resources --stack-name $STACK_NAME \
+TOTAL_RESOURCES=$(awslocal cloudformation list-stack-resources --stack-name $STACK_NAME \
     --query 'length(StackResourceSummaries[?ResourceStatus==`CREATE_COMPLETE`])' --output text 2>/dev/null || echo "0")
-echo -e "${GREEN}📊 Total successfully created resources: $TOTAL_CREATED${NC}"
 
-# Get stack outputs
-echo -e "${YELLOW}📊 Retrieving stack outputs...${NC}"
+echo -e "${GREEN}✅ Successfully deployed resources: $TOTAL_RESOURCES${NC}"
 
-# Create cfn-outputs directory if it doesn't exist
+
+
+# Generate outputs
+echo -e "${YELLOW}📊 Generating stack outputs...${NC}"
 mkdir -p ../cfn-outputs
 
-# Get stack description and extract outputs
 STACK_INFO=$(awslocal cloudformation describe-stacks --stack-name $STACK_NAME)
-
-# Parse outputs to JSON format - directly from CloudFormation stack outputs
 OUTPUT_JSON=$(echo "$STACK_INFO" | python3 -c "
-import sys
-import json
-
+import sys, json
 try:
     data = json.load(sys.stdin)
     outputs = {}
-
-    # Extract outputs from CloudFormation stack
     if 'Stacks' in data and len(data['Stacks']) > 0:
         stack_outputs = data['Stacks'][0].get('Outputs', [])
         for output in stack_outputs:
-            key = output['OutputKey']
-            value = output['OutputValue']
-            outputs[key] = value
-
+            outputs[output['OutputKey']] = output['OutputValue']
     print(json.dumps(outputs, indent=2))
-except Exception as e:
-    print('{}', file=sys.stderr)
-    print(f'Error parsing stack outputs: {e}', file=sys.stderr)
+except:
+    print('{}')
 ")
 
-# Check if we got valid outputs
-if [ "$OUTPUT_JSON" = "{}" ] || [ -z "$OUTPUT_JSON" ]; then
-    echo -e "${YELLOW}⚠️  No stack outputs defined in the CloudFormation template${NC}"
-    echo -e "${YELLOW}⚠️  Add Outputs section to your template to export resource information${NC}"
-fi
-
-# Write outputs to file (same format as Terraform)
 echo "$OUTPUT_JSON" > ../cfn-outputs/flat-outputs.json
-
 echo -e "${GREEN}✅ Outputs saved to cfn-outputs/flat-outputs.json${NC}"
 
-# Display outputs
-if [ "$OUTPUT_JSON" != "{}" ] && [ ! -z "$OUTPUT_JSON" ]; then
-    echo -e "${BLUE}📈 Stack Outputs:${NC}"
+if [ "$OUTPUT_JSON" != "{}" ]; then
+    echo -e "${BLUE}📋 Stack Outputs:${NC}"
     echo "$OUTPUT_JSON" | python3 -c "
-import sys
-import json
-
+import sys, json
 try:
     data = json.load(sys.stdin)
     for key, value in data.items():
-        if isinstance(value, list):
-            print(f'  • {key}: {len(value)} items')
-            for item in value:
-                print(f'    - {item}')
-        else:
-            print(f'  • {key}: {value}')
+        print(f'  • {key}: {value}')
 except:
     pass
 "
 else
-    echo -e "${YELLOW}⚠️  No outputs available${NC}"
+    echo -e "${YELLOW}ℹ️  No stack outputs defined${NC}"
 fi
 
-# Display summary
-echo -e "${BLUE}📈 Deployment Summary:${NC}"
-echo -e "${YELLOW}  • Stack Name: $STACK_NAME${NC}"
-echo -e "${YELLOW}  • Stack Status: $(echo "$STACK_INFO" | python3 -c "import sys, json; print(json.load(sys.stdin)['Stacks'][0]['StackStatus'])")${NC}"
-echo -e "${YELLOW}  • Infrastructure deployed to LocalStack${NC}"
-echo -e "${YELLOW}  • Outputs file created for integration tests${NC}"
-echo -e "${YELLOW}  • LocalStack endpoint: http://localhost:4566${NC}"
+# Final summary
+echo -e "${CYAN}🎯 Deployment Summary:${NC}"
+echo -e "${BLUE}  • Stack: $STACK_NAME${NC}"
+echo -e "${BLUE}  • Status: $(echo "$STACK_INFO" | python3 -c "import sys, json; print(json.load(sys.stdin)['Stacks'][0]['StackStatus'])")${NC}"
+echo -e "${BLUE}  • Resources: $TOTAL_RESOURCES deployed${NC}"
+echo -e "${BLUE}  • Duration: ${DEPLOYMENT_DURATION}s${NC}"
+echo -e "${BLUE}  • LocalStack: http://localhost:4566${NC}"
 
-echo -e "${GREEN}🎉 Ready to run integration tests!${NC}"
+# Final completion message based on overall success
+FINAL_FAILED_COUNT=$(awslocal cloudformation describe-stack-events --stack-name $STACK_NAME \
+    --query 'length(StackEvents[?ResourceStatus==`CREATE_FAILED`])' --output text 2>/dev/null || echo "0")
+
+if [ "$FINAL_FAILED_COUNT" -gt 0 ]; then
+    echo -e "${YELLOW}⚠️  CloudFormation deployment completed with $FINAL_FAILED_COUNT failed resources${NC}"
+else
+    echo -e "${GREEN}🎉 CloudFormation deployment to LocalStack completed successfully!${NC}"
+fi

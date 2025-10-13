@@ -1,0 +1,30 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "410115",
+  "team": "4",
+  "startedAt": "2025-10-07T20:24:09.342Z",
+  "subtask": "CI/CD Pipeline",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "training_quality": 8.5,
+  "aws_services": [
+    "S3",
+    "SQS",
+    "Lambda",
+    "MediaConvert",
+    "DynamoDB",
+    "CloudWatch",
+    "KMS",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rahulpatil118",
+  "dockerS3Location": ""
+}
