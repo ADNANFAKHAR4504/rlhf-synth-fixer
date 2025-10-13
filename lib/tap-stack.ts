@@ -118,7 +118,7 @@ export class TapStack extends TerraformStack {
     const ec2Module = new EC2Module(this, 'ec2', {
       vpcId: vpcModule.vpc.id,
       subnetId: vpcModule.privateSubnets[0].id,
-      instanceType: 't2.micro',
+      instanceType: 't3.micro',
       amiId: ami.id,
       sshAllowedCidr: process.env.SSH_ALLOWED_CIDR || '10.0.0.0/8',
       iamInstanceProfile: iamModule.ec2InstanceProfile.name,

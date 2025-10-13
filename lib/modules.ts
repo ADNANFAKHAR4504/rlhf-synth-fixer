@@ -395,7 +395,6 @@ export class RDSModule extends Construct {
     this.dbInstance = new aws.dbInstance.DbInstance(this, 'postgres', {
       identifier: `${id}-postgres`,
       engine: 'postgres',
-      engineVersion: '15.4',
       instanceClass: config.instanceClass,
       allocatedStorage: config.allocatedStorage,
       storageType: 'gp3',
