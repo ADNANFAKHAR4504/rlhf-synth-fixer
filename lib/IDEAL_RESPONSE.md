@@ -1,5 +1,3 @@
-# S3 Static Website Hosting - Complete Configuration
-
 # provider.tf
 
 terraform {
