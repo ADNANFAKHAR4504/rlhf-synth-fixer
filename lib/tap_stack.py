@@ -354,18 +354,6 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Lambda layer for common dependencies
-        lambda_layer = aws.lambda_.LayerVersion(
-            "etl-common-layer",
-            layer_name=f"etl-common-{environment}",
-            compatible_runtimes=["python3.9"],
-            code=pulumi.AssetArchive({
-                "python": pulumi.FileArchive("./lambda_layer")
-            }),
-            description="Common dependencies for ETL Lambda functions",
-            opts=ResourceOptions(parent=self)
-        )
-
         # Environment variables for Lambda functions
         lambda_env_vars = {
             "RAW_BUCKET": raw_data_bucket.bucket,
