@@ -123,6 +123,15 @@ describe('TapStack Infrastructure Integration Tests', () => {
         /^[a-z0-9.-]+$/
       );
     });
+
+    test('should not expose secrets in stack outputs', () => {
+      const keys = Object.keys(outputs);
+      keys.forEach(k => {
+        expect(k.toLowerCase()).not.toMatch(/password|secret|token|key/i);
+        const v = String(outputs[k] ?? '');
+        expect(v.toLowerCase()).not.toMatch(/password|secret|token/i);
+      });
+    });
   });
 
   describe('Application Load Balancer Tests', () => {

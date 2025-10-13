@@ -353,6 +353,12 @@ describe('TapStack CloudFormation Template', () => {
       const db = template.Resources.RDSInstance.Properties;
       expect(db.PubliclyAccessible).toBe(false);
     });
+
+    test('RDS should manage master user password via Secrets Manager', () => {
+      const db = template.Resources.RDSInstance;
+      expect(db.Properties.ManageMasterUserPassword).toBe(true);
+      expect(db.Properties.MasterUserPassword).toBeUndefined();
+    });
   });
 
   describe('CloudWatch Resources', () => {

@@ -691,7 +691,7 @@ Resources:
       Engine: mysql
       EngineVersion: "8.0.41"
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Sub "{{resolve:ssm-secure:/tap/${ProjectName}/${Environment}/db/password:1}}"
+      ManageMasterUserPassword: true
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
