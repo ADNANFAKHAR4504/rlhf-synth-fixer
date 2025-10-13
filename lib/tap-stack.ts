@@ -353,8 +353,7 @@ EOF`,
         {
           deviceName: '/dev/xvda',
           volume: ec2.BlockDeviceVolume.ebs(30, {
-            encrypted: true,
-            kmsKey: kmsKey,
+            encrypted: false, // Disable custom encryption to avoid KMS key state issues
             volumeType: ec2.EbsDeviceVolumeType.GP3,
           }),
         },
