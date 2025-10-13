@@ -1,0 +1,14 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "6CBBC4",
+  "team": "1",
+  "startedAt": "2025-10-12T14:04:20.353Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "CloudWatch, Lambda, DynamoDB, KMS, Route 53, RDS"
+}
