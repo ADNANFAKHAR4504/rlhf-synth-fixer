@@ -875,11 +875,11 @@ func main() {
 
 		// Application Load Balancer
 		alb, err := lb.NewLoadBalancer(ctx, "iot-alb", &lb.LoadBalancerArgs{
-			Name:             pulumi.String(sanitizeName(fmt.Sprintf("%s-%s-alb", projectName, envSuffix))),
-			Internal:         pulumi.Bool(false),
-			LoadBalancerType: pulumi.String("application"),
-			SecurityGroups:   pulumi.StringArray{albSecurityGroup.ID()},
-			Subnets:          pulumi.StringArray{publicSubnet1.ID(), publicSubnet2.ID()},
+			Name:                     pulumi.String(sanitizeName(fmt.Sprintf("%s-%s-alb", projectName, envSuffix))),
+			Internal:                 pulumi.Bool(false),
+			LoadBalancerType:         pulumi.String("application"),
+			SecurityGroups:           pulumi.StringArray{albSecurityGroup.ID()},
+			Subnets:                  pulumi.StringArray{publicSubnet1.ID(), publicSubnet2.ID()},
 			EnableDeletionProtection: pulumi.Bool(false),
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String(fmt.Sprintf("%s-%s-alb", projectName, envSuffix)),
