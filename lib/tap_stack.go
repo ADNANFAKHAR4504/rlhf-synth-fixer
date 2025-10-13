@@ -23,10 +23,10 @@ import (
 )
 
 const (
-	region       = "ap-northeast-1"
+	region       = "us-east-1"
 	vpcCIDR      = "10.0.0.0/16"
-	az1          = "ap-northeast-1a"
-	az2          = "ap-northeast-1c"
+	az1          = "us-east-1a"
+	az2          = "us-east-1b"
 	publicCIDR1  = "10.0.1.0/24"
 	publicCIDR2  = "10.0.2.0/24"
 	privateCIDR1 = "10.0.3.0/24"
