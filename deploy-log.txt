@@ -1,0 +1,266 @@
+
+> tap@0.1.0 cdktf:deploy
+> cdktf deploy '*' --auto-approve
+
+
+⠋  Starting
+[2K[1A[2K[1A[2K[G
+⠋  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠙  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠹  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠸  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠼  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠴  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠦  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠧  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠇  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠏  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠋  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠙  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠹  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠸  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠼  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠴  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠦  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠧  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠇  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠏  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠋  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠙  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠹  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠸  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠼  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠴  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠦  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠧  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠇  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠏  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠋  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠙  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠹  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠸  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠼  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠴  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠦  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠧  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠇  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠏  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠋  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠙  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠹  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠸  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠼  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠴  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠦  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠧  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠇  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠏  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠋  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠙  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠹  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠸  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠼  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠴  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠦  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠧  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠇  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠏  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠋  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠙  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠹  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠸  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠼  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠴  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠦  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠧  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠇  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠏  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠋  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠙  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠹  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠸  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠼  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠴  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠦  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠧  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠇  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠏  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠋  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠙  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠹  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠸  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠼  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠴  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠦  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠧  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠇  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠏  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠋  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠙  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠹  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠸  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠼  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠴  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠦  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠧  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠇  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠏  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠋  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠙  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠹  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠸  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠼  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠴  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠦  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠧  Synthesizing
+[2K[1A[2K[1A[2K[G
+⠇  Synthesizing
+[2K[1A[2K[1A[2K[G
+
+0 Stacks deploying     0 Stacks done     0 Stacks waiting
+[2K[1A[2K[1A[2K[1A[2K[GTapStacksynth2610724199  [0m[1mInitializing the backend...[0m
+
+
+0 Stacks deploying     0 Stacks done     0 Stacks waiting
+[2K[1A[2K[1A[2K[1A[2K[G
+
+0 Stacks deploying     0 Stacks done     1 Stack waiting
+[2K[1A[2K[1A[2K[1A[2K[GTapStacksynth2610724199  [0m[32m
+                         Successfully configured the backend "s3"! Terraform will automatically
+                         use this backend unless the backend configuration changes.[0m
+
+
+0 Stacks deploying     0 Stacks done     1 Stack waiting
+[2K[1A[2K[1A[2K[1A[2K[GTapStacksynth2610724199  [0m[1mInitializing provider plugins...[0m
+                         - Finding hashicorp/aws versions matching "6.11.0"...
+
+
+0 Stacks deploying     0 Stacks done     1 Stack waiting
+[2K[1A[2K[1A[2K[1A[2K[GTapStacksynth2610724199
+
+
+0 Stacks deploying     0 Stacks done     1 Stack waiting
+[2K[1A[2K[1A[2K[1A[2K[GTapStacksynth2610724199  - Installing hashicorp/aws v6.11.0...
+
+
+0 Stacks deploying     0 Stacks done     1 Stack waiting
+[2K[1A[2K[1A[2K[1A[2K[GTapStacksynth2610724199  [31m[31m╷[0m[0m
+                         [31m│[0m [0m[1m[31mError: [0m[0m[1mFailed to install provider[0m
+                         [31m│[0m [0m
+                         [31m│[0m [0m[0mError while installing hashicorp/aws v6.11.0: cannot install existing
+                         [31m│[0m [0mprovider directory
+                         [31m│[0m [0m/Users/mayanksethi/.terraform.d/plugin-cache/registry.terraform.io/hashicorp/aws/6.11.0/darwin_arm64
+                         [31m│[0m [0mto itself
+                         [31m╵[0m[0m
+                         [0m[0m
+
+
+0 Stacks deploying     0 Stacks done     1 Stack waiting
+Error: terraform init failed with exit code 1
