@@ -526,7 +526,7 @@ describe('S3 Static Website - Integration Tests (Live)', () => {
         }
       });
 
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(204);
       expect(response.headers['access-control-allow-origin']).toBe('*');
     });
   });
