@@ -29,9 +29,9 @@ export class TapStack extends Construct {
     // Use account from props if available
     const account = props?.env?.account || process.env.CDK_DEFAULT_ACCOUNT;
 
-    // Create primary stack (us-west-2)
+    // Create primary stack (us-east-1)
     const primaryEnv: cdk.Environment = {
-      region: 'us-west-2',
+      region: 'us-east-1',
       ...(account && { account }),
     };
     const primaryStack = new cdk.Stack(this, 'PrimaryStack', {
@@ -39,9 +39,9 @@ export class TapStack extends Construct {
     });
     this.createResources(primaryStack, 'primary');
 
-    // Create secondary stack (us-west-1) - commented out until region is bootstrapped
+    // Create secondary stack (us-west-2) - commented out until region is bootstrapped
     // const secondaryEnv: cdk.Environment = {
-    //   region: 'us-west-1',
+    //   region: 'us-west-2',
     //   ...(account && { account }),
     // };
     // const secondaryStack = new cdk.Stack(this, 'SecondaryStack', {
