@@ -135,14 +135,79 @@ export class TapStack extends cdk.Stack {
       tracing: lambda.Tracing.ACTIVE,
     });
 
+    // Create S3 bucket for AWS Config
+    const configBucket = new s3.Bucket(this, 'ConfigBucket', {
+      bucketName: `tap-config-${this.stackName.toLowerCase()}-${this.account}-${this.region}`,
+      encryption: s3.BucketEncryption.KMS,
+      encryptionKey: kmsKey,
+      versioned: true,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      enforceSSL: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+    });
+
+    // IAM role for AWS Config
+    const configRole = new iam.Role(this, 'ConfigRole', {
+      roleName: `tap-config-role-${this.stackName}`,
+      assumedBy: new iam.ServicePrincipal('config.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWS_ConfigRole'
+        ),
+      ],
+    });
+
+    // Grant Config service access to the S3 bucket and KMS key
+    configBucket.grantReadWrite(configRole);
+    kmsKey.grantEncryptDecrypt(configRole);
+
+    // AWS Config Configuration Recorder
+    const configRecorder = new config.CfnConfigurationRecorder(
+      this,
+      'ConfigRecorder',
+      {
+        name: `tap-config-recorder-${this.stackName}`,
+        roleArn: configRole.roleArn,
+        recordingGroup: {
+          allSupported: true,
+          includeGlobalResourceTypes: true,
+        },
+      }
+    );
+
+    // AWS Config Delivery Channel
+    // Note: AWS allows only 1 delivery channel per region per account
+    // For PR environments, you may want to skip this with an environment variable
+    const createDeliveryChannel =
+      process.env.CREATE_CONFIG_DELIVERY_CHANNEL !== 'false';
+
+    let configDeliveryChannel: config.CfnDeliveryChannel | undefined;
+    if (createDeliveryChannel) {
+      configDeliveryChannel = new config.CfnDeliveryChannel(
+        this,
+        'ConfigDeliveryChannel',
+        {
+          name: `tap-config-delivery-${this.stackName}`,
+          s3BucketName: configBucket.bucketName,
+          s3KmsKeyArn: kmsKey.keyArn,
+        }
+      );
+      configDeliveryChannel.addDependency(configRecorder);
+    }
+
     // Create SNS topic for compliance alerts
     const complianceTopic = new sns.Topic(this, 'ComplianceTopic', {
-      topicName: `tap-${props.environment}-compliance-alerts`,
+      topicName: `tap-compliance-alerts-${this.stackName}`,
       masterKey: kmsKey,
     });
 
     // Configure AWS Config rules
-    this.setupAwsConfigRules(complianceTopic);
+    this.setupAwsConfigRules(
+      complianceTopic,
+      configRecorder,
+      configDeliveryChannel
+    );
 
     // Output important values
     new cdk.CfnOutput(this, 'VpcId', {
@@ -169,35 +234,79 @@ export class TapStack extends cdk.Stack {
       value: exampleFunction.functionName,
       description: 'Lambda function name',
     });
+
+    new cdk.CfnOutput(this, 'ConfigBucketName', {
+      value: configBucket.bucketName,
+      description: 'AWS Config bucket name',
+    });
   }
 
-  private setupAwsConfigRules(complianceTopic: sns.Topic): void {
+  private setupAwsConfigRules(
+    complianceTopic: sns.Topic,
+    configRecorder: config.CfnConfigurationRecorder,
+    configDeliveryChannel?: config.CfnDeliveryChannel
+  ): void {
     // S3 bucket encryption rule
-    new config.ManagedRule(this, 'S3BucketEncryptionRule', {
-      identifier:
-        config.ManagedRuleIdentifiers.S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED,
-      description: 'Checks that S3 buckets have server-side encryption enabled',
-    });
+    const s3EncryptionRule = new config.ManagedRule(
+      this,
+      'S3BucketEncryptionRule',
+      {
+        configRuleName: `s3-encryption-${this.stackName}`,
+        identifier:
+          config.ManagedRuleIdentifiers.S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED,
+        description: 'Checks that S3 buckets have server-side encryption enabled',
+      }
+    );
+    const s3EncryptionCfnRule = s3EncryptionRule.node
+      .defaultChild as config.CfnConfigRule;
+    s3EncryptionCfnRule.addDependency(configRecorder);
+    if (configDeliveryChannel) {
+      s3EncryptionCfnRule.addDependency(configDeliveryChannel);
+    }
 
     // RDS encryption rule
-    new config.ManagedRule(this, 'RDSEncryptionRule', {
-      identifier: config.ManagedRuleIdentifiers.RDS_STORAGE_ENCRYPTED,
-      description: 'Checks that RDS instances have encryption at rest enabled',
-    });
+    const rdsEncryptionRule = new config.ManagedRule(
+      this,
+      'RDSEncryptionRule',
+      {
+        configRuleName: `rds-encryption-${this.stackName}`,
+        identifier: config.ManagedRuleIdentifiers.RDS_STORAGE_ENCRYPTED,
+        description: 'Checks that RDS instances have encryption at rest enabled',
+      }
+    );
+    const rdsEncryptionCfnRule = rdsEncryptionRule.node
+      .defaultChild as config.CfnConfigRule;
+    rdsEncryptionCfnRule.addDependency(configRecorder);
+    if (configDeliveryChannel) {
+      rdsEncryptionCfnRule.addDependency(configDeliveryChannel);
+    }
 
     // Security group SSH rule
-    new config.ManagedRule(this, 'RestrictedSSHRule', {
-      identifier:
-        config.ManagedRuleIdentifiers.EC2_SECURITY_GROUP_ATTACHED_TO_ENI,
-      description:
-        'Checks that security groups are attached to network interfaces',
+    const sshRule = new config.CfnConfigRule(this, 'RestrictedSSHRule', {
+      configRuleName: `restricted-ssh-${this.stackName}`,
+      source: {
+        owner: 'AWS',
+        sourceIdentifier: 'INCOMING_SSH_DISABLED',
+      },
+      description: 'Checks that security groups do not allow unrestricted SSH access',
     });
+    sshRule.addDependency(configRecorder);
+    if (configDeliveryChannel) {
+      sshRule.addDependency(configDeliveryChannel);
+    }
 
     // Lambda VPC rule
-    new config.ManagedRule(this, 'LambdaVPCRule', {
+    const lambdaVpcRule = new config.ManagedRule(this, 'LambdaVPCRule', {
+      configRuleName: `lambda-vpc-${this.stackName}`,
       identifier: config.ManagedRuleIdentifiers.LAMBDA_INSIDE_VPC,
       description: 'Checks that Lambda functions are deployed inside VPC',
     });
+    const lambdaVpcCfnRule = lambdaVpcRule.node
+      .defaultChild as config.CfnConfigRule;
+    lambdaVpcCfnRule.addDependency(configRecorder);
+    if (configDeliveryChannel) {
+      lambdaVpcCfnRule.addDependency(configDeliveryChannel);
+    }
 
     // CloudWatch alarm for non-compliant resources
     const nonCompliantMetric = new cloudwatch.Metric({
@@ -210,6 +319,7 @@ export class TapStack extends cdk.Stack {
     });
 
     new cloudwatch.Alarm(this, 'NonComplianceAlarm', {
+      alarmName: `tap-non-compliance-${this.stackName}`,
       metric: nonCompliantMetric,
       threshold: 1,
       evaluationPeriods: 1,
