@@ -410,7 +410,7 @@ const app = new cdk.App();
 new TapStack(app, 'TapStack', {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION || 'ap-south-1', // Default to ap-south-1
+    region: process.env.CDK_DEFAULT_REGION || 'us-east-1', // Default to us-east-1
   },
   environmentSuffix: process.env.ENVIRONMENT_SUFFIX || 'dev',
   description: 'Resilient infrastructure for online bookstore with ALB, ASG, S3, and CloudWatch monitoring',
@@ -511,7 +511,7 @@ Internet → ALB (ports 80/443) → EC2 Instances (port 80 from ALB only)
 ### **5. Environment Support**
 - Configurable environment suffix for multi-environment deployments
 - Dynamic resource naming with environment prefixes
-- Support for different regions (defaults to ap-south-1)
+- Support for different regions (defaults to us-east-1)
 
 ## **Deployment Instructions**
 
@@ -520,7 +520,7 @@ Internet → ALB (ports 80/443) → EC2 Instances (port 80 from ALB only)
 npm install
 
 # Bootstrap CDK (first time only)
-cdk bootstrap aws://ACCOUNT-ID/ap-south-1
+cdk bootstrap aws://ACCOUNT-ID/us-east-1
 
 # Deploy the stack with environment suffix
 ENVIRONMENT_SUFFIX=dev cdk deploy
