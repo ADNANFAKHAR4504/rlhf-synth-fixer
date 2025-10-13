@@ -3,6 +3,8 @@
   "task_id": "7973446690",
   "platform": "CDK",
   "language": "TypeScript",
+  "turn_type": "single",
+  "complexity": "hard",
   "team": "synth",
   "difficulty": "hard",
   "subtask": "Failure Recovery and High Availability",
