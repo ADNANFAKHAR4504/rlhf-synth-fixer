@@ -1215,20 +1215,19 @@ Resources:
           import cfnresponse
           def lambda_handler(event, context):
               securityhub = boto3.client('securityhub')
-              response = {}
               try:
                   if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':
                       # Enable Security Hub
                       securityhub.enable_security_hub()
-                      response['Data'] = {'Status': 'Enabled'}
+                      response_data = {'Status': 'Enabled'}
                   elif event['RequestType'] == 'Delete':
                       # Disable Security Hub
                       securityhub.disable_security_hub()
-                      response['Data'] = {'Status': 'Disabled'}
-                  cfnresponse.send(event, context, cfnresponse.SUCCESS, response)
+                      response_data = {'Status': 'Disabled'}
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
               except Exception as e:
-                  response['Data'] = {'Error': str(e)}
-                  cfnresponse.send(event, context, cfnresponse.FAILED, response)
+                  response_data = {'Error': str(e)}
+                  cfnresponse.send(event, context, cfnresponse.FAILED, response_data)
       Timeout: 30
       Tags:
         - Key: Name
