@@ -35,6 +35,9 @@
         "RegionMap": {
             "us-east-1": {
                 "AmazonLinux2AMI": "ami-052064a798f08f0d3"
+            },
+            "us-west-2": {
+                "AmazonLinux2AMI": "ami-0caa91d6b7bee0ed0"
             }
         }
     },
@@ -242,7 +245,7 @@
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "RoleName": {
-                    "Fn::Sub": "${AWS::StackName}-ec2-role"
+                    "Fn::Sub": "${AWS::StackName}-ec2-role-${AWS::Region}"
                 },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -261,7 +264,9 @@
                 ],
                 "Policies": [
                     {
-                        "PolicyName": "CloudWatchLogsS3Policy",
+                        "PolicyName": {
+                            "Fn::Sub": "${AWS::StackName}-CloudWatchLogsS3Policy-${AWS::Region}"
+                        },
                         "PolicyDocument": {
                             "Version": "2012-10-17",
                             "Statement": [
@@ -302,7 +307,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${AWS::StackName}-ec2-role"
+                            "Fn::Sub": "${AWS::StackName}-ec2-role-${AWS::Region}"
                         }
                     },
                     {
@@ -323,7 +328,7 @@
                     }
                 ],
                 "InstanceProfileName": {
-                    "Fn::Sub": "${AWS::StackName}-ec2-profile"
+                    "Fn::Sub": "${AWS::StackName}-ec2-profile-${AWS::Region}"
                 }
             }
         },
