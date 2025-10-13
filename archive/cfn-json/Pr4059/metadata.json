@@ -10,5 +10,21 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "VPC, IAM, EC2, CloudWatch, SNS"
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "IAM",
+    "CloudWatch",
+    "SNS",
+    "S3",
+    "EventBridge",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "anukkrit149",
+  "dockerS3Location": ""
 }
