@@ -32,7 +32,7 @@ Parameters:
 
   DBEngineVersion:
     Type: String
-    Default: '8.0.35'
+    Default: '8.0.42'
     Description: 'Database engine version'
 
   AppInstanceType:
