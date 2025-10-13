@@ -2153,6 +2153,7 @@
         },
         "CloudTrailTrail": {
             "Type": "AWS::CloudTrail::Trail",
+            "DependsOn": "CloudTrailBucketPolicy",
             "Properties": {
                 "TrailName": {
                     "Fn::Sub": "${StackName}-cloudtrail"
@@ -2271,7 +2272,7 @@
                     ]
                 },
                 "Code": {
-                    "ZipFile": "import boto3\nimport cfnresponse\ndef lambda_handler(event, context):\n    securityhub = boto3.client('securityhub')\n    response = {}\n    try:\n        if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':\n            # Enable Security Hub\n            securityhub.enable_security_hub()\n            response['Data'] = {'Status': 'Enabled'}\n        elif event['RequestType'] == 'Delete':\n            # Disable Security Hub\n            securityhub.disable_security_hub()\n            response['Data'] = {'Status': 'Disabled'}\n        cfnresponse.send(event, context, cfnresponse.SUCCESS, response)\n    except Exception as e:\n        response['Data'] = {'Error': str(e)}\n        cfnresponse.send(event, context, cfnresponse.FAILED, response)\n"
+                    "ZipFile": "import boto3\nimport cfnresponse\ndef lambda_handler(event, context):\n    securityhub = boto3.client('securityhub')\n    try:\n        if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':\n            # Enable Security Hub\n            securityhub.enable_security_hub()\n            response_data = {'Status': 'Enabled'}\n        elif event['RequestType'] == 'Delete':\n            # Disable Security Hub\n            securityhub.disable_security_hub()\n            response_data = {'Status': 'Disabled'}\n        cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)\n    except Exception as e:\n        response_data = {'Error': str(e)}\n        cfnresponse.send(event, context, cfnresponse.FAILED, response_data)\n"
                 },
                 "Timeout": 30,
                 "Tags": [
