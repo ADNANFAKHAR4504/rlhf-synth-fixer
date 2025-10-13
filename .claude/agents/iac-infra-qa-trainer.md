@@ -23,7 +23,9 @@ git branch --show-current  # Must output: synth-{task_id}
 
 ## QA Pipeline Workflow
 
-### 1. Project Analysis
+**Before Starting**: Review `.claude/lessons_learnt.md` for common deployment failures and quick fixes.
+
+### 1. Project Analysis & Validation
 
 - **Identify Latest Files**: 
   - Read all PROMPT files in `lib/` directory (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.) and the MODEL_RESPONSE files
@@ -33,15 +35,69 @@ git branch --show-current  # Must output: synth-{task_id}
 - Read the PROMPT files, `metadata.json`, and the latest MODEL_RESPONSE file
 - Detect platform (CDK/CDKTF/CFN/Terraform/Pulumi) and language
 
+**CRITICAL: Platform/Language Compliance Check**
+- **Compare metadata.json vs actual code**:
+  - metadata.json says `"platform": "pulumi"` → lib/ code MUST use Pulumi syntax
+  - metadata.json says `"language": "go"` → lib/ code MUST be in Go
+  - metadata.json says `"platform": "cdk"` → lib/ code MUST use CDK constructs
+  - metadata.json says `"language": "ts"` → lib/ code MUST be TypeScript
+- **If platform/language MISMATCH detected**:
+  - Report CRITICAL FAILURE immediately
+  - Document the mismatch in MODEL_FAILURES.md as a Critical failure
+  - This counts as a severe quality issue affecting training_quality score
+  - Example: Task requires Pulumi+Go but code is in CDK+TypeScript = CRITICAL FAILURE
+- **Validation passes if**:
+  - Code platform matches metadata.json platform
+  - Code language matches metadata.json language
+  - PROMPT.md explicitly mentions the correct platform and language
+
 ### 2. Code Quality
+
+**CRITICAL GATE: NO DEPLOYMENT WITHOUT CLEAN BUILD**
 
 Important: Use the commands in `package.json` and `pipfile` to run these tasks per platform and langage.
 
-- **Lint**: Run platform-specific linters and fix issues
-- **Build**: Compile code and fix errors
+- **Lint**: Run platform-specific linters and fix ALL issues
+  - **MANDATORY**: Must pass with zero errors before proceeding
+  - If linting fails, fix all issues before moving forward
+  - Report lint status clearly
+  
+- **Build**: Compile code and fix ALL errors
+  - **MANDATORY**: Must complete successfully before proceeding
+  - If build fails, fix all compilation errors before moving forward
+  - Report build status clearly
+  
 - **Synthesize**: Generate deployment templates (CDK/Terraform/Pulumi)
+  - **MANDATORY**: Must synthesize successfully before proceeding
+  - If synthesis fails, fix all configuration/syntax errors before moving forward
+  - Report synthesis status clearly
+
+**CHECKPOINT**: Verify ALL three steps (lint, build, synth) pass successfully before proceeding to Pre-Deployment Validation.
+- If ANY step fails, STOP and fix issues
+- Report blocking status if unable to resolve after multiple attempts
+- Do NOT proceed to deployment with failing lint/build/synth
+
+### 2.5. Pre-Deployment Validation
+
+**CRITICAL COST OPTIMIZATION**: Before attempting AWS deployment, run pre-validation to catch common errors.
+
+- **Run Pre-Validation Script**: `bash scripts/pre-validate-iac.sh`
+- This validates:
+  - Resource naming includes `environmentSuffix` or `environment_suffix`
+  - No hardcoded environment values (prod-, dev-, stage-, etc.)
+  - No Retain policies or DeletionProtection flags (resources must be destroyable)
+  - No expensive resource configurations that could be optimized
+  - Valid cross-resource references
+  - Platform-specific requirements
+- **Action on Validation Results**:
+  - If validation FAILS (errors): Fix issues before proceeding to deployment
+  - If validation PASSES with warnings: Review warnings, proceed if acceptable
+  - If validation PASSES: Proceed to deployment with confidence
+- **Cost Impact**: Catching errors here saves 2-3 deployment attempts (~15% token reduction in QA phase)
 
 ### 3. Deployment
+
+**CRITICAL: Only proceed if Code Quality gate passed (lint + build + synth all successful)**
 
 - Use the commands in `package.json` and `pipfile` to run the deployment job per platform and language.
 - Ensure that all resources that will be created are destroyable (no Retain policies or protected
@@ -49,7 +105,7 @@ Important: Use the commands in `package.json` and `pipfile` to run these tasks p
 - Ensure that all resources names have the ENVIRONMENT_SUFFIX to avoid conflicts with other deployments.
 - You can never change the ci-cd .yml files that are deploying this project. Your mission is to create code
 that can be deployed with the current configuration of the ci-cd pipelines.
-- Deploy to AWS (max 10 attempts)
+- Deploy to AWS (**max 5 attempts** - reduced limit for cost optimization)
   - e.g. If there are refereces to SSM parameters, include those params as part of the deployed resources.
   - If ENVIRONMENT_SUFFIX env variable is not present, set it as `synth{TaskId}`:
     - If running in a github action, use `pr{github_pr_number}` as ENVIRONMENT_SUFFIX
@@ -98,23 +154,38 @@ The result should be similar to this (an object based on plain key, value).
 
 ### 4. Testing
 
+**CRITICAL: Comprehensive testing is MANDATORY before proceeding**
+
 - **Unit Tests**: Write tests for all `lib/` code
   - Use the commands in `package.json` and `pipfile` to run the unit tests
   - Use the files and folder structure existent inside test or tests folder.
     - You can create new files, but use the existing ones.
   - Don't test hardcoded environmentSuffix
   - Convert YAML to JSON before testing if platform is cfn and language is yml
-  - Run until 90% Coverage is reached. You cannot bypass this. Is mandatory to pass unit test coverage.
+  - **MANDATORY: 90% Coverage Required**
+    - You cannot bypass this requirement
+    - Report coverage percentage clearly
+    - If coverage < 90%, add more tests until requirement is met
+    - Test all critical code paths, error handling, and edge cases
+  
 - **Integration Tests**: End-to-end testing with real AWS outputs
   - Use the commands in `package.json` and `pipfile` to run the integration tests
   - Use the files and folder structure existent inside test or tests folder.
     - You can create new files, but use the existing ones.
-  - Do not make assertions including environment names or suffixes. We need integration tests to be
-  highly reproducible when deploying to different environments or AWS accounts. Use the outputs generated
-  in the deployment step.
-  - No mocking - use actual deployment results coming from the cfn-outputs generated in the deployment
-  - Validate complete workflows, not only individual resources. If there are connections between
-   resources, assert on those connections.
+  - **MANDATORY: Proper Integration Testing**
+    - Do not make assertions including environment names or suffixes
+    - Tests must be highly reproducible across different environments or AWS accounts
+    - Use the outputs from `cfn-outputs/flat-outputs.json` for all assertions
+    - No mocking - use actual deployment results from cfn-outputs
+    - Validate complete workflows, not only individual resources
+    - Test resource connections and integrations between services
+    - Verify that resources work together as expected
+    - Test typical use cases and data flows
+  
+**CHECKPOINT**: Both unit tests (90%+ coverage) and integration tests must pass before proceeding to Final Steps.
+- Report test results with coverage percentage
+- Report any test failures immediately
+- Do NOT proceed without meeting testing requirements
 
 ### 5. Final Steps
 
@@ -124,9 +195,54 @@ in structure to the latest MODEL_RESPONSE file.
 - Important!: Re-run all build, synth (when needed), lint, unit tests with coverage and integration tests to ensure quality.
   - Dont forget to Fix them if they are failing.
 - Generate `lib/MODEL_FAILURES.md` explaining the fixes made to reach the `lib/IDEAL_RESPONSE.md` from the
-conversation logged in the PROMPT and MODEL_RESPONSE files(`lib/MODEL_PROMPT.md` => `lib/MODEL_RESPONSE.md`,
-`lib/MODEL_PROMPT2.md` => `lib/MODEL_RESPONSE2.md`...) file. Do not mention the QA process. Only focus in
+conversation logged in the PROMPT and MODEL_RESPONSE files. Do not mention the QA process. Only focus in
 the infrastructure changes needed to fix the latest MODEL_RESPONSE.
+
+**MODEL_FAILURES.md Structure** (for quality improvement):
+
+```markdown
+# Model Response Failures Analysis
+
+[Brief introduction explaining what this document covers]
+
+## Critical Failures
+
+### 1. [Failure Category - e.g., "Wrong Resource Configuration"]
+
+**Impact Level**: Critical/High/Medium/Low
+
+**MODEL_RESPONSE Issue**:
+[Quote or describe what the model generated incorrectly]
+
+**IDEAL_RESPONSE Fix**:
+[Show the correct implementation]
+
+**Root Cause**:
+[Explain WHY the model made this mistake - knowledge gap, incorrect assumption, etc.]
+
+**AWS Documentation Reference**: [Link when relevant]
+
+**Cost/Security/Performance Impact**:
+[Quantify the impact - e.g., "Would increase deployment time by 15 minutes", "Creates security vulnerability", "Costs $X/month more"]
+
+---
+
+### 2. [Next failure...]
+
+[Continue pattern for each significant failure]
+
+## Summary
+
+- Total failures categorized: X Critical, Y High, Z Medium, W Low
+- Primary knowledge gaps: [List 2-3 key areas where model needs improvement]
+- Training value: [Brief justification for training_quality score]
+```
+
+**Categorization Guidelines**:
+- **Critical**: Security vulnerabilities, deployment blockers, data loss risks, wrong regions/accounts
+- **High**: Significant cost impact (>$50/month), performance degradation (>2x slower), incorrect architecture patterns
+- **Medium**: Suboptimal configurations, missing best practices, moderate cost impact ($10-50/month)
+- **Low**: Naming conventions, minor optimizations, code style issues
 
 ### 6. Cleanup
 
@@ -137,7 +253,8 @@ the infrastructure changes needed to fix the latest MODEL_RESPONSE.
 
 - For commands, use the existing scripts in `package.json` and `Pipfile`. based on the platform and language.
   - Dont use custom commands unless you cannot find them in those files.
-- Max 10 deployment attempts
+- **Max 5 deployment attempts** (reduced for cost optimization)
+- **MANDATORY: Pass lint, build, and synth before any deployment attempt**
 - No Retain policies allowed. Every resource created should be destroyable.
 - Use real AWS outputs generated on deployment in integration tests (no mocking). These should come from cfn-outputs/flat-outputs.json
 - DO NOT create or update fildes outside of the lib/ and tests/ folder.
