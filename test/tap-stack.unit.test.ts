@@ -96,21 +96,75 @@ describe('TapStack (unit)', () => {
     expect(hasNat || hasEip).toBe(true);
   });
 
-  test('environmentSuffix prop works the same as suffix', () => {
-    const env = new cdk.App();
-    const s1 = new TapStack(env, 'PropTest1', { suffix: 'mysuffix' });
-    const s2 = new TapStack(env, 'PropTest2', { environmentSuffix: 'mysuffix' });
-    const t1 = Template.fromStack(s1).toJSON();
-    const t2 = Template.fromStack(s2).toJSON();
-    const outs1 = Object.keys(t1.Outputs || {});
-    const outs2 = Object.keys(t2.Outputs || {});
-    const ok1 = outs1.some((k) => k.toLowerCase().includes('mysuffix'));
-    const ok2 = outs2.some((k) => k.toLowerCase().includes('mysuffix'));
-    expect(ok1).toBe(true);
-    expect(ok2).toBe(true);
+  test('suffix prop takes precedence over environmentSuffix when both provided', () => {
+    const app = new cdk.App();
+    const stack = new TapStack(app, 'PrecedenceTest', {
+      suffix: 'suffixvalue',
+      environmentSuffix: 'envvalue'
+    });
+    const tmpl = Template.fromStack(stack).toJSON();
+    const outputs = Object.keys(tmpl.Outputs || {});
+    // suffix should take precedence, so outputs should contain 'suffixvalue' not 'envvalue'
+    const hasSuffix = outputs.some((k) => k.toLowerCase().includes('suffixvalue'));
+    const hasEnv = outputs.some((k) => k.toLowerCase().includes('envvalue'));
+    expect(hasSuffix).toBe(true);
+    expect(hasEnv).toBe(false);
   });
 
-  // Additional tests merged into this file to increase branch coverage
+  test('uses environmentSuffix when suffix is null/undefined', () => {
+    const app = new cdk.App();
+    const stack = new TapStack(app, 'EnvSuffixOnlyTest', {
+      suffix: undefined,
+      environmentSuffix: 'envonly'
+    });
+    const tmpl = Template.fromStack(stack).toJSON();
+    const outputs = Object.keys(tmpl.Outputs || {});
+    // should use environmentSuffix when suffix is undefined
+    const hasEnv = outputs.some((k) => k.toLowerCase().includes('envonly'));
+    expect(hasEnv).toBe(true);
+  });
+
+  test('falls back to empty string when both suffix and environmentSuffix are null', () => {
+    const app = new cdk.App();
+    // Create stack with explicitly null props to test the ?? '' fallback
+    const stack = new TapStack(app, 'NullPropsTest', {
+      suffix: null,
+      environmentSuffix: null
+    } as any);
+    const tmpl = Template.fromStack(stack).toJSON();
+    const outputs = Object.keys(tmpl.Outputs || {});
+    // When both are null, rawSuffix becomes '', then suffix becomes 'dev' due to || 'dev'
+    const hasDev = outputs.some((k) => k.toLowerCase().includes('dev'));
+    expect(hasDev).toBe(true);
+  });
+
+  test('handles empty string suffix values correctly', () => {
+    const app = new cdk.App();
+    // Test with empty string values
+    const stack = new TapStack(app, 'EmptyStringTest', {
+      suffix: '',
+      environmentSuffix: ''
+    });
+    const tmpl = Template.fromStack(stack).toJSON();
+    const outputs = Object.keys(tmpl.Outputs || {});
+    // Empty strings should result in 'dev' suffix
+    const hasDev = outputs.some((k) => k.toLowerCase().includes('dev'));
+    expect(hasDev).toBe(true);
+  });
+
+  test('uses custom iacRlhfTagValue when provided', () => {
+    const app = new cdk.App();
+    const stack = new TapStack(app, 'CustomTagTest', {
+      environmentSuffix: 'customtag',
+      iacRlhfTagValue: 'custom-value'
+    });
+    const tmpl = Template.fromStack(stack).toJSON();
+    // Check if the custom tag value is used (this tests the ?? operator branch)
+    const vpcResource = Object.values(tmpl.Resources).find((r: any) => r.Type === 'AWS::EC2::VPC');
+    const tags = (vpcResource as any)?.Properties?.Tags || [];
+    const hasCustomTag = tags.some((tag: any) => tag.Key === 'iac-rlhf-amazon' && tag.Value === 'custom-value');
+    expect(hasCustomTag).toBe(true);
+  });  // Additional tests merged into this file to increase branch coverage
 
   test('default natGateways behaviour (tolerant)', () => {
     const app = new cdk.App();

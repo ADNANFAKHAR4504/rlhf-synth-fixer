@@ -41,7 +41,6 @@ export class TapStack extends cdk.Stack {
     const bucketRemovalPolicy =
       props.bucketRemovalPolicy ?? cdk.RemovalPolicy.RETAIN;
     const deletionProtection = props.deletionProtection ?? false;
-    const defaultAmiId = props.amiId ?? 'ami-091d7d61336a4c68f';
 
     // Create VPC with public and private subnets
     const vpc = new ec2.Vpc(this, `VPC-${suffix}`, {
