@@ -670,9 +670,6 @@ resource "aws_iam_role_policy" "lambda_policy" {
 }
 
 # Lambda Function
-that closes the Lambda resource — roughly **line 721–725**, depending on spacing/comments.
-
----
 
 ### ✅ Replace that entire block with this code **(starting at line 688)**
 
