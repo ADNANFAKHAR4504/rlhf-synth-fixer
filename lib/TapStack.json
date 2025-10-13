@@ -103,12 +103,6 @@
             },
             "us-west-2": {
                 "AMI": "ami-008fe2fc65df48dac"
-            },
-            "eu-west-1": {
-                "AMI": "ami-0a5d5b5e5b5e5b5e5"
-            },
-            "ap-southeast-1": {
-                "AMI": "ami-0b5e5b5e5b5e5b5e5"
             }
         }
     },
@@ -175,6 +169,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -235,6 +237,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -265,6 +275,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -290,6 +308,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -356,6 +382,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -411,6 +445,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -465,6 +507,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -519,6 +569,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -546,6 +604,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -580,6 +646,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -608,6 +682,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -636,6 +718,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -766,6 +856,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -842,6 +940,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -900,6 +1006,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -940,6 +1054,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1003,6 +1125,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1056,6 +1186,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1103,6 +1241,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1246,6 +1392,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1355,6 +1509,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1395,6 +1557,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1465,6 +1635,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1530,6 +1708,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1597,6 +1783,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1664,6 +1858,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1723,6 +1925,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1774,6 +1984,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1854,6 +2072,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1947,6 +2173,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1993,6 +2227,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -2025,6 +2267,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -2085,6 +2335,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -2156,6 +2414,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -2185,6 +2451,14 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }

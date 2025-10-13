@@ -117,6 +117,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   CorpRDSKMSKey:
     Type: AWS::KMS::Key
@@ -150,6 +154,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   # ============================================
   # VPC INFRASTRUCTURE
@@ -168,6 +176,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   CorpInternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -179,6 +191,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   CorpVPCGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -203,6 +219,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   CorpPublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -220,6 +240,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   # Private Subnets
   CorpPrivateSubnet1:
@@ -237,6 +261,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   CorpPrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -253,6 +281,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   # NAT Gateway
   CorpNATEIP:
@@ -267,6 +299,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   CorpNATGateway:
     Type: AWS::EC2::NatGateway
@@ -280,6 +316,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   # Route Tables
   CorpPublicRouteTable:
@@ -293,6 +333,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   CorpPrivateRouteTable:
     Type: AWS::EC2::RouteTable
@@ -305,6 +349,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   CorpPublicRoute:
     Type: AWS::EC2::Route
@@ -384,6 +432,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   CorpWebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -424,6 +476,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   CorpBastionSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -454,6 +510,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   CorpDatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -473,6 +533,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   # ============================================
   # S3 BUCKETS WITH KMS ENCRYPTION
@@ -509,6 +573,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   CorpAppDataBucket:
     Type: AWS::S3::Bucket
@@ -536,6 +604,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   CorpBackupBucket:
     Type: AWS::S3::Bucket
@@ -560,6 +632,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   # S3 Bucket Policy for CloudTrail
   CorpLogsBucketPolicy:
@@ -635,6 +711,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   CorpEC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -707,6 +787,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   CorpRDSMonitoringRole:
     Type: AWS::IAM::Role
@@ -727,6 +811,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   CorpDatabase:
     Type: AWS::RDS::DBInstance
@@ -760,6 +848,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   # ============================================
   # EC2 INSTANCES
@@ -827,6 +919,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   CorpWebServer1:
     Type: AWS::EC2::Instance
@@ -883,6 +979,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   CorpWebServer2:
     Type: AWS::EC2::Instance
@@ -939,6 +1039,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   # ============================================
   # APPLICATION LOAD BALANCER
@@ -968,6 +1072,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   CorpTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -994,6 +1102,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   CorpALBHTTPListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -1036,6 +1148,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   # ============================================
   # AWS WAF
@@ -1096,6 +1212,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   CorpWebACLAssociation:
     Type: AWS::WAFv2::WebACLAssociation
@@ -1119,6 +1239,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   CorpEC2LogGroup:
     Type: AWS::Logs::LogGroup
@@ -1132,6 +1256,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   CorpCloudTrailRole:
     Type: AWS::IAM::Role
@@ -1160,6 +1288,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   CorpCloudTrail:
     Type: AWS::CloudTrail::Trail
@@ -1191,6 +1323,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   # ============================================
   # SNS TOPIC FOR ALERTS
@@ -1208,6 +1344,10 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   CorpAlarmTopicSubscription:
     Type: AWS::SNS::Subscription
