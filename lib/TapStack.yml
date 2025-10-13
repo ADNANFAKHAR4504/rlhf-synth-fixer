@@ -83,10 +83,6 @@ Resources:
           Value: '2'
         - Key: iac-rlhf-amazon
           Value: 'true'
-        - Key: team
-          Value: '2'
-        - Key: iac-rlhf-amazon
-          Value: 'true'
 
   # =============================================
   # NETWORKING INFRASTRUCTURE
