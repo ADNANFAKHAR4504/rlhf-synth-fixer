@@ -734,7 +734,7 @@ EOT
 }
 
 resource "aws_lambda_function" "processor" {
-  function_name = "${local.name_prefix}-processor"
+  function_name = "${local.resource_prefix}-processor"
   role          = aws_iam_role.lambda_role.arn
   handler       = "index.lambda_handler"
   runtime       = "python3.11"
@@ -756,7 +756,7 @@ resource "aws_lambda_function" "processor" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-lambda-function"
+    Name = "${local.resource_prefix}-lambda-function"
   })
 }
 
