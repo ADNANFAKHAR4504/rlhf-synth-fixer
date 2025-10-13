@@ -871,8 +871,6 @@ Resources:
       PreferredBackupWindow: '03:00-04:00'
       PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
       DeletionProtection: true
-      EnablePerformanceInsights: true
-      PerformanceInsightsRetentionPeriod: 7
       Tags:
         - Key: Name
           Value: !Sub '${StackName}-rds'
