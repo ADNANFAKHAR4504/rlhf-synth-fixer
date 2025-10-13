@@ -1,10 +1,11 @@
-# AWS CDK EC2 Monitoring Infrastructure - Ideal Solution
+# AWS CDK EC2 Monitoring Infrastructure - Solution
 
-This is the complete, production-ready AWS CDK application in Python that deploys a comprehensive EC2 monitoring infrastructure for a SaaS startup.
+This AWS CDK application in Python deploys a comprehensive EC2 monitoring infrastructure for a SaaS startup.
 
 ## Solution Overview
 
 The solution creates a fully-featured EC2 monitoring system with:
+
 - **15 EC2 t3.medium instances** deployed across multiple AZs
 - **VPC with 10.0.0.0/16 CIDR** including public and private subnets
 - **Security Groups** allowing HTTP traffic on port 80
@@ -12,7 +13,6 @@ The solution creates a fully-featured EC2 monitoring system with:
 - **Dual logging**: Both S3 and CloudWatch Logs integration
 - **IAM roles** with secure monitoring permissions
 - **Cost-effective design** with configurable resource limits
-- **Comprehensive integration testing** with live AWS resources
 
 ## Key Features
 
@@ -24,7 +24,7 @@ The solution creates a fully-featured EC2 monitoring system with:
 - **Cost Optimization**: Lifecycle policies, retention limits, single NAT gateway
 - **Security Best Practices**: IAM least privilege, private subnets, encryption
 - **CloudFormation Outputs**: For integration testing and automation
-- **Production Ready**: 100% test coverage, linting score 10/10  
+- **Production Ready**: 100% test coverage, linting score 10/10
 
 ## Complete Implementation
 
@@ -699,48 +699,26 @@ cdk deploy --context instanceCount=10 --context instanceSize=SMALL --context nat
 - `maxAzs` (default: 2) - Maximum number of Availability Zones to use
 - `environmentSuffix` (default: "dev") - Environment identifier for resource naming
 
-## Deployment
+## CloudFormation Outputs
 
-1. **Install dependencies:**
-   ```bash
-   pip install aws-cdk-lib constructs
-   ```
+The stack exports the following outputs for integration and automation:
 
-2. **Deploy the stack:**
-   ```bash
-   cdk deploy --outputs-file cfn-outputs/flat-outputs.json
-   ```
+### Nested Stack Outputs
 
-3. **Run integration tests:**
-   ```bash
-   python -m pytest tests/integration/ -v
-   ```
+- `VpcId` - VPC ID for the monitoring infrastructure
+- `S3BucketName` - S3 bucket name for storing logs
+- `CloudWatchLogGroupName` - CloudWatch log group name
+- `SNSTopicArn` - SNS topic ARN for alarms
+- `SecurityGroupId` - Security group ID for EC2 instances
+- `EC2InstanceIds` - Comma-separated list of instance IDs
+- `InstanceCount` - Number of EC2 instances created
 
-## Architecture Highlights
+### Main Stack Outputs
 
-### Security
-- **Private subnets** for EC2 instances (when NAT gateway enabled)
-- **IAM least privilege** with specific resource permissions
-- **S3 encryption** enabled with public access blocked
-- **Security groups** restricted to necessary ports only
-
-### Cost Optimization
-- **Single NAT gateway** (configurable)
-- **S3 lifecycle policy** - auto-delete logs after 30 days
-- **CloudWatch logs retention** - 7 days to control costs
-- **Configurable resource counts** for AWS account limits
-
-### Monitoring
-- **Memory alarms** at 80% threshold using custom CloudWatch Agent metrics
-- **CPU alarms** at 80% threshold using AWS/EC2 namespace
-- **Disk usage alarms** at 80% threshold using custom metrics
-- **Status check alarms** for instance health monitoring
-- **SNS integration** for alarm notifications
-
-### Logging
-- **Dual logging strategy**: S3 for archival + CloudWatch Logs for real-time
-- **Structured log streams** per instance with timezone support
-- **Automated S3 sync** via cron jobs with STANDARD_IA storage class
-- **Custom log collection** for system messages and security logs
-
-This solution successfully addresses all requirements while maintaining production-ready quality, comprehensive testing, and cost-effective design principles.
+- `TapStackVpcId` - VPC ID for TAP monitoring infrastructure
+- `TapStackS3BucketName` - S3 bucket name for TAP log storage
+- `TapStackCloudWatchLogGroupName` - CloudWatch log group name
+- `TapStackSNSTopicArn` - SNS topic ARN for monitoring alarms
+- `TapStackEC2InstanceIds` - Comma-separated list of instance IDs
+- `TapStackInstanceCount` - Total number of EC2 instances
+- `TapStackEnvironmentSuffix` - Environment suffix used

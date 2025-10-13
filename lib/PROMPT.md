@@ -1,48 +1,27 @@
-# AWS CDK EC2 Monitoring Infrastructure Request
+# Need AWS CDK setup for EC2 monitoring
 
-## Project Overview
+Hey, so we're a small SaaS startup and we've got about 15 EC2 instances running right now (t3.medium). Things are getting messy with monitoring and we need to get this sorted out properly using CDK in Python.
 
-I need help creating a comprehensive AWS CDK application in Python that deploys a robust EC2 monitoring infrastructure for our SaaS startup. We're currently running 15 EC2 instances and need a production-ready monitoring solution that can scale with our business.
+## What we need
 
-## Infrastructure Requirements
+We need the basics set up:
 
-### Core Infrastructure
-- **15 EC2 t3.medium instances** deployed for our application workloads
-- **VPC with 10.0.0.0/16 CIDR block** to provide isolated networking
-- **Security Groups** configured to allow HTTP traffic on port 80 for web services
-- **Multi-AZ deployment** for high availability and fault tolerance
+- VPC with 10.0.0.0/16 CIDR
+- Security groups that allow HTTP on port 80
+- The 15 instances spread across multiple AZs
 
-### Monitoring & Alerting
-- **CloudWatch alarms** for memory usage monitoring with 80% threshold alerts
-- **Basic performance monitoring** including CPU, disk usage, and instance health checks
-- **Comprehensive alerting system** to notify our operations team of issues
-- **Dashboard integration** for real-time visibility into system performance
+For monitoring, we really need CloudWatch alarms when memory hits 80%. That's been our biggest pain point - instances running out of memory and us not knowing until customers complain. Would be good to also monitor CPU, disk, and general health checks.
 
-### Logging Strategy
-- **Dual logging approach**: Send logs to both S3 and CloudWatch Logs
-- **S3 integration** for long-term log archival and compliance requirements
-- **CloudWatch Logs** for real-time log analysis and troubleshooting
-- **Structured logging** to enable efficient searching and filtering
+Logging is important too. We need logs going to both S3 (for compliance, auditors want this) and CloudWatch Logs so we can actually search through them when debugging.
 
-### Security & Access Management
-- **IAM roles and policies** configured with least-privilege access principles
-- **Secure monitoring access** without compromising system security
-- **Proper resource permissions** for CloudWatch agent and log shipping
-- **Encryption at rest** for sensitive log data
+IAM stuff should follow least privilege obviously. Don't want to leave security holes.
 
-## Design Constraints
+## Constraints
 
-### Cost Optimization
-- **Cost-effective design** that minimizes AWS charges while maintaining functionality
-- **Resource optimization** to stay within startup budget constraints
-- **Efficient resource allocation** across availability zones
+We're still pretty bootstrapped so need to keep AWS costs reasonable. Can't be spinning up unnecessary resources.
 
-### Operational Requirements
-- **Simple deployment process** that our DevOps team can easily manage
-- **Error-free deployment** with proper validation and testing
-- **Maintainable code structure** for future enhancements and modifications
-- **Production-ready solution** that can handle our current and near-term growth
+Deployment needs to be straightforward - our DevOps person is pretty good but doesn't want to spend days figuring out complex CDK setups.
 
-## Success Criteria
+Should work without errors and be something we can extend later as we grow.
 
-The solution should deploy successfully without errors, provide comprehensive monitoring coverage, maintain cost efficiency, and integrate seamlessly with our existing AWS infrastructure. The CDK application should follow best practices for infrastructure as code and be easily extensible for future requirements.
+That's about it. Just want something production-ready that we can deploy and not worry about.
