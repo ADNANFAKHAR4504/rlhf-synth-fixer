@@ -68,6 +68,7 @@ Parameters:
 
 Conditions:
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
+  HasValidDomain: !Not [!Equals [!Ref DomainName, 'example.com']]
 
 Mappings:
   RegionMap:
@@ -1110,48 +1111,36 @@ Resources:
   CorpALBHTTPListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
-      DefaultActions:
-        - Type: redirect
-          RedirectConfig:
-            Protocol: HTTPS
-            Port: '443'
-            StatusCode: HTTP_301
       LoadBalancerArn: !Ref CorpApplicationLoadBalancer
       Port: 80
       Protocol: HTTP
-
-  CorpALBHTTPSListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref CorpTargetGroup
+
+  CorpALBHTTPSListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HasValidDomain
+    Properties:
       LoadBalancerArn: !Ref CorpApplicationLoadBalancer
       Port: 443
       Protocol: HTTPS
       Certificates:
         - CertificateArn: !Ref CorpSSLCertificate
-      SslPolicy: 'ELBSecurityPolicy-TLS13-1-2-2021-06'
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref CorpTargetGroup
 
-  # Route 53 Hosted Zone
-  CorpHostedZone:
-    Type: AWS::Route53::HostedZone
-    Properties:
-      Name: !Ref DomainName
 
   # SSL Certificate for HTTPS
   CorpSSLCertificate:
     Type: AWS::CertificateManager::Certificate
+    Condition: HasValidDomain
     Properties:
       DomainName: !Sub '${ApplicationName}.${DomainName}'
       SubjectAlternativeNames:
         - !Sub 'www.${ApplicationName}.${DomainName}'
       ValidationMethod: DNS
-      DomainValidationOptions:
-        - DomainName: !Sub '${ApplicationName}.${DomainName}'
-          HostedZoneId: !Ref CorpHostedZone
-        - DomainName: !Sub 'www.${ApplicationName}.${DomainName}'
-          HostedZoneId: !Ref CorpHostedZone
       Tags:
         - Key: Name
           Value: !Sub 'corp-ssl-${ApplicationName}'
@@ -1434,14 +1423,3 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-Alarm-Topic'
 
-  HostedZoneId:
-    Description: 'Route 53 Hosted Zone ID'
-    Value: !Ref CorpHostedZone
-    Export:
-      Name: !Sub '${AWS::StackName}-HostedZone-ID'
-
-  NameServers:
-    Description: 'Route 53 Name Servers - Configure these with your domain registrar'
-    Value: !Join [', ', !GetAtt CorpHostedZone.NameServers]
-    Export:
-      Name: !Sub '${AWS::StackName}-NameServers'
