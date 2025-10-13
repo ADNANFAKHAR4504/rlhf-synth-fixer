@@ -32,14 +32,6 @@ Parameters:
     NoEcho: true
     Description: "Database master username"
 
-  DBPassword:
-    Type: String
-    Default: "ChangeMe123!"
-    NoEcho: true
-    MinLength: 8
-    Description: "Database master password"
-    ConstraintDescription: "Must be at least 8 characters"
-
   InstanceType:
     Type: String
     Default: "t3.micro"
@@ -53,17 +45,6 @@ Parameters:
     Type: "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>"
     Default: "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
     Description: "Latest Amazon Linux 2023 AMI ID via SSM"
-
-Mappings:
-  RegionAMI:
-    us-east-1:
-      AMI: "ami-0c02fb55731490381"
-    us-west-2:
-      AMI: "ami-0a54c984b9f908c81"
-    eu-west-1:
-      AMI: "ami-0f29c8402f8cce65c"
-    ap-south-1:
-      AMI: "ami-0d2692b6acea72ee6"
 
 Resources:
   # ==================== SSH Key Pair ====================
@@ -710,7 +691,7 @@ Resources:
       Engine: mysql
       EngineVersion: "8.0.41"
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUserPassword: !Sub "{{resolve:ssm-secure:/tap/${ProjectName}/${Environment}/db/password:1}}"
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
