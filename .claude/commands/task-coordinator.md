@@ -99,13 +99,43 @@ echo "✅ Pre-flight checks passed"
    pwd  # Should end with: /worktree/synth-{task_id}
    ```
 
-2. **Stage all changes**:
+2. **Validate training quality meets minimum threshold**:
+   ```bash
+   # Extract training_quality from metadata.json
+   TRAINING_QUALITY=$(jq -r '.training_quality // 0' metadata.json)
+   
+   # Minimum acceptable training quality is 8 (aiming for 9)
+   if [ "$TRAINING_QUALITY" -lt 8 ]; then
+     echo "❌ Training quality ($TRAINING_QUALITY) is below minimum threshold of 8"
+     echo "⚠️ This task needs improvement before PR creation"
+     echo ""
+     echo "Actions required:"
+     echo "1. Review lib/MODEL_FAILURES.md to understand what improvements were made"
+     echo "2. If improvements are minimal, consider:"
+     echo "   - Adding more AWS services or features to increase complexity"
+     echo "   - Implementing additional security best practices"
+     echo "   - Adding monitoring, logging, or observability features"
+     echo "3. Have iac-code-reviewer reassess and update training_quality score"
+     echo "4. Target minimum score: 8, ideal score: 9"
+     exit 1
+   fi
+   
+   echo "✅ Training quality validated: $TRAINING_QUALITY/10"
+   ```
+   
+   **If validation fails**:
+   - Return to Phase 4 (code-reviewer) to improve the implementation
+   - Add meaningful features that increase training value
+   - Ensure MODEL_FAILURES.md demonstrates significant learning opportunities
+   - Re-run validation after improvements
+
+3. **Stage all changes**:
    ```bash
    git add .
    git status  # Review what will be committed
    ```
 
-3. **Commit with standardized message**:
+4. **Commit with standardized message**:
    
    **CRITICAL COMMIT MESSAGE FORMAT**: The CI/CD pipeline validates commits using `commitlint` with conventional commits format.
    
@@ -115,7 +145,7 @@ echo "✅ Pre-flight checks passed"
    - The pipeline will FAIL if subject starts with uppercase
    
    ```bash
-   # Extract metadata for commit message
+   # Extract metadata for commit message (training_quality already validated above)
    TASK_ID=$(jq -r '.po_id' metadata.json)
    SUBTASK=$(jq -r '.subtask' metadata.json)
    BACKGROUND=$(jq -r '.background' metadata.json)
@@ -146,13 +176,13 @@ Task ID: ${TASK_ID}"
    feat(synth-{task_id}): Add infrastructure implementation  # Capital 'A' will fail
    ```
 
-4. **Push branch to remote**:
+5. **Push branch to remote**:
    ```bash
    BRANCH_NAME=$(git branch --show-current)
    git push origin ${BRANCH_NAME}
    ```
 
-5. **Create PR using gh CLI**:
+6. **Create PR using gh CLI**:
    ```bash
    # Get AWS services count
    AWS_SERVICES_COUNT=$(jq -r '.aws_services | length' metadata.json)
@@ -199,7 +229,7 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
    fi
    ```
 
-6. **Capture PR number and validate**:
+7. **Capture PR number and validate**:
    ```bash
    # Capture PR number with retry logic
    PR_NUMBER=$(gh pr view ${BRANCH_NAME} --json number -q .number)
@@ -216,7 +246,7 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
    echo "📎 PR URL: ${PR_URL}"
    ```
 
-7. **Update CSV status to "done"**:
+8. **Update CSV status to "done"**:
    ```bash
    # Return to main repo to update CSV
    cd ../..
@@ -308,7 +338,7 @@ PYTHON_SCRIPT
    fi
    ```
 
-8. **Cleanup worktree**:
+9. **Cleanup worktree**:
    ```bash
    # Remove worktree (keeps branch for PR)
    git worktree remove worktree/synth-${TASK_ID} --force
@@ -318,7 +348,7 @@ PYTHON_SCRIPT
    echo "✅ Worktree cleaned up. Branch synth-${TASK_ID} remains for PR."
    ```
 
-9. **Final validation**:
+10. **Final validation**:
    ```bash
    # Verify PR was created
    gh pr view ${PR_NUMBER} --json state,url,title
@@ -436,6 +466,7 @@ PYTHON_SCRIPT
      - Run: `bash scripts/detect-metadata.sh` to verify all required fields are present
      - If validation fails, fix the metadata.json before proceeding
      - Common errors: missing `team`, missing `startedAt`, missing `subtask`, missing `background`, missing `subject_labels`, using `difficulty` instead of `complexity`
+   - **CRITICAL**: The `background` field is REQUIRED and will be used as the PR title in Phase 5
    - If the deployment needs to be done in a specific region, create the file `lib/AWS_REGION` with the
      region name. e.g: `echo "us-east-1" > lib/AWS_REGION`
 
