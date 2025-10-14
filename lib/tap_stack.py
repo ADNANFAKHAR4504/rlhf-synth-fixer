@@ -28,20 +28,23 @@ class WebAppStack:
         # Attach IAM policies to role (requires bucket name)
         self.iam_stack.attach_policies_to_role(self.s3_stack.get_bucket_name())
         
-        # Initialize EC2 and Auto Scaling (requires IAM profile)
+        # Initialize Auto Scaling first (creates VPC and security group)
+        self.autoscaling_stack = AutoScalingStack(
+            self.config,
+            self.provider
+        )
+        
+        # Initialize EC2 (requires security group from autoscaling)
         self.ec2_stack = EC2Stack(
             self.config, 
             self.provider, 
             self.iam_stack.get_instance_profile_name(),
-            self.s3_stack.get_bucket_name()
+            self.s3_stack.get_bucket_name(),
+            self.autoscaling_stack.security_group.id
         )
         
-        self.autoscaling_stack = AutoScalingStack(
-            self.config,
-            self.provider,
-            self.ec2_stack.get_launch_template_id(),
-            self.ec2_stack.get_security_group_id()
-        )
+        # Create Auto Scaling Group with EC2 resources
+        self.autoscaling_stack.create_auto_scaling_group(self.ec2_stack.get_launch_template_id())
         
         # Register all outputs
         self._register_outputs()

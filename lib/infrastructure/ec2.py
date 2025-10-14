@@ -10,55 +10,15 @@ class EC2Stack:
     """EC2 launch template and security group configuration."""
     
     def __init__(self, config: WebAppConfig, provider: aws.Provider, 
-                 instance_profile_name: pulumi.Output[str], bucket_name: pulumi.Output[str]):
+                 instance_profile_name: pulumi.Output[str], bucket_name: pulumi.Output[str], 
+                 security_group_id: pulumi.Output[str]):
         self.config = config
         self.provider = provider
         self.instance_profile_name = instance_profile_name
         self.bucket_name = bucket_name
-        self.security_group = self._create_security_group()
+        self.security_group_id = security_group_id
         self.launch_template = self._create_launch_template()
     
-    def _create_security_group(self) -> aws.ec2.SecurityGroup:
-        """Create security group for web application."""
-        return aws.ec2.SecurityGroup(
-            "webapp-sg",
-            name=f"{self.config.get_tag_name('sg')}",
-            description="Security group for web application",
-            ingress=[
-                aws.ec2.SecurityGroupIngressArgs(
-                    from_port=80,
-                    to_port=80,
-                    protocol="tcp",
-                    cidr_blocks=["0.0.0.0/0"],
-                    description="HTTP access"
-                ),
-                aws.ec2.SecurityGroupIngressArgs(
-                    from_port=443,
-                    to_port=443,
-                    protocol="tcp",
-                    cidr_blocks=["0.0.0.0/0"],
-                    description="HTTPS access"
-                ),
-                aws.ec2.SecurityGroupIngressArgs(
-                    from_port=22,
-                    to_port=22,
-                    protocol="tcp",
-                    cidr_blocks=["0.0.0.0/0"],
-                    description="SSH access"
-                )
-            ],
-            egress=[
-                aws.ec2.SecurityGroupEgressArgs(
-                    from_port=0,
-                    to_port=0,
-                    protocol="-1",
-                    cidr_blocks=["0.0.0.0/0"],
-                    description="All outbound traffic"
-                )
-            ],
-            tags=self.config.get_common_tags(),
-            opts=pulumi.ResourceOptions(provider=self.provider)
-        )
     
     def _get_latest_amazon_linux_ami(self) -> pulumi.Output[str]:
         """Get the latest Amazon Linux 2 AMI ID."""
@@ -157,7 +117,7 @@ aws s3 cp /var/log/webapp/application.log s3://{args[0]}/logs/$(curl -s http://1
             name=self.config.launch_template_name,
             image_id=self._get_latest_amazon_linux_ami(),
             instance_type=self.config.instance_type,
-            vpc_security_group_ids=[self.security_group.id],
+            vpc_security_group_ids=[self.security_group_id],
             iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(
                 name=self.instance_profile_name
             ),
@@ -180,4 +140,4 @@ aws s3 cp /var/log/webapp/application.log s3://{args[0]}/logs/$(curl -s http://1
     
     def get_security_group_id(self) -> pulumi.Output[str]:
         """Get security group ID."""
-        return self.security_group.id
+        return self.security_group_id

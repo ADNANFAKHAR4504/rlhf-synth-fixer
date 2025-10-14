@@ -314,12 +314,13 @@ class TestEC2Stack(unittest.TestCase):
         self.mock_provider = MagicMock()
         self.mock_instance_profile_name = MagicMock()
         self.mock_bucket_name = MagicMock()
+        self.mock_security_group_id = MagicMock()
     
     @patch('pulumi_aws.ec2.get_ami')
     def test_ami_retrieval(self, mock_get_ami):
         """Test latest Amazon Linux 2 AMI retrieval."""
         mock_get_ami.return_value.id = "ami-12345"
-        ec2_stack = EC2Stack(self.config, self.mock_provider, self.mock_instance_profile_name, self.mock_bucket_name)
+        ec2_stack = EC2Stack(self.config, self.mock_provider, self.mock_instance_profile_name, self.mock_bucket_name, self.mock_security_group_id)
         
         # Verify AMI was retrieved
         mock_get_ami.assert_called_once()
@@ -331,31 +332,14 @@ class TestEC2Stack(unittest.TestCase):
         # Test filters exist
         self.assertIn('filters', call_args[1])
     
-    @patch('pulumi_aws.ec2.SecurityGroup')
     @patch('pulumi_aws.ec2.get_ami')
-    def test_security_group_creation(self, mock_get_ami, mock_sg):
-        """Test security group creation with correct rules."""
+    def test_security_group_creation(self, mock_get_ami):
+        """Test security group ID is properly stored."""
         mock_get_ami.return_value.id = "ami-12345"
-        ec2_stack = EC2Stack(self.config, self.mock_provider, self.mock_instance_profile_name, self.mock_bucket_name)
+        ec2_stack = EC2Stack(self.config, self.mock_provider, self.mock_instance_profile_name, self.mock_bucket_name, self.mock_security_group_id)
         
-        # Verify security group was created
-        mock_sg.assert_called_once()
-        call_args = mock_sg.call_args
-        
-        # Verify security group configuration - Fixed: use the actual returned name
-        actual_name = call_args[1]['name']
-        self.assertEqual(actual_name, 'web-app-webapp-sg-dev')
-        self.assertIn('Security group for web application', call_args[1]['description'])
-        
-        # Verify ingress rules
-        ingress_rules = call_args[1]['ingress']
-        self.assertEqual(len(ingress_rules), 3)  # Fixed: actual count is 3, not 1
-        # Skip detailed rule checks since they're SecurityGroupIngressArgs objects
-        
-        # Verify egress rules
-        egress_rules = call_args[1]['egress']
-        self.assertEqual(len(egress_rules), 1)
-        # Skip detailed rule checks since they're SecurityGroupEgressArgs objects
+        # Verify security group ID is stored
+        self.assertEqual(ec2_stack.security_group_id, self.mock_security_group_id)
     
     @patch('pulumi_aws.ec2.LaunchTemplate')
     @patch('pulumi_aws.ec2.SecurityGroup')
@@ -363,7 +347,7 @@ class TestEC2Stack(unittest.TestCase):
     def test_launch_template_creation(self, mock_get_ami, mock_sg, mock_lt):
         """Test launch template creation with correct configuration."""
         mock_get_ami.return_value.id = "ami-12345"
-        ec2_stack = EC2Stack(self.config, self.mock_provider, self.mock_instance_profile_name, self.mock_bucket_name)
+        ec2_stack = EC2Stack(self.config, self.mock_provider, self.mock_instance_profile_name, self.mock_bucket_name, self.mock_security_group_id)
         
         # Verify launch template was created
         mock_lt.assert_called_once()
@@ -379,15 +363,14 @@ class TestEC2Stack(unittest.TestCase):
     
     def test_ec2_getters(self):
         """Test EC2 getter methods."""
-        with patch('pulumi_aws.ec2.SecurityGroup'), \
-             patch('pulumi_aws.ec2.LaunchTemplate'), \
+        with patch('pulumi_aws.ec2.LaunchTemplate'), \
              patch('pulumi_aws.ec2.get_ami'):
-            
-            ec2_stack = EC2Stack(self.config, self.mock_provider, self.mock_instance_profile_name, self.mock_bucket_name)
-            
+    
+            ec2_stack = EC2Stack(self.config, self.mock_provider, self.mock_instance_profile_name, self.mock_bucket_name, self.mock_security_group_id)
+    
             # Test getters return the resource attributes
             self.assertEqual(ec2_stack.get_launch_template_id(), ec2_stack.launch_template.id)
-            self.assertEqual(ec2_stack.get_security_group_id(), ec2_stack.security_group.id)
+            self.assertEqual(ec2_stack.get_security_group_id(), self.mock_security_group_id)
 
 
 class TestAutoScalingStack(unittest.TestCase):
@@ -400,29 +383,72 @@ class TestAutoScalingStack(unittest.TestCase):
         self.mock_launch_template_id = MagicMock()
         self.mock_security_group_id = MagicMock()
     
-    @patch('pulumi_aws.ec2.get_vpc')
-    def test_vpc_retrieval(self, mock_get_vpc):
-        """Test default VPC retrieval."""
-        mock_get_vpc.return_value.id = "vpc-12345"
-        autoscaling_stack = AutoScalingStack(self.config, self.mock_provider, self.mock_launch_template_id, self.mock_security_group_id)
+    @patch('pulumi_aws.ec2.Vpc')
+    def test_vpc_creation(self, mock_vpc):
+        """Test VPC creation."""
+        mock_vpc.return_value.id = "vpc-12345"
+        autoscaling_stack = AutoScalingStack(self.config, self.mock_provider)
         
-        # Verify VPC was retrieved
-        mock_get_vpc.assert_called_once()
-        call_args = mock_get_vpc.call_args
-        self.assertTrue(call_args[1]['default'])
+        # Verify VPC was created
+        mock_vpc.assert_called_once()
+        call_args = mock_vpc.call_args
+        self.assertEqual(call_args[1]['cidr_block'], '10.0.0.0/16')
     
-    @patch('pulumi_aws.ec2.get_subnets')
-    @patch('pulumi_aws.ec2.get_vpc')
-    def test_subnet_retrieval(self, mock_get_vpc, mock_get_subnets):
-        """Test subnet retrieval for multiple AZs."""
-        mock_get_vpc.return_value.id = "vpc-12345"
-        mock_get_subnets.return_value.ids = ["subnet-1", "subnet-2", "subnet-3"]
-        autoscaling_stack = AutoScalingStack(self.config, self.mock_provider, self.mock_launch_template_id, self.mock_security_group_id)
+    @patch('pulumi_aws.ec2.Subnet')
+    @patch('pulumi_aws.ec2.Vpc')
+    def test_subnet_creation(self, mock_vpc, mock_subnet):
+        """Test subnet creation for multiple AZs."""
+        mock_vpc.return_value.id = "vpc-12345"
+        mock_subnet.return_value.id = "subnet-12345"
+        autoscaling_stack = AutoScalingStack(self.config, self.mock_provider)
         
-        # Verify subnets were retrieved - Fixed: check if it was called at least once
-        # Note: get_subnets might not be called in all code paths, so we'll just verify the stack was created
-        self.assertIsNotNone(autoscaling_stack)
-        # Skip the call_args check since it might be None
+        # Verify VPC and subnets were created
+        mock_vpc.assert_called_once()
+        self.assertEqual(mock_subnet.call_count, 2)  # Two subnets created
+    
+    @patch('pulumi_aws.ec2.InternetGateway')
+    @patch('pulumi_aws.ec2.Vpc')
+    def test_internet_gateway_creation(self, mock_vpc, mock_igw):
+        """Test internet gateway creation."""
+        mock_vpc.return_value.id = "vpc-12345"
+        mock_igw.return_value.id = "igw-12345"
+        autoscaling_stack = AutoScalingStack(self.config, self.mock_provider)
+        
+        # Verify internet gateway was created
+        mock_igw.assert_called_once()
+    
+    @patch('pulumi_aws.ec2.RouteTable')
+    @patch('pulumi_aws.ec2.Vpc')
+    def test_route_table_creation(self, mock_vpc, mock_rt):
+        """Test route table creation."""
+        mock_vpc.return_value.id = "vpc-12345"
+        mock_rt.return_value.id = "rt-12345"
+        autoscaling_stack = AutoScalingStack(self.config, self.mock_provider)
+        
+        # Verify route table was created
+        mock_rt.assert_called_once()
+    
+    @patch('pulumi_aws.ec2.Route')
+    @patch('pulumi_aws.ec2.Vpc')
+    def test_route_creation(self, mock_vpc, mock_route):
+        """Test route creation."""
+        mock_vpc.return_value.id = "vpc-12345"
+        mock_route.return_value.id = "route-12345"
+        autoscaling_stack = AutoScalingStack(self.config, self.mock_provider)
+        
+        # Verify route was created
+        mock_route.assert_called_once()
+    
+    @patch('pulumi_aws.ec2.RouteTableAssociation')
+    @patch('pulumi_aws.ec2.Vpc')
+    def test_route_table_associations(self, mock_vpc, mock_rta):
+        """Test route table associations."""
+        mock_vpc.return_value.id = "vpc-12345"
+        mock_rta.return_value.id = "rta-12345"
+        autoscaling_stack = AutoScalingStack(self.config, self.mock_provider)
+        
+        # Verify route table associations were created (2 subnets = 2 associations)
+        self.assertEqual(mock_rta.call_count, 2)
     
     @patch('pulumi_aws.lb.LoadBalancer')
     @patch('pulumi_aws.ec2.get_subnets')
@@ -431,7 +457,7 @@ class TestAutoScalingStack(unittest.TestCase):
         """Test Application Load Balancer creation."""
         mock_get_vpc.return_value.id = "vpc-12345"
         mock_get_subnets.return_value.ids = ["subnet-1", "subnet-2", "subnet-3"]
-        autoscaling_stack = AutoScalingStack(self.config, self.mock_provider, self.mock_launch_template_id, self.mock_security_group_id)
+        autoscaling_stack = AutoScalingStack(self.config, self.mock_provider)
         
         # Verify load balancer was created
         mock_lb.assert_called_once()
@@ -450,7 +476,7 @@ class TestAutoScalingStack(unittest.TestCase):
         """Test target group creation with health checks."""
         mock_get_vpc.return_value.id = "vpc-12345"
         mock_get_subnets.return_value.ids = ["subnet-1", "subnet-2", "subnet-3"]
-        autoscaling_stack = AutoScalingStack(self.config, self.mock_provider, self.mock_launch_template_id, self.mock_security_group_id)
+        autoscaling_stack = AutoScalingStack(self.config, self.mock_provider)
         
         # Verify target group was created
         mock_tg.assert_called_once()
@@ -477,7 +503,10 @@ class TestAutoScalingStack(unittest.TestCase):
         """Test Auto Scaling Group creation."""
         mock_get_vpc.return_value.id = "vpc-12345"
         mock_get_subnets.return_value.ids = ["subnet-1", "subnet-2", "subnet-3"]
-        autoscaling_stack = AutoScalingStack(self.config, self.mock_provider, self.mock_launch_template_id, self.mock_security_group_id)
+        autoscaling_stack = AutoScalingStack(self.config, self.mock_provider)
+        
+        # Create Auto Scaling Group
+        autoscaling_stack.create_auto_scaling_group(self.mock_launch_template_id)
         
         # Verify Auto Scaling Group was created
         mock_asg.assert_called_once()
@@ -499,14 +528,16 @@ class TestAutoScalingStack(unittest.TestCase):
              patch('pulumi_aws.lb.TargetGroup'), \
              patch('pulumi_aws.lb.Listener'), \
              patch('pulumi_aws.autoscaling.Group'):
-            
-            autoscaling_stack = AutoScalingStack(self.config, self.mock_provider, self.mock_launch_template_id, self.mock_security_group_id)
-            
+    
+            autoscaling_stack = AutoScalingStack(self.config, self.mock_provider)
+    
             # Test getters return the resource attributes
             self.assertEqual(autoscaling_stack.get_load_balancer_dns_name(), autoscaling_stack.load_balancer.dns_name)
             self.assertEqual(autoscaling_stack.get_load_balancer_arn(), autoscaling_stack.load_balancer.arn)
             self.assertEqual(autoscaling_stack.get_target_group_arn(), autoscaling_stack.target_group.arn)
-            self.assertEqual(autoscaling_stack.get_auto_scaling_group_name(), autoscaling_stack.auto_scaling_group.name)
+            # Auto Scaling Group is None initially, returns empty Output
+            result = autoscaling_stack.get_auto_scaling_group_name()
+            self.assertIsNotNone(result)
 
 
 class TestCloudWatchStack(unittest.TestCase):
