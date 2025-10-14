@@ -1,30 +1,30 @@
-import { Construct } from 'constructs';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
-import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
-import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
-import { Route } from '@cdktf/provider-aws/lib/route';
-import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
-import { EcsCluster } from '@cdktf/provider-aws/lib/ecs-cluster';
-import { EcsTaskDefinition } from '@cdktf/provider-aws/lib/ecs-task-definition';
-import { EcsService } from '@cdktf/provider-aws/lib/ecs-service';
 import { Alb } from '@cdktf/provider-aws/lib/alb';
-import { AlbTargetGroup } from '@cdktf/provider-aws/lib/alb-target-group';
 import { AlbListener } from '@cdktf/provider-aws/lib/alb-listener';
-import { RdsCluster } from '@cdktf/provider-aws/lib/rds-cluster';
-import { RdsClusterInstance } from '@cdktf/provider-aws/lib/rds-cluster-instance';
-import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
-import { ElasticacheSubnetGroup } from '@cdktf/provider-aws/lib/elasticache-subnet-group';
-import { ElasticacheReplicationGroup } from '@cdktf/provider-aws/lib/elasticache-replication-group';
-import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
-import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
-import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
-import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
+import { AlbTargetGroup } from '@cdktf/provider-aws/lib/alb-target-group';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
+import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
+import { EcsCluster } from '@cdktf/provider-aws/lib/ecs-cluster';
+import { EcsService } from '@cdktf/provider-aws/lib/ecs-service';
+import { EcsTaskDefinition } from '@cdktf/provider-aws/lib/ecs-task-definition';
+import { ElasticacheReplicationGroup } from '@cdktf/provider-aws/lib/elasticache-replication-group';
+import { ElasticacheSubnetGroup } from '@cdktf/provider-aws/lib/elasticache-subnet-group';
+import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { RdsCluster } from '@cdktf/provider-aws/lib/rds-cluster';
+import { RdsClusterInstance } from '@cdktf/provider-aws/lib/rds-cluster-instance';
+import { Route } from '@cdktf/provider-aws/lib/route';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
+import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
+import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { Construct } from 'constructs';
 
 // Network Module
 interface NetworkModuleProps {
@@ -322,7 +322,8 @@ export class SecretsModule extends Construct {
     const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     const lowercase = 'abcdefghijklmnopqrstuvwxyz';
     const numbers = '0123456789';
-    const special = '!@#$%^&*()-_=+[]{}|;:,.<>?';
+    // AWS RDS doesn't allow: / @ " (space) - using only safe special chars
+    const special = '!#$%^&*()-_=+[]{}|;:,.<>?';
     const allChars = uppercase + lowercase + numbers + special;
 
     let password = '';
