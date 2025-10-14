@@ -1,42 +1,43 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  TapStack.yml — Secure Web Application Infrastructure (us-east-1)
-  Creates VPC, subnets, ALB, EC2, RDS, S3, WAF, CloudFront, Lambda, SQS, CloudWatch, and Config.
-  All resources are new, secured, encrypted, and tagged for environment-wide management.
+  TapStack.yml — Secure, Production-Ready Web Infrastructure (us-east-1)
+  Creates VPC, ALB, EC2, RDS, S3, WAF, CloudFront, Lambda, SQS, Config, and CloudWatch.
+  Fully secure, encrypted, least-privilege, and region-locked.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: { default: "Environment Configuration" }
+        Parameters: [Environment, Owner, Project]
+      - Label: { default: "Access & Network" }
+        Parameters: [AllowedSSHLocation, KeyPairName, InstanceType]
 
 Parameters:
   Environment:
     Type: String
     Default: Production
     AllowedValues: [Development, Staging, Production]
-    Description: Environment tag for all resources.
   Owner:
     Type: String
     Default: TapOps Team
-    Description: Resource owner tag.
   Project:
     Type: String
     Default: TapStack
-    Description: Project name tag.
   AllowedSSHLocation:
     Type: String
     Default: 203.0.113.0/32
-    Description: IP CIDR range allowed to SSH into EC2 instances.
   KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Default: tapstack-key
-    Description: EC2 KeyPair name for SSH access.
+    Type: String
+    Default: ""
+    Description: Optional EC2 KeyPair name (leave blank if none exists)
   InstanceType:
     Type: String
     Default: t3.micro
-    AllowedValues:
-      - t2.micro
-      - t2.small
-      - t2.medium
-      - t3.micro
-      - t3.small
-      - t3.medium
-    Description: EC2 instance type (restricted to T2/T3 family).
+    AllowedValues: [t2.micro, t2.small, t3.micro, t3.small]
+
+Conditions:
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, ""]]
+  IsUsEast1: !Equals [!Ref "AWS::Region", "us-east-1"]
 
 Mappings:
   RegionMap:
@@ -45,7 +46,7 @@ Mappings:
 
 Resources:
 
-  ## ------------------------ Networking ------------------------
+  ## ------------------------ VPC & Networking ------------------------
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -66,8 +67,10 @@ Resources:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
-        - Key: Name
-          Value: !Sub "${Project}-IGW"
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -80,26 +83,26 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.1.0/24
-      AvailabilityZone: !Select [0, !FindInMap [RegionMap, !Ref "AWS::Region", AZs]]
       MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [0, !FindInMap [RegionMap, !Ref "AWS::Region", AZs]]
       Tags:
-        - Key: Name
-          Value: !Sub "${Project}-PublicSubnet1"
-        - Key: Environment
-          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.2.0/24
-      AvailabilityZone: !Select [1, !FindInMap [RegionMap, !Ref "AWS::Region", AZs]]
       MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [1, !FindInMap [RegionMap, !Ref "AWS::Region", AZs]]
       Tags:
-        - Key: Name
-          Value: !Sub "${Project}-PublicSubnet2"
-        - Key: Environment
-          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -107,7 +110,11 @@ Resources:
       VpcId: !Ref VPC
       CidrBlock: 10.0.3.0/24
       AvailabilityZone: !Select [0, !FindInMap [RegionMap, !Ref "AWS::Region", AZs]]
-      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -115,7 +122,11 @@ Resources:
       VpcId: !Ref VPC
       CidrBlock: 10.0.4.0/24
       AvailabilityZone: !Select [1, !FindInMap [RegionMap, !Ref "AWS::Region", AZs]]
-      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -124,6 +135,7 @@ Resources:
 
   PublicRoute:
     Type: AWS::EC2::Route
+    DependsOn: AttachGateway
     Properties:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
@@ -198,7 +210,7 @@ Resources:
   SecurityGroupEC2:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow SSH only from a specific IP
+      GroupDescription: Allow SSH only from allowed IP
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -210,14 +222,14 @@ Resources:
   KMSKey:
     Type: AWS::KMS::Key
     Properties:
-      Description: KMS key for encryption
+      Description: General encryption key
       EnableKeyRotation: true
 
   EC2Instance1:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: !Ref InstanceType
-      KeyName: !Ref KeyPairName
+      KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref "AWS::NoValue"]
       SubnetId: !Ref PrivateSubnet1
       ImageId: ami-0c02fb55956c7d316
       IamInstanceProfile: !Ref InstanceProfile
@@ -232,7 +244,7 @@ Resources:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: !Ref InstanceType
-      KeyName: !Ref KeyPairName
+      KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref "AWS::NoValue"]
       SubnetId: !Ref PrivateSubnet2
       ImageId: ami-0c02fb55956c7d316
       IamInstanceProfile: !Ref InstanceProfile
@@ -247,7 +259,7 @@ Resources:
   ALBSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow HTTP
+      GroupDescription: Allow HTTP inbound
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -283,45 +295,12 @@ Resources:
           TargetGroupArn: !Ref TargetGroup
 
   ## ------------------------ Storage & Database ------------------------
-  S3Bucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      NotificationConfiguration:
-        LambdaConfigurations:
-          - Event: s3:ObjectCreated:*
-            Function: !GetAtt AuditLambda.Arn
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-
-  S3BucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref S3Bucket
-      PolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Deny
-            Principal: "*"
-            Action: "s3:PutObject"
-            Resource: !Sub "${S3Bucket.Arn}/*"
-            Condition:
-              StringNotEquals:
-                "s3:x-amz-server-side-encryption": "AES256"
-
   DBSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub "${Project}-DBPassword"
-      Description: RDS password secret
+      Name: !Sub "${Project}-DBSecret"
       GenerateSecretString:
-        SecretStringTemplate: '{"username": "adminuser"}'
+        SecretStringTemplate: '{"username":"adminuser"}'
         GenerateStringKey: "password"
         PasswordLength: 16
         ExcludeCharacters: '"@/\'
@@ -329,7 +308,7 @@ Resources:
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupDescription: Private DB subnets
+      DBSubnetGroupDescription: Private subnets for RDS
       SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
 
   RDSInstance:
@@ -345,7 +324,7 @@ Resources:
       KmsKeyId: !Ref KMSKey
       DBSubnetGroupName: !Ref DBSubnetGroup
 
-  ## ------------------------ Lambda Audit ------------------------
+  ## ------------------------ Lambda & S3 ------------------------
   LambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -370,7 +349,24 @@ Resources:
         ZipFile: |
           import json
           def handler(event, context):
-              print("S3 Event Received:", json.dumps(event))
+              print("S3 Event:", json.dumps(event))
+
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt AuditLambda.Arn
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
 
   LambdaPermissionForS3:
     Type: AWS::Lambda::Permission
@@ -381,7 +377,7 @@ Resources:
       SourceArn: !GetAtt S3Bucket.Arn
       SourceAccount: !Ref AWS::AccountId
 
-  ## ------------------------ Monitoring ------------------------
+  ## ------------------------ Monitoring & Config ------------------------
   CPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -419,12 +415,14 @@ Resources:
 
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
+    DependsOn: ConfigRecorder
     Properties:
       S3BucketName: !Ref S3Bucket
 
   ## ------------------------ WAF & CloudFront ------------------------
   WAFWebACL:
     Type: AWS::WAFv2::WebACL
+    Condition: IsUsEast1
     Properties:
       Scope: CLOUDFRONT
       DefaultAction: { Allow: {} }
@@ -447,6 +445,7 @@ Resources:
 
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
+    Condition: IsUsEast1
     Properties:
       DistributionConfig:
         Enabled: true
