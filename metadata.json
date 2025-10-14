@@ -10,5 +10,18 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "mysql"
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "ELB",
+    "Auto Scaling",
+    "RDS",
+    "S3",
+    "CloudWatch",
+    "IAM",
+    "KMS",
+    "SNS",
+    "Route53"
+  ],
+  "training_quality": 8
 }
