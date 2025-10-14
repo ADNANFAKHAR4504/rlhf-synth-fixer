@@ -77,7 +77,9 @@ Conditions:
   HasKeyPairName: !Not [!Equals [!Ref KeyPairName, ""]]
 
 Resources:
-  # KMS
+  # --------------------------
+  # KMS (region-scoped Logs principal + full action set)
+  # --------------------------
   MasterKMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -85,12 +87,12 @@ Resources:
       KeyPolicy:
         Version: "2012-10-17"
         Statement:
-          - Sid: Enable IAM policies
+          - Sid: EnableIamRootPermissions
             Effect: Allow
             Principal: { AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root" }
             Action: "kms:*"
             Resource: "*"
-          - Sid: Allow services to use key
+          - Sid: AllowAWSServiceUse
             Effect: Allow
             Principal:
               Service:
@@ -98,8 +100,25 @@ Resources:
                 - s3.amazonaws.com
                 - rds.amazonaws.com
                 - backup.amazonaws.com
-                - logs.amazonaws.com
-            Action: ["kms:Decrypt", "kms:GenerateDataKey", "kms:CreateGrant"]
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+              - kms:CreateGrant
+            Resource: "*"
+          - Sid: AllowCloudWatchLogsRegional
+            Effect: Allow
+            Principal:
+              Service: !Sub "logs.${AWS::Region}.amazonaws.com"
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+              - kms:CreateGrant
             Resource: "*"
       EnableKeyRotation: true
       Tags:
@@ -112,7 +131,9 @@ Resources:
       AliasName: alias/production-security-master
       TargetKeyId: !Ref MasterKMSKey
 
-  # VPC + subnets
+  # --------------------------
+  # VPC & Subnets
+  # --------------------------
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -205,7 +226,9 @@ Resources:
         - { Key: Environment, Value: Production }
         - { Key: Owner, Value: SecurityTeam }
 
-  # NAT
+  # --------------------------
+  # NAT & Routes
+  # --------------------------
   NATGateway1EIP:
     Type: AWS::EC2::EIP
     DependsOn: AttachGateway
@@ -242,7 +265,6 @@ Resources:
         - { Key: Environment, Value: Production }
         - { Key: Owner, Value: SecurityTeam }
 
-  # Routes
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -328,7 +350,9 @@ Resources:
       SubnetId: !Ref DBSubnet2
       RouteTableId: !Ref PrivateRouteTable2
 
-  # NACLs (HTTP only)
+  # --------------------------
+  # NACLs (HTTP-only edge)
+  # --------------------------
   PublicNetworkAcl:
     Type: AWS::EC2::NetworkAcl
     Properties:
@@ -462,7 +486,9 @@ Resources:
       SubnetId: !Ref DBSubnet2
       NetworkAclId: !Ref DBNetworkAcl
 
-  # SGs (HTTP-only on ALB)
+  # --------------------------
+  # Security Groups
+  # --------------------------
   LoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -524,7 +550,9 @@ Resources:
         - { Key: Environment, Value: Production }
         - { Key: Owner, Value: SecurityTeam }
 
-  # IAM (no explicit RoleName / no named managed policy to avoid CAPABILITY_NAMED_IAM)
+  # --------------------------
+  # IAM (no explicit RoleName)
+  # --------------------------
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -580,7 +608,9 @@ Resources:
             Condition:
               BoolIfExists: { "aws:MultiFactorAuthPresent": "false" }
 
-  # ALB + TG (HTTP-only)
+  # --------------------------
+  # ALB + Target Group (HTTP-only)
+  # --------------------------
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -622,7 +652,9 @@ Resources:
       Port: 80
       Protocol: HTTP
 
-  # WAF (still valid with HTTP)
+  # --------------------------
+  # WAF (works fine with HTTP)
+  # --------------------------
   WAFWebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
@@ -678,7 +710,9 @@ Resources:
       ResourceArn: !Ref ApplicationLoadBalancer
       WebACLArn: !GetAtt WAFWebACL.Arn
 
-  # Launch Template
+  # --------------------------
+  # Launch Template / ASG
+  # --------------------------
   EC2LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
@@ -717,7 +751,6 @@ Resources:
               - { Key: Environment, Value: Production }
               - { Key: Owner, Value: SecurityTeam }
 
-  # ASG
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
@@ -736,7 +769,9 @@ Resources:
         - { Key: Environment, Value: Production, PropagateAtLaunch: true }
         - { Key: Owner, Value: SecurityTeam, PropagateAtLaunch: true }
 
-  # RDS
+  # --------------------------
+  # RDS (no plaintext secret; snapshots protected)
+  # --------------------------
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -773,7 +808,9 @@ Resources:
         - { Key: Environment, Value: Production }
         - { Key: Owner, Value: SecurityTeam }
 
-  # S3 logs
+  # --------------------------
+  # S3 Logs (SSE-KMS + TLS-only policy)
+  # --------------------------
   LoggingBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -841,7 +878,9 @@ Resources:
             Condition:
               { StringEquals: { "s3:x-amz-acl": "bucket-owner-full-control" } }
 
-  # CloudTrail
+  # --------------------------
+  # CloudTrail (+ KMS)
+  # --------------------------
   CloudTrail:
     Type: AWS::CloudTrail::Trail
     DependsOn: LoggingBucketPolicy
@@ -865,12 +904,15 @@ Resources:
 
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
+    DependsOn: MasterKMSKey
     Properties:
       LogGroupName: /aws/cloudtrail/production
       RetentionInDays: 30
       KmsKeyId: !GetAtt MasterKMSKey.Arn
 
-  # AWS Config (no Status resource)
+  # --------------------------
+  # AWS Config (recorder + delivery channel)
+  # --------------------------
   ConfigServiceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -918,7 +960,9 @@ Resources:
       S3KeyPrefix: config
       SnsTopicARN: !Ref SNSTopic
 
-  # SNS
+  # --------------------------
+  # SNS for notifications
+  # --------------------------
   SNSTopic:
     Type: AWS::SNS::Topic
     Properties:
@@ -928,7 +972,9 @@ Resources:
         - { Key: Environment, Value: Production }
         - { Key: Owner, Value: SecurityTeam }
 
-  # Backup
+  # --------------------------
+  # AWS Backup (≥90 days after cold)
+  # --------------------------
   BackupVault:
     Type: AWS::Backup::BackupVault
     Properties:
@@ -982,7 +1028,9 @@ Resources:
         - { Key: Environment, Value: Production }
         - { Key: Owner, Value: SecurityTeam }
 
+  # --------------------------
   # Key rotation Lambda
+  # --------------------------
   KeyRotationLambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -1049,9 +1097,6 @@ Resources:
                   )
                   sns.publish(TopicArn=sns_topic, Subject='Access Key Rotation Alert', Message=msg)
               return {'statusCode': 200, 'body': f'Processed {len(old_keys)} old keys'}
-      Tags:
-        - { Key: Environment, Value: Production }
-        - { Key: Owner, Value: SecurityTeam }
 
   KeyRotationSchedule:
     Type: AWS::Events::Rule
