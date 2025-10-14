@@ -221,8 +221,14 @@ export class MultiComponentApplicationStack extends cdk.Stack {
       }
     );
 
+    // Lambda function names must match a restricted pattern. Sanitize the suffix
+    // to only include lowercase letters, numbers, hyphens and underscores.
+    const safeSuffixForLambda = this.stringSuffix
+      ? this.stringSuffix.toLowerCase().replace(/[^a-z0-9-_]/g, '-')
+      : cdk.Aws.NO_VALUE;
+
     const lambdaFunction = new lambda.Function(this, 'ApiLambda', {
-      functionName: `prod-lambda-api-v2-${this.stringSuffix}`,
+      functionName: `prod-lambda-api-v2-${safeSuffixForLambda}`,
       runtime: lambda.Runtime.NODEJS_18_X, // Updated to supported version
       handler: 'index.handler',
       code: lambda.Code.fromInline(`
