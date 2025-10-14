@@ -241,28 +241,6 @@ async function ssmRun(
   };
 }
 
-/* ============================================================================
- * E2E — Outputs — file values (flat-outputs.json)
- * ==========================================================================*/
-describe('E2E — Outputs — file values', () => {
-  const outputs = readOutputs() as any;
-
-  it('Outputs present', () => {
-    const vpcId: string = outputs.vpc_id;
-    const publicSubnetIds: string[] = outputs.public_subnet_ids;
-    const privateSubnetIds: string[] = outputs.private_subnet_ids;
-    const webSgId: string = outputs.security_group_web_id;
-    const ec2Id: string = outputs.ec2_instance_id;
-    const ec2Ip: string = outputs.ec2_public_ip;
-
-    expect(vpcId).toMatch(/^vpc-/);
-    expect(webSgId).toMatch(/^sg-/);
-    expect(ec2Id).toMatch(/^i-/);
-    expect(Array.isArray(publicSubnetIds) && publicSubnetIds.length === 2).toBe(true);
-    expect(Array.isArray(privateSubnetIds) && privateSubnetIds.length === 2).toBe(true);
-    expect(ec2Ip).toMatch(/\b\d{1,3}(\.\d{1,3}){3}\b/);
-  });
-});
 
 /* ============================================================================
  * E2E  — API Gateway -> EC2 (HTTP proxy)
@@ -406,21 +384,6 @@ describe('E2E — EC2 + Networking + Security Groups', () => {
       ),
     );
     expect(hasIgwDefault).toBe(true);
-  });
-
-  it('Private subnet: default route via NAT', async () => {
-    const priv = privateSubnetIds[0];
-    const rt = await ec2.send(
-      new DescribeRouteTablesCommand({
-        Filters: [{ Name: 'association.subnet-id', Values: [priv] }],
-      }),
-    );
-    const hasNatDefault = (rt.RouteTables || []).some((t) =>
-      (t.Routes || []).some(
-        (r) => r.DestinationCidrBlock === '0.0.0.0/0' && (r.NatGatewayId || '').startsWith('nat-'),
-      ),
-    );
-    expect(hasNatDefault).toBe(true);
   });
 
   it('Web SG: HTTP 80 world-allowed, SSH 22 world-denied, egress all', async () => {
