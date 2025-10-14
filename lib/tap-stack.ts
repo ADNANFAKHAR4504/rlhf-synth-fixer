@@ -102,7 +102,6 @@ export class TapStack extends TerraformStack {
       allocatedStorage: 20,
       maxAllocatedStorage: 100,
       engine: 'postgres',
-      engineVersion: '14.10',
       username: 'dbadmin',
       backupRetentionPeriod: 7,
       backupWindow: '03:00-04:00',

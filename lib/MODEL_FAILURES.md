@@ -133,3 +133,47 @@ TapStackpr4374  ::error::Terraform exited with code 1.
 0 Stacks deploying     1 Stack done     0 Stacks waiting
 Invoking Terraform CLI failed with exit code 1
 Error: Process completed with exit code 1.
+
+TapStackpr4374  ╷
+                │ Warning: Argument is deprecated
+                │ 
+                │   with aws_s3_bucket.alb_alb-logs-bucket_1BF171B7 (alb/alb-logs-bucket),
+                │   on cdk.tf.json line 1137, in resource.aws_s3_bucket.alb_alb-logs-bucket_1BF171B7 (alb/alb-logs-bucket):
+                │ 1137:         "lifecycle_rule": [
+                │ 1138:           {
+                │ 1139:             "enabled": true,
+                │ 1140:             "expiration": {
+                │ 1141:               "days": 90
+                │ 1142:             },
+                │ 1143:             "id": "delete-old-logs"
+                │ 1144:           }
+                │ 1145:         ],
+                │ 
+                │ lifecycle_rule is deprecated. Use the aws_s3_bucket_lifecycle_configuration
+                │ resource instead.
+                │ 
+                │ (and 17 more similar warnings elsewhere)
+                ╵
+
+TapStackpr4374  ╷
+                │ Error: creating CloudWatch Logs Log Group (/aws/ec2/tap-project-pr4374/application): operation error CloudWatch Logs: CreateLogGroup, https response error StatusCode: 400, RequestID: 3b2e68b3-3d28-4417-89f9-7a90c8f3840b, InvalidParameterException: The specified KMS Key Id could not be found.
+                │ 
+                │   with aws_cloudwatch_log_group.monitoring_app-log-group_0F16579C (monitoring/app-log-group),
+                │   on cdk.tf.json line 402, in resource.aws_cloudwatch_log_group.monitoring_app-log-group_0F16579C (monitoring/app-log-group):
+                │  402:       }
+                │ 
+                ╵
+TapStackpr4374  ╷
+                │ Error: creating RDS DB Instance (tap-project-db-pr4374): operation error RDS: CreateDBInstance, https response error StatusCode: 400, RequestID: c72baca9-4d0a-4fac-a0d1-0c95877bfa61, api error InvalidParameterCombination: Cannot find version 14.10 for postgres
+                │ 
+                │   with aws_db_instance.rds_db-instance_9631E10E (rds/db-instance),
+                │   on cdk.tf.json line 575, in resource.aws_db_instance.rds_db-instance_9631E10E (rds/db-instance):
+                │  575:       }
+                │ 
+                ╵
+
+                ╵
+TapStackpr4374  ::error::Terraform exited with code 1.
+0 Stacks deploying     1 Stack done     0 Stacks waiting
+Invoking Terraform CLI failed with exit code 1
+Error: Process completed with exit code 1.

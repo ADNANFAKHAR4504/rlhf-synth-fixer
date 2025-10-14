@@ -1,6 +1,10 @@
 import { Construct } from 'constructs';
 import { Fn } from 'cdktf';
 
+import { S3BucketLifecycleConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-lifecycle-configuration';
+import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
+import { DataAwsElbServiceAccount } from '@cdktf/provider-aws/lib/data-aws-elb-service-account';
+
 // VPC Resources
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 import { Eip } from '@cdktf/provider-aws/lib/eip';
@@ -518,7 +522,6 @@ export interface RDSConfig {
   allocatedStorage?: number;
   maxAllocatedStorage?: number;
   engine?: string;
-  engineVersion?: string;
   username?: string;
   backupRetentionPeriod?: number;
   backupWindow?: string;
@@ -563,7 +566,6 @@ export class RDSConstruct extends Construct {
     this.instance = new DbInstance(this, 'db-instance', {
       identifier: `${config.tags.Project}-db-${config.tags.Environment}`,
       engine: config.engine || 'postgres',
-      engineVersion: config.engineVersion || '14.10',
       instanceClass: config.instanceClass || 'db.t3.micro',
       allocatedStorage: config.allocatedStorage || 20,
       maxAllocatedStorage: config.maxAllocatedStorage || 100,
@@ -631,6 +633,7 @@ export class ALBConstruct extends Construct {
   public readonly alb: Alb;
   public readonly targetGroup: AlbTargetGroup;
   public readonly listener: AlbListener;
+  private readonly albLogsBucket: S3Bucket;
 
   constructor(
     scope: Construct,
@@ -641,6 +644,9 @@ export class ALBConstruct extends Construct {
     tags: CommonTags
   ) {
     super(scope, id);
+
+    // Create ALB logs bucket with proper configuration
+    this.albLogsBucket = this.createAlbLogsBucket(tags);
 
     // Application Load Balancer
     this.alb = new Alb(this, 'alb', {
@@ -653,7 +659,7 @@ export class ALBConstruct extends Construct {
       enableHttp2: true,
       enableCrossZoneLoadBalancing: true,
       accessLogs: {
-        bucket: this.createAlbLogsBucket(tags).bucket,
+        bucket: this.albLogsBucket.bucket,
         enabled: true,
         prefix: 'alb-logs',
       },
@@ -703,7 +709,8 @@ export class ALBConstruct extends Construct {
   }
 
   private createAlbLogsBucket(tags: CommonTags): S3Bucket {
-    return new S3Bucket(this, 'alb-logs-bucket', {
+    // Create S3 bucket WITHOUT deprecated lifecycle_rule
+    const bucket = new S3Bucket(this, 'alb-logs-bucket', {
       bucket: `${tags.Project}-alb-logs-${tags.Environment}-${Date.now()}`,
       versioning: {
         enabled: true,
@@ -715,17 +722,85 @@ export class ALBConstruct extends Construct {
           },
         },
       },
-      lifecycleRule: [
-        {
-          id: 'delete-old-logs',
-          enabled: true,
-          expiration: {
-            days: 90,
-          },
-        },
-      ],
+      // REMOVE lifecycle_rule from here
       tags: tags,
     });
+
+    // Use separate lifecycle configuration resource (non-deprecated)
+    new S3BucketLifecycleConfiguration(this, 'alb-logs-lifecycle', {
+      bucket: bucket.id,
+      rule: [
+        {
+          id: 'delete-old-logs',
+          status: 'Enabled',
+          expiration: [
+            {
+              days: 90,
+            },
+          ],
+        },
+      ],
+    });
+
+    // Block public access for security
+    new S3BucketPublicAccessBlock(this, 'alb-logs-public-access-block', {
+      bucket: bucket.id,
+      blockPublicAcls: true,
+      blockPublicPolicy: true,
+      ignorePublicAcls: true,
+      restrictPublicBuckets: true,
+    });
+
+    // Get the ELB service account for the current region
+    const elbServiceAccount = new DataAwsElbServiceAccount(
+      this,
+      'elb-service-account',
+      {}
+    );
+
+    // Create bucket policy to allow ALB to write logs
+    new S3BucketPolicy(this, 'alb-logs-bucket-policy', {
+      bucket: bucket.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Sid: 'ALBAccessLogPolicy',
+            Effect: 'Allow',
+            Principal: {
+              AWS: elbServiceAccount.arn,
+            },
+            Action: 's3:PutObject',
+            Resource: `${bucket.arn}/alb-logs/*`,
+          },
+          {
+            Sid: 'AWSLogDeliveryWrite',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'delivery.logs.amazonaws.com',
+            },
+            Action: 's3:PutObject',
+            Resource: `${bucket.arn}/alb-logs/*`,
+            Condition: {
+              StringEquals: {
+                's3:x-amz-acl': 'bucket-owner-full-control',
+              },
+            },
+          },
+          {
+            Sid: 'AWSLogDeliveryAclCheck',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'delivery.logs.amazonaws.com',
+            },
+            Action: 's3:GetBucketAcl',
+            Resource: bucket.arn,
+          },
+        ],
+      }),
+    });
+
+    return bucket;
   }
 }
 
@@ -919,7 +994,8 @@ export class MonitoringConstruct extends Construct {
     this.logGroup = new CloudwatchLogGroup(this, 'app-log-group', {
       name: `/aws/ec2/${tags.Project}-${tags.Environment}/application`,
       retentionInDays: 30,
-      kmsKeyId: 'alias/aws/logs', // AWS-managed KMS key
+      // REMOVED: kmsKeyId: 'alias/aws/logs',
+      // The default AWS managed key will be used automatically
       tags: tags,
     });
 
@@ -927,11 +1003,12 @@ export class MonitoringConstruct extends Construct {
     this.snsTopic = new SnsTopic(this, 'alerts-topic', {
       name: `${tags.Project}-alerts-${tags.Environment}`,
       displayName: `${tags.Project} Alerts - ${tags.Environment}`,
-      kmsMasterKeyId: 'alias/aws/sns', // AWS-managed KMS key
+      // REMOVED: kmsMasterKeyId: 'alias/aws/sns',
+      // The default AWS managed key will be used automatically
       tags: tags,
     });
 
-    // S3 Bucket for CloudTrail
+    // S3 Bucket for CloudTrail - also use new lifecycle configuration
     const trailBucket = new S3Bucket(this, 'trail-bucket', {
       bucket: `${tags.Project}-trail-${tags.Environment}-${Date.now()}`,
       versioning: {
@@ -944,16 +1021,33 @@ export class MonitoringConstruct extends Construct {
           },
         },
       },
-      lifecycleRule: [
+      // REMOVE lifecycle_rule from here
+      tags: tags,
+    });
+
+    // Use separate lifecycle configuration resource
+    new S3BucketLifecycleConfiguration(this, 'trail-bucket-lifecycle', {
+      bucket: trailBucket.id,
+      rule: [
         {
           id: 'delete-old-logs',
-          enabled: true,
-          expiration: {
-            days: 365,
-          },
+          status: 'Enabled',
+          expiration: [
+            {
+              days: 365,
+            },
+          ],
         },
       ],
-      tags: tags,
+    });
+
+    // Block public access
+    new S3BucketPublicAccessBlock(this, 'trail-bucket-public-access-block', {
+      bucket: trailBucket.id,
+      blockPublicAcls: true,
+      blockPublicPolicy: true,
+      ignorePublicAcls: true,
+      restrictPublicBuckets: true,
     });
 
     // Bucket policy for CloudTrail
@@ -989,7 +1083,6 @@ export class MonitoringConstruct extends Construct {
       }),
     });
 
-    // CloudTrail for API activity logging
     this.trail = new Cloudtrail(this, 'trail', {
       name: `${tags.Project}-trail-${tags.Environment}`,
       s3BucketName: trailBucket.bucket,
@@ -1005,8 +1098,6 @@ export class MonitoringConstruct extends Construct {
               type: 'AWS::S3::Object',
               values: ['arn:aws:s3:::*/*'],
             },
-            // Remove the RDS::DBCluster as it's not supported for data events
-            // RDS events are captured through management events which are already enabled
           ],
         },
       ],
