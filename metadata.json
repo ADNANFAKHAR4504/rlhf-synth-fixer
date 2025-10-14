@@ -10,6 +10,5 @@
   "subject_labels": [
     "Serverless Infrastructure (Functions as Code)"
   ],
-  "background": "AWS CDK is an open-source software development framework to define cloud infrastructure in code and provision it through AWS CloudFormation",
   "aws_services": "Lambda, API Gateway, S3, DynamoDB, CloudWatch, SNS, IAM, X-Ray"
 }
