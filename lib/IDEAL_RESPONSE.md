@@ -461,5 +461,446 @@ class CloudWatchStack:
 7. lib\infrastructure\config.py
 
 ```py
+import os
+from typing import Any, Dict
+
+
+class WebAppConfig:
+    """Centralized configuration for web application infrastructure."""
+
+    def __init__(self):
+        # Environment configuration
+        self.environment = os.getenv('ENVIRONMENT', 'dev')
+        self.environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', f'-{self.environment}')
+        self.region = os.getenv('AWS_REGION', 'us-west-2')
+        self.project_name = os.getenv('PROJECT_NAME', 'web-app')
+
+        # Application configuration
+        self.app_name = os.getenv('APP_NAME', 'webapp')
+        self.instance_type = os.getenv('INSTANCE_TYPE', 't3.micro')
+        self.min_size = int(os.getenv('MIN_SIZE', '1'))
+        self.max_size = int(os.getenv('MAX_SIZE', '3'))
+        self.desired_capacity = int(os.getenv('DESIRED_CAPACITY', '2'))
+
+        # S3 configuration
+        self.log_retention_days = int(os.getenv('LOG_RETENTION_DAYS', '30'))
+
+        # Normalize names for AWS compliance
+        project_name_normalized = self.project_name.lower().replace('_', '-')
+        environment_normalized = self.environment.lower()
+        app_name_normalized = self.app_name.lower().replace('_', '-')
+        region_normalized = self.region.replace('-', '')
+
+        # Resource naming with stable identifiers (environment + region + environment for uniqueness)
+        self.s3_bucket_name = f"{project_name_normalized}-{app_name_normalized}-logs-{environment_normalized}-{region_normalized}-{environment_normalized}"
+        self.iam_role_name = f"{project_name_normalized}-{app_name_normalized}-ec2-role-{environment_normalized}-{region_normalized}-{environment_normalized}"
+        self.launch_template_name = f"{project_name_normalized}-{app_name_normalized}-template-{environment_normalized}-{region_normalized}-{environment_normalized}"
+        self.asg_name = f"{project_name_normalized}-{app_name_normalized}-asg-{environment_normalized}-{region_normalized}-{environment_normalized}"
+        self.lb_name = f"{project_name_normalized}-{app_name_normalized}-lb-{environment_normalized}-{region_normalized}-{environment_normalized}"[:32]
+        self.target_group_name = f"{project_name_normalized}-{app_name_normalized}-tg-{environment_normalized}-{region_normalized}-{environment_normalized}"[:32]
+        self.log_group_name = f"/aws/ec2/{project_name_normalized}-{app_name_normalized}-{environment_normalized}-{region_normalized}-{environment_normalized}"
+
+        # Validate region
+        if self.region not in ['us-west-2', 'us-east-1']:
+            raise ValueError(f"Region must be us-west-2 or us-east-1, got {self.region}")
+
+    def get_resource_name(self, resource_type: str, suffix: str = "") -> str:
+        """Generate normalized resource name."""
+        project_name_normalized = self.project_name.lower().replace('_', '-')
+        environment_normalized = self.environment.lower()
+        app_name_normalized = self.app_name.lower().replace('_', '-')
+        base_name = f"{project_name_normalized}-{app_name_normalized}-{resource_type}{self.environment_suffix}"
+        return f"{base_name}{suffix}" if suffix else base_name
+
+    def get_tag_name(self, resource_name: str) -> str:
+        """Generate tag name for resources."""
+        project_name_normalized = self.project_name.lower().replace('_', '-')
+        environment_normalized = self.environment.lower()
+        app_name_normalized = self.app_name.lower().replace('_', '-')
+        region_normalized = self.region.replace('-', '')
+        return f"{project_name_normalized}-{app_name_normalized}-{resource_name}-{environment_normalized}-{region_normalized}-{environment_normalized}"
+
+    def get_common_tags(self) -> Dict[str, str]:
+        """Get common tags for all resources."""
+        return {
+            "Name": self.get_tag_name("webapp"),
+            "Environment": self.environment,
+            "Project": self.project_name,
+            "Application": self.app_name,
+            "ManagedBy": "Pulumi",
+            "Purpose": "WebApplication"
+        }
+
+```
+
+8. lib\infrastructure\ec2.py
+
+```py
+import base64
+
+import pulumi
+import pulumi_aws as aws
+
+from .config import WebAppConfig
+
+
+class EC2Stack:
+    """EC2 launch template and security group configuration."""
+
+    def __init__(self, config: WebAppConfig, provider: aws.Provider,
+                 instance_profile_name: pulumi.Output[str], bucket_name: pulumi.Output[str],
+                 security_group_id: pulumi.Output[str]):
+        self.config = config
+        self.provider = provider
+        self.instance_profile_name = instance_profile_name
+        self.bucket_name = bucket_name
+        self.security_group_id = security_group_id
+        self.launch_template = self._create_launch_template()
+
+
+    def _get_latest_amazon_linux_ami(self) -> pulumi.Output[str]:
+        """Get the latest Amazon Linux 2 AMI ID."""
+        return aws.ec2.get_ami(
+            most_recent=True,
+            owners=["amazon"],
+            filters=[
+                aws.ec2.GetAmiFilterArgs(
+                    name="name",
+                    values=["amzn2-ami-hvm-*-x86_64-gp2"]
+                )
+            ],
+            opts=pulumi.InvokeOptions(provider=self.provider)
+        ).id
+
+    def _create_user_data_script(self) -> pulumi.Output[str]:
+        """Create user data script for EC2 instances."""
+        return pulumi.Output.all(self.bucket_name).apply(
+            lambda args: f"""#!/bin/bash
+# Update system
+yum update -y
+
+# Install web server
+yum install -y httpd
+systemctl start httpd
+systemctl enable httpd
+
+# Create logs directory
+mkdir -p /var/log/webapp
+
+# Configure CloudWatch agent
+yum install -y amazon-cloudwatch-agent
+
+# Create CloudWatch agent configuration
+cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF
+{{
+    "logs": {{
+        "logs_collected": {{
+            "files": {{
+                "collect_list": [
+                    {{
+                        "file_path": "/var/log/httpd/access_log",
+                        "log_group_name": "{self.config.log_group_name}",
+                        "log_stream_name": "{{instance_id}}/httpd/access.log"
+                    }},
+                    {{
+                        "file_path": "/var/log/httpd/error_log",
+                        "log_group_name": "{self.config.log_group_name}",
+                        "log_stream_name": "{{instance_id}}/httpd/error.log"
+                    }},
+                    {{
+                        "file_path": "/var/log/webapp/application.log",
+                        "log_group_name": "{self.config.log_group_name}",
+                        "log_stream_name": "{{instance_id}}/webapp/application.log"
+                    }}
+                ]
+            }}
+        }}
+    }}
+}}
+EOF
+
+# Start CloudWatch agent
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+    -a fetch-config \
+    -m ec2 \
+    -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \
+    -s
+
+# Create a simple web page
+cat > /var/www/html/index.html << EOF
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Web Application</title>
+</head>
+<body>
+    <h1>Welcome to the Web Application</h1>
+    <p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
+    <p>Region: {self.config.region}</p>
+    <p>Environment: {self.config.environment}</p>
+</body>
+</html>
+EOF
+
+# Upload logs to S3 (example)
+echo "Application started at $(date)" > /var/log/webapp/application.log
+aws s3 cp /var/log/webapp/application.log s3://{args[0]}/logs/$(curl -s http://169.254.169.254/latest/meta-data/instance-id)/application.log || true
+"""
+        )
+
+    def _create_launch_template(self) -> aws.ec2.LaunchTemplate:
+        """Create launch template for EC2 instances."""
+        return aws.ec2.LaunchTemplate(
+            "webapp-launch-template",
+            name=self.config.launch_template_name,
+            image_id=self._get_latest_amazon_linux_ami(),
+            instance_type=self.config.instance_type,
+            vpc_security_group_ids=[self.security_group_id],
+            iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(
+                name=self.instance_profile_name
+            ),
+            user_data=self._create_user_data_script().apply(
+                lambda script: base64.b64encode(script.encode('utf-8')).decode('utf-8')
+            ),
+            tag_specifications=[
+                aws.ec2.LaunchTemplateTagSpecificationArgs(
+                    resource_type="instance",
+                    tags=self.config.get_common_tags()
+                )
+            ],
+            tags=self.config.get_common_tags(),
+            opts=pulumi.ResourceOptions(provider=self.provider)
+        )
+
+    def get_launch_template_id(self) -> pulumi.Output[str]:
+        """Get launch template ID."""
+        return self.launch_template.id
+
+    def get_security_group_id(self) -> pulumi.Output[str]:
+        """Get security group ID."""
+        return self.security_group_id
+```
+
+9. lib\infrastructure\iam.py
+
+```py
+import pulumi
+import pulumi_aws as aws
+
+from .config import WebAppConfig
+
+
+class IAMStack:
+    """IAM roles and policies with least privilege principles."""
+
+    def __init__(self, config: WebAppConfig, provider: aws.Provider):
+        self.config = config
+        self.provider = provider
+        self.instance_role = self._create_instance_role()
+        self.instance_profile = self._create_instance_profile()
+
+    def _create_instance_role(self) -> aws.iam.Role:
+        """Create IAM role for EC2 instances with least privilege."""
+        return aws.iam.Role(
+            "ec2-instance-role",
+            name=self.config.iam_role_name,
+            assume_role_policy=pulumi.Output.from_input({
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Action": "sts:AssumeRole",
+                    "Principal": {
+                        "Service": "ec2.amazonaws.com"
+                    },
+                    "Effect": "Allow"
+                }]
+            }),
+            tags=self.config.get_common_tags(),
+            opts=pulumi.ResourceOptions(provider=self.provider)
+        )
+
+    def _create_instance_profile(self) -> aws.iam.InstanceProfile:
+        """Create instance profile for EC2 instances."""
+        return aws.iam.InstanceProfile(
+            "ec2-instance-profile",
+            name=f"{self.config.iam_role_name}-profile",
+            role=self.instance_role.name,
+            tags=self.config.get_common_tags(),
+            opts=pulumi.ResourceOptions(provider=self.provider)
+        )
+
+    def _create_s3_policy(self, bucket_name: pulumi.Output[str]) -> aws.iam.Policy:
+        """Create least privilege S3 policy for log access."""
+        return aws.iam.Policy(
+            "ec2-s3-policy",
+            name=f"{self.config.get_tag_name('s3-policy')}",
+            description="Least privilege S3 access for application logs",
+            policy=bucket_name.apply(
+                lambda name: {
+                    "Version": "2012-10-17",
+                    "Statement": [{
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:PutObject",
+                            "s3:PutObjectAcl"
+                        ],
+                        "Resource": f"arn:aws:s3:::{name}/logs/*"
+                    }, {
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:ListBucket"
+                        ],
+                        "Resource": f"arn:aws:s3:::{name}"
+                    }]
+                }
+            ),
+            tags=self.config.get_common_tags(),
+            opts=pulumi.ResourceOptions(provider=self.provider)
+        )
+
+    def _create_cloudwatch_policy(self) -> aws.iam.Policy:
+        """Create CloudWatch logs policy for EC2 instances."""
+        return aws.iam.Policy(
+            "ec2-cloudwatch-policy",
+            name=f"{self.config.get_tag_name('cloudwatch-policy')}",
+            description="CloudWatch logs access for EC2 instances",
+            policy=pulumi.Output.from_input({
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Action": [
+                        "logs:CreateLogGroup",
+                        "logs:CreateLogStream",
+                        "logs:PutLogEvents",
+                        "logs:DescribeLogStreams"
+                    ],
+                    "Resource": f"arn:aws:logs:{self.config.region}:*:log-group:{self.config.log_group_name}*"
+                }]
+            }),
+            tags=self.config.get_common_tags(),
+            opts=pulumi.ResourceOptions(provider=self.provider)
+        )
+
+    def attach_policies_to_role(self, bucket_name: pulumi.Output[str]) -> None:
+        """Attach policies to the instance role."""
+        s3_policy = self._create_s3_policy(bucket_name)
+        cloudwatch_policy = self._create_cloudwatch_policy()
+
+        # Attach S3 policy
+        aws.iam.RolePolicyAttachment(
+            "ec2-s3-policy-attachment",
+            role=self.instance_role.name,
+            policy_arn=s3_policy.arn,
+            opts=pulumi.ResourceOptions(provider=self.provider)
+        )
+
+        # Attach CloudWatch policy
+        aws.iam.RolePolicyAttachment(
+            "ec2-cloudwatch-policy-attachment",
+            role=self.instance_role.name,
+            policy_arn=cloudwatch_policy.arn,
+            opts=pulumi.ResourceOptions(provider=self.provider)
+        )
+
+    def get_instance_profile_arn(self) -> pulumi.Output[str]:
+        """Get instance profile ARN."""
+        return self.instance_profile.arn
+
+    def get_instance_profile_name(self) -> pulumi.Output[str]:
+        """Get instance profile name."""
+        return self.instance_profile.name
+
+```
+
+10. lib\infrastructure\s3,py
+
+```py
+import pulumi
+import pulumi_aws as aws
+
+from .config import WebAppConfig
+
+
+class S3Stack:
+    """S3 bucket for application logs with encryption and lifecycle rules."""
+
+    def __init__(self, config: WebAppConfig, provider: aws.Provider):
+        self.config = config
+        self.provider = provider
+        self.bucket = self._create_logs_bucket()
+        self.public_access_block = self._create_public_access_block()
+        self.encryption_configuration = self._create_encryption_configuration()
+        self.versioning_configuration = self._create_versioning_configuration()
+        self.lifecycle_configuration = self._create_lifecycle_configuration()
+
+    def _create_logs_bucket(self) -> aws.s3.Bucket:
+        """Create S3 bucket for application logs with SSE-S3 encryption."""
+        return aws.s3.Bucket(
+            "logs-bucket",
+            bucket=self.config.s3_bucket_name,
+            tags=self.config.get_common_tags(),
+            opts=pulumi.ResourceOptions(provider=self.provider)
+        )
+
+    def _create_public_access_block(self) -> aws.s3.BucketPublicAccessBlock:
+        """Create public access block for S3 bucket security."""
+        return aws.s3.BucketPublicAccessBlock(
+            "logs-bucket-pab",
+            bucket=self.bucket.id,
+            block_public_acls=True,
+            block_public_policy=True,
+            ignore_public_acls=True,
+            restrict_public_buckets=True,
+            opts=pulumi.ResourceOptions(provider=self.provider)
+        )
+
+    def _create_encryption_configuration(self) -> aws.s3.BucketServerSideEncryptionConfiguration:
+        """Create server-side encryption configuration."""
+        return aws.s3.BucketServerSideEncryptionConfiguration(
+            "logs-bucket-encryption",
+            bucket=self.bucket.id,
+            rules=[aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                    sse_algorithm="AES256"
+                )
+            )],
+            opts=pulumi.ResourceOptions(provider=self.provider)
+        )
+
+    def _create_versioning_configuration(self) -> aws.s3.BucketVersioning:
+        """Create versioning configuration."""
+        return aws.s3.BucketVersioning(
+            "logs-bucket-versioning",
+            bucket=self.bucket.id,
+            versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
+                status="Enabled"
+            ),
+            opts=pulumi.ResourceOptions(provider=self.provider)
+        )
+
+    def _create_lifecycle_configuration(self) -> aws.s3.BucketLifecycleConfiguration:
+        """Create lifecycle configuration to delete logs after 30 days."""
+        return aws.s3.BucketLifecycleConfiguration(
+            "logs-bucket-lifecycle",
+            bucket=self.bucket.id,
+            rules=[aws.s3.BucketLifecycleConfigurationRuleArgs(
+                id="delete-logs-after-30-days",
+                status="Enabled",
+                expiration=aws.s3.BucketLifecycleConfigurationRuleExpirationArgs(
+                    days=self.config.log_retention_days
+                ),
+                filter=aws.s3.BucketLifecycleConfigurationRuleFilterArgs(
+                    prefix="logs/"
+                )
+            )],
+            opts=pulumi.ResourceOptions(provider=self.provider)
+        )
+
+    def get_bucket_name(self) -> pulumi.Output[str]:
+        """Get bucket name."""
+        return self.bucket.id
+
+    def get_bucket_arn(self) -> pulumi.Output[str]:
+        """Get bucket ARN."""
+        return self.bucket.arn
 
 ```
