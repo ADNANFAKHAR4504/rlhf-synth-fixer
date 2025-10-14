@@ -1,0 +1,12 @@
+{
+  "platform": "pulumi",
+  "language": "go",
+  "complexity": "complex",
+  "team": "synth",
+  "startedAt": "2025-10-14T04:41:54+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": ["CI/CD Pipeline", "Cloud Environment Setup", "Security Configuration as Code"],
+  "po_id": "2735636511",
+  "aws_services": [],
+  "region": "ap-southeast-1"
+}
