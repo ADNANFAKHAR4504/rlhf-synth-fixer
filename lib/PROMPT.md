@@ -1,10 +1,5 @@
 Prompt is
 ```
-Of course. Here is the same prompt, rewritten in a more natural, human-generated format, as if a developer were asking a colleague for help.
-
-The Prompt (Human-Generated Format)
-Hey there,
-
 I'm starting a new project and I need to build out our core infrastructure on AWS. I was hoping you could help me by writing a CloudFormation template in YAML to get everything set up.
 
 The main goal is to create a fully operational and secure environment that spans three different AWS regions: us-east-1, us-west-2, and eu-west-1.
