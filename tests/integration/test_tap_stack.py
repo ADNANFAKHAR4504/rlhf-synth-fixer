@@ -223,12 +223,12 @@ class AWSResourceChecker:
             app_sg = None
             db_sg = None
 
-            # Find relevant security groups
+            # Find relevant security groups by looking for tags or names
             for sg in security_groups:
                 group_name = sg.get('GroupName', '')
-                if 'TapApplication' in group_name:
+                if 'TapApplicationSecurityGroup' in group_name:
                     app_sg = sg
-                elif 'TapDatabase' in group_name:
+                elif 'TapDatabaseSecurityGroup' in group_name:
                     db_sg = sg
 
             results = {
