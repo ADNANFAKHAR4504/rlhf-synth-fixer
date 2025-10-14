@@ -10,5 +10,23 @@
   "subject_labels": [
     "Security Configuration as Code"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC"
+  "aws_services": [
+    "ASG",
+    "EC2",
+    "S3",
+    "VPC",
+    "CloudWatch",
+    "IAM",
+    "RDS",
+    "ELB",
+    "KMS",
+    "Secrets Manager",
+    "CloudTrail"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "kanishkah-turing",
+  "dockerS3Location": ""
 }
