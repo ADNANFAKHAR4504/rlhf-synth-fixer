@@ -18,7 +18,7 @@ import (
 )
 
 // getLambdaAssetPath returns the correct path to Lambda assets
-// accounting for different execution contexts (root vs lib directory)
+// accounting for different execution contexts (root vs lib directory vs tests)
 func getLambdaAssetPath(relativePath string) string {
 	// Try the path as-is first (works from root)
 	if _, err := os.Stat(relativePath); err == nil {
@@ -29,6 +29,18 @@ func getLambdaAssetPath(relativePath string) string {
 	parentPath := filepath.Join("..", relativePath)
 	if _, err := os.Stat(parentPath); err == nil {
 		return parentPath
+	}
+
+	// Try from grandparent directory (works from tests/unit)
+	grandparentPath := filepath.Join("../..", relativePath)
+	if _, err := os.Stat(grandparentPath); err == nil {
+		return grandparentPath
+	}
+
+	// Try from great-grandparent directory (works from deeper test paths)
+	greatGrandparentPath := filepath.Join("../../..", relativePath)
+	if _, err := os.Stat(greatGrandparentPath); err == nil {
+		return greatGrandparentPath
 	}
 
 	// Fallback to original path
@@ -164,7 +176,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 
 	// Create DynamoDB table with optimized configuration
 	imageMetadataTable := awsdynamodb.NewTable(stack, jsii.String("ImageMetadataTable"), &awsdynamodb.TableProps{
-		TableName: jsii.String(fmt.Sprintf("image-metadata-%s", environmentSuffix)),
+		TableName: jsii.String(fmt.Sprintf("image-metadata-%s-%s-%s", *stack.Region(), *stack.Account(), environmentSuffix)),
 		PartitionKey: &awsdynamodb.Attribute{
 			Name: jsii.String("imageId"),
 			Type: awsdynamodb.AttributeType_STRING,
