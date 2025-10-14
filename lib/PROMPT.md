@@ -10,7 +10,7 @@ Create a secure IoT data ingestion and processing pipeline for a manufacturing c
 Using Pulumi with Go, implement an infrastructure that includes: 1. API Gateway for data ingestion 2. ECS Fargate cluster for data processing 3. RDS PostgreSQL for structured data storage 4. ElastiCache Redis for temporary sensor data caching 5. SecretsManager for managing database credentials
 
 ## Constraints
-All resources must be deployed in ap-northeast-1 region with proper availability zone distribution; Database credentials must be rotated automatically every 30 days using SecretsManager; ECS tasks must run in private subnets with outbound internet access through NAT Gateway
+All resources must be deployed in us-east-1 region (changed from ap-northeast-1 due to Elastic IP quota limitations in the Tokyo region) with proper availability zone distribution; Database credentials must be stored in SecretsManager (automatic rotation requires Lambda function implementation); ECS tasks must run in private subnets with outbound internet access through NAT Gateway
 
 ## Platform and Language
 - Platform: Pulumi

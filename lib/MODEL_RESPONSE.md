@@ -30,10 +30,10 @@ import (
 )
 
 const (
-	region       = "ap-northeast-1"
+	region       = "us-east-1"
 	vpcCIDR      = "10.0.0.0/16"
-	az1          = "ap-northeast-1a"
-	az2          = "ap-northeast-1c"
+	az1          = "us-east-1a"
+	az2          = "us-east-1b"
 	publicCIDR1  = "10.0.1.0/24"
 	publicCIDR2  = "10.0.2.0/24"
 	privateCIDR1 = "10.0.3.0/24"
@@ -1071,4 +1071,4 @@ This implementation creates a complete IoT data pipeline with:
 - ElastiCache Redis for caching
 - Secrets Manager for credential management
 
-The infrastructure is deployed in the ap-northeast-1 region with production-ready patterns.
+The infrastructure is deployed in the us-east-1 region (changed from ap-northeast-1 due to Elastic IP quota limitations in the Tokyo region) with production-ready patterns.
