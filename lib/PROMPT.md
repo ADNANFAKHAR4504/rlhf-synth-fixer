@@ -5,7 +5,7 @@ You are an expert AWS Infrastructure Engineer. Create infrastructure using **AWS
 ## Platform Requirements
 - **Platform**: AWS CDK (Cloud Development Kit)
 - **Language**: Go
-- **Region**: us-west-2 (primary region for DR solution pilot)
+- **Region**: ca-central-1 (primary region for DR solution pilot)
 
 ## Business Context
 GlobalStream is a major streaming platform serving millions of users across South America with live and on-demand content. They need a disaster recovery solution in sa-east-1 that maintains business continuity during regional outages while ensuring compliance with local media regulations.

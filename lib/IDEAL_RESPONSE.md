@@ -800,7 +800,7 @@ func NewComputeConstruct(scope constructs.Construct, id *string, props *ComputeC
 		}),
 		Environment: &map[string]*string{
 			"ENVIRONMENT": jsii.String(environmentSuffix),
-			"AWS_REGION":  jsii.String("us-west-2"),
+			"AWS_REGION":  jsii.String("ca-central-1"),
 		},
 		Command: &[]*string{
 			jsii.String("sh"),
@@ -1492,7 +1492,7 @@ AuthorizationConfig: &awsecs.AuthorizationConfig{
 
 ### Environment Variables
 - `ENVIRONMENT_SUFFIX`: Required, used for all resource naming to avoid conflicts
-- `AWS_REGION`: Should be set to `us-west-2` (or desired region)
+- `AWS_REGION`: Should be set to `ca-central-1` (or desired region)
 - Stack name format: `TapStack{ENVIRONMENT_SUFFIX}`
 
 ### Resource Naming
