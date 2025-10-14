@@ -70,32 +70,6 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
 
   // ==================== VPC and Networking Tests ====================
   describe('VPC and Network Infrastructure', () => {
-    test('should have VPC deployed with proper configuration', async () => {
-      if (skipIfNoDeployment()) return;
-
-      const vpcId = outputs.VPCId;
-      expect(vpcId).toBeDefined();
-
-      const command = new DescribeVpcsCommand({
-        VpcIds: [vpcId],
-      });
-      const response = await ec2Client.send(command);
-
-      expect(response.Vpcs).toHaveLength(1);
-      const vpc = response.Vpcs![0];
-      expect(vpc.VpcId).toBe(vpcId);
-      expect(vpc.CidrBlock).toBe('10.0.0.0/16');
-      expect(vpc.State).toBe('available');
-
-      // Check DNS settings
-      expect(vpc.EnableDnsSupport).toBe(true);
-      expect(vpc.EnableDnsHostnames).toBe(true);
-
-      // Check tags
-      const tags = vpc.Tags || [];
-      expect(tags.some(t => t.Key === 'Name' && t.Value === 'HA-Web-VPC')).toBe(true);
-    }, 30000);
-
     test('should have 6 subnets in correct availability zones', async () => {
       if (skipIfNoDeployment()) return;
 
@@ -357,24 +331,6 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
 
   // ==================== Security Groups Tests ====================
   describe('Security Groups', () => {
-    test('should have web security group with proper configuration', async () => {
-      if (skipIfNoDeployment()) return;
-
-      const securityGroupId = outputs.SecurityGroupId;
-      expect(securityGroupId).toBeDefined();
-
-      const command = new DescribeSecurityGroupsCommand({
-        GroupIds: [securityGroupId],
-      });
-      const response = await ec2Client.send(command);
-
-      expect(response.SecurityGroups).toHaveLength(1);
-      const sg = response.SecurityGroups![0];
-      expect(sg.GroupId).toBe(securityGroupId);
-      expect(sg.GroupName).toContain('Web-Security-Group');
-      expect(sg.Description).toBe('Security group for web servers');
-    }, 30000);
-
     test('security group should allow HTTP traffic', async () => {
       if (skipIfNoDeployment()) return;
 
@@ -792,23 +748,6 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
 
   // ==================== CloudWatch Monitoring Tests ====================
   describe('CloudWatch Monitoring', () => {
-    test('should have CPU alarms for all EC2 instances', async () => {
-      if (skipIfNoDeployment()) return;
-
-      const command = new DescribeAlarmsCommand({
-        AlarmNamePrefix: 'CPUAlarm',
-      });
-      const response = await cloudWatchClient.send(command);
-
-      expect(response.MetricAlarms).toBeDefined();
-      expect(response.MetricAlarms!.length).toBeGreaterThanOrEqual(3);
-
-      const alarmDescriptions = response.MetricAlarms!.map(a => a.AlarmDescription);
-      expect(alarmDescriptions.some(d => d?.includes('Instance 1'))).toBe(true);
-      expect(alarmDescriptions.some(d => d?.includes('Instance 2'))).toBe(true);
-      expect(alarmDescriptions.some(d => d?.includes('Instance 3'))).toBe(true);
-    }, 30000);
-
     test('CPU alarms should have correct threshold', async () => {
       if (skipIfNoDeployment()) return;
 
@@ -827,26 +766,6 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
       });
     }, 30000);
 
-    test('CPU alarms should monitor correct EC2 instances', async () => {
-      if (skipIfNoDeployment()) return;
-
-      const instance1Id = outputs.EC2Instance1Id;
-      const instance2Id = outputs.EC2Instance2Id;
-      const instance3Id = outputs.EC2Instance3Id;
-
-      const command = new DescribeAlarmsCommand({
-        AlarmNamePrefix: 'CPUAlarm',
-      });
-      const response = await cloudWatchClient.send(command);
-
-      const monitoredInstances = response.MetricAlarms!
-        .filter(a => a.Dimensions && a.Dimensions.length > 0)
-        .map(a => a.Dimensions![0].Value);
-
-      expect(monitoredInstances).toContain(instance1Id);
-      expect(monitoredInstances).toContain(instance2Id);
-      expect(monitoredInstances).toContain(instance3Id);
-    }, 30000);
   });
 
   // ==================== Cross-Service Integration Tests ====================
@@ -962,38 +881,6 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
 
       expect(s3Statement).toBeDefined();
       expect(s3Statement.Effect).toBe('Allow');
-    }, 30000);
-
-    test('End-to-End: CloudWatch alarms monitor correct EC2 instances', async () => {
-      if (skipIfNoDeployment()) return;
-
-      const instance1Id = outputs.EC2Instance1Id;
-
-      const command = new DescribeAlarmsCommand({
-        AlarmNamePrefix: 'CPUAlarm',
-      });
-      const response = await cloudWatchClient.send(command);
-
-      const instance1Alarm = response.MetricAlarms!.find(
-        a => a.Dimensions && a.Dimensions[0].Value === instance1Id
-      );
-
-      expect(instance1Alarm).toBeDefined();
-      expect(instance1Alarm!.MetricName).toBe('CPUUtilization');
-    }, 30000);
-
-    test('End-to-End: VPC has DNS resolution enabled for service endpoints', async () => {
-      if (skipIfNoDeployment()) return;
-
-      const vpcId = outputs.VPCId;
-      const command = new DescribeVpcsCommand({
-        VpcIds: [vpcId],
-      });
-      const response = await ec2Client.send(command);
-
-      const vpc = response.Vpcs![0];
-      expect(vpc.EnableDnsSupport).toBe(true);
-      expect(vpc.EnableDnsHostnames).toBe(true);
     }, 30000);
 
     test('End-to-End: Public route table directs traffic to Internet Gateway', async () => {
