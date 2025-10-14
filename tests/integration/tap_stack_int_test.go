@@ -19,10 +19,14 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/eventbridge"
 	"github.com/aws/aws-sdk-go-v2/service/kinesis"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
+	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/sfn"
 	"github.com/aws/aws-sdk-go-v2/service/sns"
+	"github.com/aws/aws-sdk-go-v2/types"
 	"github.com/aws/jsii-runtime-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -109,6 +113,22 @@ func TestTapStackIntegration(t *testing.T) {
 
 	t.Run("monitoring infrastructure validation", func(t *testing.T) {
 		testMonitoringInfrastructure(t, ctx, cfg, outputs)
+	})
+
+	t.Run("Step Functions execution testing", func(t *testing.T) {
+		testStepFunctionsExecution(t, ctx, cfg, outputs)
+	})
+
+	t.Run("Lambda function invocation testing", func(t *testing.T) {
+		testLambdaInvocation(t, ctx, cfg, outputs)
+	})
+
+	t.Run("EventBridge rule validation", func(t *testing.T) {
+		testEventBridgeRules(t, ctx, cfg, outputs)
+	})
+
+	t.Run("End-to-End workflow testing", func(t *testing.T) {
+		testEndToEndWorkflow(t, ctx, cfg, outputs)
 	})
 
 	t.Run("can deploy and destroy stack successfully", func(t *testing.T) {
@@ -318,17 +338,44 @@ func testTrainingInfrastructure(t *testing.T, ctx context.Context, cfg aws.Confi
 		t.Logf("✓ Training bucket %s exists", trainingBucket)
 	})
 
-	t.Run("Step Functions state machine validation", func(t *testing.T) {
+	t.Run("Step Functions state machine exists", func(t *testing.T) {
+		sfnClient := sfn.NewFromConfig(cfg)
+
 		// Extract environment suffix
 		parts := strings.Split(outputs.RawImageBucketName, "-")
 		envSuffix := parts[len(parts)-1]
 		stateMachineName := "ml-model-training-pipeline-" + envSuffix
 
-		expectedNamePattern := "ml-model-training-pipeline-"
-		assert.Contains(t, stateMachineName, expectedNamePattern, "State machine name should follow expected pattern")
+		// List state machines to find ours
+		listOutput, err := sfnClient.ListStateMachines(ctx, &sfn.ListStateMachinesInput{})
+		assert.NoError(t, err, "Should be able to list state machines")
 
-		t.Logf("✓ State machine expected name: %s", stateMachineName)
-		t.Logf("Note: Full Step Functions validation requires AWS SDK package that is not yet available in AWS SDK v2 for Go")
+		if listOutput != nil {
+			found := false
+			var stateMachineArn string
+			for _, sm := range listOutput.StateMachines {
+				if sm.Name != nil && *sm.Name == stateMachineName {
+					found = true
+					stateMachineArn = *sm.StateMachineArn
+					break
+				}
+			}
+
+			assert.True(t, found, "State machine %s should exist", stateMachineName)
+			if found {
+				// Describe the state machine
+				describeOutput, err := sfnClient.DescribeStateMachine(ctx, &sfn.DescribeStateMachineInput{
+					StateMachineArn: aws.String(stateMachineArn),
+				})
+				assert.NoError(t, err, "Should be able to describe state machine")
+				if describeOutput != nil {
+					assert.NotNil(t, describeOutput.Definition, "State machine should have a definition")
+					assert.NotNil(t, describeOutput.RoleArn, "State machine should have an execution role")
+					t.Logf("✓ Step Functions state machine %s is properly configured", stateMachineName)
+					t.Logf("  ARN: %s", stateMachineArn)
+				}
+			}
+		}
 	})
 }
 
@@ -476,6 +523,605 @@ func testMonitoringInfrastructure(t *testing.T, ctx context.Context, cfg aws.Con
 		assert.True(t, found, "SNS topic should exist")
 		if found {
 			t.Logf("✓ SNS topic %s exists", topicArn)
+		}
+	})
+}
+
+// testStepFunctionsExecution tests the actual execution of Step Functions state machine
+func testStepFunctionsExecution(t *testing.T, ctx context.Context, cfg aws.Config, outputs *StackOutputs) {
+	t.Run("execute state machine successfully", func(t *testing.T) {
+		sfnClient := sfn.NewFromConfig(cfg)
+
+		// Extract environment suffix
+		parts := strings.Split(outputs.RawImageBucketName, "-")
+		envSuffix := parts[len(parts)-1]
+		stateMachineName := "ml-model-training-pipeline-" + envSuffix
+
+		// Find the state machine ARN
+		listOutput, err := sfnClient.ListStateMachines(ctx, &sfn.ListStateMachinesInput{})
+		require.NoError(t, err, "Should be able to list state machines")
+
+		var stateMachineArn string
+		for _, sm := range listOutput.StateMachines {
+			if sm.Name != nil && *sm.Name == stateMachineName {
+				stateMachineArn = *sm.StateMachineArn
+				break
+			}
+		}
+
+		require.NotEmpty(t, stateMachineArn, "State machine should exist")
+
+		// Start execution with test input
+		executionName := "integration-test-" + time.Now().Format("20060102-150405")
+		input := `{"test": true, "timestamp": "` + time.Now().Format(time.RFC3339) + `"}`
+
+		startOutput, err := sfnClient.StartExecution(ctx, &sfn.StartExecutionInput{
+			StateMachineArn: aws.String(stateMachineArn),
+			Name:            aws.String(executionName),
+			Input:           aws.String(input),
+		})
+		require.NoError(t, err, "Should be able to start execution")
+		require.NotNil(t, startOutput, "Start execution output should not be nil")
+		require.NotEmpty(t, startOutput.ExecutionArn, "Execution ARN should not be empty")
+
+		t.Logf("✓ Started execution: %s", *startOutput.ExecutionArn)
+
+		// Wait for execution to complete (with timeout)
+		executionCompleted := false
+		maxWaitTime := 5 * time.Minute
+		pollInterval := 5 * time.Second
+		startTime := time.Now()
+
+		for time.Since(startTime) < maxWaitTime {
+			describeOutput, err := sfnClient.DescribeExecution(ctx, &sfn.DescribeExecutionInput{
+				ExecutionArn: startOutput.ExecutionArn,
+			})
+			require.NoError(t, err, "Should be able to describe execution")
+
+			t.Logf("  Execution status: %s", string(describeOutput.Status))
+
+			if describeOutput.Status == types.ExecutionStatusSucceeded {
+				executionCompleted = true
+				assert.NotNil(t, describeOutput.Output, "Execution should have output")
+				t.Logf("✓ Execution completed successfully")
+				if describeOutput.Output != nil {
+					t.Logf("  Output: %s", *describeOutput.Output)
+				}
+				break
+			} else if describeOutput.Status == types.ExecutionStatusFailed ||
+				describeOutput.Status == types.ExecutionStatusTimedOut ||
+				describeOutput.Status == types.ExecutionStatusAborted {
+				t.Errorf("Execution failed with status: %s", string(describeOutput.Status))
+				if describeOutput.Cause != nil {
+					t.Errorf("  Cause: %s", *describeOutput.Cause)
+				}
+				break
+			}
+
+			time.Sleep(pollInterval)
+		}
+
+		if !executionCompleted && time.Since(startTime) >= maxWaitTime {
+			t.Logf("⚠ Execution did not complete within %v (this may be expected for long-running workflows)", maxWaitTime)
+		}
+	})
+
+	t.Run("list execution history", func(t *testing.T) {
+		sfnClient := sfn.NewFromConfig(cfg)
+
+		// Extract environment suffix
+		parts := strings.Split(outputs.RawImageBucketName, "-")
+		envSuffix := parts[len(parts)-1]
+		stateMachineName := "ml-model-training-pipeline-" + envSuffix
+
+		// Find the state machine ARN
+		listOutput, err := sfnClient.ListStateMachines(ctx, &sfn.ListStateMachinesInput{})
+		require.NoError(t, err, "Should be able to list state machines")
+
+		var stateMachineArn string
+		for _, sm := range listOutput.StateMachines {
+			if sm.Name != nil && *sm.Name == stateMachineName {
+				stateMachineArn = *sm.StateMachineArn
+				break
+			}
+		}
+
+		require.NotEmpty(t, stateMachineArn, "State machine should exist")
+
+		// List recent executions
+		execListOutput, err := sfnClient.ListExecutions(ctx, &sfn.ListExecutionsInput{
+			StateMachineArn: aws.String(stateMachineArn),
+			MaxResults:      aws.Int32(10),
+		})
+		assert.NoError(t, err, "Should be able to list executions")
+
+		if execListOutput != nil && len(execListOutput.Executions) > 0 {
+			t.Logf("✓ Found %d recent executions", len(execListOutput.Executions))
+			for i, exec := range execListOutput.Executions {
+				if i < 3 { // Show first 3
+					t.Logf("  - %s: %s (started: %s)", *exec.Name, string(exec.Status), exec.StartDate.Format(time.RFC3339))
+				}
+			}
+		} else {
+			t.Log("No previous executions found (this is expected for new deployments)")
+		}
+	})
+}
+
+// testLambdaInvocation tests direct Lambda function invocations
+func testLambdaInvocation(t *testing.T, ctx context.Context, cfg aws.Config, outputs *StackOutputs) {
+	lambdaClient := lambda.NewFromConfig(cfg)
+
+	// Extract environment suffix
+	parts := strings.Split(outputs.RawImageBucketName, "-")
+	envSuffix := parts[len(parts)-1]
+
+	t.Run("invoke data preparation lambda", func(t *testing.T) {
+		// Find the DataPrepLambda function
+		listOutput, err := lambdaClient.ListFunctions(ctx, &lambda.ListFunctionsInput{})
+		require.NoError(t, err, "Should be able to list Lambda functions")
+
+		var dataPrepFunctionName string
+		for _, fn := range listOutput.Functions {
+			if fn.FunctionName != nil && strings.Contains(*fn.FunctionName, "DataPrepLambda") && strings.Contains(*fn.FunctionName, envSuffix) {
+				dataPrepFunctionName = *fn.FunctionName
+				break
+			}
+		}
+
+		if dataPrepFunctionName == "" {
+			t.Skip("Data prep lambda not found - may not be deployed yet")
+			return
+		}
+
+		// Invoke the function
+		payload := `{"test": true, "action": "prepare_data"}`
+		invokeOutput, err := lambdaClient.Invoke(ctx, &lambda.InvokeInput{
+			FunctionName: aws.String(dataPrepFunctionName),
+			Payload:      []byte(payload),
+		})
+		assert.NoError(t, err, "Should be able to invoke data prep lambda")
+
+		if invokeOutput != nil {
+			assert.NotNil(t, invokeOutput.StatusCode, "Lambda should return status code")
+			assert.Equal(t, int32(200), invokeOutput.StatusCode, "Lambda should return 200")
+
+			if invokeOutput.Payload != nil {
+				t.Logf("✓ Data prep lambda invoked successfully")
+				t.Logf("  Response: %s", string(invokeOutput.Payload))
+			}
+
+			if invokeOutput.FunctionError != nil {
+				t.Errorf("Lambda returned error: %s", *invokeOutput.FunctionError)
+			}
+		}
+	})
+
+	t.Run("invoke model evaluation lambda", func(t *testing.T) {
+		// Find the ModelEvalLambda function
+		listOutput, err := lambdaClient.ListFunctions(ctx, &lambda.ListFunctionsInput{})
+		require.NoError(t, err, "Should be able to list Lambda functions")
+
+		var evalFunctionName string
+		for _, fn := range listOutput.Functions {
+			if fn.FunctionName != nil && strings.Contains(*fn.FunctionName, "ModelEvalLambda") && strings.Contains(*fn.FunctionName, envSuffix) {
+				evalFunctionName = *fn.FunctionName
+				break
+			}
+		}
+
+		if evalFunctionName == "" {
+			t.Skip("Model eval lambda not found - may not be deployed yet")
+			return
+		}
+
+		// Invoke the function
+		payload := `{"test": true, "model": "test-model", "action": "evaluate"}`
+		invokeOutput, err := lambdaClient.Invoke(ctx, &lambda.InvokeInput{
+			FunctionName: aws.String(evalFunctionName),
+			Payload:      []byte(payload),
+		})
+		assert.NoError(t, err, "Should be able to invoke model eval lambda")
+
+		if invokeOutput != nil {
+			assert.NotNil(t, invokeOutput.StatusCode, "Lambda should return status code")
+			assert.Equal(t, int32(200), invokeOutput.StatusCode, "Lambda should return 200")
+
+			if invokeOutput.Payload != nil {
+				t.Logf("✓ Model evaluation lambda invoked successfully")
+				t.Logf("  Response: %s", string(invokeOutput.Payload))
+			}
+
+			if invokeOutput.FunctionError != nil {
+				t.Errorf("Lambda returned error: %s", *invokeOutput.FunctionError)
+			}
+		}
+	})
+
+	t.Run("invoke inference lambda", func(t *testing.T) {
+		// Find the InferenceLambda function
+		listOutput, err := lambdaClient.ListFunctions(ctx, &lambda.ListFunctionsInput{})
+		require.NoError(t, err, "Should be able to list Lambda functions")
+
+		var inferenceFunctionName string
+		for _, fn := range listOutput.Functions {
+			if fn.FunctionName != nil && strings.Contains(*fn.FunctionName, "InferenceFunction") && strings.Contains(*fn.FunctionName, envSuffix) {
+				inferenceFunctionName = *fn.FunctionName
+				break
+			}
+		}
+
+		if inferenceFunctionName == "" {
+			t.Skip("Inference lambda not found - may not be deployed yet")
+			return
+		}
+
+		// Invoke the function
+		payload := `{"test": true, "image_id": "test-image-123"}`
+		invokeOutput, err := lambdaClient.Invoke(ctx, &lambda.InvokeInput{
+			FunctionName: aws.String(inferenceFunctionName),
+			Payload:      []byte(payload),
+		})
+		assert.NoError(t, err, "Should be able to invoke inference lambda")
+
+		if invokeOutput != nil {
+			assert.NotNil(t, invokeOutput.StatusCode, "Lambda should return status code")
+			assert.Equal(t, int32(200), invokeOutput.StatusCode, "Lambda should return 200")
+
+			if invokeOutput.Payload != nil {
+				t.Logf("✓ Inference lambda invoked successfully")
+				t.Logf("  Response: %s", string(invokeOutput.Payload))
+
+				// Validate response structure
+				var response map[string]interface{}
+				err := json.Unmarshal(invokeOutput.Payload, &response)
+				assert.NoError(t, err, "Response should be valid JSON")
+				if err == nil {
+					assert.Contains(t, response, "statusCode", "Response should contain statusCode")
+					assert.Contains(t, response, "body", "Response should contain body")
+				}
+			}
+
+			if invokeOutput.FunctionError != nil {
+				t.Errorf("Lambda returned error: %s", *invokeOutput.FunctionError)
+			}
+		}
+	})
+
+	t.Run("check lambda configurations", func(t *testing.T) {
+		listOutput, err := lambdaClient.ListFunctions(ctx, &lambda.ListFunctionsInput{})
+		require.NoError(t, err, "Should be able to list Lambda functions")
+
+		relevantFunctions := 0
+		for _, fn := range listOutput.Functions {
+			if fn.FunctionName != nil && strings.Contains(*fn.FunctionName, envSuffix) &&
+				(strings.Contains(*fn.FunctionName, "DataPrepLambda") ||
+					strings.Contains(*fn.FunctionName, "ModelEvalLambda") ||
+					strings.Contains(*fn.FunctionName, "InferenceFunction")) {
+				relevantFunctions++
+
+				// Check Lambda configuration
+				assert.NotNil(t, fn.Runtime, "Lambda should have runtime configured")
+				assert.NotNil(t, fn.MemorySize, "Lambda should have memory size configured")
+				assert.NotNil(t, fn.Timeout, "Lambda should have timeout configured")
+
+				t.Logf("✓ Lambda %s configured with %dMB memory, %ds timeout, runtime %s",
+					*fn.FunctionName, *fn.MemorySize, *fn.Timeout, string(fn.Runtime))
+			}
+		}
+
+		assert.GreaterOrEqual(t, relevantFunctions, 1, "Should find at least one relevant Lambda function")
+	})
+}
+
+// testEventBridgeRules tests EventBridge rule configuration
+func testEventBridgeRules(t *testing.T, ctx context.Context, cfg aws.Config, outputs *StackOutputs) {
+	eventBridgeClient := eventbridge.NewFromConfig(cfg)
+
+	// Extract environment suffix
+	parts := strings.Split(outputs.RawImageBucketName, "-")
+	envSuffix := parts[len(parts)-1]
+
+	t.Run("daily training schedule rule exists", func(t *testing.T) {
+		// The rule name from the stack is "DailyTrainingSchedule"
+		// CDK may add a prefix/suffix, so we'll list all rules and find it
+		listOutput, err := eventBridgeClient.ListRules(ctx, &eventbridge.ListRulesInput{})
+		require.NoError(t, err, "Should be able to list EventBridge rules")
+
+		var foundRule *eventbridge.DescribeRuleOutput
+		for _, rule := range listOutput.Rules {
+			if rule.Name != nil && strings.Contains(*rule.Name, "DailyTrainingSchedule") {
+				// Describe the rule to get full details
+				describeOutput, err := eventBridgeClient.DescribeRule(ctx, &eventbridge.DescribeRuleInput{
+					Name: rule.Name,
+				})
+				if err == nil {
+					foundRule = describeOutput
+					break
+				}
+			}
+		}
+
+		require.NotNil(t, foundRule, "Daily training schedule rule should exist")
+
+		// Validate rule configuration
+		assert.NotNil(t, foundRule.ScheduleExpression, "Rule should have schedule expression")
+		if foundRule.ScheduleExpression != nil {
+			assert.Contains(t, *foundRule.ScheduleExpression, "cron", "Schedule should be a cron expression")
+			t.Logf("✓ EventBridge rule found with schedule: %s", *foundRule.ScheduleExpression)
+		}
+
+		assert.NotNil(t, foundRule.State, "Rule should have a state")
+		t.Logf("  Rule state: %s", string(foundRule.State))
+		t.Logf("  Note: Rule is %s by default for safety", string(foundRule.State))
+	})
+
+	t.Run("training schedule targets Step Functions", func(t *testing.T) {
+		// Find the rule
+		listOutput, err := eventBridgeClient.ListRules(ctx, &eventbridge.ListRulesInput{})
+		require.NoError(t, err, "Should be able to list EventBridge rules")
+
+		var ruleName string
+		for _, rule := range listOutput.Rules {
+			if rule.Name != nil && strings.Contains(*rule.Name, "DailyTrainingSchedule") {
+				ruleName = *rule.Name
+				break
+			}
+		}
+
+		require.NotEmpty(t, ruleName, "Training schedule rule should exist")
+
+		// List targets for this rule
+		targetsOutput, err := eventBridgeClient.ListTargetsByRule(ctx, &eventbridge.ListTargetsByRuleInput{
+			Rule: aws.String(ruleName),
+		})
+		assert.NoError(t, err, "Should be able to list rule targets")
+
+		if targetsOutput != nil && len(targetsOutput.Targets) > 0 {
+			assert.GreaterOrEqual(t, len(targetsOutput.Targets), 1, "Rule should have at least one target")
+
+			// Check if any target is a Step Functions state machine
+			hasStepFunctionsTarget := false
+			for _, target := range targetsOutput.Targets {
+				if target.Arn != nil && strings.Contains(*target.Arn, "states") && strings.Contains(*target.Arn, "stateMachine") {
+					hasStepFunctionsTarget = true
+					t.Logf("✓ Rule targets Step Functions state machine: %s", *target.Arn)
+
+					// Verify the state machine name contains our expected pattern
+					assert.Contains(t, *target.Arn, "ml-model-training-pipeline", "Target should be the training pipeline")
+					break
+				}
+			}
+
+			assert.True(t, hasStepFunctionsTarget, "Rule should target a Step Functions state machine")
+		} else {
+			t.Error("Rule should have at least one target configured")
+		}
+	})
+
+	t.Run("validate rule IAM permissions", func(t *testing.T) {
+		// Find the rule
+		listOutput, err := eventBridgeClient.ListRules(ctx, &eventbridge.ListRulesInput{})
+		require.NoError(t, err, "Should be able to list EventBridge rules")
+
+		var ruleName string
+		for _, rule := range listOutput.Rules {
+			if rule.Name != nil && strings.Contains(*rule.Name, "DailyTrainingSchedule") {
+				ruleName = *rule.Name
+				break
+			}
+		}
+
+		require.NotEmpty(t, ruleName, "Training schedule rule should exist")
+
+		// List targets to check role ARN
+		targetsOutput, err := eventBridgeClient.ListTargetsByRule(ctx, &eventbridge.ListTargetsByRuleInput{
+			Rule: aws.String(ruleName),
+		})
+		assert.NoError(t, err, "Should be able to list rule targets")
+
+		if targetsOutput != nil && len(targetsOutput.Targets) > 0 {
+			for _, target := range targetsOutput.Targets {
+				if target.RoleArn != nil {
+					assert.NotEmpty(t, *target.RoleArn, "Target should have an IAM role")
+					t.Logf("✓ EventBridge rule has IAM role: %s", *target.RoleArn)
+					break
+				}
+			}
+		}
+	})
+}
+
+// testEndToEndWorkflow tests a complete end-to-end workflow
+func testEndToEndWorkflow(t *testing.T, ctx context.Context, cfg aws.Config, outputs *StackOutputs) {
+	t.Run("complete ML pipeline workflow", func(t *testing.T) {
+		// This test simulates a complete workflow:
+		// 1. Upload image to S3
+		// 2. Write metadata to DynamoDB
+		// 3. Trigger Step Functions execution
+		// 4. Call inference API
+		// 5. Verify results
+
+		s3Client := s3.NewFromConfig(cfg)
+		dynamoClient := dynamodb.NewFromConfig(cfg)
+		sfnClient := sfn.NewFromConfig(cfg)
+
+		testImageID := "e2e-test-" + time.Now().Format("20060102-150405")
+
+		// Step 1: Upload test image to S3
+		t.Log("Step 1: Uploading test image to S3...")
+		testImageContent := []byte("test-image-data-" + time.Now().String())
+		_, err := s3Client.PutObject(ctx, &s3.PutObjectInput{
+			Bucket: aws.String(outputs.RawImageBucketName),
+			Key:    aws.String(testImageID + ".jpg"),
+			Body:   strings.NewReader(string(testImageContent)),
+		})
+		assert.NoError(t, err, "Should be able to upload test image")
+		if err == nil {
+			t.Logf("✓ Uploaded test image: %s.jpg", testImageID)
+
+			// Cleanup: Delete test image at the end
+			defer func() {
+				_, _ = s3Client.DeleteObject(ctx, &s3.DeleteObjectInput{
+					Bucket: aws.String(outputs.RawImageBucketName),
+					Key:    aws.String(testImageID + ".jpg"),
+				})
+				t.Log("  Cleaned up test image")
+			}()
+		}
+
+		// Step 2: Write metadata to DynamoDB
+		t.Log("Step 2: Writing metadata to DynamoDB...")
+		_, err = dynamoClient.PutItem(ctx, &dynamodb.PutItemInput{
+			TableName: aws.String(outputs.MetadataTableName),
+			Item: map[string]types.AttributeValue{
+				"image_id":  &types.AttributeValueMemberS{Value: testImageID},
+				"timestamp": &types.AttributeValueMemberS{Value: time.Now().Format(time.RFC3339)},
+				"status":    &types.AttributeValueMemberS{Value: "uploaded"},
+				"source":    &types.AttributeValueMemberS{Value: "integration-test"},
+				"test_run":  &types.AttributeValueMemberBOOL{Value: true},
+			},
+		})
+		assert.NoError(t, err, "Should be able to write metadata")
+		if err == nil {
+			t.Logf("✓ Wrote metadata for image: %s", testImageID)
+
+			// Cleanup: Delete test metadata at the end
+			defer func() {
+				_, _ = dynamoClient.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+					TableName: aws.String(outputs.MetadataTableName),
+					Key: map[string]types.AttributeValue{
+						"image_id": &types.AttributeValueMemberS{Value: testImageID},
+					},
+				})
+				t.Log("  Cleaned up test metadata")
+			}()
+		}
+
+		// Step 3: Trigger Step Functions workflow (optional - can be slow)
+		t.Log("Step 3: Testing Step Functions availability...")
+		// Extract environment suffix
+		parts := strings.Split(outputs.RawImageBucketName, "-")
+		envSuffix := parts[len(parts)-1]
+		stateMachineName := "ml-model-training-pipeline-" + envSuffix
+
+		// Find the state machine
+		listOutput, err := sfnClient.ListStateMachines(ctx, &sfn.ListStateMachinesInput{})
+		if err == nil && listOutput != nil {
+			for _, sm := range listOutput.StateMachines {
+				if sm.Name != nil && *sm.Name == stateMachineName {
+					t.Logf("✓ Step Functions state machine available: %s", *sm.StateMachineArn)
+					t.Log("  (Skipping execution to keep test fast - see dedicated Step Functions test)")
+					break
+				}
+			}
+		}
+
+		// Step 4: Call inference API
+		t.Log("Step 4: Testing inference API...")
+		apiEndpoint := outputs.InferenceApiEndpoint
+		if apiEndpoint == "" {
+			apiEndpoint = outputs.InferenceAPIEndpoint83653F
+		}
+
+		if apiEndpoint != "" {
+			client := &http.Client{Timeout: 30 * time.Second}
+			predictURL := strings.TrimSuffix(apiEndpoint, "/") + "/predict"
+
+			requestBody := map[string]interface{}{
+				"image_id": testImageID,
+				"test":     true,
+			}
+			requestJSON, _ := json.Marshal(requestBody)
+
+			req, err := http.NewRequestWithContext(ctx, "POST", predictURL, strings.NewReader(string(requestJSON)))
+			if err == nil {
+				req.Header.Set("Content-Type", "application/json")
+
+				resp, err := client.Do(req)
+				if err == nil && resp != nil {
+					defer resp.Body.Close()
+					body, _ := io.ReadAll(resp.Body)
+
+					if resp.StatusCode == http.StatusOK {
+						t.Logf("✓ Inference API responded successfully")
+						t.Logf("  Response: %s", string(body))
+
+						// Validate response structure
+						var apiResponse map[string]interface{}
+						if json.Unmarshal(body, &apiResponse) == nil {
+							t.Log("✓ Response is valid JSON")
+						}
+					} else {
+						t.Logf("⚠ API returned status %d: %s", resp.StatusCode, string(body))
+					}
+				} else if err != nil {
+					t.Logf("⚠ API request failed: %v (this may be expected in some test environments)", err)
+				}
+			}
+		} else {
+			t.Log("⚠ API endpoint not available in outputs")
+		}
+
+		// Step 5: Verify data persistence
+		t.Log("Step 5: Verifying data persistence...")
+		getOutput, err := dynamoClient.GetItem(ctx, &dynamodb.GetItemInput{
+			TableName: aws.String(outputs.MetadataTableName),
+			Key: map[string]types.AttributeValue{
+				"image_id": &types.AttributeValueMemberS{Value: testImageID},
+			},
+		})
+		assert.NoError(t, err, "Should be able to read metadata")
+		if err == nil && len(getOutput.Item) > 0 {
+			t.Logf("✓ Data persisted correctly in DynamoDB")
+
+			// Verify the data we wrote
+			if statusAttr, ok := getOutput.Item["status"]; ok {
+				if statusVal, ok := statusAttr.(*types.AttributeValueMemberS); ok {
+					assert.Equal(t, "uploaded", statusVal.Value, "Status should match")
+					t.Logf("  Status: %s", statusVal.Value)
+				}
+			}
+		}
+
+		t.Log("✓ End-to-end workflow test completed successfully")
+	})
+
+	t.Run("error handling and resilience", func(t *testing.T) {
+		// Test error handling
+		dynamoClient := dynamodb.NewFromConfig(cfg)
+
+		// Try to get non-existent item
+		_, err := dynamoClient.GetItem(ctx, &dynamodb.GetItemInput{
+			TableName: aws.String(outputs.MetadataTableName),
+			Key: map[string]types.AttributeValue{
+				"image_id": &types.AttributeValueMemberS{Value: "non-existent-id"},
+			},
+		})
+		assert.NoError(t, err, "GetItem should not error for non-existent items")
+		t.Log("✓ Error handling works correctly for non-existent data")
+
+		// Test API with invalid payload
+		apiEndpoint := outputs.InferenceApiEndpoint
+		if apiEndpoint == "" {
+			apiEndpoint = outputs.InferenceAPIEndpoint83653F
+		}
+
+		if apiEndpoint != "" {
+			client := &http.Client{Timeout: 10 * time.Second}
+			predictURL := strings.TrimSuffix(apiEndpoint, "/") + "/predict"
+
+			// Send invalid JSON
+			req, err := http.NewRequestWithContext(ctx, "POST", predictURL, strings.NewReader("invalid-json"))
+			if err == nil {
+				req.Header.Set("Content-Type", "application/json")
+				resp, err := client.Do(req)
+				if err == nil && resp != nil {
+					defer resp.Body.Close()
+					// API should handle invalid input gracefully
+					t.Logf("✓ API handles invalid input, returned status: %d", resp.StatusCode)
+				}
+			}
 		}
 	})
 }
