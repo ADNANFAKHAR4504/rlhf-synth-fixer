@@ -307,7 +307,6 @@ Resources:
 
   DBCluster:
     Type: AWS::RDS::DBCluster
-    DependsOn: DBMasterSecret
     Properties:
       DBClusterIdentifier: !Sub 'payment-db-cluster-${EnvironmentSuffix}'
       Engine: aurora-postgresql
@@ -495,7 +494,6 @@ Resources:
   SecretRotationSchedule:
     Type: AWS::SecretsManager::RotationSchedule
     DependsOn:
-      - SecretRotationLambda
       - SecretRotationLambdaPermission
       - DBCluster
     Properties:
