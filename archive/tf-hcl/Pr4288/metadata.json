@@ -21,5 +21,11 @@
     "IAM",
     "SNS"
   ],
-  "training_quality": 3
+  "training_quality": 3,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
 }
