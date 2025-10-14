@@ -46,7 +46,7 @@ Resources:
       Name: /TapStack/DBPassword
       Type: String
       Value: StrongP@ssw0rd123!
-      Description: Default master password for RDS (encrypted via dynamic reference)
+      Description: RDS master password stored in Parameter Store
       Tier: Standard
 
   ########################################
@@ -383,7 +383,7 @@ Resources:
       Engine: mysql
       EngineVersion: 8.0.43
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: "{{resolve:ssm-secure:/TapStack/DBPassword:1}}"
+      MasterUserPassword: !GetAtt DBPasswordParam.Value
       DBInstanceClass: db.t3.micro
       AllocatedStorage: 20
       StorageEncrypted: true
