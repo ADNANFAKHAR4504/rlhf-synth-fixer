@@ -120,7 +120,6 @@ class MonitoringStack(Construct):
         self.kinesis_stream = kinesis.Stream(
             self,
             "LogAggregationStream",
-            stream_name=f"monitoring-logs-{env_suffix}",
             encryption=kinesis.StreamEncryption.KMS,
             encryption_key=self.kms_key,
             retention_period=cdk.Duration.days(7)
