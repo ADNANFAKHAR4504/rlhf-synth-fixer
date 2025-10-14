@@ -84,11 +84,11 @@ run_step() {
             local error_output
             error_output=$(eval "$command" 2>&1)
             if [ $? -eq 0 ]; then
-                [ "$REPORT" != "1" ] && echo "$step_name completed successfully"
+                [ "$REPORT" != "1" ] && echo "✅ $step_name completed successfully"
                 write_to_csv "$step_name completed" ""
             else
                 local exit_code=$?
-                [ "$REPORT" != "1" ] && echo "$step_name failed with exit code: $exit_code"
+                [ "$REPORT" != "1" ] && echo "❌ $step_name failed with exit code: $exit_code"
                 FAILED_STEPS+=("$step_name (exit code: $exit_code)")
                 FAILED_STEP="$step_name"
                 update_status "Failed" "$step_name"
@@ -98,11 +98,11 @@ run_step() {
         else
             # Normal debug mode with output
             if eval "$command"; then
-                echo "$step_name completed successfully"
+                echo "✅ $step_name completed successfully"
                 write_to_csv "$step_name completed" ""
             else
                 local exit_code=$?
-                echo "$step_name failed with exit code: $exit_code"
+                echo "❌ $step_name failed with exit code: $exit_code"
                 FAILED_STEPS+=("$step_name (exit code: $exit_code)")
                 write_to_csv "$step_name failed" "Exit code: $exit_code"
                 success=false
@@ -126,7 +126,7 @@ run_step() {
             local error_output
             error_output=$(eval "$command" 2>&1)
             if [ $? -eq 0 ]; then
-                echo "$step_name completed successfully"
+                echo "✅ $step_name completed successfully"
                 write_to_csv "$step_name completed" ""
             else
                 write_to_csv "$step_name failed" "Command failed in normal mode | $error_output"
@@ -201,13 +201,13 @@ if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
         local bucket_name=$1
         local region=$2
         if aws s3api get-bucket-versioning --bucket "$bucket_name" --region "$region" >/dev/null 2>&1 | grep -q 'Enabled'; then
-            [ "$REPORT" != "1" ] && echo "Versioning already enabled on $bucket_name in $region"
+            [ "$REPORT" != "1" ] && echo "✅ Versioning already enabled on $bucket_name in $region"
         else
             [ "$REPORT" != "1" ] && echo "Enabling versioning on bucket $bucket_name in region $region..."
             if aws s3api put-bucket-versioning --bucket "$bucket_name" --region "$region" --versioning-configuration Status=Enabled >/dev/null 2>&1; then
-                [ "$REPORT" != "1" ] && echo "Versioning enabled on $bucket_name"
+                [ "$REPORT" != "1" ] && echo "✅ Versioning enabled on $bucket_name"
             else
-                [ "$REPORT" != "1" ] && echo "Failed to enable versioning on $bucket_name"
+                [ "$REPORT" != "1" ] && echo "❌ Failed to enable versioning on $bucket_name"
             fi
         fi
     }
@@ -218,7 +218,7 @@ if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
 
         # Check if bucket exists
         if aws s3api head-bucket --bucket "$bucket" --region "$region" >/dev/null 2>&1; then
-            [ "$REPORT" != "1" ] && echo "Bucket $bucket already exists in $region"
+            [ "$REPORT" != "1" ] && echo "✅ Bucket $bucket already exists in $region"
         else
             [ "$REPORT" != "1" ] && echo "Creating bucket $bucket in region $region..."
 
@@ -229,14 +229,14 @@ if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
                 # us-east-1 doesn't need LocationConstraint
                 for ((i=1; i<=MAX_RETRIES; i++)); do
                     if aws s3api create-bucket --bucket "$bucket" --region "$region" >/dev/null; then
-                        [ "$REPORT" != "1" ] && echo "Created bucket $bucket in $region"
+                        [ "$REPORT" != "1" ] && echo "✅ Created bucket $bucket in $region"
                         # Add tagging after successful creation
                         aws s3api put-bucket-tagging --bucket "$bucket" --region "$region" --tagging 'TagSet=[{Key=NUKE_RETAIN,Value=true}]' >/dev/null 2>&1
                         break # Success, exit retry loop
                     else
-                        [ "$REPORT" != "1" ] && echo "Failed to create bucket $bucket in $region (Attempt $i/$MAX_RETRIES)"
+                        [ "$REPORT" != "1" ] && echo "❌ Failed to create bucket $bucket in $region (Attempt $i/$MAX_RETRIES)"
                         if [ $i -eq $MAX_RETRIES ]; then
-                            [ "$REPORT" != "1" ] && echo "All retries failed. Exiting."
+                            [ "$REPORT" != "1" ] && echo "❌ All retries failed. Exiting."
                             if [ "$DEBUG_MODE" = "0" ]; then
                                 exit 1
                             fi
@@ -248,14 +248,14 @@ if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
                 # Other regions need LocationConstraint
                 for ((i=1; i<=MAX_RETRIES; i++)); do
                     if aws s3api create-bucket --bucket "$bucket" --region "$region" --create-bucket-configuration LocationConstraint="$region" >/dev/null; then
-                        [ "$REPORT" != "1" ] && echo "Created bucket $bucket in $region"
+                        [ "$REPORT" != "1" ] && echo "✅ Created bucket $bucket in $region"
                         # Add tagging after successful creation
                         aws s3api put-bucket-tagging --bucket "$bucket" --region "$region" --tagging 'TagSet=[{Key=NUKE_RETAIN,Value=true}]' >/dev/null 2>&1
                         break # Success, exit retry loop
                     else
-                        [ "$REPORT" != "1" ] && echo "Failed to create bucket $bucket in $region (Attempt $i/$MAX_RETRIES)"
+                        [ "$REPORT" != "1" ] && echo "❌ Failed to create bucket $bucket in $region (Attempt $i/$MAX_RETRIES)"
                         if [ $i -eq $MAX_RETRIES ]; then
-                            [ "$REPORT" != "1" ] && echo "All retries failed. Exiting."
+                            [ "$REPORT" != "1" ] && echo "❌ All retries failed. Exiting."
                             if [ "$DEBUG_MODE" = "0" ]; then
                                 exit 1
                             fi
@@ -321,7 +321,7 @@ update_status "Reading metadata..."
 
 # Check if metadata.json exists
 if [ ! -f "metadata.json" ]; then
-    echo "metadata.json not found - cannot proceed with CI/CD pipeline"
+    echo "❌ metadata.json not found - cannot proceed with CI/CD pipeline"
     echo "Either provide metadata.json or pass a command to execute"
     exit 1
 fi
@@ -374,7 +374,7 @@ DEPLOY_SUCCESS=$?
 if [ "$DEPLOY_SUCCESS" -eq 0 ]; then
     run_step "STEP 6: INTEGRATION TESTS" "./scripts/integration-tests.sh"
 else
-    echo "Deployment failed. Skipping integration tests."
+    echo "❌ Deployment failed. Skipping integration tests."
     # Log the skip to the CSV file
     write_to_csv "STEP 6: INTEGRATION TESTS skipped" "Deployment failed"
     # Add a note to the FAILED_STEPS for reporting if in debug mode
@@ -409,7 +409,7 @@ if [ "$DEBUG_MODE" = "1" ] && [ ${#FAILED_STEPS[@]} -gt 0 ]; then
             printf "\n"
         else
             echo ""
-            echo "SUMMARY: Non-critical steps failed but pipeline completed:"
+            echo "⚠️  SUMMARY: Non-critical steps failed but pipeline completed:"
             for step in "${FAILED_STEPS[@]}"; do
                 echo "   - $step (error logged)"
             done
@@ -425,7 +425,7 @@ if [ "$DEBUG_MODE" = "1" ] && [ ${#FAILED_STEPS[@]} -gt 0 ]; then
             printf "\n"
         else
             echo ""
-            echo "SUMMARY: The following steps failed:"
+            echo "⚠️  SUMMARY: The following steps failed:"
             for step in "${FAILED_STEPS[@]}"; do
                 echo "   - $step"
             done
@@ -440,7 +440,7 @@ elif [ ${#FAILED_STEPS[@]} -eq 0 ]; then
         update_status "Success" ""
         printf "\n"
     else
-        echo "All pipeline steps completed successfully!"
+        echo "✅ All pipeline steps completed successfully!"
     fi
     write_to_csv "Pipeline completed successfully" ""
 else
