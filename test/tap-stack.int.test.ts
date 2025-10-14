@@ -534,7 +534,10 @@ describe('TAP Infrastructure Stack - Integration Tests', () => {
     test('Lambda function has CloudWatch Logs configured', async () => {
       expect(outputs.LambdaFunctionName).toBeDefined();
 
-      const logGroupName = `/aws/lambda/${outputs.LambdaFunctionName!}`;
+      // Extract environment from function name (tap-{env}-example)
+      const functionNameParts = outputs.LambdaFunctionName!.split('-');
+      const environment = functionNameParts.slice(1, -1).join('-'); // Everything between 'tap-' and '-example'
+      const logGroupName = `/aws/lambda/tap-${environment}`;
 
       const response = await logsClient.send(
         new DescribeLogGroupsCommand({
@@ -543,6 +546,8 @@ describe('TAP Infrastructure Stack - Integration Tests', () => {
       );
 
       expect(response.logGroups).toBeDefined();
+      expect(response.logGroups!.length).toBeGreaterThan(0);
+
       const logGroup = response.logGroups!.find(
         (lg) => lg.logGroupName === logGroupName
       );
@@ -551,7 +556,7 @@ describe('TAP Infrastructure Stack - Integration Tests', () => {
       expect(logGroup!.retentionInDays).toBeDefined();
 
       console.log(
-        `✓ Lambda function has CloudWatch log group with ${logGroup!.retentionInDays} days retention`
+        `✓ Lambda function has CloudWatch log group ${logGroupName} with ${logGroup!.retentionInDays} days retention`
       );
     }, 30000);
 
@@ -832,7 +837,10 @@ describe('TAP Infrastructure Stack - Integration Tests', () => {
           await new Promise((resolve) => setTimeout(resolve, 3000));
 
           // Verify log group exists
-          const logGroupName = `/aws/lambda/${outputs.LambdaFunctionName!}`;
+          const functionNameParts = outputs.LambdaFunctionName!.split('-');
+          const environment = functionNameParts.slice(1, -1).join('-');
+          const logGroupName = `/aws/lambda/tap-${environment}`;
+
           const response = await logsClient.send(
             new DescribeLogGroupsCommand({
               logGroupNamePrefix: logGroupName,
