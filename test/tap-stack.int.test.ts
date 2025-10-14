@@ -222,7 +222,7 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
   describe('5. S3 Durable Storage', () => {
     test('should verify logs are stored in S3 with proper partitioning', async () => {
       // Wait for Firehose to deliver data to S3
-      await new Promise(resolve => setTimeout(resolve, 15000));
+      await new Promise(resolve => setTimeout(resolve, 60000));
 
       // Check for objects in the logs/ prefix
       const listResponse = await s3Client.send(new ListObjectsV2Command({
