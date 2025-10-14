@@ -11,7 +11,7 @@ Let me plan out how to structure this CloudFormation stack using AWS CDK in Type
 Let's start coding:
 
 ```typescript
-// cloudSetup.ts
+// tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
