@@ -1,22 +1,18 @@
 // tests/unit/unit-tests.ts
-// Comprehensive unit tests for Terraform infrastructure defined in lib/tap_stack.tf and lib/provider.tf
+// Comprehensive unit tests for Terraform infrastructure defined in lib/tap_stack.tf
 // These tests validate the structure and configuration without executing Terraform
 
 import fs from "fs";
 import path from "path";
 
 const STACK_REL = "../lib/tap_stack.tf";
-const PROVIDER_REL = "../lib/provider.tf";
 const stackPath = path.resolve(__dirname, STACK_REL);
-const providerPath = path.resolve(__dirname, PROVIDER_REL);
 
 describe("Terraform Infrastructure Unit Tests", () => {
   let tapStackContent: string;
-  let providerContent: string;
 
   beforeAll(() => {
     tapStackContent = fs.readFileSync(stackPath, "utf8");
-    providerContent = fs.readFileSync(providerPath, "utf8");
   });
 
   describe("File Structure", () => {
@@ -24,25 +20,21 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(fs.existsSync(stackPath)).toBe(true);
     });
 
-    test("provider.tf exists", () => {
-      expect(fs.existsSync(providerPath)).toBe(true);
-    });
-
     test("tap_stack.tf is not empty", () => {
       expect(tapStackContent.length).toBeGreaterThan(0);
     });
 
-    test("provider.tf contains AWS provider configuration", () => {
-      expect(providerContent).toMatch(/provider\s+"aws"/);
-      expect(providerContent).toMatch(/required_providers/);
+    test("tap_stack.tf contains AWS provider configuration", () => {
+      expect(tapStackContent).toMatch(/provider\s+"aws"/);
+      expect(tapStackContent).toMatch(/required_providers/);
     });
 
-    test("provider.tf contains archive provider configuration", () => {
-      expect(providerContent).toMatch(/archive/);
+    test("tap_stack.tf contains archive provider configuration", () => {
+      expect(tapStackContent).toMatch(/archive/);
     });
 
-    test("tap_stack.tf does NOT declare provider (defined in provider.tf)", () => {
-      expect(tapStackContent).not.toMatch(/\bprovider\s+"aws"\s*{/);
+    test("tap_stack.tf contains random provider configuration", () => {
+      expect(tapStackContent).toMatch(/random/);
     });
   });
 
