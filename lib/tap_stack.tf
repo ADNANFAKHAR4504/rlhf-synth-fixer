@@ -11,7 +11,7 @@ variable "primary_region" {
 variable "secondary_region" {
   description = "Secondary AWS region for disaster recovery"
   type        = string
-  default     = "us-west-1"
+  default     = "us-west-2"
 }
 
 variable "vpc_cidr_blocks" {
