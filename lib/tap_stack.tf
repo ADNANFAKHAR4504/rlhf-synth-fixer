@@ -1,6 +1,22 @@
 # main.tf
 
 # ========================================
+# Terraform Configuration
+# ========================================
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.5"
+    }
+  }
+}
+
+# ========================================
 # Variables
 # ========================================
 variable "approved_ami_id" {
@@ -833,6 +849,40 @@ resource "aws_lb_listener" "http_listener" {
 # RDS Configuration
 # ========================================
 
+# Random password for RDS
+resource "random_password" "rds_password" {
+  length  = 32
+  special = true
+  # Ensure password meets RDS requirements
+  override_special = "!#$%&*()-_=+[]{}<>:?"
+}
+
+# Secrets Manager secret for RDS password
+resource "aws_secretsmanager_secret" "rds_password" {
+  name                    = "production-rds-master-password"
+  description             = "Master password for production RDS PostgreSQL database"
+  kms_key_id              = aws_kms_key.main_key.arn
+  recovery_window_in_days = 7
+
+  tags = {
+    Name        = "production-rds-password"
+    Environment = "Production"
+  }
+}
+
+# Store the password in Secrets Manager
+resource "aws_secretsmanager_secret_version" "rds_password" {
+  secret_id = aws_secretsmanager_secret.rds_password.id
+  secret_string = jsonencode({
+    username = "dbadmin"
+    password = random_password.rds_password.result
+    engine   = "postgres"
+    host     = aws_db_instance.main_rds.address
+    port     = aws_db_instance.main_rds.port
+    dbname   = "productiondb"
+  })
+}
+
 # RDS Subnet Group
 resource "aws_db_subnet_group" "rds_subnet_group" {
   name       = "production-rds-subnet-group"
@@ -859,7 +909,7 @@ resource "aws_db_instance" "main_rds" {
 
   db_name  = "productiondb"
   username = "dbadmin"
-  password = "TempPass123!ChangeMe"
+  password = random_password.rds_password.result
 
   vpc_security_group_ids = [aws_security_group.sg_rds.id]
   db_subnet_group_name   = aws_db_subnet_group.rds_subnet_group.name
@@ -1102,4 +1152,10 @@ output "cloudtrail_s3_bucket" {
 output "lambda_function_name" {
   description = "Name of the Lambda function"
   value       = aws_lambda_function.main_lambda.function_name
+}
+
+output "rds_password_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing the RDS master password"
+  value       = aws_secretsmanager_secret.rds_password.arn
+  sensitive   = true
 }
