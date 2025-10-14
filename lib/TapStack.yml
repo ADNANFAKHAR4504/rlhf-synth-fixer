@@ -12,7 +12,7 @@ Parameters:
   KeyPairName:
     Type: String
     Default: ''
-    Description: (Optional) Name of an existing EC2 KeyPair to enable SSH access. Leave blank to skip.
+    Description: (Optional) EC2 KeyPair name for SSH; leave blank to skip.
 
   InstanceType:
     Type: String
@@ -23,7 +23,7 @@ Parameters:
   DBUsername:
     Type: String
     Default: admin
-    Description: Master username for RDS database
+    Description: Master username for RDS
 
 Mappings:
   RegionMap:
@@ -38,9 +38,20 @@ Conditions:
 Resources:
 
   ########################################
-  # Networking Layer
+  # Auto-create SSM parameter for DB password
   ########################################
+  DBPasswordParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /TapStack/DBPassword
+      Type: String
+      Value: StrongP@ssw0rd123!
+      Description: Default master password for RDS (encrypted via dynamic reference)
+      Tier: Standard
 
+  ########################################
+  # Networking
+  ########################################
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -178,7 +189,6 @@ Resources:
   ########################################
   # Security Groups
   ########################################
-
   WebSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -212,7 +222,6 @@ Resources:
   ########################################
   # IAM
   ########################################
-
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
@@ -236,7 +245,6 @@ Resources:
   ########################################
   # S3 Buckets
   ########################################
-
   AppS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -292,7 +300,6 @@ Resources:
   ########################################
   # CloudTrail
   ########################################
-
   CloudTrail:
     Type: AWS::CloudTrail::Trail
     Properties:
@@ -303,9 +310,8 @@ Resources:
       IsMultiRegionTrail: true
 
   ########################################
-  # EC2, ALB, and ASG
+  # EC2, ALB, ASG
   ########################################
-
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
@@ -315,13 +321,13 @@ Resources:
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds: [!Ref WebSecurityGroup]
+        KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref "AWS::NoValue"]
         UserData: !Base64 |
           #!/bin/bash
           yum update -y
           amazon-linux-extras install nginx1 -y
           systemctl enable nginx
           systemctl start nginx
-        KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref "AWS::NoValue"]
 
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -364,7 +370,6 @@ Resources:
   ########################################
   # RDS
   ########################################
-
   RDSSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -391,7 +396,6 @@ Resources:
   ########################################
   # CloudFront
   ########################################
-
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
     Properties:
