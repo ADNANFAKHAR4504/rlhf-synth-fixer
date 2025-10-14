@@ -11,5 +11,11 @@
     "Cloud Environment Setup"
   ],
   "aws_services": "API Gateway, Lambda, DynamoDB, WAF, CloudWatch, X-Ray, SNS, S3, KMS, IAM",
-  "training_quality": 8
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "santhosh-swe",
+  "dockerS3Location": ""
 }
