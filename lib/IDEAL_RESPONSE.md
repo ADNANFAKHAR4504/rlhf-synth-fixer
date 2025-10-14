@@ -2,7 +2,7 @@
 
 ## Architecture Overview
 
-This CloudFormation template creates a highly available, secure, production-level AWS infrastructure environment. The architecture follows AWS best practices for multi-tier applications with the following design:
+This CloudFormation template creates a highly available, secure, production-level AWS infrastructure environment deployed in the us-west-1 (N. California) region. The architecture follows AWS best practices for multi-tier applications with the following design:
 
 ### Network Architecture
 - **VPC**: A Virtual Private Cloud with CIDR block 10.0.0.0/16 providing network isolation
