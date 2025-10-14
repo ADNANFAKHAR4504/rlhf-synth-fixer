@@ -16,7 +16,7 @@ import {
 } from '@aws-sdk/client-s3';
 import axios from 'axios';
 
-// ✅ CRITICAL: Use flat outputs file from deployment job
+// CRITICAL: Use flat outputs file from deployment job
 const FLAT_OUTPUTS_PATH = path.resolve(__dirname, '../cfn-outputs/flat-outputs.json');
 
 interface FlatOutputs {
@@ -32,11 +32,11 @@ describe('S3 Static Website - Integration Tests (Live)', () => {
 
   beforeAll(() => {
     try {
-      console.log('📊 Reading deployment outputs from flat-outputs.json...');
-      console.log('📁 Outputs file path:', FLAT_OUTPUTS_PATH);
+      console.log('Reading deployment outputs from flat-outputs.json...');
+      console.log('Outputs file path:', FLAT_OUTPUTS_PATH);
       
       if (!fs.existsSync(FLAT_OUTPUTS_PATH)) {
-        console.warn('⚠️ Flat outputs file not found - using mock data for validation');
+        console.warn('WARNING: Flat outputs file not found - using mock data for validation');
         // Use mock data for PR validation when deployment hasn't happened yet
         outputs = {
           bucket_name: 'media-assets-abc12345',
@@ -46,9 +46,9 @@ describe('S3 Static Website - Integration Tests (Live)', () => {
       } else {
         const outputsContent = fs.readFileSync(FLAT_OUTPUTS_PATH, 'utf8');
         outputs = JSON.parse(outputsContent);
-        console.log('✅ Successfully loaded deployment outputs');
-        console.log(`📦 Found ${Object.keys(outputs).length} outputs`);
-        console.log('📋 Available outputs:', Object.keys(outputs).join(', '));
+        console.log('Successfully loaded deployment outputs');
+        console.log(`Found ${Object.keys(outputs).length} outputs`);
+        console.log('Available outputs:', Object.keys(outputs).join(', '));
       }
 
       // Extract values from outputs
@@ -62,13 +62,13 @@ describe('S3 Static Website - Integration Tests (Live)', () => {
       // Initialize S3 client
       s3Client = new S3Client({ region });
 
-      console.log('🪣 S3 client initialized');
-      console.log('📋 Bucket Name:', bucketName);
-      console.log('🌐 Website Endpoint:', websiteEndpoint);
-      console.log('🌍 Region:', region);
+      console.log('S3 client initialized');
+      console.log('Bucket Name:', bucketName);
+      console.log('Website Endpoint:', websiteEndpoint);
+      console.log('Region:', region);
       
     } catch (error: any) {
-      console.error('❌ Failed to load deployment outputs:', error.message);
+      console.error('ERROR: Failed to load deployment outputs:', error.message);
       throw new Error('Failed to initialize integration test environment.');
     }
   });
@@ -215,13 +215,13 @@ describe('S3 Static Website - Integration Tests (Live)', () => {
   });
 
   // ==========================================================================
-  // ⭐ TEST GROUP 6: COMPLETE STATIC WEBSITE LIFECYCLE FLOW ⭐
+  // TEST GROUP 6: COMPLETE STATIC WEBSITE LIFECYCLE FLOW
   // ==========================================================================
   describe('Complete Static Website Hosting Lifecycle Flow', () => {
     test('should execute complete website hosting workflow', async () => {
       // Skip live AWS tests when using mock data (no real deployment)
       if (!fs.existsSync(FLAT_OUTPUTS_PATH)) {
-        console.log('⏭️ Skipping live workflow test - using mock data');
+        console.log('SKIP: Skipping live workflow test - using mock data');
         expect(bucketName).toMatch(/^media-assets-/);
         return;
       }
@@ -500,7 +500,7 @@ describe('S3 Static Website - Integration Tests (Live)', () => {
     test('requesting non-existent object returns 404', async () => {
       // Skip live AWS tests when using mock data
       if (!fs.existsSync(FLAT_OUTPUTS_PATH)) {
-        console.log('⏭️ Skipping live error handling test - using mock data');
+        console.log('SKIP: Skipping live error handling test - using mock data');
         expect(websiteEndpoint).toContain('s3-website');
         return;
       }
@@ -522,7 +522,7 @@ describe('S3 Static Website - Integration Tests (Live)', () => {
     test('CORS headers present on responses', async () => {
       // Skip live AWS tests when using mock data
       if (!fs.existsSync(FLAT_OUTPUTS_PATH)) {
-        console.log('⏭️ Skipping live CORS test - using mock data');
+        console.log('SKIP: Skipping live CORS test - using mock data');
         expect(websiteEndpoint).toContain('s3-website');
         return;
       }
