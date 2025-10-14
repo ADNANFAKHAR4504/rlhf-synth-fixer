@@ -59,7 +59,7 @@ export class MultiComponentApplicationStack extends cdk.Stack {
     // Secrets Manager - RDS Credentials
     // ========================================
     const databaseSecret = new secretsmanager.Secret(this, 'DatabaseSecret', {
-      secretName: `prod-secretsmanager-db-${this.stringSuffix}`,
+      secretName: `prod-secretsmanager-db-${this.stringSuffix.toLowerCase().replace(/[^a-zA-Z0-9\-_+=.@!]/g, '')}`,
       description: 'RDS PostgreSQL database credentials',
       generateSecretString: {
         secretStringTemplate: JSON.stringify({
@@ -115,7 +115,7 @@ export class MultiComponentApplicationStack extends cdk.Stack {
     // S3 Buckets
     // ========================================
     const staticFilesBucket = new s3.Bucket(this, 'StaticFilesBucket', {
-      bucketName: `prod-s3-static-${this.stringSuffix}`,
+      bucketName: `prod-s3-static-${this.stringSuffix.toLowerCase().replace(/[^a-z0-9-]/g, '')}`,
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -134,14 +134,14 @@ export class MultiComponentApplicationStack extends cdk.Stack {
     // SQS Queue
     // ========================================
     const asyncQueue = new sqs.Queue(this, 'AsyncProcessingQueue', {
-      queueName: `prod-sqs-async-${this.stringSuffix}`,
+      queueName: `prod-sqs-async-${this.stringSuffix.toLowerCase().replace(/[^a-zA-Z0-9-_]/g, '')}`,
       encryption: sqs.QueueEncryption.KMS_MANAGED,
       retentionPeriod: Duration.days(4),
       visibilityTimeout: Duration.minutes(6),
       deadLetterQueue: {
         maxReceiveCount: 3,
         queue: new sqs.Queue(this, 'DLQ', {
-          queueName: `prod-sqs-dlq-${this.stringSuffix}`,
+          queueName: `prod-sqs-dlq-${this.stringSuffix.toLowerCase().replace(/[^a-zA-Z0-9-_]/g, '')}`,
         }),
       },
     });
@@ -150,7 +150,7 @@ export class MultiComponentApplicationStack extends cdk.Stack {
     // CloudWatch Log Groups
     // ========================================
     const lambdaLogGroup = new logs.LogGroup(this, 'LambdaLogGroup', {
-      logGroupName: `/aws/lambda/prod-lambda-api-${this.stringSuffix}`,
+      logGroupName: `/aws/lambda/prod-lambda-api-${this.stringSuffix.toLowerCase().replace(/[^a-zA-Z0-9-_/]/g, '')}`,
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: RemovalPolicy.DESTROY,
     });
