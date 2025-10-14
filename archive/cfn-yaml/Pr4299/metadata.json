@@ -1,0 +1,41 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-10-13T19:42:51.639879Z",
+  "po_id": "2050363606",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Cloud Environment Setup",
+    "Infrastructure Analysis/Monitoring",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "AWS IoT Core",
+    "Amazon Kinesis Data Streams",
+    "AWS Lambda",
+    "Amazon DynamoDB",
+    "Amazon S3",
+    "Amazon CloudWatch Logs",
+    "Amazon CloudWatch Alarms",
+    "Amazon CloudWatch Metrics",
+    "AWS IAM"
+  ],
+  "qa_completed_at": "2025-10-14T01:35:00.000000Z",
+  "deployment_attempts": 1,
+  "deployment_success": true,
+  "unit_tests_passed": 79,
+  "integration_tests_passed": 20,
+  "resources_deployed": 14,
+  "cleanup_success": true,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
