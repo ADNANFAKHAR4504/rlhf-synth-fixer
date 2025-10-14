@@ -622,9 +622,13 @@ resource "aws_lambda_permission" "eventbridge" {
 }
 
 # CloudTrail for Audit
+# Note: Disabled by default due to AWS account trail limit (max 5 trails per region)
+# Set enable_cloudtrail = true if you have available trail capacity
 resource "aws_cloudtrail" "main" {
+  count = var.enable_cloudtrail ? 1 : 0
+  
   name                          = "${var.project_name}-audit-trail"
-  s3_bucket_name                = aws_s3_bucket.cloudtrail.id
+  s3_bucket_name                = aws_s3_bucket.cloudtrail[0].id
   include_global_service_events = true
   is_multi_region_trail         = true
   enable_logging                = true
@@ -651,8 +655,10 @@ resource "aws_cloudtrail" "main" {
   ]
 }
 
-# S3 Bucket for CloudTrail
+# S3 Bucket for CloudTrail (conditional)
 resource "aws_s3_bucket" "cloudtrail" {
+  count = var.enable_cloudtrail ? 1 : 0
+  
   bucket_prefix = "${var.project_name}-audit-trail-"
   
   tags = {
@@ -661,7 +667,9 @@ resource "aws_s3_bucket" "cloudtrail" {
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
-  bucket = aws_s3_bucket.cloudtrail.id
+  count = var.enable_cloudtrail ? 1 : 0
+  
+  bucket = aws_s3_bucket.cloudtrail[0].id
   
   rule {
     apply_server_side_encryption_by_default {
@@ -672,14 +680,18 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
 }
 
 resource "aws_s3_bucket_versioning" "cloudtrail" {
-  bucket = aws_s3_bucket.cloudtrail.id
+  count = var.enable_cloudtrail ? 1 : 0
+  
+  bucket = aws_s3_bucket.cloudtrail[0].id
   versioning_configuration {
     status = "Enabled"
   }
 }
 
 resource "aws_s3_bucket_lifecycle_configuration" "cloudtrail" {
-  bucket = aws_s3_bucket.cloudtrail.id
+  count = var.enable_cloudtrail ? 1 : 0
+  
+  bucket = aws_s3_bucket.cloudtrail[0].id
   
   rule {
     id     = "archive-old-logs"
@@ -697,7 +709,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "cloudtrail" {
 }
 
 resource "aws_s3_bucket_public_access_block" "cloudtrail" {
-  bucket = aws_s3_bucket.cloudtrail.id
+  count = var.enable_cloudtrail ? 1 : 0
+  
+  bucket = aws_s3_bucket.cloudtrail[0].id
   
   block_public_acls       = true
   block_public_policy     = true
@@ -706,7 +720,9 @@ resource "aws_s3_bucket_public_access_block" "cloudtrail" {
 }
 
 resource "aws_s3_bucket_policy" "cloudtrail" {
-  bucket = aws_s3_bucket.cloudtrail.id
+  count = var.enable_cloudtrail ? 1 : 0
+  
+  bucket = aws_s3_bucket.cloudtrail[0].id
   
   policy = jsonencode({
     Version = "2012-10-17"
@@ -718,7 +734,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
           Service = "cloudtrail.amazonaws.com"
         }
         Action   = "s3:GetBucketAcl"
-        Resource = aws_s3_bucket.cloudtrail.arn
+        Resource = aws_s3_bucket.cloudtrail[0].arn
       },
       {
         Sid    = "AWSCloudTrailWrite"
@@ -727,7 +743,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
           Service = "cloudtrail.amazonaws.com"
         }
         Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.cloudtrail.arn}/*"
+        Resource = "${aws_s3_bucket.cloudtrail[0].arn}/*"
         Condition = {
           StringEquals = {
             "s3:x-amz-server-side-encryption" = "aws:kms"
@@ -879,7 +895,7 @@ output "kms_key_id" {
 }
 
 output "cloudtrail_name" {
-  value       = aws_cloudtrail.main.name
+  value       = var.enable_cloudtrail ? aws_cloudtrail.main[0].name : "CloudTrail disabled - trail limit reached"
   description = "CloudTrail name for audit logging"
 }
 

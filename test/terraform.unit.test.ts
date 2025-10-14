@@ -292,15 +292,21 @@ describe('Terraform Credential Rotation Infrastructure - Unit Tests', () => {
   });
 
   describe('CloudTrail Resources', () => {
-    test('declares CloudTrail', () => {
+    test('declares CloudTrail (conditional)', () => {
       expect(stackContent).toMatch(/resource\s+"aws_cloudtrail"\s+"main"/);
+      expect(stackContent).toMatch(/count\s*=\s*var\.enable_cloudtrail/);
     });
 
-    test('CloudTrail is multi-region', () => {
+    test('CloudTrail has inline comment about trail limit', () => {
+      expect(stackContent).toMatch(/trail limit/i);
+      expect(stackContent).toMatch(/max 5 trails/i);
+    });
+
+    test('CloudTrail is multi-region when enabled', () => {
       expect(stackContent).toMatch(/is_multi_region_trail\s*=\s*true/);
     });
 
-    test('CloudTrail has KMS encryption', () => {
+    test('CloudTrail has KMS encryption when enabled', () => {
       const cloudtrailSection = stackContent.match(/resource\s+"aws_cloudtrail"\s+"main"[\s\S]*?(?=resource\s+"|$)/);
       expect(cloudtrailSection).not.toBeNull();
       expect(cloudtrailSection![0]).toMatch(/kms_key_id/);
@@ -316,26 +322,27 @@ describe('Terraform Credential Rotation Infrastructure - Unit Tests', () => {
       expect(stackContent).toMatch(/depends_on\s*=\s*\[[\s\S]*aws_s3_bucket_policy\.cloudtrail/);
     });
 
-    test('declares S3 bucket for CloudTrail', () => {
+    test('declares S3 bucket for CloudTrail (conditional)', () => {
       expect(stackContent).toMatch(/resource\s+"aws_s3_bucket"\s+"cloudtrail"/);
+      expect(stackContent).toMatch(/count\s*=\s*var\.enable_cloudtrail/);
     });
 
-    test('S3 bucket has encryption', () => {
+    test('S3 bucket has encryption (conditional)', () => {
       expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"cloudtrail"/);
     });
 
-    test('S3 bucket has versioning enabled', () => {
+    test('S3 bucket has versioning enabled (conditional)', () => {
       expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_versioning"\s+"cloudtrail"/);
       expect(stackContent).toMatch(/status\s*=\s*"Enabled"/);
     });
 
-    test('S3 bucket has public access blocked', () => {
+    test('S3 bucket has public access blocked (conditional)', () => {
       expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_public_access_block"\s+"cloudtrail"/);
       expect(stackContent).toMatch(/block_public_acls\s*=\s*true/);
       expect(stackContent).toMatch(/block_public_policy\s*=\s*true/);
     });
 
-    test('S3 bucket has lifecycle policy', () => {
+    test('S3 bucket has lifecycle policy (conditional)', () => {
       expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_lifecycle_configuration"\s+"cloudtrail"/);
     });
   });

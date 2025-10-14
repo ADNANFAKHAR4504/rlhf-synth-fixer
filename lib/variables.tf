@@ -44,7 +44,7 @@ variable "private_subnet_ids" {
 variable "mysql_version" {
   description = "MySQL engine version"
   type        = string
-  default     = "8.0.35"
+  default     = "8.0.39"
 }
 
 variable "db_instance_class" {
@@ -128,4 +128,11 @@ variable "lambda_runtime" {
   description = "Lambda runtime for rotation function"
   type        = string
   default     = "python3.11"
+}
+
+# CloudTrail Configuration
+variable "enable_cloudtrail" {
+  description = "Enable CloudTrail for audit logging (set to false if account trail limit reached)"
+  type        = bool
+  default     = false
 }
