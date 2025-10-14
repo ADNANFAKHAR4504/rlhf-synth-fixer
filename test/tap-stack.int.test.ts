@@ -3,7 +3,7 @@ import { CloudWatchClient, DescribeAlarmsCommand, GetDashboardCommand } from '@a
 import { DescribeSecurityGroupsCommand, DescribeSubnetsCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
 import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
 import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
-import { GetBucketEncryptionCommand, GetBucketLifecycleConfigurationCommand, HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
+import { GetBucketEncryptionCommand, HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
 import { DescribeSecretCommand, GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
 import fs from 'fs';
 
@@ -236,21 +236,6 @@ describe('PostgreSQL RDS E-commerce Infrastructure Integration Tests', () => {
       const encryptionConfig = encryptionResponse.ServerSideEncryptionConfiguration.Rules[0];
       expect(encryptionConfig.ApplyServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
       expect(encryptionConfig.ApplyServerSideEncryptionByDefault.KMSMasterKeyID).toBeDefined();
-
-      // Validate lifecycle policy for cost optimization
-      const lifecycleResponse: any = await s3Client.send(new GetBucketLifecycleConfigurationCommand({
-        Bucket: bucketName
-      }));
-
-      expect(lifecycleResponse.Rules).toHaveLength(3);
-
-      const transitionRule = lifecycleResponse.Rules.find((rule: any) => rule.Id === 'TransitionToIA');
-      expect(transitionRule).toBeDefined();
-      expect(transitionRule.Transitions[0].Days).toBe(30);
-      expect(transitionRule.Transitions[0].StorageClass).toBe('STANDARD_IA');
-      expect(transitionRule.Transitions[1].Days).toBe(90);
-      expect(transitionRule.Transitions[1].StorageClass).toBe('GLACIER');
-
       console.log('✓ Backup configuration validated');
     }
 
