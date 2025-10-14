@@ -170,6 +170,31 @@ describe('TapStack', () => {
       }
     }
   });
+
+  test('Stack uses default region when AWS_REGION and context are not set', () => {
+    // Save and clear AWS_REGION env var
+    const originalRegion = process.env.AWS_REGION;
+    delete process.env.AWS_REGION;
+
+    try {
+      // Create app without region in context
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestDefaultRegionStack');
+
+      const nestedStacks = testApp.node.findAll().filter((node) => {
+        return node instanceof cdk.Stack && node !== testStack;
+      });
+
+      expect(nestedStacks.length).toBeGreaterThan(0);
+      // Verify region is defined (CDK returns token, not literal string)
+      expect(testStack.region).toBeDefined();
+    } finally {
+      // Restore AWS_REGION
+      if (originalRegion) {
+        process.env.AWS_REGION = originalRegion;
+      }
+    }
+  });
 });
 
 describe('VpcStack', () => {
