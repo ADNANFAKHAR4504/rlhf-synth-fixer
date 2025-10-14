@@ -288,6 +288,90 @@ describe('Terraform Configuration Unit Tests', () => {
     });
   });
 
+  describe('WAF Security Controls', () => {
+    test('WAF has IP blocking rule configured', () => {
+      expect(mainTfContent).toMatch(/rule\s*{[^}]*name\s*=\s*"BlockSuspiciousIPs"/s);
+    });
+
+    test('WAF IP set resource is defined', () => {
+      expect(mainTfContent).toMatch(/resource\s+"aws_wafv2_ip_set"\s+"blocked_ips"/);
+    });
+
+    test('WAF has rate limiting rule', () => {
+      expect(mainTfContent).toMatch(/rule\s*{[^}]*name\s*=\s*"RateLimitRule"/s);
+    });
+
+    test('WAF has SQL injection protection rule', () => {
+      expect(mainTfContent).toMatch(/rule\s*{[^}]*name\s*=\s*"AWSManagedRulesSQLiRuleSet"/s);
+    });
+
+    test('WAF has common rule set', () => {
+      expect(mainTfContent).toMatch(/AWSManagedRulesCommonRuleSet/);
+    });
+
+    test('WAF has known bad inputs rule set', () => {
+      expect(mainTfContent).toMatch(/AWSManagedRulesKnownBadInputsRuleSet/);
+    });
+
+    test('WAF IP blocking rule references IP set', () => {
+      expect(mainTfContent).toMatch(/ip_set_reference_statement/);
+      expect(mainTfContent).toMatch(/arn\s*=\s*aws_wafv2_ip_set\.blocked_ips\.arn/);
+    });
+
+    test('WAF rules have visibility config enabled', () => {
+      const wafRuleMatches = mainTfContent.match(/visibility_config\s*{[^}]*cloudwatch_metrics_enabled\s*=\s*true/gs);
+      expect(wafRuleMatches).toBeTruthy();
+      expect(wafRuleMatches!.length).toBeGreaterThanOrEqual(4); // At least 4 rules with visibility
+    });
+  });
+
+  describe('CloudWatch Alarms - Comprehensive Monitoring', () => {
+    test('has API Gateway 5XX error alarm', () => {
+      expect(mainTfContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"api_5xx_errors"/);
+    });
+
+    test('has API Gateway 4XX error alarm', () => {
+      expect(mainTfContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"api_4xx_errors"/);
+    });
+
+    test('has API Gateway latency alarm', () => {
+      expect(mainTfContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"api_latency"/);
+    });
+
+    test('has Lambda errors alarm', () => {
+      expect(mainTfContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"lambda_errors"/);
+    });
+
+    test('has Lambda throttles alarm', () => {
+      expect(mainTfContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"lambda_throttles"/);
+    });
+
+    test('has DynamoDB throttles alarm', () => {
+      expect(mainTfContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"dynamodb_throttles"/);
+    });
+
+    test('has WAF blocked requests alarm', () => {
+      expect(mainTfContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"waf_blocked_requests"/);
+    });
+
+    test('all alarms have SNS topic configured', () => {
+      const alarmMatches = mainTfContent.match(/resource\s+"aws_cloudwatch_metric_alarm"/g);
+      const snsActionMatches = mainTfContent.match(/alarm_actions\s*=\s*\[aws_sns_topic\.alerts\.arn\]/g);
+      
+      expect(alarmMatches).toBeTruthy();
+      expect(snsActionMatches).toBeTruthy();
+      expect(snsActionMatches!.length).toBeGreaterThanOrEqual(7); // At least 7 alarms with SNS actions
+    });
+
+    test('alarms have appropriate thresholds configured', () => {
+      expect(mainTfContent).toMatch(/threshold\s*=\s*\d+/);
+    });
+
+    test('alarms have evaluation periods configured', () => {
+      expect(mainTfContent).toMatch(/evaluation_periods\s*=\s*\d+/);
+    });
+  });
+
   describe('Resource Naming and Tagging', () => {
     test('project name is used for resource naming', () => {
       expect(variablesTfContent).toMatch(/variable\s+"project_name"/);

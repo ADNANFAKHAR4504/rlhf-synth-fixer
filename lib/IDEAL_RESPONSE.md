@@ -738,6 +738,28 @@ resource "aws_wafv2_web_acl" "main" {
     allow {}
   }
 
+  # IP blocking rule - blocks IPs in the blocked_ips IP set
+  rule {
+    name     = "BlockSuspiciousIPs"
+    priority = 0
+
+    statement {
+      ip_set_reference_statement {
+        arn = aws_wafv2_ip_set.blocked_ips.arn
+      }
+    }
+
+    action {
+      block {}
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${local.resource_prefix}-blocked-ips"
+      sampled_requests_enabled   = true
+    }
+  }
+
   # Rate limiting rule
   rule {
     name     = "RateLimitRule"
@@ -803,6 +825,29 @@ resource "aws_wafv2_web_acl" "main" {
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "${local.resource_prefix}-bad-inputs"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # AWS Managed Rules - SQL Injection Protection (Critical for PCI-DSS)
+  rule {
+    name     = "AWSManagedRulesSQLiRuleSet"
+    priority = 30
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesSQLiRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${local.resource_prefix}-sqli-protection"
       sampled_requests_enabled   = true
     }
   }
@@ -910,6 +955,27 @@ resource "aws_cloudwatch_metric_alarm" "api_latency" {
   })
 }
 
+resource "aws_cloudwatch_metric_alarm" "api_4xx_errors" {
+  alarm_name          = "${local.resource_prefix}-api-4xx-errors"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "4XXError"
+  namespace           = "AWS/ApiGateway"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 50
+  alarm_description   = "High number of 4xx client errors"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+
+  dimensions = {
+    ApiName = aws_api_gateway_rest_api.main.name
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.resource_prefix}-api-4xx-alarm"
+  })
+}
+
 # Lambda Alarms
 resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
   alarm_name          = "${local.resource_prefix}-lambda-errors"
@@ -929,6 +995,73 @@ resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
 
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-lambda-errors-alarm"
+  })
+}
+
+resource "aws_cloudwatch_metric_alarm" "lambda_throttles" {
+  alarm_name          = "${local.resource_prefix}-lambda-throttles"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "Throttles"
+  namespace           = "AWS/Lambda"
+  period              = 60
+  statistic           = "Sum"
+  threshold           = 5
+  alarm_description   = "Lambda function is being throttled due to concurrency limits"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+
+  dimensions = {
+    FunctionName = aws_lambda_function.main.function_name
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.resource_prefix}-lambda-throttles-alarm"
+  })
+}
+
+# DynamoDB Alarms
+resource "aws_cloudwatch_metric_alarm" "dynamodb_throttles" {
+  alarm_name          = "${local.resource_prefix}-dynamodb-throttles"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "UserErrors"
+  namespace           = "AWS/DynamoDB"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 5
+  alarm_description   = "DynamoDB table experiencing throttling or user errors"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+
+  dimensions = {
+    TableName = aws_dynamodb_table.main.name
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.resource_prefix}-dynamodb-throttles-alarm"
+  })
+}
+
+# WAF Alarms
+resource "aws_cloudwatch_metric_alarm" "waf_blocked_requests" {
+  alarm_name          = "${local.resource_prefix}-waf-blocks"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "BlockedRequests"
+  namespace           = "AWS/WAFV2"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 100
+  alarm_description   = "High number of requests blocked by WAF - possible attack"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+
+  dimensions = {
+    WebACL = aws_wafv2_web_acl.main.name
+    Region = var.aws_region
+    Rule   = "ALL"
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.resource_prefix}-waf-blocks-alarm"
   })
 }
 
@@ -1162,7 +1295,8 @@ output "resource_prefix" {
 
 ### Security Controls
 
-- **WAF Protection**: AWS Managed Rules for common exploits and bad inputs
+- **WAF Protection**: AWS Managed Rules for common exploits, bad inputs, and SQL injection attacks
+- **IP Blocking**: Custom IP set for blocking suspicious or malicious IP addresses
 - **Rate Limiting**: 2000 requests per 5 minutes per IP address
 - **X-Ray Tracing**: End-to-end request tracking for security analysis
 - **Sensitive Data Redaction**: Authorization headers redacted from WAF logs
@@ -1179,7 +1313,11 @@ output "resource_prefix" {
 ### Observability
 
 - **CloudWatch Dashboard**: Real-time metrics for API, Lambda, and DynamoDB
-- **CloudWatch Alarms**: Automated alerts for 5XX errors, latency, and Lambda failures
+- **CloudWatch Alarms**: Comprehensive automated alerts including:
+  - API Gateway: 4XX errors, 5XX errors, and latency
+  - Lambda: Error rates and throttling events
+  - DynamoDB: Throttling and user errors
+  - WAF: Blocked requests indicating potential attacks
 - **X-Ray Sampling**: 10% sampling rate for distributed tracing
 - **Structured Logging**: JSON-formatted access logs for analysis
 - **SNS Alerts**: Email notifications for critical events

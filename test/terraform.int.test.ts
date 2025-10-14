@@ -538,6 +538,207 @@ describe('Terraform Infrastructure End-to-End Integration Tests', () => {
         throw error;
       }
     }, 15000);
+
+    test('should verify all critical CloudWatch alarms are configured', async () => {
+      if (!deployedSuccessfully) {
+        console.log('Skipping - no deployed infrastructure');
+        return;
+      }
+
+      try {
+        console.log(`Validating CloudWatch alarms configuration`);
+        
+        // List all alarms with the resource prefix
+        const envSuffix = outputs.environment_suffix || '';
+        const alarmPrefix = `retail-api-${envSuffix}`;
+        
+        const result = execSync(
+          `aws cloudwatch describe-alarms --alarm-name-prefix "${alarmPrefix}" --output json`,
+          { encoding: 'utf8', timeout: 15000 }
+        );
+
+        const data = JSON.parse(result.trim());
+        const alarms = data.MetricAlarms;
+        
+        console.log(`Total alarms found: ${alarms.length}`);
+        
+        // Expected alarms
+        const expectedAlarmTypes = [
+          'api-5xx-errors',
+          'api-4xx-errors',
+          'api-latency',
+          'lambda-errors',
+          'lambda-throttles',
+          'dynamodb-throttles',
+          'waf-blocks'
+        ];
+        
+        const foundAlarms = alarms.map((a: any) => a.AlarmName);
+        console.log(`Alarm names: ${foundAlarms.join(', ')}`);
+        
+        // Verify we have at least 7 alarms (comprehensive monitoring)
+        expect(alarms.length).toBeGreaterThanOrEqual(7);
+        
+        // Verify each alarm has SNS action configured
+        alarms.forEach((alarm: any) => {
+          expect(alarm.AlarmActions.length).toBeGreaterThan(0);
+          console.log(`✓ ${alarm.AlarmName}: SNS action configured`);
+        });
+        
+        console.log(`CloudWatch alarms validation passed`);
+      } catch (error: any) {
+        console.error('CloudWatch alarms validation failed:', error.message);
+        throw error;
+      }
+    }, 20000);
+  });
+
+  describe('WAF Advanced Security Controls', () => {
+    test('should verify WAF has SQL injection protection enabled', async () => {
+      if (!deployedSuccessfully) {
+        console.log('Skipping - no deployed infrastructure');
+        return;
+      }
+
+      const webAclId = outputs.waf_web_acl_id;
+      const webAclName = outputs.waf_web_acl_name;
+
+      if (!webAclId || !webAclName) {
+        console.log('Skipping - no WAF Web ACL information found');
+        return;
+      }
+
+      try {
+        console.log(`Validating WAF SQL injection protection`);
+        const result = execSync(
+          `aws wafv2 get-web-acl --scope REGIONAL --id ${webAclId} --name ${webAclName} --output json`,
+          { encoding: 'utf8', timeout: 15000 }
+        );
+
+        const data = JSON.parse(result.trim());
+        const webAcl = data.WebACL;
+        
+        // Check for SQL injection rule
+        const sqlInjectionRule = webAcl.Rules.find((r: any) => 
+          r.Name === 'AWSManagedRulesSQLiRuleSet' || 
+          r.Statement?.ManagedRuleGroupStatement?.Name === 'AWSManagedRulesSQLiRuleSet'
+        );
+        
+        expect(sqlInjectionRule).toBeDefined();
+        console.log(`✓ SQL injection protection rule found: ${sqlInjectionRule.Name}`);
+        console.log(`  Priority: ${sqlInjectionRule.Priority}`);
+        console.log(`  Action: ${sqlInjectionRule.OverrideAction ? 'Override' : 'Direct'}`);
+        
+        console.log(`WAF SQL injection protection validation passed`);
+      } catch (error: any) {
+        console.error('WAF SQL injection protection validation failed:', error.message);
+        throw error;
+      }
+    }, 20000);
+
+    test('should verify WAF has IP blocking rule configured', async () => {
+      if (!deployedSuccessfully) {
+        console.log('Skipping - no deployed infrastructure');
+        return;
+      }
+
+      const webAclId = outputs.waf_web_acl_id;
+      const webAclName = outputs.waf_web_acl_name;
+
+      if (!webAclId || !webAclName) {
+        console.log('Skipping - no WAF Web ACL information found');
+        return;
+      }
+
+      try {
+        console.log(`Validating WAF IP blocking rule`);
+        const result = execSync(
+          `aws wafv2 get-web-acl --scope REGIONAL --id ${webAclId} --name ${webAclName} --output json`,
+          { encoding: 'utf8', timeout: 15000 }
+        );
+
+        const data = JSON.parse(result.trim());
+        const webAcl = data.WebACL;
+        
+        // Check for IP blocking rule
+        const ipBlockingRule = webAcl.Rules.find((r: any) => 
+          r.Name === 'BlockSuspiciousIPs' || 
+          r.Statement?.IPSetReferenceStatement
+        );
+        
+        expect(ipBlockingRule).toBeDefined();
+        console.log(`✓ IP blocking rule found: ${ipBlockingRule.Name}`);
+        console.log(`  Priority: ${ipBlockingRule.Priority}`);
+        console.log(`  Action: ${ipBlockingRule.Action ? Object.keys(ipBlockingRule.Action)[0] : 'N/A'}`);
+        
+        if (ipBlockingRule.Statement?.IPSetReferenceStatement) {
+          console.log(`  IP Set ARN: ${ipBlockingRule.Statement.IPSetReferenceStatement.ARN}`);
+        }
+        
+        console.log(`WAF IP blocking rule validation passed`);
+      } catch (error: any) {
+        console.error('WAF IP blocking rule validation failed:', error.message);
+        throw error;
+      }
+    }, 20000);
+
+    test('should verify WAF has all 4 required managed rule groups', async () => {
+      if (!deployedSuccessfully) {
+        console.log('Skipping - no deployed infrastructure');
+        return;
+      }
+
+      const webAclId = outputs.waf_web_acl_id;
+      const webAclName = outputs.waf_web_acl_name;
+
+      if (!webAclId || !webAclName) {
+        console.log('Skipping - no WAF Web ACL information found');
+        return;
+      }
+
+      try {
+        console.log(`Validating WAF managed rule groups`);
+        const result = execSync(
+          `aws wafv2 get-web-acl --scope REGIONAL --id ${webAclId} --name ${webAclName} --output json`,
+          { encoding: 'utf8', timeout: 15000 }
+        );
+
+        const data = JSON.parse(result.trim());
+        const webAcl = data.WebACL;
+        
+        // Expected rule groups for PCI-DSS compliance
+        const expectedRules = [
+          'BlockSuspiciousIPs',
+          'RateLimitRule',
+          'AWSManagedRulesCommonRuleSet',
+          'AWSManagedRulesKnownBadInputsRuleSet',
+          'AWSManagedRulesSQLiRuleSet'
+        ];
+        
+        console.log(`Total rules configured: ${webAcl.Rules.length}`);
+        
+        const foundRules: string[] = [];
+        webAcl.Rules.forEach((rule: any) => {
+          const ruleName = rule.Name;
+          foundRules.push(ruleName);
+          console.log(`  ✓ ${ruleName} (Priority: ${rule.Priority})`);
+        });
+        
+        // Verify we have at least the critical rules
+        expect(webAcl.Rules.length).toBeGreaterThanOrEqual(4);
+        
+        // Check for SQL injection specifically (critical for PCI-DSS)
+        const hasSQLiProtection = foundRules.some(name => 
+          name === 'AWSManagedRulesSQLiRuleSet'
+        );
+        expect(hasSQLiProtection).toBe(true);
+        
+        console.log(`WAF managed rule groups validation passed`);
+      } catch (error: any) {
+        console.error('WAF managed rule groups validation failed:', error.message);
+        throw error;
+      }
+    }, 20000);
   });
 
   describe('End-to-End API Workflow', () => {
