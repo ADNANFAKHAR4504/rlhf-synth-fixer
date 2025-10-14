@@ -1,3 +1,8 @@
+# HIPAA-Compliant Healthcare Data Processing Infrastructure
+
+## CloudFormation Template (cfn-template.json)
+
+```json
 {
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "HIPAA-compliant healthcare data processing infrastructure with comprehensive audit logging",
@@ -905,3 +910,4 @@
     }
   }
 }
+```
