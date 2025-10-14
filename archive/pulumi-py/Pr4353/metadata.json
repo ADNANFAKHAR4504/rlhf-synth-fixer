@@ -10,5 +10,12 @@
   "subject_labels": [
     "Failure Recovery Automation"
   ],
-  "aws_services": "Lambda, S3, SNS, CloudWatch Events, CloudWatch Logs, IAM, Parameter Store, EC2"
+  "aws_services": "Lambda, S3, SNS, CloudWatch Events, CloudWatch Logs, IAM, Parameter Store, EC2",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
 }
