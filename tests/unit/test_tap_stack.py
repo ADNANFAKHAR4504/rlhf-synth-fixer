@@ -65,10 +65,16 @@ class TestEC2RecoveryConfig(unittest.TestCase):
 
     def test_config_region_validation(self):
         """Test region validation raises error for invalid region."""
-        with patch.dict('os.environ', {'AWS_REGION': 'us-east-1'}):
+        with patch.dict('os.environ', {'AWS_REGION': 'eu-west-1'}):
             with self.assertRaises(ValueError) as context:
                 EC2RecoveryConfig()
-            self.assertIn("Region must be us-west-2", str(context.exception))
+            self.assertIn("Region must be us-west-2 or us-east-1", str(context.exception))
+
+    def test_config_region_validation_us_east_1(self):
+        """Test region validation allows us-east-1."""
+        with patch.dict('os.environ', {'AWS_REGION': 'us-east-1'}):
+            config = EC2RecoveryConfig()
+            self.assertEqual(config.region, 'us-east-1')
 
     def test_config_resource_naming(self):
         """Test resource naming includes timestamp and random suffix."""
