@@ -35,9 +35,7 @@ export class TapStack extends cdk.Stack {
         sid: 'Allow CloudWatch Logs to use the key',
         effect: iam.Effect.ALLOW,
         principals: [
-          new iam.ServicePrincipal(
-            `logs.${this.region}.amazonaws.com`
-          ),
+          new iam.ServicePrincipal(`logs.${this.region}.amazonaws.com`),
         ],
         actions: [
           'kms:Encrypt',
@@ -124,7 +122,7 @@ export class TapStack extends cdk.Stack {
     });
 
     // Grant Lambda access to database secret
-    database.cluster.secret?.grantRead(lambdaRole);
+    database.cluster.secret!.grantRead(lambdaRole);
 
     // Create Lambda function with CloudWatch logs enabled
     const exampleFunction = new lambda.Function(this, 'ExampleFunction', {
@@ -154,7 +152,7 @@ export class TapStack extends cdk.Stack {
         DB_ENDPOINT: database.cluster.clusterEndpoint.hostname,
         DB_PORT: database.cluster.clusterEndpoint.port.toString(),
         DB_NAME: `tap_${props.environment}`,
-        DB_SECRET_ARN: database.cluster.secret?.secretArn || '',
+        DB_SECRET_ARN: database.cluster.secret!.secretArn, // Secret is always created by DatabaseConstruct
       },
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
@@ -223,7 +221,11 @@ export class TapStack extends cdk.Stack {
     });
 
     // Configure AWS Config rules
-    this.setupAwsConfigRules(complianceTopic, configRecorder, configDeliveryChannel);
+    this.setupAwsConfigRules(
+      complianceTopic,
+      configRecorder,
+      configDeliveryChannel
+    );
 
     // Output important values
     new cdk.CfnOutput(this, 'VpcId', {
@@ -269,8 +271,10 @@ export class TapStack extends cdk.Stack {
       {
         configRuleName: `s3-encryption-${this.stackName}`,
         identifier:
-          config.ManagedRuleIdentifiers.S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED,
-        description: 'Checks that S3 buckets have server-side encryption enabled',
+          config.ManagedRuleIdentifiers
+            .S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED,
+        description:
+          'Checks that S3 buckets have server-side encryption enabled',
       }
     );
     const s3EncryptionCfnRule = s3EncryptionRule.node
@@ -285,7 +289,8 @@ export class TapStack extends cdk.Stack {
       {
         configRuleName: `rds-encryption-${this.stackName}`,
         identifier: config.ManagedRuleIdentifiers.RDS_STORAGE_ENCRYPTED,
-        description: 'Checks that RDS instances have encryption at rest enabled',
+        description:
+          'Checks that RDS instances have encryption at rest enabled',
       }
     );
     const rdsEncryptionCfnRule = rdsEncryptionRule.node
@@ -300,7 +305,8 @@ export class TapStack extends cdk.Stack {
         owner: 'AWS',
         sourceIdentifier: 'INCOMING_SSH_DISABLED',
       },
-      description: 'Checks that security groups do not allow unrestricted SSH access',
+      description:
+        'Checks that security groups do not allow unrestricted SSH access',
     });
     sshRule.addDependency(configRecorder);
     sshRule.addDependency(configDeliveryChannel);
