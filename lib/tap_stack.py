@@ -6,88 +6,232 @@ manages environment-specific configurations.
 """
 
 from typing import Optional
-
 import aws_cdk as cdk
-from aws_cdk import NestedStack
+from aws_cdk import (
+    Duration,
+    RemovalPolicy,
+    CfnOutput,
+    aws_lambda as lambda_,
+    aws_apigateway as apigateway,
+    aws_dynamodb as dynamodb,
+    aws_iam as iam,
+    aws_logs as logs,
+    aws_kms as kms,
+    aws_ssm as ssm,
+)
 from constructs import Construct
-
-# Import your stacks here
-# from .ddb_stack import DynamoDBStack, DynamoDBStackProps
 
 
 class TapStackProps(cdk.StackProps):
-  """
-  TapStackProps defines the properties for the TapStack CDK stack.
+    """
+    TapStackProps defines the properties for the TapStack CDK stack.
 
-  Args:
-    environment_suffix (Optional[str]): An optional suffix to identify the 
-    deployment environment (e.g., 'dev', 'prod').
-    **kwargs: Additional keyword arguments passed to the base cdk.StackProps.
+    Args:
+        environment_suffix (Optional[str]): An optional suffix to identify the 
+        deployment environment (e.g., 'dev', 'prod').
+        **kwargs: Additional keyword arguments passed to the base cdk.StackProps.
 
-  Attributes:
-    environment_suffix (Optional[str]): Stores the environment suffix for the stack.
-  """
+    Attributes:
+        environment_suffix (Optional[str]): Stores the environment suffix for the stack.
+    """
 
-  def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
-    super().__init__(**kwargs)
-    self.environment_suffix = environment_suffix
+    def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        self.environment_suffix = environment_suffix
 
 
 class TapStack(cdk.Stack):
-  """
-  Represents the main CDK stack for the Tap project.
+    """
+    Represents the main CDK stack for the Tap project.
 
-  This stack is responsible for orchestrating the instantiation of other resource-specific stacks.
-  It determines the environment suffix from the provided properties, 
-    CDK context, or defaults to 'dev'.
-  Note:
-    - Do NOT create AWS resources directly in this stack.
-    - Instead, instantiate separate stacks for each resource type within this stack.
+    This stack creates a serverless architecture with DynamoDB, Lambda, and API Gateway.
+    """
 
-  Args:
-    scope (Construct): The parent construct.
-    construct_id (str): The unique identifier for this stack.
-    props (Optional[TapStackProps]): Optional properties for configuring the 
-      stack, including environment suffix.
-    **kwargs: Additional keyword arguments passed to the CDK Stack.
+    def __init__(self, scope: Construct, construct_id: str, props: Optional[TapStackProps] = None, **kwargs):
+        super().__init__(scope, construct_id, **kwargs)
 
-  Attributes:
-    environment_suffix (str): The environment suffix used for resource naming and configuration.
-  """
+        # Get environment suffix from props, context, or use 'dev' as default
+        environment_suffix = (
+            props.environment_suffix if props else None
+        ) or self.node.try_get_context('environmentSuffix') or 'dev'
 
-  def __init__(
-          self,
-          scope: Construct,
-          construct_id: str, props: Optional[TapStackProps] = None, **kwargs):
-    super().__init__(scope, construct_id, **kwargs)
+        # ============================================
+        # AWS Systems Manager Parameter Store
+        # ============================================
+        table_name_param = ssm.StringParameter(
+            self,
+            "TableNameParameter",
+            parameter_name=f"/{environment_suffix}/tap-app/table-name",
+            string_value=f"users-table-{environment_suffix}",
+            description="DynamoDB table name for the TAP application",
+            tier=ssm.ParameterTier.STANDARD,
+        )
 
-    # Get environment suffix from props, context, or use 'dev' as default
-    environment_suffix = (
-        props.environment_suffix if props else None
-    ) or self.node.try_get_context('environmentSuffix') or 'dev'
+        lambda_name_param = ssm.StringParameter(
+            self,
+            "LambdaNameParameter",
+            parameter_name=f"/{environment_suffix}/tap-app/lambda-name",
+            string_value=f"tap-handler-{environment_suffix}",
+            description="Lambda function name for the TAP application",
+            tier=ssm.ParameterTier.STANDARD,
+        )
 
-    # Create separate stacks for each resource type
-    # Create the DynamoDB stack as a nested stack
+        # ============================================
+        # KMS Encryption Key
+        # ============================================
+        encryption_key = kms.Key(
+            self,
+            "DynamoDBEncryptionKey",
+            description=f"KMS key for DynamoDB table encryption - {environment_suffix}",
+            enable_key_rotation=True,
+            removal_policy=RemovalPolicy.DESTROY if environment_suffix == "dev" else RemovalPolicy.RETAIN,
+            alias=f"alias/dynamodb-{environment_suffix}",
+        )
 
-    # ! DO not create resources directly in this stack.
-    # ! Instead, instantiate separate stacks for each resource type.
+        # ============================================
+        # DynamoDB Table
+        # ============================================
+        users_table = dynamodb.Table(
+            self,
+            "UsersTable",
+            table_name=table_name_param.string_value,
+            partition_key=dynamodb.Attribute(
+                name="UserId",
+                type=dynamodb.AttributeType.STRING,
+            ),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            encryption=dynamodb.TableEncryption.CUSTOMER_MANAGED,
+            encryption_key=encryption_key,
+            point_in_time_recovery=True,
+            removal_policy=RemovalPolicy.DESTROY if environment_suffix == "dev" else RemovalPolicy.RETAIN,
+        )
 
-    # class NestedDynamoDBStack(NestedStack):
-    #   def __init__(self, scope, id, props=None, **kwargs):
-    #     super().__init__(scope, id, **kwargs)
-    #     # Use the original DynamoDBStack logic here
-    #     self.ddb_stack = DynamoDBStack(self, "Resource", props=props)
-    #     self.table = self.ddb_stack.table
+        # ============================================
+        # Lambda Function
+        # ============================================
+        lambda_role = iam.Role(
+            self,
+            "LambdaExecutionRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            description="Execution role for TAP Lambda function",
+        )
 
-    # db_props = DynamoDBStackProps(
-    #     environment_suffix=environment_suffix
-    # )
+        # Add permissions for DynamoDB, KMS, and CloudWatch Logs
+        lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:DeleteItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan",
+                ],
+                resources=[users_table.table_arn],
+            )
+        )
+        lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "kms:Decrypt",
+                    "kms:DescribeKey",
+                    "kms:GenerateDataKey",
+                ],
+                resources=[encryption_key.key_arn],
+            )
+        )
+        lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                ],
+                resources=["arn:aws:logs:*:*:*"],
+            )
+        )
 
-    # dynamodb_stack = NestedDynamoDBStack(
-    #     self,
-    #     f"DynamoDBStack{environment_suffix}",
-    #     props=db_props
-    # )
+        lambda_code = """
+import json
+import boto3
+import os
+from datetime import datetime
 
-    # # Make the table available as a property of this stack
-    # self.table = dynamodb_stack.table
+dynamodb = boto3.resource('dynamodb')
+table_name = os.environ['TABLE_NAME']
+table = dynamodb.Table(table_name)
+
+def lambda_handler(event, context):
+    print(f"Received event: {json.dumps(event)}")
+    try:
+        if event['httpMethod'] == 'POST':
+            body = json.loads(event['body'])
+            item = {
+                'UserId': body['UserId'],
+                'Name': body['Name'],
+                'CreatedAt': datetime.utcnow().isoformat(),
+            }
+            table.put_item(Item=item)
+            return {
+                'statusCode': 201,
+                'body': json.dumps({'message': 'Item created', 'item': item})
+            }
+        elif event['httpMethod'] == 'GET':
+            response = table.scan()
+            return {
+                'statusCode': 200,
+                'body': json.dumps({'items': response['Items']})
+            }
+        else:
+            return {
+                'statusCode': 405,
+                'body': json.dumps({'message': 'Method not allowed'})
+            }
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'body': json.dumps({'message': 'Internal server error', 'error': str(e)})
+        }
+"""
+        lambda_function = lambda_.Function(
+            self,
+            "TapHandler",
+            function_name=lambda_name_param.string_value,
+            runtime=lambda_.Runtime.PYTHON_3_9,
+            code=lambda_.Code.from_inline(lambda_code),
+            handler="index.lambda_handler",
+            role=lambda_role,
+            timeout=Duration.seconds(30),
+            memory_size=256,
+            reserved_concurrent_executions=5,
+            environment={
+                "TABLE_NAME": users_table.table_name,
+            },
+        )
+
+        # ============================================
+        # API Gateway
+        # ============================================
+        api = apigateway.RestApi(
+            self,
+            "TapApi",
+            rest_api_name=f"tap-api-{environment_suffix}",
+            description="API Gateway for TAP application",
+        )
+
+        lambda_integration = apigateway.LambdaIntegration(lambda_function)
+
+        items = api.root.add_resource("users")
+        items.add_method("GET", lambda_integration)
+        items.add_method("POST", lambda_integration)
+
+        # ============================================
+        # Outputs
+        # ============================================
+        CfnOutput(self, "ApiEndpoint", value=api.url, description="API Gateway endpoint URL")
+        CfnOutput(self, "TableName", value=users_table.table_name, description="DynamoDB table name")
+        CfnOutput(self, "LambdaFunctionName", value=lambda_function.function_name, description="Lambda function name")
+        CfnOutput(self, "KMSKeyId", value=encryption_key.key_id, description="KMS encryption key ID")
