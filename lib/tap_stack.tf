@@ -477,3 +477,104 @@ resource "aws_instance" "app_private_instance" {
     Environment = "Production"
   }
 }
+
+# Outputs
+output "vpc_id" {
+  description = "The ID of the VPC"
+  value       = aws_vpc.main_vpc.id
+}
+
+output "vpc_cidr" {
+  description = "The CIDR block of the VPC"
+  value       = aws_vpc.main_vpc.cidr_block
+}
+
+output "public_subnet_1_id" {
+  description = "The ID of the first public subnet"
+  value       = aws_subnet.public_subnet_1.id
+}
+
+output "public_subnet_2_id" {
+  description = "The ID of the second public subnet"
+  value       = aws_subnet.public_subnet_2.id
+}
+
+output "private_subnet_1_id" {
+  description = "The ID of the first private subnet"
+  value       = aws_subnet.private_subnet_1.id
+}
+
+output "private_subnet_2_id" {
+  description = "The ID of the second private subnet"
+  value       = aws_subnet.private_subnet_2.id
+}
+
+output "internet_gateway_id" {
+  description = "The ID of the Internet Gateway"
+  value       = aws_internet_gateway.main_igw.id
+}
+
+output "nat_gateway_id" {
+  description = "The ID of the NAT Gateway"
+  value       = aws_nat_gateway.main_nat_gw.id
+}
+
+output "public_route_table_id" {
+  description = "The ID of the public route table"
+  value       = aws_route_table.public_rt.id
+}
+
+output "private_route_table_id" {
+  description = "The ID of the private route table"
+  value       = aws_route_table.private_rt.id
+}
+
+output "public_security_group_id" {
+  description = "The ID of the public SSH security group"
+  value       = aws_security_group.sg_public_ssh.id
+}
+
+output "private_security_group_id" {
+  description = "The ID of the private EC2 security group"
+  value       = aws_security_group.sg_private_ec2.id
+}
+
+output "cloudtrail_logs_bucket_name" {
+  description = "The name of the CloudTrail logs S3 bucket"
+  value       = aws_s3_bucket.cloudtrail_logs.id
+}
+
+output "cloudtrail_access_logs_bucket_name" {
+  description = "The name of the CloudTrail access logs S3 bucket"
+  value       = aws_s3_bucket.cloudtrail_access_logs.id
+}
+
+output "cloudtrail_name" {
+  description = "The name of the CloudTrail"
+  value       = aws_cloudtrail.main_trail.name
+}
+
+output "iam_role_name" {
+  description = "The name of the IAM role for EC2"
+  value       = aws_iam_role.ec2_s3_read_role.name
+}
+
+output "iam_role_arn" {
+  description = "The ARN of the IAM role for EC2"
+  value       = aws_iam_role.ec2_s3_read_role.arn
+}
+
+output "iam_instance_profile_name" {
+  description = "The name of the IAM instance profile"
+  value       = aws_iam_instance_profile.ec2_profile.name
+}
+
+output "ec2_instance_id" {
+  description = "The ID of the EC2 instance"
+  value       = aws_instance.app_private_instance.id
+}
+
+output "ec2_instance_private_ip" {
+  description = "The private IP address of the EC2 instance"
+  value       = aws_instance.app_private_instance.private_ip
+}
