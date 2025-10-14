@@ -18,8 +18,9 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up integration test with live stack outputs."""
-        # Load outputs from deployment
-        outputs_file = '/Users/mayanksethi/Projects/turing/iac-test-automations/worktree/synth-2662635795/cfn-outputs/flat-outputs.json'
+        # Load outputs from deployment - use relative path from project root
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        outputs_file = os.path.join(project_root, 'cfn-outputs', 'flat-outputs.json')
 
         if not os.path.exists(outputs_file):
             raise FileNotFoundError(f"Outputs file not found: {outputs_file}")
