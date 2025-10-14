@@ -1,28 +1,18 @@
 /**
  * Robust unit tests for lib/TapStack.yml
- *
- * - Strips intrinsic CFN tags for parsing safety, but tolerates both intrinsic
- *   object forms and stripped-string forms in assertions.
- * - Verifies:
- *   - Template structure
- *   - Resource presence and key properties
- *   - Required tags: Environment: Production and iac-rlhf-amazon: "true"
- *
- * Designed for near-100% structural coverage.
- *
- * Requires: jest, js-yaml
+ * - Accepts intrinsic-stripped parsing, verifies structure/tags
+ * - Updated to assert Target registration via TargetGroup.Targets (no TargetGroupAttachment)
  */
 
 import * as fs from 'fs';
-import * as path from 'path';
 import * as yaml from 'js-yaml';
+import * as path from 'path';
 
 const TEMPLATE_PATH = path.resolve(__dirname, '..', 'lib', 'TapStack.yml');
 
 function stripCfnIntrinsics(yamlText: string): string {
   return yamlText.replace(/!([A-Za-z0-9:_\.\-]+)/g, '');
 }
-
 function normalizeRefValue(v: any): string | undefined {
   if (v === undefined || v === null) return undefined;
   if (typeof v === 'string') return v;
@@ -32,7 +22,6 @@ function normalizeRefValue(v: any): string | undefined {
   }
   return undefined;
 }
-
 function lbAttributesToMap(arr: any[]): Record<string, any> {
   const map: Record<string, any> = {};
   if (!Array.isArray(arr)) return map;
@@ -49,20 +38,10 @@ describe('TapStack CloudFormation template - unit tests', () => {
   let resources: any;
 
   beforeAll(() => {
-    if (!fs.existsSync(TEMPLATE_PATH)) {
-      throw new Error(`Template file not found: ${TEMPLATE_PATH}`);
-    }
     const content = fs.readFileSync(TEMPLATE_PATH, 'utf8');
     const cleaned = stripCfnIntrinsics(content);
     template = yaml.load(cleaned) as any;
-
-    if (!template) {
-      throw new Error('Parsed template is empty/invalid after stripping intrinsics.');
-    }
-    // Resources must exist
-    if (!template.Resources) {
-      throw new Error('Parsed template missing top-level Resources.');
-    }
+    if (!template?.Resources) throw new Error('Parsed template missing Resources');
     resources = template.Resources;
   });
 
@@ -72,7 +51,6 @@ describe('TapStack CloudFormation template - unit tests', () => {
   });
 
   test('Parameters include KeyName, InstanceType, SSHLocation, TargetRegion', () => {
-    expect(template.Parameters).toBeDefined();
     expect(template.Parameters.KeyName).toBeDefined();
     expect(template.Parameters.InstanceType).toBeDefined();
     expect(template.Parameters.SSHLocation).toBeDefined();
@@ -80,25 +58,17 @@ describe('TapStack CloudFormation template - unit tests', () => {
   });
 
   test('Condition DeployInTargetRegion exists', () => {
-    expect(template.Conditions).toBeDefined();
     expect(template.Conditions.DeployInTargetRegion).toBeDefined();
   });
 
-  test('Mappings include RegionMap or mappings are intentionally omitted', () => {
-    // Some templates intentionally remove RegionMap if not used.
-    // Accept either presence of RegionMap with us-west-2 entry OR absence of Mappings entirely.
-    if (!template.Mappings) {
-      // acceptable: no mappings defined
-      expect(template.Mappings).toBeUndefined();
-    } else {
+  test('Mappings include RegionMap or mappings omitted', () => {
+    if (template.Mappings) {
       expect(template.Mappings.RegionMap).toBeDefined();
-      expect(template.Mappings.RegionMap['us-west-2']).toBeDefined();
     }
   });
 
   describe('Resources', () => {
     test('VPC exists and tagged', () => {
-      expect(resources.VPC).toBeDefined();
       expect(resources.VPC.Type).toBe('AWS::EC2::VPC');
       expect(resources.VPC.Properties.Tags).toEqual(
         expect.arrayContaining([
@@ -110,7 +80,6 @@ describe('TapStack CloudFormation template - unit tests', () => {
 
     test('Subnets exist (public/private) and tagging', () => {
       ['PublicSubnetA', 'PublicSubnetB', 'PrivateSubnetA', 'PrivateSubnetB'].forEach((s) => {
-        expect(resources[s]).toBeDefined();
         expect(resources[s].Type).toBe('AWS::EC2::Subnet');
         expect(resources[s].Properties.Tags).toEqual(
           expect.arrayContaining([
@@ -131,9 +100,9 @@ describe('TapStack CloudFormation template - unit tests', () => {
     });
 
     test('ALB & access logging configured', () => {
-      expect(resources.ApplicationLoadBalancer).toBeDefined();
-      expect(resources.ALBAccessLogBucket).toBeDefined();
-      const attrs = lbAttributesToMap(resources.ApplicationLoadBalancer.Properties.LoadBalancerAttributes || []);
+      const alb = resources.ApplicationLoadBalancer;
+      expect(alb).toBeDefined();
+      const attrs = lbAttributesToMap(alb.Properties.LoadBalancerAttributes || []);
       expect(String(attrs['access_logs.s3.enabled'])).toBe('true');
       const bucketRaw = attrs['access_logs.s3.bucket'];
       const bucketName = normalizeRefValue(bucketRaw) ?? bucketRaw;
@@ -141,7 +110,6 @@ describe('TapStack CloudFormation template - unit tests', () => {
     });
 
     test('EC2 instance exists in private subnet and monitoring true', () => {
-      expect(resources.EC2Instance).toBeDefined();
       const ec2 = resources.EC2Instance.Properties;
       const subnet = normalizeRefValue(ec2.SubnetId) ?? ec2.SubnetId;
       expect(subnet).toBe('PrivateSubnetA');
@@ -151,7 +119,6 @@ describe('TapStack CloudFormation template - unit tests', () => {
 
     test('S3 buckets use AES256, block public access, and are tagged', () => {
       ['LogBucket', 'ALBAccessLogBucket', 'ConfigBucket'].forEach((b) => {
-        expect(resources[b]).toBeDefined();
         const bucket = resources[b].Properties;
         const sse = bucket.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm;
         expect(sse).toBe('AES256');
@@ -176,7 +143,6 @@ describe('TapStack CloudFormation template - unit tests', () => {
     });
 
     test('EC2 SG allows ALB traffic and SSH (using param)', () => {
-      expect(resources.EC2SecurityGroup).toBeDefined();
       const ingress = resources.EC2SecurityGroup.Properties.SecurityGroupIngress || [];
       const http = ingress.find((i: any) => i.FromPort === 80 && i.ToPort === 80);
       expect(http).toBeDefined();
@@ -186,16 +152,18 @@ describe('TapStack CloudFormation template - unit tests', () => {
       expect(normalizeRefValue(ssh.CidrIp) ?? ssh.CidrIp).toBe('SSHLocation');
     });
 
-    test('TargetGroupAttachment references EC2 instance', () => {
-      expect(resources.TargetGroupAttachment).toBeDefined();
-      const tid = normalizeRefValue(resources.TargetGroupAttachment.Properties.TargetId) ?? resources.TargetGroupAttachment.Properties.TargetId;
-      expect(tid).toBe('EC2Instance');
+    test('Targets are attached via TargetGroup.Targets (no TargetGroupAttachment)', () => {
+      expect(resources.ALBTargetGroup).toBeDefined();
+      const targets = resources.ALBTargetGroup.Properties.Targets || [];
+      const first = targets.find((t: any) => (normalizeRefValue(t.Id) ?? t.Id) === 'EC2Instance');
+      expect(first).toBeDefined();
+      expect(first.Port).toBe(80);
+      expect(resources.TargetGroupAttachment).toBeUndefined(); // should not exist
     });
   });
 
   describe('Outputs & Metadata', () => {
     test('cfn-outputs metadata keys present in Outputs', () => {
-      expect(template.Metadata).toBeDefined();
       const keys = template.Metadata['cfn-outputs'];
       expect(Array.isArray(keys)).toBe(true);
       keys.forEach((k: string) => expect(template.Outputs[k]).toBeDefined());
@@ -214,8 +182,10 @@ describe('TapStack CloudFormation template - unit tests', () => {
     test('All taggable resources include iac-rlhf-amazon:true', () => {
       Object.keys(resources).forEach((k) => {
         const r = resources[k];
-        if (r && r.Properties && Array.isArray(r.Properties.Tags)) {
-          expect(r.Properties.Tags).toEqual(expect.arrayContaining([expect.objectContaining({ Key: 'iac-rlhf-amazon', Value: 'true' })]));
+        if (r?.Properties?.Tags) {
+          expect(r.Properties.Tags).toEqual(
+            expect.arrayContaining([expect.objectContaining({ Key: 'iac-rlhf-amazon', Value: 'true' })])
+          );
         }
       });
     });

@@ -8,7 +8,7 @@ Parameters:
   KeyName:
     Type: String
     Default: ""
-    Description: Name of an existing EC2 KeyPair to enable SSH
+    Description: Name of an existing EC2 KeyPair to enable SSH (optional)
   InstanceType:
     Type: String
     Default: t3.micro
@@ -382,6 +382,9 @@ Resources:
       VpcId: !Ref VPC
       TargetType: instance
       HealthCheckPath: /
+      Targets:
+        - Id: !Ref EC2Instance
+          Port: 80
       Tags:
         - Key: Environment
           Value: Production
@@ -401,7 +404,6 @@ Resources:
 
   ###################################################
   # EC2 Instance in private subnet (Detailed Monitoring true)
-  # Use SSM dynamic reference for latest Amazon Linux 2 AMI (no hardcoded AMI)
   ###################################################
   EC2Instance:
     Type: AWS::EC2::Instance
@@ -409,7 +411,6 @@ Resources:
     Properties:
       InstanceType: !Ref InstanceType
       KeyName: !If [ HasKeyName, !Ref KeyName, !Ref "AWS::NoValue" ]
-      # Dynamic SSM lookup; CloudFormation resolves this at deployment time
       ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
       Monitoring: true
       SubnetId: !Ref PrivateSubnetA
@@ -450,19 +451,6 @@ Resources:
           Value: Production
         - Key: iac-rlhf-amazon
           Value: "true"
-
-  TargetGroupAttachment:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroupAttachment
-    Condition: DeployInTargetRegion
-    Metadata:
-      cfn-lint:
-        config:
-          ignore_checks:
-            - E3006
-    Properties:
-      TargetGroupArn: !Ref ALBTargetGroup
-      TargetId: !Ref EC2Instance
-      Port: 80
 
   ###################################################
   # CloudWatch Log Groups
