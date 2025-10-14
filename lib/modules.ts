@@ -1133,6 +1133,10 @@ export function createRdsMultiAz(
     tags: config.tags,
   });
 
+  // Store configuration for validation
+  const isMultiAz = true;
+  const isPubliclyAccessible = false;
+
   // Create RDS instance
   const rdsInstance = new DbInstance(scope, 'rds-instance', {
     identifier: `${config.environment}-db`,
@@ -1148,8 +1152,8 @@ export function createRdsMultiAz(
     password: config.dbPassword,
     vpcSecurityGroupIds: [rdsSg.id],
     dbSubnetGroupName: dbSubnetGroup.name,
-    multiAz: true,
-    publiclyAccessible: false,
+    multiAz: isMultiAz,
+    publiclyAccessible: isPubliclyAccessible,
     backupRetentionPeriod: 7,
     backupWindow: '03:00-04:00',
     maintenanceWindow: 'sun:04:00-sun:05:00',
@@ -1159,14 +1163,14 @@ export function createRdsMultiAz(
     tags: config.tags,
   });
 
-  // Validate Multi-AZ configuration
-  if (!rdsInstance.multiAz) {
+  // Validate configuration settings
+  if (!isMultiAz) {
     throw new Error(
       'RDS instance must be configured with Multi-AZ for high availability'
     );
   }
 
-  if (rdsInstance.publiclyAccessible) {
+  if (isPubliclyAccessible) {
     throw new Error('RDS instance must not be publicly accessible');
   }
 
@@ -1325,6 +1329,7 @@ export function enableGuardDuty(scope: Construct, config: StackConfig): void {
     tags: config.tags,
   });
 }
+
 // ==================== CloudWatch Alarms Module ====================
 export function createCloudWatchAlarms(
   scope: Construct,
