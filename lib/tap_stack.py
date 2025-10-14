@@ -1,21 +1,19 @@
-# pylint: disable=too-many-lines
 """
 tap_stack.py
 
-This module defines the TapStack class, the main Pulumi ComponentResource for
+This module defines the TapStack class, the main Pulumi ComponentResource for 
 the TAP (Test Automation Platform) project.
 
-It orchestrates the instantiation of other resource-specific components
+It orchestrates the instantiation of other resource-specific components 
 and manages environment-specific configurations.
 """
 
 from typing import Optional
 import json
-from datetime import datetime
 import base64
 
 import pulumi
-from pulumi import ResourceOptions
+from pulumi import ResourceOptions, Output
 import pulumi_aws as aws
 
 # Import your nested stacks here
@@ -23,31 +21,28 @@ import pulumi_aws as aws
 
 
 class TapStackArgs:
-    """
-    TapStackArgs defines the input arguments for the TapStack Pulumi component.
+  """
+  TapStackArgs defines the input arguments for the TapStack Pulumi component.
 
-    Args:
-        environment_suffix (Optional[str]): An optional suffix for
-            identifying the deployment environment (e.g., 'dev', 'prod').
-        tags (Optional[dict]): Optional default tags to apply to resources.
-    """
+  Args:
+    environment_suffix (Optional[str]): An optional suffix for identifying the deployment environment (e.g., 'dev', 'prod').
+    tags (Optional[dict]): Optional default tags to apply to resources.
+  """
 
-    def __init__(self, environment_suffix: Optional[str] = None,
-                 tags: Optional[dict] = None):
-        self.environment_suffix = environment_suffix or 'dev'
-        self.tags = tags
+  def __init__(self, environment_suffix: Optional[str] = None, tags: Optional[dict] = None):
+    self.environment_suffix = environment_suffix or 'dev'
+    self.tags = tags
 
 
 class TapStack(pulumi.ComponentResource):
     """
     Represents the main Pulumi component resource for the TAP project.
+    
+    Serverless Image Inference Pipeline on AWS
+    A production-ready pipeline for async image processing with ML inference
 
     This component orchestrates the instantiation of other resource-specific components
     and manages the environment suffix used for naming and configuration.
-
-    Note:
-        - DO NOT create resources directly here unless they are truly global.
-        - Use other components (e.g., DynamoDBStack) for AWS resource definitions.
 
     Args:
         name (str): The logical name of this Pulumi component.
@@ -64,81 +59,57 @@ class TapStack(pulumi.ComponentResource):
         super().__init__('tap:stack:TapStack', name, None, opts)
 
         self.environment_suffix = args.environment_suffix
-        self.tags = args.tags
+        self.tags = args.tags or {}
 
         # Configuration
         config = pulumi.Config()
-        environment = config.get("environment") or self.environment_suffix or "production"
-        retention_days = 2555  # 7 years for financial compliance
+        project_name = pulumi.get_project()
+        stack_name = pulumi.get_stack()
+        resource_prefix = f"{project_name}-{stack_name}"
 
-        # Tags for all resources
-        default_tags = {
-            "Environment": environment,
-            "Project": "financial-etl-pipeline",
-            "Compliance": "PCI-DSS",
-            "DataClassification": "Confidential",
-            "ManagedBy": "Pulumi"
-        }
-        if self.tags:
-            default_tags.update(self.tags)
+        # Reasonable defaults for Lambda functions
+        LAMBDA_TIMEOUT = 300  # 5 minutes - adjust based on your model inference time
+        LAMBDA_MEMORY = 3008  # MB - sufficient for most ML models, tune based on your needs
+        SQS_VISIBILITY_TIMEOUT = 360  # 6 minutes - slightly longer than Lambda timeout
+        SQS_MESSAGE_RETENTION = 1209600  # 14 days max
+        IMAGE_MAX_SIZE_MB = 10  # Adjust based on your requirements
 
-        # ============================================================================
-        # S3 Buckets for Data Storage
-        # ============================================================================
+        # ==================== S3 Bucket ====================
 
-        # Bucket for raw transaction data
-        stack_lower = pulumi.get_stack().lower()
-        # pylint: disable=line-too-long
-        sse_default_args = aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-            sse_algorithm="AES256"
-        )
-        # pylint: enable=line-too-long
-        sse_config = aws.s3.BucketServerSideEncryptionConfigurationArgs(
-            rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-                apply_server_side_encryption_by_default=sse_default_args
-            )
-        )
-        raw_data_bucket = aws.s3.Bucket(
-            "raw-transactions-bucket",
-            bucket=f"financial-raw-transactions-{environment}-{stack_lower}",
-            versioning=aws.s3.BucketVersioningArgs(enabled=True),
-            server_side_encryption_configuration=sse_config,
+        # Bucket for image uploads with versioning
+        self.image_bucket = aws.s3.Bucket(
+            f"{resource_prefix}-images",
+            versioning=aws.s3.BucketVersioningArgs(
+                enabled=True
+            ),
             lifecycle_rules=[
                 aws.s3.BucketLifecycleRuleArgs(
+                    id="delete-old-versions",
                     enabled=True,
-                    id="archive-old-data",
-                    transitions=[
-                        aws.s3.BucketLifecycleRuleTransitionArgs(
-                            days=90,
-                            storage_class="GLACIER"
-                        ),
-                        aws.s3.BucketLifecycleRuleTransitionArgs(
-                            days=365,
-                            storage_class="DEEP_ARCHIVE"
-                        )
-                    ]
+                    noncurrent_version_expiration=aws.s3.BucketLifecycleRuleNoncurrentVersionExpirationArgs(
+                        days=30  # Keep old versions for 30 days
+                    )
                 )
             ],
-            tags={**default_tags, "DataType": "Raw"},
+            server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
+                rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                        sse_algorithm="AES256"
+                    )
+                )
+            ),
+            tags={
+                "Environment": stack_name,
+                "Purpose": "Image uploads for inference pipeline",
+                **self.tags
+            },
             opts=ResourceOptions(parent=self)
         )
 
-        # Bucket for processed transaction data
-        processed_data_bucket = aws.s3.Bucket(
-            "processed-transactions-bucket",
-            bucket=(f"financial-processed-transactions-{environment}-"
-                    f"{stack_lower}"),
-            versioning=aws.s3.BucketVersioningArgs(enabled=True),
-            server_side_encryption_configuration=sse_config,
-            tags={**default_tags, "DataType": "Processed"},
-            opts=ResourceOptions(parent=self)
-        )
-
-        # Block public access for both buckets
-        for bucket in [raw_data_bucket, processed_data_bucket]:
-            aws.s3.BucketPublicAccessBlock(
-                f"{bucket._name}-public-access-block",
-                bucket=bucket.id,
+        # Block public access for security
+        bucket_public_access_block = aws.s3.BucketPublicAccessBlock(
+            f"{resource_prefix}-images-pab",
+            bucket=self.image_bucket.id,
                 block_public_acls=True,
                 block_public_policy=True,
                 ignore_public_acls=True,
@@ -146,155 +117,148 @@ class TapStack(pulumi.ComponentResource):
                 opts=ResourceOptions(parent=self)
             )
 
-        # ============================================================================
-        # DynamoDB Tables
-        # ============================================================================
+        # ==================== DynamoDB Table ====================
 
-        # Transaction metadata table
-        transaction_metadata_table = aws.dynamodb.Table(
-            "transaction-metadata",
-            name=f"transaction-metadata-{environment}",
-            billing_mode="PAY_PER_REQUEST",
-            hash_key="transaction_id",
-            range_key="timestamp",
+        # Table for storing processing results with efficient access patterns
+        self.results_table = aws.dynamodb.Table(
+            f"{resource_prefix}-results",
+            hash_key="image_id",  # Primary key for direct lookups
             attributes=[
-                aws.dynamodb.TableAttributeArgs(name="transaction_id", type="S"),
-                aws.dynamodb.TableAttributeArgs(name="timestamp", type="N"),
-                aws.dynamodb.TableAttributeArgs(name="status", type="S"),
+                aws.dynamodb.TableAttributeArgs(
+                    name="image_id",
+                    type="S"
+                ),
+                aws.dynamodb.TableAttributeArgs(
+                    name="status",
+                    type="S"
+                ),
+                aws.dynamodb.TableAttributeArgs(
+                    name="created_at",
+                    type="N"
+                )
             ],
             global_secondary_indexes=[
                 aws.dynamodb.TableGlobalSecondaryIndexArgs(
-                    name="status-index",
+                    name="status-created-index",
                     hash_key="status",
-                    range_key="timestamp",
-                    projection_type="ALL"
+                    range_key="created_at",
+                    projection_type="ALL",
+                    read_capacity=5,
+                    write_capacity=5
                 )
             ],
-            stream_enabled=True,
-            stream_view_type="NEW_AND_OLD_IMAGES",
-            point_in_time_recovery=aws.dynamodb.TablePointInTimeRecoveryArgs(enabled=True),
-            server_side_encryption=aws.dynamodb.TableServerSideEncryptionArgs(enabled=True),
-            tags={**default_tags, "Purpose": "TransactionMetadata"},
-            opts=ResourceOptions(parent=self)
-        )
-
-        # Audit log table
-        audit_log_table = aws.dynamodb.Table(
-            "audit-log",
-            name=f"etl-audit-log-{environment}",
-            billing_mode="PAY_PER_REQUEST",
-            hash_key="audit_id",
-            range_key="timestamp",
-            attributes=[
-                aws.dynamodb.TableAttributeArgs(name="audit_id", type="S"),
-                aws.dynamodb.TableAttributeArgs(name="timestamp", type="N"),
-            ],
-            point_in_time_recovery=aws.dynamodb.TablePointInTimeRecoveryArgs(enabled=True),
-            server_side_encryption=aws.dynamodb.TableServerSideEncryptionArgs(enabled=True),
-            tags={**default_tags, "Purpose": "AuditLog"},
-            opts=ResourceOptions(parent=self)
-        )
-
-        # ============================================================================
-        # SNS Topics and SQS Queues for Error Handling
-        # ============================================================================
-
-        # Dead letter queue
-        dlq = aws.sqs.Queue(
-            "etl-dlq",
-            name=f"etl-pipeline-dlq-{environment}",
-            message_retention_seconds=1209600,  # 14 days
-            kms_master_key_id="alias/aws/sqs",
-            tags=default_tags,
-            opts=ResourceOptions(parent=self)
-        )
-
-        # Main error queue
-        error_queue = aws.sqs.Queue(
-            "etl-error-queue",
-            name=f"etl-pipeline-errors-{environment}",
-            visibility_timeout_seconds=300,
-            message_retention_seconds=345600,  # 4 days
-            redrive_policy=pulumi.Output.all(dlq.arn).apply(
-                lambda args: json.dumps({
-                    "deadLetterTargetArn": args[0],
-                    "maxReceiveCount": 3
-                })
+            billing_mode="PAY_PER_REQUEST",  # On-demand pricing for variable workloads
+            point_in_time_recovery=aws.dynamodb.TablePointInTimeRecoveryArgs(
+                enabled=True
             ),
-            kms_master_key_id="alias/aws/sqs",
-            tags=default_tags,
+            tags={
+                "Environment": stack_name,
+                "Purpose": "Inference results storage",
+                **self.tags
+            },
             opts=ResourceOptions(parent=self)
         )
 
-        # SNS topic for alerts
-        alert_topic = aws.sns.Topic(
-            "etl-alerts",
-            name=f"etl-pipeline-alerts-{environment}",
-            kms_master_key_id="alias/aws/sns",
-            tags=default_tags,
+        # ==================== SQS Queues ====================
+
+        # Dead letter queue for failed messages
+        self.dlq = aws.sqs.Queue(
+            f"{resource_prefix}-dlq",
+            message_retention_seconds=SQS_MESSAGE_RETENTION,
+            visibility_timeout_seconds=30,
+            tags={
+                "Environment": stack_name,
+                "Purpose": "Dead letter queue for failed processing",
+                **self.tags
+            },
             opts=ResourceOptions(parent=self)
         )
 
-        # Subscribe error queue to alert topic
-        aws.sns.TopicSubscription(
-            "alert-to-error-queue",
-            topic=alert_topic.arn,
-            protocol="sqs",
-            endpoint=error_queue.arn,
+        # Queue for preprocessing tasks
+        self.preprocessing_queue = aws.sqs.Queue(
+            f"{resource_prefix}-preprocessing",
+            visibility_timeout_seconds=SQS_VISIBILITY_TIMEOUT,
+            message_retention_seconds=SQS_MESSAGE_RETENTION,
+            redrive_policy=self.dlq.arn.apply(lambda arn: json.dumps({
+                "deadLetterTargetArn": arn,
+                "maxReceiveCount": 3  # Retry 3 times before sending to DLQ
+            })),
+            tags={
+                "Environment": stack_name,
+                "Purpose": "Image preprocessing tasks",
+                **self.tags
+            },
             opts=ResourceOptions(parent=self)
         )
 
-        # ============================================================================
-        # EventBridge Event Bus and Rules
-        # ============================================================================
-
-        # Custom event bus for ETL pipeline
-        etl_event_bus = aws.cloudwatch.EventBus(
-            "etl-event-bus",
-            name=f"etl-pipeline-bus-{environment}",
-            tags=default_tags,
+        # Queue for inference tasks
+        self.inference_queue = aws.sqs.Queue(
+            f"{resource_prefix}-inference",
+            visibility_timeout_seconds=SQS_VISIBILITY_TIMEOUT,
+            message_retention_seconds=SQS_MESSAGE_RETENTION,
+            redrive_policy=self.dlq.arn.apply(lambda arn: json.dumps({
+                "deadLetterTargetArn": arn,
+                    "maxReceiveCount": 3
+            })),
+            tags={
+                "Environment": stack_name,
+                "Purpose": "Model inference tasks",
+                **self.tags
+            },
             opts=ResourceOptions(parent=self)
         )
 
-        # ============================================================================
-        # Lambda Functions
-        # ============================================================================
+        # ==================== IAM Roles and Policies ====================
 
-        # Shared Lambda execution role
-        lambda_role = aws.iam.Role(
-            "lambda-execution-role",
+        # Base Lambda execution policy
+        lambda_base_policy = aws.iam.Policy(
+            f"{resource_prefix}-lambda-base",
+            policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "logs:CreateLogGroup",
+                            "logs:CreateLogStream",
+                            "logs:PutLogEvents"
+                        ],
+                        "Resource": "arn:aws:logs:*:*:*"
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "xray:PutTraceSegments",
+                            "xray:PutTelemetryRecords"
+                        ],
+                        "Resource": "*"
+                    }
+                ]
+            }),
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Preprocessing Lambda role with S3 read and SQS write permissions
+        preprocessing_role = aws.iam.Role(
+            f"{resource_prefix}-preprocessing-role",
             assume_role_policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [{
+                    "Action": "sts:AssumeRole",
                     "Effect": "Allow",
-                    "Principal": {"Service": "lambda.amazonaws.com"},
-                    "Action": "sts:AssumeRole"
+                    "Principal": {"Service": "lambda.amazonaws.com"}
                 }]
             }),
-            tags=default_tags,
             opts=ResourceOptions(parent=self)
         )
 
-        # Attach basic execution policy
-        aws.iam.RolePolicyAttachment(
-            "lambda-basic-execution",
-            role=lambda_role.name,
-            policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
-            opts=ResourceOptions(parent=self)
-        )
-
-        # Custom policy for Lambda functions
-        lambda_policy = aws.iam.RolePolicy(
-            "lambda-custom-policy",
-            role=lambda_role.id,
-            policy=pulumi.Output.all(
-                raw_bucket_arn=raw_data_bucket.arn,
-                processed_bucket_arn=processed_data_bucket.arn,
-                metadata_table_arn=transaction_metadata_table.arn,
-                audit_table_arn=audit_log_table.arn,
-                error_queue_arn=error_queue.arn,
-                alert_topic_arn=alert_topic.arn,
-                event_bus_arn=etl_event_bus.arn
+        preprocessing_policy = aws.iam.Policy(
+            f"{resource_prefix}-preprocessing-policy",
+            policy=Output.all(
+                self.image_bucket.arn,
+                self.preprocessing_queue.arn,
+                self.inference_queue.arn,
+                self.results_table.arn
             ).apply(lambda args: json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [
@@ -302,885 +266,849 @@ class TapStack(pulumi.ComponentResource):
                         "Effect": "Allow",
                         "Action": [
                             "s3:GetObject",
-                            "s3:PutObject",
-                            "s3:DeleteObject"
+                            "s3:GetObjectVersion"
                         ],
-                        "Resource": [
-                            f"{args['raw_bucket_arn']}/*",
-                            f"{args['processed_bucket_arn']}/*"
-                        ]
+                        "Resource": f"{args[0]}/*"
                     },
                     {
                         "Effect": "Allow",
                         "Action": [
-                            "dynamodb:PutItem",
-                            "dynamodb:GetItem",
-                            "dynamodb:UpdateItem",
-                            "dynamodb:Query",
-                            "dynamodb:Scan"
-                        ],
-                        "Resource": [
-                            args['metadata_table_arn'],
-                            f"{args['metadata_table_arn']}/index/*",
-                            args['audit_table_arn']
-                        ]
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "sqs:SendMessage",
                             "sqs:ReceiveMessage",
                             "sqs:DeleteMessage",
                             "sqs:GetQueueAttributes"
                         ],
-                        "Resource": args['error_queue_arn']
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": "sns:Publish",
-                        "Resource": args['alert_topic_arn']
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": "events:PutEvents",
-                        "Resource": args['event_bus_arn']
+                        "Resource": args[1]
                     },
                     {
                         "Effect": "Allow",
                         "Action": [
-                            "kms:Decrypt",
-                            "kms:GenerateDataKey"
+                            "sqs:SendMessage"
                         ],
-                        "Resource": "*"
+                        "Resource": args[2]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "dynamodb:UpdateItem",
+                            "dynamodb:PutItem"
+                        ],
+                        "Resource": args[3]
                     }
                 ]
             })),
             opts=ResourceOptions(parent=self)
         )
 
-        # Environment variables for Lambda functions
-        lambda_env_vars = {
-            "RAW_BUCKET": raw_data_bucket.bucket,
-            "PROCESSED_BUCKET": processed_data_bucket.bucket,
-            "METADATA_TABLE": transaction_metadata_table.name,
-            "AUDIT_TABLE": audit_log_table.name,
-            "ERROR_QUEUE_URL": error_queue.url,
-            "ALERT_TOPIC_ARN": alert_topic.arn,
-            "EVENT_BUS_NAME": etl_event_bus.name,
-            "ENVIRONMENT": environment
-        }
+        aws.iam.RolePolicyAttachment(
+            f"{resource_prefix}-preprocessing-base",
+            role=preprocessing_role.name,
+            policy_arn=lambda_base_policy.arn,
+            opts=ResourceOptions(parent=self)
+        )
 
-        # 1. Ingestion Lambda
-        ingestion_lambda_code = """
+        aws.iam.RolePolicyAttachment(
+            f"{resource_prefix}-preprocessing-custom",
+            role=preprocessing_role.name,
+            policy_arn=preprocessing_policy.arn,
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Inference Lambda role with S3 write and DynamoDB write permissions
+        inference_role = aws.iam.Role(
+            f"{resource_prefix}-inference-role",
+            assume_role_policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Action": "sts:AssumeRole",
+                    "Effect": "Allow",
+                    "Principal": {"Service": "lambda.amazonaws.com"}
+                }]
+            }),
+            opts=ResourceOptions(parent=self)
+        )
+
+        inference_policy = aws.iam.Policy(
+            f"{resource_prefix}-inference-policy",
+            policy=Output.all(
+                self.image_bucket.arn,
+                self.inference_queue.arn,
+                self.results_table.arn
+            ).apply(lambda args: json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:GetObject",
+                            "s3:PutObject"
+                        ],
+                        "Resource": f"{args[0]}/*"
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "sqs:ReceiveMessage",
+                            "sqs:DeleteMessage",
+                            "sqs:GetQueueAttributes"
+                        ],
+                        "Resource": args[1]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "dynamodb:UpdateItem",
+                            "dynamodb:PutItem"
+                        ],
+                        "Resource": args[2]
+                    }
+                ]
+            })),
+            opts=ResourceOptions(parent=self)
+        )
+
+        aws.iam.RolePolicyAttachment(
+            f"{resource_prefix}-inference-base",
+            role=inference_role.name,
+            policy_arn=lambda_base_policy.arn,
+            opts=ResourceOptions(parent=self)
+        )
+
+        aws.iam.RolePolicyAttachment(
+            f"{resource_prefix}-inference-custom",
+            role=inference_role.name,
+            policy_arn=inference_policy.arn,
+            opts=ResourceOptions(parent=self)
+        )
+
+        # API Lambda role with S3 presigned URL and DynamoDB read permissions
+        api_role = aws.iam.Role(
+            f"{resource_prefix}-api-role",
+            assume_role_policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Action": "sts:AssumeRole",
+                    "Effect": "Allow",
+                    "Principal": {"Service": "lambda.amazonaws.com"}
+                }]
+            }),
+            opts=ResourceOptions(parent=self)
+        )
+
+        api_policy = aws.iam.Policy(
+            f"{resource_prefix}-api-policy",
+            policy=Output.all(
+                self.image_bucket.arn,
+                self.preprocessing_queue.arn,
+                self.results_table.arn
+            ).apply(lambda args: json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:PutObject",
+                            "s3:GetObject"
+                        ],
+                        "Resource": f"{args[0]}/*"
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "sqs:SendMessage"
+                        ],
+                        "Resource": args[1]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "dynamodb:GetItem",
+                            "dynamodb:PutItem",
+                            "dynamodb:Query"
+                        ],
+                        "Resource": [args[2], f"{args[2]}/index/*"]
+                    }
+                ]
+            })),
+            opts=ResourceOptions(parent=self)
+        )
+
+        aws.iam.RolePolicyAttachment(
+            f"{resource_prefix}-api-base",
+            role=api_role.name,
+            policy_arn=lambda_base_policy.arn,
+            opts=ResourceOptions(parent=self)
+        )
+
+        aws.iam.RolePolicyAttachment(
+            f"{resource_prefix}-api-custom",
+            role=api_role.name,
+            policy_arn=api_policy.arn,
+            opts=ResourceOptions(parent=self)
+        )
+
+        # ==================== Lambda Layer for Model ====================
+
+        # NOTE: You need to create a ZIP file containing your model and dependencies
+        # Structure: python/lib/python3.8/site-packages/[your packages]
+        # This is a placeholder - replace with your actual model layer
+        self.model_layer = aws.lambda_.LayerVersion(
+            f"{resource_prefix}-model-layer",
+            layer_name=f"{resource_prefix}-model",
+            compatible_runtimes=["python3.8", "python3.9", "python3.10", "python3.11"],
+            # Create a dummy layer for now - replace with your actual model ZIP
+            code=pulumi.AssetArchive({
+                "python/model_placeholder.txt": pulumi.StringAsset("Replace with actual model files")
+            }),
+            description="Pre-trained model and ML dependencies",
+            opts=ResourceOptions(parent=self)
+        )
+
+        # ==================== Lambda Functions ====================
+
+        # Preprocessing Lambda code
+        preprocessing_code = """
+import json
+import boto3
+import os
+import base64
+from datetime import datetime
+import traceback
+import uuid
+
+s3 = boto3.client('s3')
+sqs = boto3.client('sqs')
+dynamodb = boto3.resource('dynamodb')
+
+def handler(event, context):
+    '''Preprocesses images from S3 and sends to inference queue'''
+    
+    inference_queue_url = os.environ['INFERENCE_QUEUE_URL']
+    table = dynamodb.Table(os.environ['RESULTS_TABLE'])
+    
+    for record in event['Records']:
+        try:
+            # Parse SQS message
+            message_body = json.loads(record['body'])
+            
+            # Handle S3 event notification
+            if 'Records' in message_body:
+                s3_record = message_body['Records'][0]
+                bucket = s3_record['s3']['bucket']['name']
+                key = s3_record['s3']['object']['key']
+                image_id = key.split('/')[-1].split('.')[0]
+        else:
+                # Direct message format
+                bucket = message_body['bucket']
+                key = message_body['key']
+                image_id = message_body['image_id']
+        
+            print(f"Processing image: {image_id} from {bucket}/{key}")
+            
+            # Update status to processing
+            table.update_item(
+                Key={'image_id': image_id},
+                UpdateExpression='SET #status = :status, preprocessing_started_at = :timestamp',
+                ExpressionAttributeNames={'#status': 'status'},
+                ExpressionAttributeValues={
+                    ':status': 'preprocessing',
+                    ':timestamp': int(datetime.utcnow().timestamp())
+                }
+            )
+            
+            # Download image from S3
+            response = s3.get_object(Bucket=bucket, Key=key)
+            image_data = response['Body'].read()
+            
+            # Basic preprocessing (resize, normalize, etc.)
+            # In production, use PIL or OpenCV for actual preprocessing
+            processed_key = f"processed/{image_id}.bin"
+            
+            # Save preprocessed image back to S3
+            s3.put_object(
+                Bucket=bucket,
+                Key=processed_key,
+                Body=image_data,  # In reality, this would be processed data
+                Metadata={
+                    'original_key': key,
+                    'preprocessed_at': datetime.utcnow().isoformat()
+                }
+            )
+            
+            # Send to inference queue
+            sqs.send_message(
+                QueueUrl=inference_queue_url,
+                MessageBody=json.dumps({
+                    'image_id': image_id,
+                    'bucket': bucket,
+                    'processed_key': processed_key,
+                    'original_key': key
+                })
+            )
+            
+            # Update status
+            table.update_item(
+                Key={'image_id': image_id},
+                UpdateExpression='SET #status = :status, preprocessing_completed_at = :timestamp',
+                ExpressionAttributeNames={'#status': 'status'},
+                ExpressionAttributeValues={
+                    ':status': 'preprocessed',
+                    ':timestamp': int(datetime.utcnow().timestamp())
+                }
+            )
+            
+        except Exception as e:
+            print(f"Error processing message: {str(e)}")
+            print(traceback.format_exc())
+            
+            # Update status to failed
+            try:
+                table.update_item(
+                    Key={'image_id': image_id},
+                    UpdateExpression='SET #status = :status, error = :error',
+                    ExpressionAttributeNames={'#status': 'status'},
+                    ExpressionAttributeValues={
+                        ':status': 'preprocessing_failed',
+                        ':error': str(e)
+                    }
+                )
+            except:
+                pass
+            
+            raise  # Re-raise to trigger retry/DLQ
+    
+    return {'statusCode': 200}
+"""
+
+        self.preprocessing_function = aws.lambda_.Function(
+            f"{resource_prefix}-preprocessing",
+            code=pulumi.AssetArchive({
+                "index.py": pulumi.StringAsset(preprocessing_code)
+            }),
+            handler="index.handler",
+            runtime="python3.11",
+            role=preprocessing_role.arn,
+            timeout=LAMBDA_TIMEOUT,
+            memory_size=1024,  # 1GB for preprocessing
+            reserved_concurrent_executions=10,  # Prevent runaway scaling
+            environment=aws.lambda_.FunctionEnvironmentArgs(
+                variables={
+                    "INFERENCE_QUEUE_URL": self.inference_queue.url,
+                    "RESULTS_TABLE": self.results_table.name
+                }
+            ),
+            tracing_config=aws.lambda_.FunctionTracingConfigArgs(
+                mode="Active"  # X-Ray tracing
+            ),
+            tags={
+                "Environment": stack_name,
+                "Purpose": "Image preprocessing",
+                **self.tags
+            },
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Inference Lambda code
+        inference_code = """
+import json
+import boto3
+import os
+import base64
+from datetime import datetime
+import traceback
+
+s3 = boto3.client('s3')
+dynamodb = boto3.resource('dynamodb')
+
+def handler(event, context):
+    '''Runs model inference on preprocessed images'''
+    
+    table = dynamodb.Table(os.environ['RESULTS_TABLE'])
+    
+    for record in event['Records']:
+        try:
+            # Parse SQS message
+            message = json.loads(record['body'])
+            image_id = message['image_id']
+            bucket = message['bucket']
+            processed_key = message['processed_key']
+            
+            print(f"Running inference for image: {image_id}")
+            
+            # Update status to inferencing
+            table.update_item(
+                Key={'image_id': image_id},
+                UpdateExpression='SET #status = :status, inference_started_at = :timestamp',
+                ExpressionAttributeNames={'#status': 'status'},
+                ExpressionAttributeValues={
+                    ':status': 'inferencing',
+                    ':timestamp': int(datetime.utcnow().timestamp())
+                }
+            )
+            
+            # Download preprocessed image
+            response = s3.get_object(Bucket=bucket, Key=processed_key)
+            image_data = response['Body'].read()
+            
+            # Load model (in production, load from layer and cache)
+            # model = load_model_from_layer()
+            
+            # Run inference (placeholder - replace with actual model inference)
+            # predictions = model.predict(image_data)
+            predictions = {
+                'classes': ['cat', 'dog', 'bird'],
+                'probabilities': [0.7, 0.2, 0.1],
+                'confidence': 0.7
+            }
+            
+            # Save results to S3
+            results_key = f"results/{image_id}.json"
+        s3.put_object(
+                Bucket=bucket,
+                Key=results_key,
+                Body=json.dumps(predictions, indent=2),
+                ContentType='application/json'
+            )
+            
+            # Update DynamoDB with results
+        table.update_item(
+                Key={'image_id': image_id},
+                UpdateExpression='''
+                    SET #status = :status, 
+                        inference_completed_at = :timestamp,
+                        results = :results,
+                        results_s3_key = :results_key,
+                        top_prediction = :top_prediction,
+                        confidence = :confidence
+                ''',
+            ExpressionAttributeNames={'#status': 'status'},
+            ExpressionAttributeValues={
+                    ':status': 'completed',
+                    ':timestamp': int(datetime.utcnow().timestamp()),
+                    ':results': json.dumps(predictions),
+                    ':results_key': results_key,
+                    ':top_prediction': predictions['classes'][0],
+                    ':confidence': predictions['confidence']
+                }
+            )
+            
+            print(f"Inference completed for {image_id}: {predictions['classes'][0]} ({predictions['confidence']*100:.1f}%)")
+        
+    except Exception as e:
+            print(f"Error during inference: {str(e)}")
+            print(traceback.format_exc())
+            
+            # Update status to failed
+            try:
+                table.update_item(
+                    Key={'image_id': image_id},
+                    UpdateExpression='SET #status = :status, error = :error',
+                    ExpressionAttributeNames={'#status': 'status'},
+                    ExpressionAttributeValues={
+                        ':status': 'inference_failed',
+                        ':error': str(e)
+                    }
+                )
+            except:
+                pass
+            
+            raise  # Re-raise to trigger retry/DLQ
+    
+    return {'statusCode': 200}
+"""
+
+        self.inference_function = aws.lambda_.Function(
+            f"{resource_prefix}-inference",
+            code=pulumi.AssetArchive({
+                "index.py": pulumi.StringAsset(inference_code)
+            }),
+            handler="index.handler",
+            runtime="python3.11",
+            role=inference_role.arn,
+            timeout=LAMBDA_TIMEOUT,
+            memory_size=LAMBDA_MEMORY,
+            reserved_concurrent_executions=5,  # Control concurrency for GPU/memory intensive work
+            layers=[self.model_layer.arn],
+            environment=aws.lambda_.FunctionEnvironmentArgs(
+                variables={
+                    "RESULTS_TABLE": self.results_table.name
+                }
+            ),
+            tracing_config=aws.lambda_.FunctionTracingConfigArgs(
+                mode="Active"
+            ),
+            tags={
+                "Environment": stack_name,
+                "Purpose": "Model inference",
+                **self.tags
+            },
+            opts=ResourceOptions(parent=self)
+        )
+
+        # API Handler Lambda code
+        api_handler_code = """
 import json
 import boto3
 import os
 import uuid
-from datetime import datetime
-import hashlib
+from datetime import datetime, timedelta
+import base64
 
 s3 = boto3.client('s3')
+sqs = boto3.client('sqs')
 dynamodb = boto3.resource('dynamodb')
-events = boto3.client('events')
 
 def handler(event, context):
+    '''Handles API Gateway requests for image submission and status checks'''
+    
+    table = dynamodb.Table(os.environ['RESULTS_TABLE'])
+    bucket_name = os.environ['IMAGE_BUCKET']
+    queue_url = os.environ['PREPROCESSING_QUEUE_URL']
+    
+    path = event.get('path', event.get('rawPath', ''))
+    method = event.get('httpMethod', event.get('requestContext', {}).get('http', {}).get('method', ''))
+    
+    # Enable CORS
+    headers = {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type'
+    }
+    
     try:
-        # Parse incoming transaction
-        body = json.loads(event.get('body', '{}'))
-        transaction_id = body.get('transaction_id') or str(uuid.uuid4())
-        
-        # Add metadata
-        timestamp = datetime.utcnow()
-        body['ingestion_timestamp'] = timestamp.isoformat()
-        body['transaction_id'] = transaction_id
-        
-        # Generate checksum for data integrity
-        checksum = hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
-        body['checksum'] = checksum
-        
-        # Store raw data in S3
-        s3_key = f"raw/{timestamp.strftime('%Y/%m/%d')}/{transaction_id}.json"
-        s3.put_object(
-            Bucket=os.environ['RAW_BUCKET'],
-            Key=s3_key,
-            Body=json.dumps(body),
-            ServerSideEncryption='AES256',
-            Metadata={
-                'transaction_id': transaction_id,
-                'checksum': checksum
-            }
-        )
-        
-        # Store metadata in DynamoDB
-        table = dynamodb.Table(os.environ['METADATA_TABLE'])
-        table.put_item(Item={
-            'transaction_id': transaction_id,
-            'timestamp': int(timestamp.timestamp()),
-            'status': 'INGESTED',
-            's3_key': s3_key,
-            'checksum': checksum
-        })
-        
-        # Publish event for next stage
-        events.put_events(
-            Entries=[{
-                'Source': 'etl.pipeline',
-                'DetailType': 'TransactionIngested',
-                'Detail': json.dumps({
-                    'transaction_id': transaction_id,
-                    's3_key': s3_key,
-                    'timestamp': timestamp.isoformat()
-                }),
-                'EventBusName': os.environ['EVENT_BUS_NAME']
-            }]
-        )
-        
-        return {
-            'statusCode': 200,
-            'body': json.dumps({
-                'transaction_id': transaction_id,
-                'status': 'accepted'
-            })
-        }
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        # Send to error queue
-        boto3.client('sqs').send_message(
-            QueueUrl=os.environ['ERROR_QUEUE_URL'],
-            MessageBody=json.dumps({
-                'error': str(e),
-                'event': event,
-                'stage': 'ingestion'
-            })
-        )
-        return {'statusCode': 500, 'body': json.dumps({'error': 'Internal error'})}
-"""
-
-        ingestion_lambda = aws.lambda_.Function(
-            "ingestion-lambda",
-            name=f"etl-ingestion-{environment}",
-            runtime="python3.9",
-            handler="index.handler",
-            code=pulumi.AssetArchive({
-                "index.py": pulumi.StringAsset(ingestion_lambda_code)
-            }),
-            role=lambda_role.arn,
-            environment=aws.lambda_.FunctionEnvironmentArgs(variables=lambda_env_vars),
-            timeout=30,
-            memory_size=512,
-            reserved_concurrent_executions=10,
-            tracing_config=aws.lambda_.FunctionTracingConfigArgs(mode="Active"),
-            tags=default_tags,
-            opts=ResourceOptions(parent=self)
-        )
-
-        # 2. Validation Lambda
-        validation_lambda_code = """
-import json
-import boto3
-import os
-from datetime import datetime
-
-s3 = boto3.client('s3')
-dynamodb = boto3.resource('dynamodb')
-events = boto3.client('events')
-sns = boto3.client('sns')
-
-REQUIRED_FIELDS = ['amount', 'currency', 'account_id', 'transaction_type']
-VALID_CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY']
-VALID_TYPES = ['DEBIT', 'CREDIT', 'TRANSFER']
-
-def handler(event, context):
-    try:
-        detail = event.get('detail')
-        if isinstance(detail, str):
-            detail = json.loads(detail)
-        transaction_id = detail['transaction_id']
-        s3_key = detail['s3_key']
-        
-        # Fetch data from S3
-        response = s3.get_object(Bucket=os.environ['RAW_BUCKET'], Key=s3_key)
-        data = json.loads(response['Body'].read())
-        
-        # Validation rules
-        errors = []
-        
-        # Check required fields
-        for field in REQUIRED_FIELDS:
-            if field not in data:
-                errors.append(f"Missing required field: {field}")
-        
-        # Validate currency
-        if data.get('currency') not in VALID_CURRENCIES:
-            errors.append(f"Invalid currency: {data.get('currency')}")
-        
-        # Validate transaction type
-        if data.get('transaction_type') not in VALID_TYPES:
-            errors.append(f"Invalid transaction type: {data.get('transaction_type')}")
-        
-        # Validate amount
-        try:
-            amount = float(data.get('amount', 0))
-            if amount <= 0:
-                errors.append("Amount must be positive")
-            if amount > 1000000:  # Fraud detection threshold
-                errors.append("Amount exceeds maximum threshold")
-                # Send alert for large transaction
-                sns.publish(
-                    TopicArn=os.environ['ALERT_TOPIC_ARN'],
-                    Subject=f"Large Transaction Alert: {transaction_id}",
-                    Message=json.dumps({
-                        'transaction_id': transaction_id,
-                        'amount': amount,
-                        'timestamp': datetime.utcnow().isoformat()
-                    })
-                )
-        except (TypeError, ValueError):
-            errors.append("Invalid amount format")
-        
-        # Update status in DynamoDB
-        table = dynamodb.Table(os.environ['METADATA_TABLE'])
-        timestamp_value = detail.get('timestamp')
-        if isinstance(timestamp_value, str):
-            timestamp_value = int(datetime.fromisoformat(timestamp_value.replace('Z', '+00:00')).timestamp())
-        else:
-            timestamp_value = int(float(timestamp_value))
-        
-        if errors:
-            # Validation failed
-            table.update_item(
-                Key={
-                    'transaction_id': transaction_id,
-                    'timestamp': timestamp_value
-                },
-                UpdateExpression="SET #status = :status, validation_errors = :errors",
-                ExpressionAttributeNames={'#status': 'status'},
-                ExpressionAttributeValues={
-                    ':status': 'VALIDATION_FAILED',
-                    ':errors': errors
-                }
+        # POST /images - Submit new image for processing
+        if method == 'POST' and path == '/images':
+            # Generate unique image ID
+            image_id = str(uuid.uuid4())
+            timestamp = int(datetime.utcnow().timestamp())
+            
+            # Generate presigned URL for S3 upload
+            key = f"uploads/{image_id}.jpg"  # Adjust extension as needed
+            presigned_url = s3.generate_presigned_url(
+                'put_object',
+                Params={'Bucket': bucket_name, 'Key': key},
+                ExpiresIn=3600  # 1 hour expiry
             )
             
-            # Send to error handling
-            boto3.client('sqs').send_message(
-                QueueUrl=os.environ['ERROR_QUEUE_URL'],
-                MessageBody=json.dumps({
-                    'transaction_id': transaction_id,
-                    'errors': errors,
-                    'stage': 'validation'
+            # Create initial record in DynamoDB
+            table.put_item(Item={
+                'image_id': image_id,
+                'status': 'pending_upload',
+                'created_at': timestamp,
+                's3_key': key,
+                'bucket': bucket_name
+            })
+            
+            # If image data is provided in body, upload directly
+            if event.get('body'):
+                try:
+                    body_data = json.loads(event['body'])
+                    if 'image_base64' in body_data:
+                        image_data = base64.b64decode(body_data['image_base64'])
+                        
+                        # Upload to S3
+        s3.put_object(
+                            Bucket=bucket_name,
+                            Key=key,
+                            Body=image_data
+                        )
+                        
+                        # Send to preprocessing queue
+                        sqs.send_message(
+                            QueueUrl=queue_url,
+                            MessageBody=json.dumps({
+                                'image_id': image_id,
+                                'bucket': bucket_name,
+                                'key': key
+                            })
+                        )
+                        
+                        # Update status
+        table.update_item(
+                            Key={'image_id': image_id},
+                            UpdateExpression='SET #status = :status',
+            ExpressionAttributeNames={'#status': 'status'},
+                            ExpressionAttributeValues={':status': 'queued'}
+                        )
+                except:
+                    pass  # Fall back to presigned URL method
+            
+            return {
+                'statusCode': 201,
+                'headers': headers,
+                'body': json.dumps({
+                    'image_id': image_id,
+                    'upload_url': presigned_url,
+                    'status': 'pending_upload',
+                    'message': 'Upload your image to the provided URL, then it will be automatically processed'
                 })
-            )
-        else:
-            # Validation passed
-            table.update_item(
-                Key={
-                    'transaction_id': transaction_id,
-                    'timestamp': timestamp_value
-                },
-                UpdateExpression="SET #status = :status",
-                ExpressionAttributeNames={'#status': 'status'},
-                ExpressionAttributeValues={':status': 'VALIDATED'}
-            )
-            
-            # Trigger next stage
-            events.put_events(
-                Entries=[{
-                    'Source': 'etl.pipeline',
-                    'DetailType': 'TransactionValidated',
-                    'Detail': json.dumps({
-                        'transaction_id': transaction_id,
-                        's3_key': s3_key,
-                        'timestamp': detail.get('timestamp')
-                    }),
-                    'EventBusName': os.environ['EVENT_BUS_NAME']
-                }]
-            )
+            }
         
-        return {'statusCode': 200}
+        # GET /images/{id} - Get status and results
+        elif method == 'GET' and path.startswith('/images/'):
+            image_id = path.split('/')[-1]
+            
+            # Get item from DynamoDB
+            response = table.get_item(Key={'image_id': image_id})
+            
+            if 'Item' not in response:
+                return {
+                    'statusCode': 404,
+                    'headers': headers,
+                    'body': json.dumps({'error': 'Image not found'})
+                }
+            
+            item = response['Item']
+            
+            # Prepare response
+            result = {
+                'image_id': image_id,
+                'status': item.get('status', 'unknown'),
+                'created_at': item.get('created_at'),
+                'last_updated': item.get('inference_completed_at', item.get('preprocessing_completed_at', item.get('created_at')))
+            }
+            
+            # Add results if completed
+            if item.get('status') == 'completed':
+                result['results'] = json.loads(item.get('results', '{}'))
+                result['top_prediction'] = item.get('top_prediction')
+                result['confidence'] = float(item.get('confidence', 0))
+                
+                # Generate presigned URL for results
+                if item.get('results_s3_key'):
+                    result['results_url'] = s3.generate_presigned_url(
+                        'get_object',
+                        Params={'Bucket': bucket_name, 'Key': item['results_s3_key']},
+                        ExpiresIn=3600
+                    )
+            
+            # Add error info if failed
+            if 'failed' in item.get('status', ''):
+                result['error'] = item.get('error', 'Processing failed')
+            
+            return {
+                'statusCode': 200,
+                'headers': headers,
+                'body': json.dumps(result)
+            }
+        
+        # Unsupported endpoint
+        else:
+            return {
+                'statusCode': 400,
+                'headers': headers,
+                'body': json.dumps({'error': 'Unsupported endpoint'})
+            }
         
     except Exception as e:
-        print(f"Error: {str(e)}")
-        boto3.client('sqs').send_message(
-            QueueUrl=os.environ['ERROR_QUEUE_URL'],
-            MessageBody=json.dumps({
-                'error': str(e),
-                'event': event,
-                'stage': 'validation'
-            })
-        )
-        raise
-"""
-
-        validation_lambda = aws.lambda_.Function(
-            "validation-lambda",
-            name=f"etl-validation-{environment}",
-            runtime="python3.9",
-            handler="index.handler",
-            code=pulumi.AssetArchive({
-                "index.py": pulumi.StringAsset(validation_lambda_code)
-            }),
-            role=lambda_role.arn,
-            environment=aws.lambda_.FunctionEnvironmentArgs(variables=lambda_env_vars),
-            timeout=30,
-            memory_size=256,
-            reserved_concurrent_executions=5,
-            tracing_config=aws.lambda_.FunctionTracingConfigArgs(mode="Active"),
-            tags=default_tags,
-            opts=ResourceOptions(parent=self)
-        )
-
-        # 3. Transformation Lambda
-        transformation_lambda_code = """
-import json
-import boto3
-import os
-from datetime import datetime
-from decimal import Decimal
-
-s3 = boto3.client('s3')
-dynamodb = boto3.resource('dynamodb')
-events = boto3.client('events')
-
-def handler(event, context):
-    try:
-        detail = event.get('detail')
-        if isinstance(detail, str):
-            detail = json.loads(detail)
-        transaction_id = detail['transaction_id']
-        s3_key = detail['s3_key']
-        
-        # Fetch data from S3
-        response = s3.get_object(Bucket=os.environ['RAW_BUCKET'], Key=s3_key)
-        data = json.loads(response['Body'].read())
-        
-        # Apply transformations
-        transformed = {
-            'transaction_id': transaction_id,
-            'amount_cents': int(float(data['amount']) * 100),  # Convert to cents
-            'amount_decimal': str(Decimal(str(data['amount']))),
-            'currency': data['currency'].upper(),
-            'account_id': data['account_id'].strip(),
-            'transaction_type': data['transaction_type'].upper(),
-            'timestamp': data.get('timestamp', datetime.utcnow().isoformat()),
-            'processing_timestamp': datetime.utcnow().isoformat(),
-            'metadata': {
-                'original_checksum': data.get('checksum'),
-                'ingestion_timestamp': data.get('ingestion_timestamp'),
-                'transformation_version': '1.0'
-            }
+        print(f"API handler error: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
+        return {
+            'statusCode': 500,
+            'headers': headers,
+            'body': json.dumps({'error': 'Internal server error', 'message': str(e)})
         }
-        
-        # Add derived fields
-        if transformed['transaction_type'] == 'DEBIT':
-            transformed['amount_signed'] = -transformed['amount_cents']
-        else:
-            transformed['amount_signed'] = transformed['amount_cents']
-        
-        # Categorize transaction
-        amount = float(data['amount'])
-        if amount < 100:
-            transformed['category'] = 'SMALL'
-        elif amount < 10000:
-            transformed['category'] = 'MEDIUM'
-        else:
-            transformed['category'] = 'LARGE'
-        
-        # Store transformed data
-        processed_key = f"processed/{datetime.utcnow().strftime('%Y/%m/%d')}/{transaction_id}_transformed.json"
-        s3.put_object(
-            Bucket=os.environ['PROCESSED_BUCKET'],
-            Key=processed_key,
-            Body=json.dumps(transformed),
-            ServerSideEncryption='AES256'
-        )
-        
-        # Update metadata
-        table = dynamodb.Table(os.environ['METADATA_TABLE'])
-        timestamp_value = detail.get('timestamp')
-        if isinstance(timestamp_value, str):
-            timestamp_value = int(datetime.fromisoformat(timestamp_value.replace('Z', '+00:00')).timestamp())
-        else:
-            timestamp_value = int(float(timestamp_value))
-        
-        table.update_item(
-            Key={
-                'transaction_id': transaction_id,
-                'timestamp': timestamp_value
-            },
-            UpdateExpression="SET #status = :status, processed_key = :key",
-            ExpressionAttributeNames={'#status': 'status'},
-            ExpressionAttributeValues={
-                ':status': 'TRANSFORMED',
-                ':key': processed_key
-            }
-        )
-        
-        # Trigger next stage
-        events.put_events(
-            Entries=[{
-                'Source': 'etl.pipeline',
-                'DetailType': 'TransactionTransformed',
-                'Detail': json.dumps({
-                    'transaction_id': transaction_id,
-                    'raw_key': s3_key,
-                    'processed_key': processed_key,
-                    'timestamp': detail.get('timestamp')
-                }),
-                'EventBusName': os.environ['EVENT_BUS_NAME']
-            }]
-        )
-        
-        return {'statusCode': 200}
-        
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        boto3.client('sqs').send_message(
-            QueueUrl=os.environ['ERROR_QUEUE_URL'],
-            MessageBody=json.dumps({
-                'error': str(e),
-                'event': event,
-                'stage': 'transformation'
-            })
-        )
-        raise
 """
 
-        transformation_lambda = aws.lambda_.Function(
-            "transformation-lambda",
-            name=f"etl-transformation-{environment}",
-            runtime="python3.9",
-            handler="index.handler",
+        self.api_handler_function = aws.lambda_.Function(
+            f"{resource_prefix}-api-handler",
             code=pulumi.AssetArchive({
-                "index.py": pulumi.StringAsset(transformation_lambda_code)
+                "index.py": pulumi.StringAsset(api_handler_code)
             }),
-            role=lambda_role.arn,
-            environment=aws.lambda_.FunctionEnvironmentArgs(variables=lambda_env_vars),
-            timeout=30,
+            handler="index.handler",
+            runtime="python3.11",
+            role=api_role.arn,
+            timeout=30,  # API responses should be fast
             memory_size=512,
-            reserved_concurrent_executions=5,
-            tracing_config=aws.lambda_.FunctionTracingConfigArgs(mode="Active"),
-            tags=default_tags,
-            opts=ResourceOptions(parent=self)
-        )
-
-        # 4. Enrichment Lambda
-        enrichment_lambda_code = """
-import json
-import boto3
-import os
-from datetime import datetime
-import hashlib
-
-s3 = boto3.client('s3')
-dynamodb = boto3.resource('dynamodb')
-events = boto3.client('events')
-
-def handler(event, context):
-    try:
-        detail = event.get('detail')
-        if isinstance(detail, str):
-            detail = json.loads(detail)
-        transaction_id = detail['transaction_id']
-        processed_key = detail['processed_key']
-        
-        # Fetch transformed data
-        response = s3.get_object(Bucket=os.environ['PROCESSED_BUCKET'], Key=processed_key)
-        data = json.loads(response['Body'].read())
-        
-        # Enrich with additional data
-        enriched = data.copy()
-        
-        # Add risk score (simplified example)
-        risk_score = 0
-        if data['category'] == 'LARGE':
-            risk_score += 30
-        if data['transaction_type'] == 'TRANSFER':
-            risk_score += 20
-        
-        enriched['risk_score'] = risk_score
-        enriched['risk_level'] = 'HIGH' if risk_score > 50 else 'MEDIUM' if risk_score > 25 else 'LOW'
-        
-        # Add compliance flags
-        enriched['compliance'] = {
-            'pci_dss': True,
-            'aml_check': risk_score < 75,
-            'requires_review': risk_score > 50
-        }
-        
-        # Generate final checksum
-        enriched['final_checksum'] = hashlib.sha256(
-            json.dumps(enriched, sort_keys=True).encode()
-        ).hexdigest()
-        
-        # Store final enriched data
-        final_key = f"final/{datetime.utcnow().strftime('%Y/%m/%d')}/{transaction_id}_final.json"
-        s3.put_object(
-            Bucket=os.environ['PROCESSED_BUCKET'],
-            Key=final_key,
-            Body=json.dumps(enriched),
-            ServerSideEncryption='AES256'
-        )
-        
-        # Update metadata with completion
-        table = dynamodb.Table(os.environ['METADATA_TABLE'])
-        timestamp_value = detail.get('timestamp')
-        if isinstance(timestamp_value, str):
-            timestamp_value = int(datetime.fromisoformat(timestamp_value.replace('Z', '+00:00')).timestamp())
-        else:
-            timestamp_value = int(float(timestamp_value))
-        
-        table.update_item(
-            Key={
-                'transaction_id': transaction_id,
-                'timestamp': timestamp_value
+            environment=aws.lambda_.FunctionEnvironmentArgs(
+                variables={
+                    "RESULTS_TABLE": self.results_table.name,
+                    "IMAGE_BUCKET": self.image_bucket.id,
+                    "PREPROCESSING_QUEUE_URL": self.preprocessing_queue.url
+                }
+            ),
+            tracing_config=aws.lambda_.FunctionTracingConfigArgs(
+                mode="Active"
+            ),
+            tags={
+                "Environment": stack_name,
+                "Purpose": "API request handler",
+                **self.tags
             },
-            UpdateExpression="SET #status = :status, final_key = :key, risk_score = :risk",
-            ExpressionAttributeNames={'#status': 'status'},
-            ExpressionAttributeValues={
-                ':status': 'COMPLETED',
-                ':key': final_key,
-                ':risk': risk_score
-            }
-        )
-        
-        # Log to audit table
-        audit_table = dynamodb.Table(os.environ['AUDIT_TABLE'])
-        audit_table.put_item(Item={
-            'audit_id': f"{transaction_id}-complete",
-            'timestamp': int(datetime.utcnow().timestamp()),
-            'transaction_id': transaction_id,
-            'event': 'PIPELINE_COMPLETED',
-            'details': json.dumps({
-                'risk_score': risk_score,
-                'final_key': final_key,
-                'checksum': enriched['final_checksum']
-            })
-        })
-        
-        # Send completion event
-        events.put_events(
-            Entries=[{
-                'Source': 'etl.pipeline',
-                'DetailType': 'TransactionCompleted',
-                'Detail': json.dumps({
-                    'transaction_id': transaction_id,
-                    'final_key': final_key,
-                    'risk_score': risk_score,
-                    'timestamp': datetime.utcnow().isoformat()
-                }),
-                'EventBusName': os.environ['EVENT_BUS_NAME']
-            }]
-        )
-        
-        return {'statusCode': 200}
-        
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        boto3.client('sqs').send_message(
-            QueueUrl=os.environ['ERROR_QUEUE_URL'],
-            MessageBody=json.dumps({
-                'error': str(e),
-                'event': event,
-                'stage': 'enrichment'
-            })
-        )
-        raise
-"""
-
-        enrichment_lambda = aws.lambda_.Function(
-            "enrichment-lambda",
-            name=f"etl-enrichment-{environment}",
-            runtime="python3.9",
-            handler="index.handler",
-            code=pulumi.AssetArchive({
-                "index.py": pulumi.StringAsset(enrichment_lambda_code)
-            }),
-            role=lambda_role.arn,
-            environment=aws.lambda_.FunctionEnvironmentArgs(variables=lambda_env_vars),
-            timeout=30,
-            memory_size=512,
-            reserved_concurrent_executions=5,
-            tracing_config=aws.lambda_.FunctionTracingConfigArgs(mode="Active"),
-            tags=default_tags,
             opts=ResourceOptions(parent=self)
         )
 
-        # 5. Error Handler Lambda
-        error_handler_lambda_code = """
-import json
-import boto3
-import os
-from datetime import datetime
+        # ==================== Event Sources ====================
 
-dynamodb = boto3.resource('dynamodb')
-sns = boto3.client('sns')
-
-def handler(event, context):
-    try:
-        for record in event['Records']:
-            message = json.loads(record['body'])
-            
-            # Log error to audit table
-            audit_table = dynamodb.Table(os.environ['AUDIT_TABLE'])
-            audit_table.put_item(Item={
-                'audit_id': f"error-{record['messageId']}",
-                'timestamp': int(datetime.utcnow().timestamp()),
-                'event': 'PIPELINE_ERROR',
-                'details': json.dumps(message)
-            })
-            
-            # Send alert for critical errors
-            if message.get('stage') in ['validation', 'transformation']:
-                sns.publish(
-                    TopicArn=os.environ['ALERT_TOPIC_ARN'],
-                    Subject=f"ETL Pipeline Error - {message.get('stage', 'unknown')}",
-                    Message=json.dumps({
-                        'error': message.get('error'),
-                        'transaction_id': message.get('transaction_id'),
-                        'stage': message.get('stage'),
-                        'timestamp': datetime.utcnow().isoformat()
-                    }, indent=2)
-                )
-        
-        return {'statusCode': 200}
-        
-    except Exception as e:
-        print(f"Error handler failed: {str(e)}")
-        raise
-"""
-
-        error_handler_lambda = aws.lambda_.Function(
-            "error-handler-lambda",
-            name=f"etl-error-handler-{environment}",
-            runtime="python3.9",
-            handler="index.handler",
-            code=pulumi.AssetArchive({
-                "index.py": pulumi.StringAsset(error_handler_lambda_code)
-            }),
-            role=lambda_role.arn,
-            environment=aws.lambda_.FunctionEnvironmentArgs(variables=lambda_env_vars),
-            timeout=30,
-            memory_size=256,
-            reserved_concurrent_executions=2,
-            tags=default_tags,
+        # S3 to SQS notification
+        s3_event_queue_policy = aws.sqs.QueuePolicy(
+            f"{resource_prefix}-s3-queue-policy",
+            queue_url=self.preprocessing_queue.url,
+            policy=Output.all(self.preprocessing_queue.arn, self.image_bucket.arn).apply(
+                lambda args: json.dumps({
+                    "Version": "2012-10-17",
+                    "Statement": [{
+                        "Effect": "Allow",
+                        "Principal": {"Service": "s3.amazonaws.com"},
+                        "Action": "sqs:SendMessage",
+                        "Resource": args[0],
+                        "Condition": {
+                            "ArnLike": {
+                                "aws:SourceArn": args[1]
+                            }
+                        }
+                    }]
+                })
+            ),
             opts=ResourceOptions(parent=self)
         )
 
-        # Configure error handler to process SQS messages
-        aws.lambda_.EventSourceMapping(
-            "error-queue-trigger",
-            event_source_arn=error_queue.arn,
-            function_name=error_handler_lambda.name,
-            batch_size=10,
-            maximum_batching_window_in_seconds=5,
+        bucket_notification = aws.s3.BucketNotification(
+            f"{resource_prefix}-bucket-notification",
+            bucket=self.image_bucket.id,
+            queues=[aws.s3.BucketNotificationQueueArgs(
+                queue_arn=self.preprocessing_queue.arn,
+                events=["s3:ObjectCreated:*"],
+                filter_prefix="uploads/"
+            )],
+            opts=ResourceOptions(depends_on=[s3_event_queue_policy], parent=self)
+        )
+
+        # SQS to Lambda triggers
+        preprocessing_event_source = aws.lambda_.EventSourceMapping(
+            f"{resource_prefix}-preprocessing-trigger",
+            event_source_arn=self.preprocessing_queue.arn,
+            function_name=self.preprocessing_function.name,
+            batch_size=1,  # Process one image at a time
+            maximum_batching_window_in_seconds=0,
             opts=ResourceOptions(parent=self)
         )
 
-        # ============================================================================
-        # API Gateway
-        # ============================================================================
-
-        # REST API for transaction ingestion
-        api = aws.apigateway.RestApi(
-            "transaction-api",
-            name=f"transaction-ingestion-api-{environment}",
-            description="API for ingesting financial transactions",
-            tags=default_tags,
+        inference_event_source = aws.lambda_.EventSourceMapping(
+            f"{resource_prefix}-inference-trigger",
+            event_source_arn=self.inference_queue.arn,
+            function_name=self.inference_function.name,
+            batch_size=1,
+            maximum_batching_window_in_seconds=0,
             opts=ResourceOptions(parent=self)
         )
 
-        # Create /transactions resource
-        transactions_resource = aws.apigateway.Resource(
-            "transactions-resource",
-            rest_api=api.id,
-            parent_id=api.root_resource_id,
-            path_part="transactions",
-            opts=ResourceOptions(parent=self)
-        )
+        # ==================== API Gateway ====================
 
-        # Create POST method
-        post_method = aws.apigateway.Method(
-            "post-transaction",
-            rest_api=api.id,
-            resource_id=transactions_resource.id,
-            http_method="POST",
-            authorization="AWS_IAM",
+        self.api = aws.apigatewayv2.Api(
+            f"{resource_prefix}-api",
+            protocol_type="HTTP",
+            cors_configuration=aws.apigatewayv2.ApiCorsConfigurationArgs(
+                allow_origins=["*"],
+                allow_methods=["GET", "POST", "OPTIONS"],
+                allow_headers=["Content-Type"],
+                max_age=300
+            ),
+            tags={
+                "Environment": stack_name,
+                "Purpose": "Image inference API",
+                **self.tags
+            },
             opts=ResourceOptions(parent=self)
         )
 
         # Lambda integration
-        lambda_integration = aws.apigateway.Integration(
-            "lambda-integration",
-            rest_api=api.id,
-            resource_id=transactions_resource.id,
-            http_method=post_method.http_method,
-            integration_http_method="POST",
-            type="AWS_PROXY",
-            uri=ingestion_lambda.invoke_arn,
+        api_integration = aws.apigatewayv2.Integration(
+            f"{resource_prefix}-api-integration",
+            api_id=self.api.id,
+            integration_type="AWS_PROXY",
+            integration_uri=self.api_handler_function.invoke_arn,
+            payload_format_version="2.0",
             opts=ResourceOptions(parent=self)
         )
 
-        # Grant API Gateway permission to invoke Lambda
-        aws.lambda_.Permission(
-            "api-lambda-permission",
-            statement_id="AllowAPIGatewayInvoke",
-            action="lambda:InvokeFunction",
-            function=ingestion_lambda.name,
-            principal="apigateway.amazonaws.com",
-            source_arn=pulumi.Output.concat(api.execution_arn, "/*/*"),
+        # POST /images route
+        post_images_route = aws.apigatewayv2.Route(
+            f"{resource_prefix}-post-images",
+            api_id=self.api.id,
+            route_key="POST /images",
+            target=api_integration.id.apply(lambda id: f"integrations/{id}"),
             opts=ResourceOptions(parent=self)
         )
 
-        # Deploy API
-        api_deployment = aws.apigateway.Deployment(
-            "api-deployment",
-            rest_api=api.id,
-            opts=pulumi.ResourceOptions(depends_on=[post_method, lambda_integration], parent=self)
-        )
-
-        # Enable CloudWatch logging for API Gateway
-        api_log_group = aws.cloudwatch.LogGroup(
-            "api-log-group",
-            name=f"/aws/apigateway/transaction-api-{environment}",
-            retention_in_days=30,
-            tags=default_tags,
+        # GET /images/{id} route
+        get_image_route = aws.apigatewayv2.Route(
+            f"{resource_prefix}-get-image",
+            api_id=self.api.id,
+            route_key="GET /images/{id}",
+            target=api_integration.id.apply(lambda id: f"integrations/{id}"),
             opts=ResourceOptions(parent=self)
         )
 
-        api_stage = aws.apigateway.Stage(
-            "api-stage",
-            rest_api=api.id,
-            deployment=api_deployment.id,
-            stage_name=environment,
-            access_log_settings={
-                "destination_arn": api_log_group.arn,
-                "format": json.dumps({
-                    "requestId": "$context.requestId",
-                    "ip": "$context.identity.sourceIp",
-                    "caller": "$context.identity.caller",
-                    "user": "$context.identity.user",
-                    "requestTime": "$context.requestTime",
-                    "httpMethod": "$context.httpMethod",
-                    "resourcePath": "$context.resourcePath",
-                    "status": "$context.status",
-                    "protocol": "$context.protocol",
-                    "responseLength": "$context.responseLength"
-                })
+        # API deployment
+        api_deployment = aws.apigatewayv2.Stage(
+            f"{resource_prefix}-api-stage",
+            api_id=self.api.id,
+            name="$default",
+            auto_deploy=True,
+            tags={
+                "Environment": stack_name,
+                **self.tags
             },
-            xray_tracing_enabled=True,
-            tags=default_tags,
-            opts=ResourceOptions(parent=self)
+            opts=ResourceOptions(depends_on=[post_images_route, get_image_route], parent=self)
         )
 
-        # ============================================================================
-        # EventBridge Rules
-        # ============================================================================
-
-        # Rule: Ingested -> Validation
-        validation_rule = aws.cloudwatch.EventRule(
-            "validation-rule",
-            name=f"etl-validation-trigger-{environment}",
-            event_bus_name=etl_event_bus.name,
-            event_pattern=json.dumps({
-                "source": ["etl.pipeline"],
-                "detail-type": ["TransactionIngested"]
-            }),
-            tags=default_tags,
-            opts=ResourceOptions(parent=self)
-        )
-
-        aws.cloudwatch.EventTarget(
-            "validation-target",
-            rule=validation_rule.name,
-            arn=validation_lambda.arn,
-            event_bus_name=etl_event_bus.name,
-            opts=ResourceOptions(parent=self)
-        )
-
-        aws.lambda_.Permission(
-            "validation-eventbridge-permission",
-            statement_id="AllowEventBridgeInvoke",
+        # Lambda permission for API Gateway
+        api_lambda_permission = aws.lambda_.Permission(
+            f"{resource_prefix}-api-lambda-permission",
             action="lambda:InvokeFunction",
-            function=validation_lambda.name,
-            principal="events.amazonaws.com",
-            source_arn=validation_rule.arn,
+            function=self.api_handler_function.name,
+            principal="apigateway.amazonaws.com",
+            source_arn=Output.concat(self.api.execution_arn, "/*/*"),
             opts=ResourceOptions(parent=self)
         )
 
-        # Rule: Validated -> Transformation
-        transformation_rule = aws.cloudwatch.EventRule(
-            "transformation-rule",
-            name=f"etl-transformation-trigger-{environment}",
-            event_bus_name=etl_event_bus.name,
-            event_pattern=json.dumps({
-                "source": ["etl.pipeline"],
-                "detail-type": ["TransactionValidated"]
-            }),
-            tags=default_tags,
+        # ==================== CloudWatch Alarms ====================
+
+        # DLQ alarm - triggers when messages land in dead letter queue
+        dlq_alarm = aws.cloudwatch.MetricAlarm(
+            f"{resource_prefix}-dlq-alarm",
+            comparison_operator="GreaterThanThreshold",
+            evaluation_periods=1,
+            metric_name="ApproximateNumberOfMessagesVisible",
+            namespace="AWS/SQS",
+            period=60,
+            statistic="Sum",
+            threshold=1,
+            alarm_description="Alert when messages are sent to DLQ",
+            dimensions={"QueueName": self.dlq.name},
+            tags={
+                "Environment": stack_name,
+                "Severity": "High",
+                **self.tags
+            },
             opts=ResourceOptions(parent=self)
         )
 
-        aws.cloudwatch.EventTarget(
-            "transformation-target",
-            rule=transformation_rule.name,
-            arn=transformation_lambda.arn,
-            event_bus_name=etl_event_bus.name,
+        # Lambda error rate alarm for preprocessing
+        preprocessing_error_alarm = aws.cloudwatch.MetricAlarm(
+            f"{resource_prefix}-preprocessing-errors",
+            comparison_operator="GreaterThanThreshold",
+            evaluation_periods=2,
+            metric_name="Errors",
+            namespace="AWS/Lambda",
+            period=60,
+            statistic="Sum",
+            threshold=5,
+            alarm_description="Preprocessing function error rate too high",
+            dimensions={"FunctionName": self.preprocessing_function.name},
+            tags={
+                "Environment": stack_name,
+                "Severity": "Medium",
+                **self.tags
+            },
             opts=ResourceOptions(parent=self)
         )
 
-        aws.lambda_.Permission(
-            "transformation-eventbridge-permission",
-            statement_id="AllowEventBridgeInvoke",
-            action="lambda:InvokeFunction",
-            function=transformation_lambda.name,
-            principal="events.amazonaws.com",
-            source_arn=transformation_rule.arn,
-            opts=ResourceOptions(parent=self)
-        )
-
-        # Rule: Transformed -> Enrichment
-        enrichment_rule = aws.cloudwatch.EventRule(
-            "enrichment-rule",
-            name=f"etl-enrichment-trigger-{environment}",
-            event_bus_name=etl_event_bus.name,
-            event_pattern=json.dumps({
-                "source": ["etl.pipeline"],
-                "detail-type": ["TransactionTransformed"]
-            }),
-            tags=default_tags,
-            opts=ResourceOptions(parent=self)
-        )
-
-        aws.cloudwatch.EventTarget(
-            "enrichment-target",
-            rule=enrichment_rule.name,
-            arn=enrichment_lambda.arn,
-            event_bus_name=etl_event_bus.name,
-            opts=ResourceOptions(parent=self)
-        )
-
-        aws.lambda_.Permission(
-            "enrichment-eventbridge-permission",
-            statement_id="AllowEventBridgeInvoke",
-            action="lambda:InvokeFunction",
-            function=enrichment_lambda.name,
-            principal="events.amazonaws.com",
-            source_arn=enrichment_rule.arn,
-            opts=ResourceOptions(parent=self)
-        )
-
-        # ============================================================================
-        # CloudWatch Alarms
-        # ============================================================================
-
-        # Lambda error rate alarm
-        for lambda_func, func_name in [(ingestion_lambda, "ingestion"), 
-                              (validation_lambda, "validation"),
-                              (transformation_lambda, "transformation"),
-                              (enrichment_lambda, "enrichment")]:
-            aws.cloudwatch.MetricAlarm(
-                f"{func_name}-error-alarm",
-                name=f"etl-{func_name}-errors-{environment}",
+        # Lambda error rate alarm for inference
+        inference_error_alarm = aws.cloudwatch.MetricAlarm(
+            f"{resource_prefix}-inference-errors",
                 comparison_operator="GreaterThanThreshold",
                 evaluation_periods=2,
                 metric_name="Errors",
@@ -1188,69 +1116,66 @@ def handler(event, context):
                 period=60,
                 statistic="Sum",
                 threshold=5,
-                alarm_description=f"Alert when {func_name} Lambda errors exceed threshold",
-                alarm_actions=[alert_topic.arn],
-                dimensions={"FunctionName": lambda_func.name},
-                tags=default_tags,
+            alarm_description="Inference function error rate too high",
+            dimensions={"FunctionName": self.inference_function.name},
+            tags={
+                "Environment": stack_name,
+                "Severity": "High",
+                **self.tags
+            },
                 opts=ResourceOptions(parent=self)
             )
 
-        # DLQ alarm
-        aws.cloudwatch.MetricAlarm(
-            "dlq-alarm",
-            name=f"etl-dlq-messages-{environment}",
+        # Lambda throttle alarm
+        preprocessing_throttle_alarm = aws.cloudwatch.MetricAlarm(
+            f"{resource_prefix}-preprocessing-throttles",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=1,
-            metric_name="ApproximateNumberOfMessagesVisible",
-            namespace="AWS/SQS",
-            period=300,
-            statistic="Average",
-            threshold=1,
-            alarm_description="Alert when messages are in DLQ",
-            alarm_actions=[alert_topic.arn],
-            dimensions={"QueueName": dlq.name},
-            tags=default_tags,
+            metric_name="Throttles",
+            namespace="AWS/Lambda",
+            period=60,
+            statistic="Sum",
+            threshold=5,
+            alarm_description="Preprocessing function is being throttled",
+            dimensions={"FunctionName": self.preprocessing_function.name},
+            tags={
+                "Environment": stack_name,
+                "Severity": "Medium",
+                **self.tags
+            },
             opts=ResourceOptions(parent=self)
         )
 
-        # ============================================================================
-        # Store instance variables for reference
-        # ============================================================================
-        
-        self.raw_data_bucket = raw_data_bucket
-        self.processed_data_bucket = processed_data_bucket
-        self.transaction_metadata_table = transaction_metadata_table
-        self.audit_log_table = audit_log_table
-        self.error_queue = error_queue
-        self.dlq = dlq
-        self.alert_topic = alert_topic
-        self.event_bus = etl_event_bus
-        self.ingestion_lambda = ingestion_lambda
-        self.validation_lambda = validation_lambda
-        self.transformation_lambda = transformation_lambda
-        self.enrichment_lambda = enrichment_lambda
-        self.error_handler_lambda = error_handler_lambda
-        self.api = api
-        self.environment = environment
+        # SQS queue age alarm - messages taking too long to process
+        queue_age_alarm = aws.cloudwatch.MetricAlarm(
+            f"{resource_prefix}-queue-age",
+            comparison_operator="GreaterThanThreshold",
+            evaluation_periods=2,
+            metric_name="ApproximateAgeOfOldestMessage",
+            namespace="AWS/SQS",
+            period=300,
+            statistic="Average",
+            threshold=600,  # 10 minutes
+            alarm_description="Messages are taking too long to process",
+            dimensions={"QueueName": self.preprocessing_queue.name},
+            tags={
+                "Environment": stack_name,
+                "Severity": "Medium",
+                **self.tags
+            },
+            opts=ResourceOptions(parent=self)
+        )
 
-        # Register outputs
-        self.register_outputs({
-            "api_endpoint": pulumi.Output.concat(
-                "https://", api.id, ".execute-api.", aws.config.region, ".amazonaws.com/", environment, "/transactions"
-            ),
-            "raw_data_bucket": raw_data_bucket.bucket,
-            "processed_data_bucket": processed_data_bucket.bucket,
-            "metadata_table": transaction_metadata_table.name,
-            "audit_table": audit_log_table.name,
-            "error_queue_url": error_queue.url,
-            "dlq_url": dlq.url,
-            "alert_topic_arn": alert_topic.arn,
-            "event_bus_name": etl_event_bus.name,
-            "lambda_functions": pulumi.Output.all(
-                ingestion=ingestion_lambda.name,
-                validation=validation_lambda.name,
-                transformation=transformation_lambda.name,
-                enrichment=enrichment_lambda.name,
-                error_handler=error_handler_lambda.name
-            ).apply(lambda funcs: funcs)
-        })
+        # ==================== Outputs ====================
+
+        # Export outputs at stack level (accessible via pulumi stack output)
+        pulumi.export("api_base_url", self.api.api_endpoint)
+        pulumi.export("image_bucket_name", self.image_bucket.id)
+        pulumi.export("upload_prefix", "uploads/")
+        pulumi.export("results_table_name", self.results_table.name)
+        pulumi.export("preprocessing_queue_url", self.preprocessing_queue.url)
+        pulumi.export("inference_queue_url", self.inference_queue.url)
+        pulumi.export("dlq_url", self.dlq.url)
+        pulumi.export("preprocessing_function_arn", self.preprocessing_function.arn)
+        pulumi.export("inference_function_arn", self.inference_function.arn)
+        pulumi.export("api_handler_function_arn", self.api_handler_function.arn)
