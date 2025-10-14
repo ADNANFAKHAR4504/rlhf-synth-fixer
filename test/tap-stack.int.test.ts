@@ -65,14 +65,23 @@ describe("Live AWS Integration", () => {
   });
 
   test("IAM role and instance profile should exist and be properly configured", async () => {
-    const stackName = "TapStack";
+    const envSuffix = process.env.ENVIRONMENT_SUFFIX || "dev";
+    const region = process.env.AWS_REGION || "us-east-1";
+    const stackName = `TapStack${envSuffix}`;
+
+    // Build names exactly as deployed
     const roleName = `${stackName}-ec2-role-${region}`;
     const profileName = `${stackName}-ec2-profile-${region}`;
+
+    console.log("Verifying IAM Role:", roleName);
+    console.log("Verifying Instance Profile:", profileName);
 
     const role = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
     expect(role.Role?.AssumeRolePolicyDocument).toBeDefined();
 
-    const profile = await iamClient.send(new GetInstanceProfileCommand({ InstanceProfileName: profileName }));
+    const profile = await iamClient.send(
+      new GetInstanceProfileCommand({ InstanceProfileName: profileName })
+    );
     expect(profile.InstanceProfile?.Roles?.[0]?.RoleName).toBe(roleName);
   });
 
