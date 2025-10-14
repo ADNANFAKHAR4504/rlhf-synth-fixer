@@ -13,7 +13,7 @@ Build a production-ready, PCI-DSS compliant payment processing infrastructure us
 ### Platform & Language
 - **Platform**: AWS CDK v2.x
 - **Language**: TypeScript
-- **Region**: us-west-2 (Oregon)
+- **Region**: us-west-1 (N. California)
 
 ### Core AWS Services Required
 

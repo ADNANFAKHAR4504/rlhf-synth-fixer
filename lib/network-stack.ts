@@ -19,8 +19,8 @@ export class NetworkStack extends Construct {
 
     // Create VPC with public, private, and isolated subnets
     this.vpc = new ec2.Vpc(this, 'PaymentVpc', {
-      maxAzs: 3,
-      natGateways: 3,
+      maxAzs: 2,
+      natGateways: 2,
       ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
       subnetConfiguration: [
         {

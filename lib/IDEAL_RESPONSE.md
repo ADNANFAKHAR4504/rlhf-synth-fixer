@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document provides the ideal implementation for a PCI-DSS compliant payment processing infrastructure using AWS CDK with TypeScript. The solution deploys to AWS us-west-2 (Oregon) region and implements all security, compliance, and high-availability requirements specified in the PROMPT.
+This document provides the ideal implementation for a PCI-DSS compliant payment processing infrastructure using AWS CDK with TypeScript. The solution deploys to AWS us-west-1 (N. California) region and implements all security, compliance, and high-availability requirements specified in the PROMPT.
 
 ## Architecture Summary
 

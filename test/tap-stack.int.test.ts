@@ -71,7 +71,7 @@ const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
-const region = 'us-west-2';
+const region = 'us-west-1';
 
 // Initialize AWS clients
 const rdsClient = new RDSClient({ region });

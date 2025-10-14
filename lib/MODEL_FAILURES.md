@@ -2,13 +2,13 @@
 
 ## Executive Summary
 
-During the QA testing of the PCI-DSS compliant payment processing infrastructure deployed to AWS us-west-2 region, several critical issues were identified and resolved. This document details the problems encountered and the solutions implemented.
+During the QA testing of the PCI-DSS compliant payment processing infrastructure deployed to AWS us-west-1 region, several critical issues were identified and resolved. This document details the problems encountered and the solutions implemented.
 
 ## Critical Issues Found and Fixed
 
 ### 1. AWS Config Service Availability (HIGH PRIORITY)
 **Issue**: AWS Config rules failed to deploy with "NoAvailableConfigurationRecorder" error.
-**Root Cause**: AWS Config requires a configuration recorder to be set up in the account, which was not available in the us-west-2 region.
+**Root Cause**: AWS Config requires a configuration recorder to be set up in the account, which was not available in the us-west-1 region.
 **Fix Applied**: Commented out AWS Config rules in the monitoring stack to allow deployment to proceed. These should be enabled only after AWS Config is properly configured in the account.
 
 ### 2. WAF WebACL Association Error (HIGH PRIORITY)
@@ -27,8 +27,8 @@ During the QA testing of the PCI-DSS compliant payment processing infrastructure
 **Fix Applied**: Manual cleanup of existing resources before redeployment.
 
 ### 5. Deployment Performance Issues (HIGH PRIORITY)
-**Issue**: RDS Multi-AZ deployment in us-west-2 took excessive time (>10 minutes) causing timeouts.
-**Root Cause**: Multi-AZ RDS instances in us-west-2 region have slower provisioning times.
+**Issue**: RDS Multi-AZ deployment in us-west-1 took excessive time (>10 minutes) causing timeouts.
+**Root Cause**: Multi-AZ RDS instances in us-west-1 region have slower provisioning times.
 **Fix Applied**:
 - Changed RDS from Multi-AZ to single-AZ for testing
 - Reduced ElastiCache from 3 nodes to 1 node
@@ -70,7 +70,7 @@ During the QA testing of the PCI-DSS compliant payment processing infrastructure
    - Clean up any existing resources with conflicting names
 
 2. **Regional Considerations**:
-   - us-west-2 provides optimal provisioning times for RDS and ElastiCache
+   - us-west-1 has only 2 availability zones (us-west-1a, us-west-1c)
    - Multi-AZ configurations significantly increase deployment time
    - Consider regional proximity to users for lower latency
 
