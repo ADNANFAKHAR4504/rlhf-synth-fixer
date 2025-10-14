@@ -221,16 +221,27 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
   // --- Section 5: S3 Durable Storage ---
   describe('5. S3 Durable Storage', () => {
     test('should verify logs are stored in S3 with proper partitioning', async () => {
-      // Wait for Firehose to deliver data to S3
-      await new Promise(resolve => setTimeout(resolve, 60000));
+      let s3ObjectFound = false;
+      let attempts = 0;
+      const maxAttempts = 24; // 24 * 5s = 120s
+      let listResponse;
 
-      // Check for objects in the logs/ prefix
-      const listResponse = await s3Client.send(new ListObjectsV2Command({
-        Bucket: outputs.LogBucketName,
-        Prefix: 'logs/',
-        MaxKeys: 10
-      }));
+      while (!s3ObjectFound && attempts < maxAttempts) {
+        listResponse = await s3Client.send(new ListObjectsV2Command({
+          Bucket: outputs.LogBucketName,
+          Prefix: 'logs/',
+          MaxKeys: 10
+        }));
 
+        if (listResponse.Contents && listResponse.Contents.length > 0) {
+          s3ObjectFound = true;
+        } else {
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          attempts++;
+        }
+      }
+
+      expect(s3ObjectFound).toBe(true);
       expect(listResponse.Contents).toBeDefined();
 
       if (listResponse.Contents && listResponse.Contents.length > 0) {
@@ -238,7 +249,7 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
         const firstObject = listResponse.Contents[0];
         expect(firstObject.Key).toMatch(/logs\/year=\d{4}\/month=\d{2}\/day=\d{2}\/hour=\d{2}\/.+/);
       }
-    }, timeout);
+    }, 120000);
 
     test('should verify Glue ETL script is uploaded to S3', async () => {
       const getObjectResponse = await s3Client.send(new GetObjectCommand({
