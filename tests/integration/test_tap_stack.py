@@ -212,17 +212,17 @@ class AWSResourceChecker:
     
     def verify_security_groups(self) -> Dict[str, bool]:
         """Verify security groups allow correct access"""
-        
+
         if not self.ec2:
             return {'error': 'EC2 client not available - check AWS credentials and region'}
-        
+
         try:
             response = self.ec2.describe_security_groups()
             security_groups = response['SecurityGroups']
-            
+
             app_sg = None
             db_sg = None
-            
+
             # Find relevant security groups
             for sg in security_groups:
                 group_name = sg.get('GroupName', '')
@@ -230,23 +230,44 @@ class AWSResourceChecker:
                     app_sg = sg
                 elif 'TapDatabase' in group_name:
                     db_sg = sg
-            
+
             results = {
                 'app_sg_exists': app_sg is not None,
                 'db_sg_exists': db_sg is not None,
                 'db_allows_app_access': False
             }
-            
+
             if db_sg and app_sg:
                 # Check if DB security group allows access from app security group on port 5432
                 for rule in db_sg.get('IpPermissions', []):
-                    if (rule.get('FromPort') == 5432 and 
-                        rule.get('ToPort') == 5432 and
-                        rule.get('IpProtocol') == 'tcp'):
-                        for source in rule.get('UserIdGroupPairs', []):
-                            if source.get('GroupId') == app_sg['GroupId']:
-                                results['db_allows_app_access'] = True
-                                break
+                    if rule.get('IpProtocol') != 'tcp':
+                        continue
+
+                    from_port = rule.get('FromPort')
+                    to_port = rule.get('ToPort')
+
+                    # Case 1: All TCP ports are allowed
+                    if from_port is None and to_port is None:
+                        port_match = True
+                    # Case 2: A specific port range is defined
+                    elif from_port is not None and to_port is not None:
+                        try:
+                            port_match = int(from_port) <= 5432 and int(to_port) >= 5432
+                        except (ValueError, TypeError):
+                            port_match = False
+                    # Case 3: Other cases (e.g., only one port defined), treat as no match
+                    else:
+                        port_match = False
+
+                    if not port_match:
+                        continue
+                        
+                    for source in rule.get('UserIdGroupPairs', []):
+                        if source.get('GroupId') == app_sg['GroupId']:
+                            results['db_allows_app_access'] = True
+                            break
+                    if results['db_allows_app_access']:
+                        break
             
             return results
         except Exception as e:
