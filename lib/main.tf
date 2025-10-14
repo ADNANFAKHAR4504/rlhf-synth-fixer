@@ -924,7 +924,12 @@ resource "aws_cloudtrail" "main" {
     # Fixed data_resource format
     data_resource {
       type   = "AWS::S3::Object"
-      values = ["arn:aws:s3:::*/"]  # Changed from "arn:aws:s3:::*/*"
+      values = [
+        "${aws_s3_bucket.main.arn}/",
+        "${aws_s3_bucket.main.arn}/*",
+        "${aws_s3_bucket.cloudtrail.arn}/",
+        "${aws_s3_bucket.cloudtrail.arn}/*"
+      ]
     }
   }
 
