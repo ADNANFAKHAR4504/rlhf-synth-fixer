@@ -1,0 +1,14 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349522",
+  "team": "6",
+  "startedAt": "2025-10-14T07:29:52.656Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "[VPC, Subnets, Security Group, DynamoDB, S3, EC2, ALB, CloudWatch]"
+}
