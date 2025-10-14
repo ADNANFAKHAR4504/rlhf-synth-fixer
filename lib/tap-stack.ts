@@ -114,7 +114,6 @@ export class TapStack extends TerraformStack {
       dbSubnetGroup: networking.dbSubnetGroup,
       environment: environmentSuffix,
       projectName: projectName,
-      engineVersion: '15.4',
       instanceClass: isProduction ? 'db.r6g.large' : 'db.t3.micro',
       allocatedStorage: isProduction ? 100 : 20,
       databaseName: `${projectName.replace(/-/g, '_')}_db`,

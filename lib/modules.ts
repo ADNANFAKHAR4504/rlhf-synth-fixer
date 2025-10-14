@@ -1,7 +1,7 @@
 import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
-import { Fn } from 'cdktf'; 
+import { Fn } from 'cdktf';
 
 export interface NetworkingModuleConfig {
   vpcCidr: string;
@@ -56,7 +56,7 @@ export class NetworkingModule extends Construct {
       const publicSubnet = new aws.subnet.Subnet(this, `public-subnet-${i}`, {
         vpcId: this.vpc.id,
         cidrBlock: `10.0.${i * 2}.0/24`,
-        availabilityZone: Fn.element(azs.names, i), 
+        availabilityZone: Fn.element(azs.names, i),
         mapPublicIpOnLaunch: true,
         tags: {
           Name: `${config.projectName}-${config.environment}-public-${i + 1}`,
@@ -67,7 +67,7 @@ export class NetworkingModule extends Construct {
       const privateSubnet = new aws.subnet.Subnet(this, `private-subnet-${i}`, {
         vpcId: this.vpc.id,
         cidrBlock: `10.0.${i * 2 + 1}.0/24`,
-        availabilityZone: Fn.element(azs.names, i), 
+        availabilityZone: Fn.element(azs.names, i),
         tags: {
           Name: `${config.projectName}-${config.environment}-private-${i + 1}`,
           Type: 'Private',
@@ -175,7 +175,6 @@ export interface DatabaseModuleConfig {
   dbSubnetGroup: aws.dbSubnetGroup.DbSubnetGroup;
   environment: string;
   projectName: string;
-  engineVersion: string;
   instanceClass: string;
   allocatedStorage: number;
   databaseName: string;
@@ -243,7 +242,6 @@ export class DatabaseModule extends Construct {
     this.rdsInstance = new aws.dbInstance.DbInstance(this, 'rds', {
       identifier: `${config.projectName}-${config.environment}-db`,
       engine: 'postgres',
-      engineVersion: config.engineVersion,
       instanceClass: config.instanceClass,
       allocatedStorage: config.allocatedStorage,
       storageType: 'gp3',
