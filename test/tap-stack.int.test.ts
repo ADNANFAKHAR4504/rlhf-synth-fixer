@@ -1529,7 +1529,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
         
         // 2. Get ALB
         const albCommand = new DescribeLoadBalancersCommand({});
-        const albResponse = await elasticLoadBalancingV2Client.send(albCommand);
+        const albResponse = await elbv2Client.send(albCommand);
         
         const alb = albResponse.LoadBalancers?.find(lb => 
           lb.LoadBalancerName?.includes('tapstack') || lb.LoadBalancerName?.includes('alb')
@@ -1560,7 +1560,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
         const targetGroupCommand = new DescribeTargetGroupsCommand({
           LoadBalancerArn: alb.LoadBalancerArn
         });
-        const targetGroupResponse = await elasticLoadBalancingV2Client.send(targetGroupCommand);
+        const targetGroupResponse = await elbv2Client.send(targetGroupCommand);
         
         expect(targetGroupResponse.TargetGroups).toBeDefined();
         expect(targetGroupResponse.TargetGroups!.length).toBeGreaterThan(0);
