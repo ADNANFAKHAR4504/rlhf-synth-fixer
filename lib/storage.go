@@ -20,9 +20,9 @@ type StorageConstructProps struct {
 // StorageConstruct represents the EFS storage infrastructure.
 type StorageConstruct struct {
 	constructs.Construct
-	FileSystem      awsefs.FileSystem
-	AccessPoint     awsefs.AccessPoint
-	SecurityGroup   awsec2.SecurityGroup
+	FileSystem    awsefs.FileSystem
+	AccessPoint   awsefs.AccessPoint
+	SecurityGroup awsec2.SecurityGroup
 }
 
 // NewStorageConstruct creates EFS file system for content storage with cross-region replication.
@@ -63,9 +63,9 @@ func NewStorageConstruct(scope constructs.Construct, id *string, props *StorageC
 		// Enable automatic backups
 		EnableAutomaticBackups: jsii.Bool(true),
 		// Lifecycle policy to move files to IA storage class after 30 days
-		LifecyclePolicy: awsefs.LifecyclePolicy_AFTER_30_DAYS,
+		LifecyclePolicy:             awsefs.LifecyclePolicy_AFTER_30_DAYS,
 		OutOfInfrequentAccessPolicy: awsefs.OutOfInfrequentAccessPolicy_AFTER_1_ACCESS,
-		RemovalPolicy: awscdk.RemovalPolicy_DESTROY,
+		RemovalPolicy:               awscdk.RemovalPolicy_DESTROY,
 	})
 
 	// Note: Cross-region replication requires manual setup or AWS Backup
@@ -84,9 +84,9 @@ func NewStorageConstruct(scope constructs.Construct, id *string, props *StorageC
 			awsbackup.NewBackupPlanRule(&awsbackup.BackupPlanRuleProps{
 				RuleName: jsii.String("DailyBackup"),
 				// Daily backup at 3 AM UTC
-				StartWindow: awscdk.Duration_Hours(jsii.Number(1)),
+				StartWindow:      awscdk.Duration_Hours(jsii.Number(1)),
 				CompletionWindow: awscdk.Duration_Hours(jsii.Number(2)),
-				DeleteAfter: awscdk.Duration_Days(jsii.Number(7)),
+				DeleteAfter:      awscdk.Duration_Days(jsii.Number(7)),
 			}),
 		},
 	})

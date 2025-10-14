@@ -28,8 +28,8 @@ func NewNetworkConstruct(scope constructs.Construct, id *string, props *NetworkC
 
 	// Create VPC with public and private subnets in 2 AZs
 	vpc := awsec2.NewVpc(construct, jsii.String("Vpc"), &awsec2.VpcProps{
-		VpcName:   jsii.String(fmt.Sprintf("globalstream-vpc-%s", environmentSuffix)),
-		MaxAzs:    jsii.Number(2),
+		VpcName:     jsii.String(fmt.Sprintf("globalstream-vpc-%s", environmentSuffix)),
+		MaxAzs:      jsii.Number(2),
 		IpAddresses: awsec2.IpAddresses_Cidr(jsii.String("10.0.0.0/16")),
 		SubnetConfiguration: &[]*awsec2.SubnetConfiguration{
 			{

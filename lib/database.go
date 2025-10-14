@@ -80,15 +80,15 @@ func NewDatabaseConstruct(scope constructs.Construct, id *string, props *Databas
 		VpcSubnets: &awsec2.SubnetSelection{
 			SubnetType: awsec2.SubnetType_PRIVATE_WITH_EGRESS,
 		},
-		SecurityGroups: &[]awsec2.ISecurityGroup{dbSecurityGroup},
-		SubnetGroup:    subnetGroup,
+		SecurityGroups:      &[]awsec2.ISecurityGroup{dbSecurityGroup},
+		SubnetGroup:         subnetGroup,
 		DefaultDatabaseName: jsii.String("globalstream"),
 		// Enable encryption at rest (LGPD compliance)
 		StorageEncrypted: jsii.Bool(true),
 		// Backup configuration for 15-minute RPO
 		Backup: &awsrds.BackupProps{
-			Retention:            awscdk.Duration_Days(jsii.Number(7)),
-			PreferredWindow:      jsii.String("03:00-04:00"),
+			Retention:       awscdk.Duration_Days(jsii.Number(7)),
+			PreferredWindow: jsii.String("03:00-04:00"),
 		},
 		// Enable CloudWatch logging
 		CloudwatchLogsExports: &[]*string{

@@ -56,20 +56,20 @@ func NewCacheConstruct(scope constructs.Construct, id *string, props *CacheConst
 	subnetGroup := awselasticache.NewCfnSubnetGroup(construct, jsii.String("RedisSubnetGroup"), &awselasticache.CfnSubnetGroupProps{
 		CacheSubnetGroupName: jsii.String(fmt.Sprintf("globalstream-redis-subnet-%s", environmentSuffix)),
 		Description:          jsii.String("Subnet group for Redis cluster"),
-		SubnetIds:            props.Vpc.SelectSubnets(&awsec2.SubnetSelection{
+		SubnetIds: props.Vpc.SelectSubnets(&awsec2.SubnetSelection{
 			SubnetType: awsec2.SubnetType_PRIVATE_WITH_EGRESS,
 		}).SubnetIds,
 	})
 
 	// Create ElastiCache Redis replication group with cluster mode enabled
 	replicationGroup := awselasticache.NewCfnReplicationGroup(construct, jsii.String("RedisCluster"), &awselasticache.CfnReplicationGroupProps{
-		ReplicationGroupId: jsii.String(fmt.Sprintf("globalstream-redis-%s", environmentSuffix)),
+		ReplicationGroupId:          jsii.String(fmt.Sprintf("globalstream-redis-%s", environmentSuffix)),
 		ReplicationGroupDescription: jsii.String("Redis cluster for session management and caching"),
-		Engine:            jsii.String("redis"),
-		EngineVersion:     jsii.String("7.0"),
-		CacheNodeType:     jsii.String("cache.t3.micro"),
+		Engine:                      jsii.String("redis"),
+		EngineVersion:               jsii.String("7.0"),
+		CacheNodeType:               jsii.String("cache.t3.micro"),
 		// Enable Multi-AZ with automatic failover
-		MultiAzEnabled:       jsii.Bool(true),
+		MultiAzEnabled:           jsii.Bool(true),
 		AutomaticFailoverEnabled: jsii.Bool(true),
 		// Number of node groups (shards)
 		NumNodeGroups: jsii.Number(2),
@@ -79,9 +79,9 @@ func NewCacheConstruct(scope constructs.Construct, id *string, props *CacheConst
 		AtRestEncryptionEnabled: jsii.Bool(true),
 		// Enable encryption in transit
 		TransitEncryptionEnabled: jsii.Bool(true),
-		TransitEncryptionMode:   jsii.String("required"),
+		TransitEncryptionMode:    jsii.String("required"),
 		// Security and networking
-		SecurityGroupIds: &[]*string{cacheSecurityGroup.SecurityGroupId()},
+		SecurityGroupIds:     &[]*string{cacheSecurityGroup.SecurityGroupId()},
 		CacheSubnetGroupName: subnetGroup.CacheSubnetGroupName(),
 		// Backup configuration
 		SnapshotRetentionLimit: jsii.Number(7),

@@ -43,15 +43,15 @@ func NewCicdConstruct(scope constructs.Construct, id *string, props *CicdConstru
 
 	// Create S3 bucket for pipeline artifacts
 	artifactBucket := awss3.NewBucket(construct, jsii.String("PipelineArtifacts"), &awss3.BucketProps{
-		BucketName: jsii.String(fmt.Sprintf("globalstream-pipeline-artifacts-%s", environmentSuffix)),
-		Encryption: awss3.BucketEncryption_S3_MANAGED,
+		BucketName:        jsii.String(fmt.Sprintf("globalstream-pipeline-artifacts-%s", environmentSuffix)),
+		Encryption:        awss3.BucketEncryption_S3_MANAGED,
 		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
-		RemovalPolicy: awscdk.RemovalPolicy_DESTROY,
+		RemovalPolicy:     awscdk.RemovalPolicy_DESTROY,
 		AutoDeleteObjects: jsii.Bool(true),
-		Versioned: jsii.Bool(true),
+		Versioned:         jsii.Bool(true),
 		LifecycleRules: &[]*awss3.LifecycleRule{
 			{
-				Enabled: jsii.Bool(true),
+				Enabled:    jsii.Bool(true),
 				Expiration: awscdk.Duration_Days(jsii.Number(30)),
 			},
 		},
@@ -62,9 +62,9 @@ func NewCicdConstruct(scope constructs.Construct, id *string, props *CicdConstru
 		ProjectName: jsii.String(fmt.Sprintf("globalstream-dr-test-build-%s", environmentSuffix)),
 		Description: jsii.String("Build project for DR failover tests"),
 		Environment: &awscodebuild.BuildEnvironment{
-			BuildImage: awscodebuild.LinuxBuildImage_STANDARD_7_0(),
+			BuildImage:  awscodebuild.LinuxBuildImage_STANDARD_7_0(),
 			ComputeType: awscodebuild.ComputeType_SMALL,
-			Privileged: jsii.Bool(false),
+			Privileged:  jsii.Bool(false),
 		},
 		BuildSpec: awscodebuild.BuildSpec_FromObject(&map[string]interface{}{
 			"version": "0.2",
@@ -132,7 +132,7 @@ func NewCicdConstruct(scope constructs.Construct, id *string, props *CicdConstru
 
 	// Create CodePipeline
 	pipeline := awscodepipeline.NewPipeline(construct, jsii.String("DrTestPipeline"), &awscodepipeline.PipelineProps{
-		PipelineName: jsii.String(fmt.Sprintf("globalstream-dr-pipeline-%s", environmentSuffix)),
+		PipelineName:   jsii.String(fmt.Sprintf("globalstream-dr-pipeline-%s", environmentSuffix)),
 		ArtifactBucket: artifactBucket,
 		Stages: &[]*awscodepipeline.StageProps{
 			{
@@ -162,7 +162,7 @@ func NewCicdConstruct(scope constructs.Construct, id *string, props *CicdConstru
 				StageName: jsii.String("Deploy"),
 				Actions: &[]awscodepipeline.IAction{
 					awscodepipelineactions.NewManualApprovalAction(&awscodepipelineactions.ManualApprovalActionProps{
-						ActionName: jsii.String("ApproveFailover"),
+						ActionName:            jsii.String("ApproveFailover"),
 						AdditionalInformation: jsii.String("Review DR test results before proceeding with failover"),
 					}),
 				},

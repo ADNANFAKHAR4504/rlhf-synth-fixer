@@ -45,12 +45,12 @@ func NewApiConstruct(scope constructs.Construct, id *string, props *ApiConstruct
 		Description: jsii.String("API for content delivery and streaming services"),
 		// Enable CloudWatch logging
 		DeployOptions: &awsapigateway.StageOptions{
-			StageName: jsii.String("prod"),
+			StageName:            jsii.String("prod"),
 			AccessLogDestination: awsapigateway.NewLogGroupLogDestination(logGroup),
-			AccessLogFormat: awsapigateway.AccessLogFormat_Clf(),
-			DataTraceEnabled: jsii.Bool(true),
-			LoggingLevel:     awsapigateway.MethodLoggingLevel_INFO,
-			MetricsEnabled:   jsii.Bool(true),
+			AccessLogFormat:      awsapigateway.AccessLogFormat_Clf(),
+			DataTraceEnabled:     jsii.Bool(true),
+			LoggingLevel:         awsapigateway.MethodLoggingLevel_INFO,
+			MetricsEnabled:       jsii.Bool(true),
 		},
 		// Enable default CORS
 		DefaultCorsPreflightOptions: &awsapigateway.CorsOptions{
@@ -97,8 +97,8 @@ func NewApiConstruct(scope constructs.Construct, id *string, props *ApiConstruct
 
 	// Create request validator
 	requestValidator := awsapigateway.NewRequestValidator(construct, jsii.String("RequestValidator"), &awsapigateway.RequestValidatorProps{
-		RestApi:           api,
-		ValidateRequestBody: jsii.Bool(true),
+		RestApi:                   api,
+		ValidateRequestBody:       jsii.Bool(true),
 		ValidateRequestParameters: jsii.Bool(true),
 	})
 
@@ -126,7 +126,7 @@ func NewApiConstruct(scope constructs.Construct, id *string, props *ApiConstruct
 					},
 				},
 				{
-					StatusCode: jsii.String("400"),
+					StatusCode:       jsii.String("400"),
 					SelectionPattern: jsii.String("4\\d{2}"),
 					ResponseTemplates: &map[string]*string{
 						"application/json": jsii.String(`{"status": "error", "message": "Bad Request"}`),

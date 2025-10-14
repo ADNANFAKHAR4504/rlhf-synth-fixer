@@ -7,6 +7,7 @@
   "team": "synth",
   "startedAt": "2025-10-14T00:08:04+05:30",
   "subtask": "Application Deployment",
+  "background": "GlobalStream is a major streaming platform serving millions of users across South America with live and on-demand content. They need a disaster recovery solution that maintains business continuity during regional outages while ensuring compliance with local media regulations. The solution requires automated failover capabilities, multi-region architecture, and integration with CI/CD pipelines for continuous deployment and failure recovery automation.",
   "subject_labels": [
     "CI/CD Pipeline",
     "Failure Recovery Automation",

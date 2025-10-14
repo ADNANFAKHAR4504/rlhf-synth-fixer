@@ -85,19 +85,19 @@ func NewComputeConstruct(scope constructs.Construct, id *string, props *ComputeC
 
 	// Create Fargate task definition
 	taskDefinition := awsecs.NewFargateTaskDefinition(construct, jsii.String("MediaProcessingTask"), &awsecs.FargateTaskDefinitionProps{
-		Family:       jsii.String(fmt.Sprintf("globalstream-media-processing-%s", environmentSuffix)),
-		Cpu:          jsii.Number(1024),
+		Family:         jsii.String(fmt.Sprintf("globalstream-media-processing-%s", environmentSuffix)),
+		Cpu:            jsii.Number(1024),
 		MemoryLimitMiB: jsii.Number(2048),
-		ExecutionRole: executionRole,
-		TaskRole:      taskRole,
+		ExecutionRole:  executionRole,
+		TaskRole:       taskRole,
 	})
 
 	// Add EFS volume to task definition
 	taskDefinition.AddVolume(&awsecs.Volume{
 		Name: jsii.String("media-content"),
 		EfsVolumeConfiguration: &awsecs.EfsVolumeConfiguration{
-			FileSystemId:          props.FileSystem.FileSystemId(),
-			TransitEncryption:     jsii.String("ENABLED"),
+			FileSystemId:      props.FileSystem.FileSystemId(),
+			TransitEncryption: jsii.String("ENABLED"),
 			AuthorizationConfig: &awsecs.AuthorizationConfig{
 				AccessPointId: props.AccessPoint.AccessPointId(),
 			},
@@ -109,8 +109,8 @@ func NewComputeConstruct(scope constructs.Construct, id *string, props *ComputeC
 		ContainerName: jsii.String("media-processor"),
 		Image:         awsecs.ContainerImage_FromRegistry(jsii.String("public.ecr.aws/docker/library/alpine:latest"), nil),
 		Logging: awsecs.LogDriver_AwsLogs(&awsecs.AwsLogDriverProps{
-			LogGroup:      logGroup,
-			StreamPrefix:  jsii.String("media-processing"),
+			LogGroup:     logGroup,
+			StreamPrefix: jsii.String("media-processing"),
 		}),
 		Environment: &map[string]*string{
 			"ENVIRONMENT": jsii.String(environmentSuffix),

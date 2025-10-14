@@ -29,7 +29,7 @@ func NewSecretsConstruct(scope constructs.Construct, id *string, props *SecretsC
 
 	// Create secret for database credentials
 	databaseSecret := awssecretsmanager.NewSecret(construct, jsii.String("DatabaseSecret"), &awssecretsmanager.SecretProps{
-		SecretName: jsii.String(fmt.Sprintf("globalstream-db-credentials-%s", environmentSuffix)),
+		SecretName:  jsii.String(fmt.Sprintf("globalstream-db-credentials-%s", environmentSuffix)),
 		Description: jsii.String("Database credentials for Aurora Serverless cluster"),
 		GenerateSecretString: &awssecretsmanager.SecretStringGenerator{
 			SecretStringTemplate: jsii.String(`{"username":"globalstream_admin"}`),
@@ -48,7 +48,7 @@ func NewSecretsConstruct(scope constructs.Construct, id *string, props *SecretsC
 
 	// Create secret for API keys
 	apiKeySecret := awssecretsmanager.NewSecret(construct, jsii.String("ApiKeySecret"), &awssecretsmanager.SecretProps{
-		SecretName: jsii.String(fmt.Sprintf("globalstream-api-keys-%s", environmentSuffix)),
+		SecretName:  jsii.String(fmt.Sprintf("globalstream-api-keys-%s", environmentSuffix)),
 		Description: jsii.String("API keys for content delivery and third-party integrations"),
 		GenerateSecretString: &awssecretsmanager.SecretStringGenerator{
 			SecretStringTemplate: jsii.String(`{"apiKeyName":"globalstream-api"}`),
