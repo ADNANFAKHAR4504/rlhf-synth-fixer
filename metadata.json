@@ -10,5 +10,15 @@
   "subject_labels": [
     "Serverless Infrastructure (Functions as Code)"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC"
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "DynamoDB",
+    "CloudWatch",
+    "IAM",
+    "X-Ray",
+    "SQS"
+  ],
+  "training_quality": 9,
+  "background": "Build a serverless image processing system using AWS CDK Go that automatically processes uploaded images, generates multiple preview sizes, and stores metadata in DynamoDB. The system must handle S3 event triggers, implement proper error handling with DLQ, provide CloudWatch monitoring and alarms, and follow cost optimization best practices including lifecycle policies and pay-per-request billing."
 }
