@@ -139,16 +139,55 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
+      # Allow ALB to set the required ACL header on delivered objects
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
-        IgnorePublicAcls: true
+        IgnorePublicAcls: false   # must be false so ALB's x-amz-acl is honored
         RestrictPublicBuckets: true
       Tags:
         - Key: Environment
           Value: Production
         - Key: iac-rlhf-amazon
           Value: "true"
+
+  # Bucket policy that permits ALB log delivery to write access logs
+  ALBAccessLogBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: DeployInTargetRegion
+    Properties:
+      Bucket: !Ref ALBAccessLogBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # Allow ALB log delivery service to check the bucket ACL
+          - Sid: AWSLogDeliveryCheck
+            Effect: Allow
+            Principal:
+              Service: logdelivery.elasticloadbalancing.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !Sub arn:aws:s3:::${ALBAccessLogBucket}
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub arn:aws:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:loadbalancer/app/*
+          # Allow ALB log delivery service to put objects with proper ACL
+          - Sid: AWSLogDeliveryWrite
+            Effect: Allow
+            Principal:
+              Service: logdelivery.elasticloadbalancing.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub arn:aws:s3:::${ALBAccessLogBucket}/AWSLogs/${AWS::AccountId}/*
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub arn:aws:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:loadbalancer/app/*
 
   ConfigBucket:
     Type: AWS::S3::Bucket
