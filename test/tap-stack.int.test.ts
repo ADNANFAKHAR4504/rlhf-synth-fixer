@@ -20,21 +20,20 @@ import {
   GetCrawlerCommand,
   GetJobRunCommand,
   GlueClient,
-  StartJobRunCommand
+  StartJobRunCommand,
 } from '@aws-sdk/client-glue';
 import {
   InvokeCommand,
-  InvokeCommandOutput // Added for type reference
-  ,
-
+  InvokeCommandOutput,
   LambdaClient
 } from '@aws-sdk/client-lambda';
 import {
   GetObjectCommand,
   ListObjectsV2Command,
-  S3Client
+  ListObjectsV2CommandOutput,
+  S3Client,
 } from '@aws-sdk/client-s3';
-import { Uint8ArrayBlobAdapter } from '@smithy/util-stream'; // Added to resolve the Buffer/Blob type conflict
+import { Uint8ArrayBlobAdapter } from '@smithy/util-stream';
 import * as fs from 'fs';
 
 // --- Initialization ---
@@ -59,6 +58,45 @@ const TEST_LOG_STREAM = `test-stream-${Date.now()}`;
 const TEST_ERROR_MESSAGE = 'Application error occurred - database connection failed';
 const TEST_WARN_MESSAGE = 'Warning: High memory usage detected';
 const TEST_INFO_MESSAGE = 'User login successful';
+
+// --- Dedicated Polling Function for S3 ---
+
+/**
+ * Polls S3 for objects under a specific prefix.
+ * @param bucketName The name of the S3 bucket.
+ * @param prefix The S3 key prefix to check.
+ * @param maxTimeMs The maximum time to poll in milliseconds.
+ * @param intervalMs The delay between polls in milliseconds.
+ * @returns The last ListObjectsV2CommandOutput if objects are found, otherwise throws an error.
+ */
+async function pollForS3Object(
+  bucketName: string,
+  prefix: string,
+  maxTimeMs: number = 150000, // 2.5 minutes
+  intervalMs: number = 5000 // 5 seconds
+): Promise<ListObjectsV2CommandOutput> {
+  const startTime = Date.now();
+  let listResponse: ListObjectsV2CommandOutput;
+
+  while (Date.now() - startTime < maxTimeMs) {
+    listResponse = await s3Client.send(new ListObjectsV2Command({
+      Bucket: bucketName,
+      Prefix: prefix,
+      MaxKeys: 10
+    }));
+
+    if (listResponse.Contents && listResponse.Contents.length > 0) {
+      return listResponse;
+    }
+
+    await new Promise(resolve => setTimeout(resolve, intervalMs));
+  }
+
+  throw new Error(`Timeout waiting for S3 objects in s3://${bucketName}/${prefix} after ${maxTimeMs / 1000} seconds.`);
+}
+
+
+// --- Test Suite ---
 
 describe('Log Analytics Pipeline E2E Integration Tests', () => {
   const timeout = 60000;
@@ -118,7 +156,6 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
             })
           }
         ],
-        // sequenceToken: undefined // Removed, relying on SDK behavior for first call
       }));
 
       // Verify log stream exists
@@ -127,7 +164,6 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
         logStreamNamePrefix: TEST_LOG_STREAM
       }));
 
-      // FIX: Check for undefined before accessing property
       expect(streams.logStreams).toBeDefined();
       if (streams.logStreams) {
         expect(streams.logStreams.length).toBeGreaterThan(0);
@@ -147,10 +183,8 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
   // --- Section 3: Subscription Filter and Firehose Ingestion ---
   describe('3. Subscription Filter and Firehose Ingestion', () => {
     test('should verify subscription filter forwards logs to Firehose', async () => {
-      // Wait for subscription filter to process logs
       await new Promise(resolve => setTimeout(resolve, 5000));
 
-      // Direct test of Firehose delivery stream
       const testRecord = {
         timestamp: new Date().toISOString(),
         message: 'Direct Firehose test message',
@@ -160,8 +194,6 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
       };
 
       const payloadData = Buffer.from(JSON.stringify(testRecord) + '\n');
-
-      // FIX: Use Uint8ArrayBlobAdapter to resolve the TypeScript issue with the SDK's internal type requirement
       const dataForFirehose = new Uint8ArrayBlobAdapter(payloadData);
 
       await firehoseClient.send(new PutRecordCommand({
@@ -171,7 +203,6 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
         }
       }));
 
-      // Verify record was accepted (no error thrown)
       expect(true).toBe(true);
     }, timeout);
   });
@@ -179,7 +210,6 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
   // --- Section 4: Real-time Lambda Transformation ---
   describe('4. Real-time Lambda Transformation', () => {
     test('should verify Lambda processes and transforms log records correctly', async () => {
-      // Test Lambda function directly with sample Firehose record
       const testPayload = {
         records: [
           {
@@ -202,7 +232,6 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
 
       expect(response.StatusCode).toBe(200);
 
-      // FIX: Explicitly check for Payload existence before parsing
       expect(response.Payload).toBeDefined();
       if (response.Payload) {
         const result = JSON.parse(Buffer.from(response.Payload).toString());
@@ -210,38 +239,24 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
         expect(result.records).toHaveLength(1);
         expect(result.records[0].result).toBe('Ok');
 
-        // Decode and verify processed data includes logLevel and processingTimestamp
         const processedData = JSON.parse(Buffer.from(result.records[0].data, 'base64').toString());
-        expect(processedData.logLevel).toBe('ERROR'); // Should detect ERROR from message
+        expect(processedData.logLevel).toBe('ERROR');
         expect(processedData.processingTimestamp).toBeDefined();
       }
     }, timeout);
   });
 
-  // --- Section 5: S3 Durable Storage ---
+  // --- Section 5: S3 Durable Storage (FIXED WITH POLLING) ---
   describe('5. S3 Durable Storage', () => {
     test('should verify logs are stored in S3 with proper partitioning', async () => {
-      let s3ObjectFound = false;
-      let attempts = 0;
-      const maxAttempts = 24; // 24 * 5s = 120s
-      let listResponse;
+      // Use the dedicated polling function
+      const listResponse = await pollForS3Object(
+        outputs.LogBucketName,
+        'logs/',
+        150000 // Max time of 2.5 minutes
+      );
 
-      while (!s3ObjectFound && attempts < maxAttempts) {
-        listResponse = await s3Client.send(new ListObjectsV2Command({
-          Bucket: outputs.LogBucketName,
-          Prefix: 'logs/',
-          MaxKeys: 10
-        }));
-
-        if (listResponse.Contents && listResponse.Contents.length > 0) {
-          s3ObjectFound = true;
-        } else {
-          await new Promise(resolve => setTimeout(resolve, 5000));
-          attempts++;
-        }
-      }
-
-      expect(s3ObjectFound).toBe(true);
+      // The poll function throws if no objects are found, so reaching here means success.
       expect(listResponse.Contents).toBeDefined();
 
       if (listResponse.Contents && listResponse.Contents.length > 0) {
@@ -249,7 +264,7 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
         const firstObject = listResponse.Contents[0];
         expect(firstObject.Key).toMatch(/logs\/year=\d{4}\/month=\d{2}\/day=\d{2}\/hour=\d{2}\/.+/);
       }
-    }, 120000);
+    }, 180000); // Set Jest timeout higher than polling time (3 minutes total)
 
     test('should verify Glue ETL script is uploaded to S3', async () => {
       const getObjectResponse = await s3Client.send(new GetObjectCommand({
@@ -257,7 +272,6 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
         Key: 'scripts/log_etl_job.py'
       }));
 
-      // FIX: Explicitly check for Body existence
       expect(getObjectResponse.Body).toBeDefined();
 
       if (getObjectResponse.Body) {
@@ -272,19 +286,16 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
   // --- Section 6: Glue Schema Discovery ---
   describe('6. Glue Schema Discovery', () => {
     test('should verify Glue Crawler can be started and database exists', async () => {
-      // Check if crawler exists and can be started
       const crawlerResponse = await glueClient.send(new GetCrawlerCommand({
         Name: 'EnterpriseLogCrawler'
       }));
 
-      // FIX: Check for Crawler existence
       expect(crawlerResponse.Crawler).toBeDefined();
 
       if (crawlerResponse.Crawler) {
         expect(crawlerResponse.Crawler.Name).toBe('EnterpriseLogCrawler');
         expect(crawlerResponse.Crawler.DatabaseName).toBe(outputs.GlueDatabaseName);
 
-        // Verify target configuration
         expect(crawlerResponse.Crawler.Targets?.S3Targets).toBeDefined();
         if (crawlerResponse.Crawler.Targets?.S3Targets?.[0]) {
           expect(crawlerResponse.Crawler.Targets.S3Targets[0].Path)
@@ -294,7 +305,7 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
     }, timeout);
   });
 
-  // --- Section 7: Glue ETL Job (FIXED) ---
+  // --- Section 7: Glue ETL Job ---
   describe('7. Glue ETL Job', () => {
     test('should verify Glue ETL job exists and can be started', async () => {
       const jobRunResponse = await glueClient.send(new StartJobRunCommand({
@@ -303,17 +314,14 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
 
       expect(jobRunResponse.JobRunId).toBeDefined();
 
-      // Check job run status immediately after start
       const jobRun = await glueClient.send(new GetJobRunCommand({
         JobName: 'EnterpriseLogETLJob',
-        RunId: jobRunResponse.JobRunId! // Using non-null assertion as it was checked above
+        RunId: jobRunResponse.JobRunId!
       }));
 
-      // FIX: Check for JobRun existence
       expect(jobRun.JobRun).toBeDefined();
 
       if (jobRun.JobRun) {
-        // Job should be in a state indicating successful initiation.
         expect(['STARTING', 'RUNNING']).toContain(jobRun.JobRun.JobRunState);
       }
     }, timeout);
@@ -322,7 +330,6 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
   // --- Section 8: Athena Query Capability ---
   describe('8. Athena Query Capability', () => {
     test('should verify Athena workgroup exists and can execute queries', async () => {
-      // Simple query to test Athena functionality
       const queryString = `SELECT COUNT(*) as total_databases FROM information_schema.schemata WHERE schema_name = '${outputs.GlueDatabaseName}'`;
 
       const queryResponse = await athenaClient.send(new StartQueryExecutionCommand({
@@ -335,7 +342,6 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
 
       expect(queryResponse.QueryExecutionId).toBeDefined();
 
-      // FIX: Initialize queryStatus to a definite string value
       let queryStatus: string = 'RUNNING';
       let attempts = 0;
       const maxAttempts = 10;
@@ -344,10 +350,9 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
         await new Promise(resolve => setTimeout(resolve, 2000));
 
         const statusResponse = await athenaClient.send(new GetQueryExecutionCommand({
-          QueryExecutionId: queryResponse.QueryExecutionId! // Using non-null assertion
+          QueryExecutionId: queryResponse.QueryExecutionId!
         }));
 
-        // FIX: Check for QueryExecution and QueryExecution.Status existence
         expect(statusResponse.QueryExecution).toBeDefined();
         if (statusResponse.QueryExecution?.Status?.State) {
           queryStatus = statusResponse.QueryExecution.Status.State;
@@ -362,7 +367,6 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
           QueryExecutionId: queryResponse.QueryExecutionId!
         }));
 
-        // FIX: Check for ResultSet existence
         expect(resultsResponse.ResultSet).toBeDefined();
         if (resultsResponse.ResultSet) {
           expect(resultsResponse.ResultSet.Rows).toBeDefined();
@@ -383,7 +387,6 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
   // --- Section 10: End-to-End Workflow Validation ---
   describe('10. End-to-End Workflow Validation', () => {
     test('should validate complete log analytics pipeline components are connected', async () => {
-      // Verify all critical outputs exist (indicating successful deployment)
       const requiredOutputs = [
         'LogBucketName',
         'DeliveryStreamName',
@@ -416,7 +419,6 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
         correlation_id: testCorrelationId
       };
 
-      // Step 1: Send to CloudWatch Logs (triggers subscription filter flow)
       await logsClient.send(new PutLogEventsCommand({
         logGroupName: '/enterprise/servers/application',
         logStreamName: TEST_LOG_STREAM,
@@ -424,10 +426,8 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
           timestamp: Date.now(),
           message: JSON.stringify(testLogEvent)
         }],
-        // sequenceToken: undefined
       }));
 
-      // Step 2: Verify system can handle the query load (Athena workgroup exists and query starts)
       const workgroupQuery = "SHOW DATABASES";
       const queryResponse = await athenaClient.send(new StartQueryExecutionCommand({
         QueryString: workgroupQuery,
@@ -439,7 +439,6 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
 
       expect(queryResponse.QueryExecutionId).toBeDefined();
 
-      // Success if we reach this point - the infrastructure can handle the complete workflow
       expect(true).toBe(true);
     }, timeout);
   });
