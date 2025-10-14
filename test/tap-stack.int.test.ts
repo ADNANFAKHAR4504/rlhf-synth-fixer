@@ -62,7 +62,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
       expect(response.$metadata.httpStatusCode).toBe(200);
 
       // Verify bucket name matches expected pattern
-      expect(bucketName).toBe(`tap-media-${environmentSuffix}-455180012233`);
+      expect(bucketName).toMatch(new RegExp(`^tap-media-${environmentSuffix}-\\d{12}$`));
     });
 
     test('should verify Lambda function exists and is accessible', async () => {
@@ -213,7 +213,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
 
       expect(response.Configuration?.Environment?.Variables).toBeDefined();
       expect(response.Configuration?.Environment?.Variables?.DYNAMODB_TABLE_NAME).toBe(`tap-requests-${environmentSuffix}`);
-      expect(response.Configuration?.Environment?.Variables?.S3_BUCKET_NAME).toBe(`tap-media-${environmentSuffix}-455180012233`);
+      expect(response.Configuration?.Environment?.Variables?.S3_BUCKET_NAME).toMatch(new RegExp(`^tap-media-${environmentSuffix}-\\d{12}$`));
       expect(response.Configuration?.Environment?.Variables?.ENVIRONMENT).toBe(environmentSuffix);
     });
   });
@@ -311,7 +311,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
       expect(response.$metadata.httpStatusCode).toBe(200);
 
       // Verify bucket name follows expected pattern
-      expect(bucketName).toMatch(/^tap-media-dev-\d+$/);
+      expect(bucketName).toMatch(new RegExp(`^tap-media-${environmentSuffix}-\\d{12}$`));
     });
   });
 
@@ -483,16 +483,16 @@ describe('Turn Around Prompt API Integration Tests', () => {
 
     test('should verify resource ARNs follow AWS naming conventions', () => {
       // DynamoDB ARN
-      expect(outputs.DynamoDBTableArn).toMatch(/^arn:aws:dynamodb:[a-z0-9-]+:\d+:table\/tap-requests-dev$/);
+      expect(outputs.DynamoDBTableArn).toMatch(new RegExp(`^arn:aws:dynamodb:[a-z0-9-]+:\\d+:table/tap-requests-${environmentSuffix}$`));
 
       // Lambda ARN
-      expect(outputs.LambdaFunctionArn).toMatch(/^arn:aws:lambda:[a-z0-9-]+:\d+:function:tap-processor-dev$/);
+      expect(outputs.LambdaFunctionArn).toMatch(new RegExp(`^arn:aws:lambda:[a-z0-9-]+:\\d+:function:tap-processor-${environmentSuffix}$`));
 
       // S3 ARN
-      expect(outputs.S3BucketArn).toMatch(/^arn:aws:s3:::tap-media-dev-\d+$/);
+      expect(outputs.S3BucketArn).toMatch(new RegExp(`^arn:aws:s3:::tap-media-${environmentSuffix}-\\d+$`));
 
       // WAF ARN
-      expect(outputs.WAFArn).toMatch(/^arn:aws:wafv2:[a-z0-9-]+:\d+:regional\/webacl\/tap-waf-dev\/[a-f0-9-]+$/);
+      expect(outputs.WAFArn).toMatch(new RegExp(`^arn:aws:wafv2:[a-z0-9-]+:\\d+:regional/webacl/tap-waf-${environmentSuffix}/[a-f0-9-]+$`));
     });
   });
 });
