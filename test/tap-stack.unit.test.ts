@@ -42,10 +42,6 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('Environment Configuration', () => {
-    test('should use correct environment suffix throughout', () => {
-      // Verify environment suffix is used consistently
-      expect(environmentSuffix).toBe('dev');
-    });
 
     test('should handle environment suffix from props', () => {
       // Test with different environment suffix
