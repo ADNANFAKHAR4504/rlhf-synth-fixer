@@ -126,26 +126,42 @@ cat metadata.json | jq -r '"\(.platform) - \(.language)"'
 
 ---
 
-### 3. Training Quality Standards (IMPORTANT)
+### 3. Training Quality Standards (CRITICAL)
 
-**Symptom**: Training quality scores consistently low (< 6) or tasks provide minimal learning value
+**Symptom**: Training quality scores below 8 or tasks provide minimal learning value
 
 **Root Cause**: Generated code too simple, missing best practices, or doesn't exercise model's capabilities
 
-**Guidelines**:
-- Training quality score < 6 = Poor training data (should be rare)
-- Target range: 7-9 for most tasks
-- Score 10 reserved for exceptional learning opportunities
-- Include 1-2 AWS best practices or features relevant to the task
-- Security, compliance, and monitoring should be included when applicable
-- Avoid trivial implementations that don't teach meaningful patterns
+**CRITICAL REQUIREMENTS**:
+- **MINIMUM acceptable score: 8/10** (enforced - PR creation will be BLOCKED if score < 8)
+- **TARGET score: 9/10** (aim for this in all tasks)
+- Score 10 reserved for exceptional learning opportunities with novel patterns
+- Tasks scoring below 8 MUST be improved before PR creation
 
-**Red Flags for Low Quality**:
+**Guidelines**:
+- Training quality score < 8 = Insufficient training data (BLOCKED)
+- Target range: 8-9 for most tasks (with 9 as the goal)
+- Include 2-3 AWS best practices or features relevant to the task
+- Security, compliance, and monitoring should ALWAYS be included when applicable
+- Avoid trivial implementations that don't teach meaningful patterns
+- MODEL_FAILURES.md should demonstrate significant learning opportunities
+
+**Red Flags for Low Quality** (will result in score < 8):
 - Only basic resources with no integrations
-- No security configurations
+- No security configurations (missing KMS, IAM, encryption)
 - No monitoring or logging
 - Missing error handling
 - Hardcoded values instead of proper configuration
+- Platform/language mismatch with metadata.json (-5 points automatic penalty)
+- Missing required AWS services from task description (-2 points per missing service)
+
+**How to Improve Training Quality**:
+1. Add security features: KMS encryption, IAM least privilege, security groups
+2. Add observability: CloudWatch logs/metrics, X-Ray tracing, alarms
+3. Add resilience: Multi-AZ deployment, auto-scaling, retry logic
+4. Add cost optimization: Resource tagging, auto-scaling policies
+5. Implement AWS best practices from Well-Architected Framework
+6. Ensure ALL requirements from task description are implemented
 
 ---
 

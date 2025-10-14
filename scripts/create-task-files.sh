@@ -174,6 +174,7 @@ cat > "$METADATA_FILE" <<EOF
   "team": "synth",
   "startedAt": "$STARTED_AT",
   "subtask": "$SUBTASK",
+  "background": "$BACKGROUND",
   "subject_labels": $SUBJECT_LABELS,
   "po_id": "$TASK_ID",
   "aws_services": [],

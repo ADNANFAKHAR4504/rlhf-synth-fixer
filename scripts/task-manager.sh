@@ -139,7 +139,7 @@ select_task() {
     # Returns: task_id, status, platform, language, difficulty, subtask (tab-separated)
     local result
     result=$(parse_csv | awk -F'\t' '{
-        task_id=$1; status=$2; platform=$3; language=$4; difficulty=$5; subtask=$6
+        task_id=$1; status=$2; platform=$3; difficulty=$4; subtask=$5; language=$6
         
         # Trim whitespace
         gsub(/^[ \t]+|[ \t]+$/, "", status)
