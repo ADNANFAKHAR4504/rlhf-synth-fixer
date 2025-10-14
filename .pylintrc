@@ -21,6 +21,9 @@ disable=
     R0902, # too-many-instance-attributes
     W0621, # redefined-outer-name (for pytest fixtures)
     W0718, # broad-exception-caught
+    R0917, # too-many-positional-arguments (CDK constructs)
+    E1101, # no-member (CDK assertions Match class)
+    R0801, # duplicate-code (similar S3 bucket configs)
 
 [FORMAT]
 # Maximum number of characters on a single line
