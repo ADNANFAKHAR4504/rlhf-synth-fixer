@@ -198,10 +198,8 @@ Resources:
             - Type: Lambda
               Parameters:
                 - ParameterName: LambdaArn
-                  # FIX: Changed 'Value' to 'ParameterValue'
                   ParameterValue: !GetAtt LogProcessorLambda.Arn 
                 - ParameterName: NumberOfRetries
-                  # FIX: Changed 'Value' to 'ParameterValue'
                   ParameterValue: '3' 
 
   # ==========================================
@@ -260,7 +258,7 @@ Resources:
       MemorySize: 256
 
   # ==========================================
-  # Glue Script Uploader Automation (NEW) 💾
+  # Glue Script Uploader Automation 💾
   # ==========================================
   S3UploaderLambdaRole:
     Type: AWS::IAM::Role
@@ -460,7 +458,7 @@ Resources:
       WorkerType: 'G.1X'
 
   # ==========================================
-  # Ad-hoc Query Capability (Unchanged)
+  # Ad-hoc Query Capability 
   # ==========================================
   LogAnalyticsWorkgroup:
     Type: AWS::Athena::WorkGroup
@@ -477,7 +475,7 @@ Resources:
             EncryptionOption: SSE_S3
 
   # ==========================================
-  # Monitoring and Alerts (Unchanged)
+  # Monitoring and Alerts 
   # ==========================================
   LogAnalyticsDashboard:
     Type: AWS::CloudWatch::Dashboard
@@ -605,7 +603,7 @@ Resources:
         - !Ref LogAnalyticsAlarmTopic
 
   # ==========================================
-  # Log Collection from Servers (Unchanged)
+  # Log Collection from Servers 
   # ==========================================
   SyslogLogGroup:
     Type: AWS::Logs::LogGroup
@@ -690,7 +688,7 @@ Resources:
       RoleArn: !GetAtt CloudWatchLogsRole.Arn
 
   # ==========================================
-  # Audit Compliance (Unchanged)
+  # Audit Compliance 
   # ==========================================
   AuditLogGroup:
     Type: AWS::Logs::LogGroup
@@ -772,12 +770,13 @@ Resources:
       Timeout: 300
       MemorySize: 256
       Code:
-        # Python handler code for attaching the policy to the QuickSight service role
+        # Python handler code with improved error handling for deletion
         ZipFile: |
           import json
           import boto3
           import cfnresponse
           import traceback
+          from botocore.exceptions import ClientError
           
           iam_client = boto3.client('iam')
           
@@ -796,11 +795,19 @@ Resources:
                       print(f"Attached policy {policy_arn} to QuickSight role.")
                   
                   elif event['RequestType'] == 'Delete':
-                      iam_client.detach_role_policy(
-                          RoleName=qs_role_name,
-                          PolicyArn=policy_arn
-                      )
-                      print(f"Detached policy {policy_arn} from QuickSight role.")
+                      try:
+                          iam_client.detach_role_policy(
+                              RoleName=qs_role_name,
+                              PolicyArn=policy_arn
+                          )
+                          print(f"Detached policy {policy_arn} from QuickSight role.")
+                      except ClientError as e:
+                          # Ignore the error if the policy is already detached
+                          if e.response['Error']['Code'] == 'NoSuchEntity':
+                              print(f"Policy {policy_arn} not attached or role not found. Continuing stack deletion.")
+                              pass
+                          else:
+                              raise # Re-raise other unexpected errors
 
               except Exception as e:
                   print(f"Failed to update QuickSight permissions: {e}")
