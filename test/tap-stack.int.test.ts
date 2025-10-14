@@ -209,7 +209,6 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       );
       
       if (!accessLogsBucket) {
-        console.warn('S3 Access Logs Bucket not found - skipping test');
         return;
       }
       
@@ -227,7 +226,6 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
         const publicAccessResponse = await s3Client.send(publicAccessCommand);
         expect(publicAccessResponse.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
       } catch (error) {
-        console.warn(`S3 Access Logs Bucket test failed: ${error}`);
         // Don't fail the test if bucket access is restricted
       }
     });
@@ -242,7 +240,6 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       );
       
       if (!appBucket) {
-        console.warn('Application S3 Bucket not found - skipping test');
         return;
       }
       
@@ -260,7 +257,6 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
         const publicAccessResponse = await s3Client.send(publicAccessCommand);
         expect(publicAccessResponse.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
       } catch (error) {
-        console.warn(`Application S3 Bucket test failed: ${error}`);
         // Don't fail the test if bucket access is restricted
       }
     });
@@ -275,7 +271,6 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       );
       
       if (!cloudtrailBucket) {
-        console.warn('CloudTrail S3 Bucket not found - skipping test');
         return;
       }
       
@@ -293,7 +288,6 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
         const publicAccessResponse = await s3Client.send(publicAccessCommand);
         expect(publicAccessResponse.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
       } catch (error) {
-        console.warn(`CloudTrail S3 Bucket test failed: ${error}`);
         // Don't fail the test if bucket access is restricted
       }
     });
@@ -423,7 +417,6 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       );
       
       if (!webACL) {
-        console.warn('WAF Web ACL not found - skipping test');
         return;
       }
       
@@ -831,7 +824,6 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       );
       
       if (!ec2Role) {
-        console.warn('EC2 Instance Role not found - skipping test');
         return;
       }
       
@@ -891,7 +883,6 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       );
       
       if (!vpcFlowLogRole) {
-        console.warn('VPC Flow Log Role not found - skipping test');
         return;
       }
       
@@ -909,7 +900,6 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       );
       
       if (!securityHubRole) {
-        console.warn('Security Hub Lambda Role not found - skipping test');
         return;
       }
       
@@ -1188,7 +1178,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
           const headCommand = new HeadBucketCommand({ Bucket: bucketName });
           await s3Client.send(headCommand);
         } catch (error) {
-          console.warn(`CloudTrail S3 bucket access failed: ${error}`);
+          // CloudTrail S3 bucket access failed
         }
       }
     });
@@ -1309,7 +1299,6 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
         );
 
         if (!bastionSG || !appSG || !rdsSG) {
-          console.warn('Required security groups not found - skipping test');
           return;
         }
 
@@ -1365,7 +1354,6 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
         );
         
         if (!ec2Role) {
-          console.warn('EC2 Instance Role not found - skipping test');
           return;
         }
 
@@ -1478,7 +1466,6 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
         );
         
         if (!accessLogsBucket || !appBucket) {
-          console.warn('Required S3 buckets not found - skipping test');
           return;
         }
 
@@ -1496,7 +1483,6 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
           });
           await s3Client.send(accessLogsBucketHeadCommand);
         } catch (error) {
-          console.warn(`S3 bucket access failed: ${error}`);
           return;
         }
 
@@ -1536,7 +1522,6 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
         );
         
         if (!webACL || !alb) {
-          console.warn('WAF WebACL or ALB not found - skipping test');
           return;
         }
 
