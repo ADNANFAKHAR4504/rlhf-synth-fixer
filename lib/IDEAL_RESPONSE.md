@@ -241,7 +241,6 @@ export class DatabaseModule extends Construct {
       }
     );
 
-    // RDS Instance
     this.rdsInstance = new aws.dbInstance.DbInstance(this, 'rds', {
       identifier: `${config.projectName}-${config.environment}-db`,
       engine: 'postgres',
