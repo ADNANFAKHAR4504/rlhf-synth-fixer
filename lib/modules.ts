@@ -5,6 +5,7 @@ import { S3BucketLifecycleConfiguration } from '@cdktf/provider-aws/lib/s3-bucke
 import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
 import { DataAwsElbServiceAccount } from '@cdktf/provider-aws/lib/data-aws-elb-service-account';
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
+import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
 
 // VPC Resources
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
@@ -724,14 +725,19 @@ export class ALBConstruct extends Construct {
   }
 
   private createAlbLogsBucket(tags: CommonTags): S3Bucket {
-    // Create S3 bucket WITHOUT server_side_encryption_configuration
+    // Create S3 bucket WITHOUT versioning and encryption inline
     const bucket = new S3Bucket(this, 'alb-logs-bucket', {
       bucket: `${tags.Project}-alb-logs-${tags.Environment}-${Date.now()}`,
-      versioning: {
-        enabled: true,
-      },
-      // REMOVE server_side_encryption_configuration from here
+      // REMOVED versioning from here
       tags: tags,
+    });
+
+    // Use separate versioning configuration resource
+    new S3BucketVersioningA(this, 'alb-logs-versioning', {
+      bucket: bucket.id,
+      versioningConfiguration: {
+        status: 'Enabled',
+      },
     });
 
     // Use separate encryption configuration resource (non-deprecated)
@@ -749,7 +755,6 @@ export class ALBConstruct extends Construct {
         ],
       }
     );
-
     // Use separate lifecycle configuration resource (non-deprecated)
     new S3BucketLifecycleConfiguration(this, 'alb-logs-lifecycle', {
       bucket: bucket.id,
@@ -757,6 +762,7 @@ export class ALBConstruct extends Construct {
         {
           id: 'delete-old-logs',
           status: 'Enabled',
+          // omit filter if not needed
           expiration: [
             {
               days: 90,
@@ -775,6 +781,7 @@ export class ALBConstruct extends Construct {
       restrictPublicBuckets: true,
     });
 
+    // Get the ELB service account for the current region
     // Get the ELB service account for the current region
     const elbServiceAccount = new DataAwsElbServiceAccount(
       this,
@@ -1035,11 +1042,15 @@ export class MonitoringConstruct extends Construct {
     // S3 Bucket for CloudTrail - also use new lifecycle configuration
     const trailBucket = new S3Bucket(this, 'trail-bucket', {
       bucket: `${tags.Project}-trail-${tags.Environment}-${Date.now()}`,
-      versioning: {
-        enabled: true,
-      },
-      // REMOVE server_side_encryption_configuration from here
+      // REMOVED versioning from here
       tags: tags,
+    });
+
+    new S3BucketVersioningA(this, 'trail-bucket-versioning', {
+      bucket: trailBucket.id,
+      versioningConfiguration: {
+        status: 'Enabled',
+      },
     });
 
     // Use separate lifecycle configuration resource
@@ -1065,6 +1076,7 @@ export class MonitoringConstruct extends Construct {
         {
           id: 'delete-old-logs',
           status: 'Enabled',
+          // omit filter if not needed
           expiration: [
             {
               days: 365,
@@ -1129,7 +1141,7 @@ export class MonitoringConstruct extends Construct {
           dataResource: [
             {
               type: 'AWS::S3::Object',
-              values: ['arn:aws:s3:::*/'], // Fix: Remove the second asterisk
+              values: ['arn:aws:s3:::*/*'], // Fix: Use correct format with */*
             },
           ],
         },
