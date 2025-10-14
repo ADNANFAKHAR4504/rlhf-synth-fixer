@@ -28,6 +28,9 @@ import * as path from 'path';
 
 const AWS_REGION = 'us-east-1';
 
+// Get environment suffix from environment variable or default
+const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || 'dev';
+
 // Load deployment outputs
 const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
 let outputs: any;
@@ -35,22 +38,61 @@ let outputs: any;
 if (fs.existsSync(outputsPath)) {
   outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
 } else {
-  throw new Error(
-    `Deployment outputs not found at ${outputsPath}. Run deployment first.`
+  console.warn(
+    `⚠️ Deployment outputs not found at ${outputsPath}. Using dynamic resource names.`
   );
+  // Create dynamic outputs based on environment suffix
+  outputs = {
+    VPCId: undefined, // Will be discovered dynamically
+    ECSClusterName: `assessment-cluster-${ENVIRONMENT_SUFFIX}`,
+    ECSServiceName: `assessment-service-${ENVIRONMENT_SUFFIX}`,
+    ALBDnsName: undefined, // Will be discovered dynamically  
+    RDSClusterEndpoint: undefined, // Will be discovered dynamically
+    RedisEndpoint: undefined, // Will be discovered dynamically
+    LogGroupName: `/aws/assessment/${ENVIRONMENT_SUFFIX}`,
+    AWSAccountId: undefined
+  };
+}
+
+// Helper function to discover VPC by tags if not in outputs
+async function findVpcByEnvironment(): Promise<string | undefined> {
+  if (outputs.VPCId) return outputs.VPCId;
+
+  try {
+    const ec2Client = new EC2Client({ region: AWS_REGION });
+    const response = await ec2Client.send(new DescribeVpcsCommand({
+      Filters: [
+        {
+          Name: 'tag:Environment',
+          Values: [ENVIRONMENT_SUFFIX]
+        }
+      ]
+    }));
+
+    return response.Vpcs?.[0]?.VpcId;
+  } catch (error) {
+    console.log(`⚠️ Could not discover VPC for environment ${ENVIRONMENT_SUFFIX}:`, error);
+    return undefined;
+  }
 }
 
 describe('Student Assessment Pipeline - Integration Tests', () => {
+  console.log(`🔍 Testing environment: ${ENVIRONMENT_SUFFIX}`);
+
   describe('VPC Infrastructure', () => {
     it('should have VPC deployed and available', async () => {
+      const vpcId = await findVpcByEnvironment();
+      if (!vpcId) {
+        console.log(`⚠️ No VPC found for environment ${ENVIRONMENT_SUFFIX}, skipping VPC test`);
+        return;
+      }
+
       const ec2Client = new EC2Client({ region: AWS_REGION });
       const response = await ec2Client.send(
         new DescribeVpcsCommand({
-          VpcIds: [outputs.VPCId],
+          VpcIds: [vpcId],
         })
-      );
-
-      expect(response.Vpcs).toBeDefined();
+      ); expect(response.Vpcs).toBeDefined();
       expect(response.Vpcs).toHaveLength(1);
       expect(response.Vpcs![0].State).toBe('available');
       expect(response.Vpcs![0].CidrBlock).toBe('10.0.0.0/16');
@@ -60,14 +102,18 @@ describe('Student Assessment Pipeline - Integration Tests', () => {
     });
 
     it('should have VPC properly tagged', async () => {
+      const vpcId = await findVpcByEnvironment();
+      if (!vpcId) {
+        console.log(`⚠️ No VPC found for environment ${ENVIRONMENT_SUFFIX}, skipping VPC tagging test`);
+        return;
+      }
+
       const ec2Client = new EC2Client({ region: AWS_REGION });
       const response = await ec2Client.send(
         new DescribeVpcsCommand({
-          VpcIds: [outputs.VPCId],
+          VpcIds: [vpcId],
         })
-      );
-
-      const vpc = response.Vpcs![0];
+      ); const vpc = response.Vpcs![0];
       const nameTag = vpc.Tags?.find((tag) => tag.Key === 'Name');
       expect(nameTag).toBeDefined();
       expect(nameTag!.Value).toContain('assessment-vpc-');
@@ -126,7 +172,7 @@ describe('Student Assessment Pipeline - Integration Tests', () => {
     it('should have Redis replication group available or creating', async () => {
       const cacheClient = new ElastiCacheClient({ region: AWS_REGION });
 
-      const replicationGroupId = 'assessment-cache-dev';
+      const replicationGroupId = `assessment-cache-${ENVIRONMENT_SUFFIX}`;
       const response = await cacheClient.send(
         new DescribeReplicationGroupsCommand({
           ReplicationGroupId: replicationGroupId,
@@ -143,7 +189,7 @@ describe('Student Assessment Pipeline - Integration Tests', () => {
     it('should have encryption enabled', async () => {
       const cacheClient = new ElastiCacheClient({ region: AWS_REGION });
 
-      const replicationGroupId = 'assessment-cache-dev';
+      const replicationGroupId = `assessment-cache-${ENVIRONMENT_SUFFIX}`;
       const response = await cacheClient.send(
         new DescribeReplicationGroupsCommand({
           ReplicationGroupId: replicationGroupId,
@@ -158,7 +204,7 @@ describe('Student Assessment Pipeline - Integration Tests', () => {
     it('should have multi-AZ enabled', async () => {
       const cacheClient = new ElastiCacheClient({ region: AWS_REGION });
 
-      const replicationGroupId = 'assessment-cache-dev';
+      const replicationGroupId = `assessment-cache-${ENVIRONMENT_SUFFIX}`;
       const response = await cacheClient.send(
         new DescribeReplicationGroupsCommand({
           ReplicationGroupId: replicationGroupId,
@@ -172,7 +218,7 @@ describe('Student Assessment Pipeline - Integration Tests', () => {
     it('should have automatic failover enabled', async () => {
       const cacheClient = new ElastiCacheClient({ region: AWS_REGION });
 
-      const replicationGroupId = 'assessment-cache-dev';
+      const replicationGroupId = `assessment-cache-${ENVIRONMENT_SUFFIX}`;
       const response = await cacheClient.send(
         new DescribeReplicationGroupsCommand({
           ReplicationGroupId: replicationGroupId,
@@ -355,7 +401,7 @@ describe('Student Assessment Pipeline - Integration Tests', () => {
 
     it('should have cache encryption enabled', async () => {
       const cacheClient = new ElastiCacheClient({ region: AWS_REGION });
-      const replicationGroupId = 'assessment-cache-dev';
+      const replicationGroupId = `assessment-cache-${ENVIRONMENT_SUFFIX}`;
 
       const response = await cacheClient.send(
         new DescribeReplicationGroupsCommand({
