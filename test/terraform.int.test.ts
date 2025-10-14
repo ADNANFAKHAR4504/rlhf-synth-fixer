@@ -90,6 +90,22 @@ describe('Terraform Logging Analytics Infrastructure - Integration Tests', () =>
       const outputsContent = fs.readFileSync(OUTPUTS_FILE, 'utf8');
       deploymentOutputs = JSON.parse(outputsContent);
       isInfrastructureDeployed = true;
+
+      // Attempt to parse nested JSON strings
+      if (typeof deploymentOutputs.firehose_delivery_streams === 'string') {
+        try {
+          deploymentOutputs.firehose_delivery_streams = JSON.parse(deploymentOutputs.firehose_delivery_streams);
+        } catch (e) {
+          console.warn('Could not parse firehose_delivery_streams from string.');
+        }
+      }
+      if (typeof deploymentOutputs.iam_role_names === 'string') {
+        try {
+          deploymentOutputs.iam_role_names = JSON.parse(deploymentOutputs.iam_role_names);
+        } catch (e) {
+          console.warn('Could not parse iam_role_names from string.');
+        }
+      }
     } else {
       // Infrastructure not deployed - create mock outputs for CI/CD compatibility
       deploymentOutputs = {
