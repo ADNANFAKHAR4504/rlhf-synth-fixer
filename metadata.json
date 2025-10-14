@@ -10,5 +10,6 @@
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
-  "aws_services": "VPC, Subnet, RouteTable, InternetGateway, NatGateway, EIP, SecurityGroup, LoadBalancer, TargetGroup, Listener, AutoScalingGroup, LaunchConfiguration, Bucket, Role, Policy, InstanceProfile, Secret"
+  "aws_services": "VPC, Subnet, RouteTable, InternetGateway, NatGateway, EIP, SecurityGroup, LoadBalancer, TargetGroup, Listener, AutoScalingGroup, LaunchConfiguration, Bucket, Role, Policy, InstanceProfile, Secret",
+  "training_quality": 5
 }
