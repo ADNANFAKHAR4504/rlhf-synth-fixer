@@ -44,9 +44,9 @@ class EC2RecoveryConfig:
         self.iam_role_name = f"{project_name_normalized}-ec2-recovery-role-{environment_normalized}-{timestamp}-{random_suffix}"
         self.event_rule_name = f"{project_name_normalized}-ec2-monitoring-{environment_normalized}-{timestamp}-{random_suffix}"
         
-        # Validate region
-        if self.region != 'us-west-2':
-            raise ValueError(f"Region must be us-west-2, got {self.region}")
+        # Validate region - allow us-west-2 as default, but permit other regions for CI/CD
+        if self.region not in ['us-west-2', 'us-east-1']:
+            raise ValueError(f"Region must be us-west-2 or us-east-1, got {self.region}")
     
     def get_resource_name(self, resource_type: str, suffix: str = "") -> str:
         """Generate consistent resource names with environment suffix."""
