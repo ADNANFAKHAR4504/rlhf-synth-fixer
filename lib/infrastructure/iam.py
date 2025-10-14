@@ -46,7 +46,7 @@ class IAMStack:
         """Create least privilege S3 policy for log access."""
         return aws.iam.Policy(
             "ec2-s3-policy",
-            name=f"{self.config.get_tag_name('s3-policy')}",
+            name=f"{self.config.get_tag_name('s3-policy')}-v2",
             description="Least privilege S3 access for application logs",
             policy=bucket_name.apply(
                 lambda name: {
@@ -75,7 +75,7 @@ class IAMStack:
         """Create CloudWatch logs policy for EC2 instances."""
         return aws.iam.Policy(
             "ec2-cloudwatch-policy",
-            name=f"{self.config.get_tag_name('cloudwatch-policy')}",
+            name=f"{self.config.get_tag_name('cloudwatch-policy')}-v2",
             description="CloudWatch logs access for EC2 instances",
             policy=pulumi.Output.from_input({
                 "Version": "2012-10-17",
