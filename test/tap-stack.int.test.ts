@@ -287,7 +287,9 @@ describe("MyApp Integration Tests - ECS Infrastructure", () => {
     test("Task definition is properly configured", async () => {
       const { taskDefinition } = await ecsClient.send(
         new DescribeTaskDefinitionCommand({
-          taskDefinition: taskDefinitionArn.split('/').pop()?.split(':')[0]
+          // The ARN is in the format: arn:aws:ecs:region:id:task-definition/family:revision
+          // This extracts 'family'
+          taskDefinition: taskDefinitionArn.split('/').pop()?.split(':')[0] 
         })
       );
 
@@ -323,8 +325,8 @@ describe("MyApp Integration Tests - ECS Infrastructure", () => {
         );
         expect(encryption.ServerSideEncryptionConfiguration?.Rules?.length).toBeGreaterThan(0);
       } catch (error: any) {
-        // Bucket might not have encryption configured
-        console.log("Bucket encryption not configured (optional)");
+        // Bucket might not have encryption configured, so we log
+        console.log("Bucket encryption not configured or access denied (optional)");
       }
     }, 30000);
 
@@ -352,7 +354,8 @@ describe("MyApp Integration Tests - ECS Infrastructure", () => {
           Key: testKey
         }));
         
-        const body = await getResult.Body?.transformToString();
+        // Use transformToString() from stream body for SDK v3
+        const body = await getResult.Body?.transformToString(); 
         const parsed = JSON.parse(body || '{}');
         expect(parsed.test).toBe('integration');
 
@@ -369,45 +372,63 @@ describe("MyApp Integration Tests - ECS Infrastructure", () => {
   });
 
   describe("Database: RDS and Secrets Manager", () => {
-  test("RDS database secret exists and is accessible", async () => 
+    test("RDS database secret exists and is accessible", async () => {
+      // --- START: Missing logic added here ---
+      let SecretString: string | undefined;
 
-      expect(credentials.username).toBeDefined();
-      expect(credentials.password).toBeDefined();
-      expect(credentials.host).toBeDefined();
-      expect(credentials.port).toBeDefined();
-    } catch (error: any) {
-      console.log(`Secrets Manager access: ${error.message}`);
-      throw error; 
-    }
-  }, 30000);
+      try {
+        // 1. Get Secret Value
+        const { SecretString: fetchedSecretString } = await secretsClient.send(
+          new GetSecretValueCommand({
+            SecretId: dbSecretArn,
+          })
+        );
+        SecretString = fetchedSecretString;
 
-  test("RDS instance is available (if endpoint is provided)", async () => {
-    if (!rdsEndpoint || rdsEndpoint === "<sensitive>") {
-      console.log("RDS endpoint is sensitive/hidden, skipping detailed RDS test");
-      return;
-    }
+        // 2. Validate existence
+        expect(SecretString).toBeDefined();
 
-    const dbIdentifier = rdsEndpoint.split(".")[0];
+        // 3. Parse and validate secret structure
+        const credentials = JSON.parse(SecretString || "{}");
+        // --- END: Missing logic added here ---
 
-    try {
-      const { DBInstances } = await rdsClient.send(
-        new DescribeDBInstancesCommand({
-          DBInstanceIdentifier: dbIdentifier,
-        })
-      );
+        expect(credentials.username).toBeDefined();
+        expect(credentials.password).toBeDefined();
+        expect(credentials.host).toBeDefined();
+        expect(credentials.port).toBeDefined();
+      } catch (error: any) {
+        console.log(`Secrets Manager access: ${error.message}`);
+        throw error; 
+      }
+    }, 30000);
 
-      expect(DBInstances?.length).toBe(1);
-      const dbInstance = DBInstances![0];
+    test("RDS instance is available (if endpoint is provided)", async () => {
+      if (!rdsEndpoint || rdsEndpoint === "<sensitive>") {
+        console.log("RDS endpoint is sensitive/hidden, skipping detailed RDS test");
+        return;
+      }
 
-      expect(dbInstance.DBInstanceStatus).toBe("available");
-      expect(dbInstance.StorageEncrypted).toBe(true);
-      expect(dbInstance.BackupRetentionPeriod).toBeGreaterThan(0);
-    } catch (error: any) {
-      console.log(`RDS instance check: ${error.message}`);
-      throw error;
-    }
-  }, 30000);
-});
+      const dbIdentifier = rdsEndpoint.split(".")[0];
+
+      try {
+        const { DBInstances } = await rdsClient.send(
+          new DescribeDBInstancesCommand({
+            DBInstanceIdentifier: dbIdentifier,
+          })
+        );
+
+        expect(DBInstances?.length).toBe(1);
+        const dbInstance = DBInstances![0];
+
+        expect(dbInstance.DBInstanceStatus).toBe("available");
+        expect(dbInstance.StorageEncrypted).toBe(true);
+        expect(dbInstance.BackupRetentionPeriod).toBeGreaterThan(0);
+      } catch (error: any) {
+        console.log(`RDS instance check: ${error.message}`);
+        throw error;
+      }
+    }, 30000);
+  });
 
 
   describe("Monitoring: CloudWatch Logs and Alarms", () => {
