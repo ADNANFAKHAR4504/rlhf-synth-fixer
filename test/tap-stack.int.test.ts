@@ -392,12 +392,9 @@ describe("MyApp Integration Tests - ECS Infrastructure", () => {
       expect(credentials.port).toBeDefined();
     } catch (error: any) {
       console.log(`Secrets Manager access: ${error.message}`);
-      // Re-throw or fail the test explicitly if necessary
       throw error; 
     }
   }, 30000);
-
-  // ---
 
   test("RDS instance is available (if endpoint is provided)", async () => {
     if (!rdsEndpoint || rdsEndpoint === "<sensitive>") {
