@@ -471,11 +471,15 @@ class TestTapStackIntegration(unittest.TestCase):
         
         Tests the complete workflow:
         1. Upload image to S3 (uploads/ folder)
-        2. Verify S3 event triggers SQS message
-        3. Wait for Lambda preprocessing to process the message
-        4. Verify DynamoDB status updates
+        2. S3 event automatically triggers Lambda via SQS (EventSourceMapping)
+        3. Wait for Lambda preprocessing to process and update DynamoDB
+        4. Verify DynamoDB status updates and processing results
         
         This validates: S3 -> SQS -> Lambda -> DynamoDB flow
+        
+        Note: We don't poll SQS because Lambda EventSourceMapping consumes
+        messages immediately (maximum_batching_window_in_seconds=0), so
+        messages are processed before the test can poll them.
         """
         # Verify all required outputs are present
         required_outputs = ['image_bucket_name', 'preprocessing_queue_url', 'results_table_name']
@@ -508,45 +512,10 @@ class TestTapStackIntegration(unittest.TestCase):
             )
             print(f"Image uploaded successfully to s3://{bucket_name}/{test_key}")
             
-            # Step 2: Wait for S3 event to trigger SQS message
-            print("\n[Step 2] Waiting for S3 event to create SQS message...")
-            
-            # Poll SQS queue for the message (wait up to 30 seconds)
-            message_found = False
-            max_attempts = 6
-            for attempt in range(max_attempts):
-                time.sleep(5)
-                print(f"Polling SQS (attempt {attempt + 1}/{max_attempts})...")
-                
-                response = self.sqs_client.receive_message(
-                    QueueUrl=preprocessing_queue_url,
-                    MaxNumberOfMessages=10,
-                    WaitTimeSeconds=5,
-                    AttributeNames=['All']
-                )
-                
-                messages = response.get('Messages', [])
-                for message in messages:
-                    body = json.loads(message['Body'])
-                    
-                    # Check if this is an S3 event notification
-                    if 'Records' in body:
-                        for record in body['Records']:
-                            if record.get('eventName', '').startswith('ObjectCreated'):
-                                s3_key = record.get('s3', {}).get('object', {}).get('key', '')
-                                if test_image_id in s3_key:
-                                    message_found = True
-                                    print(f"Found S3 event message for {test_image_id}!")
-                                    print(f"Event: {record.get('eventName')}")
-                                    print(f"Bucket: {record.get('s3', {}).get('bucket', {}).get('name')}")
-                                    print(f"Key: {s3_key}")
-                                    break
-                
-                if message_found:
-                    break
-            
-            self.assertTrue(message_found, 
-                f"S3 event message not found in SQS queue after {max_attempts * 5} seconds")
+            # Step 2: S3 event automatically triggers Lambda via SQS
+            print("\n[Step 2] S3 event notification will automatically trigger Lambda...")
+            print("Note: Lambda EventSourceMapping consumes messages immediately,")
+            print("so we skip polling SQS and go directly to checking DynamoDB status.")
             
             # Step 3: Wait for Lambda to process and update DynamoDB
             print("\n[Step 3] Waiting for Lambda processing and DynamoDB updates...")
