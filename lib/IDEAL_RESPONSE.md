@@ -725,7 +725,7 @@ All resources are tagged with:
       "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
       "Properties": {
         "Name": {
-          "Fn::Sub": "WebServerTG-${EnvironmentSuffix}"
+          "Fn::Sub": "WebServerTG-v2-${EnvironmentSuffix}"
         },
         "Port": 80,
         "Protocol": "HTTP",
