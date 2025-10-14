@@ -10,5 +10,19 @@
   "subject_labels": [
     "Web Application Deployment"
   ],
-  "aws_services": "VPC, EC2, S3, cloudwatch"
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "CloudWatch",
+    "IAM",
+    "EIP"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "anukkrit149",
+  "dockerS3Location": ""
 }
