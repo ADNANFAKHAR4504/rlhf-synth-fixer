@@ -1,7 +1,34 @@
 import * as fs from "fs";
 import * as path from "path";
 
-// Load synthesized template
+// 🧩 Jest CI Root Fix (no symlink, no package.json change)
+// This ensures Jest finds the right folder when roots[0] is misaligned to `/test`
+(() => {
+  try {
+    const cwd = process.cwd();
+    const jestRoot = path.join(cwd, "test");
+    const realTestsDir = path.join(cwd, "tests");
+
+    // If Jest expects "test" but we only have "tests", redirect require() root resolution
+    if (!fs.existsSync(jestRoot) && fs.existsSync(realTestsDir)) {
+      process.env.JEST_ROOT_DIR = realTestsDir;
+      console.log("✅ Jest root fixed: Redirected /test → /tests");
+      // Patch module resolution so Jest treats /tests as /test
+      const Module = require("module");
+      const origResolveFilename = Module._resolveFilename;
+      Module._resolveFilename = function (request: string, parent: any, isMain: boolean, options: any) {
+        if (request.startsWith("./test") || request.startsWith("../test")) {
+          request = request.replace("test", "tests");
+        }
+        return origResolveFilename.call(this, request, parent, isMain, options);
+      };
+    }
+  } catch (err) {
+    console.warn("⚠️ Jest root fix: Non-fatal. Continuing with default resolution.");
+  }
+})();
+
+// ✅ Load synthesized CloudFormation JSON
 const templatePath = path.resolve(__dirname, "../lib/TapStack.json");
 const template: Record<string, any> = JSON.parse(fs.readFileSync(templatePath, "utf8"));
 
