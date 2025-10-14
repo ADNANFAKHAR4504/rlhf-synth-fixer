@@ -31,5 +31,11 @@
   "unit_tests_passed": 79,
   "integration_tests_passed": 20,
   "resources_deployed": 14,
-  "cleanup_success": true
+  "cleanup_success": true,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
