@@ -1133,4 +1133,3 @@ The stack creates a production-ready PostgreSQL infrastructure with:
 - IAM roles with minimal required permissions
 
 This architecture handles 30,000+ daily e-commerce orders by distributing read queries across replicas while maintaining high availability and security.
->>>>>>> parent of ada0a0cd32 (Archive build artifacts for PR 3763 [skip-jobs])
