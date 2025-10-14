@@ -30,9 +30,7 @@
         "BackupBucketName": {
             "Type": "String",
             "Description": "Name for the S3 backup bucket (must be globally unique)",
-            "Default": {
-                "Fn::Sub": "backup-system-${AWS::AccountId}-${Environment}"
-            },
+            "Default": "backup-system-prod-12345",
             "AllowedPattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$",
             "ConstraintDescription": "Must be a valid S3 bucket name",
             "MinLength": 3,
@@ -130,7 +128,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Ref": "BackupBucketName"
+                    "Fn::Sub": "${BackupBucketName}-${AWS::AccountId}-${Environment}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -211,7 +209,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${BackupBucketName}-logs"
+                    "Fn::Sub": "${BackupBucketName}-${AWS::AccountId}-${Environment}-logs"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [

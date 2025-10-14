@@ -23,7 +23,7 @@ Parameters:
   BackupBucketName:
     Type: String
     Description: Name for the S3 backup bucket (must be globally unique)
-    Default: !Sub "backup-system-${AWS::AccountId}-${Environment}"
+    Default: "backup-system-prod-12345"
     AllowedPattern: "^[a-z0-9][a-z0-9-]*[a-z0-9]$"
     ConstraintDescription: Must be a valid S3 bucket name
     MinLength: 3
@@ -85,7 +85,7 @@ Resources:
   BackupS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Ref BackupBucketName
+      BucketName: !Sub "${BackupBucketName}-${AWS::AccountId}-${Environment}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -126,7 +126,7 @@ Resources:
   LoggingBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${BackupBucketName}-logs"
+      BucketName: !Sub "${BackupBucketName}-${AWS::AccountId}-${Environment}-logs"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
