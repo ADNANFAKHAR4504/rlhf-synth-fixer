@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "410112",
+  "team": "4",
+  "startedAt": "2025-10-02T17:51:14.608Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "S3",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "SNS",
+    "IAM",
+    "Security Groups"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "santhosh-swe",
+  "dockerS3Location": ""
+}
