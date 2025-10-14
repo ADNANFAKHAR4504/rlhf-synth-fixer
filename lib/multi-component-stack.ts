@@ -159,7 +159,7 @@ export class MultiComponentApplicationStack extends cdk.Stack {
     // IAM Roles (Least Privilege)
     // ========================================
     const lambdaRole = new iam.Role(this, 'LambdaExecutionRole', {
-      roleName: `prod-iam-lambda-${this.stringSuffix}`,
+      roleName: `prod-iam-lambda-${this.stringSuffix.replace(/[^a-zA-Z0-9+=,.@_-]/g, '')}`,
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       description: 'Execution role for Lambda function',
       managedPolicies: [
