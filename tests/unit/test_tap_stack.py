@@ -1,4 +1,3 @@
-
 """
 test_tap_stack.py
 
@@ -7,152 +6,31 @@ Tests infrastructure components without actual AWS deployment.
 """
 
 import unittest
-from unittest.mock import patch, MagicMock
 import pulumi
 
 
-class MyMocks(pulumi.runtime.Mocks):
+class MinimalMocks(pulumi.runtime.Mocks):
     """
-    Mock implementation for Pulumi resources during testing.
+    Minimal mock that provides only essential computed outputs.
+    Returns inputs as outputs, plus critical computed properties.
     """
+    
     def new_resource(self, args: pulumi.runtime.MockResourceArgs):
-        """Mock resource creation."""
-        outputs = args.inputs
-        if args.typ == "aws:s3/bucket:Bucket":
-            outputs = {
-                **args.inputs,
-                "arn": f"arn:aws:s3:::mock-bucket-{args.name}",
-                "bucket": f"mock-bucket-{args.name}",
-                "id": f"mock-bucket-{args.name}",
-            }
-        elif args.typ == "aws:s3/bucketPublicAccessBlock:BucketPublicAccessBlock":
-            outputs = {
-                **args.inputs,
-                "id": args.name,
-            }
-        elif args.typ == "aws:s3/bucketNotification:BucketNotification":
-            outputs = {
-                **args.inputs,
-                "id": args.name,
-            }
-        elif args.typ == "aws:dynamodb/table:Table":
-            outputs = {
-                **args.inputs,
-                "arn": f"arn:aws:dynamodb:us-east-1:123456789012:table/{args.name}",
-                "id": args.name,
-                "name": args.inputs.get("name", args.name),
-            }
-        elif args.typ == "aws:sqs/queue:Queue":
-            outputs = {
-                **args.inputs,
-                "arn": f"arn:aws:sqs:us-east-1:123456789012:{args.name}",
-                "id": args.name,
-                "name": args.inputs.get("name", args.name),
-                "url": f"https://sqs.us-east-1.amazonaws.com/123456789012/{args.name}",
-            }
-        elif args.typ == "aws:sqs/queuePolicy:QueuePolicy":
-            outputs = {
-                **args.inputs,
-                "id": args.name,
-            }
-        elif args.typ == "aws:iam/role:Role":
-            outputs = {
-                **args.inputs,
-                "arn": f"arn:aws:iam::123456789012:role/{args.name}",
-                "id": args.name,
-                "name": args.inputs.get("name", args.name),
-            }
-        elif args.typ == "aws:iam/policy:Policy":
-            outputs = {
-                **args.inputs,
-                "arn": f"arn:aws:iam::123456789012:policy/{args.name}",
-                "id": args.name,
-                "name": args.inputs.get("name", args.name),
-            }
-        elif args.typ == "aws:iam/rolePolicyAttachment:RolePolicyAttachment":
-            outputs = {
-                **args.inputs,
-                "id": args.name,
-            }
-        elif args.typ == "aws:lambda/layerVersion:LayerVersion":
-            outputs = {
-                **args.inputs,
-                "arn": f"arn:aws:lambda:us-east-1:123456789012:layer:{args.name}:1",
-                "id": args.name,
-                "layer_arn": f"arn:aws:lambda:us-east-1:123456789012:layer:{args.name}",
-            }
-        elif args.typ == "aws:lambda/function:Function":
-            outputs = {
-                **args.inputs,
-                "arn": f"arn:aws:lambda:us-east-1:123456789012:function:{args.name}",
-                "id": args.name,
-                "name": args.inputs.get("name", args.name),
-                "invoke_arn": f"arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:123456789012:function:{args.name}/invocations",
-            }
-        elif args.typ == "aws:lambda/eventSourceMapping:EventSourceMapping":
-            outputs = {
-                **args.inputs,
-                "id": args.name,
-                "uuid": f"mock-uuid-{args.name}",
-            }
-        elif args.typ == "aws:lambda/permission:Permission":
-            outputs = {
-                **args.inputs,
-                "id": args.name,
-            }
-        elif args.typ == "aws:apigatewayv2/api:Api":
-            outputs = {
-                **args.inputs,
-                "id": f"mock-api-{args.name}",
-                "api_endpoint": f"https://mock-api-{args.name}.execute-api.us-east-1.amazonaws.com",
-                "execution_arn": f"arn:aws:execute-api:us-east-1:123456789012:mock-api-{args.name}",
-            }
-        elif args.typ == "aws:apigatewayv2/integration:Integration":
-            outputs = {
-                **args.inputs,
-                "id": f"mock-integration-{args.name}",
-            }
-        elif args.typ == "aws:apigatewayv2/route:Route":
-            outputs = {
-                **args.inputs,
-                "id": f"mock-route-{args.name}",
-            }
-        elif args.typ == "aws:apigatewayv2/stage:Stage":
-            outputs = {
-                **args.inputs,
-                "id": f"mock-stage-{args.name}",
-                "invoke_url": f"https://mock-api.execute-api.us-east-1.amazonaws.com/{args.inputs.get('name', 'default')}",
-            }
-        elif args.typ == "aws:cloudwatch/metricAlarm:MetricAlarm":
-            outputs = {
-                **args.inputs,
-                "arn": f"arn:aws:cloudwatch:us-east-1:123456789012:alarm:{args.name}",
-                "id": args.name,
-                "name": args.inputs.get("name", args.name),
-            }
-        else:
-            outputs = {**args.inputs, "id": args.name, "arn": f"arn:aws:mock:{args.name}"}
-
-        return [args.name, outputs]
-
+        """Return inputs as outputs with minimal computed properties."""
+        outputs = {**args.inputs, "id": f"{args.name}-id"}
+        
+        # Add only the computed outputs that are actually used in the code
+        if "execution_arn" not in outputs and args.typ == "aws:apigatewayv2/api:Api":
+            outputs["execution_arn"] = f"arn:aws:execute-api:us-east-1:123456789012:{args.name}"
+        
+        return [f"{args.name}-id", outputs]
+    
     def call(self, args: pulumi.runtime.MockCallArgs):
-        """Mock function calls."""
-        if args.token == "aws:index/getCallerIdentity:getCallerIdentity":
-            return {
-                "accountId": "123456789012",
-                "arn": "arn:aws:iam::123456789012:user/test",
-                "userId": "AIDACKCEVSQ6C2EXAMPLE",
-            }
-        elif args.token == "aws:index/getRegion:getRegion":
-            return {
-                "name": "us-east-1",
-                "region": "us-east-1",
-                "id": "us-east-1",
-            }
+        """Return empty dict for all function calls."""
         return {}
 
 
-pulumi.runtime.set_mocks(MyMocks())
+pulumi.runtime.set_mocks(MinimalMocks())
 
 
 class TestTapStackArgs(unittest.TestCase):
