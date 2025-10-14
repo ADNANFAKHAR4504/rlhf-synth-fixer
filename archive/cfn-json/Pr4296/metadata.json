@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349016",
+  "team": "6",
+  "startedAt": "2025-10-13T18:03:18.950Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "ElasticLoadBalancingV2",
+    "NATGateway",
+    "InternetGateway",
+    "AutoScaling",
+    "SecurityGroups",
+    "RouteTables",
+    "SecretsManager",
+    "IAM",
+    "CloudWatch"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Chandan-devs-tech",
+  "dockerS3Location": ""
+}
