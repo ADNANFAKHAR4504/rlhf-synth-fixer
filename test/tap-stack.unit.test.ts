@@ -72,12 +72,12 @@ describe('Data Backup System CloudFormation Template', () => {
     test('KMS key should have proper permissions', () => {
       const kmsKey = template.Resources.BackupKMSKey;
       const statements = kmsKey.Properties.KeyPolicy.Statement;
-      
+
       // Should have root permissions
       const rootStatement = statements.find((s: any) => s.Sid === 'Enable IAM User Permissions');
       expect(rootStatement).toBeDefined();
-      expect(rootStatement.Principal.AWS).toEqual({'Fn::Sub': 'arn:aws:iam::${AWS::AccountId}:root'});
-      
+      expect(rootStatement.Principal.AWS).toEqual({ 'Fn::Sub': 'arn:aws:iam::${AWS::AccountId}:root' });
+
       // Should have Lambda permissions
       const lambdaStatement = statements.find((s: any) => s.Sid === 'Allow Lambda to use the key');
       expect(lambdaStatement).toBeDefined();
@@ -88,8 +88,8 @@ describe('Data Backup System CloudFormation Template', () => {
       expect(template.Resources.BackupKMSKeyAlias).toBeDefined();
       const alias = template.Resources.BackupKMSKeyAlias;
       expect(alias.Type).toBe('AWS::KMS::Alias');
-      expect(alias.Properties.AliasName).toEqual({'Fn::Sub': 'alias/${Environment}-backup-key'});
-      expect(alias.Properties.TargetKeyId).toEqual({Ref: 'BackupKMSKey'});
+      expect(alias.Properties.AliasName).toEqual({ 'Fn::Sub': 'alias/${Environment}-backup-key' });
+      expect(alias.Properties.TargetKeyId).toEqual({ Ref: 'BackupKMSKey' });
     });
 
     test('should have IAM role for Lambda with least privilege', () => {
@@ -104,21 +104,21 @@ describe('Data Backup System CloudFormation Template', () => {
       const role = template.Resources.BackupLambdaRole;
       const backupPolicy = role.Properties.Policies.find((p: any) => p.PolicyName === 'BackupS3Access');
       expect(backupPolicy).toBeDefined();
-      
+
       const statements = backupPolicy.PolicyDocument.Statement;
-      
+
       // S3 object permissions
-      const s3ObjectStatement = statements.find((s: any) => 
-        s.Action.includes('s3:PutObject') && 
-        Array.isArray(s.Resource) && 
+      const s3ObjectStatement = statements.find((s: any) =>
+        s.Action.includes('s3:PutObject') &&
+        Array.isArray(s.Resource) &&
         s.Resource[0]['Fn::Sub'] === '${BackupS3Bucket.Arn}/*'
       );
       expect(s3ObjectStatement).toBeDefined();
-      
+
       // KMS permissions
       const kmsStatement = statements.find((s: any) => s.Action.includes('kms:Decrypt'));
       expect(kmsStatement).toBeDefined();
-      expect(kmsStatement.Resource).toEqual([{'Fn::GetAtt': ['BackupKMSKey', 'Arn']}]);
+      expect(kmsStatement.Resource).toEqual([{ 'Fn::GetAtt': ['BackupKMSKey', 'Arn'] }]);
     });
   });
 
@@ -127,9 +127,9 @@ describe('Data Backup System CloudFormation Template', () => {
       expect(template.Resources.BackupS3Bucket).toBeDefined();
       const bucket = template.Resources.BackupS3Bucket;
       expect(bucket.Type).toBe('AWS::S3::Bucket');
-      expect(bucket.Properties.BucketName).toEqual({Ref: 'BackupBucketName'});
+      expect(bucket.Properties.BucketName).toEqual({ Ref: 'BackupBucketName' });
       expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
-      expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.KMSMasterKeyID).toEqual({Ref: 'BackupKMSKey'});
+      expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.KMSMasterKeyID).toEqual({ Ref: 'BackupKMSKey' });
     });
 
     test('backup bucket should have versioning enabled', () => {
@@ -140,13 +140,13 @@ describe('Data Backup System CloudFormation Template', () => {
     test('backup bucket should have lifecycle policies', () => {
       const bucket = template.Resources.BackupS3Bucket;
       const lifecycleRules = bucket.Properties.LifecycleConfiguration.Rules;
-      
+
       // Deletion rule based on environment
       const deleteRule = lifecycleRules.find((r: any) => r.Id === 'DeleteOldBackups');
       expect(deleteRule).toBeDefined();
       expect(deleteRule.Status).toBe('Enabled');
-      expect(deleteRule.ExpirationInDays).toEqual({'Fn::FindInMap': ['EnvironmentConfig', {Ref: 'Environment'}, 'RetentionDays']});
-      
+      expect(deleteRule.ExpirationInDays).toEqual({ 'Fn::FindInMap': ['EnvironmentConfig', { Ref: 'Environment' }, 'RetentionDays'] });
+
       // Multipart upload cleanup
       const multipartRule = lifecycleRules.find((r: any) => r.Id === 'AbortIncompleteMultipartUploads');
       expect(multipartRule).toBeDefined();
@@ -166,7 +166,7 @@ describe('Data Backup System CloudFormation Template', () => {
       expect(template.Resources.LoggingBucket).toBeDefined();
       const loggingBucket = template.Resources.LoggingBucket;
       expect(loggingBucket.Type).toBe('AWS::S3::Bucket');
-      expect(loggingBucket.Properties.BucketName).toEqual({'Fn::Sub': '${BackupBucketName}-logs'});
+      expect(loggingBucket.Properties.BucketName).toEqual({ 'Fn::Sub': '${BackupBucketName}-logs' });
       expect(loggingBucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
     });
 
@@ -193,9 +193,9 @@ describe('Data Backup System CloudFormation Template', () => {
     test('Lambda function should have proper environment variables', () => {
       const lambda = template.Resources.BackupLambdaFunction;
       const envVars = lambda.Properties.Environment.Variables;
-      expect(envVars.BACKUP_BUCKET).toEqual({Ref: 'BackupS3Bucket'});
-      expect(envVars.ENVIRONMENT).toEqual({Ref: 'Environment'});
-      expect(envVars.KMS_KEY_ID).toEqual({Ref: 'BackupKMSKey'});
+      expect(envVars.BACKUP_BUCKET).toEqual({ Ref: 'BackupS3Bucket' });
+      expect(envVars.ENVIRONMENT).toEqual({ Ref: 'Environment' });
+      expect(envVars.KMS_KEY_ID).toEqual({ Ref: 'BackupKMSKey' });
     });
 
     test('Lambda function should have inline code for backup processing', () => {
@@ -210,9 +210,9 @@ describe('Data Backup System CloudFormation Template', () => {
       expect(template.Resources.BackupLambdaLogGroup).toBeDefined();
       const logGroup = template.Resources.BackupLambdaLogGroup;
       expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
-      expect(logGroup.Properties.LogGroupName).toEqual({'Fn::Sub': '/aws/lambda/${Environment}-backup-function'});
+      expect(logGroup.Properties.LogGroupName).toEqual({ 'Fn::Sub': '/aws/lambda/${Environment}-backup-function' });
       expect(logGroup.Properties.RetentionInDays).toBe(30);
-      expect(logGroup.Properties.KmsKeyId).toEqual({'Fn::GetAtt': ['BackupKMSKey', 'Arn']});
+      expect(logGroup.Properties.KmsKeyId).toEqual({ 'Fn::GetAtt': ['BackupKMSKey', 'Arn'] });
     });
   });
 
@@ -229,7 +229,7 @@ describe('Data Backup System CloudFormation Template', () => {
       const rule = template.Resources.DailyBackupRule;
       const targets = rule.Properties.Targets;
       expect(targets).toHaveLength(1);
-      expect(targets[0].Arn).toEqual({'Fn::GetAtt': ['BackupLambdaFunction', 'Arn']});
+      expect(targets[0].Arn).toEqual({ 'Fn::GetAtt': ['BackupLambdaFunction', 'Arn'] });
       expect(targets[0].RetryPolicy.MaximumRetryAttempts).toBe(2);
       expect(targets[0].RetryPolicy.MaximumEventAge).toBe(3600);
     });
@@ -240,7 +240,7 @@ describe('Data Backup System CloudFormation Template', () => {
       expect(permission.Type).toBe('AWS::Lambda::Permission');
       expect(permission.Properties.Principal).toBe('events.amazonaws.com');
       expect(permission.Properties.Action).toBe('lambda:InvokeFunction');
-      expect(permission.Properties.SourceArn).toEqual({'Fn::GetAtt': ['DailyBackupRule', 'Arn']});
+      expect(permission.Properties.SourceArn).toEqual({ 'Fn::GetAtt': ['DailyBackupRule', 'Arn'] });
     });
 
     test('should have CloudWatch alarm for backup failures', () => {
@@ -303,11 +303,11 @@ describe('Data Backup System CloudFormation Template', () => {
       resourcesWithTags.forEach(resourceName => {
         const resource = template.Resources[resourceName];
         const tags = resource.Tags || resource.Properties.Tags;
-        
+
         const envTag = tags.find((t: any) => t.Key === 'Environment');
         expect(envTag).toBeDefined();
-        expect(envTag.Value).toEqual({Ref: 'Environment'});
-        
+        expect(envTag.Value).toEqual({ Ref: 'Environment' });
+
         const purposeTag = tags.find((t: any) => t.Key === 'Purpose');
         expect(purposeTag).toBeDefined();
         expect(purposeTag.Value).toBeDefined();
@@ -343,13 +343,13 @@ describe('Data Backup System CloudFormation Template', () => {
     test('BackupBucketName output should reference the S3 bucket', () => {
       const output = template.Outputs.BackupBucketName;
       expect(output.Description).toContain('S3 backup bucket');
-      expect(output.Value).toEqual({Ref: 'BackupS3Bucket'});
+      expect(output.Value).toEqual({ Ref: 'BackupS3Bucket' });
     });
 
     test('BackupLambdaArn output should reference Lambda function ARN', () => {
       const output = template.Outputs.BackupLambdaArn;
       expect(output.Description).toContain('backup Lambda function');
-      expect(output.Value).toEqual({'Fn::GetAtt': ['BackupLambdaFunction', 'Arn']});
+      expect(output.Value).toEqual({ 'Fn::GetAtt': ['BackupLambdaFunction', 'Arn'] });
     });
   });
 
@@ -358,20 +358,20 @@ describe('Data Backup System CloudFormation Template', () => {
       const templateString = JSON.stringify(template);
       const accountIdPattern = /\d{12}/g;
       const matches = templateString.match(accountIdPattern);
-      
+
       // Filter out valid uses like retention days
       const invalidMatches = matches?.filter(match => {
         const context = templateString.substring(
           templateString.indexOf(match) - 50,
           templateString.indexOf(match) + 50
         );
-        return !context.includes('RetentionDays') && 
-               !context.includes('Threshold') && 
-               !context.includes('Period') &&
-               !context.includes('Timeout') &&
-               !context.includes('MemorySize');
+        return !context.includes('RetentionDays') &&
+          !context.includes('Threshold') &&
+          !context.includes('Period') &&
+          !context.includes('Timeout') &&
+          !context.includes('MemorySize');
       });
-      
+
       expect(invalidMatches?.length || 0).toBe(0);
     });
 

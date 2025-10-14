@@ -1,39 +1,39 @@
-import fs from 'fs';
-import { 
-  S3Client, 
-  ListObjectsV2Command, 
-  GetObjectCommand, 
-  HeadBucketCommand,
-  GetBucketEncryptionCommand,
-  GetBucketVersioningCommand,
-  GetBucketLifecycleConfigurationCommand
-} from '@aws-sdk/client-s3';
-import { 
-  LambdaClient, 
-  InvokeCommand, 
-  GetFunctionCommand,
-  GetFunctionConfigurationCommand 
-} from '@aws-sdk/client-lambda';
-import { 
-  EventBridgeClient, 
-  DescribeRuleCommand, 
-  ListTargetsByRuleCommand 
-} from '@aws-sdk/client-eventbridge';
-import { 
-  CloudWatchClient, 
-  DescribeAlarmsCommand, 
-  GetMetricStatisticsCommand 
+import {
+  CloudWatchClient,
+  DescribeAlarmsCommand,
+  GetMetricStatisticsCommand
 } from '@aws-sdk/client-cloudwatch';
-import { 
-  KMSClient, 
-  DescribeKeyCommand, 
-  GetKeyPolicyCommand 
-} from '@aws-sdk/client-kms';
-import { 
-  IAMClient, 
-  GetRoleCommand, 
-  GetRolePolicyCommand 
+import {
+  DescribeRuleCommand,
+  EventBridgeClient,
+  ListTargetsByRuleCommand
+} from '@aws-sdk/client-eventbridge';
+import {
+  GetRoleCommand,
+  GetRolePolicyCommand,
+  IAMClient
 } from '@aws-sdk/client-iam';
+import {
+  DescribeKeyCommand,
+  GetKeyPolicyCommand,
+  KMSClient
+} from '@aws-sdk/client-kms';
+import {
+  GetFunctionCommand,
+  GetFunctionConfigurationCommand,
+  InvokeCommand,
+  LambdaClient
+} from '@aws-sdk/client-lambda';
+import {
+  GetBucketEncryptionCommand,
+  GetBucketLifecycleConfigurationCommand,
+  GetBucketVersioningCommand,
+  GetObjectCommand,
+  HeadBucketCommand,
+  ListObjectsV2Command,
+  S3Client
+} from '@aws-sdk/client-s3';
+import fs from 'fs';
 
 // Configuration from CloudFormation outputs
 let outputs: any = {};
@@ -69,17 +69,17 @@ describe('Data Backup System Integration Tests', () => {
   describe('S3 Backup Infrastructure', () => {
     test('backup bucket should exist and be accessible', async () => {
       const command = new HeadBucketCommand({ Bucket: backupBucketName });
-      
+
       await expect(s3Client.send(command)).resolves.not.toThrow();
     }, 30000);
 
     test('backup bucket should have KMS encryption enabled', async () => {
       const command = new GetBucketEncryptionCommand({ Bucket: backupBucketName });
-      
+
       const response = await s3Client.send(command);
       expect(response.ServerSideEncryptionConfiguration).toBeDefined();
       expect(response.ServerSideEncryptionConfiguration!.Rules).toHaveLength(1);
-      
+
       const rule = response.ServerSideEncryptionConfiguration!.Rules![0];
       expect(rule.ApplyServerSideEncryptionByDefault!.SSEAlgorithm).toBe('aws:kms');
       expect(rule.ApplyServerSideEncryptionByDefault!.KMSMasterKeyID).toBeDefined();
@@ -87,24 +87,24 @@ describe('Data Backup System Integration Tests', () => {
 
     test('backup bucket should have versioning enabled', async () => {
       const command = new GetBucketVersioningCommand({ Bucket: backupBucketName });
-      
+
       const response = await s3Client.send(command);
       expect(response.Status).toBe('Enabled');
     }, 30000);
 
     test('backup bucket should have lifecycle policies configured', async () => {
       const command = new GetBucketLifecycleConfigurationCommand({ Bucket: backupBucketName });
-      
+
       const response = await s3Client.send(command);
       expect(response.Rules).toBeDefined();
       expect(response.Rules!.length).toBeGreaterThan(0);
-      
+
       // Check for backup deletion rule
       const deleteRule = response.Rules!.find(rule => rule.ID === 'DeleteOldBackups');
       expect(deleteRule).toBeDefined();
       expect(deleteRule!.Status).toBe('Enabled');
       expect(deleteRule!.Expiration!.Days).toBeGreaterThan(0);
-      
+
       // Check for multipart upload cleanup
       const multipartRule = response.Rules!.find(rule => rule.ID === 'AbortIncompleteMultipartUploads');
       expect(multipartRule).toBeDefined();
@@ -113,7 +113,7 @@ describe('Data Backup System Integration Tests', () => {
 
     test('logging bucket should exist and be accessible', async () => {
       const command = new HeadBucketCommand({ Bucket: loggingBucketName });
-      
+
       await expect(s3Client.send(command)).resolves.not.toThrow();
     }, 30000);
   });
@@ -121,7 +121,7 @@ describe('Data Backup System Integration Tests', () => {
   describe('Lambda Function Integration', () => {
     test('backup Lambda function should exist and be properly configured', async () => {
       const command = new GetFunctionCommand({ FunctionName: lambdaFunctionName });
-      
+
       const response = await s3Client.send(command);
       expect(response.Configuration).toBeDefined();
       expect(response.Configuration!.Runtime).toBe('python3.9');
@@ -132,11 +132,11 @@ describe('Data Backup System Integration Tests', () => {
 
     test('Lambda function should have proper environment variables', async () => {
       const command = new GetFunctionConfigurationCommand({ FunctionName: lambdaFunctionName });
-      
+
       const response = await lambdaClient.send(command);
       expect(response.Environment).toBeDefined();
       expect(response.Environment!.Variables).toBeDefined();
-      
+
       const envVars = response.Environment!.Variables!;
       expect(envVars.BACKUP_BUCKET).toBe(backupBucketName);
       expect(envVars.ENVIRONMENT).toBe(environment);
@@ -163,7 +163,7 @@ describe('Data Backup System Integration Tests', () => {
       expect(body.message).toContain('Backup completed successfully');
       expect(body.documents_uploaded).toBe(500);
       expect(body.backup_date).toBeDefined();
-      
+
       // Verify backup files were created
       const today = new Date().toISOString().split('T')[0];
       const listCommand = new ListObjectsV2Command({
@@ -176,7 +176,7 @@ describe('Data Backup System Integration Tests', () => {
       expect(listResponse.Contents!.length).toBeGreaterThan(0);
 
       // Check if manifest exists
-      const manifestExists = listResponse.Contents!.some(obj => 
+      const manifestExists = listResponse.Contents!.some(obj =>
         obj.Key!.endsWith('manifest.json')
       );
       expect(manifestExists).toBe(true);
@@ -217,7 +217,7 @@ describe('Data Backup System Integration Tests', () => {
   describe('EventBridge Scheduling', () => {
     test('daily backup rule should be configured correctly', async () => {
       const command = new DescribeRuleCommand({ Name: eventRuleName });
-      
+
       const response = await eventBridgeClient.send(command);
       expect(response.ScheduleExpression).toBe('cron(0 2 * * ? *)');
       expect(response.State).toBe('ENABLED');
@@ -226,12 +226,12 @@ describe('Data Backup System Integration Tests', () => {
 
     test('EventBridge rule should target Lambda function', async () => {
       const command = new ListTargetsByRuleCommand({ Rule: eventRuleName });
-      
+
       const response = await eventBridgeClient.send(command);
       expect(response.Targets).toBeDefined();
       expect(response.Targets!.length).toBeGreaterThan(0);
 
-      const lambdaTarget = response.Targets!.find(target => 
+      const lambdaTarget = response.Targets!.find(target =>
         target.Arn!.includes('lambda') && target.Arn!.includes(lambdaFunctionName)
       );
       expect(lambdaTarget).toBeDefined();
@@ -294,12 +294,12 @@ describe('Data Backup System Integration Tests', () => {
 
       const response = await cloudWatchClient.send(successMetricCommand);
       expect(response.Datapoints).toBeDefined();
-      
+
       // Check if we have recent successful backups
       const recentDatapoints = response.Datapoints!.filter(
         dp => dp.Timestamp! > new Date(Date.now() - 2 * 60 * 60 * 1000) // Last 2 hours
       );
-      
+
       if (recentDatapoints.length > 0) {
         expect(recentDatapoints.some(dp => dp.Sum! > 0)).toBe(true);
       }
@@ -314,7 +314,7 @@ describe('Data Backup System Integration Tests', () => {
       }
 
       const command = new DescribeKeyCommand({ KeyId: kmsKeyId });
-      
+
       const response = await kmsClient.send(command);
       expect(response.KeyMetadata).toBeDefined();
       expect(response.KeyMetadata!.KeyUsage).toBe('ENCRYPT_DECRYPT');
@@ -340,7 +340,7 @@ describe('Data Backup System Integration Tests', () => {
       expect(policy.Statement.length).toBeGreaterThan(0);
 
       // Check for Lambda permissions
-      const lambdaStatement = policy.Statement.find((stmt: any) => 
+      const lambdaStatement = policy.Statement.find((stmt: any) =>
         stmt.Principal && stmt.Principal.Service === 'lambda.amazonaws.com'
       );
       expect(lambdaStatement).toBeDefined();
@@ -348,16 +348,16 @@ describe('Data Backup System Integration Tests', () => {
 
     test('Lambda execution role should have appropriate permissions', async () => {
       const roleName = `${environment}-backup-lambda-role`;
-      
+
       const getRoleCommand = new GetRoleCommand({ RoleName: roleName });
       const roleResponse = await iamClient.send(getRoleCommand);
-      
+
       expect(roleResponse.Role).toBeDefined();
       expect(roleResponse.Role!.AssumeRolePolicyDocument).toBeDefined();
 
       // Check assume role policy
       const assumePolicy = JSON.parse(decodeURIComponent(roleResponse.Role!.AssumeRolePolicyDocument!));
-      const lambdaStatement = assumePolicy.Statement.find((stmt: any) => 
+      const lambdaStatement = assumePolicy.Statement.find((stmt: any) =>
         stmt.Principal && stmt.Principal.Service === 'lambda.amazonaws.com'
       );
       expect(lambdaStatement).toBeDefined();
@@ -367,7 +367,7 @@ describe('Data Backup System Integration Tests', () => {
         RoleName: roleName,
         PolicyName: 'BackupS3Access'
       });
-      
+
       const policyResponse = await iamClient.send(getPolicyCommand);
       expect(policyResponse.PolicyDocument).toBeDefined();
 
@@ -376,13 +376,13 @@ describe('Data Backup System Integration Tests', () => {
       expect(policy.Statement.length).toBeGreaterThan(0);
 
       // Verify S3 permissions
-      const s3Statement = policy.Statement.find((stmt: any) => 
+      const s3Statement = policy.Statement.find((stmt: any) =>
         stmt.Action && stmt.Action.some((action: string) => action.startsWith('s3:'))
       );
       expect(s3Statement).toBeDefined();
 
       // Verify KMS permissions
-      const kmsStatement = policy.Statement.find((stmt: any) => 
+      const kmsStatement = policy.Statement.find((stmt: any) =>
         stmt.Action && stmt.Action.some((action: string) => action.startsWith('kms:'))
       );
       expect(kmsStatement).toBeDefined();
@@ -406,11 +406,11 @@ describe('Data Backup System Integration Tests', () => {
       // Test bucket access doesn't rely on hardcoded regions
       const bucketCommand = new HeadBucketCommand({ Bucket: backupBucketName });
       await expect(s3Client.send(bucketCommand)).resolves.not.toThrow();
-      
+
       // Test Lambda function doesn't have region-specific hardcoding
       const functionCommand = new GetFunctionCommand({ FunctionName: lambdaFunctionName });
       const response = await lambdaClient.send(functionCommand);
-      
+
       expect(response.Configuration!.Environment!.Variables!.BACKUP_BUCKET).toBe(backupBucketName);
     }, 30000);
   });
@@ -418,7 +418,7 @@ describe('Data Backup System Integration Tests', () => {
   describe('Disaster Recovery and Data Integrity', () => {
     test('backup data should be retrievable and valid', async () => {
       const today = new Date().toISOString().split('T')[0];
-      
+
       // List all backup objects for today
       const listCommand = new ListObjectsV2Command({
         Bucket: backupBucketName,
@@ -438,7 +438,7 @@ describe('Data Backup System Integration Tests', () => {
 
         const response = await s3Client.send(getCommand);
         expect(response.Body).toBeDefined();
-        
+
         const content = await response.Body!.transformToString();
         expect(content).toBeDefined();
         expect(content.length).toBeGreaterThan(0);
@@ -460,13 +460,13 @@ describe('Data Backup System Integration Tests', () => {
       });
 
       const response = await s3Client.send(command);
-      
+
       // Check object metadata
       expect(response.Metadata).toBeDefined();
       expect(response.Metadata!['backup-date']).toBe(today);
       expect(response.Metadata!['document-count']).toBe('500');
       expect(response.Metadata!['backup-type']).toBe('daily-business-documents');
-      
+
       // Check server-side encryption
       expect(response.ServerSideEncryption).toBe('aws:kms');
       expect(response.SSEKMSKeyId).toBeDefined();
@@ -476,7 +476,7 @@ describe('Data Backup System Integration Tests', () => {
   describe('Performance and Scalability', () => {
     test('Lambda function should complete within acceptable time limits', async () => {
       const startTime = Date.now();
-      
+
       const invokeCommand = new InvokeCommand({
         FunctionName: lambdaFunctionName,
         Payload: JSON.stringify({
@@ -488,10 +488,10 @@ describe('Data Backup System Integration Tests', () => {
       const response = await lambdaClient.send(invokeCommand);
       const endTime = Date.now();
       const executionTime = endTime - startTime;
-      
+
       expect(response.StatusCode).toBe(200);
       expect(executionTime).toBeLessThan(30000); // Should complete within 30 seconds
-      
+
       const payload = JSON.parse(Buffer.from(response.Payload!).toString());
       const body = JSON.parse(payload.body);
       expect(body.documents_uploaded).toBe(500);
@@ -499,7 +499,7 @@ describe('Data Backup System Integration Tests', () => {
 
     test('system should handle backup volume appropriately', async () => {
       const today = new Date().toISOString().split('T')[0];
-      
+
       const listCommand = new ListObjectsV2Command({
         Bucket: backupBucketName,
         Prefix: `backups/${today}/`,
@@ -508,7 +508,7 @@ describe('Data Backup System Integration Tests', () => {
 
       const response = await s3Client.send(listCommand);
       expect(response.Contents).toBeDefined();
-      
+
       // Calculate total backup size
       const totalSize = response.Contents!.reduce((sum, obj) => sum + (obj.Size || 0), 0);
       expect(totalSize).toBeGreaterThan(0);

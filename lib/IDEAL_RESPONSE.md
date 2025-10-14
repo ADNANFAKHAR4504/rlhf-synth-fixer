@@ -7,19 +7,23 @@ This document outlines the ideal CloudFormation template implementation for the 
 The ideal response should include:
 
 ### 1. Parameters
+
 - **Environment**: Environment name (dev, staging, prod) with proper validation
 - **BackupBucketName**: Globally unique S3 bucket name with pattern validation
 
 ### 2. Mappings
+
 - **EnvironmentConfig**: Environment-specific configurations like retention days
 
 ### 3. Core Resources
 
 #### Security & Encryption
+
 - **AWS::KMS::Key**: Customer managed key for backup encryption
 - **AWS::KMS::Alias**: User-friendly alias for the KMS key
 
 #### Storage
+
 - **AWS::S3::Bucket**: Primary backup bucket with:
   - KMS encryption enabled
   - Versioning enabled
@@ -29,6 +33,7 @@ The ideal response should include:
 - **AWS::S3::Bucket**: Separate logging bucket for access logs
 
 #### Compute
+
 - **AWS::Lambda::Function**: Python 3.9 function for backup processing with:
   - Proper error handling and retry logic
   - CloudWatch metrics integration
@@ -36,6 +41,7 @@ The ideal response should include:
   - Appropriate timeout and memory allocation
 
 #### IAM
+
 - **AWS::IAM::Role**: Lambda execution role with:
   - Basic execution permissions
   - S3 bucket access (least privilege)
@@ -43,6 +49,7 @@ The ideal response should include:
   - CloudWatch metrics permissions
 
 #### Monitoring & Scheduling
+
 - **AWS::Logs::LogGroup**: Dedicated log group for Lambda function
 - **AWS::Events::Rule**: EventBridge rule for daily triggers
 - **AWS::Lambda::Permission**: Allow EventBridge to invoke Lambda
@@ -50,6 +57,7 @@ The ideal response should include:
 - **AWS::CloudWatch::Alarm**: Duration monitoring
 
 ### 4. Outputs
+
 - **BackupBucketName**: S3 bucket name with stack export
 - **BackupLambdaArn**: Lambda function ARN for reference
 - **EventBridgeRuleName**: Scheduled rule name
@@ -58,23 +66,27 @@ The ideal response should include:
 ## Key Quality Attributes
 
 ### Security
+
 - No hardcoded values or account-specific information
 - Proper IAM policies with least privilege access
 - KMS encryption for data at rest
 - Public access blocked on all S3 buckets
 
 ### Reliability
+
 - Error handling in Lambda function
 - CloudWatch alarms for monitoring
 - Retry policies on EventBridge rules
 - Proper resource tagging
 
 ### Cost Optimization
+
 - Lifecycle policies to automatically delete old backups
 - Pay-per-request billing for infrequent access patterns
 - Appropriate resource sizing
 
 ### Cross-Account Compatibility
+
 - Use of AWS pseudo parameters (AWS::AccountId, AWS::Region)
 - No hardcoded ARNs or resource names
 - Parameterized configuration
@@ -93,6 +105,7 @@ The ideal Lambda function should:
 ## Resource Naming Convention
 
 All resources should follow consistent naming patterns:
+
 - Include environment suffix for multi-environment support
 - Use logical names that indicate purpose
 - Ensure global uniqueness where required (S3 buckets)
@@ -100,6 +113,7 @@ All resources should follow consistent naming patterns:
 ## Tagging Strategy
 
 All resources must include:
+
 - **Environment**: Environment identifier
 - **Purpose**: Resource purpose description
 - **iac-rlhf-amazon**: Required project tag
