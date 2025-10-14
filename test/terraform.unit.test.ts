@@ -435,7 +435,7 @@ describe("S3 Media Assets Storage - Unit Tests", () => {
     });
 
     test("bucket policies use jsonencode", () => {
-      expect(count(/jsonencode\s*KATEX_INLINE_OPEN/g)).toBeGreaterThanOrEqual(2);
+      expect(count(/jsonencode\s*\(/g)).toBeGreaterThanOrEqual(2);
     });
 
     test("prod bucket policy allows CloudFront OAI GetObject", () => {
@@ -533,11 +533,11 @@ describe("S3 Media Assets Storage - Unit Tests", () => {
     });
 
     test("buckets use merge function for tags", () => {
-      expect(has(/merge\s*KATEX_INLINE_OPEN\s*local\.common_tags/)).toBe(true);
+      expect(has(/merge\s*\(\s*local\.common_tags/)).toBe(true);
     });
 
     test("all buckets have Environment and Purpose tags", () => {
-      const bucketResources = tf.match(/resource\s+"aws_s3_bucket"\s+"(dev|prod|logs)"[\s\S]*?tags\s*=[\s\S]*?\n\s*KATEX_INLINE_CLOSE/g) || [];
+      const bucketResources = tf.match(/resource\s+"aws_s3_bucket"\s+"(dev|prod|logs)"[\s\S]*?tags\s*=[\s\S]*?\n\s*\)/g) || [];
       expect(bucketResources.length).toBe(3);
       bucketResources.forEach(bucket => {
         expect(/Environment\s*=/.test(bucket)).toBe(true);
@@ -601,7 +601,7 @@ describe("S3 Media Assets Storage - Unit Tests", () => {
 
     test("uses jsonencode for all policies", () => {
       const policyResources = count(/resource\s+"aws_s3_bucket_policy"/g);
-      const jsonEncodeUsage = count(/jsonencode\s*KATEX_INLINE_OPEN/g);
+      const jsonEncodeUsage = count(/jsonencode\s*\(/g);
       expect(jsonEncodeUsage).toBeGreaterThanOrEqual(policyResources);
     });
 
