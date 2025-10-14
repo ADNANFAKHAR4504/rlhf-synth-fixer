@@ -73,10 +73,12 @@ export class NetworkStack extends Construct {
       allowAllOutbound: true,
     });
 
+    // NLB health checks come from the NLB node IPs, not through security groups
+    // Allow traffic from the entire VPC CIDR for NLB health checks
     this.ecsSecurityGroup.addIngressRule(
-      this.loadBalancerSecurityGroup,
-      ec2.Port.tcp(8080),
-      'Allow traffic from ALB'
+      ec2.Peer.ipv4(this.vpc.vpcCidrBlock),
+      ec2.Port.tcp(80),
+      'Allow traffic from VPC (NLB health checks and traffic)'
     );
 
     // Security Group for RDS Database

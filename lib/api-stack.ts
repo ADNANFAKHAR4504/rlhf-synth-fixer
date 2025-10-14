@@ -74,9 +74,6 @@ export class ApiStack extends Construct {
       options: {
         connectionType: apigateway.ConnectionType.VPC_LINK,
         vpcLink: props.vpcLink,
-        requestParameters: {
-          'integration.request.path.proxy': 'method.request.path.proxy',
-        },
       },
     });
 

@@ -1,7 +1,8 @@
 import * as cdk from 'aws-cdk-lib';
-import * as elasticache from 'aws-cdk-lib/aws-elasticache';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as elasticache from 'aws-cdk-lib/aws-elasticache';
 import * as kms from 'aws-cdk-lib/aws-kms';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
 
 interface CacheStackProps {
@@ -16,6 +17,13 @@ export class CacheStack extends Construct {
 
   constructor(scope: Construct, id: string, props: CacheStackProps) {
     super(scope, id);
+
+    // Create CloudWatch log group for ElastiCache logs
+    const logGroup = new logs.LogGroup(this, 'RedisLogGroup', {
+      logGroupName: `/aws/elasticache/redis/${props.environmentSuffix}`,
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
 
     // Create ElastiCache subnet group
     const subnetGroup = new elasticache.CfnSubnetGroup(
@@ -58,7 +66,7 @@ export class CacheStack extends Construct {
             logType: 'slow-log',
             destinationDetails: {
               cloudWatchLogsDetails: {
-                logGroup: `/aws/elasticache/redis/${props.environmentSuffix}`,
+                logGroup: logGroup.logGroupName,
               },
             },
           },
@@ -71,6 +79,8 @@ export class CacheStack extends Construct {
     );
 
     replicationGroup.addDependency(subnetGroup);
+    // Ensure log group is created before replication group
+    replicationGroup.addDependency(logGroup.node.defaultChild as cdk.CfnResource);
 
     // Store endpoint for reference
     this.redisEndpoint = replicationGroup.attrPrimaryEndPointAddress;

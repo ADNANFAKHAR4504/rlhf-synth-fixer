@@ -26,10 +26,10 @@
       "Amazon API Gateway",
       "Amazon Kinesis Data Streams"
     ],
-    "setup_requirements": "CDK v2.x with TypeScript, AWS CLI configured for us-east-2 region"
+    "setup_requirements": "CDK v2.x with TypeScript, AWS CLI configured for us-west-2 region"
   },
   "constraints": "All data must be encrypted at rest and in transit using AWS KMS keys with automatic rotation; Network architecture must implement network segmentation with no direct internet access from container tasks, all egress traffic must route through NAT Gateway",
-  "region": "us-east-2",
+  "region": "us-west-2",
   "aws_services": [
     "Amazon VPC",
     "Amazon ECS (Fargate)",

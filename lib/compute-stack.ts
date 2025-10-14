@@ -56,17 +56,17 @@ export class ComputeStack extends Construct {
       'PaymentTargetGroup',
       {
         vpc: props.vpc,
-        port: 8080,
+        port: 80,
         protocol: elbv2.Protocol.TCP,
         targetType: elbv2.TargetType.IP,
         healthCheck: {
           enabled: true,
           healthyThresholdCount: 2,
-          unhealthyThresholdCount: 3,
-          interval: cdk.Duration.seconds(30),
+          unhealthyThresholdCount: 2,
+          interval: cdk.Duration.seconds(10),
           timeout: cdk.Duration.seconds(5),
         },
-        deregistrationDelay: cdk.Duration.seconds(30),
+        deregistrationDelay: cdk.Duration.seconds(10),
       }
     );
 
@@ -109,45 +109,21 @@ export class ComputeStack extends Construct {
     props.databaseSecret.grantRead(taskRole);
     props.applicationSecret.grantRead(taskRole);
 
-    // Add X-Ray permissions
-    taskRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          'xray:PutTraceSegments',
-          'xray:PutTelemetryRecords',
-          'xray:GetSamplingRules',
-          'xray:GetSamplingTargets',
-          'xray:GetSamplingStatisticSummaries',
-        ],
-        resources: ['*'],
-      })
-    );
-
     // Create task definition
     const taskDefinition = new ecs.FargateTaskDefinition(
       this,
       'PaymentTaskDef',
       {
-        memoryLimitMiB: 2048,
-        cpu: 1024,
+        memoryLimitMiB: 512,
+        cpu: 256,
         executionRole: taskExecutionRole,
         taskRole: taskRole,
-        volumes: [
-          {
-            name: 'efs-storage',
-            efsVolumeConfiguration: {
-              fileSystemId: props.fileSystem.fileSystemId,
-              transitEncryption: 'ENABLED',
-            },
-          },
-        ],
       }
     );
 
     // Add main container
     const container = taskDefinition.addContainer('PaymentContainer', {
-      image: ecs.ContainerImage.fromRegistry('amazon/amazon-ecs-sample'),
+      image: ecs.ContainerImage.fromRegistry('httpd:alpine'),
       logging: ecs.LogDrivers.awsLogs({
         streamPrefix: 'payment-service',
         logGroup: logGroup,
@@ -172,44 +148,26 @@ export class ComputeStack extends Construct {
           'jwtSecret'
         ),
       },
+      healthCheck: {
+        command: ['CMD-SHELL', 'wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1'],
+        interval: cdk.Duration.seconds(10),
+        timeout: cdk.Duration.seconds(5),
+        retries: 2,
+        startPeriod: cdk.Duration.seconds(15),
+      },
     });
 
     container.addPortMappings({
-      containerPort: 8080,
+      containerPort: 80,
       protocol: ecs.Protocol.TCP,
-    });
-
-    container.addMountPoints({
-      containerPath: '/mnt/efs',
-      sourceVolume: 'efs-storage',
-      readOnly: false,
-    });
-
-    // Add X-Ray sidecar container
-    taskDefinition.addContainer('XRayContainer', {
-      image: ecs.ContainerImage.fromRegistry(
-        'public.ecr.aws/xray/aws-xray-daemon:latest'
-      ),
-      cpu: 32,
-      memoryReservationMiB: 256,
-      portMappings: [
-        {
-          containerPort: 2000,
-          protocol: ecs.Protocol.UDP,
-        },
-      ],
-      logging: ecs.LogDrivers.awsLogs({
-        streamPrefix: 'xray',
-        logGroup: logGroup,
-      }),
     });
 
     // Create Fargate service
     this.service = new ecs.FargateService(this, 'PaymentService', {
       cluster: this.cluster,
       taskDefinition: taskDefinition,
-      desiredCount: 3,
-      minHealthyPercent: 100,
+      desiredCount: 1,
+      minHealthyPercent: 0,
       maxHealthyPercent: 200,
       securityGroups: [props.ecsSecurityGroup],
       vpcSubnets: {
@@ -217,7 +175,8 @@ export class ComputeStack extends Construct {
       },
       enableExecuteCommand: true,
       circuitBreaker: {
-        rollback: true,
+        rollback: false,
+        enable: false,
       },
       enableECSManagedTags: true,
       propagateTags: ecs.PropagatedTagSource.SERVICE,
@@ -226,25 +185,22 @@ export class ComputeStack extends Construct {
     // Attach service to target group
     this.service.attachToNetworkTargetGroup(this.targetGroup);
 
-    // Grant EFS access to ECS task
-    props.fileSystem.grantRootAccess(taskRole);
-
     // Configure auto-scaling
     const scaling = this.service.autoScaleTaskCount({
-      minCapacity: 3,
-      maxCapacity: 10,
+      minCapacity: 1,
+      maxCapacity: 5,
     });
 
     scaling.scaleOnCpuUtilization('CpuScaling', {
       targetUtilizationPercent: 70,
-      scaleInCooldown: cdk.Duration.seconds(60),
-      scaleOutCooldown: cdk.Duration.seconds(60),
+      scaleInCooldown: cdk.Duration.seconds(30),
+      scaleOutCooldown: cdk.Duration.seconds(30),
     });
 
     scaling.scaleOnMemoryUtilization('MemoryScaling', {
       targetUtilizationPercent: 80,
-      scaleInCooldown: cdk.Duration.seconds(60),
-      scaleOutCooldown: cdk.Duration.seconds(60),
+      scaleInCooldown: cdk.Duration.seconds(30),
+      scaleOutCooldown: cdk.Duration.seconds(30),
     });
 
     // Create VPC Link for API Gateway
