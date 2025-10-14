@@ -60,7 +60,7 @@ You are a Senior Cloud Engineer with expertise in AWS.
 
 ---
 
-### 🗂 File Structure  
+### File Structure 
 - `provider.tf` (already present)  
   - Configure the Terraform **S3 backend** for remote state (all identifiers/paths parameterized).  
 - `lib/main.tf`  

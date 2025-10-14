@@ -57,4 +57,3 @@ The **generated** version contained DR/security gaps, cross-region inconsistenci
   - Full **multi-region replication** of DynamoDB data.
   - **Disaster recovery continuity** and reduced data-loss risk.
   - Improved **query flexibility** and operational observability.
-
