@@ -86,13 +86,13 @@ export class MultiComponentApplicationStack extends cdk.Stack {
     );
 
     const rdsInstance = new rds.DatabaseInstance(this, 'PostgresDatabase', {
-      instanceIdentifier: `prod-rds-postgres-${this.stringSuffix}`,
+      instanceIdentifier: `prod-rds-postgres-${this.stringSuffix.toLowerCase().replace(/[^a-z0-9-]/g, '')}`,
       engine: rds.DatabaseInstanceEngine.postgres({
         version: rds.PostgresEngineVersion.VER_13_7,
       }),
       instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.M4,
-        ec2.InstanceSize.LARGE
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MEDIUM
       ),
       vpc,
       vpcSubnets: {
@@ -101,7 +101,7 @@ export class MultiComponentApplicationStack extends cdk.Stack {
       securityGroups: [databaseSecurityGroup],
       credentials: rds.Credentials.fromSecret(databaseSecret),
       databaseName: 'proddb',
-      allocatedStorage: 100,
+      allocatedStorage: 20,
       storageEncrypted: true,
       backupRetention: Duration.days(7),
       deletionProtection: false,
