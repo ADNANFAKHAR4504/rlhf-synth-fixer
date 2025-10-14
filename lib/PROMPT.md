@@ -1,8 +1,6 @@
 Generate a production-ready Terraform configuration in HCL syntax that builds the following complete AWS infrastructure.
-Output only one file named main.tf.
-Do not create any separate files (variables.tf, outputs.tf, backend.tf, tfvars, etc.).
-A default provider.tf is already provided for AWS configuration.
-Use secure, reusable, and fully functional Terraform constructs.
+Output only one file named main.tf.Do not create any separate files (variables.tf, outputs.tf, backend.tf, tfvars, etc.).
+A default provider.tf is already provided for AWS configuration.Use secure, reusable, and fully functional Terraform constructs.
 
 Infrastructure Requirements
 Region: Deploy all resources in us-west-2.
