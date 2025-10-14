@@ -1,8 +1,8 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   TapStack.yml — Secure, Production-Ready Web Infrastructure (us-east-1)
-  Creates VPC, ALB, EC2, RDS, S3, WAF, CloudFront, Lambda, SQS, Config, and CloudWatch.
-  Fully secure, encrypted, least-privilege, and region-locked.
+  Creates VPC, ALB, EC2, RDS, S3, SNS, Lambda, SQS, WAF, CloudFront, Config, and CloudWatch.
+  Fully secure, encrypted, least-privilege, region-locked, and self-contained.
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -17,15 +17,19 @@ Parameters:
     Type: String
     Default: Production
     AllowedValues: [Development, Staging, Production]
+    Description: Deployment environment tag.
   Owner:
     Type: String
     Default: TapOps Team
+    Description: Owner tag for resources.
   Project:
     Type: String
     Default: TapStack
+    Description: Project tag for resources.
   AllowedSSHLocation:
     Type: String
     Default: 203.0.113.0/32
+    Description: CIDR allowed for SSH.
   KeyPairName:
     Type: String
     Default: ""
@@ -34,6 +38,7 @@ Parameters:
     Type: String
     Default: t3.micro
     AllowedValues: [t2.micro, t2.small, t3.micro, t3.small]
+    Description: EC2 instance type (restricted to T2/T3 family).
 
 Conditions:
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, ""]]
@@ -46,7 +51,9 @@ Mappings:
 
 Resources:
 
-  ## ------------------------ VPC & Networking ------------------------
+  ###########################################################
+  # Networking
+  ###########################################################
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -90,6 +97,8 @@ Resources:
           Value: !Ref Owner
         - Key: Project
           Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -103,6 +112,8 @@ Resources:
           Value: !Ref Owner
         - Key: Project
           Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -115,6 +126,8 @@ Resources:
           Value: !Ref Owner
         - Key: Project
           Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -127,11 +140,18 @@ Resources:
           Value: !Ref Owner
         - Key: Project
           Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -188,7 +208,9 @@ Resources:
       SubnetId: !Ref PrivateSubnet2
       RouteTableId: !Ref PrivateRouteTable
 
-  ## ------------------------ IAM & Security ------------------------
+  ###########################################################
+  # IAM, Roles & Security
+  ###########################################################
   InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -201,6 +223,13 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
 
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -217,13 +246,29 @@ Resources:
           FromPort: 22
           ToPort: 22
           CidrIp: !Ref AllowedSSHLocation
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
 
-  ## ------------------------ Compute ------------------------
+  ###########################################################
+  # Compute
+  ###########################################################
   KMSKey:
     Type: AWS::KMS::Key
     Properties:
-      Description: General encryption key
+      Description: General encryption key for EBS and other resources
       EnableKeyRotation: true
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
 
   EC2Instance1:
     Type: AWS::EC2::Instance
@@ -233,12 +278,22 @@ Resources:
       SubnetId: !Ref PrivateSubnet1
       ImageId: ami-0c02fb55956c7d316
       IamInstanceProfile: !Ref InstanceProfile
+      SecurityGroupIds: [!Ref SecurityGroupEC2]
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
           Ebs:
             VolumeSize: 10
             Encrypted: true
             KmsKeyId: !Ref KMSKey
+      Tags:
+        - Key: Name
+          Value: !Sub "${Project}-EC2-1"
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
 
   EC2Instance2:
     Type: AWS::EC2::Instance
@@ -248,14 +303,26 @@ Resources:
       SubnetId: !Ref PrivateSubnet2
       ImageId: ami-0c02fb55956c7d316
       IamInstanceProfile: !Ref InstanceProfile
+      SecurityGroupIds: [!Ref SecurityGroupEC2]
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
           Ebs:
             VolumeSize: 10
             Encrypted: true
             KmsKeyId: !Ref KMSKey
+      Tags:
+        - Key: Name
+          Value: !Sub "${Project}-EC2-2"
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
 
-  ## ------------------------ Load Balancer ------------------------
+  ###########################################################
+  # Load Balancer
+  ###########################################################
   ALBSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -266,12 +333,26 @@ Resources:
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
 
   ALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Subnets: [!Ref PublicSubnet1, !Ref PublicSubnet2]
       SecurityGroups: [!Ref ALBSG]
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
 
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -294,22 +375,92 @@ Resources:
         - Type: forward
           TargetGroupArn: !Ref TargetGroup
 
-  ## ------------------------ Storage & Database ------------------------
+  ###########################################################
+  # Storage, SNS (for safe notifications) & Database
+  ###########################################################
+  S3EventsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: !Sub "${Project}-S3EventsTopic"
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      NotificationConfiguration:
+        TopicConfigurations:
+          - Event: s3:ObjectCreated:*
+            Topic: !Ref S3EventsTopic
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyUnEncryptedObjectUploads
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:PutObject"
+            Resource: !Sub "${S3Bucket.Arn}/*"
+            Condition:
+              StringNotEquals:
+                "s3:x-amz-server-side-encryption": "AES256"
+
   DBSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
       Name: !Sub "${Project}-DBSecret"
+      Description: "Generated DB credentials for RDS (managed by CloudFormation)"
       GenerateSecretString:
         SecretStringTemplate: '{"username":"adminuser"}'
         GenerateStringKey: "password"
         PasswordLength: 16
         ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
 
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupDescription: Private subnets for RDS
       SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
+      DBSubnetGroupName: !Sub "${Project}-db-subnet-group"
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
 
   RDSInstance:
     Type: AWS::RDS::DBInstance
@@ -323,8 +474,17 @@ Resources:
       StorageEncrypted: true
       KmsKeyId: !Ref KMSKey
       DBSubnetGroupName: !Ref DBSubnetGroup
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
 
-  ## ------------------------ Lambda & S3 ------------------------
+  ###########################################################
+  # Lambda (audit) & SNS subscription (safe, non-circular)
+  ###########################################################
   LambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -337,6 +497,13 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
 
   AuditLambda:
     Type: AWS::Lambda::Function
@@ -350,34 +517,34 @@ Resources:
           import json
           def handler(event, context):
               print("S3 Event:", json.dumps(event))
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
 
-  S3Bucket:
-    Type: AWS::S3::Bucket
+  SNSSubscriptionToLambda:
+    Type: AWS::SNS::Subscription
     Properties:
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      NotificationConfiguration:
-        LambdaConfigurations:
-          - Event: s3:ObjectCreated:*
-            Function: !GetAtt AuditLambda.Arn
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
+      TopicArn: !Ref S3EventsTopic
+      Protocol: lambda
+      Endpoint: !GetAtt AuditLambda.Arn
+      RawMessageDelivery: true
 
-  LambdaPermissionForS3:
+  LambdaInvokePermissionForSNS:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
       FunctionName: !Ref AuditLambda
-      Principal: s3.amazonaws.com
-      SourceArn: !GetAtt S3Bucket.Arn
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref S3EventsTopic
       SourceAccount: !Ref AWS::AccountId
 
-  ## ------------------------ Monitoring & Config ------------------------
+  ###########################################################
+  # Monitoring & Config
+  ###########################################################
   CPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -392,6 +559,11 @@ Resources:
       Dimensions:
         - Name: InstanceId
           Value: !Ref EC2Instance1
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
 
   AWSConfigRole:
     Type: AWS::IAM::Role
@@ -427,12 +599,14 @@ Resources:
               - Effect: Allow
                 Action:
                   - sns:Publish
-                Resource: "*"
+                Resource: !Ref S3EventsTopic
       Tags:
         - Key: Owner
           Value: !Ref Owner
         - Key: Project
           Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
 
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
@@ -447,7 +621,9 @@ Resources:
     Properties:
       S3BucketName: !Ref S3Bucket
 
-  ## ------------------------ WAF & CloudFront ------------------------
+  ###########################################################
+  # WAF & CloudFront (us-east-1 only)
+  ###########################################################
   WAFWebACL:
     Type: AWS::WAFv2::WebACL
     Condition: IsUsEast1
@@ -470,6 +646,13 @@ Resources:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
             MetricName: limitrequests
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
 
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
@@ -486,6 +669,21 @@ Resources:
           ViewerProtocolPolicy: allow-all
         WebACLId: !Ref WAFWebACL
 
+  ###########################################################
+  # SQS (logging queue)
+  ###########################################################
+  AppLoggingQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      VisibilityTimeout: 30
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+
 Outputs:
   VPCId:
     Description: VPC ID
@@ -494,8 +692,14 @@ Outputs:
     Description: Load Balancer DNS
     Value: !GetAtt ALB.DNSName
   S3BucketName:
-    Description: Application Bucket
+    Description: Application S3 Bucket name
     Value: !Ref S3Bucket
   RDSAddress:
     Description: RDS Endpoint
     Value: !GetAtt RDSInstance.Endpoint.Address
+  S3EventsTopicArn:
+    Description: SNS Topic ARN used for S3 events
+    Value: !Ref S3EventsTopic
+  AuditLambdaArn:
+    Description: Audit Lambda ARN
+    Value: !GetAtt AuditLambda.Arn
