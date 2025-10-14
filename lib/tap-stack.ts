@@ -246,23 +246,6 @@ export class TapStack extends TerraformStack {
       enableLogging: true,
       enableLogFileValidation: true,
       includeGlobalServiceEvents: true,
-      isMultiRegionTrail: true,
-      eventSelector: [
-        {
-          readWriteType: 'All',
-          includeManagementEvents: true,
-          dataResource: [
-            {
-              type: 'AWS::S3::Object',
-              values: ['arn:aws:s3:::*/*'],
-            },
-            {
-              type: 'AWS::Lambda::Function',
-              values: ['arn:aws:lambda:*:*:function/*'],
-            },
-          ],
-        },
-      ],
       tags: {
         Project: project,
         Environment: environment,

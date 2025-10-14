@@ -614,7 +614,7 @@ export class S3Module extends Construct {
 export interface CloudFrontModuleConfig extends BaseModuleConfig {
   s3BucketDomainName: string;
   s3BucketArn: string;
-  s3BucketName: string; 
+  s3BucketName: string;
 }
 
 export class CloudFrontModule extends Construct {
