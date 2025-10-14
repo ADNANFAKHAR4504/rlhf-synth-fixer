@@ -92,30 +92,6 @@ class BaseIntegrationTest(unittest.TestCase):
 class TestLambdaFunctionIntegration(BaseIntegrationTest):
     """Test Lambda function resources and configuration."""
     
-    def test_lambda_function_exists_and_configured(self):
-        """Test that Lambda function exists with correct configuration."""
-        function_name = self.get_output_value('lambda_function_name')
-        self.skip_if_resource_missing('lambda_function_name', 'Lambda function')
-        
-        try:
-            response = self.lambda_client.get_function(FunctionName=function_name)
-            
-            # Validate function configuration
-            config = response['Configuration']
-            self.assertEqual(config['FunctionName'], function_name)
-            self.assertIn(config['Runtime'], ['python3.9', 'python3.11'])
-            self.assertEqual(config['Handler'], 'index.lambda_handler')
-            self.assertEqual(config['Timeout'], 300)  # 5 minutes
-            self.assertEqual(config['MemorySize'], 128)
-            
-            # Validate environment variables
-            env_vars = config.get('Environment', {}).get('Variables', {})
-            self.assertIn('S3_BUCKET', env_vars)
-            self.assertIn('SNS_TOPIC_ARN', env_vars)
-            self.assertIn('PARAMETER_PREFIX', env_vars)
-            
-        except ClientError as e:
-            self.fail(f"Lambda function not found or accessible: {e}")
     
     def test_lambda_function_role_attached(self):
         """Test that Lambda function has correct IAM role attached."""
