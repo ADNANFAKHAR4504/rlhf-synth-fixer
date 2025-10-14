@@ -38,7 +38,7 @@ Conditions:
 Resources:
 
   ########################################
-  # Auto-create SSM parameter for DB password
+  # SSM Parameter for DB Password (Valid Characters)
   ########################################
   DBPasswordParam:
     Type: AWS::SSM::Parameter
@@ -220,7 +220,7 @@ Resources:
           SourceSecurityGroupId: !Ref WebSecurityGroup
 
   ########################################
-  # IAM
+  # IAM Roles
   ########################################
   EC2Role:
     Type: AWS::IAM::Role
@@ -274,6 +274,9 @@ Resources:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
 
+  ########################################
+  # CloudTrail with Correct Bucket Policy
+  ########################################
   CloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -287,6 +290,7 @@ Resources:
               Service: cloudtrail.amazonaws.com
             Action: s3:GetBucketAcl
             Resource: !Sub arn:aws:s3:::${CloudTrailBucket}
+
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
@@ -295,22 +299,25 @@ Resources:
             Resource: !Sub arn:aws:s3:::${CloudTrailBucket}/AWSLogs/${AWS::AccountId}/*
             Condition:
               StringEquals:
-                s3:x-amz-acl: bucket-owner-full-control
+                "s3:x-amz-acl": "bucket-owner-full-control"
+                "AWS:SourceAccount": !Ref AWS::AccountId
+              ArnLike:
+                "AWS:SourceArn": !Sub arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${EnvironmentName}-trail
 
-  ########################################
-  # CloudTrail
-  ########################################
   CloudTrail:
     Type: AWS::CloudTrail::Trail
+    DependsOn: CloudTrailBucketPolicy
     Properties:
       TrailName: !Sub "${EnvironmentName}-trail"
       S3BucketName: !Ref CloudTrailBucket
       IsLogging: true
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      IsOrganizationTrail: false
 
   ########################################
-  # EC2, ALB, ASG
+  # EC2 + ALB + Auto Scaling
   ########################################
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
@@ -394,7 +401,7 @@ Resources:
       BackupRetentionPeriod: 7
 
   ########################################
-  # CloudFront (with required ForwardedValues)
+  # CloudFront (With ForwardedValues)
   ########################################
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
