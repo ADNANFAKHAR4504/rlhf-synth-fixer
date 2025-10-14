@@ -1,0 +1,31 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "410117",
+  "team": "4",
+  "startedAt": "2025-10-10T11:39:29.042Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "IoT Analytics infrastructure project implementing a comprehensive data pipeline for processing sensor data. The architecture includes IoT Core for device connectivity, Kinesis Data Streams for real-time data ingestion, Lambda functions for data processing, DynamoDB for storage, and EventBridge for event-driven architecture. The project also integrates with QuickSight for analytics dashboards and CloudWatch for monitoring.",
+  "training_quality": 8,
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "IoT Core",
+    "Kinesis Data Stream",
+    "Lambda Functions",
+    "DynamoDB",
+    "QuickSight",
+    "EventBridge",
+    "CloudWatch",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rahulpatil118",
+  "dockerS3Location": ""
+}

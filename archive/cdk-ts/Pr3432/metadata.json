@@ -1,0 +1,40 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "61031627",
+  "team": "1",
+  "startedAt": "2025-10-03T09:35:35.015Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "VPC",
+    "Application Load Balancer",
+    "ECS Fargate",
+    "Aurora MySQL",
+    "DynamoDB",
+    "S3",
+    "CloudFront",
+    "Cognito",
+    "Lambda",
+    "Step Functions",
+    "SES",
+    "SNS",
+    "CloudWatch",
+    "ElastiCache Redis",
+    "IAM",
+    "Secrets Manager",
+    "KMS",
+    "SQS"
+  ],
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raghav-turing",
+  "dockerS3Location": ""
+}

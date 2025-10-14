@@ -2,6 +2,21 @@
 
 Orchestrates the complete Infrastructure as Code development lifecycle by coordinating three specialized sub-agents.
 
+## ⚠️ CRITICAL: CSV Data Integrity
+
+**BEFORE modifying tasks.csv:**
+1. READ the "CSV File Corruption Prevention" section in `lessons_learnt.md`
+2. READ the complete guide in `.claude/csv_safety_guide.md`
+3. RUN the safety check: `./scripts/check-csv-safety.sh`
+
+ALL CSV operations MUST:
+1. Create backup before ANY modification
+2. Read ALL rows, modify specific row(s), write ALL rows back
+3. Validate row counts before and after
+4. Restore from backup if ANY validation fails
+
+**Failure to follow these rules will corrupt the tasks.csv file and lose all task data!**
+
 ## ⚠️ CRITICAL: Commit Message Requirements
 
 **ALL commits MUST follow conventional commits format with lowercase subject:**
@@ -32,10 +47,15 @@ Execute these phases in sequence to deliver production-ready IaC:
 
 **Agent**: `iac-code-reviewer`
 
-- If the `lib/MODEL_FAILURES.md` file reports minimal issues (not big deployment issues deploying the MODEL_RESPONSE), 
-  then request iac-infra-generator to add two more recent AWS Features or services to increase the complexity of the
-  task. Then go to phase2 and give it another round. The idea of this is to make sure that we are truly finding flaws 
-  in the initial `lib/MODEL_RESPONSE.md` and fix them in the `lib/IDEAL_RESPONSE.md`.
+- **Cost-Optimized Iteration Logic**: If the `lib/MODEL_FAILURES.md` file reports minimal issues (not big deployment 
+  issues deploying the MODEL_RESPONSE) AND `training_quality` score < 6, consider requesting iac-infra-generator to 
+  add 1 additional AWS feature or service to increase task complexity.
+  - **Maximum 1 additional iteration** to avoid excessive regeneration cycles
+  - Only iterate if the current task would provide limited training value (score < 6)
+  - The goal is to ensure meaningful differences between MODEL_RESPONSE.md and IDEAL_RESPONSE.md
+  - Skip iteration if training_quality >= 6 (already provides good training value)
+- **Cost Impact**: Reducing "always add 2 features" to "conditionally add 1 feature max" saves 5-10% by avoiding 
+  unnecessary iterations
 
 ### Phase 5: PR Creation & Task Completion
 
@@ -79,13 +99,43 @@ echo "✅ Pre-flight checks passed"
    pwd  # Should end with: /worktree/synth-{task_id}
    ```
 
-2. **Stage all changes**:
+2. **Validate training quality meets minimum threshold**:
+   ```bash
+   # Extract training_quality from metadata.json
+   TRAINING_QUALITY=$(jq -r '.training_quality // 0' metadata.json)
+   
+   # Minimum acceptable training quality is 8 (aiming for 9)
+   if [ "$TRAINING_QUALITY" -lt 8 ]; then
+     echo "❌ Training quality ($TRAINING_QUALITY) is below minimum threshold of 8"
+     echo "⚠️ This task needs improvement before PR creation"
+     echo ""
+     echo "Actions required:"
+     echo "1. Review lib/MODEL_FAILURES.md to understand what improvements were made"
+     echo "2. If improvements are minimal, consider:"
+     echo "   - Adding more AWS services or features to increase complexity"
+     echo "   - Implementing additional security best practices"
+     echo "   - Adding monitoring, logging, or observability features"
+     echo "3. Have iac-code-reviewer reassess and update training_quality score"
+     echo "4. Target minimum score: 8, ideal score: 9"
+     exit 1
+   fi
+   
+   echo "✅ Training quality validated: $TRAINING_QUALITY/10"
+   ```
+   
+   **If validation fails**:
+   - Return to Phase 4 (code-reviewer) to improve the implementation
+   - Add meaningful features that increase training value
+   - Ensure MODEL_FAILURES.md demonstrates significant learning opportunities
+   - Re-run validation after improvements
+
+3. **Stage all changes**:
    ```bash
    git add .
    git status  # Review what will be committed
    ```
 
-3. **Commit with standardized message**:
+4. **Commit with standardized message**:
    
    **CRITICAL COMMIT MESSAGE FORMAT**: The CI/CD pipeline validates commits using `commitlint` with conventional commits format.
    
@@ -95,9 +145,10 @@ echo "✅ Pre-flight checks passed"
    - The pipeline will FAIL if subject starts with uppercase
    
    ```bash
-   # Extract metadata for commit message
+   # Extract metadata for commit message (training_quality already validated above)
    TASK_ID=$(jq -r '.po_id' metadata.json)
    SUBTASK=$(jq -r '.subtask' metadata.json)
+   BACKGROUND=$(jq -r '.background' metadata.json)
    PLATFORM=$(jq -r '.platform' metadata.json)
    LANGUAGE=$(jq -r '.language' metadata.json)
    COMPLEXITY=$(jq -r '.complexity' metadata.json)
@@ -125,20 +176,25 @@ Task ID: ${TASK_ID}"
    feat(synth-{task_id}): Add infrastructure implementation  # Capital 'A' will fail
    ```
 
-4. **Push branch to remote**:
+5. **Push branch to remote**:
    ```bash
    BRANCH_NAME=$(git branch --show-current)
    git push origin ${BRANCH_NAME}
    ```
 
-5. **Create PR using gh CLI**:
+6. **Create PR using gh CLI**:
    ```bash
    # Get AWS services count
    AWS_SERVICES_COUNT=$(jq -r '.aws_services | length' metadata.json)
    
+   # CRITICAL: Verify metadata fields for PR body
+   # Complexity must match the value from tasks.csv (medium/hard/expert)
+   # Complexity is already extracted at line 154 from metadata.json
+   
    # Create PR with error handling
+   # PR Title Format: synth-{TASK_ID} (lowercase "synth")
    if gh pr create \
-     --title "Task ${TASK_ID}: ${SUBTASK}" \
+     --title "synth-${TASK_ID}" \
      --body "**Platform**: ${PLATFORM}-${LANGUAGE}
 **Complexity**: ${COMPLEXITY}
 **Training Quality**: ${TRAINING_QUALITY}/10
@@ -166,6 +222,7 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
 - [x] Code in ideal response and tapstack are the same" \
      --base main \
      --head ${BRANCH_NAME} \
+     --label "synth" \
      --label "automated" \
      --label "complexity-${COMPLEXITY}"; then
      echo "✅ PR created successfully"
@@ -177,7 +234,7 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
    fi
    ```
 
-6. **Capture PR number and validate**:
+7. **Capture PR number and validate**:
    ```bash
    # Capture PR number with retry logic
    PR_NUMBER=$(gh pr view ${BRANCH_NAME} --json number -q .number)
@@ -194,7 +251,7 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
    echo "📎 PR URL: ${PR_URL}"
    ```
 
-7. **Update CSV status to "done"**:
+8. **Update CSV status to "done"**:
    ```bash
    # Return to main repo to update CSV
    cd ../..
@@ -205,27 +262,48 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
      exit 1
    fi
    
-   # Update tasks.csv (using Python for safe CSV handling)
+   # Update tasks.csv (using Python for safe CSV handling with backup and validation)
    python3 << 'PYTHON_SCRIPT'
 import csv
 import sys
+import shutil
+import os
 
 task_id = "${TASK_ID}"
 pr_number = "${PR_NUMBER}"
 
 try:
+    # CRITICAL: Create backup before modifying
+    shutil.copy2('tasks.csv', 'tasks.csv.backup')
+    
     # Read CSV
     rows = []
     updated = False
+    original_count = 0
     with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         fieldnames = reader.fieldnames
         for row in reader:
+            original_count += 1
             if row['task_id'] == task_id and row['status'] == 'in_progress':
                 row['status'] = 'done'
                 row['trainr_notes'] = f"Completed - PR #{pr_number}"
                 updated = True
             rows.append(row)
+    
+    # VALIDATION: Ensure we haven't lost any rows
+    if len(rows) != original_count:
+        print(f"❌ ERROR: Row count mismatch. Original: {original_count}, Current: {len(rows)}")
+        print("Restoring from backup...")
+        shutil.copy2('tasks.csv.backup', 'tasks.csv')
+        sys.exit(1)
+    
+    # VALIDATION: Ensure we have all fieldnames
+    if not fieldnames or len(fieldnames) == 0:
+        print("❌ ERROR: No fieldnames found in CSV")
+        print("Restoring from backup...")
+        shutil.copy2('tasks.csv.backup', 'tasks.csv')
+        sys.exit(1)
 
     # Write back
     if updated:
@@ -233,12 +311,29 @@ try:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(rows)
-        print(f"✅ Updated task {task_id} status to 'done' with PR #{pr_number}")
+        
+        # VALIDATION: Verify the write was successful
+        verify_count = 0
+        with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                verify_count += 1
+        
+        if verify_count != original_count:
+            print(f"❌ ERROR: Write verification failed. Expected {original_count} rows, found {verify_count}")
+            print("Restoring from backup...")
+            shutil.copy2('tasks.csv.backup', 'tasks.csv')
+            sys.exit(1)
+        
+        print(f"✅ Updated task {task_id} status to 'done' with PR #{pr_number} ({verify_count} total rows preserved)")
     else:
         print(f"⚠️ Task {task_id} not found or not in 'in_progress' status")
         sys.exit(1)
 except Exception as e:
     print(f"❌ ERROR updating CSV: {e}")
+    print("Restoring from backup...")
+    if os.path.exists('tasks.csv.backup'):
+        shutil.copy2('tasks.csv.backup', 'tasks.csv')
     sys.exit(1)
 PYTHON_SCRIPT
    
@@ -248,7 +343,7 @@ PYTHON_SCRIPT
    fi
    ```
 
-8. **Cleanup worktree**:
+9. **Cleanup worktree**:
    ```bash
    # Remove worktree (keeps branch for PR)
    git worktree remove worktree/synth-${TASK_ID} --force
@@ -258,7 +353,7 @@ PYTHON_SCRIPT
    echo "✅ Worktree cleaned up. Branch synth-${TASK_ID} remains for PR."
    ```
 
-9. **Final validation**:
+10. **Final validation**:
    ```bash
    # Verify PR was created
    gh pr view ${PR_NUMBER} --json state,url,title
@@ -332,23 +427,32 @@ PYTHON_SCRIPT
    - Do not return to main repo until Phase 5 (PR creation)
 7. **Generate metadata.json with ALL required fields** (CRITICAL - validation will fail if any field is missing):
     - If `metadata.json` is not present, extract platform and language from the selected task
+    - **CRITICAL**: Platform and language from CSV are MANDATORY constraints:
+      - CSV specifies `platform: Pulumi` and `language: Go` → metadata.json MUST have `"platform": "pulumi", "language": "go"`
+      - CSV specifies `platform: CDK` and `language: TypeScript` → metadata.json MUST have `"platform": "cdk", "language": "ts"`
+      - CSV specifies `platform: Terraform` and `language: HCL` → metadata.json MUST have `"platform": "tf", "language": "hcl"`
+      - **Do NOT change or override these values** - they are fixed requirements
     - Validate `cli/create-task.ts` exists before mimicking its actions
     - If `cli/create-task.ts` is missing, use fallback platform detection logic:
     - Determine platform (cdk, cdktf, cfn, tf, pulumi) from task description
-    - Determine language (ts, py, yaml, json, hcl) from task description
+    - Determine language (ts, py, yaml, json, hcl, go) from task description
     - Prefer TypeScript for tests only, avoid Python where possible (unless the project is in python e.g. pulumi-py, cdktf-py)
-    - Set `complexity` (NOT "difficulty") from CSV difficulty field
+    - **CRITICAL**: Set `complexity` field to EXACT value from CSV `difficulty` column (NOT "difficulty")
+      - Read the `difficulty` value from tasks.csv for the selected task
+      - Valid values: "medium", "hard", "expert" (must match CSV exactly)
+      - This value will be displayed in the PR body - ensure accuracy
     - Set `team` as "synth" (REQUIRED - validation will fail without this)
     - Set `startedAt` as current timestamp using `date -Iseconds` (REQUIRED - validation will fail without this)
-    - **Extract `subtask` and `subject_labels` from tasks.csv** (REQUIRED - validation will fail without these):
+    - **Extract `subtask`, `background`, and `subject_labels` from tasks.csv** (REQUIRED - validation will fail without these):
       - Read the selected task row from tasks.csv
       - Get the `subtask` value from the subtask column
+      - Get the `background` value from the background column (REQUIRED for PR title in Phase 5)
       - Get the `subject_labels` value from the subject_labels column (parse as JSON array)
-      - Both fields MUST be included in metadata.json
+      - All three fields MUST be included in metadata.json
     - Do not add more fields to metadata.json than the ones shown in the example below
     - Validate `templates/` directory exists and contains required platform template
     - If template missing, report BLOCKED status with specific template needed
-    - Copy appropriate template from `templates/` directory
+    - Copy appropriate template from `templates/` directory matching the platform-language from CSV
     - Generate `metadata.json` with ALL required fields. Set `po_id` field to the task_id value. Example:
 
    ```json
@@ -361,24 +465,65 @@ PYTHON_SCRIPT
        "team": "synth",
        "startedAt": "2025-08-12T13:19:10-05:00",
        "subtask": "Application Deployment",
+       "background": "A manufacturing company needs to modernize their factory monitoring system...",
        "subject_labels": ["CI/CD Pipeline", "Security Configuration as Code"]
      }
    ```
 
-    - **Validate metadata.json immediately after creation**:
-      - Run: `bash scripts/detect-metadata.sh` to verify all required fields are present
-      - If validation fails, fix the metadata.json before proceeding
-      - Common errors: missing `team`, missing `startedAt`, missing `subtask`, missing `subject_labels`, using `difficulty` instead of `complexity`
-    - If the deployment needs to be done in a specific region, create the file `lib/AWS_REGION` with the
-      region name. e.g: `echo "us-east-1" > lib/AWS_REGION`
+   - **Validate metadata.json immediately after creation**:
+     - Run: `bash scripts/detect-metadata.sh` to verify all required fields are present
+     - If validation fails, fix the metadata.json before proceeding
+     - Common errors: missing `team`, missing `startedAt`, missing `subtask`, missing `background`, missing `subject_labels`, using `difficulty` instead of `complexity`
+   - **CRITICAL**: The `background` field is REQUIRED and will be used as the PR title in Phase 5
+   - If the deployment needs to be done in a specific region, create the file `lib/AWS_REGION` with the
+     region name. e.g: `echo "us-east-1" > lib/AWS_REGION`
+
+### Context Optimization (Cost Reduction Strategy)
+
+**Purpose**: Minimize redundant file reads and context loading across agent phases.
+
+**Guidelines for All Sub-Agents**:
+
+1. **Cache Frequently Accessed Files**:
+   - Read `metadata.json` once and reference the cached content across operations
+   - Template files should be loaded once per phase, not repeatedly
+   - Use file modification timestamps to detect changes before re-reading
+
+2. **Avoid Redundant File Operations**:
+   - Before reading a file, check if you already have its current content
+   - Use `ls -l --time-style=full-iso` to check modification times
+   - Skip re-reading files that haven't changed since last access
+
+3. **Efficient Context Management**:
+   - When comparing files (e.g., IDEAL_RESPONSE vs TapStack), check file sizes first
+   - Use checksums (md5sum/sha256sum) for quick equality checks before detailed comparison
+   - Load only necessary portions of large files when possible
+
+4. **Cross-Phase Communication**:
+   - Each phase should document what files it modified
+   - Next phase can skip validation of unmodified files
+   - Share key metadata across phases without re-extraction
+
+**Cost Impact**: These optimizations reduce token usage by 2-4% across all phases by eliminating redundant reads.
+
 8. Install dependencies inside the worktree with error handling:
     - If language is py: `pipenv install --dev --ignore-pipfile`
     - If language is not py: `npm ci`
     - If installation fails, report BLOCKED status with error details
-9. Use the selected task description for the workflow. Start the workflow.
+9. **Pass complete task context to iac-infra-generator**:
+    - Provide full task description including:
+      - Background context
+      - Problem statement
+      - Environment/technology requirements
+      - Specific constraints (region, security, compliance, etc.)
+      - ALL AWS services mentioned
+      - Platform and language from metadata.json (MANDATORY)
+    - **Do NOT summarize or paraphrase** - pass complete requirements
+    - Generator MUST honor platform/language from metadata.json
+10. Use the selected task description for the workflow. Start the workflow.
     - Report final status before handoff to next agent
 
-Important: Do not generate the `/lib/PROMPT.md` code, delegate that to the subagent. Send the task information to the generator agent
+Important: Do not generate the `/lib/PROMPT.md` code, delegate that to the subagent. Send the COMPLETE task information to the generator agent including all constraints.
 
 
 ## Task Completion Requirements
@@ -402,34 +547,72 @@ If PR creation fails at any step:
    python3 << 'PYTHON_SCRIPT'
 import csv
 import sys
+import shutil
+import os
 
 task_id = "${TASK_ID}"
 error_msg = "${ERROR_MESSAGE}"
 error_step = "${ERROR_STEP}"
 
 try:
+    # CRITICAL: Create backup before modifying
+    shutil.copy2('tasks.csv', 'tasks.csv.backup')
+    
     rows = []
     updated = False
+    original_count = 0
     with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         fieldnames = reader.fieldnames
         for row in reader:
+            original_count += 1
             if row['task_id'] == task_id and row['status'] == 'in_progress':
                 row['status'] = 'error'
                 row['trainr_notes'] = f"PR creation failed at {error_step}: {error_msg}"
                 updated = True
             rows.append(row)
+    
+    # VALIDATION: Ensure we haven't lost any rows
+    if len(rows) != original_count:
+        print(f"❌ ERROR: Row count mismatch. Original: {original_count}, Current: {len(rows)}")
+        print("Restoring from backup...")
+        shutil.copy2('tasks.csv.backup', 'tasks.csv')
+        sys.exit(1)
+    
+    # VALIDATION: Ensure we have all fieldnames
+    if not fieldnames or len(fieldnames) == 0:
+        print("❌ ERROR: No fieldnames found in CSV")
+        print("Restoring from backup...")
+        shutil.copy2('tasks.csv.backup', 'tasks.csv')
+        sys.exit(1)
 
     if updated:
         with open('tasks.csv', 'w', newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(rows)
-        print(f"✅ Updated task {task_id} status to 'error'")
+        
+        # VALIDATION: Verify the write was successful
+        verify_count = 0
+        with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                verify_count += 1
+        
+        if verify_count != original_count:
+            print(f"❌ ERROR: Write verification failed. Expected {original_count} rows, found {verify_count}")
+            print("Restoring from backup...")
+            shutil.copy2('tasks.csv.backup', 'tasks.csv')
+            sys.exit(1)
+        
+        print(f"✅ Updated task {task_id} status to 'error' ({verify_count} total rows preserved)")
     else:
         print(f"⚠️ Task {task_id} not found or not in 'in_progress' status")
 except Exception as e:
     print(f"❌ ERROR updating CSV: {e}")
+    print("Restoring from backup...")
+    if os.path.exists('tasks.csv.backup'):
+        shutil.copy2('tasks.csv.backup', 'tasks.csv')
     sys.exit(1)
 PYTHON_SCRIPT
    ```
