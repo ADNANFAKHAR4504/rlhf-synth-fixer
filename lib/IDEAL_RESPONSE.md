@@ -1,6 +1,8 @@
-# Serverless infrastructure in AWS using CDK TypeScript
+# Serverless production-ready infrastructure solution
 
-```json
+## Project Structure
+
+```typescript
 // package.json
 {
   "name": "serverless-cdk-infrastructure",
@@ -782,21 +784,19 @@ if (!['staging', 'prod', 'dev', 'test'].includes(environmentSuffix)) {
 }
 
 // Create the stack
-new TapStack(app, `TapStack-${environmentSuffix}`, {
+new InfraStack(this, 'InfraStack', {
   environmentSuffix,
-  projectName: app.node.tryGetContext('projectName'),
-  apiThrottleRate: app.node.tryGetContext('apiThrottleRate'),
-  apiThrottleBurst: app.node.tryGetContext('apiThrottleBurst'),
-  lambdaMemorySize: app.node.tryGetContext('lambdaMemorySize'),
-  lambdaTimeout: app.node.tryGetContext('lambdaTimeout'),
-  dynamodbReadCapacity: app.node.tryGetContext('dynamodbReadCapacity'),
-  dynamodbWriteCapacity: app.node.tryGetContext('dynamodbWriteCapacity'),
-  enablePointInTimeRecovery: app.node.tryGetContext('enablePointInTimeRecovery'),
-  logRetentionDays: app.node.tryGetContext('logRetentionDays'),
-  env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION,
-  },
+  projectName: this.node.tryGetContext('projectName'),
+  apiThrottleRate: this.node.tryGetContext('apiThrottleRate'),
+  apiThrottleBurst: this.node.tryGetContext('apiThrottleBurst'),
+  lambdaMemorySize: this.node.tryGetContext('lambdaMemorySize'),
+  lambdaTimeout: this.node.tryGetContext('lambdaTimeout'),
+  dynamodbReadCapacity: this.node.tryGetContext('dynamodbReadCapacity'),
+  dynamodbWriteCapacity: this.node.tryGetContext('dynamodbWriteCapacity'),
+  enablePointInTimeRecovery: this.node.tryGetContext(
+    'enablePointInTimeRecovery'
+  ),
+  logRetentionDays: this.node.tryGetContext('logRetentionDays'),
 });
 
 app.synth();
@@ -932,3 +932,5 @@ cdk destroy --context environmentSuffix=staging
 - **Lambda reserved concurrency** to prevent throttling
 - **API Gateway caching** capability (can be enabled)
 - **Point-in-time recovery** for production DynamoDB tables
+
+This solution provides a production-ready, secure, and scalable serverless infrastructure that meets all specified requirements while maintaining clean code organization and following AWS best practices.
