@@ -17,7 +17,7 @@ Apply the Environment = "Production" tag to every resource.
 
 Be deployable as-is for demonstration or production simulation.
 
-Problem Definition
+Problem Definition:
 
 Design a secure, compliant AWS infrastructure using Terraform, meeting the following detailed requirements (originally CloudFormation-based but implemented here in Terraform).
 
