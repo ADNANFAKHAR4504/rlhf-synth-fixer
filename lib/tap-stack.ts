@@ -17,7 +17,7 @@ import {
   DatabaseModuleConfig,
   ContainerServiceModuleConfig,
   StaticAssetsModuleConfig,
-  MonitoringModuleConfig
+  MonitoringModuleConfig,
 } from './modules';
 
 interface TapStackProps {
@@ -55,16 +55,21 @@ export class TapStack extends TerraformStack {
     const containerPort = props?.containerPort || 3000;
 
     // Set environment-specific configurations
-    const isProduction = environmentSuffix === 'production' || environmentSuffix === 'prod';
-    
-    const defaultTags = props?.defaultTags ? [props.defaultTags] : [{
-      tags: {
-        Environment: environmentSuffix,
-        Project: projectName,
-        ManagedBy: 'Terraform',
-        Stack: id,
-      }
-    }];
+    const isProduction =
+      environmentSuffix === 'production' || environmentSuffix === 'prod';
+
+    const defaultTags = props?.defaultTags
+      ? [props.defaultTags]
+      : [
+          {
+            tags: {
+              Environment: environmentSuffix,
+              Project: projectName,
+              ManagedBy: 'Terraform',
+              Stack: id,
+            },
+          },
+        ];
 
     // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
     new AwsProvider(this, 'aws', {
@@ -96,8 +101,12 @@ export class TapStack extends TerraformStack {
       environment: environmentSuffix,
       projectName: projectName,
     };
-    
-    const networking = new NetworkingModule(this, 'networking', networkingConfig);
+
+    const networking = new NetworkingModule(
+      this,
+      'networking',
+      networkingConfig
+    );
 
     // 2. Database Module - Depends on networking
     const databaseConfig: DatabaseModuleConfig = {
@@ -110,7 +119,7 @@ export class TapStack extends TerraformStack {
       allocatedStorage: isProduction ? 100 : 20,
       databaseName: `${projectName.replace(/-/g, '_')}_db`,
     };
-    
+
     const database = new DatabaseModule(this, 'database', databaseConfig);
 
     // 3. Container Service Module - Depends on networking and database
@@ -133,16 +142,24 @@ export class TapStack extends TerraformStack {
       domainName: props?.domainName,
       hostedZoneId: props?.hostedZoneId,
     };
-    
-    const containerService = new ContainerServiceModule(this, 'container-service', containerServiceConfig);
+
+    const containerService = new ContainerServiceModule(
+      this,
+      'container-service',
+      containerServiceConfig
+    );
 
     // 4. Static Assets Module - Independent
     const staticAssetsConfig: StaticAssetsModuleConfig = {
       environment: environmentSuffix,
       projectName: projectName,
     };
-    
-    const staticAssets = new StaticAssetsModule(this, 'static-assets', staticAssetsConfig);
+
+    const staticAssets = new StaticAssetsModule(
+      this,
+      'static-assets',
+      staticAssetsConfig
+    );
 
     // 5. Monitoring Module - Depends on container service and database
     const monitoringConfig: MonitoringModuleConfig = {
@@ -154,12 +171,12 @@ export class TapStack extends TerraformStack {
       serviceName: containerService.service.name,
       rdsIdentifier: database.rdsInstance.identifier,
     };
-    
-    const monitoring = new MonitoringModule(this, 'monitoring', monitoringConfig);
 
-    // ==========================================
-    // Terraform Outputs
-    // ==========================================
+    const monitoring = new MonitoringModule(
+      this,
+      'monitoring',
+      monitoringConfig
+    );
 
     // Networking Outputs
     new TerraformOutput(this, 'vpc-id', {
