@@ -368,31 +368,30 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
 
   describe('Security & Monitoring', () => {
     test('WAF should be protecting the application', async () => {
-      try {
-        const webAcls = await wafv2.send(new ListWebACLsCommand({ Scope: 'REGIONAL' }));
-        const webAcl = webAcls.WebACLs!.find((acl: any) => acl.ARN === outputs.WebACLArn) || webAcls.WebACLs![0];
+      const webAcls = await wafv2.send(new ListWebACLsCommand({ Scope: 'REGIONAL' }));
+      const webAcl = webAcls.WebACLs!.find((acl: any) => acl.ARN === outputs.WebACLArn) || webAcls.WebACLs![0];
 
-        expect(webAcl).toBeDefined();
+      expect(webAcl).toBeDefined();
 
-        // Check WAF rules
-        const wafDetails = await wafv2.send(new GetWebACLCommand({
-          Scope: 'REGIONAL',
-          Id: outputs.WebACLArn.split('/').pop()
+      // Check WAF rules
+      const wafDetails = await wafv2.send(new GetWebACLCommand({
+        Scope: 'REGIONAL',
+        Id: outputs.WebACLArn.split('/').pop()
+      }));
+
+      expect(wafDetails.WebACL!.Rules).toBeDefined();
+      expect(wafDetails.WebACL!.Rules!.length).toBeGreaterThan(0);
+
+      // Check ALB association
+      const loadBalancers = await elbv2.describeLoadBalancers().promise();
+      const alb = loadBalancers.LoadBalancers!.find((lb: any) => lb.DNSName === outputs.ALBDNSName) || loadBalancers.LoadBalancers![0];
+
+      if (alb) {
+        const associations = await wafv2.send(new ListResourcesForWebACLCommand({
+          WebACLArn: outputs.WebACLArn
         }));
-
-        expect(wafDetails.WebACL!.Rules).toBeDefined();
-        expect(wafDetails.WebACL!.Rules!.length).toBeGreaterThan(0);
-
-        // Check ALB association
-        const loadBalancers = await elbv2.describeLoadBalancers().promise();
-        const alb = loadBalancers.LoadBalancers!.find((lb: any) => lb.DNSName === outputs.ALBDNSName) || loadBalancers.LoadBalancers![0];
-
-        if (alb) {
-          const associations = await wafv2.send(new ListResourcesForWebACLCommand({
-            WebACLArn: outputs.WebACLArn
-          }));
-          expect(associations.ResourceArns).toContain(alb!.LoadBalancerArn);
-        }
+        expect(associations.ResourceArns).toContain(alb!.LoadBalancerArn);
+      }
     });
 
     test('CloudTrail should be logging all API activities', async () => {
