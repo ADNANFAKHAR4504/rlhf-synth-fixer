@@ -17,6 +17,8 @@ boto3 = "*"
 cfn-flip = "*"
 moto = {extras = ["sqs", "sns", "lambda", "dynamodb", "cloudwatch"], version = "*"}
 attrs = "*"
+aws-lambda-powertools = "*"
+aws-xray-sdk = "*"
 
 [dev-packages]
 boto3 = "*"
@@ -31,6 +33,7 @@ cfn-flip = "*"
 black = "*"
 pillow = "*"
 pytest-cov = "*"
+psycopg2-binary = "*"
 
 [requires]
 python_version = "3.12.11"

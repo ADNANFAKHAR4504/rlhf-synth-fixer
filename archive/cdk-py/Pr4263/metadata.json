@@ -1,0 +1,32 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "IAC-CDK-PY-3753",
+  "team": "5",
+  "startedAt": "2025-10-13T16:33:03.320Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "RDS",
+    "EC2",
+    "VPC",
+    "KMS",
+    "S3",
+    "CloudWatch",
+    "IAM",
+    "SSM",
+    "SecretsManager",
+    "SecurityGroups"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
+}
