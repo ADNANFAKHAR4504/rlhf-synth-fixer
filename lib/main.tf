@@ -931,7 +931,6 @@ resource "aws_cloudtrail" "main" {
     }
   }
 
-
   enable_logging                = true
   include_global_service_events = true
   is_multi_region_trail        = true
