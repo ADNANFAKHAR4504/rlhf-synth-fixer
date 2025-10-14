@@ -1,0 +1,16 @@
+{
+  "name": "lambda-edge-viewer-request",
+  "version": "1.0.0",
+  "description": "Lambda@Edge function for content personalization on viewer request",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"No tests specified\""
+  },
+  "keywords": [
+    "lambda-edge",
+    "cloudfront",
+    "personalization"
+  ],
+  "author": "",
+  "license": "MIT"
+}
