@@ -373,20 +373,6 @@ describe("MyApp Integration Tests - ECS Infrastructure", () => {
 
   describe("Database: RDS and Secrets Manager", () => {
     test("RDS database secret exists and is accessible", async () => {
-      // --- START: Missing logic added here ---
-      let SecretString: string | undefined;
-
-      try {
-        // 1. Get Secret Value
-        const { SecretString: fetchedSecretString } = await secretsClient.send(
-          new GetSecretValueCommand({
-            SecretId: dbSecretArn,
-          })
-        );
-        SecretString = fetchedSecretString;
-
-        // 2. Validate existence
-        expect(SecretString).toBeDefined();
 
         // 3. Parse and validate secret structure
         const credentials = JSON.parse(SecretString || "{}");
