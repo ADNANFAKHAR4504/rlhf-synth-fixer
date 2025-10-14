@@ -4,8 +4,6 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-aws-cdk-lib = "2.214.0"
-constructs = "10.4.2"
 aws-cdk-aws-lambda-python-alpha = "*"
 cdktf = "0.21.0"
 cdktf-cdktf-provider-aws = "21.9.1"
@@ -19,6 +17,8 @@ moto = {extras = ["sqs", "sns", "lambda", "dynamodb", "cloudwatch"], version = "
 attrs = "*"
 aws-lambda-powertools = "*"
 aws-xray-sdk = "*"
+aws-cdk-lib = "*"
+constructs = "*"
 
 [dev-packages]
 boto3 = "*"

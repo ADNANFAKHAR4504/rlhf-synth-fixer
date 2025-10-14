@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "445325c4ae76a4bfdb7218a4eca5c22667efd52e4f70926f644549c3a52935da"
+            "sha256": "c794d45a4f772a1105cf1b6ed23fcc0da81e76e692b9938678a94fcc8378c8bd"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -51,12 +51,12 @@
         },
         "aws-cdk-lib": {
             "hashes": [
-                "sha256:374dd3b6e412becfb77808e4d828efbee070e3400968360af16df856485c3ade",
-                "sha256:90f3268218e020c641d634d74cff3376905824c80a572d7e2eabc219977d98ef"
+                "sha256:7ca5ff88c7a9aa32590e38d1083d1fea4ced173c88c18ffd38e3feda8337de3b",
+                "sha256:fbaf9b02ed38eba796ad0a05ad29c17b0d7a607da972053636076cfa91ca13ad"
             ],
             "index": "pypi",
             "markers": "python_version ~= '3.9'",
-            "version": "==2.214.0"
+            "version": "==2.219.0"
         },
         "aws-cdk.asset-awscli-v1": {
             "hashes": [

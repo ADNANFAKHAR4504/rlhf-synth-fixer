@@ -1,0 +1,14 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "E734A1",
+  "team": "1",
+  "startedAt": "2025-10-14T06:27:56.757Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": "vpc, iam, cloudwatch, rds,  rds,"
+}
