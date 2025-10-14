@@ -1,6 +1,6 @@
 {
-  "platform": "CloudFormation",
-  "language": "JSON",
+  "platform": "cfn",
+  "language": "json",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "3104055492",
