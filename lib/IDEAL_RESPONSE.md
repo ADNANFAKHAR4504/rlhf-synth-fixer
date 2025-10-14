@@ -1,4 +1,4 @@
-```json
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Real Estate Platform Infrastructure - Production Environment'
 
