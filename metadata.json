@@ -10,6 +10,14 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "vpc, lambda, s3, rds, iam, secretsmanager, ec2",
-  "training_quality": "high"
+  "aws_services": [
+    "vpc",
+    "lambda",
+    "s3",
+    "rds",
+    "iam",
+    "secretsmanager",
+    "ec2"
+  ],
+  "training_quality": 8
 }
