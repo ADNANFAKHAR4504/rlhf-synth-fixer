@@ -453,7 +453,7 @@ describe('Infrastructure Stack', () => {
       template.hasOutput('useast1VPCId', {
         Description: 'VPC ID',
         Export: {
-          Name: 'vpc-id-dev-us-east-1',
+          Name: `vpc-id-${environmentSuffix}-us-east-1`,
         },
       });
     });
@@ -462,7 +462,7 @@ describe('Infrastructure Stack', () => {
       template.hasOutput('useast1ApplicationLoadBalancerDNS', {
         Description: 'Application Load Balancer DNS Name',
         Export: {
-          Name: 'alb-dns-dev-us-east-1',
+          Name: `alb-dns-${environmentSuffix}-us-east-1`,
         },
       });
     });
@@ -471,7 +471,7 @@ describe('Infrastructure Stack', () => {
       template.hasOutput('useast1ApplicationLoadBalancerURL', {
         Description: 'Application Load Balancer URL',
         Export: {
-          Name: 'alb-url-dev-us-east-1',
+          Name: `alb-url-${environmentSuffix}-us-east-1`,
         },
       });
     });
@@ -480,7 +480,7 @@ describe('Infrastructure Stack', () => {
       template.hasOutput('useast1DynamoDBTableName', {
         Description: 'DynamoDB Global Table name',
         Export: {
-          Name: 'dynamodb-global-table-dev',
+          Name: `dynamodb-global-table-${environmentSuffix}`,
         },
       });
     });
@@ -489,7 +489,7 @@ describe('Infrastructure Stack', () => {
       template.hasOutput('useast1LogBucket', {
         Description: 'Log bucket',
         Export: {
-          Name: 'log-bucket-dev-us-east-1',
+          Name: `log-bucket-${environmentSuffix}-us-east-1`,
         },
       });
     });
@@ -535,7 +535,7 @@ describe('Infrastructure Stack', () => {
 
     test('Uses default instance type when not provided', () => {
       const infra = new Infrastructure(app, 'DefaultInstanceInfra', {
-        environmentSuffix: 'dev',
+        environmentSuffix: 'test',
         region: 'us-east-1',
         // instanceType not provided
       });
@@ -544,7 +544,7 @@ describe('Infrastructure Stack', () => {
 
     test('Uses custom instance type when provided', () => {
       const infra = new Infrastructure(app, 'CustomInstanceInfra', {
-        environmentSuffix: 'dev',
+        environmentSuffix: 'test',
         region: 'us-east-1',
         instanceType: 't3.xlarge',
       });
@@ -553,7 +553,7 @@ describe('Infrastructure Stack', () => {
 
     test('Uses default capacity values when not provided', () => {
       const infra = new Infrastructure(app, 'DefaultCapacityInfra', {
-        environmentSuffix: 'dev',
+        environmentSuffix: 'test',
         region: 'us-east-1',
         // minCapacity, maxCapacity, desiredCapacity not provided
       });
@@ -562,7 +562,7 @@ describe('Infrastructure Stack', () => {
 
     test('Uses custom capacity values when provided', () => {
       const infra = new Infrastructure(app, 'CustomCapacityInfra', {
-        environmentSuffix: 'dev',
+        environmentSuffix: 'test',
         region: 'us-east-1',
         minCapacity: 1,
         maxCapacity: 5,
@@ -573,7 +573,7 @@ describe('Infrastructure Stack', () => {
 
     test('Uses default VPC CIDR when not provided', () => {
       const infra = new Infrastructure(app, 'DefaultVpcInfra', {
-        environmentSuffix: 'dev',
+        environmentSuffix: 'test',
         region: 'us-east-1',
         // vpcCidr not provided
       });
@@ -582,7 +582,7 @@ describe('Infrastructure Stack', () => {
 
     test('Uses custom VPC CIDR when provided', () => {
       const infra = new Infrastructure(app, 'CustomVpcInfra', {
-        environmentSuffix: 'dev',
+        environmentSuffix: 'test',
         region: 'us-east-1',
         vpcCidr: '192.168.0.0/16',
       });
@@ -591,7 +591,7 @@ describe('Infrastructure Stack', () => {
 
     test('Handles undefined keyPairName', () => {
       const infra = new Infrastructure(app, 'NoKeyPairInfra', {
-        environmentSuffix: 'dev',
+        environmentSuffix: 'test',
         region: 'us-east-1',
         keyPairName: undefined,
       });
@@ -600,7 +600,7 @@ describe('Infrastructure Stack', () => {
 
     test('Handles provided keyPairName', () => {
       const infra = new Infrastructure(app, 'WithKeyPairInfra', {
-        environmentSuffix: 'dev',
+        environmentSuffix: 'test',
         region: 'us-east-1',
         keyPairName: 'my-key-pair',
       });
@@ -635,7 +635,10 @@ describe('Infrastructure Stack', () => {
     });
 
     test('Creates expected number of IAM resources', () => {
-      template.resourceCountIs('AWS::IAM::Role', 3); // Instance role, VPC flow logs role, S3 auto-delete role
+      // In production, S3 auto-delete is disabled, so no auto-delete role is created
+      // In non-production, S3 auto-delete is enabled, so an auto-delete role is created
+      const expectedRoleCount = stack.isProduction ? 2 : 3; // Instance role, VPC flow logs role, (S3 auto-delete role if not production)
+      template.resourceCountIs('AWS::IAM::Role', expectedRoleCount);
       template.resourceCountIs('AWS::IAM::Policy', 2); // Instance policy, VPC flow logs policy
     });
   });
