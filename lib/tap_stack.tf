@@ -4,6 +4,25 @@
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
+# Data source for default VPC if not provided
+data "aws_vpc" "default" {
+  default = true
+}
+
+# Data source for default subnets if not provided
+data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [local.vpc_id]
+  }
+}
+
+# Local variables for VPC and subnet IDs
+locals {
+  vpc_id             = var.vpc_id != "" ? var.vpc_id : data.aws_vpc.default.id
+  private_subnet_ids = length(var.private_subnet_ids) > 0 ? var.private_subnet_ids : data.aws_subnets.default.ids
+}
+
 # KMS Key for encryption
 resource "aws_kms_key" "secrets_key" {
   description             = "KMS key for Secrets Manager encryption"
@@ -91,7 +110,7 @@ resource "aws_kms_alias" "secrets_key_alias" {
 # RDS Subnet Group
 resource "aws_db_subnet_group" "main" {
   name       = "${var.project_name}-db-subnet"
-  subnet_ids = var.private_subnet_ids
+  subnet_ids = local.private_subnet_ids
   
   tags = {
     Name        = "${var.project_name}-db-subnet"
@@ -196,7 +215,7 @@ resource "aws_db_instance" "main" {
 resource "aws_security_group" "rds" {
   name        = "${var.project_name}-rds-sg"
   description = "Security group for RDS MySQL"
-  vpc_id      = var.vpc_id
+  vpc_id      = local.vpc_id
   
   tags = {
     Name        = "${var.project_name}-rds-sg"
@@ -217,7 +236,7 @@ resource "aws_vpc_security_group_ingress_rule" "rds_from_lambda" {
 resource "aws_security_group" "lambda" {
   name        = "${var.project_name}-lambda-sg"
   description = "Security group for Lambda functions"
-  vpc_id      = var.vpc_id
+  vpc_id      = local.vpc_id
   
   tags = {
     Name        = "${var.project_name}-lambda-sg"
@@ -384,7 +403,7 @@ resource "aws_lambda_function" "rotation" {
   }
   
   vpc_config {
-    subnet_ids         = var.private_subnet_ids
+    subnet_ids         = local.private_subnet_ids
     security_group_ids = [aws_security_group.lambda.id]
   }
   
@@ -432,10 +451,10 @@ resource "aws_lambda_permission" "rotation" {
 
 # VPC Endpoint for Secrets Manager
 resource "aws_vpc_endpoint" "secretsmanager" {
-  vpc_id              = var.vpc_id
+  vpc_id              = local.vpc_id
   service_name        = "com.amazonaws.${data.aws_region.current.name}.secretsmanager"
   vpc_endpoint_type   = "Interface"
-  subnet_ids          = var.private_subnet_ids
+  subnet_ids          = local.private_subnet_ids
   security_group_ids  = [aws_security_group.vpc_endpoints.id]
   private_dns_enabled = true
   
@@ -447,10 +466,10 @@ resource "aws_vpc_endpoint" "secretsmanager" {
 
 # VPC Endpoint for KMS
 resource "aws_vpc_endpoint" "kms" {
-  vpc_id              = var.vpc_id
+  vpc_id              = local.vpc_id
   service_name        = "com.amazonaws.${data.aws_region.current.name}.kms"
   vpc_endpoint_type   = "Interface"
-  subnet_ids          = var.private_subnet_ids
+  subnet_ids          = local.private_subnet_ids
   security_group_ids  = [aws_security_group.vpc_endpoints.id]
   private_dns_enabled = true
   
@@ -464,7 +483,7 @@ resource "aws_vpc_endpoint" "kms" {
 resource "aws_security_group" "vpc_endpoints" {
   name        = "${var.project_name}-vpc-endpoints-sg"
   description = "Security group for VPC endpoints"
-  vpc_id      = var.vpc_id
+  vpc_id      = local.vpc_id
   
   tags = {
     Name        = "${var.project_name}-vpc-endpoints-sg"

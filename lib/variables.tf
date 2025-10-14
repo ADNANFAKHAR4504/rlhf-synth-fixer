@@ -21,11 +21,13 @@ variable "aws_region" {
 variable "vpc_id" {
   description = "VPC ID for resources"
   type        = string
+  default     = ""
 }
 
 variable "private_subnet_ids" {
   description = "List of private subnet IDs for RDS and Lambda"
   type        = list(string)
+  default     = []
 }
 
 # RDS Configuration
