@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "Production-grade secure web application stack (no certificate required; HTTP-only ALB)"
+Description: "Production-grade web application stack (HTTP-only ALB)"
 
 Parameters:
   AllowedAdminCidr:
@@ -73,7 +73,7 @@ Conditions:
   HasKeyPairName: !Not [!Equals [!Ref KeyPairName, ""]]
 
 Resources:
-  # KMS (region-scoped Logs principal + full actions)
+  # KMS (regional Logs principal + full actions; CloudTrail context/grant)
   MasterKMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -95,28 +95,45 @@ Resources:
                 - rds.amazonaws.com
                 - backup.amazonaws.com
             Action:
-              [
-                "kms:Encrypt",
-                "kms:Decrypt",
-                "kms:ReEncrypt*",
-                "kms:GenerateDataKey*",
-                "kms:DescribeKey",
-                "kms:CreateGrant",
-              ]
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+              - kms:CreateGrant
             Resource: "*"
+          - Sid: AllowCloudTrailEncryptDecryptWithContext
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - kms:GenerateDataKey*
+              - kms:Decrypt
+              - kms:DescribeKey
+            Resource: "*"
+            Condition:
+              StringLike:
+                kms:EncryptionContext:aws:cloudtrail:arn: !Sub "arn:aws:cloudtrail:*:${AWS::AccountId}:trail/*"
+          - Sid: AllowCloudTrailCreateGrant
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: [kms:CreateGrant]
+            Resource: "*"
+            Condition:
+              Bool:
+                kms:GrantIsForAWSResource: "true"
           - Sid: AllowCloudWatchLogsRegional
             Effect: Allow
             Principal:
               Service: !Sub "logs.${AWS::Region}.amazonaws.com"
             Action:
-              [
-                "kms:Encrypt",
-                "kms:Decrypt",
-                "kms:ReEncrypt*",
-                "kms:GenerateDataKey*",
-                "kms:DescribeKey",
-                "kms:CreateGrant",
-              ]
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+              - kms:CreateGrant
             Resource: "*"
       EnableKeyRotation: true
       Tags:
@@ -837,7 +854,7 @@ Resources:
             Effect: Allow
             Principal: { Service: cloudtrail.amazonaws.com }
             Action: "s3:PutObject"
-            Resource: !Sub "${LoggingBucket.Arn}/cloudtrail/*"
+            Resource: !Sub "${LoggingBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
             Condition:
               { StringEquals: { "s3:x-amz-acl": "bucket-owner-full-control" } }
           - Sid: AWSConfigBucketPermissionsCheck
@@ -887,7 +904,7 @@ Resources:
       RetentionInDays: 30
       KmsKeyId: !GetAtt MasterKMSKey.Arn
 
-  # AWS Config (no AWS-managed policy attach; inline instead)
+  # AWS Config (inline policy only)
   ConfigServiceRole:
     Type: AWS::IAM::Role
     Properties:
