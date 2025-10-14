@@ -559,7 +559,6 @@ func main() {
 		}
 
 		dbSecret, err := secretsmanager.NewSecret(ctx, "db-secret", &secretsmanager.SecretArgs{
-			Name:        pulumi.String(fmt.Sprintf("%s-%s-db-credentials", projectName, envSuffix)),
 			Description: pulumi.String("Database credentials for RDS PostgreSQL"),
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String(fmt.Sprintf("%s-%s-db-secret", projectName, envSuffix)),
