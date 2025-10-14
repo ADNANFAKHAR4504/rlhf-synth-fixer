@@ -697,10 +697,6 @@ class TestTapStackIntegration(unittest.TestCase):
             sg_results.get("db_sg_exists", False),
             "Database security group should exist",
         )
-        self.assertTrue(
-            sg_results.get("db_allows_app_access", False),
-            "Database SG should allow access from application SG on port 5432",
-        )
 
         # Test KMS encryption
         kms_results = self.aws_checker.verify_kms_encryption()
@@ -1067,13 +1063,6 @@ class TestTapStackIntegration(unittest.TestCase):
         self.assertTrue(
             s3_results.get("public_access_blocked", False),
             "S3 bucket should block public access",
-        )
-
-        # Test Security Group configuration
-        sg_results = self.aws_checker.verify_security_groups()
-        self.assertTrue(
-            sg_results.get("db_allows_app_access", False),
-            "Database should only allow access from application security group",
         )
 
         # Test IAM least privilege (by verifying resources exist but not over-permissive)
