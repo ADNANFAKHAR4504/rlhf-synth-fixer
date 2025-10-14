@@ -110,12 +110,12 @@ class TapStack(pulumi.ComponentResource):
         bucket_public_access_block = aws.s3.BucketPublicAccessBlock(
             f"{resource_prefix}-images-pab",
             bucket=self.image_bucket.id,
-            block_public_acls=True,
-            block_public_policy=True,
-            ignore_public_acls=True,
-            restrict_public_buckets=True,
-            opts=ResourceOptions(parent=self)
-        )
+                block_public_acls=True,
+                block_public_policy=True,
+                ignore_public_acls=True,
+                restrict_public_buckets=True,
+                opts=ResourceOptions(parent=self)
+            )
 
         # ==================== DynamoDB Table ====================
 
@@ -198,7 +198,7 @@ class TapStack(pulumi.ComponentResource):
             message_retention_seconds=SQS_MESSAGE_RETENTION,
             redrive_policy=self.dlq.arn.apply(lambda arn: json.dumps({
                 "deadLetterTargetArn": arn,
-                "maxReceiveCount": 3
+                    "maxReceiveCount": 3
             })),
             tags={
                 "Environment": stack_name,
@@ -496,12 +496,12 @@ def handler(event, context):
                 bucket = s3_record['s3']['bucket']['name']
                 key = s3_record['s3']['object']['key']
                 image_id = key.split('/')[-1].split('.')[0]
-            else:
+        else:
                 # Direct message format
                 bucket = message_body['bucket']
                 key = message_body['key']
                 image_id = message_body['image_id']
-            
+        
             print(f"Processing image: {image_id} from {bucket}/{key}")
             
             # Update status to processing
@@ -662,7 +662,7 @@ def handler(event, context):
             
             # Save results to S3
             results_key = f"results/{image_id}.json"
-            s3.put_object(
+        s3.put_object(
                 Bucket=bucket,
                 Key=results_key,
                 Body=json.dumps(predictions, indent=2),
@@ -670,7 +670,7 @@ def handler(event, context):
             )
             
             # Update DynamoDB with results
-            table.update_item(
+        table.update_item(
                 Key={'image_id': image_id},
                 UpdateExpression='''
                     SET #status = :status, 
@@ -680,8 +680,8 @@ def handler(event, context):
                         top_prediction = :top_prediction,
                         confidence = :confidence
                 ''',
-                ExpressionAttributeNames={'#status': 'status'},
-                ExpressionAttributeValues={
+            ExpressionAttributeNames={'#status': 'status'},
+            ExpressionAttributeValues={
                     ':status': 'completed',
                     ':timestamp': int(datetime.utcnow().timestamp()),
                     ':results': json.dumps(predictions),
@@ -692,8 +692,8 @@ def handler(event, context):
             )
             
             print(f"Inference completed for {image_id}: {predictions['classes'][0]} ({predictions['confidence']*100:.1f}%)")
-            
-        except Exception as e:
+        
+    except Exception as e:
             print(f"Error during inference: {str(e)}")
             print(traceback.format_exc())
             
@@ -807,7 +807,7 @@ def handler(event, context):
                         image_data = base64.b64decode(body_data['image_base64'])
                         
                         # Upload to S3
-                        s3.put_object(
+        s3.put_object(
                             Bucket=bucket_name,
                             Key=key,
                             Body=image_data
@@ -824,10 +824,10 @@ def handler(event, context):
                         )
                         
                         # Update status
-                        table.update_item(
+        table.update_item(
                             Key={'image_id': image_id},
                             UpdateExpression='SET #status = :status',
-                            ExpressionAttributeNames={'#status': 'status'},
+            ExpressionAttributeNames={'#status': 'status'},
                             ExpressionAttributeValues={':status': 'queued'}
                         )
                 except:
@@ -899,7 +899,7 @@ def handler(event, context):
                 'headers': headers,
                 'body': json.dumps({'error': 'Unsupported endpoint'})
             }
-            
+        
     except Exception as e:
         print(f"API handler error: {str(e)}")
         import traceback
@@ -1109,13 +1109,13 @@ def handler(event, context):
         # Lambda error rate alarm for inference
         inference_error_alarm = aws.cloudwatch.MetricAlarm(
             f"{resource_prefix}-inference-errors",
-            comparison_operator="GreaterThanThreshold",
-            evaluation_periods=2,
-            metric_name="Errors",
-            namespace="AWS/Lambda",
-            period=60,
-            statistic="Sum",
-            threshold=5,
+                comparison_operator="GreaterThanThreshold",
+                evaluation_periods=2,
+                metric_name="Errors",
+                namespace="AWS/Lambda",
+                period=60,
+                statistic="Sum",
+                threshold=5,
             alarm_description="Inference function error rate too high",
             dimensions={"FunctionName": self.inference_function.name},
             tags={
@@ -1123,8 +1123,8 @@ def handler(event, context):
                 "Severity": "High",
                 **self.tags
             },
-            opts=ResourceOptions(parent=self)
-        )
+                opts=ResourceOptions(parent=self)
+            )
 
         # Lambda throttle alarm
         preprocessing_throttle_alarm = aws.cloudwatch.MetricAlarm(
@@ -1168,16 +1168,14 @@ def handler(event, context):
 
         # ==================== Outputs ====================
 
-        # Register outputs
-        self.register_outputs({
-            "api_base_url": self.api.api_endpoint,
-            "image_bucket_name": self.image_bucket.id,
-            "upload_prefix": "uploads/",
-            "results_table_name": self.results_table.name,
-            "preprocessing_queue_url": self.preprocessing_queue.url,
-            "inference_queue_url": self.inference_queue.url,
-            "dlq_url": self.dlq.url,
-            "preprocessing_function_arn": self.preprocessing_function.arn,
-            "inference_function_arn": self.inference_function.arn,
-            "api_handler_function_arn": self.api_handler_function.arn,
-        })
+        # Export outputs at stack level (accessible via pulumi stack output)
+        pulumi.export("api_base_url", self.api.api_endpoint)
+        pulumi.export("image_bucket_name", self.image_bucket.id)
+        pulumi.export("upload_prefix", "uploads/")
+        pulumi.export("results_table_name", self.results_table.name)
+        pulumi.export("preprocessing_queue_url", self.preprocessing_queue.url)
+        pulumi.export("inference_queue_url", self.inference_queue.url)
+        pulumi.export("dlq_url", self.dlq.url)
+        pulumi.export("preprocessing_function_arn", self.preprocessing_function.arn)
+        pulumi.export("inference_function_arn", self.inference_function.arn)
+        pulumi.export("api_handler_function_arn", self.api_handler_function.arn)
