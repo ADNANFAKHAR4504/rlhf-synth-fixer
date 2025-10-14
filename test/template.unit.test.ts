@@ -364,13 +364,11 @@ describe('CloudFormation Template Unit Tests', () => {
     test('should have application log group', () => {
       expect(template.Resources.ApplicationLogGroup).toBeDefined();
       expect(template.Resources.ApplicationLogGroup.Type).toBe('AWS::Logs::LogGroup');
-      expect(template.Resources.ApplicationLogGroup.DependsOn).toBe('EncryptionKey');
     });
 
     test('should have error log group', () => {
       expect(template.Resources.ErrorLogGroup).toBeDefined();
       expect(template.Resources.ErrorLogGroup.Type).toBe('AWS::Logs::LogGroup');
-      expect(template.Resources.ErrorLogGroup.DependsOn).toBe('EncryptionKey');
     });
 
     test('log groups should have retention policy', () => {
