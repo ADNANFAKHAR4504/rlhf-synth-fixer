@@ -103,8 +103,6 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
       // Internet Gateway State might be undefined in some cases
       if (igw.State !== undefined) {
         expect(igw.State).toBe('available');
-      } else {
-        console.log('Internet Gateway State is undefined - this is expected in some regions');
       }
     });
 
@@ -206,8 +204,6 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
         expect(albSg.IpPermissions!.some((rule: any) => 
           rule.FromPort === 443 && rule.ToPort === 443 && rule.IpProtocol === 'tcp'
         )).toBe(true);
-      } else {
-        console.log('ALB Security Group not found - this is expected if ALB is not created');
       }
 
       // Database Security Group (using actual resource name)
@@ -218,8 +214,6 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
         expect(dbSg.IpPermissions!.some((rule: any) => 
           rule.FromPort === 3306 && rule.ToPort === 3306 && rule.IpProtocol === 'tcp'
         )).toBe(true);
-      } else {
-        console.log('Database Security Group not found - this is expected if database is not created');
       }
     });
   });
@@ -400,7 +394,7 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
           expect(associations.ResourceArns).toContain(alb!.LoadBalancerArn);
         }
       } catch (error) {
-        console.log('WAF access denied or not found - this is expected in some test environments');
+        // WAF access denied or not found - skip test
       }
     });
 
@@ -554,7 +548,6 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
         expect(kmsKeyId).toContain('arn:aws:kms');
       } else {
         expect(kmsKeyId).toBeDefined();
-        console.log('S3 bucket uses KMS key ID:', kmsKeyId);
       }
 
       // 3. Verify RDS uses KMS encryption
@@ -655,8 +648,6 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
         // Certificate might be in different states depending on DNS validation
         expect(['ISSUED', 'PENDING_VALIDATION', 'FAILED']).toContain(certificate.Status);
         expect(certificate.Type).toBe('AMAZON_ISSUED');
-      } else {
-        console.log('No SSL Certificate found - this is expected if DomainName is example.com');
       }
     });
   });
@@ -858,8 +849,6 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
         );
         if (monitoringRole) {
           expect(monitoringRole.AssumeRolePolicyDocument).toBeDefined();
-        } else {
-          console.log('RDS Monitoring Role not found - this is expected if monitoring is not enabled');
         }
       } else {
         // Check if the role exists by name 
@@ -870,8 +859,6 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
         );
         if (monitoringRole) {
           expect(monitoringRole.AssumeRolePolicyDocument).toBeDefined();
-        } else {
-          console.log('RDS Monitoring Role ARN not found - this is expected if monitoring is not enabled');
         }
       }
     });
@@ -921,8 +908,6 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
         );
         if (cloudTrailRole) {
           expect(cloudTrailRole.AssumeRolePolicyDocument).toBeDefined();
-        } else {
-          console.log('CloudTrail Role not found - this is expected if CloudWatch logs are not enabled');
         }
       } else {
         // Check if the role exists by name 
@@ -933,8 +918,6 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
         );
         if (cloudTrailRole) {
           expect(cloudTrailRole.AssumeRolePolicyDocument).toBeDefined();
-        } else {
-          console.log('CloudTrail CloudWatch Logs Role ARN not found - this is expected if CloudWatch logs are not enabled');
         }
       }
     });
@@ -974,7 +957,7 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
           expect(ec2LogGroup.retentionInDays).toBe(30);
         }
       } else {
-        console.log('EC2 log group not found - this is expected if EC2 logging is not enabled');
+        // EC2 log group not found - skip test
       }
 
       // Check for CloudTrail log group
@@ -993,8 +976,6 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
         if (cloudTrailLogGroup.retentionInDays !== undefined) {
           expect(cloudTrailLogGroup.retentionInDays).toBe(90);
         }
-      } else {
-        console.log('CloudTrail log group not found - this is expected if CloudTrail logging is not enabled');
       }
     });
 
@@ -1008,8 +989,6 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
         expect(['ISSUED', 'PENDING_VALIDATION', 'FAILED']).toContain(certificate.Status);
         expect(certificate.Type).toBe('AMAZON_ISSUED');
         expect(certificate.DomainName).toContain('enterpriseapp');
-      } else {
-        console.log('No SSL Certificate found - this is expected if DomainName is example.com');
       }
     });
 
