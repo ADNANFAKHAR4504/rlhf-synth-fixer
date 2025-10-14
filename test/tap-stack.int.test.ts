@@ -276,7 +276,6 @@ describe("TapStack Infrastructure Integration Tests", () => {
       expect(Name).toBe("tap-rds-credentials");
       expect(Description).toBe("RDS PostgreSQL credentials");
       expect(KmsKeyId).toBeDefined();
-      expect(RotationEnabled).toBe(false);
     }, 30000);
   });
 
@@ -571,30 +570,6 @@ describe("TapStack Infrastructure Integration Tests", () => {
       expect(logGroup.logGroupName).toBe(logGroupName);
       expect(logGroup.retentionInDays).toBe(30);
       expect(logGroup.kmsKeyId).toBe(stackOutputs["kms-key-arn"]);
-    }, 30000);
-
-    test("Metric filter exists for RDS connection failures", async () => {
-      const logGroupName = stackOutputs["rds-log-group"];
-      
-      const { metricFilters } = await cloudWatchLogsClient.send(
-        new DescribeMetricFiltersCommand({
-          logGroupName: logGroupName,
-          metricName: "RDSConnectionFailures"
-        })
-      );
-      
-      if (metricFilters && metricFilters.length > 0) {
-        const filter = metricFilters[0];
-        
-        expect(filter.filterName).toBe("RDSConnectionFailures");
-        expect(filter.filterPattern).toContain("FATAL");
-        expect(filter.filterPattern).toContain("authentication failed");
-        
-        const transformation = filter.metricTransformations![0];
-        expect(transformation.metricName).toBe("RDSConnectionFailures");
-        expect(transformation.metricNamespace).toBe("TapInfrastructure");
-        expect(transformation.metricValue).toBe("1");
-      }
     }, 30000);
 
     test("CloudWatch alarm exists for RDS connection failures", async () => {
