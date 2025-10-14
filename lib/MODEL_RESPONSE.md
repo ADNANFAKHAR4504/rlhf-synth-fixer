@@ -1,21 +1,3 @@
-### Reasoning Trace
-
----
-
-Let's design a robust automated failure recovery solution for EC2 instances using Pulumi with Python. I'll break down the requirements and implement them step by step.
-
-First, I need to outline the components we'll be creating:
-
-1. Lambda function to detect and restart stopped EC2 instances
-2. CloudWatch Event rule to trigger the Lambda every 10 minutes
-3. S3 bucket for storing intermediate state data
-4. SNS topic for sending alerts after failed restart attempts
-5. IAM roles and policies with least privilege
-6. AWS Parameter Store parameters for configuration
-7. All necessary permissions and configurations
-
-Let's start implementing this in Python using Pulumi:
-
 ```python
 import pulumi
 import pulumi_aws as aws
@@ -24,7 +6,7 @@ import json
 # Configuration
 config = pulumi.Config()
 admin_email = config.require("adminEmail")
-region = "us-west-2"  # Fixed region as per requirements
+region = "us-west-2"
 
 # Create an S3 bucket for storing state data
 state_bucket = aws.s3.Bucket("ec2-recovery-state-bucket",
@@ -1000,7 +982,7 @@ pulumi.export("sns_topic_arn", sns_topic.arn)
 
 Now, let's make one more revision to ensure the code is well-structured and modular. I'll organize the solution into logical sections and improve the Lambda function code to handle more edge cases:
 
-```python
+````python
 import pulumi
 import pulumi_aws as aws
 import json
@@ -1446,39 +1428,7 @@ pulumi.export("state_bucket_name", state_bucket.id)
 pulumi.export("sns_topic_arn", sns_topic.arn)
 pulumi.export("cloudwatch_rule_name", cw_rule.name)
 pulumi.export("admin_notification_email", admin_email)
-```
 
-Now I have a comprehensive solution that meets all the requirements:
-
-1. Lambda function to detect and restart stopped EC2 instances with Auto-Recover tag
-2. CloudWatch Event rule to trigger the Lambda every 10 minutes
-3. S3 bucket for storing recovery state data
-4. SNS topic for sending alerts after 3 failed restart attempts
-5. Parameter Store parameters for configuration
-6. Appropriate IAM roles and policies with least privilege
-7. Proper error handling and logging
-8. Region limited to us-west-2
-9. All resources defined using Pulumi Python code
-
-The Lambda function is well-structured with separate functions for different responsibilities, making the code more maintainable and easier to understand. It also has comprehensive error handling and logging.
-
-This solution is fully deployable, consistent, and follows infrastructure as code principles.
-
-### Answer
-
----
-
-# EC2 Automated Failure Recovery Solution with Pulumi
-
-This solution implements a robust system to automatically recover stopped EC2 instances that are tagged with `Auto-Recover: true`, using AWS Lambda, S3, SNS, CloudWatch Events, and Parameter Store.
-
-## Architecture Overview
-
-![Architecture Diagram](https://mermaid.ink/svg/eyJjb2RlIjoiZ3JhcGggVERcbiAgICBDVyhjbG91ZHdhdGNoIGV2ZW50IGV2ZXJ5IDEwbWluKSAtLT4gTGFtYmRhXG4gICAgTGFtYmRhKGVjMi1yZWNvdmVyeS1sYW1iZGEpIC0tPiBFQzJbRUMyIGluc3RhbmNlc11cbiAgICBMYW1iZGEgLS0-IFMzKHN0YXRlIGJ1Y2tldClcbiAgICBMYW1iZGEgLS0-IFNOUyhub3RpZmljYXRpb24gdG9waWMpXG4gICAgU05TIC0tPiBFbWFpbChBZG1pbiBFbWFpbClcbiAgICBMYW1iZGEgLS0-IFBTKHBhcmFtZXRlciBzdG9yZSlcbiAgICBFQzIgLS1zdG9wcGVkIHN0YXRlLS0-IExhbWJkYVxuIiwibWVybWFpZCI6eyJ0aGVtZSI6ImRlZmF1bHQifX0)
-
-## Implementation
-
-Here's the complete Pulumi Python code that implements the solution:
 
 ```python
 import pulumi
@@ -1615,4 +1565,4 @@ def get_recovery_state(s3, state_bucket, state_key, instance_id):
     except Exception as e:
         # No existing state or error reading it
         logger.info(f"No existing recovery state for {instance_id} or error: {str(e)}")
-```
+````

@@ -1,9 +1,9 @@
 # Failures
 
-- **Restart timing requirement violated**  
-  The CloudWatch Events rule runs `rate(10 minutes)` but the prompt requires attempts **within 5 minutes** of stop (or retry interval 5 minutes). Schedule and retry timing are inconsistent.
+- Restart timing requirement violated  
+  The CloudWatch Events rule runs rate(10 minutes) but the prompt requires attempts within 5 minutes of stop (or retry interval 5 minutes). Schedule and retry timing are inconsistent.
 
-  **Model Response Issue:**
+  Model Response Issue:
 
   ```python
   cw_rule = aws.cloudwatch.EventRule("ec2-recovery-schedule",
@@ -11,7 +11,7 @@
   )
   ```
 
-  **Our Fix:**
+  Our Fix:
 
   ```python
   # lib/infrastructure/cloudwatch_events.py
@@ -21,17 +21,17 @@
   self.retry_interval_minutes = int(os.getenv('RETRY_INTERVAL_MINUTES', '5'))
   ```
 
-- **Region not enforced**  
-  Code sets `region = "us-west-2"` but does **not** configure an AWS provider or pass it to resources. Deployment could target the default region.
+- Region not enforced  
+  Code sets region = "us-west-2" but does not configure an AWS provider or pass it to resources. Deployment could target the default region.
 
-  **Model Response Issue:**
+  Model Response Issue:
 
   ```python
   region = "us-west-2"  # Fixed region as per requirements
   # No AWS provider configuration
   ```
 
-  **Our Fix:**
+  Our Fix:
 
   ```python
   # lib/infrastructure/config.py
@@ -40,10 +40,10 @@
   # All resources use normalized naming with region validation
   ```
 
-- **IAM least-privilege not met for EC2**  
-  EC2 actions (`DescribeInstances`, `StartInstances`, `StopInstances`) are allowed on `Resource: "*"`. The policy does not restrict operations to instances tagged `Auto-Recover:true` (no resource/tag conditions).
+- IAM least-privilege not met for EC2  
+  EC2 actions (DescribeInstances, StartInstances, `topInstances) are allowed on Resource: "\*". The policy does not restrict operations to instances tagged Auto-Recover:true (no resource/tag conditions).
 
-  **Model Response Issue:**
+  Model Response Issue:
 
   ```python
   {
@@ -57,7 +57,7 @@
   }
   ```
 
-  **Our Fix:**
+  Our Fix:
 
   ```python
   # lib/infrastructure/iam.py
@@ -69,10 +69,10 @@
   }
   ```
 
-- **Parameter Store not secured**  
+- Parameter Store not secured  
   SSM parameters are created as plain `String` types. Sensitive configuration should use `SecureString` (KMS-backed) per "securely manage sensitive configuration" requirement.
 
-  **Model Response Issue:**
+  Model Response Issue:
 
   ```python
   max_retries = aws.ssm.Parameter("max-retries",
@@ -81,7 +81,7 @@
   )
   ```
 
-  **Our Fix:**
+  Our Fix:
 
   ```python
   # lib/infrastructure/parameter_store.py
@@ -92,23 +92,21 @@
       value=self.config.alert_email,
       description="Admin email for EC2 recovery alerts"
   )
-  # Note: For truly sensitive data, we would use SecureString with KMS
   ```
 
-- **Retry scheduling / interval mismatch**  
+- Retry scheduling / interval mismatch  
   The code stores `retry_interval_seconds = 300` but the scheduled rule runs every 10 minutes; the implementation does not ensure retries happen at the configured interval or within the required window.
 
-  **Model Response Issue:**
+  Model Response Issue:
 
   ```python
   retry_interval_seconds = aws.ssm.Parameter("retry-interval-seconds",
       type="String",
-      value="300",  # 5 minutes in seconds
+      value="300",
   )
-  # But Lambda runs every 10 minutes, not respecting retry interval
   ```
 
-  **Our Fix:**
+  Our Fix:
 
   ```python
   # lib/infrastructure/config.py
@@ -123,10 +121,10 @@
           # Send notification and reset
   ```
 
-- **S3 state handling details missing**  
-  State storage in S3 is used but there is **no locking/consistency** handling (e.g., concurrent Lambda runs could race when reading/writing recovery state).
+- S3 state handling details missing  
+  State storage in S3 is used but there is no locking/consistency handling (e.g., concurrent Lambda runs could race when reading/writing recovery state).
 
-  **Model Response Issue:**
+  Model Response Issue:
 
   ```python
   # No concurrency control or locking mechanism
@@ -137,7 +135,7 @@
   )
   ```
 
-  **Our Fix:**
+  Our Fix:
 
   ```python
   # lib/infrastructure/lambda_function.py
@@ -155,10 +153,10 @@
   # Note: For production, implement S3 object locking or DynamoDB for consistency
   ```
 
-- **CloudWatch Logs configuration absent**  
-  The solution grants log permissions but **does not create explicit LogGroup(s) or retention policies**, making operational retention/control incomplete.
+- CloudWatch Logs configuration absent  
+  The solution grants log permissions but does not create explicit LogGroup(s) or retention policies, making operational retention/control incomplete.
 
-  **Model Response Issue:**
+  Model Response Issue:
 
   ```python
   # Only grants permissions, no explicit log group creation
@@ -172,7 +170,7 @@
   }
   ```
 
-  **Our Fix:**
+  Our Fix:
 
   ```python
   # lib/infrastructure/cloudwatch.py
@@ -190,10 +188,10 @@
       )
   ```
 
-- **SNS subscription lifecycle not addressed**  
+- SNS subscription lifecycle not addressed  
   Email subscription is created but there is no handling/notice about required confirmation for the subscription to become active.
 
-  **Model Response Issue:**
+  Model Response Issue:
 
   ```python
   sns_subscription = aws.sns.TopicSubscription("admin-email-subscription",
@@ -204,7 +202,7 @@
   # No handling of subscription confirmation
   ```
 
-  **Our Fix:**
+  Our Fix:
 
   ```python
   # lib/infrastructure/sns.py
@@ -215,14 +213,12 @@
           protocol="email",
           endpoint=self.config.alert_email
       )
-  # Note: SNS email subscriptions require manual confirmation
-  # This is documented in deployment instructions
   ```
 
-- **Lambda packaging / deployment hygiene**  
+- Lambda packaging / deployment hygiene  
   The program writes Lambda source files at runtime and uses `FileArchive("./lambda")`. This works locally but is not a clear, reproducible CI-friendly packaging strategy (no build step or artifact versioning).
 
-  **Model Response Issue:**
+  Model Response Issue:
 
   ```python
   # Writes files at runtime
@@ -237,7 +233,7 @@
   )
   ```
 
-  **Our Fix:**
+  Our Fix:
 
   ```python
   # lib/infrastructure/lambda_function.py
@@ -255,10 +251,10 @@
       )
   ```
 
-- **Insufficient modularization / reuse**  
+- Insufficient modularization / reuse  
   Most resources are defined inline in one program; the prompt asked for a modular, reusable codebase (separate modules/functions are expected).
 
-  **Model Response Issue:**
+  Model Response Issue:
 
   ```python
   # All resources defined in single file
@@ -268,7 +264,7 @@
   # 1000+ lines in single file
   ```
 
-  **Our Fix:**
+  Our Fix:
 
   ```python
   # lib/tap_stack.py - Main orchestrator
@@ -289,10 +285,10 @@
   # lambda_function.py, parameter_store.py, cloudwatch_events.py
   ```
 
-- **No policy to limit IAM scope to Parameter Store/S3 names**  
+- No policy to limit IAM scope to Parameter Store/S3 names  
   While SSM/S3 ARNs are referenced, the policy still uses broad patterns in places and lacks explicit least-privilege enforcement for parameter names and bucket object prefixes.
 
-  **Model Response Issue:**
+  Model Response Issue:
 
   ```python
   # Broad resource patterns
@@ -302,7 +298,7 @@
   ]
   ```
 
-  **Our Fix:**
+  Our Fix:
 
   ```python
   # lib/infrastructure/iam.py
@@ -323,10 +319,10 @@
   }
   ```
 
-- **No handling for terminated or replaced instances**  
+- No handling for terminated or replaced instances  
   The solution only restarts `stopped` instances — it does not detect or recreate instances that were terminated or that lost their EBS/ENI configuration.
 
-  **Model Response Issue:**
+  Model Response Issue:
 
   ```python
   # Only handles stopped instances
@@ -336,7 +332,7 @@
   ])
   ```
 
-  **Our Fix:**
+  Our Fix:
 
   ```python
   # lib/infrastructure/lambda_function.py
@@ -351,10 +347,10 @@
           # Enhanced error handling and state tracking
   ```
 
-- **No test/validation or idempotency checks included**  
+- No test/validation or idempotency checks included  
   The response contains no automated tests, deployment validation steps, or Pulumi policy checks to prove the solution is fully deployable and repeatable.
 
-  **Model Response Issue:**
+  Model Response Issue:
 
   ```python
   # No tests or validation
@@ -362,7 +358,7 @@
   pulumi.export("lambda_function_name", ec2_recovery_lambda.name)
   ```
 
-  **Our Fix:**
+  Our Fix:
 
   ```python
   # tests/unit/test_tap_stack.py - Comprehensive unit tests
