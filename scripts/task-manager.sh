@@ -1,16 +1,77 @@
 #!/bin/bash
 # Pure shell task management - NO Python dependencies
 # Proper CSV parsing with quoted field support
+# Thread-safe with file locking for parallel execution
 
 set -euo pipefail
 
 CSV_FILE="${CSV_FILE:-tasks.csv}"
 BACKUP_FILE="${BACKUP_FILE:-tasks.csv.backup}"
+LOCK_FILE="${LOCK_FILE:-tasks.csv.lock}"
+LOCK_TIMEOUT="${LOCK_TIMEOUT:-60}"  # Maximum seconds to wait for lock
 
 # Colors
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 log_info() { echo -e "${GREEN}✅ $1${NC}" >&2; }
 log_error() { echo -e "${RED}❌ $1${NC}" >&2; }
+log_warn() { echo -e "${YELLOW}⚠️  $1${NC}" >&2; }
+
+# Acquire exclusive lock with timeout
+# Uses mkdir for atomicity (portable across all Unix systems including macOS)
+# Returns: 0 on success, 1 on timeout
+acquire_lock() {
+    local elapsed=0
+    local wait_interval=0.1
+    
+    log_info "Attempting to acquire lock (PID: $$)..."
+    
+    # Try to create lock directory atomically (mkdir is atomic)
+    while ! mkdir "$LOCK_FILE" 2>/dev/null; do
+        sleep "$wait_interval"
+        elapsed=$(awk "BEGIN {print $elapsed + $wait_interval}")
+        
+        if (( $(awk "BEGIN {print ($elapsed >= $LOCK_TIMEOUT)}") )); then
+            # Check if lock is stale (older than 5 minutes)
+            if [ -d "$LOCK_FILE" ]; then
+                local lock_age
+                lock_age=$(($(date +%s) - $(stat -f %m "$LOCK_FILE" 2>/dev/null || stat -c %Y "$LOCK_FILE" 2>/dev/null || echo 0)))
+                if [ "$lock_age" -gt 300 ]; then
+                    log_warn "Removing stale lock (age: ${lock_age}s)"
+                    rmdir "$LOCK_FILE" 2>/dev/null || true
+                    continue
+                fi
+            fi
+            log_error "Failed to acquire lock after ${LOCK_TIMEOUT}s (another process may be holding it)"
+            return 1
+        fi
+        
+        # Log every 5 seconds
+        if (( $(awk "BEGIN {print (int($elapsed) % 5 == 0 && $elapsed > 0)}") )); then
+            log_warn "Still waiting for lock... (${elapsed}s elapsed)"
+        fi
+    done
+    
+    # Write PID to lock directory for debugging
+    echo $$ > "$LOCK_FILE/pid" 2>/dev/null || true
+    
+    log_info "Lock acquired (PID: $$)"
+    return 0
+}
+
+# Release lock
+# Removes the lock directory
+release_lock() {
+    if [ -d "$LOCK_FILE" ]; then
+        rm -f "$LOCK_FILE/pid" 2>/dev/null || true
+        rmdir "$LOCK_FILE" 2>/dev/null || true
+        log_info "Lock released (PID: $$)"
+    fi
+}
+
+# Cleanup lock file on exit
+cleanup_lock() {
+    release_lock
+}
 
 # Parse a CSV line properly (handles quotes and embedded commas)
 # This AWK script correctly handles RFC 4180 CSV format
@@ -75,7 +136,7 @@ select_task() {
     [ ! -f "$CSV_FILE" ] && { log_error "CSV not found"; exit 1; }
     
     # Get first pending task with hard/medium difficulty
-    # Returns: task_id, status, platform, difficulty, subtask, language (tab-separated)
+    # Returns: task_id, status, platform, language, difficulty, subtask (tab-separated)
     local result
     result=$(parse_csv | awk -F'\t' '{
         task_id=$1; status=$2; platform=$3; difficulty=$4; subtask=$5; language=$6
@@ -104,10 +165,27 @@ select_task() {
     echo "$result"
 }
 
-# Update task status
+# Update task status (with optional locking)
+# If called from select_and_update, lock is already held
+# If called standalone, acquires lock
 update_status() {
     local task_id="$1" new_status="${2:-in_progress}" notes="${3:-}"
+    local needs_lock=true
+    
     [ ! -f "$CSV_FILE" ] && { log_error "CSV not found"; exit 1; }
+    
+    # Check if we're being called from within select_and_update (lock already held)
+    # We detect this by checking if LOCK_HELD environment variable is set
+    if [ "${LOCK_HELD:-}" != "1" ]; then
+        # Acquire lock for standalone update
+        if ! acquire_lock; then
+            log_error "Could not acquire lock for update_status"
+            exit 1
+        fi
+        trap "release_lock" EXIT INT TERM
+    else
+        needs_lock=false
+    fi
     
     backup
     
@@ -133,12 +211,26 @@ update_status() {
     
     if [ $found -eq 0 ]; then
         rm -f "$temp_file"
+        if [ "$needs_lock" = true ]; then
+            release_lock
+            trap - EXIT INT TERM
+        fi
         log_error "Task $task_id not found"
         return 1
     fi
     
     mv "$temp_file" "$CSV_FILE"
-    validate "$original_count" && log_info "Task $task_id updated to $new_status"
+    
+    local result=0
+    validate "$original_count" && log_info "Task $task_id updated to $new_status" || result=$?
+    
+    # Release lock if we acquired it
+    if [ "$needs_lock" = true ]; then
+        release_lock
+        trap - EXIT INT TERM
+    fi
+    
+    return $result
 }
 
 # Check status distribution
@@ -189,15 +281,47 @@ get_task() {
     grep "^$task_id," "$CSV_FILE" | head -1
 }
 
-# Atomic select and update
+# Atomic select and update with file locking
 select_and_update() {
     local task_json
-    task_json=$(select_task)
-    
     local task_id
+    local exit_code=0
+    
+    # Acquire exclusive lock
+    if ! acquire_lock; then
+        log_error "Could not acquire lock for select_and_update"
+        exit 1
+    fi
+    
+    # Ensure lock is released on exit
+    trap "release_lock" EXIT INT TERM
+    
+    # Critical section - select and update atomically
+    task_json=$(select_task) || exit_code=$?
+    
+    if [ $exit_code -ne 0 ]; then
+        release_lock
+        exit $exit_code
+    fi
+    
     task_id=$(echo "$task_json" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
     
-    update_status "$task_id" "in_progress"
+    # Set flag to indicate lock is already held (avoid nested locking)
+    export LOCK_HELD=1
+    
+    # Update status while holding lock
+    update_status "$task_id" "in_progress" || exit_code=$?
+    
+    # Clear flag
+    unset LOCK_HELD
+    
+    # Release lock
+    release_lock
+    trap - EXIT INT TERM
+    
+    if [ $exit_code -ne 0 ]; then
+        exit $exit_code
+    fi
     
     # Return with updated status
     echo "$task_json" | sed 's/"status":"[^"]*"/"status":"in_progress"/'
@@ -213,33 +337,43 @@ case "${1:-help}" in
     *)
         cat <<'EOF'
 Task Manager - Pure Shell (No Python, 10-20x faster)
+Thread-safe with file locking for parallel execution
 
 Usage: ./scripts/task-manager.sh <command> [args]
 
 Commands:
     select                          Select next pending hard/medium task
-    select-and-update               Select and mark in_progress (atomic)
-    update <id> [status] [notes]    Update task status
+    select-and-update               Select and mark in_progress (atomic, locked)
+    update <id> [status] [notes]    Update task status (locked)
     status                          Show task distribution
     get <id>                        Get task details
 
 Environment:
     CSV_FILE        CSV path (default: tasks.csv)
     BACKUP_FILE     Backup path (default: tasks.csv.backup)
+    LOCK_FILE       Lock file path (default: tasks.csv.lock)
+    LOCK_TIMEOUT    Lock timeout in seconds (default: 60)
 
 Examples:
-    # Atomic select and update (recommended)
+    # Atomic select and update (recommended for parallel workflows)
     TASK=$(./scripts/task-manager.sh select-and-update)
     TASK_ID=$(echo "$TASK" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
     
-    # Update status
+    # Update status (thread-safe)
     ./scripts/task-manager.sh update $TASK_ID done "Completed"
     
     # Check distribution
     ./scripts/task-manager.sh status
 
+Parallel Execution:
+    ✅ Safe to run multiple instances simultaneously
+    ✅ Automatic file locking prevents race conditions
+    ✅ Configurable timeout for lock acquisition
+    ⚠️  If lock timeout is reached, process will fail gracefully
+
 Performance: ~0.04s vs ~0.5s for Python (12x faster)
 Dependencies: Only awk, sed, grep (standard Unix tools)
+Lock Mechanism: Uses atomic mkdir (portable across Linux, macOS, BSD)
 EOF
         ;;
 esac

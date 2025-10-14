@@ -19,6 +19,7 @@ TEAM=$(jq -r '.team // "unknown"' metadata.json)
 STARTED_AT=$(jq -r '.startedAt // "unknown"' metadata.json)
 COMPLEXITY=$(jq -r '.complexity // "unknown"' metadata.json)
 SUBTASK=$(jq -r '.subtask // empty' metadata.json)
+BACKGROUND=$(jq -r '.background // empty' metadata.json)
 SUBJECT_LABELS=$(jq -c '.subject_labels // empty' metadata.json)
 
 echo "Detected metadata:"
@@ -29,6 +30,7 @@ echo "  Team: $TEAM"
 echo "  Started At: $STARTED_AT"
 echo "  Complexity: $COMPLEXITY"
 echo "  Subtask: $SUBTASK"
+echo "  Background: $BACKGROUND"
 echo "  Subject Labels: $SUBJECT_LABELS"
 
 # Validation checks
@@ -71,30 +73,43 @@ else
   fi
 fi
 
-# Check for required documentation files
-echo "🔍 Checking for required documentation files..."
-
-if [ ! -f "lib/PROMPT.md" ]; then
-  echo "❌ lib/PROMPT.md not found"
-  ((ERROR_COUNT++))
-fi
-
-if [ ! -f "lib/MODEL_RESPONSE.md" ]; then
-  echo "❌ lib/MODEL_RESPONSE.md not found"
-  ((ERROR_COUNT++))
-fi
-
-# Additional documentation files that may be required by some workflows
-if [ -f "lib/IDEAL_RESPONSE.md" ]; then
-  echo "✅ lib/IDEAL_RESPONSE.md found"
+# Synthetic task specific validations (only for team="synth")
+if [ "$TEAM" == "synth" ]; then
+  echo "🔍 Detected synthetic task, performing additional validations..."
+  
+  # If background is empty, raise error
+  if [ -z "$BACKGROUND" ]; then
+    echo "❌ Background is required but not found in metadata.json for synthetic tasks"
+    ((ERROR_COUNT++))
+  fi
+  
+  # Check for required documentation files
+  echo "🔍 Checking for required documentation files..."
+  
+  if [ ! -f "lib/PROMPT.md" ]; then
+    echo "❌ lib/PROMPT.md not found"
+    ((ERROR_COUNT++))
+  fi
+  
+  if [ ! -f "lib/MODEL_RESPONSE.md" ]; then
+    echo "❌ lib/MODEL_RESPONSE.md not found"
+    ((ERROR_COUNT++))
+  fi
+  
+  # Additional documentation files that may be required by some workflows
+  if [ -f "lib/IDEAL_RESPONSE.md" ]; then
+    echo "✅ lib/IDEAL_RESPONSE.md found"
+  else
+    echo "ℹ️ lib/IDEAL_RESPONSE.md not found (may not be required for all workflows)"
+  fi
+  
+  if [ -f "lib/MODEL_FAILURES.md" ]; then
+    echo "✅ lib/MODEL_FAILURES.md found"
+  else
+    echo "ℹ️ lib/MODEL_FAILURES.md not found (may not be required for all workflows)"
+  fi
 else
-  echo "ℹ️ lib/IDEAL_RESPONSE.md not found (may not be required for all workflows)"
-fi
-
-if [ -f "lib/MODEL_FAILURES.md" ]; then
-  echo "✅ lib/MODEL_FAILURES.md found"
-else
-  echo "ℹ️ lib/MODEL_FAILURES.md not found (may not be required for all workflows)"
+  echo "ℹ️ Non-synthetic task detected (team=$TEAM), skipping background and documentation file checks"
 fi
 
 # Exit with error if any validation failed
@@ -111,6 +126,7 @@ export TEAM
 export STARTED_AT
 export COMPLEXITY
 export SUBTASK
+export BACKGROUND
 export SUBJECT_LABELS
 
 # If in GitHub Actions, also set outputs
@@ -122,6 +138,7 @@ if [ -n "$GITHUB_OUTPUT" ]; then
   echo "started_at=$STARTED_AT" >> "$GITHUB_OUTPUT"
   echo "complexity=$COMPLEXITY" >> "$GITHUB_OUTPUT"
   echo "subtask=$SUBTASK" >> "$GITHUB_OUTPUT"
+  echo "background=$BACKGROUND" >> "$GITHUB_OUTPUT"
   echo "subject_labels=$SUBJECT_LABELS" >> "$GITHUB_OUTPUT"
 fi
 

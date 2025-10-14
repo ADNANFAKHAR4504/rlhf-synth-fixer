@@ -1,0 +1,2 @@
+Create an AWS CDK v2 Python stack to deploy a high-availability RDS PostgreSQL database for an e-commerce app handling 30,000 daily orders with read-heavy workloads. Use a primary instance (db.m5.large) with read replicas across two AZs, Security Groups allowing port 5432, and KMS encryption for data at rest. Configure CloudWatch for metrics and monitoring, S3 for automated backups, and IAM roles with least-privilege access. Produce a fully deployable CDK program that ensures secure, resilient, and observable database operations.
+Expected output: Single stack (tap_stack.py)
