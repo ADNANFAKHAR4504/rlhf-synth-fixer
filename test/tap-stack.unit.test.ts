@@ -609,7 +609,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(rds.Properties.MasterUsername).toEqual({ Ref: 'DBUsername' });
       expect(rds.Properties.MasterUserPassword).toEqual({
         'Fn::Sub':
-          '{{resolve:secretsmanager:prod-db-password-${EnvironmentSuffix}:SecretString:password}}',
+          '{{resolve:secretsmanager:prod-db-password-v2-${EnvironmentSuffix}:SecretString:password}}',
       });
     });
 
@@ -634,7 +634,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should configure secret with environment-specific name', () => {
       const secret = template.Resources.DBSecret;
       expect(secret.Properties.Name).toEqual({
-        'Fn::Sub': 'prod-db-password-${EnvironmentSuffix}',
+        'Fn::Sub': 'prod-db-password-v2-${EnvironmentSuffix}',
       });
     });
 

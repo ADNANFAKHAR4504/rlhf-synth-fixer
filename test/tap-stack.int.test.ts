@@ -723,7 +723,7 @@ describe('EC2 to RDS Connectivity Integration', () => {
       .promise();
     const dbSecret = secretResponse.SecretList?.find(
       s =>
-        s.Name?.includes('prod-db-password') &&
+        s.Name?.includes('prod-db-password-v2') &&
         s.Name?.includes(environmentSuffix)
     );
     expect(dbSecret).toBeDefined();

@@ -113,7 +113,7 @@ All resources are tagged with:
       "Type": "AWS::SecretsManager::Secret",
       "Properties": {
         "Name": {
-          "Fn::Sub": "prod-db-password-${EnvironmentSuffix}"
+          "Fn::Sub": "prod-db-password-v2-${EnvironmentSuffix}"
         },
         "Description": "RDS database master password",
         "GenerateSecretString": {
@@ -947,7 +947,7 @@ All resources are tagged with:
           "Ref": "DBUsername"
         },
         "MasterUserPassword": {
-          "Fn::Sub": "{{resolve:secretsmanager:prod-db-password-${EnvironmentSuffix}:SecretString:password}}"
+          "Fn::Sub": "{{resolve:secretsmanager:prod-db-password-v2-${EnvironmentSuffix}:SecretString:password}}"
         },
         "AllocatedStorage": "20",
         "StorageType": "gp3",
