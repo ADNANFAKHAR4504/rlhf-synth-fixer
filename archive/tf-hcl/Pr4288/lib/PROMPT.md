@@ -1,0 +1,3 @@
+Create a Terraform configuration to implement a centralized real-time logging and analytics system for 500 servers. Use Kinesis Firehose for log ingestion, S3 for secure log storage, Glue for schema discovery, Athena for ad-hoc queries, Lambda for real-time log processing, QuickSight for dashboards, CloudWatch for metrics, and IAM for least-privilege access. Ensure compliance with audit requirements and enable real-time processing, queryability, and visualization of security and performance data. use us-east-2 as the region
+
+expected outputs: single stack, main.tf, provider.tf, outputs.tf, variables.tf , complete real world lambda code

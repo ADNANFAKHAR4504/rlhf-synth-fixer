@@ -106,6 +106,8 @@ bin/tfplan
 
 build
 tasks.csv
+tasks.csv.backup
+*.csv.backup
 .sherlock/data
 .sherlock/reports
 
@@ -142,4 +144,4 @@ turing-iac-review-app/turing-iac-tasks-processor*
 turing-iac-review-app/tasks.json
 turing-iac-review-app/aws-nuke-config-runtime.yaml
 turing-iac-review-app/task_reports.csv
-turing-iac-review-app/aws-nuke-report-batch*
+turing-iac-review-app/aws-nuke-report-batch*tasks.csv.lock/
