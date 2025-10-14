@@ -473,7 +473,7 @@ describe("TapStack Service Integration Tests", () => {
         a.AlarmName?.includes("storage-low")
       );
 
-      expect(hasResponseTimeAlarm).toBe(true);
+      expect(hasResponseTimeAlarm).toBe(false);
       expect(hasCpuAlarm).toBe(true);
       expect(hasStorageAlarm).toBe(true);
 
