@@ -72,7 +72,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "patient-data-${EnvironmentSuffix}"
+          "Fn::Sub": "patient-data-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -118,7 +118,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "logging-bucket-${EnvironmentSuffix}"
+          "Fn::Sub": "logging-bucket-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -150,7 +150,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "cloudtrail-logs-${EnvironmentSuffix}"
+          "Fn::Sub": "cloudtrail-logs-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
