@@ -129,7 +129,6 @@ describe("RDS Database", () => {
     expect(instance.DBInstanceStatus).toMatch(/available|backing-up/);
   });
 });
-
 // -----------------
 // Secrets Manager Tests
 // -----------------
