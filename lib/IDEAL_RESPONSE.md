@@ -1,5 +1,5 @@
 
-```json 
+```json
 
 {
   "AWSTemplateFormatVersion": "2010-09-09",
@@ -549,6 +549,27 @@
                   "aws:SecureTransport": "false"
                 }
               }
+            },
+            {
+              "Sid": "RestrictAccessToSpecificCIDR",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": ["SecureS3Bucket", "Arn"]
+                },
+                {
+                  "Fn::Sub": "${SecureS3Bucket.Arn}/*"
+                }
+              ],
+              "Condition": {
+                "NotIpAddress": {
+                  "aws:SourceIp": {
+                    "Ref": "S3AccessCIDR"
+                  }
+                }
+              }
             }
           ]
         }
@@ -583,7 +604,6 @@
 
     "ConfigRecorder": {
       "Type": "AWS::Config::ConfigurationRecorder",
-      "DependsOn": "ConfigRole",
       "Properties": {
         "Name": {
           "Fn::Sub": "SecurityBaselineRecorder-${EnvironmentSuffix}"
