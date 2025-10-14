@@ -378,8 +378,8 @@ func TestElastiCacheRedis(t *testing.T) {
 				found = true
 				assert.Equal(t, "available", *rg.Status)
 				assert.True(t, *rg.AtRestEncryptionEnabled)
-				assert.True(t, *rg.AutomaticFailover != "disabled")
-				assert.True(t, *rg.MultiAZ != "disabled")
+				assert.True(t, string(rg.AutomaticFailover) != "disabled")
+				assert.True(t, string(rg.MultiAZ) != "disabled")
 				break
 			}
 		}
@@ -445,7 +445,7 @@ func TestECRRepository(t *testing.T) {
 
 		repo := result.Repositories[0]
 		assert.NotNil(t, repo.ImageScanningConfiguration)
-		assert.True(t, *repo.ImageScanningConfiguration.ScanOnPush)
+		assert.True(t, repo.ImageScanningConfiguration.ScanOnPush)
 	})
 }
 
@@ -467,7 +467,7 @@ func TestApplicationLoadBalancer(t *testing.T) {
 		alb := result.LoadBalancers[0]
 		assert.Equal(t, "active", string(alb.State.Code))
 		assert.Equal(t, "application", string(alb.Type))
-		assert.False(t, *alb.Scheme == "internal", "ALB should be internet-facing")
+		assert.False(t, string(alb.Scheme) == "internal", "ALB should be internet-facing")
 	})
 
 	t.Run("target group should exist", func(t *testing.T) {
@@ -479,7 +479,7 @@ func TestApplicationLoadBalancer(t *testing.T) {
 
 		tg := result.TargetGroups[0]
 		assert.Equal(t, int32(8080), *tg.Port)
-		assert.Equal(t, "HTTP", *tg.Protocol)
+		assert.Equal(t, "HTTP", string(tg.Protocol))
 		assert.Equal(t, "ip", string(tg.TargetType))
 	})
 
@@ -584,7 +584,7 @@ func TestHighAvailability(t *testing.T) {
 				rg.NodeGroups[0].PrimaryEndpoint != nil {
 				endpoint := *rg.NodeGroups[0].PrimaryEndpoint.Address
 				if strings.Contains(endpoint, strings.Split(outputs.RedisEndpoint, ".")[0]) {
-					assert.True(t, *rg.AutomaticFailover != "disabled", "Redis should have automatic failover enabled")
+					assert.True(t, string(rg.AutomaticFailover) != "disabled", "Redis should have automatic failover enabled")
 					break
 				}
 			}
@@ -628,14 +628,20 @@ func TestSecurityConfiguration(t *testing.T) {
 	})
 
 	t.Run("VPC should have DNS support enabled", func(t *testing.T) {
-		result, err := ec2Client.DescribeVpcs(ctx, &ec2.DescribeVpcsInput{
-			VpcIds: []string{outputs.VpcID},
+		// Check DNS Support
+		dnsSupport, err := ec2Client.DescribeVpcAttribute(ctx, &ec2.DescribeVpcAttributeInput{
+			VpcId:     aws.String(outputs.VpcID),
+			Attribute: types.VpcAttributeNameEnableDnsSupport,
 		})
 		require.NoError(t, err)
-		require.Len(t, result.Vpcs, 1)
+		assert.True(t, *dnsSupport.EnableDnsSupport.Value)
 
-		vpc := result.Vpcs[0]
-		assert.True(t, *vpc.EnableDnsSupport)
-		assert.True(t, *vpc.EnableDnsHostnames)
+		// Check DNS Hostnames
+		dnsHostnames, err := ec2Client.DescribeVpcAttribute(ctx, &ec2.DescribeVpcAttributeInput{
+			VpcId:     aws.String(outputs.VpcID),
+			Attribute: types.VpcAttributeNameEnableDnsHostnames,
+		})
+		require.NoError(t, err)
+		assert.True(t, *dnsHostnames.EnableDnsHostnames.Value)
 	})
 }
