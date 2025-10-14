@@ -1,17 +1,17 @@
+import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
-import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
+import { S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
-import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import {
-  NetworkModule,
-  EcsModule,
-  RdsModule,
   CacheModule,
-  SecretsModule,
+  EcsModule,
   MonitoringModule,
+  NetworkModule,
+  RdsModule,
+  SecretsModule,
 } from './modules';
 
 interface TapStackProps {
@@ -38,6 +38,10 @@ export class TapStack extends TerraformStack {
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
+    // Create dynamic stack name to avoid conflicts
+    const timestamp = Math.floor(Date.now() / 1000);
+    const dynamicStackName = `${id}-${environmentSuffix}-${timestamp}`;
+
     // Configure AWS Provider
     new AwsProvider(this, 'aws', {
       region: awsRegion,
@@ -47,10 +51,10 @@ export class TapStack extends TerraformStack {
     // Get current AWS account
     const current = new DataAwsCallerIdentity(this, 'current');
 
-    // Configure S3 Backend
+    // Configure S3 Backend with dynamic stack name
     new S3Backend(this, {
       bucket: stateBucket,
-      key: `${environmentSuffix}/${id}.tfstate`,
+      key: `${environmentSuffix}/${dynamicStackName}.tfstate`,
       region: stateBucketRegion,
       encrypt: true,
     });
