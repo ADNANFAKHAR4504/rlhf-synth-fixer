@@ -373,9 +373,10 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
 
       expect(webAcl).toBeDefined();
 
-      // Check WAF rules 
+      // Check WAF rules - use both Name and Id
       const wafDetails = await wafv2.send(new GetWebACLCommand({
         Scope: 'REGIONAL',
+        Name: webAcl.Name,
         Id: webAcl.Id
       }));
 
