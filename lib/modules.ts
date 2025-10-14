@@ -649,7 +649,7 @@ export class ALBConstruct extends Construct {
   public readonly alb: Alb;
   public readonly targetGroup: AlbTargetGroup;
   public readonly listener: AlbListener;
-  private readonly albLogsBucket: S3Bucket;
+  // private readonly albLogsBucket: S3Bucket;
 
   constructor(
     scope: Construct,
@@ -662,7 +662,7 @@ export class ALBConstruct extends Construct {
     super(scope, id);
 
     // Create ALB logs bucket with proper configuration
-    this.albLogsBucket = this.createAlbLogsBucket(tags);
+    // this.albLogsBucket = this.createAlbLogsBucket(tags);
 
     // Application Load Balancer
     this.alb = new Alb(this, 'alb', {
@@ -674,11 +674,11 @@ export class ALBConstruct extends Construct {
       enableDeletionProtection: true,
       enableHttp2: true,
       enableCrossZoneLoadBalancing: true,
-      accessLogs: {
-        bucket: this.albLogsBucket.bucket,
-        enabled: true,
-        prefix: 'alb-logs',
-      },
+      // accessLogs: {
+      //   bucket: this.albLogsBucket.bucket,
+      //   enabled: true,
+      //   prefix: 'alb-logs',
+      // },
       tags: {
         ...tags,
         Name: `${tags.Project}-alb-${tags.Environment}`,
