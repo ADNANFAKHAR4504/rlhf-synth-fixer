@@ -1,0 +1,21 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350078",
+  "team": "2",
+  "startedAt": "2025-10-08T11:36:51.913Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": "VPC, Subnet, RouteTable, InternetGateway, NatGateway, EIP, SecurityGroup, LoadBalancer, TargetGroup, Listener, AutoScalingGroup, LaunchConfiguration, Bucket, Role, Policy, InstanceProfile, Secret",
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "matkadturing",
+  "dockerS3Location": ""
+}

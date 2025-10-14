@@ -1,0 +1,34 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349442",
+  "team": "6",
+  "startedAt": "2025-10-10T14:57:27.234Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "S3",
+    "VPC",
+    "EC2",
+    "Lambda",
+    "RDS (Aurora PostgreSQL)",
+    "KMS",
+    "IAM",
+    "CloudWatch Logs",
+    "CloudWatch Alarms",
+    "SNS",
+    "AWS Config",
+    "Secrets Manager"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "enyachoke-turing",
+  "dockerS3Location": ""
+}
