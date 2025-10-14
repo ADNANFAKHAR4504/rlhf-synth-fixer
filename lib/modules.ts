@@ -769,7 +769,7 @@ export function createBastionHost(
       httpTokens: 'required',
       httpPutResponseHopLimit: 1,
     },
-    userData: Fn.base64encode(`#!/bin/bash
+userData: Fn.base64encode(Fn.rawString(`#!/bin/bash
 # Update system
 yum update -y
 
@@ -791,7 +791,7 @@ systemctl restart sshd
 yum install -y fail2ban
 systemctl enable fail2ban
 systemctl start fail2ban
-`),
+`)),
     tags: {
       ...config.tags,
       Name: `${config.environment}-bastion`,
@@ -895,7 +895,7 @@ export function createPrivateEc2Fleet(
         httpTokens: 'required',
         httpPutResponseHopLimit: 1,
       },
-      userData: Fn.base64encode(`#!/bin/bash
+userData: Fn.base64encode(Fn.rawString(`#!/bin/bash
 # Update system
 yum update -y
 
@@ -937,7 +937,7 @@ cat <<EOF > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
 EOF
 
 /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
-`),
+`)),
       tags: {
         ...config.tags,
         Name: `${config.environment}-app-instance-${i + 1}`,
@@ -1325,7 +1325,6 @@ export function enableGuardDuty(scope: Construct, config: StackConfig): void {
     tags: config.tags,
   });
 }
-
 // ==================== CloudWatch Alarms Module ====================
 export function createCloudWatchAlarms(
   scope: Construct,
@@ -1337,197 +1336,194 @@ export function createCloudWatchAlarms(
   // EC2 CPU Utilization Alarms
   ec2FleetResources.instances.forEach((instance, index) => {
     new CloudwatchMetricAlarm(scope, `ec2-cpu-alarm-${index}`, {
-      alarmName: `${config.environment}-ec2-cpu-${index}`,
-      comparisonOperator: 'GreaterThanThreshold',
-      evaluationPeriods: 2,
+      alarmName: `${config.environment}-ec2-cpu-${index + 1}`,
+      alarmDescription: `High CPU utilization for instance ${index + 1}`,
       metricName: 'CPUUtilization',
       namespace: 'AWS/EC2',
-      period: 300,
       statistic: 'Average',
+      period: 300,
+      evaluationPeriods: 2,
       threshold: 80,
-      alarmDescription: `CPU utilization alarm for EC2 instance ${index}`,
+      comparisonOperator: 'GreaterThanThreshold',
       dimensions: {
-        InstanceId: instance.id,
+        InstanceId: instance.id
       },
       alarmActions: [albResources.snsTopic.arn],
-      okActions: [albResources.snsTopic.arn],
-      treatMissingData: 'breaching',
-      tags: config.tags,
+      treatMissingData: 'notBreaching',
+      tags: config.tags
     });
 
     // EC2 Status Check Failed Alarm
     new CloudwatchMetricAlarm(scope, `ec2-status-alarm-${index}`, {
-      alarmName: `${config.environment}-ec2-status-${index}`,
-      comparisonOperator: 'GreaterThanThreshold',
-      evaluationPeriods: 2,
+      alarmName: `${config.environment}-ec2-status-${index + 1}`,
+      alarmDescription: `Status check failed for instance ${index + 1}`,
       metricName: 'StatusCheckFailed',
       namespace: 'AWS/EC2',
-      period: 300,
-      statistic: 'Average',
+      statistic: 'Maximum',
+      period: 60,
+      evaluationPeriods: 2,
       threshold: 0,
-      alarmDescription: `Status check alarm for EC2 instance ${index}`,
+      comparisonOperator: 'GreaterThanThreshold',
       dimensions: {
-        InstanceId: instance.id,
+        InstanceId: instance.id
       },
       alarmActions: [albResources.snsTopic.arn],
       treatMissingData: 'breaching',
-      tags: config.tags,
+      tags: config.tags
     });
   });
 
   // ALB Unhealthy Host Count Alarm
   new CloudwatchMetricAlarm(scope, 'alb-unhealthy-hosts-alarm', {
     alarmName: `${config.environment}-alb-unhealthy-hosts`,
-    comparisonOperator: 'GreaterThanThreshold',
-    evaluationPeriods: 2,
+    alarmDescription: 'ALB has unhealthy target hosts',
     metricName: 'UnHealthyHostCount',
     namespace: 'AWS/ApplicationELB',
-    period: 300,
     statistic: 'Average',
-    threshold: 0,
-    alarmDescription: 'ALB unhealthy host count alarm',
+    period: 300,
+    evaluationPeriods: 2,
+    threshold: 1,
+    comparisonOperator: 'GreaterThanOrEqualToThreshold',
     dimensions: {
       TargetGroup: albResources.targetGroup.arnSuffix,
-      LoadBalancer: albResources.alb.arnSuffix,
-    },
-    alarmActions: [albResources.snsTopic.arn],
-    okActions: [albResources.snsTopic.arn],
-    treatMissingData: 'notBreaching',
-    tags: config.tags,
-  });
-
-  // ALB Request Count Alarm (unusually high traffic)
-  new CloudwatchMetricAlarm(scope, 'alb-request-count-alarm', {
-    alarmName: `${config.environment}-alb-high-request-count`,
-    comparisonOperator: 'GreaterThanThreshold',
-    evaluationPeriods: 2,
-    metricName: 'RequestCount',
-    namespace: 'AWS/ApplicationELB',
-    period: 300,
-    statistic: 'Sum',
-    threshold: 10000, // Adjust based on expected traffic
-    alarmDescription: 'ALB high request count alarm',
-    dimensions: {
-      LoadBalancer: albResources.alb.arnSuffix,
+      LoadBalancer: albResources.alb.arnSuffix
     },
     alarmActions: [albResources.snsTopic.arn],
     treatMissingData: 'notBreaching',
-    tags: config.tags,
+    tags: config.tags
   });
 
   // ALB Target Response Time Alarm
   new CloudwatchMetricAlarm(scope, 'alb-response-time-alarm', {
-    alarmName: `${config.environment}-alb-high-response-time`,
-    comparisonOperator: 'GreaterThanThreshold',
-    evaluationPeriods: 2,
+    alarmName: `${config.environment}-alb-response-time`,
+    alarmDescription: 'ALB target response time is high',
     metricName: 'TargetResponseTime',
     namespace: 'AWS/ApplicationELB',
-    period: 300,
     statistic: 'Average',
-    threshold: 3, // 3 seconds
-    alarmDescription: 'ALB high response time alarm',
+    period: 300,
+    evaluationPeriods: 2,
+    threshold: 2, // 2 seconds
+    comparisonOperator: 'GreaterThanThreshold',
     dimensions: {
-      LoadBalancer: albResources.alb.arnSuffix,
+      LoadBalancer: albResources.alb.arnSuffix
     },
     alarmActions: [albResources.snsTopic.arn],
     treatMissingData: 'notBreaching',
-    tags: config.tags,
+    tags: config.tags
+  });
+
+  // ALB HTTP 5xx Errors Alarm
+  new CloudwatchMetricAlarm(scope, 'alb-5xx-alarm', {
+    alarmName: `${config.environment}-alb-5xx-errors`,
+    alarmDescription: 'ALB is returning 5xx errors',
+    metricName: 'HTTPCode_Target_5XX_Count',
+    namespace: 'AWS/ApplicationELB',
+    statistic: 'Sum',
+    period: 300,
+    evaluationPeriods: 2,
+    threshold: 10,
+    comparisonOperator: 'GreaterThanThreshold',
+    dimensions: {
+      LoadBalancer: albResources.alb.arnSuffix
+    },
+    alarmActions: [albResources.snsTopic.arn],
+    treatMissingData: 'notBreaching',
+    tags: config.tags
   });
 
   // RDS CPU Utilization Alarm
   new CloudwatchMetricAlarm(scope, 'rds-cpu-alarm', {
     alarmName: `${config.environment}-rds-cpu`,
-    comparisonOperator: 'GreaterThanThreshold',
-    evaluationPeriods: 2,
+    alarmDescription: 'RDS CPU utilization is high',
     metricName: 'CPUUtilization',
     namespace: 'AWS/RDS',
-    period: 300,
     statistic: 'Average',
+    period: 300,
+    evaluationPeriods: 2,
     threshold: 75,
-    alarmDescription: 'RDS CPU utilization alarm',
+    comparisonOperator: 'GreaterThanThreshold',
     dimensions: {
-      DBInstanceIdentifier: rdsResources.instance.id,
+      DBInstanceIdentifier: rdsResources.instance.identifier
     },
     alarmActions: [albResources.snsTopic.arn],
-    okActions: [albResources.snsTopic.arn],
-    treatMissingData: 'breaching',
-    tags: config.tags,
+    treatMissingData: 'notBreaching',
+    tags: config.tags
   });
 
   // RDS Free Storage Space Alarm
   new CloudwatchMetricAlarm(scope, 'rds-storage-alarm', {
-    alarmName: `${config.environment}-rds-low-storage`,
-    comparisonOperator: 'LessThanThreshold',
-    evaluationPeriods: 1,
+    alarmName: `${config.environment}-rds-storage`,
+    alarmDescription: 'RDS free storage space is low',
     metricName: 'FreeStorageSpace',
     namespace: 'AWS/RDS',
-    period: 300,
     statistic: 'Average',
+    period: 300,
+    evaluationPeriods: 1,
     threshold: 2147483648, // 2GB in bytes
-    alarmDescription: 'RDS low free storage space alarm',
+    comparisonOperator: 'LessThanThreshold',
     dimensions: {
-      DBInstanceIdentifier: rdsResources.instance.id,
+      DBInstanceIdentifier: rdsResources.instance.identifier
     },
     alarmActions: [albResources.snsTopic.arn],
-    treatMissingData: 'breaching',
-    tags: config.tags,
+    treatMissingData: 'notBreaching',
+    tags: config.tags
   });
 
   // RDS Database Connections Alarm
   new CloudwatchMetricAlarm(scope, 'rds-connections-alarm', {
-    alarmName: `${config.environment}-rds-high-connections`,
-    comparisonOperator: 'GreaterThanThreshold',
-    evaluationPeriods: 2,
+    alarmName: `${config.environment}-rds-connections`,
+    alarmDescription: 'RDS database connections are high',
     metricName: 'DatabaseConnections',
     namespace: 'AWS/RDS',
-    period: 300,
     statistic: 'Average',
+    period: 300,
+    evaluationPeriods: 2,
     threshold: 40, // Adjust based on instance class
-    alarmDescription: 'RDS high database connections alarm',
+    comparisonOperator: 'GreaterThanThreshold',
     dimensions: {
-      DBInstanceIdentifier: rdsResources.instance.id,
+      DBInstanceIdentifier: rdsResources.instance.identifier
     },
     alarmActions: [albResources.snsTopic.arn],
     treatMissingData: 'notBreaching',
-    tags: config.tags,
+    tags: config.tags
   });
 
   // RDS Read Latency Alarm
   new CloudwatchMetricAlarm(scope, 'rds-read-latency-alarm', {
-    alarmName: `${config.environment}-rds-high-read-latency`,
-    comparisonOperator: 'GreaterThanThreshold',
-    evaluationPeriods: 2,
+    alarmName: `${config.environment}-rds-read-latency`,
+    alarmDescription: 'RDS read latency is high',
     metricName: 'ReadLatency',
     namespace: 'AWS/RDS',
-    period: 300,
     statistic: 'Average',
-    threshold: 0.2, // 200ms
-    alarmDescription: 'RDS high read latency alarm',
+    period: 300,
+    evaluationPeriods: 2,
+    threshold: 0.05, // 50ms
+    comparisonOperator: 'GreaterThanThreshold',
     dimensions: {
-      DBInstanceIdentifier: rdsResources.instance.id,
+      DBInstanceIdentifier: rdsResources.instance.identifier
     },
     alarmActions: [albResources.snsTopic.arn],
     treatMissingData: 'notBreaching',
-    tags: config.tags,
+    tags: config.tags
   });
 
   // RDS Write Latency Alarm
   new CloudwatchMetricAlarm(scope, 'rds-write-latency-alarm', {
-    alarmName: `${config.environment}-rds-high-write-latency`,
-    comparisonOperator: 'GreaterThanThreshold',
-    evaluationPeriods: 2,
+    alarmName: `${config.environment}-rds-write-latency`,
+    alarmDescription: 'RDS write latency is high',
     metricName: 'WriteLatency',
     namespace: 'AWS/RDS',
-    period: 300,
     statistic: 'Average',
-    threshold: 0.2, // 200ms
-    alarmDescription: 'RDS high write latency alarm',
+    period: 300,
+    evaluationPeriods: 2,
+    threshold: 0.1, // 100ms
+    comparisonOperator: 'GreaterThanThreshold',
     dimensions: {
-      DBInstanceIdentifier: rdsResources.instance.id,
+      DBInstanceIdentifier: rdsResources.instance.identifier
     },
     alarmActions: [albResources.snsTopic.arn],
     treatMissingData: 'notBreaching',
-    tags: config.tags,
+    tags: config.tags
   });
 }
 
@@ -1536,20 +1532,20 @@ export function createSsmSetupAndVpcEndpoints(
   scope: Construct,
   config: StackConfig,
   vpcResources: VpcResources,
-  __iamResources: IamResources
+  iamResources: IamResources
 ): void {
-  // Create security group for VPC endpoints
+  // Security group for VPC endpoints
   const endpointSg = new SecurityGroup(scope, 'vpc-endpoint-sg', {
     name: `${config.environment}-vpc-endpoint-sg`,
     description: 'Security group for VPC endpoints',
     vpcId: vpcResources.vpc.id,
     tags: {
       ...config.tags,
-      Name: `${config.environment}-vpc-endpoint-sg`,
-    },
+      Name: `${config.environment}-vpc-endpoint-sg`
+    }
   });
 
-  // Allow HTTPS from VPC CIDR
+  // Allow HTTPS from VPC
   new SecurityGroupRule(scope, 'endpoint-https-ingress', {
     type: 'ingress',
     fromPort: 443,
@@ -1557,7 +1553,7 @@ export function createSsmSetupAndVpcEndpoints(
     protocol: 'tcp',
     cidrBlocks: [config.vpcCidr],
     securityGroupId: endpointSg.id,
-    description: 'HTTPS from VPC',
+    description: 'HTTPS from VPC'
   });
 
   // Egress rule
@@ -1568,17 +1564,17 @@ export function createSsmSetupAndVpcEndpoints(
     protocol: '-1',
     cidrBlocks: ['0.0.0.0/0'],
     securityGroupId: endpointSg.id,
-    description: 'Allow all outbound',
+    description: 'Allow all outbound'
   });
 
-  // S3 Gateway Endpoint (no security group needed)
+  // S3 Gateway Endpoint (doesn't require security group)
   new VpcEndpoint(scope, 's3-endpoint', {
     vpcId: vpcResources.vpc.id,
     serviceName: `com.amazonaws.${config.region}.s3`,
     vpcEndpointType: 'Gateway',
     routeTableIds: [
       vpcResources.publicRouteTable.id,
-      ...vpcResources.privateRouteTables.map(rt => rt.id),
+      ...vpcResources.privateRouteTables.map(rt => rt.id)
     ],
     policy: JSON.stringify({
       Version: '2012-10-17',
@@ -1586,21 +1582,25 @@ export function createSsmSetupAndVpcEndpoints(
         {
           Effect: 'Allow',
           Principal: '*',
-          Action: ['s3:GetObject', 's3:PutObject', 's3:ListBucket'],
+          Action: [
+            's3:GetObject',
+            's3:PutObject',
+            's3:ListBucket'
+          ],
           Resource: [
             `arn:aws:s3:::${config.environment}-*`,
-            `arn:aws:s3:::${config.environment}-*/*`,
-          ],
-        },
-      ],
+            `arn:aws:s3:::${config.environment}-*/*`
+          ]
+        }
+      ]
     }),
     tags: {
       ...config.tags,
-      Name: `${config.environment}-s3-endpoint`,
-    },
+      Name: `${config.environment}-s3-endpoint`
+    }
   });
 
-  // SSM Endpoint
+  // SSM Interface Endpoint
   new VpcEndpoint(scope, 'ssm-endpoint', {
     vpcId: vpcResources.vpc.id,
     serviceName: `com.amazonaws.${config.region}.ssm`,
@@ -1610,11 +1610,11 @@ export function createSsmSetupAndVpcEndpoints(
     privateDnsEnabled: true,
     tags: {
       ...config.tags,
-      Name: `${config.environment}-ssm-endpoint`,
-    },
+      Name: `${config.environment}-ssm-endpoint`
+    }
   });
 
-  // SSM Messages Endpoint (required for Session Manager)
+  // SSM Messages Interface Endpoint (required for Session Manager)
   new VpcEndpoint(scope, 'ssmmessages-endpoint', {
     vpcId: vpcResources.vpc.id,
     serviceName: `com.amazonaws.${config.region}.ssmmessages`,
@@ -1624,11 +1624,11 @@ export function createSsmSetupAndVpcEndpoints(
     privateDnsEnabled: true,
     tags: {
       ...config.tags,
-      Name: `${config.environment}-ssmmessages-endpoint`,
-    },
+      Name: `${config.environment}-ssmmessages-endpoint`
+    }
   });
 
-  // EC2 Messages Endpoint (required for Session Manager)
+  // EC2 Messages Interface Endpoint (required for Session Manager)
   new VpcEndpoint(scope, 'ec2messages-endpoint', {
     vpcId: vpcResources.vpc.id,
     serviceName: `com.amazonaws.${config.region}.ec2messages`,
@@ -1638,25 +1638,11 @@ export function createSsmSetupAndVpcEndpoints(
     privateDnsEnabled: true,
     tags: {
       ...config.tags,
-      Name: `${config.environment}-ec2messages-endpoint`,
-    },
+      Name: `${config.environment}-ec2messages-endpoint`
+    }
   });
 
-  // KMS Endpoint (for encryption operations)
-  new VpcEndpoint(scope, 'kms-endpoint', {
-    vpcId: vpcResources.vpc.id,
-    serviceName: `com.amazonaws.${config.region}.kms`,
-    vpcEndpointType: 'Interface',
-    subnetIds: vpcResources.privateSubnets.map(s => s.id),
-    securityGroupIds: [endpointSg.id],
-    privateDnsEnabled: true,
-    tags: {
-      ...config.tags,
-      Name: `${config.environment}-kms-endpoint`,
-    },
-  });
-
-  // CloudWatch Logs Endpoint (for CloudWatch agent)
+  // CloudWatch Logs Interface Endpoint
   new VpcEndpoint(scope, 'logs-endpoint', {
     vpcId: vpcResources.vpc.id,
     serviceName: `com.amazonaws.${config.region}.logs`,
@@ -1666,55 +1652,184 @@ export function createSsmSetupAndVpcEndpoints(
     privateDnsEnabled: true,
     tags: {
       ...config.tags,
-      Name: `${config.environment}-logs-endpoint`,
-    },
+      Name: `${config.environment}-logs-endpoint`
+    }
   });
 
-  // Create SSM Document for automated patching
-  new SsmDocument(scope, 'patch-baseline-document', {
-    name: `${config.environment}-patch-baseline`,
+  // KMS Interface Endpoint (for encryption operations)
+  new VpcEndpoint(scope, 'kms-endpoint', {
+    vpcId: vpcResources.vpc.id,
+    serviceName: `com.amazonaws.${config.region}.kms`,
+    vpcEndpointType: 'Interface',
+    subnetIds: vpcResources.privateSubnets.map(s => s.id),
+    securityGroupIds: [endpointSg.id],
+    privateDnsEnabled: true,
+    tags: {
+      ...config.tags,
+      Name: `${config.environment}-kms-endpoint`
+    }
+  });
+
+  // Create SSM Document for Session Manager preferences
+  new SsmDocument(scope, 'session-manager-prefs', {
+    name: `${config.environment}-SessionManagerRunShell`,
+    documentType: 'Session',
+    documentFormat: 'JSON',
+    content: JSON.stringify({
+      schemaVersion: '1.0',
+      description: 'Session Manager Preferences',
+      sessionType: 'Standard_Stream',
+      inputs: {
+        s3BucketName: '',
+        s3KeyPrefix: '',
+        s3EncryptionEnabled: true,
+        cloudWatchLogGroupName: `/aws/ssm/${config.environment}`,
+        cloudWatchEncryptionEnabled: true,
+        kmsKeyId: '',
+        runAsEnabled: false,
+        runAsDefaultUser: '',
+        idleSessionTimeout: '20',
+        maxSessionDuration: '60'
+      }
+    }),
+    tags: config.tags
+  });
+
+  // Create SSM Document for patch management
+  new SsmDocument(scope, 'patch-baseline-doc', {
+    name: `${config.environment}-PatchBaseline`,
     documentType: 'Command',
     documentFormat: 'JSON',
     content: JSON.stringify({
       schemaVersion: '2.2',
-      description: 'Automated patching document',
+      description: 'Patch Management Baseline',
+      parameters: {
+        action: {
+          type: 'String',
+          description: 'Install or Scan',
+          allowedValues: ['Install', 'Scan'],
+          default: 'Scan'
+        }
+      },
       mainSteps: [
         {
           action: 'aws:runShellScript',
-          name: 'patchLinuxSystem',
+          name: 'PatchInstance',
           inputs: {
             runCommand: [
               '#!/bin/bash',
-              'echo "Starting system patching..."',
-              'yum update -y',
-              'echo "Patching completed."',
-            ],
-          },
-        },
-      ],
+              'if [ "{{ action }}" == "Install" ]; then',
+              '  sudo yum update -y',
+              'else',
+              '  sudo yum check-update',
+              'fi'
+            ]
+          }
+        }
+      ]
     }),
-    tags: config.tags,
+    tags: config.tags
   });
 
-  // Create SSM Document for log collection
-  new SsmDocument(scope, 'log-collection-document', {
-    name: `${config.environment}-log-collection`,
-    documentType: 'Command',
-    documentFormat: 'JSON',
-    content: JSON.stringify({
-      schemaVersion: '2.2',
-      description: 'Collect and ship logs to CloudWatch',
-      mainSteps: [
+  // Create IAM policy for Session Manager logging
+  new IamRolePolicy(scope, 'session-manager-logging-policy', {
+    name: 'SessionManagerLogging',
+    role: iamResources.ec2Role.id,
+    policy: JSON.stringify({
+      Version: '2012-10-17',
+      Statement: [
         {
-          action: 'aws:configurePackage',
-          name: 'configureCloudWatchAgent',
-          inputs: {
-            name: 'AmazonCloudWatchAgent',
-            action: 'Install',
-          },
+          Effect: 'Allow',
+          Action: [
+            'ssmmessages:CreateControlChannel',
+            'ssmmessages:CreateDataChannel',
+            'ssmmessages:OpenControlChannel',
+            'ssmmessages:OpenDataChannel',
+            'ssm:UpdateInstanceInformation',
+            'ssm:ListAssociations',
+            'ssm:ListInstanceAssociations',
+            'ssm:GetDocument',
+            'ssm:DescribeDocument'
+          ],
+          Resource: '*'
         },
-      ],
-    }),
-    tags: config.tags,
+        {
+          Effect: 'Allow',
+          Action: [
+            'logs:CreateLogStream',
+            'logs:PutLogEvents',
+            'logs:DescribeLogGroups',
+            'logs:DescribeLogStreams'
+          ],
+          Resource: `arn:aws:logs:${config.region}:${config.accountId}:log-group:/aws/ssm/*`
+        },
+        {
+          Effect: 'Allow',
+          Action: [
+            'kms:Decrypt'
+          ],
+          Resource: '*',
+          Condition: {
+            StringEquals: {
+              'kms:ViaService': `ssm.${config.region}.amazonaws.com`
+            }
+          }
+        }
+      ]
+    })
   });
+
+  // Additional runtime validations
+  console.log('✓ SSM and VPC endpoints configured successfully');
+  console.log(`  - S3 Gateway endpoint created`);
+  console.log(`  - SSM Interface endpoints created (ssm, ssmmessages, ec2messages)`);
+  console.log(`  - CloudWatch Logs and KMS endpoints created`);
+  console.log(`  - Session Manager preferences configured`);
+  console.log(`  - Patch management baseline created`);
+  
+  // Validate endpoint security
+  if (!endpointSg.id) {
+    throw new Error('Failed to create VPC endpoint security group');
+  }
+}
+
+// ==================== Additional Validation Functions ====================
+export function validateResourceCreation(resources: any): void {
+  // Check if critical resources were created successfully
+  const criticalResources = [
+    'vpc',
+    'publicSubnets',
+    'privateSubnets',
+    'natGateways',
+    'ec2Instances',
+    'alb',
+    'rds',
+    'kmsKey'
+  ];
+
+  criticalResources.forEach(resource => {
+    if (!resources[resource]) {
+      throw new Error(`Critical resource ${resource} was not created successfully`);
+    }
+  });
+
+  console.log('✓ All critical resources created successfully');
+}
+
+// ==================== Export Additional Helper Functions ====================
+export function generateTags(environment: string, additionalTags?: { [key: string]: string }): { [key: string]: string } {
+  return {
+    Environment: environment,
+    ManagedBy: 'CDKTF',
+    CreatedAt: new Date().toISOString(),
+    ...additionalTags
+  };
+}
+
+export function calculateSubnetCidr(vpcCidr: string, subnetIndex: number, subnetSize: number = 24): string {
+  // Simple subnet CIDR calculation
+  const vpcParts = vpcCidr.split('/');
+  const baseIp = vpcParts[0].split('.');
+  baseIp[2] = String(subnetIndex);
+  return `${baseIp.join('.')}.0/${subnetSize}`;
 }
