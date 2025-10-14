@@ -1073,14 +1073,6 @@ export class OpenSearchModule extends Construct {
           tlsSecurityPolicy: 'Policy-Min-TLS-1-2-2019-07',
         },
 
-        advancedSecurityOptions: {
-          enabled: true,
-          internalUserDatabaseEnabled: false,
-          masterUserOptions: {
-            masterUserArn: `arn:aws:iam::*:role/${config.environment}-security-admin-role`,
-          },
-        },
-
         tags: commonTags,
       }
     );
