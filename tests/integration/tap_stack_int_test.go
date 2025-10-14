@@ -26,7 +26,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sfn"
 	"github.com/aws/aws-sdk-go-v2/service/sns"
-	"github.com/aws/aws-sdk-go-v2/types"
 	"github.com/aws/jsii-runtime-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -580,7 +579,7 @@ func testStepFunctionsExecution(t *testing.T, ctx context.Context, cfg aws.Confi
 
 			t.Logf("  Execution status: %s", string(describeOutput.Status))
 
-			if describeOutput.Status == types.ExecutionStatusSucceeded {
+			if describeOutput.Status == sfntypes.ExecutionStatusSucceeded {
 				executionCompleted = true
 				assert.NotNil(t, describeOutput.Output, "Execution should have output")
 				t.Logf("✓ Execution completed successfully")
@@ -588,9 +587,9 @@ func testStepFunctionsExecution(t *testing.T, ctx context.Context, cfg aws.Confi
 					t.Logf("  Output: %s", *describeOutput.Output)
 				}
 				break
-			} else if describeOutput.Status == types.ExecutionStatusFailed ||
-				describeOutput.Status == types.ExecutionStatusTimedOut ||
-				describeOutput.Status == types.ExecutionStatusAborted {
+			} else if describeOutput.Status == sfntypes.ExecutionStatusFailed ||
+				describeOutput.Status == sfntypes.ExecutionStatusTimedOut ||
+				describeOutput.Status == sfntypes.ExecutionStatusAborted {
 				t.Errorf("Execution failed with status: %s", string(describeOutput.Status))
 				if describeOutput.Cause != nil {
 					t.Errorf("  Cause: %s", *describeOutput.Cause)
@@ -974,12 +973,12 @@ func testEndToEndWorkflow(t *testing.T, ctx context.Context, cfg aws.Config, out
 		t.Log("Step 2: Writing metadata to DynamoDB...")
 		_, err = dynamoClient.PutItem(ctx, &dynamodb.PutItemInput{
 			TableName: aws.String(outputs.MetadataTableName),
-			Item: map[string]types.AttributeValue{
-				"image_id":  &types.AttributeValueMemberS{Value: testImageID},
-				"timestamp": &types.AttributeValueMemberS{Value: time.Now().Format(time.RFC3339)},
-				"status":    &types.AttributeValueMemberS{Value: "uploaded"},
-				"source":    &types.AttributeValueMemberS{Value: "integration-test"},
-				"test_run":  &types.AttributeValueMemberBOOL{Value: true},
+			Item: map[string]dynamodbtypes.AttributeValue{
+				"image_id":  &dynamodbtypes.AttributeValueMemberS{Value: testImageID},
+				"timestamp": &dynamodbtypes.AttributeValueMemberS{Value: time.Now().Format(time.RFC3339)},
+				"status":    &dynamodbtypes.AttributeValueMemberS{Value: "uploaded"},
+				"source":    &dynamodbtypes.AttributeValueMemberS{Value: "integration-test"},
+				"test_run":  &dynamodbtypes.AttributeValueMemberBOOL{Value: true},
 			},
 		})
 		assert.NoError(t, err, "Should be able to write metadata")
@@ -990,8 +989,8 @@ func testEndToEndWorkflow(t *testing.T, ctx context.Context, cfg aws.Config, out
 			defer func() {
 				_, _ = dynamoClient.DeleteItem(ctx, &dynamodb.DeleteItemInput{
 					TableName: aws.String(outputs.MetadataTableName),
-					Key: map[string]types.AttributeValue{
-						"image_id": &types.AttributeValueMemberS{Value: testImageID},
+					Key: map[string]dynamodbtypes.AttributeValue{
+						"image_id": &dynamodbtypes.AttributeValueMemberS{Value: testImageID},
 					},
 				})
 				t.Log("  Cleaned up test metadata")
@@ -1067,8 +1066,8 @@ func testEndToEndWorkflow(t *testing.T, ctx context.Context, cfg aws.Config, out
 		t.Log("Step 5: Verifying data persistence...")
 		getOutput, err := dynamoClient.GetItem(ctx, &dynamodb.GetItemInput{
 			TableName: aws.String(outputs.MetadataTableName),
-			Key: map[string]types.AttributeValue{
-				"image_id": &types.AttributeValueMemberS{Value: testImageID},
+			Key: map[string]dynamodbtypes.AttributeValue{
+				"image_id": &dynamodbtypes.AttributeValueMemberS{Value: testImageID},
 			},
 		})
 		assert.NoError(t, err, "Should be able to read metadata")
@@ -1077,7 +1076,7 @@ func testEndToEndWorkflow(t *testing.T, ctx context.Context, cfg aws.Config, out
 
 			// Verify the data we wrote
 			if statusAttr, ok := getOutput.Item["status"]; ok {
-				if statusVal, ok := statusAttr.(*types.AttributeValueMemberS); ok {
+				if statusVal, ok := statusAttr.(*dynamodbtypes.AttributeValueMemberS); ok {
 					assert.Equal(t, "uploaded", statusVal.Value, "Status should match")
 					t.Logf("  Status: %s", statusVal.Value)
 				}
@@ -1094,8 +1093,8 @@ func testEndToEndWorkflow(t *testing.T, ctx context.Context, cfg aws.Config, out
 		// Try to get non-existent item
 		_, err := dynamoClient.GetItem(ctx, &dynamodb.GetItemInput{
 			TableName: aws.String(outputs.MetadataTableName),
-			Key: map[string]types.AttributeValue{
-				"image_id": &types.AttributeValueMemberS{Value: "non-existent-id"},
+			Key: map[string]dynamodbtypes.AttributeValue{
+				"image_id": &dynamodbtypes.AttributeValueMemberS{Value: "non-existent-id"},
 			},
 		})
 		assert.NoError(t, err, "GetItem should not error for non-existent items")
