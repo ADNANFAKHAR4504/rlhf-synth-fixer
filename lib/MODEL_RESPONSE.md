@@ -54,19 +54,15 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
   }
 }
 
 provider "aws" {
   region = "us-west-2"
-  
-  default_tags {
-    tags = {
-      Project     = "Media CMS"
-      ManagedBy   = "Terraform"
-      CreatedDate = timestamp()
-    }
-  }
 }
 ```
 
@@ -74,19 +70,9 @@ provider "aws" {
 
 ```hcl
 # ============================================
-# Variables
-# ============================================
-variable "cloudfront_oai_arn" {
-  description = "ARN of the CloudFront Origin Access Identity for production bucket access"
-  type        = string
-}
-
-# ============================================
 # Data Sources
 # ============================================
 data "aws_caller_identity" "current" {}
-
-data "aws_canonical_user_id" "current" {}
 
 # ============================================
 # Locals
@@ -109,10 +95,26 @@ locals {
 }
 
 # ============================================
+# Random Suffix for Unique Bucket Names
+# ============================================
+resource "random_string" "bucket_suffix" {
+  length  = 8
+  special = false
+  upper   = false
+}
+
+# ============================================
+# CloudFront Origin Access Identity
+# ============================================
+resource "aws_cloudfront_origin_access_identity" "media_oai" {
+  comment = "OAI for media assets production bucket"
+}
+
+# ============================================
 # S3 Bucket - Centralized Logs
 # ============================================
 resource "aws_s3_bucket" "logs" {
-  bucket = "media-assets-logs"
+  bucket = "media-assets-logs-${random_string.bucket_suffix.result}"
   
   tags = merge(
     local.common_tags,
@@ -148,6 +150,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs" {
   rule {
     id     = "delete-old-logs"
     status = "Enabled"
+    filter {}
 
     expiration {
       days = 90
@@ -155,38 +158,35 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs" {
   }
 }
 
-# Grant permissions for S3 to write access logs
-resource "aws_s3_bucket_acl" "logs" {
+resource "aws_s3_bucket_policy" "logs" {
   bucket = aws_s3_bucket.logs.id
-  
-  access_control_policy {
-    grant {
-      grantee {
-        type = "Group"
-        uri  = "http://acs.amazonaws.com/groups/s3/LogDelivery"
-      }
-      permission = "WRITE"
-    }
 
-    grant {
-      grantee {
-        type = "Group"
-        uri  = "http://acs.amazonaws.com/groups/s3/LogDelivery"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "S3ServerAccessLogsPolicy"
+        Effect = "Allow"
+        Principal = {
+          Service = "logging.s3.amazonaws.com"
+        }
+        Action = "s3:PutObject"
+        Resource = "${aws_s3_bucket.logs.arn}/*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = local.account_id
+          }
+        }
       }
-      permission = "READ_ACP"
-    }
-
-    owner {
-      id = data.aws_canonical_user_id.current.id
-    }
-  }
+    ]
+  })
 }
 
 # ============================================
 # S3 Bucket - Development Environment
 # ============================================
 resource "aws_s3_bucket" "dev" {
-  bucket = "media-assets-dev"
+  bucket = "media-assets-dev-${random_string.bucket_suffix.result}"
   
   tags = merge(
     local.common_tags,
@@ -232,7 +232,7 @@ resource "aws_s3_bucket_logging" "dev" {
   bucket = aws_s3_bucket.dev.id
 
   target_bucket = aws_s3_bucket.logs.id
-  target_prefix = "dev-logs/"
+  target_prefix = "dev/"
 }
 
 resource "aws_s3_bucket_lifecycle_configuration" "dev" {
@@ -241,6 +241,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "dev" {
   rule {
     id     = "delete-old-dev-objects"
     status = "Enabled"
+    filter {}
 
     expiration {
       days = 30
@@ -252,7 +253,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "dev" {
 # S3 Bucket - Production Environment
 # ============================================
 resource "aws_s3_bucket" "prod" {
-  bucket = "media-assets-prod"
+  bucket = "media-assets-prod-${random_string.bucket_suffix.result}"
   
   tags = merge(
     local.common_tags,
@@ -306,7 +307,7 @@ resource "aws_s3_bucket_logging" "prod" {
   bucket = aws_s3_bucket.prod.id
 
   target_bucket = aws_s3_bucket.logs.id
-  target_prefix = "prod-logs/"
+  target_prefix = "prod/"
 }
 
 resource "aws_s3_bucket_lifecycle_configuration" "prod" {
@@ -315,6 +316,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "prod" {
   rule {
     id     = "transition-to-glacier"
     status = "Enabled"
+    filter {}
 
     transition {
       days          = 90
@@ -323,7 +325,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "prod" {
   }
 }
 
-# Production bucket policy for CloudFront OAI access
 resource "aws_s3_bucket_policy" "prod" {
   bucket = aws_s3_bucket.prod.id
 
@@ -334,7 +335,7 @@ resource "aws_s3_bucket_policy" "prod" {
         Sid    = "AllowCloudFrontOAIAccess"
         Effect = "Allow"
         Principal = {
-          AWS = var.cloudfront_oai_arn
+          AWS = aws_cloudfront_origin_access_identity.media_oai.iam_arn
         }
         Action = [
           "s3:GetObject",
@@ -346,7 +347,7 @@ resource "aws_s3_bucket_policy" "prod" {
         Sid    = "AllowCloudFrontListBucket"
         Effect = "Allow"
         Principal = {
-          AWS = var.cloudfront_oai_arn
+          AWS = aws_cloudfront_origin_access_identity.media_oai.iam_arn
         }
         Action = [
           "s3:ListBucket"
@@ -399,6 +400,16 @@ output "dev_bucket_domain_name" {
   description = "Domain name of the development bucket"
   value       = aws_s3_bucket.dev.bucket_regional_domain_name
 }
+
+output "cloudfront_oai_id" {
+  description = "ID of the CloudFront Origin Access Identity"
+  value       = aws_cloudfront_origin_access_identity.media_oai.id
+}
+
+output "cloudfront_oai_arn" {
+  description = "ARN of the CloudFront Origin Access Identity"
+  value       = aws_cloudfront_origin_access_identity.media_oai.iam_arn
+}
 ```
 
 ## Key Features Implemented:
@@ -438,10 +449,10 @@ output "dev_bucket_domain_name" {
 terraform init
 
 # Plan the deployment
-terraform plan -var="cloudfront_oai_arn=arn:aws:iam::cloudfront:user/CloudFront-Origin-Access-Identity/ABCDEFG1234567"
+terraform plan
 
 # Apply the configuration
-terraform apply -var="cloudfront_oai_arn=arn:aws:iam::cloudfront:user/CloudFront-Origin-Access-Identity/ABCDEFG1234567"
+terraform apply
 ```
 
 The configuration follows all current Terraform and AWS best practices, with clear separation of concerns and proper resource management for your media CMS infrastructure.
