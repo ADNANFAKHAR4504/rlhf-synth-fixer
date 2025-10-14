@@ -31,7 +31,7 @@ locals {
 
 resource "aws_kms_key" "platform_key" {
   description             = "KMS key for ${var.project_name} platform encryption"
-  deletion_window_in_days = 7 # Reduced for easier cleanup
+  deletion_window_in_days = 30
   enable_key_rotation     = true
 
   tags = merge(local.common_tags, {
@@ -455,7 +455,7 @@ resource "aws_api_gateway_method" "items_get" {
   rest_api_id   = aws_api_gateway_rest_api.main.id
   resource_id   = aws_api_gateway_resource.items.id
   http_method   = "GET"
-  authorization = "NONE" # Changed from AWS_IAM for easier testing
+  authorization = "AWS_IAM"
 }
 
 resource "aws_api_gateway_integration" "items_get" {
@@ -472,7 +472,7 @@ resource "aws_api_gateway_method" "items_post" {
   rest_api_id   = aws_api_gateway_rest_api.main.id
   resource_id   = aws_api_gateway_resource.items.id
   http_method   = "POST"
-  authorization = "NONE" # Changed from AWS_IAM for easier testing
+  authorization = "AWS_IAM"
 }
 
 resource "aws_api_gateway_integration" "items_post" {
@@ -999,7 +999,7 @@ resource "aws_xray_sampling_rule" "main" {
 # S3 Bucket for Analytics
 resource "aws_s3_bucket" "analytics" {
   bucket        = "${local.resource_prefix}-analytics-${local.account_id}"
-  force_destroy = true # Allow easy cleanup
+  force_destroy = false
 
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-analytics"

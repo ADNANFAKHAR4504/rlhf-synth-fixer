@@ -275,6 +275,10 @@ describe('Terraform Configuration Unit Tests', () => {
       expect(mainTfContent).toMatch(/aws_kms_key/);
     });
 
+    test('KMS key has 30-day deletion window for production safety', () => {
+      expect(mainTfContent).toMatch(/deletion_window_in_days\s*=\s*30/);
+    });
+
     test('CloudWatch logging is enabled', () => {
       expect(mainTfContent).toContain('aws_cloudwatch_log_group');
     });
@@ -285,6 +289,16 @@ describe('Terraform Configuration Unit Tests', () => {
 
     test('S3 buckets have public access blocked', () => {
       expect(mainTfContent).toContain('aws_s3_bucket_public_access_block');
+    });
+
+    test('S3 buckets have force_destroy disabled for data protection', () => {
+      expect(mainTfContent).toMatch(/force_destroy\s*=\s*false/);
+    });
+
+    test('API Gateway uses AWS_IAM authorization for secure access', () => {
+      const iamAuthMatches = mainTfContent.match(/authorization\s*=\s*"AWS_IAM"/g);
+      expect(iamAuthMatches).toBeTruthy();
+      expect(iamAuthMatches!.length).toBeGreaterThanOrEqual(2); // At least GET and POST methods
     });
   });
 
@@ -357,7 +371,7 @@ describe('Terraform Configuration Unit Tests', () => {
     test('all alarms have SNS topic configured', () => {
       const alarmMatches = mainTfContent.match(/resource\s+"aws_cloudwatch_metric_alarm"/g);
       const snsActionMatches = mainTfContent.match(/alarm_actions\s*=\s*\[aws_sns_topic\.alerts\.arn\]/g);
-      
+
       expect(alarmMatches).toBeTruthy();
       expect(snsActionMatches).toBeTruthy();
       expect(snsActionMatches!.length).toBeGreaterThanOrEqual(7); // At least 7 alarms with SNS actions
