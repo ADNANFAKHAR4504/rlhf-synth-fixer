@@ -67,6 +67,20 @@ Resources:
             Condition:
               StringEquals:
                 "kms:ViaService": !Sub "s3.${AWS::Region}.amazonaws.com"
+          - Sid: Allow CloudWatch Logs to use the key
+            Effect: Allow
+            Principal:
+              Service: !Sub "logs.${AWS::Region}.amazonaws.com"
+            Action:
+              - "kms:Encrypt"
+              - "kms:Decrypt"
+              - "kms:ReEncrypt*"
+              - "kms:GenerateDataKey*"
+              - "kms:DescribeKey"
+            Resource: "*"
+            Condition:
+              ArnLike:
+                "kms:EncryptionContext:aws:logs:arn": !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${Environment}-backup-function"
       Tags:
         - Key: Environment
           Value: !Ref Environment

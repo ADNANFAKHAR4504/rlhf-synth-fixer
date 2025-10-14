@@ -84,6 +84,29 @@ describe('Data Backup System CloudFormation Template', () => {
       expect(lambdaStatement.Principal.Service).toBe('lambda.amazonaws.com');
     });
 
+    test('KMS key should allow CloudWatch Logs encryption', () => {
+      const kmsKey = template.Resources.BackupKMSKey;
+      const statements = kmsKey.Properties.KeyPolicy.Statement;
+
+      // Should have CloudWatch Logs permissions
+      const logsStatement = statements.find((s: any) => s.Sid === 'Allow CloudWatch Logs to use the key');
+      expect(logsStatement).toBeDefined();
+      expect(logsStatement.Principal.Service).toEqual({ 'Fn::Sub': 'logs.${AWS::Region}.amazonaws.com' });
+
+      // Should have required permissions
+      const requiredActions = ['kms:Encrypt', 'kms:Decrypt', 'kms:ReEncrypt*', 'kms:GenerateDataKey*', 'kms:DescribeKey'];
+      requiredActions.forEach(action => {
+        expect(logsStatement.Action).toContain(action);
+      });
+
+      // Should have proper condition
+      expect(logsStatement.Condition).toBeDefined();
+      expect(logsStatement.Condition.ArnLike).toBeDefined();
+      expect(logsStatement.Condition.ArnLike['kms:EncryptionContext:aws:logs:arn']).toEqual({
+        'Fn::Sub': 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${Environment}-backup-function'
+      });
+    });
+
     test('should have KMS key alias', () => {
       expect(template.Resources.BackupKMSKeyAlias).toBeDefined();
       const alias = template.Resources.BackupKMSKeyAlias;

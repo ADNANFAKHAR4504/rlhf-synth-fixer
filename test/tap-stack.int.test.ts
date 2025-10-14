@@ -4,6 +4,10 @@ import {
   GetMetricStatisticsCommand
 } from '@aws-sdk/client-cloudwatch';
 import {
+  CloudWatchLogsClient,
+  DescribeLogGroupsCommand
+} from '@aws-sdk/client-cloudwatch-logs';
+import {
   DescribeRuleCommand,
   EventBridgeClient,
   ListTargetsByRuleCommand
@@ -51,6 +55,7 @@ const s3Client = new S3Client({ region });
 const lambdaClient = new LambdaClient({ region });
 const eventBridgeClient = new EventBridgeClient({ region });
 const cloudWatchClient = new CloudWatchClient({ region });
+const logsClient = new CloudWatchLogsClient({ region });
 const kmsClient = new KMSClient({ region });
 const iamClient = new IAMClient({ region });
 
@@ -212,6 +217,26 @@ describe('Data Backup System Integration Tests', () => {
       expect(sampleDoc.metadata.department).toBeDefined();
       expect(sampleDoc.metadata.priority).toBeDefined();
     }, 30000);
+
+    test('Lambda log group should exist with KMS encryption', async () => {
+      const logGroupName = `/aws/lambda/${environment}-backup-function`;
+      
+      const command = new DescribeLogGroupsCommand({
+        logGroupNamePrefix: logGroupName
+      });
+
+      const response = await logsClient.send(command);
+      expect(response.logGroups).toBeDefined();
+      
+      const logGroup = response.logGroups!.find(lg => lg.logGroupName === logGroupName);
+      expect(logGroup).toBeDefined();
+      expect(logGroup!.retentionInDays).toBe(30);
+      expect(logGroup!.kmsKeyId).toBeDefined();
+      expect(logGroup!.kmsKeyId).toContain('arn:aws:kms');
+      
+      // Verify KMS key is the correct one from our stack
+      expect(logGroup!.kmsKeyId).toContain(kmsKeyId || environment);
+    }, 10000);
   });
 
   describe('EventBridge Scheduling', () => {
