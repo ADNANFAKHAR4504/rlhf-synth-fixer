@@ -2,6 +2,21 @@
 
 Orchestrates the complete Infrastructure as Code development lifecycle by coordinating three specialized sub-agents.
 
+## ⚠️ CRITICAL: CSV Data Integrity
+
+**BEFORE modifying tasks.csv:**
+1. READ the "CSV File Corruption Prevention" section in `lessons_learnt.md`
+2. READ the complete guide in `.claude/csv_safety_guide.md`
+3. RUN the safety check: `./scripts/check-csv-safety.sh`
+
+ALL CSV operations MUST:
+1. Create backup before ANY modification
+2. Read ALL rows, modify specific row(s), write ALL rows back
+3. Validate row counts before and after
+4. Restore from backup if ANY validation fails
+
+**Failure to follow these rules will corrupt the tasks.csv file and lose all task data!**
+
 ## ⚠️ CRITICAL: Commit Message Requirements
 
 **ALL commits MUST follow conventional commits format with lowercase subject:**
@@ -212,27 +227,48 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
      exit 1
    fi
    
-   # Update tasks.csv (using Python for safe CSV handling)
+   # Update tasks.csv (using Python for safe CSV handling with backup and validation)
    python3 << 'PYTHON_SCRIPT'
 import csv
 import sys
+import shutil
+import os
 
 task_id = "${TASK_ID}"
 pr_number = "${PR_NUMBER}"
 
 try:
+    # CRITICAL: Create backup before modifying
+    shutil.copy2('tasks.csv', 'tasks.csv.backup')
+    
     # Read CSV
     rows = []
     updated = False
+    original_count = 0
     with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         fieldnames = reader.fieldnames
         for row in reader:
+            original_count += 1
             if row['task_id'] == task_id and row['status'] == 'in_progress':
                 row['status'] = 'done'
                 row['trainr_notes'] = f"Completed - PR #{pr_number}"
                 updated = True
             rows.append(row)
+    
+    # VALIDATION: Ensure we haven't lost any rows
+    if len(rows) != original_count:
+        print(f"❌ ERROR: Row count mismatch. Original: {original_count}, Current: {len(rows)}")
+        print("Restoring from backup...")
+        shutil.copy2('tasks.csv.backup', 'tasks.csv')
+        sys.exit(1)
+    
+    # VALIDATION: Ensure we have all fieldnames
+    if not fieldnames or len(fieldnames) == 0:
+        print("❌ ERROR: No fieldnames found in CSV")
+        print("Restoring from backup...")
+        shutil.copy2('tasks.csv.backup', 'tasks.csv')
+        sys.exit(1)
 
     # Write back
     if updated:
@@ -240,12 +276,29 @@ try:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(rows)
-        print(f"✅ Updated task {task_id} status to 'done' with PR #{pr_number}")
+        
+        # VALIDATION: Verify the write was successful
+        verify_count = 0
+        with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                verify_count += 1
+        
+        if verify_count != original_count:
+            print(f"❌ ERROR: Write verification failed. Expected {original_count} rows, found {verify_count}")
+            print("Restoring from backup...")
+            shutil.copy2('tasks.csv.backup', 'tasks.csv')
+            sys.exit(1)
+        
+        print(f"✅ Updated task {task_id} status to 'done' with PR #{pr_number} ({verify_count} total rows preserved)")
     else:
         print(f"⚠️ Task {task_id} not found or not in 'in_progress' status")
         sys.exit(1)
 except Exception as e:
     print(f"❌ ERROR updating CSV: {e}")
+    print("Restoring from backup...")
+    if os.path.exists('tasks.csv.backup'):
+        shutil.copy2('tasks.csv.backup', 'tasks.csv')
     sys.exit(1)
 PYTHON_SCRIPT
    
@@ -455,34 +508,72 @@ If PR creation fails at any step:
    python3 << 'PYTHON_SCRIPT'
 import csv
 import sys
+import shutil
+import os
 
 task_id = "${TASK_ID}"
 error_msg = "${ERROR_MESSAGE}"
 error_step = "${ERROR_STEP}"
 
 try:
+    # CRITICAL: Create backup before modifying
+    shutil.copy2('tasks.csv', 'tasks.csv.backup')
+    
     rows = []
     updated = False
+    original_count = 0
     with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         fieldnames = reader.fieldnames
         for row in reader:
+            original_count += 1
             if row['task_id'] == task_id and row['status'] == 'in_progress':
                 row['status'] = 'error'
                 row['trainr_notes'] = f"PR creation failed at {error_step}: {error_msg}"
                 updated = True
             rows.append(row)
+    
+    # VALIDATION: Ensure we haven't lost any rows
+    if len(rows) != original_count:
+        print(f"❌ ERROR: Row count mismatch. Original: {original_count}, Current: {len(rows)}")
+        print("Restoring from backup...")
+        shutil.copy2('tasks.csv.backup', 'tasks.csv')
+        sys.exit(1)
+    
+    # VALIDATION: Ensure we have all fieldnames
+    if not fieldnames or len(fieldnames) == 0:
+        print("❌ ERROR: No fieldnames found in CSV")
+        print("Restoring from backup...")
+        shutil.copy2('tasks.csv.backup', 'tasks.csv')
+        sys.exit(1)
 
     if updated:
         with open('tasks.csv', 'w', newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(rows)
-        print(f"✅ Updated task {task_id} status to 'error'")
+        
+        # VALIDATION: Verify the write was successful
+        verify_count = 0
+        with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                verify_count += 1
+        
+        if verify_count != original_count:
+            print(f"❌ ERROR: Write verification failed. Expected {original_count} rows, found {verify_count}")
+            print("Restoring from backup...")
+            shutil.copy2('tasks.csv.backup', 'tasks.csv')
+            sys.exit(1)
+        
+        print(f"✅ Updated task {task_id} status to 'error' ({verify_count} total rows preserved)")
     else:
         print(f"⚠️ Task {task_id} not found or not in 'in_progress' status")
 except Exception as e:
     print(f"❌ ERROR updating CSV: {e}")
+    print("Restoring from backup...")
+    if os.path.exists('tasks.csv.backup'):
+        shutil.copy2('tasks.csv.backup', 'tasks.csv')
     sys.exit(1)
 PYTHON_SCRIPT
    ```
