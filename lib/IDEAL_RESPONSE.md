@@ -1133,7 +1133,7 @@ All resources are tagged with:
 
 1. **Validate the template**:
 ```bash
-aws cloudformation validate-template --template-body file://lib/TapStack.json --region ap-south-1
+aws cloudformation validate-template --template-body file://lib/TapStack.json --region us-west-1
 ```
 
 2. **Deploy the stack**:
@@ -1145,7 +1145,7 @@ aws cloudformation create-stack \
     ParameterKey=EnvironmentSuffix,ParameterValue=dev \
     ParameterKey=DBUsername,ParameterValue=admin \
   --capabilities CAPABILITY_IAM \
-  --region ap-south-1
+  --region us-west-1
 ```
 
 Note: The stack automatically creates a Secrets Manager secret with an auto-generated strong password. No manual secret creation is required.
@@ -1154,7 +1154,7 @@ Note: The stack automatically creates a Secrets Manager secret with an auto-gene
 ```bash
 aws cloudformation describe-stacks \
   --stack-name production-infrastructure-dev \
-  --region ap-south-1 \
+  --region us-west-1 \
   --query 'Stacks[0].StackStatus'
 ```
 
@@ -1162,7 +1162,7 @@ aws cloudformation describe-stacks \
 ```bash
 aws cloudformation describe-stacks \
   --stack-name production-infrastructure-dev \
-  --region ap-south-1 \
+  --region us-west-1 \
   --query 'Stacks[0].Outputs'
 ```
 
@@ -1175,7 +1175,7 @@ To delete the stack and all resources:
 ```bash
 aws cloudformation delete-stack \
   --stack-name production-infrastructure-dev \
-  --region ap-south-1
+  --region us-west-1
 ```
 
 ## Key Features

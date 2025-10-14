@@ -6,7 +6,7 @@ const outputs = JSON.parse(
 );
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const region = process.env.AWS_REGION || 'ap-south-1';
+const region = process.env.AWS_REGION || 'us-west-1';
 
 AWS.config.update({ region });
 
