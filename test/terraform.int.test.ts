@@ -147,6 +147,7 @@ async function getAccountId(): Promise<string> {
 // Check credentials early before defining tests
 let credentialsChecked = false;
 let shouldSkipTests = false;
+let dataAccountId: string;
 
 // Wrapper function to conditionally skip tests
 async function setupTests() {
