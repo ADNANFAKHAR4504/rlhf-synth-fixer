@@ -29,3 +29,82 @@ Property Property 'NetworkAcIRule does not exist on type 'typeof import("/home/i
 Property 'NetworkAcIRule does not exist on type 'typeof import("/home/infivit/Desktop/new prs/pr349430/iac-test-automations/node_modules/@cdktf/provider-aws/lib/vpc/index"), ts(2339) [Ln 231, Col 13]
 Namespace"/home/infivit/Desktop/new prs/pr349430/iac-test-automations/node_modules/@cdktf/provider-aws/lib/elb/index"" has no exported member 'Alb', ts(2694) [Ln 580, Col 28]
 Namespace"/home/infivit/Desktop/new prs/pr349430/lac-test-automations/node_modules/@cdktf/provider-aws/lib/elb/index"" has no exported member 'Alb TargetGroup'. ts(2694) (Ln 581, Col 36)
+
+synth issues:
+Run ./scripts/synth.sh
+Project: platform=cdktf, language=ts
+✅ CDKTF project detected, running CDKTF get and synth...
+❌ No .gen directory found; generating...
+Generated typescript constructs in the output directory: .gen
+✅ Found other language CDKTF generated provider directory in .gen
+
+> tap@0.1.0 cdktf:synth
+> cdktf synth
+
+Error: 025-10-14T11:15:51.421] [ERROR] default - /home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/errors.ts:489
+  new Error(`Found an encoded list token string in a scalar string context.
+  ^
+
+Error: 025-10-14T11:15:51.424] [ERROR] default - Error: Found an encoded list token string in a scalar string context.
+In CDKTF, we represent lists, with values unknown until after runtime, as arrays with a single element— a string token (["Token.1"]).
+
+
+We do this because CDKTF does not know the length of the list at compile time, meaning CDKTF has yet to invoke Terraform to communicate with the cloud provider. CDKTF later invokes Terraform on the synthesized static JSON file.
+
+Because we don't know the length of the list, we can not differentiate if the list was accessed at the first or last index, or as part of a loop. To avoid this ambiguity:
+
+- If you want to access a singular item, use 'Fn.element(list, 0)'. Do not use 'list[0]'.
+- If you want to loop over the list use 'TerraformIterator.fromList(list)'. Do not use a 'for' or 'forEach' loop.
+
+Learn more about tokens: https://developer.hashicorp.com/terraform/cdktf/concepts/tokens
+Learn more about iterators: https://developer.hashicorp.com/terraform/cdktf/concepts/iterators
+    at encodedListTokenInScalarStringContext (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/errors.ts:489:3)
+    at resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:137:50)
+    at Object.resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:84:16)
+    at resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:246:39)
+    at Object.resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:84:16)
+    at resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:246:39)
+    at Object.resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:84:16)
+    at resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:246:39)
+    at Object.resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:84:16)
+    at resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:246:39)
+
+ERROR: cdktf encountered an error while synthesizing
+
+Synth command: npx ts-node bin/tap.ts
+Error:         non-zero exit code 1
+
+
+Command output on stderr:
+⠋  Synthesizing
+
+    /home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/errors.ts:489
+      new Error(`Found an encoded list token string in a scalar string context.
+      ^
+    Error: Found an encoded list token string in a scalar string context.
+    In CDKTF, we represent lists, with values unknown until after runtime, as arrays with a single element— a string token (["Token.1"]).
+
+
+    We do this because CDKTF does not know the length of the list at compile time, meaning CDKTF has yet to invoke Terraform to communicate with the cloud provider. CDKTF later invokes Terraform on the synthesized static JSON file.
+
+    Because we don't know the length of the list, we can not differentiate if the list was accessed at the first or last index, or as part of a loop. To avoid this ambiguity:
+
+    - If you want to access a singular item, use 'Fn.element(list, 0)'. Do not use 'list[0]'.
+    - If you want to loop over the list use 'TerraformIterator.fromList(list)'. Do not use a 'for' or 'forEach' loop.
+
+    Learn more about tokens: https://developer.hashicorp.com/terraform/cdktf/concepts/tokens
+    Learn more about iterators: https://developer.hashicorp.com/terraform/cdktf/concepts/iterators
+        at encodedListTokenInScalarStringContext (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/errors.ts:489:3)
+        at resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:137:50)
+        at Object.resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:84:16)
+        at resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:246:39)
+        at Object.resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:84:16)
+        at resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:246:39)
+        at Object.resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:84:16)
+        at resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:246:39)
+        at Object.resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:84:16)
+        at resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:246:39)
+
+
+
+Error: Process completed with exit code 1.

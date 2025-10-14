@@ -67,13 +67,13 @@ export class TapStack extends TerraformStack {
     const current = new DataAwsCallerIdentity(this, 'current', {});
 
     // Define common tags for all resources
- const commonTags: CommonTags = {
-  Project: 'tap-project',
-  Environment: environmentSuffix,
-  Owner: 'platform-team',
-  ManagedBy: 'terraform-cdktf',
-  CostCenter: 'engineering',
-};
+    const commonTags: CommonTags = {
+      Project: 'tap-project',
+      Environment: environmentSuffix,
+      Owner: 'platform-team',
+      ManagedBy: 'terraform-cdktf',
+      CostCenter: 'engineering',
+    };
 
     // 1. Create VPC with public and private subnets across multiple AZs
     const vpcConfig: VPCConfig = {
@@ -113,7 +113,7 @@ export class TapStack extends TerraformStack {
       this,
       'rds',
       rdsConfig,
-      vpcModule.privateSubnets.map((subnet) => subnet.id),
+      vpcModule.privateSubnets.map(subnet => subnet.id),
       [securityGroups.rdsSg.id]
     );
 
@@ -122,7 +122,7 @@ export class TapStack extends TerraformStack {
       this,
       'alb',
       vpcModule.vpc.id,
-      vpcModule.publicSubnets.map((subnet) => subnet.id),
+      vpcModule.publicSubnets.map(subnet => subnet.id),
       [securityGroups.albSg.id],
       commonTags
     );
@@ -140,7 +140,7 @@ export class TapStack extends TerraformStack {
       this,
       'asg',
       asgConfig,
-      vpcModule.privateSubnets.map((subnet) => subnet.id),
+      vpcModule.privateSubnets.map(subnet => subnet.id),
       [securityGroups.ec2Sg.id],
       [albModule.targetGroup.arn],
       iamModule.ec2InstanceProfile.name
@@ -158,7 +158,7 @@ export class TapStack extends TerraformStack {
 
     // 8. Create SSM Parameter Store entries for configuration
     SSMHelpers.createCloudWatchAgentConfig(this, commonTags);
-    
+
     // Store ALB DNS name in SSM for reference
     SSMHelpers.createParameter(
       this,
@@ -176,12 +176,12 @@ export class TapStack extends TerraformStack {
     });
 
     new TerraformOutput(this, 'public-subnet-ids', {
-      value: vpcModule.publicSubnets.map((subnet) => subnet.id),
+      value: vpcModule.publicSubnets.map(subnet => subnet.id),
       description: 'Public subnet IDs',
     });
 
     new TerraformOutput(this, 'private-subnet-ids', {
-      value: vpcModule.privateSubnets.map((subnet) => subnet.id),
+      value: vpcModule.privateSubnets.map(subnet => subnet.id),
       description: 'Private subnet IDs',
     });
 

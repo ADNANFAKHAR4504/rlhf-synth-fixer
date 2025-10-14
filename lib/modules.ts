@@ -1,59 +1,60 @@
-import { Construct } from "constructs";
+import { Construct } from 'constructs';
+import { Fn } from 'cdktf';
 
 // VPC Resources
-import { DataAwsAvailabilityZones } from "@cdktf/provider-aws/lib/data-aws-availability-zones";
-import { Eip } from "@cdktf/provider-aws/lib/eip";
-import { InternetGateway } from "@cdktf/provider-aws/lib/internet-gateway";
-import { NatGateway } from "@cdktf/provider-aws/lib/nat-gateway";
-import { NetworkAcl } from "@cdktf/provider-aws/lib/network-acl";
-import { NetworkAclRule } from "@cdktf/provider-aws/lib/network-acl-rule";
-import { Route } from "@cdktf/provider-aws/lib/route";
-import { RouteTable } from "@cdktf/provider-aws/lib/route-table";
-import { RouteTableAssociation } from "@cdktf/provider-aws/lib/route-table-association";
-import { Subnet } from "@cdktf/provider-aws/lib/subnet";
-import { Vpc } from "@cdktf/provider-aws/lib/vpc";
+import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
+import { Eip } from '@cdktf/provider-aws/lib/eip';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
+import { NetworkAcl } from '@cdktf/provider-aws/lib/network-acl';
+import { NetworkAclRule } from '@cdktf/provider-aws/lib/network-acl-rule';
+import { Route } from '@cdktf/provider-aws/lib/route';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 
 // EC2 Resources
-import { DataAwsAmi } from "@cdktf/provider-aws/lib/data-aws-ami";
-import { LaunchTemplate } from "@cdktf/provider-aws/lib/launch-template";
-import { SecurityGroup } from "@cdktf/provider-aws/lib/security-group";
-import { SecurityGroupRule } from "@cdktf/provider-aws/lib/security-group-rule";
+import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
+import { LaunchTemplate } from '@cdktf/provider-aws/lib/launch-template';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
 
 // IAM Resources
-import { IamInstanceProfile } from "@cdktf/provider-aws/lib/iam-instance-profile";
-import { IamPolicy } from "@cdktf/provider-aws/lib/iam-policy";
-import { IamRole } from "@cdktf/provider-aws/lib/iam-role";
-import { IamRolePolicyAttachment } from "@cdktf/provider-aws/lib/iam-role-policy-attachment";
+import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
+import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
 
 // RDS Resources
-import { DbInstance } from "@cdktf/provider-aws/lib/db-instance";
-import { DbSubnetGroup } from "@cdktf/provider-aws/lib/db-subnet-group";
+import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
+import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 
 // Auto Scaling Resources
-import { AutoscalingGroup } from "@cdktf/provider-aws/lib/autoscaling-group";
-import { AutoscalingPolicy } from "@cdktf/provider-aws/lib/autoscaling-policy";
+import { AutoscalingGroup } from '@cdktf/provider-aws/lib/autoscaling-group';
+import { AutoscalingPolicy } from '@cdktf/provider-aws/lib/autoscaling-policy';
 
 // ELB Resources (ALB)
-import { Alb } from "@cdktf/provider-aws/lib/alb";
-import { AlbListener } from "@cdktf/provider-aws/lib/alb-listener";
-import { AlbTargetGroup } from "@cdktf/provider-aws/lib/alb-target-group";
+import { Alb } from '@cdktf/provider-aws/lib/alb';
+import { AlbListener } from '@cdktf/provider-aws/lib/alb-listener';
+import { AlbTargetGroup } from '@cdktf/provider-aws/lib/alb-target-group';
 
 // CloudWatch Resources
-import { CloudwatchLogGroup } from "@cdktf/provider-aws/lib/cloudwatch-log-group";
-import { CloudwatchMetricAlarm } from "@cdktf/provider-aws/lib/cloudwatch-metric-alarm";
+import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
+import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
 
 // CloudTrail Resources
-import { Cloudtrail } from "@cdktf/provider-aws/lib/cloudtrail";
+import { Cloudtrail } from '@cdktf/provider-aws/lib/cloudtrail';
 
 // SNS Resources
-import { SnsTopic } from "@cdktf/provider-aws/lib/sns-topic";
+import { SnsTopic } from '@cdktf/provider-aws/lib/sns-topic';
 
 // SSM Resources
-import { SsmParameter } from "@cdktf/provider-aws/lib/ssm-parameter";
+import { SsmParameter } from '@cdktf/provider-aws/lib/ssm-parameter';
 
 // S3 Resources
-import { S3Bucket } from "@cdktf/provider-aws/lib/s3-bucket";
-import { S3BucketPolicy } from "@cdktf/provider-aws/lib/s3-bucket-policy";
+import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
 
 // Common interfaces for configuration
 export interface CommonTags {
@@ -76,6 +77,7 @@ export interface VPCConfig {
 }
 
 // VPC Module - Handles networking infrastructure
+
 export class VPCConstruct extends Construct {
   public readonly vpc: Vpc;
   public readonly publicSubnets: Subnet[];
@@ -87,13 +89,12 @@ export class VPCConstruct extends Construct {
   constructor(scope: Construct, id: string, config: VPCConfig) {
     super(scope, id);
 
-    const azs = new DataAwsAvailabilityZones(this, "azs", {
-      state: "available",
+    const azs = new DataAwsAvailabilityZones(this, 'azs', {
+      state: 'available',
     });
 
-    // Create VPC with DNS support for RDS endpoint resolution
-    this.vpc = new Vpc(this, "vpc", {
-      cidrBlock: config.cidrBlock || "10.0.0.0/16",
+    this.vpc = new Vpc(this, 'vpc', {
+      cidrBlock: config.cidrBlock || '10.0.0.0/16',
       enableDnsHostnames: config.enableDnsHostnames ?? true,
       enableDnsSupport: config.enableDnsSupport ?? true,
       tags: {
@@ -103,7 +104,7 @@ export class VPCConstruct extends Construct {
     });
 
     // Internet Gateway for public subnet connectivity
-    this.internetGateway = new InternetGateway(this, "igw", {
+    this.internetGateway = new InternetGateway(this, 'igw', {
       vpcId: this.vpc.id,
       tags: {
         ...config.tags,
@@ -120,16 +121,19 @@ export class VPCConstruct extends Construct {
     const natCount = config.natGatewayCount || 2;
 
     for (let i = 0; i < 2; i++) {
+      // FIX: Use Fn.element instead of direct array access
+      const availabilityZone = Fn.element(azs.names, i);
+
       // Public Subnet
       const publicSubnet = new Subnet(this, `public-subnet-${i}`, {
         vpcId: this.vpc.id,
         cidrBlock: `10.0.${i * 2}.0/24`,
-        availabilityZone: azs.names[i],
+        availabilityZone: availabilityZone, // Use the fixed AZ reference
         mapPublicIpOnLaunch: true,
         tags: {
           ...config.tags,
           Name: `${config.tags.Project}-public-subnet-${i + 1}-${config.tags.Environment}`,
-          Type: "Public",
+          Type: 'Public',
         },
       });
       this.publicSubnets.push(publicSubnet);
@@ -138,11 +142,11 @@ export class VPCConstruct extends Construct {
       const privateSubnet = new Subnet(this, `private-subnet-${i}`, {
         vpcId: this.vpc.id,
         cidrBlock: `10.0.${i * 2 + 1}.0/24`,
-        availabilityZone: azs.names[i],
+        availabilityZone: availabilityZone, // Use the fixed AZ reference
         tags: {
           ...config.tags,
           Name: `${config.tags.Project}-private-subnet-${i + 1}-${config.tags.Environment}`,
-          Type: "Private",
+          Type: 'Private',
         },
       });
       this.privateSubnets.push(privateSubnet);
@@ -150,7 +154,7 @@ export class VPCConstruct extends Construct {
       // Create NAT Gateway for each AZ (high availability)
       if (i < natCount) {
         const eip = new Eip(this, `nat-eip-${i}`, {
-          domain: "vpc",
+          domain: 'vpc',
           tags: {
             ...config.tags,
             Name: `${config.tags.Project}-nat-eip-${i + 1}-${config.tags.Environment}`,
@@ -171,7 +175,7 @@ export class VPCConstruct extends Construct {
     }
 
     // Route tables for public subnets
-    const publicRouteTable = new RouteTable(this, "public-rt", {
+    const publicRouteTable = new RouteTable(this, 'public-rt', {
       vpcId: this.vpc.id,
       tags: {
         ...config.tags,
@@ -179,9 +183,9 @@ export class VPCConstruct extends Construct {
       },
     });
 
-    new Route(this, "public-route", {
+    new Route(this, 'public-route', {
       routeTableId: publicRouteTable.id,
-      destinationCidrBlock: "0.0.0.0/0",
+      destinationCidrBlock: '0.0.0.0/0',
       gatewayId: this.internetGateway.id,
     });
 
@@ -205,7 +209,7 @@ export class VPCConstruct extends Construct {
       if (this.natGateways[index % natCount]) {
         new Route(this, `private-route-${index}`, {
           routeTableId: privateRouteTable.id,
-          destinationCidrBlock: "0.0.0.0/0",
+          destinationCidrBlock: '0.0.0.0/0',
           natGatewayId: this.natGateways[index % natCount].id,
         });
       }
@@ -217,7 +221,7 @@ export class VPCConstruct extends Construct {
     });
 
     // Network ACLs with secure defaults
-    const networkAcl = new NetworkAcl(this, "nacl", {
+    const networkAcl = new NetworkAcl(this, 'nacl', {
       vpcId: this.vpc.id,
       tags: {
         ...config.tags,
@@ -226,56 +230,56 @@ export class VPCConstruct extends Construct {
     });
 
     // Allow all internal VPC traffic
-    new NetworkAclRule(this, "nacl-ingress-vpc", {
+    new NetworkAclRule(this, 'nacl-ingress-vpc', {
       networkAclId: networkAcl.id,
       ruleNumber: 100,
-      protocol: "-1",
-      ruleAction: "allow",
+      protocol: '-1',
+      ruleAction: 'allow',
       cidrBlock: this.vpc.cidrBlock,
       fromPort: 0,
       toPort: 0,
     });
 
     // Allow HTTPS inbound
-    new NetworkAclRule(this, "nacl-ingress-https", {
+    new NetworkAclRule(this, 'nacl-ingress-https', {
       networkAclId: networkAcl.id,
       ruleNumber: 110,
-      protocol: "tcp",
-      ruleAction: "allow",
-      cidrBlock: "0.0.0.0/0",
+      protocol: 'tcp',
+      ruleAction: 'allow',
+      cidrBlock: '0.0.0.0/0',
       fromPort: 443,
       toPort: 443,
     });
 
     // Allow HTTP inbound
-    new NetworkAclRule(this, "nacl-ingress-http", {
+    new NetworkAclRule(this, 'nacl-ingress-http', {
       networkAclId: networkAcl.id,
       ruleNumber: 120,
-      protocol: "tcp",
-      ruleAction: "allow",
-      cidrBlock: "0.0.0.0/0",
+      protocol: 'tcp',
+      ruleAction: 'allow',
+      cidrBlock: '0.0.0.0/0',
       fromPort: 80,
       toPort: 80,
     });
 
     // Allow ephemeral ports for responses
-    new NetworkAclRule(this, "nacl-ingress-ephemeral", {
+    new NetworkAclRule(this, 'nacl-ingress-ephemeral', {
       networkAclId: networkAcl.id,
       ruleNumber: 130,
-      protocol: "tcp",
-      ruleAction: "allow",
-      cidrBlock: "0.0.0.0/0",
+      protocol: 'tcp',
+      ruleAction: 'allow',
+      cidrBlock: '0.0.0.0/0',
       fromPort: 1024,
       toPort: 65535,
     });
 
     // Egress rules
-    new NetworkAclRule(this, "nacl-egress-all", {
+    new NetworkAclRule(this, 'nacl-egress-all', {
       networkAclId: networkAcl.id,
       ruleNumber: 100,
-      protocol: "-1",
-      ruleAction: "allow",
-      cidrBlock: "0.0.0.0/0",
+      protocol: '-1',
+      ruleAction: 'allow',
+      cidrBlock: '0.0.0.0/0',
       fromPort: 0,
       toPort: 0,
       egress: true,
@@ -293,33 +297,33 @@ export class SecurityGroupsConstruct extends Construct {
     super(scope, id);
 
     // ALB Security Group - Allow HTTP/HTTPS from internet
-    this.albSg = new SecurityGroup(this, "alb-sg", {
+    this.albSg = new SecurityGroup(this, 'alb-sg', {
       name: `${tags.Project}-alb-sg-${tags.Environment}`,
-      description: "Security group for Application Load Balancer",
+      description: 'Security group for Application Load Balancer',
       vpcId: vpcId,
       ingress: [
         {
-          protocol: "tcp",
+          protocol: 'tcp',
           fromPort: 80,
           toPort: 80,
-          cidrBlocks: ["0.0.0.0/0"],
-          description: "Allow HTTP from anywhere",
+          cidrBlocks: ['0.0.0.0/0'],
+          description: 'Allow HTTP from anywhere',
         },
         {
-          protocol: "tcp",
+          protocol: 'tcp',
           fromPort: 443,
           toPort: 443,
-          cidrBlocks: ["0.0.0.0/0"],
-          description: "Allow HTTPS from anywhere",
+          cidrBlocks: ['0.0.0.0/0'],
+          description: 'Allow HTTPS from anywhere',
         },
       ],
       egress: [
         {
-          protocol: "-1",
+          protocol: '-1',
           fromPort: 0,
           toPort: 0,
-          cidrBlocks: ["0.0.0.0/0"],
-          description: "Allow all outbound traffic",
+          cidrBlocks: ['0.0.0.0/0'],
+          description: 'Allow all outbound traffic',
         },
       ],
       tags: {
@@ -329,17 +333,17 @@ export class SecurityGroupsConstruct extends Construct {
     });
 
     // EC2 Security Group - Allow traffic from ALB only
-    this.ec2Sg = new SecurityGroup(this, "ec2-sg", {
+    this.ec2Sg = new SecurityGroup(this, 'ec2-sg', {
       name: `${tags.Project}-ec2-sg-${tags.Environment}`,
-      description: "Security group for EC2 instances",
+      description: 'Security group for EC2 instances',
       vpcId: vpcId,
       egress: [
         {
-          protocol: "-1",
+          protocol: '-1',
           fromPort: 0,
           toPort: 0,
-          cidrBlocks: ["0.0.0.0/0"],
-          description: "Allow all outbound traffic",
+          cidrBlocks: ['0.0.0.0/0'],
+          description: 'Allow all outbound traffic',
         },
       ],
       tags: {
@@ -349,28 +353,28 @@ export class SecurityGroupsConstruct extends Construct {
     });
 
     // Allow traffic from ALB to EC2
-    new SecurityGroupRule(this, "ec2-sg-rule-alb", {
-      type: "ingress",
+    new SecurityGroupRule(this, 'ec2-sg-rule-alb', {
+      type: 'ingress',
       fromPort: 80,
       toPort: 80,
-      protocol: "tcp",
+      protocol: 'tcp',
       sourceSecurityGroupId: this.albSg.id,
       securityGroupId: this.ec2Sg.id,
-      description: "Allow HTTP from ALB",
+      description: 'Allow HTTP from ALB',
     });
 
     // RDS Security Group - Allow PostgreSQL from EC2 only
-    this.rdsSg = new SecurityGroup(this, "rds-sg", {
+    this.rdsSg = new SecurityGroup(this, 'rds-sg', {
       name: `${tags.Project}-rds-sg-${tags.Environment}`,
-      description: "Security group for RDS PostgreSQL",
+      description: 'Security group for RDS PostgreSQL',
       vpcId: vpcId,
       egress: [
         {
-          protocol: "-1",
+          protocol: '-1',
           fromPort: 0,
           toPort: 0,
-          cidrBlocks: ["0.0.0.0/0"],
-          description: "Allow all outbound traffic",
+          cidrBlocks: ['0.0.0.0/0'],
+          description: 'Allow all outbound traffic',
         },
       ],
       tags: {
@@ -380,14 +384,14 @@ export class SecurityGroupsConstruct extends Construct {
     });
 
     // Allow PostgreSQL traffic from EC2 to RDS
-    new SecurityGroupRule(this, "rds-sg-rule-ec2", {
-      type: "ingress",
+    new SecurityGroupRule(this, 'rds-sg-rule-ec2', {
+      type: 'ingress',
       fromPort: 5432,
       toPort: 5432,
-      protocol: "tcp",
+      protocol: 'tcp',
       sourceSecurityGroupId: this.ec2Sg.id,
       securityGroupId: this.rdsSg.id,
-      description: "Allow PostgreSQL from EC2 instances",
+      description: 'Allow PostgreSQL from EC2 instances',
     });
   }
 }
@@ -402,23 +406,23 @@ export class IAMConstruct extends Construct {
 
     // EC2 assume role policy document
     const ec2AssumeRolePolicy = {
-      Version: "2012-10-17",
+      Version: '2012-10-17',
       Statement: [
         {
-          Action: "sts:AssumeRole",
-          Effect: "Allow",
+          Action: 'sts:AssumeRole',
+          Effect: 'Allow',
           Principal: {
-            Service: "ec2.amazonaws.com",
+            Service: 'ec2.amazonaws.com',
           },
         },
       ],
     };
 
     // EC2 IAM Role with least privilege
-    this.ec2Role = new IamRole(this, "ec2-role", {
+    this.ec2Role = new IamRole(this, 'ec2-role', {
       name: `${tags.Project}-ec2-role-${tags.Environment}`,
       assumeRolePolicy: JSON.stringify(ec2AssumeRolePolicy),
-      description: "IAM role for EC2 instances with RDS and SSM access",
+      description: 'IAM role for EC2 instances with RDS and SSM access',
       tags: {
         ...tags,
         Name: `${tags.Project}-ec2-role-${tags.Environment}`,
@@ -426,19 +430,19 @@ export class IAMConstruct extends Construct {
     });
 
     // Policy for CloudWatch Logs
-    const cloudwatchLogsPolicy = new IamPolicy(this, "cloudwatch-logs-policy", {
+    const cloudwatchLogsPolicy = new IamPolicy(this, 'cloudwatch-logs-policy', {
       name: `${tags.Project}-ec2-cloudwatch-${tags.Environment}`,
-      description: "Allow EC2 instances to write to CloudWatch Logs",
+      description: 'Allow EC2 instances to write to CloudWatch Logs',
       policy: JSON.stringify({
-        Version: "2012-10-17",
+        Version: '2012-10-17',
         Statement: [
           {
-            Effect: "Allow",
+            Effect: 'Allow',
             Action: [
-              "logs:CreateLogGroup",
-              "logs:CreateLogStream",
-              "logs:PutLogEvents",
-              "logs:DescribeLogStreams",
+              'logs:CreateLogGroup',
+              'logs:CreateLogStream',
+              'logs:PutLogEvents',
+              'logs:DescribeLogStreams',
             ],
             Resource: `arn:aws:logs:us-east-1:*:log-group:/aws/ec2/${tags.Project}-${tags.Environment}/*`,
           },
@@ -448,28 +452,28 @@ export class IAMConstruct extends Construct {
     });
 
     // Policy for SSM Parameter Store (read-only for secure strings)
-    const ssmPolicy = new IamPolicy(this, "ssm-policy", {
+    const ssmPolicy = new IamPolicy(this, 'ssm-policy', {
       name: `${tags.Project}-ec2-ssm-${tags.Environment}`,
-      description: "Allow EC2 instances to read from SSM Parameter Store",
+      description: 'Allow EC2 instances to read from SSM Parameter Store',
       policy: JSON.stringify({
-        Version: "2012-10-17",
+        Version: '2012-10-17',
         Statement: [
           {
-            Effect: "Allow",
+            Effect: 'Allow',
             Action: [
-              "ssm:GetParameter",
-              "ssm:GetParameters",
-              "ssm:GetParametersByPath",
+              'ssm:GetParameter',
+              'ssm:GetParameters',
+              'ssm:GetParametersByPath',
             ],
             Resource: `arn:aws:ssm:us-east-1:*:parameter/${tags.Project}/${tags.Environment}/*`,
           },
           {
-            Effect: "Allow",
-            Action: ["kms:Decrypt"],
-            Resource: "*",
+            Effect: 'Allow',
+            Action: ['kms:Decrypt'],
+            Resource: '*',
             Condition: {
               StringEquals: {
-                "kms:ViaService": "ssm.us-east-1.amazonaws.com",
+                'kms:ViaService': 'ssm.us-east-1.amazonaws.com',
               },
             },
           },
@@ -479,28 +483,32 @@ export class IAMConstruct extends Construct {
     });
 
     // Attach policies to role
-    new IamRolePolicyAttachment(this, "ec2-cloudwatch-attachment", {
+    new IamRolePolicyAttachment(this, 'ec2-cloudwatch-attachment', {
       role: this.ec2Role.name,
       policyArn: cloudwatchLogsPolicy.arn,
     });
 
-    new IamRolePolicyAttachment(this, "ec2-ssm-attachment", {
+    new IamRolePolicyAttachment(this, 'ec2-ssm-attachment', {
       role: this.ec2Role.name,
       policyArn: ssmPolicy.arn,
     });
 
     // Attach AWS managed policy for SSM Session Manager (optional for troubleshooting)
-    new IamRolePolicyAttachment(this, "ec2-ssm-managed-attachment", {
+    new IamRolePolicyAttachment(this, 'ec2-ssm-managed-attachment', {
       role: this.ec2Role.name,
-      policyArn: "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+      policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
     });
 
     // Instance profile for EC2
-    this.ec2InstanceProfile = new IamInstanceProfile(this, "ec2-instance-profile", {
-      name: `${tags.Project}-ec2-profile-${tags.Environment}`,
-      role: this.ec2Role.name,
-      tags: tags,
-    });
+    this.ec2InstanceProfile = new IamInstanceProfile(
+      this,
+      'ec2-instance-profile',
+      {
+        name: `${tags.Project}-ec2-profile-${tags.Environment}`,
+        role: this.ec2Role.name,
+        tags: tags,
+      }
+    );
   }
 }
 
@@ -532,10 +540,10 @@ export class RDSConstruct extends Construct {
     super(scope, id);
 
     // DB Subnet Group for Multi-AZ deployment
-    this.subnetGroup = new DbSubnetGroup(this, "subnet-group", {
+    this.subnetGroup = new DbSubnetGroup(this, 'subnet-group', {
       name: `${config.tags.Project}-db-subnet-${config.tags.Environment}`,
       subnetIds: subnetIds,
-      description: "Subnet group for RDS PostgreSQL Multi-AZ deployment",
+      description: 'Subnet group for RDS PostgreSQL Multi-AZ deployment',
       tags: {
         ...config.tags,
         Name: `${config.tags.Project}-db-subnet-${config.tags.Environment}`,
@@ -543,37 +551,37 @@ export class RDSConstruct extends Construct {
     });
 
     // Generate random password and store in SSM
-    const dbPassword = new SsmParameter(this, "db-password", {
+    const dbPassword = new SsmParameter(this, 'db-password', {
       name: `/${config.tags.Project}/${config.tags.Environment}/rds/master-password`,
-      type: "SecureString",
+      type: 'SecureString',
       value: this.generateRandomPassword(),
-      description: "Master password for RDS PostgreSQL instance",
+      description: 'Master password for RDS PostgreSQL instance',
       tags: config.tags,
     });
 
     // RDS PostgreSQL instance with Multi-AZ and encryption
-    this.instance = new DbInstance(this, "db-instance", {
+    this.instance = new DbInstance(this, 'db-instance', {
       identifier: `${config.tags.Project}-db-${config.tags.Environment}`,
-      engine: config.engine || "postgres",
-      engineVersion: config.engineVersion || "14.10",
-      instanceClass: config.instanceClass || "db.t3.micro",
+      engine: config.engine || 'postgres',
+      engineVersion: config.engineVersion || '14.10',
+      instanceClass: config.instanceClass || 'db.t3.micro',
       allocatedStorage: config.allocatedStorage || 20,
       maxAllocatedStorage: config.maxAllocatedStorage || 100,
-      storageType: "gp3",
+      storageType: 'gp3',
       storageEncrypted: true, // AWS-managed encryption
-      username: config.username || "dbadmin",
+      username: config.username || 'dbadmin',
       password: dbPassword.value,
       dbSubnetGroupName: this.subnetGroup.name,
       vpcSecurityGroupIds: securityGroupIds,
       multiAz: true, // Enable Multi-AZ for high availability
       backupRetentionPeriod: config.backupRetentionPeriod || 7,
-      backupWindow: config.backupWindow || "03:00-04:00",
-      maintenanceWindow: config.maintenanceWindow || "sun:04:00-sun:05:00",
+      backupWindow: config.backupWindow || '03:00-04:00',
+      maintenanceWindow: config.maintenanceWindow || 'sun:04:00-sun:05:00',
       autoMinorVersionUpgrade: true,
       deletionProtection: true, // Prevent accidental deletion in production
       skipFinalSnapshot: false,
       finalSnapshotIdentifier: `${config.tags.Project}-final-snapshot-${Date.now()}`,
-      enabledCloudwatchLogsExports: ["postgresql"], // Enable CloudWatch logs
+      enabledCloudwatchLogsExports: ['postgresql'], // Enable CloudWatch logs
       monitoringInterval: 60, // Enhanced monitoring
       monitoringRoleArn: this.createRdsMonitoringRole(config.tags).arn,
       performanceInsightsEnabled: true,
@@ -586,16 +594,16 @@ export class RDSConstruct extends Construct {
   }
 
   private createRdsMonitoringRole(tags: CommonTags): IamRole {
-    const role = new IamRole(this, "rds-monitoring-role", {
+    const role = new IamRole(this, 'rds-monitoring-role', {
       name: `${tags.Project}-rds-monitoring-${tags.Environment}`,
       assumeRolePolicy: JSON.stringify({
-        Version: "2012-10-17",
+        Version: '2012-10-17',
         Statement: [
           {
-            Action: "sts:AssumeRole",
-            Effect: "Allow",
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
             Principal: {
-              Service: "monitoring.rds.amazonaws.com",
+              Service: 'monitoring.rds.amazonaws.com',
             },
           },
         ],
@@ -603,9 +611,10 @@ export class RDSConstruct extends Construct {
       tags: tags,
     });
 
-    new IamRolePolicyAttachment(this, "rds-monitoring-policy", {
+    new IamRolePolicyAttachment(this, 'rds-monitoring-policy', {
       role: role.name,
-      policyArn: "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole",
+      policyArn:
+        'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole',
     });
 
     return role;
@@ -634,10 +643,10 @@ export class ALBConstruct extends Construct {
     super(scope, id);
 
     // Application Load Balancer
-    this.alb = new Alb(this, "alb", {
+    this.alb = new Alb(this, 'alb', {
       name: `${tags.Project}-alb-${tags.Environment}`,
       internal: false,
-      loadBalancerType: "application",
+      loadBalancerType: 'application',
       securityGroups: securityGroupIds,
       subnets: subnetIds,
       enableDeletionProtection: true,
@@ -646,7 +655,7 @@ export class ALBConstruct extends Construct {
       accessLogs: {
         bucket: this.createAlbLogsBucket(tags).bucket,
         enabled: true,
-        prefix: "alb-logs",
+        prefix: 'alb-logs',
       },
       tags: {
         ...tags,
@@ -655,23 +664,23 @@ export class ALBConstruct extends Construct {
     });
 
     // Target Group for EC2 instances
-    this.targetGroup = new AlbTargetGroup(this, "tg", {
+    this.targetGroup = new AlbTargetGroup(this, 'tg', {
       name: `${tags.Project}-tg-${tags.Environment}`,
       port: 80,
-      protocol: "HTTP",
+      protocol: 'HTTP',
       vpcId: vpcId,
-      targetType: "instance",
+      targetType: 'instance',
       healthCheck: {
         enabled: true,
-        path: "/health",
-        protocol: "HTTP",
+        path: '/health',
+        protocol: 'HTTP',
         healthyThreshold: 2,
         unhealthyThreshold: 3,
         timeout: 5,
         interval: 30,
-        matcher: "200",
+        matcher: '200',
       },
-      deregistrationDelay: "30",
+      deregistrationDelay: '30',
       tags: {
         ...tags,
         Name: `${tags.Project}-tg-${tags.Environment}`,
@@ -679,13 +688,13 @@ export class ALBConstruct extends Construct {
     });
 
     // ALB Listener
-    this.listener = new AlbListener(this, "listener", {
+    this.listener = new AlbListener(this, 'listener', {
       loadBalancerArn: this.alb.arn,
       port: 80,
-      protocol: "HTTP",
+      protocol: 'HTTP',
       defaultAction: [
         {
-          type: "forward",
+          type: 'forward',
           targetGroupArn: this.targetGroup.arn,
         },
       ],
@@ -694,22 +703,22 @@ export class ALBConstruct extends Construct {
   }
 
   private createAlbLogsBucket(tags: CommonTags): S3Bucket {
-    return new S3Bucket(this, "alb-logs-bucket", {
+    return new S3Bucket(this, 'alb-logs-bucket', {
       bucket: `${tags.Project}-alb-logs-${tags.Environment}-${Date.now()}`,
-      acl: "private",
+      acl: 'private',
       versioning: {
         enabled: true,
       },
       serverSideEncryptionConfiguration: {
         rule: {
           applyServerSideEncryptionByDefault: {
-            sseAlgorithm: "AES256",
+            sseAlgorithm: 'AES256',
           },
         },
       },
       lifecycleRule: [
         {
-          id: "delete-old-logs",
+          id: 'delete-old-logs',
           enabled: true,
           expiration: {
             days: 90,
@@ -747,17 +756,17 @@ export class ASGConstruct extends Construct {
     super(scope, id);
 
     // Get latest Amazon Linux 2 AMI
-    const ami = new DataAwsAmi(this, "amazon-linux", {
+    const ami = new DataAwsAmi(this, 'amazon-linux', {
       mostRecent: true,
-      owners: ["amazon"],
+      owners: ['amazon'],
       filter: [
         {
-          name: "name",
-          values: ["amzn2-ami-hvm-*-x86_64-gp2"],
+          name: 'name',
+          values: ['amzn2-ami-hvm-*-x86_64-gp2'],
         },
         {
-          name: "virtualization-type",
-          values: ["hvm"],
+          name: 'virtualization-type',
+          values: ['hvm'],
         },
       ],
     });
@@ -794,30 +803,30 @@ EOF
 `;
 
     // Launch Template
-    this.launchTemplate = new LaunchTemplate(this, "launch-template", {
+    this.launchTemplate = new LaunchTemplate(this, 'launch-template', {
       name: `${config.tags.Project}-lt-${config.tags.Environment}`,
       imageId: ami.id,
-      instanceType: config.instanceType || "t3.micro",
+      instanceType: config.instanceType || 't3.micro',
       keyName: config.keyName,
       vpcSecurityGroupIds: securityGroupIds,
       iamInstanceProfile: {
         name: instanceProfile,
       },
-      userData: Buffer.from(userData).toString("base64"),
+      userData: Buffer.from(userData).toString('base64'),
       blockDeviceMappings: [
         {
-          deviceName: "/dev/xvda",
+          deviceName: '/dev/xvda',
           ebs: {
             volumeSize: 20,
-            volumeType: "gp3",
-            encrypted: "true",
-            deleteOnTermination: "true",
+            volumeType: 'gp3',
+            encrypted: 'true',
+            deleteOnTermination: 'true',
           },
         },
       ],
       metadataOptions: {
-        httpEndpoint: "enabled",
-        httpTokens: "required", // IMDSv2 for security
+        httpEndpoint: 'enabled',
+        httpTokens: 'required', // IMDSv2 for security
         httpPutResponseHopLimit: 1,
       },
       monitoring: {
@@ -825,14 +834,14 @@ EOF
       },
       tagSpecifications: [
         {
-          resourceType: "instance",
+          resourceType: 'instance',
           tags: {
             ...config.tags,
             Name: `${config.tags.Project}-instance-${config.tags.Environment}`,
           },
         },
         {
-          resourceType: "volume",
+          resourceType: 'volume',
           tags: {
             ...config.tags,
             Name: `${config.tags.Project}-volume-${config.tags.Environment}`,
@@ -843,27 +852,27 @@ EOF
     });
 
     // Auto Scaling Group
-    this.asg = new AutoscalingGroup(this, "asg", {
+    this.asg = new AutoscalingGroup(this, 'asg', {
       name: `${config.tags.Project}-asg-${config.tags.Environment}`,
       minSize: config.minSize || 2,
       maxSize: config.maxSize || 6,
       desiredCapacity: config.desiredCapacity || 2,
       vpcZoneIdentifier: subnetIds,
       targetGroupArns: targetGroupArns,
-      healthCheckType: "ELB",
+      healthCheckType: 'ELB',
       healthCheckGracePeriod: 300,
       defaultCooldown: 300,
-      terminationPolicies: ["OldestInstance"],
+      terminationPolicies: ['OldestInstance'],
       launchTemplate: {
         id: this.launchTemplate.id,
-        version: "$Latest",
+        version: '$Latest',
       },
       enabledMetrics: [
-        "GroupMinSize",
-        "GroupMaxSize",
-        "GroupDesiredCapacity",
-        "GroupInServiceInstances",
-        "GroupTotalInstances",
+        'GroupMinSize',
+        'GroupMaxSize',
+        'GroupDesiredCapacity',
+        'GroupInServiceInstances',
+        'GroupTotalInstances',
       ],
       tag: Object.entries(config.tags).map(([key, value]) => ({
         key,
@@ -873,18 +882,18 @@ EOF
     });
 
     // Auto Scaling Policies
-    new AutoscalingPolicy(this, "scale-up-policy", {
+    new AutoscalingPolicy(this, 'scale-up-policy', {
       name: `${config.tags.Project}-scale-up-${config.tags.Environment}`,
       autoscalingGroupName: this.asg.name,
-      adjustmentType: "ChangeInCapacity",
+      adjustmentType: 'ChangeInCapacity',
       scalingAdjustment: 1,
       cooldown: 300,
     });
 
-    new AutoscalingPolicy(this, "scale-down-policy", {
+    new AutoscalingPolicy(this, 'scale-down-policy', {
       name: `${config.tags.Project}-scale-down-${config.tags.Environment}`,
       autoscalingGroupName: this.asg.name,
-      adjustmentType: "ChangeInCapacity",
+      adjustmentType: 'ChangeInCapacity',
       scalingAdjustment: -1,
       cooldown: 300,
     });
@@ -897,42 +906,49 @@ export class MonitoringConstruct extends Construct {
   public readonly snsTopic: SnsTopic;
   public readonly trail: Cloudtrail;
 
-  constructor(scope: Construct, id: string, tags: CommonTags, albArn: string, asgName: string, dbId: string) {
+  constructor(
+    scope: Construct,
+    id: string,
+    tags: CommonTags,
+    albArn: string,
+    asgName: string,
+    dbId: string
+  ) {
     super(scope, id);
 
     // CloudWatch Log Group for application logs
-    this.logGroup = new CloudwatchLogGroup(this, "app-log-group", {
+    this.logGroup = new CloudwatchLogGroup(this, 'app-log-group', {
       name: `/aws/ec2/${tags.Project}-${tags.Environment}/application`,
       retentionInDays: 30,
-      kmsKeyId: "alias/aws/logs", // AWS-managed KMS key
+      kmsKeyId: 'alias/aws/logs', // AWS-managed KMS key
       tags: tags,
     });
 
     // SNS Topic for alerts
-    this.snsTopic = new SnsTopic(this, "alerts-topic", {
+    this.snsTopic = new SnsTopic(this, 'alerts-topic', {
       name: `${tags.Project}-alerts-${tags.Environment}`,
       displayName: `${tags.Project} Alerts - ${tags.Environment}`,
-      kmsMasterKeyId: "alias/aws/sns", // AWS-managed KMS key
+      kmsMasterKeyId: 'alias/aws/sns', // AWS-managed KMS key
       tags: tags,
     });
 
     // S3 Bucket for CloudTrail
-    const trailBucket = new S3Bucket(this, "trail-bucket", {
+    const trailBucket = new S3Bucket(this, 'trail-bucket', {
       bucket: `${tags.Project}-trail-${tags.Environment}-${Date.now()}`,
-      acl: "private",
+      acl: 'private',
       versioning: {
         enabled: true,
       },
       serverSideEncryptionConfiguration: {
         rule: {
           applyServerSideEncryptionByDefault: {
-            sseAlgorithm: "AES256",
+            sseAlgorithm: 'AES256',
           },
         },
       },
       lifecycleRule: [
         {
-          id: "delete-old-logs",
+          id: 'delete-old-logs',
           enabled: true,
           expiration: {
             days: 365,
@@ -943,31 +959,31 @@ export class MonitoringConstruct extends Construct {
     });
 
     // Bucket policy for CloudTrail
-    new S3BucketPolicy(this, "trail-bucket-policy", {
+    new S3BucketPolicy(this, 'trail-bucket-policy', {
       bucket: trailBucket.id,
       policy: JSON.stringify({
-        Version: "2012-10-17",
+        Version: '2012-10-17',
         Statement: [
           {
-            Sid: "AWSCloudTrailAclCheck",
-            Effect: "Allow",
+            Sid: 'AWSCloudTrailAclCheck',
+            Effect: 'Allow',
             Principal: {
-              Service: "cloudtrail.amazonaws.com",
+              Service: 'cloudtrail.amazonaws.com',
             },
-            Action: "s3:GetBucketAcl",
+            Action: 's3:GetBucketAcl',
             Resource: trailBucket.arn,
           },
           {
-            Sid: "AWSCloudTrailWrite",
-            Effect: "Allow",
+            Sid: 'AWSCloudTrailWrite',
+            Effect: 'Allow',
             Principal: {
-              Service: "cloudtrail.amazonaws.com",
+              Service: 'cloudtrail.amazonaws.com',
             },
-            Action: "s3:PutObject",
+            Action: 's3:PutObject',
             Resource: `${trailBucket.arn}/*`,
             Condition: {
               StringEquals: {
-                "s3:x-amz-acl": "bucket-owner-full-control",
+                's3:x-amz-acl': 'bucket-owner-full-control',
               },
             },
           },
@@ -976,7 +992,7 @@ export class MonitoringConstruct extends Construct {
     });
 
     // CloudTrail for API activity logging
-    this.trail = new Cloudtrail(this, "trail", {
+    this.trail = new Cloudtrail(this, 'trail', {
       name: `${tags.Project}-trail-${tags.Environment}`,
       s3BucketName: trailBucket.bucket,
       includeGlobalServiceEvents: true,
@@ -984,16 +1000,16 @@ export class MonitoringConstruct extends Construct {
       enableLogFileValidation: true,
       eventSelector: [
         {
-          readWriteType: "All",
+          readWriteType: 'All',
           includeManagementEvents: true,
           dataResource: [
             {
-              type: "AWS::S3::Object",
-              values: ["arn:aws:s3:::*/*"],
+              type: 'AWS::S3::Object',
+              values: ['arn:aws:s3:::*/*'],
             },
             {
-              type: "AWS::RDS::DBCluster",
-              values: ["arn:aws:rds:*:*:cluster/*"],
+              type: 'AWS::RDS::DBCluster',
+              values: ['arn:aws:rds:*:*:cluster/*'],
             },
           ],
         },
@@ -1005,38 +1021,47 @@ export class MonitoringConstruct extends Construct {
     this.createAlarms(tags, albArn, asgName, dbId);
   }
 
-  private createAlarms(tags: CommonTags, albArn: string, asgName: string, dbId: string) {
+  private createAlarms(
+    tags: CommonTags,
+    albArn: string,
+    asgName: string,
+    dbId: string
+  ) {
     // ALB Target Response Time Alarm
-    new CloudwatchMetricAlarm(this, "alb-response-time", {
+    new CloudwatchMetricAlarm(this, 'alb-response-time', {
       alarmName: `${tags.Project}-alb-response-time-${tags.Environment}`,
-      alarmDescription: "Alert when ALB response time is high",
-      comparisonOperator: "GreaterThanThreshold",
+      alarmDescription: 'Alert when ALB response time is high',
+      comparisonOperator: 'GreaterThanThreshold',
       evaluationPeriods: 2,
-      metricName: "TargetResponseTime",
-      namespace: "AWS/ApplicationELB",
+      metricName: 'TargetResponseTime',
+      namespace: 'AWS/ApplicationELB',
       period: 300,
-      statistic: "Average",
+      statistic: 'Average',
       threshold: 2,
-      treatMissingData: "notBreaching",
+      treatMissingData: 'notBreaching',
       alarmActions: [this.snsTopic.arn],
       dimensions: {
-        LoadBalancer: albArn.split("/").slice(1).join("/"),
+        LoadBalancer: Fn.join('/', [
+          Fn.element(Fn.split('/', albArn), 1),
+          Fn.element(Fn.split('/', albArn), 2),
+          Fn.element(Fn.split('/', albArn), 3),
+        ]),
       },
       tags: tags,
     });
 
     // ASG CPU Utilization Alarm
-    new CloudwatchMetricAlarm(this, "asg-cpu-high", {
+    new CloudwatchMetricAlarm(this, 'asg-cpu-high', {
       alarmName: `${tags.Project}-asg-cpu-high-${tags.Environment}`,
-      alarmDescription: "Alert when ASG instances CPU is high",
-      comparisonOperator: "GreaterThanThreshold",
+      alarmDescription: 'Alert when ASG instances CPU is high',
+      comparisonOperator: 'GreaterThanThreshold',
       evaluationPeriods: 2,
-      metricName: "CPUUtilization",
-      namespace: "AWS/EC2",
+      metricName: 'CPUUtilization',
+      namespace: 'AWS/EC2',
       period: 300,
-      statistic: "Average",
+      statistic: 'Average',
       threshold: 80,
-      treatMissingData: "notBreaching",
+      treatMissingData: 'notBreaching',
       alarmActions: [this.snsTopic.arn],
       dimensions: {
         AutoScalingGroupName: asgName,
@@ -1045,17 +1070,17 @@ export class MonitoringConstruct extends Construct {
     });
 
     // RDS Free Storage Space Alarm
-    new CloudwatchMetricAlarm(this, "rds-storage-low", {
+    new CloudwatchMetricAlarm(this, 'rds-storage-low', {
       alarmName: `${tags.Project}-rds-storage-low-${tags.Environment}`,
-      alarmDescription: "Alert when RDS free storage is low",
-      comparisonOperator: "LessThanThreshold",
+      alarmDescription: 'Alert when RDS free storage is low',
+      comparisonOperator: 'LessThanThreshold',
       evaluationPeriods: 1,
-      metricName: "FreeStorageSpace",
-      namespace: "AWS/RDS",
+      metricName: 'FreeStorageSpace',
+      namespace: 'AWS/RDS',
       period: 300,
-      statistic: "Average",
+      statistic: 'Average',
       threshold: 2147483648, // 2GB in bytes
-      treatMissingData: "notBreaching",
+      treatMissingData: 'notBreaching',
       alarmActions: [this.snsTopic.arn],
       dimensions: {
         DBInstanceIdentifier: dbId,
@@ -1064,17 +1089,17 @@ export class MonitoringConstruct extends Construct {
     });
 
     // RDS CPU Utilization Alarm
-    new CloudwatchMetricAlarm(this, "rds-cpu-high", {
+    new CloudwatchMetricAlarm(this, 'rds-cpu-high', {
       alarmName: `${tags.Project}-rds-cpu-high-${tags.Environment}`,
-      alarmDescription: "Alert when RDS CPU is high",
-      comparisonOperator: "GreaterThanThreshold",
+      alarmDescription: 'Alert when RDS CPU is high',
+      comparisonOperator: 'GreaterThanThreshold',
       evaluationPeriods: 2,
-      metricName: "CPUUtilization",
-      namespace: "AWS/RDS",
+      metricName: 'CPUUtilization',
+      namespace: 'AWS/RDS',
       period: 300,
-      statistic: "Average",
+      statistic: 'Average',
       threshold: 75,
-      treatMissingData: "notBreaching",
+      treatMissingData: 'notBreaching',
       alarmActions: [this.snsTopic.arn],
       dimensions: {
         DBInstanceIdentifier: dbId,
@@ -1096,32 +1121,43 @@ export class SSMHelpers {
   ): SsmParameter {
     return new SsmParameter(scope, name, {
       name: `/${tags.Project}/${tags.Environment}/${name}`,
-      type: secure ? "SecureString" : "String",
+      type: secure ? 'SecureString' : 'String',
       value: value,
       description: description,
       tags: tags,
     });
   }
 
-  static createCloudWatchAgentConfig(scope: Construct, tags: CommonTags): SsmParameter {
+  static createCloudWatchAgentConfig(
+    scope: Construct,
+    tags: CommonTags
+  ): SsmParameter {
     const config = {
       metrics: {
         namespace: `${tags.Project}/${tags.Environment}`,
         metrics_collected: {
           cpu: {
             measurement: [
-              { name: "cpu_usage_idle", rename: "CPU_IDLE", unit: "Percent" },
-              { name: "cpu_usage_iowait", rename: "CPU_IOWAIT", unit: "Percent" },
+              { name: 'cpu_usage_idle', rename: 'CPU_IDLE', unit: 'Percent' },
+              {
+                name: 'cpu_usage_iowait',
+                rename: 'CPU_IOWAIT',
+                unit: 'Percent',
+              },
             ],
             metrics_collection_interval: 60,
           },
           disk: {
-            measurement: [{ name: "used_percent", rename: "DISK_USED", unit: "Percent" }],
+            measurement: [
+              { name: 'used_percent', rename: 'DISK_USED', unit: 'Percent' },
+            ],
             metrics_collection_interval: 60,
-            resources: ["*"],
+            resources: ['*'],
           },
           mem: {
-            measurement: [{ name: "mem_used_percent", rename: "MEM_USED", unit: "Percent" }],
+            measurement: [
+              { name: 'mem_used_percent', rename: 'MEM_USED', unit: 'Percent' },
+            ],
             metrics_collection_interval: 60,
           },
         },
@@ -1131,19 +1167,19 @@ export class SSMHelpers {
           files: {
             collect_list: [
               {
-                file_path: "/var/log/messages",
+                file_path: '/var/log/messages',
                 log_group_name: `/aws/ec2/${tags.Project}-${tags.Environment}/system`,
-                log_stream_name: "{instance_id}",
+                log_stream_name: '{instance_id}',
               },
               {
-                file_path: "/var/log/httpd/access_log",
+                file_path: '/var/log/httpd/access_log',
                 log_group_name: `/aws/ec2/${tags.Project}-${tags.Environment}/application`,
-                log_stream_name: "{instance_id}/access",
+                log_stream_name: '{instance_id}/access',
               },
               {
-                file_path: "/var/log/httpd/error_log",
+                file_path: '/var/log/httpd/error_log',
                 log_group_name: `/aws/ec2/${tags.Project}-${tags.Environment}/application`,
-                log_stream_name: "{instance_id}/error",
+                log_stream_name: '{instance_id}/error',
               },
             ],
           },
@@ -1153,9 +1189,9 @@ export class SSMHelpers {
 
     return SSMHelpers.createParameter(
       scope,
-      "cloudwatch/config",
+      'cloudwatch/config',
       JSON.stringify(config),
-      "CloudWatch agent configuration",
+      'CloudWatch agent configuration',
       tags,
       false
     );
