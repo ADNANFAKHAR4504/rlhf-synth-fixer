@@ -8,7 +8,39 @@ let outputs: Record<string, any> = {};
 
 // Check if outputs file exists
 if (existsSync(outputsPath)) {
-  outputs = JSON.parse(readFileSync(outputsPath, 'utf-8'));
+  const rawOutputs = JSON.parse(readFileSync(outputsPath, 'utf-8'));
+
+  // Parse JSON strings in outputs
+  for (const [key, value] of Object.entries(rawOutputs)) {
+    if (typeof value === 'string' && (value.startsWith('[') || value.startsWith('{'))) {
+      try {
+        outputs[key] = JSON.parse(value);
+      } catch (e) {
+        outputs[key] = value;
+      }
+    } else {
+      outputs[key] = value;
+    }
+  }
+} else {
+  // Try alternative path for outputs
+  const altPath = '/Users/raajavelc/Downloads/cfn-outputs 4/flat-outputs.json';
+  if (existsSync(altPath)) {
+    const rawOutputs = JSON.parse(readFileSync(altPath, 'utf-8'));
+
+    // Parse JSON strings in outputs
+    for (const [key, value] of Object.entries(rawOutputs)) {
+      if (typeof value === 'string' && (value.startsWith('[') || value.startsWith('{'))) {
+        try {
+          outputs[key] = JSON.parse(value);
+        } catch (e) {
+          outputs[key] = value;
+        }
+      } else {
+        outputs[key] = value;
+      }
+    }
+  }
 }
 
 const AWS_REGION = process.env.AWS_REGION || outputs.primary_region || 'us-east-1';
@@ -27,7 +59,7 @@ const events = new AWS.CloudWatchEvents({ region: AWS_REGION });
 describe('Terraform Integration Tests - Multi-Account VPC Peering', () => {
 
   // Skip all tests if outputs file doesn't exist
-  const hasOutputs = existsSync(outputsPath) && Object.keys(outputs).length > 0;
+  const hasOutputs = Object.keys(outputs).length > 0;
 
   if (!hasOutputs) {
     test.skip('Outputs file not found - skipping integration tests', () => {});
