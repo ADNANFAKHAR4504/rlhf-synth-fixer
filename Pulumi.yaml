@@ -1,0 +1,5 @@
+name: pulumi-infra
+runtime:
+  name: python
+description: Pulumi infrastructure for manufacturing IoT platform
+main: tap.py
