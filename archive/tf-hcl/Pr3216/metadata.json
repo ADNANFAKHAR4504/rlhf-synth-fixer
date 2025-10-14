@@ -10,5 +10,20 @@
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
-  "aws_services": "Amazon RDS for MySQL, Amazon VPC (private subnets), EC2 Security Groups, AWS Key Management Service (KMS), Amazon CloudWatch (metrics & logs), Amazon S3 (automated backups), AWS Identity and Access Management (IAM with DB authentication)"
+  "aws_services": [
+    "Amazon RDS",
+    "Amazon VPC",
+    "Amazon EC2",
+    "AWS KMS",
+    "Amazon CloudWatch",
+    "Amazon S3",
+    "AWS IAM"
+  ],
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "devang-devops",
+  "dockerS3Location": ""
 }
