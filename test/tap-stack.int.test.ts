@@ -419,7 +419,6 @@ describe("MyApp Integration Tests - ECS Infrastructure", () => {
       expect(dbInstance.BackupRetentionPeriod).toBeGreaterThan(0);
     } catch (error: any) {
       console.log(`RDS instance check: ${error.message}`);
-      // Re-throw or fail the test explicitly if necessary
       throw error;
     }
   }, 30000);
