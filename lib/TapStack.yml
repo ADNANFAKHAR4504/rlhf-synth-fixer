@@ -628,7 +628,7 @@ Resources:
     Properties:
       Name: /log-analytics/cloudwatch-agent-config
       Type: String
-      Value: !Sub |
+      Value: |
         {
           "agent": {
             "metrics_collection_interval": 60,
@@ -788,11 +788,25 @@ Resources:
                   qs_role_name = 'aws-quicksight-service-role-v0'
                   
                   if event['RequestType'] in ['Create', 'Update']:
-                      iam_client.attach_role_policy(
-                          RoleName=qs_role_name,
-                          PolicyArn=policy_arn
-                      )
-                      print(f"Attached policy {policy_arn} to QuickSight role.")
+                      try:
+                          # First check if the role exists
+                          iam_client.get_role(RoleName=qs_role_name)
+                          
+                          # Role exists, attach the policy
+                          iam_client.attach_role_policy(
+                              RoleName=qs_role_name,
+                              PolicyArn=policy_arn
+                          )
+                          print(f"Attached policy {policy_arn} to QuickSight role.")
+                          response_data['Message'] = f"Successfully attached policy to {qs_role_name}"
+                          
+                      except ClientError as e:
+                          if e.response['Error']['Code'] == 'NoSuchEntity':
+                              print(f"QuickSight service role {qs_role_name} does not exist. This is expected if QuickSight hasn't been set up yet.")
+                              response_data['Message'] = f"QuickSight role {qs_role_name} not found - skipping policy attachment. Set up QuickSight first if needed."
+                              # Don't fail the stack - just log and continue
+                          else:
+                              raise # Re-raise other unexpected errors
                   
                   elif event['RequestType'] == 'Delete':
                       try:
@@ -802,9 +816,9 @@ Resources:
                           )
                           print(f"Detached policy {policy_arn} from QuickSight role.")
                       except ClientError as e:
-                          # Ignore the error if the policy is already detached
+                          # Ignore the error if the policy is already detached or role doesn't exist
                           if e.response['Error']['Code'] == 'NoSuchEntity':
-                              print(f"Policy {policy_arn} not attached or role not found. Continuing stack deletion.")
+                              print(f"Policy {policy_arn} not attached or role {qs_role_name} not found. Continuing stack deletion.")
                               pass
                           else:
                               raise # Re-raise other unexpected errors
