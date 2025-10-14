@@ -53,13 +53,13 @@ variable "app_instance_count" {
 variable "environment" {
   description = "Environment name"
   type        = string
-  default     = "pd"
+  default     = "pv2"
 }
 
 variable "project_name" {
   description = "Project name"
   type        = string
-  default     = "iac"
+  default     = "pd"
 }
 
 # ============================================================================
