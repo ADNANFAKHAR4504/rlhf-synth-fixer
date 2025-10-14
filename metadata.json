@@ -1,0 +1,14 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348981",
+  "team": "3",
+  "startedAt": "2025-10-14T16:29:17.379Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "VPC, Subnets (Public and Private), Internet Gateway, NAT Gateway, Route Tables, Security Groups, IAM Role, IAM Policy, Instance Profile, EC2 Instances, KMS Key, Application Load Balancer (ALB), Target Group, Listener, S3 Bucket, S3 Bucket Policy, RDS Instance, SQS Queue, Lambda Function, CloudFront Distribution, AWS WAF WebACL, CloudWatch Alarms, AWS Config Recorder, AWS Config Delivery Channel, CloudWatch Log Group, CloudWatch Metric Filter, IAM Role for Lambda, IAM Role for Config"
+}
