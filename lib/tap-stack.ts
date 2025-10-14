@@ -145,8 +145,8 @@ export class TapStack extends TerraformStack {
       region,
       vpcId: vpcModule.vpc.id,
       subnetIds: vpcModule.privateSubnets.map(s => s.id),
-      kmsKeyId: kmsKey.id,
-      secretArn: secretsModule.databaseSecret.arn,
+      kmsKeyArn: kmsKey.arn,
+      secretArn: '', // No longer needed
       allowedSecurityGroupId: vpcModule.securityGroupWeb.id,
     });
 

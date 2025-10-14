@@ -1,7 +1,6 @@
 import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
 import * as random from '@cdktf/provider-random';
-import { Fn } from 'cdktf';
 
 // Common interface for module configuration
 export interface BaseModuleConfig {
@@ -260,6 +259,11 @@ export class IamModule extends Construct {
   constructor(scope: Construct, id: string, config: IamModuleConfig) {
     super(scope, id);
 
+    const current = new aws.dataAwsCallerIdentity.DataAwsCallerIdentity(
+      this,
+      'current'
+    );
+
     const commonTags = {
       Project: config.project,
       Environment: config.environment,
@@ -411,7 +415,7 @@ export class IamModule extends Construct {
         Statement: [
           {
             Effect: 'Allow',
-            Principal: { AWS: 'arn:aws:iam::*:root' },
+            Principal: { AWS: `arn:aws:iam::${current.accountId}:root` },
             Action: 'sts:AssumeRole',
             Condition: {
               Bool: { 'aws:MultiFactorAuthPresent': 'true' },
@@ -529,6 +533,18 @@ export class S3Module extends Construct {
       tags: commonTags,
     });
 
+    // Add bucket ownership controls (replaces ACL)
+    new aws.s3BucketOwnershipControls.S3BucketOwnershipControls(
+      this,
+      'bucket-ownership',
+      {
+        bucket: this.bucket.id,
+        rule: {
+          objectOwnership: 'BucketOwnerEnforced',
+        },
+      }
+    );
+
     // Block all public access
     new aws.s3BucketPublicAccessBlock.S3BucketPublicAccessBlock(
       this,
@@ -571,12 +587,6 @@ export class S3Module extends Construct {
           ],
         }
       );
-
-    // Set bucket ACL
-    this.bucketAcl = new aws.s3BucketAcl.S3BucketAcl(this, 'bucket-acl', {
-      bucket: this.bucket.id,
-      acl: 'private',
-    });
 
     // Add lifecycle policy
     new aws.s3BucketLifecycleConfiguration.S3BucketLifecycleConfiguration(
@@ -683,7 +693,7 @@ export class CloudFrontModule extends Construct {
 
     // Update S3 bucket policy to allow CloudFront access
     new aws.s3BucketPolicy.S3BucketPolicy(this, 'bucket-policy', {
-      bucket: config.s3BucketArn.split(':').pop()!,
+      bucket: config.s3BucketArn.split(':::')[1],
       policy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -793,7 +803,7 @@ yum update -y
 export interface RdsModuleConfig extends BaseModuleConfig {
   vpcId: string;
   subnetIds: string[];
-  kmsKeyId: string;
+  kmsKeyArn: string;
   secretArn: string;
   allowedSecurityGroupId: string;
 }
@@ -849,16 +859,6 @@ export class RdsModule extends Construct {
       securityGroupId: this.dbSecurityGroup.id,
     });
 
-    // Get secret value
-    const dbSecret =
-      new aws.dataAwsSecretsmanagerSecretVersion.DataAwsSecretsmanagerSecretVersion(
-        this,
-        'db-secret-data',
-        {
-          secretId: config.secretArn,
-        }
-      );
-
     // Create RDS Instance
     this.dbInstance = new aws.dbInstance.DbInstance(this, 'db-instance', {
       identifier: `${config.environment}-database-mysql`,
@@ -868,11 +868,11 @@ export class RdsModule extends Construct {
       maxAllocatedStorage: 100, // Enable storage autoscaling
       storageType: 'gp3',
       storageEncrypted: true,
-      kmsKeyId: config.kmsKeyId,
+      kmsKeyId: config.kmsKeyArn,
 
       dbName: 'application',
       username: 'tap_admin',
-      password: Fn.lookup(Fn.jsondecode(dbSecret.secretString), 'password'),
+      manageMasterUserPassword: true,
 
       multiAz: true,
       dbSubnetGroupName: this.dbSubnetGroup.name,
