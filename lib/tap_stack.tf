@@ -474,7 +474,7 @@ resource "aws_db_subnet_group" "main" {
 resource "aws_db_instance" "main" {
   identifier     = local.rds_instance_name
   engine         = "mysql"
-  engine_version = "8.0.35"
+  engine_version = "8.0.43"
   instance_class = "db.t3.micro"
   
   allocated_storage     = 20
@@ -1013,7 +1013,7 @@ resource "aws_iam_role_policy" "config" {
 
 resource "aws_iam_role_policy_attachment" "config" {
   role       = aws_iam_role.config.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSConfigRole"
 }
 
 # Config Configuration Recorder
