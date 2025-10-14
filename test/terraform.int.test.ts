@@ -103,9 +103,22 @@ function loadOutputs(): DeploymentOutputs {
       throw new Error(`Output file not found: ${OUTPUT_FILE}. Required for CI/CD testing.`);
     }
     const outputsContent = fs.readFileSync(OUTPUT_FILE, 'utf8');
-    return JSON.parse(outputsContent) as DeploymentOutputs;
+    const rawOutputs = JSON.parse(outputsContent);
+    
+    // Terraform outputs have format: { "value": "actual-value", "type": "string", "sensitive": false }
+    // Extract just the values
+    const extractedOutputs: DeploymentOutputs = {};
+    for (const [key, val] of Object.entries(rawOutputs)) {
+      if (val && typeof val === 'object' && 'value' in val) {
+        extractedOutputs[key as keyof DeploymentOutputs] = (val as any).value;
+      } else {
+        extractedOutputs[key as keyof DeploymentOutputs] = val as any;
+      }
+    }
+    
+    return extractedOutputs;
   }
-
+  
   console.log('Running in local mode with mock data');
   return MOCK_OUTPUTS;
 }
