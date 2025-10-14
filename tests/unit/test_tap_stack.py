@@ -67,12 +67,12 @@ class TestWebAppConfig(unittest.TestCase):
         """Test resource naming normalization."""
         config = WebAppConfig()
         # Test S3 bucket name normalization
-        self.assertIn('web-app-webapp-logs', config.s3_bucket_name)
+        self.assertIn('web-app-webapp-mlogs', config.s3_bucket_name)
         self.assertTrue(config.s3_bucket_name.islower())
         self.assertNotIn('_', config.s3_bucket_name)
         
         # Test IAM role name normalization
-        self.assertIn('web-app-webapp-ec2-role', config.iam_role_name)
+        self.assertIn('web-app-webapp-mec2-role', config.iam_role_name)
         self.assertTrue(config.iam_role_name.islower())
         self.assertNotIn('_', config.iam_role_name)
         

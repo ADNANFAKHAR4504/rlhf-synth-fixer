@@ -14,7 +14,7 @@ class AWSProviderStack:
     def _create_aws_provider(self) -> aws.Provider:
         """Create AWS provider with explicit region enforcement."""
         return aws.Provider(
-            "aws-provider-461889-2857",
+            "aws-provider-stable",  # Stable name for all deployments
             region=self.config.region
         )
     
