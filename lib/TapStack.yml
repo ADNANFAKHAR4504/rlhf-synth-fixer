@@ -6,8 +6,9 @@ Description: >
 
 Parameters:
   KeyName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: Name of an existing EC2 KeyPair to enable SSH (for troubleshooting)
+    Type: String
+    Default: ""
+    Description: Name of an existing EC2 KeyPair to enable SSH
   InstanceType:
     Type: String
     Default: t3.micro
@@ -28,6 +29,7 @@ Parameters:
 
 Conditions:
   DeployInTargetRegion: !Equals [ !Ref "AWS::Region", !Ref TargetRegion ]
+  HasKeyName: !Not [ !Equals [ !Ref KeyName, "" ] ]
 
 Metadata:
   cfn-outputs:
@@ -406,7 +408,7 @@ Resources:
     Condition: DeployInTargetRegion
     Properties:
       InstanceType: !Ref InstanceType
-      KeyName: !Ref KeyName
+      KeyName: !If [ HasKeyName, !Ref KeyName, !Ref "AWS::NoValue" ]
       # Dynamic SSM lookup; CloudFormation resolves this at deployment time
       ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
       Monitoring: true
