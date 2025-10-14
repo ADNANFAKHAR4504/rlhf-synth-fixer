@@ -5,6 +5,10 @@ Parameters:
   EnvironmentSuffix:
     Type: String
     Default: prod
+    AllowedValues:
+      - dev
+      - staging
+      - prod
     Description: Environment suffix for resource naming and tagging
 
   DBInstanceClass:
@@ -796,194 +800,130 @@ Resources:
           Value: !Ref PrimaryDB
       TreatMissingData: notBreaching
   # ==================== CloudWatch Dashboard ====================
-  # ==================== CloudWatch Dashboard ====================
   MonitoringDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
       DashboardName: !Sub 'ecommerce-db-dashboard-${EnvironmentSuffix}'
-      DashboardBody: !Sub |
-        {
-          "widgets": [
-            {
-              "type": "metric",
-              "properties": {
-                "metrics": [
-                  ["AWS/RDS", "CPUUtilization", {"stat": "Average", "label": "Primary CPU"}, {"DBInstanceIdentifier": "${PrimaryDB}"}],
-                  ["...", {"stat": "Average", "label": "Replica 1 CPU"}, {"DBInstanceIdentifier": "${ReadReplica1}"}],
-                  ["...", {"stat": "Average", "label": "Replica 2 CPU"}, {"DBInstanceIdentifier": "${ReadReplica2}"}]
-                ],
-                "view": "timeSeries",
-                "stacked": false,
-                "region": "${AWS::Region}",
-                "title": "CPU Utilization (%)",
-                "period": 300,
-                "yAxis": {
-                  "left": {
-                    "min": 0,
-                    "max": 100
-                  }
-                }
+      DashboardBody: !Sub
+        - |
+          {
+            "widgets": [
+              {
+                "type": "metric",
+                "properties": {
+                  "metrics": [
+                    ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", "${PrimaryId}"],
+                    ["...", ".", "${Replica1Id}"],
+                    ["...", ".", "${Replica2Id}"]
+                  ],
+                  "view": "timeSeries",
+                  "stacked": false,
+                  "region": "${Region}",
+                  "title": "CPU Utilization",
+                  "period": 300,
+                  "stat": "Average"
+                },
+                "width": 12,
+                "height": 6,
+                "x": 0,
+                "y": 0
               },
-              "width": 12,
-              "height": 6,
-              "x": 0,
-              "y": 0
-            },
-            {
-              "type": "metric",
-              "properties": {
-                "metrics": [
-                  ["AWS/RDS", "DatabaseConnections", {"stat": "Average"}, {"DBInstanceIdentifier": "${PrimaryDB}"}],
-                  [".", "FreeableMemory", {"stat": "Average", "yAxis": "right"}, {"DBInstanceIdentifier": "${PrimaryDB}"}]
-                ],
-                "view": "timeSeries",
-                "stacked": false,
-                "region": "${AWS::Region}",
-                "title": "Connections & Memory",
-                "period": 300,
-                "yAxis": {
-                  "left": {
-                    "label": "Connections"
-                  },
-                  "right": {
-                    "label": "Memory (bytes)"
-                  }
-                }
+              {
+                "type": "metric",
+                "properties": {
+                  "metrics": [
+                    ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", "${PrimaryId}"],
+                    [".", "FreeableMemory", ".", "."]
+                  ],
+                  "view": "timeSeries",
+                  "region": "${Region}",
+                  "title": "Connections & Memory",
+                  "period": 300,
+                  "stat": "Average"
+                },
+                "width": 12,
+                "height": 6,
+                "x": 12,
+                "y": 0
               },
-              "width": 12,
-              "height": 6,
-              "x": 12,
-              "y": 0
-            },
-            {
-              "type": "metric",
-              "properties": {
-                "metrics": [
-                  ["AWS/RDS", "ReadLatency", {"stat": "Average", "label": "Read Latency"}, {"DBInstanceIdentifier": "${PrimaryDB}"}],
-                  [".", "WriteLatency", {"stat": "Average", "label": "Write Latency"}, {"DBInstanceIdentifier": "${PrimaryDB}"}]
-                ],
-                "view": "timeSeries",
-                "stacked": false,
-                "region": "${AWS::Region}",
-                "title": "Latency (seconds)",
-                "period": 300,
-                "yAxis": {
-                  "left": {
-                    "min": 0
-                  }
-                }
+              {
+                "type": "metric",
+                "properties": {
+                  "metrics": [
+                    ["AWS/RDS", "ReadLatency", "DBInstanceIdentifier", "${PrimaryId}"],
+                    [".", "WriteLatency", ".", "."]
+                  ],
+                  "view": "timeSeries",
+                  "region": "${Region}",
+                  "title": "Latency",
+                  "period": 300,
+                  "stat": "Average"
+                },
+                "width": 12,
+                "height": 6,
+                "x": 0,
+                "y": 6
               },
-              "width": 12,
-              "height": 6,
-              "x": 0,
-              "y": 6
-            },
-            {
-              "type": "metric",
-              "properties": {
-                "metrics": [
-                  ["AWS/RDS", "ReadIOPS", {"stat": "Average"}, {"DBInstanceIdentifier": "${PrimaryDB}"}],
-                  [".", "WriteIOPS", {"stat": "Average"}, {"DBInstanceIdentifier": "${PrimaryDB}"}]
-                ],
-                "view": "timeSeries",
-                "stacked": false,
-                "region": "${AWS::Region}",
-                "title": "IOPS",
-                "period": 300,
-                "yAxis": {
-                  "left": {
-                    "min": 0
-                  }
-                }
+              {
+                "type": "metric",
+                "properties": {
+                  "metrics": [
+                    ["AWS/RDS", "ReplicaLag", "DBInstanceIdentifier", "${Replica1Id}"],
+                    ["...", ".", "${Replica2Id}"]
+                  ],
+                  "view": "timeSeries",
+                  "region": "${Region}",
+                  "title": "Replica Lag",
+                  "period": 300,
+                  "stat": "Average"
+                },
+                "width": 12,
+                "height": 6,
+                "x": 12,
+                "y": 6
               },
-              "width": 12,
-              "height": 6,
-              "x": 12,
-              "y": 6
-            },
-            {
-              "type": "metric",
-              "properties": {
-                "metrics": [
-                  ["AWS/RDS", "ReplicaLag", {"stat": "Average", "label": "Replica 1 Lag"}, {"DBInstanceIdentifier": "${ReadReplica1}"}],
-                  ["...", {"stat": "Average", "label": "Replica 2 Lag"}, {"DBInstanceIdentifier": "${ReadReplica2}"}]
-                ],
-                "view": "timeSeries",
-                "stacked": false,
-                "region": "${AWS::Region}",
-                "title": "Replica Lag (milliseconds)",
-                "period": 300,
-                "yAxis": {
-                  "left": {
-                    "min": 0
-                  }
-                }
+              {
+                "type": "metric",
+                "properties": {
+                  "metrics": [
+                    ["AWS/RDS", "FreeStorageSpace", "DBInstanceIdentifier", "${PrimaryId}"]
+                  ],
+                  "view": "timeSeries",
+                  "region": "${Region}",
+                  "title": "Storage",
+                  "period": 300,
+                  "stat": "Average"
+                },
+                "width": 12,
+                "height": 6,
+                "x": 0,
+                "y": 12
               },
-              "width": 12,
-              "height": 6,
-              "x": 0,
-              "y": 12
-            },
-            {
-              "type": "metric",
-              "properties": {
-                "metrics": [
-                  ["AWS/RDS", "FreeStorageSpace", {"stat": "Average"}, {"DBInstanceIdentifier": "${PrimaryDB}"}]
-                ],
-                "view": "timeSeries",
-                "stacked": false,
-                "region": "${AWS::Region}",
-                "title": "Free Storage Space (bytes)",
-                "period": 300,
-                "yAxis": {
-                  "left": {
-                    "min": 0
-                  }
-                }
-              },
-              "width": 12,
-              "height": 6,
-              "x": 12,
-              "y": 12
-            },
-            {
-              "type": "metric",
-              "properties": {
-                "metrics": [
-                  ["AWS/RDS", "ReadThroughput", {"stat": "Average"}, {"DBInstanceIdentifier": "${PrimaryDB}"}],
-                  [".", "WriteThroughput", {"stat": "Average"}, {"DBInstanceIdentifier": "${PrimaryDB}"}]
-                ],
-                "view": "timeSeries",
-                "stacked": false,
-                "region": "${AWS::Region}",
-                "title": "Throughput (bytes/sec)",
-                "period": 300
-              },
-              "width": 12,
-              "height": 6,
-              "x": 0,
-              "y": 18
-            },
-            {
-              "type": "metric",
-              "properties": {
-                "metrics": [
-                  ["AWS/RDS", "NetworkReceiveThroughput", {"stat": "Average"}, {"DBInstanceIdentifier": "${PrimaryDB}"}],
-                  [".", "NetworkTransmitThroughput", {"stat": "Average"}, {"DBInstanceIdentifier": "${PrimaryDB}"}]
-                ],
-                "view": "timeSeries",
-                "stacked": false,
-                "region": "${AWS::Region}",
-                "title": "Network Throughput (bytes/sec)",
-                "period": 300
-              },
-              "width": 12,
-              "height": 6,
-              "x": 12,
-              "y": 18
-            }
-          ]
-        }
+              {
+                "type": "metric",
+                "properties": {
+                  "metrics": [
+                    ["AWS/RDS", "ReadIOPS", "DBInstanceIdentifier", "${PrimaryId}"],
+                    [".", "WriteIOPS", ".", "."]
+                  ],
+                  "view": "timeSeries",
+                  "region": "${Region}",
+                  "title": "IOPS",
+                  "period": 300,
+                  "stat": "Average"
+                },
+                "width": 12,
+                "height": 6,
+                "x": 12,
+                "y": 12
+              }
+            ]
+          }
+        - Region: !Ref AWS::Region
+          PrimaryId: !Ref PrimaryDB
+          Replica1Id: !Ref ReadReplica1
+          Replica2Id: !Ref ReadReplica2
+
 Outputs:
   VPCId:
     Description: VPC ID
