@@ -1,0 +1,14 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "383273",
+  "team": "2",
+  "startedAt": "2025-10-14T17:41:53.803Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "ec2,lambda,cloudtrail,subnet,s3"
+}
