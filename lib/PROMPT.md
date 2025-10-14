@@ -14,6 +14,7 @@ For visualization, Amazon QuickSight will create dashboards showing traffic patt
 
 CloudWatch will monitor everything to make sure the system stays healthy, and proper IAM roles will keep everything secure.
 
+
 ## How It Works
 
 Traffic sensors send their data (vehicle counts, average speeds, congestion scores) through secure MQTT connections to AWS IoT Core. The IoT Core rules engine automatically forwards this data to Kinesis Data Streams for processing.
