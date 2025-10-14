@@ -3,7 +3,6 @@ Description: >
   TapStack.yml — Secure, Production-Ready Web Infrastructure (us-east-1)
   Creates VPC, ALB, EC2, RDS, S3, SNS, Lambda, SQS, WAF, CloudFront, Config, and CloudWatch.
   Fully secure, encrypted, least-privilege, region-locked, and self-contained.
-
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -377,6 +376,13 @@ Resources:
 
   ###########################################################
   # Storage, SNS (for safe notifications) & Database
+  #
+  # NOTE: To avoid the common S3 destination validation failure,
+  # - create the SNS Topic first,
+  # - attach a TopicPolicy permitting s3.amazonaws.com to Publish (restricted by account),
+  # - THEN create the S3 bucket with a TopicConfiguration referencing that topic.
+  #
+  # This ordering ensures S3 can validate the destination at bucket creation time.
   ###########################################################
   S3EventsTopic:
     Type: AWS::SNS::Topic
@@ -390,8 +396,27 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  SNSTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics: [!Ref S3EventsTopic]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowS3Publish
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref S3EventsTopic
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+
   S3Bucket:
     Type: AWS::S3::Bucket
+    DependsOn:
+      - SNSTopicPolicy
     Properties:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
@@ -525,15 +550,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  SNSSubscriptionToLambda:
-    Type: AWS::SNS::Subscription
-    Properties:
-      TopicArn: !Ref S3EventsTopic
-      Protocol: lambda
-      Endpoint: !GetAtt AuditLambda.Arn
-      RawMessageDelivery: true
-
-  LambdaInvokePermissionForSNS:
+  LambdaPermissionForSNS:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
@@ -541,6 +558,15 @@ Resources:
       Principal: sns.amazonaws.com
       SourceArn: !Ref S3EventsTopic
       SourceAccount: !Ref AWS::AccountId
+
+  SNSSubscriptionToLambda:
+    Type: AWS::SNS::Subscription
+    DependsOn: LambdaPermissionForSNS
+    Properties:
+      TopicArn: !Ref S3EventsTopic
+      Protocol: lambda
+      Endpoint: !GetAtt AuditLambda.Arn
+      RawMessageDelivery: true
 
   ###########################################################
   # Monitoring & Config
