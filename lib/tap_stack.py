@@ -15,12 +15,12 @@ from aws_cdk import (
     aws_apigateway as apigateway,
     aws_dynamodb as dynamodb,
     aws_iam as iam,
+    aws_logs as logs,
+    aws_cloudwatch as cloudwatch,
 )
 from constructs import Construct
-from decimal import Decimal
 import json
-import os
-import boto3
+
 
 class TapStackProps(cdk.StackProps):
     """
@@ -60,6 +60,7 @@ class TapStack(cdk.Stack):
         # ============================================
         table = dynamodb.Table(
             self, "ItemsTable",
+            table_name=f"items-table-{environment_suffix}",
             partition_key=dynamodb.Attribute(
                 name="id",
                 type=dynamodb.AttributeType.STRING
@@ -84,15 +85,29 @@ class TapStack(cdk.Stack):
         table.grant_read_write_data(lambda_role)
 
         # ============================================
-        # Lambda Function
+        # Lambda Function with Full CRUD Operations
         # ============================================
         lambda_code = """
 import json
 import boto3
 import os
+import logging
 from decimal import Decimal
+from botocore.config import Config
 
-dynamodb = boto3.resource('dynamodb')
+# Configure structured logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+# Configure boto3 with retry logic
+boto3_config = Config(
+    retries={
+        'max_attempts': 3,
+        'mode': 'adaptive'
+    }
+)
+
+dynamodb = boto3.resource('dynamodb', config=boto3_config)
 table_name = os.environ['TABLE_NAME']
 table = dynamodb.Table(table_name)
 
@@ -107,11 +122,31 @@ def decimal_to_json(obj):
     else:
         return obj
 
+def validate_item_data(data, required_fields=None):
+    if required_fields is None:
+        required_fields = ['id', 'name']
+    
+    for field in required_fields:
+        if field not in data:
+            raise ValueError(f"Missing required field: {field}")
+
 def lambda_handler(event, context):
-    print(f"Received event: {json.dumps(event)}")
+    logger.info(json.dumps({
+        "event": "lambda_invocation",
+        "method": event.get('httpMethod'),
+        "path": event.get('path'),
+        "request_id": context.aws_request_id
+    }))
+    
     try:
-        if event['httpMethod'] == 'POST':
+        method = event['httpMethod']
+        path = event['path']
+        
+        if method == 'POST' and path == '/items':
+            # CREATE operation
             body = json.loads(event['body'])
+            validate_item_data(body)
+            
             item = {
                 'id': body['id'],
                 'name': body['name'],
@@ -120,29 +155,177 @@ def lambda_handler(event, context):
                 'status': body.get('status', 'active')
             }
             table.put_item(Item=item)
+            
+            logger.info(json.dumps({
+                "event": "item_created",
+                "item_id": item['id'],
+                "request_id": context.aws_request_id
+            }))
+            
             return {
                 'statusCode': 201,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
                 'body': json.dumps({'message': 'Item created', 'item': decimal_to_json(item)})
             }
-        elif event['httpMethod'] == 'GET':
+            
+        elif method == 'GET' and path == '/items':
+            # READ ALL operation
             response = table.scan()
             items = response['Items']
+            
+            logger.info(json.dumps({
+                "event": "items_retrieved",
+                "count": len(items),
+                "request_id": context.aws_request_id
+            }))
+            
             return {
                 'statusCode': 200,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
                 'body': json.dumps({'items': decimal_to_json(items)})
             }
+            
+        elif method == 'GET' and '/items/' in path:
+            # READ SINGLE operation
+            item_id = path.split('/items/')[-1]
+            
+            response = table.get_item(Key={'id': item_id})
+            
+            if 'Item' not in response:
+                return {
+                    'statusCode': 404,
+                    'headers': {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                    },
+                    'body': json.dumps({'message': 'Item not found'})
+                }
+            
+            return {
+                'statusCode': 200,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': json.dumps({'item': decimal_to_json(response['Item'])})
+            }
+            
+        elif method == 'PUT' and '/items/' in path:
+            # UPDATE operation
+            item_id = path.split('/items/')[-1]
+            body = json.loads(event['body'])
+            
+            update_expression = "SET "
+            expression_attribute_values = {}
+            expression_parts = []
+            
+            for key, value in body.items():
+                if key != 'id':  # Don't update the partition key
+                    expression_parts.append(f"#{key} = :{key}")
+                    expression_attribute_values[f":{key}"] = Decimal(str(value)) if isinstance(value, (int, float)) else value
+            
+            if not expression_parts:
+                return {
+                    'statusCode': 400,
+                    'headers': {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                    },
+                    'body': json.dumps({'message': 'No valid fields to update'})
+                }
+            
+            update_expression += ", ".join(expression_parts)
+            expression_attribute_names = {f"#{key}": key for key in body.keys() if key != 'id'}
+            
+            table.update_item(
+                Key={'id': item_id},
+                UpdateExpression=update_expression,
+                ExpressionAttributeValues=expression_attribute_values,
+                ExpressionAttributeNames=expression_attribute_names
+            )
+            
+            logger.info(json.dumps({
+                "event": "item_updated",
+                "item_id": item_id,
+                "request_id": context.aws_request_id
+            }))
+            
+            return {
+                'statusCode': 200,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': json.dumps({'message': 'Item updated successfully'})
+            }
+            
+        elif method == 'DELETE' and '/items/' in path:
+            # DELETE operation
+            item_id = path.split('/items/')[-1]
+            
+            table.delete_item(Key={'id': item_id})
+            
+            logger.info(json.dumps({
+                "event": "item_deleted",
+                "item_id": item_id,
+                "request_id": context.aws_request_id
+            }))
+            
+            return {
+                'statusCode': 200,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': json.dumps({'message': 'Item deleted successfully'})
+            }
+            
         else:
             return {
                 'statusCode': 405,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
                 'body': json.dumps({'message': 'Method not allowed'})
             }
+            
+    except ValueError as e:
+        logger.error(json.dumps({
+            "event": "validation_error",
+            "error": str(e),
+            "request_id": context.aws_request_id
+        }))
+        return {
+            'statusCode': 400,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
+            'body': json.dumps({'message': 'Validation error', 'error': str(e)})
+        }
     except Exception as e:
-        print(f"Error: {str(e)}")
+        logger.error(json.dumps({
+            "event": "internal_error",
+            "error": str(e),
+            "request_id": context.aws_request_id
+        }))
         return {
             'statusCode': 500,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
             'body': json.dumps({'message': 'Internal server error', 'error': str(e)})
         }
 """
+
         lambda_function = lambda_.Function(
             self, "CrudLambdaFunction",
             function_name=f"crud-lambda-{environment_suffix}",
@@ -158,7 +341,7 @@ def lambda_handler(event, context):
         )
 
         # ============================================
-        # API Gateway
+        # API Gateway with Full CRUD Routes
         # ============================================
         api = apigateway.RestApi(
             self, "ItemsApi",
@@ -166,7 +349,8 @@ def lambda_handler(event, context):
             description="API Gateway for CRUD operations",
             default_cors_preflight_options=apigateway.CorsOptions(
                 allow_origins=apigateway.Cors.ALL_ORIGINS,
-                allow_methods=apigateway.Cors.ALL_METHODS
+                allow_methods=apigateway.Cors.ALL_METHODS,
+                allow_headers=["Content-Type", "X-Amz-Date", "Authorization", "X-Api-Key"]
             )
         )
 
@@ -175,8 +359,41 @@ def lambda_handler(event, context):
 
         # Define API resources and methods
         items = api.root.add_resource("items")
-        items.add_method("GET", lambda_integration)  # GET /items
-        items.add_method("POST", lambda_integration)  # POST /items
+        items.add_method("GET", lambda_integration)  # GET /items (list all)
+        items.add_method("POST", lambda_integration)  # POST /items (create)
+
+        # Individual item operations
+        item = items.add_resource("{id}")
+        item.add_method("GET", lambda_integration)  # GET /items/{id} (get one)
+        item.add_method("PUT", lambda_integration)  # PUT /items/{id} (update)
+        item.add_method("DELETE", lambda_integration)  # DELETE /items/{id} (delete)
+
+        # ============================================
+        # CloudWatch Alarms for Monitoring
+        # ============================================
+        lambda_error_alarm = cloudwatch.Alarm(
+            self, "LambdaErrorAlarm",
+            metric=lambda_function.metric_errors(),
+            threshold=1,
+            evaluation_periods=1,
+            alarm_description="Lambda function errors"
+        )
+
+        api_4xx_alarm = cloudwatch.Alarm(
+            self, "Api4xxErrorAlarm",
+            metric=api.metric_client_error(),
+            threshold=5,
+            evaluation_periods=2,
+            alarm_description="API Gateway 4xx errors"
+        )
+
+        api_5xx_alarm = cloudwatch.Alarm(
+            self, "Api5xxErrorAlarm",
+            metric=api.metric_server_error(),
+            threshold=1,
+            evaluation_periods=1,
+            alarm_description="API Gateway 5xx errors"
+        )
 
         # ============================================
         # Outputs
