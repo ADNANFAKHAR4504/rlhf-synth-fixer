@@ -401,10 +401,38 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: [config.amazonaws.com]
+              Service: config.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSConfigRole
+      Policies:
+        - PolicyName: AWSConfigInlinePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - config:PutConfigurationRecorder
+                  - config:PutDeliveryChannel
+                  - config:PutEvaluations
+                  - config:PutConfigRule
+                  - config:StartConfigurationRecorder
+                  - config:StopConfigurationRecorder
+                  - config:Get*
+                  - config:Describe*
+                  - config:DeliverConfigSnapshot
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub "arn:aws:s3:::${S3Bucket}/*"
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: "*"
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
 
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
