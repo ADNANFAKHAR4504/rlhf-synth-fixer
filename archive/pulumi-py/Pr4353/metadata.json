@@ -1,0 +1,21 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349244",
+  "team": "6",
+  "startedAt": "2025-10-13T20:25:16.784Z",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": "Lambda, S3, SNS, CloudWatch Events, CloudWatch Logs, IAM, Parameter Store, EC2",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
+}
