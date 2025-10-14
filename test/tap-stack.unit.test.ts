@@ -87,9 +87,9 @@ describe('TapStack CloudFormation Template', () => {
     test('DomainName parameter should have correct properties', () => {
       const domainParam = template.Parameters.DomainName;
       expect(domainParam.Type).toBe('String');
-      expect(domainParam.Default).toBe('example.com');
+      expect(domainParam.Default).toBe('');
       expect(domainParam.AllowedPattern).toBeDefined();
-      expect(domainParam.Description).toBe('Base domain name for Route53 configuration');
+      expect(domainParam.Description).toBe('Base domain name for Route53 configuration (leave empty to skip Route53 setup)');
     });
 
     test('AlertEmail parameter should have correct properties', () => {
@@ -188,13 +188,17 @@ describe('TapStack CloudFormation Template', () => {
         'WAFWebACLId',
         'SecretArn',
         'KMSKeyId',
-        'DNSName',
         'Region',
       ];
 
       expectedOutputs.forEach(outputName => {
         expect(template.Outputs[outputName]).toBeDefined();
       });
+    });
+
+    test('should have conditional DNS output', () => {
+      expect(template.Outputs.DNSName).toBeDefined();
+      expect(template.Outputs.DNSName.Condition).toBe('HasDomainName');
     });
 
     test('VPCId output should be correct', () => {
@@ -278,7 +282,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(10); // All the infrastructure outputs
+      expect(outputCount).toBe(10); // 9 standard outputs + 1 conditional DNS output
     });
 
     test('should have mappings for configuration', () => {
@@ -289,6 +293,8 @@ describe('TapStack CloudFormation Template', () => {
     test('should have conditions section', () => {
       expect(template.Conditions).toBeDefined();
       expect(template.Conditions.IsSecondaryRegion).toBeDefined();
+      expect(template.Conditions.HasDomainName).toBeDefined();
+      expect(template.Conditions.HasDomainNameAndSecondaryRegion).toBeDefined();
     });
   });
 

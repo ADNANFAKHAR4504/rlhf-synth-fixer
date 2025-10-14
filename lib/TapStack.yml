@@ -31,9 +31,9 @@ Parameters:
   
   DomainName:
     Type: String
-    Default: example.com
-    Description: Base domain name for Route53 configuration
-    AllowedPattern: '^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9](\.[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9])*$'
+    Default: ''
+    Description: Base domain name for Route53 configuration (leave empty to skip Route53 setup)
+    AllowedPattern: '^([a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9](\.[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9])*)?$'
   
   AlertEmail:
     Type: String
@@ -883,6 +883,7 @@ Resources:
   # Route 53 Hosted Zone (placeholder - usually already exists)
   HostedZone:
     Type: AWS::Route53::HostedZone
+    Condition: HasDomainName
     Properties:
       Name: !Ref DomainName
       HostedZoneConfig:
@@ -891,6 +892,7 @@ Resources:
   # Health Check for Multi-Region Failover
   HealthCheck:
     Type: AWS::Route53::HealthCheck
+    Condition: HasDomainName
     Properties:
       HealthCheckConfig:
         Type: HTTPS
@@ -904,6 +906,7 @@ Resources:
   # Primary Region Record Set with Failover
   PrimaryRecordSet:
     Type: AWS::Route53::RecordSet
+    Condition: HasDomainName
     Properties:
       HostedZoneId: !Ref HostedZone
       Name: !Sub 'api.${DomainName}'
@@ -919,7 +922,7 @@ Resources:
   # Secondary Region Record Set (placeholder for multi-region setup)
   SecondaryRecordSet:
     Type: AWS::Route53::RecordSet
-    Condition: IsSecondaryRegion
+    Condition: HasDomainNameAndSecondaryRegion
     Properties:
       HostedZoneId: !Ref HostedZone
       Name: !Sub 'api.${DomainName}'
@@ -1037,6 +1040,10 @@ Resources:
 # ==========================================
 Conditions:
   IsSecondaryRegion: !Not [!Equals [!Ref AWS::Region, 'us-east-1']]
+  HasDomainName: !Not [!Equals [!Ref DomainName, '']]
+  HasDomainNameAndSecondaryRegion: !And 
+    - !Condition HasDomainName
+    - !Condition IsSecondaryRegion
 
 # ==========================================
 # Outputs
@@ -1091,6 +1098,7 @@ Outputs:
       Name: !Sub '${AWS::StackName}-KMSKeyId'
 
   DNSName:
+    Condition: HasDomainName
     Description: Route53 DNS Name
     Value: !Sub 'api.${DomainName}'
     Export:
