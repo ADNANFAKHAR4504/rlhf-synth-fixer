@@ -10,6 +10,5 @@
   "subject_labels": [
     "Serverless Infrastructure (Functions as Code)"
   ],
-  "aws_services": "Lambda, API Gateway, DynamoDB, S3, VPC, Secrets Manager, WAF, CloudWatch, SNS, IAM, EC2",
-  "background": "AWS CloudFormation and CDK allow infrastructure to be provisioned in a language-centric way, enabling developers to use familiar programming languages and integrate CI/CD practices effectively."
+  "aws_services": "Lambda, API Gateway, DynamoDB, S3, VPC, Secrets Manager, WAF, CloudWatch, SNS, IAM, EC2"
 }
