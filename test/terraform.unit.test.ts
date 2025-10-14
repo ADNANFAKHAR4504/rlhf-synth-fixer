@@ -318,8 +318,7 @@ describe("S3 Media Assets Storage - Unit Tests", () => {
       const corsConfig = tf.match(/cors_configuration\s*=\s*\{[\s\S]*?\n\s*\}/);
       expect(corsConfig).toBeTruthy();
       if (corsConfig) {
-        expect(/allowed_methods\s*=\s*```math
-\s*"GET"\s*,\s*"HEAD"\s*```/.test(corsConfig[0])).toBe(true);
+        expect(/allowed_methods\s*=\s*\[\s*"GET"\s*,\s*"HEAD"\s*\]/.test(corsConfig[0])).toBe(true);
       }
     });
 
@@ -434,7 +433,7 @@ describe("S3 Media Assets Storage - Unit Tests", () => {
     });
 
     test("bucket policies use jsonencode", () => {
-      expect(count(/jsonencode\s*KATEX_INLINE_OPEN/)).toBeGreaterThanOrEqual(2);
+      expect(count(/jsonencode\s*\(/)).toBeGreaterThanOrEqual(2);
     });
 
     test("prod bucket policy allows CloudFront OAI GetObject", () => {
@@ -532,11 +531,11 @@ describe("S3 Media Assets Storage - Unit Tests", () => {
     });
 
     test("buckets use merge function for tags", () => {
-      expect(has(/merge\s*KATEX_INLINE_OPEN\s*local\.common_tags/)).toBe(true);
+      expect(has(/merge\s*\(\s*local\.common_tags/)).toBe(true);
     });
 
     test("all buckets have Environment and Purpose tags", () => {
-      const bucketResources = tf.match(/resource\s+"aws_s3_bucket"\s+"(dev|prod|logs)"[\s\S]*?tags\s*=[\s\S]*?\n\s*KATEX_INLINE_CLOSE/g) || [];
+      const bucketResources = tf.match(/resource\s+"aws_s3_bucket"\s+"(dev|prod|logs)"[\s\S]*?tags\s*=[\s\S]*?\n\s*\)/g) || [];
       expect(bucketResources.length).toBe(3);
       bucketResources.forEach(bucket => {
         expect(/Environment\s*=/.test(bucket)).toBe(true);
@@ -601,7 +600,7 @@ describe("S3 Media Assets Storage - Unit Tests", () => {
 
     test("uses jsonencode for all policies", () => {
       const policyResources = count(/resource\s+"aws_s3_bucket_policy"/);
-      const jsonEncodeUsage = count(/jsonencode\s*KATEX_INLINE_OPEN/);
+      const jsonEncodeUsage = count(/jsonencode\s*\(/);
       expect(jsonEncodeUsage).toBeGreaterThanOrEqual(policyResources);
     });
 
