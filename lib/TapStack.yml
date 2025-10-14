@@ -394,7 +394,7 @@ Resources:
       BackupRetentionPeriod: 7
 
   ########################################
-  # CloudFront
+  # CloudFront (Fixed ForwardedValues)
   ########################################
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
@@ -411,6 +411,10 @@ Resources:
           ViewerProtocolPolicy: allow-all
           AllowedMethods: [GET, HEAD]
           CachedMethods: [GET, HEAD]
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
 
 Outputs:
   VPCId:
