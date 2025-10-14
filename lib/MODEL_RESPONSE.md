@@ -1,6 +1,6 @@
 # Disaster Recovery Infrastructure for GlobalStream
 
-This implementation provides a comprehensive disaster recovery solution using AWS CDK with Go. All infrastructure is designed for the us-east-1 region with DR capabilities to sa-east-1.
+This implementation provides a comprehensive disaster recovery solution using AWS CDK with Go. All infrastructure is designed for the us-west-2 region with DR capabilities to sa-east-1.
 
 ## File: lib/tap_stack.go
 
@@ -759,7 +759,7 @@ func NewComputeConstruct(scope constructs.Construct, id *string, props *ComputeC
 		}),
 		Environment: &map[string]*string{
 			"ENVIRONMENT": jsii.String(environmentSuffix),
-			"AWS_REGION":  jsii.String("us-east-1"),
+			"AWS_REGION":  jsii.String("us-west-2"),
 		},
 		Command: &[]*string{
 			jsii.String("sh"),

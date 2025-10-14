@@ -114,7 +114,7 @@ func NewComputeConstruct(scope constructs.Construct, id *string, props *ComputeC
 		}),
 		Environment: &map[string]*string{
 			"ENVIRONMENT": jsii.String(environmentSuffix),
-			"AWS_REGION":  jsii.String("us-east-1"),
+			"AWS_REGION":  jsii.String("us-west-2"),
 		},
 		Command: &[]*string{
 			jsii.String("sh"),
