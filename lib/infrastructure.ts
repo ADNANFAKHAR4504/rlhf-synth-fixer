@@ -39,7 +39,9 @@ export class InfraStack extends cdk.Stack {
     // Set defaults
     const projectName = props.projectName || 'TapProject';
     const isProduction = props.environmentSuffix.toLowerCase().includes('prod');
-    const removalPolicy = isProduction ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY;
+    const removalPolicy = isProduction
+      ? cdk.RemovalPolicy.RETAIN
+      : cdk.RemovalPolicy.DESTROY;
 
     // Default configuration values
     const config = {
@@ -49,7 +51,8 @@ export class InfraStack extends cdk.Stack {
       lambdaTimeout: props.lambdaTimeout || 30,
       dynamodbReadCapacity: props.dynamodbReadCapacity || 5,
       dynamodbWriteCapacity: props.dynamodbWriteCapacity || 5,
-      enablePointInTimeRecovery: props.enablePointInTimeRecovery ?? isProduction,
+      enablePointInTimeRecovery:
+        props.enablePointInTimeRecovery ?? isProduction,
       logRetentionDays: props.logRetentionDays || (isProduction ? 90 : 7),
     };
 
@@ -65,10 +68,19 @@ export class InfraStack extends cdk.Stack {
     });
 
     // ==================== DynamoDB Table ====================
-    const dynamoTable = this.createDynamoDBTable(props.environmentSuffix, removalPolicy, config, commonTags);
+    const dynamoTable = this.createDynamoDBTable(
+      props.environmentSuffix,
+      removalPolicy,
+      config,
+      commonTags
+    );
 
     // ==================== S3 Bucket ====================
-    const mediaBucket = this.createS3Bucket(props.environmentSuffix, removalPolicy, commonTags);
+    const mediaBucket = this.createS3Bucket(
+      props.environmentSuffix,
+      removalPolicy,
+      commonTags
+    );
 
     // ==================== Lambda Function ====================
     const lambdaFunction = this.createLambdaFunction(
@@ -174,8 +186,14 @@ export class InfraStack extends cdk.Stack {
 
     // Add metadata
     const cfnTable = table.node.defaultChild as dynamodb.CfnTable;
-    cfnTable.addMetadata('Purpose', 'Store API request data with RequestId as primary key');
-    cfnTable.addMetadata('Encryption', 'AWS managed encryption at rest enabled');
+    cfnTable.addMetadata(
+      'Purpose',
+      'Store API request data with RequestId as primary key'
+    );
+    cfnTable.addMetadata(
+      'Encryption',
+      'AWS managed encryption at rest enabled'
+    );
 
     // Add Global Secondary Index on Timestamp
     table.addGlobalSecondaryIndex({
@@ -201,7 +219,8 @@ export class InfraStack extends cdk.Stack {
     tags: any
   ): s3.Bucket {
     const bucket = new s3.Bucket(this, 'MediaBucket', {
-      bucketName: `tap-media-${environmentSuffix}`.toLowerCase() + '-' + this.account,
+      bucketName:
+        `tap-media-${environmentSuffix}`.toLowerCase() + '-' + this.account,
       encryption: s3.BucketEncryption.S3_MANAGED,
       versioned: true,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -219,8 +238,14 @@ export class InfraStack extends cdk.Stack {
 
     // Add metadata
     const cfnBucket = bucket.node.defaultChild as s3.CfnBucket;
-    cfnBucket.addMetadata('Purpose', 'Store media files with versioning and encryption');
-    cfnBucket.addMetadata('Security', 'AES-256 encryption, SSL enforced, public access blocked');
+    cfnBucket.addMetadata(
+      'Purpose',
+      'Store media files with versioning and encryption'
+    );
+    cfnBucket.addMetadata(
+      'Security',
+      'AES-256 encryption, SSL enforced, public access blocked'
+    );
 
     // Apply tags to the bucket
     this.applyTags(bucket, tags);
@@ -247,35 +272,38 @@ export class InfraStack extends cdk.Stack {
     const lambdaRole = new iam.Role(this, 'LambdaExecutionRole', {
       roleName: `tap-lambda-role-${environmentSuffix}`,
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-      description: 'Execution role for TAP Lambda function with least privilege',
+      description:
+        'Execution role for TAP Lambda function with least privilege',
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSLambdaBasicExecutionRole'
+        ),
       ],
     });
 
     // Add specific permissions for DynamoDB
-    lambdaRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'dynamodb:PutItem',
-        'dynamodb:GetItem',
-        'dynamodb:UpdateItem',
-        'dynamodb:Query',
-        'dynamodb:BatchWriteItem',
-      ],
-      resources: [table.tableArn, `${table.tableArn}/index/*`],
-    }));
+    lambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'dynamodb:PutItem',
+          'dynamodb:GetItem',
+          'dynamodb:UpdateItem',
+          'dynamodb:Query',
+          'dynamodb:BatchWriteItem',
+        ],
+        resources: [table.tableArn, `${table.tableArn}/index/*`],
+      })
+    );
 
     // Add specific permissions for S3
-    lambdaRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        's3:PutObject',
-        's3:GetObject',
-        's3:GetObjectVersion',
-      ],
-      resources: [`${bucket.bucketArn}/*`],
-    }));
+    lambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['s3:PutObject', 's3:GetObject', 's3:GetObjectVersion'],
+        resources: [`${bucket.bucketArn}/*`],
+      })
+    );
 
     // Create Lambda function
     const lambdaFunction = new lambda.Function(this, 'ProcessorFunction', {
@@ -300,8 +328,14 @@ export class InfraStack extends cdk.Stack {
 
     // Add metadata
     const cfnFunction = lambdaFunction.node.defaultChild as lambda.CfnFunction;
-    cfnFunction.addMetadata('Purpose', 'Process API requests and store data in DynamoDB');
-    cfnFunction.addMetadata('Retries', 'Configured for 2 retry attempts on transient errors');
+    cfnFunction.addMetadata(
+      'Purpose',
+      'Process API requests and store data in DynamoDB'
+    );
+    cfnFunction.addMetadata(
+      'Retries',
+      'Configured for 2 retry attempts on transient errors'
+    );
 
     // Apply tags to the function
     this.applyTags(lambdaFunction, tags);
@@ -347,8 +381,14 @@ export class InfraStack extends cdk.Stack {
 
     // Add metadata
     const cfnApi = api.node.defaultChild as apigateway.CfnRestApi;
-    cfnApi.addMetadata('Purpose', 'RESTful API Gateway with throttling and CORS enabled');
-    cfnApi.addMetadata('Throttling', `${config.apiThrottleRate} req/sec with ${config.apiThrottleBurst} burst`);
+    cfnApi.addMetadata(
+      'Purpose',
+      'RESTful API Gateway with throttling and CORS enabled'
+    );
+    cfnApi.addMetadata(
+      'Throttling',
+      `${config.apiThrottleRate} req/sec with ${config.apiThrottleBurst} burst`
+    );
 
     // Create Lambda integration
     const lambdaIntegration = new apigateway.LambdaIntegration(lambdaFunction, {
@@ -497,8 +537,14 @@ export class InfraStack extends cdk.Stack {
     });
 
     // Add metadata
-    webAcl.addMetadata('Purpose', 'Protect API Gateway from SQL injection and other common attacks');
-    webAcl.addMetadata('Rules', 'SQL injection protection, rate limiting, AWS managed rules');
+    webAcl.addMetadata(
+      'Purpose',
+      'Protect API Gateway from SQL injection and other common attacks'
+    );
+    webAcl.addMetadata(
+      'Rules',
+      'SQL injection protection, rate limiting, AWS managed rules'
+    );
     // Apply tags to the WAF
     this.applyTags(webAcl as any, tags);
 
@@ -513,7 +559,9 @@ export class InfraStack extends cdk.Stack {
 
     // Add explicit dependency to ensure WebACL is created before association
     webAclAssociation.addDependency(webAcl);
-    webAclAssociation.addDependency(api.deploymentStage.node.defaultChild as apigateway.CfnStage);
+    webAclAssociation.addDependency(
+      api.deploymentStage.node.defaultChild as apigateway.CfnStage
+    );
 
     return webAcl;
   }

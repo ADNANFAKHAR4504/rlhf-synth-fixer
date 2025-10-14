@@ -33,7 +33,9 @@ export class TapStack extends cdk.Stack {
       lambdaTimeout: this.node.tryGetContext('lambdaTimeout'),
       dynamodbReadCapacity: this.node.tryGetContext('dynamodbReadCapacity'),
       dynamodbWriteCapacity: this.node.tryGetContext('dynamodbWriteCapacity'),
-      enablePointInTimeRecovery: this.node.tryGetContext('enablePointInTimeRecovery'),
+      enablePointInTimeRecovery: this.node.tryGetContext(
+        'enablePointInTimeRecovery'
+      ),
       logRetentionDays: this.node.tryGetContext('logRetentionDays'),
     });
   }
