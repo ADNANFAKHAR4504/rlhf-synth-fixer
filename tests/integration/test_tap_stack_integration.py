@@ -36,9 +36,20 @@ def deployment_outputs() -> Dict[str, Any]:
     Note: This file is created by the deployment process and contains
     all the necessary information to test deployed resources.
     """
-    outputs_file = "/Users/mayanksethi/Projects/turing/iac-test-automations/worktree/synth-2464881093/cfn-outputs/flat-outputs.json"
-
-    if not os.path.exists(outputs_file):
+    # Try relative path first, then absolute path based on current working directory
+    possible_paths = [
+        "cfn-outputs/flat-outputs.json",
+        os.path.join(os.getcwd(), "cfn-outputs/flat-outputs.json"),
+        "/home/chris/turing_work/synth/iac-test-automations/cfn-outputs/flat-outputs.json"
+    ]
+    
+    outputs_file = None
+    for path in possible_paths:
+        if os.path.exists(path):
+            outputs_file = path
+            break
+    
+    if outputs_file is None:
         pytest.skip("Deployment outputs not found - deployment was not performed")
 
     with open(outputs_file, 'r', encoding='utf-8') as f:
@@ -48,7 +59,7 @@ def deployment_outputs() -> Dict[str, Any]:
 @pytest.fixture
 def aws_region() -> str:
     """Return the AWS region for testing."""
-    return os.getenv('AWS_REGION', 'ap-southeast-1')
+    return os.getenv('AWS_REGION', 'us-east-1')
 
 
 @pytest.fixture
@@ -121,8 +132,17 @@ class TestVPCConfiguration:
 
         vpc = response['Vpcs'][0]
         assert vpc['State'] == 'available', "VPC is not available"
-        assert vpc['EnableDnsSupport'] is True, "DNS support not enabled"
-        assert vpc['EnableDnsHostnames'] is True, "DNS hostnames not enabled"
+        
+        # Get VPC attributes to check DNS settings
+        dns_support_resp = ec2_client.describe_vpc_attribute(
+            VpcId=vpc_id, Attribute='enableDnsSupport'
+        )
+        dns_hostnames_resp = ec2_client.describe_vpc_attribute(
+            VpcId=vpc_id, Attribute='enableDnsHostnames'
+        )
+        
+        assert dns_support_resp['EnableDnsSupport']['Value'] is True, "DNS support not enabled"
+        assert dns_hostnames_resp['EnableDnsHostnames']['Value'] is True, "DNS hostnames not enabled"
 
     def test_subnets_exist(
         self, deployment_outputs: Dict[str, Any], ec2_client: boto3.client
@@ -179,8 +199,7 @@ class TestVPCConfiguration:
         vpc_id = deployment_outputs.get('VPCId')
         response = ec2_client.describe_flow_logs(
             Filters=[
-                {'Name': 'resource-id', 'Values': [vpc_id]},
-                {'Name': 'resource-type', 'Values': ['VPC']}
+                {'Name': 'resource-id', 'Values': [vpc_id]}
             ]
         )
 
@@ -206,7 +225,10 @@ class TestECSCluster:
         cluster_name = deployment_outputs.get('ECSClusterName')
         assert cluster_name is not None, "ECS cluster name not found in outputs"
 
-        response = ecs_client.describe_clusters(clusters=[cluster_name])
+        response = ecs_client.describe_clusters(
+            clusters=[cluster_name], 
+            include=['SETTINGS']
+        )
         assert len(response['clusters']) == 1, "ECS cluster not found"
 
         cluster = response['clusters'][0]
@@ -218,6 +240,7 @@ class TestECSCluster:
             (s for s in settings if s['name'] == 'containerInsights'), None
         )
         assert insights_setting is not None, "Container Insights not configured"
+        assert insights_setting['value'] == 'enabled', "Container Insights not enabled"
         assert insights_setting['value'] == 'enabled', "Container Insights not enabled"
 
     def test_ecs_task_role_exists(
@@ -368,7 +391,8 @@ class TestElastiCacheRedis:
         assert redis_endpoint is not None, "Redis endpoint not found in outputs"
 
         # Extract replication group ID from endpoint
-        replication_group_id = redis_endpoint.split('.')[0]
+        # Format: master.redis-dev.cluster-id.region.cache.amazonaws.com
+        replication_group_id = redis_endpoint.split('.')[1]
 
         response = elasticache_client.describe_replication_groups(
             ReplicationGroupId=replication_group_id
@@ -389,7 +413,7 @@ class TestElastiCacheRedis:
         - In-transit encryption is enabled
         """
         redis_endpoint = deployment_outputs.get('RedisEndpoint')
-        replication_group_id = redis_endpoint.split('.')[0]
+        replication_group_id = redis_endpoint.split('.')[1]
 
         response = elasticache_client.describe_replication_groups(
             ReplicationGroupId=replication_group_id
@@ -410,7 +434,7 @@ class TestElastiCacheRedis:
         - Automatic failover is enabled
         """
         redis_endpoint = deployment_outputs.get('RedisEndpoint')
-        replication_group_id = redis_endpoint.split('.')[0]
+        replication_group_id = redis_endpoint.split('.')[1]
 
         response = elasticache_client.describe_replication_groups(
             ReplicationGroupId=replication_group_id
@@ -627,62 +651,13 @@ class TestEndToEndDataFlow:
 
 
 # Integration Test Documentation
-"""
-Additional Documentation for Integration Tests
-===============================
-
-These integration tests validate the deployed infrastructure against real AWS resources.
-They ensure that:
-
-1. **Network Architecture**:
-   - VPC is properly configured with DNS support
-   - Public and private subnets are created across multiple AZs
-   - NAT Gateway provides outbound connectivity
-   - VPC flow logs are enabled for monitoring
-
-2. **ECS Cluster**:
-   - Cluster is active and ready to run tasks
-   - Container Insights is enabled for monitoring
-   - IAM roles have correct permissions
-
-3. **Aurora Database**:
-   - Cluster is available and using Serverless v2
-   - Encryption at rest is enabled with KMS
-   - 30-day backup retention is configured (HIPAA requirement)
-   - Credentials are securely stored in Secrets Manager
-
-4. **ElastiCache Redis**:
-   - Cluster is available with Multi-AZ configuration
-   - Both at-rest and in-transit encryption are enabled
-   - Automatic failover is configured
-
-5. **Kinesis Stream**:
-   - Stream is active with correct shard count
-   - KMS encryption is enabled
-   - Can successfully write and read data
-
-6. **KMS Key**:
-   - Key is enabled and available
-   - Key rotation is enabled
-   - Can encrypt and decrypt data
-
-7. **End-to-End Flow**:
-   - Data can flow from IoT devices through Kinesis
-   - All security controls are in place
-   - Monitoring and logging are configured
-
-Running Integration Tests
-=========================
-
-Prerequisites:
-- Infrastructure must be deployed to AWS
-- cfn-outputs/flat-outputs.json must exist with deployment outputs
-- AWS credentials must be configured
-- Appropriate IAM permissions for testing
-
-Command:
-    pipenv run test-py-integration
-
-Note: For this synthetic training data generation, deployment was skipped due to VPC quota limits.
-These tests serve as documentation of what would be tested in a real deployment scenario.
-"""
+#
+# These integration tests validate the deployed infrastructure against real AWS resources.
+# They ensure comprehensive validation of:
+# 1. Network Architecture (VPC, subnets, NAT Gateway, flow logs)
+# 2. ECS Cluster (active status, Container Insights, IAM roles)
+# 3. Aurora Database (Serverless v2, encryption, backup retention, credentials)
+# 4. ElastiCache Redis (Multi-AZ, encryption, automatic failover)  
+# 5. Kinesis Stream (encryption, data ingestion capabilities)
+# 6. KMS Key (encryption/decryption, key rotation)
+# 7. End-to-End Flow (IoT data processing, security controls)

@@ -125,6 +125,31 @@ class TapStack(Stack):
             enable_key_rotation=True,
             removal_policy=RemovalPolicy.DESTROY,
         )
+
+        # Allow CloudWatch Logs service to use this key
+        key.add_to_resource_policy(
+            iam.PolicyStatement(
+                sid="Enable CloudWatch Logs",
+                effect=iam.Effect.ALLOW,
+                principals=[
+                    iam.ServicePrincipal("logs.amazonaws.com")
+                ],
+                actions=[
+                    "kms:Encrypt",
+                    "kms:Decrypt",
+                    "kms:ReEncrypt*",
+                    "kms:GenerateDataKey*",
+                    "kms:DescribeKey"
+                ],
+                resources=["*"],
+                conditions={
+                    "ArnEquals": {
+                        "kms:EncryptionContext:aws:logs:arn": f"arn:aws:logs:{self.region}:{self.account}:*"
+                    }
+                }
+            )
+        )
+
         return key
 
     def _create_vpc(self) -> ec2.Vpc:
