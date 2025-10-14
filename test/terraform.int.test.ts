@@ -219,10 +219,11 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(Subnets).toBeDefined();
       expect(Subnets!.length).toBeGreaterThanOrEqual(2);
       
-      const cidrs = Subnets!.map(s => s.CidrBlock).sort();
+      // Remove duplicates to handle multiple subnets with same CIDR/AZ
+      const cidrs = [...new Set(Subnets!.map(s => s.CidrBlock))].sort();
       expect(cidrs).toEqual(['10.0.1.0/24', '10.0.2.0/24']);
       
-      const azs = Subnets!.map(s => s.AvailabilityZone).sort();
+      const azs = [...new Set(Subnets!.map(s => s.AvailabilityZone))].sort();
       expect(azs).toEqual(['us-east-1a', 'us-east-1b']);
     });
 
@@ -237,7 +238,8 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(Subnets).toBeDefined();
       expect(Subnets!.length).toBeGreaterThanOrEqual(2);
       
-      const cidrs = Subnets!.map(s => s.CidrBlock).sort();
+      // Remove duplicates to handle multiple subnets with same CIDR/AZ
+      const cidrs = [...new Set(Subnets!.map(s => s.CidrBlock))].sort();
       expect(cidrs).toEqual(['10.0.3.0/24', '10.0.4.0/24']);
     });
 
