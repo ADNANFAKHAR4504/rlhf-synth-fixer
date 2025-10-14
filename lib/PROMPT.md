@@ -63,4 +63,4 @@ The generated prompt should:
 ---
 
 **Subject Label:** _Security Configuration as Code_  
-**Background Context:** Security configuration as code ensures that policies and controls are versioned, reviewed, and consistently applied across all environments.
+

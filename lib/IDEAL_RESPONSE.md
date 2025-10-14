@@ -1,3 +1,4 @@
+
 ```hcl
 ## provider.tf
 
@@ -17,7 +18,13 @@ terraform {
 provider "aws" {
   region = var.aws_region
 }
+```
+```hcl
+## lib/terraform.auto.tfvars
+aws_region = "eu-central-1"
+```
 
+```hcl
 ## tap_stack.tf
 #############################################
 # Variables
@@ -1240,3 +1247,4 @@ output "platform_kms_key_arn" {
   description = "CMK ARN used across the stack"
   value       = aws_kms_key.platform.arn
 }
+```
