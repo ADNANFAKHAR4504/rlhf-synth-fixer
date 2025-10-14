@@ -1,90 +1,57 @@
 ### model failure
 
-### 1. Networking – Missing Cross-Region High Availability
+### 1. Networking – Incorrect Private Subnet Routing
 
 Model Response:
-All infrastructure resources (VPC, subnets, RDS, and ALB) are provisioned in a single AWS region (us-west-2). This violates the cross-region high availability requirement defined in the ideal response.
+The configuration defined both public and private subnets but did not correctly associate route tables for private subnets. As a result, private subnets lacked outbound internet access for updates or package downloads.
 
 Ideal Response Implements:
-Deploys mirrored infrastructure stacks in both us-east-1 and us-west-2 regions, ensuring active redundancy and failover between regions.
+Introduces appropriate route table associations and NAT Gateway routing for private subnets, ensuring secure internet access from private instances.
 
-### 2. Security – Absence of S3 Cross-Region Replication and Encryption Policy Enforcement
+### 2. Configuration – Inconsistent Resource Naming and Domain References
 
 Model Response:
-The aws_s3_bucket.cloudtrail is created without cross-region replication or replication configuration. While it uses server-side encryption, it doesn’t include a replication configuration or enforce bucket policy for destination encryption consistency.
+Several resources (VPC, EC2, RDS) used inconsistent naming conventions and generic identifiers such as main-vpc or my-key, leading to unclear resource mapping and maintainability issues.
 
 Ideal Response Implements:
-Creates two S3 buckets (primary and replica) with an aws_s3_bucket_replication_configuration, enforcing encrypted replication using KMS and destination bucket policy for consistent data protection.
+Applies consistent and descriptive naming conventions aligned with project variables (e.g., ${var.project_name}-vpc, ${var.environment}-rds-db), improving clarity and traceability.
 
-### 3. IAM & Security – Incomplete Least-Privilege IAM Configuration
+### 3. Resource Sizing – Non-Optimized Instance Classes
 
 Model Response:
-Attaches broad managed policies like CloudWatchAgentServerPolicy and AmazonSSMManagedInstanceCore, and defines an inline EC2 IAM role policy granting wide KMS decryption and SSM parameter access to all parameters under the project path.
+Used minimal instance classes (t3.micro for EC2 and db.t3.micro for RDS) that are not recommended for production or high availability environments.
 
 Ideal Response Implements:
-Implements least-privilege IAM roles and policies scoped to resource-level access, including distinct IAM roles for EC2, RDS, and CloudWatch agents, with explicit permissions for only required resources.
+Upgrades EC2 and RDS instance types to more stable configurations (e.g., t3.small or t3.medium), aligning resource performance with production standards.
 
-### 4. Observability – Missing CloudTrail Organization-Level Integration and Centralized Log Archiving
+### 4. Security – Missing Key Parameterization
 
 Model Response:
-Configures a single-account CloudTrail (aws_cloudtrail.main) without multi-account organization trail integration, nor centralized log storage in a dedicated logging account.
+Hardcoded EC2 key pair name (key_name = "my-key") instead of using a variable, reducing deployment flexibility and environment portability.
 
 Ideal Response Implements:
-Creates an organization-trail integrated with AWS Organizations, forwarding logs securely to a central S3 bucket with access control policies managed by a separate logging account.
+Introduces a Terraform variable for the SSH key pair (var.ec2_key_name), allowing dynamic configuration per environment without manual code modification.
 
-### 5. Application Security – ALB Missing HTTPS Listener and ACM Certificate Integration
+### 5. Maintainability – Inline Security Group Rules
 
 Model Response:
-The Application Load Balancer (aws_lb.main) exposes only HTTP on port 80, lacking HTTPS/TLS termination. No ACM certificate or HTTPS listener configuration is defined.
-
-resource "aws_lb_listener" "http" {
-  port = 80
-  protocol = "HTTP"
-}
+Security group ingress and egress rules were defined inline within the aws_security_group resources. This structure is harder to extend or manage when scaling environments.
 
 Ideal Response Implements:
-Configures an HTTPS listener using an aws_acm_certificate validated via Route 53, enforcing TLS 1.2+ for secure inbound connections and redirecting all HTTP traffic to HTTPS.
+Separates network rules into dedicated aws_security_group_rule resources, improving readability and enabling fine-grained rule management.
 
-### 6. RDS – Missing Secrets Manager Integration for Credential Management
+### 6. Observability – Partial CloudWatch Integration
 
 Model Response:
-RDS credentials are generated via a random_password and stored in AWS SSM Parameter Store. This limits rotation capabilities and secure retrieval integration.
+The EC2 instance user data installed the CloudWatch agent package but did not include startup commands or configuration steps, leaving metrics uncollected.
 
 Ideal Response Implements:
-Uses aws_secretsmanager_secret and aws_secretsmanager_secret_version to securely manage and automatically rotate the RDS master password.
+Enhances user data with proper agent start-up commands and configuration setup, ensuring monitoring visibility from first boot.
 
-### 7. EC2 Launch Template – Partial CloudWatch Agent Configuration
+### 7. S3 Backend – Missing Explicit Region and Versioning Validation
 
 Model Response:
-User data installs the CloudWatch agent RPM but omits configuration and service start commands to enable metric collection.
-
-wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
-rpm -U ./amazon-cloudwatch-agent.rpm
-
+Defined S3 backend bucket and DynamoDB lock table but did not explicitly enforce backend region configuration in Terraform, potentially causing initialization issues across regions.
 
 Ideal Response Implements:
-Includes a preconfigured CloudWatch agent JSON configuration fetched from S3 or template, then starts the agent service for full monitoring coverage.
-
-### 8. Route 53 – No Health Check or Failover Routing Policy
-
-Model Response:
-Defines a static Route 53 A record alias for the ALB without any health checks or routing policies for multi-region failover.
-
-Ideal Response Implements:
-Configures Route 53 with a failover routing policy using health checks to detect ALB availability, automatically routing traffic between regions.
-
-### 9. Maintainability – Inline Security Group Rules
-
-Model Response:
-Ingress and egress rules are defined inline within aws_security_group resources.
-
-Ideal Response Implements:
-Uses discrete aws_security_group_rule resources for modular and maintainable rule management.
-
-### 10. Compliance – Missing S3 Access Logging and ALB Access Logs
-
-Model Response:
-The CloudTrail S3 bucket lacks access logging. Similarly, ALB does not have access logs or S3 logging enabled.
-
-Ideal Response Implements:
-Enables S3 server access logs and ALB access logs stored in a dedicated, encrypted S3 logging bucket for auditing and compliance tracking.
+Adds explicit region and backend parameters in Terraform backend initialization and ensures versioning and encryption are validated on the S3 state bucket.
