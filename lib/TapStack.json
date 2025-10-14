@@ -186,7 +186,10 @@
               },
               "Action": "s3:GetBucketAcl",
               "Resource": {
-                "Fn::GetAtt": ["CloudTrailBucket", "Arn"]
+                "Fn::GetAtt": [
+                  "CloudTrailBucket",
+                  "Arn"
+                ]
               }
             },
             {
@@ -217,7 +220,10 @@
         },
         "RetentionInDays": 14,
         "KmsKeyId": {
-          "Fn::GetAtt": ["EncryptionKey", "Arn"]
+          "Fn::GetAtt": [
+            "EncryptionKey",
+            "Arn"
+          ]
         }
       }
     },
@@ -252,7 +258,10 @@
                     "logs:PutLogEvents"
                   ],
                   "Resource": {
-                    "Fn::GetAtt": ["CloudTrailLogGroup", "Arn"]
+                    "Fn::GetAtt": [
+                      "CloudTrailLogGroup",
+                      "Arn"
+                    ]
                   }
                 }
               ]
@@ -263,7 +272,9 @@
     },
     "AuditTrail": {
       "Type": "AWS::CloudTrail::Trail",
-      "DependsOn": ["CloudTrailBucketPolicy"],
+      "DependsOn": [
+        "CloudTrailBucketPolicy"
+      ],
       "Properties": {
         "TrailName": {
           "Fn::Sub": "hipaa-audit-trail-${EnvironmentSuffix}"
@@ -273,12 +284,19 @@
         },
         "IsLogging": true,
         "IsMultiRegionTrail": true,
+        "IncludeGlobalServiceEvents": true,
         "EnableLogFileValidation": true,
         "CloudWatchLogsLogGroupArn": {
-          "Fn::GetAtt": ["CloudTrailLogGroup", "Arn"]
+          "Fn::GetAtt": [
+            "CloudTrailLogGroup",
+            "Arn"
+          ]
         },
         "CloudWatchLogsRoleArn": {
-          "Fn::GetAtt": ["CloudTrailRole", "Arn"]
+          "Fn::GetAtt": [
+            "CloudTrailRole",
+            "Arn"
+          ]
         },
         "EventSelectors": [
           {
@@ -322,7 +340,12 @@
         },
         "CidrBlock": "10.0.1.0/24",
         "AvailabilityZone": {
-          "Fn::Select": [0, { "Fn::GetAZs": "" }]
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
         },
         "Tags": [
           {
@@ -342,7 +365,12 @@
         },
         "CidrBlock": "10.0.2.0/24",
         "AvailabilityZone": {
-          "Fn::Select": [1, { "Fn::GetAZs": "" }]
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
         },
         "Tags": [
           {
@@ -553,7 +581,10 @@
         },
         "RetentionInDays": 14,
         "KmsKeyId": {
-          "Fn::GetAtt": ["EncryptionKey", "Arn"]
+          "Fn::GetAtt": [
+            "EncryptionKey",
+            "Arn"
+          ]
         }
       }
     },
@@ -610,7 +641,10 @@
                     "dynamodb:Query"
                   ],
                   "Resource": {
-                    "Fn::GetAtt": ["AuditTable", "Arn"]
+                    "Fn::GetAtt": [
+                      "AuditTable",
+                      "Arn"
+                    ]
                   }
                 }
               ]
@@ -644,7 +678,10 @@
                     "kms:GenerateDataKey"
                   ],
                   "Resource": {
-                    "Fn::GetAtt": ["EncryptionKey", "Arn"]
+                    "Fn::GetAtt": [
+                      "EncryptionKey",
+                      "Arn"
+                    ]
                   }
                 }
               ]
@@ -680,7 +717,10 @@
                     "logs:PutLogEvents"
                   ],
                   "Resource": {
-                    "Fn::GetAtt": ["ProcessingFunctionLogGroup", "Arn"]
+                    "Fn::GetAtt": [
+                      "ProcessingFunctionLogGroup",
+                      "Arn"
+                    ]
                   }
                 }
               ]
@@ -691,7 +731,9 @@
     },
     "DataProcessorFunction": {
       "Type": "AWS::Lambda::Function",
-      "DependsOn": ["ProcessingFunctionLogGroup"],
+      "DependsOn": [
+        "ProcessingFunctionLogGroup"
+      ],
       "Properties": {
         "FunctionName": {
           "Fn::Sub": "data-processor-${EnvironmentSuffix}"
@@ -699,7 +741,10 @@
         "Runtime": "nodejs20.x",
         "Handler": "index.handler",
         "Role": {
-          "Fn::GetAtt": ["LambdaExecutionRole", "Arn"]
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
         },
         "Timeout": 300,
         "MemorySize": 512,
@@ -805,7 +850,13 @@
         "Action": "lambda:InvokeFunction",
         "Principal": "s3.amazonaws.com",
         "SourceArn": {
-          "Fn::GetAtt": ["PatientDataBucket", "Arn"]
+          "Fn::GetAtt": [
+            "PatientDataBucket",
+            "Arn"
+          ]
+        },
+        "SourceAccount": {
+          "Ref": "AWS::AccountId"
         }
       }
     },
@@ -864,7 +915,10 @@
     "DataProcessorFunctionArn": {
       "Description": "ARN of the data processor Lambda function",
       "Value": {
-        "Fn::GetAtt": ["DataProcessorFunction", "Arn"]
+        "Fn::GetAtt": [
+          "DataProcessorFunction",
+          "Arn"
+        ]
       }
     },
     "DataProcessorFunctionName": {
@@ -894,7 +948,10 @@
     "EncryptionKeyArn": {
       "Description": "KMS encryption key ARN",
       "Value": {
-        "Fn::GetAtt": ["EncryptionKey", "Arn"]
+        "Fn::GetAtt": [
+          "EncryptionKey",
+          "Arn"
+        ]
       }
     },
     "CloudTrailName": {
