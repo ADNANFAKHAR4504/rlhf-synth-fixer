@@ -35,7 +35,7 @@ def stack(app: cdk.App, environment_suffix: str) -> TapStack:
         app,
         f"TapStack{environment_suffix}",
         props=props,
-        env=cdk.Environment(account="123456789012", region="ap-southeast-1")
+        env=cdk.Environment(account="123456789012", region="us-east-1")
     )
 
 
