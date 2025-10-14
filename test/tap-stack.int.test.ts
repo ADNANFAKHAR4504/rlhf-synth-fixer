@@ -260,7 +260,7 @@ describe('Financial Data Layer Multi-Region Integration Tests', () => {
     expect(primaryFinalResponse.Item).toBeDefined();
     expect(primaryFinalResponse.Item!.status.S).toBe('completed');
     expect(primaryFinalResponse.Item!.completedAt).toBeDefined();
-    expect(secondaryGetResponse.Item!.completedRegion.S).toBe('us-west-1');
+    expect(primaryFinalResponse.Item!.completedRegion.S).toBe('us-west-1');
     console.log('Update replicated to primary region successfully');
 
     console.log('All steps completed - Multi-region end-to-end flow validated');

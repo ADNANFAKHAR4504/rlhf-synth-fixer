@@ -192,7 +192,7 @@ describe('TapStack', () => {
 
     test('should configure backup retention', () => {
       template.hasResourceProperties('AWS::RDS::DBCluster', {
-        BackupRetentionPeriod: 7,
+        BackupRetentionPeriod: 1,
         PreferredBackupWindow: '02:00-04:00',
       });
     });
@@ -770,25 +770,21 @@ describe('TapStack', () => {
       });
     });
 
-    test('single-region table should not have replication', () => {
+    test('secondary stack should not create DynamoDB table', () => {
       const singleApp2 = new cdk.App();
-      const singleStack2 = new TapStack(singleApp2, 'SingleRegionNoReplication', {
+      const singleStack2 = new TapStack(singleApp2, 'SecondaryStackImportsTable', {
         environmentSuffix: 'test',
-        isPrimary: false, // Secondary stack without replication
+        isPrimary: false, // Secondary stack imports table
         primaryRegion: 'us-east-1',
         secondaryRegion: 'us-west-1',
         globalClusterId: 'global-test',
+        globalTableName: 'metadata-test',
         env: { account: '123456789012', region: 'us-west-1' },
       });
       const singleTemplate2 = Template.fromStack(singleStack2);
       
-      // Secondary stack should use customer-managed encryption (no replication on secondary)
-      singleTemplate2.hasResourceProperties('AWS::DynamoDB::Table', {
-        SSESpecification: {
-          SSEEnabled: true,
-          SSEType: 'KMS',
-        },
-      });
+      // Secondary stack should not create DynamoDB table (imports replicated table)
+      singleTemplate2.resourceCountIs('AWS::DynamoDB::Table', 0);
     });
   });
 });

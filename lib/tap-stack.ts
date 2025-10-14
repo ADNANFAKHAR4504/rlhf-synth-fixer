@@ -28,7 +28,7 @@ export class TapStack extends cdk.Stack {
   public readonly vpc: ec2.Vpc;
   public readonly auroraCluster?: rds.DatabaseCluster;
   public readonly globalCluster?: rds.CfnGlobalCluster;
-  public readonly metadataTable: dynamodb.Table;
+  public readonly metadataTable: dynamodb.ITable;
   public readonly redisCluster: elasticache.CfnReplicationGroup;
   public readonly backupLambda: lambda.Function;
   public readonly eventBus: events.EventBus;
@@ -80,11 +80,14 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    const dynamoDbKmsKey = new kms.Key(this, 'DynamoDbEncryptionKey', {
-      enableKeyRotation: true,
-      description: `DynamoDB encryption key for ${environmentSuffix}`,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
+    let dynamoDbKmsKey: kms.Key | undefined;
+    if (props.isPrimary) {
+      dynamoDbKmsKey = new kms.Key(this, 'DynamoDbEncryptionKey', {
+        enableKeyRotation: true,
+        description: `DynamoDB encryption key for ${environmentSuffix}`,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      });
+    }
 
     const secretsKmsKey = new kms.Key(this, 'SecretsEncryptionKey', {
       enableKeyRotation: true,
@@ -187,15 +190,15 @@ export class TapStack extends cdk.Stack {
         credentials: rds.Credentials.fromSecret(databaseCredentialsSecret),
         writer: rds.ClusterInstance.provisioned('writer', {
           instanceType: ec2.InstanceType.of(
-            ec2.InstanceClass.R6G,
-            ec2.InstanceSize.LARGE
+            ec2.InstanceClass.T4G,
+            ec2.InstanceSize.MEDIUM
           ),
         }),
         readers: [
           rds.ClusterInstance.provisioned('reader', {
             instanceType: ec2.InstanceType.of(
-              ec2.InstanceClass.R6G,
-              ec2.InstanceSize.LARGE
+              ec2.InstanceClass.T4G,
+              ec2.InstanceSize.MEDIUM
             ),
           }),
         ],
@@ -206,13 +209,12 @@ export class TapStack extends cdk.Stack {
         securityGroups: [auroraSecurityGroup],
         parameterGroup,
         backup: {
-          retention: cdk.Duration.days(7),
+          retention: cdk.Duration.days(1),
           preferredWindow: '02:00-04:00',
         },
         storageEncrypted: true,
         storageEncryptionKey: databaseKmsKey,
         cloudwatchLogsExports: ['postgresql'],
-        monitoringInterval: cdk.Duration.seconds(60),
         deletionProtection: false,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
         clusterIdentifier: `aurora-${props.primaryRegion}-${environmentSuffix}`,
@@ -230,15 +232,15 @@ export class TapStack extends cdk.Stack {
         }),
         writer: rds.ClusterInstance.provisioned('writer', {
           instanceType: ec2.InstanceType.of(
-            ec2.InstanceClass.R6G,
-            ec2.InstanceSize.LARGE
+            ec2.InstanceClass.T4G,
+            ec2.InstanceSize.MEDIUM
           ),
         }),
         readers: [
           rds.ClusterInstance.provisioned('reader', {
             instanceType: ec2.InstanceType.of(
-              ec2.InstanceClass.R6G,
-              ec2.InstanceSize.LARGE
+              ec2.InstanceClass.T4G,
+              ec2.InstanceSize.MEDIUM
             ),
           }),
         ],
@@ -251,7 +253,6 @@ export class TapStack extends cdk.Stack {
         storageEncrypted: true,
         storageEncryptionKey: databaseKmsKey,
         cloudwatchLogsExports: ['postgresql'],
-        monitoringInterval: cdk.Duration.seconds(60),
         deletionProtection: false,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
         clusterIdentifier: `aurora-${props.secondaryRegion}-${environmentSuffix}`,
@@ -260,6 +261,14 @@ export class TapStack extends cdk.Stack {
       const cfnCluster = auroraCluster.node.defaultChild as rds.CfnDBCluster;
       cfnCluster.globalClusterIdentifier =
         props.globalClusterId || `global-${environmentSuffix}`;
+      cfnCluster.addPropertyOverride(
+        'BackupRetentionPeriod',
+        cdk.Token.asAny(undefined)
+      );
+      cfnCluster.addPropertyOverride(
+        'PreferredBackupWindow',
+        cdk.Token.asAny(undefined)
+      );
 
       globalClusterEndpoint = auroraCluster.clusterEndpoint.hostname;
     }
@@ -283,30 +292,47 @@ export class TapStack extends cdk.Stack {
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
 
-    const hasReplication = props.isPrimary && props.secondaryRegion;
-    const metadataTable = new dynamodb.Table(this, 'MetadataTable', {
-      partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
-      sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      encryption: hasReplication
-        ? dynamodb.TableEncryption.AWS_MANAGED
-        : dynamodb.TableEncryption.CUSTOMER_MANAGED,
-      encryptionKey: hasReplication ? undefined : dynamoDbKmsKey,
-      pointInTimeRecovery: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      tableName: props.globalTableName || `metadata-table-${environmentSuffix}`,
-      replicationRegions: hasReplication ? [props.secondaryRegion!] : undefined,
-      stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
-    });
+    let metadataTable: dynamodb.ITable;
+
+    if (props.isPrimary) {
+      const hasReplication = props.secondaryRegion;
+      metadataTable = new dynamodb.Table(this, 'MetadataTable', {
+        partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
+        sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
+        billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+        encryption: hasReplication
+          ? dynamodb.TableEncryption.AWS_MANAGED
+          : dynamodb.TableEncryption.CUSTOMER_MANAGED,
+        encryptionKey: hasReplication ? undefined : dynamoDbKmsKey!,
+        pointInTimeRecovery: true,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        tableName:
+          props.globalTableName || `metadata-table-${environmentSuffix}`,
+        replicationRegions: hasReplication
+          ? [props.secondaryRegion!]
+          : undefined,
+        stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
+      });
+    } else {
+      metadataTable = dynamodb.Table.fromTableName(
+        this,
+        'MetadataTable',
+        props.globalTableName || `metadata-table-${environmentSuffix}`
+      );
+    }
+
     this.metadataTable = metadataTable;
 
-    new cloudwatch.Alarm(this, 'DynamoDBUserErrorsAlarm', {
-      metric: metadataTable.metricUserErrors(),
-      threshold: 5,
-      evaluationPeriods: 2,
-      datapointsToAlarm: 2,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-    });
+    if (props.isPrimary) {
+      new cloudwatch.Alarm(this, 'DynamoDBUserErrorsAlarm', {
+        metric: (metadataTable as dynamodb.Table).metricUserErrors(),
+        threshold: 5,
+        evaluationPeriods: 2,
+        datapointsToAlarm: 2,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      });
+    }
 
     const redisSubnetGroup = new elasticache.CfnSubnetGroup(
       this,
@@ -371,7 +397,9 @@ export class TapStack extends cdk.Stack {
 
     databaseKmsKey.grantEncryptDecrypt(backupLambdaRole);
     cacheKmsKey.grantEncryptDecrypt(backupLambdaRole);
-    dynamoDbKmsKey.grantEncryptDecrypt(backupLambdaRole);
+    if (props.isPrimary && dynamoDbKmsKey) {
+      dynamoDbKmsKey.grantEncryptDecrypt(backupLambdaRole);
+    }
     secretsKmsKey.grantEncryptDecrypt(backupLambdaRole);
     databaseCredentialsSecret.grantRead(backupLambdaRole);
     redisCredentialsSecret.grantRead(backupLambdaRole);
@@ -490,74 +518,50 @@ export class TapStack extends cdk.Stack {
         domainName: redisCluster.attrPrimaryEndPointAddress,
         ttl: cdk.Duration.seconds(60),
       });
-    } else {
-      new route53.CnameRecord(this, 'DatabaseRecordSecondary', {
-        zone: route53.HostedZone.fromHostedZoneAttributes(
-          this,
-          'ImportedZone',
-          {
-            hostedZoneId: 'PLACEHOLDER',
-            zoneName: `financial-${environmentSuffix}.internal`,
-          }
-        ),
-        recordName: `database-${props.secondaryRegion}`,
-        domainName: auroraCluster.clusterEndpoint.hostname,
-        ttl: cdk.Duration.seconds(60),
-      });
-
-      new route53.CnameRecord(this, 'RedisRecordSecondary', {
-        zone: route53.HostedZone.fromHostedZoneAttributes(
-          this,
-          'ImportedZoneRedis',
-          {
-            hostedZoneId: 'PLACEHOLDER',
-            zoneName: `financial-${environmentSuffix}.internal`,
-          }
-        ),
-        recordName: `redis-${props.secondaryRegion}`,
-        domainName: redisCluster.attrPrimaryEndPointAddress,
-        ttl: cdk.Duration.seconds(60),
-      });
     }
+
+    const regionSuffix = props.isPrimary
+      ? props.primaryRegion
+      : props.secondaryRegion;
 
     new cdk.CfnOutput(this, 'VpcId', {
       value: vpc.vpcId,
-      exportName: `${environmentSuffix}-VpcId`,
+      exportName: `${environmentSuffix}-${regionSuffix}-VpcId`,
     });
 
     new cdk.CfnOutput(this, 'AuroraClusterEndpoint', {
       value: auroraCluster.clusterEndpoint.hostname,
-      exportName: `${environmentSuffix}-AuroraClusterEndpoint`,
+      exportName: `${environmentSuffix}-${regionSuffix}-AuroraClusterEndpoint`,
     });
 
     new cdk.CfnOutput(this, 'AuroraClusterIdentifier', {
       value: auroraCluster.clusterIdentifier,
-      exportName: `${environmentSuffix}-AuroraClusterIdentifier`,
+      exportName: `${environmentSuffix}-${regionSuffix}-AuroraClusterIdentifier`,
     });
 
     new cdk.CfnOutput(this, 'MetadataTableName', {
       value: metadataTable.tableName,
-      exportName: `${environmentSuffix}-MetadataTableName`,
+      exportName: `${environmentSuffix}-${regionSuffix}-MetadataTableName`,
     });
 
     new cdk.CfnOutput(this, 'RedisClusterEndpoint', {
       value: redisCluster.attrPrimaryEndPointAddress,
-      exportName: `${environmentSuffix}-RedisClusterEndpoint`,
+      exportName: `${environmentSuffix}-${regionSuffix}-RedisClusterEndpoint`,
     });
 
     new cdk.CfnOutput(this, 'BackupLambdaArn', {
       value: backupLambda.functionArn,
-      exportName: `${environmentSuffix}-BackupLambdaArn`,
+      exportName: `${environmentSuffix}-${regionSuffix}-BackupLambdaArn`,
     });
 
     new cdk.CfnOutput(this, 'EventBusName', {
       value: eventBus.eventBusName,
-      exportName: `${environmentSuffix}-EventBusName`,
+      exportName: `${environmentSuffix}-${regionSuffix}-EventBusName`,
     });
 
     new cdk.CfnOutput(this, 'DatabaseSecretArn', {
       value: databaseCredentialsSecret.secretArn,
-      exportName: `${environmentSuffix}-DatabaseSecretArn`,
+      exportName: `${environmentSuffix}-${regionSuffix}-DatabaseSecretArn`,
     });
   }
 }
