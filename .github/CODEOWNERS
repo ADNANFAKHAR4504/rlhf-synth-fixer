@@ -1,10 +1,8 @@
 # CODEOWNERS file
 # This file defines who owns and can approve changes to different parts of the repository
 
-# Global ownership: Only @hernanmog-turing and @deavyanshturing can approve changes everywhere
-* @hernanmog-turing @deavyanshturing 
+# Exception paths: These can be approved by the listed team members
+/lib/ /test/ /bin/ /Pipfile /Pipfile.lock /package.json /package-lock.json @Ashwin-DevAsh @PranavSTuring @olaoluwa-turing @abubakarTuring @mohit-bairagi-turing @antny-turing @mayanksethi-turing @iamarpit-turing
 
-# Exceptions: lib/, test/, and bin/ can be approved by anyone
-lib/
-test/
-bin/
+# Global ownership: Everything else requires approval from @hernanmog-turing and @deavyanshturing
+* @hernanmog-turing @deavyanshturing
