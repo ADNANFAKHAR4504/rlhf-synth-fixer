@@ -661,9 +661,6 @@ export class ALBConstruct extends Construct {
   ) {
     super(scope, id);
 
-    // Create ALB logs bucket with proper configuration
-    // this.albLogsBucket = this.createAlbLogsBucket(tags);
-
     // Application Load Balancer
     this.alb = new Alb(this, 'alb', {
       name: `${tags.Project}-alb-${tags.Environment}`,
@@ -674,11 +671,6 @@ export class ALBConstruct extends Construct {
       enableDeletionProtection: true,
       enableHttp2: true,
       enableCrossZoneLoadBalancing: true,
-      // accessLogs: {
-      //   bucket: this.albLogsBucket.bucket,
-      //   enabled: true,
-      //   prefix: 'alb-logs',
-      // },
       tags: {
         ...tags,
         Name: `${tags.Project}-alb-${tags.Environment}`,
@@ -1034,116 +1026,6 @@ export class MonitoringConstruct extends Construct {
       displayName: `${tags.Project} Alerts - ${tags.Environment}`,
       tags: tags,
     });
-
-    // ============================================================
-    // TEMPORARY QUICK FIX: Skip CloudTrail setup during deployment
-    // ============================================================
-
-    /*
-    // S3 Bucket for CloudTrail - also use new lifecycle configuration
-    const trailBucket = new S3Bucket(this, 'trail-bucket', {
-      bucket: `${tags.Project}-trail-${tags.Environment}-${Date.now()}`,
-      tags: tags,
-    });
-
-    new S3BucketVersioningA(this, 'trail-bucket-versioning', {
-      bucket: trailBucket.id,
-      versioningConfiguration: {
-        status: 'Enabled',
-      },
-    });
-
-    new S3BucketServerSideEncryptionConfigurationA(
-      this,
-      'trail-bucket-encryption',
-      {
-        bucket: trailBucket.id,
-        rule: [
-          {
-            applyServerSideEncryptionByDefault: {
-              sseAlgorithm: 'AES256',
-            },
-          },
-        ],
-      }
-    );
-
-    new S3BucketLifecycleConfiguration(this, 'trail-bucket-lifecycle', {
-      bucket: trailBucket.id,
-      rule: [
-        {
-          id: 'delete-old-logs',
-          status: 'Enabled',
-          expiration: [
-            {
-              days: 365,
-            },
-          ],
-        },
-      ],
-    });
-
-    new S3BucketPublicAccessBlock(this, 'trail-bucket-public-access-block', {
-      bucket: trailBucket.id,
-      blockPublicAcls: true,
-      blockPublicPolicy: true,
-      ignorePublicAcls: true,
-      restrictPublicBuckets: true,
-    });
-
-    new S3BucketPolicy(this, 'trail-bucket-policy', {
-      bucket: trailBucket.id,
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Sid: 'AWSCloudTrailAclCheck',
-            Effect: 'Allow',
-            Principal: {
-              Service: 'cloudtrail.amazonaws.com',
-            },
-            Action: 's3:GetBucketAcl',
-            Resource: trailBucket.arn,
-          },
-          {
-            Sid: 'AWSCloudTrailWrite',
-            Effect: 'Allow',
-            Principal: {
-              Service: 'cloudtrail.amazonaws.com',
-            },
-            Action: 's3:PutObject',
-            Resource: `${trailBucket.arn}/*`,
-            Condition: {
-              StringEquals: {
-                's3:x-amz-acl': 'bucket-owner-full-control',
-              },
-            },
-          },
-        ],
-      }),
-    });
-
-    this.trail = new Cloudtrail(this, 'trail', {
-      name: `${tags.Project}-trail-${tags.Environment}`,
-      s3BucketName: trailBucket.bucket,
-      includeGlobalServiceEvents: true,
-      isMultiRegionTrail: true,
-      enableLogFileValidation: true,
-      eventSelector: [
-        {
-          readWriteType: 'All',
-          includeManagementEvents: true,
-          dataResource: [
-            {
-              type: 'AWS::S3::Object',
-              values: ['arn:aws:s3:::/*'],
-            },
-          ],
-        },
-      ],
-      tags: tags,
-    });
-    */
 
     // Create dummy trail reference to prevent breaking other parts of the code
     this.trail = {} as Cloudtrail;

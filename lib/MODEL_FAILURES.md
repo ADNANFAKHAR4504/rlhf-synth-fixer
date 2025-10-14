@@ -1,240 +1,314 @@
-Module "@cdktf/provider-aws"" has no exported member 'ecz'. ts(2305) (Ln 4, Col 3
-Module "@cdktf/provider-aws" has no exported member 'iam', ts(2305) (Ln S, Col 3)
-Module "@cdktf/provider-aws" has no exported member 'rds', ts(2305) [Ln 6, Col 3]
-Module "@cdktf/provider-aws has no exported member 'autoscaling', ts(2305) [Ln 7, Col 3]
-Module "@cdktf/provider-aws" has no exported member 'cloudwatch', ts(2305) [Ln 9, Col-3]
-Module "@cdktf/provider-aws" has no exported member 'sns', ts(2305) (Ln 11, Col 3)
-Module "@cdktf/provider-aws"" has no exported member 'ssm'. Module "@cdktf/provider-aws" has no exported member 'sns
-Module "@cdktf/provider-aws"" has no exported member 's3', ts(2305) [Ln 13, Col 3)
-Namespace"/home/infivit/Desktop/new prs/pr349430/lac-test-automations/node_modules/@cdktf/provider-aws/lib/vpc/index"" has no exported member 'Subnet", ts(2694) (Ln 39, Col 38)
-Namespace"/home/infivit/Desktop/new prs/pr349430/iac-test-automations/node_modules/@cdktf/provider-aws/lib/vpc/index" has no exported member Subnet, ts(2694) (Ln 40, Col 39]
-Namespace"/home/infivit/Desktop/new prs/pr349430/iac-test-automations/node_modules/@cdktf/provider-aws/lib/vpc/index"" has no exported member "InternetGateway, ts(2694) [Ln 41, Col 40] Namespace"/home/infivit/Desktop/new prs/pr349430/lac-test-automations/node_modules/@cdktf/provider-aws/lib/vpc/index"" has no exported member 'NatGateway', ts(2694) [Ln 42, Col 36]
-Property InternetGateway' does not exist on type typeof import("/home/infivit/Desktop/new prs/pr349430/iac-test-automations/node_modules/@cdktf/provider-aws/lib/vpc/index"), ts(2339) [Ln 64, Col 36]
-Property 'Subnet' does not exist on type 'typeof import("/home/infivit/Desktop/new prs/pr349430/iac-test-automations/node_modules/@cdktf/provider-aws/lib/vpc/index")'. ts(2339) [Ln 82, Col 36)
-Property 'get' does not exist on type 'string[]', ts(2339) [Ln 85, Col 37] Property
-'Subnet' does not exist on type 'typeof import("/home/infivit/Desktop/new prs/pr349430/iac-test-automations/node_modules/@cdktf/provider-aws/lib/vpc/index"), ts(2339) [Ln 96, Col 37]
-Property 'get' does not exist on type 'string[], ts(2339) [Ln 99, Col.37]
-Property 'NatGateway' does not exist on type 'typeof import("/home/infivit/Desktop/new prs/pr349430/iac-test-automations/node_modules/@cdktf/provider-aws/lib/vpc/index")". ts(2339) [Ln 119, Col 361
-Property 'Route Table does not exist on type 'typeof import("/home/infivit/Desktop/new prs/pr349430/iac-test-automations/node_modules/@cdktf/provider-aws/lib/vpc/index"), ts(2339) (Ln 132, Cal 38]
-Property 'Route' does not exist on type 'typeof import("/home/infivit/Desktop/new prs/pr349430/lac-test-automations/node_modules/@cdktf/provider-aws/lib/vpc/index"), (2339) (L 140, Col 13)
-Property 'Route Table Association' does not exist on type 'typeof import("/home/infivit/Desktop/new prs/pr349430/iac-test-automations/node_modules/@cdktf/provider-aws/lib/vpc/in... ts(2339) [Ln 147, Col 15
-Property 'Route Table' does not exist on type 'typeof import("/home/infivit/Desktop/new prs/pr349430/iac-test-automations/node_modules/@cdktf/provider-aws/lib/vpc/index"). ts(2339) [Ln 155, Col 41]
-Property 'Route' does not exist on type 'typeof import("/home/infivit/Desktop/new prs/pr349430/iac-test-automations/node_modules/@cdktf/provider-aws/lib/vpc/index"), ts(2339) (Ln 164, Col 17)
-Property 'Route TableAssociation' does not exist on type 'typeof import("/home/infivit/Desktop/new prs/pr349430/iac-test-automations/node_modules/@cdktf/provider-aws/lib/vpc/in... ts(2339) (Ln 171, Col 15))
-Property 'NetworkAcl' does not exist on type 'typeof import("/home/infivit/Desktop/new prs/pr349430/iac-test-automations/node_modules/@cdktf/provider-aws/lib/vpc/index"), ts(2339) (Ln 178, Col 32)
-Property NetworkAclRule' does not exist on type 'typeof import("/home/infivit/Desktop/new prs/pr349430/iac-test-automations/node_modules/@cdktf/provider-aws/lib/vpc/index"), ts(2339) [Ln 187, Col 13]
-Property ' NetworkAcIRule' does not exist on type 'typeof import("/home/infivit/Desktop/new prs/pr349430/lac-test-automations/node_modules/@cdktf/provider-aws/lib/vpc/index"), ts(2339) (Ln 209, Col 13)
-NetworkAcIRule' does not exist on type 'typeof import("/home/infivit/Desktop/new prs/pr349430/iac-test-automations/node_modules/@cdktf/provider-aws/lib/vpc/index"), ts(2339) (Ln 198, Col 13)
-Property Property 'NetworkAcIRule does not exist on type 'typeof import("/home/infivit/Desktop/new prs/pr349430/lac-test-automations/node_modules/@cdktf/provider-aws/lib/vpc/index"), ts(2339) [Ln 220, Col 13]
-Property 'NetworkAcIRule does not exist on type 'typeof import("/home/infivit/Desktop/new prs/pr349430/iac-test-automations/node_modules/@cdktf/provider-aws/lib/vpc/index"), ts(2339) [Ln 231, Col 13]
-Namespace"/home/infivit/Desktop/new prs/pr349430/iac-test-automations/node_modules/@cdktf/provider-aws/lib/elb/index"" has no exported member 'Alb', ts(2694) [Ln 580, Col 28]
-Namespace"/home/infivit/Desktop/new prs/pr349430/lac-test-automations/node_modules/@cdktf/provider-aws/lib/elb/index"" has no exported member 'Alb TargetGroup'. ts(2694) (Ln 581, Col 36)
+# MODEL FAILURES
 
-synth issues:
-Run ./scripts/synth.sh
-Project: platform=cdktf, language=ts
-✅ CDKTF project detected, running CDKTF get and synth...
-❌ No .gen directory found; generating...
-Generated typescript constructs in the output directory: .gen
-✅ Found other language CDKTF generated provider directory in .gen
+## Critical Deployment Failures - TAP Infrastructure Project
 
-> tap@0.1.0 cdktf:synth
-> cdktf synth
+### 1. Module Import Pattern Failures (Compilation Breaking)
 
-Error: 025-10-14T11:15:51.421] [ERROR] default - /home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/errors.ts:489
-  new Error(`Found an encoded list token string in a scalar string context.
-  ^
+**Model Response:**
+```typescript
+import {
+  ec2,
+  iam,
+  rds,
+  elasticloadbalancingv2,
+  autoscaling,
+  ssm,
+  cloudwatch,
+  logs,
+  sns,
+  cloudtrail,
+  s3,
+  kms,
+} from '@cdktf/provider-aws';
+```
+**Errors:** 
+- `Module "@cdktf/provider-aws" has no exported member 'ec2'`
+- `Module "@cdktf/provider-aws" has no exported member 'iam'`
+- Similar errors for all namespace imports
 
-Error: 025-10-14T11:15:51.424] [ERROR] default - Error: Found an encoded list token string in a scalar string context.
-In CDKTF, we represent lists, with values unknown until after runtime, as arrays with a single element— a string token (["Token.1"]).
+**Actual Implementation:**
+```typescript
+import { S3BucketLifecycleConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-lifecycle-configuration';
+import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
+import { DataAwsElbServiceAccount } from '@cdktf/provider-aws/lib/data-aws-elb-service-account';
+// ... specific class imports
+```
+CDKTF requires importing specific classes from their exact paths, not namespace imports. This fundamental misunderstanding broke the entire compilation.
 
+---
 
-We do this because CDKTF does not know the length of the list at compile time, meaning CDKTF has yet to invoke Terraform to communicate with the cloud provider. CDKTF later invokes Terraform on the synthesized static JSON file.
+### 2. CDKTF Token Array Access Failure (Runtime Breaking)
 
-Because we don't know the length of the list, we can not differentiate if the list was accessed at the first or last index, or as part of a loop. To avoid this ambiguity:
+**Model Response:**
+```typescript
+// Line 85 - Direct array access causing token errors
+availabilityZone: azs.names.get(i),  // WRONG - causes "Found an encoded list token string" error
+```
 
-- If you want to access a singular item, use 'Fn.element(list, 0)'. Do not use 'list[0]'.
-- If you want to loop over the list use 'TerraformIterator.fromList(list)'. Do not use a 'for' or 'forEach' loop.
+**Actual Implementation:**
+```typescript
+// Lines 108-109 - Proper token handling
+const availabilityZone = Fn.element(azs.names, i);
+// ...
+availabilityZone: availabilityZone,
+```
+**Fix:** Used `Fn.element()` to properly handle CDKTF tokens that represent lists with unknown runtime values. Direct array access causes synthesis failures.
 
-Learn more about tokens: https://developer.hashicorp.com/terraform/cdktf/concepts/tokens
-Learn more about iterators: https://developer.hashicorp.com/terraform/cdktf/concepts/iterators
-    at encodedListTokenInScalarStringContext (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/errors.ts:489:3)
-    at resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:137:50)
-    at Object.resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:84:16)
-    at resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:246:39)
-    at Object.resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:84:16)
-    at resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:246:39)
-    at Object.resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:84:16)
-    at resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:246:39)
-    at Object.resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:84:16)
-    at resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:246:39)
+---
 
-ERROR: cdktf encountered an error while synthesizing
+### 3. S3 Bucket Deprecated Configuration (Deployment Warnings & Failures)
 
-Synth command: npx ts-node bin/tap.ts
-Error:         non-zero exit code 1
+**Model Response:**
+```typescript
+this.bucket = new s3.S3Bucket(this, 'cloudtrail-bucket', {
+  bucket: `${config.tags.Project}-cloudtrail-${Date.now()}`,
+  versioning: {               // DEPRECATED - inline configuration
+    enabled: true,
+  },
+  serverSideEncryptionConfiguration: {  // DEPRECATED
+    rule: {
+      applyServerSideEncryptionByDefault: {
+        sseAlgorithm: 'AES256',
+      },
+    },
+  },
+  lifecycleRule: [            // DEPRECATED
+    // ...
+  ],
+});
+```
 
+**Actual Implementation:**
+```typescript
+// Create bucket without deprecated inline configurations
+const bucket = new S3Bucket(this, 'alb-logs-bucket', {
+  bucket: `${tags.Project}-alb-logs-${tags.Environment}-${Date.now()}`,
+  tags: tags,
+});
 
-Command output on stderr:
-⠋  Synthesizing
+// Use separate resource constructs
+new S3BucketVersioningA(this, 'alb-logs-versioning', {
+  bucket: bucket.id,
+  versioningConfiguration: {
+    status: 'Enabled',
+  },
+});
 
-    /home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/errors.ts:489
-      new Error(`Found an encoded list token string in a scalar string context.
-      ^
-    Error: Found an encoded list token string in a scalar string context.
-    In CDKTF, we represent lists, with values unknown until after runtime, as arrays with a single element— a string token (["Token.1"]).
+new S3BucketServerSideEncryptionConfigurationA(this, 'alb-logs-encryption', {
+  bucket: bucket.id,
+  rule: [{
+    applyServerSideEncryptionByDefault: {
+      sseAlgorithm: 'AES256',
+    },
+  }],
+});
 
+new S3BucketLifecycleConfiguration(this, 'alb-logs-lifecycle', {
+  bucket: bucket.id,
+  rule: [{
+    id: 'delete-old-logs',
+    status: 'Enabled',
+    expiration: [{
+      days: 90,
+    }],
+  }],
+});
+```
+AWS deprecated inline bucket configurations in favor of separate resource constructs for better state management.
 
-    We do this because CDKTF does not know the length of the list at compile time, meaning CDKTF has yet to invoke Terraform to communicate with the cloud provider. CDKTF later invokes Terraform on the synthesized static JSON file.
+---
 
-    Because we don't know the length of the list, we can not differentiate if the list was accessed at the first or last index, or as part of a loop. To avoid this ambiguity:
+### 4. RDS Password Generation Failure (Deployment Breaking)
 
-    - If you want to access a singular item, use 'Fn.element(list, 0)'. Do not use 'list[0]'.
-    - If you want to loop over the list use 'TerraformIterator.fromList(list)'. Do not use a 'for' or 'forEach' loop.
+**Model Response:**
+```typescript
+// Line 428 - Hardcoded non-compliant password
+password: 'temp-password-change-me',  // FAILS AWS password validation
+```
+**Error:** `The parameter MasterUserPassword is not a valid password. Only printable ASCII characters besides '/', '@', '"', ' ' may be used.`
 
-    Learn more about tokens: https://developer.hashicorp.com/terraform/cdktf/concepts/tokens
-    Learn more about iterators: https://developer.hashicorp.com/terraform/cdktf/concepts/iterators
-        at encodedListTokenInScalarStringContext (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/errors.ts:489:3)
-        at resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:137:50)
-        at Object.resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:84:16)
-        at resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:246:39)
-        at Object.resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:84:16)
-        at resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:246:39)
-        at Object.resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:84:16)
-        at resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:246:39)
-        at Object.resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:84:16)
-        at resolve (/home/runner/work/iac-test-automations/iac-test-automations/node_modules/cdktf/lib/tokens/private/resolve.ts:246:39)
+**Actual Implementation:**
+```typescript
+// Lines 546-562 - Proper password generation
+private generateRandomPassword(): string {
+  // Fix: Generate password without forbidden characters ('/', '@', '"', ' ')
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$%&*+,-.:<=>?[]^_`{|}~';
+  let password = '';
+  
+  // Ensure password meets complexity requirements
+  password += 'Db';  // Start with uppercase and lowercase
+  password += Math.floor(Math.random() * 10);  // Add a number
+  password += '!';   // Add a special character
+  
+  // Generate remaining characters
+  for (let i = 4; i < 20; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  
+  return password;
+}
+```
+Implements proper password generation that meets AWS RDS password requirements.
 
+---
 
+### 5. RDS Engine Version Failure (Deployment Breaking)
 
-Error: Process completed with exit code 1.
+**Model Response:**
+```typescript
+// Line 418 - Non-existent RDS version
+engineVersion: '14.9',  // FAILS: Cannot find version 14.9 for postgres
+```
 
-TapStackpr4374  Success! Terraform has validated the lock file and found no need for changes.
-TapStackpr4374  ╷
-                │ Warning: Argument is deprecated
-                │ 
-                │   with aws_s3_bucket.alb_alb-logs-bucket_1BF171B7 (alb/alb-logs-bucket),
-                │   on cdk.tf.json line 1142, in resource.aws_s3_bucket.alb_alb-logs-bucket_1BF171B7 (alb/alb-logs-bucket):
-                │ 1142:         "acl": "private",
-                │ 
-                │ acl is deprecated. Use the aws_s3_bucket_acl resource instead.
-                │ 
-                │ (and 7 more similar warnings elsewhere)
-                ╵
-TapStackpr4374  ╷
-                │ Error: expected event_selector.0.data_resource.1.type to be one of ["AWS::DynamoDB::Table" "AWS::Lambda::Function" "AWS::S3::Object"], got AWS::RDS::DBCluster
-                │ 
-                │   with aws_cloudtrail.monitoring_trail_9CE0CD1B (monitoring/trail),
-                │   on cdk.tf.json line 367, in resource.aws_cloudtrail.monitoring_trail_9CE0CD1B (monitoring/trail).event_selector[0].data_resource[1]:
-                │  367:                 "type": "AWS::RDS::DBCluster",
-                │ 
-                ╵
-TapStackpr4374  ::error::Terraform exited with code 1.
-0 Stacks deploying     1 Stack done     0 Stacks waiting
-Invoking Terraform CLI failed with exit code 1
-Error: Process completed with exit code 1.
+**Actual Implementation:**
+```typescript
+// No hardcoded version - allows AWS to select latest compatible version
+engine: config.engine || 'postgres',
+// engineVersion not specified, uses AWS default
+```
+Removed hardcoded engine version to use AWS default stable version, preventing version mismatch errors.
 
-TapStackpr4374  ╷
-                │ Warning: Argument is deprecated
-                │ 
-                │   with aws_s3_bucket.alb_alb-logs-bucket_1BF171B7 (alb/alb-logs-bucket),
-                │   on cdk.tf.json line 1137, in resource.aws_s3_bucket.alb_alb-logs-bucket_1BF171B7 (alb/alb-logs-bucket):
-                │ 1137:         "lifecycle_rule": [
-                │ 1138:           {
-                │ 1139:             "enabled": true,
-                │ 1140:             "expiration": {
-                │ 1141:               "days": 90
-                │ 1142:             },
-                │ 1143:             "id": "delete-old-logs"
-                │ 1144:           }
-                │ 1145:         ],
-                │ 
-                │ lifecycle_rule is deprecated. Use the aws_s3_bucket_lifecycle_configuration
-                │ resource instead.
-                │ 
-                │ (and 17 more similar warnings elsewhere)
-                ╵
+---
 
-TapStackpr4374  ╷
-                │ Error: creating CloudWatch Logs Log Group (/aws/ec2/tap-project-pr4374/application): operation error CloudWatch Logs: CreateLogGroup, https response error StatusCode: 400, RequestID: 3b2e68b3-3d28-4417-89f9-7a90c8f3840b, InvalidParameterException: The specified KMS Key Id could not be found.
-                │ 
-                │   with aws_cloudwatch_log_group.monitoring_app-log-group_0F16579C (monitoring/app-log-group),
-                │   on cdk.tf.json line 402, in resource.aws_cloudwatch_log_group.monitoring_app-log-group_0F16579C (monitoring/app-log-group):
-                │  402:       }
-                │ 
-                ╵
-TapStackpr4374  ╷
-                │ Error: creating RDS DB Instance (tap-project-db-pr4374): operation error RDS: CreateDBInstance, https response error StatusCode: 400, RequestID: c72baca9-4d0a-4fac-a0d1-0c95877bfa61, api error InvalidParameterCombination: Cannot find version 14.10 for postgres
-                │ 
-                │   with aws_db_instance.rds_db-instance_9631E10E (rds/db-instance),
-                │   on cdk.tf.json line 575, in resource.aws_db_instance.rds_db-instance_9631E10E (rds/db-instance):
-                │  575:       }
-                │ 
-                ╵
+### 6. CloudWatch Log Group KMS Key Failure (Deployment Breaking)
 
-                ╵
-TapStackpr4374  ::error::Terraform exited with code 1.
-0 Stacks deploying     1 Stack done     0 Stacks waiting
-Invoking Terraform CLI failed with exit code 1
-Error: Process completed with exit code 1.
+**Model Response:**
+```typescript
+// Missing KMS key configuration for CloudWatch Log Group
+this.logGroup = new logs.CloudwatchLogGroup(this, 'app-logs', {
+  name: `/aws/application/${config.tags.Project}`,
+  retentionInDays: 30,
+  tags: config.tags,
+  // Missing kmsKeyId configuration
+});
+```
+**Error:** `The specified KMS Key Id could not be found.`
 
-TapStackpr4374  ╷
-                │ Warning: Argument is deprecated
-                │ 
-                │   with aws_s3_bucket.alb_alb-logs-bucket_1BF171B7 (alb/alb-logs-bucket),
-                │   on cdk.tf.json line 1145, in resource.aws_s3_bucket.alb_alb-logs-bucket_1BF171B7 (alb/alb-logs-bucket):
-                │ 1145:         "server_side_encryption_configuration": {
-                │ 1146:           "rule": {
-                │ 1147:             "apply_server_side_encryption_by_default": {
-                │ 1148:               "sse_algorithm": "AES256"
-                │ 1149:             }
-                │ 1150:           }
-                │ 1151:         },
-                │ 
-                │ server_side_encryption_configuration is deprecated. Use the
-                │ aws_s3_bucket_server_side_encryption_configuration resource instead.
-                │ 
-                │ (and 11 more similar warnings elsewhere)
-                ╵
-TapStackpr4374  ╷
-                │ Warning: Invalid Attribute Combination
-                │ 
-                │   with aws_s3_bucket_lifecycle_configuration.alb_alb-logs-lifecycle_242F3651 (alb/alb-logs-lifecycle),
-                │   on cdk.tf.json line 1200, in resource.aws_s3_bucket_lifecycle_configuration.alb_alb-logs-lifecycle_242F3651 (alb/alb-logs-lifecycle).rule:
-                │ 1200:           {
-                │ 1201:             "expiration": [
-                │ 1202:               {
-                │ 1203:                 "days": 90
-                │ 1204:               }
-                │ 1205:             ],
-                │ 1206:             "id": "delete-old-logs",
-                │ 1207:             "status": "Enabled"
-                │ 1208:           }
-                │ 
-                │ No attribute specified when one (and only one) of
-                │ [rule[0].filter,rule[0].prefix] is required
-                │ 
-                │ This will be an error in a future version of the provider
-                │ 
-                │ (and 5 more similar warnings elsewhere)
-                ╵
-TapStackpr4374  ╷
-                │ Error: setting CloudTrail Trail (arn:aws:cloudtrail:us-east-1:***:trail/tap-project-trail-pr4374) event selectors: operation error CloudTrail: PutEventSelectors, https response error StatusCode: 400, RequestID: d6dda9e4-8c35-45b3-aada-a3c13fd21bbd, InvalidEventSelectorsException: Value arn:aws:s3:::*/* for DataResources.Values is invalid.
-                │ 
-                │   with aws_cloudtrail.monitoring_trail_9CE0CD1B (monitoring/trail),
-                │   on cdk.tf.json line 392, in resource.aws_cloudtrail.monitoring_trail_9CE0CD1B (monitoring/trail):
-                │  392:       }
-                │ 
-                ╵
-TapStackpr4374  ╷
-                │ Error: creating RDS DB Instance (tap-project-db-pr4374): operation error RDS: CreateDBInstance, https response error StatusCode: 400, RequestID: b39bb561-82ef-4c8f-88b6-e705fbcff04e, api error InvalidParameterValue: The parameter MasterUserPassword is not a valid password. Only printable ASCII characters besides '/', '@', '"', ' ' may be used.
-                │ 
-                │   with aws_db_instance.rds_db-instance_9631E10E (rds/db-instance),
-                │   on cdk.tf.json line 583, in resource.aws_db_instance.rds_db-instance_9631E10E (rds/db-instance):
-                │  583:       }
-                │ 
-                ╵
-TapStackpr4374  ::error::Terraform exited with code 1.
-0 Stacks deploying     1 Stack done     0 Stacks waiting
-Invoking Terraform CLI failed with exit code 1
-Error: Process completed with exit code 1.
+**Actual Implementation:**
+```typescript
+// Properly configured without KMS (uses AWS default encryption)
+this.logGroup = new CloudwatchLogGroup(this, 'app-log-group', {
+  name: `/aws/ec2/${tags.Project}-${tags.Environment}/application`,
+  retentionInDays: 30,
+  tags: tags,
+  // No kmsKeyId specified - uses AWS managed encryption
+});
+```
+Removed explicit KMS configuration to use AWS-managed encryption, avoiding KMS key lookup failures.
+
+---
+
+### 7. S3 Backend State Configuration Missing (Infrastructure Management)
+
+**Model Response:**
+```typescript
+// No S3 backend configuration for Terraform state management
+```
+
+**Actual Implementation:**
+```typescript
+// Configure S3 Backend with native state locking
+new S3Backend(this, {
+  bucket: stateBucket,
+  key: `${environmentSuffix}/${id}.tfstate`,
+  region: stateBucketRegion,
+  encrypt: true,
+});
+// Using escape hatch for state locking
+this.addOverride('terraform.backend.s3.use_lockfile', true);
+```
+Added proper S3 backend configuration with state locking for safe concurrent operations.
+
+---
+
+### 8. AWS Provider Configuration Missing (Authentication)
+
+**Model Response:**
+```typescript
+// Basic provider configuration without proper tags
+new AwsProvider(this, 'aws', {
+  region: 'us-east-1',
+  defaultTags: [{
+    tags: {
+      Terraform: 'true',
+      ManagedBy: 'CDKTF',
+    },
+  }],
+});
+```
+
+**Actual Implementation:**
+```typescript
+// Flexible provider configuration with overrides
+const awsRegion = AWS_REGION_OVERRIDE ? AWS_REGION_OVERRIDE : props?.awsRegion || 'us-east-1';
+const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
+
+new AwsProvider(this, 'aws', {
+  region: awsRegion,
+  defaultTags: defaultTags,
+});
+```
+Implemented configurable AWS provider with region override capability and flexible default tags.
+
+---
+
+### 9. Security Group Rule Creation Pattern (Circular Dependency Risk)
+
+**Model Response:**
+```typescript
+// Inline ingress rules in security group definition - can cause circular dependencies
+this.albSecurityGroup = new ec2.SecurityGroup(this, 'alb-sg', {
+  ingress: [
+    // Inline rules
+  ],
+});
+```
+
+**Actual Implementation:**
+```typescript
+// Create security group first, then add rules separately
+this.ec2Sg = new SecurityGroup(this, 'ec2-sg', {
+  name: `${tags.Project}-ec2-sg-${tags.Environment}`,
+  vpcId: vpcId,
+  // No inline ingress rules
+});
+
+// Add rules after creation to avoid circular dependencies
+new SecurityGroupRule(this, 'ec2-sg-rule-alb', {
+  type: 'ingress',
+  fromPort: 80,
+  toPort: 80,
+  protocol: 'tcp',
+  sourceSecurityGroupId: this.albSg.id,
+  securityGroupId: this.ec2Sg.id,
+});
+```
+Separated security group creation from rule attachment to prevent circular dependency issues.
+
+---
+
+### 10. ALB Listener Configuration (Missing Critical Parameters)
+
+**Model Response:**
+```typescript
+// Basic listener configuration
+defaultAction: [
+  {
+    type: 'forward',
+    targetGroupArn: this.targetGroup.arn,
+  },
+],
+```
+
+**Actual Implementation:**
+```typescript
+// Complete listener configuration with proper array syntax
+defaultAction: [
+  {
+    type: 'forward',
+    targetGroupArn: this.targetGroup.arn,
+  },
+],
+// Removed 'deregistrationDelay' from listener (belongs in target group)
+```
+Fixed listener configuration to use proper CDKTF array syntax for default actions.
