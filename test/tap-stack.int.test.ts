@@ -140,7 +140,20 @@ describe('IoT Analytics Integration Tests', () => {
       const outputStr = JSON.stringify(stackOutputs);
       if (!outputStr.includes('mock-endpoint')) { // Only check real deployments, not mock data
         expect(outputStr).not.toMatch(/123456789012/); // Common placeholder account ID
-        expect(outputStr).not.toMatch(/us-east-1(?!.*amazonaws\.com)/); // Hardcoded region (except in service URLs)
+
+        // Check for hardcoded regions - allow them in ARNs and service URLs but not elsewhere
+        const allowedRegionContexts = [
+          /arn:aws:[^:]*:us-east-1:/g, // In ARNs
+          /\.us-east-1\.amazonaws\.com/g, // In service URLs
+        ];
+
+        // Remove allowed contexts and then check if region still appears
+        let cleanedOutput = outputStr;
+        allowedRegionContexts.forEach(pattern => {
+          cleanedOutput = cleanedOutput.replace(pattern, 'REGION_REMOVED');
+        });
+
+        expect(cleanedOutput).not.toMatch(/us-east-1/); // Should not find hardcoded region after removing valid contexts
       }
     });
 
