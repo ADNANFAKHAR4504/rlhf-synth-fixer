@@ -19,12 +19,14 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go-v2/service/eventbridge"
 	"github.com/aws/aws-sdk-go-v2/service/kinesis"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sfn"
+	sfntypes "github.com/aws/aws-sdk-go-v2/service/sfn/types"
 	"github.com/aws/aws-sdk-go-v2/service/sns"
 	"github.com/aws/jsii-runtime-go"
 	"github.com/stretchr/testify/assert"
@@ -630,7 +632,7 @@ func testStepFunctionsExecution(t *testing.T, ctx context.Context, cfg aws.Confi
 		// List recent executions
 		execListOutput, err := sfnClient.ListExecutions(ctx, &sfn.ListExecutionsInput{
 			StateMachineArn: aws.String(stateMachineArn),
-			MaxResults:      aws.Int32(10),
+			MaxResults:      10,
 		})
 		assert.NoError(t, err, "Should be able to list executions")
 
@@ -816,10 +818,6 @@ func testLambdaInvocation(t *testing.T, ctx context.Context, cfg aws.Config, out
 // testEventBridgeRules tests EventBridge rule configuration
 func testEventBridgeRules(t *testing.T, ctx context.Context, cfg aws.Config, outputs *StackOutputs) {
 	eventBridgeClient := eventbridge.NewFromConfig(cfg)
-
-	// Extract environment suffix
-	parts := strings.Split(outputs.RawImageBucketName, "-")
-	envSuffix := parts[len(parts)-1]
 
 	t.Run("daily training schedule rule exists", func(t *testing.T) {
 		// The rule name from the stack is "DailyTrainingSchedule"
