@@ -155,68 +155,57 @@ Arn 'arn:aws:logs:ap-southeast-1:342597974367:log-group:/aws/application/httpd-e
 - **Performance**: No performance impact
 - **Cost**: Prevented infrastructure from being created (3 failed deployment attempts = ~15 minutes wasted)
 
-### 3. Missing Resource Dependencies for Log Groups
+### 3. Unused Parameters Removed
 
-**Impact Level**: High
+**Impact Level**: Low
 
 **IDEAL_RESPONSE Issue**:
-Log groups were created without explicit dependencies on the KMS key, causing race conditions where CloudWatch Logs tried to use the KMS key before it was fully available:
+The template included unused parameters `GitHubRepo` and `GitHubBranch` that were not referenced anywhere in the template, causing linter warnings and unnecessary complexity:
 
 ```json
-"ApplicationLogGroup": {
-  "Type": "AWS::Logs::LogGroup",
-  "Properties": {
-    "LogGroupName": {
-      "Fn::Sub": "/aws/application/httpd-access-${EnvironmentSuffix}"
-    },
-    "RetentionInDays": 7,
-    "KmsKeyId": {
-      "Fn::GetAtt": ["EncryptionKey", "Arn"]
-    }
+"Parameters": {
+  "GitHubRepo": {
+    "Type": "String",
+    "Default": "my-application",
+    "Description": "GitHub repository name for the application source code"
+  },
+  "GitHubBranch": {
+    "Type": "String",
+    "Default": "main",
+    "Description": "GitHub branch to deploy from"
   }
 }
 ```
 
 **FIXED_RESPONSE Solution**:
-Added explicit `DependsOn` attribute to ensure KMS key is created first:
+Removed unused parameters and cleaned up the parameter groups:
 
 ```json
-"ApplicationLogGroup": {
-  "Type": "AWS::Logs::LogGroup",
-  "DependsOn": "EncryptionKey",
-  "Properties": {
-    "LogGroupName": {
-      "Fn::Sub": "/aws/application/httpd-access-${EnvironmentSuffix}"
-    },
-    "RetentionInDays": 7,
-    "KmsKeyId": {
-      "Fn::GetAtt": ["EncryptionKey", "Arn"]
-    }
-  }
+"Parameters": {
+  "EnvironmentSuffix": { ... },
+  "InstanceType": { ... },
+  "DesiredCapacity": { ... }
 }
 ```
 
 **Root Cause**:
-- CloudFormation's implicit dependency detection through `Fn::GetAtt` isn't sufficient for KMS keys
-- KMS keys have a complex creation process involving key policy validation
-- Even with `Fn::GetAtt`, CloudFormation may attempt parallel creation
-- The model assumed `Fn::GetAtt` would automatically create proper ordering
-- This is a subtle CloudFormation behavior that requires explicit dependencies for certain resource types
-
-**AWS Documentation Reference**:
-https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-dependson.html
+- The model included placeholders for future CI/CD integration
+- Parameters were defined but never referenced in the template
+- CloudFormation linter (cfn-lint) flagged these as W2001 warnings
+- Including unused parameters reduces template clarity and maintainability
 
 **Cost/Security/Performance Impact**:
-- **Deployment reliability**: Race condition caused intermittent failures
-- **Development time**: Difficult to debug timing issues
-- **Cost**: Could cause deployment to succeed on retry but fail initially (~5 minutes per retry)
-- **Best practice violation**: Explicit dependencies make templates more maintainable
+- **Code quality**: Improved template clarity by removing unused code
+- **Linting**: Eliminated W2001 warnings
+- **Maintainability**: Simplified parameter interface
+- **No functional impact**: Parameters were not being used
 
 ## Summary
 
 ### Failure Statistics
-- **Total critical failures**: 3
-- **Deployment attempts required**: 4 (1 initial + 3 fixes)
+- **Total critical failures**: 2
+- **Total warnings fixed**: 1
+- **Deployment attempts required**: 3 (1 initial + 2 critical fixes)
 - **Time wasted**: ~15 minutes across failed deployments
 - **Stack rollbacks**: 3 complete rollbacks
 
@@ -226,7 +215,7 @@ https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-dep
 
 2. **Service-Specific KMS Requirements**: The model didn't understand that CloudWatch Logs has unique KMS policy requirements compared to S3, CodeBuild, and other services. It treated all AWS services as having uniform KMS requirements.
 
-3. **CloudFormation Resource Dependency Subtleties**: The model assumed `Fn::GetAtt` would create sufficient ordering guarantees, missing the need for explicit `DependsOn` in cases where resource creation involves complex validation steps (like KMS key policy validation).
+3. **Template Simplification**: The model included unused parameters for future CI/CD features that weren't implemented, reducing template clarity and causing linter warnings.
 
 ### Training Value
 
@@ -234,7 +223,7 @@ https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-dep
 
 **Justification**:
 - The infrastructure design was architecturally sound (multi-AZ, proper security, comprehensive monitoring)
-- All 40 resources were correctly configured except for 3 critical issues
+- All 40 resources were correctly configured except for 2 critical issues
 - The failures represent subtle AWS-specific knowledge gaps rather than fundamental infrastructure misunderstandings
 - These are real-world issues that experienced engineers encounter and fix regularly
 - The fixes were straightforward once identified, indicating the model was "close" to correct
@@ -251,16 +240,16 @@ https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-dep
 **What the Model Needs to Learn**:
 - Check managed policy availability before using them
 - Understand service-specific KMS requirements (especially CloudWatch Logs)
-- Use explicit `DependsOn` for resources with complex creation dependencies
+- Avoid including unused parameters that reduce template clarity
 - Verify current AWS best practices vs. outdated examples
-- Test template validity before considering it complete
+- Test template validity with linters before considering it complete
 
 ### Recommendations for Model Improvement
 
 1. **Policy Verification**: Before recommending any AWS managed policy, verify it's not deprecated
 2. **Service-Specific Documentation**: Enhance training with service-specific configuration requirements
-3. **Dependency Analysis**: Improve understanding of when explicit dependencies are needed vs. implicit
+3. **Template Linting**: Run cfn-lint validation before considering templates complete
 4. **Region-Specific Validation**: Some AWS features vary by region - this should be checked
 5. **Error Pattern Recognition**: These error messages have clear patterns that could guide fixes
 
-The model's response was production-quality infrastructure with minor but critical AWS-specific configuration errors. With these lessons learned, similar templates should have higher first-deployment success rates.
+The model's response was production-quality infrastructure with critical AWS-specific configuration errors. With these lessons learned, similar templates should have higher first-deployment success rates.

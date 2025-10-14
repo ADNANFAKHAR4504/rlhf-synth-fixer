@@ -50,16 +50,6 @@ lib/
       "Description": "Desired number of instances in the Auto Scaling Group",
       "MinValue": 1,
       "MaxValue": 10
-    },
-    "GitHubRepo": {
-      "Type": "String",
-      "Default": "my-application",
-      "Description": "GitHub repository name for the application source code"
-    },
-    "GitHubBranch": {
-      "Type": "String",
-      "Default": "main",
-      "Description": "GitHub branch to deploy from"
     }
   },
   "Metadata": {
@@ -80,15 +70,6 @@ lib/
           "Parameters": [
             "InstanceType",
             "DesiredCapacity"
-          ]
-        },
-        {
-          "Label": {
-            "default": "CI/CD Configuration"
-          },
-          "Parameters": [
-            "GitHubRepo",
-            "GitHubBranch"
           ]
         }
       ]
