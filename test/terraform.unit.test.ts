@@ -623,8 +623,8 @@ describe('Terraform Infrastructure Unit Tests - Multi-Account VPC Peering', () =
       expect(terraformCode).toMatch(/namespace\s*=\s*"Corp\/VPCPeering\/Security"/);
     });
 
-    test('should define dimensions in metric transformation', () => {
-      expect(terraformCode).toMatch(/metric_transformation\s*\{[\s\S]*?dimensions\s*=\s*\{/);
+    test('should include VPC index in metric name', () => {
+      expect(terraformCode).toMatch(/name\s*=\s*"RejectedConnections-VPC-\$\{count\.index\}"/);
     });
 
     test('should not use both dimensions and default_value (mutually exclusive)', () => {

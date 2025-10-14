@@ -925,12 +925,9 @@ resource "aws_cloudwatch_log_metric_filter" "rejected_connections" {
   pattern        = "[version, account, eni, source, destination, srcport, destport, protocol, packets, bytes, windowstart, windowend, action=REJECT, flowlogstatus]"
 
   metric_transformation {
-    name      = "RejectedConnections"
+    name      = "RejectedConnections-VPC-${count.index}"
     namespace = "Corp/VPCPeering/Security"
     value     = "1"
-    dimensions = {
-      VPCIndex = tostring(count.index)
-    }
   }
 }
 
@@ -941,17 +938,13 @@ resource "aws_cloudwatch_metric_alarm" "rejected_connections" {
   alarm_name          = "${var.project_name}-rejected-connections-${count.index}-${local.env_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "1"
-  metric_name         = "RejectedConnections"
+  metric_name         = "RejectedConnections-VPC-${count.index}"
   namespace           = "Corp/VPCPeering/Security"
   period              = "300"
   statistic           = "Sum"
   threshold           = "100"
   alarm_description   = "Alert on high number of rejected connections in VPC ${count.index}"
   alarm_actions       = [aws_sns_topic.alerts.arn]
-
-  dimensions = {
-    VPCIndex = count.index
-  }
 
   tags = local.common_tags
 }
