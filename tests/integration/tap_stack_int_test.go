@@ -27,13 +27,13 @@ import (
 
 // StackOutputs represents the expected outputs from the CDK stack
 type StackOutputs struct {
-	ApiEndpoint              string `json:"ApiEndpoint"`
-	TableName                string `json:"TableName"`
-	CreateScoreFunctionName  string `json:"CreateScoreFunctionName"`
-	GetScoreFunctionName     string `json:"GetScoreFunctionName"`
-	UpdateScoreFunctionName  string `json:"UpdateScoreFunctionName"`
-	DeleteScoreFunctionName  string `json:"DeleteScoreFunctionName"`
-	EnvironmentSuffix        string `json:"EnvironmentSuffix"`
+	ApiEndpoint             string `json:"ApiEndpoint"`
+	TableName               string `json:"TableName"`
+	CreateScoreFunctionName string `json:"CreateScoreFunctionName"`
+	GetScoreFunctionName    string `json:"GetScoreFunctionName"`
+	UpdateScoreFunctionName string `json:"UpdateScoreFunctionName"`
+	DeleteScoreFunctionName string `json:"DeleteScoreFunctionName"`
+	EnvironmentSuffix       string `json:"EnvironmentSuffix"`
 }
 
 // loadStackOutputs loads stack outputs from cdk-outputs.json
