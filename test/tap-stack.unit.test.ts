@@ -18,7 +18,6 @@ describe('TapStack CloudFormation Template - Production Security Stack', () => {
     outputs = template.Outputs || {};
   });
 
-
   describe('Template Structure', () => {
     test('should have valid CloudFormation format version', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
@@ -26,8 +25,9 @@ describe('TapStack CloudFormation Template - Production Security Stack', () => {
 
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
+      // Updated description for HTTP-only stack
       expect(template.Description).toBe(
-        'Production-grade secure web application stack with comprehensive security controls'
+        'Production-grade web application stack (HTTP-only ALB)'
       );
     });
 
@@ -46,14 +46,23 @@ describe('TapStack CloudFormation Template - Production Security Stack', () => {
 
   describe('Parameters', () => {
     test('should have all required parameters', () => {
+      // CertificateArn removed for HTTP-only deployment
       const expectedParams = [
-        'AllowedAdminCidr', 'DBName', 'DBUsername', 'DBEngineVersion',
-        'InstanceType', 'DesiredCapacity', 'CertificateArn', 'EnforceKeyRotation',
-        'KeyPairName', 'LatestAmiId'
+        'AllowedAdminCidr',
+        'DBName',
+        'DBUsername',
+        'DBEngineVersion',
+        'InstanceType',
+        'DesiredCapacity',
+        'EnforceKeyRotation',
+        'KeyPairName',
+        'LatestAmiId',
       ];
-      expectedParams.forEach(param => {
+      expectedParams.forEach((param) => {
         expect(parameters[param]).toBeDefined();
       });
+      // Ensure certificate is NOT present
+      expect(parameters.CertificateArn).toBeUndefined();
     });
 
     test('AllowedAdminCidr should have correct validation pattern', () => {
@@ -83,9 +92,8 @@ describe('TapStack CloudFormation Template - Production Security Stack', () => {
       expect(param.MaxValue).toBe(6);
     });
 
-    test('CertificateArn should validate ACM ARN pattern', () => {
-      const param = parameters.CertificateArn;
-      expect(param.AllowedPattern).toBe('^arn:aws:acm:.*');
+    test('should not require a certificate parameter', () => {
+      expect(parameters.CertificateArn).toBeUndefined();
     });
   });
 
@@ -164,19 +172,20 @@ describe('TapStack CloudFormation Template - Production Security Stack', () => {
   });
 
   describe('Security Groups', () => {
-    test('LoadBalancer security group should only allow 443 and 80', () => {
+    test('LoadBalancer security group should only allow 80 (HTTP-only)', () => {
       const sg = resources.LoadBalancerSecurityGroup;
       expect(sg).toBeDefined();
       const ingress = sg.Properties.SecurityGroupIngress;
-      expect(ingress.some((rule: any) => rule.FromPort === 443)).toBe(true);
-      expect(ingress.some((rule: any) => rule.FromPort === 80)).toBe(true);
+      const ports = (ingress || []).map((r: any) => r.FromPort);
+      expect(ports).toContain(80);
+      expect(ports).not.toContain(443);
     });
 
     test('App instance security group should not allow direct internet access', () => {
       const sg = resources.AppInstanceSecurityGroup;
       expect(sg).toBeDefined();
       const ingress = sg.Properties.SecurityGroupIngress;
-      const internetRule = ingress.find((rule: any) => rule.CidrIp === '0.0.0.0/0');
+      const internetRule = (ingress || []).find((rule: any) => rule.CidrIp === '0.0.0.0/0');
       expect(internetRule).toBeUndefined();
     });
 
@@ -194,7 +203,7 @@ describe('TapStack CloudFormation Template - Production Security Stack', () => {
       const publicNACL = resources.PublicNetworkAcl;
       const privateNACL = resources.PrivateNetworkAcl;
       const dbNACL = resources.DBNetworkAcl;
-      
+
       expect(publicNACL).toBeDefined();
       expect(privateNACL).toBeDefined();
       expect(dbNACL).toBeDefined();
@@ -216,20 +225,17 @@ describe('TapStack CloudFormation Template - Production Security Stack', () => {
       expect(alb.Properties.Scheme).toBe('internet-facing');
     });
 
-    test('should have HTTPS listener with TLS enforcement', () => {
-      const listener = resources.HTTPSListener;
-      expect(listener).toBeDefined();
-      expect(listener.Properties.Port).toBe(443);
-      expect(listener.Properties.Protocol).toBe('HTTPS');
-      expect(listener.Properties.SslPolicy).toBe('ELBSecurityPolicy-TLS-1-2-2017-01');
+    test('should NOT have HTTPS listener (HTTP-only design)', () => {
+      expect(resources.HTTPSListener).toBeUndefined();
     });
 
-    test('should have HTTP listener for redirect to HTTPS', () => {
+    test('should have HTTP listener forwarding to target group', () => {
       const listener = resources.HTTPListener;
       expect(listener).toBeDefined();
       expect(listener.Properties.Port).toBe(80);
-      expect(listener.Properties.DefaultActions[0].Type).toBe('redirect');
-      expect(listener.Properties.DefaultActions[0].RedirectConfig.Protocol).toBe('HTTPS');
+      expect(listener.Properties.Protocol).toBe('HTTP');
+      expect(listener.Properties.DefaultActions[0].Type).toBe('forward');
+      expect(listener.Properties.DefaultActions[0].TargetGroupArn).toBeDefined();
     });
 
     test('should have WAF Web ACL with managed rules', () => {
@@ -237,7 +243,7 @@ describe('TapStack CloudFormation Template - Production Security Stack', () => {
       expect(waf).toBeDefined();
       expect(waf.Type).toBe('AWS::WAFv2::WebACL');
       expect(waf.Properties.Rules.length).toBeGreaterThan(0);
-      
+
       const rateLimit = waf.Properties.Rules.find((rule: any) => rule.Name === 'RateLimitRule');
       expect(rateLimit).toBeDefined();
       expect(rateLimit.Statement.RateBasedStatement.Limit).toBe(2000);
@@ -343,10 +349,15 @@ describe('TapStack CloudFormation Template - Production Security Stack', () => {
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
-        'VPCId', 'LoadBalancerDNS', 'WAFWebACLArn', 'RDSEndpoint',
-        'KMSKeyArn', 'CloudTrailArn', 'BackupPlanId'
+        'VPCId',
+        'LoadBalancerDNS',
+        'WAFWebACLArn',
+        'RDSEndpoint',
+        'KMSKeyArn',
+        'CloudTrailArn',
+        'BackupPlanId',
       ];
-      expectedOutputs.forEach(outputName => {
+      expectedOutputs.forEach((outputName) => {
         expect(outputs[outputName]).toBeDefined();
       });
     });
@@ -377,9 +388,10 @@ describe('TapStack CloudFormation Template - Production Security Stack', () => {
       expect(resourceCount).toBeGreaterThan(50); // Production stack should have many resources
     });
 
-    test('should have all required parameters', () => {
+    test('should have all required parameters (count)', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(10); // Updated count based on actual template
+      // 9 parameters in HTTP-only template
+      expect(parameterCount).toBe(9);
     });
 
     test('should have comprehensive outputs', () => {
@@ -391,7 +403,7 @@ describe('TapStack CloudFormation Template - Production Security Stack', () => {
   describe('Security Compliance', () => {
     test('all resources should have proper security tags', () => {
       const resourcesWithTags = ['VPC', 'LoadBalancerSecurityGroup', 'RDSDatabase', 'LoggingBucket'];
-      resourcesWithTags.forEach(resourceName => {
+      resourcesWithTags.forEach((resourceName) => {
         const resource = resources[resourceName];
         expect(resource.Properties.Tags).toBeDefined();
         const tags = resource.Properties.Tags;
@@ -401,22 +413,15 @@ describe('TapStack CloudFormation Template - Production Security Stack', () => {
     });
 
     test('encryption should be enabled for all applicable resources', () => {
-      // KMS Key
-      expect(resources.MasterKMSKey.Properties.EnableKeyRotation).toBe(true);
-      
-      // RDS
-      expect(resources.RDSDatabase.Properties.StorageEncrypted).toBe(true);
-      
-      // S3
-      expect(resources.LoggingBucket.Properties.BucketEncryption).toBeDefined();
-      
-      // EBS in Launch Template
-      expect(resources.EC2LaunchTemplate.Properties.LaunchTemplateData.BlockDeviceMappings[0].Ebs.Encrypted).toBe(true);
+      expect(resources.MasterKMSKey.Properties.EnableKeyRotation).toBe(true); // KMS Key
+      expect(resources.RDSDatabase.Properties.StorageEncrypted).toBe(true);    // RDS
+      expect(resources.LoggingBucket.Properties.BucketEncryption).toBeDefined(); // S3
+      expect(resources.EC2LaunchTemplate.Properties.LaunchTemplateData.BlockDeviceMappings[0].Ebs.Encrypted).toBe(true); // EBS
     });
 
     test('IAM roles should follow least privilege principle', () => {
       const roles = ['EC2InstanceRole', 'ConfigServiceRole', 'BackupRole', 'KeyRotationLambdaRole'];
-      roles.forEach(roleName => {
+      roles.forEach((roleName) => {
         const role = resources[roleName];
         expect(role).toBeDefined();
         expect(role.Properties.AssumeRolePolicyDocument).toBeDefined();
@@ -435,7 +440,7 @@ describe('TapStack CloudFormation Template - Production Security Stack', () => {
   describe('High Availability and Resilience', () => {
     test('resources should be distributed across multiple AZs', () => {
       const multiAZResources = ['PublicSubnet1', 'PublicSubnet2', 'PrivateSubnet1', 'PrivateSubnet2'];
-      multiAZResources.forEach(resourceName => {
+      multiAZResources.forEach((resourceName) => {
         const resource = resources[resourceName];
         expect(resource.Properties.AvailabilityZone).toBeDefined();
       });
