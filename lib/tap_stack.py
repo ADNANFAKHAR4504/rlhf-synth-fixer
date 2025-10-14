@@ -1179,3 +1179,4 @@ def handler(event, context):
         pulumi.export("preprocessing_function_arn", self.preprocessing_function.arn)
         pulumi.export("inference_function_arn", self.inference_function.arn)
         pulumi.export("api_handler_function_arn", self.api_handler_function.arn)
+        
