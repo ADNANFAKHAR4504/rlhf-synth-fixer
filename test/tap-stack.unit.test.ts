@@ -102,7 +102,7 @@ describe('TapStack', () => {
 
     nestedStacks.forEach((nestedStack) => {
       const stackNode = nestedStack as cdk.Stack;
-      expect(stackNode.region || stackNode.env?.region).toBeDefined();
+      expect(stackNode.region).toBeDefined();
     });
   });
 
