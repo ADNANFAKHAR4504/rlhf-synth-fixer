@@ -6,25 +6,9 @@ Metadata:
     ParameterGroups:
       - Label:
           default: "Environment Configuration"
-        Parameters:
-          - EnvironmentSuffix
+        Parameters: []
 
 Parameters:
-  EnvironmentSuffix:
-    Type: String
-    Default: "dev"
-    Description: "Environment suffix for resource naming (e.g., dev, staging, prod)"
-    AllowedPattern: "^[a-zA-Z0-9]+$"
-    ConstraintDescription: "Must contain only alphanumeric characters"
-
-  SecondaryRegion:
-    Type: String
-    Default: us-west-2
-    AllowedValues:
-      - us-east-1
-      - us-west-2
-    Description: Secondary AWS Region for failover
-
   SecondaryAlbDnsName:
     Type: String
     Default: ""
@@ -45,27 +29,22 @@ Parameters:
 
   DomainName:
     Type: String
+    Default: "example.com"
     Description: Domain name for the application (e.g., example.com)
-
-  CloudFrontCertificateArn:
-    Type: String
-    Description: ACM certificate ARN for CloudFront (must be in us-east-1)
 
   Team:
     Type: String
+    Default: "default"
     Description: Team or application name for naming convention
 
   EnvName:
     Type: String
+    Default: "dev"
     Description: Environment name for naming convention (e.g., dev, staging, prod)
     AllowedValues:
       - dev
       - staging
       - prod
-
-  ALBCertificateArn:
-    Type: String
-    Description: ACM certificate ARN for the regional ALB (must be in the stack's region)
 
   Environment:
     Type: String
@@ -555,7 +534,38 @@ Resources:
             Action: s3:GetObject
             Resource: !Sub "${AppAssetsBucket.Arn}/*"
 
-  # Removed in-template ACM certificate; use ALBCertificateArn parameter instead
+    # ==========================================
+  # ACM CERTIFICATES
+  # ==========================================
+
+  ALBCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref DomainName
+      SubjectAlternativeNames:
+        - !Sub "*.${DomainName}"
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !If [IsUSEast1, !Ref HostedZone, !Ref "AWS::NoValue"]
+      Tags:
+        - Key: Name
+          Value: !Sub "${Team}-${EnvName}-alb-cert"
+
+  CloudFrontCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Condition: IsUSEast1
+    Properties:
+      DomainName: !Ref DomainName
+      SubjectAlternativeNames:
+        - !Sub "*.${DomainName}"
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref HostedZone
+      Tags:
+        - Key: Name
+          Value: !Sub "${Team}-${EnvName}-cf-cert"
 
   # ==========================================
   # APPLICATION LOAD BALANCER
@@ -638,7 +648,7 @@ Resources:
       Port: 443
       Protocol: HTTPS
       Certificates:
-        - CertificateArn: !Ref ALBCertificateArn
+        - CertificateArn: !Ref ALBCertificate
       SslPolicy: ELBSecurityPolicy-TLS-1-2-2017-01
       DefaultActions:
         - Type: forward
@@ -833,9 +843,6 @@ Resources:
       Name: !Ref DomainName
       HostedZoneConfig:
         Comment: !Sub "Hosted zone for ${Team}-${EnvName}-${DomainName}"
-      Tags:
-        - Key: Name
-          Value: !Sub "${Team}-${EnvName}-hosted-zone"
 
   RecordSetGroup:
     Type: AWS::Route53::RecordSetGroup
@@ -859,15 +866,13 @@ Resources:
     Type: AWS::Route53::HealthCheck
     Condition: IsUSEast1
     Properties:
-      Type: HTTPS
-      ResourcePath: /health
-      FullyQualifiedDomainName: !GetAtt ApplicationLoadBalancer.DNSName
-      Port: 443
-      RequestInterval: 30
-      FailureThreshold: 3
-      HealthCheckTags:
-        - Key: Name
-          Value: !Sub "${AWS::StackName}-HealthCheck"
+      HealthCheckConfig:
+        Type: HTTPS
+        ResourcePath: /health
+        FullyQualifiedDomainName: !GetAtt ApplicationLoadBalancer.DNSName
+        Port: 443
+        RequestInterval: 30
+        FailureThreshold: 3
 
   # ==========================================
   # CLOUDFRONT DISTRIBUTION
@@ -890,7 +895,7 @@ Resources:
         HttpVersion: http2
         PriceClass: PriceClass_100
         ViewerCertificate:
-          AcmCertificateArn: !Ref CloudFrontCertificateArn
+          AcmCertificateArn: !Ref CloudFrontCertificate
           SslSupportMethod: sni-only
           MinimumProtocolVersion: TLSv1.2_2021
         Aliases:
