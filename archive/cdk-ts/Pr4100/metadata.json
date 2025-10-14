@@ -1,0 +1,39 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349438",
+  "team": "1",
+  "startedAt": "2025-10-10T02:25:22.258Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "EC2",
+    "AutoScaling",
+    "ApplicationLoadBalancer",
+    "VPC",
+    "S3",
+    "RDS",
+    "KMS",
+    "SecretsManager",
+    "CloudWatch",
+    "SNS",
+    "CodePipeline",
+    "CodeBuild",
+    "Route53",
+    "ACM",
+    "IAM",
+    "CloudWatchLogs",
+    "EventBridge"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
+}

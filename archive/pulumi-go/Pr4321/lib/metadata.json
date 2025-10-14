@@ -1,0 +1,22 @@
+{
+  "platform": "pulumi",
+  "language": "go",
+  "complexity": "complex",
+  "team": "synth",
+  "startedAt": "2025-10-14T04:41:54+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": ["CI/CD Pipeline", "Cloud Environment Setup", "Security Configuration as Code"],
+  "po_id": "2735636511",
+  "aws_services": [
+    "Amazon Kinesis Data Streams",
+    "Amazon Kinesis Data Firehose",
+    "Amazon S3",
+    "AWS KMS",
+    "AWS IAM",
+    "Amazon CloudWatch Logs",
+    "Amazon CloudWatch Alarms"
+  ],
+  "region": "ap-southeast-1",
+  "training_quality": 8,
+  "training_quality_justification": "High training value (8/10). The implementation demonstrates critical AWS service evolution patterns, particularly the S3 ACL configuration changes that reflect recent AWS security improvements. The MODEL_FAILURES.md documents 2 critical failures (S3 bucket ACL configuration and Firehose DataFormatConversionConfiguration) and 3 medium failures that provide valuable learning data. The task implements a complete PCI DSS-compliant data pipeline with proper encryption, monitoring, and security controls. Key learning opportunities include: KMS key policies for multi-service access, S3 bucket ownership controls for logging, Kinesis-Firehose integration with encryption, least privilege IAM policies, and CloudWatch monitoring setup. The fixes demonstrate proper Pulumi dependency management and error handling. Minor deductions: test coverage at 75% (below 90% target), some integration test path resolution issues documented."
+}

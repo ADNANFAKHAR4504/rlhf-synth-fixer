@@ -1,0 +1,27 @@
+{
+  "platform": "pulumi",
+  "language": "java",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "83046219",
+  "team": "synth",
+  "startedAt": "2025-10-08T21:15:30+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "S3",
+    "KMS",
+    "CloudTrail",
+    "CloudWatch",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

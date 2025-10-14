@@ -1,0 +1,30 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "68159240",
+  "team": "synth",
+  "startedAt": "2025-10-03T17:20:04+05:30",
+  "training_quality": 8,
+  "aws_services": [
+    "AWS Backup",
+    "AWS Backup Audit Manager",
+    "CloudWatch",
+    "DynamoDB",
+    "IAM",
+    "KMS",
+    "S3",
+    "SNS"
+  ],
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
