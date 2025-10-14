@@ -10,8 +10,9 @@ Parameters:
     Description: Environment name (e.g., dev, staging, prod)
 
   KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: EC2 KeyPair for SSH access
+    Type: String
+    Default: ''
+    Description: (Optional) Name of an existing EC2 KeyPair to enable SSH access. Leave blank to skip.
 
   InstanceType:
     Type: String
@@ -30,6 +31,9 @@ Mappings:
       AMI: ami-0c02fb55956c7d316
     us-west-2:
       AMI: ami-0892d3c7ee96c0bf7
+
+Conditions:
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, ""]]
 
 Resources:
 
@@ -206,7 +210,7 @@ Resources:
           SourceSecurityGroupId: !Ref WebSecurityGroup
 
   ########################################
-  # IAM Roles
+  # IAM
   ########################################
 
   EC2Role:
@@ -308,7 +312,6 @@ Resources:
       LaunchTemplateData:
         ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
         InstanceType: !Ref InstanceType
-        KeyName: !Ref KeyPairName
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds: [!Ref WebSecurityGroup]
@@ -318,6 +321,7 @@ Resources:
           amazon-linux-extras install nginx1 -y
           systemctl enable nginx
           systemctl start nginx
+        KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref "AWS::NoValue"]
 
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
