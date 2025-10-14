@@ -484,7 +484,7 @@ Resources:
     Properties:
       DBInstanceIdentifier: !Sub 'ecommerce-db-primary-${EnvironmentSuffix}'
       Engine: postgres
-      EngineVersion: '16.2'
+      EngineVersion: '16.6'
       DBInstanceClass: !Ref DBInstanceClass
       AllocatedStorage: !Ref AllocatedStorage
       MaxAllocatedStorage: !Ref MaxAllocatedStorage
