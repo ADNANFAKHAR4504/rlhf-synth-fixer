@@ -114,5 +114,31 @@ export class TapStack extends cdk.Stack {
     monitoringStack.addDependency(lambdaStack);
     monitoringStack.addDependency(apiGatewayStack);
     monitoringStack.addDependency(storageStack);
+
+    // Outputs - Import from other stacks and re-export for integration tests
+    new cdk.CfnOutput(this, 'BucketName', {
+      value: cdk.Fn.importValue(`DataBucketName-${environmentSuffix}`),
+      description: 'S3 Bucket Name',
+    });
+
+    new cdk.CfnOutput(this, 'TableName', {
+      value: cdk.Fn.importValue(`DataTableName-${environmentSuffix}`),
+      description: 'DynamoDB Table Name',
+    });
+
+    new cdk.CfnOutput(this, 'ApiEndpoint', {
+      value: cdk.Fn.importValue(`ApiEndpoint-${environmentSuffix}`),
+      description: 'API Gateway Endpoint URL',
+    });
+
+    new cdk.CfnOutput(this, 'FunctionArn', {
+      value: cdk.Fn.importValue(`DataProcessorArn-${environmentSuffix}`),
+      description: 'Lambda Function ARN',
+    });
+
+    new cdk.CfnOutput(this, 'VpcId', {
+      value: cdk.Fn.importValue(`VpcId-${environmentSuffix}`),
+      description: 'VPC ID',
+    });
   }
 }
