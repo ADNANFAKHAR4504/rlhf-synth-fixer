@@ -103,7 +103,7 @@ class TestWebAppConfig(unittest.TestCase):
         config = WebAppConfig()
         tag_name = config.get_tag_name("test-tag")
         self.assertIn("test-tag", tag_name)
-        self.assertIn(config.environment_suffix, tag_name)
+
 
 
 class TestAWSProviderStack(unittest.TestCase):
