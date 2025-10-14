@@ -1,8 +1,8 @@
 {
   "po_id": "4101712413",
   "team": "synth",
-  "platform": "CDK",
-  "language": "Python",
+  "platform": "cdk",
+  "language": "py",
   "complexity": "hard",
   "turn_type": "multi-turn",
   "subtask": "Failure Recovery and High Availability",
