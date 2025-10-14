@@ -13,9 +13,8 @@ const awsRegion = process.env.AWS_REGION || 'eu-west-1';
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
-// Stack name with timestamp to avoid conflicts
-const timestamp = Math.floor(Date.now() / 1000);
-const stackName = `TapStack${environmentSuffix}-${timestamp}`;
+// Stack name
+const stackName = `TapStack${environmentSuffix}`;
 
 // Default tags
 const defaultTags = {
