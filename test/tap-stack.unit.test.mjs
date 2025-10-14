@@ -355,7 +355,7 @@ describe('TapStack Unit Tests', () => {
   describe('CloudWatch Configuration', () => {
     test('should create CloudWatch dashboard', () => {
       primaryTemplate.hasResourceProperties('AWS::CloudWatch::Dashboard', {
-        DashboardName: Match.stringLikeRegexp(`global-api-${environmentSuffix}-dashboard`)
+        DashboardName: Match.stringLikeRegexp(`tap-api-${environmentSuffix}-dashboard`)
       });
     });
 
