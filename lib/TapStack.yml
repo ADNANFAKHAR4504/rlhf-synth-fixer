@@ -24,6 +24,7 @@ Parameters:
 
   SourceBucketName:
     Type: String
+    Default: "tap-source-images-bucket"
     Description: "Name for the source image bucket (must be globally unique)"
     MinLength: 3
     MaxLength: 63
@@ -32,6 +33,7 @@ Parameters:
 
   ThumbnailBucketName:
     Type: String
+    Default: "tap-thumbnail-images-bucket"
     Description: "Name for the thumbnail bucket (must be globally unique)"
     MinLength: 3
     MaxLength: 63
