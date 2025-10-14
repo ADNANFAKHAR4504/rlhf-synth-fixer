@@ -1,8 +1,3 @@
-
----
-
-### **Ideal_response.md**
-```markdown
 # Ideal_response.md
 
 ## Purpose
