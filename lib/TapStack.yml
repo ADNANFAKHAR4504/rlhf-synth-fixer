@@ -45,7 +45,7 @@ Resources:
     Properties:
       Name: /TapStack/DBPassword
       Type: String
-      Value: StrongP@ssw0rd123!
+      Value: StrongP#ssW0rd123!
       Description: RDS master password stored in Parameter Store
       Tier: Standard
 
@@ -394,7 +394,7 @@ Resources:
       BackupRetentionPeriod: 7
 
   ########################################
-  # CloudFront (Fixed ForwardedValues)
+  # CloudFront (with required ForwardedValues)
   ########################################
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
