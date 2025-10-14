@@ -177,3 +177,64 @@ TapStackpr4374  ::error::Terraform exited with code 1.
 0 Stacks deploying     1 Stack done     0 Stacks waiting
 Invoking Terraform CLI failed with exit code 1
 Error: Process completed with exit code 1.
+
+TapStackpr4374  ╷
+                │ Warning: Argument is deprecated
+                │ 
+                │   with aws_s3_bucket.alb_alb-logs-bucket_1BF171B7 (alb/alb-logs-bucket),
+                │   on cdk.tf.json line 1145, in resource.aws_s3_bucket.alb_alb-logs-bucket_1BF171B7 (alb/alb-logs-bucket):
+                │ 1145:         "server_side_encryption_configuration": {
+                │ 1146:           "rule": {
+                │ 1147:             "apply_server_side_encryption_by_default": {
+                │ 1148:               "sse_algorithm": "AES256"
+                │ 1149:             }
+                │ 1150:           }
+                │ 1151:         },
+                │ 
+                │ server_side_encryption_configuration is deprecated. Use the
+                │ aws_s3_bucket_server_side_encryption_configuration resource instead.
+                │ 
+                │ (and 11 more similar warnings elsewhere)
+                ╵
+TapStackpr4374  ╷
+                │ Warning: Invalid Attribute Combination
+                │ 
+                │   with aws_s3_bucket_lifecycle_configuration.alb_alb-logs-lifecycle_242F3651 (alb/alb-logs-lifecycle),
+                │   on cdk.tf.json line 1200, in resource.aws_s3_bucket_lifecycle_configuration.alb_alb-logs-lifecycle_242F3651 (alb/alb-logs-lifecycle).rule:
+                │ 1200:           {
+                │ 1201:             "expiration": [
+                │ 1202:               {
+                │ 1203:                 "days": 90
+                │ 1204:               }
+                │ 1205:             ],
+                │ 1206:             "id": "delete-old-logs",
+                │ 1207:             "status": "Enabled"
+                │ 1208:           }
+                │ 
+                │ No attribute specified when one (and only one) of
+                │ [rule[0].filter,rule[0].prefix] is required
+                │ 
+                │ This will be an error in a future version of the provider
+                │ 
+                │ (and 5 more similar warnings elsewhere)
+                ╵
+TapStackpr4374  ╷
+                │ Error: setting CloudTrail Trail (arn:aws:cloudtrail:us-east-1:***:trail/tap-project-trail-pr4374) event selectors: operation error CloudTrail: PutEventSelectors, https response error StatusCode: 400, RequestID: d6dda9e4-8c35-45b3-aada-a3c13fd21bbd, InvalidEventSelectorsException: Value arn:aws:s3:::*/* for DataResources.Values is invalid.
+                │ 
+                │   with aws_cloudtrail.monitoring_trail_9CE0CD1B (monitoring/trail),
+                │   on cdk.tf.json line 392, in resource.aws_cloudtrail.monitoring_trail_9CE0CD1B (monitoring/trail):
+                │  392:       }
+                │ 
+                ╵
+TapStackpr4374  ╷
+                │ Error: creating RDS DB Instance (tap-project-db-pr4374): operation error RDS: CreateDBInstance, https response error StatusCode: 400, RequestID: b39bb561-82ef-4c8f-88b6-e705fbcff04e, api error InvalidParameterValue: The parameter MasterUserPassword is not a valid password. Only printable ASCII characters besides '/', '@', '"', ' ' may be used.
+                │ 
+                │   with aws_db_instance.rds_db-instance_9631E10E (rds/db-instance),
+                │   on cdk.tf.json line 583, in resource.aws_db_instance.rds_db-instance_9631E10E (rds/db-instance):
+                │  583:       }
+                │ 
+                ╵
+TapStackpr4374  ::error::Terraform exited with code 1.
+0 Stacks deploying     1 Stack done     0 Stacks waiting
+Invoking Terraform CLI failed with exit code 1
+Error: Process completed with exit code 1.

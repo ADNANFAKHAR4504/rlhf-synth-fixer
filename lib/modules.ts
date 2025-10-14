@@ -4,6 +4,7 @@ import { Fn } from 'cdktf';
 import { S3BucketLifecycleConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-lifecycle-configuration';
 import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
 import { DataAwsElbServiceAccount } from '@cdktf/provider-aws/lib/data-aws-elb-service-account';
+import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
 
 // VPC Resources
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
@@ -623,8 +624,22 @@ export class RDSConstruct extends Construct {
   }
 
   private generateRandomPassword(): string {
-    // In production, use AWS Secrets Manager or external secret management
-    return `DbP@ss-${Math.random().toString(36).substring(2, 15)}-${Date.now()}`;
+    // Fix: Generate password without forbidden characters ('/', '@', '"', ' ')
+    const chars =
+      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$%&*+,-.:<=>?[]^_`{|}~';
+    let password = '';
+
+    // Ensure password meets complexity requirements
+    password += 'Db'; // Start with uppercase and lowercase
+    password += Math.floor(Math.random() * 10); // Add a number
+    password += '!'; // Add a special character
+
+    // Generate remaining characters
+    for (let i = 4; i < 20; i++) {
+      password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+
+    return password;
   }
 }
 
@@ -709,22 +724,31 @@ export class ALBConstruct extends Construct {
   }
 
   private createAlbLogsBucket(tags: CommonTags): S3Bucket {
-    // Create S3 bucket WITHOUT deprecated lifecycle_rule
+    // Create S3 bucket WITHOUT server_side_encryption_configuration
     const bucket = new S3Bucket(this, 'alb-logs-bucket', {
       bucket: `${tags.Project}-alb-logs-${tags.Environment}-${Date.now()}`,
       versioning: {
         enabled: true,
       },
-      serverSideEncryptionConfiguration: {
-        rule: {
-          applyServerSideEncryptionByDefault: {
-            sseAlgorithm: 'AES256',
-          },
-        },
-      },
-      // REMOVE lifecycle_rule from here
+      // REMOVE server_side_encryption_configuration from here
       tags: tags,
     });
+
+    // Use separate encryption configuration resource (non-deprecated)
+    new S3BucketServerSideEncryptionConfigurationA(
+      this,
+      'alb-logs-encryption',
+      {
+        bucket: bucket.id,
+        rule: [
+          {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'AES256',
+            },
+          },
+        ],
+      }
+    );
 
     // Use separate lifecycle configuration resource (non-deprecated)
     new S3BucketLifecycleConfiguration(this, 'alb-logs-lifecycle', {
@@ -1014,18 +1038,27 @@ export class MonitoringConstruct extends Construct {
       versioning: {
         enabled: true,
       },
-      serverSideEncryptionConfiguration: {
-        rule: {
-          applyServerSideEncryptionByDefault: {
-            sseAlgorithm: 'AES256',
-          },
-        },
-      },
-      // REMOVE lifecycle_rule from here
+      // REMOVE server_side_encryption_configuration from here
       tags: tags,
     });
 
     // Use separate lifecycle configuration resource
+    new S3BucketServerSideEncryptionConfigurationA(
+      this,
+      'trail-bucket-encryption',
+      {
+        bucket: trailBucket.id,
+        rule: [
+          {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'AES256',
+            },
+          },
+        ],
+      }
+    );
+
+    // Fix lifecycle configuration - add filter
     new S3BucketLifecycleConfiguration(this, 'trail-bucket-lifecycle', {
       bucket: trailBucket.id,
       rule: [
@@ -1096,7 +1129,7 @@ export class MonitoringConstruct extends Construct {
           dataResource: [
             {
               type: 'AWS::S3::Object',
-              values: ['arn:aws:s3:::*/*'],
+              values: ['arn:aws:s3:::*/'], // Fix: Remove the second asterisk
             },
           ],
         },
