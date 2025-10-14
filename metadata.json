@@ -1,12 +1,16 @@
 {
   "platform": "cdktf",
-  "language": "typescript",
+  "language": "ts",
   "complexity": "moderate",
   "team": "synth",
   "startedAt": "2025-10-14T14:17:06+05:30",
   "subtask": "Application Deployment",
   "background": "An educational technology company needs to build a secure data pipeline for processing student assessment data. The system needs to collect assessment results from various schools, process them for analytics, and store them securely while maintaining strict privacy controls.",
-  "subject_labels": ["CI/CD Pipeline", "Infrastructure Analysis/Monitoring", "Security Configuration as Code"],
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
   "po_id": "3696013669",
   "aws_services": [
     "VPC",
