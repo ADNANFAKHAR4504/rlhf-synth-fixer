@@ -317,7 +317,7 @@ describe('CloudFormation Template', () => {
     expect(templateStr).not.toMatch(/\b\d{12}\b/);
 
     // Should not contain hardcoded region names (except in SSM parameter path)
-    const regions = ['us-east-1', 'us-west-2', 'eu-west-1', 'ap-southeast-1'];
+    const regions = ['us-east-1', 'us-west-2', 'eu-west-3', 'ap-southeast-1'];
     regions.forEach(region => {
       if (templateStr.includes(region)) {
         // Only allow in SSM parameter paths or AWS pseudo parameters
