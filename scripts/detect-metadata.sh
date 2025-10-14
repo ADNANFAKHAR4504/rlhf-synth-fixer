@@ -60,6 +60,12 @@ if [ -z "$SUBTASK" ]; then
   ((ERROR_COUNT++))
 fi
 
+# If background is empty, raise error
+if [ -z "$BACKGROUND" ]; then
+  echo "❌ Background is required but not found in metadata.json"
+  ((ERROR_COUNT++))
+fi
+
 # If subject_labels is empty or not an array, raise error
 if [ -z "$SUBJECT_LABELS" ] || [ "$SUBJECT_LABELS" == "null" ]; then
   echo "❌ subject_labels is required but not found in metadata.json"
