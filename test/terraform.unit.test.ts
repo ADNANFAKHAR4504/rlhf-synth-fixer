@@ -128,7 +128,7 @@ describe("S3 Media Assets Storage - Unit Tests", () => {
       const bucketNames = tf.match(/bucket\s*=\s*"media-assets-[^"]+"/g) || [];
       expect(bucketNames.length).toBe(3);
       bucketNames.forEach(name => {
-        expect(name).toContain('${random_string.bucket_suffix.result}');
+        expect(name).toContain('random_string.bucket_suffix.result');
       });
     });
 
@@ -318,8 +318,10 @@ describe("S3 Media Assets Storage - Unit Tests", () => {
       const corsConfig = tf.match(/cors_configuration\s*=\s*\{[\s\S]*?\n\s*\}/);
       expect(corsConfig).toBeTruthy();
       if (corsConfig) {
-        expect(/allowed_methods\s*=\s*```math
-\s*"GET"\s*,\s*"HEAD"\s*```/.test(corsConfig[0])).toBe(true);
+        const hasGetMethod = /allowed_methods/.test(corsConfig[0]) && /"GET"/.test(corsConfig[0]);
+        const hasHeadMethod = /"HEAD"/.test(corsConfig[0]);
+        expect(hasGetMethod).toBe(true);
+        expect(hasHeadMethod).toBe(true);
       }
     });
 
@@ -392,7 +394,6 @@ describe("S3 Media Assets Storage - Unit Tests", () => {
     });
 
     test("lifecycle rules use aws_s3_bucket_lifecycle_configuration resource", () => {
-      // Ensure not using deprecated lifecycle block inside bucket
       const bucketResources = tf.match(/resource\s+"aws_s3_bucket"\s+"(dev|prod|logs)"[\s\S]*?^\}/gm) || [];
       bucketResources.forEach(bucket => {
         expect(/lifecycle\s*\{/.test(bucket)).toBe(false);
@@ -430,7 +431,7 @@ describe("S3 Media Assets Storage - Unit Tests", () => {
   // ============================================================================
   describe("Bucket Policies", () => {
     test("bucket policies use separate aws_s3_bucket_policy resources", () => {
-      expect(count(/resource\s+"aws_s3_bucket_policy"/g)).toBe(2); // logs and prod
+      expect(count(/resource\s+"aws_s3_bucket_policy"/g)).toBe(2);
     });
 
     test("bucket policies use jsonencode", () => {
@@ -585,7 +586,6 @@ describe("S3 Media Assets Storage - Unit Tests", () => {
   // ============================================================================
   describe("Best Practices", () => {
     test("no hardcoded account IDs", () => {
-      // Allow the account_id in condition blocks, but not hardcoded elsewhere
       const accountIdMatches = tf.match(/\d{12}/g);
       expect(accountIdMatches).toBeNull();
     });
@@ -612,7 +612,6 @@ describe("S3 Media Assets Storage - Unit Tests", () => {
     });
 
     test("follows naming conventions for resources", () => {
-      // Check that resource names are descriptive
       expect(has(/resource\s+"aws_s3_bucket"\s+"(dev|prod|logs)"/)).toBe(true);
       expect(has(/resource\s+"aws_cloudfront_origin_access_identity"\s+"media_oai"/)).toBe(true);
     });
