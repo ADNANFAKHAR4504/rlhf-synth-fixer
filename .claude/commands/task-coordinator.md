@@ -187,10 +187,14 @@ Task ID: ${TASK_ID}"
    # Get AWS services count
    AWS_SERVICES_COUNT=$(jq -r '.aws_services | length' metadata.json)
    
+   # CRITICAL: Verify metadata fields for PR body
+   # Complexity must match the value from tasks.csv (medium/hard/expert)
+   # Complexity is already extracted at line 154 from metadata.json
+   
    # Create PR with error handling
-   # PR Title Format: Synth-{TASK_ID}: {BACKGROUND}
+   # PR Title Format: synth-{TASK_ID} (lowercase "synth")
    if gh pr create \
-     --title "Synth-${TASK_ID}: ${BACKGROUND}" \
+     --title "synth-${TASK_ID}" \
      --body "**Platform**: ${PLATFORM}-${LANGUAGE}
 **Complexity**: ${COMPLEXITY}
 **Training Quality**: ${TRAINING_QUALITY}/10
@@ -433,7 +437,10 @@ PYTHON_SCRIPT
     - Determine platform (cdk, cdktf, cfn, tf, pulumi) from task description
     - Determine language (ts, py, yaml, json, hcl, go) from task description
     - Prefer TypeScript for tests only, avoid Python where possible (unless the project is in python e.g. pulumi-py, cdktf-py)
-    - Set `complexity` (NOT "difficulty") from CSV difficulty field
+    - **CRITICAL**: Set `complexity` field to EXACT value from CSV `difficulty` column (NOT "difficulty")
+      - Read the `difficulty` value from tasks.csv for the selected task
+      - Valid values: "medium", "hard", "expert" (must match CSV exactly)
+      - This value will be displayed in the PR body - ensure accuracy
     - Set `team` as "synth" (REQUIRED - validation will fail without this)
     - Set `startedAt` as current timestamp using `date -Iseconds` (REQUIRED - validation will fail without this)
     - **Extract `subtask`, `background`, and `subject_labels` from tasks.csv** (REQUIRED - validation will fail without these):
