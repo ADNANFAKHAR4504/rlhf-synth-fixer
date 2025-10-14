@@ -106,7 +106,7 @@ describe("S3 Media Assets Storage - Unit Tests", () => {
   // ============================================================================
   describe("S3 Bucket Resources", () => {
     test("creates exactly 3 S3 buckets", () => {
-      expect(count(/resource\s+"aws_s3_bucket"\s+"/)).toBe(3);
+      expect(count(/resource\s+"aws_s3_bucket"\s+"/g)).toBe(3);
     });
 
     test("creates logs bucket with correct prefix", () => {
@@ -269,7 +269,7 @@ describe("S3 Media Assets Storage - Unit Tests", () => {
   // ============================================================================
   describe("Server-Side Encryption", () => {
     test("all 3 buckets have encryption configuration", () => {
-      expect(count(/resource\s+"aws_s3_bucket_server_side_encryption_configuration"/)).toBe(3);
+      expect(count(/resource\s+"aws_s3_bucket_server_side_encryption_configuration"/g)).toBe(3);
     });
 
     test("logs bucket uses AES256 encryption", () => {
@@ -297,7 +297,7 @@ describe("S3 Media Assets Storage - Unit Tests", () => {
     });
 
     test("encryption uses apply_server_side_encryption_by_default", () => {
-      expect(count(/apply_server_side_encryption_by_default/)).toBe(3);
+      expect(count(/apply_server_side_encryption_by_default/g)).toBe(3);
     });
 
     test("no KMS keys are used (AES256 only)", () => {
@@ -318,7 +318,8 @@ describe("S3 Media Assets Storage - Unit Tests", () => {
       const corsConfig = tf.match(/cors_configuration\s*=\s*\{[\s\S]*?\n\s*\}/);
       expect(corsConfig).toBeTruthy();
       if (corsConfig) {
-        expect(/allowed_methods\s*=\s*\[\s*"GET"\s*,\s*"HEAD"\s*\]/.test(corsConfig[0])).toBe(true);
+        expect(/allowed_methods\s*=\s*```math
+\s*"GET"\s*,\s*"HEAD"\s*```/.test(corsConfig[0])).toBe(true);
       }
     });
 
@@ -344,7 +345,7 @@ describe("S3 Media Assets Storage - Unit Tests", () => {
   // ============================================================================
   describe("Lifecycle Rules", () => {
     test("all 3 buckets have lifecycle configuration", () => {
-      expect(count(/resource\s+"aws_s3_bucket_lifecycle_configuration"/)).toBe(3);
+      expect(count(/resource\s+"aws_s3_bucket_lifecycle_configuration"/g)).toBe(3);
     });
 
     test("dev bucket lifecycle rule has id", () => {
@@ -404,23 +405,23 @@ describe("S3 Media Assets Storage - Unit Tests", () => {
   // ============================================================================
   describe("Public Access Block", () => {
     test("all 3 buckets have public access block", () => {
-      expect(count(/resource\s+"aws_s3_bucket_public_access_block"/)).toBe(3);
+      expect(count(/resource\s+"aws_s3_bucket_public_access_block"/g)).toBe(3);
     });
 
     test("all buckets block public ACLs", () => {
-      expect(count(/block_public_acls\s*=\s*true/)).toBe(3);
+      expect(count(/block_public_acls\s*=\s*true/g)).toBe(3);
     });
 
     test("all buckets block public policy", () => {
-      expect(count(/block_public_policy\s*=\s*true/)).toBe(3);
+      expect(count(/block_public_policy\s*=\s*true/g)).toBe(3);
     });
 
     test("all buckets ignore public ACLs", () => {
-      expect(count(/ignore_public_acls\s*=\s*true/)).toBe(3);
+      expect(count(/ignore_public_acls\s*=\s*true/g)).toBe(3);
     });
 
     test("all buckets restrict public buckets", () => {
-      expect(count(/restrict_public_buckets\s*=\s*true/)).toBe(3);
+      expect(count(/restrict_public_buckets\s*=\s*true/g)).toBe(3);
     });
   });
 
@@ -429,11 +430,11 @@ describe("S3 Media Assets Storage - Unit Tests", () => {
   // ============================================================================
   describe("Bucket Policies", () => {
     test("bucket policies use separate aws_s3_bucket_policy resources", () => {
-      expect(count(/resource\s+"aws_s3_bucket_policy"/)).toBe(2); // logs and prod
+      expect(count(/resource\s+"aws_s3_bucket_policy"/g)).toBe(2); // logs and prod
     });
 
     test("bucket policies use jsonencode", () => {
-      expect(count(/jsonencode\s*\(/)).toBeGreaterThanOrEqual(2);
+      expect(count(/jsonencode\s*KATEX_INLINE_OPEN/g)).toBeGreaterThanOrEqual(2);
     });
 
     test("prod bucket policy allows CloudFront OAI GetObject", () => {
@@ -502,7 +503,7 @@ describe("S3 Media Assets Storage - Unit Tests", () => {
     });
 
     test("logging uses aws_s3_bucket_logging resource", () => {
-      expect(count(/resource\s+"aws_s3_bucket_logging"/)).toBe(2);
+      expect(count(/resource\s+"aws_s3_bucket_logging"/g)).toBe(2);
     });
   });
 
@@ -531,11 +532,11 @@ describe("S3 Media Assets Storage - Unit Tests", () => {
     });
 
     test("buckets use merge function for tags", () => {
-      expect(has(/merge\s*\(\s*local\.common_tags/)).toBe(true);
+      expect(has(/merge\s*KATEX_INLINE_OPEN\s*local\.common_tags/)).toBe(true);
     });
 
     test("all buckets have Environment and Purpose tags", () => {
-      const bucketResources = tf.match(/resource\s+"aws_s3_bucket"\s+"(dev|prod|logs)"[\s\S]*?tags\s*=[\s\S]*?\n\s*\)/g) || [];
+      const bucketResources = tf.match(/resource\s+"aws_s3_bucket"\s+"(dev|prod|logs)"[\s\S]*?tags\s*=[\s\S]*?\n\s*KATEX_INLINE_CLOSE/g) || [];
       expect(bucketResources.length).toBe(3);
       bucketResources.forEach(bucket => {
         expect(/Environment\s*=/.test(bucket)).toBe(true);
@@ -549,7 +550,7 @@ describe("S3 Media Assets Storage - Unit Tests", () => {
   // ============================================================================
   describe("Output Definitions", () => {
     test("has exactly 10 outputs", () => {
-      expect(count(/output\s+"[^"]+"/)).toBe(10);
+      expect(count(/output\s+"[^"]+"/g)).toBe(10);
     });
 
     test("all outputs have descriptions", () => {
@@ -599,8 +600,8 @@ describe("S3 Media Assets Storage - Unit Tests", () => {
     });
 
     test("uses jsonencode for all policies", () => {
-      const policyResources = count(/resource\s+"aws_s3_bucket_policy"/);
-      const jsonEncodeUsage = count(/jsonencode\s*\(/);
+      const policyResources = count(/resource\s+"aws_s3_bucket_policy"/g);
+      const jsonEncodeUsage = count(/jsonencode\s*KATEX_INLINE_OPEN/g);
       expect(jsonEncodeUsage).toBeGreaterThanOrEqual(policyResources);
     });
 
