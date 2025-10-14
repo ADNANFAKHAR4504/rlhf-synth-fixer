@@ -90,18 +90,59 @@ function httpGet(urlStr: string, timeoutMs = 6000): Promise<{ status: number; bo
 const ts = () => new Date().toISOString();
 const log = (...parts: any[]) => console.log(`[E2E] ${ts()}`, ...parts);
 
-const OUTPUTS_PATH = path.resolve(process.cwd(), 'cfn-outputs/flat-outputs.json');
-if (!fs.existsSync(OUTPUTS_PATH)) {
-  throw new Error(
-    `Missing ${OUTPUTS_PATH}. Export Terraform outputs first:\n` +
-      `  terraform output -json | jq 'with_entries(.value |= .value)' > cfn-outputs/flat-outputs.json\n`,
-  );
+/* ---------- outputs discovery (robust for CI) ---------- */
+type FlatOutputs = Record<string, unknown>;
+
+function findOutputsPath(): string {
+  const baseDir = path.join(process.cwd(), 'cfn-outputs');
+
+  const ENV_SUFFIX =
+    process.env.ENV_SUFFIX ||
+    process.env.ENVIRONMENT_SUFFIX ||
+    process.env.PR_ENV_SUFFIX ||
+    process.env.PR_NUMBER ||
+    process.env.CHANGE_ID ||
+    process.env.BRANCH_ENV_SUFFIX ||
+    process.env.GITHUB_HEAD_REF ||
+    process.env.CI_COMMIT_REF_SLUG ||
+    process.env.CI_COMMIT_BRANCH ||
+    undefined;
+
+  const candidates = [
+    path.join(baseDir, 'flat-outputs.json'),
+    ENV_SUFFIX && path.join(baseDir, `flat-outputs.${ENV_SUFFIX}.json`),
+    ENV_SUFFIX && path.join(baseDir, ENV_SUFFIX, 'flat-outputs.json'),
+  ].filter(Boolean) as string[];
+
+  let chosen = candidates.find((p) => fs.existsSync(p));
+  if (!chosen && fs.existsSync(baseDir)) {
+    const files = fs
+      .readdirSync(baseDir)
+      .filter((f) => /^flat-outputs(\.|-).+\.json$/i.test(f))
+      .map((f) => path.join(baseDir, f))
+      .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+    if (files.length) chosen = files[0];
+  }
+
+  if (!chosen) {
+    const tried = candidates.length ? candidates.join('\n  ') : '(no candidates)';
+    throw new Error(
+      `Could not locate outputs file under ${baseDir}.\nTried:\n  ${tried}\n` +
+        `Ensure your pipeline writes either "flat-outputs.json" or a suffixed variant like "flat-outputs.<env>.json".`
+    );
+  }
+
+  console.log('[E2E] Using outputs file:', chosen);
+  return chosen;
+}
+
+const OUTPUTS_PATH = findOutputsPath();
+
+function readOutputs(): FlatOutputs {
+  return JSON.parse(fs.readFileSync(OUTPUTS_PATH, 'utf8')) as FlatOutputs;
 }
 
 // Region auto-detect from outputs.subnet_azs[0] (e.g., "us-west-2a" -> "us-west-2")
-function readOutputs(): Record<string, any> {
-  return JSON.parse(fs.readFileSync(OUTPUTS_PATH, 'utf8'));
-}
 function regionFromAz(az?: string): string | undefined {
   return az ? az.replace(/[a-z]$/, '') : undefined;
 }
@@ -112,8 +153,8 @@ const __outputsForRegion = (() => {
     return {};
   }
 })();
-const REGION_FROM_OUTPUTS: string | undefined = Array.isArray(__outputsForRegion.subnet_azs)
-  ? regionFromAz(__outputsForRegion.subnet_azs[0])
+const REGION_FROM_OUTPUTS: string | undefined = Array.isArray((__outputsForRegion as any).subnet_azs)
+  ? regionFromAz((__outputsForRegion as any).subnet_azs[0])
   : undefined;
 
 const REGION = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || REGION_FROM_OUTPUTS || 'us-west-2';
@@ -204,7 +245,7 @@ async function ssmRun(
  * E2E — Outputs — file values (flat-outputs.json)
  * ==========================================================================*/
 describe('E2E — Outputs — file values', () => {
-  const outputs = readOutputs();
+  const outputs = readOutputs() as any;
 
   it('Outputs present', () => {
     const vpcId: string = outputs.vpc_id;
@@ -228,7 +269,7 @@ describe('E2E — Outputs — file values', () => {
  *  - GET /ec2 should return the Nginx page your EC2 serves
  * ==========================================================================*/
 describe('E2E — API Gateway -> EC2 ', () => {
-  const outputs = readOutputs();
+  const outputs = readOutputs() as any;
   const apiUrl: string = outputs.api_invoke_url;      // existing output
   const ec2Ip: string  = outputs.ec2_public_ip;       // existing output
 
@@ -251,7 +292,7 @@ describe('E2E — API Gateway -> EC2 ', () => {
  * E2E — EC2 + Networking + Security Groups
  * ==========================================================================*/
 describe('E2E — EC2 + Networking + Security Groups', () => {
-  const outputs = readOutputs();
+  const outputs = readOutputs() as any;
 
   const vpcId: string = outputs.vpc_id;
   const publicSubnetIds: string[] = outputs.public_subnet_ids;
@@ -330,10 +371,8 @@ describe('E2E — EC2 + Networking + Security Groups', () => {
       ].join('\n');
 
       const diag = await ssmRun(ssm, ec2Id, diagScript, 240);
-      // Surface diagnostic info to CI logs to make debugging easy
       console.log('[E2E] nginx diagnostics:\n', diag.StdOut.slice(0, 4000));
 
-      // One last external HTTP retry after restart
       try {
         res = await retry(
           () => httpGet(`http://${ec2Ip}/`).then((r) => (r.status >= 200 && r.status < 400 ? r : null)),
@@ -341,9 +380,7 @@ describe('E2E — EC2 + Networking + Security Groups', () => {
           3000,
           'ec2-http-80-after-restart',
         );
-      } catch (e) {
-        // keep res as null
-      }
+      } catch (e) {}
     }
 
     expect(res).toBeTruthy();
@@ -444,7 +481,7 @@ describe('E2E — EC2 + Networking + Security Groups', () => {
  * E2E — RDS SQL login + CRUD from EC2 (psql)
  * ==========================================================================*/
 describe('E2E — RDS SQL login + CRUD from EC2 (psql)', () => {
-  const outputs = readOutputs();
+  const outputs = readOutputs() as any;
   const rdsEndpoint: string = outputs.rds_endpoint;
   const ec2Id: string = outputs.ec2_instance_id;
   const lambdaName: string = outputs.lambda_function_name;
@@ -454,7 +491,6 @@ describe('E2E — RDS SQL login + CRUD from EC2 (psql)', () => {
   const lambda = new LambdaClient({ region: REGION });
 
   it('EC2 can login to RDS via psql and run basic CRUD', async () => {
-    // 1) Discover SSM param name from Lambda env (RDS_PASSWORD_PARAM)
     const cfg = await lambda.send(
       new GetFunctionConfigurationCommand({ FunctionName: lambdaName }),
     );
@@ -462,17 +498,14 @@ describe('E2E — RDS SQL login + CRUD from EC2 (psql)', () => {
     expect(typeof paramName).toBe('string');
     if (!paramName) throw new Error('RDS_PASSWORD_PARAM not found on Lambda');
 
-    // 2) Decrypt the DB password in the test runner
     const secret = await ssm.send(
       new GetParameterCommand({ Name: paramName, WithDecryption: true }),
     );
     const dbPassword = secret.Parameter?.Value || '';
     expect(dbPassword.length).toBeGreaterThan(0);
 
-    // 3) Ensure instance is healthy
     await waitForReachability(ec2, ec2Id);
 
-    // 4) Install psql & run SQL with sslmode=require, parse COUNT deterministically
     const pwB64 = Buffer.from(dbPassword, 'utf8').toString('base64');
 
     const script = [
@@ -502,7 +535,6 @@ describe('E2E — RDS SQL login + CRUD from EC2 (psql)', () => {
     ].join('\n');
 
     const out = await ssmRun(ssm, ec2Id, script, 420);
-    // Debug aid on failure
     if (out.Status !== 'Success') {
       console.log('[E2E][psql-stdout]', out.StdOut.slice(0, 4000));
       console.log('[E2E][psql-stderr]', out.StdErr.slice(0, 4000));
@@ -511,7 +543,6 @@ describe('E2E — RDS SQL login + CRUD from EC2 (psql)', () => {
     expect(out.Status).toBe('Success');
     expect(/PSQL_OK/.test(out.StdOut)).toBe(true);
 
-    // Strong assertion on COUNT
     const m = out.StdOut.match(/COUNT=(\d+)/);
     expect(m).toBeTruthy();
     expect(m && m[1]).toBe('1');
@@ -522,7 +553,7 @@ describe('E2E — RDS SQL login + CRUD from EC2 (psql)', () => {
  * E2E — RDS posture (encryption/private/KMS + SSL param)
  * ==========================================================================*/
 describe('E2E — RDS posture', () => {
-  const outputs = readOutputs();
+  const outputs = readOutputs() as any;
   const rdsEndpoint: string = outputs.rds_endpoint;
   const rds = new RDSClient({ region: REGION });
 
@@ -545,7 +576,6 @@ describe('E2E — RDS posture', () => {
     const pgName = inst!.DBParameterGroups?.[0]?.DBParameterGroupName!;
     expect(typeof pgName).toBe('string');
 
-    // Paginate through parameters to locate rds.force_ssl
     let marker: string | undefined = undefined;
     let forceSslValue: string | undefined;
 
@@ -569,7 +599,7 @@ describe('E2E — RDS posture', () => {
  * E2E — Lambda heartbeat → S3 (app bucket) + CloudWatch Logs emission
  * ==========================================================================*/
 describe('E2E — Lambda heartbeat writes to S3', () => {
-  const outputs = readOutputs();
+  const outputs = readOutputs() as any;
   const lambdaName: string = outputs.lambda_function_name;
   const appBucket: string = outputs.app_bucket_name;
 
@@ -663,7 +693,7 @@ describe('E2E — Lambda heartbeat writes to S3', () => {
  * E2E — API Gateway (IAM) — unsigned denied, SigV4-signed allowed
  * ==========================================================================*/
 describe('E2E — API Gateway IAM auth', () => {
-  const outputs = readOutputs();
+  const outputs = readOutputs() as any;
   const apiUrl: string = outputs.api_invoke_url;
 
   it('Unsigned GET / is denied (non-2xx)', async () => {
@@ -672,11 +702,10 @@ describe('E2E — API Gateway IAM auth', () => {
   });
 
   it('SigV4-signed GET / is allowed (2xx)', async () => {
-    const outputs = readOutputs();
+    const outputs = readOutputs() as any;
     const apiUrl: string = outputs.api_invoke_url;
     const u = new URL(apiUrl + '/');
 
-    // Reuse default SDK creds (whatever made your other AWS calls succeed)
     const probeClient = new S3Client({ region: REGION });
     const provider = probeClient.config.credentials as unknown as () => Promise<{
       accessKeyId: string; secretAccessKey: string; sessionToken?: string;
@@ -693,7 +722,6 @@ describe('E2E — API Gateway IAM auth', () => {
       sha256: Sha256 as any,
     });
 
-    // Build and sign request
     const req = new HttpRequest({
       protocol: u.protocol,
       hostname: u.hostname,
@@ -703,7 +731,7 @@ describe('E2E — API Gateway IAM auth', () => {
     });
 
     const signed = await signer.sign(req);
-    const finalReq = new HttpRequest(signed as any); // normalize to protocol-http HttpRequest
+    const finalReq = new HttpRequest(signed as any);
 
     const { response } = await new NodeHttpHandler().handle(finalReq as any, { requestTimeout: 6000 });
     const code = response.statusCode ?? 0;
@@ -716,13 +744,12 @@ describe('E2E — API Gateway IAM auth', () => {
  * E2E — CloudTrail delivers to S3 (AWSLogs/...) + posture
  * ==========================================================================*/
 describe('E2E — CloudTrail delivers to S3 (AWSLogs/...)', () => {
-  const outputs = readOutputs();
+  const outputs = readOutputs() as any;
   const trailBucket: string = outputs.trail_bucket_name;
 
   const s3 = new S3Client({ region: REGION });
 
   it('AWSLogs/<account>/ exists or appears shortly (multi-region trail)', async () => {
-    // We don’t import @aws-sdk/client-cloudtrail; we assert delivery by S3 listing.
     const hasLogs = await retry(
       async () => {
         const res = await s3.send(
@@ -731,7 +758,7 @@ describe('E2E — CloudTrail delivers to S3 (AWSLogs/...)', () => {
         const any = (res.Contents || []).some((o) => o.Key && o.Key.startsWith('AWSLogs/'));
         return any ? true : null;
       },
-      24, // up to ~2 minutes
+      24,
       5000,
       'cloudtrail-s3',
     );
@@ -751,7 +778,7 @@ describe('E2E — CloudTrail delivers to S3 (AWSLogs/...)', () => {
  * E2E — S3 buckets enforce TLS-only access (HTTP denied)
  * ==========================================================================*/
 describe('E2E — S3 buckets enforce TLS-only access (HTTP denied)', () => {
-  const outputs = readOutputs();
+  const outputs = readOutputs() as any;
   const ec2Id: string = outputs.ec2_instance_id;
   const trailBucket: string = outputs.trail_bucket_name;
   const appBucket: string = outputs.app_bucket_name;
@@ -775,76 +802,56 @@ describe('E2E — S3 buckets enforce TLS-only access (HTTP denied)', () => {
       const m = l.match(/HTTP_CODE=(\d+)/);
       expect(m).toBeTruthy();
       const code = Number(m![1]);
-      // anything but 2xx is OK — 301/400/403 are all fine for HTTP attempts
       expect(code >= 200 && code < 300).toBe(false);
     });
   });
 });
 
 /* ============================================================================
- * E2E — WAF logging posture and (optionally) live log verification
- *  - No new SDKs required (uses S3 + your existing httpGet/signature helpers).
- *  - Default: posture check passes when logging not enabled.
- *  - With env WAF_LOG_BUCKET + WAF_ASSOCIATED=1: full E2E verification.
+ * E2E — AWS WAF logging posture and (optionally) live log verification
  * ==========================================================================*/
 describe('E2E — AWS WAF logging', () => {
-  const outputs = readOutputs();
-  const apiUrl: string = outputs.api_invoke_url; // your HTTP API endpoint (used to generate traffic if associated)
+  const outputs = readOutputs() as any;
+  const apiUrl: string = outputs.api_invoke_url;
   const s3 = new S3Client({ region: REGION });
 
-  // Toggle full E2E by environment (keeps current stack unchanged)
   const WAF_LOG_BUCKET = process.env.WAF_LOG_BUCKET || '';
   const WAF_ASSOCIATED = process.env.WAF_ASSOCIATED === '1';
 
   it('Posture: logging is either disabled by design OR has a configured log bucket (env)', async () => {
-    // Your Terraform uses `count = local.waf_logging_enabled ? 1 : 0` and
-    // association is disabled for HTTP API. By default, we confirm “off-by-design”.
-    // If a bucket is provided via env, we confirm the bucket is reachable.
     if (!WAF_LOG_BUCKET) {
-      // Off-by-design posture passes (explicit, not skipped)
       expect(true).toBe(true);
     } else {
-      // Check bucket exists and is listable
       const listed = await s3.send(
         new ListObjectsV2Command({ Bucket: WAF_LOG_BUCKET, MaxKeys: 1 })
       );
-      // It’s okay if empty prior to traffic; we just assert the bucket is valid
       expect(listed.$metadata.httpStatusCode).toBeGreaterThanOrEqual(200);
       expect(listed.$metadata.httpStatusCode).toBeLessThan(400);
     }
   });
 
   it('Live logs (E2E): suspicious requests produce WAF log objects in S3', async () => {
-    // Only run the live part when both log bucket is known AND Web ACL is associated.
     if (!WAF_LOG_BUCKET || !WAF_ASSOCIATED) {
-      // Prove we are intentionally not running the live log probe (no skip)
       expect(true).toBe(true);
       return;
     }
 
-    // 1) Note current object count
     const before = await s3.send(
       new ListObjectsV2Command({ Bucket: WAF_LOG_BUCKET, MaxKeys: 50, Prefix: '' })
     );
     const beforeCount = (before.Contents || []).length;
 
-    // 2) Generate “suspicious” traffic through the protected resource.
-    // If your Web ACL is attached to an ALB/REST API/CloudFront in front of this API,
-    // these payloads should be logged by WAF managed rules.
     const probes = [
-      `${apiUrl}/?q=<script>alert(1)</script>`, // XSS-ish
-      `${apiUrl}/?id=1%20OR%201=1--`            // SQLi-ish
+      `${apiUrl}/?q=<script>alert(1)</script>`,
+      `${apiUrl}/?id=1%20OR%201=1--`
     ];
 
     for (const p of probes) {
       try {
         await httpGet(p, 4000);
-      } catch {
-        // even connection errors are fine; logging happens at WAF layer
-      }
+      } catch {}
     }
 
-    // 3) Wait for Firehose to deliver objects into S3
     const after = await retry(async () => {
       const res = await s3.send(
         new ListObjectsV2Command({ Bucket: WAF_LOG_BUCKET, MaxKeys: 100 })
@@ -853,7 +860,6 @@ describe('E2E — AWS WAF logging', () => {
       return cnt > beforeCount ? res : null;
     }, 20, 5000, 'waf-logs-firehose');
 
-    // 4) Fetch one of the newest objects and assert WAF fields
     const newest = (after.Contents || [])
       .sort((a, b) => (b.LastModified?.getTime() || 0) - (a.LastModified?.getTime() || 0))[0];
     expect(newest?.Key).toBeTruthy();
@@ -866,14 +872,10 @@ describe('E2E — AWS WAF logging', () => {
       (obj.Body as any).on('error', reject);
     });
 
-    // Firehose usually batches JSON lines. Check for representative fields.
-    // We only need to see at least one event with these properties.
     const lines = body.split('\n').map(l => l.trim()).filter(Boolean).slice(0, 20);
     const hasWafFields = lines.some(l => {
       try {
         const j = JSON.parse(l);
-        // Typical WAF log keys:
-        // terminatingRuleId, action, httpRequest, httpSourceIp, httpSourceName, ruleGroupList, etc.
         return (
           j.terminatingRuleId !== undefined &&
           j.action !== undefined &&
