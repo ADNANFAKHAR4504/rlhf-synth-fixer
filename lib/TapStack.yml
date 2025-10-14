@@ -28,10 +28,7 @@ Parameters:
   DBEngineVersion:
     Type: String
     Default: "8.0.41"
-    AllowedValues:
-      - "8.0.40"
-      - "8.0.41"
-      - "8.0.42"
+    AllowedValues: ["8.0.40", "8.0.41", "8.0.42"]
     Description: "MySQL engine version"
 
   InstanceType:
@@ -53,7 +50,6 @@ Parameters:
     AllowedValues: ["true", "false"]
     Description: "Automatically deactivate IAM access keys older than 90 days"
 
-  # Optional key pair (leave blank to skip)
   KeyPairName:
     Type: String
     Default: ""
@@ -77,9 +73,7 @@ Conditions:
   HasKeyPairName: !Not [!Equals [!Ref KeyPairName, ""]]
 
 Resources:
-  # --------------------------
-  # KMS (region-scoped Logs principal + full action set)
-  # --------------------------
+  # KMS (region-scoped Logs principal + full actions)
   MasterKMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -101,24 +95,28 @@ Resources:
                 - rds.amazonaws.com
                 - backup.amazonaws.com
             Action:
-              - kms:Encrypt
-              - kms:Decrypt
-              - kms:ReEncrypt*
-              - kms:GenerateDataKey*
-              - kms:DescribeKey
-              - kms:CreateGrant
+              [
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:DescribeKey",
+                "kms:CreateGrant",
+              ]
             Resource: "*"
           - Sid: AllowCloudWatchLogsRegional
             Effect: Allow
             Principal:
               Service: !Sub "logs.${AWS::Region}.amazonaws.com"
             Action:
-              - kms:Encrypt
-              - kms:Decrypt
-              - kms:ReEncrypt*
-              - kms:GenerateDataKey*
-              - kms:DescribeKey
-              - kms:CreateGrant
+              [
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:DescribeKey",
+                "kms:CreateGrant",
+              ]
             Resource: "*"
       EnableKeyRotation: true
       Tags:
@@ -131,9 +129,7 @@ Resources:
       AliasName: alias/production-security-master
       TargetKeyId: !Ref MasterKMSKey
 
-  # --------------------------
   # VPC & Subnets
-  # --------------------------
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -226,9 +222,7 @@ Resources:
         - { Key: Environment, Value: Production }
         - { Key: Owner, Value: SecurityTeam }
 
-  # --------------------------
   # NAT & Routes
-  # --------------------------
   NATGateway1EIP:
     Type: AWS::EC2::EIP
     DependsOn: AttachGateway
@@ -350,9 +344,7 @@ Resources:
       SubnetId: !Ref DBSubnet2
       RouteTableId: !Ref PrivateRouteTable2
 
-  # --------------------------
   # NACLs (HTTP-only edge)
-  # --------------------------
   PublicNetworkAcl:
     Type: AWS::EC2::NetworkAcl
     Properties:
@@ -486,9 +478,7 @@ Resources:
       SubnetId: !Ref DBSubnet2
       NetworkAclId: !Ref DBNetworkAcl
 
-  # --------------------------
   # Security Groups
-  # --------------------------
   LoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -550,9 +540,7 @@ Resources:
         - { Key: Environment, Value: Production }
         - { Key: Owner, Value: SecurityTeam }
 
-  # --------------------------
   # IAM (no explicit RoleName)
-  # --------------------------
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -598,19 +586,19 @@ Resources:
           - Sid: DenyAllExceptListedIfNoMFA
             Effect: Deny
             Action:
-              - "iam:*"
-              - "ec2:TerminateInstances"
-              - "ec2:DeleteVolume"
-              - "rds:DeleteDBInstance"
-              - "s3:DeleteBucket"
-              - "kms:ScheduleKeyDeletion"
+              [
+                "iam:*",
+                "ec2:TerminateInstances",
+                "ec2:DeleteVolume",
+                "rds:DeleteDBInstance",
+                "s3:DeleteBucket",
+                "kms:ScheduleKeyDeletion",
+              ]
             Resource: "*"
             Condition:
-              BoolIfExists: { "aws:MultiFactorAuthPresent": "false" }
+              { BoolIfExists: { "aws:MultiFactorAuthPresent": "false" } }
 
-  # --------------------------
   # ALB + Target Group (HTTP-only)
-  # --------------------------
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -652,9 +640,7 @@ Resources:
       Port: 80
       Protocol: HTTP
 
-  # --------------------------
-  # WAF (works fine with HTTP)
-  # --------------------------
+  # WAF
   WAFWebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
@@ -710,9 +696,7 @@ Resources:
       ResourceArn: !Ref ApplicationLoadBalancer
       WebACLArn: !GetAtt WAFWebACL.Arn
 
-  # --------------------------
   # Launch Template / ASG
-  # --------------------------
   EC2LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
@@ -769,9 +753,7 @@ Resources:
         - { Key: Environment, Value: Production, PropagateAtLaunch: true }
         - { Key: Owner, Value: SecurityTeam, PropagateAtLaunch: true }
 
-  # --------------------------
-  # RDS (no plaintext secret; snapshots protected)
-  # --------------------------
+  # RDS
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -808,9 +790,7 @@ Resources:
         - { Key: Environment, Value: Production }
         - { Key: Owner, Value: SecurityTeam }
 
-  # --------------------------
-  # S3 Logs (SSE-KMS + TLS-only policy)
-  # --------------------------
+  # S3 Logs (SSE-KMS + TLS-only)
   LoggingBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -878,9 +858,7 @@ Resources:
             Condition:
               { StringEquals: { "s3:x-amz-acl": "bucket-owner-full-control" } }
 
-  # --------------------------
   # CloudTrail (+ KMS)
-  # --------------------------
   CloudTrail:
     Type: AWS::CloudTrail::Trail
     DependsOn: LoggingBucketPolicy
@@ -909,9 +887,7 @@ Resources:
       RetentionInDays: 30
       KmsKeyId: !GetAtt MasterKMSKey.Arn
 
-  # --------------------------
-  # AWS Config (recorder + delivery channel)
-  # --------------------------
+  # AWS Config (no AWS-managed policy attach; inline instead)
   ConfigServiceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -921,8 +897,6 @@ Resources:
           - Effect: Allow
             Principal: { Service: config.amazonaws.com }
             Action: "sts:AssumeRole"
-      ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/service-role/AWSConfigRole" # <-- fixed ARN
       Policies:
         - PolicyName: S3AndSNSAccessForConfig
           PolicyDocument:
@@ -930,10 +904,12 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - "s3:GetBucketAcl"
-                  - "s3:ListBucket"
-                  - "s3:PutObject"
-                  - "s3:GetObject"
+                  [
+                    "s3:GetBucketAcl",
+                    "s3:ListBucket",
+                    "s3:PutObject",
+                    "s3:GetObject",
+                  ]
                 Resource:
                   - !GetAtt LoggingBucket.Arn
                   - !Sub "${LoggingBucket.Arn}/*"
@@ -961,9 +937,7 @@ Resources:
       S3KeyPrefix: config
       SnsTopicARN: !Ref SNSTopic
 
-  # --------------------------
-  # SNS for notifications
-  # --------------------------
+  # SNS
   SNSTopic:
     Type: AWS::SNS::Topic
     Properties:
@@ -973,9 +947,7 @@ Resources:
         - { Key: Environment, Value: Production }
         - { Key: Owner, Value: SecurityTeam }
 
-  # --------------------------
-  # AWS Backup (≥90 days after cold)
-  # --------------------------
+  # AWS Backup
   BackupVault:
     Type: AWS::Backup::BackupVault
     Properties:
@@ -1029,9 +1001,7 @@ Resources:
         - { Key: Environment, Value: Production }
         - { Key: Owner, Value: SecurityTeam }
 
-  # --------------------------
   # Key rotation Lambda
-  # --------------------------
   KeyRotationLambdaRole:
     Type: AWS::IAM::Role
     Properties:
