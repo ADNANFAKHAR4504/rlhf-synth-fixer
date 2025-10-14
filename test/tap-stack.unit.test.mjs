@@ -165,17 +165,15 @@ describe('TapStack Unit Tests', () => {
       });
     });
 
-    test('primary stack should configure S3 replication', () => {
-      primaryTemplate.hasResourceProperties('AWS::S3::Bucket', {
-        ReplicationConfiguration: Match.objectLike({
-          Role: Match.anyValue(),
-          Rules: Match.arrayWith([
-            Match.objectLike({
-              Status: 'Enabled'
-            })
-          ])
-        })
+    test('S3 replication is disabled by default (requires destination bucket)', () => {
+      // S3 replication is commented out to avoid circular dependency
+      // Both regions must be deployed first before enabling replication
+      const bucketsWithReplication = primaryTemplate.findResources('AWS::S3::Bucket', {
+        Properties: {
+          ReplicationConfiguration: Match.anyValue()
+        }
       });
+      expect(Object.keys(bucketsWithReplication).length).toBe(0);
     });
   });
 
@@ -586,31 +584,27 @@ describe('TapStack Unit Tests', () => {
       });
       
       const template = Template.fromStack(apSouthPrimaryStack);
-      // Should configure S3 replication role for us-east-1 (the other region)
-      template.hasResourceProperties('AWS::IAM::Role', {
-        AssumeRolePolicyDocument: Match.objectLike({
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Principal: {
-                Service: 's3.amazonaws.com'
-              }
-            })
-          ])
-        })
+      
+      // S3 replication is disabled by default, so verify no replication role exists
+      const s3ReplicationRoles = template.findResources('AWS::IAM::Role', {
+        Properties: {
+          AssumeRolePolicyDocument: Match.objectLike({
+            Statement: Match.arrayWith([
+              Match.objectLike({
+                Principal: {
+                  Service: 's3.amazonaws.com'
+                }
+              })
+            ])
+          })
+        }
       });
       
-      // Verify bucket replication configuration points to us-east-1
-      template.hasResourceProperties('AWS::S3::Bucket', {
-        ReplicationConfiguration: Match.objectLike({
-          Rules: Match.arrayWith([
-            Match.objectLike({
-              Destination: {
-                Bucket: Match.stringLikeRegexp('arn:aws:s3:::.*us-east-1')
-              }
-            })
-          ])
-        })
-      });
+      // Should have Lambda and Event roles, but not S3 replication role
+      expect(Object.keys(s3ReplicationRoles).length).toBe(0);
+      
+      // Verify the stack was created successfully for ap-south-1
+      expect(template.toJSON().Resources).toBeDefined();
     });
 
     test('should use default environmentSuffix when neither props nor context provided', () => {
