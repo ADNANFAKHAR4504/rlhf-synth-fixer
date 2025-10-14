@@ -18,8 +18,8 @@ Build a production-ready, PCI-DSS compliant payment processing infrastructure us
 ### Core AWS Services Required
 
 1. **Amazon ECS (Fargate)** - Serverless containerized payment processing microservices
-2. **Amazon RDS (PostgreSQL)** - Multi-AZ encrypted database for transaction storage
-3. **Amazon ElastiCache Redis** - Encrypted caching layer for session management
+2. **Amazon RDS (PostgreSQL)** - Single-AZ encrypted database for transaction storage (optimized for development)
+3. **Amazon ElastiCache Redis** - Single-node encrypted caching layer for session management (optimized for development)
 4. **AWS Secrets Manager** - Secure credential storage with automatic rotation
 5. **Amazon EFS** - Encrypted shared file system for containers
 6. **Amazon API Gateway** - Secure REST API with VPC Link integration
@@ -32,7 +32,7 @@ Build a production-ready, PCI-DSS compliant payment processing infrastructure us
 
 #### Network Security
 - VPC with CIDR block 10.0.0.0/16
-- Three-tier subnet architecture across 3 Availability Zones:
+- Three-tier subnet architecture across 2 Availability Zones (us-west-1 limitation):
   - Public subnets for load balancers and NAT gateways
   - Private subnets for ECS tasks
   - Isolated database subnets for RDS and ElastiCache
@@ -49,11 +49,11 @@ Build a production-ready, PCI-DSS compliant payment processing infrastructure us
 - Secrets Manager for all sensitive credentials (database passwords, API keys, application secrets)
 
 #### High Availability Design
-- Multi-AZ deployment for all critical components
-- RDS PostgreSQL in Multi-AZ configuration with automated backups
-- ElastiCache Redis with replication groups
-- ECS services with auto-scaling policies
-- NAT Gateways deployed in each Availability Zone
+- Deployment optimized for fast provisioning while maintaining security
+- RDS PostgreSQL in Single-AZ configuration with automated backups (30-day retention)
+- ElastiCache Redis single-node deployment with encryption
+- ECS services with auto-scaling policies (1-5 tasks)
+- NAT Gateways deployed in each Availability Zone (2 AZs)
 - Network Load Balancer for high-performance traffic distribution
 
 #### PCI-DSS Compliance Requirements
@@ -68,26 +68,27 @@ Build a production-ready, PCI-DSS compliant payment processing infrastructure us
 
 #### VPC and Networking
 - VPC with 10.0.0.0/16 CIDR block
-- 3 public subnets (10.0.0.0/24, 10.0.1.0/24, 10.0.2.0/24)
-- 3 private subnets (10.0.3.0/24, 10.0.4.0/24, 10.0.5.0/24)
-- 3 database subnets (10.0.6.0/24, 10.0.7.0/24, 10.0.8.0/24)
+- 2 public subnets across 2 AZs (us-west-1a, us-west-1c)
+- 2 private subnets across 2 AZs
+- 2 isolated database subnets across 2 AZs
 - Internet Gateway for public subnet connectivity
-- NAT Gateways in each public subnet for private subnet internet access
+- 2 NAT Gateways (one per AZ) for private subnet internet access
 - VPC Flow Logs sent to CloudWatch Logs
 - Separate security groups for:
   - Load balancer
-  - ECS tasks
-  - RDS database
-  - ElastiCache Redis
-  - EFS file system
+  - ECS tasks (allows traffic from VPC CIDR on port 80)
+  - RDS database (allows traffic from ECS on port 5432)
+  - ElastiCache Redis (allows traffic from ECS on port 6379)
+  - EFS file system (allows NFS traffic from ECS on port 2049)
 
 #### ECS Fargate Configuration
 - Fargate launch type for serverless container management
 - Task definition with 512 MB memory and 256 CPU units
 - Container image: httpd:alpine (lightweight web server)
-- CloudWatch Logs integration for container logging
+- Container health check using wget on port 80
+- CloudWatch Logs integration with 3-month retention
 - Task execution role with permissions for:
-  - Pulling container images
+  - Pulling container images from ECR
   - Reading from Secrets Manager
   - Writing logs to CloudWatch
 - Task role with permissions for:
@@ -95,32 +96,41 @@ Build a production-ready, PCI-DSS compliant payment processing infrastructure us
   - Reading from Secrets Manager
 - Service configuration:
   - Desired count: 1 task
-  - Deployment circuit breaker disabled for more control
-  - Health check integration with target group
+  - Min healthy percent: 0 (for faster deployments)
+  - Max healthy percent: 200
+  - Deployment circuit breaker explicitly disabled
+  - Health check integration with NLB target group
 - Auto-scaling configuration:
   - Scale between 1-5 tasks
   - CPU-based scaling at 70% utilization
   - Memory-based scaling at 80% utilization
+  - Scale in/out cooldown: 30 seconds
 
 #### Database Configuration
-- RDS PostgreSQL 14.x
-- Instance class: db.t3.micro
-- Storage: 20 GB GP2 with encryption
-- Multi-AZ deployment enabled
-- Automated backups with 7-day retention
-- Performance Insights enabled for monitoring
+- RDS PostgreSQL 16.6
+- Instance class: db.t3.medium
+- Storage: 100 GB GP3 with auto-scaling up to 500 GB
+- Single-AZ deployment for faster provisioning
+- KMS encryption using customer-managed key
+- Automated backups with 30-day retention
+- Performance Insights enabled with KMS encryption
+- CloudWatch Logs exports for PostgreSQL and upgrade logs (3-month retention)
 - Security group allowing access only from ECS security group on port 5432
-- Credentials stored in Secrets Manager with 30-day rotation
+- Credentials stored in Secrets Manager with automated 30-day rotation
+- Deletion protection disabled for development (enable for production)
 
 #### Caching Layer
-- ElastiCache Redis 7.0
+- ElastiCache Redis 7.1
 - Node type: cache.t3.micro
-- Replication group with automatic failover
-- Encryption at rest using KMS
-- Encryption in transit enabled
-- Auth token authentication
-- CloudWatch Logs for slow queries
+- Single-node deployment (no replication for development)
+- Encryption at rest using customer-managed KMS key
+- Encryption in transit enabled (TLS required mode)
+- Automatic minor version upgrades enabled
+- 7-day snapshot retention with backup window 03:00-05:00 UTC
+- Maintenance window: Sunday 05:00-07:00 UTC
+- CloudWatch Logs delivery for slow-log queries (JSON format)
 - Security group allowing access only from ECS security group on port 6379
+- Subnet group across private subnets in both AZs
 
 #### Shared Storage
 - EFS file system with encryption at rest
@@ -131,9 +141,15 @@ Build a production-ready, PCI-DSS compliant payment processing infrastructure us
 
 #### Load Balancing
 - Network Load Balancer (Layer 4) for VPC Link compatibility
-- Deployed in public subnets across all AZs
-- Target group with IP target type
-- Health checks on port 80 with 10-second intervals
+- Deployed in public subnets across both AZs
+- Target group with IP target type for Fargate
+- Optimized health checks:
+  - Protocol: TCP on port 80
+  - Interval: 10 seconds
+  - Timeout: 5 seconds
+  - Healthy threshold: 2
+  - Unhealthy threshold: 2
+- Deregistration delay: 10 seconds (for faster deployments)
 - Cross-zone load balancing enabled
 - VPC Link for private API Gateway integration
 
@@ -153,10 +169,10 @@ Build a production-ready, PCI-DSS compliant payment processing infrastructure us
 
 #### Event Streaming
 - Kinesis Data Stream for transaction events
-- 1 shard for development workloads
+- 3 shards in provisioned mode
 - 24-hour data retention
-- Server-side encryption with KMS
-- Enhanced fan-out disabled to reduce costs
+- Server-side encryption with customer-managed KMS key
+- Stream mode: PROVISIONED
 
 #### Secrets Management
 - Database secret with auto-generated password
@@ -166,31 +182,33 @@ Build a production-ready, PCI-DSS compliant payment processing infrastructure us
 - VPC endpoint for Secrets Manager access
 
 #### Monitoring and Alerting
-- CloudWatch Dashboard with:
-  - API Gateway metrics (requests, latency, errors)
-  - ECS metrics (CPU, memory, task count)
-  - RDS metrics (connections, CPU, storage)
-  - ElastiCache metrics (CPU, memory, connections)
-  - Kinesis metrics (throughput, iterator age)
-- CloudWatch Alarms for:
-  - API 4xx errors (threshold: 100)
-  - API 5xx errors (threshold: 50)
-  - Database CPU (threshold: 80%)
-  - ECS Service CPU (threshold: 80%)
-  - ECS Service Memory (threshold: 80%)
-  - NLB unhealthy hosts
+- CloudWatch Dashboard with 9 widgets:
+  - ECS Service CPU and Memory utilization
+  - NLB Active connections and Target response time
+  - Database CPU and Connection count
+  - API Gateway Request count and Latency
+  - Kinesis Incoming records
+- CloudWatch Alarms (6 total):
+  - API 4xx errors (threshold: 100 in 5 minutes)
+  - API 5xx errors (threshold: 10 in 5 minutes)
+  - Database CPU (threshold: 80%, 2 evaluation periods)
+  - ECS Service CPU (threshold: 80%, 2 evaluation periods)
+  - ECS Service Memory (threshold: 85%, 2 evaluation periods)
+  - NLB unhealthy hosts (threshold: 1 unhealthy, 2 evaluation periods)
 - SNS topic for alarm notifications
+- All alarms use TreatMissingData: NOT_BREACHING
 
 ## Implementation Constraints
 
 1. **Security First**: Every component must be configured with security best practices
 2. **Zero Trust Network**: Components in private subnets cannot directly access the internet
-3. **Encryption Everywhere**: All data encrypted at rest and in transit
+3. **Encryption Everywhere**: All data encrypted at rest and in transit using customer-managed KMS keys
 4. **Least Privilege**: IAM roles grant only necessary permissions
 5. **Audit Trail**: All API calls and data access logged to CloudWatch
-6. **Automated Rotation**: Database credentials rotate every 30 days
-7. **Multi-AZ Resilience**: Critical components survive AZ failures
+6. **Automated Rotation**: Database credentials rotate every 30 days via Lambda
+7. **Fast Deployment**: Optimized for quick provisioning with Single-AZ RDS and single-node ElastiCache
 8. **Cost Optimization**: Use appropriate instance sizes for development workloads
+9. **Regional Limitation**: us-west-1 has only 2 Availability Zones (us-west-1a, us-west-1c)
 
 ## Code Structure Requirements
 
@@ -221,9 +239,24 @@ The implementation should follow a modular stack design:
 
 - All AWS services deploy successfully without errors
 - PCI-DSS compliance requirements fully met
-- Encryption configured for all data at rest and in transit
-- High availability across multiple Availability Zones
-- Auto-scaling responds to traffic changes
+- Encryption configured for all data at rest and in transit using customer-managed KMS keys
+- Infrastructure deployed across 2 Availability Zones (us-west-1 limitation)
+- Auto-scaling responds to CPU/Memory utilization changes
 - Security best practices followed throughout
 - Code is clean, modular, and production-ready
-- Stack deploys in approximately 15-20 minutes
+- Stack deploys quickly (optimized for fast provisioning)
+- All security groups follow least-privilege principles
+- Comprehensive monitoring and alerting configured
+- Database credentials automatically rotate every 30 days
+
+## Production Considerations
+
+For production deployment, consider these upgrades:
+1. Enable Multi-AZ for RDS PostgreSQL (`multiAz: true`)
+2. Configure ElastiCache with 3 nodes and automatic failover
+3. Enable RDS deletion protection (`deletionProtection: true`)
+4. Increase ECS task count and adjust auto-scaling thresholds
+5. Use larger instance types (db.t3.large, cache.t3.medium)
+6. Implement cross-region backup replication
+7. Add HTTPS listener with ACM certificate to API Gateway
+8. Configure SNS topic subscriptions for alarm notifications
