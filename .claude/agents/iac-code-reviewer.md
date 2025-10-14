@@ -38,9 +38,10 @@ pwd  # Must end with: /worktree/synth-{task_id}
   - If only PROMPT.md exists, use that file
   - If only MODEL_RESPONSE.md exists, use that file
 - Read `lib/MODEL_FAILURES.md` and analyze the failures/fixes described
-- **Verify metadata.json already contains `subtask` and `subject_labels`**:
+- **Verify metadata.json already contains `subtask`, `background`, and `subject_labels`**:
   - These fields should have been populated from tasks.csv during task setup
   - If missing, report BLOCKED status - these must be set from the source CSV
+  - The `background` field is REQUIRED for PR title generation in Phase 5
 
 **CRITICAL: Platform/Language Compliance Validation**
 - **Verify IDEAL_RESPONSE.md matches metadata.json constraints**:

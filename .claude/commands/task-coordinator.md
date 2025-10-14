@@ -103,6 +103,7 @@ echo "✅ Pre-flight checks passed"
    # Extract metadata for commit message
    TASK_ID=$(jq -r '.po_id' metadata.json)
    SUBTASK=$(jq -r '.subtask' metadata.json)
+   BACKGROUND=$(jq -r '.background' metadata.json)
    PLATFORM=$(jq -r '.platform' metadata.json)
    LANGUAGE=$(jq -r '.language' metadata.json)
    COMPLEXITY=$(jq -r '.complexity' metadata.json)
@@ -142,8 +143,9 @@ Task ID: ${TASK_ID}"
    AWS_SERVICES_COUNT=$(jq -r '.aws_services | length' metadata.json)
    
    # Create PR with error handling
+   # PR Title Format: Synth-{TASK_ID}: {BACKGROUND}
    if gh pr create \
-     --title "Task ${TASK_ID}: ${SUBTASK}" \
+     --title "Synth-${TASK_ID}: ${BACKGROUND}" \
      --body "**Platform**: ${PLATFORM}-${LANGUAGE}
 **Complexity**: ${COMPLEXITY}
 **Training Quality**: ${TRAINING_QUALITY}/10
@@ -350,11 +352,12 @@ PYTHON_SCRIPT
     - Set `complexity` (NOT "difficulty") from CSV difficulty field
     - Set `team` as "synth" (REQUIRED - validation will fail without this)
     - Set `startedAt` as current timestamp using `date -Iseconds` (REQUIRED - validation will fail without this)
-    - **Extract `subtask` and `subject_labels` from tasks.csv** (REQUIRED - validation will fail without these):
+    - **Extract `subtask`, `background`, and `subject_labels` from tasks.csv** (REQUIRED - validation will fail without these):
       - Read the selected task row from tasks.csv
       - Get the `subtask` value from the subtask column
+      - Get the `background` value from the background column (REQUIRED for PR title in Phase 5)
       - Get the `subject_labels` value from the subject_labels column (parse as JSON array)
-      - Both fields MUST be included in metadata.json
+      - All three fields MUST be included in metadata.json
     - Do not add more fields to metadata.json than the ones shown in the example below
     - Validate `templates/` directory exists and contains required platform template
     - If template missing, report BLOCKED status with specific template needed
@@ -371,6 +374,7 @@ PYTHON_SCRIPT
        "team": "synth",
        "startedAt": "2025-08-12T13:19:10-05:00",
        "subtask": "Application Deployment",
+       "background": "A manufacturing company needs to modernize their factory monitoring system...",
        "subject_labels": ["CI/CD Pipeline", "Security Configuration as Code"]
      }
    ```
@@ -378,7 +382,7 @@ PYTHON_SCRIPT
    - **Validate metadata.json immediately after creation**:
      - Run: `bash scripts/detect-metadata.sh` to verify all required fields are present
      - If validation fails, fix the metadata.json before proceeding
-     - Common errors: missing `team`, missing `startedAt`, missing `subtask`, missing `subject_labels`, using `difficulty` instead of `complexity`
+     - Common errors: missing `team`, missing `startedAt`, missing `subtask`, missing `background`, missing `subject_labels`, using `difficulty` instead of `complexity`
    - If the deployment needs to be done in a specific region, create the file `lib/AWS_REGION` with the
      region name. e.g: `echo "us-east-1" > lib/AWS_REGION`
 

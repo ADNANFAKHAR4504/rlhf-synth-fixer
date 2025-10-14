@@ -2,6 +2,82 @@
 
 This document contains common patterns, failures, and solutions discovered during synthetic task generation. Reference this before starting tasks to avoid known pitfalls and reduce deployment attempts.
 
+**For comprehensive validation procedures, see `.claude/validation_and_testing_guide.md`**  
+**For quick reference, see `.claude/quick_validation_checklist.md`**
+
+## Critical Data Integrity Requirements (MUST READ FIRST)
+
+### CSV File Corruption Prevention (CRITICAL)
+
+**Symptom**: tasks.csv file gets corrupted with only current task's data, all other task rows are lost/overwritten
+
+**Root Cause**: Not preserving all rows when updating CSV file, or not validating write operations
+
+**Prevention Rules** (MANDATORY for ALL CSV operations):
+1. **ALWAYS create backup before ANY modification**: `shutil.copy2('tasks.csv', 'tasks.csv.backup')`
+2. **ALWAYS read ALL rows into memory** before modifying any single row
+3. **ALWAYS validate row count** before and after write operations
+4. **ALWAYS verify fieldnames** are present and non-empty
+5. **ALWAYS restore from backup** if ANY validation fails
+6. **NEVER write CSV without these safeguards**
+
+**Safe CSV Update Pattern**:
+```python
+import csv
+import shutil
+import sys
+
+# 1. BACKUP
+shutil.copy2('tasks.csv', 'tasks.csv.backup')
+
+# 2. READ ALL ROWS
+rows = []
+original_count = 0
+with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
+    reader = csv.DictReader(f)
+    fieldnames = reader.fieldnames
+    for row in reader:
+        original_count += 1
+        # Modify specific row(s)
+        if row['task_id'] == target_id:
+            row['status'] = 'new_status'
+        rows.append(row)  # CRITICAL: append ALL rows
+
+# 3. VALIDATE BEFORE WRITE
+if len(rows) != original_count or not fieldnames:
+    print("ERROR: Data validation failed")
+    shutil.copy2('tasks.csv.backup', 'tasks.csv')
+    sys.exit(1)
+
+# 4. WRITE ALL ROWS
+with open('tasks.csv', 'w', newline='', encoding='utf-8') as f:
+    writer = csv.DictWriter(f, fieldnames=fieldnames)
+    writer.writeheader()
+    writer.writerows(rows)  # Write ALL rows
+
+# 5. VERIFY WRITE
+verify_count = sum(1 for _ in csv.DictReader(open('tasks.csv', 'r')))
+if verify_count != original_count:
+    print("ERROR: Write verification failed")
+    shutil.copy2('tasks.csv.backup', 'tasks.csv')
+    sys.exit(1)
+```
+
+**Applies to**: ALL agents that modify tasks.csv (task-selector, task-coordinator)
+
+**Recovery**: If corruption occurs:
+1. Use the validation tool: `python3 scripts/validate-tasks-csv.py --restore`
+2. Or manually restore: `cp tasks.csv.backup tasks.csv`
+3. Or use git: `git checkout tasks.csv` (if committed)
+
+**Validation Tool**: Use `python3 scripts/validate-tasks-csv.py` to:
+- Validate CSV structure and integrity
+- Check backup file status
+- Create backups: `--create-backup`
+- Restore from backup: `--restore`
+
+---
+
 ## Critical Quality Requirements (MUST READ FIRST)
 
 ### 1. Platform and Language Compliance (CRITICAL)
@@ -127,18 +203,9 @@ const key = event.Records[0].s3.object.key;
 
 ---
 
-### 4. S3 Bucket Deletion Failures
+### 4. S3 Bucket Considerations
 
-**Symptom**: Stack deletion fails with "Bucket must be empty" error
-
-**Root Cause**: S3 buckets with objects cannot be deleted
-
-**Quick Fix**:
-- CDK: Set `autoDeleteObjects: true` and `removalPolicy: RemovalPolicy.DESTROY`
-- CloudFormation: Add Lambda custom resource to empty bucket before deletion
-- Terraform: Use `force_destroy = true`
-
-**CRITICAL**: All synthetic tasks MUST create destroyable resources
+**Note**: Resource cleanup (including S3 bucket deletion) is handled after manual PR review. The infrastructure code does not need special deletion configurations for synthetic tasks.
 
 ---
 
