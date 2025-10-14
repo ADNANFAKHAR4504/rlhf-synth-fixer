@@ -19,10 +19,17 @@ import {
 } from "@aws-sdk/client-ec2";
 import {
   DescribeLoadBalancersCommand,
-  ElasticLoadBalancingV2Client
+  DescribeTargetGroupsCommand,
+  DescribeTargetHealthCommand,
+  ElasticLoadBalancingV2Client,
+  type DescribeTargetGroupsCommandOutput,
+  type DescribeTargetHealthCommandOutput,
+  type TargetHealthDescription,
 } from "@aws-sdk/client-elastic-load-balancing-v2";
 import {
   DescribeRuleCommand,
+  DisableRuleCommand,
+  EnableRuleCommand,
   EventBridgeClient,
   ListTargetsByRuleCommand
 } from "@aws-sdk/client-eventbridge";
@@ -40,9 +47,12 @@ import {
 } from "@aws-sdk/client-rds";
 import {
   GetHealthCheckCommand,
+  GetHealthCheckStatusCommand,
   ListResourceRecordSetsCommand,
   Route53Client,
-  RRType
+  RRType,
+  type GetHealthCheckStatusCommandOutput,
+  type HealthCheckObservation,
 } from "@aws-sdk/client-route-53";
 import axios from "axios";
 import fs from "fs";
@@ -954,136 +964,139 @@ suite("Trading Platform DR Stack - AWS integration", () => {
       ).toBe(true);
     });
 
-    // describe("when the primary application reports failure", () => {
-    //   const failoverRuleName = `${resourcePrefix}-failover-trigger`;
-    //   const targetGroupName = `${resourcePrefix}-tg-primary`;
-    //   const failureSeconds = 180;
-    //   const recoverySeconds = 5;
+    describe("when the primary application reports failure", () => {
+      const failoverRuleName = `${resourcePrefix}-failover-trigger`;
+      const targetGroupName = `${resourcePrefix}-tg-primary`;
+      const failureSeconds = 180;
+      const recoverySeconds = 5;
 
-    //   let eventBridge: EventBridgeClient;
-    //   let elbv2: ElasticLoadBalancingV2Client;
-    //   let targetGroupArn: string | undefined;
+      let eventBridge: EventBridgeClient;
+      let elbv2: ElasticLoadBalancingV2Client;
+      let targetGroupArn: string | undefined;
 
-    //   beforeAll(async () => {
-    //     eventBridge = new EventBridgeClient({ region: primaryRegion });
-    //     elbv2 = new ElasticLoadBalancingV2Client({ region: primaryRegion });
+      beforeAll(async () => {
+        eventBridge = new EventBridgeClient({ region: primaryRegion });
+        elbv2 = new ElasticLoadBalancingV2Client({ region: primaryRegion });
 
-    //     await eventBridge.send(new DisableRuleCommand({ Name: failoverRuleName }));
+        await eventBridge.send(new DisableRuleCommand({ Name: failoverRuleName }));
 
-    //     const failureResponse = await axios.post(
-    //       `${primaryAlbUrl}/trigger-failure`,
-    //       { seconds: failureSeconds },
-    //       { timeout: 10000 },
-    //     );
+        const failureResponse = await axios.post(
+          `${primaryAlbUrl}/trigger-failure`,
+          { seconds: failureSeconds },
+          { timeout: 10000 },
+        );
 
-    //     if (failureResponse.status !== 202) {
-    //       throw new Error(`expected trigger-failure to return 202, received ${failureResponse.status}`);
-    //     }
+        if (failureResponse.status !== 202) {
+          throw new Error(`expected trigger-failure to return 202, received ${failureResponse.status}`);
+        }
 
-    //     const targetGroupResponse = await elbv2.send(
-    //       new DescribeTargetGroupsCommand({ Names: [targetGroupName] }),
-    //     );
-    //     targetGroupArn = targetGroupResponse.TargetGroups?.[0]?.TargetGroupArn ?? undefined;
-    //     if (!targetGroupArn) {
-    //       throw new Error("primary target group ARN not found");
-    //     }
-    //   });
+        const targetGroupResponse = await elbv2.send(
+          new DescribeTargetGroupsCommand({ Names: [targetGroupName] }),
+        ) as DescribeTargetGroupsCommandOutput;
+        targetGroupArn = targetGroupResponse.TargetGroups?.[0]?.TargetGroupArn ?? undefined;
+        if (!targetGroupArn) {
+          throw new Error("primary target group ARN not found");
+        }
+      });
 
-    //   afterAll(async () => {
-    //     try {
-    //       await axios.post(
-    //         `${primaryAlbUrl}/trigger-failure`,
-    //         { seconds: recoverySeconds },
-    //         { timeout: 10000 },
-    //       );
-    //     } catch (error) {
-    //       // eslint-disable-next-line no-console
-    //       console.warn("Failed to shorten failure window:", error);
-    //     }
+      afterAll(async () => {
+        try {
+          await axios.post(
+            `${primaryAlbUrl}/trigger-failure`,
+            { seconds: recoverySeconds },
+            { timeout: 10000 },
+          );
+        } catch (error) {
+          // eslint-disable-next-line no-console
+          console.warn("Failed to shorten failure window:", error);
+        }
 
-    //     try {
-    //       await eventBridge.send(new EnableRuleCommand({ Name: failoverRuleName }));
-    //     } catch (error) {
-    //       // eslint-disable-next-line no-console
-    //       console.warn("Failed to re-enable failover rule:", error);
-    //     }
+        try {
+          await eventBridge.send(new EnableRuleCommand({ Name: failoverRuleName }));
+        } catch (error) {
+          // eslint-disable-next-line no-console
+          console.warn("Failed to re-enable failover rule:", error);
+        }
 
-    //     await waitFor(async () => {
-    //       if (!targetGroupArn) {
-    //         return false;
-    //       }
-    //       const health = await elbv2.send(
-    //         new DescribeTargetHealthCommand({ TargetGroupArn: targetGroupArn }),
-    //       );
-    //       const descriptions = health.TargetHealthDescriptions ?? [];
-    //       return (
-    //         descriptions.length > 0 &&
-    //         descriptions.every((description) => description.TargetHealth?.State === "healthy")
-    //       );
-    //     }, { timeoutMs: 600000, intervalMs: 15000, initialDelayMs: 30000 }).catch(() => undefined);
+        await waitFor(async () => {
+          if (!targetGroupArn) {
+            return false;
+          }
+          const health = await elbv2.send(
+            new DescribeTargetHealthCommand({ TargetGroupArn: targetGroupArn }),
+          ) as DescribeTargetHealthCommandOutput;
+          const descriptions: TargetHealthDescription[] = health.TargetHealthDescriptions ?? [];
+          return (
+            descriptions.length > 0 &&
+            descriptions.every((description) => description.TargetHealth?.State === "healthy")
+          );
+        }, { timeoutMs: 600000, intervalMs: 15000, initialDelayMs: 30000 }).catch(() => undefined);
 
-    //     await waitFor(async () => {
-    //       const statusResponse = await route53Client.send(
-    //         new GetHealthCheckStatusCommand({ HealthCheckId: outputs.route53_health_check_id }),
-    //       );
-    //       const observations = statusResponse.HealthCheckObservations ?? [];
-    //       return observations.every((observation) =>
-    //         (observation.StatusReport?.Status ?? "").toLowerCase().includes("success"),
-    //       );
-    //     }, { timeoutMs: 600000, intervalMs: 15000, initialDelayMs: 30000 }).catch(() => undefined);
+        await waitFor(async () => {
+          const statusResponse = await route53Client.send(
+            new GetHealthCheckStatusCommand({ HealthCheckId: outputs.route53_health_check_id }),
+          ) as GetHealthCheckStatusCommandOutput;
+          const observations: HealthCheckObservation[] =
+            statusResponse.HealthCheckObservations ?? [];
+          return observations.every((observation) =>
+            (observation.StatusReport?.Status ?? "").toLowerCase().includes("success"),
+          );
+        }, { timeoutMs: 600000, intervalMs: 15000, initialDelayMs: 30000 }).catch(() => undefined);
 
-    //     eventBridge.destroy();
-    //     elbv2.destroy();
-    //   });
+        eventBridge.destroy();
+        elbv2.destroy();
+      });
 
-    //   it("marks all primary targets as unhealthy", async () => {
-    //     await waitFor(async () => {
-    //       if (!targetGroupArn) {
-    //         return false;
-    //       }
-    //       const health = await elbv2.send(
-    //         new DescribeTargetHealthCommand({ TargetGroupArn: targetGroupArn }),
-    //       );
-    //       const descriptions = health.TargetHealthDescriptions ?? [];
-    //       return (
-    //         descriptions.length > 0 &&
-    //         descriptions.every((description) => description.TargetHealth?.State === "unhealthy")
-    //       );
-    //     }, { timeoutMs: 600000, intervalMs: 15000, initialDelayMs: 15000 });
+      it("marks all primary targets as unhealthy", async () => {
+        await waitFor(async () => {
+          if (!targetGroupArn) {
+            return false;
+          }
+          const health = await elbv2.send(
+            new DescribeTargetHealthCommand({ TargetGroupArn: targetGroupArn }),
+          ) as DescribeTargetHealthCommandOutput;
+          const descriptions: TargetHealthDescription[] = health.TargetHealthDescriptions ?? [];
+          return (
+            descriptions.length > 0 &&
+            descriptions.every((description) => description.TargetHealth?.State === "unhealthy")
+          );
+        }, { timeoutMs: 600000, intervalMs: 15000, initialDelayMs: 15000 });
 
-    //     const health = await elbv2.send(
-    //       new DescribeTargetHealthCommand({ TargetGroupArn: targetGroupArn }),
-    //     );
-    //     const descriptions = health.TargetHealthDescriptions ?? [];
-    //     expect(descriptions.length).toBeGreaterThan(0);
-    //     descriptions.forEach((description) => {
-    //       expect(description.TargetHealth?.State).toBe("unhealthy");
-    //     });
-    //   });
+        const health = await elbv2.send(
+          new DescribeTargetHealthCommand({ TargetGroupArn: targetGroupArn }),
+        ) as DescribeTargetHealthCommandOutput;
+        const descriptions: TargetHealthDescription[] = health.TargetHealthDescriptions ?? [];
+        expect(descriptions.length).toBeGreaterThan(0);
+        descriptions.forEach((description) => {
+          expect(description.TargetHealth?.State).toBe("unhealthy");
+        });
+      });
 
-    //   it("marks the Route53 health check as failed", async () => {
-    //     await waitFor(async () => {
-    //       const statusResponse = await route53Client.send(
-    //         new GetHealthCheckStatusCommand({ HealthCheckId: outputs.route53_health_check_id }),
-    //       );
-    //       const observations = statusResponse.HealthCheckObservations ?? [];
-    //       return observations.some((observation) =>
-    //         (observation.StatusReport?.Status ?? "").toLowerCase().includes("fail"),
-    //       );
-    //     }, { timeoutMs: 600000, intervalMs: 15000, initialDelayMs: 15000 });
+      it("marks the Route53 health check as failed", async () => {
+        await waitFor(async () => {
+          const statusResponse = await route53Client.send(
+            new GetHealthCheckStatusCommand({ HealthCheckId: outputs.route53_health_check_id }),
+          ) as GetHealthCheckStatusCommandOutput;
+          const observations: HealthCheckObservation[] =
+            statusResponse.HealthCheckObservations ?? [];
+          return observations.some((observation) =>
+            (observation.StatusReport?.Status ?? "").toLowerCase().includes("fail"),
+          );
+        }, { timeoutMs: 600000, intervalMs: 15000, initialDelayMs: 15000 });
 
-    //     const statusResponse = await route53Client.send(
-    //       new GetHealthCheckStatusCommand({ HealthCheckId: outputs.route53_health_check_id }),
-    //     );
-    //     const observations = statusResponse.HealthCheckObservations ?? [];
-    //     expect(observations.length).toBeGreaterThan(0);
-    //     expect(
-    //       observations.some((observation) =>
-    //         (observation.StatusReport?.Status ?? "").toLowerCase().includes("fail"),
-    //       ),
-    //     ).toBe(true);
-    //   });
-    // });
+        const statusResponse = await route53Client.send(
+          new GetHealthCheckStatusCommand({ HealthCheckId: outputs.route53_health_check_id }),
+        ) as GetHealthCheckStatusCommandOutput;
+        const observations: HealthCheckObservation[] =
+          statusResponse.HealthCheckObservations ?? [];
+        expect(observations.length).toBeGreaterThan(0);
+        expect(
+          observations.some((observation) =>
+            (observation.StatusReport?.Status ?? "").toLowerCase().includes("fail"),
+          ),
+        ).toBe(true);
+      });
+    });
   });
 
   describe("Application API", () => {
