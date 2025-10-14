@@ -4,6 +4,8 @@ import pytest
 from aws_cdk import App, Stack
 from aws_cdk import aws_ecs as ecs
 from aws_cdk import aws_elasticloadbalancingv2 as elbv2
+from aws_cdk import aws_codedeploy as codedeploy
+from aws_cdk import aws_iam as iam
 
 from lib.cdk.cicd_stack import CicdStack
 
@@ -56,16 +58,43 @@ def test_cicd_stack_synthesizes_correctly():
         protocol=elbv2.ApplicationProtocol.HTTP
     )
 
-    # Now pass the required arguments
+    # Create dummy CodeDeploy resources
+    codedeploy_app = codedeploy.EcsApplication(dummy_stack, "DummyCodeDeployApp")
+    
+    codedeploy_role = iam.Role(
+        dummy_stack,
+        "DummyCodeDeployRole",
+        assumed_by=iam.ServicePrincipal("codedeploy.amazonaws.com"),
+        managed_policies=[
+            iam.ManagedPolicy.from_aws_managed_policy_name("AWSCodeDeployRoleForECS")
+        ],
+    )
+
+    deployment_group = codedeploy.EcsDeploymentGroup(
+        dummy_stack,
+        "DummyDeploymentGroup",
+        service=fargate_service,
+        blue_green_deployment_config=codedeploy.EcsBlueGreenDeploymentConfig(
+            listener=listener,
+            blue_target_group=tg1,
+            green_target_group=tg2,
+        ),
+        deployment_config=codedeploy.EcsDeploymentConfig.ALL_AT_ONCE,
+        application=codedeploy_app,
+        role=codedeploy_role,
+    )
+
+    # Now pass the required arguments including CodeDeploy resources
     stack = CicdStack(
         app,
         "MyTestCICDStack",
         fargate_service=fargate_service,
         listener=listener,
         blue_target_group=tg1,
-        green_target_group=tg2
+        green_target_group=tg2,
+        codedeploy_app=codedeploy_app,
+        deployment_group=deployment_group,
     )
 
     # Assertion to ensure stack synthesizes
     assert stack
-    

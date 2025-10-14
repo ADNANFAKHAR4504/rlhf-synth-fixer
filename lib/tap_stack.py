@@ -77,6 +77,9 @@ class NestedEcsStack(NestedStack):
         self.blue_target_group = self.ecs_stack.blue_target_group
         self.green_target_group = self.ecs_stack.green_target_group
         self.load_balancer = self.ecs_stack.load_balancer
+        self.codedeploy_app = self.ecs_stack.codedeploy_app
+        self.deployment_group = self.ecs_stack.deployment_group
+        self.codedeploy_role = self.ecs_stack.codedeploy_role
 
 
 class NestedRdsStack(NestedStack):
@@ -118,6 +121,8 @@ class NestedCicdStack(NestedStack):
         listener,
         blue_target_group,
         green_target_group,
+        codedeploy_app,
+        deployment_group,
         **kwargs
     ):
         super().__init__(scope, construct_id, **kwargs)
@@ -128,6 +133,8 @@ class NestedCicdStack(NestedStack):
             listener=listener,
             blue_target_group=blue_target_group,
             green_target_group=green_target_group,
+            codedeploy_app=codedeploy_app,
+            deployment_group=deployment_group,
             env=env
         )
 
@@ -249,6 +256,8 @@ class TapStack(Stack):
             listener=ecs_stack_primary.listener,
             blue_target_group=ecs_stack_primary.blue_target_group,
             green_target_group=ecs_stack_primary.green_target_group,
+            codedeploy_app=ecs_stack_primary.codedeploy_app,
+            deployment_group=ecs_stack_primary.deployment_group,
             env=self.env_us_east_1
         )
 

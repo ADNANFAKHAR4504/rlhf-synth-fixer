@@ -43,6 +43,9 @@ def patched_tap_stack():
         mock_nested_ecs.return_value.blue_target_group = MagicMock()
         mock_nested_ecs.return_value.green_target_group = MagicMock()
         mock_nested_ecs.return_value.load_balancer = MagicMock()
+        mock_nested_ecs.return_value.codedeploy_app = MagicMock()
+        mock_nested_ecs.return_value.deployment_group = MagicMock()
+        mock_nested_ecs.return_value.codedeploy_role = MagicMock()
         mock_nested_rds.return_value.rds_instance = MagicMock()
 
         yield {
@@ -114,6 +117,9 @@ def test_nested_ecs_stack_initialization(mock_ecs_stack):
     mock_ecs_instance.blue_target_group = MagicMock()
     mock_ecs_instance.green_target_group = MagicMock()
     mock_ecs_instance.load_balancer = MagicMock()
+    mock_ecs_instance.codedeploy_app = MagicMock()
+    mock_ecs_instance.deployment_group = MagicMock()
+    mock_ecs_instance.codedeploy_role = MagicMock()
     mock_ecs_stack.return_value = mock_ecs_instance
     
     nested_ecs = NestedEcsStack(
@@ -130,6 +136,9 @@ def test_nested_ecs_stack_initialization(mock_ecs_stack):
     assert nested_ecs.blue_target_group is not None
     assert nested_ecs.green_target_group is not None
     assert nested_ecs.load_balancer is not None
+    assert nested_ecs.codedeploy_app is not None
+    assert nested_ecs.deployment_group is not None
+    assert nested_ecs.codedeploy_role is not None
     mock_ecs_stack.assert_called_once()
 
 
@@ -192,7 +201,9 @@ def test_nested_cicd_stack_initialization(mock_cicd_stack):
         fargate_service=MagicMock(),
         listener=MagicMock(),
         blue_target_group=MagicMock(),
-        green_target_group=MagicMock()
+        green_target_group=MagicMock(),
+        codedeploy_app=MagicMock(),
+        deployment_group=MagicMock(),
     )
     
     assert nested_cicd.cicd_stack is not None
