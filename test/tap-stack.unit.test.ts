@@ -14,8 +14,8 @@ describe('TapStack', () => {
     app = new cdk.App();
     config = {
       isPrimary: true,
-      regionName: 'us-west-1',
-      peerRegion: 'us-west-2',
+      regionName: 'us-east-2',
+      peerRegion: 'us-east-1',
       environmentSuffix: environmentSuffix,
     };
     stack = new TapStack(app, 'TestTapStack', {
@@ -35,8 +35,8 @@ describe('TapStack', () => {
       const stackWithoutEnv = new TapStack(app, 'TestStackNoEnv', {
         config: {
           isPrimary: false,
-          regionName: 'us-west-2',
-          peerRegion: 'us-west-1',
+          regionName: 'us-east-1',
+          peerRegion: 'us-east-2',
         },
       });
       expect(stackWithoutEnv).toBeDefined();
@@ -123,6 +123,12 @@ describe('TapStack', () => {
       customTemplate.hasResourceProperties('AWS::EC2::VPC', {
         CidrBlock: '10.1.0.0/16',
       });
+    });
+
+    test('should create VPC with 1 NAT gateway for cost optimization', () => {
+      // Count NAT gateways in the template
+      const natGateways = template.findResources('AWS::EC2::NatGateway');
+      expect(Object.keys(natGateways).length).toBe(1);
     });
   });
 
@@ -332,13 +338,13 @@ describe('TapStack', () => {
                 DeleteAfterDays: 30,
               },
             },
-            {
-              RuleName: 'WeeklyBackup',
-              ScheduleExpression: 'cron(0 3 0 * ? *)',
-              Lifecycle: {
-                DeleteAfterDays: 90,
-              },
-            },
+                   {
+                     RuleName: 'WeeklyBackup',
+                     ScheduleExpression: 'cron(0 3 ? * SUN *)',
+                     Lifecycle: {
+                       DeleteAfterDays: 90,
+                     },
+                   },
           ],
         },
       });
@@ -521,7 +527,7 @@ describe('TapStack', () => {
 
     test('should handle different region configurations', () => {
       const usEastApp = new cdk.App();
-      const usEastConfig = { ...config, regionName: 'us-east-1', peerRegion: 'us-west-2' };
+      const usEastConfig = { ...config, regionName: 'us-east-1', peerRegion: 'us-east-2' };
       const usEastStack = new TapStack(usEastApp, 'USEastStack', {
         environmentSuffix,
         config: usEastConfig,

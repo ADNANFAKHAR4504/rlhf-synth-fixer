@@ -11,6 +11,7 @@ import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
+import * as iam from 'aws-cdk-lib/aws-iam';
 // import { NetworkingStack } from './stacks/networking-stack';
 // import { DatabaseStack } from './stacks/database-stack';
 // import { ComputeStack } from './stacks/compute-stack';
@@ -81,6 +82,51 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
+    // Add bucket policy for CloudTrail
+    auditBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
+        actions: ['s3:GetBucketAcl'],
+        resources: [auditBucket.bucketArn],
+        conditions: {
+          StringEquals: {
+            'AWS:SourceArn': `arn:aws:cloudtrail:${config.regionName}:${this.account}:trail/tap-audit-trail-${envSuffix}-${config.regionName}`,
+          },
+        },
+      })
+    );
+
+    auditBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
+        actions: ['s3:PutObject'],
+        resources: [`${auditBucket.bucketArn}/*`],
+        conditions: {
+          StringEquals: {
+            's3:x-amz-acl': 'bucket-owner-full-control',
+            'AWS:SourceArn': `arn:aws:cloudtrail:${config.regionName}:${this.account}:trail/tap-audit-trail-${envSuffix}-${config.regionName}`,
+          },
+        },
+      })
+    );
+
+    // Add KMS key policy for CloudTrail
+    this.kmsKey.addToResourcePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
+        actions: ['kms:GenerateDataKey*'],
+        resources: ['*'],
+        conditions: {
+          StringEquals: {
+            'kms:EncryptionContext:aws:cloudtrail:arn': `arn:aws:cloudtrail:${config.regionName}:${this.account}:trail/tap-audit-trail-${envSuffix}-${config.regionName}`,
+          },
+        },
+      })
+    );
+
     // Enable CloudTrail for audit logging
     new cloudtrail.Trail(this, 'AuditTrail', {
       bucket: auditBucket,
@@ -88,13 +134,14 @@ export class TapStack extends cdk.Stack {
       includeGlobalServiceEvents: config.isPrimary,
       isMultiRegionTrail: config.isPrimary,
       enableFileValidation: true,
+      trailName: `tap-audit-trail-${envSuffix}-${config.regionName}`,
     });
 
     // Create VPC
     this.vpc = new ec2.Vpc(this, 'VPC', {
       ipAddresses: ec2.IpAddresses.cidr(config.vpcCidr || '10.0.0.0/16'),
       maxAzs: 3,
-      natGateways: 2,
+      natGateways: 1,
       vpcName: `tap-vpc-${envSuffix}-${config.regionName}`,
     });
 
@@ -338,9 +385,9 @@ export class TapStack extends cdk.Stack {
         scheduleExpression: cdk.aws_events.Schedule.cron({
           minute: '0',
           hour: '3',
-          day: '0', // Sunday
           month: '*',
           year: '*',
+          weekDay: 'SUN', // Sunday
         }),
         deleteAfter: cdk.Duration.days(90),
         backupVault,

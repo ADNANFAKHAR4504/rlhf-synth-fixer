@@ -18,8 +18,8 @@ Tags.of(app).add('Author', commitAuthor);
 
 // Target regions for multi-region deployment
 const regions = [
-  { name: 'us-west-1', isPrimary: true },
-  { name: 'us-west-2', isPrimary: false },
+  { name: 'us-east-2', isPrimary: true },
+  { name: 'us-east-1', isPrimary: false },
 ];
 
 // Create stacks for both regions
@@ -31,7 +31,7 @@ regions.forEach(region => {
     config: {
       isPrimary: region.isPrimary,
       regionName: region.name,
-      peerRegion: region.isPrimary ? 'us-west-2' : 'us-west-1',
+      peerRegion: region.isPrimary ? 'us-east-1' : 'us-east-2',
       environmentSuffix: environmentSuffix,
     },
     description: `Multi-region disaster recovery infrastructure for ${region.name} (${region.isPrimary ? 'Primary' : 'DR'})`,
