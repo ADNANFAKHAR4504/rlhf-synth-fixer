@@ -197,6 +197,12 @@ describe('TapStack', () => {
       });
     });
 
+    test('should use R6G instance class for Global Database compatibility', () => {
+      template.hasResourceProperties('AWS::RDS::DBInstance', {
+        DBInstanceClass: 'db.r6g.large',
+      });
+    });
+
     test('should use parameter group with SSL enforcement', () => {
       template.hasResourceProperties('AWS::RDS::DBClusterParameterGroup', {
         Parameters: Match.objectLike({
