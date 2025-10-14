@@ -10,7 +10,15 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": ["S3", "KMS", "IAM", "CloudWatch", "EventBridge", "CloudTrail", "SNS"],
+  "aws_services": [
+    "S3",
+    "KMS",
+    "IAM",
+    "CloudWatch",
+    "EventBridge",
+    "CloudTrail",
+    "SNS"
+  ],
   "training_quality": 9,
   "coverage": {
     "lines": 100,
