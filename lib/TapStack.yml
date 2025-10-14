@@ -73,7 +73,7 @@ Conditions:
   HasKeyPairName: !Not [!Equals [!Ref KeyPairName, ""]]
 
 Resources:
-  # KMS (regional Logs principal + full actions; CloudTrail context/grant)
+  # KMS (regional Logs principal + CloudTrail context/grant + EC2/EBS ViaService)
   MasterKMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -135,6 +135,22 @@ Resources:
               - kms:DescribeKey
               - kms:CreateGrant
             Resource: "*"
+          - Sid: AllowEC2EBSUseViaService
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+              - kms:CreateGrant
+            Resource: "*"
+            Condition:
+              StringEquals:
+                kms:CallerAccount: !Sub "${AWS::AccountId}"
+                kms:ViaService: !Sub "ec2.${AWS::Region}.amazonaws.com"
       EnableKeyRotation: true
       Tags:
         - { Key: Environment, Value: Production }
