@@ -13,7 +13,7 @@ Contain no placeholders — use realistic sample values where appropriate.
 
 All resources must include the tag Environment = "Production".
 
-Problem Definition
+Problem Definition:
 
 Design a secure AWS VPC architecture using Terraform, fulfilling all the following requirements:
 
