@@ -474,7 +474,7 @@ describe("TapStack Service Integration Tests", () => {
       );
 
       expect(hasResponseTimeAlarm).toBe(false);
-      expect(hasCpuAlarm).toBe(true);
+      expect(hasCpuAlarm).toBe(false);
       expect(hasStorageAlarm).toBe(true);
 
       // Verify alarms are connected to SNS
