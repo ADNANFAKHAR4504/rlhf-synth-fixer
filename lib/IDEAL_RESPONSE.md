@@ -234,19 +234,34 @@ func (tapStack *TapStack) createTrainingInfrastructure(stack awscdk.Stack) {
 		EncryptionKey:     tapStack.EncryptionKey,
 	})
 
-	// IAM role for SageMaker
+	// IAM role for SageMaker with least privilege permissions
 	tapStack.SageMakerRole = awsiam.NewRole(stack, jsii.String("SageMakerExecutionRole"), &awsiam.RoleProps{
 		AssumedBy: awsiam.NewServicePrincipal(jsii.String("sagemaker.amazonaws.com"), nil),
 		ManagedPolicies: &[]awsiam.IManagedPolicy{
 			awsiam.ManagedPolicy_FromAwsManagedPolicyName(jsii.String("AmazonSageMakerFullAccess")),
-			awsiam.ManagedPolicy_FromAwsManagedPolicyName(jsii.String("AmazonS3FullAccess")),
 		},
 	})
 
-	// Grant permissions to the role
-	tapStack.TrainingBucket.GrantReadWrite(tapStack.SageMakerRole, nil)
-	tapStack.RawImageBucket.GrantRead(tapStack.SageMakerRole, nil)
-	tapStack.ProcessedBucket.GrantReadWrite(tapStack.SageMakerRole, nil)
+	// Add scoped S3 permissions instead of AmazonS3FullAccess
+	tapStack.SageMakerRole.AddToPolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+		Effect: awsiam.Effect_ALLOW,
+		Actions: &[]*string{
+			jsii.String("s3:GetObject"),
+			jsii.String("s3:PutObject"),
+			jsii.String("s3:ListBucket"),
+		},
+		Resources: &[]*string{
+			tapStack.TrainingBucket.BucketArn(),
+			tapStack.TrainingBucket.ArnForObjects(jsii.String("*")),
+			tapStack.ProcessedBucket.BucketArn(),
+			tapStack.ProcessedBucket.ArnForObjects(jsii.String("*")),
+			tapStack.RawImageBucket.BucketArn(),
+			tapStack.RawImageBucket.ArnForObjects(jsii.String("*")),
+		},
+	}))
+
+	// Grant KMS permissions for encrypted buckets
+	tapStack.EncryptionKey.GrantEncryptDecrypt(tapStack.SageMakerRole)
 
 	// Define training pipeline using Step Functions
 	prepLambda := awslambda.NewFunction(stack, jsii.String("DataPrepLambda"), &awslambda.FunctionProps{
@@ -323,18 +338,63 @@ func (tapStack *TapStack) createInferenceInfrastructure(stack awscdk.Stack) {
 	tapStack.ModelBucket.GrantRead(tapStack.InferenceLambda, nil)
 	tapStack.MetadataTable.GrantReadWriteData(tapStack.InferenceLambda)
 
-	// API Gateway
+	// API Gateway with authentication
 	tapStack.InferenceApi = awsapigateway.NewRestApi(stack, jsii.String("InferenceAPI"), &awsapigateway.RestApiProps{
 		RestApiName: jsii.String(fmt.Sprintf("ml-inference-api-%s", *tapStack.EnvironmentSuffix)),
-		Description: jsii.String("API for ML model inference"),
+		Description: jsii.String("API for ML model inference with API Key authentication"),
 		DeployOptions: &awsapigateway.StageOptions{
-			StageName:    jsii.String("v1"),
-			LoggingLevel: awsapigateway.MethodLoggingLevel_INFO,
+			StageName:           jsii.String("v1"),
+			LoggingLevel:        awsapigateway.MethodLoggingLevel_INFO,
+			DataTraceEnabled:    jsii.Bool(true),
+			MetricsEnabled:      jsii.Bool(true),
+			TracingEnabled:      jsii.Bool(true),
+			ThrottlingBurstLimit: jsii.Number(100),
+			ThrottlingRateLimit:  jsii.Number(50),
+		},
+		CloudWatchRole: jsii.Bool(true),
+	})
+
+	// Create API Key for authentication
+	apiKey := tapStack.InferenceApi.AddApiKey(jsii.String("InferenceApiKey"), &awsapigateway.ApiKeyOptions{
+		ApiKeyName:  jsii.String(fmt.Sprintf("ml-inference-key-%s", *tapStack.EnvironmentSuffix)),
+		Description: jsii.String("API Key for ML inference endpoint"),
+	})
+
+	// Create usage plan with throttling and quota
+	usagePlan := tapStack.InferenceApi.AddUsagePlan(jsii.String("InferenceUsagePlan"), &awsapigateway.UsagePlanProps{
+		Name:        jsii.String(fmt.Sprintf("ml-inference-usage-plan-%s", *tapStack.EnvironmentSuffix)),
+		Description: jsii.String("Usage plan for ML inference API"),
+		Throttle: &awsapigateway.ThrottleSettings{
+			RateLimit:  jsii.Number(50),
+			BurstLimit: jsii.Number(100),
+		},
+		Quota: &awsapigateway.QuotaSettings{
+			Limit:  jsii.Number(10000),
+			Period: awsapigateway.Period_DAY,
+		},
+		ApiStages: &[]*awsapigateway.UsagePlanPerApiStage{
+			{
+				Api:   tapStack.InferenceApi,
+				Stage: tapStack.InferenceApi.DeploymentStage(),
+			},
 		},
 	})
 
+	usagePlan.AddApiKey(apiKey, nil)
+
+	// Add /predict endpoint with API Key requirement
 	inferenceResource := tapStack.InferenceApi.Root().AddResource(jsii.String("predict"), nil)
-	inferenceResource.AddMethod(jsii.String("POST"), awsapigateway.NewLambdaIntegration(tapStack.InferenceLambda, nil), nil)
+	inferenceResource.AddMethod(jsii.String("POST"), awsapigateway.NewLambdaIntegration(tapStack.InferenceLambda, nil), &awsapigateway.MethodOptions{
+		ApiKeyRequired: jsii.Bool(true),
+		AuthorizationType: awsapigateway.AuthorizationType_NONE,
+	})
+
+	// Export API Key ID for retrieval
+	awscdk.NewCfnOutput(stack, jsii.String("InferenceApiKeyId"), &awscdk.CfnOutputProps{
+		Value:       apiKey.KeyId(),
+		Description: jsii.String("API Key ID for inference endpoint (use AWS CLI to get the value)"),
+		ExportName:  jsii.String(fmt.Sprintf("InferenceApiKeyId-%s", *tapStack.EnvironmentSuffix)),
+	})
 }
 
 func (tapStack *TapStack) createMonitoringInfrastructure(stack awscdk.Stack) {
@@ -445,9 +505,12 @@ func (tapStack *TapStack) addStackOutputs(stack awscdk.Stack) {
 ### Security
 
 - KMS encryption for all S3 buckets, DynamoDB table, and Kinesis stream
-- Least privilege IAM roles
+- Least privilege IAM roles with scoped S3 permissions (no broad `AmazonS3FullAccess`)
 - Block all public access on S3 buckets
-- Secure API Gateway integration
+- API Gateway authentication with API Keys
+- Usage plans with throttling (50 req/s) and daily quotas (10,000 req/day)
+- X-Ray tracing enabled for API requests
+- CloudWatch logging with data trace enabled
 
 ### Scalability
 
@@ -469,4 +532,3 @@ func (tapStack *TapStack) addStackOutputs(stack awscdk.Stack) {
 - Stack outputs for external integration
 - Proper removal policies for development
 - Comprehensive tagging strategy
-

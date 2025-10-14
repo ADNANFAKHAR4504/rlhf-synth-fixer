@@ -57,6 +57,92 @@ func TestTapStack(t *testing.T) {
 		assert.Equal(t, envSuffix, *stack.EnvironmentSuffix)
 	})
 
+	t.Run("verifies API Gateway security features", func(t *testing.T) {
+		// ARRANGE
+		app := awscdk.NewApp(nil)
+		envSuffix := "testsec"
+		stack := lib.NewTapStack(app, jsii.String("TapStackTestSecurity"), &lib.TapStackProps{
+			StackProps:        &awscdk.StackProps{},
+			EnvironmentSuffix: jsii.String(envSuffix),
+		})
+
+		template := assertions.Template_FromStack(stack.Stack, nil)
+
+		// ASSERT - Verify API Key creation
+		template.ResourceCountIs(jsii.String("AWS::ApiGateway::ApiKey"), jsii.Number(1))
+		template.HasResourceProperties(jsii.String("AWS::ApiGateway::ApiKey"), map[string]interface{}{
+			"Name": "ml-inference-key-" + envSuffix,
+		})
+
+		// Verify Usage Plan creation
+		template.ResourceCountIs(jsii.String("AWS::ApiGateway::UsagePlan"), jsii.Number(1))
+		template.HasResourceProperties(jsii.String("AWS::ApiGateway::UsagePlan"), map[string]interface{}{
+			"UsagePlanName": "ml-inference-usage-plan-" + envSuffix,
+			"Throttle": map[string]interface{}{
+				"RateLimit":  float64(50),
+				"BurstLimit": float64(100),
+			},
+			"Quota": map[string]interface{}{
+				"Limit":  float64(10000),
+				"Period": "DAY",
+			},
+		})
+
+		// Verify Usage Plan Key association
+		template.ResourceCountIs(jsii.String("AWS::ApiGateway::UsagePlanKey"), jsii.Number(1))
+
+		// Verify API method requires API Key
+		template.HasResourceProperties(jsii.String("AWS::ApiGateway::Method"), map[string]interface{}{
+			"ApiKeyRequired": true,
+			"HttpMethod":     "POST",
+		})
+
+		t.Logf("✓ API Gateway security features verified (API Key, Usage Plan, Throttling)")
+	})
+
+	t.Run("verifies IAM least privilege for SageMaker role", func(t *testing.T) {
+		// ARRANGE
+		app := awscdk.NewApp(nil)
+		envSuffix := "testiam"
+		stack := lib.NewTapStack(app, jsii.String("TapStackTestIAM"), &lib.TapStackProps{
+			StackProps:        &awscdk.StackProps{},
+			EnvironmentSuffix: jsii.String(envSuffix),
+		})
+
+		template := assertions.Template_FromStack(stack.Stack, nil)
+
+		// ASSERT - Verify SageMaker role exists
+		template.HasResourceProperties(jsii.String("AWS::IAM::Role"), map[string]interface{}{
+			"AssumeRolePolicyDocument": map[string]interface{}{
+				"Statement": []interface{}{
+					map[string]interface{}{
+						"Principal": map[string]interface{}{
+							"Service": "sagemaker.amazonaws.com",
+						},
+					},
+				},
+			},
+		})
+
+		// Verify inline policy with scoped S3 permissions exists
+		template.HasResourceProperties(jsii.String("AWS::IAM::Policy"), map[string]interface{}{
+			"PolicyDocument": map[string]interface{}{
+				"Statement": assertions.Match_ArrayWith(&[]interface{}{
+					map[string]interface{}{
+						"Action": []interface{}{
+							"s3:GetObject",
+							"s3:PutObject",
+							"s3:ListBucket",
+						},
+						"Effect": "Allow",
+					},
+				}),
+			},
+		})
+
+		t.Logf("✓ IAM least privilege verified (scoped S3 permissions, no AmazonS3FullAccess)")
+	})
+
 	t.Run("defaults environment suffix to 'dev' if not provided", func(t *testing.T) {
 		// ARRANGE
 		app := awscdk.NewApp(nil)

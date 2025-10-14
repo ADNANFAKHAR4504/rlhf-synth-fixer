@@ -5,6 +5,7 @@ package lib_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -16,6 +17,7 @@ import (
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	awsapigateway "github.com/aws/aws-sdk-go-v2/service/apigateway"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -41,6 +43,7 @@ type StackOutputs struct {
 	MetadataTableName          string `json:"MetadataTableName"`
 	InferenceApiEndpoint       string `json:"InferenceApiEndpoint"`
 	InferenceAPIEndpoint83653F string `json:"InferenceAPIEndpoint83653F54"`
+	InferenceApiKeyId          string `json:"InferenceApiKeyId"`
 }
 
 // loadStackOutputs loads stack outputs from cfn-outputs/flat-outputs.json
@@ -78,6 +81,30 @@ func loadStackOutputs(t *testing.T) *StackOutputs {
 	require.NoError(t, err, "Failed to parse stack outputs from %s", foundPath)
 
 	return &outputs
+}
+
+// getApiKeyValue retrieves the API Key value from AWS using the API Key ID
+func getApiKeyValue(ctx context.Context, cfg aws.Config, apiKeyId string) (string, error) {
+	if apiKeyId == "" {
+		return "", fmt.Errorf("API Key ID is empty")
+	}
+
+	apigwClient := awsapigateway.NewFromConfig(cfg)
+
+	// Get the API Key value
+	output, err := apigwClient.GetApiKey(ctx, &awsapigateway.GetApiKeyInput{
+		ApiKey:       aws.String(apiKeyId),
+		IncludeValue: aws.Bool(true),
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to get API key: %w", err)
+	}
+
+	if output.Value == nil {
+		return "", fmt.Errorf("API key value is nil")
+	}
+
+	return *output.Value, nil
 }
 
 func TestTapStackIntegration(t *testing.T) {
@@ -381,7 +408,7 @@ func testTrainingInfrastructure(t *testing.T, ctx context.Context, cfg aws.Confi
 }
 
 func testInferenceInfrastructure(t *testing.T, ctx context.Context, cfg aws.Config, outputs *StackOutputs) {
-	t.Run("API Gateway endpoint is accessible", func(t *testing.T) {
+	t.Run("API Gateway requires authentication", func(t *testing.T) {
 		// Get the API endpoint
 		apiEndpoint := outputs.InferenceApiEndpoint
 		if apiEndpoint == "" {
@@ -390,16 +417,63 @@ func testInferenceInfrastructure(t *testing.T, ctx context.Context, cfg aws.Conf
 
 		require.NotEmpty(t, apiEndpoint, "API endpoint should not be empty")
 
-		// Make a test request to the API
 		client := &http.Client{
 			Timeout: 10 * time.Second,
 		}
 
-		// Test POST to /predict endpoint
+		// Test POST to /predict endpoint WITHOUT API Key (should fail)
 		predictURL := strings.TrimSuffix(apiEndpoint, "/") + "/predict"
 		req, err := http.NewRequestWithContext(ctx, "POST", predictURL, strings.NewReader(`{"test": "data"}`))
 		require.NoError(t, err, "Should create request")
 		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := client.Do(req)
+		if err == nil && resp != nil {
+			defer resp.Body.Close()
+			body, _ := io.ReadAll(resp.Body)
+
+			// API should return 403 Forbidden without API Key
+			assert.Equal(t, http.StatusForbidden, resp.StatusCode, "API should return 403 without API Key, got %d: %s", resp.StatusCode, string(body))
+			t.Logf("✓ API Gateway correctly rejects requests without API Key (403)")
+		}
+	})
+
+	t.Run("API Gateway endpoint is accessible with API Key", func(t *testing.T) {
+		// Get the API endpoint
+		apiEndpoint := outputs.InferenceApiEndpoint
+		if apiEndpoint == "" {
+			apiEndpoint = outputs.InferenceAPIEndpoint83653F
+		}
+
+		require.NotEmpty(t, apiEndpoint, "API endpoint should not be empty")
+
+		// Get API Key value
+		apiKeyValue := ""
+		if outputs.InferenceApiKeyId != "" {
+			value, err := getApiKeyValue(ctx, cfg, outputs.InferenceApiKeyId)
+			if err != nil {
+				t.Logf("⚠ Could not retrieve API Key value: %v (test will be skipped)", err)
+				t.Skip("Cannot test API with API Key - key retrieval failed")
+				return
+			}
+			apiKeyValue = value
+			t.Logf("✓ Retrieved API Key for testing")
+		} else {
+			t.Skip("API Key ID not available in outputs")
+			return
+		}
+
+		// Make a test request to the API with API Key
+		client := &http.Client{
+			Timeout: 10 * time.Second,
+		}
+
+		// Test POST to /predict endpoint WITH API Key
+		predictURL := strings.TrimSuffix(apiEndpoint, "/") + "/predict"
+		req, err := http.NewRequestWithContext(ctx, "POST", predictURL, strings.NewReader(`{"test": "data"}`))
+		require.NoError(t, err, "Should create request")
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("x-api-key", apiKeyValue)
 
 		resp, err := client.Do(req)
 		assert.NoError(t, err, "Should be able to reach API endpoint")
@@ -408,11 +482,53 @@ func testInferenceInfrastructure(t *testing.T, ctx context.Context, cfg aws.Conf
 			defer resp.Body.Close()
 			body, _ := io.ReadAll(resp.Body)
 
-			// API should return 200 (success)
-			assert.Equal(t, http.StatusOK, resp.StatusCode, "API should return 200, got %d: %s", resp.StatusCode, string(body))
+			// API should return 200 (success) with valid API Key
+			assert.Equal(t, http.StatusOK, resp.StatusCode, "API should return 200 with valid API Key, got %d: %s", resp.StatusCode, string(body))
 
-			t.Logf("✓ API Gateway endpoint %s is accessible", predictURL)
+			t.Logf("✓ API Gateway endpoint %s is accessible with API Key", predictURL)
 			t.Logf("  Response: %s", string(body))
+		}
+	})
+
+	t.Run("verify API Key and Usage Plan exist", func(t *testing.T) {
+		if outputs.InferenceApiKeyId == "" {
+			t.Skip("API Key ID not available")
+			return
+		}
+
+		apigwClient := awsapigateway.NewFromConfig(cfg)
+
+		// Verify API Key exists
+		apiKey, err := apigwClient.GetApiKey(ctx, &awsapigateway.GetApiKeyInput{
+			ApiKey:       aws.String(outputs.InferenceApiKeyId),
+			IncludeValue: aws.Bool(false),
+		})
+		assert.NoError(t, err, "Should be able to get API Key")
+		if apiKey != nil && apiKey.Name != nil {
+			t.Logf("✓ API Key exists: %s", *apiKey.Name)
+		}
+
+		// List usage plans
+		usagePlans, err := apigwClient.GetUsagePlans(ctx, &awsapigateway.GetUsagePlansInput{})
+		assert.NoError(t, err, "Should be able to list usage plans")
+
+		if usagePlans != nil && len(usagePlans.Items) > 0 {
+			foundUsagePlan := false
+			for _, plan := range usagePlans.Items {
+				if plan.Name != nil && strings.Contains(*plan.Name, "ml-inference-usage-plan") {
+					foundUsagePlan = true
+					t.Logf("✓ Usage Plan exists: %s", *plan.Name)
+					if plan.Throttle != nil {
+						t.Logf("  Throttle: RateLimit=%v, BurstLimit=%v",
+							plan.Throttle.RateLimit, plan.Throttle.BurstLimit)
+					}
+					if plan.Quota != nil {
+						t.Logf("  Quota: Limit=%v, Period=%s", plan.Quota.Limit, string(plan.Quota.Period))
+					}
+					break
+				}
+			}
+			assert.True(t, foundUsagePlan, "Usage plan should exist")
 		}
 	})
 
@@ -1022,6 +1138,17 @@ func testEndToEndWorkflow(t *testing.T, ctx context.Context, cfg aws.Config, out
 		}
 
 		if apiEndpoint != "" {
+			// Get API Key for authenticated request
+			apiKeyValue := ""
+			if outputs.InferenceApiKeyId != "" {
+				value, err := getApiKeyValue(ctx, cfg, outputs.InferenceApiKeyId)
+				if err == nil {
+					apiKeyValue = value
+				} else {
+					t.Logf("⚠ Could not retrieve API Key: %v", err)
+				}
+			}
+
 			client := &http.Client{Timeout: 30 * time.Second}
 			predictURL := strings.TrimSuffix(apiEndpoint, "/") + "/predict"
 
@@ -1034,6 +1161,10 @@ func testEndToEndWorkflow(t *testing.T, ctx context.Context, cfg aws.Config, out
 			req, err := http.NewRequestWithContext(ctx, "POST", predictURL, strings.NewReader(string(requestJSON)))
 			if err == nil {
 				req.Header.Set("Content-Type", "application/json")
+				if apiKeyValue != "" {
+					req.Header.Set("x-api-key", apiKeyValue)
+					t.Log("  Using API Key for authentication")
+				}
 
 				resp, err := client.Do(req)
 				if err == nil && resp != nil {
@@ -1049,6 +1180,8 @@ func testEndToEndWorkflow(t *testing.T, ctx context.Context, cfg aws.Config, out
 						if json.Unmarshal(body, &apiResponse) == nil {
 							t.Log("✓ Response is valid JSON")
 						}
+					} else if resp.StatusCode == http.StatusForbidden && apiKeyValue == "" {
+						t.Logf("✓ API correctly requires authentication (403)")
 					} else {
 						t.Logf("⚠ API returned status %d: %s", resp.StatusCode, string(body))
 					}
