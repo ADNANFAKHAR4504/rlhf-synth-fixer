@@ -1,0 +1,14 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349562",
+  "team": "6",
+  "startedAt": "2025-10-14T09:18:37.961Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "(VPC, Subnets, Internet Gateway, NAT Gateway, Route Tables, Application Load Balancer, Auto Scaling Group, EC2 Instances, RDS Instance (PostgreSQL), IAM Roles and Policies, Security Groups, SSM Parameter Store, CloudWatch Alarms, CloudWatch Log Groups,)"
+}
