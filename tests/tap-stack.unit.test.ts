@@ -49,10 +49,10 @@ import * as path from "path";
         console.log("ℹ️ Module resolution shim active: redirecting relative 'test' -> 'tests' imports");
       }
     }
-  } catch (e) {
+  } catch (e: any) {
     // If patching fails, don't prevent tests from running — just warn.
     // eslint-disable-next-line no-console
-    console.warn("⚠️ Module resolution shim failed (non-fatal):", (e && e.message) || e);
+    console.warn("⚠️ Module resolution shim failed (non-fatal):", e?.message || e);
   }
 })();
 
