@@ -85,10 +85,13 @@ export class MultiComponentApplicationStack extends cdk.Stack {
       }
     );
 
+    // Use a generally-available Postgres engine version. Some regions may not have
+    // older minor versions (e.g. 13.7). Prefer Postgres 15.x which has wider availability.
     const rdsInstance = new rds.DatabaseInstance(this, 'PostgresDatabase', {
       instanceIdentifier: `prod-rds-postgres-${this.stringSuffix.toLowerCase().replace(/[^a-z0-9-]/g, '')}`,
       engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_13_7,
+        // VER_15_3 is preferred; fall back to VER_15 if the specific constant isn't available
+        version: rds.PostgresEngineVersion.VER_15_3,
       }),
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
