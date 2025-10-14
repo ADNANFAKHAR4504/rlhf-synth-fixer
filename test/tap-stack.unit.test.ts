@@ -4,14 +4,91 @@ import path from 'path';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
+// Define comprehensive CloudFormation YAML types
+const CloudFormationSchema = yaml.DEFAULT_SCHEMA.extend([
+  new yaml.Type('!Ref', {
+    kind: 'scalar',
+    construct: (data) => ({ Ref: data }),
+  }),
+  new yaml.Type('!Sub', {
+    kind: 'scalar',
+    construct: (data) => ({ 'Fn::Sub': data }),
+  }),
+  new yaml.Type('!GetAtt', {
+    kind: 'scalar',
+    construct: (data) => {
+      // Handle GetAtt with dot notation (e.g., !GetAtt Resource.Property)
+      const parts = data.split('.');
+      return { 'Fn::GetAtt': parts };
+    },
+  }),
+  new yaml.Type('!Join', {
+    kind: 'sequence',
+    construct: (data) => ({ 'Fn::Join': data }),
+  }),
+  new yaml.Type('!Select', {
+    kind: 'sequence',
+    construct: (data) => ({ 'Fn::Select': data }),
+  }),
+  new yaml.Type('!Split', {
+    kind: 'sequence',
+    construct: (data) => ({ 'Fn::Split': data }),
+  }),
+  new yaml.Type('!Base64', {
+    kind: 'scalar',
+    construct: (data) => ({ 'Fn::Base64': data }),
+  }),
+  new yaml.Type('!GetAZs', {
+    kind: 'scalar',
+    construct: (data) => ({ 'Fn::GetAZs': data }),
+  }),
+  new yaml.Type('!ImportValue', {
+    kind: 'scalar',
+    construct: (data) => ({ 'Fn::ImportValue': data }),
+  }),
+  new yaml.Type('!FindInMap', {
+    kind: 'sequence',
+    construct: (data) => ({ 'Fn::FindInMap': data }),
+  }),
+  new yaml.Type('!Equals', {
+    kind: 'sequence',
+    construct: (data) => ({ 'Fn::Equals': data }),
+  }),
+  new yaml.Type('!If', {
+    kind: 'sequence',
+    construct: (data) => ({ 'Fn::If': data }),
+  }),
+  new yaml.Type('!Not', {
+    kind: 'sequence',
+    construct: (data) => ({ 'Fn::Not': data }),
+  }),
+  new yaml.Type('!And', {
+    kind: 'sequence',
+    construct: (data) => ({ 'Fn::And': data }),
+  }),
+  new yaml.Type('!Or', {
+    kind: 'sequence',
+    construct: (data) => ({ 'Fn::Or': data }),
+  }),
+]);
+
 describe('IoT Analytics CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    // Load the YAML template directly
+    // Load the YAML template with CloudFormation schema and safe options
     const templatePath = path.join(__dirname, '../lib/TapStack.yml');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = yaml.load(templateContent);
+
+    try {
+      template = yaml.load(templateContent, {
+        schema: CloudFormationSchema,
+        filename: templatePath
+      });
+    } catch (error) {
+      console.error('Error parsing YAML template:', error);
+      throw error;
+    }
   });
 
   describe('Template Structure', () => {
