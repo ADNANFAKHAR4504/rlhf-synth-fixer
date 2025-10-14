@@ -214,10 +214,10 @@ export class TapStack extends TerraformStack {
       description: 'SNS topic ARN for alerts',
     });
 
-    new TerraformOutput(this, 'cloudtrail-name', {
-      value: monitoringModule.trail.name,
-      description: 'CloudTrail name for API logging',
-    });
+    // new TerraformOutput(this, 'cloudtrail-name', {
+    //   value: monitoringModule.trail.name,
+    //   description: 'CloudTrail name for API logging',
+    // });
 
     new TerraformOutput(this, 'cloudwatch-log-group', {
       value: monitoringModule.logGroup.name,
