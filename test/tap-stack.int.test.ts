@@ -393,9 +393,6 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
           }));
           expect(associations.ResourceArns).toContain(alb!.LoadBalancerArn);
         }
-      } catch (error) {
-        // WAF access denied or not found - skip test
-      }
     });
 
     test('CloudTrail should be logging all API activities', async () => {
@@ -956,8 +953,6 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
         if (ec2LogGroup.retentionInDays !== undefined) {
           expect(ec2LogGroup.retentionInDays).toBe(30);
         }
-      } else {
-        // EC2 log group not found - skip test
       }
 
       // Check for CloudTrail log group
