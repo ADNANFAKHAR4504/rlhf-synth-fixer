@@ -10,5 +10,5 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "VPC, EC2, ALB, RDS, CloudWatch, Route 53,"
+  "aws_services": ["VPC, EC2, ALB, RDS, CloudWatch, Route 53,"]
 }

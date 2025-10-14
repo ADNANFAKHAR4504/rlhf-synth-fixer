@@ -1,25 +1,40 @@
-ROLE: You are a senior Terraform engineer.
+Generate a production-ready Terraform configuration in HCL syntax that builds the following complete AWS infrastructure.
+Output only one file named main.tf.
+Do not create any separate files (variables.tf, outputs.tf, backend.tf, tfvars, etc.).
+A default provider.tf is already provided for AWS configuration.
+Use secure, reusable, and fully functional Terraform constructs.
 
-CONTEXT:
-We must migrate an AWS application from region us-west-1 to us-west-2 using Terraform HCL.
+Infrastructure Requirements
+Region: Deploy all resources in us-west-2.
 
-CONSTRAINTS:
-- Preserve logical identity: keep the same names/tags/topology.
-- Resource IDs are region-scoped; provide an old→new ID mapping plan using terraform import (do NOT recreate).
-- Migrate Terraform state to the new region/workspace without data loss.
-- Preserve all SG rules and network configuration semantics.
-- Minimize downtime; propose DNS cutover steps and TTL strategy.
+Networking (VPC & Subnets):
+Create a custom VPC with public and private subnets across at least two Availability Zones.
+Include Internet Gateway, NAT Gateways, and proper Route Tables for public/private traffic separation.
+Configure Security Groups and Network ACLs using the principle of least privilege.
 
-DELIVERABLES:
-1) main.tf (providers, resources, modules as needed)
-2) variables.tf
-3) backend.tf (if required) with placeholders, not real secrets
-4) state-migration.md (exact Terraform CLI commands: workspace create/select, import, and verification)
-5) id-mapping.csv sample (headers: resource,address,old_id,new_id,notes)
-6) runbook.md (cutover plan, roll-back, checks)
+Compute Layer (Web Tier):
+Deploy an Auto Scaling Group (ASG) with a Launch Template running the latest Amazon Linux 2 AMI.
+Maintain at least 2 EC2 instances across AZs.
+Attach an Application Load Balancer (ALB) that distributes traffic evenly.
 
-OUTPUT FORMAT (IMPORTANT):
-- Provide each file in a separate fenced code block with its filename as the first line in a comment, e.g.:
-```hcl
-# main.tf
-...
+Load Balancing & DNS:
+Create an ALB in public subnets and attach target groups.
+Integrate with Route 53 using a domain alias (A or CNAME record) that points to the ALB.
+
+Database Layer:
+Deploy a Multi-AZ Amazon RDS PostgreSQL instance in private subnets.
+Enable automated backups with 7-day retention.
+Encrypt data at rest using KMS-managed keys.
+
+Security & Compliance:
+Implement AWS WAF on the ALB with AWS Managed Rule Sets.
+Enforce encryption (EBS, RDS, S3 if applicable).
+Create IAM Roles and Instance Profiles with least-privilege policies for EC2 and RDS.
+Configure VPC Flow Logs and CloudTrail for audit and monitoring.
+
+Monitoring & Logging:
+Enable CloudWatch Logs and CloudWatch Alarms for EC2, RDS, and ALB health checks.
+Include optional SNS notifications for alarm alerts.
+Configuration Management:
+Manage all sensitive data (DB credentials, app configs) via SSM Parameter Store.
+Include Parameter retrieval logic for EC2 bootstrapping.
