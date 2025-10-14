@@ -4,23 +4,43 @@
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
-# Data source for default VPC if not provided
-data "aws_vpc" "default" {
-  default = true
+# Create VPC if not provided
+resource "aws_vpc" "main" {
+  count = var.vpc_id == "" ? 1 : 0
+  
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+  
+  tags = {
+    Name        = "${var.project_name}-vpc"
+    Environment = var.environment
+  }
 }
 
-# Data source for default subnets if not provided
-data "aws_subnets" "default" {
-  filter {
-    name   = "vpc-id"
-    values = [local.vpc_id]
+# Create private subnets if not provided
+resource "aws_subnet" "private" {
+  count = var.vpc_id == "" ? 2 : 0
+  
+  vpc_id            = aws_vpc.main[0].id
+  cidr_block        = "10.0.${count.index + 1}.0/24"
+  availability_zone = data.aws_availability_zones.available.names[count.index]
+  
+  tags = {
+    Name        = "${var.project_name}-private-subnet-${count.index + 1}"
+    Environment = var.environment
   }
+}
+
+# Data source for availability zones
+data "aws_availability_zones" "available" {
+  state = "available"
 }
 
 # Local variables for VPC and subnet IDs
 locals {
-  vpc_id             = var.vpc_id != "" ? var.vpc_id : data.aws_vpc.default.id
-  private_subnet_ids = length(var.private_subnet_ids) > 0 ? var.private_subnet_ids : data.aws_subnets.default.ids
+  vpc_id             = var.vpc_id != "" ? var.vpc_id : aws_vpc.main[0].id
+  private_subnet_ids = length(var.private_subnet_ids) > 0 ? var.private_subnet_ids : aws_subnet.private[*].id
 }
 
 # KMS Key for encryption
@@ -45,7 +65,7 @@ resource "aws_kms_key" "secrets_key" {
         Sid    = "Allow CloudWatch Logs"
         Effect = "Allow"
         Principal = {
-          Service = "logs.${data.aws_region.current.name}.amazonaws.com"
+          Service = "logs.${var.aws_region}.amazonaws.com"
         }
         Action = [
           "kms:Encrypt",
@@ -58,7 +78,7 @@ resource "aws_kms_key" "secrets_key" {
         Resource = "*"
         Condition = {
           ArnLike = {
-            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*"
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
           }
         }
       },
@@ -348,7 +368,7 @@ resource "aws_iam_role_policy" "lambda_rotation" {
   role = aws_iam_role.lambda_rotation.id
   
   policy = templatefile("${path.module}/iam-policies.json", {
-    region       = data.aws_region.current.name
+    region       = var.aws_region
     account_id   = data.aws_caller_identity.current.account_id
     project_name = var.project_name
     kms_key_arn  = aws_kms_key.secrets_key.arn
@@ -452,7 +472,7 @@ resource "aws_lambda_permission" "rotation" {
 # VPC Endpoint for Secrets Manager
 resource "aws_vpc_endpoint" "secretsmanager" {
   vpc_id              = local.vpc_id
-  service_name        = "com.amazonaws.${data.aws_region.current.name}.secretsmanager"
+  service_name        = "com.amazonaws.${var.aws_region}.secretsmanager"
   vpc_endpoint_type   = "Interface"
   subnet_ids          = local.private_subnet_ids
   security_group_ids  = [aws_security_group.vpc_endpoints.id]
@@ -467,7 +487,7 @@ resource "aws_vpc_endpoint" "secretsmanager" {
 # VPC Endpoint for KMS
 resource "aws_vpc_endpoint" "kms" {
   vpc_id              = local.vpc_id
-  service_name        = "com.amazonaws.${data.aws_region.current.name}.kms"
+  service_name        = "com.amazonaws.${var.aws_region}.kms"
   vpc_endpoint_type   = "Interface"
   subnet_ids          = local.private_subnet_ids
   security_group_ids  = [aws_security_group.vpc_endpoints.id]
