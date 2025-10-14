@@ -399,7 +399,7 @@ EOF`,
     // Create RDS subnet group
     const dbSubnetGroup = new rds.SubnetGroup(stack, 'DbSubnetGroup', {
       vpc,
-      subnetGroupName: `prod-db-subnet-group-${stringSuffix}`,
+      subnetGroupName: `prod-db-subnet-group-${stringSuffix}-${timestamp}`,
       description: 'Subnet group for RDS database',
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
@@ -409,7 +409,7 @@ EOF`,
 
     // Create RDS instance with deletionProtection set to false
     const rdsInstance = new rds.DatabaseInstance(stack, 'Database', {
-      instanceIdentifier: `prod-mysql-db-${stringSuffix}`,
+      instanceIdentifier: `prod-mysql-db-${stringSuffix}-${timestamp}`,
       engine: rds.DatabaseInstanceEngine.mysql({
         version: rds.MysqlEngineVersion.VER_8_0_34,
       }),
