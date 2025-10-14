@@ -136,6 +136,7 @@ export class TapStack extends TerraformStack {
       region,
       s3BucketDomainName: s3Module.bucket.bucketRegionalDomainName,
       s3BucketArn: s3Module.bucket.arn,
+      s3BucketName: s3Module.bucket.id,
     });
 
     // 6. RDS Module

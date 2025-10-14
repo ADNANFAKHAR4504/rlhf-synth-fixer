@@ -614,6 +614,7 @@ export class S3Module extends Construct {
 export interface CloudFrontModuleConfig extends BaseModuleConfig {
   s3BucketDomainName: string;
   s3BucketArn: string;
+  s3BucketName: string; 
 }
 
 export class CloudFrontModule extends Construct {
@@ -693,7 +694,7 @@ export class CloudFrontModule extends Construct {
 
     // Update S3 bucket policy to allow CloudFront access
     new aws.s3BucketPolicy.S3BucketPolicy(this, 'bucket-policy', {
-      bucket: config.s3BucketArn.split(':::')[1],
+      bucket: config.s3BucketName,
       policy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
