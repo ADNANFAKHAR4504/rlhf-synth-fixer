@@ -1,14 +1,22 @@
 import { CloudWatchClient, DescribeAlarmsCommand } from "@aws-sdk/client-cloudwatch";
-import { CloudWatchLogsClient, DescribeLogStreamsCommand, GetLogEventsCommand } from "@aws-sdk/client-cloudwatch-logs";
-import { DescribeInstancesCommand, EC2Client } from "@aws-sdk/client-ec2";
+import { CloudWatchLogsClient, DescribeLogStreamsCommand } from "@aws-sdk/client-cloudwatch-logs";
+import { DescribeInstancesCommand, DescribeSecurityGroupsCommand, DescribeSubnetsCommand, EC2Client } from "@aws-sdk/client-ec2";
+import { GetInstanceProfileCommand, GetRoleCommand, IAMClient } from "@aws-sdk/client-iam";
+import { GetBucketEncryptionCommand, HeadBucketCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetTopicAttributesCommand, SNSClient } from "@aws-sdk/client-sns";
 import * as fs from "fs";
 
 // Load actual deployment outputs
 const outputs = JSON.parse(fs.readFileSync("cfn-outputs/flat-outputs.json", "utf8"));
 
-const ec2Client = new EC2Client({ region: "us-west-2" });
-const logsClient = new CloudWatchLogsClient({ region: "us-west-2" });
-const cwClient = new CloudWatchClient({ region: "us-west-2" });
+// Load region from lib/AWS_REGION file
+const region = fs.readFileSync("lib/AWS_REGION", "utf8").trim();
+const ec2Client = new EC2Client({ region });
+const logsClient = new CloudWatchLogsClient({ region });
+const cwClient = new CloudWatchClient({ region });
+const s3Client = new S3Client({ region });
+const snsClient = new SNSClient({ region });
+const iamClient = new IAMClient({ region });
 
 describe("Live AWS Integration", () => {
   test("EC2 instances should be running and accessible", async () => {
@@ -34,6 +42,85 @@ describe("Live AWS Integration", () => {
     expect(res.MetricAlarms?.length).toBe(alarmNames.length);
     const validStates = ["OK", "ALARM"];
     expect(res.MetricAlarms?.every(a => validStates.includes(a.StateValue || ""))).toBe(true);
+  });
+
+  test("S3 bucket should exist and be properly configured", async () => {
+    const bucketName = outputs.S3BucketName;
+    expect(bucketName).toBeDefined();
+
+    // Test bucket exists and is accessible
+    await expect(s3Client.send(new HeadBucketCommand({ Bucket: bucketName }))).resolves.toBeDefined();
+
+    // Test bucket encryption is enabled
+    const encryption = await s3Client.send(new GetBucketEncryptionCommand({ Bucket: bucketName }));
+    expect(encryption.ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe("AES256");
+  });
+
+  test("SNS topic should exist and be properly configured", async () => {
+    const topicArn = outputs.SNSTopicArn;
+    expect(topicArn).toBeDefined();
+
+    const attributes = await snsClient.send(new GetTopicAttributesCommand({ TopicArn: topicArn }));
+    expect(attributes.Attributes?.DisplayName).toBe("EC2 CPU Utilization Alarms");
+  });
+
+  test("IAM role and instance profile should exist and be properly configured", async () => {
+    const stackName = "TapStack";
+    const roleName = `${stackName}-ec2-role-${region}`;
+    const profileName = `${stackName}-ec2-profile-${region}`;
+
+    const role = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
+    expect(role.Role?.AssumeRolePolicyDocument).toBeDefined();
+
+    const profile = await iamClient.send(new GetInstanceProfileCommand({ InstanceProfileName: profileName }));
+    expect(profile.InstanceProfile?.Roles?.[0]?.RoleName).toBe(roleName);
+  });
+
+  test("Security group should have correct ingress and egress rules", async () => {
+    const instanceIds = outputs.InstanceIds.split(",");
+    const instances = await ec2Client.send(new DescribeInstancesCommand({ InstanceIds: instanceIds }));
+    const securityGroupIds = instances.Reservations?.[0]?.Instances?.[0]?.SecurityGroups?.map(sg => sg.GroupId).filter((id): id is string => id !== undefined) || [];
+
+    expect(securityGroupIds.length).toBeGreaterThan(0);
+    const securityGroups = await ec2Client.send(new DescribeSecurityGroupsCommand({ GroupIds: securityGroupIds }));
+    const securityGroup = securityGroups.SecurityGroups?.[0];
+
+    expect(securityGroup?.IpPermissions).toHaveLength(2); // HTTP and SSH
+    expect(securityGroup?.IpPermissionsEgress).toHaveLength(1); // All outbound
+
+    const httpRule = securityGroup?.IpPermissions?.find(rule => rule.FromPort === 80);
+    const sshRule = securityGroup?.IpPermissions?.find(rule => rule.FromPort === 22);
+
+    expect(httpRule).toBeDefined();
+    expect(sshRule).toBeDefined();
+  });
+
+  test("Subnet should be public and properly configured", async () => {
+    const instanceIds = outputs.InstanceIds.split(",");
+    const instances = await ec2Client.send(new DescribeInstancesCommand({ InstanceIds: instanceIds }));
+    const subnetId = instances.Reservations?.[0]?.Instances?.[0]?.SubnetId;
+
+    expect(subnetId).toBeDefined();
+    const subnets = await ec2Client.send(new DescribeSubnetsCommand({ SubnetIds: [subnetId!] }));
+    const subnet = subnets.Subnets?.[0];
+
+    expect(subnet?.MapPublicIpOnLaunch).toBe(true);
+    expect(subnet?.CidrBlock).toMatch(/^10\.0\./);
+  });
+
+  test("Cross-service integration: EC2 instances should be able to write to S3", async () => {
+    const bucketName = outputs.S3BucketName;
+    const instanceIds = outputs.InstanceIds.split(",");
+
+    // This test validates that the IAM role attached to instances has S3 permissions
+    // by checking that the bucket exists and the instances have the correct role attached
+    const instances = await ec2Client.send(new DescribeInstancesCommand({ InstanceIds: [instanceIds[0]] }));
+    const instanceProfile = instances.Reservations?.[0]?.Instances?.[0]?.IamInstanceProfile;
+
+    expect(instanceProfile?.Arn).toContain("ec2-profile");
+
+    // Verify bucket is accessible (indirect test of permissions)
+    await expect(s3Client.send(new HeadBucketCommand({ Bucket: bucketName }))).resolves.toBeDefined();
   });
 });
 

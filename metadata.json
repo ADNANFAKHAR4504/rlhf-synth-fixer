@@ -7,8 +7,21 @@
   "team": "4",
   "startedAt": "2025-10-11T18:47:50.470Z",
   "subtask": "Provisioning of Infrastructure Environments",
+  "training_quality": 8,
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "EC2, VPC, Subnet, Internet Gateway, Route Table, Security Group, IAM Role, IAM Instance Profile, S3 Bucket, CloudWatch, SNS"
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "Route Table",
+    "Security Group",
+    "IAM Role",
+    "IAM Instance Profile",
+    "S3 Bucket",
+    "CloudWatch",
+    "SNS"
+  ]
 }

@@ -61,11 +61,9 @@ Parameters:
       - production
     Description: Environment tag for resources
 
-
-Mappings:
-  RegionMap:
-    us-east-1:
-      AmazonLinux2AMI: ami-052064a798f08f0d3  # Amazon Linux 2 AMI (HVM) - Kernel 5.10
+  LatestAmazonLinuxAMI:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
 
 
 Resources:
@@ -183,7 +181,7 @@ Resources:
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${AWS::StackName}-ec2-role
+      RoleName: !Sub "${AWS::StackName}-ec2-role-${AWS::Region}"
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -194,7 +192,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
       Policies:
-        - PolicyName: CloudWatchLogsS3Policy
+        - PolicyName: !Sub "${AWS::StackName}-CloudWatchLogsS3Policy-${AWS::Region}"
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -218,7 +216,7 @@ Resources:
                   - !Sub 'arn:aws:s3:::${LogsBucket}'
       Tags:
         - Key: Name
-          Value: !Sub ${AWS::StackName}-ec2-role
+          Value: !Sub "${AWS::StackName}-ec2-role-${AWS::Region}"
         - Key: Environment
           Value: !Ref EnvironmentTag
 
@@ -228,7 +226,7 @@ Resources:
     Properties:
       Roles:
         - !Ref EC2Role
-      InstanceProfileName: !Sub ${AWS::StackName}-ec2-profile
+      InstanceProfileName: !Sub "${AWS::StackName}-ec2-profile-${AWS::Region}"
 
 
   # S3 Bucket for Logs
@@ -289,7 +287,7 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub ${AWS::StackName}-lt
       LaunchTemplateData:
-        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AmazonLinux2AMI]
+        ImageId: !Ref LatestAmazonLinuxAMI
         InstanceType: !Ref InstanceType
         KeyName: !Ref MyKeyPair       
         IamInstanceProfile:
@@ -302,13 +300,17 @@ Resources:
             yum update -y
 
             # Install CloudWatch Agent
+            yum install -y wget
             wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
-            rpm -U ./amazon-cloudwatch-agent.rpm
+            rpm -Uvh amazon-cloudwatch-agent.rpm
 
-            # Configure and start CloudWatch Agent (full metrics)
+            # Create CloudWatch Agent config
             cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF
             {
-              "agent": { "metrics_collection_interval": 60, "run_as_user": "cwagent" },
+              "agent": {
+                "metrics_collection_interval": 60,
+                "run_as_user": "root"
+              },
               "logs": {
                 "logs_collected": {
                   "files": {
@@ -325,20 +327,35 @@ Resources:
               "metrics": {
                 "namespace": "SaaSApp/${EnvironmentTag}",
                 "metrics_collected": {
-                  "cpu": { "measurement": ["cpu_usage_idle", "cpu_usage_system", "cpu_usage_user"], "metrics_collection_interval": 60 },
-                  "mem": { "measurement": ["mem_used_percent"], "metrics_collection_interval": 60 },
-                  "disk": { "measurement": ["disk_used_percent"], "metrics_collection_interval": 60 },
-                  "diskio": { "measurement": ["io_time"], "metrics_collection_interval": 60 }
+                  "cpu": {
+                    "measurement": ["cpu_usage_idle", "cpu_usage_system", "cpu_usage_user"],
+                    "metrics_collection_interval": 60
+                  },
+                  "mem": {
+                    "measurement": ["mem_used_percent"],
+                    "metrics_collection_interval": 60
+                  },
+                  "disk": {
+                    "measurement": ["disk_used_percent"],
+                    "metrics_collection_interval": 60
+                  },
+                  "diskio": {
+                    "measurement": ["io_time"],
+                    "metrics_collection_interval": 60
+                  }
                 }
               }
             }
             EOF
+
+            # Start CloudWatch Agent
             /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
 
-            # Simple web demo
+            # Enable and start the web server
             yum install -y httpd
+            systemctl enable httpd
             echo "<h1>SaaS App - Instance $(hostname)</h1>" > /var/www/html/index.html
-            systemctl enable --now httpd
+            systemctl start httpd
         TagSpecifications:
           - ResourceType: instance
             Tags:

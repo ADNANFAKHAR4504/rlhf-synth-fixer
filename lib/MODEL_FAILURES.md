@@ -10,7 +10,7 @@
 
 **Ideal Response:** Uses Version: `!GetAtt EC2LaunchTemplate.LatestVersionNumber`.
 
-**Impact:** CloudFormation validation error — `$Latest` is not a valid intrinsic function reference. Deployment fails before stack creation.
+**Impact:** CloudFormation validation error - `$Latest` is not a valid intrinsic function reference. Deployment fails before stack creation.
 
 ### 2. Key Pair Handling Error
 
@@ -24,7 +24,7 @@
 
 ### 3. CloudWatch Metrics Configuration Error
 
-**Requirement:** Collect extended CloudWatch metrics — CPU, memory, disk, and network I/O.
+**Requirement:** Collect extended CloudWatch metrics - CPU, memory, disk, and network I/O.
 
 **Model Response:** Configured only CPU metric collection.
 
@@ -40,11 +40,31 @@
 
 **Ideal Response:** Adds inline policy for both CloudWatch metrics and S3 (`logs:CreateLogGroup`, `s3:PutObject`, etc.).
 
-**Impact:** EC2 instances unable to send logs to S3 or create new log streams — CloudWatch and S3 integration fails.
+**Impact:** EC2 instances unable to send logs to S3 or create new log streams - CloudWatch and S3 integration fails.
+
+### 5. Hardcoded AMI ID Values
+
+**Requirement:** Use dynamic AMI resolution for cross-region compatibility and automatic updates.
+
+**Model Response:** Used hardcoded AMI IDs in RegionMap (e.g., `ami-052064a798f08f0d3` for us-east-1).
+
+**Ideal Response:** Uses SSM Parameter Store (`AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>`) with `/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2`.
+
+**Impact:** Template becomes region-specific, requires manual AMI updates, and breaks cross-account deployment without modification.
+
+### 6. CloudWatch Agent User Permission Error
+
+**Requirement:** CloudWatch Agent must run with sufficient privileges to create log streams and send metrics.
+
+**Model Response:** Configured CloudWatch Agent with `"run_as_user": "cwagent"` (non-root user).
+
+**Ideal Response:** Uses `"run_as_user": "root"` for proper log stream creation and metric collection.
+
+**Impact:** CloudWatch Agent fails to create log streams and send metrics due to insufficient permissions - monitoring data is lost.
 
 ## Major Issues
 
-### 5. CloudWatch Alarm Evaluation Configuration
+### 7. CloudWatch Alarm Evaluation Configuration
 
 **Requirement:** Trigger CPU alarms above threshold (e.g., 80%) with missing data treated as breaching.
 
@@ -54,7 +74,7 @@
 
 **Impact:** Alarm state remains INSUFFICIENT_DATA instead of alerting when metrics stop reporting, reducing reliability.
 
-### 6. Missing Resource Tag Consistency
+### 8. Missing Resource Tag Consistency
 
 **Requirement:** Every resource should include Environment and Name tags for cost tracking and filtering.
 
@@ -64,7 +84,7 @@
 
 **Impact:** Inconsistent tagging breaks cost allocation and environment-based automation workflows.
 
-### 7. S3 Bucket Security Misconfiguration
+### 9. S3 Bucket Security Misconfiguration
 
 **Requirement:** Logs bucket must block all public access and enable encryption.
 
@@ -72,11 +92,11 @@
 
 **Ideal Response:** Includes ServerSideEncryptionConfiguration with AES256 and all BlockPublic* properties set to true.
 
-**Impact:** Security risk — logs bucket may be exposed or fail compliance checks.
+**Impact:** Security risk - logs bucket may be exposed or fail compliance checks.
 
 ## Minor Issues
 
-### 8. Lifecycle Policy Missing Expiration
+### 10. Lifecycle Policy Missing Expiration
 
 **Requirement:** Automatically delete logs older than 90 days.
 
@@ -93,7 +113,7 @@ LifecycleConfiguration:
 
 **Impact:** S3 bucket accumulates logs indefinitely, increasing storage costs.
 
-### 9. Output Section Omissions
+### 11. Output Section Omissions
 
 **Requirement:** Export VPC ID, EC2 instance IDs, log group name, and alarm names.
 
@@ -111,6 +131,8 @@ LifecycleConfiguration:
 | Critical | Key pair not dynamically created | Deployment dependency error |
 | Critical | Incomplete CloudWatch metric configuration | Missing monitoring visibility |
 | Critical | Insufficient IAM permissions | Logs fail to reach CloudWatch/S3 |
+| Critical | Hardcoded AMI ID values | Cross-region deployment failure |
+| Critical | CloudWatch Agent permission error | Monitoring data loss |
 | Major | Missing alarm configuration consistency | False negatives in monitoring |
 | Major | Tag inconsistency across resources | Breaks automation/cost reports |
 | Major | S3 bucket security misconfiguration | Potential compliance breach |
@@ -119,4 +141,4 @@ LifecycleConfiguration:
 
 ## Overall Assessment
 
-The model response contains 4 critical deployment-blocking errors and 5 configuration-quality issues. The most severe problems are incorrect Launch Template versioning, static key pair reference, and incomplete CloudWatch/S3 integration — all of which prevent the stack from deploying or functioning as intended.
+The model response contains 6 critical deployment-blocking errors and 5 configuration-quality issues. The most severe problems are incorrect Launch Template versioning, static key pair reference, hardcoded AMI values, CloudWatch Agent permission errors, and incomplete CloudWatch/S3 integration - all of which prevent the stack from deploying or functioning as intended.

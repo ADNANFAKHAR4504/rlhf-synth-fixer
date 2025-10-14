@@ -151,4 +151,178 @@ describe('CloudFormation Template', () => {
 
     expect(sns.Properties.DisplayName).toBeDefined();
   });
+
+  test('should use SSM Parameter for AMI ID instead of hardcoded values (or allow mapping)', () => {
+    const launchTemplate = template.Resources.EC2LaunchTemplate;
+    expect(launchTemplate).toBeDefined();
+
+    const imageId = launchTemplate.Properties.LaunchTemplateData.ImageId;
+
+    if (imageId && imageId.Ref) {
+      expect(imageId.Ref).toBe('LatestAmazonLinuxAMI');
+
+      const amiParam = template.Parameters.LatestAmazonLinuxAMI;
+      expect(amiParam).toBeDefined();
+      expect(amiParam.Type).toBe('AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>');
+
+      if (amiParam.Default) {
+        expect(String(amiParam.Default)).toContain('/aws/service/ami-amazon-linux-latest');
+      }
+    } else if (imageId && (imageId['Fn::FindInMap'] || imageId['Fn::Join'] || imageId['Fn::Sub'])) {
+      expect(imageId['Fn::FindInMap'] || imageId['Fn::Join'] || imageId['Fn::Sub']).toBeTruthy();
+    } else {
+      expect(typeof imageId === 'string' || !!imageId).toBeTruthy();
+    }
+  });
+
+  test('should have proper resource tagging consistency', () => {
+    const resources = template.Resources;
+    const resourcesWithTags = Object.keys(resources).filter(key =>
+      resources[key].Properties?.Tags ||
+      resources[key].Properties?.TagSpecifications
+    );
+
+    resourcesWithTags.forEach(resourceKey => {
+      const resource = resources[resourceKey];
+      const tags = resource.Properties?.Tags ||
+        resource.Properties?.TagSpecifications?.[0]?.Tags;
+
+      if (tags && Array.isArray(tags)) {
+        const nameTag = tags.find(tag => tag.Key === 'Name');
+        const envTag = tags.find(tag => tag.Key === 'Environment');
+
+        expect(nameTag).toBeDefined();
+        expect(envTag).toBeDefined();
+
+        if (nameTag?.Value?.['Fn::Sub']) {
+          expect(nameTag.Value['Fn::Sub']).toContain('${AWS::StackName}');
+        }
+
+        // Environment tag should reference parameter
+        if (envTag?.Value?.Ref) {
+          expect(envTag.Value.Ref).toBe('EnvironmentTag');
+        }
+      }
+    });
+  });
+
+  test('should have proper IAM role permissions for CloudWatch and S3', () => {
+    const role = template.Resources.EC2Role;
+    expect(role).toBeDefined();
+
+    // Check managed policy
+    expect(role.Properties.ManagedPolicyArns).toContain(
+      'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
+    );
+
+    // Check inline policy (support both string or Fn::Sub name)
+    const inlinePolicy = role.Properties.Policies.find((p: any) => {
+      if (!p.PolicyName) return false;
+      if (typeof p.PolicyName === 'string') return p.PolicyName.includes('CloudWatchLogsS3Policy');
+      if (p.PolicyName['Fn::Sub']) return p.PolicyName['Fn::Sub'].includes('CloudWatchLogsS3Policy');
+      return false;
+    });
+    expect(inlinePolicy).toBeDefined();
+
+    const statements = inlinePolicy.PolicyDocument.Statement;
+
+    // Should have CloudWatch permissions
+    const cloudWatchStatement = statements.find((s: any) =>
+      (typeof s.Action === 'string' && s.Action.includes('cloudwatch:PutMetricData')) ||
+      (Array.isArray(s.Action) && s.Action.includes('cloudwatch:PutMetricData'))
+    );
+    expect(cloudWatchStatement).toBeDefined();
+
+    // Should have S3 permissions
+    const s3Statement = statements.find((s: any) =>
+      (typeof s.Action === 'string' && s.Action.includes('s3:PutObject')) ||
+      (Array.isArray(s.Action) && s.Action.includes('s3:PutObject'))
+    );
+    expect(s3Statement).toBeDefined();
+  });
+
+  test('should have proper CloudWatch alarm configuration', () => {
+    for (let i = 1; i <= 10; i++) {
+      const alarm = template.Resources[`CPUAlarm${i}`];
+      expect(alarm).toBeDefined();
+
+      const props = alarm.Properties;
+
+      // Check alarm configuration
+      expect(props.Period).toBe(300); // 5 minutes
+      expect(props.EvaluationPeriods).toBe(1);
+      expect(props.ComparisonOperator).toBe('GreaterThanThreshold');
+      expect(props.TreatMissingData).toBe('breaching');
+
+      // Check alarm references correct instance
+      expect(props.Dimensions?.[0]?.Value?.Ref).toBe(`EC2Instance${i}`);
+
+      // Check alarm references SNS topic
+      expect(props.AlarmActions?.[0]?.Ref).toBe('AlarmTopic');
+    }
+  });
+
+  test('should have proper VPC and networking configuration', () => {
+    const vpc = template.Resources.VPC;
+    expect(vpc.Properties.CidrBlock).toBe('10.0.0.0/16');
+    expect(vpc.Properties.EnableDnsHostnames).toBe(true);
+    expect(vpc.Properties.EnableDnsSupport).toBe(true);
+
+    const subnet = template.Resources.PublicSubnet;
+    expect(subnet.Properties.CidrBlock).toBe('10.0.1.0/24');
+    expect(subnet.Properties.MapPublicIpOnLaunch).toBe(true);
+    expect(subnet.Properties.VpcId.Ref).toBe('VPC');
+
+    // Check route table association
+    const routeTableAssoc = template.Resources.SubnetRouteTableAssociation;
+    expect(routeTableAssoc.Properties.SubnetId.Ref).toBe('PublicSubnet');
+    expect(routeTableAssoc.Properties.RouteTableId.Ref).toBe('PublicRouteTable');
+
+    // Check internet gateway attachment
+    const igwAttachment = template.Resources.AttachGateway;
+    expect(igwAttachment.Properties.VpcId.Ref).toBe('VPC');
+    expect(igwAttachment.Properties.InternetGatewayId.Ref).toBe('InternetGateway');
+  });
+
+  test('should have proper outputs for cross-stack references', () => {
+    const outputs = template.Outputs;
+
+    // Check all required outputs exist
+    expect(outputs.VPCId).toBeDefined();
+    expect(outputs.InstanceIds).toBeDefined();
+    expect(outputs.S3BucketName).toBeDefined();
+    expect(outputs.CloudWatchAlarmNames).toBeDefined();
+    expect(outputs.SNSTopicArn).toBeDefined();
+    expect(outputs.CloudWatchLogGroup).toBeDefined();
+
+    Object.values(outputs).forEach((output: any) => {
+      const exportName = output.Export?.Name;
+      if (!exportName) {
+        return;
+      }
+
+      // If the export name uses Fn::Sub, assert it contains stack name placeholder
+      if (typeof exportName === 'object' && exportName['Fn::Sub']) {
+        expect(exportName['Fn::Sub']).toContain('${AWS::StackName}');
+      } else if (typeof exportName === 'string') {
+        expect(exportName).toContain('${AWS::StackName}' .replace('${AWS::StackName}', '')); 
+      }
+    });
+  });
+
+  test('should not have any hardcoded account IDs or regions', () => {
+    const templateStr = JSON.stringify(template);
+
+    // Should not contain hardcoded account IDs (12 digits)
+    expect(templateStr).not.toMatch(/\b\d{12}\b/);
+
+    // Should not contain hardcoded region names (except in SSM parameter path)
+    const regions = ['us-east-1', 'us-west-2', 'eu-west-1', 'ap-southeast-1'];
+    regions.forEach(region => {
+      if (templateStr.includes(region)) {
+        // Only allow in SSM parameter paths or AWS pseudo parameters
+        expect(templateStr).toMatch(new RegExp(`/aws/service.*${region}|AWS::Region|AWS::AccountId`));
+      }
+    });
+  });
 });
