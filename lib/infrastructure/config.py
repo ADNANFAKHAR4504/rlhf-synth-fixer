@@ -28,14 +28,14 @@ class WebAppConfig:
         app_name_normalized = self.app_name.lower().replace('_', '-')
         region_normalized = self.region.replace('-', '')
         
-        # Resource naming with stable identifiers
-        self.s3_bucket_name = f"{project_name_normalized}-{app_name_normalized}-logs{self.environment_suffix}-{region_normalized}"
-        self.iam_role_name = f"{project_name_normalized}-{app_name_normalized}-ec2-role{self.environment_suffix}-{region_normalized}"
-        self.launch_template_name = f"{project_name_normalized}-{app_name_normalized}-template{self.environment_suffix}-{region_normalized}"
-        self.asg_name = f"{project_name_normalized}-{app_name_normalized}-asg{self.environment_suffix}-{region_normalized}"
-        self.lb_name = f"{project_name_normalized}-{app_name_normalized}-lb{self.environment_suffix}-{region_normalized}"[:32]
-        self.target_group_name = f"{project_name_normalized}-{app_name_normalized}-tg{self.environment_suffix}-{region_normalized}"[:32]
-        self.log_group_name = f"/aws/ec2/{project_name_normalized}-{app_name_normalized}{self.environment_suffix}-{region_normalized}"
+        # Resource naming with stable identifiers (environment + region for uniqueness)
+        self.s3_bucket_name = f"{project_name_normalized}-{app_name_normalized}-logs-{environment_normalized}-{region_normalized}"
+        self.iam_role_name = f"{project_name_normalized}-{app_name_normalized}-ec2-role-{environment_normalized}-{region_normalized}"
+        self.launch_template_name = f"{project_name_normalized}-{app_name_normalized}-template-{environment_normalized}-{region_normalized}"
+        self.asg_name = f"{project_name_normalized}-{app_name_normalized}-asg-{environment_normalized}-{region_normalized}"
+        self.lb_name = f"{project_name_normalized}-{app_name_normalized}-lb-{environment_normalized}-{region_normalized}"[:32]
+        self.target_group_name = f"{project_name_normalized}-{app_name_normalized}-tg-{environment_normalized}-{region_normalized}"[:32]
+        self.log_group_name = f"/aws/ec2/{project_name_normalized}-{app_name_normalized}-{environment_normalized}-{region_normalized}"
         
         # Validate region
         if self.region not in ['us-west-2', 'us-east-1']:
@@ -55,7 +55,7 @@ class WebAppConfig:
         environment_normalized = self.environment.lower()
         app_name_normalized = self.app_name.lower().replace('_', '-')
         region_normalized = self.region.replace('-', '')
-        return f"{project_name_normalized}-{app_name_normalized}-{resource_name}{self.environment_suffix}-{region_normalized}"
+        return f"{project_name_normalized}-{app_name_normalized}-{resource_name}-{environment_normalized}-{region_normalized}"
     
     def get_common_tags(self) -> Dict[str, str]:
         """Get common tags for all resources."""
