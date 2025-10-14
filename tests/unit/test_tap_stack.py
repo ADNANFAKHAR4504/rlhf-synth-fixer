@@ -71,7 +71,7 @@ class TestWebAppConfig(unittest.TestCase):
         self.assertTrue(config.s3_bucket_name.islower())
         self.assertNotIn('_', config.s3_bucket_name)
         
-        # Test IAM role name normalization
+        # Test IAM role name normalizatio
         self.assertIn('web-app-webapp-mec2-role', config.iam_role_name)
         self.assertTrue(config.iam_role_name.islower())
         self.assertNotIn('_', config.iam_role_name)
