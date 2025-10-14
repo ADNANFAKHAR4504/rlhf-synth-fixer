@@ -1,6 +1,6 @@
 {
-  "platform": "CloudFormation",
-  "language": "YAML",
+  "platform": "cfn",
+  "language": "yaml",
   "complexity": "medium",
   "turn_type": "single",
   "po_id": "2966563502",
