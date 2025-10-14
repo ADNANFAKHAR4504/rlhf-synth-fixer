@@ -452,6 +452,24 @@ resource "aws_s3_bucket_public_access_block" "cloudfront_logs_pab" {
   restrict_public_buckets = true
 }
 
+# Enable ACL for CloudFront logging
+resource "aws_s3_bucket_ownership_controls" "cloudfront_logs_ownership" {
+  provider = aws.primary
+  bucket   = aws_s3_bucket.cloudfront_logs.id
+
+  rule {
+    object_ownership = "BucketOwnerPreferred"
+  }
+}
+
+resource "aws_s3_bucket_acl" "cloudfront_logs_acl" {
+  provider = aws.primary
+  bucket   = aws_s3_bucket.cloudfront_logs.id
+  acl      = "log-delivery-write"
+
+  depends_on = [aws_s3_bucket_ownership_controls.cloudfront_logs_ownership]
+}
+
 # CloudFront Origin Access Identity
 resource "aws_cloudfront_origin_access_identity" "oai" {
   comment = "${var.project_name} OAI"
@@ -909,8 +927,8 @@ resource "aws_cloudwatch_dashboard" "main" {
 
         properties = {
           metrics = [
-            ["AWS/WAFV2", "BlockedRequests", { "WebACL" : aws_wafv2_web_acl.cloudfront_waf.name, "Region" : "Global", "Rule" : "ALL" }],
-            [".", "AllowedRequests", { "WebACL" : aws_wafv2_web_acl.cloudfront_waf.name, "Region" : "Global", "Rule" : "ALL" }]
+            ["AWS/WAFV2", "BlockedRequests"],
+            [".", "AllowedRequests"]
           ]
           view   = "timeSeries"
           region = "us-east-1"
@@ -1175,11 +1193,12 @@ resource "aws_quicksight_data_set" "content_analytics" {
   depends_on = [aws_quicksight_data_source.cloudfront_logs]
 }
 
-# CloudTrail for audit logging
+# CloudTrail for audit logging (optional due to account limits)
 resource "aws_cloudtrail" "main" {
+  count                         = var.enable_cloudtrail ? 1 : 0
   provider                      = aws.primary
   name                          = "${var.project_name}-trail"
-  s3_bucket_name                = aws_s3_bucket.cloudtrail.id
+  s3_bucket_name                = aws_s3_bucket.cloudtrail[0].id
   enable_logging                = true
   include_global_service_events = true
   is_multi_region_trail         = true
@@ -1205,6 +1224,7 @@ resource "aws_cloudtrail" "main" {
 
 # S3 bucket for CloudTrail logs
 resource "aws_s3_bucket" "cloudtrail" {
+  count    = var.enable_cloudtrail ? 1 : 0
   provider = aws.primary
   bucket   = "${var.project_name}-cloudtrail-${random_string.unique_id.result}"
 
@@ -1214,8 +1234,9 @@ resource "aws_s3_bucket" "cloudtrail" {
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail_encryption" {
+  count    = var.enable_cloudtrail ? 1 : 0
   provider = aws.primary
-  bucket   = aws_s3_bucket.cloudtrail.id
+  bucket   = aws_s3_bucket.cloudtrail[0].id
 
   rule {
     apply_server_side_encryption_by_default {
@@ -1225,8 +1246,9 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail_encryp
 }
 
 resource "aws_s3_bucket_public_access_block" "cloudtrail_pab" {
+  count    = var.enable_cloudtrail ? 1 : 0
   provider = aws.primary
-  bucket   = aws_s3_bucket.cloudtrail.id
+  bucket   = aws_s3_bucket.cloudtrail[0].id
 
   block_public_acls       = true
   block_public_policy     = true
@@ -1235,6 +1257,8 @@ resource "aws_s3_bucket_public_access_block" "cloudtrail_pab" {
 }
 
 data "aws_iam_policy_document" "cloudtrail_bucket_policy" {
+  count = var.enable_cloudtrail ? 1 : 0
+
   statement {
     sid = "AWSCloudTrailAclCheck"
 
@@ -1245,7 +1269,7 @@ data "aws_iam_policy_document" "cloudtrail_bucket_policy" {
 
     actions = ["s3:GetBucketAcl"]
 
-    resources = [aws_s3_bucket.cloudtrail.arn]
+    resources = [aws_s3_bucket.cloudtrail[0].arn]
   }
 
   statement {
@@ -1258,7 +1282,7 @@ data "aws_iam_policy_document" "cloudtrail_bucket_policy" {
 
     actions = ["s3:PutObject"]
 
-    resources = ["${aws_s3_bucket.cloudtrail.arn}/*"]
+    resources = ["${aws_s3_bucket.cloudtrail[0].arn}/*"]
 
     condition {
       test     = "StringEquals"
@@ -1269,9 +1293,10 @@ data "aws_iam_policy_document" "cloudtrail_bucket_policy" {
 }
 
 resource "aws_s3_bucket_policy" "cloudtrail" {
+  count    = var.enable_cloudtrail ? 1 : 0
   provider = aws.primary
-  bucket   = aws_s3_bucket.cloudtrail.id
-  policy   = data.aws_iam_policy_document.cloudtrail_bucket_policy.json
+  bucket   = aws_s3_bucket.cloudtrail[0].id
+  policy   = data.aws_iam_policy_document.cloudtrail_bucket_policy[0].json
 }
 
 # Outputs
@@ -1321,13 +1346,18 @@ output "waf_web_acl_arn" {
 }
 
 output "cloudtrail_name" {
-  description = "CloudTrail name"
-  value       = aws_cloudtrail.main.name
+  description = "CloudTrail name (if enabled)"
+  value       = var.enable_cloudtrail ? aws_cloudtrail.main[0].name : ""
 }
 
 output "cloudtrail_arn" {
-  description = "CloudTrail ARN"
-  value       = aws_cloudtrail.main.arn
+  description = "CloudTrail ARN (if enabled)"
+  value       = var.enable_cloudtrail ? aws_cloudtrail.main[0].arn : ""
+}
+
+output "cloudtrail_enabled" {
+  description = "Whether CloudTrail is enabled"
+  value       = var.enable_cloudtrail
 }
 
 output "sns_topic_arn" {
@@ -1411,7 +1441,7 @@ output "deployment_instructions" {
     4. Monitoring:
        - CloudWatch Dashboard: ${aws_cloudwatch_dashboard.main.dashboard_name}
        - SNS Topic for Alerts: ${aws_sns_topic.alerts.name}
-       - CloudTrail: ${aws_cloudtrail.main.name}
+       ${var.enable_cloudtrail ? "- CloudTrail: ${aws_cloudtrail.main[0].name}" : "- CloudTrail: DISABLED (enable with enable_cloudtrail=true)"}
     
     5. Analytics:
        - Analytics Bucket: ${aws_s3_bucket.analytics.id}

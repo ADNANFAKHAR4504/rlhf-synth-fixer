@@ -315,20 +315,26 @@ describe('Terraform Infrastructure Unit Tests', () => {
     });
 
     describe('CloudTrail Resources', () => {
-      test('declares CloudTrail', () => {
+      test('declares CloudTrail with conditional count', () => {
         expect(content).toMatch(/resource\s+"aws_cloudtrail"\s+"main"/);
+        expect(content).toMatch(/count\s*=\s*var\.enable_cloudtrail\s*\?\s*1\s*:\s*0/);
       });
 
-      test('CloudTrail has logging enabled', () => {
+      test('CloudTrail has logging enabled when deployed', () => {
         expect(content).toMatch(/enable_logging\s*=\s*true/);
       });
 
-      test('CloudTrail is multi-region', () => {
+      test('CloudTrail is multi-region when deployed', () => {
         expect(content).toMatch(/is_multi_region_trail\s*=\s*true/);
       });
 
-      test('CloudTrail has log file validation enabled', () => {
+      test('CloudTrail has log file validation enabled when deployed', () => {
         expect(content).toMatch(/enable_log_file_validation\s*=\s*true/);
+      });
+
+      test('CloudTrail S3 bucket is conditional', () => {
+        const cloudtrailBucketMatch = content.match(/resource\s+"aws_s3_bucket"\s+"cloudtrail"[\s\S]*?count\s*=\s*var\.enable_cloudtrail/);
+        expect(cloudtrailBucketMatch).not.toBeNull();
       });
     });
 
@@ -534,6 +540,10 @@ describe('Terraform Infrastructure Unit Tests', () => {
 
     test('defines enable_quicksight variable', () => {
       expect(content).toMatch(/variable\s+"enable_quicksight"/);
+    });
+
+    test('defines enable_cloudtrail variable', () => {
+      expect(content).toMatch(/variable\s+"enable_cloudtrail"/);
     });
 
     test('defines alert_email variable', () => {

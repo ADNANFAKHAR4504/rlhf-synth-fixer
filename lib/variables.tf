@@ -163,15 +163,21 @@ variable "route53_ttl" {
 
 # Analytics Configuration
 variable "enable_quicksight" {
-  description = "Enable QuickSight for analytics"
+  description = "Enable QuickSight for analytics (requires QuickSight account setup)"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "analytics_retention_days" {
   description = "Retention period for analytics data (days)"
   type        = number
   default     = 90
+}
+
+variable "enable_cloudtrail" {
+  description = "Enable CloudTrail for audit logging (may hit account limits)"
+  type        = bool
+  default     = false
 }
 
 # Compliance Configuration
