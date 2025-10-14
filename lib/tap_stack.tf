@@ -808,29 +808,6 @@ resource "aws_cloudfront_distribution" "main" {
     }
   }
 
-  # Custom cache behavior for dynamic content
-  ordered_cache_behavior {
-    path_pattern     = "/api/*"
-    allowed_methods  = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
-    cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "s3-origin-group"
-
-    forwarded_values {
-      query_string = true
-      headers      = ["Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers", "Accept", "Accept-Language", "Content-Type"]
-
-      cookies {
-        forward = "none"
-      }
-    }
-
-    viewer_protocol_policy = "https-only"
-    min_ttl                = 0
-    default_ttl            = 0
-    max_ttl                = 0
-    compress               = true
-  }
-
   # Custom error pages
   custom_error_response {
     error_code            = 403
