@@ -59,7 +59,7 @@ def deployment_outputs() -> Dict[str, Any]:
 @pytest.fixture
 def aws_region() -> str:
     """Return the AWS region for testing."""
-    return os.getenv('AWS_REGION', 'us-east-1')
+    return os.getenv('AWS_REGION', 'us-west-2')
 
 
 @pytest.fixture
