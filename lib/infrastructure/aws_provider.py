@@ -13,13 +13,8 @@ class AWSProviderStack:
     
     def _create_aws_provider(self) -> aws.Provider:
         """Create AWS provider with explicit region enforcement."""
-        import random
-        import time
-        timestamp = str(int(time.time()))[-6:]
-        random_suffix = str(random.randint(1000, 9999))
-        
         return aws.Provider(
-            f"aws-provider-{timestamp}-{random_suffix}",
+            "aws-provider-461889-2857",
             region=self.config.region
         )
     
