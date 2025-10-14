@@ -1123,61 +1123,6 @@ All resources are tagged with:
 }
 ```
 
-## Deployment Instructions
-
-### Prerequisites
-- AWS CLI configured with appropriate credentials
-- Permissions to create VPC, EC2, RDS, IAM, Secrets Manager, and ELB resources
-
-### Deployment Steps
-
-1. **Validate the template**:
-```bash
-aws cloudformation validate-template --template-body file://lib/TapStack.json --region us-west-1
-```
-
-2. **Deploy the stack**:
-```bash
-aws cloudformation create-stack \
-  --stack-name production-infrastructure-dev \
-  --template-body file://lib/TapStack.json \
-  --parameters \
-    ParameterKey=EnvironmentSuffix,ParameterValue=dev \
-    ParameterKey=DBUsername,ParameterValue=admin \
-  --capabilities CAPABILITY_IAM \
-  --region us-west-1
-```
-
-Note: The stack automatically creates a Secrets Manager secret with an auto-generated strong password. No manual secret creation is required.
-
-3. **Monitor deployment**:
-```bash
-aws cloudformation describe-stacks \
-  --stack-name production-infrastructure-dev \
-  --region us-west-1 \
-  --query 'Stacks[0].StackStatus'
-```
-
-4. **Get stack outputs**:
-```bash
-aws cloudformation describe-stacks \
-  --stack-name production-infrastructure-dev \
-  --region us-west-1 \
-  --query 'Stacks[0].Outputs'
-```
-
-5. **Access the application**:
-After the stack is created, retrieve the LoadBalancerURL from the outputs and access it in your browser.
-
-### Cleanup
-
-To delete the stack and all resources:
-```bash
-aws cloudformation delete-stack \
-  --stack-name production-infrastructure-dev \
-  --region us-west-1
-```
-
 ## Key Features
 
 ### Security Best Practices
