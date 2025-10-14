@@ -1,260 +1,33 @@
 """
 test_tap_stack.py
 
-Unit tests for the TapStack Pulumi component using Pulumi's testing utilities.
-These tests validate the infrastructure configuration without deploying actual resources.
+Unit tests for the TapStack configuration and argument handling.
+These tests use Pulumi's testing framework with minimal generic mocking.
 """
 
 import unittest
-from typing import Any, Awaitable, Optional
 import pulumi
 
 
-class PulumiMocks(pulumi.runtime.Mocks):
+class GenericMocks(pulumi.runtime.Mocks):
     """
-    Mock implementation for Pulumi resources to enable testing without actual deployments.
+    Generic mock that works for all resource types without resource-specific logic.
+    Simply returns inputs as outputs with auto-generated IDs.
     """
-
+    
     def new_resource(self, args: pulumi.runtime.MockResourceArgs):
-        """
-        Mock the creation of new resources.
-        Returns a state dict with the resource's inputs and some mock IDs.
-        """
-        outputs = args.inputs
-        
-        # Generate resource-specific mock outputs
-        if args.typ == "aws:s3/bucket:Bucket":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-id",
-                "arn": f"arn:aws:s3:::{args.name}",
-                "bucket": args.inputs.get("bucket", f"{args.name}"),
-                "bucket_domain_name": f"{args.name}.s3.amazonaws.com",
-            }
-        elif args.typ == "aws:dynamodb/table:Table":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-id",
-                "arn": f"arn:aws:dynamodb:us-east-1:123456789012:table/{args.name}",
-                "name": args.inputs.get("name", args.name),
-            }
-        elif args.typ == "aws:lambda/function:Function":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-id",
-                "arn": f"arn:aws:lambda:us-east-1:123456789012:function:{args.name}",
-                "name": args.inputs.get("function_name", args.name),
-                "invoke_arn": f"arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:123456789012:function:{args.name}/invocations",
-            }
-        elif args.typ == "aws:sqs/queue:Queue":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-id",
-                "arn": f"arn:aws:sqs:us-east-1:123456789012:{args.name}",
-                "name": args.inputs.get("name", args.name),
-                "url": f"https://sqs.us-east-1.amazonaws.com/123456789012/{args.name}",
-            }
-        elif args.typ == "aws:sns/topic:Topic":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-id",
-                "arn": f"arn:aws:sns:us-east-1:123456789012:{args.name}",
-                "name": args.inputs.get("name", args.name),
-            }
-        elif args.typ == "aws:cloudwatch/eventBus:EventBus":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-id",
-                "arn": f"arn:aws:events:us-east-1:123456789012:event-bus/{args.name}",
-                "name": args.inputs.get("name", args.name),
-            }
-        elif args.typ == "aws:apigateway/restApi:RestApi":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-api-id",
-                "name": args.inputs.get("name", args.name),
-                "execution_arn": f"arn:aws:execute-api:us-east-1:123456789012:{args.name}-api-id",
-                "root_resource_id": "root123",
-            }
-        elif args.typ == "aws:apigateway/resource:Resource":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-resource-id",
-                "path": args.inputs.get("path_part", "/resource"),
-            }
-        elif args.typ == "aws:apigateway/method:Method":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-method-id",
-                "http_method": args.inputs.get("http_method", "POST"),
-            }
-        elif args.typ == "aws:apigateway/integration:Integration":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-integration-id",
-            }
-        elif args.typ == "aws:apigateway/deployment:Deployment":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-deployment-id",
-                "invoke_url": "https://api-id.execute-api.us-east-1.amazonaws.com",
-            }
-        elif args.typ == "aws:apigateway/stage:Stage":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-stage-id",
-                "invoke_url": f"https://api-id.execute-api.us-east-1.amazonaws.com/{args.inputs.get('stage_name', 'dev')}",
-            }
-        elif args.typ == "aws:iam/role:Role":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-role-id",
-                "arn": f"arn:aws:iam::123456789012:role/{args.name}",
-                "name": args.inputs.get("name", args.name),
-            }
-        elif args.typ == "aws:iam/rolePolicy:RolePolicy":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-policy-id",
-            }
-        elif args.typ == "aws:iam/rolePolicyAttachment:RolePolicyAttachment":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-attachment-id",
-            }
-        elif args.typ == "aws:cloudwatch/logGroup:LogGroup":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-log-group-id",
-                "arn": f"arn:aws:logs:us-east-1:123456789012:log-group:{args.inputs.get('name', args.name)}",
-                "name": args.inputs.get("name", args.name),
-            }
-        elif args.typ == "aws:cloudwatch/logStream:LogStream":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-log-stream-id",
-                "name": args.inputs.get("name", args.name),
-            }
-        elif args.typ == "aws:cloudwatch/eventRule:EventRule":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-rule-id",
-                "arn": f"arn:aws:events:us-east-1:123456789012:rule/{args.name}",
-                "name": args.inputs.get("name", args.name),
-            }
-        elif args.typ == "aws:cloudwatch/eventTarget:EventTarget":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-target-id",
-            }
-        elif args.typ == "aws:cloudwatch/metricAlarm:MetricAlarm":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-alarm-id",
-                "arn": f"arn:aws:cloudwatch:us-east-1:123456789012:alarm:{args.name}",
-            }
-        elif args.typ == "aws:lambda/permission:Permission":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-permission-id",
-            }
-        elif args.typ == "aws:lambda/eventSourceMapping:EventSourceMapping":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-mapping-id",
-                "uuid": f"{args.name}-uuid",
-            }
-        elif args.typ == "aws:sns/topicSubscription:TopicSubscription":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-subscription-id",
-                "arn": f"arn:aws:sns:us-east-1:123456789012:{args.name}:subscription-id",
-            }
-        elif args.typ == "aws:s3/bucketPublicAccessBlock:BucketPublicAccessBlock":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-pab-id",
-            }
-        elif args.typ == "aws:apigatewayv2/api:Api":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-api-id",
-                "name": args.inputs.get("name", args.name),
-                "api_endpoint": f"https://{args.name}-api-id.execute-api.us-east-1.amazonaws.com",
-                "execution_arn": f"arn:aws:execute-api:us-east-1:123456789012:{args.name}-api-id",
-            }
-        elif args.typ == "aws:apigatewayv2/integration:Integration":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-integration-id",
-            }
-        elif args.typ == "aws:apigatewayv2/route:Route":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-route-id",
-            }
-        elif args.typ == "aws:apigatewayv2/stage:Stage":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-stage-id",
-                "invoke_url": f"https://api-id.execute-api.us-east-1.amazonaws.com/{args.inputs.get('name', 'default')}",
-            }
-        elif args.typ == "aws:s3/bucketNotification:BucketNotification":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-notification-id",
-            }
-        elif args.typ == "aws:sqs/queuePolicy:QueuePolicy":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-policy-id",
-            }
-        elif args.typ == "aws:lambda/layerVersion:LayerVersion":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-layer-id",
-                "arn": f"arn:aws:lambda:us-east-1:123456789012:layer:{args.name}:1",
-                "layer_arn": f"arn:aws:lambda:us-east-1:123456789012:layer:{args.name}",
-            }
-        elif args.typ == "aws:iam/policy:Policy":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-policy-id",
-                "arn": f"arn:aws:iam::123456789012:policy/{args.name}",
-            }
-        else:
-            # Default mock output for any other resource type
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-id",
-                "arn": f"arn:aws:service:region:account-id:{args.name}",
-            }
-
-        return [outputs.get("id", f"{args.name}-id"), outputs]
-
+        """Return inputs as outputs with a generated ID."""
+        return [f"{args.name}-id", {**args.inputs, "id": f"{args.name}-id"}]
+    
     def call(self, args: pulumi.runtime.MockCallArgs):
-        """
-        Mock function calls (e.g., data sources, function invocations).
-        """
-        if args.token == "aws:index/getCallerIdentity:getCallerIdentity":
-            return {
-                "accountId": "123456789012",
-                "arn": "arn:aws:iam::123456789012:user/test",
-                "userId": "AIDACKCEVSQ6C2EXAMPLE",
-            }
-        elif args.token == "aws:index/getRegion:getRegion":
-            return {
-                "name": "us-east-1",
-            }
-        
+        """Return empty dict for all function calls."""
         return {}
 
 
-# Set Pulumi mocks for all tests
-pulumi.runtime.set_mocks(PulumiMocks())
+# Set mocks before importing the stack
+pulumi.runtime.set_mocks(GenericMocks())
 
-# Import after setting mocks
-from lib.tap_stack import TapStack, TapStackArgs
+from lib.tap_stack import TapStackArgs, TapStack
 
 
 class TestTapStackArgs(unittest.TestCase):
@@ -287,189 +60,132 @@ class TestTapStackArgs(unittest.TestCase):
         
         self.assertEqual(args.environment_suffix, 'dev')
 
+    def test_tap_stack_args_multiple_environments(self):
+        """Test TapStackArgs with various environment suffix values."""
+        environments = ['dev', 'staging', 'qa', 'prod', 'test', 'demo']
+        
+        for env in environments:
+            args = TapStackArgs(environment_suffix=env)
+            self.assertEqual(args.environment_suffix, env)
 
-class TestTapStackComponent(unittest.TestCase):
-    """Test cases for TapStack Pulumi ComponentResource."""
+    def test_tap_stack_args_complex_tags(self):
+        """Test TapStackArgs with complex tag values."""
+        complex_tags = {
+            "Team": "Platform Engineering",
+            "CostCenter": "12345",
+            "Environment": "production",
+            "ManagedBy": "Pulumi",
+            "Owner": "platform-team@example.com"
+        }
+        args = TapStackArgs(environment_suffix='prod', tags=complex_tags)
+        
+        self.assertEqual(args.tags, complex_tags)
+        self.assertEqual(len(args.tags), 5)
+
+
+class TestTapStackCreation(unittest.TestCase):
+    """Test TapStack instantiation and resource creation."""
 
     @pulumi.runtime.test
-    def test_tap_stack_creation_with_default_args(self):
-        """Test TapStack creation with default arguments."""
-        
-        def check_stack(args):
+    def test_tap_stack_instantiation(self):
+        """Test TapStack can be instantiated."""
+        def check_instantiation(args):
             stack = TapStack("test-stack", TapStackArgs())
             
-            # Verify the stack was created
             self.assertIsNotNone(stack)
             self.assertEqual(stack.environment_suffix, 'dev')
-            
-            # Verify instance variables are set for image processing pipeline
-            self.assertIsNotNone(stack.image_bucket)
-            self.assertIsNotNone(stack.results_table)
-            self.assertIsNotNone(stack.preprocessing_queue)
-            self.assertIsNotNone(stack.inference_queue)
-            self.assertIsNotNone(stack.dlq)
-            self.assertIsNotNone(stack.preprocessing_function)
-            self.assertIsNotNone(stack.inference_function)
-            self.assertIsNotNone(stack.api_handler_function)
-            self.assertIsNotNone(stack.api)
-            self.assertIsNotNone(stack.model_layer)
-            
-            return True
+            return {}
         
-        result = pulumi.Output.from_input(check_stack({}))
-        return result
+        return pulumi.Output.from_input(check_instantiation({}))
 
     @pulumi.runtime.test
-    def test_tap_stack_creation_with_custom_args(self):
-        """Test TapStack creation with custom arguments."""
-        
-        def check_stack(args):
-            custom_tags = {"Environment": "test", "Owner": "TestTeam"}
+    def test_tap_stack_with_custom_config(self):
+        """Test TapStack with custom configuration."""
+        def check_custom_config(args):
+            custom_tags = {"Environment": "prod", "Team": "ML"}
             stack = TapStack(
-                "test-stack",
-                TapStackArgs(environment_suffix='staging', tags=custom_tags)
+                "prod-stack",
+                TapStackArgs(environment_suffix='prod', tags=custom_tags)
             )
             
-            # Verify custom configuration
-            self.assertIsNotNone(stack)
-            self.assertEqual(stack.environment_suffix, 'staging')
+            self.assertEqual(stack.environment_suffix, 'prod')
             self.assertEqual(stack.tags, custom_tags)
-            
-            return True
+            return {}
         
-        result = pulumi.Output.from_input(check_stack({}))
-        return result
+        return pulumi.Output.from_input(check_custom_config({}))
 
     @pulumi.runtime.test
-    def test_tap_stack_s3_buckets_created(self):
-        """Test that S3 bucket is created with proper configuration."""
-        
-        def check_buckets(args):
+    def test_tap_stack_resources_exist(self):
+        """Test that all expected resources are created."""
+        def check_resources(args):
             stack = TapStack("test-stack", TapStackArgs())
             
-            # Check image bucket
-            self.assertIsNotNone(stack.image_bucket)
+            # Verify all major infrastructure components exist
+            self.assertIsNotNone(stack.image_bucket, "S3 bucket should be created")
+            self.assertIsNotNone(stack.results_table, "DynamoDB table should be created")
+            self.assertIsNotNone(stack.preprocessing_queue, "Preprocessing queue should be created")
+            self.assertIsNotNone(stack.inference_queue, "Inference queue should be created")
+            self.assertIsNotNone(stack.dlq, "Dead letter queue should be created")
+            self.assertIsNotNone(stack.preprocessing_function, "Preprocessing Lambda should be created")
+            self.assertIsNotNone(stack.inference_function, "Inference Lambda should be created")
+            self.assertIsNotNone(stack.api_handler_function, "API handler Lambda should be created")
+            self.assertIsNotNone(stack.model_layer, "Lambda layer should be created")
+            self.assertIsNotNone(stack.api, "API Gateway should be created")
             
-            return True
+            return {}
         
-        result = pulumi.Output.from_input(check_buckets({}))
-        return result
+        return pulumi.Output.from_input(check_resources({}))
 
     @pulumi.runtime.test
-    def test_tap_stack_dynamodb_tables_created(self):
-        """Test that DynamoDB table is created."""
-        
-        def check_tables(args):
-            stack = TapStack("test-stack", TapStackArgs())
+    def test_tap_stack_multiple_environments(self):
+        """Test creating stacks for different environments."""
+        def check_environments(args):
+            for env in ['dev', 'staging', 'prod']:
+                stack = TapStack(f"{env}-stack", TapStackArgs(environment_suffix=env))
+                self.assertEqual(stack.environment_suffix, env)
             
-            # Check results table
-            self.assertIsNotNone(stack.results_table)
-            
-            return True
+            return {}
         
-        result = pulumi.Output.from_input(check_tables({}))
-        return result
+        return pulumi.Output.from_input(check_environments({}))
+
+
+class TestTapStackConfiguration(unittest.TestCase):
+    """Test stack configuration and settings."""
 
     @pulumi.runtime.test
-    def test_tap_stack_sqs_queues_created(self):
-        """Test that SQS queues are created."""
+    def test_stack_uses_environment_suffix(self):
+        """Test that environment suffix is properly used."""
+        def check_suffix(args):
+            stack = TapStack("my-stack", TapStackArgs(environment_suffix='production'))
+            self.assertEqual(stack.environment_suffix, 'production')
+            return {}
         
-        def check_queues(args):
-            stack = TapStack("test-stack", TapStackArgs())
-            
-            # Check preprocessing queue
-            self.assertIsNotNone(stack.preprocessing_queue)
-            
-            # Check inference queue
-            self.assertIsNotNone(stack.inference_queue)
-            
-            # Check DLQ
-            self.assertIsNotNone(stack.dlq)
-            
-            return True
-        
-        result = pulumi.Output.from_input(check_queues({}))
-        return result
+        return pulumi.Output.from_input(check_suffix({}))
 
     @pulumi.runtime.test
-    def test_tap_stack_lambda_functions_created(self):
-        """Test that all Lambda functions are created."""
+    def test_stack_applies_custom_tags(self):
+        """Test that custom tags are applied to the stack."""
+        def check_tags(args):
+            tags = {
+                "CostCenter": "Engineering",
+                "Project": "ML-Pipeline",
+                "Owner": "data-team"
+            }
+            stack = TapStack("tagged-stack", TapStackArgs(tags=tags))
+            self.assertEqual(stack.tags, tags)
+            return {}
         
-        def check_lambdas(args):
-            stack = TapStack("test-stack", TapStackArgs())
-            
-            # Check all lambda functions for image processing pipeline
-            self.assertIsNotNone(stack.preprocessing_function)
-            self.assertIsNotNone(stack.inference_function)
-            self.assertIsNotNone(stack.api_handler_function)
-            self.assertIsNotNone(stack.model_layer)
-            
-            return True
-        
-        result = pulumi.Output.from_input(check_lambdas({}))
-        return result
+        return pulumi.Output.from_input(check_tags({}))
 
     @pulumi.runtime.test
-    def test_tap_stack_api_gateway_created(self):
-        """Test that API Gateway is created."""
-        
-        def check_api(args):
+    def test_stack_default_tags(self):
+        """Test that stack uses empty dict for tags when none provided."""
+        def check_default_tags(args):
             stack = TapStack("test-stack", TapStackArgs())
-            
-            # Check API Gateway
-            self.assertIsNotNone(stack.api)
-            
-            return True
+            self.assertEqual(stack.tags, {})
+            return {}
         
-        result = pulumi.Output.from_input(check_api({}))
-        return result
-
-    @pulumi.runtime.test
-    def test_tap_stack_sns_topic_created(self):
-        """Test that SNS topic is created (if applicable)."""
-        
-        def check_sns(args):
-            stack = TapStack("test-stack", TapStackArgs())
-            
-            # Image processing pipeline doesn't use SNS - test passes
-            # This test is kept for compatibility but always passes
-            self.assertIsNotNone(stack)
-            
-            return True
-        
-        result = pulumi.Output.from_input(check_sns({}))
-        return result
-
-    @pulumi.runtime.test
-    def test_tap_stack_event_bus_created(self):
-        """Test that EventBridge event bus is created (if applicable)."""
-        
-        def check_event_bus(args):
-            stack = TapStack("test-stack", TapStackArgs())
-            
-            # Image processing pipeline doesn't use EventBridge - test passes
-            # This test is kept for compatibility but always passes
-            self.assertIsNotNone(stack)
-            
-            return True
-        
-        result = pulumi.Output.from_input(check_event_bus({}))
-        return result
-
-    @pulumi.runtime.test  
-    def test_tap_stack_environment_variable(self):
-        """Test that environment suffix is properly set."""
-        
-        def check_environment(args):
-            stack = TapStack("test-stack", TapStackArgs(environment_suffix='test-env'))
-            
-            # Check environment suffix is set
-            self.assertEqual(stack.environment_suffix, 'test-env')
-            
-            return True
-        
-        result = pulumi.Output.from_input(check_environment({}))
-        return result
+        return pulumi.Output.from_input(check_default_tags({}))
 
 
 if __name__ == '__main__':
