@@ -37,6 +37,7 @@ Parameters:
   
   AlertEmail:
     Type: String
+    Default: mathew.k@turing.com
     Description: Email address for CloudWatch alerts
     AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
 
