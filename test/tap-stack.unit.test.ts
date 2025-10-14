@@ -57,7 +57,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Parameters.RandomSuffix).toBeDefined();
       const param = template.Parameters.RandomSuffix;
       expect(param.Type).toBe('String');
-      expect(param.Default).toBe('57348');
+      expect(param.Default).toBe('573481771');
       expect(param.Description).toBe('Random suffix for S3 bucket names to ensure global uniqueness');
     });
 

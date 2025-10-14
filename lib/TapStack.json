@@ -10,7 +10,7 @@
         "RandomSuffix": {
             "Description": "Random suffix for S3 bucket names to ensure global uniqueness",
             "Type": "String",
-            "Default": "57348"
+            "Default": "573481771"
         },
         "LatestAmiId": {
             "Description": "Latest Amazon Linux 2 AMI ID from Systems Manager Parameter Store",
