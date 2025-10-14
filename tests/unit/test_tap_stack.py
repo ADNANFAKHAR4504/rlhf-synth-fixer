@@ -2,22 +2,28 @@
 test_tap_stack.py
 
 Unit tests for the TapStack configuration and argument handling.
-These tests use Pulumi's testing framework with minimal generic mocking.
+These tests use Pulumi's testing framework with minimal mocking for computed outputs.
 """
 
 import unittest
 import pulumi
 
 
-class GenericMocks(pulumi.runtime.Mocks):
+class MinimalMocks(pulumi.runtime.Mocks):
     """
-    Generic mock that works for all resource types without resource-specific logic.
-    Simply returns inputs as outputs with auto-generated IDs.
+    Minimal mock that provides only essential computed outputs.
+    Returns inputs as outputs, plus critical computed properties.
     """
     
     def new_resource(self, args: pulumi.runtime.MockResourceArgs):
-        """Return inputs as outputs with a generated ID."""
-        return [f"{args.name}-id", {**args.inputs, "id": f"{args.name}-id"}]
+        """Return inputs as outputs with minimal computed properties."""
+        outputs = {**args.inputs, "id": f"{args.name}-id"}
+        
+        # Add only the computed outputs that are actually used in the code
+        if "execution_arn" not in outputs and args.typ in ["aws:apigatewayv2/api:Api"]:
+            outputs["execution_arn"] = f"arn:aws:execute-api:us-east-1:123456789012:{args.name}"
+        
+        return [f"{args.name}-id", outputs]
     
     def call(self, args: pulumi.runtime.MockCallArgs):
         """Return empty dict for all function calls."""
@@ -25,7 +31,7 @@ class GenericMocks(pulumi.runtime.Mocks):
 
 
 # Set mocks before importing the stack
-pulumi.runtime.set_mocks(GenericMocks())
+pulumi.runtime.set_mocks(MinimalMocks())
 
 from lib.tap_stack import TapStackArgs, TapStack
 
