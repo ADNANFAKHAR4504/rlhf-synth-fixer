@@ -1,4 +1,6 @@
 import os
+import random
+import time
 from typing import Any, Dict
 
 
@@ -22,20 +24,23 @@ class WebAppConfig:
         # S3 configuration
         self.log_retention_days = int(os.getenv('LOG_RETENTION_DAYS', '30'))
         
+        # Generate unique identifiers
+        timestamp = str(int(time.time()))[-6:]
+        random_suffix = str(random.randint(1000, 9999))
+        
         # Normalize names for AWS compliance
         project_name_normalized = self.project_name.lower().replace('_', '-')
         environment_normalized = self.environment.lower()
         app_name_normalized = self.app_name.lower().replace('_', '-')
-        region_normalized = self.region.replace('-', '')
         
-        # Resource naming with region suffix 
-        self.s3_bucket_name = f"{project_name_normalized}-{app_name_normalized}-logs{self.environment_suffix}-{region_normalized}"
-        self.iam_role_name = f"{project_name_normalized}-{app_name_normalized}-ec2-role{self.environment_suffix}-{region_normalized}"
-        self.launch_template_name = f"{project_name_normalized}-{app_name_normalized}-template{self.environment_suffix}-{region_normalized}"
-        self.asg_name = f"{project_name_normalized}-{app_name_normalized}-asg{self.environment_suffix}-{region_normalized}"
-        self.lb_name = f"{project_name_normalized}-{app_name_normalized}-lb{self.environment_suffix}-{region_normalized}"[:32]
-        self.target_group_name = f"{project_name_normalized}-{app_name_normalized}-tg{self.environment_suffix}-{region_normalized}"[:32]
-        self.log_group_name = f"/aws/ec2/{project_name_normalized}-{app_name_normalized}{self.environment_suffix}-{region_normalized}"
+        # Resource naming with environment suffix
+        self.s3_bucket_name = f"{project_name_normalized}-{app_name_normalized}-logs{self.environment_suffix}-{timestamp}-{random_suffix}"
+        self.iam_role_name = f"{project_name_normalized}-{app_name_normalized}-ec2-role{self.environment_suffix}-{timestamp}-{random_suffix}"
+        self.launch_template_name = f"{project_name_normalized}-{app_name_normalized}-template{self.environment_suffix}-{timestamp}-{random_suffix}"
+        self.asg_name = f"{project_name_normalized}-{app_name_normalized}-asg{self.environment_suffix}-{timestamp}-{random_suffix}"
+        self.lb_name = f"{project_name_normalized}-{app_name_normalized}-lb{self.environment_suffix}-{timestamp}-{random_suffix}"[:32]
+        self.target_group_name = f"{project_name_normalized}-{app_name_normalized}-tg{self.environment_suffix}-{timestamp}-{random_suffix}"[:32]
+        self.log_group_name = f"/aws/ec2/{project_name_normalized}-{app_name_normalized}{self.environment_suffix}-{timestamp}-{random_suffix}"
         
         # Validate region
         if self.region not in ['us-west-2', 'us-east-1']:
@@ -54,8 +59,7 @@ class WebAppConfig:
         project_name_normalized = self.project_name.lower().replace('_', '-')
         environment_normalized = self.environment.lower()
         app_name_normalized = self.app_name.lower().replace('_', '-')
-        region_normalized = self.region.replace('-', '')
-        return f"{project_name_normalized}-{app_name_normalized}-{resource_name}{self.environment_suffix}-{region_normalized}"
+        return f"{project_name_normalized}-{app_name_normalized}-{resource_name}{self.environment_suffix}"
     
     def get_common_tags(self) -> Dict[str, str]:
         """Get common tags for all resources."""
