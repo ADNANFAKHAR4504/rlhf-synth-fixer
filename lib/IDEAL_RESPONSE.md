@@ -102,20 +102,62 @@ The ideal Lambda function should:
 5. **Handle errors gracefully** with proper logging
 6. **Support cross-account execution** without modifications
 
+### Example Lambda Function Structure
+
+```python
+import json
+import boto3
+import logging
+from datetime import datetime
+
+def lambda_handler(event, context):
+    """
+    Main handler for backup processing
+    """
+    try:
+        # Initialize AWS clients
+        s3_client = boto3.client('s3')
+        cloudwatch = boto3.client('cloudwatch')
+
+        # Process backup operations
+        result = process_backups(s3_client)
+
+        # Send metrics to CloudWatch
+        send_metrics(cloudwatch, result)
+
+        return {
+            'statusCode': 200,
+            'body': json.dumps('Backup completed successfully')
+        }
+    except Exception as e:
+        logging.error(f"Backup failed: {str(e)}")
+        raise
+```
+
 ## Resource Naming Convention
 
 All resources should follow consistent naming patterns:
 
-- Include environment suffix for multi-environment support
-- Use logical names that indicate purpose
-- Ensure global uniqueness where required (S3 buckets)
+```yaml
+# Example naming patterns
+BackupBucket: !Sub '${AWS::StackName}-backup-${Environment}'
+LambdaFunction: !Sub '${AWS::StackName}-backup-processor'
+KMSKey: !Sub '${AWS::StackName}-backup-key'
+LogGroup: !Sub '/aws/lambda/${AWS::StackName}-backup-processor'
+```
 
 ## Tagging Strategy
 
 All resources must include:
 
-- **Environment**: Environment identifier
-- **Purpose**: Resource purpose description
-- **iac-rlhf-amazon**: Required project tag
+```yaml
+Tags:
+  - Key: Environment
+    Value: !Ref Environment
+  - Key: Purpose
+    Value: DataBackup
+  - Key: iac-rlhf-amazon
+    Value: backup-system
+```
 
 This template serves as the gold standard for a production-ready, secure, and maintainable data backup solution using AWS CloudFormation.
