@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Enterprise Log Analytics System for 500 servers (Fully Automated Deployment)'
+Description: 'Enterprise Log Analytics System for 500 servers'
 
 Resources:
   # ==========================================
@@ -258,7 +258,7 @@ Resources:
       MemorySize: 256
 
   # ==========================================
-  # Glue Script Uploader Automation 💾
+  # Glue Script Uploader Automation 
   # ==========================================
   S3UploaderLambdaRole:
     Type: AWS::IAM::Role
