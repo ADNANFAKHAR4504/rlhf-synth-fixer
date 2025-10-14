@@ -18,7 +18,7 @@ class CloudWatchStack:
         return aws.cloudwatch.LogGroup(
             "webapp-log-group",
             name=self.config.log_group_name,
-            retention_in_days=14,
+            retention_in_days=self.config.log_retention_days,
             tags=self.config.get_common_tags(),
             opts=pulumi.ResourceOptions(provider=self.provider)
         )

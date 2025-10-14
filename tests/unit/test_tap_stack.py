@@ -559,7 +559,7 @@ class TestCloudWatchStack(unittest.TestCase):
         
         # Verify log group configuration
         self.assertEqual(call_args[1]['name'], self.config.log_group_name)
-        self.assertEqual(call_args[1]['retention_in_days'], 14)
+        self.assertEqual(call_args[1]['retention_in_days'], self.config.log_retention_days)
         self.assertEqual(call_args[1]['tags'], self.config.get_common_tags())
     
     @patch('pulumi_aws.cloudwatch.LogStream')
