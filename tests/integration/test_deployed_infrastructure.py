@@ -19,11 +19,27 @@ def load_outputs():
     with open(outputs_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    # Check if this is the correct stack's outputs
-    if not any(key.startswith("TapStack") and "api_gateway_endpoint" in str(data.get(key, {})) for key in data.keys()):
-        pytest.skip("Current stack outputs not found - infrastructure not deployed yet")
+    # Look for TapStack with healthcare CDKTF outputs
+    # Expected structure: {"TapStackpr4317": {"api_gateway_endpoint": "...", ...}}
+    current_stack = None
+    stack_name = None
+    for name, stack_outputs in data.items():
+        if isinstance(stack_outputs, dict) and name.startswith("TapStack"):
+            # Check for healthcare CDKTF stack outputs
+            if any(key in stack_outputs for key in ["api_gateway_endpoint", "data_bucket_name", "kms_key_arn"]):
+                current_stack = stack_outputs
+                stack_name = name
+                break
 
-    return data
+    if current_stack is None:
+        pytest.skip("Healthcare CDKTF stack outputs not found - infrastructure not deployed yet")
+
+    # Extract environment suffix from stack name (e.g., "TapStackpr4317" -> "pr4317")
+    environment_suffix = stack_name.replace("TapStack", "").lower()
+    current_stack["_environment_suffix"] = environment_suffix
+    current_stack["_stack_name"] = stack_name
+
+    return current_stack
 
 
 @pytest.fixture(scope="module")
@@ -225,8 +241,7 @@ class TestLambdaFunctions:
 
     def test_lambda_functions_exist(self, outputs, lambda_client):
         """Test that Lambda functions are deployed."""
-        # We need to infer Lambda function names from the environment suffix
-        environment_suffix = os.getenv("ENVIRONMENT_SUFFIX", "synth2610724199")
+        environment_suffix = outputs.get("_environment_suffix", os.getenv("ENVIRONMENT_SUFFIX", "synth2610724199"))
 
         expected_functions = [
             f"healthcare-data-processor-{environment_suffix}",
@@ -255,7 +270,7 @@ class TestCloudWatchMonitoring:
 
     def test_cloudwatch_alarms_exist(self, outputs, cloudwatch_client):
         """Test that CloudWatch alarms are created."""
-        environment_suffix = os.getenv("ENVIRONMENT_SUFFIX", "synth2610724199")
+        environment_suffix = outputs.get("_environment_suffix", os.getenv("ENVIRONMENT_SUFFIX", "synth2610724199"))
 
         # List alarms with prefix (using correct prefix)
         response = cloudwatch_client.describe_alarms(
@@ -278,7 +293,7 @@ class TestNetworking:
     def test_vpc_exists(self, outputs, aws_region):
         """Test that VPC is created."""
         ec2_client = boto3.client("ec2", region_name=aws_region)
-        environment_suffix = os.getenv("ENVIRONMENT_SUFFIX", "synth2610724199")
+        environment_suffix = outputs.get("_environment_suffix", os.getenv("ENVIRONMENT_SUFFIX", "synth2610724199"))
 
         # Find VPC by tag
         response = ec2_client.describe_vpcs(
