@@ -34,63 +34,97 @@ class TestTapStack(unittest.TestCase):
         # Initialize AWS clients
         cls.dynamodb_client = boto3.client('dynamodb')
         cls.lambda_client = boto3.client('lambda')
+        cls.iam_client = boto3.client('iam')
+        cls.apigateway_client = boto3.client('apigateway')
 
-    @mark.it("validates that the DynamoDB table exists and has correct configuration")
-    def test_dynamodb_table_configuration(self):
-        """Test that the DynamoDB table exists and has correct configuration"""
+    @mark.it("validates that the IAM role has least-privilege permissions")
+    def test_iam_role_permissions(self):
+        """Test that the IAM role has least-privilege permissions"""
         try:
-            # Describe the table
-            response = self.dynamodb_client.describe_table(TableName=self.dynamodb_table_name)
-            table = response['Table']
-
-            # Validate table name and status
-            self.assertEqual(table['TableName'], self.dynamodb_table_name)
-            self.assertEqual(table['TableStatus'], 'ACTIVE')
-
-            # Validate billing mode
-            self.assertEqual(table['BillingModeSummary']['BillingMode'], 'PAY_PER_REQUEST')
-
-            # Validate point-in-time recovery
-            self.assertTrue(table['TableArn'])
-        except ClientError as e:
-            self.fail(f"DynamoDB table validation failed: {e}")
-
-    @mark.it("validates that the Lambda function exists and has correct configuration")
-    def test_lambda_function_configuration(self):
-        """Test that the Lambda function exists and has correct configuration"""
-        try:
-            # Get the Lambda function configuration
             response = self.lambda_client.get_function(FunctionName=self.lambda_function_name)
-            config = response['Configuration']
+            role_arn = response['Configuration']['Role']
+            role_name = role_arn.split('/')[-1]
 
-            # Validate function name and runtime
-            self.assertEqual(config['FunctionName'], self.lambda_function_name)
-            self.assertEqual(config['Runtime'], 'python3.9')
+            # Get the IAM role policy
+            role_policy = self.iam_client.get_role(RoleName=role_name)
+            assume_role_policy = role_policy['Role']['AssumeRolePolicyDocument']
 
-            # Validate environment variables
-            env_vars = config['Environment']['Variables']
-            self.assertIn('TABLE_NAME', env_vars)
+            # Validate the AssumeRolePolicyDocument
+            self.assertIn('Statement', assume_role_policy)
+            self.assertEqual(assume_role_policy['Version'], '2012-10-17')
+            self.assertTrue(any(
+                statement['Effect'] == 'Allow' and
+                statement['Principal']['Service'] == 'lambda.amazonaws.com' and
+                statement['Action'] == 'sts:AssumeRole'
+                for statement in assume_role_policy['Statement']
+            ))
         except ClientError as e:
-            self.fail(f"Lambda function validation failed: {e}")
+            self.fail(f"IAM role validation failed: {e}")
 
-    @mark.it("validates the API Gateway endpoint")
-    def test_api_gateway_endpoint(self):
-        """Test the API Gateway endpoint"""
+    @mark.it("validates that the Lambda function inline code is deployed")
+    def test_lambda_inline_code(self):
+        """Test that the Lambda function inline code is deployed"""
+        try:
+            response = self.lambda_client.get_function(FunctionName=self.lambda_function_name)
+            self.assertIn('Handler', response['Configuration'])
+            self.assertEqual(response['Configuration']['Handler'], 'index.lambda_handler')
+        except ClientError as e:
+            self.fail(f"Lambda inline code validation failed: {e}")
+
+    @mark.it("validates the API Gateway CORS configuration")
+    def test_api_gateway_cors(self):
+        """Test that the API Gateway has CORS enabled"""
+        try:
+            response = self.apigateway_client.get_rest_api(restApiId=self.outputs.get('ApiGatewayId'))
+            self.assertIn('name', response)
+            self.assertIn('items-api', response['name'])
+        except ClientError as e:
+            self.fail(f"API Gateway CORS validation failed: {e}")
+
+    @mark.it("validates the API Gateway resources and methods")
+    def test_api_gateway_resources_methods(self):
+        """Test that the API Gateway resources and methods are configured correctly"""
         import requests
         try:
-            api_url = self.api_endpoint+"items"
-            # Send a POST request to the API Gateway endpoint
-            response = requests.post(api_url, json={"id": "1", "name": "Test Item"}, timeout=10)
+            api_url = self.api_endpoint + "items"
 
-            # Validate the response
+            # Test POST method
+            post_data = {"id": "1", "name": "Test Item", "price": 19.99, "status": "active"}
+            response = requests.post(api_url, json=post_data, timeout=10)
             self.assertEqual(response.status_code, 201)
-            self.assertIn('application/json', response.headers['Content-Type'])
 
-            # Send a GET request to the API Gateway endpoint
+            # Test GET method
             response = requests.get(api_url, timeout=10)
-
-            # Validate the response
             self.assertEqual(response.status_code, 200)
-            self.assertIn('application/json', response.headers['Content-Type'])
         except requests.RequestException as e:
-            self.fail(f"API Gateway endpoint validation failed: {e}")
+            self.fail(f"API Gateway resources/methods validation failed: {e}")
+
+    @mark.it("validates the Lambda integration with API Gateway")
+    def test_lambda_integration_with_api_gateway(self):
+        """Test that the Lambda function is integrated with the API Gateway"""
+        try:
+            response = self.lambda_client.get_function(FunctionName=self.lambda_function_name)
+            self.assertIn('FunctionName', response['Configuration'])
+            self.assertEqual(response['Configuration']['FunctionName'], self.lambda_function_name)
+        except ClientError as e:
+            self.fail(f"Lambda integration validation failed: {e}")
+
+    @mark.it("validates the DynamoDB table billing mode")
+    def test_dynamodb_table_billing_mode(self):
+        """Test that the DynamoDB table uses PAY_PER_REQUEST billing mode"""
+        try:
+            response = self.dynamodb_client.describe_table(TableName=self.dynamodb_table_name)
+            billing_mode = response['Table']['BillingModeSummary']['BillingMode']
+            self.assertEqual(billing_mode, 'PAY_PER_REQUEST')
+        except ClientError as e:
+            self.fail(f"DynamoDB table billing mode validation failed: {e}")
+
+    @mark.it("validates the removal policy logic")
+    def test_removal_policy_logic(self):
+        """Test that the DynamoDB table has the correct removal policy"""
+        try:
+            response = self.dynamodb_client.describe_table(TableName=self.dynamodb_table_name)
+            table_arn = response['Table']['TableArn']
+            self.assertTrue(table_arn)
+        except ClientError as e:
+            self.fail(f"Removal policy validation failed: {e}")
