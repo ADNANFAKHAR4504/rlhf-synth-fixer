@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: >
-  TapStack - Secure, Highly Available Web Application Infrastructure
-  Creates a secure AWS environment with VPC, EC2, RDS, S3, IAM, CloudWatch, CloudTrail, and CloudFront.
+  TapStack - Secure, Highly Available Web Application Infrastructure.
+  Creates a secure, multi-AZ environment with VPC, EC2, ALB, RDS, S3, IAM, CloudWatch, CloudTrail, and CloudFront.
 
 Parameters:
   EnvironmentName:
@@ -22,15 +22,7 @@ Parameters:
   DBUsername:
     Type: String
     Default: admin
-    Description: RDS master username
-
-  DBPassword:
-    NoEcho: true
-    Type: String
-    Description: RDS master password (secured)
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: "[a-zA-Z0-9]*"
+    Description: Master username for RDS database
 
 Mappings:
   RegionMap:
@@ -214,7 +206,7 @@ Resources:
           SourceSecurityGroupId: !Ref WebSecurityGroup
 
   ########################################
-  # IAM Roles and Policies
+  # IAM Roles
   ########################################
 
   EC2Role:
@@ -238,7 +230,7 @@ Resources:
       Roles: [!Ref EC2Role]
 
   ########################################
-  # S3 Buckets with Ownership & Policy
+  # S3 Buckets
   ########################################
 
   AppS3Bucket:
@@ -294,7 +286,7 @@ Resources:
                 s3:x-amz-acl: bucket-owner-full-control
 
   ########################################
-  # CloudTrail & Monitoring
+  # CloudTrail
   ########################################
 
   CloudTrail:
@@ -307,7 +299,7 @@ Resources:
       IsMultiRegionTrail: true
 
   ########################################
-  # EC2 + ALB + Auto Scaling
+  # EC2, ALB, and ASG
   ########################################
 
   LaunchTemplate:
@@ -366,7 +358,7 @@ Resources:
       TargetGroupARNs: [!Ref TargetGroup]
 
   ########################################
-  # RDS Database
+  # RDS
   ########################################
 
   RDSSubnetGroup:
@@ -382,7 +374,7 @@ Resources:
       Engine: mysql
       EngineVersion: 8.0.43
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Sub "{{resolve:ssm-secure:/TapStack/DBPassword:1}}"
+      MasterUserPassword: "{{resolve:ssm-secure:/TapStack/DBPassword:1}}"
       DBInstanceClass: db.t3.micro
       AllocatedStorage: 20
       StorageEncrypted: true
@@ -393,7 +385,7 @@ Resources:
       BackupRetentionPeriod: 7
 
   ########################################
-  # CloudFront Distribution
+  # CloudFront
   ########################################
 
   CloudFrontDistribution:
