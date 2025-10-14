@@ -23,6 +23,7 @@ Parameters:
   BackupBucketName:
     Type: String
     Description: Name for the S3 backup bucket (must be globally unique)
+    Default: !Sub "backup-system-${AWS::AccountId}-${Environment}"
     AllowedPattern: "^[a-z0-9][a-z0-9-]*[a-z0-9]$"
     ConstraintDescription: Must be a valid S3 bucket name
     MinLength: 3
@@ -419,7 +420,6 @@ Resources:
           Id: "1"
           RetryPolicy:
             MaximumRetryAttempts: 2
-            MaximumEventAge: 3600 # 1 hour
       Tags:
         - Key: Environment
           Value: !Ref Environment

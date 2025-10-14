@@ -30,6 +30,9 @@
         "BackupBucketName": {
             "Type": "String",
             "Description": "Name for the S3 backup bucket (must be globally unique)",
+            "Default": {
+                "Fn::Sub": "backup-system-${AWS::AccountId}-${Environment}"
+            },
             "AllowedPattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$",
             "ConstraintDescription": "Must be a valid S3 bucket name",
             "MinLength": 3,
@@ -459,8 +462,7 @@
                         },
                         "Id": "1",
                         "RetryPolicy": {
-                            "MaximumRetryAttempts": 2,
-                            "MaximumEventAge": 3600
+                            "MaximumRetryAttempts": 2
                         }
                     }
                 ],
