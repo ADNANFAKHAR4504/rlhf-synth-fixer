@@ -120,13 +120,9 @@ LANGUAGE=$(json_val "$TASK_JSON" "language" | tr '[:upper:]' '[:lower:]')
 DIFFICULTY=$(json_val "$TASK_JSON" "difficulty" | tr '[:upper:]' '[:lower:]')
 SUBTASK=$(json_val "$TASK_JSON" "subtask")
 
-# Map difficulty to complexity
-case "$DIFFICULTY" in
-    easy) COMPLEXITY="simple" ;;
-    medium) COMPLEXITY="moderate" ;;
-    hard|expert) COMPLEXITY="complex" ;;
-    *) COMPLEXITY="moderate" ;;
-esac
+# CRITICAL: Use exact difficulty value as complexity (no mapping)
+# This ensures PR body shows the same complexity as tasks.csv
+COMPLEXITY="$DIFFICULTY"
 
 # Get timestamp
 STARTED_AT=$(date -Iseconds 2>/dev/null || date +%Y-%m-%dT%H:%M:%S%z)
