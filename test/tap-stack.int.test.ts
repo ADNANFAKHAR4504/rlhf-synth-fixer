@@ -52,7 +52,10 @@ import {
 } from "@aws-sdk/client-cloudwatch";
 import axios from 'axios';
 
-const awsRegion = process.env.AWS_REGION || "us-east-1";
+// --- Client Configuration ---
+
+// Type assertion for process.env.AWS_REGION is typically needed in real-world TS code
+const awsRegion = process.env.AWS_REGION || "us-east-1"; 
 const ec2Client = new EC2Client({ region: awsRegion });
 const elbv2Client = new ElasticLoadBalancingV2Client({ region: awsRegion });
 const rdsClient = new RDSClient({ region: awsRegion });
@@ -62,6 +65,8 @@ const secretsClient = new SecretsManagerClient({ region: awsRegion });
 const logsClient = new CloudWatchLogsClient({ region: awsRegion });
 const cloudWatchClient = new CloudWatchClient({ region: awsRegion });
 
+// --- Integration Test Suite ---
+
 describe("MyApp Integration Tests - ECS Infrastructure", () => {
   let vpcId: string;
   let vpcCidr: string;
@@ -70,12 +75,12 @@ describe("MyApp Integration Tests - ECS Infrastructure", () => {
   let ecsClusterName: string;
   let ecsServiceName: string;
   let taskDefinitionArn: string;
-  let rdsEndpoint: string;
+  let rdsEndpoint: string | undefined;
   let dbSecretArn: string;
   let staticAssetsBucket: string;
   let staticAssetsBucketArn: string;
   let logGroupName: string;
-  let dashboardUrl: string;
+  let dashboardUrl: string | undefined;
   let alarmCount: number;
   let albArn: string;
 
@@ -87,20 +92,20 @@ describe("MyApp Integration Tests - ECS Infrastructure", () => {
       const outputs = JSON.parse(fs.readFileSync(outputFilePath, 'utf-8'));
       
       // Parse outputs based on your deployment variables
-      vpcId = outputs["vpc-id"] || "vpc-0c745bfc83171b0a7";
-      vpcCidr = outputs["vpc-cidr"] || "10.0.0.0/16";
-      albDnsName = outputs["alb-dns-name"] || "myapp-pr4337-alb-1448593160.us-east-1.elb.amazonaws.com";
-      albUrl = outputs["alb-url"] || "http://myapp-pr4337-alb-1448593160.us-east-1.elb.amazonaws.com";
-      ecsClusterName = outputs["ecs-cluster-name"] || "myapp-pr4337-cluster";
-      ecsServiceName = outputs["ecs-service-name"] || "myapp-pr4337-service";
-      taskDefinitionArn = outputs["task-definition-arn"] || "arn:aws:ecs:us-east-1:***:task-definition/myapp-pr4337:1";
-      rdsEndpoint = outputs["rds-endpoint"];
-      dbSecretArn = outputs["db-secret-arn"] || "arn:aws:secretsmanager:us-east-1:***:secret:myapp-pr4337-db-credentials-BD0AiU";
-      staticAssetsBucket = outputs["static-assets-bucket"] || "myapp-pr4337-static-assets";
-      staticAssetsBucketArn = outputs["static-assets-bucket-arn"] || "arn:aws:s3:::myapp-pr4337-static-assets";
-      logGroupName = outputs["log-group-name"] || "/aws/ecs/myapp-pr4337";
-      dashboardUrl = outputs["dashboard-url"];
-      alarmCount = parseInt(outputs["alarm-count"] || "5");
+      vpcId = (outputs["vpc-id"] as string) || "vpc-0c745bfc83171b0a7";
+      vpcCidr = (outputs["vpc-cidr"] as string) || "10.0.0.0/16";
+      albDnsName = (outputs["alb-dns-name"] as string) || "myapp-pr4337-alb-1448593160.us-east-1.elb.amazonaws.com";
+      albUrl = (outputs["alb-url"] as string) || "http://myapp-pr4337-alb-1448593160.us-east-1.elb.amazonaws.com";
+      ecsClusterName = (outputs["ecs-cluster-name"] as string) || "myapp-pr4337-cluster";
+      ecsServiceName = (outputs["ecs-service-name"] as string) || "myapp-pr4337-service";
+      taskDefinitionArn = (outputs["task-definition-arn"] as string) || "arn:aws:ecs:us-east-1:***:task-definition/myapp-pr4337:1";
+      rdsEndpoint = (outputs["rds-endpoint"] as string | undefined);
+      dbSecretArn = (outputs["db-secret-arn"] as string) || "arn:aws:secretsmanager:us-east-1:***:secret:myapp-pr4337-db-credentials-BD0AiU";
+      staticAssetsBucket = (outputs["static-assets-bucket"] as string) || "myapp-pr4337-static-assets";
+      staticAssetsBucketArn = (outputs["static-assets-bucket-arn"] as string) || "arn:aws:s3:::myapp-pr4337-static-assets";
+      logGroupName = (outputs["log-group-name"] as string) || "/aws/ecs/myapp-pr4337";
+      dashboardUrl = (outputs["dashboard-url"] as string | undefined);
+      alarmCount = parseInt((outputs["alarm-count"] as string) || "5", 10);
     } else {
       // Fallback to your provided values
       vpcId = "vpc-0c745bfc83171b0a7";
@@ -122,6 +127,7 @@ describe("MyApp Integration Tests - ECS Infrastructure", () => {
     }
   });
 
+  // --- Network Infrastructure: VPC Configuration ---
   describe("Network Infrastructure: VPC Configuration", () => {
     test("VPC is properly configured and available", async () => {
       const { Vpcs } = await ec2Client.send(
@@ -164,7 +170,8 @@ describe("MyApp Integration Tests - ECS Infrastructure", () => {
       });
     }, 30000);
   });
-
+  
+  // --- Application Load Balancer ---
   describe("Application Load Balancer", () => {
     test("ALB is healthy and properly configured", async () => {
       const { LoadBalancers } = await elbv2Client.send(
@@ -225,7 +232,8 @@ describe("MyApp Integration Tests - ECS Infrastructure", () => {
       }
     }, 30000);
   });
-
+  
+  // --- ECS Cluster and Service ---
   describe("ECS Cluster and Service", () => {
     test("ECS cluster is active and properly configured", async () => {
       const { clusters } = await ecsClient.send(
@@ -285,11 +293,13 @@ describe("MyApp Integration Tests - ECS Infrastructure", () => {
     }, 30000);
 
     test("Task definition is properly configured", async () => {
+      // The ARN is in the format: arn:aws:ecs:region:id:task-definition/family:revision
+      // This extracts 'family' and sends the family:revision part as 'taskDefinition'
+      const taskDefFamily = taskDefinitionArn.split('/').pop();
+
       const { taskDefinition } = await ecsClient.send(
         new DescribeTaskDefinitionCommand({
-          // The ARN is in the format: arn:aws:ecs:region:id:task-definition/family:revision
-          // This extracts 'family'
-          taskDefinition: taskDefinitionArn.split('/').pop()?.split(':')[0] 
+          taskDefinition: taskDefFamily
         })
       );
 
@@ -303,13 +313,15 @@ describe("MyApp Integration Tests - ECS Infrastructure", () => {
       expect(mainContainer?.logConfiguration?.options?.['awslogs-group']).toBe(logGroupName);
     }, 30000);
   });
-
+  
+  // --- Storage: S3 Static Assets Bucket ---
   describe("Storage: S3 Static Assets Bucket", () => {
     test("Static assets S3 bucket is properly configured", async () => {
       const bucketCheck = await s3Client.send(
         new HeadBucketCommand({ Bucket: staticAssetsBucket })
       );
       
+      // A successful HeadBucket returns status 200 without a body
       expect(bucketCheck.$metadata.httpStatusCode).toBe(200);
 
       // Check versioning
@@ -370,12 +382,24 @@ describe("MyApp Integration Tests - ECS Infrastructure", () => {
       }
     }, 30000);
   });
-
+  
+  // --- Database: RDS and Secrets Manager ---
   describe("Database: RDS and Secrets Manager", () => {
     test("RDS database secret exists and is accessible", async () => {
+      try {
+        // 1. Describe secret to check existence and configuration
+        const { ARN } = await secretsClient.send(
+            new DescribeSecretCommand({ SecretId: dbSecretArn })
+        );
+        expect(ARN).toBeDefined();
+
+        // 2. Retrieve secret value
+        const { SecretString } = await secretsClient.send(
+          new GetSecretValueCommand({ SecretId: dbSecretArn })
+        );
 
         // 3. Parse and validate secret structure
-        const credentials = JSON.parse(SecretString || "{}");
+        const credentials = JSON.parse((SecretString as string) || "{}");
         // --- END: Missing logic added here ---
 
         expect(credentials.username).toBeDefined();
@@ -394,6 +418,7 @@ describe("MyApp Integration Tests - ECS Infrastructure", () => {
         return;
       }
 
+      // RDS endpoint is typically in the format <db-identifier>.<hash>.<region>.rds.amazonaws.com
       const dbIdentifier = rdsEndpoint.split(".")[0];
 
       try {
@@ -416,7 +441,7 @@ describe("MyApp Integration Tests - ECS Infrastructure", () => {
     }, 30000);
   });
 
-
+  // --- Monitoring: CloudWatch Logs and Alarms ---
   describe("Monitoring: CloudWatch Logs and Alarms", () => {
     test("CloudWatch log group exists and is configured", async () => {
       const { logGroups } = await logsClient.send(
@@ -490,22 +515,25 @@ describe("MyApp Integration Tests - ECS Infrastructure", () => {
         );
 
         expect(DashboardBody).toBeDefined();
-        const dashboard = JSON.parse(DashboardBody || '{}');
+        const dashboard = JSON.parse((DashboardBody as string) || '{}');
         expect(dashboard.widgets?.length).toBeGreaterThan(0);
       } catch (error: any) {
         console.log(`Dashboard check: ${error.message}`);
       }
     }, 30000);
   });
-
+  
+  // --- End-to-End Integration Tests ---
   describe("End-to-End Integration Tests", () => {
     test("ALB endpoint responds to HTTP requests", async () => {
       try {
         const response = await axios.get(albUrl, {
           timeout: 10000,
-          validateStatus: () => true
+          validateStatus: () => true // Do not throw on non-2xx status codes
         });
 
+        // Application might return 200 (OK), 404 (Not Found), 503 (Service Unavailable), etc.
+        // We check for statuses indicating the ALB is forwarding requests
         expect([200, 301, 302, 403, 404, 502, 503]).toContain(response.status);
         console.log(`ALB response status: ${response.status}`);
         
@@ -516,6 +544,8 @@ describe("MyApp Integration Tests - ECS Infrastructure", () => {
         console.log(`ALB connection error: ${error.message}`);
         if (error.code === 'ECONNREFUSED') {
           throw new Error('ALB is not accepting connections');
+        } else {
+            throw error;
         }
       }
     }, 30000);
@@ -569,11 +599,13 @@ describe("MyApp Integration Tests - ECS Infrastructure", () => {
         
         if (events && events.length > 0) {
           events.forEach(event => {
-            console.log(`Log: ${event.message?.substring(0, 100)}...`);
+            // Using a non-null assertion (!) because we are inside the 'if (events && events.length > 0)' block
+            console.log(`Log: ${event.message!.substring(0, 100)}...`); 
           });
         }
       } catch (error: any) {
         console.log(`Log retrieval: ${error.message}`);
+        throw error;
       }
     }, 30000);
   });
