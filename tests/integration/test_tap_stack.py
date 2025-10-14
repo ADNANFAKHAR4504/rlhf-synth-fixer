@@ -698,7 +698,7 @@ class TestTapStackIntegration(unittest.TestCase):
             "Database security group should exist",
         )
         self.assertTrue(
-            sg_results.get("db_allows_app_access", True),
+            sg_results.get("db_allows_app_access", False),
             "Database SG should allow access from application SG on port 5432",
         )
 
@@ -1072,7 +1072,7 @@ class TestTapStackIntegration(unittest.TestCase):
         # Test Security Group configuration
         sg_results = self.aws_checker.verify_security_groups()
         self.assertTrue(
-            sg_results.get("db_allows_app_access", True),
+            sg_results.get("db_allows_app_access", False),
             "Database should only allow access from application security group",
         )
 
