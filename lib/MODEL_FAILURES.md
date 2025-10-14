@@ -108,3 +108,28 @@ Command output on stderr:
 
 
 Error: Process completed with exit code 1.
+
+TapStackpr4374  Success! Terraform has validated the lock file and found no need for changes.
+TapStackpr4374  ╷
+                │ Warning: Argument is deprecated
+                │ 
+                │   with aws_s3_bucket.alb_alb-logs-bucket_1BF171B7 (alb/alb-logs-bucket),
+                │   on cdk.tf.json line 1142, in resource.aws_s3_bucket.alb_alb-logs-bucket_1BF171B7 (alb/alb-logs-bucket):
+                │ 1142:         "acl": "private",
+                │ 
+                │ acl is deprecated. Use the aws_s3_bucket_acl resource instead.
+                │ 
+                │ (and 7 more similar warnings elsewhere)
+                ╵
+TapStackpr4374  ╷
+                │ Error: expected event_selector.0.data_resource.1.type to be one of ["AWS::DynamoDB::Table" "AWS::Lambda::Function" "AWS::S3::Object"], got AWS::RDS::DBCluster
+                │ 
+                │   with aws_cloudtrail.monitoring_trail_9CE0CD1B (monitoring/trail),
+                │   on cdk.tf.json line 367, in resource.aws_cloudtrail.monitoring_trail_9CE0CD1B (monitoring/trail).event_selector[0].data_resource[1]:
+                │  367:                 "type": "AWS::RDS::DBCluster",
+                │ 
+                ╵
+TapStackpr4374  ::error::Terraform exited with code 1.
+0 Stacks deploying     1 Stack done     0 Stacks waiting
+Invoking Terraform CLI failed with exit code 1
+Error: Process completed with exit code 1.

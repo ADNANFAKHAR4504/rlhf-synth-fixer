@@ -705,7 +705,6 @@ export class ALBConstruct extends Construct {
   private createAlbLogsBucket(tags: CommonTags): S3Bucket {
     return new S3Bucket(this, 'alb-logs-bucket', {
       bucket: `${tags.Project}-alb-logs-${tags.Environment}-${Date.now()}`,
-      acl: 'private',
       versioning: {
         enabled: true,
       },
@@ -935,7 +934,6 @@ export class MonitoringConstruct extends Construct {
     // S3 Bucket for CloudTrail
     const trailBucket = new S3Bucket(this, 'trail-bucket', {
       bucket: `${tags.Project}-trail-${tags.Environment}-${Date.now()}`,
-      acl: 'private',
       versioning: {
         enabled: true,
       },
@@ -1007,10 +1005,8 @@ export class MonitoringConstruct extends Construct {
               type: 'AWS::S3::Object',
               values: ['arn:aws:s3:::*/*'],
             },
-            {
-              type: 'AWS::RDS::DBCluster',
-              values: ['arn:aws:rds:*:*:cluster/*'],
-            },
+            // Remove the RDS::DBCluster as it's not supported for data events
+            // RDS events are captured through management events which are already enabled
           ],
         },
       ],
