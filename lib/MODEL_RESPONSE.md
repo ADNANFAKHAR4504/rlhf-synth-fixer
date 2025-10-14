@@ -1,27 +1,4 @@
-### Reasoning Trace
-
----
-
-The user is asking for a comprehensive serverless infrastructure using AWS CDK TypeScript. Let me break down the requirements:
-
-1. **API Gateway REST API** - Triggers Lambda via HTTP POST
-2. **Lambda Function** - TypeScript, CloudWatch logging, AWS SDK v3
-3. **DynamoDB Table** - Primary key: RequestId, GSI on Timestamp, encryption
-4. **S3 Bucket** - AES-256 encryption, versioning, for media files
-5. **Security** - Least privilege IAM, CORS (GET/POST), AWS WAF (SQL injection protection)
-6. **Operational** - API throttling (100 req/s), Lambda retries for transient errors
-7. **Environment Support** - Staging and production via stack parameters
-8. **Tagging** - ProjectName and Environment tags
-9. **Outputs** - API Endpoint and DynamoDB Table ARN
-10. **Design Constraints** - Everything in TapStack class, use environmentSuffix, non-prod resources destructible
-
-Let me create a comprehensive solution that addresses all these requirements.
-
-### Answer
-
----
-
-I'll create a comprehensive serverless infrastructure solution that meets all your requirements. This implementation will be clean, modular, and production-ready.
+# A clean, modular, and production-ready serverless infrastructure solution.
 
 ## Project Structure
 

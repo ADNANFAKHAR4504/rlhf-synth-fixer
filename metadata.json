@@ -10,5 +10,5 @@
   "subject_labels": [
     "Serverless Infrastructure (Functions as Code)"
   ],
-  "aws_services": "[API Gateway, Lambda, S3, DynamoDB, CloudWatch]"
+  "aws_services": "[API Gateway, Lambda, S3, DynamoDB, CloudWatch, WAF, IAM]"
 }

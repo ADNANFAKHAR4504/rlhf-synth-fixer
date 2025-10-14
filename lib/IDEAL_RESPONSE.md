@@ -765,41 +765,77 @@ exports.handler = async (event, context) => {
 ```typescript
 // bin/tap.ts
 #!/usr/bin/env node
-import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
+import { Tags } from 'aws-cdk-lib';
 import { TapStack } from '../lib/tap-stack';
 
 const app = new cdk.App();
 
-// Get environment suffix from context
-const environmentSuffix = app.node.tryGetContext('environmentSuffix');
+// Get environment suffix from context (set by CI/CD pipeline) or use 'dev' as default
+const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
+const stackName = `TapStack${environmentSuffix}`;
+const repositoryName = process.env.REPOSITORY || 'unknown';
+const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
-if (!environmentSuffix) {
-  throw new Error('Environment suffix is required. Use: cdk deploy --context environmentSuffix=<staging|prod>');
-}
+// Apply tags to all stacks in this app (optional - you can do this at stack level instead)
+Tags.of(app).add('Environment', environmentSuffix);
+Tags.of(app).add('Repository', repositoryName);
+Tags.of(app).add('Author', commitAuthor);
 
-// Validate environment suffix
-if (!['staging', 'prod', 'dev', 'test'].includes(environmentSuffix)) {
-  console.warn(`Warning: Non-standard environment suffix '${environmentSuffix}' detected.`);
-}
-
-// Create the stack
-new InfraStack(this, 'InfraStack', {
-  environmentSuffix,
-  projectName: this.node.tryGetContext('projectName'),
-  apiThrottleRate: this.node.tryGetContext('apiThrottleRate'),
-  apiThrottleBurst: this.node.tryGetContext('apiThrottleBurst'),
-  lambdaMemorySize: this.node.tryGetContext('lambdaMemorySize'),
-  lambdaTimeout: this.node.tryGetContext('lambdaTimeout'),
-  dynamodbReadCapacity: this.node.tryGetContext('dynamodbReadCapacity'),
-  dynamodbWriteCapacity: this.node.tryGetContext('dynamodbWriteCapacity'),
-  enablePointInTimeRecovery: this.node.tryGetContext(
-    'enablePointInTimeRecovery'
-  ),
-  logRetentionDays: this.node.tryGetContext('logRetentionDays'),
+new TapStack(app, stackName, {
+  stackName: stackName, // This ensures CloudFormation stack name includes the suffix
+  environmentSuffix: environmentSuffix, // Pass the suffix to the stack
+  env: {
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+    region: process.env.CDK_DEFAULT_REGION,
+  },
 });
+```
 
-app.synth();
+```typescript
+// lib/tap-stack.ts
+import * as cdk from 'aws-cdk-lib';
+import { Construct } from 'constructs';
+import { InfraStack } from './infrastructure';
+
+// ? Import your stacks here
+// import { MyStack } from './my-stack';
+
+interface TapStackProps extends cdk.StackProps {
+  environmentSuffix?: string;
+}
+
+export class TapStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
+    super(scope, id, props);
+
+    // Get environment suffix from props, context, or use 'dev' as default
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const environmentSuffix =
+      props?.environmentSuffix ||
+      this.node.tryGetContext('environmentSuffix') ||
+      'dev';
+
+    // ? Add your stack instantiations here
+    // ! Do NOT create resources directly in this stack.
+    // ! Instead, create separate stacks for each resource type.
+
+    new InfraStack(this, 'InfraStack', {
+      environmentSuffix,
+      projectName: this.node.tryGetContext('projectName'),
+      apiThrottleRate: this.node.tryGetContext('apiThrottleRate'),
+      apiThrottleBurst: this.node.tryGetContext('apiThrottleBurst'),
+      lambdaMemorySize: this.node.tryGetContext('lambdaMemorySize'),
+      lambdaTimeout: this.node.tryGetContext('lambdaTimeout'),
+      dynamodbReadCapacity: this.node.tryGetContext('dynamodbReadCapacity'),
+      dynamodbWriteCapacity: this.node.tryGetContext('dynamodbWriteCapacity'),
+      enablePointInTimeRecovery: this.node.tryGetContext(
+        'enablePointInTimeRecovery'
+      ),
+      logRetentionDays: this.node.tryGetContext('logRetentionDays'),
+    });
+  }
+}
 ```
 
 ## CDK Configuration
