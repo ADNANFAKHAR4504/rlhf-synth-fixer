@@ -13,6 +13,8 @@
     "Infrastructure Security Implementation"
   ],
   "aws_services": "S3 Bucket, VPC, IAM, ALB, RDS, Lambda, CloudTrail, CloudWatch, KMS, SNS, EC2, NAT Gateway",
+  "training_quality": 9,
+  "background": "Design and implement a comprehensive AWS production infrastructure using Terraform that adheres to security best practices and compliance requirements. The infrastructure must include multi-tier architecture with public and private subnets, IAM roles with least privilege, encrypted data storage, multi-AZ redundancy, centralized logging and monitoring, and automated security alerting. This task requires integrating 12 AWS services with proper security configurations including KMS encryption, CloudTrail auditing, VPC isolation, and security group restrictions.",
   "testDependencies": {
     "@aws-sdk/client-ec2": "^3.883.0",
     "@aws-sdk/client-s3": "^3.901.0",
