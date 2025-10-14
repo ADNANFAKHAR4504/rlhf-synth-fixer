@@ -407,11 +407,14 @@ export class MultiComponentApplicationStack extends cdk.Stack {
     });
 
     // Additional Route 53 records for comprehensive DNS
+    // Point the API subdomain to the CloudFront distribution which
+    // proxies /api/* to the RestApi. This avoids requiring a
+    // default domain directly on the API Gateway.
     new route53.ARecord(this, 'ApiARecord', {
       zone: hostedZone,
       recordName: 'api',
       target: route53.RecordTarget.fromAlias(
-        new route53Targets.ApiGateway(api)
+        new route53Targets.CloudFrontTarget(distribution)
       ),
     });
 
