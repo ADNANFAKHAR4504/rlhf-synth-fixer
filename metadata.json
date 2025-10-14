@@ -5,6 +5,7 @@
   "team": "synth",
   "startedAt": "2025-10-13T23:15:46",
   "subtask": "Application Deployment",
+  "background": "A manufacturing company needs to modernize their factory monitoring system. They have multiple assembly lines with IoT sensors that generate data every 30 seconds. The data needs to be collected, processed, and stored securely while maintaining audit trails for compliance purposes.",
   "subject_labels": [
     "CI/CD Pipeline",
     "Infrastructure Analysis/Monitoring",
