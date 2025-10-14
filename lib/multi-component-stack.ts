@@ -150,7 +150,7 @@ export class MultiComponentApplicationStack extends cdk.Stack {
     // CloudWatch Log Groups
     // ========================================
     const lambdaLogGroup = new logs.LogGroup(this, 'LambdaLogGroup', {
-      logGroupName: `/aws/lambda/prod-lambda-api-${this.stringSuffix.toLowerCase().replace(/[^a-zA-Z0-9-_/]/g, '')}`,
+      logGroupName: `/aws/lambda/prod-lambda-api-v2-${this.stringSuffix.toLowerCase().replace(/[^a-zA-Z0-9-_/]/g, '')}`,
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: RemovalPolicy.DESTROY,
     });
@@ -158,7 +158,7 @@ export class MultiComponentApplicationStack extends cdk.Stack {
     // ========================================
     // IAM Roles (Least Privilege)
     // ========================================
-    const lambdaRole = new iam.Role(this, 'LambdaExecutionRole', {
+    const lambdaRole = new iam.Role(this, 'LambdaExecutionRoleV2', {
       roleName: `prod-iam-lambda-${this.stringSuffix.replace(/[^a-zA-Z0-9+=,.@_-]/g, '')}`,
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       description: 'Execution role for Lambda function',
@@ -217,7 +217,7 @@ export class MultiComponentApplicationStack extends cdk.Stack {
     );
 
     const lambdaFunction = new lambda.Function(this, 'ApiLambda', {
-      functionName: `prod-lambda-api-${this.stringSuffix}`,
+      functionName: `prod-lambda-api-v2-${this.stringSuffix}`,
       runtime: lambda.Runtime.NODEJS_18_X, // Updated to supported version
       handler: 'index.handler',
       code: lambda.Code.fromInline(`
