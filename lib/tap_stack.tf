@@ -615,16 +615,6 @@ resource "aws_cloudtrail" "main" {
     include_management_events = true
     
     data_resource {
-      type   = "AWS::SecretsManager::Secret"
-      values = ["arn:aws:secretsmanager:*:*:secret:*"]
-    }
-  }
-  
-  event_selector {
-    read_write_type           = "All"
-    include_management_events = true
-    
-    data_resource {
       type   = "AWS::Lambda::Function"
       values = ["arn:aws:lambda:*:*:function:*"]
     }

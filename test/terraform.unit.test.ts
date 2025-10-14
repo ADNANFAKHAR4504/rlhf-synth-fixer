@@ -306,8 +306,10 @@ describe('Terraform Credential Rotation Infrastructure - Unit Tests', () => {
       expect(cloudtrailSection![0]).toMatch(/kms_key_id/);
     });
 
-    test('CloudTrail has event selectors for Secrets Manager', () => {
-      expect(stackContent).toMatch(/AWS::SecretsManager::Secret/);
+    test('CloudTrail captures management events including Secrets Manager', () => {
+      // Secrets Manager API calls are captured via management events
+      expect(stackContent).toMatch(/include_management_events\s*=\s*true/);
+      expect(stackContent).toMatch(/is_multi_region_trail\s*=\s*true/);
     });
 
     test('CloudTrail depends on S3 bucket policy', () => {
@@ -588,7 +590,8 @@ describe('Terraform Credential Rotation Infrastructure - Unit Tests', () => {
     });
 
     test('comprehensive audit logging configured', () => {
-      expect(stackContent).toMatch(/AWS::SecretsManager::Secret/);
+      // CloudTrail captures Secrets Manager events via management events
+      expect(stackContent).toMatch(/include_management_events\s*=\s*true/);
       expect(stackContent).toMatch(/AWS::Lambda::Function/);
       expect(stackContent).toMatch(/CloudTrail/);
     });
