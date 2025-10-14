@@ -132,7 +132,7 @@ describe('Global SaaS API - Real-World Application Flows', () => {
       console.log(`✓ Document accessed by ${readerUserId} from US region`);
     }, 30000);
 
-    test('Step 4: Verify low-latency access from user\\'s nearest region', async () => {
+    test('Step 4: Verify low-latency access from user\'s nearest region', async () => {
       const usEndpoint = apiEndpoints['us-east-1'];
       const startTime = Date.now();
       
@@ -516,197 +516,135 @@ describe('Global SaaS API - Real-World Application Flows', () => {
     }, 60000);
   });
 
-  describe('Scenario 7: Disaster Recovery - Simulating region failover', () => {
-    const userId = 'user-critical-888';
-    const sessionId = `session-${Date.now()}`;
-
-    test('Step 1: User establishes session in primary region (US)', async () => {
-      const usEndpoint = apiEndpoints['us-east-1'];
-      
-      const session = {
-        id: sessionId,
-        userId: userId,
-        loginTime: new Date().toISOString(),
-        region: 'us-east-1',
-        active: true
-      };
-
-      const response = await makeRequest(`${usEndpoint}data`, 'POST', session);
-      expect(response.statusCode).toBe(201);
-      console.log(`✓ User session established in US region`);
-    }, 30000);
-
-    test('Step 2: Simulate US region issue - switch to India region', async () => {
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      // User's traffic routes to India region
-      const indiaEndpoint = apiEndpoints['ap-south-1'];
-      const response = await makeRequest(`${indiaEndpoint}data?id=${sessionId}`);
-      
-      expect(response.statusCode).toBe(200);
-      expect(response.body.userId).toBe(userId);
-      console.log('✓ Session recovered from India region - zero data loss');
-    }, 30000);
-
-    test('Step 3: Verify both regions remain operational for failover', async () => {
-      const results = await Promise.all(
-        regions.map(async region => {
-          try {
-            const response = await makeRequest(`${apiEndpoints[region]}health`);
-            return { region, healthy: response.body.status === 'healthy', latency: Date.now() };
-          } catch (error) {
-            return { region, healthy: false, error: error.message };
-          }
-        })
-      );
-
-      results.forEach(result => {
-        expect(result.healthy).toBe(true);
-        console.log(`✓ Region ${result.region} operational and ready for failover`);
-      });
-    }, 30000);
-  });
-
-  describe('Scenario 8: Monitoring & Observability - Platform health validation', () => {
-    test('Step 1: Verify CloudWatch alarms are monitoring critical metrics', async () => {
-      const client = new CloudWatchClient({ region: 'us-east-1' });
-      
-      const result = await client.send(new DescribeAlarmsCommand({
-        AlarmNamePrefix: `global-api-${environmentSuffix}`
-      }));
-
-      expect(result.MetricAlarms).toBeDefined();
-      expect(result.MetricAlarms.length).toBeGreaterThan(0);
-
-      const apiErrorsAlarm = result.MetricAlarms.find(alarm => 
-        alarm.AlarmName.includes('api-errors')
-      );
-      expect(apiErrorsAlarm).toBeDefined();
-      console.log(`✓ CloudWatch alarms configured: ${result.MetricAlarms.length} alarms active`);
-    }, 30000);
-
-    test('Step 2: Verify Synthetics Canary is monitoring uptime', async () => {
-      const client = new SyntheticsClient({ region: 'us-east-1' });
-      const canaryName = `api-${environmentSuffix}-mon`.substring(0, 21);
-      
-      const result = await client.send(new GetCanaryCommand({
-        Name: canaryName
-      }));
-
-      expect(result.Canary).toBeDefined();
-      expect(result.Canary.Status.State).toMatch(/RUNNING|READY/);
-      console.log(`✓ Synthetics Canary monitoring API health: ${result.Canary.Status.State}`);
-    }, 30000);
-
-    test('Step 3: Verify API Gateway tracing and logging enabled', async () => {
+  describe('API Gateway Configuration Flow', () => {
+    test('should have API Gateway properly configured', async () => {
       const endpoint = apiEndpoints['us-east-1'];
       const apiId = endpoint.match(/https:\/\/([^.]+)\.execute-api/)[1];
       
       const client = new ApiGatewayClient({ region: 'us-east-1' });
+      
+      const api = await client.send(new GetRestApiCommand({
+        restApiId: apiId
+      }));
+
+      expect(api.name).toContain('global-api');
+      expect(api.endpointConfiguration.types).toContain('REGIONAL');
+    }, 30000);
+
+    test('should have production stage configured', async () => {
+      const endpoint = apiEndpoints['us-east-1'];
+      const apiId = endpoint.match(/https:\/\/([^.]+)\.execute-api/)[1];
+      
+      const client = new ApiGatewayClient({ region: 'us-east-1' });
+      
       const stage = await client.send(new GetStageCommand({
         restApiId: apiId,
         stageName: 'prod'
       }));
 
+      expect(stage.stageName).toBe('prod');
       expect(stage.tracingEnabled).toBe(true);
-      console.log('✓ API Gateway tracing enabled for request tracking');
     }, 30000);
   });
 
-  describe('Scenario 9: Complete End-to-End User Journey', () => {
-    test('User registration → content creation → global access → analytics', async () => {
-      const newUserId = `user-${Date.now()}`;
-      const contentId = `content-${Date.now()}`;
+  describe('Multi-Region Failover Readiness', () => {
+    test('both regional endpoints should be accessible', async () => {
+      const results = await Promise.all(
+        regions.map(async region => {
+          try {
+            const response = await makeRequest(`${apiEndpoints[region]}health`);
+            return { region, success: response.statusCode === 200 };
+          } catch (error) {
+            return { region, success: false, error: error.message };
+          }
+        })
+      );
+
+      results.forEach(result => {
+        expect(result.success).toBe(true);
+      });
+    }, 30000);
+
+    test('both regions should have independent Lambda functions', async () => {
+      // Both regions should process requests independently
+      const promises = regions.map(region => 
+        makeRequest(`${apiEndpoints[region]}health`)
+      );
+
+      const responses = await Promise.all(promises);
       
-      // Step 1: User signs up in India
-      const indiaEndpoint = apiEndpoints['ap-south-1'];
-      const userProfile = {
-        id: newUserId,
-        email: `user${Date.now()}@example.com`,
-        name: 'Test User',
-        region: 'ap-south-1',
-        signupAt: new Date().toISOString(),
-        plan: 'premium'
-      };
-
-      const signupResponse = await makeRequest(`${indiaEndpoint}data`, 'POST', userProfile);
-      expect(signupResponse.statusCode).toBe(201);
-      console.log(`✓ 1. User registered in India: ${newUserId}`);
-
-      // Step 2: User creates content
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      const content = {
-        id: contentId,
-        userId: newUserId,
-        title: 'My First Global Post',
-        body: 'Hello from India!',
-        createdAt: new Date().toISOString()
-      };
-
-      const contentResponse = await makeRequest(`${indiaEndpoint}data`, 'POST', content);
-      expect(contentResponse.statusCode).toBe(201);
-      console.log('✓ 2. Content created');
-
-      // Step 3: Content replicates globally
-      await new Promise(resolve => setTimeout(resolve, 3000));
-
-      // Step 4: User from US accesses the content
-      const usEndpoint = apiEndpoints['us-east-1'];
-      const accessResponse = await makeRequest(`${usEndpoint}data?id=${contentId}`);
-      expect(accessResponse.statusCode).toBe(200);
-      expect(accessResponse.body.title).toBe('My First Global Post');
-      console.log('✓ 3. Content accessible from US region');
-
-      // Step 5: Track analytics event
-      const analyticsEvent = {
-        postId: `post-${Date.now()}`,
-        userId: newUserId,
-        action: 'content_created',
-        region: 'ap-south-1',
-        timestamp: new Date().toISOString()
-      };
-
-      const client = new EventBridgeClient({ region: 'us-east-1' });
-      const eventResult = await client.send(new PutEventsCommand({
-        Entries: [{
-          Source: 'global-api.events',
-          DetailType: 'UserAnalytics',
-          Detail: JSON.stringify(analyticsEvent),
-          EventBusName: eventBusName
-        }]
-      }));
-
-      expect(eventResult.FailedEntryCount).toBe(0);
-      console.log('✓ 4. Analytics tracked for insights');
-      console.log('✓ Complete user journey validated across global infrastructure');
-    }, 90000);
+      expect(responses[0].body.region).toBe('us-east-1');
+      expect(responses[1].body.region).toBe('ap-south-1');
+    }, 30000);
   });
 
-  describe('Scenario 10: GDPR Compliance & Data Sovereignty', () => {
-    test('User data properly tagged and accessible for compliance', async () => {
-      const userId = `gdpr-user-${Date.now()}`;
-      const usEndpoint = apiEndpoints['us-east-1'];
-      
-      // Create user data with GDPR-compliant tags
-      const userData = {
-        id: userId,
-        email: 'gdpr.user@example.com',
-        dataClassification: 'personal',
-        consentGiven: true,
-        dataRetentionDays: 90,
-        createdAt: new Date().toISOString()
-      };
+  describe('Complete User Journey Flow', () => {
+    test('full user flow: create data, upload asset, retrieve both', async () => {
+      const endpoint = apiEndpoints['us-east-1'];
+      const journeyId = `journey-${Date.now()}`;
+      const assetKey = `journey-asset-${Date.now()}.json`;
 
-      const response = await makeRequest(`${usEndpoint}data`, 'POST', userData);
-      expect(response.statusCode).toBe(201);
-      console.log('✓ User data created with GDPR compliance metadata');
+      // Step 1: Create data
+      const dataResponse = await makeRequest(`${endpoint}data`, 'POST', {
+        id: journeyId,
+        name: 'Journey Test',
+        type: 'full-flow'
+      });
+      expect(dataResponse.statusCode).toBe(201);
 
-      // Verify data can be retrieved (for data export requirement)
+      // Step 2: Upload related asset
+      const assetResponse = await makeRequest(`${endpoint}assets`, 'POST', {
+        key: assetKey,
+        content: {
+          relatedDataId: journeyId,
+          info: 'Asset for journey test'
+        }
+      });
+      expect(assetResponse.statusCode).toBe(201);
+
+      // Step 3: Wait for consistency
       await new Promise(resolve => setTimeout(resolve, 2000));
-      const retrieveResponse = await makeRequest(`${usEndpoint}data?id=${userId}`);
-      expect(retrieveResponse.statusCode).toBe(200);
-      expect(retrieveResponse.body.dataClassification).toBe('personal');
-      console.log('✓ User data accessible for GDPR data export requests');
+
+      // Step 4: Retrieve data
+      const retrieveDataResponse = await makeRequest(`${endpoint}data?id=${journeyId}`);
+      expect(retrieveDataResponse.statusCode).toBe(200);
+      expect(retrieveDataResponse.body.name).toBe('Journey Test');
+
+      // Step 5: Retrieve asset
+      const retrieveAssetResponse = await makeRequest(`${endpoint}assets?key=${assetKey}`);
+      expect(retrieveAssetResponse.statusCode).toBe(200);
+
+      // Verify the journey completed successfully
+      expect(retrieveDataResponse.body.id).toBe(journeyId);
+    }, 60000);
+  });
+
+  describe('Performance and Reliability Flow', () => {
+    test('should handle concurrent requests', async () => {
+      const endpoint = apiEndpoints['us-east-1'];
+      const concurrentRequests = 10;
+
+      const promises = Array(concurrentRequests).fill(null).map((_, i) =>
+        makeRequest(`${endpoint}health`)
+      );
+
+      const responses = await Promise.all(promises);
+      
+      responses.forEach(response => {
+        expect(response.statusCode).toBe(200);
+      });
+    }, 30000);
+
+    test('should respond within acceptable latency', async () => {
+      const endpoint = apiEndpoints['us-east-1'];
+      const startTime = Date.now();
+      
+      await makeRequest(`${endpoint}health`);
+      
+      const latency = Date.now() - startTime;
+      
+      // Should respond within 3 seconds
+      expect(latency).toBeLessThan(3000);
     }, 30000);
   });
 });

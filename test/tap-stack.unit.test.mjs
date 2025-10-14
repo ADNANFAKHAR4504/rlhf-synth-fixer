@@ -417,20 +417,13 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('QuickSight Configuration', () => {
-    test('primary stack should create QuickSight data source', () => {
-      primaryTemplate.hasResourceProperties('AWS::QuickSight::DataSource', {
-        Type: 'ATHENA',
-        DataSourceParameters: {
-          AthenaParameters: {
-            WorkGroup: 'primary'
-          }
-        }
-      });
-    });
-
-    test('secondary stack should not create QuickSight resources', () => {
-      const dataSources = secondaryTemplate.findResources('AWS::QuickSight::DataSource');
-      expect(Object.keys(dataSources).length).toBe(0);
+    test('QuickSight is disabled by default (requires account-level setup)', () => {
+      // QuickSight is commented out in the stack as it requires AWS account subscription
+      const primaryDataSources = primaryTemplate.findResources('AWS::QuickSight::DataSource');
+      const secondaryDataSources = secondaryTemplate.findResources('AWS::QuickSight::DataSource');
+      
+      expect(Object.keys(primaryDataSources).length).toBe(0);
+      expect(Object.keys(secondaryDataSources).length).toBe(0);
     });
   });
 
@@ -573,9 +566,11 @@ describe('TapStack Unit Tests', () => {
       });
       
       const template = Template.fromStack(testStack);
-      // Should have primary resources (QuickSight, health check, etc.)
-      template.hasResourceProperties('AWS::QuickSight::DataSource', {
-        Type: 'ATHENA'
+      // Should have primary resources (Route 53 health check, S3 replication, etc.)
+      template.hasResourceProperties('AWS::Route53::HealthCheck', {
+        HealthCheckConfig: Match.objectLike({
+          Type: 'HTTPS'
+        })
       });
     });
 
