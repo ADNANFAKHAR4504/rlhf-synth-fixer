@@ -1,0 +1,14 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349772",
+  "team": "3",
+  "startedAt": "2025-10-14T12:12:43.604Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": "lambda, s3, api-gateway, dyanmodb, system manager, cloudwatch"
+}
