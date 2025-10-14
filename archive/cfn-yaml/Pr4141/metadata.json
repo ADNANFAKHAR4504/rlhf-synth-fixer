@@ -23,5 +23,11 @@
     "S3 Bucket",
     "CloudWatch",
     "SNS"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
 }
