@@ -27,10 +27,11 @@ export class TapStack extends cdk.Stack {
     new Infrastructure(this, 'PrimaryRegionInfrastructure', {
       environmentSuffix: environmentSuffix,
       region: 'us-east-1',
+      secondaryRegion: 'ap-south-1',
       instanceType: 't3.large',
-      minCapacity: 2,
+      minCapacity: 1,
       maxCapacity: 10,
-      desiredCapacity: 4,
+      desiredCapacity: 1,
       env: {
         account: process.env.CDK_DEFAULT_ACCOUNT,
         region: 'us-east-1',
@@ -40,14 +41,14 @@ export class TapStack extends cdk.Stack {
     // Create secondary region infrastructure
     new Infrastructure(this, 'SecondaryRegionInfrastructure', {
       environmentSuffix: environmentSuffix,
-      region: 'us-west-2',
+      region: 'ap-south-1',
       instanceType: 't3.large',
-      minCapacity: 2,
+      minCapacity: 1,
       maxCapacity: 10,
-      desiredCapacity: 4,
+      desiredCapacity: 1,
       env: {
         account: process.env.CDK_DEFAULT_ACCOUNT,
-        region: 'us-west-2',
+        region: 'ap-south-1',
       },
     });
   }

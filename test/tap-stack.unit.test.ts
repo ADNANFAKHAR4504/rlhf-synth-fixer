@@ -15,6 +15,7 @@ describe('Infrastructure Stack', () => {
     stack = new Infrastructure(app, 'TestInfrastructure', {
       environmentSuffix,
       region: 'us-east-1',
+      secondaryRegion: 'ap-south-1',
       instanceType: 't3.medium',
       minCapacity: 2,
       maxCapacity: 6,
@@ -276,39 +277,45 @@ describe('Infrastructure Stack', () => {
     });
   });
 
-  describe('DynamoDB Table', () => {
-    test('DynamoDB table uses pay-per-request billing', () => {
-      template.hasResourceProperties('AWS::DynamoDB::Table', {
+  describe('DynamoDB Global Table (TableV2)', () => {
+    test('DynamoDB Global Table uses on-demand billing', () => {
+      template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
         BillingMode: 'PAY_PER_REQUEST',
       });
     });
 
-    test('DynamoDB table has encryption enabled', () => {
-      template.hasResourceProperties('AWS::DynamoDB::Table', {
+    test('DynamoDB Global Table has encryption enabled', () => {
+      template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
         SSESpecification: {
           SSEEnabled: true,
         },
       });
     });
 
-    test('DynamoDB table has point-in-time recovery enabled', () => {
-      template.hasResourceProperties('AWS::DynamoDB::Table', {
-        PointInTimeRecoverySpecification: {
-          PointInTimeRecoveryEnabled: true,
-        },
+    test('DynamoDB Global Table has point-in-time recovery enabled', () => {
+      const resources = template.findResources('AWS::DynamoDB::GlobalTable');
+      const globalTable = Object.values(resources)[0];
+
+      expect(globalTable.Properties.Replicas).toBeDefined();
+      expect(globalTable.Properties.Replicas).toHaveLength(2);
+
+      // Check that both replicas have point-in-time recovery enabled
+      globalTable.Properties.Replicas.forEach((replica: any) => {
+        expect(replica.PointInTimeRecoverySpecification).toBeDefined();
+        expect(replica.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled).toBe(true);
       });
     });
 
-    test('DynamoDB table has DynamoDB streams enabled', () => {
-      template.hasResourceProperties('AWS::DynamoDB::Table', {
+    test('DynamoDB Global Table has DynamoDB streams enabled', () => {
+      template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
         StreamSpecification: {
           StreamViewType: 'NEW_AND_OLD_IMAGES',
         },
       });
     });
 
-    test('DynamoDB table has composite primary key', () => {
-      template.hasResourceProperties('AWS::DynamoDB::Table', {
+    test('DynamoDB Global Table has composite primary key', () => {
+      template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
         KeySchema: [
           {
             AttributeName: 'id',
@@ -336,8 +343,8 @@ describe('Infrastructure Stack', () => {
       });
     });
 
-    test('DynamoDB table has global secondary index', () => {
-      template.hasResourceProperties('AWS::DynamoDB::Table', {
+    test('DynamoDB Global Table has global secondary index', () => {
+      template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
         GlobalSecondaryIndexes: [
           {
             IndexName: 'status-index',
@@ -357,6 +364,19 @@ describe('Infrastructure Stack', () => {
           },
         ],
       });
+    });
+
+    test('DynamoDB Global Table has replication regions configured', () => {
+      const resources = template.findResources('AWS::DynamoDB::GlobalTable');
+      const globalTable = Object.values(resources)[0];
+
+      expect(globalTable.Properties.Replicas).toBeDefined();
+      expect(globalTable.Properties.Replicas).toHaveLength(2);
+
+      // Check that both regions are present
+      const regions = globalTable.Properties.Replicas.map((replica: any) => replica.Region);
+      expect(regions).toContain('us-east-1');
+      expect(regions).toContain('ap-south-1');
     });
   });
 
@@ -456,11 +476,11 @@ describe('Infrastructure Stack', () => {
       });
     });
 
-    test('DynamoDB table name is exported for application integration', () => {
+    test('DynamoDB Global Table name is exported for application integration', () => {
       template.hasOutput('useast1DynamoDBTableName', {
-        Description: 'DynamoDB Table name',
+        Description: 'DynamoDB Global Table name',
         Export: {
-          Name: 'dynamodb-table-dev-us-east-1',
+          Name: 'dynamodb-global-table-dev',
         },
       });
     });
@@ -611,7 +631,7 @@ describe('Infrastructure Stack', () => {
     test('Creates expected number of storage resources', () => {
       template.resourceCountIs('AWS::S3::Bucket', 1);
       template.resourceCountIs('AWS::S3::BucketPolicy', 1);
-      template.resourceCountIs('AWS::DynamoDB::Table', 1);
+      template.resourceCountIs('AWS::DynamoDB::GlobalTable', 1);
     });
 
     test('Creates expected number of IAM resources', () => {
@@ -639,12 +659,12 @@ describe('TapStack', () => {
       expect(primaryInfra.region).toBe('us-east-1');
     });
 
-    test('Creates secondary region infrastructure in us-west-2', () => {
+    test('Creates secondary region infrastructure in ap-south-1', () => {
       const secondaryInfra = stack.node.children.find(
         child => child.node.id === 'SecondaryRegionInfrastructure'
       ) as Infrastructure;
       expect(secondaryInfra).toBeInstanceOf(Infrastructure);
-      expect(secondaryInfra.region).toBe('us-west-2');
+      expect(secondaryInfra.region).toBe('ap-south-1');
     });
 
     test('Both regions have identical infrastructure configuration', () => {
@@ -714,7 +734,7 @@ describe('TapStack', () => {
       expect(primaryInfra.vpc).not.toBe(secondaryInfra.vpc);
     });
 
-    test('Each region has independent DynamoDB tables', () => {
+    test('Each region shares the same DynamoDB Global Table', () => {
       const primaryInfra = stack.node.children.find(
         child => child.node.id === 'PrimaryRegionInfrastructure'
       ) as Infrastructure;
@@ -723,8 +743,7 @@ describe('TapStack', () => {
       ) as Infrastructure;
 
       expect(primaryInfra.globalTable).toBeDefined();
-      expect(secondaryInfra.globalTable).toBeDefined();
-      expect(primaryInfra.globalTable).not.toBe(secondaryInfra.globalTable);
+      expect(secondaryInfra.globalTable).toBeUndefined(); // Only primary region creates the table
     });
 
     test('Each region has independent S3 buckets', () => {

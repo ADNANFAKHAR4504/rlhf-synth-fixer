@@ -16,6 +16,7 @@ import { Construct } from 'constructs';
 export interface InfrastructureProps extends cdk.StackProps {
   environmentSuffix: string;
   region: string;
+  secondaryRegion?: string;
   instanceType?: string;
   minCapacity?: number;
   maxCapacity?: number;
@@ -35,7 +36,7 @@ export class Infrastructure extends cdk.Stack {
   public vpc: ec2.Vpc;
   public alb: elbv2.ApplicationLoadBalancer;
   public logBucket: s3.Bucket;
-  public globalTable: dynamodb.Table;
+  public globalTable?: dynamodb.TableV2;
   public instanceRole: iam.Role;
   public albSecurityGroup: ec2.SecurityGroup;
   public instanceSecurityGroup: ec2.SecurityGroup;
@@ -86,8 +87,10 @@ export class Infrastructure extends cdk.Stack {
       keyPairName
     );
 
-    // Create DynamoDB Table (not global table for single region)
-    this.createDynamoDbTable();
+    // Create DynamoDB Global Table (only in primary region)
+    if (props.secondaryRegion) {
+      this.createDynamoDbGlobalTable(props.secondaryRegion);
+    }
 
     // Output important values
     this.createOutputs(this.region);
@@ -475,11 +478,11 @@ export class Infrastructure extends cdk.Stack {
     return asg;
   }
 
-  private createDynamoDbTable(): void {
-    // Create DynamoDB Table for this region
-    this.globalTable = new dynamodb.Table(
+  private createDynamoDbGlobalTable(secondaryRegion: string): void {
+    // Create DynamoDB Global Table with replication to secondary region
+    this.globalTable = new dynamodb.TableV2(
       this,
-      `webapp-table-${this.environmentSuffix}`,
+      `webapp-global-table-${this.environmentSuffix}`,
       {
         tableName: `webapp-data-${this.environmentSuffix}`,
         partitionKey: {
@@ -490,12 +493,17 @@ export class Infrastructure extends cdk.Stack {
           name: 'timestamp',
           type: dynamodb.AttributeType.NUMBER,
         },
-        billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-        encryption: dynamodb.TableEncryption.AWS_MANAGED,
+        billing: dynamodb.Billing.onDemand(),
+        encryption: dynamodb.TableEncryptionV2.awsManagedKey(),
         pointInTimeRecoverySpecification: {
           pointInTimeRecoveryEnabled: true,
         },
-        stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
+        dynamoStream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
+        replicas: [
+          {
+            region: secondaryRegion,
+          },
+        ],
         removalPolicy: this.removalPolicy,
       }
     );
@@ -520,82 +528,84 @@ export class Infrastructure extends cdk.Stack {
 
   private createOutputs(region: string): void {
     // VPC and Networking Outputs
-    new cdk.CfnOutput(this, 'VPCId', {
+    new cdk.CfnOutput(this, `${region}-VPCId`, {
       value: this.vpc.vpcId,
       description: 'VPC ID',
-      exportName: `vpc-id-${this.environmentSuffix}`,
+      exportName: `vpc-id-${this.environmentSuffix}-${region}`,
     });
 
     // Subnet Outputs
-    new cdk.CfnOutput(this, 'PublicSubnet1Id', {
+    new cdk.CfnOutput(this, `${region}-PublicSubnet1Id`, {
       value: this.vpc.publicSubnets[0].subnetId,
       description: 'Public Subnet 1 ID',
-      exportName: `public-subnet-1-${this.environmentSuffix}`,
+      exportName: `public-subnet-1-${this.environmentSuffix}-${region}`,
     });
 
-    new cdk.CfnOutput(this, 'PublicSubnet2Id', {
+    new cdk.CfnOutput(this, `${region}-PublicSubnet2Id`, {
       value: this.vpc.publicSubnets[1].subnetId,
       description: 'Public Subnet 2 ID',
-      exportName: `public-subnet-2-${this.environmentSuffix}`,
+      exportName: `public-subnet-2-${this.environmentSuffix}-${region}`,
     });
 
-    new cdk.CfnOutput(this, 'PrivateSubnet1Id', {
+    new cdk.CfnOutput(this, `${region}-PrivateSubnet1Id`, {
       value: this.vpc.privateSubnets[0].subnetId,
       description: 'Private Subnet 1 ID',
-      exportName: `private-subnet-1-${this.environmentSuffix}`,
+      exportName: `private-subnet-1-${this.environmentSuffix}-${region}`,
     });
 
-    new cdk.CfnOutput(this, 'PrivateSubnet2Id', {
+    new cdk.CfnOutput(this, `${region}-PrivateSubnet2Id`, {
       value: this.vpc.privateSubnets[1].subnetId,
       description: 'Private Subnet 2 ID',
-      exportName: `private-subnet-2-${this.environmentSuffix}`,
+      exportName: `private-subnet-2-${this.environmentSuffix}-${region}`,
     });
 
     // Security Group Outputs
-    new cdk.CfnOutput(this, 'ALBSecurityGroupId', {
+    new cdk.CfnOutput(this, `${region}-ALBSecurityGroupId`, {
       value: this.albSecurityGroup.securityGroupId,
       description: 'ALB Security Group ID',
-      exportName: `alb-sg-${this.environmentSuffix}`,
+      exportName: `alb-sg-${this.environmentSuffix}-${region}`,
     });
 
-    new cdk.CfnOutput(this, 'WebServerSecurityGroupId', {
+    new cdk.CfnOutput(this, `${region}-WebServerSecurityGroupId`, {
       value: this.instanceSecurityGroup.securityGroupId,
       description: 'Web Server Security Group ID',
-      exportName: `web-server-sg-${this.environmentSuffix}`,
+      exportName: `web-server-sg-${this.environmentSuffix}-${region}`,
     });
 
     // ALB Outputs
-    new cdk.CfnOutput(this, 'ApplicationLoadBalancerDNS', {
+    new cdk.CfnOutput(this, `${region}-ApplicationLoadBalancerDNS`, {
       value: this.alb.loadBalancerDnsName,
       description: 'Application Load Balancer DNS Name',
-      exportName: `alb-dns-${this.environmentSuffix}`,
+      exportName: `alb-dns-${this.environmentSuffix}-${region}`,
     });
 
-    new cdk.CfnOutput(this, 'ApplicationLoadBalancerURL', {
+    new cdk.CfnOutput(this, `${region}-ApplicationLoadBalancerURL`, {
       value: `http://${this.alb.loadBalancerDnsName}`,
       description: 'Application Load Balancer URL',
-      exportName: `alb-url-${this.environmentSuffix}`,
+      exportName: `alb-url-${this.environmentSuffix}-${region}`,
     });
 
     // Additional Infrastructure Outputs
-    new cdk.CfnOutput(this, 'DynamoDBTableName', {
-      value: this.globalTable.tableName,
-      description: 'DynamoDB Table name',
-      exportName: `dynamodb-table-${this.environmentSuffix}`,
-    });
+    if (this.globalTable) {
+      new cdk.CfnOutput(this, `${region}-DynamoDBTableName`, {
+        value: this.globalTable.tableName,
+        description: 'DynamoDB Global Table name',
+        exportName: `dynamodb-global-table-${this.environmentSuffix}`,
+      });
+    }
 
-    new cdk.CfnOutput(this, 'LogBucket', {
+    new cdk.CfnOutput(this, `${region}-LogBucket`, {
       value: this.logBucket.bucketName,
       description: 'Log bucket',
-      exportName: `log-bucket-${this.environmentSuffix}`,
+      exportName: `log-bucket-${this.environmentSuffix}-${region}`,
     });
 
-    new cdk.CfnOutput(this, 'Region', {
+    new cdk.CfnOutput(this, `${region}-Region`, {
       value: region,
       description: 'AWS Region',
     });
 
-    new cdk.CfnOutput(this, 'Environment', {
+    new cdk.CfnOutput(this, `${region}-Environment`, {
       value: this.isProduction ? 'Production' : 'Non-Production',
       description: 'Environment type',
     });
@@ -606,37 +616,90 @@ export class Infrastructure extends cdk.Stack {
 ## Usage Example
 
 ```typescript
-// app.ts
+// tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
-import { Infrastructure } from './lib/infrastructure';
+import { Construct } from 'constructs';
+import { Infrastructure } from './infrastructure';
+
+// ? Import your stacks here
+// import { MyStack } from './my-stack';
+
+interface TapStackProps extends cdk.StackProps {
+  environmentSuffix?: string;
+}
+
+export class TapStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
+    super(scope, id, props);
+
+    // Get environment suffix from props, context, or use 'dev' as default
+    const environmentSuffix =
+      props?.environmentSuffix ||
+      this.node.tryGetContext('environmentSuffix') ||
+      'dev';
+
+    // ? Add your stack instantiations here
+    // ! Do NOT create resources directly in this stack.
+    // ! Instead, create separate stacks for each resource type.
+
+    // Create primary region infrastructure
+    new Infrastructure(this, 'PrimaryRegionInfrastructure', {
+      environmentSuffix: environmentSuffix,
+      region: 'us-east-1',
+      secondaryRegion: 'ap-south-1',
+      instanceType: 't3.large',
+      minCapacity: 2,
+      maxCapacity: 10,
+      desiredCapacity: 4,
+      env: {
+        account: process.env.CDK_DEFAULT_ACCOUNT,
+        region: 'us-east-1',
+      },
+    });
+
+    // Create secondary region infrastructure
+    new Infrastructure(this, 'SecondaryRegionInfrastructure', {
+      environmentSuffix: environmentSuffix,
+      region: 'ap-south-1',
+      instanceType: 't3.large',
+      minCapacity: 2,
+      maxCapacity: 10,
+      desiredCapacity: 4,
+      env: {
+        account: process.env.CDK_DEFAULT_ACCOUNT,
+        region: 'ap-south-1',
+      },
+    });
+  }
+}
+```
+
+```typescript
+// bin/tap.ts
+#!/usr/bin/env node
+import * as cdk from 'aws-cdk-lib';
+import { Tags } from 'aws-cdk-lib';
+import { TapStack } from '../lib/tap-stack';
 
 const app = new cdk.App();
 
-// Production deployment
-new Infrastructure(this, 'PrimaryRegionInfrastructure', {
-  environmentSuffix: environmentSuffix,
-  region: 'us-east-1',
-  instanceType: 't3.large',
-  minCapacity: 2,
-  maxCapacity: 10,
-  desiredCapacity: 2,
-  env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-east-1',
-  },
-});
+// Get environment suffix from context (set by CI/CD pipeline) or use 'dev' as default
+const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
+const stackName = `TapStack${environmentSuffix}`;
+const repositoryName = process.env.REPOSITORY || 'unknown';
+const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
-// Create secondary region infrastructure
-new Infrastructure(this, 'SecondaryRegionInfrastructure', {
-  environmentSuffix: environmentSuffix,
-  region: 'us-west-2',
-  instanceType: 't3.large',
-  minCapacity: 2,
-  maxCapacity: 10,
-  desiredCapacity: 2,
+// Apply tags to all stacks in this app (optional - you can do this at stack level instead)
+Tags.of(app).add('Environment', environmentSuffix);
+Tags.of(app).add('Repository', repositoryName);
+Tags.of(app).add('Author', commitAuthor);
+
+new TapStack(app, stackName, {
+  stackName: stackName, // This ensures CloudFormation stack name includes the suffix
+  environmentSuffix: environmentSuffix, // Pass the suffix to the stack
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-west-2',
+    region: process.env.CDK_DEFAULT_REGION,
   },
 });
 ```

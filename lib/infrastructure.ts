@@ -10,6 +10,7 @@ import { Construct } from 'constructs';
 export interface InfrastructureProps extends cdk.StackProps {
   environmentSuffix: string;
   region: string;
+  secondaryRegion?: string;
   instanceType?: string;
   minCapacity?: number;
   maxCapacity?: number;
@@ -29,7 +30,7 @@ export class Infrastructure extends cdk.Stack {
   public vpc: ec2.Vpc;
   public alb: elbv2.ApplicationLoadBalancer;
   public logBucket: s3.Bucket;
-  public globalTable: dynamodb.Table;
+  public globalTable?: dynamodb.TableV2;
   public instanceRole: iam.Role;
   public albSecurityGroup: ec2.SecurityGroup;
   public instanceSecurityGroup: ec2.SecurityGroup;
@@ -80,8 +81,10 @@ export class Infrastructure extends cdk.Stack {
       keyPairName
     );
 
-    // Create DynamoDB Table (not global table for single region)
-    this.createDynamoDbTable();
+    // Create DynamoDB Global Table (only in primary region)
+    if (props.secondaryRegion) {
+      this.createDynamoDbGlobalTable(props.secondaryRegion);
+    }
 
     // Output important values
     this.createOutputs(this.region);
@@ -377,7 +380,9 @@ export class Infrastructure extends cdk.Stack {
         userData,
         role: this.instanceRole,
         securityGroup,
-        keyPair: keyPairName ? new ec2.KeyPair(this, 'KeyPair', { keyPairName }) : undefined,
+        keyPair: keyPairName
+          ? new ec2.KeyPair(this, 'KeyPair', { keyPairName })
+          : undefined,
         blockDevices: [
           {
             deviceName: '/dev/xvda',
@@ -467,11 +472,11 @@ export class Infrastructure extends cdk.Stack {
     return asg;
   }
 
-  private createDynamoDbTable(): void {
-    // Create DynamoDB Table for this region
-    this.globalTable = new dynamodb.Table(
+  private createDynamoDbGlobalTable(secondaryRegion: string): void {
+    // Create DynamoDB Global Table with replication to secondary region
+    this.globalTable = new dynamodb.TableV2(
       this,
-      `webapp-table-${this.environmentSuffix}`,
+      `webapp-global-table-${this.environmentSuffix}`,
       {
         tableName: `webapp-data-${this.environmentSuffix}`,
         partitionKey: {
@@ -482,12 +487,17 @@ export class Infrastructure extends cdk.Stack {
           name: 'timestamp',
           type: dynamodb.AttributeType.NUMBER,
         },
-        billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-        encryption: dynamodb.TableEncryption.AWS_MANAGED,
+        billing: dynamodb.Billing.onDemand(),
+        encryption: dynamodb.TableEncryptionV2.awsManagedKey(),
         pointInTimeRecoverySpecification: {
           pointInTimeRecoveryEnabled: true,
         },
-        stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
+        dynamoStream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
+        replicas: [
+          {
+            region: secondaryRegion,
+          },
+        ],
         removalPolicy: this.removalPolicy,
       }
     );
@@ -570,11 +580,13 @@ export class Infrastructure extends cdk.Stack {
     });
 
     // Additional Infrastructure Outputs
-    new cdk.CfnOutput(this, `${region}-DynamoDBTableName`, {
-      value: this.globalTable.tableName,
-      description: 'DynamoDB Table name',
-      exportName: `dynamodb-table-${this.environmentSuffix}-${region}`,
-    });
+    if (this.globalTable) {
+      new cdk.CfnOutput(this, `${region}-DynamoDBTableName`, {
+        value: this.globalTable.tableName,
+        description: 'DynamoDB Global Table name',
+        exportName: `dynamodb-global-table-${this.environmentSuffix}`,
+      });
+    }
 
     new cdk.CfnOutput(this, `${region}-LogBucket`, {
       value: this.logBucket.bucketName,

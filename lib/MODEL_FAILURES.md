@@ -50,6 +50,123 @@
 **Fix Applied:** Removed the invalid `targetGroup.applyRemovalPolicy(this.removalPolicy);` line
 **Impact:** Target groups will use default removal behavior (typically destroyed with stack deletion)
 
+## Major Architectural Differences Between MODEL_RESPONSE.md and IDEAL_RESPONSE.md
+
+### 6. Single Stack vs Multi-Stack Architecture ✅ FIXED
+
+**MODEL_RESPONSE.md Approach:**
+
+- Single `Infrastructure` stack trying to create resources in multiple regions
+- Used `primaryRegion` and `secondaryRegion` parameters
+- Created separate VPCs, ALBs, and resources within one stack
+- **Problem**: CDK stacks are region-specific - all resources would be created in the same region
+
+**IDEAL_RESPONSE.md Approach:**
+
+- Separate `Infrastructure` stacks for each region
+- Uses `region` parameter and optional `secondaryRegion` for DynamoDB replication
+- Each stack creates resources only in its designated region
+- **Solution**: Proper multi-region deployment with separate stacks
+
+### 7. DynamoDB Table Implementation ✅ FIXED
+
+**MODEL_RESPONSE.md Issues:**
+
+- Used legacy `dynamodb.Table` class
+- Used deprecated API: `billingMode`, `encryption`, `stream`, `replicationRegions`
+- Created separate tables in each region (defeats Global Table purpose)
+
+**IDEAL_RESPONSE.md Solution:**
+
+- Uses modern `dynamodb.TableV2` class
+- Correct API: `billing: dynamodb.Billing.onDemand()`, `encryption: dynamodb.TableEncryptionV2.awsManagedKey()`
+- Proper Global Table with `replicas: [{ region: secondaryRegion }]`
+- Only creates table in primary region, replicates to secondary
+
+### 8. Resource Naming and Visibility ✅ FIXED
+
+**MODEL_RESPONSE.md Issues:**
+
+- Private properties (`private vpc`, `private alb`, etc.)
+- Hardcoded prefixes (`primary-`, `secondary-`)
+- Resource naming conflicts between regions
+
+**IDEAL_RESPONSE.md Solution:**
+
+- Public properties (`public vpc`, `public alb`, etc.) for better testability
+- Consistent naming without hardcoded prefixes
+- Region-specific naming to avoid conflicts
+
+### 9. Health Check Configuration ✅ FIXED
+
+**MODEL_RESPONSE.md Issues:**
+
+- Used deprecated `autoscaling.HealthCheck.elb()` method
+- Required grace period configuration
+
+**IDEAL_RESPONSE.md Solution:**
+
+- Uses modern `autoscaling.HealthChecks.ec2()` method
+- Simplified configuration without grace period
+
+### 10. S3 Cross-Region Replication ✅ REMOVED
+
+**MODEL_RESPONSE.md:**
+
+- Complex S3 cross-region replication setup
+- Replication roles and policies
+- **Problem**: Not needed with separate regional stacks
+
+**IDEAL_RESPONSE.md:**
+
+- Removed S3 cross-region replication
+- Each region has its own S3 bucket
+- Simpler and more appropriate for the architecture
+
+### 11. Output Structure ✅ ENHANCED
+
+**MODEL_RESPONSE.md:**
+
+- Basic outputs for primary/secondary regions
+- Limited resource information
+
+**IDEAL_RESPONSE.md:**
+
+- Comprehensive outputs including VPC, subnets, security groups
+- Region-specific export names
+- Better organization and more detailed information
+
+## Major Architectural Issues Fixed
+
+### 4. DynamoDB TableV2 Configuration Issues ✅ FIXED
+
+**Location:** `createDynamoDbGlobalTable` method
+**Issue:** Incorrect API usage for DynamoDB TableV2 class
+**Problems Fixed:**
+
+- `billingMode` → `billing: dynamodb.Billing.onDemand()`
+- `encryption` → `encryption: dynamodb.TableEncryptionV2.awsManagedKey()`
+- `stream` → `dynamoStream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES`
+- `replicationRegions` → `replicas: [{ region: secondaryRegion }]`
+  **Root Cause:** TableV2 uses different API structure compared to legacy Table class
+  **Fix Applied:** Updated all TableV2-specific properties to use correct API
+  **Impact:** DynamoDB Global Table now uses modern TableV2 API with proper configuration
+
+### 5. DynamoDB Global Table Implementation ✅ FIXED
+
+**Location:** `createDynamoDbTable` method and constructor
+**Issue:** Separate DynamoDB tables were being created in each region instead of a single Global Table
+**Problem:** This defeats the purpose of multi-region architecture - data would not be replicated between regions
+**Root Cause:** The refactoring to separate stacks removed the Global Table configuration
+**Fix Applied:**
+
+- Modified DynamoDB creation to only occur in primary region (`us-east-1`)
+- Updated method to `createDynamoDbGlobalTable()` with `replicationRegions: ['us-west-2']`
+- Made `globalTable` property optional since it only exists in primary region
+- Updated outputs to only show DynamoDB information from primary region
+- Secondary region stack no longer creates its own DynamoDB table
+  **Impact:** Now creates a single DynamoDB Global Table that replicates data between `us-east-1` and `us-west-2`
+
 ## Potential Issues Identified
 
 ### 2. Cross-Region Resource Creation Limitation ✅ FIXED
