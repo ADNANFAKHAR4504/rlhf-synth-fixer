@@ -1,0 +1,14 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349027",
+  "team": "6",
+  "startedAt": "2025-10-14T13:23:41.588Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": "IAM, VPC, CloudTrail"
+}
