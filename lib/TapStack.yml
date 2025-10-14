@@ -904,7 +904,6 @@ Resources:
 
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
-    DependsOn: MasterKMSKey
     Properties:
       LogGroupName: /aws/cloudtrail/production
       RetentionInDays: 30
@@ -923,22 +922,24 @@ Resources:
             Principal: { Service: config.amazonaws.com }
             Action: "sts:AssumeRole"
       ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/service-role/ConfigRole"
+        - "arn:aws:iam::aws:policy/service-role/AWSConfigRole" # <-- fixed ARN
       Policies:
-        - PolicyName: S3AccessForConfig
+        - PolicyName: S3AndSNSAccessForConfig
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
-                  [
-                    "s3:GetBucketAcl",
-                    "s3:ListBucket",
-                    "s3:PutObject",
-                    "s3:GetObject",
-                  ]
+                  - "s3:GetBucketAcl"
+                  - "s3:ListBucket"
+                  - "s3:PutObject"
+                  - "s3:GetObject"
                 Resource:
-                  [!GetAtt LoggingBucket.Arn, !Sub "${LoggingBucket.Arn}/*"]
+                  - !GetAtt LoggingBucket.Arn
+                  - !Sub "${LoggingBucket.Arn}/*"
+              - Effect: Allow
+                Action: "sns:Publish"
+                Resource: !Ref SNSTopic
       Tags:
         - { Key: Environment, Value: Production }
         - { Key: Owner, Value: SecurityTeam }
