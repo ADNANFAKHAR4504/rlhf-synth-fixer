@@ -363,7 +363,6 @@ describe("TapStack Unit Tests", () => {
           dbSubnetGroup: networkingModule.dbSubnetGroup,
           environment: 'dev',
           projectName: 'myapp',
-          engineVersion: '15.4',
           instanceClass: 'db.t3.micro',
           allocatedStorage: 20,
           databaseName: 'myapp_db'
