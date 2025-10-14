@@ -149,7 +149,10 @@ export class ComputeStack extends Construct {
         ),
       },
       healthCheck: {
-        command: ['CMD-SHELL', 'wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1'],
+        command: [
+          'CMD-SHELL',
+          'wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1',
+        ],
         interval: cdk.Duration.seconds(10),
         timeout: cdk.Duration.seconds(5),
         retries: 2,

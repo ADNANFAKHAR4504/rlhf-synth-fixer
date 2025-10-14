@@ -80,7 +80,9 @@ export class CacheStack extends Construct {
 
     replicationGroup.addDependency(subnetGroup);
     // Ensure log group is created before replication group
-    replicationGroup.addDependency(logGroup.node.defaultChild as cdk.CfnResource);
+    replicationGroup.addDependency(
+      logGroup.node.defaultChild as cdk.CfnResource
+    );
 
     // Store endpoint for reference
     this.redisEndpoint = replicationGroup.attrPrimaryEndPointAddress;
