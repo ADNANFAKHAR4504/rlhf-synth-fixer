@@ -11,7 +11,7 @@ Design and implement a PCI-DSS compliant payment processing infrastructure using
 ### Platform & Language
 - **Platform**: AWS CDK v2.x
 - **Language**: TypeScript
-- **Region**: sa-east-1 (São Paulo)
+- **Region**: us-east-2 (Ohio)
 
 ### Required AWS Services
 1. **Amazon ECS (Fargate)** - For containerized payment processing microservices
