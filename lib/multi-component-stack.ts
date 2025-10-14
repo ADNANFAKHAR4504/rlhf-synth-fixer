@@ -90,8 +90,10 @@ export class MultiComponentApplicationStack extends cdk.Stack {
     const rdsInstance = new rds.DatabaseInstance(this, 'PostgresDatabase', {
       instanceIdentifier: `prod-rds-postgres-${this.stringSuffix.toLowerCase().replace(/[^a-z0-9-]/g, '')}`,
       engine: rds.DatabaseInstanceEngine.postgres({
-        // VER_15_3 is preferred; fall back to VER_15 if the specific constant isn't available
-        version: rds.PostgresEngineVersion.VER_15_3,
+        // Use the major Postgres 15 engine constant so CDK/RDS will pick a supported
+        // minor version available in the target region. Pinning to a minor (e.g. 15.3)
+        // can fail in regions that don't offer that exact patch level.
+        version: rds.PostgresEngineVersion.VER_15,
       }),
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
