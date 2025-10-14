@@ -161,7 +161,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	// 4. Create Monitoring Infrastructure
 	tapStack.createMonitoringInfrastructure(stack)
 
-	// 5. Add outputs for integration testing
+	// 5. Add stack outputs
 	tapStack.addStackOutputs(stack)
 
 	return tapStack
@@ -407,7 +407,7 @@ func (tapStack *TapStack) createAlarms(stack awscdk.Stack) {
 }
 
 func (tapStack *TapStack) addStackOutputs(stack awscdk.Stack) {
-	// Add outputs for resources
+	// Export stack outputs
 	awscdk.NewCfnOutput(stack, jsii.String("RawImageBucketName"), &awscdk.CfnOutputProps{
 		Value:       tapStack.RawImageBucket.BucketName(),
 		Description: jsii.String("Raw image bucket name"),
@@ -466,35 +466,7 @@ func (tapStack *TapStack) addStackOutputs(stack awscdk.Stack) {
 ### Operational Excellence
 
 - Environment-specific naming with suffix support
-- Stack outputs for integration testing
+- Stack outputs for external integration
 - Proper removal policies for development
 - Comprehensive tagging strategy
 
-## Deployment
-
-```bash
-# Synthesize CloudFormation template
-cdk synth
-
-# Deploy to AWS
-cdk deploy --context environmentSuffix=dev
-
-# Destroy stack
-cdk destroy
-```
-
-## Testing
-
-### Unit Tests (96.8% coverage)
-
-- Resource creation validation
-- Environment suffix handling
-- Resource count verification
-- Resource naming conventions
-
-### Integration Tests
-
-- Stack deployment verification
-- Resource existence checks
-- API endpoint validation
-- Output verification

@@ -10,6 +10,6 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "Sagemaker, Lambda, API Gateway,Step functions, DynamoDB, WAF, CloudWatch, X-Ray, SNS, S3, KMS, IAM",
-  "training_quality": 8
+  "aws_services": "SageMaker, Lambda, API Gateway, Step Functions, DynamoDB, Kinesis, CloudWatch, EventBridge, SNS, S3, KMS, IAM",
+  "training_quality": 9
 }
