@@ -11,5 +11,15 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "[S3 Bucket, CloudFront OAI]"
+  "aws_services": [
+    "S3",
+    "CloudFront"
+  ],
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
 }
