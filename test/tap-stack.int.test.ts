@@ -13,6 +13,7 @@ import fs from 'fs';
 
 describe('TapStack CloudFormation Template Integration Tests', () => {
   let outputs: any;
+  let vpcId: string;
   let ec2Client: EC2Client;
   let s3Client: S3Client;
   let rdsClient: RDSClient;
@@ -27,6 +28,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
 
   beforeAll(async () => {
       outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
+      vpcId = outputs.VPCId;
 
     ec2Client = new EC2Client({ region: process.env.AWS_REGION || 'us-east-1' });
     s3Client = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
@@ -43,13 +45,15 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
 
   describe('VPC and Networking Infrastructure', () => {
     test('VPC should exist and be properly configured', async () => {
+      expect(vpcId).toBeDefined();
+      
       const command = new DescribeVpcsCommand({
-        Filters: [{ Name: 'tag:Name', Values: ['*-vpc'] }]
+        VpcIds: [vpcId]
       });
       const response = await ec2Client.send(command);
 
       expect(response.Vpcs).toBeDefined();
-      expect(response.Vpcs!.length).toBeGreaterThan(0);
+      expect(response.Vpcs!.length).toBe(1);
 
       const vpc = response.Vpcs![0];
       expect(vpc.CidrBlock).toBe('10.0.0.0/16');
@@ -66,6 +70,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
     test('Public subnets should exist and be properly configured', async () => {
       const command = new DescribeSubnetsCommand({
         Filters: [
+          { Name: 'vpc-id', Values: [vpcId] },
           { Name: 'tag:Name', Values: ['*-public-subnet-*'] },
           { Name: 'state', Values: ['available'] }
         ]
@@ -86,6 +91,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
     test('Private subnets should exist and be properly configured', async () => {
       const command = new DescribeSubnetsCommand({
         Filters: [
+          { Name: 'vpc-id', Values: [vpcId] },
           { Name: 'tag:Name', Values: ['*-private-subnet-*'] },
           { Name: 'state', Values: ['available'] }
         ]
@@ -104,14 +110,8 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
     });
 
     test('Internet Gateway should be attached to VPC', async () => {
-      const vpcCommand = new DescribeVpcsCommand({
-        Filters: [{ Name: 'tag:Name', Values: ['*-vpc'] }]
-      });
-      const vpcResponse = await ec2Client.send(vpcCommand);
-      const vpcId = vpcResponse.Vpcs![0].VpcId;
-
       const command = new DescribeVpcsCommand({
-        VpcIds: [vpcId!]
+        VpcIds: [vpcId]
       });
       const response = await ec2Client.send(command);
 
@@ -123,7 +123,10 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
   describe('Security Groups', () => {
     test('Bastion Security Group should exist with correct rules', async () => {
       const command = new DescribeSecurityGroupsCommand({
-        Filters: [{ Name: 'tag:Name', Values: ['*-bastion-sg'] }]
+        Filters: [
+          { Name: 'vpc-id', Values: [vpcId] },
+          { Name: 'tag:Name', Values: ['*-bastion-sg'] }
+        ]
       });
       const response = await ec2Client.send(command);
 
@@ -142,7 +145,10 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
 
     test('Application Security Group should exist with correct rules', async () => {
       const command = new DescribeSecurityGroupsCommand({
-        Filters: [{ Name: 'tag:Name', Values: ['*-app-sg'] }]
+        Filters: [
+          { Name: 'vpc-id', Values: [vpcId] },
+          { Name: 'tag:Name', Values: ['*-app-sg'] }
+        ]
       });
       const response = await ec2Client.send(command);
 
@@ -155,7 +161,10 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
 
     test('ALB Security Group should exist with correct rules', async () => {
       const command = new DescribeSecurityGroupsCommand({
-        Filters: [{ Name: 'tag:Name', Values: ['*-alb-sg'] }]
+        Filters: [
+          { Name: 'vpc-id', Values: [vpcId] },
+          { Name: 'tag:Name', Values: ['*-alb-sg'] }
+        ]
       });
       const response = await ec2Client.send(command);
 
@@ -173,7 +182,10 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
 
     test('RDS Security Group should exist with correct rules', async () => {
       const command = new DescribeSecurityGroupsCommand({
-        Filters: [{ Name: 'tag:Name', Values: ['*-rds-sg'] }]
+        Filters: [
+          { Name: 'vpc-id', Values: [vpcId] },
+          { Name: 'tag:Name', Values: ['*-rds-sg'] }
+        ]
       });
       const response = await ec2Client.send(command);
 
@@ -186,7 +198,10 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
 
     test('Lambda Security Group should exist with correct rules', async () => {
       const command = new DescribeSecurityGroupsCommand({
-        Filters: [{ Name: 'tag:Name', Values: ['*-lambda-sg'] }]
+        Filters: [
+          { Name: 'vpc-id', Values: [vpcId] },
+          { Name: 'tag:Name', Values: ['*-lambda-sg'] }
+        ]
       });
       const response = await ec2Client.send(command);
 
@@ -407,7 +422,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       const listResponse = await wafv2Client.send(listCommand);
       
       const webACL = listResponse.WebACLs?.find(acl => 
-        acl.Name?.includes('tapstack') || acl.Name?.includes('waf')
+        acl.Name?.includes('web-acl')
       );
       
       expect(webACL).toBeDefined();
@@ -809,7 +824,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       const listResponse = await iamClient.send(listCommand);
       
       const ec2Role = listResponse.Roles?.find(role => 
-        role.RoleName?.includes('ec2-role')
+        role.RoleName?.includes('EC2InstanceRole')
       );
       
       if (!ec2Role) {
@@ -836,7 +851,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       const listResponse = await iamClient.send(listCommand);
       
       const lambdaRole = listResponse.Roles?.find(role => 
-        role.RoleName?.includes('LambdaExecutionRole') || role.RoleName?.includes('lambda-execution-role')
+        role.RoleName?.includes('LambdaExecutionRole')
       );
       
       expect(lambdaRole).toBeDefined();
@@ -868,7 +883,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       const listResponse = await iamClient.send(listCommand);
       
       const vpcFlowLogRole = listResponse.Roles?.find(role => 
-        role.RoleName?.includes('vpc-flow-logs-role')
+        role.RoleName?.includes('VPCFlowLogRole')
       );
       
       if (!vpcFlowLogRole) {
@@ -885,7 +900,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       const listResponse = await iamClient.send(listCommand);
       
       const securityHubRole = listResponse.Roles?.find(role => 
-        role.RoleName?.includes('securityhub-lambda-role')
+        role.RoleName?.includes('SecurityHubLambdaRole')
       );
       
       if (!securityHubRole) {
@@ -910,7 +925,10 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
   describe('NAT Gateway and Routing', () => {
     test('NAT Gateways should exist and be available', async () => {
       const command = new DescribeNatGatewaysCommand({
-        Filter: [{ Name: 'tag:Name', Values: ['*-nat-*'] }]
+        Filter: [
+          { Name: 'vpc-id', Values: [vpcId] },
+          { Name: 'state', Values: ['available'] }
+        ]
       });
       const response = await ec2Client.send(command);
 
@@ -928,7 +946,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
 
     test('Route Tables should exist with correct routes', async () => {
       const command = new DescribeRouteTablesCommand({
-        Filters: [{ Name: 'tag:Name', Values: ['*-rt*'] }]
+        Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
       });
       const response = await ec2Client.send(command);
 
@@ -939,12 +957,11 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       const publicRouteTable = response.RouteTables!.find(rt => 
         rt.Tags?.some(tag => tag.Key === 'Name' && tag.Value?.includes('public'))
       );
-      if (publicRouteTable) {
-        expect(publicRouteTable.Routes).toBeDefined();
-        expect(publicRouteTable.Routes!.some(route => 
-          route.DestinationCidrBlock === '0.0.0.0/0' && route.GatewayId?.startsWith('igw-')
-        )).toBe(true);
-      }
+      expect(publicRouteTable).toBeDefined();
+      expect(publicRouteTable!.Routes).toBeDefined();
+      expect(publicRouteTable!.Routes!.some(route => 
+        route.DestinationCidrBlock === '0.0.0.0/0' && route.GatewayId?.startsWith('igw-')
+      )).toBe(true);
 
       // Check for private route tables with NAT gateway routes
       const privateRouteTables = response.RouteTables!.filter(rt => 
@@ -952,20 +969,17 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       );
       privateRouteTables.forEach(rt => {
         expect(rt.Routes).toBeDefined();
-        // Check if there are any routes to NAT gateways (might not exist if NAT gateways failed)
         const hasNatGatewayRoute = rt.Routes!.some(route => 
           route.DestinationCidrBlock === '0.0.0.0/0' && route.NatGatewayId?.startsWith('nat-')
         );
-        // Only assert if NAT gateways are actually configured
-        if (hasNatGatewayRoute) {
-          expect(hasNatGatewayRoute).toBe(true);
-        }
+        expect(hasNatGatewayRoute).toBe(true);
       });
     });
 
     test('Private subnets should route through NAT Gateways', async () => {
       const subnetCommand = new DescribeSubnetsCommand({
         Filters: [
+          { Name: 'vpc-id', Values: [vpcId] },
           { Name: 'tag:Name', Values: ['*-private-subnet-*'] },
           { Name: 'state', Values: ['available'] }
         ]
@@ -973,7 +987,10 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       const subnetResponse = await ec2Client.send(subnetCommand);
 
       const routeTableCommand = new DescribeRouteTablesCommand({
-        Filters: [{ Name: 'tag:Name', Values: ['*-private-rt-*'] }]
+        Filters: [
+          { Name: 'vpc-id', Values: [vpcId] },
+          { Name: 'tag:Name', Values: ['*-private-rt-*'] }
+        ]
       });
       const routeTableResponse = await ec2Client.send(routeTableCommand);
 
@@ -1251,7 +1268,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
         const webACLsResponse = await wafv2Client.send(listWebACLsCommand);
         
         const webACL = webACLsResponse.WebACLs?.find(acl => 
-          acl.Name?.includes('tapstack') || acl.Name?.includes('waf')
+          acl.Name?.includes('web-acl')
         );
         
       expect(webACL).toBeDefined();
@@ -1499,7 +1516,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
         const publicSubnetCommand = new DescribeSubnetsCommand({
           Filters: [
             { Name: 'vpc-id', Values: [vpc.VpcId!] },
-            { Name: 'tag:Name', Values: ['*-public-subnet-*'] }
+            { Name: 'tag:Name', Values: ['*tapstack*-public-subnet-*'] }
           ]
         });
         const publicSubnetResponse = await ec2Client.send(publicSubnetCommand);
@@ -1508,7 +1525,10 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
 
         // 4. Verify NAT Gateways exist in public subnets
         const natGatewayCommand = new DescribeNatGatewaysCommand({
-          Filter: [{ Name: 'tag:Name', Values: ['*-nat-*'] }]
+          Filter: [
+            { Name: 'tag:Name', Values: ['*tapstack*nat*'] },
+            { Name: 'state', Values: ['available'] }
+          ]
         });
         const natGatewayResponse = await ec2Client.send(natGatewayCommand);
         expect(natGatewayResponse.NatGateways).toBeDefined();
@@ -1527,7 +1547,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
         const privateSubnetCommand = new DescribeSubnetsCommand({
           Filters: [
             { Name: 'vpc-id', Values: [vpc.VpcId!] },
-            { Name: 'tag:Name', Values: ['*-private-subnet-*'] }
+            { Name: 'tag:Name', Values: ['*tapstack*-private-subnet-*'] }
           ]
         });
         const privateSubnetResponse = await ec2Client.send(privateSubnetCommand);
@@ -1568,20 +1588,20 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       test('Bastion → Application → RDS Security Group Chain', async () => {
         // 1. Get all security groups
         const sgCommand = new DescribeSecurityGroupsCommand({
-          Filters: [{ Name: 'tag:Name', Values: ['*-sg'] }]
+          Filters: [{ Name: 'tag:Name', Values: ['*tapstack*-sg'] }]
         });
         const sgResponse = await ec2Client.send(sgCommand);
         expect(sgResponse.SecurityGroups).toBeDefined();
 
         // 2. Find specific security groups
         const bastionSG = sgResponse.SecurityGroups!.find(sg => 
-          sg.GroupName?.includes('bastion')
+          sg.Tags?.some(tag => tag.Key === 'Name' && tag.Value?.includes('bastion-sg'))
         );
         const appSG = sgResponse.SecurityGroups!.find(sg => 
-          sg.GroupName?.includes('app')
+          sg.Tags?.some(tag => tag.Key === 'Name' && tag.Value?.includes('app-sg'))
         );
         const rdsSG = sgResponse.SecurityGroups!.find(sg => 
-          sg.GroupName?.includes('rds')
+          sg.Tags?.some(tag => tag.Key === 'Name' && tag.Value?.includes('rds-sg'))
         );
 
         expect(bastionSG).toBeDefined();
@@ -1636,7 +1656,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
 
         // 2. Find EC2 instance role
         const ec2Role = rolesResponse.Roles!.find(role => 
-          role.RoleName?.includes('ec2-role')
+          role.RoleName?.includes('EC2InstanceRole')
         );
         
         expect(ec2Role).toBeDefined();
@@ -1651,10 +1671,10 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
 
         // 4. Find Lambda execution roles
         const lambdaRole = rolesResponse.Roles!.find(role => 
-          role.RoleName?.includes('lambda-execution-role')
+          role.RoleName?.includes('LambdaExecutionRole')
         );
         const securityHubRole = rolesResponse.Roles!.find(role => 
-          role.RoleName?.includes('securityhub-lambda-role')
+          role.RoleName?.includes('SecurityHubLambdaRole')
         );
 
         expect(lambdaRole).toBeDefined();
@@ -1790,7 +1810,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
         const webACLsResponse = await wafv2Client.send(listWebACLsCommand);
         
         const webACL = webACLsResponse.WebACLs?.find(acl => 
-          acl.Name?.includes('tapstack') || acl.Name?.includes('waf')
+          acl.Name?.includes('web-acl')
         );
         
         // 2. Get ALB
