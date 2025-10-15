@@ -1,0 +1,27 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "20253849",
+  "team": "1",
+  "startedAt": "2025-10-11T07:55:56.893Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "S3",
+    "CloudFormation",
+    "Lambda",
+    "EventBridge",
+    "CloudWatch",
+    "VPC",
+    "EC2",
+    "RDS",
+    "CloudFront",
+    "IAM",
+    "Secrets Manager"
+  ]
+}
