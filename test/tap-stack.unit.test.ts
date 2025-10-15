@@ -162,7 +162,7 @@ describe('Elastic Beanstalk Web App - CloudFormation Unit Tests', () => {
   // ================
   test('No hardcoded ARNs, account IDs, or regions', () => {
     const yamlString = fs.readFileSync(templatePath, 'utf8');
-    expect(yamlString).not.toMatch(/\b\d{12}\b/); // AWS Account ID
+    expect(yamlString).not.toMatch(/\b\d{12}\b/); 
     expect(yamlString).not.toMatch(/arn:aws:[a-z0-9-]+:[a-z0-9-]+:\d{12}:/);
     // Allow intrinsic references but avoid literal hardcoded region tokens
     expect(yamlString).not.toMatch(/\b(us-|eu-|ap-|me-|ca-|af-)[a-z0-9-]+\b/);

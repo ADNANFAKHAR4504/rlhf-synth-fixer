@@ -23,7 +23,7 @@ import {
 import { GetCallerIdentityCommand, STSClient } from "@aws-sdk/client-sts";
 import * as fs from "fs";
 import * as path from "path";
-import fetch from "node-fetch"; // required for endpoint reachability test
+import fetch from "node-fetch"; 
 
 // ---------------------------------------------------------------------------
 // LOAD DATA
