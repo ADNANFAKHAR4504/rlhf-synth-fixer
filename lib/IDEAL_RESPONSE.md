@@ -15,6 +15,11 @@ This infrastructure deploys a highly available e-commerce web application with:
 
 ## Infrastructure Code
 
+> **Note:** All resources below are contained in `lib/main.tf`. The comment headers (e.g., `# vpc.tf`, `# security_groups.tf`) are organizational markers within the single file, not separate files. The actual file structure is:
+> - `lib/provider.tf` - Terraform and provider configuration
+> - `lib/variables.tf` - Input variables
+> - `lib/main.tf` - All infrastructure resources
+
 ### provider.tf
 
 ```hcl
@@ -27,6 +32,10 @@ terraform {
     aws = {
       source  = "hashicorp/aws"
       version = ">= 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
     }
   }
 
