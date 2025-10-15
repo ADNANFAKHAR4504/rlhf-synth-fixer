@@ -208,9 +208,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
         bucket.Name?.includes('s3-access-logs')
       );
       
-      if (!accessLogsBucket) {
-        return;
-      }
+      expect(accessLogsBucket).toBeDefined();
       
       const bucketName = accessLogsBucket.Name!;
 
@@ -239,9 +237,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
         bucket.Name?.includes('app-bucket')
       );
       
-      if (!appBucket) {
-        return;
-      }
+      expect(appBucket).toBeDefined();
       
       const bucketName = appBucket.Name!;
 
@@ -270,9 +266,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
         bucket.Name?.includes('cloudtrail')
       );
       
-      if (!cloudtrailBucket) {
-        return;
-      }
+      expect(cloudtrailBucket).toBeDefined();
       
       const bucketName = cloudtrailBucket.Name!;
 
@@ -416,11 +410,8 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
         acl.Name?.includes('tapstack') || acl.Name?.includes('waf')
       );
       
-      if (!webACL) {
-        return;
-      }
-      
-      expect(webACL.Name).toBeDefined();
+      expect(webACL).toBeDefined();
+      expect(webACL!.Name).toBeDefined();
       expect(webACL.Id).toBeDefined();
       
       // Get detailed information about the Web ACL
@@ -848,11 +839,8 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
         role.RoleName?.includes('LambdaExecutionRole') || role.RoleName?.includes('lambda-execution-role')
       );
       
-      if (!lambdaRole) {
-        return;
-      }
-      
-      expect(lambdaRole.RoleName).toBeDefined();
+      expect(lambdaRole).toBeDefined();
+      expect(lambdaRole!.RoleName).toBeDefined();
       expect(lambdaRole.AssumeRolePolicyDocument).toBeDefined();
       
       // Check attached managed policies
@@ -953,13 +941,9 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       );
       if (publicRouteTable) {
         expect(publicRouteTable.Routes).toBeDefined();
-        // Check if there's an IGW route (might not exist if IGW attachment failed)
-        const hasIgwRoute = publicRouteTable.Routes!.some(route => 
+        expect(publicRouteTable.Routes!.some(route => 
           route.DestinationCidrBlock === '0.0.0.0/0' && route.GatewayId?.startsWith('igw-')
-        );
-        if (hasIgwRoute) {
-          expect(hasIgwRoute).toBe(true);
-        }
+        )).toBe(true);
       }
 
       // Check for private route tables with NAT gateway routes
@@ -1004,16 +988,12 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
           rt.Associations?.some(assoc => assoc.SubnetId === subnet.SubnetId)
         );
         
-        if (associatedRouteTable) {
-          // Check if there are any routes to NAT gateways (might not exist if NAT gateways failed)
-          const hasNatGatewayRoute = associatedRouteTable.Routes!.some(route => 
-            route.DestinationCidrBlock === '0.0.0.0/0' && route.NatGatewayId?.startsWith('nat-')
-          );
-          // Only assert if NAT gateways are actually configured
-          if (hasNatGatewayRoute) {
-            expect(hasNatGatewayRoute).toBe(true);
-          }
-        }
+        expect(associatedRouteTable).toBeDefined();
+        // Check if there are any routes to NAT gateways
+        const hasNatGatewayRoute = associatedRouteTable!.Routes!.some(route => 
+          route.DestinationCidrBlock === '0.0.0.0/0' && route.NatGatewayId?.startsWith('nat-')
+        );
+        expect(hasNatGatewayRoute).toBe(true);
       });
     });
   });
@@ -1037,9 +1017,13 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       });
       const rdsSGResponse = await ec2Client.send(rdsSGCommand);
 
-      if (lambdaSGResponse.SecurityGroups && rdsSGResponse.SecurityGroups) {
-        const lambdaSG = lambdaSGResponse.SecurityGroups[0];
-        const rdsSG = rdsSGResponse.SecurityGroups[0];
+        expect(lambdaSGResponse.SecurityGroups).toBeDefined();
+        expect(lambdaSGResponse.SecurityGroups!.length).toBeGreaterThan(0);
+        expect(rdsSGResponse.SecurityGroups).toBeDefined();
+        expect(rdsSGResponse.SecurityGroups!.length).toBeGreaterThan(0);
+
+        const lambdaSG = lambdaSGResponse.SecurityGroups![0];
+        const rdsSG = rdsSGResponse.SecurityGroups![0];
 
         // Check RDS security group allows Lambda access
         expect(rdsSG.IpPermissions).toBeDefined();
@@ -1048,7 +1032,6 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
           (rule.FromPort === 3306 || rule.FromPort === 5432) &&
           rule.UserIdGroupPairs?.some(pair => pair.GroupId === lambdaSG.GroupId)
         )).toBe(true);
-      }
     });
 
     test('App instances should be able to access RDS through security groups', async () => {
@@ -1095,18 +1078,21 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       });
       const appSGResponse = await ec2Client.send(appSGCommand);
 
-      if (albSGResponse.SecurityGroups && appSGResponse.SecurityGroups) {
-        const albSG = albSGResponse.SecurityGroups[0];
-        const appSG = appSGResponse.SecurityGroups[0];
+      expect(albSGResponse.SecurityGroups).toBeDefined();
+      expect(albSGResponse.SecurityGroups!.length).toBeGreaterThan(0);
+      expect(appSGResponse.SecurityGroups).toBeDefined();
+      expect(appSGResponse.SecurityGroups!.length).toBeGreaterThan(0);
 
-        // Check App security group allows ALB access
-        expect(appSG.IpPermissions).toBeDefined();
-        expect(appSG.IpPermissions!.some(rule =>
-          rule.IpProtocol === 'tcp' &&
-          rule.FromPort === 80 &&
-          rule.UserIdGroupPairs?.some(pair => pair.GroupId === albSG.GroupId)
-        )).toBe(true);
-      }
+      const albSG = albSGResponse.SecurityGroups![0];
+      const appSG = appSGResponse.SecurityGroups![0];
+
+      // Check App security group allows ALB access
+      expect(appSG.IpPermissions).toBeDefined();
+      expect(appSG.IpPermissions!.some(rule =>
+        rule.IpProtocol === 'tcp' &&
+        rule.FromPort === 80 &&
+        rule.UserIdGroupPairs?.some(pair => pair.GroupId === albSG.GroupId)
+      )).toBe(true);
     });
 
     test('Bastion should be able to reach app instances through security groups', async () => {
@@ -1122,18 +1108,21 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       });
       const appSGResponse = await ec2Client.send(appSGCommand);
 
-      if (bastionSGResponse.SecurityGroups && appSGResponse.SecurityGroups) {
-        const bastionSG = bastionSGResponse.SecurityGroups[0];
-        const appSG = appSGResponse.SecurityGroups[0];
+      expect(bastionSGResponse.SecurityGroups).toBeDefined();
+      expect(bastionSGResponse.SecurityGroups!.length).toBeGreaterThan(0);
+      expect(appSGResponse.SecurityGroups).toBeDefined();
+      expect(appSGResponse.SecurityGroups!.length).toBeGreaterThan(0);
 
-        // Check App security group allows Bastion SSH access
-        expect(appSG.IpPermissions).toBeDefined();
-        expect(appSG.IpPermissions!.some(rule =>
-          rule.IpProtocol === 'tcp' &&
-          rule.FromPort === 22 &&
-          rule.UserIdGroupPairs?.some(pair => pair.GroupId === bastionSG.GroupId)
-        )).toBe(true);
-      }
+      const bastionSG = bastionSGResponse.SecurityGroups![0];
+      const appSG = appSGResponse.SecurityGroups![0];
+
+      // Check App security group allows Bastion SSH access
+      expect(appSG.IpPermissions).toBeDefined();
+      expect(appSG.IpPermissions!.some(rule =>
+        rule.IpProtocol === 'tcp' &&
+        rule.FromPort === 22 &&
+        rule.UserIdGroupPairs?.some(pair => pair.GroupId === bastionSG.GroupId)
+      )).toBe(true);
     });
 
     test('Lambda should have VPC configuration for private resource access', async () => {
@@ -1265,9 +1254,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
           acl.Name?.includes('tapstack') || acl.Name?.includes('waf')
         );
         
-        if (!webACL) {
-          return;
-        }
+      expect(webACL).toBeDefined();
 
         // 2. Get detailed WAF configuration
         const getWebACLCommand = new GetWebACLCommand({
@@ -1296,9 +1283,8 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
           lb.LoadBalancerName?.includes('tapstack') || lb.LoadBalancerName?.includes('alb')
         );
         
-        if (alb) {
-          expect(alb.LoadBalancerArn).toBeDefined();
-        }
+        expect(alb).toBeDefined();
+        expect(alb!.LoadBalancerArn).toBeDefined();
       });
 
       test('Internal isolation: Bastion to RDS direct connection should fail', async () => {
@@ -1470,12 +1456,11 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
         expect(trail!.IsMultiRegionTrail).toBe(true);
 
         // 5. Verify CloudTrail S3 bucket exists for log delivery
-        if (trail && (trail as any).S3BucketName) {
-          const cloudTrailBucket = bucketsResponse.Buckets?.find(bucket => 
-            bucket.Name === (trail as any).S3BucketName
-          );
-          expect(cloudTrailBucket).toBeDefined();
-        }
+        expect((trail as any).S3BucketName).toBeDefined();
+        const cloudTrailBucket = bucketsResponse.Buckets?.find(bucket => 
+          bucket.Name === (trail as any).S3BucketName
+        );
+        expect(cloudTrailBucket).toBeDefined();
 
         // 6. Verify VPC Flow Logs are configured
         const logGroupsCommand = new DescribeLogGroupsCommand({
@@ -1560,12 +1545,11 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
         const publicRouteTable = routeTableResponse.RouteTables!.find(rt => 
           rt.Tags?.some(tag => tag.Key === 'Name' && tag.Value?.includes('public'))
         );
-        if (publicRouteTable) {
-          const hasIgwRoute = publicRouteTable.Routes!.some(route => 
-            route.DestinationCidrBlock === '0.0.0.0/0' && route.GatewayId?.startsWith('igw-')
-          );
-          expect(hasIgwRoute).toBe(true);
-        }
+        expect(publicRouteTable).toBeDefined();
+        const hasIgwRoute = publicRouteTable!.Routes!.some(route => 
+          route.DestinationCidrBlock === '0.0.0.0/0' && route.GatewayId?.startsWith('igw-')
+        );
+        expect(hasIgwRoute).toBe(true);
 
         // Verify private route tables have NAT gateway routes
         const privateRouteTables = routeTableResponse.RouteTables!.filter(rt => 
@@ -1575,9 +1559,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
           const hasNatRoute = rt.Routes!.some(route => 
             route.DestinationCidrBlock === '0.0.0.0/0' && route.NatGatewayId?.startsWith('nat-')
           );
-          if (hasNatRoute) {
-            expect(hasNatRoute).toBe(true);
-          }
+          expect(hasNatRoute).toBe(true);
         });
       });
     });
@@ -1602,9 +1584,9 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
           sg.GroupName?.includes('rds')
         );
 
-        if (!bastionSG || !appSG || !rdsSG) {
-          return;
-        }
+        expect(bastionSG).toBeDefined();
+        expect(appSG).toBeDefined();
+        expect(rdsSG).toBeDefined();
 
         // 3. Verify Bastion can access Application (SSH)
         const bastionToAppRule = appSG.IpPermissions?.find(rule =>
@@ -1657,9 +1639,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
           role.RoleName?.includes('ec2-role')
         );
         
-        if (!ec2Role) {
-          return;
-        }
+        expect(ec2Role).toBeDefined();
 
         // 3. Verify EC2 role has correct assume role policy
         const ec2RoleCommand = new GetRoleCommand({
@@ -1767,9 +1747,8 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
           bucket.Name?.includes('app-bucket')
         );
         
-        if (!accessLogsBucket || !appBucket) {
-          return;
-        }
+        expect(accessLogsBucket).toBeDefined();
+        expect(appBucket).toBeDefined();
 
         // 4. Verify application bucket has logging configuration
 
@@ -1822,9 +1801,8 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
           lb.LoadBalancerName?.includes('tapstack') || lb.LoadBalancerName?.includes('alb')
         );
         
-        if (!webACL || !alb) {
-          return;
-        }
+        expect(webACL).toBeDefined();
+        expect(alb).toBeDefined();
 
         // 3. Verify ALB has WAF association
 
