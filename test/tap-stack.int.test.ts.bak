@@ -54,7 +54,7 @@ const hasMockData = (
   testConfig.sourceBucket.includes('123456789') ||
   testConfig.thumbnailBucket.includes('123456789') ||
   testConfig.lambdaFunction.includes('123456789') ||
-  !outputs[`${stackName}-ProcessorFunctionArn`] ||
+  !outputs[`${stackName}-ProcessorFunctionArn`] || 
   outputs[`${stackName}-ProcessorFunctionArn`]?.includes('123456789012')
 );
 
@@ -75,11 +75,6 @@ describe('S3-triggered Lambda Image Processing Integration Tests', () => {
   });
 
   afterEach(async () => {
-    // Skip cleanup if no real infrastructure is deployed
-    if (skipTests) {
-      return;
-    }
-
     // Cleanup test objects from S3
     try {
       await s3Client.send(new DeleteObjectCommand({
@@ -119,11 +114,6 @@ describe('S3-triggered Lambda Image Processing Integration Tests', () => {
         return;
       }
 
-      if (skipTests) {
-        console.log('⚠️ Skipping test - no real deployment detected');
-        return;
-      }
-
       const command = new ListObjectsV2Command({
         Bucket: testConfig.sourceBucket,
         MaxKeys: 1,
@@ -133,11 +123,6 @@ describe('S3-triggered Lambda Image Processing Integration Tests', () => {
     });
 
     test('should verify S3 thumbnail bucket exists and is accessible', async () => {
-      if (skipTests) {
-        console.log('⚠️ Skipping test - no real deployment detected');
-        return;
-      }
-
       const command = new ListObjectsV2Command({
         Bucket: testConfig.thumbnailBucket,
         MaxKeys: 1,
@@ -147,11 +132,6 @@ describe('S3-triggered Lambda Image Processing Integration Tests', () => {
     });
 
     test('should verify DynamoDB table exists and is accessible', async () => {
-      if (skipTests) {
-        console.log('⚠️ Skipping test - no real deployment detected');
-        return;
-      }
-
       const command = new ScanCommand({
         TableName: testConfig.metadataTable,
         Limit: 1,
@@ -161,11 +141,6 @@ describe('S3-triggered Lambda Image Processing Integration Tests', () => {
     });
 
     test('should verify Lambda function exists and is accessible', async () => {
-      if (skipTests) {
-        console.log('⚠️ Skipping test - no real deployment detected');
-        return;
-      }
-
       const command = new GetFunctionCommand({
         FunctionName: testConfig.lambdaFunction,
       });
@@ -179,11 +154,6 @@ describe('S3-triggered Lambda Image Processing Integration Tests', () => {
 
   describe('End-to-End Image Processing Workflow', () => {
     test('should process image upload and create thumbnail', async () => {
-      if (skipTests) {
-        console.log('⚠️ Skipping test - no real deployment detected');
-        return;
-      }
-
       // Upload test image to source bucket
       const putCommand = new PutObjectCommand({
         Bucket: testConfig.sourceBucket,
@@ -225,11 +195,6 @@ describe('S3-triggered Lambda Image Processing Integration Tests', () => {
     }, 30000);
 
     test('should store metadata in DynamoDB', async () => {
-      if (skipTests) {
-        console.log('⚠️ Skipping test - no real deployment detected');
-        return;
-      }
-
       // Upload test image
       const putCommand = new PutObjectCommand({
         Bucket: testConfig.sourceBucket,
@@ -269,11 +234,6 @@ describe('S3-triggered Lambda Image Processing Integration Tests', () => {
     }, 30000);
 
     test('should handle multiple image formats', async () => {
-      if (skipTests) {
-        console.log('⚠️ Skipping test - no real deployment detected');
-        return;
-      }
-
       const imageFormats = [
         { key: `test-image-${Date.now()}.jpg`, contentType: 'image/jpeg' },
         { key: `test-image-${Date.now()}.jpeg`, contentType: 'image/jpeg' },
@@ -321,11 +281,6 @@ describe('S3-triggered Lambda Image Processing Integration Tests', () => {
 
   describe('Error Handling and Resilience', () => {
     test('should handle invalid image files gracefully', async () => {
-      if (skipTests) {
-        console.log('⚠️ Skipping test - no real deployment detected');
-        return;
-      }
-
       const invalidImageKey = `invalid-image-${Date.now()}.jpg`;
       const invalidContent = Buffer.from('this-is-not-an-image');
 
@@ -368,11 +323,6 @@ describe('S3-triggered Lambda Image Processing Integration Tests', () => {
     }, 30000);
 
     test('should handle large file processing within timeout limits', async () => {
-      if (skipTests) {
-        console.log('⚠️ Skipping test - no real deployment detected');
-        return;
-      }
-
       const largeImageKey = `large-image-${Date.now()}.jpg`;
       const largeContent = Buffer.alloc(1024 * 1024); // 1MB fake content
 
@@ -415,11 +365,6 @@ describe('S3-triggered Lambda Image Processing Integration Tests', () => {
 
   describe('Performance and Scalability', () => {
     test('should handle concurrent image uploads', async () => {
-      if (skipTests) {
-        console.log('⚠️ Skipping test - no real deployment detected');
-        return;
-      }
-
       const concurrentUploads = 5;
       const uploadPromises: Promise<any>[] = [];
 
@@ -476,11 +421,6 @@ describe('S3-triggered Lambda Image Processing Integration Tests', () => {
 
   describe('Monitoring and Observability', () => {
     test('should send custom CloudWatch metrics', async () => {
-      if (skipTests) {
-        console.log('⚠️ Skipping test - no real deployment detected');
-        return;
-      }
-
       // Upload test image to trigger metrics
       const metricsTestKey = `metrics-test-${Date.now()}.jpg`;
       const putCommand = new PutObjectCommand({
@@ -535,11 +475,6 @@ describe('S3-triggered Lambda Image Processing Integration Tests', () => {
 
   describe('Data Consistency and Integrity', () => {
     test('should maintain data consistency between S3 and DynamoDB', async () => {
-      if (skipTests) {
-        console.log('⚠️ Skipping test - no real deployment detected');
-        return;
-      }
-
       const consistencyTestKey = `consistency-test-${Date.now()}.jpg`;
       const uniqueContent = Buffer.from(`unique-content-${Date.now()}`);
 
@@ -601,11 +536,6 @@ describe('S3-triggered Lambda Image Processing Integration Tests', () => {
     }, 30000);
 
     test('should handle timestamp indexing correctly', async () => {
-      if (skipTests) {
-        console.log('⚠️ Skipping test - no real deployment detected');
-        return;
-      }
-
       const timestampTestKey = `timestamp-test-${Date.now()}.jpg`;
 
       // Upload image
@@ -670,11 +600,6 @@ describe('S3-triggered Lambda Image Processing Integration Tests', () => {
 
   describe('Security and Access Control', () => {
     test('should prevent unauthorized access to buckets', async () => {
-      if (skipTests) {
-        console.log('⚠️ Skipping test - no real deployment detected');
-        return;
-      }
-
       // This test verifies that buckets have proper access controls
       // We can't easily test this without additional AWS credentials
       // But we can verify the bucket configuration doesn't allow public access
