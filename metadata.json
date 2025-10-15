@@ -8,6 +8,7 @@
   "startedAt": "2025-10-15T09:58:11.807Z",
   "subtask": "Provisioning of Infrastructure Environments",
   "training_quality": 8,
+  "background": "Set up scalable web application infrastructure with secure access, basic monitoring, and streamlined deployment.",
   "subject_labels": [
     "Web Application Deployment"
   ],
