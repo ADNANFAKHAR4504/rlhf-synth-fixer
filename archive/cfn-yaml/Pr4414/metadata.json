@@ -10,12 +10,11 @@
   "subject_labels": [
     "Web Application Deployment"
   ],
-  "background": "Real-time enterprise log analytics system for 500 servers with secure storage, ETL processing, and dashboard visualization",
   "aws_services": [
     "Kinesis Firehose",
     "S3",
     "Glue",
-    "Athena", 
+    "Athena",
     "Lambda",
     "QuickSight",
     "CloudWatch",
@@ -24,5 +23,11 @@
     "SNS",
     "SSM"
   ],
-  "training_quality": 9
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
 }
