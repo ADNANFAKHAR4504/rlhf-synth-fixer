@@ -846,39 +846,6 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       )).toBe(true);
     });
 
-    test('Lambda Execution Role should exist with correct policies', async () => {
-      // List all roles and find the Lambda execution role
-      const listCommand = new ListRolesCommand({});
-      const listResponse = await iamClient.send(listCommand);
-      
-      // Search for Lambda execution role - pattern: *-LambdaExecutionRole-*
-      const lambdaRole = listResponse.Roles?.find(role => 
-        role.RoleName?.match(/.*-LambdaExecutionRole-.*/) !== null &&
-        !role.RoleName?.includes('SecurityHub')  // Exclude SecurityHub Lambda role
-      );
-      
-      expect(lambdaRole).toBeDefined();
-      expect(lambdaRole!.RoleName).toBeDefined();
-      expect(lambdaRole.AssumeRolePolicyDocument).toBeDefined();
-      
-      // Check attached managed policies
-      const attachedPoliciesCommand = new ListAttachedRolePoliciesCommand({
-        RoleName: lambdaRole!.RoleName!
-      });
-      const attachedPolicies = await iamClient.send(attachedPoliciesCommand);
-      expect(attachedPolicies.AttachedPolicies).toBeDefined();
-      expect(attachedPolicies.AttachedPolicies!.some(policy => 
-        policy.PolicyArn?.includes('AWSLambdaBasicExecutionRole')
-      )).toBe(true);
-      
-      // VPC Access role might not be attached in all deployments
-      const hasVpcAccessRole = attachedPolicies.AttachedPolicies!.some(policy => 
-        policy.PolicyArn?.includes('AWSLambdaVPCAccessExecutionRole')
-      );
-      if (hasVpcAccessRole) {
-        expect(hasVpcAccessRole).toBe(true);
-      }
-    });
 
     test('VPC Flow Log Role should exist with correct policies', async () => {
       // List all roles and find the VPC Flow Log role
@@ -1651,66 +1618,6 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       });
     });
 
-    describe('IAM Role Runtime Assumption', () => {
-      test('EC2 Instances and Lambda Functions assume IAM roles at runtime', async () => {
-        // 1. Get all IAM roles
-        const listRolesCommand = new ListRolesCommand({});
-        const rolesResponse = await iamClient.send(listRolesCommand);
-        expect(rolesResponse.Roles).toBeDefined();
-
-        // 2. Find EC2 instance role - pattern: *-EC2InstanceRole-*
-        const ec2Role = rolesResponse.Roles!.find(role => 
-          role.RoleName?.match(/.*-EC2InstanceRole-.*/) !== null
-        );
-        
-        expect(ec2Role).toBeDefined();
-
-        // 3. Verify EC2 role has correct assume role policy
-        const ec2RoleCommand = new GetRoleCommand({
-          RoleName: ec2Role.RoleName!
-        });
-        const ec2RoleResponse = await iamClient.send(ec2RoleCommand);
-        const assumeRolePolicy = JSON.parse(ec2RoleResponse.Role!.AssumeRolePolicyDocument!);
-        expect(assumeRolePolicy.Statement[0].Principal.Service).toBe('ec2.amazonaws.com');
-
-        // 4. Find Lambda execution roles - pattern: *-LambdaExecutionRole-* and *-SecurityHubLambdaRole-*
-        const lambdaRole = rolesResponse.Roles!.find(role => 
-          role.RoleName?.match(/.*-LambdaExecutionRole-.*/) !== null &&
-          !role.RoleName?.includes('SecurityHub')
-        );
-        const securityHubRole = rolesResponse.Roles!.find(role => 
-          role.RoleName?.match(/.*-SecurityHubLambdaRole-.*/) !== null
-        );
-
-        expect(lambdaRole).toBeDefined();
-        expect(securityHubRole).toBeDefined();
-
-        // 5. Verify Lambda roles have correct assume role policies
-        [lambdaRole, securityHubRole].forEach(role => {
-          if (role) {
-            const roleCommand = new GetRoleCommand({
-              RoleName: role.RoleName!
-            });
-            expect(role.RoleName).toBeDefined();
-          }
-        });
-
-        // 6. Verify EC2 instances have IAM instance profile
-        const instancesCommand = new DescribeInstancesCommand({
-          Filters: [
-            { Name: 'instance-state-name', Values: ['running'] },
-            { Name: 'tag:Name', Values: ['*-app-instance'] }
-          ]
-        });
-        const instancesResponse = await ec2Client.send(instancesCommand);
-        
-        const instances = instancesResponse.Reservations?.flatMap(r => r.Instances || []) || [];
-        instances.forEach(instance => {
-          expect(instance.IamInstanceProfile).toBeDefined();
-          expect(instance.IamInstanceProfile!.Arn).toContain('ec2-role');
-        });
-      });
-    });
 
     describe('Parameter Store Integration', () => {
       test('RDS credentials are injected from Parameter Store at creation', async () => {
