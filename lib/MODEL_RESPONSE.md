@@ -1,66 +1,91 @@
 Model response
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Production-ready CI/CD Pipeline for Web Application Deployment with automated build, test, and deploy stages'
+Description: 'CI/CD Pipeline for Web Application Deployment using CodePipeline, CodeBuild, and CodeDeploy'
 
 Parameters:
-  ProjectName:
-    Type: String
-    Default: 'WebApp'
-    Description: 'Name of the project for resource naming and tagging'
-    
-  NotificationEmail:
-    Type: String
-    Description: 'Email address for pipeline notifications'
-    AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    ConstraintDescription: 'Must be a valid email address'
-    
-  EC2InstanceType:
-    Type: String
-    Default: 't3.micro'
-    Description: 'EC2 instance type for deployment targets'
-    AllowedValues:
-      - t3.micro
-      - t3.small
-      - t3.medium
-      - t3.large
-      - t3.xlarge
-      
+  # Environment Parameters
   DevEnvironmentName:
     Type: String
     Default: 'Development'
-    Description: 'Name of the development environment'
-    
+    Description: 'Name of the Development environment'
+  
   ProdEnvironmentName:
     Type: String
     Default: 'Production'
-    Description: 'Name of the production environment'
-    
+    Description: 'Name of the Production environment'
+  
+  # Infrastructure Parameters
+  DevInstanceType:
+    Type: String
+    Default: 't2.micro'
+    AllowedValues:
+      - 't2.micro'
+      - 't2.small'
+      - 't2.medium'
+      - 't3.micro'
+      - 't3.small'
+    Description: 'EC2 instance type for Development environment'
+  
+  ProdInstanceType:
+    Type: String
+    Default: 't2.small'
+    AllowedValues:
+      - 't2.small'
+      - 't2.medium'
+      - 't3.small'
+      - 't3.medium'
+      - 'm5.large'
+    Description: 'EC2 instance type for Production environment'
+  
+  # Notification Parameters
+  NotificationEmail:
+    Type: String
+    Description: 'Email address to receive pipeline notifications'
+    Default: 'admin@example.com'
+  
+  # Storage Parameters
   ArtifactBucketName:
     Type: String
-    Default: ''
-    Description: 'S3 bucket name for artifacts (leave empty for auto-generation)'
-    
-  CodeBuildComputeType:
+    Description: 'Name of the S3 bucket to store pipeline artifacts'
+    Default: 'webapp-pipeline-artifacts'
+  
+  # AWS Region Parameter
+  AWSRegion:
     Type: String
-    Default: 'BUILD_GENERAL1_SMALL'
-    Description: 'CodeBuild compute type'
+    Default: 'us-east-1'
     AllowedValues:
-      - BUILD_GENERAL1_SMALL
-      - BUILD_GENERAL1_MEDIUM
-      - BUILD_GENERAL1_LARGE
-
-Conditions:
-  CreateBucket: !Equals [!Ref ArtifactBucketName, '']
+      - 'us-east-1'
+      - 'us-east-2'
+      - 'us-west-1'
+      - 'us-west-2'
+      - 'eu-west-1'
+      - 'eu-central-1'
+      - 'ap-northeast-1'
+      - 'ap-southeast-1'
+      - 'ap-southeast-2'
+    Description: 'AWS Region for the CI/CD pipeline'
+  
+  # Application Parameters
+  ApplicationName:
+    Type: String
+    Default: 'WebApp'
+    Description: 'Name of the application to be deployed'
+  
+  RepositoryName:
+    Type: String
+    Default: 'WebAppRepo'
+    Description: 'Name of the CodeCommit repository'
 
 Resources:
-  # ==================== IAM Roles and Policies ====================
+  #---------------------------------------------------------------------------
+  # IAM Roles and Policies
+  #---------------------------------------------------------------------------
   
-  # IAM Role for CodePipeline
+  # CodePipeline Service Role
   CodePipelineServiceRole:
-    Type: AWS::IAM::Role
+    Type: 'AWS::IAM::Role'
     Properties:
-      RoleName: !Sub '${ProjectName}-CodePipeline-Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -68,22 +93,20 @@ Resources:
             Principal:
               Service: codepipeline.amazonaws.com
             Action: 'sts:AssumeRole'
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AWSCodePipelineFullAccess
       Policies:
-        - PolicyName: CodePipelineServicePolicy
+        - PolicyName: CodePipelineAccess
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
                   - 's3:GetObject'
-                  - 's3:PutObject'
-                  - 's3:GetBucketLocation'
+                  - 's3:GetObjectVersion'
                   - 's3:GetBucketVersioning'
+                  - 's3:PutObject'
                 Resource:
-                  - !Sub '${ArtifactsBucket.Arn}'
-                  - !Sub '${ArtifactsBucket.Arn}/*'
+                  - !Sub 'arn:aws:s3:::${ArtifactBucketName}'
+                  - !Sub 'arn:aws:s3:::${ArtifactBucketName}/*'
               - Effect: Allow
                 Action:
                   - 'codecommit:GetBranch'
@@ -91,38 +114,40 @@ Resources:
                   - 'codecommit:UploadArchive'
                   - 'codecommit:GetUploadArchiveStatus'
                   - 'codecommit:CancelUploadArchive'
-                Resource: !GetAtt CodeCommitRepository.Arn
+                Resource: !GetAtt CodeCommitRepo.Arn
               - Effect: Allow
                 Action:
                   - 'codebuild:BatchGetBuilds'
                   - 'codebuild:StartBuild'
-                Resource: !GetAtt CodeBuildProject.Arn
+                Resource: 
+                  - !GetAtt BuildProject.Arn
+                  - !GetAtt TestProject.Arn
               - Effect: Allow
                 Action:
                   - 'codedeploy:CreateDeployment'
-                  - 'codedeploy:GetApplication'
                   - 'codedeploy:GetApplicationRevision'
                   - 'codedeploy:GetDeployment'
                   - 'codedeploy:GetDeploymentConfig'
                   - 'codedeploy:RegisterApplicationRevision'
-                Resource: '*'
+                Resource: 
+                  - !Sub 'arn:aws:codedeploy:${AWS::Region}:${AWS::AccountId}:application:${ApplicationName}'
+                  - !Sub 'arn:aws:codedeploy:${AWS::Region}:${AWS::AccountId}:deploymentgroup:${ApplicationName}/${ApplicationName}-${DevEnvironmentName}'
+                  - !Sub 'arn:aws:codedeploy:${AWS::Region}:${AWS::AccountId}:deploymentgroup:${ApplicationName}/${ApplicationName}-${ProdEnvironmentName}'
+                  - !Sub 'arn:aws:codedeploy:${AWS::Region}:${AWS::AccountId}:deploymentconfig:*'
               - Effect: Allow
                 Action:
                   - 'sns:Publish'
-                Resource: !Ref SNSTopic
+                Resource: !Ref PipelineNotificationTopic
       Tags:
         - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: 'Shared'
+          Value: !Ref ApplicationName
         - Key: ManagedBy
-          Value: 'CloudFormation'
-
-  # IAM Role for CodeBuild
+          Value: CloudFormation
+  
+  # CodeBuild Service Role
   CodeBuildServiceRole:
-    Type: AWS::IAM::Role
+    Type: 'AWS::IAM::Role'
     Properties:
-      RoleName: !Sub '${ProjectName}-CodeBuild-Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -131,7 +156,7 @@ Resources:
               Service: codebuild.amazonaws.com
             Action: 'sts:AssumeRole'
       Policies:
-        - PolicyName: CodeBuildServicePolicy
+        - PolicyName: CodeBuildAccess
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -140,32 +165,30 @@ Resources:
                   - 'logs:CreateLogGroup'
                   - 'logs:CreateLogStream'
                   - 'logs:PutLogEvents'
-                Resource:
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ProjectName}-*'
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ProjectName}-*:*'
+                Resource: 
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/*'
               - Effect: Allow
                 Action:
                   - 's3:GetObject'
+                  - 's3:GetObjectVersion'
                   - 's3:PutObject'
                 Resource:
-                  - !Sub '${ArtifactsBucket.Arn}/*'
+                  - !Sub 'arn:aws:s3:::${ArtifactBucketName}'
+                  - !Sub 'arn:aws:s3:::${ArtifactBucketName}/*'
               - Effect: Allow
                 Action:
                   - 'codecommit:GitPull'
-                Resource: !GetAtt CodeCommitRepository.Arn
+                Resource: !GetAtt CodeCommitRepo.Arn
       Tags:
         - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: 'Shared'
+          Value: !Ref ApplicationName
         - Key: ManagedBy
-          Value: 'CloudFormation'
-
-  # IAM Role for CodeDeploy
+          Value: CloudFormation
+  
+  # CodeDeploy Service Role
   CodeDeployServiceRole:
-    Type: AWS::IAM::Role
+    Type: 'AWS::IAM::Role'
     Properties:
-      RoleName: !Sub '${ProjectName}-CodeDeploy-Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -174,40 +197,17 @@ Resources:
               Service: codedeploy.amazonaws.com
             Action: 'sts:AssumeRole'
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AWSCodeDeployRole
-      Policies:
-        - PolicyName: CodeDeployServicePolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 'ec2:CreateTags'
-                  - 'ec2:DescribeInstances'
-                Resource: '*'
-              - Effect: Allow
-                Action:
-                  - 'sns:Publish'
-                Resource: !Ref SNSTopic
-              - Effect: Allow
-                Action:
-                  - 'cloudwatch:PutMetricAlarm'
-                  - 'cloudwatch:DescribeAlarms'
-                  - 'cloudwatch:DeleteAlarms'
-                Resource: '*'
+        - 'arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole'
       Tags:
         - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: 'Shared'
+          Value: !Ref ApplicationName
         - Key: ManagedBy
-          Value: 'CloudFormation'
-
-  # IAM Role for EC2 Instances
+          Value: CloudFormation
+  
+  # EC2 Instance Role for CodeDeploy
   EC2InstanceRole:
-    Type: AWS::IAM::Role
+    Type: 'AWS::IAM::Role'
     Properties:
-      RoleName: !Sub '${ProjectName}-EC2-Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -216,9 +216,9 @@ Resources:
               Service: ec2.amazonaws.com
             Action: 'sts:AssumeRole'
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - 'arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess'
       Policies:
-        - PolicyName: EC2InstancePolicy
+        - PolicyName: CodeDeployEC2Access
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -227,202 +227,254 @@ Resources:
                   - 's3:GetObject'
                   - 's3:ListBucket'
                 Resource:
-                  - !Sub '${ArtifactsBucket.Arn}'
-                  - !Sub '${ArtifactsBucket.Arn}/*'
+                  - !Sub 'arn:aws:s3:::${ArtifactBucketName}'
+                  - !Sub 'arn:aws:s3:::${ArtifactBucketName}/*'
                   - !Sub 'arn:aws:s3:::aws-codedeploy-${AWS::Region}/*'
-              - Effect: Allow
-                Action:
-                  - 'logs:CreateLogGroup'
-                  - 'logs:CreateLogStream'
-                  - 'logs:PutLogEvents'
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
       Tags:
         - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: 'Shared'
+          Value: !Ref ApplicationName
         - Key: ManagedBy
-          Value: 'CloudFormation'
-
+          Value: CloudFormation
+  
+  # EC2 Instance Profile
   EC2InstanceProfile:
-    Type: AWS::IAM::InstanceProfile
+    Type: 'AWS::IAM::InstanceProfile'
     Properties:
-      InstanceProfileName: !Sub '${ProjectName}-EC2-Profile'
       Roles:
         - !Ref EC2InstanceRole
 
-  # ==================== S3 Bucket for Artifacts ====================
+  #---------------------------------------------------------------------------
+  # S3 Bucket for Pipeline Artifacts
+  #---------------------------------------------------------------------------
   
-  ArtifactsBucket:
-    Type: AWS::S3::Bucket
+  ArtifactBucket:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
     Properties:
-      BucketName: !If
-        - CreateBucket
-        - !Sub '${ProjectName}-artifacts-${AWS::AccountId}-${AWS::Region}'
-        - !Ref ArtifactBucketName
+      BucketName: !Ref ArtifactBucketName
+      VersioningConfiguration:
+        Status: Enabled
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
-      VersioningConfiguration:
-        Status: Enabled
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldArtifacts
-            Status: Enabled
-            ExpirationInDays: 30
-            NoncurrentVersionExpirationInDays: 7
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldArtifacts
+            Status: Enabled
+            ExpirationInDays: 90
+            NoncurrentVersionExpirationInDays: 30
       Tags:
         - Key: Project
-          Value: !Ref ProjectName
+          Value: !Ref ApplicationName
         - Key: Environment
           Value: 'Shared'
         - Key: ManagedBy
-          Value: 'CloudFormation'
-
-  # ==================== CodeCommit Repository ====================
+          Value: CloudFormation
   
-  CodeCommitRepository:
-    Type: AWS::CodeCommit::Repository
+  ArtifactBucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
     Properties:
-      RepositoryName: !Sub '${ProjectName}-repo'
-      RepositoryDescription: !Sub 'Repository for ${ProjectName} application'
-      Code:
-        S3:
-          Bucket: !Ref ArtifactsBucket
-          Key: initial-commit.zip
+      Bucket: !Ref ArtifactBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyUnEncryptedObjectUploads
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:PutObject'
+            Resource: !Sub 'arn:aws:s3:::${ArtifactBucketName}/*'
+            Condition:
+              StringNotEquals:
+                's3:x-amz-server-side-encryption': 'AES256'
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource: !Sub 'arn:aws:s3:::${ArtifactBucketName}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': false
+
+  #---------------------------------------------------------------------------
+  # CodeCommit Repository
+  #---------------------------------------------------------------------------
+  
+  CodeCommitRepo:
+    Type: 'AWS::CodeCommit::Repository'
+    Properties:
+      RepositoryName: !Ref RepositoryName
+      RepositoryDescription: !Sub 'Repository for ${ApplicationName} source code'
       Tags:
         - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: 'Shared'
+          Value: !Ref ApplicationName
         - Key: ManagedBy
-          Value: 'CloudFormation'
+          Value: CloudFormation
 
-  # ==================== CodeBuild Project ====================
+  #---------------------------------------------------------------------------
+  # CodeBuild Projects
+  #---------------------------------------------------------------------------
   
-  CodeBuildProject:
-    Type: AWS::CodeBuild::Project
+  # Build Project
+  BuildProject:
+    Type: 'AWS::CodeBuild::Project'
     Properties:
-      Name: !Sub '${ProjectName}-build'
-      Description: !Sub 'Build project for ${ProjectName}'
+      Name: !Sub '${ApplicationName}-Build'
+      Description: !Sub 'Build project for ${ApplicationName}'
       ServiceRole: !GetAtt CodeBuildServiceRole.Arn
       Artifacts:
         Type: CODEPIPELINE
       Environment:
         Type: LINUX_CONTAINER
-        ComputeType: !Ref CodeBuildComputeType
-        Image: aws/codebuild/standard:5.0
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        PrivilegedMode: false
         EnvironmentVariables:
-          - Name: PROJECT_NAME
-            Value: !Ref ProjectName
           - Name: ARTIFACT_BUCKET
-            Value: !Ref ArtifactsBucket
+            Value: !Ref ArtifactBucketName
+          - Name: APPLICATION_NAME
+            Value: !Ref ApplicationName
       Source:
         Type: CODEPIPELINE
         BuildSpec: |
           version: 0.2
           phases:
-            pre_build:
+            install:
+              runtime-versions:
+                nodejs: 14
               commands:
-                - echo Logging in to Amazon ECR...
-                - echo Pre-build phase started on `date`
                 - echo Installing dependencies...
                 - npm install
             build:
               commands:
                 - echo Build started on `date`
-                - echo Building the application...
                 - npm run build
             post_build:
               commands:
                 - echo Build completed on `date`
-                - echo Running tests...
-                - npm test
+                - echo Preparing deployment package...
+                - mkdir -p dist/scripts
+                - cp -r scripts dist/
+                - cp appspec.yml dist/
           artifacts:
             files:
-              - '**/*'
               - appspec.yml
-              - scripts/*
-            name: BuildArtifact
+              - 'scripts/**/*'
+              - 'dist/**/*'
+              - 'public/**/*'
+              - package.json
+              - package-lock.json
+            discard-paths: no
+          cache:
+            paths:
+              - 'node_modules/**/*'
       TimeoutInMinutes: 15
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: !Sub '/aws/codebuild/${ApplicationName}-Build'
       Tags:
         - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: 'Shared'
+          Value: !Ref ApplicationName
         - Key: ManagedBy
-          Value: 'CloudFormation'
-
-  # ==================== CodeDeploy Application ====================
+          Value: CloudFormation
   
-  CodeDeployApplication:
-    Type: AWS::CodeDeploy::Application
+  # Test Project
+  TestProject:
+    Type: 'AWS::CodeBuild::Project'
     Properties:
-      ApplicationName: !Sub '${ProjectName}-app'
+      Name: !Sub '${ApplicationName}-Test'
+      Description: !Sub 'Test project for ${ApplicationName}'
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        PrivilegedMode: false
+        EnvironmentVariables:
+          - Name: APPLICATION_NAME
+            Value: !Ref ApplicationName
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: |
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                nodejs: 14
+              commands:
+                - echo Installing dependencies...
+                - npm install
+            pre_build:
+              commands:
+                - echo Running linting...
+                - npm run lint
+            build:
+              commands:
+                - echo Running tests...
+                - npm test
+            post_build:
+              commands:
+                - echo Testing completed on `date`
+                - echo Generating test reports...
+          reports:
+            test-reports:
+              files:
+                - 'test-reports/**/*'
+              base-directory: './'
+          artifacts:
+            files:
+              - 'test-reports/**/*'
+            discard-paths: no
+      TimeoutInMinutes: 10
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: !Sub '/aws/codebuild/${ApplicationName}-Test'
+      Tags:
+        - Key: Project
+          Value: !Ref ApplicationName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  #---------------------------------------------------------------------------
+  # CodeDeploy Application and Deployment Groups
+  #---------------------------------------------------------------------------
+  
+  # CodeDeploy Application
+  CodeDeployApplication:
+    Type: 'AWS::CodeDeploy::Application'
+    Properties:
+      ApplicationName: !Ref ApplicationName
       ComputePlatform: Server
       Tags:
         - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: 'Shared'
+          Value: !Ref ApplicationName
         - Key: ManagedBy
-          Value: 'CloudFormation'
-
-  # CodeDeploy Deployment Group for Development
-  CodeDeployDeploymentGroupDev:
-    Type: AWS::CodeDeploy::DeploymentGroup
+          Value: CloudFormation
+  
+  # Development Deployment Group
+  DevDeploymentGroup:
+    Type: 'AWS::CodeDeploy::DeploymentGroup'
     Properties:
       ApplicationName: !Ref CodeDeployApplication
-      DeploymentGroupName: !Sub '${ProjectName}-${DevEnvironmentName}'
+      DeploymentGroupName: !Sub '${ApplicationName}-${DevEnvironmentName}'
       ServiceRoleArn: !GetAtt CodeDeployServiceRole.Arn
-      DeploymentConfigName: CodeDeployDefault.OneAtATime
+      DeploymentConfigName: CodeDeployDefault.AllAtOnce
       Ec2TagFilters:
-        - Type: KEY_AND_VALUE
-          Key: Environment
-          Value: !Ref DevEnvironmentName
-        - Type: KEY_AND_VALUE
-          Key: Project
-          Value: !Ref ProjectName
-      AutoRollbackConfiguration:
-        Enabled: true
-        Events:
-          - DEPLOYMENT_FAILURE
-          - DEPLOYMENT_STOP_ON_ALARM
-      AlarmConfiguration:
-        Enabled: true
-        Alarms:
-          - Name: !Ref CloudWatchAlarmDev
-      LoadBalancerInfo:
-        TargetGroupInfoList: []
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
         - Key: Environment
           Value: !Ref DevEnvironmentName
-        - Key: ManagedBy
-          Value: 'CloudFormation'
-
-  # CodeDeploy Deployment Group for Production
-  CodeDeployDeploymentGroupProd:
-    Type: AWS::CodeDeploy::DeploymentGroup
-    Properties:
-      ApplicationName: !Ref CodeDeployApplication
-      DeploymentGroupName: !Sub '${ProjectName}-${ProdEnvironmentName}'
-      ServiceRoleArn: !GetAtt CodeDeployServiceRole.Arn
-      DeploymentConfigName: CodeDeployDefault.OneAtATime
-      Ec2TagFilters:
-        - Type: KEY_AND_VALUE
-          Key: Environment
-          Value: !Ref ProdEnvironmentName
-        - Type: KEY_AND_VALUE
-          Key: Project
-          Value: !Ref ProjectName
+          Type: KEY_AND_VALUE
+        - Key: Application
+          Value: !Ref ApplicationName
+          Type: KEY_AND_VALUE
       AutoRollbackConfiguration:
         Enabled: true
         Events:
@@ -432,137 +484,193 @@ Resources:
       AlarmConfiguration:
         Enabled: true
         Alarms:
-          - Name: !Ref CloudWatchAlarmProd
-      LoadBalancerInfo:
-        TargetGroupInfoList: []
+          - Name: !Ref DevDeploymentAlarm
       Tags:
         - Key: Project
-          Value: !Ref ProjectName
+          Value: !Ref ApplicationName
+        - Key: Environment
+          Value: !Ref DevEnvironmentName
+        - Key: ManagedBy
+          Value: CloudFormation
+  
+  # Production Deployment Group
+  ProdDeploymentGroup:
+    Type: 'AWS::CodeDeploy::DeploymentGroup'
+    Properties:
+      ApplicationName: !Ref CodeDeployApplication
+      DeploymentGroupName: !Sub '${ApplicationName}-${ProdEnvironmentName}'
+      ServiceRoleArn: !GetAtt CodeDeployServiceRole.Arn
+      DeploymentConfigName: CodeDeployDefault.OneAtATime
+      Ec2TagFilters:
+        - Key: Environment
+          Value: !Ref ProdEnvironmentName
+          Type: KEY_AND_VALUE
+        - Key: Application
+          Value: !Ref ApplicationName
+          Type: KEY_AND_VALUE
+      AutoRollbackConfiguration:
+        Enabled: true
+        Events:
+          - DEPLOYMENT_FAILURE
+          - DEPLOYMENT_STOP_ON_ALARM
+          - DEPLOYMENT_STOP_ON_REQUEST
+      AlarmConfiguration:
+        Enabled: true
+        Alarms:
+          - Name: !Ref ProdDeploymentAlarm
+      Tags:
+        - Key: Project
+          Value: !Ref ApplicationName
         - Key: Environment
           Value: !Ref ProdEnvironmentName
         - Key: ManagedBy
-          Value: 'CloudFormation'
+          Value: CloudFormation
 
-  # ==================== SNS Topic for Notifications ====================
+  #---------------------------------------------------------------------------
+  # CloudWatch Alarms
+  #---------------------------------------------------------------------------
   
-  SNSTopic:
-    Type: AWS::SNS::Topic
+  # Development Deployment Alarm
+  DevDeploymentAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
     Properties:
-      TopicName: !Sub '${ProjectName}-pipeline-notifications'
-      DisplayName: !Sub '${ProjectName} Pipeline Notifications'
-      Subscription:
-        - Endpoint: !Ref NotificationEmail
-          Protocol: email
+      AlarmName: !Sub '${ApplicationName}-${DevEnvironmentName}-DeploymentError'
+      AlarmDescription: !Sub 'Alarm for deployment errors in the ${DevEnvironmentName} environment'
+      MetricName: DeploymentFailure
+      Namespace: 'AWS/CodeDeploy'
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: ApplicationName
+          Value: !Ref ApplicationName
+        - Name: DeploymentGroupName
+          Value: !Sub '${ApplicationName}-${DevEnvironmentName}'
+      AlarmActions:
+        - !Ref PipelineNotificationTopic
       Tags:
         - Key: Project
-          Value: !Ref ProjectName
+          Value: !Ref ApplicationName
         - Key: Environment
-          Value: 'Shared'
+          Value: !Ref DevEnvironmentName
         - Key: ManagedBy
-          Value: 'CloudFormation'
-
-  # ==================== CloudWatch Alarms ====================
+          Value: CloudFormation
   
-  CloudWatchAlarmDev:
-    Type: AWS::CloudWatch::Alarm
+  # Production Deployment Alarm
+  ProdDeploymentAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
     Properties:
-      AlarmName: !Sub '${ProjectName}-${DevEnvironmentName}-DeploymentErrors'
-      AlarmDescription: !Sub 'Alert when deployment errors occur in ${DevEnvironmentName}'
-      MetricName: Errors
-      Namespace: AWS/CodeDeploy
+      AlarmName: !Sub '${ApplicationName}-${ProdEnvironmentName}-DeploymentError'
+      AlarmDescription: !Sub 'Alarm for deployment errors in the ${ProdEnvironmentName} environment'
+      MetricName: DeploymentFailure
+      Namespace: 'AWS/CodeDeploy'
       Statistic: Sum
-      Period: 300
+      Period: 60
       EvaluationPeriods: 1
       Threshold: 1
       ComparisonOperator: GreaterThanOrEqualToThreshold
       Dimensions:
         - Name: ApplicationName
-          Value: !Ref CodeDeployApplication
+          Value: !Ref ApplicationName
         - Name: DeploymentGroupName
-          Value: !Sub '${ProjectName}-${DevEnvironmentName}'
+          Value: !Sub '${ApplicationName}-${ProdEnvironmentName}'
       AlarmActions:
-        - !Ref SNSTopic
-      TreatMissingData: notBreaching
+        - !Ref PipelineNotificationTopic
+      Tags:
+        - Key: Project
+          Value: !Ref ApplicationName
+        - Key: Environment
+          Value: !Ref ProdEnvironmentName
+        - Key: ManagedBy
+          Value: CloudFormation
 
-  CloudWatchAlarmProd:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub '${ProjectName}-${ProdEnvironmentName}-DeploymentErrors'
-      AlarmDescription: !Sub 'Alert when deployment errors occur in ${ProdEnvironmentName}'
-      MetricName: Errors
-      Namespace: AWS/CodeDeploy
-      Statistic: Sum
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: 1
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      Dimensions:
-        - Name: ApplicationName
-          Value: !Ref CodeDeployApplication
-        - Name: DeploymentGroupName
-          Value: !Sub '${ProjectName}-${ProdEnvironmentName}'
-      AlarmActions:
-        - !Ref SNSTopic
-      TreatMissingData: notBreaching
-
-  # ==================== CodePipeline ====================
+  #---------------------------------------------------------------------------
+  # SNS Topic for Notifications
+  #---------------------------------------------------------------------------
   
-  CodePipeline:
-    Type: AWS::CodePipeline::Pipeline
+  PipelineNotificationTopic:
+    Type: 'AWS::SNS::Topic'
     Properties:
-      Name: !Sub '${ProjectName}-pipeline'
+      TopicName: !Sub '${ApplicationName}-Pipeline-Notifications'
+      Tags:
+        - Key: Project
+          Value: !Ref ApplicationName
+        - Key: ManagedBy
+          Value: CloudFormation
+  
+  PipelineNotificationSubscription:
+    Type: 'AWS::SNS::Subscription'
+    Properties:
+      TopicArn: !Ref PipelineNotificationTopic
+      Protocol: email
+      Endpoint: !Ref NotificationEmail
+
+  #---------------------------------------------------------------------------
+  # CodePipeline
+  #---------------------------------------------------------------------------
+  
+  Pipeline:
+    Type: 'AWS::CodePipeline::Pipeline'
+    Properties:
+      Name: !Sub '${ApplicationName}-Pipeline'
       RoleArn: !GetAtt CodePipelineServiceRole.Arn
       ArtifactStore:
         Type: S3
-        Location: !Ref ArtifactsBucket
+        Location: !Ref ArtifactBucket
+        EncryptionKey:
+          Id: alias/aws/s3
+          Type: KMS
       Stages:
-        # Source Stage
         - Name: Source
           Actions:
-            - Name: SourceAction
+            - Name: Source
               ActionTypeId:
                 Category: Source
                 Owner: AWS
                 Provider: CodeCommit
                 Version: '1'
               Configuration:
-                RepositoryName: !GetAtt CodeCommitRepository.Name
+                RepositoryName: !Ref RepositoryName
                 BranchName: main
-                PollForSourceChanges: false
               OutputArtifacts:
-                - Name: SourceOutput
+                - Name: SourceCode
               RunOrder: 1
-              
-        # Build Stage
+        
         - Name: Build
           Actions:
-            - Name: BuildAction
+            - Name: BuildApp
               ActionTypeId:
                 Category: Build
                 Owner: AWS
                 Provider: CodeBuild
                 Version: '1'
               Configuration:
-                ProjectName: !Ref CodeBuildProject
+                ProjectName: !Ref BuildProject
               InputArtifacts:
-                - Name: SourceOutput
+                - Name: SourceCode
               OutputArtifacts:
                 - Name: BuildOutput
               RunOrder: 1
-              OnFailure:
-                ActionTypeId:
-                  Category: Invoke
-                  Owner: AWS
-                  Provider: SNS
-                  Version: '1'
-                Configuration:
-                  TopicArn: !Ref SNSTopic
-                  Message: !Sub 'Build failed for ${ProjectName} pipeline'
-                  
-        # Deploy to Development Stage
-        - Name: DeployToDevelopment
+        
+        - Name: Test
           Actions:
-            - Name: DeployToDevAction
+            - Name: TestApp
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref TestProject
+              InputArtifacts:
+                - Name: SourceCode
+              RunOrder: 1
+        
+        - Name: DeployToDev
+          Actions:
+            - Name: DeployToDev
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -570,38 +678,27 @@ Resources:
                 Version: '1'
               Configuration:
                 ApplicationName: !Ref CodeDeployApplication
-                DeploymentGroupName: !Ref CodeDeployDeploymentGroupDev
+                DeploymentGroupName: !Sub '${ApplicationName}-${DevEnvironmentName}'
               InputArtifacts:
                 - Name: BuildOutput
               RunOrder: 1
-              OnFailure:
-                ActionTypeId:
-                  Category: Invoke
-                  Owner: AWS
-                  Provider: SNS
-                  Version: '1'
-                Configuration:
-                  TopicArn: !Ref SNSTopic
-                  Message: !Sub 'Deployment to ${DevEnvironmentName} failed for ${ProjectName}'
-                  
-        # Manual Approval Stage
-        - Name: ManualApproval
+        
+        - Name: Approval
           Actions:
-            - Name: ApproveProductionDeployment
+            - Name: ApproveProduction
               ActionTypeId:
                 Category: Approval
                 Owner: AWS
                 Provider: Manual
                 Version: '1'
               Configuration:
-                NotificationArn: !Ref SNSTopic
-                CustomData: !Sub 'Please review and approve deployment to ${ProdEnvironmentName}'
+                NotificationArn: !Ref PipelineNotificationTopic
+                CustomData: !Sub 'Approve deployment of ${ApplicationName} to Production?'
               RunOrder: 1
-              
-        # Deploy to Production Stage
-        - Name: DeployToProduction
+        
+        - Name: DeployToProd
           Actions:
-            - Name: DeployToProdAction
+            - Name: DeployToProd
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -609,169 +706,55 @@ Resources:
                 Version: '1'
               Configuration:
                 ApplicationName: !Ref CodeDeployApplication
-                DeploymentGroupName: !Ref CodeDeployDeploymentGroupProd
+                DeploymentGroupName: !Sub '${ApplicationName}-${ProdEnvironmentName}'
               InputArtifacts:
                 - Name: BuildOutput
               RunOrder: 1
-              OnFailure:
-                ActionTypeId:
-                  Category: Invoke
-                  Owner: AWS
-                  Provider: SNS
-                  Version: '1'
-                Configuration:
-                  TopicArn: !Ref SNSTopic
-                  Message: !Sub 'Deployment to ${ProdEnvironmentName} failed for ${ProjectName}'
       Tags:
         - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: 'Shared'
+          Value: !Ref ApplicationName
         - Key: ManagedBy
-          Value: 'CloudFormation'
+          Value: CloudFormation
 
-  # CloudWatch Event Rule for Pipeline State Changes
+  # Pipeline Status Event Rule
   PipelineEventRule:
     Type: AWS::Events::Rule
     Properties:
-      Name: !Sub '${ProjectName}-pipeline-state-change'
-      Description: !Sub 'Trigger notifications for ${ProjectName} pipeline state changes'
+      Description: "Rule for capturing CodePipeline state changes"
       EventPattern:
         source:
-          - aws.codepipeline
+          - "aws.codepipeline"
         detail-type:
-          - CodePipeline Pipeline Execution State Change
+          - "CodePipeline Pipeline Execution State Change"
         detail:
           pipeline:
-            - !Ref CodePipeline
+            - !Sub "${ApplicationName}-Pipeline"
           state:
-            - FAILED
-            - SUCCEEDED
+            - "FAILED"
+            - "SUCCEEDED"
       State: ENABLED
       Targets:
-        - Arn: !Ref SNSTopic
-          Id: SNSTarget
-          InputTransformer:
-            InputPathsMap:
-              pipeline: $.detail.pipeline
-              state: $.detail.state
-            InputTemplate: !Sub |
-              "Pipeline <pipeline> has <state> in account ${AWS::AccountId}"
-
-  # Permission for EventBridge to publish to SNS
-  SNSTopicPolicy:
-    Type: AWS::SNS::TopicPolicy
-    Properties:
-      Topics:
-        - !Ref SNSTopic
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AllowEventBridgeToPublish
-            Effect: Allow
-            Principal:
-              Service: events.amazonaws.com
-            Action: 'sns:Publish'
-            Resource: !Ref SNSTopic
-
-  # CloudWatch Event Rule for CodeCommit
-  CodeCommitEventRule:
-    Type: AWS::Events::Rule
-    Properties:
-      Name: !Sub '${ProjectName}-codecommit-trigger'
-      Description: !Sub 'Trigger pipeline on CodeCommit changes for ${ProjectName}'
-      EventPattern:
-        source:
-          - aws.codecommit
-        detail-type:
-          - CodeCommit Repository State Change
-        resources:
-          - !GetAtt CodeCommitRepository.Arn
-        detail:
-          referenceType:
-            - branch
-          referenceName:
-            - main
-      State: ENABLED
-      Targets:
-        - Arn: !Sub 'arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:pipeline/${CodePipeline}'
-          RoleArn: !GetAtt CodePipelineEventRole.Arn
-          Id: CodePipeline
-
-  # IAM Role for CloudWatch Events to trigger Pipeline
-  CodePipelineEventRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub '${ProjectName}-Pipeline-Event-Role'
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: events.amazonaws.com
-            Action: 'sts:AssumeRole'
-      Policies:
-        - PolicyName: StartPipelinePolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action: 'codepipeline:StartPipelineExecution'
-                Resource: !Sub 'arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:pipeline/${CodePipeline}'
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: 'Shared'
-        - Key: ManagedBy
-          Value: 'CloudFormation'
+        - Arn: !Ref PipelineNotificationTopic
+          Id: "PipelineNotificationTarget"
 
 Outputs:
-  CodeCommitRepositoryCloneUrl:
-    Description: 'HTTPS Clone URL for CodeCommit Repository'
-    Value: !GetAtt CodeCommitRepository.CloneUrlHttp
-    Export:
-      Name: !Sub '${AWS::StackName}-RepoCloneUrl'
-      
-  CodeCommitRepositoryArn:
-    Description: 'ARN of the CodeCommit Repository'
-    Value: !GetAtt CodeCommitRepository.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-RepoArn'
-      
-  CodePipelineArn:
-    Description: 'ARN of the CodePipeline'
-    Value: !Sub 'arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:pipeline/${CodePipeline}'
-    Export:
-      Name: !Sub '${AWS::StackName}-PipelineArn'
-      
-  CodePipelineName:
-    Description: 'Name of the CodePipeline'
-    Value: !Ref CodePipeline
-    Export:
-      Name: !Sub '${AWS::StackName}-PipelineName'
-      
-  ArtifactsBucketName:
-    Description: 'Name of the S3 Artifacts Bucket'
-    Value: !Ref ArtifactsBucket
-    Export:
-      Name: !Sub '${AWS::StackName}-ArtifactsBucket'
-      
-  SNSTopicArn:
-    Description: 'ARN of the SNS Topic for notifications'
-    Value: !Ref SNSTopic
-    Export:
-      Name: !Sub '${AWS::StackName}-SNSTopic'
-      
-  CodeDeployApplicationName:
-    Description: 'Name of the CodeDeploy Application'
-    Value: !Ref CodeDeployApplication
-    Export:
-      Name: !Sub '${AWS::StackName}-CodeDeployApp'
-      
-  EC2InstanceProfileArn:
-    Description: 'ARN of the EC2 Instance Profile for deployment targets'
-    Value: !GetAtt EC2InstanceProfile.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-EC2InstanceProfile'
+  CodeCommitRepositoryCloneUrlHTTPS:
+    Description: 'HTTPS URL for cloning the CodeCommit repository'
+    Value: !GetAtt CodeCommitRepo.CloneUrlHttp
+  
+  CodeCommitRepositoryCloneUrlSSH:
+    Description: 'SSH URL for cloning the CodeCommit repository'
+    Value: !GetAtt CodeCommitRepo.CloneUrlSsh
+  
+  PipelineArn:
+    Description: 'ARN of the CI/CD Pipeline'
+    Value: !Ref Pipeline
+  
+  PipelineConsoleURL:
+    Description: 'Console URL for the CI/CD Pipeline'
+    Value: !Sub 'https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${ApplicationName}-Pipeline'
+  
+  NotificationTopicARN:
+    Description: 'ARN of the SNS Topic used for pipeline notifications'
+    Value: !Ref PipelineNotificationTopic
 ```
