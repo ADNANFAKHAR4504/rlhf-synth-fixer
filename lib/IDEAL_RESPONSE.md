@@ -2,32 +2,10 @@
 
 This infrastructure implements a high-availability containerized architecture for SmartFactory Inc.'s manufacturing IoT sensor data processing platform using Pulumi Python.
 
-## Architecture Overview
-
-The solution includes:
-- ECS Fargate cluster for containerized workloads
-- Kinesis Data Streams for real-time data ingestion (4 shards for 10,000+ machines)
-- ElastiCache Redis cluster for temporary storage and caching
-- RDS Aurora PostgreSQL Serverless v2 cluster for persistent storage
-- EFS for shared storage between containers
-- API Gateway for external system integration
-- Secrets Manager for credential management
-- VPC with private subnets for security (multi-AZ for 99.99% uptime)
-- CloudWatch logging and monitoring for compliance (with latency alarms)
-- KMS encryption for all data at rest
-
-## Key Improvements Over Initial Implementation
-
-1. Fixed missing `logs` module import for CloudWatch LogGroup
-2. Added comprehensive IAM roles with least privilege
-3. Implemented proper NAT Gateway setup for high availability (2 NAT Gateways in MODEL_RESPONSE, simplified for synthetic env)
-4. Added CloudWatch alarms for latency monitoring (2-second threshold)
-5. Used proper output attribute for Redis endpoint (`primary_endpoint_address`)
-
 ## File: Pulumi.yaml
 
 ```yaml
-name: pulumi-infra
+name: TapStack
 runtime:
   name: python
 description: Pulumi infrastructure for manufacturing IoT platform
@@ -56,8 +34,8 @@ from lib.tap_stack import TapStack, TapStackArgs
 # Initialize Pulumi configuration
 config = Config()
 
-# Get environment suffix from config or fallback to 'dev'
-environment_suffix = config.get('env') or 'dev'
+# Get environment suffix from ENVIRONMENT_SUFFIX env var, config, or fallback to 'dev'
+environment_suffix = os.getenv('ENVIRONMENT_SUFFIX') or config.get('env') or 'dev'
 STACK_NAME = f"TapStack{environment_suffix}"
 
 repository_name = os.getenv('REPOSITORY', 'unknown')
@@ -74,6 +52,23 @@ stack = TapStack(
     name="pulumi-infra",
     args=TapStackArgs(environment_suffix=environment_suffix),
 )
+
+# Export stack outputs
+pulumi.export("vpc_id", stack.vpc.id)
+pulumi.export("ecs_cluster_arn", stack.ecs_cluster.arn)
+pulumi.export("kinesis_stream_name", stack.kinesis_stream.name)
+pulumi.export("kinesis_stream_arn", stack.kinesis_stream.arn)
+pulumi.export("redis_endpoint", stack.redis_cluster.primary_endpoint_address)
+pulumi.export("aurora_endpoint", stack.aurora_cluster.endpoint)
+pulumi.export("aurora_cluster_arn", stack.aurora_cluster.arn)
+pulumi.export("efs_id", stack.efs_filesystem.id)
+pulumi.export("api_gateway_url", stack.api_gateway.api_endpoint)
+pulumi.export("api_gateway_id", stack.api_gateway.id)
+pulumi.export("secret_arn", stack.db_credentials_secret.arn)
+pulumi.export("kms_key_id", stack.kms_key.id)
+pulumi.export("kms_key_arn", stack.kms_key.arn)
+pulumi.export("environment_suffix", environment_suffix)
+
 ```
 
 ## File: lib/__init__.py

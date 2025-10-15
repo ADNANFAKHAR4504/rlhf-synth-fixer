@@ -35,3 +35,19 @@ stack = TapStack(
     name="pulumi-infra",
     args=TapStackArgs(environment_suffix=environment_suffix),
 )
+
+# Export stack outputs
+pulumi.export("vpc_id", stack.vpc.id)
+pulumi.export("ecs_cluster_arn", stack.ecs_cluster.arn)
+pulumi.export("kinesis_stream_name", stack.kinesis_stream.name)
+pulumi.export("kinesis_stream_arn", stack.kinesis_stream.arn)
+pulumi.export("redis_endpoint", stack.redis_cluster.primary_endpoint_address)
+pulumi.export("aurora_endpoint", stack.aurora_cluster.endpoint)
+pulumi.export("aurora_cluster_arn", stack.aurora_cluster.arn)
+pulumi.export("efs_id", stack.efs_filesystem.id)
+pulumi.export("api_gateway_url", stack.api_gateway.api_endpoint)
+pulumi.export("api_gateway_id", stack.api_gateway.id)
+pulumi.export("secret_arn", stack.db_credentials_secret.arn)
+pulumi.export("kms_key_id", stack.kms_key.id)
+pulumi.export("kms_key_arn", stack.kms_key.arn)
+pulumi.export("environment_suffix", environment_suffix)
