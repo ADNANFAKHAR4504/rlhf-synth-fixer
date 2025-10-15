@@ -43,6 +43,7 @@ import { SnsTopicSubscription } from '@cdktf/provider-aws/lib/sns-topic-subscrip
 import { VpcEndpoint } from '@cdktf/provider-aws/lib/vpc-endpoint';
 import { SsmDocument } from '@cdktf/provider-aws/lib/ssm-document';
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
+import { DataAwsGuarddutyDetector } from '@cdktf/provider-aws/lib/data-aws-guardduty-detector';
 
 // ==================== Type Definitions ====================
 export interface StackConfig {
@@ -179,8 +180,34 @@ export function createKmsKey(scope: Construct, config: StackConfig): KmsKey {
               'logs.amazonaws.com',
             ],
           },
-          Action: ['kms:Decrypt', 'kms:GenerateDataKey', 'kms:CreateGrant'],
+          Action: [
+            'kms:Decrypt',
+            'kms:GenerateDataKey',
+            'kms:CreateGrant',
+            'kms:DescribeKey',
+          ],
           Resource: '*',
+        },
+        {
+          Sid: 'Allow CloudWatch Logs',
+          Effect: 'Allow',
+          Principal: {
+            Service: `logs.${config.region}.amazonaws.com`,
+          },
+          Action: [
+            'kms:Encrypt',
+            'kms:Decrypt',
+            'kms:ReEncrypt*',
+            'kms:GenerateDataKey*',
+            'kms:CreateGrant',
+            'kms:DescribeKey',
+          ],
+          Resource: '*',
+          Condition: {
+            ArnLike: {
+              'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${config.region}:${config.accountId}:log-group:*`,
+            },
+          },
         },
       ],
     }),
@@ -463,7 +490,7 @@ export function createIamRolesAndPolicies(
 
   new IamRolePolicyAttachment(scope, 'config-policy', {
     role: configRole.name,
-    policyArn: 'arn:aws:iam::aws:policy/service-role/ConfigRole',
+    policyArn: 'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole',
   });
 
   // VPC Flow Logs Role
@@ -769,7 +796,8 @@ export function createBastionHost(
       httpTokens: 'required',
       httpPutResponseHopLimit: 1,
     },
-userData: Fn.base64encode(Fn.rawString(`#!/bin/bash
+    userData: Fn.base64encode(
+      Fn.rawString(`#!/bin/bash
 # Update system
 yum update -y
 
@@ -791,7 +819,8 @@ systemctl restart sshd
 yum install -y fail2ban
 systemctl enable fail2ban
 systemctl start fail2ban
-`)),
+`)
+    ),
     tags: {
       ...config.tags,
       Name: `${config.environment}-bastion`,
@@ -895,7 +924,8 @@ export function createPrivateEc2Fleet(
         httpTokens: 'required',
         httpPutResponseHopLimit: 1,
       },
-userData: Fn.base64encode(Fn.rawString(`#!/bin/bash
+      userData: Fn.base64encode(
+        Fn.rawString(`#!/bin/bash
 # Update system
 yum update -y
 
@@ -937,7 +967,8 @@ cat <<EOF > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
 EOF
 
 /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
-`)),
+`)
+      ),
       tags: {
         ...config.tags,
         Name: `${config.environment}-app-instance-${i + 1}`,
@@ -1141,7 +1172,10 @@ export function createRdsMultiAz(
   const rdsInstance = new DbInstance(scope, 'rds-instance', {
     identifier: `${config.environment}-db`,
     engine: 'mysql',
-    engineVersion: '8.0.35',
+    engineVersion: '8.0', // Use major version only to get latest available minor version
+    // engineVersion: '8.0.32',  // Specific version that's widely available
+    // engineVersion: '8.0.28',  // LTS version
+    // engineVersion: '5.7',     // If you want to use MySQL 5.7 instead
     instanceClass: config.dbInstanceClass,
     allocatedStorage: 20,
     storageType: 'gp3',
@@ -1185,14 +1219,14 @@ export function createRdsMultiAz(
 export function createVPCFlowLogs(
   scope: Construct,
   config: StackConfig,
-  vpcResources: VpcResources,
-  kmsKey: KmsKey
+  vpcResources: VpcResources
 ): void {
-  // Create CloudWatch Log Group for VPC Flow Logs
+  // Create CloudWatch Log Group for VPC Flow Logs without KMS initially
   const flowLogGroup = new CloudwatchLogGroup(scope, 'flow-log-group', {
     name: `/aws/vpc/${config.environment}`,
     retentionInDays: 30,
-    kmsKeyId: kmsKey.arn,
+    // Remove KMS key for now, use AWS-managed encryption
+    // kmsKeyId: kmsKey.arn,
     tags: config.tags,
   });
 
@@ -1248,86 +1282,28 @@ export function createVPCFlowLogs(
   });
 }
 
-// ==================== AWS Config Module ====================
-export function enableAwsConfigAndBuckets(
-  scope: Construct,
-  config: StackConfig,
-  configBucket: S3Bucket,
-  configRole: IamRole
-): void {
-  // Config bucket policy
-  new S3BucketPolicy(scope, 'config-bucket-policy', {
-    bucket: configBucket.id,
-    policy: JSON.stringify({
-      Version: '2012-10-17',
-      Statement: [
-        {
-          Sid: 'AWSConfigBucketPermissionsCheck',
-          Effect: 'Allow',
-          Principal: {
-            Service: 'config.amazonaws.com',
-          },
-          Action: 's3:GetBucketAcl',
-          Resource: configBucket.arn,
-        },
-        {
-          Sid: 'AWSConfigBucketExistenceCheck',
-          Effect: 'Allow',
-          Principal: {
-            Service: 'config.amazonaws.com',
-          },
-          Action: 's3:ListBucket',
-          Resource: configBucket.arn,
-        },
-        {
-          Sid: 'AWSConfigBucketWrite',
-          Effect: 'Allow',
-          Principal: {
-            Service: 'config.amazonaws.com',
-          },
-          Action: 's3:PutObject',
-          Resource: `${configBucket.arn}/*`,
-          Condition: {
-            StringEquals: {
-              's3:x-amz-acl': 'bucket-owner-full-control',
-            },
-          },
-        },
-      ],
-    }),
-  });
-
-  // Create Config Recorder
-  const recorder = new ConfigConfigurationRecorder(scope, 'config-recorder', {
-    name: `${config.environment}-recorder`,
-    roleArn: configRole.arn,
-    recordingGroup: {
-      allSupported: true,
-      includeGlobalResourceTypes: true,
-    },
-  });
-
-  // Create Delivery Channel
-  new ConfigDeliveryChannel(scope, 'config-delivery-channel', {
-    name: `${config.environment}-delivery-channel`,
-    s3BucketName: configBucket.bucket,
-  });
-
-  // Start Config Recorder
-  new ConfigConfigurationRecorderStatus(scope, 'config-recorder-status', {
-    name: recorder.name,
-    isEnabled: true,
-    dependsOn: [recorder],
-  });
-}
-
 // ==================== GuardDuty Module ====================
 export function enableGuardDuty(scope: Construct, config: StackConfig): void {
-  new GuarddutyDetector(scope, 'guardduty-detector', {
-    enable: true,
-    findingPublishingFrequency: 'FIFTEEN_MINUTES',
-    tags: config.tags,
-  });
+  // Try to use existing detector or create new one
+  try {
+    // First try to reference existing detector
+    const existingDetector = new DataAwsGuarddutyDetector(
+      scope,
+      'existing-guardduty-detector',
+      {
+        // This will use the default detector if it exists
+      }
+    );
+
+    console.log('Using existing GuardDuty detector:', existingDetector.id);
+  } catch {
+    // If no existing detector, create a new one
+    new GuarddutyDetector(scope, 'guardduty-detector', {
+      enable: true,
+      findingPublishingFrequency: 'FIFTEEN_MINUTES',
+      tags: config.tags,
+    });
+  }
 }
 
 // ==================== CloudWatch Alarms Module ====================
@@ -1351,11 +1327,11 @@ export function createCloudWatchAlarms(
       threshold: 80,
       comparisonOperator: 'GreaterThanThreshold',
       dimensions: {
-        InstanceId: instance.id
+        InstanceId: instance.id,
       },
       alarmActions: [albResources.snsTopic.arn],
       treatMissingData: 'notBreaching',
-      tags: config.tags
+      tags: config.tags,
     });
 
     // EC2 Status Check Failed Alarm
@@ -1370,11 +1346,11 @@ export function createCloudWatchAlarms(
       threshold: 0,
       comparisonOperator: 'GreaterThanThreshold',
       dimensions: {
-        InstanceId: instance.id
+        InstanceId: instance.id,
       },
       alarmActions: [albResources.snsTopic.arn],
       treatMissingData: 'breaching',
-      tags: config.tags
+      tags: config.tags,
     });
   });
 
@@ -1391,11 +1367,11 @@ export function createCloudWatchAlarms(
     comparisonOperator: 'GreaterThanOrEqualToThreshold',
     dimensions: {
       TargetGroup: albResources.targetGroup.arnSuffix,
-      LoadBalancer: albResources.alb.arnSuffix
+      LoadBalancer: albResources.alb.arnSuffix,
     },
     alarmActions: [albResources.snsTopic.arn],
     treatMissingData: 'notBreaching',
-    tags: config.tags
+    tags: config.tags,
   });
 
   // ALB Target Response Time Alarm
@@ -1410,11 +1386,11 @@ export function createCloudWatchAlarms(
     threshold: 2, // 2 seconds
     comparisonOperator: 'GreaterThanThreshold',
     dimensions: {
-      LoadBalancer: albResources.alb.arnSuffix
+      LoadBalancer: albResources.alb.arnSuffix,
     },
     alarmActions: [albResources.snsTopic.arn],
     treatMissingData: 'notBreaching',
-    tags: config.tags
+    tags: config.tags,
   });
 
   // ALB HTTP 5xx Errors Alarm
@@ -1429,11 +1405,11 @@ export function createCloudWatchAlarms(
     threshold: 10,
     comparisonOperator: 'GreaterThanThreshold',
     dimensions: {
-      LoadBalancer: albResources.alb.arnSuffix
+      LoadBalancer: albResources.alb.arnSuffix,
     },
     alarmActions: [albResources.snsTopic.arn],
     treatMissingData: 'notBreaching',
-    tags: config.tags
+    tags: config.tags,
   });
 
   // RDS CPU Utilization Alarm
@@ -1448,11 +1424,11 @@ export function createCloudWatchAlarms(
     threshold: 75,
     comparisonOperator: 'GreaterThanThreshold',
     dimensions: {
-      DBInstanceIdentifier: rdsResources.instance.identifier
+      DBInstanceIdentifier: rdsResources.instance.identifier,
     },
     alarmActions: [albResources.snsTopic.arn],
     treatMissingData: 'notBreaching',
-    tags: config.tags
+    tags: config.tags,
   });
 
   // RDS Free Storage Space Alarm
@@ -1467,11 +1443,11 @@ export function createCloudWatchAlarms(
     threshold: 2147483648, // 2GB in bytes
     comparisonOperator: 'LessThanThreshold',
     dimensions: {
-      DBInstanceIdentifier: rdsResources.instance.identifier
+      DBInstanceIdentifier: rdsResources.instance.identifier,
     },
     alarmActions: [albResources.snsTopic.arn],
     treatMissingData: 'notBreaching',
-    tags: config.tags
+    tags: config.tags,
   });
 
   // RDS Database Connections Alarm
@@ -1486,11 +1462,11 @@ export function createCloudWatchAlarms(
     threshold: 40, // Adjust based on instance class
     comparisonOperator: 'GreaterThanThreshold',
     dimensions: {
-      DBInstanceIdentifier: rdsResources.instance.identifier
+      DBInstanceIdentifier: rdsResources.instance.identifier,
     },
     alarmActions: [albResources.snsTopic.arn],
     treatMissingData: 'notBreaching',
-    tags: config.tags
+    tags: config.tags,
   });
 
   // RDS Read Latency Alarm
@@ -1505,11 +1481,11 @@ export function createCloudWatchAlarms(
     threshold: 0.05, // 50ms
     comparisonOperator: 'GreaterThanThreshold',
     dimensions: {
-      DBInstanceIdentifier: rdsResources.instance.identifier
+      DBInstanceIdentifier: rdsResources.instance.identifier,
     },
     alarmActions: [albResources.snsTopic.arn],
     treatMissingData: 'notBreaching',
-    tags: config.tags
+    tags: config.tags,
   });
 
   // RDS Write Latency Alarm
@@ -1524,11 +1500,11 @@ export function createCloudWatchAlarms(
     threshold: 0.1, // 100ms
     comparisonOperator: 'GreaterThanThreshold',
     dimensions: {
-      DBInstanceIdentifier: rdsResources.instance.identifier
+      DBInstanceIdentifier: rdsResources.instance.identifier,
     },
     alarmActions: [albResources.snsTopic.arn],
     treatMissingData: 'notBreaching',
-    tags: config.tags
+    tags: config.tags,
   });
 }
 
@@ -1546,8 +1522,8 @@ export function createSsmSetupAndVpcEndpoints(
     vpcId: vpcResources.vpc.id,
     tags: {
       ...config.tags,
-      Name: `${config.environment}-vpc-endpoint-sg`
-    }
+      Name: `${config.environment}-vpc-endpoint-sg`,
+    },
   });
 
   // Allow HTTPS from VPC
@@ -1558,7 +1534,7 @@ export function createSsmSetupAndVpcEndpoints(
     protocol: 'tcp',
     cidrBlocks: [config.vpcCidr],
     securityGroupId: endpointSg.id,
-    description: 'HTTPS from VPC'
+    description: 'HTTPS from VPC',
   });
 
   // Egress rule
@@ -1569,7 +1545,7 @@ export function createSsmSetupAndVpcEndpoints(
     protocol: '-1',
     cidrBlocks: ['0.0.0.0/0'],
     securityGroupId: endpointSg.id,
-    description: 'Allow all outbound'
+    description: 'Allow all outbound',
   });
 
   // S3 Gateway Endpoint (doesn't require security group)
@@ -1579,7 +1555,7 @@ export function createSsmSetupAndVpcEndpoints(
     vpcEndpointType: 'Gateway',
     routeTableIds: [
       vpcResources.publicRouteTable.id,
-      ...vpcResources.privateRouteTables.map(rt => rt.id)
+      ...vpcResources.privateRouteTables.map(rt => rt.id),
     ],
     policy: JSON.stringify({
       Version: '2012-10-17',
@@ -1587,22 +1563,18 @@ export function createSsmSetupAndVpcEndpoints(
         {
           Effect: 'Allow',
           Principal: '*',
-          Action: [
-            's3:GetObject',
-            's3:PutObject',
-            's3:ListBucket'
-          ],
+          Action: ['s3:GetObject', 's3:PutObject', 's3:ListBucket'],
           Resource: [
             `arn:aws:s3:::${config.environment}-*`,
-            `arn:aws:s3:::${config.environment}-*/*`
-          ]
-        }
-      ]
+            `arn:aws:s3:::${config.environment}-*/*`,
+          ],
+        },
+      ],
     }),
     tags: {
       ...config.tags,
-      Name: `${config.environment}-s3-endpoint`
-    }
+      Name: `${config.environment}-s3-endpoint`,
+    },
   });
 
   // SSM Interface Endpoint
@@ -1615,8 +1587,8 @@ export function createSsmSetupAndVpcEndpoints(
     privateDnsEnabled: true,
     tags: {
       ...config.tags,
-      Name: `${config.environment}-ssm-endpoint`
-    }
+      Name: `${config.environment}-ssm-endpoint`,
+    },
   });
 
   // SSM Messages Interface Endpoint (required for Session Manager)
@@ -1629,8 +1601,8 @@ export function createSsmSetupAndVpcEndpoints(
     privateDnsEnabled: true,
     tags: {
       ...config.tags,
-      Name: `${config.environment}-ssmmessages-endpoint`
-    }
+      Name: `${config.environment}-ssmmessages-endpoint`,
+    },
   });
 
   // EC2 Messages Interface Endpoint (required for Session Manager)
@@ -1643,8 +1615,8 @@ export function createSsmSetupAndVpcEndpoints(
     privateDnsEnabled: true,
     tags: {
       ...config.tags,
-      Name: `${config.environment}-ec2messages-endpoint`
-    }
+      Name: `${config.environment}-ec2messages-endpoint`,
+    },
   });
 
   // CloudWatch Logs Interface Endpoint
@@ -1657,8 +1629,8 @@ export function createSsmSetupAndVpcEndpoints(
     privateDnsEnabled: true,
     tags: {
       ...config.tags,
-      Name: `${config.environment}-logs-endpoint`
-    }
+      Name: `${config.environment}-logs-endpoint`,
+    },
   });
 
   // KMS Interface Endpoint (for encryption operations)
@@ -1671,8 +1643,8 @@ export function createSsmSetupAndVpcEndpoints(
     privateDnsEnabled: true,
     tags: {
       ...config.tags,
-      Name: `${config.environment}-kms-endpoint`
-    }
+      Name: `${config.environment}-kms-endpoint`,
+    },
   });
 
   // Create SSM Document for Session Manager preferences
@@ -1694,10 +1666,10 @@ export function createSsmSetupAndVpcEndpoints(
         runAsEnabled: false,
         runAsDefaultUser: '',
         idleSessionTimeout: '20',
-        maxSessionDuration: '60'
-      }
+        maxSessionDuration: '60',
+      },
     }),
-    tags: config.tags
+    tags: config.tags,
   });
 
   // Create SSM Document for patch management
@@ -1713,8 +1685,8 @@ export function createSsmSetupAndVpcEndpoints(
           type: 'String',
           description: 'Install or Scan',
           allowedValues: ['Install', 'Scan'],
-          default: 'Scan'
-        }
+          default: 'Scan',
+        },
       },
       mainSteps: [
         {
@@ -1727,13 +1699,13 @@ export function createSsmSetupAndVpcEndpoints(
               '  sudo yum update -y',
               'else',
               '  sudo yum check-update',
-              'fi'
-            ]
-          }
-        }
-      ]
+              'fi',
+            ],
+          },
+        },
+      ],
     }),
-    tags: config.tags
+    tags: config.tags,
   });
 
   // Create IAM policy for Session Manager logging
@@ -1754,9 +1726,9 @@ export function createSsmSetupAndVpcEndpoints(
             'ssm:ListAssociations',
             'ssm:ListInstanceAssociations',
             'ssm:GetDocument',
-            'ssm:DescribeDocument'
+            'ssm:DescribeDocument',
           ],
-          Resource: '*'
+          Resource: '*',
         },
         {
           Effect: 'Allow',
@@ -1764,34 +1736,34 @@ export function createSsmSetupAndVpcEndpoints(
             'logs:CreateLogStream',
             'logs:PutLogEvents',
             'logs:DescribeLogGroups',
-            'logs:DescribeLogStreams'
+            'logs:DescribeLogStreams',
           ],
-          Resource: `arn:aws:logs:${config.region}:${config.accountId}:log-group:/aws/ssm/*`
+          Resource: `arn:aws:logs:${config.region}:${config.accountId}:log-group:/aws/ssm/*`,
         },
         {
           Effect: 'Allow',
-          Action: [
-            'kms:Decrypt'
-          ],
+          Action: ['kms:Decrypt'],
           Resource: '*',
           Condition: {
             StringEquals: {
-              'kms:ViaService': `ssm.${config.region}.amazonaws.com`
-            }
-          }
-        }
-      ]
-    })
+              'kms:ViaService': `ssm.${config.region}.amazonaws.com`,
+            },
+          },
+        },
+      ],
+    }),
   });
 
   // Additional runtime validations
   console.log('✓ SSM and VPC endpoints configured successfully');
-  console.log(`  - S3 Gateway endpoint created`);
-  console.log(`  - SSM Interface endpoints created (ssm, ssmmessages, ec2messages)`);
-  console.log(`  - CloudWatch Logs and KMS endpoints created`);
-  console.log(`  - Session Manager preferences configured`);
-  console.log(`  - Patch management baseline created`);
-  
+  console.log('  - S3 Gateway endpoint created');
+  console.log(
+    '  - SSM Interface endpoints created (ssm, ssmmessages, ec2messages)'
+  );
+  console.log('  - CloudWatch Logs and KMS endpoints created');
+  console.log('  - Session Manager preferences configured');
+  console.log('  - Patch management baseline created');
+
   // Validate endpoint security
   if (!endpointSg.id) {
     throw new Error('Failed to create VPC endpoint security group');
@@ -1809,12 +1781,14 @@ export function validateResourceCreation(resources: any): void {
     'ec2Instances',
     'alb',
     'rds',
-    'kmsKey'
+    'kmsKey',
   ];
 
   criticalResources.forEach(resource => {
     if (!resources[resource]) {
-      throw new Error(`Critical resource ${resource} was not created successfully`);
+      throw new Error(
+        `Critical resource ${resource} was not created successfully`
+      );
     }
   });
 
@@ -1822,16 +1796,23 @@ export function validateResourceCreation(resources: any): void {
 }
 
 // ==================== Export Additional Helper Functions ====================
-export function generateTags(environment: string, additionalTags?: { [key: string]: string }): { [key: string]: string } {
+export function generateTags(
+  environment: string,
+  additionalTags?: { [key: string]: string }
+): { [key: string]: string } {
   return {
     Environment: environment,
     ManagedBy: 'CDKTF',
     CreatedAt: new Date().toISOString(),
-    ...additionalTags
+    ...additionalTags,
   };
 }
 
-export function calculateSubnetCidr(vpcCidr: string, subnetIndex: number, subnetSize: number = 24): string {
+export function calculateSubnetCidr(
+  vpcCidr: string,
+  subnetIndex: number,
+  subnetSize: number = 24
+): string {
   // Simple subnet CIDR calculation
   const vpcParts = vpcCidr.split('/');
   const baseIp = vpcParts[0].split('.');

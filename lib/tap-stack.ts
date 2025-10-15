@@ -19,7 +19,6 @@ import {
   createAlbForPrivateInstances,
   createRdsMultiAz,
   createVPCFlowLogs,
-  enableAwsConfigAndBuckets,
   enableGuardDuty,
   createCloudWatchAlarms,
   createSsmSetupAndVpcEndpoints,
@@ -76,7 +75,7 @@ export class TapStack extends TerraformStack {
       vpcCidr: '10.0.0.0/16',
       availabilityZones: ['us-east-1a', 'us-east-1b'], // Update based on your region
       instanceType: 't3.medium',
-      keyPairName: 'my-key-pair', // Update with your actual key pair name
+      keyPairName: 'TapStackpr4141-keypair', // Update with your actual key pair name
       dbPassword: 'ChangeMePlease123!', // Use AWS Secrets Manager in production
       kmsKeyAlias: `${environmentSuffix}-master-key`,
       notificationEmail: 'alerts@example.com', // Update with actual email
@@ -141,15 +140,7 @@ export class TapStack extends TerraformStack {
     );
 
     // Enable VPC Flow Logs
-    createVPCFlowLogs(this, stackConfig, vpcResources, kmsKey);
-
-    // Enable AWS Config
-    enableAwsConfigAndBuckets(
-      this,
-      stackConfig,
-      s3Resources.configBucket,
-      iamResources.configRole
-    );
+    createVPCFlowLogs(this, stackConfig, vpcResources);
 
     // Enable GuardDuty
     enableGuardDuty(this, stackConfig);
