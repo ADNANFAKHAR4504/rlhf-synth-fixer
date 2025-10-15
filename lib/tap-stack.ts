@@ -109,13 +109,21 @@ export class TapStack extends cdk.Stack {
   }
 
   private deployRegionalInfrastructure(props: TapStackProps) {
+    const environmentSuffix =
+      props?.environmentSuffix ||
+      this.node.tryGetContext('environmentSuffix') ||
+      'dev';
+
     for (const region of REGIONS) {
       const regionalApi = new RegionalApi(this, `RegionalApi-${region}`, {
         region: region,
         isPrimary: region === PRIMARY_REGION,
         certificateArn: props.certificateArn,
         globalDatabase: this.globalDatabase,
-        domainName: `${region}.${props.domainName}`,
+        domainName: props.domainName
+          ? `${region}.${props.domainName}`
+          : undefined,
+        environmentSuffix: environmentSuffix,
       });
 
       this.regionalApis.set(region, regionalApi);

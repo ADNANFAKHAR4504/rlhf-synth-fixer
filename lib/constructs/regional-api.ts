@@ -14,6 +14,7 @@ export interface RegionalApiProps {
   certificateArn?: string;
   globalDatabase: GlobalDatabase;
   domainName?: string;
+  environmentSuffix?: string;
 }
 
 export class RegionalApi extends Construct {
@@ -55,6 +56,10 @@ export class RegionalApi extends Construct {
       }
     );
 
+    // Determine reserved concurrency based on environment
+    const envSuffix = props.environmentSuffix || 'dev';
+    const reservedConcurrency = envSuffix === 'prod' ? 1000 : undefined; // Only reserve for production
+
     // Create transaction processing Lambda
     this.transactionProcessor = new lambda.Function(
       this,
@@ -67,7 +72,7 @@ export class RegionalApi extends Construct {
         architecture: lambda.Architecture.ARM_64, // Graviton2 for better performance and cost
         memorySize: 3008,
         timeout: cdk.Duration.seconds(30),
-        reservedConcurrentExecutions: 1000,
+        reservedConcurrentExecutions: reservedConcurrency,
         environment: {
           DB_CONNECTION_STRING: props.globalDatabase.getConnectionString(
             props.region
