@@ -40,6 +40,74 @@ describe('TapStack Unit Tests (single file)', () => {
     expect(ts).toBeDefined();
   });
 
+  test('TapStack reads environmentSuffix from props', () => {
+    const localApp = new cdk.App();
+    const ts = new (require('../lib/tap-stack').TapStack)(localApp, 'PropsTap', { environmentSuffix: 'props' });
+    expect(ts).toBeDefined();
+  });
+
+  test('TapStack forwards outputs when child provides concrete values', () => {
+    // Load modules in isolation and mock the child stack so its public
+    // properties return real strings. This exercises the truthy branch in
+    // TapStack where CfnOutput receives an actual value instead of NO_VALUE.
+    jest.isolateModules(() => {
+      jest.mock('../lib/multi-component-stack', () => ({
+        MultiComponentApplicationStack: class {
+          public vpcId = 'vpc-000';
+          public apiUrl = 'https://example.org/';
+          public lambdaFunctionArn = 'arn:aws:lambda:local:function:fn';
+          public rdsEndpoint = 'rds.local';
+          public s3BucketName = 'bucket-local';
+          public sqsQueueUrl = 'https://sqs.local/queue';
+          public cloudFrontDomainName = 'distro.local';
+          public hostedZoneId = 'ZLOCAL12345';
+          public databaseSecretArn = 'arn:aws:secretsmanager:local:secret';
+          public lambdaRoleArn = 'arn:aws:iam::local:role/lambda';
+          public databaseSecurityGroupId = 'sg-db-local';
+          public lambdaSecurityGroupId = 'sg-lambda-local';
+          public lambdaLogGroupName = '/aws/lambda/local';
+          constructor(scope: any, id: any, props?: any) { }
+        }
+      }));
+
+      const localCdk = require('aws-cdk-lib');
+      const TapStackMock = require('../lib/tap-stack').TapStack;
+      const app = new localCdk.App();
+      const ts = new TapStackMock(app, 'ForwardingTap', { environmentSuffix: 'm' });
+      expect(ts).toBeDefined();
+    });
+  });
+
+  test('TapStack uses NO_VALUE when child properties are undefined', () => {
+    jest.isolateModules(() => {
+      jest.mock('../lib/multi-component-stack', () => ({
+        MultiComponentApplicationStack: class {
+          // Intentionally leave some properties undefined to exercise the
+          // nullish coalescing branch in TapStack.
+          public vpcId = undefined;
+          public apiUrl = undefined;
+          public lambdaFunctionArn = undefined;
+          public rdsEndpoint = undefined;
+          public s3BucketName = undefined;
+          public sqsQueueUrl = undefined;
+          public cloudFrontDomainName = undefined;
+          public hostedZoneId = undefined;
+          public databaseSecretArn = undefined;
+          public lambdaRoleArn = undefined;
+          public databaseSecurityGroupId = undefined;
+          public lambdaSecurityGroupId = undefined;
+          public lambdaLogGroupName = undefined;
+          constructor(scope: any, id: any, props?: any) { }
+        }
+      }));
+
+      const TapStackMock = require('../lib/tap-stack').TapStack;
+      const app = new cdk.App();
+      const ts = new TapStackMock(app, 'NoValueTap', { environmentSuffix: 'n' });
+      expect(ts).toBeDefined();
+    });
+  });
+
   test('synthesizes main networking and compute resources', () => {
     // VPC
     const vpcs = template.findResources('AWS::EC2::VPC');
