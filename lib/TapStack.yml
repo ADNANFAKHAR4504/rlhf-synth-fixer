@@ -35,7 +35,7 @@ Parameters:
 
   DomainName:
     Type: String
-    Default: "example.com"
+    Default: ""
     Description: Domain name for the application (e.g., example.com)
 
   Team:
@@ -98,6 +98,8 @@ Conditions:
   IsProduction: !Equals [!Ref Environment, "production"]
   CreateVPC: !Equals [!Ref VpcId, ""]
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, ""]]
+  HasDomain: !Not [!Equals [!Ref DomainName, ""]]
+  IsUSEast1AndHasDomain: !And [!Condition IsUSEast1, !Condition HasDomain]
 
 Resources:
   # ==========================================
@@ -518,7 +520,7 @@ Resources:
 
   AppAssetsBucketPolicy:
     Type: AWS::S3::BucketPolicy
-    Condition: IsUSEast1
+    Condition: IsUSEast1AndHasDomain
     Properties:
       Bucket: !Ref AppAssetsBucket
       PolicyDocument:
@@ -537,6 +539,7 @@ Resources:
 
   ALBCertificate:
     Type: AWS::CertificateManager::Certificate
+    Condition: HasDomain
     Properties:
       DomainName: !Ref DomainName
       SubjectAlternativeNames:
@@ -551,7 +554,7 @@ Resources:
 
   CloudFrontCertificate:
     Type: AWS::CertificateManager::Certificate
-    Condition: IsUSEast1
+    Condition: IsUSEast1AndHasDomain
     Properties:
       DomainName: !Ref DomainName
       SubjectAlternativeNames:
@@ -639,6 +642,7 @@ Resources:
             StatusCode: HTTP_301
 
   HTTPSListener:
+    Condition: HasDomain
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       LoadBalancerArn: !Ref ApplicationLoadBalancer
@@ -835,7 +839,7 @@ Resources:
 
   HostedZone:
     Type: AWS::Route53::HostedZone
-    Condition: IsUSEast1
+    Condition: IsUSEast1AndHasDomain
     Properties:
       Name: !Ref DomainName
       HostedZoneConfig:
@@ -843,7 +847,7 @@ Resources:
 
   RecordSetGroup:
     Type: AWS::Route53::RecordSetGroup
-    Condition: IsUSEast1
+    Condition: IsUSEast1AndHasDomain
     Properties:
       HostedZoneId: !Ref HostedZone
       RecordSets:
@@ -861,7 +865,7 @@ Resources:
   # Health check for Route 53
   HealthCheck:
     Type: AWS::Route53::HealthCheck
-    Condition: IsUSEast1
+    Condition: IsUSEast1AndHasDomain
     Properties:
       HealthCheckConfig:
         Type: HTTPS
@@ -877,14 +881,14 @@ Resources:
 
   CloudFrontOAI:
     Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
-    Condition: IsUSEast1
+    Condition: IsUSEast1AndHasDomain
     Properties:
       CloudFrontOriginAccessIdentityConfig:
         Comment: !Sub "OAI for ${AWS::StackName}"
 
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
-    Condition: IsUSEast1
+    Condition: IsUSEast1AndHasDomain
     Properties:
       DistributionConfig:
         Comment: !Sub "CloudFront distribution for ${Team}-${EnvironmentSuffix}"
@@ -895,9 +899,10 @@ Resources:
           AcmCertificateArn: !Ref CloudFrontCertificate
           SslSupportMethod: sni-only
           MinimumProtocolVersion: TLSv1.2_2021
-        Aliases:
-          - !Ref DomainName
-          - !Sub "www.${DomainName}"
+        Aliases: !If
+          - HasDomain
+          - [!Ref DomainName, !Sub "www.${DomainName}"]
+          - []
         DefaultRootObject: index.html
         Origins:
           - Id: ALBOriginPrimary
@@ -980,7 +985,7 @@ Resources:
           Bucket: !GetAtt LogsBucket.DomainName
           Prefix: cloudfront-logs/
           IncludeCookies: false
-        WebACLId: !Ref WebACL
+        WebACLId: !If [HasDomain, !Ref WebACL, !Ref "AWS::NoValue"]
       Tags:
         - Key: Name
           Value: !Sub "${Team}-${EnvironmentSuffix}-cloudfront"
@@ -991,7 +996,7 @@ Resources:
 
   WebACL:
     Type: AWS::WAFv2::WebACL
-    Condition: IsUSEast1
+    Condition: IsUSEast1AndHasDomain
     Properties:
       Name: !Sub "${Team}-${EnvironmentSuffix}-web-acl"
       Scope: CLOUDFRONT
@@ -1125,7 +1130,7 @@ Outputs:
       Name: !Sub "${AWS::StackName}-ALB-DNS"
 
   CloudFrontURL:
-    Condition: IsUSEast1
+    Condition: IsUSEast1AndHasDomain
     Description: CloudFront distribution URL
     Value: !GetAtt CloudFrontDistribution.DomainName
     Export:
