@@ -11,6 +11,9 @@ cdktf = "0.21.0"
 cdktf-cdktf-provider-aws = "21.9.1"
 pulumi_random = "*"
 cfn-lint = "*"
+pulumi = "*"
+pulumi-aws = "*"
+boto3 = "*"
 cfn-flip = "*"
 moto = {extras = ["sqs", "sns", "lambda", "dynamodb", "cloudwatch"], version = "*"}
 attrs = "*"
@@ -30,7 +33,6 @@ cfn-flip = "*"
 black = "*"
 pillow = "*"
 pytest-cov = "*"
-psycopg2-binary = "*"
 
 [requires]
 python_version = "3.12.11"
