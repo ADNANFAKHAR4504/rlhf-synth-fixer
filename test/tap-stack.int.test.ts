@@ -51,10 +51,10 @@ try {
 } catch (error) {
   // If deployment outputs don't exist, construct expected resource names based on CloudFormation template
   console.warn('cfn-outputs/flat-outputs.json not found, using constructed resource names');
-  
+
   // Get AWS account ID for S3 bucket names (will be resolved at runtime)
   const AWS_ACCOUNT_ID = process.env.AWS_ACCOUNT_ID || '123456789012';
-  
+
   // Construct expected resource names based on the CloudFormation template naming patterns
   outputs = {
     LogBucketName: `enterprise-log-analytics-${environmentSuffix}-${AWS_ACCOUNT_ID}`,
@@ -140,7 +140,7 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
     test('should create log stream in ApplicationLogGroup and put log events', async () => {
       // Use environment-aware log group name
       const applicationLogGroupName = `/enterprise/servers/application-${environmentSuffix}`;
-      
+
       // Create log stream
       await logsClient.send(new CreateLogStreamCommand({
         logGroupName: applicationLogGroupName,
@@ -260,7 +260,7 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
 
       // Use environment-aware Lambda function name
       const lambdaFunctionName = `LogProcessorFunction-${environmentSuffix}`;
-      
+
       const response: InvokeCommandOutput = await lambdaClient.send(new InvokeCommand({
         // Function name is typically constructed by CDK/CloudFormation
         FunctionName: lambdaFunctionName,
@@ -328,7 +328,7 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
     test('should verify Glue Crawler can be started and database exists', async () => {
       // Use environment-aware Glue Crawler name
       const crawlerName = `EnterpriseLogCrawler-${environmentSuffix}`;
-      
+
       const crawlerResponse = await glueClient.send(new GetCrawlerCommand({
         Name: crawlerName // Assuming this is the name from CDK/CFN
       }));
@@ -354,7 +354,7 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
     test('should verify Glue ETL job exists and can be started', async () => {
       // Use environment-aware Glue ETL job name
       const etlJobName = `EnterpriseLogETLJob-${environmentSuffix}`;
-      
+
       // This is a START/CHECK status test, the actual job run verification is typically in separate tests
       const jobRunResponse = await glueClient.send(new StartJobRunCommand({
         JobName: etlJobName
@@ -464,7 +464,7 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
     test('should validate infrastructure can handle the complete log event flow', async () => {
       // Use environment-aware log group name
       const applicationLogGroupName = `/enterprise/servers/application-${environmentSuffix}`;
-      
+
       const testCorrelationId = `e2e-test-${Date.now()}`;
       const testLogEvent = {
         timestamp: new Date().toISOString(),
@@ -474,7 +474,7 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
         correlation_id: testCorrelationId
       };
 
-      // Step 1: Send to CloudWatch Logs (triggers subscription filter flow)
+      // Step 1: Send to CloudWatch Logs 
       await logsClient.send(new PutLogEventsCommand({
         logGroupName: applicationLogGroupName,
         logStreamName: TEST_LOG_STREAM,
