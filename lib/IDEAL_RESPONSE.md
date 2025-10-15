@@ -21,7 +21,7 @@ lib/
 
 ## Implementation
 
-### 1. Main TAP Stack (`lib/tap-stack.ts`)
+### 1. Main TAP Stack code(`lib/tap-stack.ts`)
 
 This is the orchestration stack that instantiates all other stacks and manages dependencies.
 
