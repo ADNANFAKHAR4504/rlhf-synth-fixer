@@ -36,7 +36,7 @@
 - Consistent **naming and tagging strategy** for auditability.  
 - Separation of **public and private routing layers** to enforce least privilege.  
 
----
+
 
 
 ```yaml
