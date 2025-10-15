@@ -45,11 +45,11 @@
 >
 >    * Create a **CloudFront Distribution** serving the S3 bucket as origin.
 >    * Attach an **AWS WAF WebACL** with sample rules (e.g., block IP set, rate limiting, SQLi/XSS rules).
-> 8. **Tagging**
->
->    * Every resource must include tags:
->      `Environment`, `Owner`, and `Project`.
->
+ 8. **Tagging**
+
+    * Every resource must include tags:
+      `Environment`, `Owner`, and `Project`.
+
  #### Technical requirements:
 
  * Use intrinsic functions (`!Ref`, `!Sub`, `!GetAtt`) properly.
