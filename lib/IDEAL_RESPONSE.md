@@ -126,7 +126,7 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
 				version: rds.PostgresEngineVersion.VER_15,
 			}),
 			instanceType: ec2.InstanceType.of(
-				ec2.InstanceClass.M4,
+				ec2.InstanceClass.M5,
 				ec2.InstanceSize.LARGE
 			),
 			vpc,
