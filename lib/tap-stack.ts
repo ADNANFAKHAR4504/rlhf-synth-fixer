@@ -1,0 +1,47 @@
+import * as cdk from 'aws-cdk-lib';
+import { Construct } from 'constructs';
+import { CloudSetupStack } from './cloud-setup-stack';
+
+interface TapStackProps extends cdk.StackProps {
+  environmentSuffix?: string;
+}
+
+export class TapStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
+    super(scope, id, props);
+
+    const environmentSuffix =
+      props?.environmentSuffix || this.node.tryGetContext('environmentSuffix') || 'dev';
+
+    // Instantiate CloudSetupStack for us-east-1
+    const usEast = new CloudSetupStack(this, `CloudSetupUsEast1-${environmentSuffix}`, {
+      env: { region: 'us-east-1', account: props?.env?.account },
+      domainName: `cloudsetup-${environmentSuffix}.example.com`,
+      environmentSuffix,
+    });
+
+    // Instantiate CloudSetupStack for eu-west-1
+    /*
+    const euWest = new CloudSetupStack(this, `CloudSetupEuWest1-${environmentSuffix}`, {
+      env: { region: 'eu-west-1', account: props?.env?.account },
+      domainName: `eu.cloudsetup-${environmentSuffix}.example.com`,
+      environmentSuffix,
+    });
+    */
+
+    // Re-export important outputs so the top-level stack shows flat outputs
+    new cdk.CfnOutput(this, 'UsEast_VpcId', { value: usEast.vpcId });
+    new cdk.CfnOutput(this, 'UsEast_RdsEndpoint', { value: usEast.rdsEndpoint ?? '' });
+    new cdk.CfnOutput(this, 'UsEast_BucketName', { value: usEast.bucketName ?? '' });
+    new cdk.CfnOutput(this, 'UsEast_AlbDns', { value: usEast.albDns ?? '' });
+    new cdk.CfnOutput(this, 'UsEast_CloudFrontUrl', { value: usEast.cloudFrontUrl ?? '' });
+
+    /*
+    new cdk.CfnOutput(this, 'EuWest_VpcId', { value: euWest.vpcId });
+    new cdk.CfnOutput(this, 'EuWest_RdsEndpoint', { value: euWest.rdsEndpoint ?? '' });
+    new cdk.CfnOutput(this, 'EuWest_BucketName', { value: euWest.bucketName ?? '' });
+    new cdk.CfnOutput(this, 'EuWest_AlbDns', { value: euWest.albDns ?? '' });
+    new cdk.CfnOutput(this, 'EuWest_CloudFrontUrl', { value: euWest.cloudFrontUrl ?? '' });
+    */
+  }
+}
