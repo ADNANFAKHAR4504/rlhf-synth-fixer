@@ -137,8 +137,10 @@ def get_all_nested_stacks_recursive(cfn_client, stack_name, visited=None):
         visited = set()
     
     stack_name = extract_stack_name_from_arn(stack_name)
+    print(f"DEBUG: Checking stack: {stack_name}")
     
     if stack_name in visited:
+        print(f"DEBUG: Already visited {stack_name}, skipping")
         return []
     
     visited.add(stack_name)
@@ -146,16 +148,23 @@ def get_all_nested_stacks_recursive(cfn_client, stack_name, visited=None):
     
     try:
         paginator = cfn_client.get_paginator('list_stack_resources')
+        page_count = 0
         for page in paginator.paginate(StackName=stack_name):
+            page_count += 1
+            print(f"DEBUG: Page {page_count} for stack {stack_name}")
             for resource in page['StackResourceSummaries']:
                 if resource['ResourceType'] == 'AWS::CloudFormation::Stack':
                     nested_stack_id = resource['PhysicalResourceId']
                     nested_stack_name = extract_stack_name_from_arn(nested_stack_id)
+                    print(f"DEBUG: Found nested stack: {nested_stack_name}")
                     all_nested.append(nested_stack_name)
                     deeper_nested = get_all_nested_stacks_recursive(cfn_client, nested_stack_name, visited)
                     all_nested.extend(deeper_nested)
-    except Exception:
-        pass
+        
+        if page_count == 0:
+            print(f"DEBUG: No pages returned for {stack_name}")
+    except Exception as e:
+        print(f"DEBUG ERROR: Failed to list resources for {stack_name}: {type(e).__name__}: {str(e)}")
     
     return all_nested
 
@@ -166,6 +175,8 @@ def get_stack_resources_by_type(cfn_client, stack_name, resource_type):
     all_nested_stacks = get_all_nested_stacks_recursive(cfn_client, stack_name)
     all_stacks_to_check = [stack_name] + all_nested_stacks
     
+    print(f"DEBUG: Checking {len(all_stacks_to_check)} stacks for {resource_type}")
+    
     for stack in all_stacks_to_check:
         try:
             paginator = cfn_client.get_paginator('list_stack_resources')
@@ -173,7 +184,9 @@ def get_stack_resources_by_type(cfn_client, stack_name, resource_type):
                 for resource in page['StackResourceSummaries']:
                     if resource['ResourceType'] == resource_type:
                         resource_ids.append(resource['PhysicalResourceId'])
-        except Exception:
+                        print(f"DEBUG: Found {resource_type}: {resource['PhysicalResourceId']}")
+        except Exception as e:
+            print(f"DEBUG ERROR: Failed to check stack {stack} for {resource_type}: {e}")
             continue
     
     return resource_ids
