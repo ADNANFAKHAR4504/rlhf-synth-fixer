@@ -1,4 +1,4 @@
-name: education-platform
+name: TapStack
 runtime:
   name: python
   options:
