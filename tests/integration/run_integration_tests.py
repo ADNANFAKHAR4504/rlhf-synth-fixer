@@ -25,7 +25,7 @@ class IntegrationTestRunner:
         self.region = region
         self.profile = profile
         self.session = boto3.Session(profile_name=profile, region_name=region) if profile else boto3.Session(region_name=region)
-        self.outputs_file = 'cdk-outputs.json'
+        self.outputs_file = os.path.join('cfn-outputs', 'flat-outputs.json')
         
     def validate_aws_credentials(self) -> bool:
         """Validate AWS credentials are available and working."""

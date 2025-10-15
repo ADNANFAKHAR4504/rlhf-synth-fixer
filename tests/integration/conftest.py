@@ -24,7 +24,7 @@ def aws_region():
 def deployment_outputs():
     """Load deployment outputs from flat file."""
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    outputs_path = os.path.join(base_dir, '..', '..', 'cdk-outputs.json')
+    outputs_path = os.path.join(base_dir, '..', '..', 'cfn-outputs', 'flat-outputs.json')
     
     if os.path.exists(outputs_path):
         try:

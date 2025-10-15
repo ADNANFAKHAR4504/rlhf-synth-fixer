@@ -20,7 +20,7 @@ from botocore.exceptions import ClientError, NoCredentialsError
 
 # Load deployment flat outputs
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-FLAT_OUTPUTS_PATH = os.path.join(BASE_DIR, '..', '..', 'cdk-outputs.json')
+FLAT_OUTPUTS_PATH = os.path.join(BASE_DIR, '..', '..', 'cfn-outputs', 'flat-outputs.json')
 
 def load_outputs() -> Dict[str, Any]:
     """Load and return flat deployment outputs."""
