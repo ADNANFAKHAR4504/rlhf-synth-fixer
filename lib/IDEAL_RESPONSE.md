@@ -2,7 +2,7 @@ A comprehensive serverless application using AWS CDK in TypeScript with modular 
 
 ## File Structure
 
-```
+```requestValidatorName
 ├── bin/
 │   └── tap.ts
 ├── lib/
@@ -651,7 +651,7 @@ export class ApiGatewayConstruct extends Construct {
     // Add GET method (no request body validation for GET requests)
     users.addMethod('GET', lambdaIntegration, {
       requestValidatorOptions: {
-        requestValidatorName: 'Validator',
+        requestValidatorName: `ValidatorGet${props.environmentSuffix}`,
         validateRequestBody: false, // GET requests don't have request body
         validateRequestParameters: true,
       },
@@ -674,7 +674,7 @@ export class ApiGatewayConstruct extends Construct {
     // Add POST method with request validation
     users.addMethod('POST', lambdaIntegration, {
       requestValidatorOptions: {
-        requestValidatorName: 'Validator',
+        requestValidatorName: `ValidatorPost${props.environmentSuffix}`,
         validateRequestBody: true,
         validateRequestParameters: true,
       },

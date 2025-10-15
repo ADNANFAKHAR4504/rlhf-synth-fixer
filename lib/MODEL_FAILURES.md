@@ -91,7 +91,10 @@
   - GET method: `validateRequestBody: false` (no body validation needed)
   - POST method: `validateRequestBody: true` with proper request model validation
   - Added dedicated POST method with appropriate response codes (201, 400, 500)
-- **Lines**: 128-129, 145-170
+  - Fixed request validator naming to be method-specific with environment suffix:
+    - GET method: `ValidatorGet${props.environmentSuffix}`
+    - POST method: `ValidatorPost${props.environmentSuffix}`
+- **Lines**: 128-129, 145-170, 127, 150
 
 ### 6. End-to-End Encryption Implementation
 

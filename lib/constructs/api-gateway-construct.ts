@@ -121,13 +121,28 @@ export class ApiGatewayConstruct extends Construct {
     // Create users resource
     const users = this.restApi.root.addResource('users');
 
+    // Create separate request validators for GET and POST methods
+    const getValidator = new apigateway.RequestValidator(this, 'GetValidator', {
+      restApi: this.restApi,
+      requestValidatorName: `ValidatorGet${props.environmentSuffix}`,
+      validateRequestBody: false, // GET requests don't have request body
+      validateRequestParameters: true,
+    });
+
+    const postValidator = new apigateway.RequestValidator(
+      this,
+      'PostValidator',
+      {
+        restApi: this.restApi,
+        requestValidatorName: `ValidatorPost${props.environmentSuffix}`,
+        validateRequestBody: true,
+        validateRequestParameters: true,
+      }
+    );
+
     // Add GET method (no request body validation for GET requests)
     users.addMethod('GET', lambdaIntegration, {
-      requestValidatorOptions: {
-        requestValidatorName: 'Validator',
-        validateRequestBody: false, // GET requests don't have request body
-        validateRequestParameters: true,
-      },
+      requestValidator: getValidator,
       methodResponses: [
         {
           statusCode: '200',
@@ -146,11 +161,7 @@ export class ApiGatewayConstruct extends Construct {
 
     // Add POST method with request validation
     users.addMethod('POST', lambdaIntegration, {
-      requestValidatorOptions: {
-        requestValidatorName: 'Validator',
-        validateRequestBody: true,
-        validateRequestParameters: true,
-      },
+      requestValidator: postValidator,
       requestModels: {
         'application/json': requestModel,
       },
