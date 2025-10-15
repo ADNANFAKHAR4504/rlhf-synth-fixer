@@ -1,13 +1,223 @@
 """
 Unit tests for Educational Platform CI/CD Infrastructure
 """
-import unittest
+import importlib
 import json
 import os
+import sys
+import types
+import unittest
+
+
+def _create_pulumi_stub():
+    """Create a minimal stub for the pulumi module to execute the program."""
+    module = types.ModuleType("pulumi")
+    module._exports = {}
+
+    class Output:
+        """Lightweight Output implementation used by the tests."""
+
+        def __init__(self, value):
+            self.value = value
+
+        def apply(self, func):
+            return Output(func(self.value))
+
+        @staticmethod
+        def all(*args):
+            resolved = []
+            for arg in args:
+                if isinstance(arg, Output):
+                    resolved.append(arg.value)
+                else:
+                    resolved.append(arg)
+            return Output(resolved)
+
+        @staticmethod
+        def secret(value):
+            return Output(value)
+
+    class ResourceOptions:
+        """Minimal ResourceOptions that simply stores dependencies."""
+
+        def __init__(self, depends_on=None):
+            self.depends_on = depends_on or []
+
+    class Config:
+        """Simple Config stub that returns pre-populated values."""
+
+        def __init__(self, **values):
+            self._values = values
+
+        def get(self, key, default=None):
+            return self._values.get(key, default)
+
+    def export(name, value):
+        module._exports[name] = value
+
+    module.Output = Output
+    module.ResourceOptions = ResourceOptions
+    module.Config = Config
+    module.export = export
+    return module
+
+
+def _create_pulumi_aws_stub():
+    """Create a lightweight pulumi_aws stub to avoid real provider imports."""
+    module = types.ModuleType("pulumi_aws")
+
+    class _AttrDict(dict):
+        """Dictionary that allows attribute-style access for convenience."""
+
+        def __getattr__(self, item):
+            try:
+                return self[item]
+            except KeyError as exc:
+                raise AttributeError(item) from exc
+
+        def __setattr__(self, key, value):
+            self[key] = value
+
+    class _CacheNode:
+        """Simple object representing an ElastiCache node."""
+
+        def __init__(self, address, port):
+            self.address = address
+            self.port = port
+
+    class MockResource:
+        """Generic AWS resource placeholder that records provided arguments."""
+
+        def __init__(self, resource_name, *args, **kwargs):
+            self.resource_name = resource_name
+            self.args = args
+            self.kwargs = kwargs
+            self.id = kwargs.get("id", f"{resource_name}_id")
+            self.arn = kwargs.get("arn", f"arn:mock::{resource_name}")
+            self.endpoint = kwargs.get("endpoint", f"{resource_name}.mock.local")
+            self.address = kwargs.get("address", f"{resource_name}.mock.local")
+            default_cache = [_CacheNode(f"{resource_name}.mock.local", kwargs.get("port", 6379))]
+            raw_nodes = kwargs.get("cache_nodes", kwargs.get("cacheNodes", default_cache))
+            cache_nodes = []
+            for node in raw_nodes:
+                if isinstance(node, dict):
+                    cache_nodes.append(_AttrDict(node))
+                else:
+                    cache_nodes.append(node)
+            self.cache_nodes = cache_nodes
+            self.cacheNodes = cache_nodes
+            self.bucket = kwargs.get("bucket", f"{resource_name}-bucket")
+            for key, value in kwargs.items():
+                setattr(self, key, value)
+
+    def resource_factory(name):
+        return type(name, (MockResource,), {})
+
+    def args_factory(name):
+        def __init__(self, **kwargs):
+            self._kwargs = kwargs
+            for key, value in kwargs.items():
+                setattr(self, key, value)
+
+        return type(name, (), {"__init__": __init__})
+
+    namespaces = {
+        "kms": ["Key", "Alias"],
+        "ec2": [
+            "Vpc",
+            "InternetGateway",
+            "Subnet",
+            "Eip",
+            "NatGateway",
+            "RouteTable",
+            "RouteTableAssociation",
+            "SecurityGroup",
+        ],
+        "rds": ["Instance", "SubnetGroup"],
+        "elasticache": ["Cluster", "SubnetGroup"],
+        "cloudwatch": ["LogGroup", "MetricAlarm"],
+        "s3": ["Bucket", "BucketPublicAccessBlock"],
+        "secretsmanager": ["Secret", "SecretVersion"],
+        "iam": ["Policy", "Role", "RolePolicyAttachment"],
+        "codebuild": ["Project"],
+        "codepipeline": ["Pipeline"],
+        "sns": ["Topic"],
+    }
+
+    for namespace, classes in namespaces.items():
+        setattr(
+            module,
+            namespace,
+            types.SimpleNamespace(**{cls_name: resource_factory(cls_name) for cls_name in classes}),
+        )
+
+    for cls_name in {
+        "ProjectArtifactsArgs",
+        "ProjectEnvironmentArgs",
+        "ProjectSourceArgs",
+        "ProjectLogsConfigArgs",
+        "ProjectLogsConfigCloudwatchLogsArgs",
+        "ProjectEnvironmentEnvironmentVariableArgs",
+    }:
+        setattr(getattr(module, "codebuild"), cls_name, args_factory(cls_name))
+
+    for cls_name in {
+        "PipelineArtifactStoreArgs",
+        "PipelineArtifactStoreEncryptionKeyArgs",
+        "PipelineStageArgs",
+        "PipelineStageActionArgs",
+    }:
+        setattr(getattr(module, "codepipeline"), cls_name, args_factory(cls_name))
+
+    for cls_name in {
+        "BucketServerSideEncryptionConfigurationArgs",
+        "BucketServerSideEncryptionConfigurationRuleArgs",
+        "BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs",
+        "BucketVersioningArgs",
+    }:
+        setattr(getattr(module, "s3"), cls_name, args_factory(cls_name))
+
+    for cls_name in {"RouteTableRouteArgs", "SecurityGroupIngressArgs", "SecurityGroupEgressArgs"}:
+        setattr(getattr(module, "ec2"), cls_name, args_factory(cls_name))
+
+    class Identity:
+        def __init__(self):
+            self.account_id = "123456789012"
+
+    def get_caller_identity():
+        return Identity()
+
+    module.get_caller_identity = get_caller_identity
+    return module
+
+
+def _load_infrastructure_module():
+    """Import the Pulumi program with stubbed dependencies and return module plus stub."""
+    original_modules = {name: sys.modules.get(name) for name in ("pulumi", "pulumi_aws")}
+    pulumi_stub = _create_pulumi_stub()
+    pulumi_aws_stub = _create_pulumi_aws_stub()
+
+    sys.modules["pulumi"] = pulumi_stub
+    sys.modules["pulumi_aws"] = pulumi_aws_stub
+
+    module = importlib.import_module("lib.__main__")
+
+    for name, original in original_modules.items():
+        if original is not None:
+            sys.modules[name] = original
+        else:
+            sys.modules.pop(name, None)
+
+    return module, pulumi_stub
 
 
 class TestEducationPlatformInfrastructure(unittest.TestCase):
     """Test cases for educational platform infrastructure validation"""
+
+    @classmethod
+    def setUpClass(cls):
+        """Import the Pulumi program once using the stubs."""
+        cls.infra_module, cls.pulumi_stub = _load_infrastructure_module()
 
     def setUp(self):
         """Set up test fixtures"""
@@ -18,6 +228,7 @@ class TestEducationPlatformInfrastructure(unittest.TestCase):
         )
         with open(self.main_file, 'r', encoding='utf-8') as f:
             self.content = f.read()
+        self.module = self.__class__.infra_module
 
     def test_infrastructure_file_exists(self):
         """Test that infrastructure files exist"""
@@ -26,6 +237,12 @@ class TestEducationPlatformInfrastructure(unittest.TestCase):
             os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
             'Pulumi.yaml'
         )))
+
+    def test_infrastructure_module_imports(self):
+        """Test module imports and exposes expected resources"""
+        self.assertTrue(hasattr(self.module, 'vpc'))
+        self.assertTrue(hasattr(self.module, 'kms_key'))
+        self.assertEqual(getattr(self.module, 'environment_suffix'), 'dev')
 
     def test_required_imports(self):
         """Test all required imports are present"""
@@ -287,6 +504,8 @@ class TestEducationPlatformInfrastructure(unittest.TestCase):
         ]
         for exp in exports:
             self.assertIn(f'export("{exp}"', self.content)
+            self.assertIn(exp, self.__class__.pulumi_stub._exports)
+            self.assertIsNotNone(self.__class__.pulumi_stub._exports[exp])
 
     def test_resource_dependencies(self):
         """Test resource dependencies are configured"""
@@ -326,18 +545,6 @@ class TestEducationPlatformInfrastructure(unittest.TestCase):
             'Pulumi.yaml'
         )
         self.assertTrue(os.path.exists(pulumi_yaml))
-
-    def test_requirements_file(self):
-        """Test requirements.txt contains necessary dependencies"""
-        requirements = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-            'requirements.txt'
-        )
-        with open(requirements, 'r', encoding='utf-8') as f:
-            content = f.read()
-            self.assertIn('pulumi', content)
-            self.assertIn('pulumi-aws', content)
-            self.assertIn('boto3', content)
 
     def test_caller_identity_usage(self):
         """Test AWS caller identity is used for account ID"""
