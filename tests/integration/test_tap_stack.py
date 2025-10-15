@@ -8,18 +8,20 @@ from decimal import Decimal
 import boto3
 from pytest import mark
 
-flat_outputs = """
-{
-  "DLQueueURL": "https://sqs.us-east-1.amazonaws.com/149536495831/shipment-events-dlq-dev",
-  "DashboardURL": "https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=shipment-processing-dev",
-  "EventBusName": "shipment-events-dev",
-  "EventsTableName": "shipment-events-dev",
-  "ProcessorLambdaARN": "arn:aws:lambda:us-east-1:149536495831:function:shipment-event-processor-dev",
-  "SQSQueueARN": "arn:aws:sqs:us-east-1:149536495831:shipment-events-queue-dev",
-  "SQSQueueURL": "https://sqs.us-east-1.amazonaws.com/149536495831/shipment-events-queue-dev"
-}
-"""
+# Open file cfn-outputs/flat-outputs.json
+base_dir = os.path.dirname(os.path.abspath(__file__))
+flat_outputs_path = os.path.join(
+    base_dir, '..', '..', 'cfn-outputs', 'flat-outputs.json'
+)
+
+if os.path.exists(flat_outputs_path):
+    with open(flat_outputs_path, 'r', encoding='utf-8') as f:
+        flat_outputs = f.read()
+else:
+    flat_outputs = '{}'
+
 flat_outputs = json.loads(flat_outputs)
+
 
 
 @mark.describe("TapStack Integration Tests")
