@@ -655,12 +655,17 @@ export class RdsModule extends Construct {
         {
           name: 'shared_preload_libraries',
           value: 'pg_stat_statements',
+          applyMethod: 'pending-reboot', // Add this line
         },
         {
           name: 'log_statement',
           value: 'all',
+          applyMethod: 'immediate', // Add this line for dynamic parameters
         },
       ],
+      lifecycle: {
+        createBeforeDestroy: true, // Create new parameter group before destroying old one
+      },
       tags: config.tags,
     });
 
