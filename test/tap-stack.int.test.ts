@@ -40,7 +40,11 @@ import {
   GetPublicAccessBlockCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
-import { GetTopicAttributesCommand, SNSClient } from '@aws-sdk/client-sns';
+import {
+  GetTopicAttributesCommand,
+  ListTopicsCommand,
+  SNSClient,
+} from '@aws-sdk/client-sns';
 import { GetWebACLCommand, WAFV2Client } from '@aws-sdk/client-wafv2';
 import fs from 'fs';
 
@@ -48,10 +52,7 @@ let outputs: any;
 try {
   outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
 } catch {
-  console.warn(
-    'Could not read cfn-outputs/flat-outputs.json, using mock outputs for testing'
-  );
-  outputs = {};
+  throw new Error('cfn-outputs/flat-outputs.json not found or invalid JSON');
 }
 
 function deriveRegionFromOutputs(out: any): string | undefined {
@@ -96,55 +97,66 @@ const configClient = new ConfigServiceClient({ region });
 const lambdaClient = new LambdaClient({ region });
 const snsClient = new SNSClient({ region });
 
-describe('TapStack Production Security Infrastructure Integration Tests', () => {
+// ---------- helpers (fail-fast) ----------
+async function getVpcId(): Promise<string> {
+  if (outputs.VPCId) {
+    return outputs.VPCId as string;
+  }
+  const res = await ec2Client.send(
+    new DescribeVpcsCommand({
+      Filters: [
+        { Name: 'tag:Name', Values: ['ProductionVPC'] },
+        { Name: 'cidr-block', Values: ['10.0.0.0/16'] },
+      ],
+    })
+  );
+  const vpcId = res.Vpcs?.[0]?.VpcId;
+  if (!vpcId) throw new Error('VPC not found by outputs or tag/CIDR discovery');
+  return vpcId;
+}
+
+async function getAlbByDnsOrThrow() {
+  if (!outputs.LoadBalancerDNS) throw new Error('LoadBalancerDNS output missing');
+  const all = await elbClient.send(new DescribeLoadBalancersCommand({}));
+  const alb = all.LoadBalancers?.find(
+    (lb) =>
+      lb.DNSName === outputs.LoadBalancerDNS ||
+      String(outputs.LoadBalancerDNS).startsWith(`${lb.LoadBalancerName}-`)
+  );
+  if (!alb) throw new Error('ALB not found by DNS');
+  return alb;
+}
+
+async function findSnsTopicArnByDisplayName(targetDisplayName: string): Promise<string> {
+  let next: string | undefined;
+  do {
+    const page = await snsClient.send(new ListTopicsCommand({ NextToken: next }));
+    for (const t of page.Topics ?? []) {
+      const arn = t.TopicArn!;
+      const attrs = await snsClient.send(new GetTopicAttributesCommand({ TopicArn: arn }));
+      if (attrs.Attributes?.DisplayName === targetDisplayName) return arn;
+    }
+    next = page.NextToken;
+  } while (next);
+  throw new Error(`SNS topic with DisplayName="${targetDisplayName}" not found`);
+}
+
+describe('TapStack Production Security Infrastructure Integration Tests (fail-fast)', () => {
   const testTimeout = 30000;
 
   // ---------- VPC & NETWORKING ----------
   describe('VPC and Networking Integration Tests', () => {
     test(
-      'VPC exists with DNS features (non-blocking: use outputs if present, else discover by tag+CIDR)',
+      'VPC exists with DNS features',
       async () => {
-        let vpcId: string | undefined = outputs.VPCId as string | undefined;
-        let vpcResp;
+        const vpcId = await getVpcId();
 
-        if (vpcId) {
-          try {
-            vpcResp = await ec2Client.send(
-              new DescribeVpcsCommand({ VpcIds: [vpcId] })
-            );
-          } catch {
-            vpcId = undefined; // fall back to discovery
-          }
-        }
+        const vpcResp = await ec2Client.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
+        expect(vpcResp.Vpcs?.length).toBe(1);
+        const vpc = vpcResp.Vpcs![0];
 
-        if (!vpcId) {
-          const discovered = await ec2Client.send(
-            new DescribeVpcsCommand({
-              Filters: [
-                { Name: 'tag:Name', Values: ['ProductionVPC'] }, // from template
-                { Name: 'cidr-block', Values: ['10.0.0.0/16'] }, // from SubnetConfig
-              ],
-            })
-          );
-          vpcId = discovered.Vpcs?.[0]?.VpcId;
-          vpcResp = discovered;
-        }
-
-        if (!vpcId) {
-          console.warn('Production VPC not found — skipping VPC test.');
-          return;
-        }
-
-        const vpc = (vpcResp?.Vpcs ?? []).find((x) => x.VpcId === vpcId);
-        if (!vpc) {
-          const byId = await ec2Client.send(
-            new DescribeVpcsCommand({ VpcIds: [vpcId] })
-          );
-          vpc = byId.Vpcs?.[0];
-        }
-
-        expect(vpc?.State).toBe('available');
-        expect(vpc?.CidrBlock).toBe('10.0.0.0/16');
+        expect(vpc.State).toBe('available');
+        expect(vpc.CidrBlock).toBe('10.0.0.0/16');
 
         const [dnsHostnames, dnsSupport] = await Promise.all([
           ec2Client.send(
@@ -160,7 +172,6 @@ describe('TapStack Production Security Infrastructure Integration Tests', () => 
             })
           ),
         ]);
-
         expect(dnsHostnames.EnableDnsHostnames?.Value).toBe(true);
         expect(dnsSupport.EnableDnsSupport?.Value).toBe(true);
       },
@@ -168,25 +179,9 @@ describe('TapStack Production Security Infrastructure Integration Tests', () => 
     );
 
     test(
-      'Public route table has 0.0.0.0/0 route to IGW (non-blocking)',
+      'Public route table has 0.0.0.0/0 route to IGW',
       async () => {
-        // Find VPC (reuse logic)
-        const vpcs = await ec2Client.send(
-          new DescribeVpcsCommand({
-            VpcIds: outputs.VPCId ? [outputs.VPCId] : undefined,
-            Filters: outputs.VPCId
-              ? undefined
-              : [
-                { Name: 'tag:Name', Values: ['ProductionVPC'] },
-                { Name: 'cidr-block', Values: ['10.0.0.0/16'] },
-              ],
-          } as any)
-        );
-        const vpcId = vpcs.Vpcs?.[0]?.VpcId;
-        if (!vpcId) {
-          console.warn('VPC not found — skipping IGW route test.');
-          return;
-        }
+        const vpcId = await getVpcId();
 
         const igws = await ec2Client.send(
           new DescribeInternetGatewaysCommand({
@@ -194,10 +189,7 @@ describe('TapStack Production Security Infrastructure Integration Tests', () => 
           })
         );
         const igwId = igws.InternetGateways?.[0]?.InternetGatewayId;
-        if (!igwId) {
-          console.warn('No Internet Gateway attached — skipping.');
-          return;
-        }
+        if (!igwId) throw new Error('Internet Gateway not attached to VPC');
 
         const rts = await ec2Client.send(
           new DescribeRouteTablesCommand({
@@ -208,10 +200,7 @@ describe('TapStack Production Security Infrastructure Integration Tests', () => 
           })
         );
         const publicRt = rts.RouteTables?.[0];
-        if (!publicRt) {
-          console.warn('PublicRouteTable not found — skipping.');
-          return;
-        }
+        if (!publicRt) throw new Error('PublicRouteTable not found by tag');
 
         const hasDefaultToIgw = publicRt.Routes?.some(
           (r) => r.DestinationCidrBlock === '0.0.0.0/0' && r.GatewayId === igwId
@@ -222,25 +211,9 @@ describe('TapStack Production Security Infrastructure Integration Tests', () => 
     );
 
     test(
-      'Private route tables default to NAT gateways (non-blocking)',
+      'Private route tables default to NAT gateways',
       async () => {
-        // Find VPC
-        const vpcs = await ec2Client.send(
-          new DescribeVpcsCommand({
-            VpcIds: outputs.VPCId ? [outputs.VPCId] : undefined,
-            Filters: outputs.VPCId
-              ? undefined
-              : [
-                { Name: 'tag:Name', Values: ['ProductionVPC'] },
-                { Name: 'cidr-block', Values: ['10.0.0.0/16'] },
-              ],
-          } as any)
-        );
-        const vpcId = vpcs.Vpcs?.[0]?.VpcId;
-        if (!vpcId) {
-          console.warn('VPC not found — skipping NAT route test.');
-          return;
-        }
+        const vpcId = await getVpcId();
 
         const ngwResp = await ec2Client.send(
           new DescribeNatGatewaysCommand({
@@ -251,14 +224,9 @@ describe('TapStack Production Security Infrastructure Integration Tests', () => 
           })
         );
         const natIds = new Set(
-          (ngwResp.NatGateways ?? [])
-            .map((n) => n.NatGatewayId)
-            .filter(Boolean) as string[]
+          (ngwResp.NatGateways ?? []).map((n) => n.NatGatewayId!).filter(Boolean)
         );
-        if (natIds.size === 0) {
-          console.warn('No NAT gateways found — skipping.');
-          return;
-        }
+        if (natIds.size === 0) throw new Error('No NAT gateways (state=available) found');
 
         const rtResp = await ec2Client.send(
           new DescribeRouteTablesCommand({
@@ -269,10 +237,7 @@ describe('TapStack Production Security Infrastructure Integration Tests', () => 
           })
         );
         const privateRTs = rtResp.RouteTables ?? [];
-        if (privateRTs.length === 0) {
-          console.warn('Private route tables not found — skipping.');
-          return;
-        }
+        if (privateRTs.length === 0) throw new Error('Private route tables not found by tag');
 
         for (const rt of privateRTs) {
           const hasNatDefault = (rt.Routes ?? []).some(
@@ -288,42 +253,21 @@ describe('TapStack Production Security Infrastructure Integration Tests', () => 
     );
 
     test(
-      'Subnets are spread across at least 2 AZs (uses outputs or discovery)',
+      'Subnets are spread across at least 2 AZs',
       async () => {
+        const vpcId = await getVpcId();
+
         let subnetIds: string[] = [];
-        if (outputs.PublicSubnetIds) {
-          subnetIds.push(...String(outputs.PublicSubnetIds).split(','));
-        }
-        if (outputs.PrivateSubnetIds) {
-          subnetIds.push(...String(outputs.PrivateSubnetIds).split(','));
-        }
+        if (outputs.PublicSubnetIds) subnetIds.push(...String(outputs.PublicSubnetIds).split(','));
+        if (outputs.PrivateSubnetIds) subnetIds.push(...String(outputs.PrivateSubnetIds).split(','));
 
         if (subnetIds.length === 0) {
-          const vpcs = await ec2Client.send(
-            new DescribeVpcsCommand({
-              VpcIds: outputs.VPCId ? [outputs.VPCId] : undefined,
-              Filters: outputs.VPCId
-                ? undefined
-                : [
-                  { Name: 'tag:Name', Values: ['ProductionVPC'] },
-                  { Name: 'cidr-block', Values: ['10.0.0.0/16'] },
-                ],
-            } as any)
-          );
-          const vpcId = vpcs.Vpcs?.[0]?.VpcId;
-          if (!vpcId) {
-            console.warn('VPC not found — skipping subnet AZ test.');
-            return;
-          }
           const subs = await ec2Client.send(
             new DescribeSubnetsCommand({ Filters: [{ Name: 'vpc-id', Values: [vpcId] }] })
           );
           subnetIds = (subs.Subnets ?? []).map((s) => s.SubnetId!).filter(Boolean);
-          if (subnetIds.length === 0) {
-            console.warn('No subnets found — skipping.');
-            return;
-          }
         }
+        if (subnetIds.length === 0) throw new Error('No subnets found in VPC');
 
         const resp = await ec2Client.send(new DescribeSubnetsCommand({ SubnetIds: subnetIds }));
         const azs = new Set(resp.Subnets?.map((s) => s.AvailabilityZone));
@@ -338,50 +282,30 @@ describe('TapStack Production Security Infrastructure Integration Tests', () => 
     test(
       'ALB should be accessible and properly configured',
       async () => {
-        if (!outputs.LoadBalancerDNS) {
-          console.warn('LoadBalancerDNS not found in outputs, skipping test');
-          return;
-        }
+        const alb = await getAlbByDnsOrThrow();
 
-        const all = await elbClient.send(new DescribeLoadBalancersCommand({}));
-        const alb = all.LoadBalancers?.find(
-          (lb) =>
-            lb.DNSName === outputs.LoadBalancerDNS ||
-            String(outputs.LoadBalancerDNS).startsWith(`${lb.LoadBalancerName}-`)
-        );
-
-        expect(alb).toBeDefined();
-        expect(alb!.State?.Code).toBe('active');
-        expect(alb!.Type).toBe('application');
-        expect(alb!.Scheme).toBe('internet-facing');
-        expect(alb!.IpAddressType).toBe('ipv4');
+        expect(alb.State?.Code).toBe('active');
+        expect(alb.Type).toBe('application');
+        expect(alb.Scheme).toBe('internet-facing');
+        expect(alb.IpAddressType).toBe('ipv4');
       },
       testTimeout
     );
 
     test(
-      'Target groups should be healthy',
+      'Target groups attached to ALB have healthy HTTP checks',
       async () => {
-        if (!outputs.LoadBalancerDNS) {
-          console.warn('LoadBalancerDNS not found, skipping target group test');
-          return;
-        }
+        const alb = await getAlbByDnsOrThrow();
 
-        const response = await elbClient.send(new DescribeTargetGroupsCommand({}));
-        const stackTGs =
-          response.TargetGroups?.filter(
-            (tg) =>
-              tg.TargetGroupName?.includes('Production') ||
-              tg.TargetGroupName?.toLowerCase().includes('tap')
-          ) ?? [];
+        const tgs = await elbClient.send(
+          new DescribeTargetGroupsCommand({ LoadBalancerArn: alb.LoadBalancerArn })
+        );
+        const groups = tgs.TargetGroups ?? [];
+        if (groups.length === 0) throw new Error('No target groups attached to ALB');
 
-        if (stackTGs.length > 0) {
-          stackTGs.forEach((tg) => {
-            expect(tg.HealthCheckProtocol).toBe('HTTP');
-            expect(tg.HealthCheckPath).toBe('/health');
-          });
-        } else {
-          expect(Array.isArray(stackTGs)).toBe(true);
+        for (const tg of groups) {
+          expect(tg.HealthCheckProtocol).toBe('HTTP');
+          expect(tg.HealthCheckPath).toBe('/health');
         }
       },
       testTimeout
@@ -393,16 +317,13 @@ describe('TapStack Production Security Infrastructure Integration Tests', () => 
     test(
       'RDS instance should be encrypted and multi-AZ',
       async () => {
-        if (!outputs.RDSEndpoint) {
-          console.warn('RDSEndpoint not found in outputs, skipping test');
-          return;
-        }
+        if (!outputs.RDSEndpoint) throw new Error('RDSEndpoint output missing');
         const dbInstanceId = String(outputs.RDSEndpoint).split('.')[0];
 
         const response = await rdsClient.send(
           new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbInstanceId })
         );
-        expect(response.DBInstances).toHaveLength(1);
+        expect(response.DBInstances?.length).toBe(1);
 
         const db = response.DBInstances![0];
         expect(db.DBInstanceStatus).toBe('available');
@@ -417,10 +338,7 @@ describe('TapStack Production Security Infrastructure Integration Tests', () => 
     test(
       'RDS should have proper engine and version',
       async () => {
-        if (!outputs.RDSEndpoint) {
-          console.warn('RDSEndpoint not found in outputs, skipping test');
-          return;
-        }
+        if (!outputs.RDSEndpoint) throw new Error('RDSEndpoint output missing');
         const dbInstanceId = String(outputs.RDSEndpoint).split('.')[0];
 
         const response = await rdsClient.send(
@@ -438,53 +356,27 @@ describe('TapStack Production Security Infrastructure Integration Tests', () => 
   // ---------- S3 ----------
   describe('S3 Bucket Security Tests', () => {
     test(
-      'S3 logging bucket should have encryption enabled',
+      'Logging bucket has KMS encryption and public access block',
       async () => {
-        const s3BucketName = Object.values(outputs).find(
-          (v: any) => typeof v === 'string' && v.includes('production-logs')
-        ) as string | undefined;
-
-        if (!s3BucketName) {
-          console.warn('S3 bucket name not found in outputs, skipping test');
-          return;
-        }
-
-        const encryptionResponse = await s3Client.send(
-          new GetBucketEncryptionCommand({ Bucket: s3BucketName })
+        if (!outputs.CloudTrailArn) throw new Error('CloudTrailArn output missing');
+        const trailName = String(outputs.CloudTrailArn).split('/').pop()!;
+        const trails = await cloudTrailClient.send(
+          new DescribeTrailsCommand({ trailNameList: [trailName] })
         );
+        const trail = trails.trailList?.[0];
+        if (!trail?.S3BucketName) throw new Error('CloudTrail S3 bucket not found via DescribeTrails');
 
-        expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
-        const rule =
-          encryptionResponse.ServerSideEncryptionConfiguration!.Rules![0];
-        expect(rule.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe(
-          'aws:kms'
-        );
-      },
-      testTimeout
-    );
+        const bucket = trail.S3BucketName;
 
-    test(
-      'S3 bucket should block public access',
-      async () => {
-        const s3BucketName = Object.values(outputs).find(
-          (v: any) => typeof v === 'string' && v.includes('production-logs')
-        ) as string | undefined;
+        const enc = await s3Client.send(new GetBucketEncryptionCommand({ Bucket: bucket }));
+        const rule = enc.ServerSideEncryptionConfiguration?.Rules?.[0];
+        expect(rule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
 
-        if (!s3BucketName) {
-          console.warn('S3 bucket name not found in outputs, skipping test');
-          return;
-        }
-
-        const response = await s3Client.send(
-          new GetPublicAccessBlockCommand({ Bucket: s3BucketName })
-        );
-
-        expect(response.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
-        expect(response.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
-        expect(response.PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
-        expect(response.PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(
-          true
-        );
+        const pab = await s3Client.send(new GetPublicAccessBlockCommand({ Bucket: bucket }));
+        expect(pab.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
+        expect(pab.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
+        expect(pab.PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
+        expect(pab.PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
       },
       testTimeout
     );
@@ -493,12 +385,9 @@ describe('TapStack Production Security Infrastructure Integration Tests', () => 
   // ---------- KMS ----------
   describe('KMS Encryption Tests', () => {
     test(
-      'KMS key should have rotation enabled',
+      'KMS key has rotation enabled and is active',
       async () => {
-        if (!outputs.KMSKeyArn) {
-          console.warn('KMSKeyArn not found in outputs, skipping test');
-          return;
-        }
+        if (!outputs.KMSKeyArn) throw new Error('KMSKeyArn output missing');
 
         const rotation = await kmsClient.send(
           new GetKeyRotationStatusCommand({ KeyId: outputs.KMSKeyArn })
@@ -518,12 +407,9 @@ describe('TapStack Production Security Infrastructure Integration Tests', () => 
   // ---------- WAF ----------
   describe('WAF Protection Tests', () => {
     test(
-      'WAF Web ACL should be properly configured',
+      'WAF Web ACL has required rules',
       async () => {
-        if (!outputs.WAFWebACLArn) {
-          console.warn('WAFWebACLArn not found in outputs, skipping test');
-          return;
-        }
+        if (!outputs.WAFWebACLArn) throw new Error('WAFWebACLArn output missing');
 
         const webACLId = String(outputs.WAFWebACLArn).split('/').pop()!;
         const response = await wafClient.send(
@@ -534,12 +420,10 @@ describe('TapStack Production Security Infrastructure Integration Tests', () => 
           })
         );
 
-        expect(response.WebACL?.Rules).toBeDefined();
-        expect(response.WebACL?.Rules?.length).toBeGreaterThan(0);
+        const rules = response.WebACL?.Rules ?? [];
+        expect(rules.length).toBeGreaterThan(0);
 
-        const rateLimitRule = response.WebACL?.Rules?.find(
-          (r) => r.Name === 'RateLimitRule'
-        );
+        const rateLimitRule = rules.find((r) => r.Name === 'RateLimitRule');
         expect(rateLimitRule).toBeDefined();
       },
       testTimeout
@@ -549,20 +433,17 @@ describe('TapStack Production Security Infrastructure Integration Tests', () => 
   // ---------- BACKUP ----------
   describe('Backup and Disaster Recovery Tests', () => {
     test(
-      'AWS Backup plan should exist and be active',
+      'AWS Backup plan exists and is named Production*',
       async () => {
-        if (!outputs.BackupPlanId) {
-          console.warn('BackupPlanId not found in outputs, skipping test');
-          return;
-        }
+        if (!outputs.BackupPlanId) throw new Error('BackupPlanId output missing');
 
         const response = await backupClient.send(new ListBackupPlansCommand({}));
         const ourPlan = response.BackupPlansList?.find(
           (p) => p.BackupPlanId === outputs.BackupPlanId
         );
 
-        expect(ourPlan).toBeDefined();
-        expect(ourPlan?.BackupPlanName).toContain('Production');
+        if (!ourPlan) throw new Error('Backup plan not found by ID');
+        expect(ourPlan.BackupPlanName).toContain('Production');
       },
       testTimeout
     );
@@ -571,9 +452,10 @@ describe('TapStack Production Security Infrastructure Integration Tests', () => 
   // ---------- IAM ----------
   describe('IAM and Security Compliance Tests', () => {
     test(
-      'EC2 instance role should have minimal permissions',
+      'EC2 instance role exists and has CloudWatchAgent policy',
       async () => {
         const roleNames = ['EC2InstanceRole', 'TapStack-EC2InstanceRole'];
+        let found = false;
 
         for (const roleName of roleNames) {
           try {
@@ -583,17 +465,15 @@ describe('TapStack Production Security Infrastructure Integration Tests', () => 
             const policies = await iamClient.send(
               new ListAttachedRolePoliciesCommand({ RoleName: roleName })
             );
-
             const arns = policies.AttachedPolicies?.map((p) => p.PolicyArn) || [];
             expect(arns.some((arn) => arn?.includes('CloudWatchAgent'))).toBe(true);
+            found = true;
             break;
           } catch {
-            if (roleName === roleNames[roleNames.length - 1]) {
-              console.warn('EC2 instance role not found, skipping IAM test');
-            }
-            continue;
+            // try next
           }
         }
+        if (!found) throw new Error('EC2 instance role not found in expected names');
       },
       testTimeout
     );
@@ -602,19 +482,15 @@ describe('TapStack Production Security Infrastructure Integration Tests', () => 
   // ---------- MONITORING ----------
   describe('Monitoring and Logging Tests', () => {
     test(
-      'CloudTrail should be active and logging',
+      'CloudTrail is active, multi-region, and logging',
       async () => {
-        if (!outputs.CloudTrailArn) {
-          console.warn('CloudTrailArn not found in outputs, skipping test');
-          return;
-        }
-
+        if (!outputs.CloudTrailArn) throw new Error('CloudTrailArn output missing');
         const trailName = String(outputs.CloudTrailArn).split('/').pop()!;
 
         const describe = await cloudTrailClient.send(
           new DescribeTrailsCommand({ trailNameList: [trailName] })
         );
-        expect(describe.trailList).toHaveLength(1);
+        expect(describe.trailList?.length).toBe(1);
         const trail = describe.trailList![0];
         expect(trail.IsMultiRegionTrail).toBe(true);
         expect(trail.LogFileValidationEnabled).toBe(true);
@@ -628,34 +504,18 @@ describe('TapStack Production Security Infrastructure Integration Tests', () => 
     );
 
     test(
-      'Config service should be recording',
+      'Config recorder exists and records all/global resources',
       async () => {
-        if (Object.keys(outputs).length === 0) {
-          console.warn('No outputs available, skipping Config test');
-          return;
-        }
+        const response = await configClient.send(
+          new DescribeConfigurationRecordersCommand({})
+        );
+        const productionRecorder =
+          response.ConfigurationRecorders?.find((r) => r.name?.includes('Production')) ??
+          response.ConfigurationRecorders?.[0];
 
-        try {
-          const response = await configClient.send(
-            new DescribeConfigurationRecordersCommand({})
-          );
-          const productionRecorder = response.ConfigurationRecorders?.find((r) =>
-            r.name?.includes('Production')
-          );
-
-          if (productionRecorder) {
-            expect(productionRecorder.recordingGroup?.allSupported).toBe(true);
-            expect(
-              productionRecorder.recordingGroup?.includeGlobalResourceTypes
-            ).toBe(true);
-          } else {
-            console.warn('Production Config recorder not found, may be using default');
-          }
-        } catch {
-          console.warn(
-            'Config service test skipped due to AWS credentials or permissions'
-          );
-        }
+        if (!productionRecorder) throw new Error('No AWS Config recorder found');
+        expect(productionRecorder.recordingGroup?.allSupported).toBe(true);
+        expect(productionRecorder.recordingGroup?.includeGlobalResourceTypes).toBe(true);
       },
       testTimeout
     );
@@ -664,13 +524,14 @@ describe('TapStack Production Security Infrastructure Integration Tests', () => 
   // ---------- LAMBDA ----------
   describe('Lambda Function Tests', () => {
     test(
-      'Key rotation Lambda should be deployed and configured',
+      'Key rotation Lambda is deployed and configured',
       async () => {
         const functionNames = [
           'AccessKeyRotationChecker',
           `AccessKeyRotationChecker-${environmentSuffix}`,
         ];
 
+        let found = false;
         for (const name of functionNames) {
           try {
             const fn = await lambdaClient.send(
@@ -682,14 +543,13 @@ describe('TapStack Production Security Infrastructure Integration Tests', () => 
             expect(
               fn.Configuration?.Environment?.Variables?.ENFORCE_ROTATION
             ).toBeDefined();
+            found = true;
             break;
           } catch {
-            if (name === functionNames[functionNames.length - 1]) {
-              console.warn('Key rotation Lambda not found, skipping test');
-            }
-            continue;
+            // try next
           }
         }
+        if (!found) throw new Error('Key rotation Lambda not found by expected names');
       },
       testTimeout
     );
@@ -698,21 +558,12 @@ describe('TapStack Production Security Infrastructure Integration Tests', () => 
   // ---------- SNS ----------
   describe('SNS Topic Tests', () => {
     test(
-      'SNS topic should be encrypted and properly configured',
+      'SNS topic "ProductionSecurityAlerts" exists and is KMS-encrypted',
       async () => {
-        let topicArn: string | undefined;
-
-        for (const [, value] of Object.entries(outputs)) {
-          if (typeof value === 'string' && value.includes('arn:aws:sns') && value.includes('Production')) {
-            topicArn = value;
-            break;
-          }
-        }
-
-        if (!topicArn) {
-          console.warn('SNS topic ARN not found, skipping test');
-          return;
-        }
+        const topicArn =
+          (Object.values(outputs).find(
+            (v: any) => typeof v === 'string' && v.includes('arn:aws:sns') && v.includes('Production')
+          ) as string | undefined) ?? (await findSnsTopicArnByDisplayName('ProductionSecurityAlerts'));
 
         const response = await snsClient.send(
           new GetTopicAttributesCommand({ TopicArn: topicArn })
@@ -727,37 +578,11 @@ describe('TapStack Production Security Infrastructure Integration Tests', () => 
   // ---------- END-TO-END ----------
   describe('End-to-End Security Workflow Tests', () => {
     test(
-      'Complete infrastructure should be secure and operational',
+      'Critical outputs are present (sanity)',
       async () => {
-        const criticalOutputs = ['VPCId', 'LoadBalancerDNS', 'RDSEndpoint', 'KMSKeyArn'];
-        criticalOutputs.forEach((o) => {
-          if (!outputs[o]) {
-            console.warn(`${o} not found in outputs - infrastructure may not be fully deployed`);
-          }
-        });
-
-        const coreComponentsDeployed = Boolean(
-          (outputs.VPCId || true) && (outputs.LoadBalancerDNS || outputs.RDSEndpoint)
-        );
-        expect(coreComponentsDeployed || Object.keys(outputs).length === 0).toBe(true);
-      },
-      testTimeout
-    );
-
-    test(
-      'Security configuration should meet compliance standards',
-      async () => {
-        const securityChecks = {
-          hasKMSEncryption: !!outputs.KMSKeyArn,
-          hasWAFProtection: !!outputs.WAFWebACLArn,
-          hasCloudTrailLogging: !!outputs.CloudTrailArn,
-          hasBackupPlan: !!outputs.BackupPlanId,
-        };
-
-        const securityScore = Object.values(securityChecks).filter(Boolean).length;
-        expect(securityScore).toBeGreaterThanOrEqual(
-          Object.keys(outputs).length === 0 ? 0 : 2
-        );
+        for (const key of ['VPCId', 'LoadBalancerDNS', 'RDSEndpoint', 'KMSKeyArn', 'WAFWebACLArn', 'CloudTrailArn', 'BackupPlanId']) {
+          if (!outputs[key]) throw new Error(`Missing critical output: ${key}`);
+        }
       },
       testTimeout
     );
