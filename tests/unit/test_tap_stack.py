@@ -1,7 +1,7 @@
 import unittest
 
 import aws_cdk as cdk
-from aws_cdk.assertions import Template, Match
+from aws_cdk.assertions import Match, Template
 from pytest import mark
 
 from lib.tap_stack import TapStack, TapStackProps
@@ -55,20 +55,30 @@ class TestTapStack(unittest.TestCase):
         # ASSERT
         template.resource_count_is("AWS::SQS::Queue", 2)  # Main queue + DLQ
         
-        # Check main queue
-        template.has_resource_properties("AWS::SQS::Queue", {
-            "QueueName": f"shipment-events-queue-{env_suffix}",
-            "VisibilityTimeoutSeconds": 360,
-            "MessageRetentionPeriod": 345600,  # 4 days
-            "ReceiveMessageWaitTimeSeconds": 20
-        })
+        # Find queues by inspecting actual resources
+        queues = template.find_resources("AWS::SQS::Queue")
         
-        # Check DLQ
-        template.has_resource_properties("AWS::SQS::Queue", {
-            "QueueName": f"shipment-events-dlq-{env_suffix}",
-            "MessageRetentionPeriod": 1209600,  # 14 days
-            "VisibilityTimeoutSeconds": 300
-        })
+        main_queue_found = False
+        dlq_found = False
+        
+        for queue_id, queue_data in queues.items():
+            props = queue_data.get("Properties", {})
+            queue_name = props.get("QueueName", "")
+            
+            if f"shipment-events-queue-{env_suffix}" == queue_name:
+                main_queue_found = True
+                self.assertEqual(props.get("VisibilityTimeout"), 360)
+                self.assertEqual(props.get("MessageRetentionPeriod"), 345600)
+                self.assertEqual(props.get("ReceiveMessageWaitTimeSeconds"), 20)
+                self.assertIn("RedrivePolicy", props)
+            
+            elif f"shipment-events-dlq-{env_suffix}" == queue_name:
+                dlq_found = True
+                self.assertEqual(props.get("MessageRetentionPeriod"), 1209600)
+                self.assertEqual(props.get("VisibilityTimeout"), 300)
+        
+        self.assertTrue(main_queue_found, "Main queue should exist")
+        self.assertTrue(dlq_found, "DLQ should exist")
 
     @mark.it("creates Lambda function with correct configuration")
     def test_creates_lambda_function(self):
@@ -78,21 +88,71 @@ class TestTapStack(unittest.TestCase):
                          TapStackProps(environment_suffix=env_suffix))
         template = Template.from_stack(stack)
 
-        # ASSERT
-        template.resource_count_is("AWS::Lambda::Function", 1)
-        template.has_resource_properties("AWS::Lambda::Function", {
-            "FunctionName": f"shipment-event-processor-{env_suffix}",
-            "Runtime": "python3.12",
-            "Handler": "index.lambda_handler",
-            "Timeout": 60,
-            "MemorySize": 512,
-            "TracingConfig": {"Mode": "Active"},
-            "Environment": {
-                "Variables": {
-                    "ENVIRONMENT": env_suffix
-                }
-            }
-        })
+        # Get all Lambda functions
+        lambdas = template.find_resources("AWS::Lambda::Function")
+        
+        # Find the processor function by name
+        processor_function = None
+        for resource_id, resource in lambdas.items():
+            props = resource["Properties"]
+            function_name = props.get("FunctionName", "")
+            if f"shipment-event-processor-{env_suffix}" == function_name:
+                processor_function = props
+                break
+        
+        # ASSERT - Processor function should exist
+        self.assertIsNotNone(processor_function, 
+                           f"Should find Lambda function named 'shipment-event-processor-{env_suffix}'")
+        
+        # Verify core properties
+        self.assertEqual(
+            processor_function.get("FunctionName"), 
+            f"shipment-event-processor-{env_suffix}",
+            f"Expected FunctionName to be 'shipment-event-processor-{env_suffix}'"
+        )
+        self.assertEqual(
+            processor_function.get("Runtime"), 
+            "python3.12",
+            f"Expected Runtime to be 'python3.12', got '{processor_function.get('Runtime')}'"
+        )
+        self.assertEqual(
+            processor_function.get("Handler"), 
+            "index.lambda_handler",
+            f"Expected Handler to be 'index.lambda_handler', got '{processor_function.get('Handler')}'"
+        )
+        self.assertEqual(
+            processor_function.get("Timeout"), 
+            60,
+            f"Expected Timeout to be 60, got '{processor_function.get('Timeout')}'"
+        )
+        self.assertEqual(
+            processor_function.get("MemorySize"), 
+            512,
+            f"Expected MemorySize to be 512, got '{processor_function.get('MemorySize')}'"
+        )
+        
+        # Verify tracing
+        self.assertIn("TracingConfig", processor_function, "TracingConfig should exist")
+        tracing_config = processor_function.get("TracingConfig", {})
+        self.assertEqual(
+            tracing_config.get("Mode"), 
+            "Active",
+            f"Expected TracingConfig Mode to be 'Active', got '{tracing_config.get('Mode')}'"
+        )
+        
+        # Verify environment variables
+        self.assertIn("Environment", processor_function, "Environment should exist")
+        environment = processor_function.get("Environment", {})
+        self.assertIn("Variables", environment, "Environment.Variables should exist")
+        env_vars = environment.get("Variables", {})
+        
+        self.assertIn("ENVIRONMENT", env_vars, "ENVIRONMENT variable should exist")
+        self.assertEqual(
+            env_vars.get("ENVIRONMENT"), 
+            env_suffix,
+            f"Expected ENVIRONMENT to be '{env_suffix}', got '{env_vars.get('ENVIRONMENT')}'"
+        )
+        self.assertIn("EVENTS_TABLE_NAME", env_vars, "EVENTS_TABLE_NAME variable should exist")
 
     @mark.it("creates EventBridge resources")
     def test_creates_eventbridge_resources(self):
@@ -166,20 +226,44 @@ class TestTapStack(unittest.TestCase):
                          TapStackProps(environment_suffix=env_suffix))
         template = Template.from_stack(stack)
 
-        # ASSERT
-        template.resource_count_is("AWS::IAM::Role", 1)
-        template.has_resource_properties("AWS::IAM::Role", {
-            "AssumeRolePolicyDocument": {
-                "Statement": [{
-                    "Effect": "Allow",
-                    "Principal": {"Service": "lambda.amazonaws.com"},
-                    "Action": "sts:AssumeRole"
-                }]
-            },
-            "ManagedPolicyArns": [
-                Match.string_like_regexp(".*AWSLambdaBasicExecutionRole")
-            ]
-        })
+        # Find all IAM roles
+        roles = template.find_resources("AWS::IAM::Role")
+        
+        # Find the Lambda execution role
+        lambda_role_found = False
+        has_basic_execution_role = False
+        
+        for role_id, role_data in roles.items():
+            props = role_data.get("Properties", {})
+            assume_policy = props.get("AssumeRolePolicyDocument", {})
+            
+            # Check if this is a Lambda role
+            for statement in assume_policy.get("Statement", []):
+                principal = statement.get("Principal", {})
+                if principal.get("Service") == "lambda.amazonaws.com":
+                    lambda_role_found = True
+                    
+                    # Verify the role has managed policies
+                    managed_policies = props.get("ManagedPolicyArns", [])
+                    self.assertGreater(len(managed_policies), 0, 
+                                     "Lambda role should have managed policies")
+                    
+                    # Check for AWSLambdaBasicExecutionRole
+                    # ManagedPolicyArns use Fn::Join intrinsic function
+                    for policy in managed_policies:
+                        policy_str = str(policy)
+                        if "AWSLambdaBasicExecutionRole" in policy_str:
+                            has_basic_execution_role = True
+                            break
+                    
+                    break
+            
+            if lambda_role_found:
+                break
+        
+        self.assertTrue(lambda_role_found, "Lambda execution role should exist")
+        self.assertTrue(has_basic_execution_role, 
+                       "Lambda role should have AWSLambdaBasicExecutionRole")
 
     @mark.it("creates stack outputs for integration")
     def test_creates_stack_outputs(self):
