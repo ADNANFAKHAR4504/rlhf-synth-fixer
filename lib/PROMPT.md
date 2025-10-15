@@ -10,11 +10,9 @@ We are moving to a multi-account, multi-region AWS setup and need to define our 
 - WAF must have logging enabled.
 - EC2 instances should use the latest AMIs and be properly tagged.
 - RDS must not be publicly accessible and must enforce SSL.
-- Redshift clusters must have encryption at rest and in transit.
 - Lambda functions must run in a VPC with restricted subnets and have concurrency limits.
 - API Gateway endpoints must require IAM authorization.
-- CloudFront distributions must be protected by AWS Shield Advanced.
-- Enable logging and metrics for WAF and CloudFront.
+
 
 ## Implementation
 

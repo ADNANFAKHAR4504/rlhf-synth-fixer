@@ -942,6 +942,8 @@ resource "aws_lambda_function" "heartbeat" {
     }
   }
 
+  reserved_concurrent_executions = var.lambda_reserved_concurrency
+
   tags = local.base_tags
 }
 

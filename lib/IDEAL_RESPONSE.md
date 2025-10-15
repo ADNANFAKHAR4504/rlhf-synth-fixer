@@ -25,7 +25,6 @@ aws_region = "eu-central-1"
 ```
 
 ```hcl
-## tap_stack.tf
 #############################################
 # Variables
 #############################################
@@ -970,6 +969,8 @@ resource "aws_lambda_function" "heartbeat" {
     }
   }
 
+  reserved_concurrent_executions = var.lambda_reserved_concurrency
+
   tags = local.base_tags
 }
 
@@ -1247,4 +1248,3 @@ output "platform_kms_key_arn" {
   description = "CMK ARN used across the stack"
   value       = aws_kms_key.platform.arn
 }
-```
