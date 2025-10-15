@@ -322,7 +322,7 @@ describe('TapStack', () => {
 
   describe('Stack Outputs', () => {
     test('should have API URL output', () => {
-      template.hasOutput(`ApiUrldev`, {
+      template.hasOutput(`ApiUrl${environmentSuffix}`, {
         Description: `HTTP API endpoint URL (${environmentSuffix})`,
         Export: {
           Name: `tap-api-url-${environmentSuffix}`,
@@ -331,7 +331,7 @@ describe('TapStack', () => {
     });
 
     test('should have Bucket Name output', () => {
-      template.hasOutput(`BucketNamedev`, {
+      template.hasOutput(`BucketName${environmentSuffix}`, {
         Description: `S3 bucket name (${environmentSuffix})`,
         Export: {
           Name: `tap-bucket-name-${environmentSuffix}`,
@@ -340,7 +340,7 @@ describe('TapStack', () => {
     });
 
     test('should have Table Name output', () => {
-      template.hasOutput(`TableNamedev`, {
+      template.hasOutput(`TableName${environmentSuffix}`, {
         Description: `DynamoDB table name (${environmentSuffix})`,
         Export: {
           Name: `tap-table-name-${environmentSuffix}`,
@@ -349,7 +349,7 @@ describe('TapStack', () => {
     });
 
     test('should have Error Topic ARN output', () => {
-      template.hasOutput(`ErrorTopicArndev`, {
+      template.hasOutput(`ErrorTopicArn${environmentSuffix}`, {
         Description: `SNS error topic ARN (${environmentSuffix})`,
         Export: {
           Name: `tap-error-topic-arn-${environmentSuffix}`,
@@ -358,7 +358,7 @@ describe('TapStack', () => {
     });
 
     test('should have Lambda Function Name output', () => {
-      template.hasOutput(`LambdaFunctionNamedev`, {
+      template.hasOutput(`LambdaFunctionName${environmentSuffix}`, {
         Description: `Lambda function name (${environmentSuffix})`,
         Export: {
           Name: `tap-lambda-name-${environmentSuffix}`,
