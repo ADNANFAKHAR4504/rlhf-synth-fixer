@@ -1,20 +1,21 @@
-import { Construct } from 'constructs';
-import { RdsCluster } from '@cdktf/provider-aws/lib/rds-cluster';
-import { RdsClusterInstance } from '@cdktf/provider-aws/lib/rds-cluster-instance';
-import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
-import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 import { BackupPlan } from '@cdktf/provider-aws/lib/backup-plan';
-import { BackupVault } from '@cdktf/provider-aws/lib/backup-vault';
 import { BackupSelection } from '@cdktf/provider-aws/lib/backup-selection';
+import { BackupVault } from '@cdktf/provider-aws/lib/backup-vault';
+import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { RdsCluster } from '@cdktf/provider-aws/lib/rds-cluster';
+import { RdsClusterInstance } from '@cdktf/provider-aws/lib/rds-cluster-instance';
+import { RdsGlobalCluster } from '@cdktf/provider-aws/lib/rds-global-cluster';
 import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
 import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
-import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { Construct } from 'constructs';
 
 interface DatabaseStackProps {
   environmentSuffix: string;
@@ -185,7 +186,7 @@ export class DatabaseStack extends Construct {
       }
     );
 
-    // KMS key for database encryption
+    // KMS key for database encryption in primary region
     const dbKmsKey = new KmsKey(this, 'db-kms-key', {
       provider: primaryProvider,
       description: 'KMS key for database encryption',
@@ -193,6 +194,18 @@ export class DatabaseStack extends Construct {
       deletionWindowInDays: 7,
       tags: {
         Name: `healthcare-db-kms-${environmentSuffix}`,
+        Environment: environmentSuffix,
+      },
+    });
+
+    // KMS key for database encryption in secondary region
+    const dbKmsKeySecondary = new KmsKey(this, 'db-kms-key-secondary', {
+      provider: secondaryProvider,
+      description: 'KMS key for database encryption in secondary region',
+      enableKeyRotation: true,
+      deletionWindowInDays: 7,
+      tags: {
+        Name: `healthcare-db-kms-dr-${environmentSuffix}`,
         Environment: environmentSuffix,
       },
     });
@@ -217,6 +230,17 @@ export class DatabaseStack extends Construct {
       }),
     });
 
+    // Aurora Global Cluster for cross-region replication
+    const globalCluster = new RdsGlobalCluster(this, 'global-cluster', {
+      provider: primaryProvider,
+      globalClusterIdentifier: `healthcare-global-${environmentSuffix}`,
+      engine: 'aurora-postgresql',
+      engineVersion: '15.3',
+      databaseName: 'healthcaredb',
+      storageEncrypted: true,
+      deletionProtection: false,
+    });
+
     // Primary Aurora Serverless v2 Cluster
     const primaryCluster = new RdsCluster(this, 'primary-cluster', {
       provider: primaryProvider,
@@ -224,7 +248,7 @@ export class DatabaseStack extends Construct {
       engine: 'aurora-postgresql',
       engineMode: 'provisioned',
       engineVersion: '15.3',
-      databaseName: 'healthcaredb',
+      globalClusterIdentifier: globalCluster.id,
       masterUsername: 'dbadmin',
       masterPassword: 'ChangeMe123456!',
       dbSubnetGroupName: primarySubnetGroup.name,
@@ -241,6 +265,7 @@ export class DatabaseStack extends Construct {
         minCapacity: 0.5,
         maxCapacity: 2,
       },
+      dependsOn: [globalCluster],
       tags: {
         Name: `healthcare-db-${environmentSuffix}`,
         Environment: environmentSuffix,
@@ -261,26 +286,27 @@ export class DatabaseStack extends Construct {
       },
     });
 
-    // Secondary Aurora Cluster (read replica)
+    // Secondary Aurora Cluster (global database secondary region)
     const secondaryCluster = new RdsCluster(this, 'secondary-cluster', {
       provider: secondaryProvider,
       clusterIdentifier: `healthcare-db-dr-${environmentSuffix}`,
       engine: 'aurora-postgresql',
       engineMode: 'provisioned',
       engineVersion: '15.3',
+      globalClusterIdentifier: globalCluster.id,
       dbSubnetGroupName: secondarySubnetGroup.name,
       vpcSecurityGroupIds: [secondarySecurityGroup.id],
-      backupRetentionPeriod: 7,
-      replicationSourceIdentifier: primaryCluster.arn,
       storageEncrypted: true,
+      kmsKeyId: dbKmsKeySecondary.arn,
       skipFinalSnapshot: true,
       deletionProtection: false,
       serverlessv2ScalingConfiguration: {
         minCapacity: 0.5,
         maxCapacity: 2,
       },
+      dependsOn: [primaryCluster],
       lifecycle: {
-        ignoreChanges: ['master_username', 'master_password'],
+        ignoreChanges: ['master_username', 'master_password', 'database_name'],
       },
       tags: {
         Name: `healthcare-db-dr-${environmentSuffix}`,

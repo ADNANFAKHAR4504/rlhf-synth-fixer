@@ -421,7 +421,8 @@ describe('DatabaseStack', () => {
 
     const synthesized = Testing.synth(stack);
     expect(synthesized).toContain('healthcare-db-dr-test');
-    expect(synthesized).toContain('replication_source_identifier');
+    expect(synthesized).toContain('aws_rds_global_cluster');
+    expect(synthesized).toContain('global_cluster_identifier');
   });
 
   it('should create RDS cluster instances', () => {
