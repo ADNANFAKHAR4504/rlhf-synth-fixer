@@ -27,7 +27,7 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   # .gen should be restored via cache/artifacts; generate only if missing
 
   case "$LANGUAGE" in
-    py|go|ts)
+    py|python|go|ts|typescript|java|csharp)
       if [ ! -d ".gen" ]; then
         echo "❌ No .gen directory found; generating..."
         npx --yes cdktf get
