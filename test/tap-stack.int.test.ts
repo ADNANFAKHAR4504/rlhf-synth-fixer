@@ -1,10 +1,28 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
 import fs from 'fs';
-import { CodePipelineClient, GetPipelineCommand, GetPipelineStateCommand, StartPipelineExecutionCommand } from '@aws-sdk/client-codepipeline';
+import { CodePipelineClient,     test('should validate SNS topic accessibility and configuration', async () => {
+      // Get updated outputs with real account ID
+      const updatedOutputs = await replaceAccountIdPlaceholders(outputs);
+      const notificationTopicArn = updatedOutputs.NotificationTopicARN;
+      
+      // Test direct topic access
+      const getTopicAttributesCommand = new GetTopicAttributesCommand({
+        TopicArn: notificationTopicArn
+      });
+      
+      const topicResponse = await snsClient.send(getTopicAttributesCommand);
+      
+      expect(topicResponse.Attributes).toBeDefined();
+      expect(topicResponse.Attributes!['TopicArn']).toBe(notificationTopicArn);
+      expect(topicResponse.Attributes!['SubscriptionsConfirmed']).toBeDefined();
+      
+      console.log(`✅ SNS Topic ${notificationTopicArn} is accessible and configured`);
+    }, 30000);nd, GetPipelineStateCommand, StartPipelineExecutionCommand } from '@aws-sdk/client-codepipeline';
 import { SNSClient, ListTopicsCommand, GetTopicAttributesCommand } from '@aws-sdk/client-sns';
 import { CloudFormationClient, DescribeStacksCommand, DescribeStackResourcesCommand } from '@aws-sdk/client-cloudformation';
 import { CodeBuildClient, ListProjectsCommand, BatchGetProjectsCommand } from '@aws-sdk/client-codebuild';
 import { CodeDeployClient, ListApplicationsCommand, ListDeploymentGroupsCommand } from '@aws-sdk/client-codedeploy';
+import { STSClient, GetCallerIdentityCommand } from '@aws-sdk/client-sts';
 
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
@@ -19,6 +37,29 @@ const snsClient = new SNSClient({ region: 'us-east-1' });
 const cloudFormationClient = new CloudFormationClient({ region: 'us-east-1' });
 const codeBuildClient = new CodeBuildClient({ region: 'us-east-1' });
 const codeDeployClient = new CodeDeployClient({ region: 'us-east-1' });
+const stsClient = new STSClient({ region: 'us-east-1' });
+
+// Utility function to get actual account ID and replace placeholders
+async function getActualAccountId(): Promise<string> {
+  const getCallerIdentityCommand = new GetCallerIdentityCommand({});
+  const response = await stsClient.send(getCallerIdentityCommand);
+  return response.Account!;
+}
+
+// Function to replace *** placeholders with actual account ID
+async function replaceAccountIdPlaceholders(outputs: any): Promise<any> {
+  const accountId = await getActualAccountId();
+  const updatedOutputs = JSON.parse(JSON.stringify(outputs));
+  
+  // Replace *** with actual account ID in all string values
+  for (const [key, value] of Object.entries(updatedOutputs)) {
+    if (typeof value === 'string' && value.includes('***')) {
+      updatedOutputs[key] = value.replace(/\*\*\*/g, accountId);
+    }
+  }
+  
+  return updatedOutputs;
+}
 
 describe('CI/CD Pipeline Integration Tests - Live Traffic Simulation', () => {
   
@@ -166,7 +207,7 @@ describe('CI/CD Pipeline Integration Tests - Live Traffic Simulation', () => {
         
         console.log(` Stack ${assumedStackName} validated with ${resourcesResponse.StackResources!.length} resources`);
       } catch (error) {
-        console.log('ℹ️ Stack validation skipped - stack name may differ from convention');
+        console.log(' Stack validation skipped - stack name may differ from convention');
       }
     }, 30000);
 
@@ -206,7 +247,7 @@ describe('CI/CD Pipeline Integration Tests - Live Traffic Simulation', () => {
           
           console.log(` CodeBuild projects validated: ${pipelineProjects.join(', ')}`);
         } else {
-          console.log('ℹ️ No pipeline-specific CodeBuild projects found');
+          console.log(' No pipeline-specific CodeBuild projects found');
         }
       }
     }, 30000);
@@ -241,7 +282,7 @@ describe('CI/CD Pipeline Integration Tests - Live Traffic Simulation', () => {
           
           console.log(` CodeDeploy application ${appName} validated with ${deploymentGroupsResponse.deploymentGroups!.length} deployment groups`);
         } else {
-          console.log('ℹ️ No pipeline-specific CodeDeploy applications found');
+          console.log(' No pipeline-specific CodeDeploy applications found');
         }
       }
     }, 30000);
