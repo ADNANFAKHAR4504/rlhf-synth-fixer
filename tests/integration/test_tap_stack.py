@@ -121,10 +121,21 @@ def stack_resources(deployed_stack, aws_clients):
     return resources
 
 
+def extract_stack_name_from_arn(arn_or_name):
+    """Extract stack name from ARN or return name as-is."""
+    if arn_or_name.startswith('arn:'):
+        parts = arn_or_name.split('/')
+        if len(parts) >= 2:
+            return parts[1]
+    return arn_or_name
+
+
 def get_all_nested_stacks_recursive(cfn_client, stack_name, visited=None):
     """Recursively get ALL nested stacks at all levels."""
     if visited is None:
         visited = set()
+    
+    stack_name = extract_stack_name_from_arn(stack_name)
     
     if stack_name in visited:
         return []
@@ -137,7 +148,8 @@ def get_all_nested_stacks_recursive(cfn_client, stack_name, visited=None):
         for page in paginator.paginate(StackName=stack_name):
             for resource in page['StackResourceSummaries']:
                 if resource['ResourceType'] == 'AWS::CloudFormation::Stack':
-                    nested_stack_name = resource['PhysicalResourceId']
+                    nested_stack_id = resource['PhysicalResourceId']
+                    nested_stack_name = extract_stack_name_from_arn(nested_stack_id)
                     all_nested.append(nested_stack_name)
                     deeper_nested = get_all_nested_stacks_recursive(cfn_client, nested_stack_name, visited)
                     all_nested.extend(deeper_nested)
