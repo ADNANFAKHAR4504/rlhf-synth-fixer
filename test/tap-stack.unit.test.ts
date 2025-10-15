@@ -180,7 +180,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
       const profile = template.Resources.EC2InstanceProfile;
       expect(profile).toBeDefined();
       expect(profile.Type).toBe('AWS::IAM::InstanceProfile');
-      expect(profile.Properties.Roles).toContain({ Ref: 'EC2InstanceRole' });
+      expect(profile.Properties.Roles).toContainEqual({ Ref: 'EC2InstanceRole' });
     });
   });
 
@@ -439,7 +439,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
 
     test('has stream enabled for change data capture', () => {
       const table = template.Resources.SessionTable;
-      expect(table.Properties.StreamSpecification.StreamEnabled).toBe(true);
+      expect(table.Properties.StreamSpecification).toBeDefined();
       expect(table.Properties.StreamSpecification.StreamViewType).toBe('NEW_AND_OLD_IMAGES');
     });
   });
