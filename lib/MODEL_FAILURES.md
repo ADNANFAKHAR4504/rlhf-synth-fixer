@@ -1,4 +1,3 @@
-MODEL_FAILURES.md
 Summary of Model Failures & Fixes
 
 This file documents major errors and failures encountered during the implementation, linting, unit testing, and deployment of the TapStack CloudFormation stack.

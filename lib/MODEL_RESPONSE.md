@@ -1,3 +1,4 @@
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   Secure production infrastructure template (parameterized).
@@ -568,3 +569,4 @@ Outputs:
     Condition: DeployInTargetRegion
     Description: Logs bucket
     Value: !Ref LogBucket
+```
