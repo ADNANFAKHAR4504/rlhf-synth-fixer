@@ -49,8 +49,8 @@ describe("EC2 Web Application Infrastructure - Unit Tests", () => {
 
     test("AMI data source filters for Amazon Linux 2", () => {
       expect(has(/amzn2-ami-hvm-\*-x86_64-gp2/)).toBe(true);
-      expect(has(/virtualization-type.*hvm/)).toBe(true);
-      expect(has(/architecture.*x86_64/)).toBe(true);
+      expect(has(/name\s*=\s*"virtualization-type"[\s\S]*?values\s*=\s*\["hvm"\]/)).toBe(true);
+      expect(has(/name\s*=\s*"architecture"[\s\S]*?values\s*=\s*\["x86_64"\]/)).toBe(true);
     });
 
     test("AMI data source uses most_recent flag", () => {
