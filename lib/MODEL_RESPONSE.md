@@ -1010,7 +1010,7 @@ Outputs:
 
 ### High Availability
 
-- Multi-AZ deployment with 3 availability zones in eu-central-1
+- Multi-AZ deployment with 3 availability zones in eu-west-2
 - Aurora Serverless v2 with 2 instances across AZs
 - ECS service with 2 tasks distributed across subnets
 - Kinesis with 2 shards for 1000 events/second capacity

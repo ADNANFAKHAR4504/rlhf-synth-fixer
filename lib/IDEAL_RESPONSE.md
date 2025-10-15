@@ -1004,7 +1004,7 @@ Outputs:
 
 ### High Availability
 
-- Multi-AZ deployment with 3 availability zones in eu-central-1
+- Multi-AZ deployment with 3 availability zones in eu-west-2
 - Aurora Serverless v2 with 2 instances across AZs
 - ECS service with 2 tasks distributed across subnets
 - Kinesis with 2 shards for 1000 events/second capacity
@@ -1045,4 +1045,4 @@ All resources follow the pattern: `{resource-type}-${EnvironmentSuffix}` to prev
 - RDS has `DeletionProtection: false` to allow cleanup
 - All resource names include `${EnvironmentSuffix}` parameter for parallel deployments
 - Stack outputs are exported for integration testing and cross-stack references
-- Deployment to eu-central-1 region as specified in requirements
+- Deployment to eu-west-2 region as specified in requirements

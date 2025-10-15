@@ -10,7 +10,7 @@ Hospital equipment generates tons of data 24/7. That data needs to be collected 
 
 ## The Solution
 
-We used AWS CloudFormation (YAML) to build everything in **us-east-1**. Here's what went into it:
+We used AWS CloudFormation (YAML) to build everything in **eu-west-2**. Here's what went into it:
 
 ### Core Infrastructure
 
@@ -122,7 +122,7 @@ aws cloudformation deploy \
   --stack-name TapStackdev \
   --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
   --parameter-overrides EnvironmentSuffix=dev \
-  --region us-east-1
+  --region eu-west-2
 ```
 
 Takes about 15-20 minutes for everything to come up. The Aurora instances are the slowest part.
@@ -131,8 +131,8 @@ Takes about 15-20 minutes for everything to come up. The Aurora instances are th
 
 Once deployed, you'll get outputs with all the important info:
 
-- **API Gateway**: `https://{api-id}.execute-api.us-east-1.amazonaws.com/prod`
-- **Aurora Endpoint**: `aurora-cluster-dev.cluster-{id}.us-east-1.rds.amazonaws.com`
+- **API Gateway**: `https://{api-id}.execute-api.eu-west-2.amazonaws.com/prod`
+- **Aurora Endpoint**: `aurora-cluster-dev.cluster-{id}.eu-west-2.rds.amazonaws.com`
 - **Kinesis Stream**: `patient-data-stream-dev`
 - **ECS Cluster**: `data-processing-cluster-dev`
 
