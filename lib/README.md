@@ -332,6 +332,7 @@ def test_your_new_check(aws_clients, deployed_stack, stack_name):
         print(f"Resource {resource['id']} in {resource['region']} is healthy")
 ```
 
+
 ## Contributing
 
 When adding tests:
