@@ -75,6 +75,17 @@ Parameters:
     Default: 'WebAppRepo'
     Description: 'Name of the CodeCommit repository'
 
+  CreateCodeCommitRepo:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: 'Whether to create a CodeCommit repository (set to false if CodeCommit is not available)'
+
+Conditions:
+  ShouldCreateCodeCommitRepo: !Equals [!Ref CreateCodeCommitRepo, 'true']
+
 Resources:
   #---------------------------------------------------------------------------
   # IAM Roles and Policies
@@ -105,14 +116,17 @@ Resources:
                 Resource:
                   - !Sub 'arn:aws:s3:::${ArtifactBucketName}'
                   - !Sub 'arn:aws:s3:::${ArtifactBucketName}/*'
-              - Effect: Allow
-                Action:
-                  - 'codecommit:GetBranch'
-                  - 'codecommit:GetCommit'
-                  - 'codecommit:UploadArchive'
-                  - 'codecommit:GetUploadArchiveStatus'
-                  - 'codecommit:CancelUploadArchive'
-                Resource: !GetAtt CodeCommitRepo.Arn
+              - !If
+                - ShouldCreateCodeCommitRepo
+                - Effect: Allow
+                  Action:
+                    - 'codecommit:GetBranch'
+                    - 'codecommit:GetCommit'
+                    - 'codecommit:UploadArchive'
+                    - 'codecommit:GetUploadArchiveStatus'
+                    - 'codecommit:CancelUploadArchive'
+                  Resource: !GetAtt CodeCommitRepo.Arn
+                - !Ref AWS::NoValue
               - Effect: Allow
                 Action:
                   - 'codebuild:BatchGetBuilds'
@@ -173,10 +187,13 @@ Resources:
                 Resource:
                   - !Sub 'arn:aws:s3:::${ArtifactBucketName}'
                   - !Sub 'arn:aws:s3:::${ArtifactBucketName}/*'
-              - Effect: Allow
-                Action:
-                  - 'codecommit:GitPull'
-                Resource: !GetAtt CodeCommitRepo.Arn
+              - !If
+                - ShouldCreateCodeCommitRepo
+                - Effect: Allow
+                  Action:
+                    - 'codecommit:GitPull'
+                  Resource: !GetAtt CodeCommitRepo.Arn
+                - !Ref AWS::NoValue
       Tags:
         - Key: Project
           Value: !Ref ApplicationName
@@ -305,6 +322,7 @@ Resources:
   
   CodeCommitRepo:
     Type: 'AWS::CodeCommit::Repository'
+    Condition: ShouldCreateCodeCommitRepo
     Properties:
       RepositoryName: !Ref RepositoryName
       RepositoryDescription: !Sub 'Repository for ${ApplicationName} source code'
@@ -623,18 +641,32 @@ Resources:
       Stages:
         - Name: Source
           Actions:
-            - Name: Source
-              ActionTypeId:
-                Category: Source
-                Owner: AWS
-                Provider: CodeCommit
-                Version: '1'
-              Configuration:
-                RepositoryName: !Ref RepositoryName
-                BranchName: main
-              OutputArtifacts:
-                - Name: SourceCode
-              RunOrder: 1
+            - !If
+              - ShouldCreateCodeCommitRepo
+              - Name: Source
+                ActionTypeId:
+                  Category: Source
+                  Owner: AWS
+                  Provider: CodeCommit
+                  Version: '1'
+                Configuration:
+                  RepositoryName: !Ref RepositoryName
+                  BranchName: main
+                OutputArtifacts:
+                  - Name: SourceCode
+                RunOrder: 1
+              - Name: Source
+                ActionTypeId:
+                  Category: Source
+                  Owner: AWS
+                  Provider: S3
+                  Version: '1'
+                Configuration:
+                  S3Bucket: !Ref ArtifactBucket
+                  S3ObjectKey: 'source.zip'
+                OutputArtifacts:
+                  - Name: SourceCode
+                RunOrder: 1
         
         - Name: Build
           Actions:
@@ -737,10 +769,12 @@ Resources:
 
 Outputs:
   CodeCommitRepositoryCloneUrlHTTPS:
+    Condition: ShouldCreateCodeCommitRepo
     Description: 'HTTPS URL for cloning the CodeCommit repository'
     Value: !GetAtt CodeCommitRepo.CloneUrlHttp
   
   CodeCommitRepositoryCloneUrlSSH:
+    Condition: ShouldCreateCodeCommitRepo
     Description: 'SSH URL for cloning the CodeCommit repository'
     Value: !GetAtt CodeCommitRepo.CloneUrlSsh
   
