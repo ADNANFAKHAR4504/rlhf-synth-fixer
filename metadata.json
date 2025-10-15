@@ -25,5 +25,6 @@
     "Route 53",
     "WAF",
     "Application Auto Scaling"
-  ]
+  ],
+  "training_quality": 8
 }
