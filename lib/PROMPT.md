@@ -7,7 +7,7 @@ Your task is to design and implement a multi-region, highly available, and fault
 - Infrastructure as Code: Must be fully implemented using CDKTF with TypeScript.
 - Regions:
   - Primary Region: `us-east-2`
-  - Disaster Recovery Region: `us-west-1`
+  - Disaster Recovery Region: `eu-central-1`
 - Networking:
   - Create isolated VPCs with CIDR ranges:
   - Primary: `10.0.0.0/16`

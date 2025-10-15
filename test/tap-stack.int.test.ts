@@ -35,7 +35,7 @@ if (outputs) {
   describe("EKS DR Live Infrastructure Integration Tests", () => {
 
     const primaryEks = new EKS({ region: 'us-east-2' });
-    const drEks = new EKS({ region: 'us-west-1' });
+    const drEks = new EKS({ region: 'eu-central-1' });
     const primaryAppMesh = new AppMesh({ region: 'us-east-2' });
 
     it("should have an active primary EKS cluster", async () => {

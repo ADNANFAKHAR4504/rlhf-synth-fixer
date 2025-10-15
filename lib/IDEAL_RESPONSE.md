@@ -274,8 +274,8 @@ export class EksDrStack extends TerraformStack {
       alias: 'us-east-2',
     });
     const drProvider = new AwsProvider(this, 'dr', {
-      region: 'us-west-1',
-      alias: 'us-west-1',
+      region: 'eu-central-1',
+      alias: 'eu-central-1',
     });
 
     // Instantiate the regional infrastructure for both regions using the modular construct
@@ -289,7 +289,7 @@ export class EksDrStack extends TerraformStack {
     });
     const drInfra = new RegionalEksInfra(this, 'DrInfrastructure', {
       provider: drProvider,
-      region: 'us-west-1',
+      region: 'eu-central-1',
       vpcCidr: '172.16.0.0/16',
       domainName,
       randomSuffix,

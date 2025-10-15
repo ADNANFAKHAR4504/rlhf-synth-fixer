@@ -9,7 +9,7 @@ import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-avail
 const CONFIG = {
   project: 'iac-rlhf-amazon',
   primaryRegion: 'us-east-2',
-  drRegion: 'us-west-1',
+  drRegion: 'eu-central-1',
   primaryCidr: '10.0.0.0/16',
   drCidr: '172.16.0.0/16',
   eksVersion: '1.27',
