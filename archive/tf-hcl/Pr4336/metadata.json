@@ -1,0 +1,37 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "356240",
+  "team": "2",
+  "startedAt": "2025-10-08T19:13:04.418Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "DynamoDB",
+    "Application Load Balancer",
+    "Route53",
+    "Lambda",
+    "EventBridge",
+    "CloudWatch",
+    "KMS",
+    "NAT Gateway",
+    "Internet Gateway",
+    "IAM",
+    "Elastic IP",
+    "Security Groups"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "caiof-turing",
+  "dockerS3Location": ""
+}
