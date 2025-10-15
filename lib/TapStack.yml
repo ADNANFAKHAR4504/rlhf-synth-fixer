@@ -1,9 +1,11 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  TapStack.yml — Secure web infra (us-east-1). VPC public/private subnets,
-  ALB balancing EC2 (T2/T3) across AZs, private RDS, encrypted S3 bucket with CloudFront OAI,
-  WAFv2, CloudFront, Lambda audit via SNS from S3 events, SQS logging queue, KMS for EBS/RDS,
-  CloudWatch alarms, and AWS Config monitoring. All resources tagged with Environment, Owner, Project.
+  TapStack — Secure web infra (us-east-1). VPC with public & private subnets,
+  ALB balancing HTTP to 2 EC2 instances across AZs, private encrypted RDS,
+  encrypted S3 with CloudFront + OAI and WAFv2, Lambda audit via SNS from S3 events,
+  SQS logging queue, KMS for EBS/RDS, CloudWatch alarms, IAM role for SSM, and an
+  IAM managed policy to restrict EC2 launches to specific public subnets.
+  AWS Config creation is optional (disabled by default to avoid recorder limits).
 
 Parameters:
   Environment:
@@ -18,9 +20,9 @@ Parameters:
   Project:
     Type: String
     Default: tapstack
-    Description: Project tag (lowercase)
     AllowedPattern: '^[a-z0-9-]+$'
-    ConstraintDescription: "Project must use lowercase letters, numbers, or hyphen."
+    ConstraintDescription: "Project must be lowercase letters, numbers, or hyphen."
+    Description: Project tag (lowercase; used in bucket name)
   AllowedSSHLocation:
     Type: String
     Default: 203.0.113.0/32
@@ -38,10 +40,16 @@ Parameters:
       - t3.micro
       - t3.small
     Description: EC2 instance type (restricted to T2/T3 family)
+  CreateAWSConfig:
+    Type: String
+    AllowedValues: [true, false]
+    Default: false
+    Description: "Set to true to create AWS Config resources (ensure no existing recorder exists)."
 
 Conditions:
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, ""]]
   IsUsEast1: !Equals [!Ref "AWS::Region", "us-east-1"]
+  CreateConfig: !Equals [!Ref CreateAWSConfig, "true"]
 
 Mappings:
   RegionAZs:
@@ -51,9 +59,9 @@ Mappings:
 
 Resources:
 
-  ###########################
-  # VPC & Subnets
-  ###########################
+  # -----------------------
+  # VPC & Networking
+  # -----------------------
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -218,9 +226,25 @@ Resources:
       SubnetId: !Ref PrivateSubnet2
       RouteTableId: !Ref PrivateRouteTable
 
-  ###########################
-  # IAM & InstanceProfile (SSM)
-  ###########################
+  # -----------------------
+  # KMS Key
+  # -----------------------
+  KMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for EBS and RDS encryption
+      EnableKeyRotation: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+
+  # -----------------------
+  # IAM role & instance profile for SSM
+  # -----------------------
   InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -247,13 +271,13 @@ Resources:
       Roles:
         - !Ref InstanceRole
 
-  ###########################
-  # Security Groups
-  ###########################
+  # -----------------------
+  # Security groups
+  # -----------------------
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow SSH from allowed IP only
+      GroupDescription: Allow SSH from a single IP
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -286,25 +310,9 @@ Resources:
         - Key: Project
           Value: !Ref Project
 
-  ###########################
-  # KMS Key
-  ###########################
-  KMSKey:
-    Type: AWS::KMS::Key
-    Properties:
-      Description: KMS key for EBS and RDS encryption
-      EnableKeyRotation: true
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
-        - Key: Project
-          Value: !Ref Project
-
-  ###########################
-  # EC2 Instances (private subnets)
-  ###########################
+  # -----------------------
+  # EC2 Instances (private subnets) - T2/T3 enforced by parameter
+  # -----------------------
   EC2Instance1:
     Type: AWS::EC2::Instance
     Properties:
@@ -357,9 +365,9 @@ Resources:
         - Key: Project
           Value: !Ref Project
 
-  ###########################
-  # ALB + TargetGroup + Listener
-  ###########################
+  # -----------------------
+  # ALB + Target group + Listener
+  # -----------------------
   ALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -386,6 +394,13 @@ Resources:
       Targets:
         - Id: !Ref EC2Instance1
         - Id: !Ref EC2Instance2
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
 
   Listener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -397,9 +412,9 @@ Resources:
         - Type: forward
           TargetGroupArn: !Ref TargetGroup
 
-  ###########################
-  # SNS topic + policy (S3 -> SNS)
-  ###########################
+  # -----------------------
+  # SNS topic + policy for S3 notifications
+  # -----------------------
   S3EventsTopic:
     Type: AWS::SNS::Topic
     Properties:
@@ -430,9 +445,9 @@ Resources:
               StringEquals:
                 aws:SourceAccount: !Ref AWS::AccountId
 
-  ###########################
-  # S3 Bucket (deterministic) & notifications
-  ###########################
+  # -----------------------
+  # S3 bucket with SSE and notifications to SNS (deterministic name)
+  # -----------------------
   S3Bucket:
     Type: AWS::S3::Bucket
     DependsOn:
@@ -460,9 +475,10 @@ Resources:
         - Key: Project
           Value: !Ref Project
 
-  ###########################
-  # S3 Bucket Policy: OAI read, deny unencrypted uploads, allow AWS Config write
-  ###########################
+  # -----------------------
+  # CloudFront OAI & S3 bucket policy (allow OAI read, deny non-encrypted uploads,
+  # allow AWS Config to write when enabled)
+  # -----------------------
   CloudFrontOAI:
     Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
     Properties:
@@ -483,6 +499,7 @@ Resources:
             Action:
               - s3:GetObject
             Resource: !Sub "arn:aws:s3:::${S3Bucket}/*"
+
           - Sid: DenyUnEncryptedObjectUploads
             Effect: Deny
             Principal: "*"
@@ -491,6 +508,7 @@ Resources:
             Condition:
               StringNotEquals:
                 "s3:x-amz-server-side-encryption": "AES256"
+
           - Sid: AllowAWSConfigWrite
             Effect: Allow
             Principal:
@@ -505,9 +523,9 @@ Resources:
               StringEquals:
                 aws:SourceAccount: !Ref AWS::AccountId
 
-  ###########################
-  # Lambda (audit) + SNS subscription (no RawMessageDelivery)
-  ###########################
+  # -----------------------
+  # Lambda (audit) and SNS subscription (Lambda protocol doesn't allow RawMessageDelivery)
+  # -----------------------
   LambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -556,6 +574,7 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: sns.amazonaws.com
       SourceArn: !Ref S3EventsTopic
+      SourceAccount: !Ref AWS::AccountId
 
   SNSSubscriptionToLambda:
     Type: AWS::SNS::Subscription
@@ -566,9 +585,9 @@ Resources:
       Protocol: lambda
       Endpoint: !GetAtt AuditLambda.Arn
 
-  ###########################
-  # Secrets + RDS (private)
-  ###########################
+  # -----------------------
+  # SecretsManager + RDS (private)
+  # -----------------------
   DBSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -615,9 +634,9 @@ Resources:
         - Key: Project
           Value: !Ref Project
 
-  ###########################
-  # SQS for application logging
-  ###########################
+  # -----------------------
+  # SQS queue for application logging
+  # -----------------------
   AppLoggingQueue:
     Type: AWS::SQS::Queue
     Properties:
@@ -630,9 +649,9 @@ Resources:
         - Key: Project
           Value: !Ref Project
 
-  ###########################
-  # WAFv2 WebACL (us-east-1 only)
-  ###########################
+  # -----------------------
+  # WAFv2 WebACL (CloudFront) - only in us-east-1
+  # -----------------------
   WAFWebACL:
     Type: AWS::WAFv2::WebACL
     Condition: IsUsEast1
@@ -659,9 +678,9 @@ Resources:
             CloudWatchMetricsEnabled: true
             MetricName: rateLimitRule
 
-  ###########################
-  # CloudFront Distribution (uses WAF ARN)
-  ###########################
+  # -----------------------
+  # CloudFront Distribution (us-east-1 only)
+  # -----------------------
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
     Condition: IsUsEast1
@@ -685,9 +704,9 @@ Resources:
               Forward: none
         WebACLId: !GetAtt WAFWebACL.Arn
 
-  ###########################
-  # CloudWatch Alarms (CPU + memory placeholder)
-  ###########################
+  # -----------------------
+  # CloudWatch alarms (CPU & memory)
+  # -----------------------
   CPUAlarmInstance1:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -718,26 +737,11 @@ Resources:
       Threshold: 80
       ComparisonOperator: GreaterThanThreshold
 
-  ###########################
-  # AWS Config delivery channel (create BEFORE recorder)
-  ###########################
-  ConfigDeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    Properties:
-      S3BucketName: !Ref S3Bucket
-      # optional: specify SnsTopicARN if you need notifications
-      # SnsTopicARN: !Ref S3EventsTopic
-
-  ConfigRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    DependsOn:
-      - ConfigDeliveryChannel
-    Properties:
-      RoleARN: !GetAtt AWSConfigRole.Arn
-      RecordingGroup:
-        AllSupported: true
-
+  # -----------------------
+  # AWS Config (conditional) - DeliveryChannel before Recorder
+  # -----------------------
   AWSConfigRole:
+    Condition: CreateConfig
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -772,6 +776,45 @@ Resources:
                 Action:
                   - sns:Publish
                 Resource: !Ref S3EventsTopic
+
+  ConfigDeliveryChannel:
+    Condition: CreateConfig
+    Type: AWS::Config::DeliveryChannel
+    Properties:
+      S3BucketName: !Ref S3Bucket
+
+  ConfigRecorder:
+    Condition: CreateConfig
+    Type: AWS::Config::ConfigurationRecorder
+    DependsOn:
+      - ConfigDeliveryChannel
+    Properties:
+      RoleARN: !GetAtt AWSConfigRole.Arn
+      RecordingGroup:
+        AllSupported: true
+
+  # -----------------------
+  # IAM Managed policy to restrict RunInstances to public subnets
+  # NOTE: tags removed from this IAM::ManagedPolicy to avoid E3002 linter error
+  # -----------------------
+  RestrictEC2LaunchToPublicSubnetsPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub "${Project}-restrict-ec2-launch-publicsubnets"
+      Description: "Deny ec2:RunInstances when ec2:Subnet is not an approved public subnet"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyRunInstancesOutsidePublicSubnets
+            Effect: Deny
+            Action:
+              - ec2:RunInstances
+            Resource: "*"
+            Condition:
+              StringNotEquals:
+                ec2:Subnet:
+                  - !Ref PublicSubnet1
+                  - !Ref PublicSubnet2
 
 Outputs:
   VPCId:
