@@ -740,7 +740,7 @@ Resources:
               - !Sub 'arn:aws:athena:${AWS::Region}:${AWS::AccountId}:workgroup/EnterpriseLogAnalytics-${EnvironmentSuffix}'
 
   # ==========================================
-  # QuickSight Permissions Automation (CUSTOM RESOURCE)
+  # QuickSight Permissions Automation
   # ==========================================
   QuickSightUpdaterLambdaRole:
     Type: AWS::IAM::Role
