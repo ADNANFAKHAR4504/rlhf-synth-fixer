@@ -269,6 +269,15 @@ export class TapStack extends cdk.Stack {
         'PreferredBackupWindow',
         cdk.Token.asAny(undefined)
       );
+      // Secondary cluster inherits credentials from global cluster
+      cfnCluster.addPropertyOverride(
+        'MasterUsername',
+        cdk.Token.asAny(undefined)
+      );
+      cfnCluster.addPropertyOverride(
+        'MasterUserPassword',
+        cdk.Token.asAny(undefined)
+      );
 
       globalClusterEndpoint = auroraCluster.clusterEndpoint.hostname;
     }
