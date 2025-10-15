@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "CLO_YML_MED_RDS_BACKUP_2d3e4f_5a6b7c8dST",
+  "team": "5",
+  "startedAt": "2025-10-09T06:37:27.067Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "RDS",
+    "EC2-VPC",
+    "EC2-Subnet",
+    "EC2-SecurityGroup",
+    "EC2-InternetGateway",
+    "EC2-NATGateway",
+    "KMS",
+    "CloudWatch",
+    "IAM",
+    "SecretsManager",
+    "SNS"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
+}
