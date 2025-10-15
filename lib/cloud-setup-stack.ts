@@ -56,27 +56,42 @@ export class CloudSetupStack extends cdk.Stack {
       maxAzs: 2,
       natGateways: 1,
       subnetConfiguration: [
-        { name: `public-${this.suffix}`, subnetType: ec2.SubnetType.PUBLIC, cidrMask: 24 },
-        { name: `private-${this.suffix}`, subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS, cidrMask: 24 },
+        {
+          name: `public-${this.suffix}`,
+          subnetType: ec2.SubnetType.PUBLIC,
+          cidrMask: 24,
+        },
+        {
+          name: `private-${this.suffix}`,
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          cidrMask: 24,
+        },
       ],
     });
     this.vpcId = vpc.vpcId;
 
-    // Security group for HTTPS ingress (ALB will terminate TLS)
+    // Security group for ALB ingress (allow HTTPS and HTTP for flexibility)
     const httpsSg = new ec2.SecurityGroup(this, `https-sg-${this.suffix}`, {
       vpc,
-      description: 'Allow HTTPS from internet',
+      description: 'Allow ALB ingress (HTTP/HTTPS)',
       allowAllOutbound: true,
       securityGroupName: `https-sg-${this.suffix}`,
     });
-    httpsSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), 'Allow HTTPS');
+    httpsSg.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(443),
+      'Allow HTTPS'
+    );
+    httpsSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'Allow HTTP');
 
     // IAM role for EC2
     const ec2Role = new iam.Role(this, `ec2-role-${this.suffix}`, {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonEC2ReadOnlyAccess'),
-        iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'CloudWatchAgentServerPolicy'
+        ),
       ],
       description: 'EC2 role with read-only access',
     });
@@ -97,11 +112,16 @@ export class CloudSetupStack extends cdk.Stack {
     const fn = new lambda.Function(this, `s3-trigger-fn-${this.suffix}`, {
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'index.handler',
-      code: lambda.Code.fromInline("exports.handler = async () => { console.log('ok'); }"),
+      code: lambda.Code.fromInline(
+        "exports.handler = async () => { console.log('ok'); }"
+      ),
       timeout: cdk.Duration.minutes(1),
       memorySize: 256,
     });
-    bucket.addEventNotification(s3.EventType.OBJECT_CREATED, new s3n.LambdaDestination(fn));
+    bucket.addEventNotification(
+      s3.EventType.OBJECT_CREATED,
+      new s3n.LambdaDestination(fn)
+    );
 
     // RDS
     const rdsSg = new ec2.SecurityGroup(this, `rds-sg-${this.suffix}`, {
@@ -112,8 +132,13 @@ export class CloudSetupStack extends cdk.Stack {
     rdsSg.addIngressRule(httpsSg, ec2.Port.tcp(3306), 'Allow from app SG');
 
     const db = new rds.DatabaseInstance(this, `rds-${this.suffix}`, {
-      engine: rds.DatabaseInstanceEngine.mysql({ version: rds.MysqlEngineVersion.VER_8_0 }),
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      engine: rds.DatabaseInstanceEngine.mysql({
+        version: rds.MysqlEngineVersion.VER_8_0,
+      }),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       securityGroups: [rdsSg],
@@ -129,7 +154,7 @@ export class CloudSetupStack extends cdk.Stack {
     this.rdsEndpoint = db.dbInstanceEndpointAddress;
 
     // Log group
-    const logGroup = new logs.LogGroup(this, `logs-${this.suffix}`, {
+    new logs.LogGroup(this, `logs-${this.suffix}`, {
       logGroupName: `/aws/ecs/cloud-setup-${this.suffix}`,
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -148,8 +173,13 @@ export class CloudSetupStack extends cdk.Stack {
     const asg = new autoscaling.AutoScalingGroup(this, `asg-${this.suffix}`, {
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
-      machineImage: new ec2.AmazonLinuxImage({ generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2 }),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
+      machineImage: new ec2.AmazonLinuxImage({
+        generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
+      }),
       securityGroup: httpsSg,
       role: ec2Role,
       userData,
@@ -166,12 +196,20 @@ export class CloudSetupStack extends cdk.Stack {
       loadBalancerName: `alb-${this.suffix}`,
     });
 
-    const listener = alb.addListener('HttpsListener', {
-      port: 443,
-      protocol: elbv2.ApplicationProtocol.HTTPS,
-      // certificate can be provided via props; if not, ALB will be created without cert (synth may warn)
-      certificates: props.albCertificateArn ? [{ certificateArn: props.albCertificateArn }] : undefined,
-    });
+    // Create HTTPS listener only if certificate ARN provided, otherwise create HTTP listener
+    let listener: elbv2.ApplicationListener;
+    if (props.albCertificateArn) {
+      listener = alb.addListener('HttpsListener', {
+        port: 443,
+        protocol: elbv2.ApplicationProtocol.HTTPS,
+        certificates: [{ certificateArn: props.albCertificateArn }],
+      });
+    } else {
+      listener = alb.addListener('HttpListener', {
+        port: 80,
+        protocol: elbv2.ApplicationProtocol.HTTP,
+      });
+    }
 
     listener.addTargets('AppTargets', {
       port: 80,
@@ -182,11 +220,24 @@ export class CloudSetupStack extends cdk.Stack {
     this.albDns = alb.loadBalancerDnsName;
 
     // Route53 + CloudFront (CloudFront certificate should be in us-east-1 if provided)
-    const hostedZone = new route53.HostedZone(this, `hosted-zone-${this.suffix}`, { zoneName: props.domainName });
+    const hostedZone = new route53.HostedZone(
+      this,
+      `hosted-zone-${this.suffix}`,
+      { zoneName: props.domainName }
+    );
     const cf = new cloudfront.Distribution(this, `cf-${this.suffix}`, {
-      defaultBehavior: { origin: new origins.LoadBalancerV2Origin(alb), viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS },
+      defaultBehavior: {
+        origin: new origins.LoadBalancerV2Origin(alb),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+      },
       domainNames: [props.domainName],
-      certificate: props.cloudFrontCertificateArn ? acm.Certificate.fromCertificateArn(this, `cf-cert-${this.suffix}`, props.cloudFrontCertificateArn) : undefined,
+      certificate: props.cloudFrontCertificateArn
+        ? acm.Certificate.fromCertificateArn(
+            this,
+            `cf-cert-${this.suffix}`,
+            props.cloudFrontCertificateArn
+          )
+        : undefined,
       minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
       priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
     });
@@ -196,7 +247,9 @@ export class CloudSetupStack extends cdk.Stack {
     new route53.ARecord(this, `cf-alias-${this.suffix}`, {
       zone: hostedZone,
       recordName: props.domainName,
-      target: route53.RecordTarget.fromAlias(new cdk.aws_route53_targets.CloudFrontTarget(cf)),
+      target: route53.RecordTarget.fromAlias(
+        new cdk.aws_route53_targets.CloudFrontTarget(cf)
+      ),
     });
 
     // CloudWatch alarm
@@ -217,6 +270,8 @@ export class CloudSetupStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'RdsEndpoint', { value: this.rdsEndpoint || '' });
     new cdk.CfnOutput(this, 'BucketName', { value: this.bucketName || '' });
     new cdk.CfnOutput(this, 'AlbDns', { value: this.albDns || '' });
-    new cdk.CfnOutput(this, 'CloudFrontUrl', { value: this.cloudFrontUrl || '' });
+    new cdk.CfnOutput(this, 'CloudFrontUrl', {
+      value: this.cloudFrontUrl || '',
+    });
   }
 }
