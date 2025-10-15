@@ -9,6 +9,7 @@ import sys
 # Add parent directory to path so we can import lib
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import re
 import aws_cdk as cdk
 from lib.tap_stack import TapStack, TapStackProps
 
@@ -21,6 +22,16 @@ environment_suffix = (
     or os.environ.get('ENVIRONMENT_SUFFIX')
     or 'dev'
 )
+
+# If the context value comes from an unexpanded shell expression like
+# '${ENVIRONMENT_SUFFIX:-dev}' (common when running on some shells),
+# fall back to the safe default. Also sanitize any characters that are
+# not allowed in CDK stack names.
+if isinstance(environment_suffix, str) and ('${' in environment_suffix or '$' in environment_suffix):
+    environment_suffix = 'dev'
+
+# Replace any character other than letters, numbers or hyphen with hyphen
+environment_suffix = re.sub(r'[^A-Za-z0-9-]', '-', str(environment_suffix))
 
 # Get AWS region from environment or lib/AWS_REGION file
 region = os.environ.get('AWS_REGION')

@@ -226,7 +226,6 @@ class MonitoringStack(Construct):
             ).subnet_ids,
             cache_subnet_group_name=f"monitoring-redis-subnet-{env_suffix}"
         )
-print(self.vpc.select_subnets(subnet_type=ec2.SubnetType.PRIVATE_ISOLATED).subnet_ids)
         # ElastiCache Redis cluster
         self.redis_cluster = elasticache.CfnReplicationGroup(
             self,
