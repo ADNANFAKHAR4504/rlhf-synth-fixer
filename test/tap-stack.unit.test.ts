@@ -132,9 +132,9 @@ describe('TapStack (unit)', () => {
     // S3 and RDS resources exist in this version of the stack
     t.resourceCountIs('AWS::S3::Bucket', 1);
     t.resourceCountIs('AWS::RDS::DBInstance', 1);
-    // Outputs exist
+    // Outputs no longer exist (removed to avoid export conflicts)
     const outputs = t.toJSON().Outputs || {};
-    expect(Object.keys(outputs).length).toBeGreaterThan(0);
+    expect(Object.keys(outputs).length).toBe(0);
   });
 
   test('TapStack top-level outputs fallback to empty strings when child properties are falsy (mocked child)', () => {

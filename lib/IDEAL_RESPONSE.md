@@ -283,13 +283,7 @@ export class CloudSetupStack extends cdk.Stack {
 		});
 
 		// Outputs (expose via public properties so TapStack can re-export)
-		new cdk.CfnOutput(this, 'VpcId', { value: this.vpcId });
-		new cdk.CfnOutput(this, 'RdsEndpoint', { value: this.rdsEndpoint || '' });
-		new cdk.CfnOutput(this, 'BucketName', { value: this.bucketName || '' });
-		new cdk.CfnOutput(this, 'AlbDns', { value: this.albDns || '' });
-		new cdk.CfnOutput(this, 'CloudFrontUrl', {
-			value: this.cloudFrontUrl || '',
-		});
+		// Removed CfnOutputs to avoid cross-stack export conflicts
 	}
 }
 
