@@ -20,31 +20,31 @@
 > 3. **Compute**
 >
 >    * Launch **two EC2 instances** (parameterized `InstanceType`, allowed values only **T2 and T3 families**) in **different AZs (private subnets)**.
->    * Attach an **IAM Role and Instance Profile** that grants **SSM agent access**.
->    * Apply encryption to all EBS volumes using a dedicated **KMS key**.
-> 4. **Load Balancing**
->
->    * Create an **Application Load Balancer (ALB)** in the public subnets.
->    * Target the two EC2 instances (private subnets) via a target group.
->    * Listener should handle **HTTP (port 80)** traffic only.
->    * *(Exclude SSL/ACM certificate configuration entirely.)*
-> 5. **Storage and Data**
->
->    * Create an **S3 bucket** for application storage with:
->
->      * **Server-Side Encryption (SSE-S3 or KMS)**
->      * **Public access blocked**
->      * **S3 bucket policy** enforcing encryption
->    * Create an **RDS instance** in private subnets (parameterize DB engine, username, password) and ensure **`PubliclyAccessible: false`**.
-> 6. **Application Integration**
->
->    * Deploy an **SQS queue** for logging message handling.
->    * Add a **Lambda function** triggered by **S3 ObjectCreated events** for auditing/logging (use inline Python code).
->    * Integrate CloudWatch **CPU and memory utilization alarms** for all EC2 instances.
-> 7. **Content Delivery & Protection**
->
->    * Create a **CloudFront Distribution** serving the S3 bucket as origin.
->    * Attach an **AWS WAF WebACL** with sample rules (e.g., block IP set, rate limiting, SQLi/XSS rules).
+    * Attach an **IAM Role and Instance Profile** that grants **SSM agent access**.
+    * Apply encryption to all EBS volumes using a dedicated **KMS key**.
+ 4. **Load Balancing**
+
+    * Create an **Application Load Balancer (ALB)** in the public subnets.
+    * Target the two EC2 instances (private subnets) via a target group.
+    * Listener should handle **HTTP (port 80)** traffic only.
+    * *(Exclude SSL/ACM certificate configuration entirely.)*
+ 5. **Storage and Data**
+
+    * Create an **S3 bucket** for application storage with:
+
+      * **Server-Side Encryption (SSE-S3 or KMS)**
+      * **Public access blocked**
+      * **S3 bucket policy** enforcing encryption
+    * Create an **RDS instance** in private subnets (parameterize DB engine, username, password) and ensure **`PubliclyAccessible: false`**.
+ 6. **Application Integration**
+
+    * Deploy an **SQS queue** for logging message handling.
+    * Add a **Lambda function** triggered by **S3 ObjectCreated events** for auditing/logging (use inline Python code).
+    * Integrate CloudWatch **CPU and memory utilization alarms** for all EC2 instances.
+ 7. **Content Delivery & Protection**
+
+    * Create a **CloudFront Distribution** serving the S3 bucket as origin.
+    * Attach an **AWS WAF WebACL** with sample rules (e.g., block IP set, rate limiting, SQLi/XSS rules).
  8. **Tagging**
 
     * Every resource must include tags:
