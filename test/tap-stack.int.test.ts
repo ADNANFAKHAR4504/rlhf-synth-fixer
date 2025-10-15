@@ -1,23 +1,6 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
 import fs from 'fs';
-import { CodePipelineClient,     test('should validate SNS topic accessibility and configuration', async () => {
-      // Get updated outputs with real account ID
-      const updatedOutputs = await replaceAccountIdPlaceholders(outputs);
-      const notificationTopicArn = updatedOutputs.NotificationTopicARN;
-      
-      // Test direct topic access
-      const getTopicAttributesCommand = new GetTopicAttributesCommand({
-        TopicArn: notificationTopicArn
-      });
-      
-      const topicResponse = await snsClient.send(getTopicAttributesCommand);
-      
-      expect(topicResponse.Attributes).toBeDefined();
-      expect(topicResponse.Attributes!['TopicArn']).toBe(notificationTopicArn);
-      expect(topicResponse.Attributes!['SubscriptionsConfirmed']).toBeDefined();
-      
-      console.log(`✅ SNS Topic ${notificationTopicArn} is accessible and configured`);
-    }, 30000);nd, GetPipelineStateCommand, StartPipelineExecutionCommand } from '@aws-sdk/client-codepipeline';
+import { CodePipelineClient, GetPipelineStateCommand, StartPipelineExecutionCommand } from '@aws-sdk/client-codepipeline';
 import { SNSClient, ListTopicsCommand, GetTopicAttributesCommand } from '@aws-sdk/client-sns';
 import { CloudFormationClient, DescribeStacksCommand, DescribeStackResourcesCommand } from '@aws-sdk/client-cloudformation';
 import { CodeBuildClient, ListProjectsCommand, BatchGetProjectsCommand } from '@aws-sdk/client-codebuild';
@@ -27,6 +10,24 @@ import { STSClient, GetCallerIdentityCommand } from '@aws-sdk/client-sts';
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
+
+// Function to fetch AWS account ID
+const getAccountId = async (): Promise<string> => {
+  const sts = new AWS.STS();
+  try {
+    const result = await sts.getCallerIdentity().promise();
+    return result.Account || '';
+  } catch (error) {
+    console.warn('Could not fetch account ID:', error);
+    return '';
+  }
+};
+
+// Function to replace placeholders in resource identifiers
+const replacePlaceholders = (value: string, accountId: string): string => {
+  return value.replace(/\*\*\*/g, accountId);
+};
+
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
