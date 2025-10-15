@@ -1,5 +1,5 @@
-export const PRIMARY_REGION = 'eu-west-1';
-export const SECONDARY_REGIONS = ['eu-west-2', 'eu-west-3'];
+export const PRIMARY_REGION = 'eu-west-2';
+export const SECONDARY_REGIONS = ['eu-west-3', 'eu-north-1'];
 export const REGIONS = [PRIMARY_REGION, ...SECONDARY_REGIONS];
 
 export const AVAILABILITY_TARGET = 0.99999; // 99.999%
@@ -18,4 +18,3 @@ export const FAILOVER_THRESHOLDS = {
   DB_CONNECTION_FAILURES: 3,
   REPLICATION_LAG_MS: 100,
 };
-

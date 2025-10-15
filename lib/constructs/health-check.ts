@@ -3,6 +3,7 @@ import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import { Construct } from 'constructs';
@@ -26,6 +27,17 @@ export class HealthCheckSystem extends Construct {
 
     // Create comprehensive health check Lambda
     const envSuffix = props.environmentSuffix || 'dev';
+
+    const healthCheckerLogGroup = new logs.LogGroup(
+      this,
+      'HealthCheckerLogGroup',
+      {
+        logGroupName: `/aws/lambda/financial-app-health-checker-${envSuffix}`,
+        retention: logs.RetentionDays.ONE_WEEK,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }
+    );
+
     const healthChecker = new lambda.Function(this, 'HealthChecker', {
       functionName: `financial-app-health-checker-${envSuffix}`,
       runtime: lambda.Runtime.NODEJS_18_X,
@@ -37,6 +49,7 @@ export class HealthCheckSystem extends Construct {
       environment: {
         ALERT_TOPIC_ARN: props.alertTopic.topicArn,
       },
+      logGroup: healthCheckerLogGroup,
     });
 
     props.alertTopic.grantPublish(healthChecker);
@@ -47,17 +60,21 @@ export class HealthCheckSystem extends Construct {
 
       // Route53 health check (only if custom domain is configured)
       if (api.apiGatewayDomainName) {
-        const healthCheck = new route53.CfnHealthCheck(this, `HealthCheck-${region}`, {
-          healthCheckConfig: {
-            port: 443,
-            type: 'HTTPS',
-            resourcePath: '/health',
-            fullyQualifiedDomainName: api.apiGatewayDomainName.domainName,
-            requestInterval: 30,
-            failureThreshold: 2,
-            measureLatency: true,
-          },
-        });
+        const healthCheck = new route53.CfnHealthCheck(
+          this,
+          `HealthCheck-${region}`,
+          {
+            healthCheckConfig: {
+              port: 443,
+              type: 'HTTPS',
+              resourcePath: '/health',
+              fullyQualifiedDomainName: api.apiGatewayDomainName.domainName,
+              requestInterval: 30,
+              failureThreshold: 2,
+              measureLatency: true,
+            },
+          }
+        );
 
         this.healthChecks.set(region, healthCheck);
       }
@@ -87,7 +104,8 @@ export class HealthCheckSystem extends Construct {
             event: events.RuleTargetInput.fromObject({
               region: region,
               apiEndpoint: apiEndpoint,
-              dbConnectionString: props.globalDatabase.getConnectionString(region),
+              dbConnectionString:
+                props.globalDatabase.getConnectionString(region),
               checks: [
                 'api_latency',
                 'database_connection',
@@ -106,21 +124,23 @@ export class HealthCheckSystem extends Construct {
   }
 
   private createHealthDashboard(regions: string[]) {
-    const envSuffix = cdk.Stack.of(this).node.tryGetContext('environmentSuffix') || 'dev';
+    const envSuffix =
+      cdk.Stack.of(this).node.tryGetContext('environmentSuffix') || 'dev';
     const dashboard = new cloudwatch.Dashboard(this, 'HealthDashboard', {
       dashboardName: `financial-app-health-${envSuffix}`,
     });
 
-    const widgets = regions.map(region =>
-      new cloudwatch.GraphWidget({
-        title: `${region} Health Score`,
-        left: [this.healthMetrics.get(region)!],
-        leftYAxis: {
-          min: 0,
-          max: 100,
-        },
-        period: cdk.Duration.minutes(1),
-      })
+    const widgets = regions.map(
+      region =>
+        new cloudwatch.GraphWidget({
+          title: `${region} Health Score`,
+          left: [this.healthMetrics.get(region)!],
+          leftYAxis: {
+            min: 0,
+            max: 100,
+          },
+          period: cdk.Duration.minutes(1),
+        })
     );
 
     dashboard.addWidgets(...widgets);
@@ -131,4 +151,3 @@ export class HealthCheckSystem extends Construct {
     return healthCheck?.attrHealthCheckId;
   }
 }
-

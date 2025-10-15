@@ -22,17 +22,15 @@ export class RegionalApi extends Construct {
   public latencyMetric!: cloudwatch.Metric;
   public errorMetric!: cloudwatch.Metric;
   public requestCountMetric!: cloudwatch.Metric;
-  public readonly sessionTable: dynamodb.Table;
+  public readonly sessionTable: dynamodb.ITable;
   public readonly transactionProcessor: lambda.Function;
 
   constructor(scope: Construct, id: string, props: RegionalApiProps) {
     super(scope, id);
 
-    // Create DynamoDB Global Table for sessions
-    const replicationRegions = props.isPrimary
-      ? ['us-east-1', 'eu-west-1', 'ap-southeast-1'].filter(r => r !== props.region)
-      : undefined;
-
+    // Create DynamoDB Table for sessions
+    // Note: For production multi-region deployment, use Global Tables with replicationRegions
+    // For LocalStack/single-region testing, we create separate tables per region
     this.sessionTable = new dynamodb.Table(this, 'SessionTable', {
       tableName: `financial-app-sessions-${props.region}`,
       partitionKey: {
@@ -42,29 +40,47 @@ export class RegionalApi extends Construct {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       pointInTimeRecovery: true,
       stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
-      replicationRegions: replicationRegions,
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // For dev/test environments
+      // replicationRegions: For production, enable global tables across regions
     });
 
+    // Create log group for transaction processor with deletion policy
+    const transactionLogGroup = new logs.LogGroup(
+      this,
+      'TransactionProcessorLogGroup',
+      {
+        logGroupName: `/aws/lambda/financial-transaction-processor-${props.region}`,
+        retention: logs.RetentionDays.ONE_WEEK,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }
+    );
+
     // Create transaction processing Lambda
-    this.transactionProcessor = new lambda.Function(this, 'TransactionProcessor', {
-      functionName: `financial-transaction-processor-${props.region}`,
-      runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'index.handler',
-      code: lambda.Code.fromAsset('lib/lambda/transaction-processor'),
-      architecture: lambda.Architecture.ARM_64, // Graviton2 for better performance and cost
-      memorySize: 3008,
-      timeout: cdk.Duration.seconds(30),
-      reservedConcurrentExecutions: 1000,
-      environment: {
-        DB_CONNECTION_STRING: props.globalDatabase.getConnectionString(props.region),
-        DB_SECRET_ARN: props.globalDatabase.credentials.secretArn,
-        SESSION_TABLE_NAME: this.sessionTable.tableName,
-        REGION: props.region,
-        IS_PRIMARY: props.isPrimary.toString(),
-      },
-      tracing: lambda.Tracing.ACTIVE,
-      logRetention: logs.RetentionDays.ONE_WEEK,
-    });
+    this.transactionProcessor = new lambda.Function(
+      this,
+      'TransactionProcessor',
+      {
+        functionName: `financial-transaction-processor-${props.region}`,
+        runtime: lambda.Runtime.NODEJS_18_X,
+        handler: 'index.handler',
+        code: lambda.Code.fromAsset('lib/lambda/transaction-processor'),
+        architecture: lambda.Architecture.ARM_64, // Graviton2 for better performance and cost
+        memorySize: 3008,
+        timeout: cdk.Duration.seconds(30),
+        reservedConcurrentExecutions: 1000,
+        environment: {
+          DB_CONNECTION_STRING: props.globalDatabase.getConnectionString(
+            props.region
+          ),
+          DB_SECRET_ARN: props.globalDatabase.credentials.secretArn,
+          SESSION_TABLE_NAME: this.sessionTable.tableName,
+          REGION: props.region,
+          IS_PRIMARY: props.isPrimary.toString(),
+        },
+        tracing: lambda.Tracing.ACTIVE,
+        logGroup: transactionLogGroup,
+      }
+    );
 
     // Grant permissions
     props.globalDatabase.credentials.grantRead(this.transactionProcessor);
@@ -118,22 +134,35 @@ export class RegionalApi extends Construct {
     const healthResource = this.api.root.addResource('health');
 
     // Transaction endpoints
-    transactionResource.addMethod('POST', new apigateway.LambdaIntegration(this.transactionProcessor), {
-      methodResponses: [{
-        statusCode: '200',
-        responseModels: {
-          'application/json': apigateway.Model.EMPTY_MODEL,
-        },
-      }],
-      requestValidator: new apigateway.RequestValidator(this, 'TransactionValidator', {
-        restApi: this.api,
-        requestValidatorName: 'transaction-validator',
-        validateRequestBody: true,
-        validateRequestParameters: true,
-      }),
-    });
+    transactionResource.addMethod(
+      'POST',
+      new apigateway.LambdaIntegration(this.transactionProcessor),
+      {
+        methodResponses: [
+          {
+            statusCode: '200',
+            responseModels: {
+              'application/json': apigateway.Model.EMPTY_MODEL,
+            },
+          },
+        ],
+        requestValidator: new apigateway.RequestValidator(
+          this,
+          'TransactionValidator',
+          {
+            restApi: this.api,
+            requestValidatorName: 'transaction-validator',
+            validateRequestBody: true,
+            validateRequestParameters: true,
+          }
+        ),
+      }
+    );
 
-    transactionResource.addMethod('GET', new apigateway.LambdaIntegration(this.transactionProcessor));
+    transactionResource.addMethod(
+      'GET',
+      new apigateway.LambdaIntegration(this.transactionProcessor)
+    );
 
     // Health check endpoint
     const healthLambda = new lambda.Function(this, 'HealthCheckHandler', {
@@ -154,7 +183,10 @@ export class RegionalApi extends Construct {
       `),
     });
 
-    healthResource.addMethod('GET', new apigateway.LambdaIntegration(healthLambda));
+    healthResource.addMethod(
+      'GET',
+      new apigateway.LambdaIntegration(healthLambda)
+    );
   }
 
   private setupMetrics() {
@@ -213,4 +245,3 @@ export class RegionalApi extends Construct {
     });
   }
 }
-

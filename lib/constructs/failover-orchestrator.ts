@@ -31,12 +31,19 @@ export class FailoverOrchestrator extends Construct {
     const validateFailoverFunction = this.createValidateFailoverFunction();
 
     // Define Step Functions workflow
-    const validateHealth = new stepfunctionsTasks.LambdaInvoke(this, 'ValidateHealth', {
-      lambdaFunction: validateHealthFunction,
-      outputPath: '$.Payload',
-    });
+    const validateHealth = new stepfunctionsTasks.LambdaInvoke(
+      this,
+      'ValidateHealth',
+      {
+        lambdaFunction: validateHealthFunction,
+        outputPath: '$.Payload',
+      }
+    );
 
-    const checkNeedFailover = new stepfunctions.Choice(this, 'CheckNeedFailover')
+    const checkNeedFailover = new stepfunctions.Choice(
+      this,
+      'CheckNeedFailover'
+    )
       .when(
         stepfunctions.Condition.stringEquals('$.failoverRequired', 'true'),
         new stepfunctions.Parallel(this, 'ExecuteFailover')
@@ -59,25 +66,27 @@ export class FailoverOrchestrator extends Construct {
             })
           )
       )
-      .otherwise(
-        new stepfunctions.Succeed(this, 'NoFailoverNeeded')
-      );
+      .otherwise(new stepfunctions.Succeed(this, 'NoFailoverNeeded'));
 
     const definition = validateHealth.next(checkNeedFailover);
 
     const envSuffix = props.environmentSuffix || 'dev';
-    this.stateMachine = new stepfunctions.StateMachine(this, 'FailoverStateMachine', {
-      definition,
-      stateMachineName: `financial-app-failover-${envSuffix}`,
-      timeout: cdk.Duration.minutes(15),
-    });
+    this.stateMachine = new stepfunctions.StateMachine(
+      this,
+      'FailoverStateMachine',
+      {
+        definition,
+        stateMachineName: `financial-app-failover-${envSuffix}`,
+        timeout: cdk.Duration.minutes(15),
+      }
+    );
 
     // Grant permissions
     props.alertTopic.grantPublish(this.stateMachine);
   }
 
   private createValidateHealthFunction(): lambda.Function {
-    return new lambda.Function(this, 'ValidateHealthFunction', {
+    const fn = new lambda.Function(this, 'ValidateHealthFunction', {
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'index.handler',
       architecture: lambda.Architecture.ARM_64, // Graviton2 for better performance and cost
@@ -120,10 +129,12 @@ export class FailoverOrchestrator extends Construct {
       `),
       timeout: cdk.Duration.minutes(2),
     });
+
+    return fn;
   }
 
   private createPromoteReplicaFunction(): lambda.Function {
-    return new lambda.Function(this, 'PromoteReplicaFunction', {
+    const fn = new lambda.Function(this, 'PromoteReplicaFunction', {
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'index.handler',
       code: lambda.Code.fromAsset('lib/lambda/promote-replica'),
@@ -132,7 +143,9 @@ export class FailoverOrchestrator extends Construct {
       role: new iam.Role(this, 'PromoteReplicaRole', {
         assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
         managedPolicies: [
-          iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+          iam.ManagedPolicy.fromAwsManagedPolicyName(
+            'service-role/AWSLambdaBasicExecutionRole'
+          ),
         ],
         inlinePolicies: {
           RDSPolicy: new iam.PolicyDocument({
@@ -150,10 +163,12 @@ export class FailoverOrchestrator extends Construct {
         },
       }),
     });
+
+    return fn;
   }
 
   private createUpdateRoutingFunction(): lambda.Function {
-    return new lambda.Function(this, 'UpdateRoutingFunction', {
+    const fn = new lambda.Function(this, 'UpdateRoutingFunction', {
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'index.handler',
       architecture: lambda.Architecture.ARM_64, // Graviton2 for better performance and cost
@@ -188,10 +203,12 @@ export class FailoverOrchestrator extends Construct {
       `),
       timeout: cdk.Duration.minutes(2),
     });
+
+    return fn;
   }
 
   private createValidateFailoverFunction(): lambda.Function {
-    return new lambda.Function(this, 'ValidateFailoverFunction', {
+    const fn = new lambda.Function(this, 'ValidateFailoverFunction', {
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'index.handler',
       architecture: lambda.Architecture.ARM_64, // Graviton2 for better performance and cost
@@ -224,6 +241,7 @@ export class FailoverOrchestrator extends Construct {
       `),
       timeout: cdk.Duration.minutes(3),
     });
+
+    return fn;
   }
 }
-

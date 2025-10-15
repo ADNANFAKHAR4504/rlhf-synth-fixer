@@ -3,6 +3,7 @@ import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
@@ -22,6 +23,13 @@ export class ChaosTestingSystem extends Construct {
 
     const envSuffix = props.environmentSuffix || 'dev';
 
+    // Create log group for chaos runner with deletion policy
+    const chaosLogGroup = new logs.LogGroup(this, 'ChaosRunnerLogGroup', {
+      logGroupName: `/aws/lambda/financial-app-chaos-runner-${envSuffix}`,
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
     // Create chaos testing Lambda
     const chaosRunner = new lambda.Function(this, 'ChaosRunner', {
       functionName: `financial-app-chaos-runner-${envSuffix}`,
@@ -33,9 +41,11 @@ export class ChaosTestingSystem extends Construct {
       timeout: cdk.Duration.minutes(15),
       environment: {
         REGIONS: JSON.stringify(props.regions),
-        FAILOVER_STATE_MACHINE_ARN: props.failoverOrchestrator.stateMachine.stateMachineArn,
+        FAILOVER_STATE_MACHINE_ARN:
+          props.failoverOrchestrator.stateMachine.stateMachineArn,
       },
       role: this.createChaosRole(),
+      logGroup: chaosLogGroup,
     });
 
     // Schedule chaos tests (disabled by default)
@@ -44,19 +54,21 @@ export class ChaosTestingSystem extends Construct {
       enabled: false, // Enable manually when ready to test
     });
 
-    chaosSchedule.addTarget(new targets.LambdaFunction(chaosRunner, {
-      event: events.RuleTargetInput.fromObject({
-        testScenarios: [
-          'region_failure',
-          'database_slowdown',
-          'api_throttling',
-          'network_partition',
-          'certificate_expiry',
-        ],
-        duration: 300, // 5 minutes
-        targetRegions: props.regions,
-      }),
-    }));
+    chaosSchedule.addTarget(
+      new targets.LambdaFunction(chaosRunner, {
+        event: events.RuleTargetInput.fromObject({
+          testScenarios: [
+            'region_failure',
+            'database_slowdown',
+            'api_throttling',
+            'network_partition',
+            'certificate_expiry',
+          ],
+          duration: 300, // 5 minutes
+          targetRegions: props.regions,
+        }),
+      })
+    );
 
     // Create SSM parameter for enabling/disabling chaos tests
     new ssm.StringParameter(this, 'ChaosTestingEnabled', {
@@ -73,7 +85,9 @@ export class ChaosTestingSystem extends Construct {
     return new iam.Role(this, 'ChaosRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSLambdaBasicExecutionRole'
+        ),
       ],
       inlinePolicies: {
         ChaosPolicy: new iam.PolicyDocument({
@@ -101,17 +115,19 @@ export class ChaosTestingSystem extends Construct {
   }
 
   private createTestResultStorage() {
-    const envSuffix = cdk.Stack.of(this).node.tryGetContext('environmentSuffix') || 'dev';
+    const envSuffix =
+      cdk.Stack.of(this).node.tryGetContext('environmentSuffix') || 'dev';
     // Create S3 bucket for test results
-    const bucket = new s3.Bucket(this, 'ChaosTestResults', {
+    new s3.Bucket(this, 'ChaosTestResults', {
       bucketName: `financial-app-chaos-test-results-${envSuffix}-${cdk.Stack.of(this).account}`,
       versioned: true,
-      lifecycleRules: [{
-        id: 'delete-old-results',
-        expiration: cdk.Duration.days(90),
-      }],
+      lifecycleRules: [
+        {
+          id: 'delete-old-results',
+          expiration: cdk.Duration.days(90),
+        },
+      ],
       encryption: s3.BucketEncryption.S3_MANAGED,
     });
   }
 }
-

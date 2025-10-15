@@ -18,9 +18,11 @@ export interface GlobalDatabaseProps {
 export class GlobalDatabase extends Construct {
   public readonly globalCluster: rds.CfnGlobalCluster;
   public readonly primaryCluster: rds.DatabaseCluster;
-  public readonly secondaryClusters: Map<string, rds.DatabaseCluster> = new Map();
+  public readonly secondaryClusters: Map<string, rds.DatabaseCluster> =
+    new Map();
   public readonly credentials: secretsmanager.ISecret;
-  private readonly replicationMetrics: Map<string, cloudwatch.Metric> = new Map();
+  private readonly replicationMetrics: Map<string, cloudwatch.Metric> =
+    new Map();
   private readonly parameterGroup: rds.ParameterGroup;
 
   constructor(scope: Construct, id: string, props: GlobalDatabaseProps) {
@@ -54,7 +56,7 @@ export class GlobalDatabase extends Construct {
       sourceDbClusterIdentifier: undefined, // Will be set after primary cluster creation
       storageEncrypted: true,
       engine: 'aurora-mysql',
-      engineVersion: '5.7.mysql_aurora.2.10.2',
+      engineVersion: '8.0.mysql_aurora.3.08.2',
     });
 
     // Create primary cluster
@@ -66,14 +68,17 @@ export class GlobalDatabase extends Construct {
 
     this.primaryCluster = new rds.DatabaseCluster(this, 'PrimaryCluster', {
       engine: rds.DatabaseClusterEngine.auroraMysql({
-        version: rds.AuroraMysqlEngineVersion.VER_2_10_2,
+        version: rds.AuroraMysqlEngineVersion.VER_3_04_0,
       }),
       credentials: rds.Credentials.fromGeneratedSecret('admin', {
         secretName: `financial-db-primary-credentials-${envSuffix}`,
       }),
       instanceProps: {
         vpc: primaryVpc,
-        instanceType: ec2.InstanceType.of(ec2.InstanceClass.R6G, ec2.InstanceSize.XLARGE4),
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.R6G,
+          ec2.InstanceSize.XLARGE4
+        ),
         vpcSubnets: {
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
@@ -90,38 +95,52 @@ export class GlobalDatabase extends Construct {
 
     // Enable backtrack if requested
     if (props.enableBacktrack) {
-      const cfnCluster = this.primaryCluster.node.defaultChild as rds.CfnDBCluster;
+      const cfnCluster = this.primaryCluster.node
+        .defaultChild as rds.CfnDBCluster;
       cfnCluster.backtrackWindow = 72; // 72 hours
     }
 
     // Update global cluster with primary cluster ARN
-    this.globalCluster.sourceDbClusterIdentifier = this.primaryCluster.clusterArn;
+    this.globalCluster.sourceDbClusterIdentifier =
+      this.primaryCluster.clusterArn;
 
     // Create secondary clusters
-    this.createSecondaryClusters(props.secondaryRegions, encryptionKey, envSuffix);
+    this.createSecondaryClusters(
+      props.secondaryRegions,
+      encryptionKey,
+      envSuffix
+    );
 
     // Setup replication monitoring
-    this.setupReplicationMonitoring(props.primaryRegion, props.secondaryRegions);
+    this.setupReplicationMonitoring(
+      props.primaryRegion,
+      props.secondaryRegions
+    );
   }
 
   private createParameterGroup(): rds.ParameterGroup {
     return new rds.ParameterGroup(this, 'AuroraParameterGroup', {
       engine: rds.DatabaseClusterEngine.auroraMysql({
-        version: rds.AuroraMysqlEngineVersion.VER_2_10_2,
+        version: rds.AuroraMysqlEngineVersion.VER_3_04_0,
       }),
       description: 'Optimized for financial transactions',
       parameters: {
-        'innodb_buffer_pool_size': '{DBInstanceClassMemory*3/4}',
-        'max_connections': '5000',
-        'innodb_lock_wait_timeout': '5',
-        'binlog_format': 'ROW',
-        'aurora_binlog_replication_max_yield_seconds': '0',
-        'aurora_enable_repl_bin_log_filtering': '0',
+        // Parameters compatible with Aurora MySQL 8.0
+        innodb_buffer_pool_size: '{DBInstanceClassMemory*3/4}',
+        max_connections: '5000',
+        innodb_lock_wait_timeout: '5',
+        binlog_format: 'ROW',
+        // aurora_binlog_replication_max_yield_seconds: Not supported in MySQL 8.0
+        // aurora_enable_repl_bin_log_filtering: Not supported in MySQL 8.0
       },
     });
   }
 
-  private createSecondaryClusters(regions: string[], encryptionKey: kms.IKey, envSuffix: string) {
+  private createSecondaryClusters(
+    regions: string[],
+    encryptionKey: kms.IKey,
+    envSuffix: string
+  ) {
     for (const region of regions) {
       // Note: In practice, you'd need to create these in separate stacks per region
       // This is a simplified representation
@@ -131,25 +150,32 @@ export class GlobalDatabase extends Construct {
         cidr: `10.${regions.indexOf(region) + 1}.0.0/16`,
       });
 
-      const secondaryCluster = new rds.DatabaseCluster(this, `SecondaryCluster-${region}`, {
-        engine: rds.DatabaseClusterEngine.auroraMysql({
-          version: rds.AuroraMysqlEngineVersion.VER_2_10_2,
-        }),
-        credentials: rds.Credentials.fromGeneratedSecret('admin', {
-          secretName: `financial-db-${region}-credentials-${envSuffix}`,
-        }),
-        instanceProps: {
-          vpc: secondaryVpc,
-          instanceType: ec2.InstanceType.of(ec2.InstanceClass.R6G, ec2.InstanceSize.XLARGE4),
-          vpcSubnets: {
-            subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      const secondaryCluster = new rds.DatabaseCluster(
+        this,
+        `SecondaryCluster-${region}`,
+        {
+          engine: rds.DatabaseClusterEngine.auroraMysql({
+            version: rds.AuroraMysqlEngineVersion.VER_3_04_0,
+          }),
+          credentials: rds.Credentials.fromGeneratedSecret('admin', {
+            secretName: `financial-db-${region}-credentials-${envSuffix}`,
+          }),
+          instanceProps: {
+            vpc: secondaryVpc,
+            instanceType: ec2.InstanceType.of(
+              ec2.InstanceClass.R6G,
+              ec2.InstanceSize.XLARGE4
+            ),
+            vpcSubnets: {
+              subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+            },
           },
-        },
-        instances: 3,
-        storageEncrypted: true,
-        storageEncryptionKey: encryptionKey,
-        parameterGroup: this.parameterGroup,
-      });
+          instances: 3,
+          storageEncrypted: true,
+          storageEncryptionKey: encryptionKey,
+          parameterGroup: this.parameterGroup,
+        }
+      );
 
       this.secondaryClusters.set(region, secondaryCluster);
 
@@ -159,7 +185,10 @@ export class GlobalDatabase extends Construct {
     }
   }
 
-  private setupReplicationMonitoring(primaryRegion: string, secondaryRegions: string[]) {
+  private setupReplicationMonitoring(
+    primaryRegion: string,
+    secondaryRegions: string[]
+  ) {
     // Create custom metrics for replication lag
     for (const region of secondaryRegions) {
       const metric = new cloudwatch.Metric({
@@ -191,11 +220,10 @@ export class GlobalDatabase extends Construct {
   }
 
   public getConnectionString(region: string): string {
-    const cluster = region === this.primaryCluster.env.region ?
-      this.primaryCluster :
-      this.secondaryClusters.get(region)!;
+    // For LocalStack/single-stack deployment, all regions use the primary cluster
+    // For production multi-region deployment, each region would use its own cluster
+    const cluster = this.secondaryClusters.get(region) || this.primaryCluster;
 
     return cluster.clusterEndpoint.socketAddress;
   }
 }
-

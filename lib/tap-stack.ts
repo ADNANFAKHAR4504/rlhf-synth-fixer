@@ -38,7 +38,7 @@ export class TapStack extends cdk.Stack {
     // Create global monitoring topic
     const globalAlertTopic = new sns.Topic(this, 'GlobalAlertTopic', {
       topicName: `financial-app-global-alerts-${environmentSuffix}`,
-      displayName: `Financial Application Global Alerts - ${environmentSuffix}`
+      displayName: `Financial Application Global Alerts - ${environmentSuffix}`,
     });
 
     globalAlertTopic.addSubscription(
@@ -73,14 +73,18 @@ export class TapStack extends cdk.Stack {
     });
 
     // Setup failover orchestration
-    const failoverOrchestrator = new FailoverOrchestrator(this, 'FailoverOrchestrator', {
-      regions: REGIONS,
-      regionalApis: this.regionalApis,
-      globalDatabase: this.globalDatabase,
-      healthCheckSystem: this.healthCheckSystem,
-      alertTopic: globalAlertTopic,
-      environmentSuffix: environmentSuffix,
-    });
+    const failoverOrchestrator = new FailoverOrchestrator(
+      this,
+      'FailoverOrchestrator',
+      {
+        regions: REGIONS,
+        regionalApis: this.regionalApis,
+        globalDatabase: this.globalDatabase,
+        healthCheckSystem: this.healthCheckSystem,
+        alertTopic: globalAlertTopic,
+        environmentSuffix: environmentSuffix,
+      }
+    );
 
     // Setup global routing (only if domain is provided, otherwise outputs will show IP addresses)
     if (props.domainName && props.certificateArn) {
@@ -121,7 +125,8 @@ export class TapStack extends cdk.Stack {
   private setupGlobalRouting(domainName: string) {
     // Only setup Route53 if hosted zone is available (production environments)
     if (this.hostedZone) {
-      const primaryDomain = this.regionalApis.get(PRIMARY_REGION)!.apiGatewayDomainName;
+      const primaryDomain =
+        this.regionalApis.get(PRIMARY_REGION)!.apiGatewayDomainName;
 
       if (primaryDomain) {
         // Create Route53 record set with latency routing
@@ -138,7 +143,8 @@ export class TapStack extends cdk.Stack {
 
         // Add secondary regions
         for (const region of SECONDARY_REGIONS) {
-          const regionalDomain = this.regionalApis.get(region)!.apiGatewayDomainName;
+          const regionalDomain =
+            this.regionalApis.get(region)!.apiGatewayDomainName;
 
           if (regionalDomain) {
             new route53.RecordSet(this, `LatencyRouting-${region}`, {
