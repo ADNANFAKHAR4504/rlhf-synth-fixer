@@ -10,5 +10,13 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "Kinesis, DynamoDB, Lambda, IOT Core, EventBridge, IAM, CloudWatch"
+  "aws_services": [
+    "Kinesis",
+    "DynamoDB",
+    "Lambda",
+    "IOT Core",
+    "EventBridge",
+    "IAM",
+    "CloudWatch"
+  ]
 }
