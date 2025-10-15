@@ -50,13 +50,13 @@
 >    * Every resource must include tags:
 >      `Environment`, `Owner`, and `Project`.
 >
-> #### Technical requirements:
->
-> * Use intrinsic functions (`!Ref`, `!Sub`, `!GetAtt`) properly.
-> * Include all **Parameters**, **Conditions**, **Resources**, and **Outputs**.
-> * Follow AWS best practices for **security, isolation, and IAM least privilege**.
-> * Ensure it passes `cfn-lint` and AWS CloudFormation validation.
-> * No placeholders like “TODO” — fill all required values with parameter references or logical defaults.
-> * No SSL/ACM or HTTPS listener configuration (HTTP only).
-> * Output the entire YAML code in a single fenced block with no explanations or commentary.
+ #### Technical requirements:
+
+ * Use intrinsic functions (`!Ref`, `!Sub`, `!GetAtt`) properly.
+ * Include all **Parameters**, **Conditions**, **Resources**, and **Outputs**.
+ * Follow AWS best practices for **security, isolation, and IAM least privilege**.
+ * Ensure it passes `cfn-lint` and AWS CloudFormation validation.
+ * No placeholders like “TODO” — fill all required values with parameter references or logical defaults.
+ * No SSL/ACM or HTTPS listener configuration (HTTP only).
+ * Output the entire YAML code in a single fenced block with no explanations or commentary.
 
