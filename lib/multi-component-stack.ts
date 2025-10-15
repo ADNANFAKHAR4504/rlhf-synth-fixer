@@ -116,9 +116,9 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
         version: rds.PostgresEngineVersion.VER_15,
       }),
       instanceType: ec2.InstanceType.of(
-				ec2.InstanceClass.M5,
-				ec2.InstanceSize.LARGE
-			),
+        ec2.InstanceClass.M5,
+        ec2.InstanceSize.LARGE
+      ),
       vpc,
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
