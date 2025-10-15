@@ -13,30 +13,6 @@ Parameters:
     Default: 'Production'
     Description: 'Name of the Production environment'
   
-  # Infrastructure Parameters
-  DevInstanceType:
-    Type: String
-    Default: 't2.micro'
-    AllowedValues:
-      - 't2.micro'
-      - 't2.small'
-      - 't2.medium'
-      - 't3.micro'
-      - 't3.small'
-    Description: 'EC2 instance type for Development environment'
-  
-  ProdInstanceType:
-    Type: String
-    Default: 't2.small'
-    AllowedValues:
-      - 't2.small'
-      - 't2.medium'
-      - 't3.small'
-      - 't3.medium'
-      - 'm5.large'
-    Description: 'EC2 instance type for Production environment'
-  
-  # Notification Parameters
   NotificationEmail:
     Type: String
     Description: 'Email address to receive pipeline notifications'
@@ -46,23 +22,7 @@ Parameters:
   ArtifactBucketName:
     Type: String
     Description: 'Name of the S3 bucket to store pipeline artifacts'
-    Default: 'webapp-pipeline-artifacts'
-  
-  # AWS Region Parameter
-  AWSRegion:
-    Type: String
-    Default: 'us-east-1'
-    AllowedValues:
-      - 'us-east-1'
-      - 'us-east-2'
-      - 'us-west-1'
-      - 'us-west-2'
-      - 'eu-west-1'
-      - 'eu-central-1'
-      - 'ap-northeast-1'
-      - 'ap-southeast-1'
-      - 'ap-southeast-2'
-    Description: 'AWS Region for the CI/CD pipeline'
+    Default: 'webapp-pipeline-artifact-cicd-pr'
   
   # Application Parameters
   ApplicationName:
@@ -155,6 +115,8 @@ Resources:
           Value: !Ref ApplicationName
         - Key: ManagedBy
           Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
   
   # CodeBuild Service Role
   CodeBuildServiceRole:
@@ -199,6 +161,8 @@ Resources:
           Value: !Ref ApplicationName
         - Key: ManagedBy
           Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
   
   # CodeDeploy Service Role
   CodeDeployServiceRole:
@@ -218,6 +182,8 @@ Resources:
           Value: !Ref ApplicationName
         - Key: ManagedBy
           Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
   
   # EC2 Instance Role for CodeDeploy
   EC2InstanceRole:
@@ -250,6 +216,8 @@ Resources:
           Value: !Ref ApplicationName
         - Key: ManagedBy
           Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
   
   # EC2 Instance Profile
   EC2InstanceProfile:
@@ -264,7 +232,8 @@ Resources:
   
   ArtifactBucket:
     Type: 'AWS::S3::Bucket'
-    DeletionPolicy: Retain
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       BucketName: !Ref ArtifactBucketName
       VersioningConfiguration:
@@ -291,6 +260,8 @@ Resources:
           Value: 'Shared'
         - Key: ManagedBy
           Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
   
   ArtifactBucketPolicy:
     Type: 'AWS::S3::BucketPolicy'
@@ -331,6 +302,8 @@ Resources:
           Value: !Ref ApplicationName
         - Key: ManagedBy
           Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   #---------------------------------------------------------------------------
   # CodeBuild Projects
@@ -399,6 +372,8 @@ Resources:
           Value: !Ref ApplicationName
         - Key: ManagedBy
           Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
   
   # Test Project
   TestProject:
@@ -459,6 +434,8 @@ Resources:
           Value: !Ref ApplicationName
         - Key: ManagedBy
           Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   #---------------------------------------------------------------------------
   # CodeDeploy Application and Deployment Groups
@@ -475,6 +452,8 @@ Resources:
           Value: !Ref ApplicationName
         - Key: ManagedBy
           Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
   
   # Development Deployment Group
   DevDeploymentGroup:
@@ -508,6 +487,8 @@ Resources:
           Value: !Ref DevEnvironmentName
         - Key: ManagedBy
           Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
   
   # Production Deployment Group
   ProdDeploymentGroup:
@@ -541,6 +522,8 @@ Resources:
           Value: !Ref ProdEnvironmentName
         - Key: ManagedBy
           Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   #---------------------------------------------------------------------------
   # CloudWatch Alarms
@@ -573,6 +556,8 @@ Resources:
           Value: !Ref DevEnvironmentName
         - Key: ManagedBy
           Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
   
   # Production Deployment Alarm
   ProdDeploymentAlarm:
@@ -601,6 +586,8 @@ Resources:
           Value: !Ref ProdEnvironmentName
         - Key: ManagedBy
           Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   #---------------------------------------------------------------------------
   # SNS Topic for Notifications
@@ -615,6 +602,8 @@ Resources:
           Value: !Ref ApplicationName
         - Key: ManagedBy
           Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
   
   PipelineNotificationSubscription:
     Type: 'AWS::SNS::Subscription'
@@ -745,6 +734,8 @@ Resources:
           Value: !Ref ApplicationName
         - Key: ManagedBy
           Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   # Pipeline Status Event Rule
   PipelineEventRule:
