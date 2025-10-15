@@ -4,6 +4,8 @@ import {
   PutItemCommand,
   GetItemCommand,
   QueryCommand,
+  BatchWriteItemCommand,
+  ScanCommand,
 } from '@aws-sdk/client-dynamodb';
 import {
   SecretsManagerClient,
@@ -16,11 +18,23 @@ import {
 } from '@aws-sdk/client-eventbridge';
 import { RDSClient, DescribeDBClustersCommand } from '@aws-sdk/client-rds';
 
-const primaryOutputs = JSON.parse(
-  fs.readFileSync('cfn-outputs/primary-outputs.json', 'utf8')
-);
-const secondaryOutputs = JSON.parse(
-  fs.readFileSync('cfn-outputs/secondary-outputs.json', 'utf8')
+// Load CloudFormation outputs with better error handling
+function loadOutputs(filePath: string, region: string): any {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch (error) {
+    throw new Error(
+      `Failed to load CloudFormation outputs from ${filePath}. ` +
+        `Please ensure the stack is deployed and outputs are saved. ` +
+        `Run: cdk deploy --outputs-file ${filePath} --region ${region}`
+    );
+  }
+}
+
+const primaryOutputs = loadOutputs('cfn-outputs/primary-outputs.json', 'us-east-1');
+const secondaryOutputs = loadOutputs(
+  'cfn-outputs/secondary-outputs.json',
+  'us-west-1'
 );
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -264,5 +278,356 @@ describe('Financial Data Layer Multi-Region Integration Tests', () => {
     console.log('Update replicated to primary region successfully');
 
     console.log('All steps completed - Multi-region end-to-end flow validated');
+  }, 180000);
+
+  test('Flow 2: Concurrent multi-region writes and consistency validation', async () => {
+    console.log('=== Testing concurrent writes from both regions ===');
+    const baseId = `concurrent-${Date.now()}`;
+    const primaryWrites: Promise<any>[] = [];
+    const secondaryWrites: Promise<any>[] = [];
+
+    console.log('Step 1: Write 10 items concurrently from primary region');
+    for (let i = 0; i < 10; i++) {
+      primaryWrites.push(
+        primaryDynamoClient.send(
+          new PutItemCommand({
+            TableName: tableName,
+            Item: {
+              id: { S: `${baseId}-primary-${i}` },
+              timestamp: { N: (Date.now() + i).toString() },
+              region: { S: 'us-east-1' },
+              data: { S: `Primary data ${i}` },
+            },
+          })
+        )
+      );
+    }
+
+    console.log('Step 2: Write 10 items concurrently from secondary region');
+    for (let i = 0; i < 10; i++) {
+      secondaryWrites.push(
+        secondaryDynamoClient.send(
+          new PutItemCommand({
+            TableName: tableName,
+            Item: {
+              id: { S: `${baseId}-secondary-${i}` },
+              timestamp: { N: (Date.now() + i + 100).toString() },
+              region: { S: 'us-west-1' },
+              data: { S: `Secondary data ${i}` },
+            },
+          })
+        )
+      );
+    }
+
+    await Promise.all([...primaryWrites, ...secondaryWrites]);
+    console.log('All concurrent writes completed');
+
+    console.log('Step 3: Wait for global table replication (5s)');
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+
+    console.log('Step 4: Verify all primary writes are replicated to secondary');
+    for (let i = 0; i < 10; i++) {
+      const response = await secondaryDynamoClient.send(
+        new GetItemCommand({
+          TableName: tableName,
+          Key: {
+            id: { S: `${baseId}-primary-${i}` },
+            timestamp: { N: (Date.now() + i).toString() },
+          },
+        })
+      );
+      expect(response.Item).toBeDefined();
+      expect(response.Item!.region.S).toBe('us-east-1');
+    }
+
+    console.log('Step 5: Verify all secondary writes are replicated to primary');
+    for (let i = 0; i < 10; i++) {
+      const response = await primaryDynamoClient.send(
+        new GetItemCommand({
+          TableName: tableName,
+          Key: {
+            id: { S: `${baseId}-secondary-${i}` },
+            timestamp: { N: (Date.now() + i + 100).toString() },
+          },
+        })
+      );
+      expect(response.Item).toBeDefined();
+      expect(response.Item!.region.S).toBe('us-west-1');
+    }
+
+    console.log('Concurrent write flow validated - 20 items replicated successfully');
+  }, 180000);
+
+  test('Flow 3: Regional failover and disaster recovery simulation', async () => {
+    console.log('=== Testing regional failover scenario ===');
+    const failoverId = `failover-${Date.now()}`;
+    const timestamp = Date.now();
+
+    console.log('Step 1: Write critical transaction to primary region');
+    await primaryDynamoClient.send(
+      new PutItemCommand({
+        TableName: tableName,
+        Item: {
+          id: { S: failoverId },
+          timestamp: { N: timestamp.toString() },
+          status: { S: 'processing' },
+          amount: { N: '50000.00' },
+          critical: { BOOL: true },
+        },
+      })
+    );
+
+    console.log('Step 2: Verify Aurora primary cluster is available');
+    const primaryCluster = await primaryRdsClient.send(
+      new DescribeDBClustersCommand({
+        DBClusterIdentifier: primaryClusterIdentifier,
+      })
+    );
+    expect(primaryCluster.DBClusters![0].Status).toBe('available');
+
+    console.log('Step 3: Wait for replication to secondary region');
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+
+    console.log('Step 4: Simulate primary region failure - read from secondary');
+    const failoverRead = await secondaryDynamoClient.send(
+      new GetItemCommand({
+        TableName: tableName,
+        Key: {
+          id: { S: failoverId },
+          timestamp: { N: timestamp.toString() },
+        },
+      })
+    );
+    expect(failoverRead.Item).toBeDefined();
+    expect(failoverRead.Item!.critical.BOOL).toBe(true);
+
+    console.log('Step 5: Complete transaction from secondary region');
+    await secondaryDynamoClient.send(
+      new PutItemCommand({
+        TableName: tableName,
+        Item: {
+          id: { S: failoverId },
+          timestamp: { N: timestamp.toString() },
+          status: { S: 'completed-failover' },
+          amount: { N: '50000.00' },
+          critical: { BOOL: true },
+          failoverRegion: { S: 'us-west-1' },
+          failoverTime: { N: Date.now().toString() },
+        },
+      })
+    );
+
+    console.log('Step 6: Verify secondary Aurora cluster is available for reads');
+    const secondaryCluster = await secondaryRdsClient.send(
+      new DescribeDBClustersCommand({
+        DBClusterIdentifier: secondaryClusterIdentifier,
+      })
+    );
+    expect(secondaryCluster.DBClusters![0].Status).toBe('available');
+    expect(secondaryCluster.DBClusters![0].ReaderEndpoint).toBeDefined();
+
+    console.log(
+      'Failover simulation completed - Secondary region handled critical transaction'
+    );
+  }, 180000);
+
+  test('Flow 4: Bulk data operations and batch processing', async () => {
+    console.log('=== Testing bulk data operations ===');
+    const batchId = `batch-${Date.now()}`;
+    const batchSize = 25;
+
+    console.log(`Step 1: Prepare batch write of ${batchSize} items`);
+    const batchItems = [];
+    for (let i = 0; i < batchSize; i++) {
+      batchItems.push({
+        PutRequest: {
+          Item: {
+            id: { S: `${batchId}-item-${i}` },
+            timestamp: { N: (Date.now() + i).toString() },
+            batchNumber: { N: i.toString() },
+            processingStatus: { S: 'queued' },
+            amount: { N: (Math.random() * 10000).toFixed(2) },
+          },
+        },
+      });
+    }
+
+    console.log('Step 2: Execute batch write to primary region');
+    await primaryDynamoClient.send(
+      new BatchWriteItemCommand({
+        RequestItems: {
+          [tableName]: batchItems,
+        },
+      })
+    );
+
+    console.log('Step 3: Trigger batch processing Lambda in primary region');
+    const batchProcessResponse = await primaryLambdaClient.send(
+      new InvokeCommand({
+        FunctionName: primaryLambdaArn,
+        InvocationType: 'RequestResponse',
+        Payload: Buffer.from(
+          JSON.stringify({
+            source: 'batch-processor',
+            batchId,
+            batchSize,
+          })
+        ),
+      })
+    );
+    expect(batchProcessResponse.StatusCode).toBe(200);
+
+    console.log('Step 4: Wait for batch replication (6s)');
+    await new Promise((resolve) => setTimeout(resolve, 6000));
+
+    console.log('Step 5: Verify batch items replicated to secondary region');
+    let replicatedCount = 0;
+    for (let i = 0; i < batchSize; i++) {
+      const response = await secondaryDynamoClient.send(
+        new GetItemCommand({
+          TableName: tableName,
+          Key: {
+            id: { S: `${batchId}-item-${i}` },
+            timestamp: { N: (Date.now() + i).toString() },
+          },
+        })
+      );
+      if (response.Item) {
+        replicatedCount++;
+      }
+    }
+    expect(replicatedCount).toBeGreaterThan(20); // Allow for eventual consistency
+
+    console.log(
+      `Bulk operation completed - ${replicatedCount}/${batchSize} items replicated`
+    );
+  }, 180000);
+
+  test('Flow 5: Event-driven workflow with cross-region coordination', async () => {
+    console.log('=== Testing event-driven workflow ===');
+    const workflowId = `workflow-${Date.now()}`;
+    const timestamp = Date.now();
+
+    console.log('Step 1: Initiate workflow in primary region');
+    await primaryDynamoClient.send(
+      new PutItemCommand({
+        TableName: tableName,
+        Item: {
+          id: { S: workflowId },
+          timestamp: { N: timestamp.toString() },
+          workflowStatus: { S: 'initiated' },
+          steps: { N: '0' },
+          initiatedRegion: { S: 'us-east-1' },
+        },
+      })
+    );
+
+    console.log('Step 2: Send workflow event to primary EventBridge');
+    const event1 = await primaryEventBridgeClient.send(
+      new PutEventsCommand({
+        Entries: [
+          {
+            Source: 'com.financial.workflow',
+            DetailType: 'WorkflowInitiated',
+            Detail: JSON.stringify({
+              workflowId,
+              step: 1,
+              action: 'validate-transaction',
+            }),
+            EventBusName: primaryEventBusName,
+          },
+        ],
+      })
+    );
+    expect(event1.FailedEntryCount).toBe(0);
+
+    console.log('Step 3: Invoke Lambda for workflow step 1');
+    const step1Response = await primaryLambdaClient.send(
+      new InvokeCommand({
+        FunctionName: primaryLambdaArn,
+        Payload: Buffer.from(
+          JSON.stringify({
+            source: 'workflow-orchestrator',
+            workflowId,
+            step: 1,
+          })
+        ),
+      })
+    );
+    expect(step1Response.StatusCode).toBe(200);
+
+    console.log('Step 4: Wait for replication');
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+
+    console.log('Step 5: Continue workflow from secondary region');
+    await secondaryDynamoClient.send(
+      new PutItemCommand({
+        TableName: tableName,
+        Item: {
+          id: { S: workflowId },
+          timestamp: { N: timestamp.toString() },
+          workflowStatus: { S: 'processing' },
+          steps: { N: '1' },
+          initiatedRegion: { S: 'us-east-1' },
+          processingRegion: { S: 'us-west-1' },
+        },
+      })
+    );
+
+    console.log('Step 6: Send completion event from secondary region');
+    const event2 = await secondaryEventBridgeClient.send(
+      new PutEventsCommand({
+        Entries: [
+          {
+            Source: 'com.financial.workflow',
+            DetailType: 'WorkflowStepCompleted',
+            Detail: JSON.stringify({
+              workflowId,
+              step: 2,
+              completedIn: 'us-west-1',
+            }),
+            EventBusName: secondaryEventBusName,
+          },
+        ],
+      })
+    );
+    expect(event2.FailedEntryCount).toBe(0);
+
+    console.log('Step 7: Invoke secondary Lambda for final step');
+    const step2Response = await secondaryLambdaClient.send(
+      new InvokeCommand({
+        FunctionName: secondaryLambdaArn,
+        Payload: Buffer.from(
+          JSON.stringify({
+            source: 'workflow-orchestrator',
+            workflowId,
+            step: 2,
+            finalStep: true,
+          })
+        ),
+      })
+    );
+    expect(step2Response.StatusCode).toBe(200);
+
+    console.log('Step 8: Wait for final replication');
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+
+    console.log('Step 9: Verify workflow completion in primary region');
+    const finalState = await primaryDynamoClient.send(
+      new GetItemCommand({
+        TableName: tableName,
+        Key: {
+          id: { S: workflowId },
+          timestamp: { N: timestamp.toString() },
+        },
+      })
+    );
+    expect(finalState.Item).toBeDefined();
+    expect(finalState.Item!.processingRegion.S).toBe('us-west-1');
+
+    console.log(
+      'Event-driven workflow completed - Cross-region coordination validated'
+    );
   }, 180000);
 });
