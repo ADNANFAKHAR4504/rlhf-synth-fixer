@@ -23,7 +23,7 @@ export class ServiceConnectConstruct extends Construct {
       this,
       `FoodDeliveryNamespace-${props.environmentSuffix}`,
       {
-        name: 'food-delivery.local',
+        name: `food-delivery-${props.environmentSuffix}.local`,
         vpc: props.vpc,
         description: 'Private namespace for Food Delivery microservices',
       }

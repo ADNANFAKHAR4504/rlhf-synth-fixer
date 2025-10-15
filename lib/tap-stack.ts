@@ -158,7 +158,7 @@ export class TapStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'OrdersApiServiceConnectDns', {
-      value: 'orders-api',
+      value: `orders-api-${environmentSuffix}`,
       description:
         'Service Connect DNS name for Orders API (internal communication)',
       exportName: `OrdersApiServiceConnectDns-${environmentSuffix}`,
@@ -178,17 +178,10 @@ export class TapStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'RestaurantsApiServiceConnectDns', {
-      value: 'restaurants-api',
+      value: `restaurants-api-${environmentSuffix}`,
       description:
         'Service Connect DNS name for Restaurants API (internal communication)',
       exportName: `RestaurantsApiServiceConnectDns-${environmentSuffix}`,
-    });
-
-    // Service Connect Namespace Outputs
-    new cdk.CfnOutput(this, 'ServiceConnectNamespaceArn', {
-      value: serviceConnectConstruct.namespace.namespaceArn,
-      description: 'ARN of the Service Connect namespace',
-      exportName: `FoodDeliveryNamespaceArn-${environmentSuffix}`,
     });
 
     // Region Output

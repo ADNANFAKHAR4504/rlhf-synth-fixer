@@ -1,8 +1,8 @@
 import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as servicediscovery from 'aws-cdk-lib/aws-servicediscovery';
+import { Construct } from 'constructs';
 
 export interface RestaurantsApiConstructProps {
   vpc: ec2.Vpc;
@@ -92,13 +92,17 @@ export class RestaurantsApiConstruct extends Construct {
           services: [
             {
               portMappingName: 'http',
-              dnsName: 'restaurants-api',
+              discoveryName: `restaurants-api-${props.environmentSuffix}`,
+              dnsName: `restaurants-api-${props.environmentSuffix}`,
               port: 80,
             },
           ],
         },
       }
     );
+
+    // Ensure the namespace is created before the service
+    this.service.node.addDependency(props.namespace);
 
     // Output the service name
     new cdk.CfnOutput(this, 'RestaurantsApiServiceName', {

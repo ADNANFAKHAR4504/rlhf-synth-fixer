@@ -1,9 +1,9 @@
 import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as servicediscovery from 'aws-cdk-lib/aws-servicediscovery';
+import { Construct } from 'constructs';
 
 export interface OrdersApiConstructProps {
   vpc: ec2.Vpc;
@@ -92,13 +92,17 @@ export class OrdersApiConstruct extends Construct {
           services: [
             {
               portMappingName: 'http',
-              dnsName: 'orders-api',
+              discoveryName: `orders-api-${props.environmentSuffix}`,
+              dnsName: `orders-api-${props.environmentSuffix}`,
               port: 80,
             },
           ],
         },
       }
     );
+
+    // Ensure the namespace is created before the service
+    this.service.node.addDependency(props.namespace);
 
     // Add a target group for the Orders API to the ALB
     const targetGroup = new elbv2.ApplicationTargetGroup(
