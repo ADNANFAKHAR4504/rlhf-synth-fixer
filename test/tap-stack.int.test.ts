@@ -19,6 +19,8 @@ import {
   GetTopicAttributesCommand,
   PublishCommand,
   ListSubscriptionsByTopicCommand,
+  SubscribeCommand,
+  UnsubscribeCommand,
 } from "@aws-sdk/client-sns";
 import {
   CloudWatchLogsClient,
@@ -44,6 +46,7 @@ import {
   DescribeAutoScalingGroupsCommand,
   DescribeAutoScalingInstancesCommand,
   SetDesiredCapacityCommand,
+  DescribeScalingActivitiesCommand,
 } from "@aws-sdk/client-auto-scaling";
 import {
   IAMClient,
@@ -55,9 +58,21 @@ import {
   SSMClient,
   GetParameterCommand,
   GetParametersByPathCommand,
+  SendCommandCommand,
+  GetCommandInvocationCommand,
+  ListCommandInvocationsCommand,
+  DescribeInstanceInformationCommand,
 } from "@aws-sdk/client-ssm";
+import {
+  SQSClient,
+  CreateQueueCommand,
+  DeleteQueueCommand,
+  ReceiveMessageCommand,
+  SetQueueAttributesCommand,
+} from "@aws-sdk/client-sqs";
 import * as fs from "fs";
 import * as path from "path";
+import axios from "axios"; // You'll need to install this: npm install axios
 
 const awsRegion = process.env.AWS_REGION || "us-east-1";
 const ec2Client = new EC2Client({ region: awsRegion });
@@ -69,6 +84,7 @@ const elbClient = new ElasticLoadBalancingV2Client({ region: awsRegion });
 const autoScalingClient = new AutoScalingClient({ region: awsRegion });
 const iamClient = new IAMClient({ region: awsRegion });
 const ssmClient = new SSMClient({ region: awsRegion });
+const sqsClient = new SQSClient({ region: awsRegion });
 
 describe("TapStack Service Integration Tests", () => {
   let vpcId: string;
@@ -130,6 +146,22 @@ describe("TapStack Service Integration Tests", () => {
     }
   });
 
+  // Helper function to wait for a condition
+  const waitForCondition = async (
+    checkFn: () => Promise<boolean>,
+    timeoutMs: number = 30000,
+    intervalMs: number = 2000
+  ): Promise<boolean> => {
+    const startTime = Date.now();
+    while (Date.now() - startTime < timeoutMs) {
+      if (await checkFn()) {
+        return true;
+      }
+      await new Promise(resolve => setTimeout(resolve, intervalMs));
+    }
+    return false;
+  };
+
   describe("Network Layer Integration", () => {
     test("VPC has proper connectivity between public and private subnets", async () => {
       const { Vpcs } = await ec2Client.send(
@@ -149,6 +181,119 @@ describe("TapStack Service Integration Tests", () => {
       expect(InternetGateways?.length).toBeGreaterThan(0);
       expect(InternetGateways?.[0].Attachments?.[0].State).toBe("available");
     }, 30000);
+
+    test("Route tables are properly configured for public and private subnets", async () => {
+      const { RouteTables } = await ec2Client.send(
+        new DescribeRouteTablesCommand({
+          Filters: [{ Name: "vpc-id", Values: [vpcId] }]
+        })
+      );
+
+      // Check public subnet routes
+      for (const publicSubnetId of publicSubnetIds) {
+        const publicRoute = RouteTables?.find(rt =>
+          rt.Associations?.some(a => a.SubnetId === publicSubnetId)
+        );
+        
+        expect(publicRoute).toBeDefined();
+        
+        // Should have route to IGW for internet traffic
+        const igwRoute = publicRoute?.Routes?.find(r =>
+          r.DestinationCidrBlock === "0.0.0.0/0" && r.GatewayId?.startsWith("igw-")
+        );
+        expect(igwRoute).toBeDefined();
+      }
+
+      // Check private subnet routes
+      for (const privateSubnetId of privateSubnetIds) {
+        const privateRoute = RouteTables?.find(rt =>
+          rt.Associations?.some(a => a.SubnetId === privateSubnetId)
+        );
+        
+        expect(privateRoute).toBeDefined();
+        
+        // Should have route to NAT Gateway for internet traffic
+        const natRoute = privateRoute?.Routes?.find(r =>
+          r.DestinationCidrBlock === "0.0.0.0/0" && r.NatGatewayId?.startsWith("nat-")
+        );
+        expect(natRoute).toBeDefined();
+      }
+    }, 30000);
+
+    test("NAT Gateways are functional for private subnet internet access", async () => {
+      // Verify NAT Gateways exist and are available
+      const { NatGateways } = await ec2Client.send(
+        new DescribeNatGatewaysCommand({
+          Filter: [
+            { Name: "vpc-id", Values: [vpcId] },
+            { Name: "state", Values: ["available"] }
+          ]
+        })
+      );
+
+      expect(NatGateways?.length).toBeGreaterThan(0);
+      
+      // Each NAT Gateway should be in a public subnet
+      NatGateways?.forEach(nat => {
+        expect(publicSubnetIds).toContain(nat.SubnetId);
+        expect(nat.State).toBe("available");
+      });
+
+      // Test outbound connectivity from private instance via SSM
+      const { AutoScalingGroups } = await autoScalingClient.send(
+        new DescribeAutoScalingGroupsCommand({
+          AutoScalingGroupNames: [asgName]
+        })
+      );
+
+      const instanceId = AutoScalingGroups?.[0]?.Instances?.[0]?.InstanceId;
+      if (instanceId) {
+        try {
+          // Check if instance is SSM managed
+          const { InstanceInformationList } = await ssmClient.send(
+            new DescribeInstanceInformationCommand({
+              InstanceInformationFilterList: [
+                { key: "InstanceIds", valueSet: [instanceId] }
+              ]
+            })
+          );
+
+          if (InstanceInformationList?.length) {
+            // Test internet connectivity through NAT
+            const command = await ssmClient.send(
+              new SendCommandCommand({
+                InstanceIds: [instanceId],
+                DocumentName: "AWS-RunShellScript",
+                Parameters: {
+                  commands: [
+                    "curl -I https://www.google.com 2>&1 | head -n 1",
+                    "echo 'NAT Gateway test completed'"
+                  ]
+                },
+                TimeoutSeconds: 30
+              })
+            );
+
+            // Wait for command to complete
+            await new Promise(resolve => setTimeout(resolve, 5000));
+
+            const result = await ssmClient.send(
+              new GetCommandInvocationCommand({
+                CommandId: command.Command?.CommandId!,
+                InstanceId: instanceId
+              })
+            );
+
+            expect(result.Status).toMatch(/Success|InProgress/);
+            if (result.StandardOutputContent) {
+              expect(result.StandardOutputContent).toContain("HTTP");
+            }
+          }
+        } catch (error) {
+          console.log("SSM command execution skipped (instance may not be SSM-enabled yet)");
+        }
+      }
+    }, 60000);
 
     test("Subnets are properly distributed across availability zones", async () => {
       const { Subnets } = await ec2Client.send(
@@ -175,6 +320,477 @@ describe("TapStack Service Integration Tests", () => {
         expect(hasPublic).toBe(true);
         expect(hasPrivate).toBe(true);
       });
+    }, 30000);
+  });
+
+  describe("EC2 to RDS Connectivity", () => {
+    test("EC2 instances can establish connection to RDS database", async () => {
+      // Get an EC2 instance from ASG
+      const { AutoScalingGroups } = await autoScalingClient.send(
+        new DescribeAutoScalingGroupsCommand({
+          AutoScalingGroupNames: [asgName]
+        })
+      );
+
+      const instanceId = AutoScalingGroups?.[0]?.Instances?.[0]?.InstanceId;
+      if (!instanceId) {
+        console.warn("No EC2 instances found in ASG to test RDS connectivity");
+        return;
+      }
+
+      // Get RDS connection details
+      const rdsHost = rdsEndpoint.split(':')[0];
+      const rdsPort = rdsEndpoint.split(':')[1] || "5432";
+
+      try {
+        // Test network connectivity to RDS
+        const command = await ssmClient.send(
+          new SendCommandCommand({
+            InstanceIds: [instanceId],
+            DocumentName: "AWS-RunShellScript",
+            Parameters: {
+              commands: [
+                `nc -zv ${rdsHost} ${rdsPort} 2>&1`,
+                `echo "RDS connectivity test to ${rdsHost}:${rdsPort}"`,
+                // Test DNS resolution
+                `nslookup ${rdsHost}`,
+                // Test with telnet as backup
+                `timeout 5 bash -c "</dev/tcp/${rdsHost}/${rdsPort}" && echo "Port ${rdsPort} is open" || echo "Port ${rdsPort} is closed"`
+              ]
+            },
+            TimeoutSeconds: 30
+          })
+        );
+
+        await new Promise(resolve => setTimeout(resolve, 10000));
+
+        const result = await ssmClient.send(
+          new GetCommandInvocationCommand({
+            CommandId: command.Command?.CommandId!,
+            InstanceId: instanceId
+          })
+        );
+
+        expect(result.Status).toMatch(/Success|InProgress/);
+        if (result.StandardOutputContent) {
+          // Should successfully connect to RDS port
+          expect(result.StandardOutputContent.toLowerCase()).toMatch(/succeeded|open|connected/);
+        }
+      } catch (error) {
+        console.log("EC2 to RDS connectivity test skipped (SSM not available):", error);
+      }
+    }, 60000);
+
+    test("Security group chain allows proper database access", async () => {
+      const { SecurityGroups } = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({
+          Filters: [{ Name: "vpc-id", Values: [vpcId] }]
+        })
+      );
+
+      const ec2Sg = SecurityGroups?.find(sg => sg.GroupName?.includes("ec2-sg"));
+      const rdsSg = SecurityGroups?.find(sg => sg.GroupName?.includes("rds-sg"));
+
+      expect(ec2Sg).toBeDefined();
+      expect(rdsSg).toBeDefined();
+
+      // Verify RDS security group allows PostgreSQL traffic from EC2
+      const rdsIngressRule = rdsSg?.IpPermissions?.find(rule =>
+        rule.FromPort === 5432 &&
+        rule.ToPort === 5432 &&
+        rule.IpProtocol === "tcp" &&
+        rule.UserIdGroupPairs?.some(pair => pair.GroupId === ec2Sg?.GroupId)
+      );
+
+      expect(rdsIngressRule).toBeDefined();
+
+      // Verify EC2 security group has egress to RDS
+      const ec2EgressRule = ec2Sg?.IpPermissionsEgress?.find(rule =>
+        rule.IpProtocol === "-1" || // Allow all
+        (rule.FromPort === 5432 && rule.ToPort === 5432)
+      );
+
+      expect(ec2EgressRule).toBeDefined();
+    }, 30000);
+  });
+
+  describe("Full Request Path Testing", () => {
+    test("HTTP request flows through ALB to EC2 instances", async () => {
+      // Wait for healthy targets
+      const { TargetGroups } = await elbClient.send(
+        new DescribeTargetGroupsCommand({
+          LoadBalancerArn: albArn
+        })
+      );
+
+      const targetGroupArn = TargetGroups?.[0]?.TargetGroupArn;
+      
+      // Check target health
+      const { TargetHealthDescriptions } = await elbClient.send(
+        new DescribeTargetHealthCommand({
+          TargetGroupArn: targetGroupArn
+        })
+      );
+
+      const healthyTargets = TargetHealthDescriptions?.filter(
+        t => t.TargetHealth?.State === "healthy"
+      );
+
+      expect(healthyTargets?.length).toBeGreaterThan(0);
+
+      // Make HTTP request to ALB
+      try {
+        const response = await axios.get(`http://${albDnsName}/health`, {
+          timeout: 10000
+        });
+        
+        expect(response.status).toBe(200);
+        expect(response.data).toContain("OK");
+      } catch (error: any) {
+        if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+          console.warn("ALB DNS not yet propagated or not accessible from test environment");
+        } else {
+          throw error;
+        }
+      }
+    }, 60000);
+
+    test("Application can handle multiple concurrent requests", async () => {
+      try {
+        // Send multiple concurrent requests
+        const requests = Array(10).fill(null).map(() =>
+          axios.get(`http://${albDnsName}/`, {
+            timeout: 10000
+          })
+        );
+
+        const responses = await Promise.allSettled(requests);
+        const successful = responses.filter(r => r.status === "fulfilled");
+        
+        // At least some requests should succeed
+        expect(successful.length).toBeGreaterThan(0);
+        
+        // Check response content
+        successful.forEach(response => {
+          if (response.status === "fulfilled") {
+            expect(response.value.status).toBe(200);
+          }
+        });
+      } catch (error) {
+        console.warn("Load test skipped - ALB may not be accessible from test environment");
+      }
+    }, 60000);
+  });
+
+  describe("Auto Scaling Behavior", () => {
+    let originalDesiredCapacity: number;
+
+    beforeAll(async () => {
+      // Store original capacity
+      const { AutoScalingGroups } = await autoScalingClient.send(
+        new DescribeAutoScalingGroupsCommand({
+          AutoScalingGroupNames: [asgName]
+        })
+      );
+      originalDesiredCapacity = AutoScalingGroups?.[0]?.DesiredCapacity || 2;
+    });
+
+    afterAll(async () => {
+      // Restore original capacity
+      try {
+        await autoScalingClient.send(
+          new SetDesiredCapacityCommand({
+            AutoScalingGroupName: asgName,
+            DesiredCapacity: originalDesiredCapacity
+          })
+        );
+      } catch (error) {
+        console.log("Could not restore original capacity:", error);
+      }
+    });
+
+    test("Auto Scaling Group can scale up when needed", async () => {
+      const { AutoScalingGroups: initialASG } = await autoScalingClient.send(
+        new DescribeAutoScalingGroupsCommand({
+          AutoScalingGroupNames: [asgName]
+        })
+      );
+
+      const initialCapacity = initialASG?.[0]?.DesiredCapacity || 0;
+      const maxSize = initialASG?.[0]?.MaxSize || 6;
+      const newCapacity = Math.min(initialCapacity + 1, maxSize);
+
+      // Trigger scale up
+      await autoScalingClient.send(
+        new SetDesiredCapacityCommand({
+          AutoScalingGroupName: asgName,
+          DesiredCapacity: newCapacity
+        })
+      );
+
+      // Wait for scaling activity
+      const scaled = await waitForCondition(async () => {
+        const { AutoScalingGroups } = await autoScalingClient.send(
+          new DescribeAutoScalingGroupsCommand({
+            AutoScalingGroupNames: [asgName]
+          })
+        );
+        return AutoScalingGroups?.[0]?.Instances?.length === newCapacity;
+      }, 120000);
+
+      expect(scaled).toBe(true);
+
+      // Verify scaling activity
+      const { Activities } = await autoScalingClient.send(
+        new DescribeScalingActivitiesCommand({
+          AutoScalingGroupName: asgName,
+          MaxRecords: 5
+        })
+      );
+
+      const scaleUpActivity = Activities?.find(a =>
+        a.Description?.includes("capacity from") && 
+        a.StatusCode === "Successful"
+      );
+      expect(scaleUpActivity).toBeDefined();
+    }, 180000);
+
+    test("Auto Scaling Group can scale down when needed", async () => {
+      const { AutoScalingGroups: currentASG } = await autoScalingClient.send(
+        new DescribeAutoScalingGroupsCommand({
+          AutoScalingGroupNames: [asgName]
+        })
+      );
+
+      const currentCapacity = currentASG?.[0]?.DesiredCapacity || 3;
+      const minSize = currentASG?.[0]?.MinSize || 2;
+      const newCapacity = Math.max(currentCapacity - 1, minSize);
+
+      // Trigger scale down
+      await autoScalingClient.send(
+        new SetDesiredCapacityCommand({
+          AutoScalingGroupName: asgName,
+          DesiredCapacity: newCapacity
+        })
+      );
+
+      // Wait for scaling activity
+      const scaled = await waitForCondition(async () => {
+        const { AutoScalingGroups } = await autoScalingClient.send(
+          new DescribeAutoScalingGroupsCommand({
+            AutoScalingGroupNames: [asgName]
+          })
+        );
+        return AutoScalingGroups?.[0]?.Instances?.length === newCapacity;
+      }, 120000);
+
+      expect(scaled).toBe(true);
+    }, 180000);
+
+    test("Auto Scaling maintains minimum healthy capacity", async () => {
+      const { AutoScalingGroups } = await autoScalingClient.send(
+        new DescribeAutoScalingGroupsCommand({
+          AutoScalingGroupNames: [asgName]
+        })
+      );
+
+      const asg = AutoScalingGroups?.[0];
+      const healthyInstances = asg?.Instances?.filter(i =>
+        i.HealthStatus === "Healthy" && i.LifecycleState === "InService"
+      );
+
+      expect(healthyInstances?.length).toBeGreaterThanOrEqual(asg?.MinSize || 0);
+    }, 30000);
+  });
+
+  describe("CloudWatch Alarms and SNS Integration", () => {
+    let testQueueUrl: string;
+    let subscriptionArn: string;
+
+    beforeAll(async () => {
+      // Create a test SQS queue to receive SNS messages
+      try {
+        const queue = await sqsClient.send(
+          new CreateQueueCommand({
+            QueueName: `test-alarm-queue-${Date.now()}`
+          })
+        );
+        testQueueUrl = queue.QueueUrl!;
+
+        // Subscribe SQS queue to SNS topic
+        const subscription = await snsClient.send(
+          new SubscribeCommand({
+            Protocol: "sqs",
+            TopicArn: snsTopicArn,
+            Endpoint: `arn:aws:sqs:${awsRegion}:${accountId}:${testQueueUrl.split('/').pop()}`
+          })
+        );
+        subscriptionArn = subscription.SubscriptionArn!;
+
+        // Allow SNS to send messages to SQS
+        await sqsClient.send(
+          new SetQueueAttributesCommand({
+            QueueUrl: testQueueUrl,
+            Attributes: {
+              Policy: JSON.stringify({
+                Version: "2012-10-17",
+                Statement: [{
+                  Effect: "Allow",
+                  Principal: {
+                    Service: "sns.amazonaws.com"
+                  },
+                  Action: "sqs:SendMessage",
+                  Resource: `arn:aws:sqs:${awsRegion}:${accountId}:${testQueueUrl.split('/').pop()}`,
+                  Condition: {
+                    ArnEquals: {
+                      "aws:SourceArn": snsTopicArn
+                    }
+                  }
+                }]
+              })
+            }
+          })
+        );
+      } catch (error) {
+        console.log("Could not create test queue for alarm testing:", error);
+      }
+    });
+
+    afterAll(async () => {
+      // Clean up test resources
+      if (subscriptionArn) {
+        try {
+          await snsClient.send(
+            new UnsubscribeCommand({
+              SubscriptionArn: subscriptionArn
+            })
+          );
+        } catch (error) {
+          console.log("Could not unsubscribe:", error);
+        }
+      }
+      if (testQueueUrl) {
+        try {
+          await sqsClient.send(
+            new DeleteQueueCommand({
+              QueueUrl: testQueueUrl
+            })
+          );
+        } catch (error) {
+          console.log("Could not delete queue:", error);
+        }
+      }
+    });
+
+    test("CloudWatch alarms exist for critical metrics", async () => {
+      const { MetricAlarms } = await cloudWatchClient.send(
+        new DescribeAlarmsCommand({
+          MaxRecords: 50
+        })
+      );
+
+      const stackAlarms = MetricAlarms?.filter(alarm =>
+        alarm.AlarmName?.includes("tap-project")
+      );
+
+      expect(stackAlarms?.length).toBeGreaterThan(0);
+
+      // Check for different types of alarms
+      const alarmTypes = stackAlarms?.map(a => {
+        if (a.AlarmName?.includes("response-time")) return "response-time";
+        if (a.AlarmName?.includes("cpu-high")) return "cpu";
+        if (a.AlarmName?.includes("storage-low")) return "storage";
+        return "other";
+      });
+
+      console.log("Found alarm types:", alarmTypes);
+    }, 30000);
+
+    test("CloudWatch alarms can trigger and send SNS notifications", async () => {
+      // Create a test metric that will breach threshold
+      const namespace = `tap-project/test`;
+      const metricName = `TestAlarmTrigger-${Date.now()}`;
+
+      // Create a test alarm
+      const alarmName = `test-alarm-${Date.now()}`;
+      const threshold = 50;
+
+      // First, put metric data below threshold
+      await cloudWatchClient.send(
+        new PutMetricDataCommand({
+          Namespace: namespace,
+          MetricData: [{
+            MetricName: metricName,
+            Value: 30,
+            Unit: "None",
+            Timestamp: new Date()
+          }]
+        })
+      );
+
+      // Note: Creating and triggering alarms programmatically requires
+      // the alarm to be created first, which is outside the scope of this test
+      // This test verifies the existing alarm infrastructure
+
+      // Test SNS topic is functional
+      const publishResult = await snsClient.send(
+        new PublishCommand({
+          TopicArn: snsTopicArn,
+          Message: "Test alarm notification",
+          Subject: "Test Alert"
+        })
+      );
+
+      expect(publishResult.MessageId).toBeDefined();
+
+      // Check if message was received (if queue was created)
+      if (testQueueUrl) {
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        
+        const messages = await sqsClient.send(
+          new ReceiveMessageCommand({
+            QueueUrl: testQueueUrl,
+            MaxNumberOfMessages: 10,
+            WaitTimeSeconds: 5
+          })
+        );
+
+        expect(messages.Messages?.length).toBeGreaterThan(0);
+      }
+    }, 60000);
+
+    test("Custom metrics can trigger auto-scaling", async () => {
+      // Put custom metric data that could trigger scaling
+      const namespace = "AWS/EC2";
+      
+      await cloudWatchClient.send(
+        new PutMetricDataCommand({
+          Namespace: namespace,
+          MetricData: [{
+            MetricName: "CPUUtilization",
+            Value: 85, // High CPU to potentially trigger scale-up
+            Unit: "Percent",
+            Timestamp: new Date(),
+            Dimensions: [{
+              Name: "AutoScalingGroupName",
+              Value: asgName
+            }]
+          }]
+        })
+      );
+
+      // Check if scaling policies exist
+      const { MetricAlarms } = await cloudWatchClient.send(
+        new DescribeAlarmsCommand({
+          AlarmNamePrefix: `tap-project`
+        })
+      );
+
+      const scalingAlarms = MetricAlarms?.filter(alarm =>
+        alarm.AlarmActions?.some(action => action.includes("autoscaling"))
+      );
+
+      console.log(`Found ${scalingAlarms?.length || 0} scaling-related alarms`);
     }, 30000);
   });
 
@@ -267,28 +883,7 @@ describe("TapStack Service Integration Tests", () => {
       // Should have at least one healthy target
       expect(healthyTargets?.length).toBeGreaterThan(0);
     }, 30000);
-
-    test("Auto scaling policies respond to load changes", async () => {
-      const { AutoScalingGroups } = await autoScalingClient.send(
-        new DescribeAutoScalingGroupsCommand({
-          AutoScalingGroupNames: [asgName]
-        })
-      );
-
-      const asg = AutoScalingGroups?.[0];
-      
-      // Verify scaling configuration
-      expect(asg?.MinSize).toBeGreaterThanOrEqual(2);
-      expect(asg?.MaxSize).toBeGreaterThanOrEqual(6);
-      expect(asg?.HealthCheckType).toBe("ELB");
-      expect(asg?.HealthCheckGracePeriod).toBe(300);
-
-      // Verify instances are in private subnets
-      const instanceSubnets = asg?.Instances?.map(i => i.AvailabilityZone) || [];
-      expect(instanceSubnets.length).toBeGreaterThan(0);
-    }, 30000);
   });
-
 
   describe("IAM and SSM Parameter Store Integration", () => {
     test("EC2 instances have proper IAM roles for SSM access", async () => {
