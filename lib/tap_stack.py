@@ -130,7 +130,7 @@ class TapStack(cdk.Stack):
         dlq.grant_send_messages(lambda_role)
         events_table.grant_read_write_data(lambda_role)
         
-        # Lambda Function Code
+        # Lambda Function Code - Updated to handle EventBridge envelope
         lambda_code = '''
 import json
 import os
@@ -146,7 +146,11 @@ table_name = os.environ['EVENTS_TABLE_NAME']
 table = dynamodb.Table(table_name)
 
 def lambda_handler(event, context):
-    """Process shipment events from SQS with idempotent handling."""
+    """Process shipment events from SQS with idempotent handling.
+    
+    Handles both direct SQS messages and EventBridge-wrapped messages.
+    EventBridge wraps events in an envelope with the actual data in the 'detail' field.
+    """
     logger.info(f"Received {len(event['Records'])} messages")
     
     batch_item_failures = []
@@ -158,15 +162,27 @@ def lambda_handler(event, context):
             # Parse message body
             body = json.loads(record['body'])
             
-            # Extract event data
-            shipment_id = body.get('shipment_id')
-            event_timestamp = body.get('event_timestamp')
-            event_type = body.get('event_type')
-            event_data = body.get('event_data', {})
+            # Check if this is an EventBridge envelope
+            # EventBridge messages have 'detail-type', 'source', and 'detail' fields
+            if 'detail' in body and 'source' in body and 'detail-type' in body:
+                logger.info(f"Processing EventBridge envelope message: {message_id}")
+                # Extract the actual event from the 'detail' field
+                event_payload = body['detail']
+            else:
+                logger.info(f"Processing direct SQS message: {message_id}")
+                # Direct SQS message - use body as is
+                event_payload = body
+            
+            # Extract event data from the payload
+            shipment_id = event_payload.get('shipment_id')
+            event_timestamp = event_payload.get('event_timestamp')
+            event_type = event_payload.get('event_type')
+            event_data = event_payload.get('event_data', {})
             
             # Validate required fields
             if not all([shipment_id, event_timestamp, event_type]):
                 logger.error(f"Missing required fields in message {message_id}")
+                logger.error(f"Payload: {json.dumps(event_payload)}")
                 raise ValueError("Missing required fields")
             
             # Calculate TTL (90 days from now)
@@ -198,17 +214,21 @@ def lambda_handler(event, context):
             
         except Exception as e:
             logger.error(f"Error processing message {message_id}: {str(e)}")
+            logger.error(f"Message body: {json.dumps(body) if 'body' in locals() else 'Unable to parse body'}")
             
             # Try to write failure record
             try:
+                # Extract event_payload if available, otherwise use body
+                failure_payload = event_payload if 'event_payload' in locals() else body
+                
                 failure_item = {
-                    'shipment_id': body.get('shipment_id', 'UNKNOWN'),
-                    'event_timestamp': body.get('event_timestamp', datetime.utcnow().isoformat()),
+                    'shipment_id': failure_payload.get('shipment_id', 'UNKNOWN'),
+                    'event_timestamp': failure_payload.get('event_timestamp', datetime.utcnow().isoformat()),
                     'processing_status': 'FAILED',
                     'error_message': str(e),
                     'retry_count': int(record.get('attributes', {}).get('ApproximateReceiveCount', 1)),
                     'message_id': message_id,
-                    'event_data': body,
+                    'event_data': failure_payload,
                     'processed_at': datetime.utcnow().isoformat(),
                     'expires_at': int((datetime.now() + timedelta(days=90)).timestamp())
                 }
