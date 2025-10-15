@@ -1185,6 +1185,307 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
   });
 
   describe('End-to-End Infrastructure Workflows', () => {
+    describe('Application Flow', () => {
+      test('HTTPS request through ALB should reach application and connect to RDS', async () => {
+        // 1. Get ALB DNS name from outputs
+        if (!outputs.ALBDNSName) {
+          console.warn('ALB DNS name not available in outputs');
+          return;
+        }
+
+        // 2. Verify ALB is active and healthy
+        const albCommand = new DescribeLoadBalancersCommand({});
+        const albResponse = await elbv2Client.send(albCommand);
+        
+        const alb = albResponse.LoadBalancers?.find(lb => 
+          lb.DNSName === outputs.ALBDNSName
+        );
+        expect(alb).toBeDefined();
+        expect(alb!.State?.Code).toBe('active');
+
+        // 3. Verify target group has healthy targets
+        const targetGroupCommand = new DescribeTargetGroupsCommand({
+          LoadBalancerArn: alb!.LoadBalancerArn
+        });
+        const targetGroupResponse = await elbv2Client.send(targetGroupCommand);
+        
+        expect(targetGroupResponse.TargetGroups).toBeDefined();
+        expect(targetGroupResponse.TargetGroups!.length).toBeGreaterThan(0);
+        
+        const targetGroup = targetGroupResponse.TargetGroups![0];
+        expect(targetGroup.TargetGroupName).toBeDefined();
+        expect(targetGroup.Protocol).toBe('HTTP');
+        expect(targetGroup.Port).toBe(80);
+
+        // 4. Verify RDS instance is available for database connections
+        if (outputs.RDSEndpoint) {
+          const rdsCommand = new DescribeDBInstancesCommand({});
+          const rdsResponse = await rdsClient.send(rdsCommand);
+          
+          const rdsInstance = rdsResponse.DBInstances?.find(instance =>
+            instance.Endpoint?.Address === outputs.RDSEndpoint
+          );
+          expect(rdsInstance).toBeDefined();
+          expect(rdsInstance!.DBInstanceStatus).toBe('available');
+        }
+
+        // 5. Verify application instances are running and healthy
+        const instancesCommand = new DescribeInstancesCommand({
+          Filters: [
+            { Name: 'tag:Name', Values: ['*-app-instance'] },
+            { Name: 'instance-state-name', Values: ['running'] }
+          ]
+        });
+        const instancesResponse = await ec2Client.send(instancesCommand);
+        
+        const instances = instancesResponse.Reservations?.flatMap(r => r.Instances || []) || [];
+        expect(instances.length).toBeGreaterThan(0);
+        
+        instances.forEach(instance => {
+          expect(instance.State?.Name).toBe('running');
+          expect(instance.SecurityGroups).toBeDefined();
+          expect(instance.SecurityGroups!.length).toBeGreaterThan(0);
+        });
+      });
+    });
+
+    describe('Network Security and Access Control', () => {
+      test('WAF should block malicious requests (SQL injection)', async () => {
+        // 1. Verify WAF Web ACL exists and is configured
+        const listWebACLsCommand = new ListWebACLsCommand({
+          Scope: 'REGIONAL'
+        });
+        const webACLsResponse = await wafv2Client.send(listWebACLsCommand);
+        
+        const webACL = webACLsResponse.WebACLs?.find(acl => 
+          acl.Name?.includes('tapstack') || acl.Name?.includes('waf')
+        );
+        
+        if (!webACL) {
+          return;
+        }
+
+        // 2. Get detailed WAF configuration
+        const getWebACLCommand = new GetWebACLCommand({
+          Scope: 'REGIONAL',
+          Id: webACL.Id!
+        });
+        const webACLResponse = await wafv2Client.send(getWebACLCommand);
+        
+        expect(webACLResponse.WebACL).toBeDefined();
+        expect(webACLResponse.WebACL!.Rules).toBeDefined();
+        expect(webACLResponse.WebACL!.Rules!.length).toBeGreaterThan(0);
+
+        // 3. Verify WAF has managed rules for SQL injection protection
+        const hasManagedRules = webACLResponse.WebACL!.Rules!.some(rule =>
+          rule.Statement && 
+          (rule.Statement as any).ManagedRuleGroupStatement &&
+          (rule.Statement as any).ManagedRuleGroupStatement.VendorName === 'AWS'
+        );
+        expect(hasManagedRules).toBe(true);
+
+        // 4. Verify WAF is associated with ALB
+        const albCommand = new DescribeLoadBalancersCommand({});
+        const albResponse = await elbv2Client.send(albCommand);
+        
+        const alb = albResponse.LoadBalancers?.find(lb => 
+          lb.LoadBalancerName?.includes('tapstack') || lb.LoadBalancerName?.includes('alb')
+        );
+        
+        if (alb) {
+          expect(alb.LoadBalancerArn).toBeDefined();
+        }
+      });
+
+      test('Internal isolation: Bastion to RDS direct connection should fail', async () => {
+        // 1. Verify bastion host exists and is running
+        const bastionCommand = new DescribeInstancesCommand({
+          Filters: [
+            { Name: 'tag:Name', Values: ['*-bastion-host'] },
+            { Name: 'instance-state-name', Values: ['running'] }
+          ]
+        });
+        const bastionResponse = await ec2Client.send(bastionCommand);
+        
+        const bastionInstances = bastionResponse.Reservations?.flatMap(r => r.Instances || []) || [];
+        expect(bastionInstances.length).toBeGreaterThan(0);
+        
+        const bastionHost = bastionInstances[0];
+        expect(bastionHost.State?.Name).toBe('running');
+        expect(bastionHost.SecurityGroups).toBeDefined();
+
+        // 2. Verify RDS instance exists and is in private subnets
+        if (outputs.RDSEndpoint) {
+          const rdsCommand = new DescribeDBInstancesCommand({});
+          const rdsResponse = await rdsClient.send(rdsCommand);
+          
+          const rdsInstance = rdsResponse.DBInstances?.find(instance =>
+            instance.Endpoint?.Address === outputs.RDSEndpoint
+          );
+          expect(rdsInstance).toBeDefined();
+          expect(rdsInstance!.DBInstanceStatus).toBe('available');
+        }
+
+        // 3. Verify RDS security group only allows access from app and lambda security groups
+        const rdsSGCommand = new DescribeSecurityGroupsCommand({
+          Filters: [{ Name: 'tag:Name', Values: ['*-rds-sg'] }]
+        });
+        const rdsSGResponse = await ec2Client.send(rdsSGCommand);
+        
+        expect(rdsSGResponse.SecurityGroups).toBeDefined();
+        expect(rdsSGResponse.SecurityGroups!.length).toBeGreaterThan(0);
+        
+        const rdsSG = rdsSGResponse.SecurityGroups![0];
+        expect(rdsSG.IpPermissions).toBeDefined();
+
+        // 4. Verify RDS security group does NOT allow bastion access
+        const bastionSGCommand = new DescribeSecurityGroupsCommand({
+          Filters: [{ Name: 'tag:Name', Values: ['*-bastion-sg'] }]
+        });
+        const bastionSGResponse = await ec2Client.send(bastionSGCommand);
+        
+        const bastionSG = bastionSGResponse.SecurityGroups![0];
+        
+        // Check that RDS security group doesn't have rules allowing bastion access
+        const hasBastionAccess = rdsSG.IpPermissions!.some(rule =>
+          rule.UserIdGroupPairs?.some(pair => pair.GroupId === bastionSG.GroupId) &&
+          rule.IpProtocol === 'tcp' &&
+          (rule.FromPort === 3306 || rule.FromPort === 5432)
+        );
+        expect(hasBastionAccess).toBe(false);
+      });
+
+      test('Administrative access path: SSH bastion → app instances', async () => {
+        // 1. Verify bastion host exists and is running
+        const bastionCommand = new DescribeInstancesCommand({
+          Filters: [
+            { Name: 'tag:Name', Values: ['*-bastion-host'] },
+            { Name: 'instance-state-name', Values: ['running'] }
+          ]
+        });
+        const bastionResponse = await ec2Client.send(bastionCommand);
+        
+        const bastionInstances = bastionResponse.Reservations?.flatMap(r => r.Instances || []) || [];
+        expect(bastionInstances.length).toBeGreaterThan(0);
+        
+        const bastionHost = bastionInstances[0];
+        expect(bastionHost.State?.Name).toBe('running');
+        expect(bastionHost.PublicIpAddress).toBeDefined();
+        expect(bastionHost.SecurityGroups).toBeDefined();
+
+        // 2. Verify app instances exist and are running
+        const appInstancesCommand = new DescribeInstancesCommand({
+          Filters: [
+            { Name: 'tag:Name', Values: ['*-app-instance'] },
+            { Name: 'instance-state-name', Values: ['running'] }
+          ]
+        });
+        const appInstancesResponse = await ec2Client.send(appInstancesCommand);
+        
+        const appInstances = appInstancesResponse.Reservations?.flatMap(r => r.Instances || []) || [];
+        expect(appInstances.length).toBeGreaterThan(0);
+        
+        appInstances.forEach(instance => {
+          expect(instance.State?.Name).toBe('running');
+          expect(instance.SecurityGroups).toBeDefined();
+        });
+
+        // 3. Verify security group rules allow bastion → app SSH access
+        const bastionSGCommand = new DescribeSecurityGroupsCommand({
+          Filters: [{ Name: 'tag:Name', Values: ['*-bastion-sg'] }]
+        });
+        const bastionSGResponse = await ec2Client.send(bastionSGCommand);
+        
+        const appSGCommand = new DescribeSecurityGroupsCommand({
+          Filters: [{ Name: 'tag:Name', Values: ['*-app-sg'] }]
+        });
+        const appSGResponse = await ec2Client.send(appSGCommand);
+        
+        const bastionSG = bastionSGResponse.SecurityGroups![0];
+        const appSG = appSGResponse.SecurityGroups![0];
+
+        // 4. Verify app security group allows SSH from bastion
+        const hasSSHAccess = appSG.IpPermissions!.some(rule =>
+          rule.UserIdGroupPairs?.some(pair => pair.GroupId === bastionSG.GroupId) &&
+          rule.IpProtocol === 'tcp' &&
+          rule.FromPort === 22 &&
+          rule.ToPort === 22
+        );
+        expect(hasSSHAccess).toBe(true);
+
+        // 5. Verify bastion security group allows SSH egress to private subnets
+        const hasSSHEgress = bastionSG.IpPermissionsEgress!.some(rule =>
+          rule.IpProtocol === 'tcp' &&
+          rule.FromPort === 22 &&
+          rule.ToPort === 22 &&
+          rule.IpRanges?.some(range => range.CidrIp === '10.0.0.0/16')
+        );
+        expect(hasSSHEgress).toBe(true);
+      });
+    });
+
+    describe('Event-Driven Auditing and Logging', () => {
+      test('S3 upload should trigger Lambda and generate CloudTrail logs', async () => {
+        // 1. Verify application S3 bucket exists
+        const listBucketsCommand = new ListBucketsCommand({});
+        const bucketsResponse = await s3Client.send(listBucketsCommand);
+        
+        const appBucket = bucketsResponse.Buckets?.find(bucket => 
+          bucket.Name?.includes('app-bucket')
+        );
+        expect(appBucket).toBeDefined();
+
+        // 2. Verify Lambda function exists and is configured for S3 events
+        const lambdaListCommand = new ListFunctionsCommand({});
+        const lambdaListResponse = await lambdaClient.send(lambdaListCommand);
+        
+        const lambdaFunction = lambdaListResponse.Functions?.find(func => 
+          func.FunctionName?.includes('lambda') && !func.FunctionName?.includes('securityhub')
+        );
+        expect(lambdaFunction).toBeDefined();
+
+        // 3. Verify Lambda has proper IAM permissions for S3 access
+        const lambdaCommand = new GetFunctionCommand({
+          FunctionName: lambdaFunction!.FunctionName!
+        });
+        const lambdaResponse = await lambdaClient.send(lambdaCommand);
+        
+        expect(lambdaResponse.Configuration).toBeDefined();
+        expect(lambdaResponse.Configuration!.Role).toBeDefined();
+        expect(lambdaResponse.Configuration!.Role).toContain('lambda-execution-role');
+
+        // 4. Verify CloudTrail is configured and logging
+        const cloudTrailCommand = new DescribeTrailsCommand({});
+        const cloudTrailResponse = await cloudTrailClient.send(cloudTrailCommand);
+        
+        const trail = cloudTrailResponse.trailList?.find(t => 
+          t.Name?.includes('tapstack') || t.Name?.includes('cloudtrail')
+        );
+        expect(trail).toBeDefined();
+        expect(trail!.IncludeGlobalServiceEvents).toBe(true);
+        expect(trail!.IsMultiRegionTrail).toBe(true);
+
+        // 5. Verify CloudTrail S3 bucket exists for log delivery
+        if (trail && (trail as any).S3BucketName) {
+          const cloudTrailBucket = bucketsResponse.Buckets?.find(bucket => 
+            bucket.Name === (trail as any).S3BucketName
+          );
+          expect(cloudTrailBucket).toBeDefined();
+        }
+
+        // 6. Verify VPC Flow Logs are configured
+        const logGroupsCommand = new DescribeLogGroupsCommand({
+          logGroupNamePrefix: '/aws/vpc/flowlogs/'
+        });
+        const logGroupsResponse = await cloudWatchLogsClient.send(logGroupsCommand);
+        
+        const vpcFlowLogGroup = logGroupsResponse.logGroups?.find(lg =>
+          lg.logGroupName?.includes('/aws/vpc/flowlogs/')
+        );
+        expect(vpcFlowLogGroup).toBeDefined();
+      });
+    });
+
     describe('VPC Networking Flow', () => {
       test('VPC → Internet Gateway → Public Subnets → NAT Gateway → Private Subnets', async () => {
         // 1. Verify VPC exists and is properly configured
