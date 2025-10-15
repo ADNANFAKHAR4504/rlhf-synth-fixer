@@ -1,5 +1,3 @@
-# Model Response
-
 This CloudFormation solution provisions a **secure, multi-AZ web application infrastructure** that adheres to AWS best practices for security, availability, and automation.  
 The template (`TapStack.yml`) was designed to be **self-contained**, creating all resources from scratch with no external dependencies.
 
