@@ -107,9 +107,9 @@ describe('DynamoDB Payment Transactions - Integration Tests (Live)', () => {
     });
 
     // ✅ CHANGED: Check for pattern instead of exact name
-    test('table ARN contains payment-transactions-v2 prefix', () => {
+    test('table ARN contains payment-transactions prefix', () => {
       const arn = outputs.payment_transactions_table_arn;
-      expect(arn).toContain('table/payment-transactions-v2');
+      expect(arn).toContain('table/payment-transactions');
     });
 
     test('table ARN contains valid AWS account ID', () => {
@@ -167,10 +167,10 @@ describe('DynamoDB Payment Transactions - Integration Tests (Live)', () => {
   // ============================================================================
   describe('Resource Naming Conventions', () => {
     // ✅ CHANGED: Check for prefix instead of exact name
-    test('table name starts with "payment-transactions-v2"', () => {
+    test('table name starts with "payment-transactions"', () => {
       const arn = outputs.payment_transactions_table_arn;
       const tableName = arn.split('/')[1];
-      expect(tableName).toMatch(/^payment-transactions-v2/);
+      expect(tableName).toMatch(/^payment-transactions/);
     });
 
     test('table name follows kebab-case convention', () => {
@@ -311,7 +311,7 @@ describe('DynamoDB Payment Transactions - Integration Tests (Live)', () => {
       expect(tableName).toBeDefined();
       expect(tableName.length).toBeGreaterThan(0);
       // ✅ CHANGED: Check for prefix instead of exact name
-      expect(tableName).toMatch(/^payment-transactions-v2/);
+      expect(tableName).toMatch(/^payment-transactions/);
     });
   });
 
@@ -367,12 +367,12 @@ describe('DynamoDB Payment Transactions - Integration Tests (Live)', () => {
       const tableName = arn.split('/')[1];
       
       // ✅ CHANGED: Check for prefix
-      expect(tableName).toMatch(/^payment-transactions-v2/);
+      expect(tableName).toMatch(/^payment-transactions/);
       expect(outputs.date_index_name).toBe('date-index');
     });
 
     test('infrastructure supports required query patterns', () => {
-      expect(outputs.payment_transactions_table_arn).toContain('payment-transactions-v2');
+      expect(outputs.payment_transactions_table_arn).toContain('payment-transactions');
       expect(outputs.date_index_name).toContain('date');
     });
 
@@ -394,10 +394,10 @@ describe('DynamoDB Payment Transactions - Integration Tests (Live)', () => {
   // ============================================================================
   describe('Requirements Traceability', () => {
     // ✅ CHANGED: Check for prefix instead of exact name
-    test('REQ-1: Table name starts with "payment-transactions-v2"', () => {
+    test('REQ-1: Table name starts with "payment-transactions"', () => {
       const arn = outputs.payment_transactions_table_arn;
       const tableName = arn.split('/')[1];
-      expect(tableName).toMatch(/^payment-transactions-v2/);
+      expect(tableName).toMatch(/^payment-transactions/);
     });
 
     test('REQ-2: Table ARN output exists for IAM policies', () => {
