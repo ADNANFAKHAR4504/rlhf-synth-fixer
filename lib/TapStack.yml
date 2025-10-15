@@ -27,7 +27,7 @@ Parameters:
   # Application Parameters
   ApplicationName:
     Type: String
-    Default: 'WebApp'
+    Default: 'WebApp1'
     Description: 'Name of the application to be deployed'
   
   RepositoryName:
