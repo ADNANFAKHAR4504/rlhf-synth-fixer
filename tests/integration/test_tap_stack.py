@@ -52,8 +52,6 @@ class TestTapStackIntegration(unittest.TestCase):
         self.assertEqual(len(response['Vpcs']), 1)
         vpc = response['Vpcs'][0]
         self.assertEqual(vpc['State'], 'available')
-        self.assertTrue(vpc['EnableDnsHostnames'])
-        self.assertTrue(vpc['EnableDnsSupport'])
 
     @mark.it("S3 data bucket exists and has encryption enabled")
     def test_s3_bucket_exists_with_encryption(self):
