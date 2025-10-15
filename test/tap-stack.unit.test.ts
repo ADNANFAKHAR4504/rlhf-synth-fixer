@@ -269,7 +269,7 @@ describe('HIPAA-Compliant Healthcare Infrastructure CloudFormation Template', ()
     test('resources should use environment suffix in names', () => {
       const bucket = template.Resources.PatientDataBucket;
       expect(bucket.Properties.BucketName).toEqual({
-        'Fn::Sub': 'patient-data-${EnvironmentSuffix}',
+        'Fn::Sub': 'patient-data-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}',
       });
 
       const table = template.Resources.AuditTable;
