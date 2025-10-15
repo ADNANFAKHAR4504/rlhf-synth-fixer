@@ -87,6 +87,7 @@ export class RestaurantsApiConstruct extends Construct {
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
         assignPublicIp: false,
+        enableExecuteCommand: true,
         serviceConnectConfiguration: {
           namespace: props.namespace.namespaceName,
           services: [
@@ -103,6 +104,13 @@ export class RestaurantsApiConstruct extends Construct {
 
     // Ensure the namespace is created before the service
     this.service.node.addDependency(props.namespace);
+
+    // Add IAM permissions for ECS Exec
+    taskDefinition.taskRole.addManagedPolicy(
+      cdk.aws_iam.ManagedPolicy.fromAwsManagedPolicyName(
+        'AmazonSSMManagedInstanceCore'
+      )
+    );
 
     // Output the service name
     new cdk.CfnOutput(this, 'RestaurantsApiServiceName', {
