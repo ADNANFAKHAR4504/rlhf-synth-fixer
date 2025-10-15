@@ -234,16 +234,71 @@ Resources:
         ZipFile: |
           import boto3
           import json
-          import cfnresponse
+          import urllib3
+          import logging
+
+          # Configure logging
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          def send_response(event, context, response_status, response_data=None, physical_resource_id=None, reason=None):
+              """Send response to CloudFormation"""
+              if response_data is None:
+                  response_data = {}
+                  
+              if physical_resource_id is None:
+                  physical_resource_id = context.log_stream_name
+                  
+              if reason is None:
+                  reason = f"See CloudWatch Log Stream: {context.log_stream_name}"
+
+              response_url = event['ResponseURL']
+              
+              response_body = {
+                  'Status': response_status,
+                  'Reason': reason,
+                  'PhysicalResourceId': physical_resource_id,
+                  'StackId': event['StackId'],
+                  'RequestId': event['RequestId'],
+                  'LogicalResourceId': event['LogicalResourceId'],
+                  'Data': response_data
+              }
+
+              json_response_body = json.dumps(response_body)
+              logger.info(f"Response body: {json_response_body}")
+
+              headers = {
+                  'content-type': '',
+                  'content-length': str(len(json_response_body))
+              }
+
+              try:
+                  http = urllib3.PoolManager()
+                  response = http.request('PUT', response_url, body=json_response_body, headers=headers)
+                  logger.info(f"Status code: {response.status}")
+              except Exception as e:
+                  logger.error(f"Failed to send response: {str(e)}")
 
           def lambda_handler(event, context):
+              logger.info(f"Received event: {json.dumps(event, default=str)}")
+              
               try:
+                  request_type = event['RequestType']
+                  properties = event['ResourceProperties']
+                  
+                  bucket_name = properties.get('BucketName')
+                  lambda_arn = properties.get('LambdaFunctionArn')
+                  
+                  if not bucket_name:
+                      raise ValueError("BucketName is required in ResourceProperties")
+                  if not lambda_arn and request_type != 'Delete':
+                      raise ValueError("LambdaFunctionArn is required in ResourceProperties for Create/Update")
+                  
+                  logger.info(f"Processing {request_type} request for bucket: {bucket_name}")
+                  
                   s3_client = boto3.client('s3')
                   
-                  bucket_name = event['ResourceProperties']['BucketName']
-                  lambda_arn = event['ResourceProperties']['LambdaFunctionArn']
-                  
-                  if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':
+                  if request_type in ['Create', 'Update']:
                       # Configure bucket notifications
                       notification_config = {
                           'LambdaConfigurations': [
@@ -286,23 +341,37 @@ Resources:
                           ]
                       }
                       
+                      logger.info(f"Setting notification configuration: {json.dumps(notification_config, default=str)}")
+                      
                       s3_client.put_bucket_notification_configuration(
                           Bucket=bucket_name,
                           NotificationConfiguration=notification_config
                       )
                       
-                  elif event['RequestType'] == 'Delete':
+                      logger.info("Successfully configured bucket notifications")
+                      
+                  elif request_type == 'Delete':
                       # Remove bucket notifications
+                      logger.info("Removing bucket notifications")
                       s3_client.put_bucket_notification_configuration(
                           Bucket=bucket_name,
                           NotificationConfiguration={}
                       )
+                      logger.info("Successfully removed bucket notifications")
                   
-                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  # Send success response
+                  send_response(event, context, 'SUCCESS', {
+                      'BucketName': bucket_name,
+                      'Status': f'{request_type} completed successfully'
+                  }, f"{bucket_name}-notification-config")
                   
               except Exception as e:
-                  print(f"Error: {str(e)}")
-                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
+                  error_message = f"Error processing {event.get('RequestType', 'Unknown')} request: {str(e)}"
+                  logger.error(error_message)
+                  logger.exception("Full exception details:")
+                  
+                  # Send failure response
+                  send_response(event, context, 'FAILED', {}, None, error_message)
 
   # IAM Role for the S3 Notification Configuration Lambda
   ConfigureS3NotificationRole:
@@ -327,7 +396,9 @@ Resources:
                 Action:
                   - "s3:PutBucketNotification"
                   - "s3:GetBucketNotification"
-                Resource: !Sub "${SourceBucket.Arn}"
+                  - "s3:PutBucketNotificationConfiguration"
+                  - "s3:GetBucketNotificationConfiguration"
+                Resource: !GetAtt SourceBucket.Arn
 
   # CloudWatch Log Group for Lambda
   ImageProcessorLogGroup:

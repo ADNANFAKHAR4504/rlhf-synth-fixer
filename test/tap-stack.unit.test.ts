@@ -138,6 +138,15 @@ describe('S3-triggered Lambda Image Processing CloudFormation Template', () => {
       expect(customFunction.Type).toBe('AWS::Lambda::Function');
       expect(customFunction.Properties.Runtime).toBe('python3.9');
       expect(customFunction.Properties.Handler).toBe('index.lambda_handler');
+      expect(customFunction.Properties.Timeout).toBe(60);
+
+      // Verify the function code includes proper error handling
+      const code = customFunction.Properties.Code.ZipFile;
+      expect(code).toContain('send_response');
+      expect(code).toContain('logging');
+      expect(code).toContain('urllib3');
+      expect(code).toContain('BucketName is required');
+      expect(code).toContain('LambdaFunctionArn is required');
     });
 
     test('should have IAM role for custom resource Lambda', () => {
