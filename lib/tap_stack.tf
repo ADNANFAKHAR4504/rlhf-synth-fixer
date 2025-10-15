@@ -13,7 +13,7 @@ resource "aws_kms_key" "s3_encryption" {
 }
 
 resource "aws_kms_alias" "s3_encryption" {
-  name          = "alias/${var.project_name}-s3-${var.environment}"
+  name          = "alias/${var.project_name}-s3-${var.environment}-${random_string.resource_suffix.result}"
   target_key_id = aws_kms_key.s3_encryption.key_id
 }
 
@@ -30,7 +30,7 @@ resource "aws_kms_key" "dynamodb_encryption" {
 }
 
 resource "aws_kms_alias" "dynamodb_encryption" {
-  name          = "alias/${var.project_name}-dynamodb-${var.environment}"
+  name          = "alias/${var.project_name}-dynamodb-${var.environment}-${random_string.resource_suffix.result}"
   target_key_id = aws_kms_key.dynamodb_encryption.key_id
 }
 
@@ -47,7 +47,7 @@ resource "aws_kms_key" "sagemaker_encryption" {
 }
 
 resource "aws_kms_alias" "sagemaker_encryption" {
-  name          = "alias/${var.project_name}-sagemaker-${var.environment}"
+  name          = "alias/${var.project_name}-sagemaker-${var.environment}-${random_string.resource_suffix.result}"
   target_key_id = aws_kms_key.sagemaker_encryption.key_id
 }
 
@@ -64,7 +64,7 @@ resource "aws_kms_key" "kinesis_encryption" {
 }
 
 resource "aws_kms_alias" "kinesis_encryption" {
-  name          = "alias/${var.project_name}-kinesis-${var.environment}"
+  name          = "alias/${var.project_name}-kinesis-${var.environment}-${random_string.resource_suffix.result}"
   target_key_id = aws_kms_key.kinesis_encryption.key_id
 }
 
@@ -117,7 +117,7 @@ resource "aws_kms_key" "lambda_encryption" {
 }
 
 resource "aws_kms_alias" "lambda_encryption" {
-  name          = "alias/${var.project_name}-lambda-${var.environment}"
+  name          = "alias/${var.project_name}-lambda-${var.environment}-${random_string.resource_suffix.result}"
   target_key_id = aws_kms_key.lambda_encryption.key_id
 }
 
@@ -1076,7 +1076,7 @@ resource "aws_cloudwatch_log_group" "step_functions" {
 # Lambda function for data preprocessing
 resource "aws_lambda_function" "data_preprocessing" {
   filename         = "${path.module}/lambda/preprocessing.zip"
-  function_name    = "${var.project_name}-preprocessing-${var.environment}"
+  function_name    = "${var.project_name}-preprocessing-${var.environment}-${random_string.resource_suffix.result}"
   role             = aws_iam_role.lambda_preprocessing.arn
   handler          = "preprocessing_handler.handler"
   runtime          = var.lambda_runtime
@@ -1108,7 +1108,7 @@ resource "aws_lambda_function" "data_preprocessing" {
 # Lambda function for inference handling
 resource "aws_lambda_function" "inference_handler" {
   filename         = "${path.module}/lambda/inference.zip"
-  function_name    = "${var.project_name}-inference-${var.environment}"
+  function_name    = "${var.project_name}-inference-${var.environment}-${random_string.resource_suffix.result}"
   role             = aws_iam_role.lambda_inference.arn
   handler          = "inference_handler.handler"
   runtime          = var.lambda_runtime
@@ -1141,7 +1141,7 @@ resource "aws_lambda_function" "inference_handler" {
 # Lambda function for Kinesis stream consumer
 resource "aws_lambda_function" "kinesis_consumer" {
   filename         = "${path.module}/lambda/kinesis_consumer.zip"
-  function_name    = "${var.project_name}-kinesis-consumer-${var.environment}"
+  function_name    = "${var.project_name}-kinesis-consumer-${var.environment}-${random_string.resource_suffix.result}"
   role             = aws_iam_role.lambda_kinesis_consumer.arn
   handler          = "kinesis_consumer_handler.handler"
   runtime          = var.lambda_runtime
@@ -1185,7 +1185,7 @@ resource "aws_lambda_event_source_mapping" "kinesis_to_lambda" {
 # Lambda function for model evaluation
 resource "aws_lambda_function" "model_evaluation" {
   filename         = "${path.module}/lambda/model_evaluation.zip"
-  function_name    = "${var.project_name}-model-evaluation-${var.environment}"
+  function_name    = "${var.project_name}-model-evaluation-${var.environment}-${random_string.resource_suffix.result}"
   role             = aws_iam_role.lambda_preprocessing.arn
   handler          = "model_evaluation_handler.handler"
   runtime          = var.lambda_runtime
@@ -1726,7 +1726,7 @@ resource "aws_apigatewayv2_stage" "ml_inference" {
 }
 
 resource "aws_cloudwatch_log_group" "api_gateway" {
-  name              = "/aws/apigateway/${var.project_name}-ml-api-${var.environment}"
+  name              = "/aws/apigateway/${var.project_name}-ml-api-${var.environment}-${random_string.resource_suffix.result}"
   retention_in_days = var.log_retention_days
 
   kms_key_id = aws_kms_key.lambda_encryption.arn
