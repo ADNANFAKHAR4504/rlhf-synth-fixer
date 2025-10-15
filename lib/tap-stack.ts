@@ -56,7 +56,7 @@ export class TapStack extends cdk.Stack {
       secondaryRegions: SECONDARY_REGIONS,
       databaseName: 'financial_transactions',
       backupRetentionDays: 30,
-      enableBacktrack: true,
+      enableBacktrack: false, // Backtrack not supported for Global Databases
       environmentSuffix: environmentSuffix,
     });
 

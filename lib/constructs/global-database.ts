@@ -84,12 +84,13 @@ export class GlobalDatabase extends Construct {
       parameterGroup: this.parameterGroup,
     });
 
-    // Enable backtrack if requested
-    if (props.enableBacktrack) {
-      const cfnCluster = this.primaryCluster.node
-        .defaultChild as rds.CfnDBCluster;
-      cfnCluster.backtrackWindow = 72; // 72 hours
-    }
+    // Note: Backtrack is not supported for Global Databases
+    // For non-global deployments, you can enable backtrack:
+    // if (props.enableBacktrack) {
+    //   const cfnCluster = this.primaryCluster.node
+    //     .defaultChild as rds.CfnDBCluster;
+    //   cfnCluster.backtrackWindow = 72; // 72 hours
+    // }
 
     // Create global cluster from primary cluster
     // Note: When using sourceDbClusterIdentifier, don't specify engine properties
