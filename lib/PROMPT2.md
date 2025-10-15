@@ -13,7 +13,7 @@ Updating the DBPassword parameter so it has NoEcho: true set (to prevent plainte
 
 Replacing the current static DBPassword parameter reference with an SSM Parameter Store dynamic reference in the MasterUserPassword property of the RDSInstance.
 
-Use the syntax:
+Use the syntax
 
 MasterUserPassword: '{{resolve:ssm-secure:/tapstack/prod/dbpassword:1}}'
 
