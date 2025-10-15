@@ -12,18 +12,6 @@ from unittest.mock import patch
 
 import boto3
 import pytest
-from moto import (
-    mock_apigateway,
-    mock_ec2, 
-    mock_ecs,
-    mock_elasticache,
-    mock_efs,
-    mock_kinesis,
-    mock_kms,
-    mock_logs,
-    mock_rds,
-    mock_secretsmanager
-)
 
 
 @pytest.fixture(scope="session")
@@ -86,10 +74,24 @@ def validate_aws_credentials(aws_clients):
 
 @pytest.fixture(scope="function")
 def mock_aws_environment():
-    """Mock AWS environment for testing without real AWS resources."""
-    with mock_ec2(), mock_ecs(), mock_kinesis(), mock_elasticache(), \
-         mock_rds(), mock_efs(), mock_apigateway(), mock_secretsmanager(), \
-         mock_kms(), mock_logs():
+    """Mock AWS environment for testing without real AWS resources.
+    
+    Note: This fixture is provided for completeness but should generally not be used
+    in integration tests, which should test against real AWS resources.
+    """
+    # Import moto mocks only when needed to avoid import errors
+    try:
+        from moto import (
+            mock_ec2, mock_ecs, mock_kinesis, mock_elasticache,
+            mock_rds, mock_efs, mock_apigatewayv2, mock_secretsmanager,
+            mock_kms, mock_logs
+        )
+        with mock_ec2(), mock_ecs(), mock_kinesis(), mock_elasticache(), \
+             mock_rds(), mock_efs(), mock_apigatewayv2(), mock_secretsmanager(), \
+             mock_kms(), mock_logs():
+            yield
+    except ImportError as e:
+        pytest.skip(f"Moto mocking not available: {e}")
         yield
 
 
