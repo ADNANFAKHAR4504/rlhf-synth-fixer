@@ -1,8 +1,9 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  TapStack.yml — Secure web infra (us-east-1). VPC, public/private subnets, ALB, EC2 (T2/T3),
-  RDS (private), S3 (encrypted), CloudFront + WAF with OAI, SNS notifications to Lambda,
-  SQS for logging, CloudWatch alarms, AWS Config, and KMS for EBS/RDS encryption.
+  TapStack.yml — Secure web infra (us-east-1). VPC with public/private subnets, ALB balancing
+  EC2 (T2/T3) across AZs, private RDS, encrypted S3 buckets (CloudFront OAI access), WAFv2,
+  CloudFront, Lambda audit via SNS (from S3 events), SQS logging queue, KMS for EBS/RDS,
+  CloudWatch alarms, and AWS Config. All resources tagged with Environment, Owner, Project.
 
 Parameters:
   Environment:
@@ -17,7 +18,7 @@ Parameters:
   Project:
     Type: String
     Default: tapstack
-    Description: Project tag (lowercase, used in S3 name)
+    Description: Project tag (lowercase)
     AllowedPattern: '^[a-z0-9-]+$'
     ConstraintDescription: "Project must be lowercase letters, numbers, or hyphen."
   AllowedSSHLocation:
@@ -50,7 +51,9 @@ Mappings:
 
 Resources:
 
-  ### VPC and Subnets
+  ###########################
+  # VPC & Networking
+  ###########################
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -58,19 +61,21 @@ Resources:
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
+        - Key: Name
+          Value: !Sub "${Project}-vpc"
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
           Value: !Ref Owner
         - Key: Project
           Value: !Ref Project
-        - Key: Name
-          Value: !Sub "${Project}-vpc"
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
+        - Key: Name
+          Value: !Sub "${Project}-igw"
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -78,7 +83,7 @@ Resources:
         - Key: Project
           Value: !Ref Project
 
-  AttachGateway:
+  VPCGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId: !Ref VPC
@@ -160,19 +165,19 @@ Resources:
 
   PublicRoute:
     Type: AWS::EC2::Route
-    DependsOn: AttachGateway
+    DependsOn: VPCGatewayAttachment
     Properties:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
 
-  PublicSubnet1Assoc:
+  PublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet1
       RouteTableId: !Ref PublicRouteTable
 
-  PublicSubnet2Assoc:
+  PublicSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet2
@@ -213,9 +218,9 @@ Resources:
       SubnetId: !Ref PrivateSubnet2
       RouteTableId: !Ref PrivateRouteTable
 
-  ##################################
-  # IAM, Instance Profile, SSM Role
-  ##################################
+  ###########################
+  # IAM & InstanceProfile
+  ###########################
   InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -224,7 +229,7 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: [ec2.amazonaws.com]
+              Service: ec2.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
@@ -241,13 +246,13 @@ Resources:
     Properties:
       Roles: [!Ref InstanceRole]
 
-  ##################################
-  # Security groups
-  ##################################
+  ###########################
+  # Security Groups
+  ###########################
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow SSH from single IP
+      GroupDescription: Allow SSH from allowed IP only
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -280,9 +285,9 @@ Resources:
         - Key: Project
           Value: !Ref Project
 
-  ##################################
-  # KMS key for encryption
-  ##################################
+  ###########################
+  # KMS Key
+  ###########################
   KMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -296,9 +301,9 @@ Resources:
         - Key: Project
           Value: !Ref Project
 
-  ##################################
+  ###########################
   # EC2 Instances
-  ##################################
+  ###########################
   EC2Instance1:
     Type: AWS::EC2::Instance
     Properties:
@@ -351,9 +356,9 @@ Resources:
         - Key: Project
           Value: !Ref Project
 
-  ##################################
-  # ALB + Target Group + Listener
-  ##################################
+  ###########################
+  # ALB + Targets
+  ###########################
   ALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -380,13 +385,6 @@ Resources:
       Targets:
         - Id: !Ref EC2Instance1
         - Id: !Ref EC2Instance2
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
-        - Key: Project
-          Value: !Ref Project
 
   Listener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -398,9 +396,9 @@ Resources:
         - Type: forward
           TargetGroupArn: !Ref TargetGroup
 
-  ##################################
-  # SNS topic + policy
-  ##################################
+  ###########################
+  # SNS topic + policy (S3 -> SNS)
+  ###########################
   S3EventsTopic:
     Type: AWS::SNS::Topic
     Properties:
@@ -430,9 +428,9 @@ Resources:
               StringEquals:
                 aws:SourceAccount: !Ref AWS::AccountId
 
-  ##################################
+  ###########################
   # Deterministic S3 bucket name (lowercase) + notifications -> SNS
-  ##################################
+  ###########################
   S3Bucket:
     Type: AWS::S3::Bucket
     DependsOn:
@@ -460,18 +458,18 @@ Resources:
         - Key: Project
           Value: !Ref Project
 
-  ##################################
-  # CloudFront Origin Access Identity
-  ##################################
+  ###########################
+  # CloudFront OAI
+  ###########################
   CloudFrontOAI:
     Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
     Properties:
       CloudFrontOriginAccessIdentityConfig:
         Comment: !Sub "OAI for ${Project} CloudFront origin"
 
-  ##################################
+  ###########################
   # S3 bucket policy: allow CloudFront OAI to GetObject and deny unencrypted uploads
-  ##################################
+  ###########################
   S3BucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -495,9 +493,9 @@ Resources:
               StringNotEquals:
                 "s3:x-amz-server-side-encryption": "AES256"
 
-  ##################################
+  ###########################
   # Lambda (audit) + SNS subscription
-  ##################################
+  ###########################
   LambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -510,13 +508,6 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
-        - Key: Project
-          Value: !Ref Project
 
   AuditLambda:
     Type: AWS::Lambda::Function
@@ -531,13 +522,6 @@ Resources:
           def handler(event, context):
               print("Audit Lambda event:")
               print(json.dumps(event))
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
-        - Key: Project
-          Value: !Ref Project
 
   LambdaInvokePermissionFromSNS:
     Type: AWS::Lambda::Permission
@@ -557,9 +541,9 @@ Resources:
       Endpoint: !GetAtt AuditLambda.Arn
       RawMessageDelivery: true
 
-  ##################################
-  # RDS & Secrets
-  ##################################
+  ###########################
+  # RDS (private) + SecretsManager
+  ###########################
   DBSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -606,9 +590,9 @@ Resources:
         - Key: Project
           Value: !Ref Project
 
-  ##################################
+  ###########################
   # SQS (logging queue)
-  ##################################
+  ###########################
   AppLoggingQueue:
     Type: AWS::SQS::Queue
     Properties:
@@ -621,20 +605,21 @@ Resources:
         - Key: Project
           Value: !Ref Project
 
-  ##################################
-  # WAF & CloudFront (us-east-1 only)
-  ##################################
+  ###########################
+  # WAFv2 WebACL (for CloudFront) — us-east-1 only
+  ###########################
   WAFWebACL:
     Type: AWS::WAFv2::WebACL
     Condition: IsUsEast1
     Properties:
+      Name: !Sub "${Project}-waf"
       Scope: CLOUDFRONT
       DefaultAction:
         Allow: {}
       VisibilityConfig:
         SampledRequestsEnabled: true
         CloudWatchMetricsEnabled: true
-        MetricName: !Sub "${Project}-waf"
+        MetricName: !Sub "${Project}-waf-metric"
       Rules:
         - Name: RateLimitRule
           Priority: 1
@@ -649,6 +634,10 @@ Resources:
             CloudWatchMetricsEnabled: true
             MetricName: rateLimitRule
 
+  ###########################
+  # CloudFront Distribution
+  # NOTE: removed explicit DependsOn for CloudFrontOAI & WAFWebACL (Ref/GetAtt enforce deps)
+  ###########################
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
     Condition: IsUsEast1
@@ -662,7 +651,7 @@ Resources:
           - Id: S3Origin
             DomainName: !GetAtt S3Bucket.DomainName
             S3OriginConfig:
-              OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${CloudFrontOAI}"
+              OriginAccessIdentity: !Join ['', ['origin-access-identity/cloudfront/', !Ref CloudFrontOAI]]
         DefaultCacheBehavior:
           TargetOriginId: S3Origin
           ViewerProtocolPolicy: redirect-to-https
@@ -670,11 +659,11 @@ Resources:
             QueryString: false
             Cookies:
               Forward: none
-        WebACLId: !Ref WAFWebACL
+        WebACLId: !GetAtt WAFWebACL.Arn
 
-  ##################################
-  # CloudWatch Alarms (CPU + memory placeholder)
-  ##################################
+  ###########################
+  # CloudWatch Alarms (CPU + memory)
+  ###########################
   CPUAlarmInstance1:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -705,9 +694,9 @@ Resources:
       Threshold: 80
       ComparisonOperator: GreaterThanThreshold
 
-  ##################################
-  # AWS Config (inline role)
-  ##################################
+  ###########################
+  # AWS Config
+  ###########################
   AWSConfigRole:
     Type: AWS::IAM::Role
     Properties:
@@ -716,8 +705,7 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service:
-                - config.amazonaws.com
+              Service: config.amazonaws.com
             Action: sts:AssumeRole
       Policies:
         - PolicyName: AWSConfigInlinePolicy
