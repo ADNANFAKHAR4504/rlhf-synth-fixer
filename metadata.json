@@ -10,5 +10,21 @@
   "subject_labels": [
     "Serverless Infrastructure (Functions as Code)"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, Fargate, VPC"
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "S3",
+    "KMS",
+    "Secrets Manager",
+    "IAM",
+    "SQS",
+    "CloudWatch",
+    "Route 53",
+    "WAF",
+    "Application Auto Scaling"
+  ],
+  "training_quality": 6
 }
