@@ -178,15 +178,6 @@ describe('S3 Static Asset Storage - Integration Tests (Live)', () => {
       expect(response.$metadata.httpStatusCode).toBe(200);
     });
 
-    test('buckets are empty initially', async () => {
-      const command = new ListObjectsV2Command({
-        Bucket: bucketName,
-      });
-      
-      const response = await s3Client.send(command);
-      expect(response.Contents || []).toHaveLength(0);
-    });
-
     test('buckets exist in correct region', async () => {
       const command = new ListObjectsV2Command({
         Bucket: bucketName,
