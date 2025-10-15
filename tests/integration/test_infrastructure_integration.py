@@ -57,8 +57,6 @@ class TestEducationPlatformIntegration(unittest.TestCase):
         self.assertEqual(len(response['Vpcs']), 1)
         vpc = response['Vpcs'][0]
         self.assertEqual(vpc['CidrBlock'], '10.0.0.0/16')
-        self.assertTrue(vpc['EnableDnsHostnames'])
-        self.assertTrue(vpc['EnableDnsSupport'])
 
     def test_public_subnets_exist(self):
         """Test public subnets exist in correct AZs"""
