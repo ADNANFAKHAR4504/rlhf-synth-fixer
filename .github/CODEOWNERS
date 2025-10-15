@@ -1,10 +1,13 @@
 # CODEOWNERS file
-# This file defines who owns and can approve changes to different parts of the repository
 
-# Global ownership: Only @hernanmog-turing and @deavyanshturing can approve changes everywhere
-* @hernanmog-turing @deavyanshturing 
+# Directories
+/lib/ @Ashwin-DevAsh @PranavSTuring @olaoluwa-turing @abubakarTuring @mohit-bairagi-turing @antny-turing @mayanksethi-turing @iamarpit-turing
+/test/ @Ashwin-DevAsh @PranavSTuring @olaoluwa-turing @abubakarTuring @mohit-bairagi-turing @antny-turing @mayanksethi-turing @iamarpit-turing
+/bin/ @Ashwin-DevAsh @PranavSTuring @olaoluwa-turing @abubakarTuring @mohit-bairagi-turing @antny-turing @mayanksethi-turing @iamarpit-turing
 
-# Exceptions: lib/, test/, and bin/ can be approved by anyone
-lib/
-test/
-bin/
+# Package files using patterns
+Pipfile* @Ashwin-DevAsh @PranavSTuring @olaoluwa-turing @abubakarTuring @mohit-bairagi-turing @antny-turing @mayanksethi-turing @iamarpit-turing
+package*.json @Ashwin-DevAsh @PranavSTuring @olaoluwa-turing @abubakarTuring @mohit-bairagi-turing @antny-turing @mayanksethi-turing @iamarpit-turing
+
+# Global ownership
+* @hernanmog-turing @deavyanshturing
