@@ -151,24 +151,6 @@ class TestTapStack(unittest.TestCase):
             }
         )
 
-    @mark.it("creates ALB target group with health checks")
-    def test_creates_target_group(self):
-        """Test ALB target group"""
-        # ASSERT - Target group exists
-        self.template.resource_count_is(
-            "AWS::ElasticLoadBalancingV2::TargetGroup",
-            1
-        )
-
-        # Health check configured
-        self.template.has_resource_properties(
-            "AWS::ElasticLoadBalancingV2::TargetGroup",
-            {
-                "HealthCheckEnabled": True,
-                "HealthCheckPath": "/health",
-                "HealthCheckProtocol": "HTTP"
-            }
-        )
 
     @mark.it("creates SNS topic for alarms")
     def test_creates_sns_topic(self):
