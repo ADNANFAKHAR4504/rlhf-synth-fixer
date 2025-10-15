@@ -1,0 +1,28 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291286",
+  "team": "5",
+  "startedAt": "2025-10-08T05:22:37.388Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "SageMaker",
+    "S3", 
+    "Lambda",
+    "Step Functions",
+    "DynamoDB",
+    "Kinesis",
+    "API Gateway",
+    "EventBridge",
+    "CloudWatch",
+    "IAM",
+    "KMS",
+    "SNS"
+  ],
+  "training_quality": 9
+}
