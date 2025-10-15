@@ -329,7 +329,7 @@ rds_instance = aws.rds.Instance(
     f"education-rds-{environment_suffix}",
     identifier=f"education-db-{environment_suffix}",
     engine="mysql",
-    engine_version="8.0.35",
+    engine_version="8.0.38",
     instance_class="db.t3.micro",
     allocated_storage=20,
     storage_encrypted=True,
