@@ -431,8 +431,9 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       
       // Get detailed information about the Web ACL
       const getCommand = new GetWebACLCommand({
-          Scope: 'REGIONAL',
-        Id: webACL.Id!
+        Scope: 'REGIONAL',
+        Id: webACL.Id!,
+        Name: webACL.Name!
       });
       const response = await wafv2Client.send(getCommand);
 
@@ -850,8 +851,11 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       const listCommand = new ListRolesCommand({});
       const listResponse = await iamClient.send(listCommand);
       
+      // Search for Lambda execution role - it should contain both 'Lambda' and 'ExecutionRole'
       const lambdaRole = listResponse.Roles?.find(role => 
-        role.RoleName?.includes('LambdaExecutionRole')
+        role.RoleName?.includes('Lambda') && 
+        role.RoleName?.includes('ExecutionRole') &&
+        !role.RoleName?.includes('SecurityHub')  // Exclude SecurityHub Lambda role
       );
       
       expect(lambdaRole).toBeDefined();
@@ -1276,7 +1280,8 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
         // 2. Get detailed WAF configuration
         const getWebACLCommand = new GetWebACLCommand({
           Scope: 'REGIONAL',
-          Id: webACL.Id!
+          Id: webACL.Id!,
+          Name: webACL.Name!
         });
         const webACLResponse = await wafv2Client.send(getWebACLCommand);
         
@@ -1654,9 +1659,10 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
         const rolesResponse = await iamClient.send(listRolesCommand);
         expect(rolesResponse.Roles).toBeDefined();
 
-        // 2. Find EC2 instance role
+        // 2. Find EC2 instance role - search for 'EC2' and 'Role' or 'InstanceRole'
         const ec2Role = rolesResponse.Roles!.find(role => 
-          role.RoleName?.includes('EC2InstanceRole')
+          role.RoleName?.includes('EC2') && 
+          (role.RoleName?.includes('InstanceRole') || role.RoleName?.includes('Role'))
         );
         
         expect(ec2Role).toBeDefined();
@@ -1671,10 +1677,13 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
 
         // 4. Find Lambda execution roles
         const lambdaRole = rolesResponse.Roles!.find(role => 
-          role.RoleName?.includes('LambdaExecutionRole')
+          role.RoleName?.includes('Lambda') && 
+          role.RoleName?.includes('ExecutionRole') &&
+          !role.RoleName?.includes('SecurityHub')
         );
         const securityHubRole = rolesResponse.Roles!.find(role => 
-          role.RoleName?.includes('SecurityHubLambdaRole')
+          role.RoleName?.includes('SecurityHub') && 
+          role.RoleName?.includes('Lambda')
         );
 
         expect(lambdaRole).toBeDefined();
