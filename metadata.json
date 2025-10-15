@@ -10,5 +10,17 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "S3, CloudFront, WAF, Route 53, ACM, CloudWatch, Lambda@Edge, KMS, QuickSight"
+  "aws_services": [
+    "S3",
+    "CloudFront",
+    "WAF",
+    "Lambda",
+    "CloudWatch",
+    "SNS",
+    "CloudTrail",
+    "QuickSight",
+    "KMS",
+    "IAM"
+  ],
+  "training_quality": 9
 }
