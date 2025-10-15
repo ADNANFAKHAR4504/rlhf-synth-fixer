@@ -131,9 +131,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref ApplicationVPC
-      CidrBlock: !Sub 
-        - '${VPCBase}.1.0/24'
-        - VPCBase: !Select [0, !Split ['.0/16', !Ref VPCCidr]]
+      CidrBlock: '10.0.1.0/24'
       AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
@@ -146,9 +144,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref ApplicationVPC
-      CidrBlock: !Sub 
-        - '${VPCBase}.2.0/24'
-        - VPCBase: !Select [0, !Split ['.0/16', !Ref VPCCidr]]
+      CidrBlock: '10.0.2.0/24'
       AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
@@ -162,9 +158,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref ApplicationVPC
-      CidrBlock: !Sub 
-        - '${VPCBase}.10.0/24'
-        - VPCBase: !Select [0, !Split ['.0/16', !Ref VPCCidr]]
+      CidrBlock: '10.0.10.0/24'
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
@@ -176,9 +170,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref ApplicationVPC
-      CidrBlock: !Sub 
-        - '${VPCBase}.11.0/24'
-        - VPCBase: !Select [0, !Split ['.0/16', !Ref VPCCidr]]
+      CidrBlock: '10.0.11.0/24'
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
@@ -1403,7 +1395,7 @@ Resources:
   CloudTrailLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${ApplicationName}-cloudtrail-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'webapp-cloudtrail-logs-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
