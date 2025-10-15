@@ -1,26 +1,30 @@
-Complete Terraform configuration for DynamoDB table with on-demand billing, global secondary index, point-in-time recovery, and comprehensive security features.
-
 ## provider.tf
 
 ```hcl
 terraform {
-  required_version = ">= 1.0"
-  
   required_providers {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 6.0"
     }
   }
+  required_version = ">= 1.0"
+  backend "s3" {
+
+  }
 }
 
 provider "aws" {
-  # AWS region will be determined from environment or AWS config
+
 }
 ```
 ## main.tf
 
 ```hcl
+# ============================================================================
+# DYNAMODB TABLE - Payment Transactions
+# ============================================================================
+
 resource "aws_dynamodb_table" "payment_transactions" {
   name = "payment-transactions"
   billing_mode = "PAY_PER_REQUEST"  # On-demand billing mode
@@ -80,6 +84,10 @@ resource "aws_dynamodb_table" "payment_transactions" {
     Department  = "finance"
   }
 }
+
+# ============================================================================
+# OUTPUTS
+# ============================================================================
 
 # Output the table ARN for IAM policies and application configuration
 output "payment_transactions_table_arn" {
