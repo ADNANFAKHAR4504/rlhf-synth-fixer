@@ -5,7 +5,7 @@ resource "aws_kms_key" "s3_encryption" {
   description             = "KMS key for S3 bucket encryption"
   deletion_window_in_days = var.kms_deletion_window_in_days
   enable_key_rotation     = true
-
+  
   tags = merge(var.common_tags, {
     Name    = "${var.project_name}-s3-kms-${var.environment}"
     Purpose = "S3Encryption"
@@ -125,7 +125,7 @@ resource "aws_kms_alias" "lambda_encryption" {
 
 # S3 bucket for raw image data
 resource "aws_s3_bucket" "raw_data" {
-  bucket = "${var.project_name}-raw-data-${var.environment}-${data.aws_caller_identity.current.account_id}"
+  bucket = "${var.project_name}-raw-data-${var.environment}-${random_string.resource_suffix.result}-${data.aws_caller_identity.current.account_id}"
 
   tags = merge(var.common_tags, {
     Name    = "${var.project_name}-raw-data-${var.environment}"
@@ -189,7 +189,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "raw_data" {
 
 # S3 bucket for processed data
 resource "aws_s3_bucket" "processed_data" {
-  bucket = "${var.project_name}-processed-data-${var.environment}-${data.aws_caller_identity.current.account_id}"
+  bucket = "${var.project_name}-processed-data-${var.environment}-${random_string.resource_suffix.result}-${data.aws_caller_identity.current.account_id}"
 
   tags = merge(var.common_tags, {
     Name    = "${var.project_name}-processed-data-${var.environment}"
@@ -249,7 +249,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "processed_data" {
 
 # S3 bucket for model artifacts
 resource "aws_s3_bucket" "model_artifacts" {
-  bucket = "${var.project_name}-model-artifacts-${var.environment}-${data.aws_caller_identity.current.account_id}"
+  bucket = "${var.project_name}-model-artifacts-${var.environment}-${random_string.resource_suffix.result}-${data.aws_caller_identity.current.account_id}"
 
   tags = merge(var.common_tags, {
     Name    = "${var.project_name}-model-artifacts-${var.environment}"
@@ -288,7 +288,7 @@ resource "aws_s3_bucket_public_access_block" "model_artifacts" {
 
 # S3 bucket for logs
 resource "aws_s3_bucket" "logs" {
-  bucket = "${var.project_name}-logs-${var.environment}-${data.aws_caller_identity.current.account_id}"
+  bucket = "${var.project_name}-logs-${var.environment}-${random_string.resource_suffix.result}-${data.aws_caller_identity.current.account_id}"
 
   tags = merge(var.common_tags, {
     Name    = "${var.project_name}-logs-${var.environment}"
@@ -349,7 +349,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs" {
 
 # DynamoDB table for model metadata and versioning
 resource "aws_dynamodb_table" "model_metadata" {
-  name         = "${var.project_name}-model-metadata-${var.environment}"
+  name         = "${var.project_name}-model-metadata-${var.environment}-${random_string.resource_suffix.result}"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "ModelId"
   range_key    = "Version"
@@ -398,7 +398,7 @@ resource "aws_dynamodb_table" "model_metadata" {
 
 # DynamoDB table for training metrics
 resource "aws_dynamodb_table" "training_metrics" {
-  name         = "${var.project_name}-training-metrics-${var.environment}"
+  name         = "${var.project_name}-training-metrics-${var.environment}-${random_string.resource_suffix.result}"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "TrainingJobId"
   range_key    = "Timestamp"
@@ -442,7 +442,7 @@ resource "aws_dynamodb_table" "training_metrics" {
 
 # DynamoDB table for A/B test configuration
 resource "aws_dynamodb_table" "ab_test_config" {
-  name         = "${var.project_name}-ab-test-config-${var.environment}"
+  name         = "${var.project_name}-ab-test-config-${var.environment}-${random_string.resource_suffix.result}"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "TestId"
 
@@ -480,7 +480,7 @@ resource "aws_dynamodb_table" "ab_test_config" {
 # ========== KINESIS DATA STREAM ==========
 
 resource "aws_kinesis_stream" "inference_requests" {
-  name             = "${var.project_name}-inference-requests-${var.environment}"
+  name             = "${var.project_name}-inference-requests-${var.environment}-${random_string.resource_suffix.result}"
   shard_count      = var.kinesis_shard_count
   retention_period = var.kinesis_retention_hours
 
@@ -508,7 +508,7 @@ resource "aws_kinesis_stream" "inference_requests" {
 
 # IAM role for Lambda data preprocessing
 resource "aws_iam_role" "lambda_preprocessing" {
-  name = "${var.project_name}-lambda-preprocessing-${var.environment}"
+  name = "${var.project_name}-lambda-preprocessing-${var.environment}-${random_string.resource_suffix.result}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -582,7 +582,7 @@ resource "aws_iam_role_policy" "lambda_preprocessing" {
 
 # IAM role for Lambda inference
 resource "aws_iam_role" "lambda_inference" {
-  name = "${var.project_name}-lambda-inference-${var.environment}"
+  name = "${var.project_name}-lambda-inference-${var.environment}-${random_string.resource_suffix.result}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -657,7 +657,7 @@ resource "aws_iam_role_policy" "lambda_inference" {
 
 # IAM role for Lambda Kinesis consumer
 resource "aws_iam_role" "lambda_kinesis_consumer" {
-  name = "${var.project_name}-lambda-kinesis-consumer-${var.environment}"
+  name = "${var.project_name}-lambda-kinesis-consumer-${var.environment}-${random_string.resource_suffix.result}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -731,7 +731,7 @@ resource "aws_iam_role_policy" "lambda_kinesis_consumer" {
 
 # IAM role for SageMaker
 resource "aws_iam_role" "sagemaker" {
-  name = "${var.project_name}-sagemaker-${var.environment}"
+  name = "${var.project_name}-sagemaker-${var.environment}-${random_string.resource_suffix.result}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -755,7 +755,7 @@ resource "aws_iam_role" "sagemaker" {
 resource "aws_iam_role_policy" "sagemaker" {
   name = "${var.project_name}-sagemaker-policy-${var.environment}"
   role = aws_iam_role.sagemaker.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -840,7 +840,7 @@ resource "aws_iam_role_policy" "sagemaker" {
 
 # IAM role for Step Functions
 resource "aws_iam_role" "step_functions" {
-  name = "${var.project_name}-step-functions-${var.environment}"
+  name = "${var.project_name}-step-functions-${var.environment}-${random_string.resource_suffix.result}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -953,7 +953,7 @@ resource "aws_iam_role_policy" "step_functions" {
 
 # IAM role for EventBridge
 resource "aws_iam_role" "eventbridge" {
-  name = "${var.project_name}-eventbridge-${var.environment}"
+  name = "${var.project_name}-eventbridge-${var.environment}-${random_string.resource_suffix.result}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -1002,7 +1002,7 @@ resource "aws_iam_role_policy" "eventbridge" {
 # ========== CLOUDWATCH LOG GROUPS ==========
 
 resource "aws_cloudwatch_log_group" "lambda_preprocessing" {
-  name              = "/aws/lambda/${var.project_name}-preprocessing-${var.environment}"
+  name              = "/aws/lambda/${var.project_name}-preprocessing-${var.environment}-${random_string.resource_suffix.result}"
   retention_in_days = var.log_retention_days
 
   kms_key_id = aws_kms_key.lambda_encryption.arn
@@ -1016,7 +1016,7 @@ resource "aws_cloudwatch_log_group" "lambda_preprocessing" {
 }
 
 resource "aws_cloudwatch_log_group" "lambda_inference" {
-  name              = "/aws/lambda/${var.project_name}-inference-${var.environment}"
+  name              = "/aws/lambda/${var.project_name}-inference-${var.environment}-${random_string.resource_suffix.result}"
   retention_in_days = var.log_retention_days
 
   kms_key_id = aws_kms_key.lambda_encryption.arn
@@ -1030,7 +1030,7 @@ resource "aws_cloudwatch_log_group" "lambda_inference" {
 }
 
 resource "aws_cloudwatch_log_group" "lambda_kinesis_consumer" {
-  name              = "/aws/lambda/${var.project_name}-kinesis-consumer-${var.environment}"
+  name              = "/aws/lambda/${var.project_name}-kinesis-consumer-${var.environment}-${random_string.resource_suffix.result}"
   retention_in_days = var.log_retention_days
 
   kms_key_id = aws_kms_key.lambda_encryption.arn
@@ -1044,7 +1044,7 @@ resource "aws_cloudwatch_log_group" "lambda_kinesis_consumer" {
 }
 
 resource "aws_cloudwatch_log_group" "lambda_model_evaluation" {
-  name              = "/aws/lambda/${var.project_name}-model-evaluation-${var.environment}"
+  name              = "/aws/lambda/${var.project_name}-model-evaluation-${var.environment}-${random_string.resource_suffix.result}"
   retention_in_days = var.log_retention_days
 
   kms_key_id = aws_kms_key.lambda_encryption.arn
@@ -1058,7 +1058,7 @@ resource "aws_cloudwatch_log_group" "lambda_model_evaluation" {
 }
 
 resource "aws_cloudwatch_log_group" "step_functions" {
-  name              = "/aws/vendedlogs/states/${var.project_name}-ml-pipeline-${var.environment}"
+  name              = "/aws/vendedlogs/states/${var.project_name}-ml-pipeline-${var.environment}-${random_string.resource_suffix.result}"
   retention_in_days = var.log_retention_days
 
   kms_key_id = aws_kms_key.lambda_encryption.arn
@@ -1222,7 +1222,17 @@ resource "random_string" "sagemaker_suffix" {
   special = false
   upper   = false
   keepers = {
-    keeper = "5"
+    keeper = "6"
+  }
+}
+
+# Additional random string for other resources to avoid conflicts
+resource "random_string" "resource_suffix" {
+  length  = 6
+  special = false
+  upper   = false
+  keepers = {
+    keeper = "6"
   }
 }
 
@@ -1799,7 +1809,7 @@ resource "aws_lambda_permission" "eventbridge_lambda" {
 # CloudWatch Dashboard
 resource "aws_cloudwatch_dashboard" "ml_pipeline" {
   dashboard_name = "${var.project_name}-ml-dashboard-${var.environment}"
-
+  
   dashboard_body = jsonencode({
     widgets = [
       {
