@@ -10,5 +10,19 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "Lambda"
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "IAM",
+    "RDS",
+    "S3",
+    "VPC",
+    "CloudFront",
+    "Route 53",
+    "SQS",
+    "CloudWatch",
+    "Secrets Manager",
+    "EC2"
+  ],
+  "training_quality": 3
 }
