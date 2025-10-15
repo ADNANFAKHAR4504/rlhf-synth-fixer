@@ -261,7 +261,7 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
       // Use the dedicated polling function, which is now set to poll for 5 minutes
       const listResponse = await pollForS3Object(
         outputs.LogBucketName,
-        'logs/',
+        'errors/',
         300000 // Max polling time of 5 minutes
       );
 
@@ -272,7 +272,7 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
         // Verify partitioning structure (year=YYYY/month=MM/day=DD/hour=HH)
         const firstObject = listResponse.Contents[0];
         // The expected partitioning structure
-        expect(firstObject.Key).toMatch(/logs\/year=\d{4}\/month=\d{2}\/day=\d{2}\/hour=\d{2}\/.+/);
+        expect(firstObject.Key).toMatch(/errors\/year=\d{4}\/month=\d{2}\/day=\d{2}\/hour=\d{2}\/.+/);
       }
     }, 360000); // <--- JEST TIMEOUT SET TO 6 MINUTES (360000 ms) to accommodate polling
 
