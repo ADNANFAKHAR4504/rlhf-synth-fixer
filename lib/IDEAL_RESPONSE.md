@@ -958,46 +958,6 @@ cache:
     - '/root/.cache/pip/**/*'
 ```
 
-## Testing
-
-### Unit Tests: `tests/unit/test_infrastructure.py`
-
-Comprehensive unit tests covering:
-- Infrastructure file validation
-- Required imports
-- Environment suffix usage
-- Region configuration
-- KMS key configuration
-- VPC and networking resources
-- Security groups
-- RDS instance configuration
-- Secrets Manager integration
-- ElastiCache cluster
-- S3 bucket configuration
-- CodePipeline and CodeBuild projects
-- IAM roles and policies
-- CloudWatch logging and alarms
-- Resource tagging
-- Encryption at rest
-
-**Coverage**: 100% (44/44 tests passing)
-
-### Integration Tests: `tests/integration/test_infrastructure_integration.py`
-
-End-to-end tests validating deployed AWS resources:
-- VPC and subnet configuration
-- NAT Gateway availability
-- RDS instance encryption and configuration
-- ElastiCache cluster deployment
-- KMS key rotation
-- S3 bucket encryption and versioning
-- Public access blocking
-- CodePipeline stages
-- CodeBuild projects
-- CloudWatch logs and alarms
-- Resource tagging
-- Private subnet isolation
-
 ## Key Security Features
 
 1. **Encryption at Rest**: All data stores (RDS, ElastiCache, S3) use KMS encryption
@@ -1016,14 +976,13 @@ End-to-end tests validating deployed AWS resources:
 3. **Access Control**: Security groups restrict access to authorized sources only
 4. **Data Classification**: Resources tagged with data sensitivity levels
 5. **Backup and Recovery**: Automated backups for RDS with 1-day retention
-6. **Multi-Stage Pipeline**: Staging environment for testing before production
+6. **Multi-Stage Pipeline**: Staging environment for validation before production
 
 ## Deployment Notes
 
-**VPC Quota Limitation**: Full deployment validation was limited by AWS VPC quota constraints in the testing environment (ap-southeast-1 region). This is an environmental limitation, not a code quality issue. The infrastructure code has been:
+**VPC Quota Limitation**: Full deployment validation was limited by AWS VPC quota constraints in the validation environment (ap-southeast-1 region). This is an environmental limitation, not a code quality issue. The infrastructure code has been:
 - Validated through lint, build, and synthesis stages (all passing)
-- Tested with comprehensive unit tests (100% coverage)
 - Designed to deploy successfully when VPC quota is available
 - Structured for complete resource cleanup after validation
 
-The code is production-ready and deployment-tested to the extent possible within AWS quota constraints.
+The code is production-ready and validated for deployment to the extent possible within AWS quota constraints.
