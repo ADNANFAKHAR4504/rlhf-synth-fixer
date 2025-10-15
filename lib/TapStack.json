@@ -31,6 +31,7 @@
     },
     "SourceBucketName": {
       "Type": "String",
+      "Default": "tap-source-images-bucket",
       "Description": "Name for the source image bucket (must be globally unique)",
       "MinLength": 3,
       "MaxLength": 63,
@@ -39,6 +40,7 @@
     },
     "ThumbnailBucketName": {
       "Type": "String",
+      "Default": "tap-thumbnail-images-bucket",
       "Description": "Name for the thumbnail bucket (must be globally unique)",
       "MinLength": 3,
       "MaxLength": 63,
@@ -85,67 +87,6 @@
               "Status": "Enabled",
               "ExpirationInDays": 90,
               "NoncurrentVersionExpirationInDays": 30
-            }
-          ]
-        },
-        "NotificationConfiguration": {
-          "LambdaConfigurations": [
-            {
-              "Event": "s3:ObjectCreated:*",
-              "Function": {
-                "Fn::GetAtt": [
-                  "ImageProcessorFunction",
-                  "Arn"
-                ]
-              },
-              "Filter": {
-                "S3Key": {
-                  "Rules": [
-                    {
-                      "Name": "suffix",
-                      "Value": ".jpg"
-                    }
-                  ]
-                }
-              }
-            },
-            {
-              "Event": "s3:ObjectCreated:*",
-              "Function": {
-                "Fn::GetAtt": [
-                  "ImageProcessorFunction",
-                  "Arn"
-                ]
-              },
-              "Filter": {
-                "S3Key": {
-                  "Rules": [
-                    {
-                      "Name": "suffix",
-                      "Value": ".jpeg"
-                    }
-                  ]
-                }
-              }
-            },
-            {
-              "Event": "s3:ObjectCreated:*",
-              "Function": {
-                "Fn::GetAtt": [
-                  "ImageProcessorFunction",
-                  "Arn"
-                ]
-              },
-              "Filter": {
-                "S3Key": {
-                  "Rules": [
-                    {
-                      "Name": "suffix",
-                      "Value": ".png"
-                    }
-                  ]
-                }
-              }
             }
           ]
         },
@@ -409,6 +350,94 @@
             "Arn"
           ]
         }
+      }
+    },
+    "S3BucketNotificationCustomResource": {
+      "Type": "AWS::CloudFormation::CustomResource",
+      "DependsOn": [
+        "LambdaInvokePermission",
+        "ImageProcessorFunction",
+        "SourceBucket"
+      ],
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "ConfigureS3NotificationFunction",
+            "Arn"
+          ]
+        },
+        "BucketName": {
+          "Ref": "SourceBucket"
+        },
+        "LambdaFunctionArn": {
+          "Fn::GetAtt": [
+            "ImageProcessorFunction",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "ConfigureS3NotificationFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${AWS::StackName}-ConfigureS3Notification"
+        },
+        "Runtime": "python3.9",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "ConfigureS3NotificationRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 60,
+        "Code": {
+          "ZipFile": "import boto3\nimport json\nimport cfnresponse\n\ndef lambda_handler(event, context):\n    try:\n        s3_client = boto3.client('s3')\n        \n        bucket_name = event['ResourceProperties']['BucketName']\n        lambda_arn = event['ResourceProperties']['LambdaFunctionArn']\n        \n        if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':\n            # Configure bucket notifications\n            notification_config = {\n                'LambdaConfigurations': [\n                    {\n                        'Id': 'ImageProcessingJPG',\n                        'LambdaFunctionArn': lambda_arn,\n                        'Events': ['s3:ObjectCreated:*'],\n                        'Filter': {\n                            'Key': {\n                                'FilterRules': [\n                                    {'Name': 'suffix', 'Value': '.jpg'}\n                                ]\n                            }\n                        }\n                    },\n                    {\n                        'Id': 'ImageProcessingJPEG',\n                        'LambdaFunctionArn': lambda_arn,\n                        'Events': ['s3:ObjectCreated:*'],\n                        'Filter': {\n                            'Key': {\n                                'FilterRules': [\n                                    {'Name': 'suffix', 'Value': '.jpeg'}\n                                ]\n                            }\n                        }\n                    },\n                    {\n                        'Id': 'ImageProcessingPNG',\n                        'LambdaFunctionArn': lambda_arn,\n                        'Events': ['s3:ObjectCreated:*'],\n                        'Filter': {\n                            'Key': {\n                                'FilterRules': [\n                                    {'Name': 'suffix', 'Value': '.png'}\n                                ]\n                            }\n                        }\n                    }\n                ]\n            }\n            \n            s3_client.put_bucket_notification_configuration(\n                Bucket=bucket_name,\n                NotificationConfiguration=notification_config\n            )\n            \n        elif event['RequestType'] == 'Delete':\n            # Remove bucket notifications\n            s3_client.put_bucket_notification_configuration(\n                Bucket=bucket_name,\n                NotificationConfiguration={}\n            )\n        \n        cfnresponse.send(event, context, cfnresponse.SUCCESS, {})\n        \n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        cfnresponse.send(event, context, cfnresponse.FAILED, {})\n"
+        }
+      }
+    },
+    "ConfigureS3NotificationRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "${AWS::StackName}-ConfigureS3NotificationRole"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "S3NotificationPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutBucketNotification",
+                    "s3:GetBucketNotification"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${SourceBucket.Arn}"
+                  }
+                }
+              ]
+            }
+          }
+        ]
       }
     },
     "ImageProcessorLogGroup": {

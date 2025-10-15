@@ -70,29 +70,6 @@ Resources:
             Status: Enabled
             ExpirationInDays: 90
             NoncurrentVersionExpirationInDays: 30
-      NotificationConfiguration:
-        LambdaConfigurations:
-          - Event: "s3:ObjectCreated:*"
-            Function: !GetAtt ImageProcessorFunction.Arn
-            Filter:
-              S3Key:
-                Rules:
-                  - Name: suffix
-                    Value: .jpg
-          - Event: "s3:ObjectCreated:*"
-            Function: !GetAtt ImageProcessorFunction.Arn
-            Filter:
-              S3Key:
-                Rules:
-                  - Name: suffix
-                    Value: .jpeg
-          - Event: "s3:ObjectCreated:*"
-            Function: !GetAtt ImageProcessorFunction.Arn
-            Filter:
-              S3Key:
-                Rules:
-                  - Name: suffix
-                    Value: .png
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -231,6 +208,126 @@ Resources:
       Principal: s3.amazonaws.com
       SourceAccount: !Ref "AWS::AccountId"
       SourceArn: !GetAtt SourceBucket.Arn
+
+  # Custom Resource to Configure S3 Bucket Notifications (avoids circular dependency)
+  S3BucketNotificationCustomResource:
+    Type: AWS::CloudFormation::CustomResource
+    DependsOn:
+      - LambdaInvokePermission
+      - ImageProcessorFunction
+      - SourceBucket
+    Properties:
+      ServiceToken: !GetAtt ConfigureS3NotificationFunction.Arn
+      BucketName: !Ref SourceBucket
+      LambdaFunctionArn: !GetAtt ImageProcessorFunction.Arn
+
+  # Lambda Function to Configure S3 Notifications
+  ConfigureS3NotificationFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-ConfigureS3Notification"
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt ConfigureS3NotificationRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          import cfnresponse
+
+          def lambda_handler(event, context):
+              try:
+                  s3_client = boto3.client('s3')
+                  
+                  bucket_name = event['ResourceProperties']['BucketName']
+                  lambda_arn = event['ResourceProperties']['LambdaFunctionArn']
+                  
+                  if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':
+                      # Configure bucket notifications
+                      notification_config = {
+                          'LambdaConfigurations': [
+                              {
+                                  'Id': 'ImageProcessingJPG',
+                                  'LambdaFunctionArn': lambda_arn,
+                                  'Events': ['s3:ObjectCreated:*'],
+                                  'Filter': {
+                                      'Key': {
+                                          'FilterRules': [
+                                              {'Name': 'suffix', 'Value': '.jpg'}
+                                          ]
+                                      }
+                                  }
+                              },
+                              {
+                                  'Id': 'ImageProcessingJPEG',
+                                  'LambdaFunctionArn': lambda_arn,
+                                  'Events': ['s3:ObjectCreated:*'],
+                                  'Filter': {
+                                      'Key': {
+                                          'FilterRules': [
+                                              {'Name': 'suffix', 'Value': '.jpeg'}
+                                          ]
+                                      }
+                                  }
+                              },
+                              {
+                                  'Id': 'ImageProcessingPNG',
+                                  'LambdaFunctionArn': lambda_arn,
+                                  'Events': ['s3:ObjectCreated:*'],
+                                  'Filter': {
+                                      'Key': {
+                                          'FilterRules': [
+                                              {'Name': 'suffix', 'Value': '.png'}
+                                          ]
+                                      }
+                                  }
+                              }
+                          ]
+                      }
+                      
+                      s3_client.put_bucket_notification_configuration(
+                          Bucket=bucket_name,
+                          NotificationConfiguration=notification_config
+                      )
+                      
+                  elif event['RequestType'] == 'Delete':
+                      # Remove bucket notifications
+                      s3_client.put_bucket_notification_configuration(
+                          Bucket=bucket_name,
+                          NotificationConfiguration={}
+                      )
+                  
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
+
+  # IAM Role for the S3 Notification Configuration Lambda
+  ConfigureS3NotificationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-ConfigureS3NotificationRole"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      Policies:
+        - PolicyName: S3NotificationPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:PutBucketNotification"
+                  - "s3:GetBucketNotification"
+                Resource: !Sub "${SourceBucket.Arn}"
 
   # CloudWatch Log Group for Lambda
   ImageProcessorLogGroup:

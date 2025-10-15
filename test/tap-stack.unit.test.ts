@@ -48,18 +48,20 @@ describe('S3-triggered Lambda Image Processing CloudFormation Template', () => {
       expect(envParam.Description).toBe('Environment name for resource tagging');
     });
 
-    test('SourceBucketName parameter should have validation', () => {
+    test('SourceBucketName parameter should have validation and default value', () => {
       const param = template.Parameters.SourceBucketName;
       expect(param.Type).toBe('String');
+      expect(param.Default).toBe('tap-source-images-bucket');
       expect(param.MinLength).toBe(3);
       expect(param.MaxLength).toBe(63);
       expect(param.AllowedPattern).toBe('^[a-z0-9][a-z0-9-]*[a-z0-9]$');
       expect(param.ConstraintDescription).toBe('Must be a valid S3 bucket name');
     });
 
-    test('ThumbnailBucketName parameter should have validation', () => {
+    test('ThumbnailBucketName parameter should have validation and default value', () => {
       const param = template.Parameters.ThumbnailBucketName;
       expect(param.Type).toBe('String');
+      expect(param.Default).toBe('tap-thumbnail-images-bucket');
       expect(param.MinLength).toBe(3);
       expect(param.MaxLength).toBe(63);
       expect(param.AllowedPattern).toBe('^[a-z0-9][a-z0-9-]*[a-z0-9]$');
@@ -102,18 +104,10 @@ describe('S3-triggered Lambda Image Processing CloudFormation Template', () => {
       expect(glacierRule.Transitions[0].StorageClass).toBe('GLACIER');
     });
 
-    test('SourceBucket should have S3 event notifications configured', () => {
+    test('SourceBucket should NOT have S3 event notifications configured (using custom resource instead)', () => {
       const bucket = template.Resources.SourceBucket;
-      const lambdaConfigs = bucket.Properties.NotificationConfiguration.LambdaConfigurations;
-
-      expect(lambdaConfigs).toHaveLength(3);
-
-      const fileExtensions = ['.jpg', '.jpeg', '.png'];
-      fileExtensions.forEach((ext, index) => {
-        expect(lambdaConfigs[index].Event).toBe('s3:ObjectCreated:*');
-        expect(lambdaConfigs[index].Function).toEqual({ 'Fn::GetAtt': ['ImageProcessorFunction', 'Arn'] });
-        expect(lambdaConfigs[index].Filter.S3Key.Rules[0].Value).toBe(ext);
-      });
+      // The bucket should no longer have NotificationConfiguration to avoid circular dependency
+      expect(bucket.Properties.NotificationConfiguration).toBeUndefined();
     });
 
     test('S3 buckets should block public access', () => {
@@ -127,6 +121,30 @@ describe('S3-triggered Lambda Image Processing CloudFormation Template', () => {
         expect(publicAccessBlock.IgnorePublicAcls).toBe(true);
         expect(publicAccessBlock.RestrictPublicBuckets).toBe(true);
       });
+    });
+
+    test('should have S3 bucket notification custom resource', () => {
+      const customResource = template.Resources.S3BucketNotificationCustomResource;
+      expect(customResource).toBeDefined();
+      expect(customResource.Type).toBe('AWS::CloudFormation::CustomResource');
+      expect(customResource.DependsOn).toContain('LambdaInvokePermission');
+      expect(customResource.DependsOn).toContain('ImageProcessorFunction');
+      expect(customResource.DependsOn).toContain('SourceBucket');
+    });
+
+    test('should have custom resource Lambda function for S3 notifications', () => {
+      const customFunction = template.Resources.ConfigureS3NotificationFunction;
+      expect(customFunction).toBeDefined();
+      expect(customFunction.Type).toBe('AWS::Lambda::Function');
+      expect(customFunction.Properties.Runtime).toBe('python3.9');
+      expect(customFunction.Properties.Handler).toBe('index.lambda_handler');
+    });
+
+    test('should have IAM role for custom resource Lambda', () => {
+      const role = template.Resources.ConfigureS3NotificationRole;
+      expect(role).toBeDefined();
+      expect(role.Type).toBe('AWS::IAM::Role');
+      expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
     });
   });
 
