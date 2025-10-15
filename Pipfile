@@ -33,7 +33,6 @@ cfn-flip = "*"
 black = "*"
 pillow = "*"
 pytest-cov = "*"
-psycopg2-binary = "*"
 
 [requires]
 python_version = "3.12.11"
