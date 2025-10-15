@@ -1,3 +1,23 @@
+# E-Commerce Web Stack Infrastructure
+
+Complete Terraform infrastructure for a scalable e-commerce web application with auto-scaling, load balancing, and monitoring.
+
+## Architecture Overview
+
+This infrastructure deploys a highly available e-commerce web application with:
+
+- VPC with multi-AZ public subnets
+- Application Load Balancer for traffic distribution
+- Auto Scaling Group with EC2 instances running Nginx
+- S3 bucket for static assets with encryption
+- CloudWatch monitoring and alarms
+- Security groups with least privilege access
+
+## Infrastructure Code
+
+### provider.tf
+
+```hcl
 # provider.tf
 
 terraform {
@@ -23,8 +43,11 @@ provider "aws" {
     tags = var.common_tags
   }
 }
+```
 
+### variables.tf
 
+```hcl
 # variables.tf
 variable "aws_region" {
   default = "us-east-1"
@@ -121,7 +144,11 @@ variable "s3_bucket_prefix" {
   type        = string
   default     = "ecommerce-static-assets"
 }
+```
 
+### main.tf
+
+```hcl
 # vpc.tf
 # Create VPC with DNS support enabled
 resource "aws_vpc" "main" {
@@ -637,3 +664,37 @@ output "target_group_arn" {
   description = "ARN of the target group"
   value       = aws_lb_target_group.main.arn
 }
+```
+
+## Deployment
+
+Deploy using standard Terraform workflow:
+
+```bash
+cd lib
+terraform init
+terraform plan
+terraform apply
+```
+
+## Post-Deployment
+
+After deployment, access your e-commerce application:
+
+```bash
+# Get the ALB URL from outputs
+terraform output alb_url
+
+# Test the endpoint
+curl http://ALB_DNS_NAME
+```
+
+## Key Features
+
+- Multi-AZ deployment for high availability
+- Auto-scaling based on CPU utilization
+- Load balancer health checks
+- Encrypted S3 storage for static assets
+- CloudWatch monitoring and alarms
+- Security groups following least privilege
+- Automatic instance refresh for updates
