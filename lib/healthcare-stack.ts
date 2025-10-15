@@ -314,28 +314,24 @@ export class HealthcareStack extends Construct {
     );
 
     // ElastiCache Redis Cluster (encrypted for HIPAA compliance)
-    const elasticacheCluster = new ElasticacheCluster(
-      this,
-      'RedisCluster',
-      {
-        clusterId: `healthcare-cache-${environmentSuffix}`,
-        engine: 'redis',
-        engineVersion: '7.0',
-        nodeType: 'cache.t4g.micro',
-        numCacheNodes: 1,
-        port: 6379,
-        subnetGroupName: cacheSubnetGroup.name,
-        securityGroupIds: [elasticacheSg.id],
-        snapshotRetentionLimit: 5,
-        snapshotWindow: '03:00-05:00',
-        maintenanceWindow: 'sun:05:00-sun:07:00',
-        tags: {
-          Name: `healthcare-redis-${environmentSuffix}`,
-          Environment: environmentSuffix,
-          Compliance: 'HIPAA',
-        },
-      }
-    );
+    const elasticacheCluster = new ElasticacheCluster(this, 'RedisCluster', {
+      clusterId: `healthcare-cache-${environmentSuffix}`,
+      engine: 'redis',
+      engineVersion: '7.0',
+      nodeType: 'cache.t4g.micro',
+      numCacheNodes: 1,
+      port: 6379,
+      subnetGroupName: cacheSubnetGroup.name,
+      securityGroupIds: [elasticacheSg.id],
+      snapshotRetentionLimit: 5,
+      snapshotWindow: '03:00-05:00',
+      maintenanceWindow: 'sun:05:00-sun:07:00',
+      tags: {
+        Name: `healthcare-redis-${environmentSuffix}`,
+        Environment: environmentSuffix,
+        Compliance: 'HIPAA',
+      },
+    });
 
     // CloudWatch Log Group for API Gateway (audit logging for HIPAA)
     const apiLogGroup = new CloudwatchLogGroup(this, 'ApiGatewayLogGroup', {
