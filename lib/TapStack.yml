@@ -56,7 +56,7 @@ Mappings:
       CIDR: 10.0.10.0/24
     PrivateSubnet2:
       CIDR: 10.0.11.0/24
-  
+  # Verified ApiGatewayHostedZone Mapping for multi region failover
   ApiGatewayHostedZone:
     us-east-1:
       ZoneId: Z1UJRXOUMOOFQ8
@@ -304,6 +304,8 @@ Resources:
           Value: !Ref Project
         - Key: Owner
           Value: !Ref Owner
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -338,6 +340,8 @@ Resources:
           Value: !Ref Project
         - Key: Owner
           Value: !Ref Owner
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   PrivateRoute1:
     Type: AWS::EC2::Route
@@ -365,6 +369,8 @@ Resources:
           Value: !Ref Project
         - Key: Owner
           Value: !Ref Owner
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   PrivateRoute2:
     Type: AWS::EC2::Route
@@ -397,6 +403,8 @@ Resources:
           Value: !Ref Project
         - Key: Owner
           Value: !Ref Owner
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   # VPC Endpoints for AWS Services (Cost optimization & security)
   S3VPCEndpoint:
@@ -452,6 +460,8 @@ Resources:
           Value: !Ref Project
         - Key: Owner
           Value: !Ref Owner
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   LambdaKMSKeyAlias:
     Type: AWS::KMS::Alias
@@ -479,6 +489,8 @@ Resources:
           Value: !Ref Project
         - Key: Owner
           Value: !Ref Owner
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   # ==========================================
   # IAM Roles and Policies
@@ -498,6 +510,15 @@ Resources:
             Action: 'sts:AssumeRole'
       ManagedPolicyArns:
         - 'arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref Project
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: rlhf-iac-amazon
+          Value: 'true'
       Policies:
         - PolicyName: LambdaExecutionPolicy
           PolicyDocument:
@@ -563,13 +584,6 @@ Resources:
                   - 'xray:PutTraceSegments'
                   - 'xray:PutTelemetryRecords'
                 Resource: '*'
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref Project
-        - Key: Owner
-          Value: !Ref Owner
 
   # ==========================================
   # Storage Resources
@@ -608,6 +622,8 @@ Resources:
           Value: !Ref Project
         - Key: Owner
           Value: !Ref Owner
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   # DynamoDB Table with Auto-scaling
   DynamoDBTable:
@@ -641,6 +657,8 @@ Resources:
           Value: !Ref Project
         - Key: Owner
           Value: !Ref Owner
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   # DynamoDB Auto-scaling
   DynamoDBTableReadCapacityScalableTarget:
@@ -703,6 +721,8 @@ Resources:
           Value: !Ref Project
         - Key: Owner
           Value: !Ref Owner
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   # CloudWatch Log Group for Lambda
   LambdaLogGroup:
@@ -710,6 +730,15 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/lambda/${Project}-${Environment}-main'
       RetentionInDays: 30
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref Project
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   # Main Lambda Function
   MainLambdaFunction:
@@ -796,6 +825,7 @@ Resources:
         Environment: !Ref Environment
         Project: !Ref Project
         Owner: !Ref Owner
+        rlhf-iac-amazon: 'true'
 
   # CloudWatch Log Group for API Gateway
   ApiLogGroup:
@@ -803,6 +833,15 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/apigateway/${Project}-${Environment}'
       RetentionInDays: 30
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref Project
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   # ==========================================
   # WAF Resources
@@ -871,6 +910,8 @@ Resources:
           Value: !Ref Project
         - Key: Owner
           Value: !Ref Owner
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   # Note: WAFv2 WebACL association is not supported directly with API Gateway V2 (HttpApi)
   # API Gateway V2 has built-in DDoS protection and throttling capabilities
@@ -954,6 +995,8 @@ Resources:
           Value: !Ref Project
         - Key: Owner
           Value: !Ref Owner
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   # CloudWatch Alarm for Lambda Errors
   LambdaErrorAlarm:
