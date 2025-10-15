@@ -78,8 +78,8 @@ const outputs = JSON.parse(
   fs.readFileSync('terraform-outputs.json', 'utf8')
 );
 
-const primaryRegion = 'ap-southeast-1';
-const secondaryRegion = 'ap-southeast-2';
+const primaryRegion = 'eu-west-2';
+const secondaryRegion = 'eu-west-1';
 const environmentSuffix = outputs.environment_suffix || 'dev';
 
 // Initialize AWS clients
