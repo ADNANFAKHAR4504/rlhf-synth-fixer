@@ -88,6 +88,6 @@ class TapStack(cdk.Stack):
         cdk.CfnOutput(
             self,
             "RedisEndpoint",
-            value=monitoring_stack.redis_cluster.attr_configuration_end_point_address,
+            value=monitoring_stack.redis_cluster.attr_primary_end_point_address,
             description="ElastiCache Redis endpoint"
         )
