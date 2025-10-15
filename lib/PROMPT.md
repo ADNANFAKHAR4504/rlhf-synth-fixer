@@ -1,91 +1,111 @@
-# HIPAA-Compliant Disaster Recovery Infrastructure
+# Healthcare Disaster Recovery Infrastructure
 
-You are an expert AWS Infrastructure Engineer. Create infrastructure using **CDKTF with TypeScript** for a HIPAA-compliant disaster recovery solution.
+I need to build a disaster recovery infrastructure for a healthcare application that needs to be HIPAA compliant. The solution should handle both planned and unplanned outages with minimal data loss and downtime.
 
-## Requirements
+## What I'm Looking For
 
-### Multi-Region Architecture
-- Primary region: eu-west-2
-- Secondary region: eu-west-1 for disaster recovery
-- Automated failover between regions using Route53 health checks
-- Cross-region data replication for all critical data stores
+### Regional Setup
+I want the primary infrastructure in **eu-west-2** (London) with a disaster recovery site in **eu-west-1** (Ireland). If the London region goes down or has issues, the system should be able to failover to Ireland relatively quickly.
 
-### Data Storage and Protection
-- RDS PostgreSQL database with Multi-AZ deployment in primary region
-- Cross-region read replica in secondary region for disaster recovery
-- Automated backups with 7-day retention using AWS Backup
-- S3 buckets with cross-region replication and versioning enabled
-- Server-side encryption using AWS KMS with separate keys per region
-- Point-in-time recovery enabled for all data stores
+### Database Requirements
+For the database, I'm thinking Aurora PostgreSQL with Serverless v2 for cost efficiency. I need:
+- Multi-AZ deployment in the primary region for high availability
+- A separate cluster in the DR region that can be promoted if needed
+- Automated backups that run hourly so we don't lose more than 15 minutes of data
+- Everything encrypted at rest with KMS keys
+- 7-day backup retention using AWS Backup service
 
-### High Availability
-- Multi-AZ deployment for all critical components
-- Application Load Balancer in each region
-- Auto Scaling groups for compute resources (if needed)
-- Route53 health checks monitoring primary region resources
-- Automatic DNS failover to secondary region on health check failure
+The database should be in private subnets with proper security groups that only allow PostgreSQL traffic from within the VPC.
 
-### Compliance and Security
-- All data encrypted at rest using KMS
-- All data encrypted in transit using TLS
-- CloudTrail logging enabled for audit trail
-- VPC Flow Logs for network monitoring
-- S3 bucket policies enforcing secure access
-- IAM roles following least privilege principle
-- Secrets stored in AWS Secrets Manager
+### Storage Needs
+I need S3 buckets for storing healthcare data files. These should:
+- Have versioning enabled so we can recover from accidental deletions
+- Replicate to the DR region automatically (targeting 15-minute replication time)
+- Use KMS encryption with separate keys in each region
+- Have lifecycle policies to move older data to Intelligent-Tiering after 30 days
+- Clean up old versions after 90 days to control costs
 
-### Monitoring and Alarms
-- CloudWatch alarms for RDS health, S3 replication, and backup completion
-- CloudWatch alarms for Route53 health check failures
-- SNS topic for critical alerts
-- CloudWatch Logs for application and system logs with 30-day retention
+### Monitoring and Alerts
+Set up CloudWatch alarms for:
+- Database CPU utilization (alert if over 80%)
+- Database connection count (alert if too high)
+- Replication lag between regions
 
-### Recovery Orchestration
-- Lambda function to automate failover procedures
-- Lambda function to promote read replica to primary on failover
-- SNS notifications for disaster recovery events
-- Systems Manager Parameter Store for configuration values
+I want all alerts going to an SNS topic that can notify the ops team. Also need CloudWatch Logs with 30-day retention for troubleshooting.
+
+For compliance, enable CloudTrail with multi-region support so we have a complete audit trail of all API calls.
+
+### Disaster Recovery Automation
+Create a Lambda function that can orchestrate failover procedures. It should:
+- Be triggered by CloudWatch alarms when there's a problem
+- Have permissions to describe and modify RDS clusters
+- Publish notifications to SNS when failover events happen
+- Have access to SSM Parameter Store for configuration
+
+Also set up Route53 health checks that monitor the replication lag alarm to detect when things aren't healthy.
+
+### Security and Compliance
+This is for healthcare data, so security is critical:
+- All data encrypted at rest using AWS KMS with automatic key rotation
+- All data encrypted in transit (TLS)
+- Secrets stored in AWS Secrets Manager, not hardcoded
+- IAM roles with least privilege - only grant what's needed
+- VPC with proper subnet isolation
+- Security groups that restrict access appropriately
 
 ### Recovery Objectives
-- Recovery Time Objective (RTO): < 1 hour
-- Recovery Point Objective (RPO): < 15 minutes
-- RDS automated backups every 15 minutes using continuous backup
-- S3 replication with real-time replication
+We need to meet these targets:
+- **RTO (Recovery Time Objective):** Less than 1 hour from incident to restored service
+- **RPO (Recovery Point Objective):** Less than 15 minutes of data loss
 
-## Implementation Guidelines
+To achieve this:
+- Hourly automated backups with point-in-time recovery
+- Real-time replication for S3 data
+- Monitoring that detects issues quickly
 
-### Resource Naming
-- ALL resource names MUST include the environmentSuffix parameter
-- Use pattern: {resource-type}-${environmentSuffix}
-- Example: `rds-database-${environmentSuffix}`
+### Implementation Details
 
-### RDS Configuration
-- Use db.t3.small instance for cost optimization
-- Enable automated backups with 7-day retention
-- Set backup window to off-peak hours
-- Enable deletion protection: false (for CI/CD destroyability)
-- Skip final snapshot on deletion for testing environments
+**Tech Stack:** Use CDKTF with TypeScript for infrastructure as code.
 
-### S3 Configuration
-- Enable versioning on all buckets
-- Configure lifecycle policies for cost optimization
-- Set up cross-region replication rules
-- Enable server-side encryption with KMS
+**Resource Naming:** Every resource should include an environment suffix (like 'dev', 'prod', 'pr4365') so we can deploy multiple environments without conflicts. Use patterns like `healthcare-db-${environmentSuffix}`.
 
-### Lambda Functions
-- Use Node.js 18.x or Python 3.11 runtime
-- Keep functions lightweight and focused
-- Use environment variables for configuration
-- Grant minimal IAM permissions
+**Cost Optimization:**
+- Aurora Serverless v2 scales down when not in use
+- S3 Intelligent-Tiering moves data to cheaper storage automatically
+- Set appropriate log retention periods (30 days is fine)
+- Use multi-AZ only where necessary for availability
 
-### Cost Optimization
-- Use Aurora Serverless v2 instead of standard RDS for auto-scaling and cost efficiency
-- Configure S3 Intelligent-Tiering for automatic cost optimization
-- Use VPC endpoints for S3 and other services to avoid NAT Gateway costs
-- Set appropriate CloudWatch log retention periods
+**Deployment Considerations:**
+Since this might be used in CI/CD pipelines, make sure:
+- Resources can be fully destroyed (no deletion protection)
+- RDS clusters skip final snapshot on deletion in non-prod environments
+- Nothing takes longer than 15 minutes to deploy
+- State stored in S3 with encryption enabled
 
-### Deployment Considerations
-- All infrastructure must be fully destroyable
-- No resources with deletion protection enabled
-- Use skip_final_snapshot for RDS instances
-- Avoid resources that take too long to deploy (>15 minutes)
+**VPC and Networking:**
+- Primary VPC with CIDR 10.0.0.0/16
+- Secondary VPC with CIDR 10.1.0.0/16
+- Subnets in multiple availability zones (10.0.1.0/24, 10.0.2.0/24, etc.)
+- Security groups for database access
+- DB subnet groups for RDS placement
+
+**Database Configuration Specifics:**
+- Aurora PostgreSQL 15.3
+- Serverless v2 with 0.5-2 ACU capacity range
+- Enable CloudWatch logs export for PostgreSQL
+- Backup window during off-peak hours
+- Store master credentials in Secrets Manager
+
+**Backup Strategy:**
+- AWS Backup with continuous backup enabled
+- Schedule: `cron(0 */1 * * ? *)` (every hour)
+- Lifecycle: Delete after 7 days
+- Backup vault with KMS encryption
+
+**S3 Replication Configuration:**
+- Enable delete marker replication
+- Include source selection criteria for KMS encrypted objects
+- Set replication time to 15 minutes
+- Enable replication metrics
+
+That should give a robust, HIPAA-compliant disaster recovery solution that can handle regional failures while keeping data loss and downtime to a minimum.

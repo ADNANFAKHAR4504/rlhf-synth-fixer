@@ -1,13 +1,13 @@
-import { Construct } from 'constructs';
-import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
+import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
+import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
-import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
+import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { Route53HealthCheck } from '@cdktf/provider-aws/lib/route53-health-check';
 import { SsmParameter } from '@cdktf/provider-aws/lib/ssm-parameter';
-import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
-import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
-import { TerraformAsset, AssetType } from 'cdktf';
+import { AssetType, TerraformAsset } from 'cdktf';
+import { Construct } from 'constructs';
 import * as path from 'path';
 
 interface DisasterRecoveryStackProps {
