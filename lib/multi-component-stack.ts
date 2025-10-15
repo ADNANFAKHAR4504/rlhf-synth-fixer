@@ -23,7 +23,9 @@ export class MultiComponentApplicationStack extends cdk.Stack {
   // This is intentionally simple and useful to call from unit tests to exercise
   // the branches (defined vs falsy suffix).
   public computeSafeSuffixForLambda(input?: string): string | cdk.Aws {
-    return input ? input.toLowerCase().replace(/[^a-z0-9-_]/g, '-') : cdk.Aws.NO_VALUE;
+    return input
+      ? input.toLowerCase().replace(/[^a-z0-9-_]/g, '-')
+      : cdk.Aws.NO_VALUE;
   }
 
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -230,7 +232,9 @@ export class MultiComponentApplicationStack extends cdk.Stack {
 
     // Lambda function names must match a restricted pattern. Sanitize the suffix
     // to only include lowercase letters, numbers, hyphens and underscores.
-    const safeSuffixForLambda = this.computeSafeSuffixForLambda(this.stringSuffix);
+    const safeSuffixForLambda = this.computeSafeSuffixForLambda(
+      this.stringSuffix
+    );
 
     const lambdaFunction = new lambda.Function(this, 'ApiLambda', {
       functionName: `prod-lambda-api-v2-${safeSuffixForLambda}`,
