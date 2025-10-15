@@ -612,11 +612,21 @@ describe('TapStack CloudFormation Template (Unit Tests)', () => {
       expect(R.AuroraDBInstance2.Properties.PubliclyAccessible).toBe(false);
     });
 
-    test('all subnets should be private', () => {
-      const subnets = Object.keys(R).filter(k => R[k]?.Type === 'AWS::EC2::Subnet');
-      subnets.forEach(subnetName => {
+    test('private subnets should not auto-assign public IPs', () => {
+      const privateSubnets = Object.keys(R).filter(k =>
+        R[k]?.Type === 'AWS::EC2::Subnet' && k.includes('Private')
+      );
+      privateSubnets.forEach(subnetName => {
         const subnet = R[subnetName].Properties;
         expect(subnet.MapPublicIpOnLaunch).toBe(false);
+      });
+      // Public subnets (for NAT Gateway) should auto-assign public IPs
+      const publicSubnets = Object.keys(R).filter(k =>
+        R[k]?.Type === 'AWS::EC2::Subnet' && k.includes('Public')
+      );
+      publicSubnets.forEach(subnetName => {
+        const subnet = R[subnetName].Properties;
+        expect(subnet.MapPublicIpOnLaunch).toBe(true);
       });
     });
 

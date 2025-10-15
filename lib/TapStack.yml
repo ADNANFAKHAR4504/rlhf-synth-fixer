@@ -1,15 +1,15 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: 'HIPAA-Compliant Event Processing Pipeline for Healthcare Data'
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "HIPAA-Compliant Event Processing Pipeline for Healthcare Data"
 
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
-          default: 'Environment Configuration'
+          default: "Environment Configuration"
         Parameters:
           - EnvironmentSuffix
       - Label:
-          default: 'Database Configuration'
+          default: "Database Configuration"
         Parameters:
           - DBUsername
           - DBName
@@ -17,26 +17,26 @@ Metadata:
 Parameters:
   EnvironmentSuffix:
     Type: String
-    Default: 'dev'
-    Description: 'Environment suffix for resource naming'
-    AllowedPattern: '^[a-zA-Z0-9]+$'
-    ConstraintDescription: 'Must contain only alphanumeric characters'
+    Default: "dev"
+    Description: "Environment suffix for resource naming"
+    AllowedPattern: "^[a-zA-Z0-9]+$"
+    ConstraintDescription: "Must contain only alphanumeric characters"
 
   DBUsername:
     Type: String
-    Default: 'admin'
-    Description: 'Database administrator username'
+    Default: "admin"
+    Description: "Database administrator username"
     MinLength: 1
     MaxLength: 16
-    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
 
   DBName:
     Type: String
-    Default: 'healthcaredb'
-    Description: 'Database name'
+    Default: "healthcaredb"
+    Description: "Database name"
     MinLength: 1
     MaxLength: 64
-    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
 
 Resources:
   # ========================================
@@ -48,55 +48,55 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      Description: !Sub 'KMS key for HIPAA-compliant data encryption - ${EnvironmentSuffix}'
+      Description: !Sub "KMS key for HIPAA-compliant data encryption - ${EnvironmentSuffix}"
       EnableKeyRotation: true
       KeyPolicy:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Sid: Enable IAM User Permissions
             Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: 'kms:*'
-            Resource: '*'
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
           - Sid: Allow CloudWatch Logs
             Effect: Allow
             Principal:
-              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+              Service: !Sub "logs.${AWS::Region}.amazonaws.com"
             Action:
-              - 'kms:Encrypt'
-              - 'kms:Decrypt'
-              - 'kms:ReEncrypt*'
-              - 'kms:GenerateDataKey*'
-              - 'kms:CreateGrant'
-              - 'kms:DescribeKey'
-            Resource: '*'
+              - "kms:Encrypt"
+              - "kms:Decrypt"
+              - "kms:ReEncrypt*"
+              - "kms:GenerateDataKey*"
+              - "kms:CreateGrant"
+              - "kms:DescribeKey"
+            Resource: "*"
             Condition:
               ArnLike:
-                'kms:EncryptionContext:aws:logs:arn': !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*'
+                "kms:EncryptionContext:aws:logs:arn": !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*"
           - Sid: Allow CloudTrail
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
             Action:
-              - 'kms:GenerateDataKey*'
-              - 'kms:Decrypt'
-            Resource: '*'
+              - "kms:GenerateDataKey*"
+              - "kms:Decrypt"
+            Resource: "*"
             Condition:
               StringLike:
-                'kms:EncryptionContext:aws:cloudtrail:arn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/*'
+                "kms:EncryptionContext:aws:cloudtrail:arn": !Sub "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/*"
       Tags:
         - Key: Name
-          Value: !Sub 'data-encryption-key-${EnvironmentSuffix}'
+          Value: !Sub "data-encryption-key-${EnvironmentSuffix}"
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Compliance
-          Value: 'HIPAA'
+          Value: "HIPAA"
 
   DataEncryptionKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/data-encryption-${EnvironmentSuffix}'
+      AliasName: !Sub "alias/data-encryption-${EnvironmentSuffix}"
       TargetKeyId: !Ref DataEncryptionKey
 
   # ========================================
@@ -106,12 +106,12 @@ Resources:
   VPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: '10.0.0.0/16'
+      CidrBlock: "10.0.0.0/16"
       EnableDnsHostnames: true
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub 'hipaa-vpc-${EnvironmentSuffix}'
+          Value: !Sub "hipaa-vpc-${EnvironmentSuffix}"
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
@@ -119,12 +119,12 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: '10.0.1.0/24'
-      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: "10.0.1.0/24"
+      AvailabilityZone: !Select [0, !GetAZs ""]
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub 'private-subnet-1-${EnvironmentSuffix}'
+          Value: !Sub "private-subnet-1-${EnvironmentSuffix}"
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
@@ -132,12 +132,12 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: '10.0.2.0/24'
-      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: "10.0.2.0/24"
+      AvailabilityZone: !Select [1, !GetAZs ""]
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub 'private-subnet-2-${EnvironmentSuffix}'
+          Value: !Sub "private-subnet-2-${EnvironmentSuffix}"
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
@@ -145,12 +145,110 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: '10.0.3.0/24'
-      AvailabilityZone: !Select [2, !GetAZs '']
+      CidrBlock: "10.0.3.0/24"
+      AvailabilityZone: !Select [2, !GetAZs ""]
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub 'private-subnet-3-${EnvironmentSuffix}'
+          Value: !Sub "private-subnet-3-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Public Subnets for NAT Gateway
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.10.0/24"
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "public-subnet-1-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.11.0/24"
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "public-subnet-2-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "igw-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Public Route Table
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "public-route-table-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  # Elastic IP for NAT Gateway
+  NATGatewayEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "nat-eip-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # NAT Gateway (in public subnet)
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub "nat-gateway-${EnvironmentSuffix}"
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
@@ -159,7 +257,7 @@ Resources:
     Type: AWS::EC2::VPCEndpoint
     Properties:
       VpcId: !Ref VPC
-      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.s3"
       VpcEndpointType: Gateway
       RouteTableIds:
         - !Ref PrivateRouteTable
@@ -168,7 +266,7 @@ Resources:
     Type: AWS::EC2::VPCEndpoint
     Properties:
       VpcId: !Ref VPC
-      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.kinesis-streams'
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.kinesis-streams"
       VpcEndpointType: Interface
       PrivateDnsEnabled: true
       SubnetIds:
@@ -182,7 +280,7 @@ Resources:
     Type: AWS::EC2::VPCEndpoint
     Properties:
       VpcId: !Ref VPC
-      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.secretsmanager'
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.secretsmanager"
       VpcEndpointType: Interface
       PrivateDnsEnabled: true
       SubnetIds:
@@ -196,7 +294,7 @@ Resources:
     Type: AWS::EC2::VPCEndpoint
     Properties:
       VpcId: !Ref VPC
-      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ecr.dkr'
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ecr.dkr"
       VpcEndpointType: Interface
       PrivateDnsEnabled: true
       SubnetIds:
@@ -210,7 +308,7 @@ Resources:
     Type: AWS::EC2::VPCEndpoint
     Properties:
       VpcId: !Ref VPC
-      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ecr.api'
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ecr.api"
       VpcEndpointType: Interface
       PrivateDnsEnabled: true
       SubnetIds:
@@ -224,7 +322,7 @@ Resources:
     Type: AWS::EC2::VPCEndpoint
     Properties:
       VpcId: !Ref VPC
-      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.logs'
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.logs"
       VpcEndpointType: Interface
       PrivateDnsEnabled: true
       SubnetIds:
@@ -240,9 +338,17 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub 'private-route-table-${EnvironmentSuffix}'
+          Value: !Sub "private-route-table-${EnvironmentSuffix}"
         - Key: Environment
           Value: !Ref EnvironmentSuffix
+
+  # Route internet traffic from private subnets through NAT Gateway
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref NATGateway
 
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -269,8 +375,8 @@ Resources:
   VPCEndpointSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub 'vpc-endpoint-sg-${EnvironmentSuffix}'
-      GroupDescription: 'Security group for VPC endpoints'
+      GroupName: !Sub "vpc-endpoint-sg-${EnvironmentSuffix}"
+      GroupDescription: "Security group for VPC endpoints"
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -279,48 +385,48 @@ Resources:
           SourceSecurityGroupId: !Ref ECSTaskSecurityGroup
       Tags:
         - Key: Name
-          Value: !Sub 'vpc-endpoint-sg-${EnvironmentSuffix}'
+          Value: !Sub "vpc-endpoint-sg-${EnvironmentSuffix}"
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
   ECSTaskSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub 'ecs-task-sg-${EnvironmentSuffix}'
-      GroupDescription: 'Security group for ECS Fargate tasks'
+      GroupName: !Sub "ecs-task-sg-${EnvironmentSuffix}"
+      GroupDescription: "Security group for ECS Fargate tasks"
       VpcId: !Ref VPC
       SecurityGroupEgress:
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           CidrIp: 0.0.0.0/0
-          Description: 'HTTPS for AWS API calls'
+          Description: "HTTPS for AWS API calls"
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
           CidrIp: 10.0.0.0/16
-          Description: 'MySQL/Aurora access within VPC'
+          Description: "MySQL/Aurora access within VPC"
       Tags:
         - Key: Name
-          Value: !Sub 'ecs-task-sg-${EnvironmentSuffix}'
+          Value: !Sub "ecs-task-sg-${EnvironmentSuffix}"
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub 'rds-sg-${EnvironmentSuffix}'
-      GroupDescription: 'Security group for RDS Aurora cluster'
+      GroupName: !Sub "rds-sg-${EnvironmentSuffix}"
+      GroupDescription: "Security group for RDS Aurora cluster"
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
           SourceSecurityGroupId: !Ref ECSTaskSecurityGroup
-          Description: 'MySQL from ECS tasks'
+          Description: "MySQL from ECS tasks"
       Tags:
         - Key: Name
-          Value: !Sub 'rds-sg-${EnvironmentSuffix}'
+          Value: !Sub "rds-sg-${EnvironmentSuffix}"
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
@@ -331,7 +437,7 @@ Resources:
   PatientDataStream:
     Type: AWS::Kinesis::Stream
     Properties:
-      Name: !Sub 'patient-data-stream-${EnvironmentSuffix}'
+      Name: !Sub "patient-data-stream-${EnvironmentSuffix}"
       RetentionPeriodHours: 24
       ShardCount: 2
       StreamEncryption:
@@ -341,11 +447,11 @@ Resources:
         StreamMode: PROVISIONED
       Tags:
         - Key: Name
-          Value: !Sub 'patient-data-stream-${EnvironmentSuffix}'
+          Value: !Sub "patient-data-stream-${EnvironmentSuffix}"
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Compliance
-          Value: 'HIPAA'
+          Value: "HIPAA"
 
   # ========================================
   # RDS Aurora Serverless v2
@@ -354,50 +460,50 @@ Resources:
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub 'aurora-subnet-group-${EnvironmentSuffix}'
-      DBSubnetGroupDescription: 'Subnet group for Aurora Serverless v2'
+      DBSubnetGroupName: !Sub "aurora-subnet-group-${EnvironmentSuffix}"
+      DBSubnetGroupDescription: "Subnet group for Aurora Serverless v2"
       SubnetIds:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
         - !Ref PrivateSubnet3
       Tags:
         - Key: Name
-          Value: !Sub 'aurora-subnet-group-${EnvironmentSuffix}'
+          Value: !Sub "aurora-subnet-group-${EnvironmentSuffix}"
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
   DBClusterParameterGroup:
     Type: AWS::RDS::DBClusterParameterGroup
     Properties:
-      Description: !Sub 'Cluster parameter group for Aurora MySQL - ${EnvironmentSuffix}'
+      Description: !Sub "Cluster parameter group for Aurora MySQL - ${EnvironmentSuffix}"
       Family: aurora-mysql8.0
       Parameters:
-        require_secure_transport: 'ON'
+        require_secure_transport: "ON"
       Tags:
         - Key: Name
-          Value: !Sub 'aurora-cluster-params-${EnvironmentSuffix}'
+          Value: !Sub "aurora-cluster-params-${EnvironmentSuffix}"
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
   DBSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub 'aurora-db-secret-${EnvironmentSuffix}'
-      Description: 'Database credentials for Aurora cluster'
+      Name: !Sub "aurora-db-secret-${EnvironmentSuffix}"
+      Description: "Database credentials for Aurora cluster"
       GenerateSecretString:
         SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
-        GenerateStringKey: 'password'
+        GenerateStringKey: "password"
         PasswordLength: 32
         ExcludeCharacters: '"@/\'
         RequireEachIncludedType: true
       KmsKeyId: !Ref DataEncryptionKey
       Tags:
         - Key: Name
-          Value: !Sub 'aurora-db-secret-${EnvironmentSuffix}'
+          Value: !Sub "aurora-db-secret-${EnvironmentSuffix}"
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Compliance
-          Value: 'HIPAA'
+          Value: "HIPAA"
 
   DBSecretAttachment:
     Type: AWS::SecretsManager::SecretTargetAttachment
@@ -411,12 +517,12 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      DBClusterIdentifier: !Sub 'aurora-cluster-${EnvironmentSuffix}'
+      DBClusterIdentifier: !Sub "aurora-cluster-${EnvironmentSuffix}"
       Engine: aurora-mysql
-      EngineVersion: '8.0.mysql_aurora.3.04.0'
+      EngineVersion: "8.0.mysql_aurora.3.04.0"
       DatabaseName: !Ref DBName
-      MasterUsername: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:username}}'
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}'
+      MasterUsername: !Sub "{{resolve:secretsmanager:${DBSecret}:SecretString:username}}"
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}"
       DBSubnetGroupName: !Ref DBSubnetGroup
       VpcSecurityGroupIds:
         - !Ref RDSSecurityGroup
@@ -425,8 +531,8 @@ Resources:
         MinCapacity: 0.5
         MaxCapacity: 2
       BackupRetentionPeriod: 1
-      PreferredBackupWindow: '03:00-04:00'
-      PreferredMaintenanceWindow: 'mon:04:00-mon:05:00'
+      PreferredBackupWindow: "03:00-04:00"
+      PreferredMaintenanceWindow: "mon:04:00-mon:05:00"
       EnableCloudwatchLogsExports:
         - error
         - general
@@ -437,25 +543,25 @@ Resources:
       DeletionProtection: false
       Tags:
         - Key: Name
-          Value: !Sub 'aurora-cluster-${EnvironmentSuffix}'
+          Value: !Sub "aurora-cluster-${EnvironmentSuffix}"
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Compliance
-          Value: 'HIPAA'
+          Value: "HIPAA"
 
   AuroraDBInstance1:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      DBInstanceIdentifier: !Sub 'aurora-instance-1-${EnvironmentSuffix}'
+      DBInstanceIdentifier: !Sub "aurora-instance-1-${EnvironmentSuffix}"
       DBClusterIdentifier: !Ref AuroraDBCluster
       DBInstanceClass: db.serverless
       Engine: aurora-mysql
       PubliclyAccessible: false
       Tags:
         - Key: Name
-          Value: !Sub 'aurora-instance-1-${EnvironmentSuffix}'
+          Value: !Sub "aurora-instance-1-${EnvironmentSuffix}"
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
@@ -464,14 +570,14 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      DBInstanceIdentifier: !Sub 'aurora-instance-2-${EnvironmentSuffix}'
+      DBInstanceIdentifier: !Sub "aurora-instance-2-${EnvironmentSuffix}"
       DBClusterIdentifier: !Ref AuroraDBCluster
       DBInstanceClass: db.serverless
       Engine: aurora-mysql
       PubliclyAccessible: false
       Tags:
         - Key: Name
-          Value: !Sub 'aurora-instance-2-${EnvironmentSuffix}'
+          Value: !Sub "aurora-instance-2-${EnvironmentSuffix}"
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
@@ -482,97 +588,97 @@ Resources:
   ECSCluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Sub 'data-processing-cluster-${EnvironmentSuffix}'
+      ClusterName: !Sub "data-processing-cluster-${EnvironmentSuffix}"
       ClusterSettings:
         - Name: containerInsights
           Value: enabled
       Tags:
         - Key: Name
-          Value: !Sub 'data-processing-cluster-${EnvironmentSuffix}'
+          Value: !Sub "data-processing-cluster-${EnvironmentSuffix}"
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
   ECSTaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'ecs-task-execution-role-${EnvironmentSuffix}'
+      RoleName: !Sub "ecs-task-execution-role-${EnvironmentSuffix}"
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               Service: ecs-tasks.amazonaws.com
-            Action: 'sts:AssumeRole'
+            Action: "sts:AssumeRole"
       ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
+        - "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
       Policies:
         - PolicyName: SecretsManagerAccess
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
-                  - 'secretsmanager:GetSecretValue'
+                  - "secretsmanager:GetSecretValue"
                 Resource: !Ref DBSecret
               - Effect: Allow
                 Action:
-                  - 'kms:Decrypt'
-                  - 'kms:DescribeKey'
+                  - "kms:Decrypt"
+                  - "kms:DescribeKey"
                 Resource: !GetAtt DataEncryptionKey.Arn
       Tags:
         - Key: Name
-          Value: !Sub 'ecs-task-execution-role-${EnvironmentSuffix}'
+          Value: !Sub "ecs-task-execution-role-${EnvironmentSuffix}"
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
   ECSTaskRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'ecs-task-role-${EnvironmentSuffix}'
+      RoleName: !Sub "ecs-task-role-${EnvironmentSuffix}"
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               Service: ecs-tasks.amazonaws.com
-            Action: 'sts:AssumeRole'
+            Action: "sts:AssumeRole"
       Policies:
         - PolicyName: KinesisAccess
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
-                  - 'kinesis:GetRecords'
-                  - 'kinesis:GetShardIterator'
-                  - 'kinesis:DescribeStream'
-                  - 'kinesis:ListStreams'
+                  - "kinesis:GetRecords"
+                  - "kinesis:GetShardIterator"
+                  - "kinesis:DescribeStream"
+                  - "kinesis:ListStreams"
                 Resource: !GetAtt PatientDataStream.Arn
               - Effect: Allow
                 Action:
-                  - 'kms:Decrypt'
-                  - 'kms:DescribeKey'
+                  - "kms:Decrypt"
+                  - "kms:DescribeKey"
                 Resource: !GetAtt DataEncryptionKey.Arn
         - PolicyName: SecretsManagerAccess
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
-                  - 'secretsmanager:GetSecretValue'
+                  - "secretsmanager:GetSecretValue"
                 Resource: !Ref DBSecret
         - PolicyName: CloudWatchLogs
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
-                  - 'logs:CreateLogStream'
-                  - 'logs:PutLogEvents'
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
                 Resource: !GetAtt ECSTaskLogGroup.Arn
       Tags:
         - Key: Name
-          Value: !Sub 'ecs-task-role-${EnvironmentSuffix}'
+          Value: !Sub "ecs-task-role-${EnvironmentSuffix}"
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
@@ -581,35 +687,35 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      LogGroupName: !Sub '/ecs/data-processing-${EnvironmentSuffix}'
+      LogGroupName: !Sub "/ecs/data-processing-${EnvironmentSuffix}"
       RetentionInDays: 7
       KmsKeyId: !GetAtt DataEncryptionKey.Arn
 
   ECSTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: !Sub 'data-processor-${EnvironmentSuffix}'
+      Family: !Sub "data-processor-${EnvironmentSuffix}"
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      Cpu: '512'
-      Memory: '1024'
+      Cpu: "512"
+      Memory: "1024"
       ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
       TaskRoleArn: !GetAtt ECSTaskRole.Arn
       ContainerDefinitions:
         - Name: data-processor
-          Image: 'public.ecr.aws/amazonlinux/amazonlinux:latest'
+          Image: "public.ecr.aws/amazonlinux/amazonlinux:latest"
           Essential: true
           Command:
-            - '/bin/sh'
-            - '-c'
+            - "/bin/sh"
+            - "-c"
             - 'echo "Data processing container started" && sleep 3600'
           LogConfiguration:
             LogDriver: awslogs
             Options:
               awslogs-group: !Ref ECSTaskLogGroup
               awslogs-region: !Ref AWS::Region
-              awslogs-stream-prefix: 'ecs'
+              awslogs-stream-prefix: "ecs"
           Environment:
             - Name: KINESIS_STREAM_NAME
               Value: !Ref PatientDataStream
@@ -619,14 +725,14 @@ Resources:
               Value: !Ref AWS::Region
       Tags:
         - Key: Name
-          Value: !Sub 'data-processor-task-${EnvironmentSuffix}'
+          Value: !Sub "data-processor-task-${EnvironmentSuffix}"
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
   ECSService:
     Type: AWS::ECS::Service
     Properties:
-      ServiceName: !Sub 'data-processing-service-${EnvironmentSuffix}'
+      ServiceName: !Sub "data-processing-service-${EnvironmentSuffix}"
       Cluster: !Ref ECSCluster
       TaskDefinition: !Ref ECSTaskDefinition
       DesiredCount: 2
@@ -642,7 +748,7 @@ Resources:
             - !Ref PrivateSubnet3
       Tags:
         - Key: Name
-          Value: !Sub 'data-processing-service-${EnvironmentSuffix}'
+          Value: !Sub "data-processing-service-${EnvironmentSuffix}"
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
@@ -650,26 +756,52 @@ Resources:
   # API Gateway
   # ========================================
 
+  # IAM Role for API Gateway CloudWatch Logging
+  APIGatewayCloudWatchRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "api-gateway-cloudwatch-role-${EnvironmentSuffix}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+      Tags:
+        - Key: Name
+          Value: !Sub "api-gateway-cloudwatch-role-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # API Gateway Account Configuration
+  APIGatewayAccount:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !GetAtt APIGatewayCloudWatchRole.Arn
+
   APIGatewayLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      LogGroupName: !Sub '/aws/apigateway/hipaa-api-${EnvironmentSuffix}'
+      LogGroupName: !Sub "/aws/apigateway/hipaa-api-${EnvironmentSuffix}"
       RetentionInDays: 7
       KmsKeyId: !GetAtt DataEncryptionKey.Arn
 
   RestAPI:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: !Sub 'hipaa-api-${EnvironmentSuffix}'
-      Description: 'API Gateway for external system integration'
+      Name: !Sub "hipaa-api-${EnvironmentSuffix}"
+      Description: "API Gateway for external system integration"
       EndpointConfiguration:
         Types:
           - REGIONAL
       Tags:
         - Key: Name
-          Value: !Sub 'hipaa-api-${EnvironmentSuffix}'
+          Value: !Sub "hipaa-api-${EnvironmentSuffix}"
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
@@ -678,7 +810,7 @@ Resources:
     Properties:
       RestApiId: !Ref RestAPI
       ParentId: !GetAtt RestAPI.RootResourceId
-      PathPart: 'health'
+      PathPart: "health"
 
   APIGatewayHealthMethod:
     Type: AWS::ApiGateway::Method
@@ -692,13 +824,13 @@ Resources:
         IntegrationResponses:
           - StatusCode: 200
             ResponseTemplates:
-              'application/json': '{"status": "healthy", "timestamp": "$context.requestTime"}'
+              "application/json": '{"status": "healthy", "timestamp": "$context.requestTime"}'
         RequestTemplates:
-          'application/json': '{"statusCode": 200}'
+          "application/json": '{"statusCode": 200}'
       MethodResponses:
         - StatusCode: 200
           ResponseModels:
-            'application/json': 'Empty'
+            "application/json": "Empty"
 
   APIGatewayDeployment:
     Type: AWS::ApiGateway::Deployment
@@ -709,31 +841,32 @@ Resources:
 
   APIGatewayStage:
     Type: AWS::ApiGateway::Stage
+    DependsOn: APIGatewayAccount
     Properties:
       RestApiId: !Ref RestAPI
       DeploymentId: !Ref APIGatewayDeployment
       StageName: prod
-      Description: 'Production stage'
+      Description: "Production stage"
       MethodSettings:
-        - ResourcePath: '/*'
-          HttpMethod: '*'
+        - ResourcePath: "/*"
+          HttpMethod: "*"
           MetricsEnabled: true
           ThrottlingBurstLimit: 500
           ThrottlingRateLimit: 100
       AccessLogSetting:
         DestinationArn: !GetAtt APIGatewayLogGroup.Arn
-        Format: '$context.requestId $context.requestTime $context.httpMethod $context.path $context.status'
+        Format: "$context.requestId $context.requestTime $context.httpMethod $context.path $context.status"
       Tags:
         - Key: Name
-          Value: !Sub 'hipaa-api-stage-${EnvironmentSuffix}'
+          Value: !Sub "hipaa-api-stage-${EnvironmentSuffix}"
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
   APIGatewayUsagePlan:
     Type: AWS::ApiGateway::UsagePlan
     Properties:
-      UsagePlanName: !Sub 'hipaa-api-usage-plan-${EnvironmentSuffix}'
-      Description: 'Usage plan for HIPAA API'
+      UsagePlanName: !Sub "hipaa-api-usage-plan-${EnvironmentSuffix}"
+      Description: "Usage plan for HIPAA API"
       ApiStages:
         - ApiId: !Ref RestAPI
           Stage: !Ref APIGatewayStage
@@ -742,7 +875,7 @@ Resources:
         RateLimit: 100
       Tags:
         - Key: Name
-          Value: !Sub 'hipaa-api-usage-plan-${EnvironmentSuffix}'
+          Value: !Sub "hipaa-api-usage-plan-${EnvironmentSuffix}"
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
@@ -755,11 +888,11 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      BucketName: !Sub 'cloudtrail-logs-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketName: !Sub "cloudtrail-logs-${EnvironmentSuffix}-${AWS::AccountId}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: 'aws:kms'
+              SSEAlgorithm: "aws:kms"
               KMSMasterKeyID: !Ref DataEncryptionKey
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -773,41 +906,41 @@ Resources:
             ExpirationInDays: 90
       Tags:
         - Key: Name
-          Value: !Sub 'cloudtrail-logs-${EnvironmentSuffix}'
+          Value: !Sub "cloudtrail-logs-${EnvironmentSuffix}"
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Compliance
-          Value: 'HIPAA'
+          Value: "HIPAA"
 
   CloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
       Bucket: !Ref CloudTrailBucket
       PolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Sid: AWSCloudTrailAclCheck
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
-            Action: 's3:GetBucketAcl'
+            Action: "s3:GetBucketAcl"
             Resource: !GetAtt CloudTrailBucket.Arn
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
-            Action: 's3:PutObject'
-            Resource: !Sub '${CloudTrailBucket.Arn}/*'
+            Action: "s3:PutObject"
+            Resource: !Sub "${CloudTrailBucket.Arn}/*"
             Condition:
               StringEquals:
-                's3:x-amz-acl': 'bucket-owner-full-control'
+                "s3:x-amz-acl": "bucket-owner-full-control"
 
   CloudTrail:
     Type: AWS::CloudTrail::Trail
     DependsOn:
       - CloudTrailBucketPolicy
     Properties:
-      TrailName: !Sub 'hipaa-audit-trail-${EnvironmentSuffix}'
+      TrailName: !Sub "hipaa-audit-trail-${EnvironmentSuffix}"
       S3BucketName: !Ref CloudTrailBucket
       IsLogging: true
       IsMultiRegionTrail: false
@@ -818,16 +951,16 @@ Resources:
         - ReadWriteType: All
           IncludeManagementEvents: true
           DataResources:
-            - Type: 'AWS::S3::Object'
+            - Type: "AWS::S3::Object"
               Values:
-                - !Sub '${CloudTrailBucket.Arn}/*'
+                - !Sub "${CloudTrailBucket.Arn}/*"
       Tags:
         - Key: Name
-          Value: !Sub 'hipaa-audit-trail-${EnvironmentSuffix}'
+          Value: !Sub "hipaa-audit-trail-${EnvironmentSuffix}"
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Compliance
-          Value: 'HIPAA'
+          Value: "HIPAA"
 
 # ========================================
 # Outputs
@@ -835,121 +968,151 @@ Resources:
 
 Outputs:
   VPCId:
-    Description: 'VPC ID'
+    Description: "VPC ID"
     Value: !Ref VPC
     Export:
-      Name: !Sub '${AWS::StackName}-VPCId'
+      Name: !Sub "${AWS::StackName}-VPCId"
 
   PrivateSubnet1Id:
-    Description: 'Private Subnet 1 ID'
+    Description: "Private Subnet 1 ID"
     Value: !Ref PrivateSubnet1
     Export:
-      Name: !Sub '${AWS::StackName}-PrivateSubnet1Id'
+      Name: !Sub "${AWS::StackName}-PrivateSubnet1Id"
 
   PrivateSubnet2Id:
-    Description: 'Private Subnet 2 ID'
+    Description: "Private Subnet 2 ID"
     Value: !Ref PrivateSubnet2
     Export:
-      Name: !Sub '${AWS::StackName}-PrivateSubnet2Id'
+      Name: !Sub "${AWS::StackName}-PrivateSubnet2Id"
 
   PrivateSubnet3Id:
-    Description: 'Private Subnet 3 ID'
+    Description: "Private Subnet 3 ID"
     Value: !Ref PrivateSubnet3
     Export:
-      Name: !Sub '${AWS::StackName}-PrivateSubnet3Id'
+      Name: !Sub "${AWS::StackName}-PrivateSubnet3Id"
+
+  PublicSubnet1Id:
+    Description: "Public Subnet 1 ID"
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicSubnet1Id"
+
+  PublicSubnet2Id:
+    Description: "Public Subnet 2 ID"
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicSubnet2Id"
+
+  InternetGatewayId:
+    Description: "Internet Gateway ID"
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub "${AWS::StackName}-InternetGatewayId"
+
+  NATGatewayId:
+    Description: "NAT Gateway ID"
+    Value: !Ref NATGateway
+    Export:
+      Name: !Sub "${AWS::StackName}-NATGatewayId"
+
+  NATGatewayEIP:
+    Description: "NAT Gateway Elastic IP"
+    Value: !Ref NATGatewayEIP
+    Export:
+      Name: !Sub "${AWS::StackName}-NATGatewayEIP"
 
   KMSKeyId:
-    Description: 'KMS Key ID for data encryption'
+    Description: "KMS Key ID for data encryption"
     Value: !Ref DataEncryptionKey
     Export:
-      Name: !Sub '${AWS::StackName}-KMSKeyId'
+      Name: !Sub "${AWS::StackName}-KMSKeyId"
 
   KMSKeyArn:
-    Description: 'KMS Key ARN for data encryption'
+    Description: "KMS Key ARN for data encryption"
     Value: !GetAtt DataEncryptionKey.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-KMSKeyArn'
+      Name: !Sub "${AWS::StackName}-KMSKeyArn"
 
   KinesisStreamName:
-    Description: 'Kinesis Data Stream Name'
+    Description: "Kinesis Data Stream Name"
     Value: !Ref PatientDataStream
     Export:
-      Name: !Sub '${AWS::StackName}-KinesisStreamName'
+      Name: !Sub "${AWS::StackName}-KinesisStreamName"
 
   KinesisStreamArn:
-    Description: 'Kinesis Data Stream ARN'
+    Description: "Kinesis Data Stream ARN"
     Value: !GetAtt PatientDataStream.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-KinesisStreamArn'
+      Name: !Sub "${AWS::StackName}-KinesisStreamArn"
 
   DBClusterId:
-    Description: 'Aurora DB Cluster ID'
+    Description: "Aurora DB Cluster ID"
     Value: !Ref AuroraDBCluster
     Export:
-      Name: !Sub '${AWS::StackName}-DBClusterId'
+      Name: !Sub "${AWS::StackName}-DBClusterId"
 
   DBClusterEndpoint:
-    Description: 'Aurora DB Cluster Endpoint'
+    Description: "Aurora DB Cluster Endpoint"
     Value: !GetAtt AuroraDBCluster.Endpoint.Address
     Export:
-      Name: !Sub '${AWS::StackName}-DBClusterEndpoint'
+      Name: !Sub "${AWS::StackName}-DBClusterEndpoint"
 
   DBClusterReadEndpoint:
-    Description: 'Aurora DB Cluster Read Endpoint'
+    Description: "Aurora DB Cluster Read Endpoint"
     Value: !GetAtt AuroraDBCluster.ReadEndpoint.Address
     Export:
-      Name: !Sub '${AWS::StackName}-DBClusterReadEndpoint'
+      Name: !Sub "${AWS::StackName}-DBClusterReadEndpoint"
 
   DBSecretArn:
-    Description: 'Database Secret ARN'
+    Description: "Database Secret ARN"
     Value: !Ref DBSecret
     Export:
-      Name: !Sub '${AWS::StackName}-DBSecretArn'
+      Name: !Sub "${AWS::StackName}-DBSecretArn"
 
   ECSClusterName:
-    Description: 'ECS Cluster Name'
+    Description: "ECS Cluster Name"
     Value: !Ref ECSCluster
     Export:
-      Name: !Sub '${AWS::StackName}-ECSClusterName'
+      Name: !Sub "${AWS::StackName}-ECSClusterName"
 
   ECSClusterArn:
-    Description: 'ECS Cluster ARN'
+    Description: "ECS Cluster ARN"
     Value: !GetAtt ECSCluster.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-ECSClusterArn'
+      Name: !Sub "${AWS::StackName}-ECSClusterArn"
 
   ECSServiceName:
-    Description: 'ECS Service Name'
+    Description: "ECS Service Name"
     Value: !GetAtt ECSService.Name
     Export:
-      Name: !Sub '${AWS::StackName}-ECSServiceName'
+      Name: !Sub "${AWS::StackName}-ECSServiceName"
 
   APIGatewayId:
-    Description: 'API Gateway REST API ID'
+    Description: "API Gateway REST API ID"
     Value: !Ref RestAPI
     Export:
-      Name: !Sub '${AWS::StackName}-APIGatewayId'
+      Name: !Sub "${AWS::StackName}-APIGatewayId"
 
   APIGatewayURL:
-    Description: 'API Gateway URL'
-    Value: !Sub 'https://${RestAPI}.execute-api.${AWS::Region}.amazonaws.com/prod'
+    Description: "API Gateway URL"
+    Value: !Sub "https://${RestAPI}.execute-api.${AWS::Region}.amazonaws.com/prod"
     Export:
-      Name: !Sub '${AWS::StackName}-APIGatewayURL'
+      Name: !Sub "${AWS::StackName}-APIGatewayURL"
 
   CloudTrailName:
-    Description: 'CloudTrail Name'
+    Description: "CloudTrail Name"
     Value: !Ref CloudTrail
     Export:
-      Name: !Sub '${AWS::StackName}-CloudTrailName'
+      Name: !Sub "${AWS::StackName}-CloudTrailName"
 
   CloudTrailBucketName:
-    Description: 'CloudTrail S3 Bucket Name'
+    Description: "CloudTrail S3 Bucket Name"
     Value: !Ref CloudTrailBucket
     Export:
-      Name: !Sub '${AWS::StackName}-CloudTrailBucketName'
+      Name: !Sub "${AWS::StackName}-CloudTrailBucketName"
 
   EnvironmentSuffix:
-    Description: 'Environment suffix used for this deployment'
+    Description: "Environment suffix used for this deployment"
     Value: !Ref EnvironmentSuffix
     Export:
-      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
+      Name: !Sub "${AWS::StackName}-EnvironmentSuffix"
