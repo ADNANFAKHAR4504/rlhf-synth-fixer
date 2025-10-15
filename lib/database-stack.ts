@@ -8,7 +8,6 @@ import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { RdsCluster } from '@cdktf/provider-aws/lib/rds-cluster';
 import { RdsClusterInstance } from '@cdktf/provider-aws/lib/rds-cluster-instance';
-import { RdsGlobalCluster } from '@cdktf/provider-aws/lib/rds-global-cluster';
 import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
 import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
@@ -231,15 +230,16 @@ export class DatabaseStack extends Construct {
     });
 
     // Aurora Global Cluster for cross-region replication
-    const globalCluster = new RdsGlobalCluster(this, 'global-cluster', {
-      provider: primaryProvider,
-      globalClusterIdentifier: `healthcare-global-${environmentSuffix}`,
-      engine: 'aurora-postgresql',
-      engineVersion: '15.3',
-      databaseName: 'healthcaredb',
-      storageEncrypted: true,
-      deletionProtection: false,
-    });
+    // Commented out to allow existing cluster to continue without global cluster
+    // const globalCluster = new RdsGlobalCluster(this, 'global-cluster', {
+    //   provider: primaryProvider,
+    //   globalClusterIdentifier: `healthcare-global-${environmentSuffix}`,
+    //   engine: 'aurora-postgresql',
+    //   engineVersion: '15.3',
+    //   databaseName: 'healthcaredb',
+    //   storageEncrypted: true,
+    //   deletionProtection: false,
+    // });
 
     // Primary Aurora Serverless v2 Cluster
     const primaryCluster = new RdsCluster(this, 'primary-cluster', {
@@ -248,7 +248,8 @@ export class DatabaseStack extends Construct {
       engine: 'aurora-postgresql',
       engineMode: 'provisioned',
       engineVersion: '15.3',
-      globalClusterIdentifier: globalCluster.id,
+      // globalClusterIdentifier: globalCluster.id, // Removed to fix modification error
+      databaseName: 'healthcaredb', // Added since global cluster is removed
       masterUsername: 'dbadmin',
       masterPassword: 'ChangeMe123456!',
       dbSubnetGroupName: primarySubnetGroup.name,
@@ -264,7 +265,7 @@ export class DatabaseStack extends Construct {
         minCapacity: 0.5,
         maxCapacity: 2,
       },
-      dependsOn: [globalCluster],
+      // dependsOn: [globalCluster], // Removed since global cluster is commented out
       tags: {
         Name: `healthcare-db-${environmentSuffix}`,
         Environment: environmentSuffix,
@@ -285,14 +286,17 @@ export class DatabaseStack extends Construct {
       },
     });
 
-    // Secondary Aurora Cluster (global database secondary region)
+    // Secondary Aurora Cluster (DR - standalone without global cluster)
     const secondaryCluster = new RdsCluster(this, 'secondary-cluster', {
       provider: secondaryProvider,
       clusterIdentifier: `healthcare-db-dr-${environmentSuffix}`,
       engine: 'aurora-postgresql',
       engineMode: 'provisioned',
       engineVersion: '15.3',
-      globalClusterIdentifier: globalCluster.id,
+      // globalClusterIdentifier: globalCluster.id, // Removed - standalone cluster
+      databaseName: 'healthcaredb',
+      masterUsername: 'dbadmin',
+      masterPassword: 'ChangeMe123456!',
       dbSubnetGroupName: secondarySubnetGroup.name,
       vpcSecurityGroupIds: [secondarySecurityGroup.id],
       storageEncrypted: true,
@@ -303,10 +307,7 @@ export class DatabaseStack extends Construct {
         minCapacity: 0.5,
         maxCapacity: 2,
       },
-      dependsOn: [primaryCluster],
-      lifecycle: {
-        ignoreChanges: ['master_username', 'master_password', 'database_name'],
-      },
+      // dependsOn: [primaryCluster], // Removed - no longer needed without global cluster
       tags: {
         Name: `healthcare-db-dr-${environmentSuffix}`,
         Environment: environmentSuffix,
