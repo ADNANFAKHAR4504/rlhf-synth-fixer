@@ -789,6 +789,9 @@ Resources:
       AccessLogSettings:
         DestinationArn: !GetAtt ApiLogGroup.Arn
         Format: '$context.requestId $context.error.message $context.error.messageString'
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 1000
+        ThrottlingRateLimit: 500
       Tags:
         Environment: !Ref Environment
         Project: !Ref Project
@@ -869,12 +872,9 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
 
-  # Associate WAF with API Gateway
-  WAFAssociation:
-    Type: AWS::WAFv2::WebACLAssociation
-    Properties:
-      ResourceArn: !Sub 'arn:aws:apigateway:${AWS::Region}:${AWS::AccountId}:/apis/${HttpApi}/stages/$default'
-      WebACLArn: !GetAtt WAFWebACL.Arn
+  # Note: WAFv2 WebACL association is not supported directly with API Gateway V2 (HttpApi)
+  # API Gateway V2 has built-in DDoS protection and throttling capabilities
+  # For advanced WAF protection, consider using CloudFront with WAF or migrating to REST API
 
   # ==========================================
   # Route 53 DNS Resources
