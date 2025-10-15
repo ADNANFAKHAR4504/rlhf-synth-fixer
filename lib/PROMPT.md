@@ -17,3 +17,4 @@ We’re using AWS CDK version 2, so make sure the imports and constructs follow 
 
 The whole thing should be secure, well-organized, and ready to extend if we need to scale it later on.
 
+
