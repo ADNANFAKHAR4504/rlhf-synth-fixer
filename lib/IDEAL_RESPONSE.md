@@ -337,8 +337,10 @@ data "aws_availability_zones" "available" {
 # RANDOM RESOURCES
 # ============================================================================
 
-resource "random_id" "suffix" {
-  byte_length = 4
+resource "random_string" "suffix" {
+  length  = 8
+  special = false
+  upper   = false
 }
 
 # ============================================================================
@@ -346,7 +348,7 @@ resource "random_id" "suffix" {
 # ============================================================================
 
 locals {
-  suffix = random_id.suffix.hex
+  suffix = random_string.suffix.result
 
   common_tags = {
     Environment = var.environment
@@ -943,6 +945,7 @@ resource "aws_sns_topic_policy" "alerts" {
     Version = "2012-10-17"
     Statement = [
       {
+        Sid    = "AllowCloudWatchToPublish"
         Effect = "Allow"
         Principal = {
           Service = "cloudwatch.amazonaws.com"
@@ -951,6 +954,7 @@ resource "aws_sns_topic_policy" "alerts" {
         Resource = aws_sns_topic.alerts.arn
       },
       {
+        Sid    = "AllowLambdaToPublish"
         Effect = "Allow"
         Principal = {
           Service = "lambda.amazonaws.com"

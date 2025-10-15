@@ -147,15 +147,15 @@ describe("Data Sources", () => {
 });
 
 describe("Random Resources", () => {
-  test("declares random_id resource for suffix", () => {
-    expect(stackContent).toMatch(/resource\s+"random_id"\s+"suffix"/);
+  test("declares random_string resource for suffix", () => {
+    expect(stackContent).toMatch(/resource\s+"random_string"\s+"suffix"/);
   });
 
-  test("random_id has byte_length specified", () => {
-    const randomIdMatch = stackContent.match(
-      /resource\s+"random_id"\s+"suffix"\s*{[^}]*}/s
+  test("random_string has length specified", () => {
+    const randomStringMatch = stackContent.match(
+      /resource\s+"random_string"\s+"suffix"\s*{[^}]*}/s
     );
-    expect(randomIdMatch![0]).toMatch(/byte_length\s*=\s*\d+/);
+    expect(randomStringMatch![0]).toMatch(/length\s*=\s*\d+/);
   });
 });
 
