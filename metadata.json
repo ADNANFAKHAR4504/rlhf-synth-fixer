@@ -10,6 +10,7 @@
   "subject_labels": [
     "Web Application Deployment"
   ],
+  "background": "Real-time enterprise log analytics system for 500 servers with secure storage, ETL processing, and dashboard visualization",
   "aws_services": [
     "Kinesis Firehose",
     "S3",
