@@ -87,6 +87,8 @@ dependencies {
     implementation platform("software.amazon.awssdk:bom:${awsSdkVersion}")
     implementation 'software.amazon.awssdk:cloudwatchlogs'
     implementation 'software.amazon.awssdk:ssm'
+    implementation 'software.amazon.awssdk:rds'
+    implementation 'software.amazon.awssdk:wafv2'
 
     // AWS CDK dependencies
     implementation "software.amazon.awscdk:aws-cdk-lib:${awsCdkVersion}"
@@ -197,6 +199,11 @@ dependencies {
     // NEW: SES for email testing
     integrationTestImplementation 'software.amazon.awssdk:ses'
 
+
+    integrationTestImplementation 'software.amazon.awssdk:cloudfront'
+    integrationTestImplementation 'software.amazon.awssdk:guardduty'
+    integrationTestImplementation 'software.amazon.awssdk:wafv2'
+
     // WebSocket client for testing
     integrationTestImplementation 'javax.websocket:javax.websocket-api:1.1'
     integrationTestImplementation 'org.glassfish.tyrus.bundles:tyrus-standalone-client:1.19'
@@ -208,7 +215,6 @@ dependencies {
     // SLF4J implementation for integration tests
     integrationTestImplementation 'org.slf4j:slf4j-simple:2.0.7'
 }
-
 // Configure JAR with main class
 jar {
     manifest {
