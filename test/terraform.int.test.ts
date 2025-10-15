@@ -81,56 +81,22 @@ function makeHttpRequest(url: string, method: string = "GET", body?: string): Pr
 
 describe("ML Pipeline Integration Tests", () => {
   let outputs: OutputsFormat = {};
-  let isActualDeployment = false;
-
-  // Helper function to get mock outputs
-  function getMockOutputs(): OutputsFormat {
-    return {
-      api_gateway_endpoint: "https://mock-api-id.execute-api.us-east-1.amazonaws.com/dev",
-      inference_api_url: "https://mock-api-id.execute-api.us-east-1.amazonaws.com/dev/inference",
-      raw_data_bucket: "ml-pipeline-raw-data-dev-abc123-123456789012",
-      processed_data_bucket: "ml-pipeline-processed-data-dev-abc123-123456789012",
-      model_artifacts_bucket: "ml-pipeline-model-artifacts-dev-abc123-123456789012",
-      logs_bucket: "ml-pipeline-logs-dev-abc123-123456789012",
-      model_metadata_table: "ml-pipeline-model-metadata-dev-abc123",
-      training_metrics_table: "ml-pipeline-training-metrics-dev-abc123",
-      ab_test_config_table: "ml-pipeline-ab-test-config-dev-abc123",
-      kinesis_stream_name: "ml-pipeline-inference-requests-dev-abc123",
-      kinesis_stream_arn: "arn:aws:kinesis:us-east-1:123456789012:stream/ml-pipeline-inference-requests-dev-abc123",
-      sagemaker_endpoint_a: "ml-pipeline-endpoint-a-dev-abc123",
-      sagemaker_endpoint_b: "ml-pipeline-endpoint-b-dev-abc123",
-      step_functions_arn: "arn:aws:states:us-east-1:123456789012:stateMachine:ml-pipeline-ml-pipeline-dev-abc123",
-      lambda_preprocessing_function: "ml-pipeline-preprocessing-dev-abc123",
-      lambda_inference_function: "ml-pipeline-inference-dev-abc123",
-      lambda_kinesis_consumer_function: "ml-pipeline-kinesis-consumer-dev-abc123",
-      sns_alerts_topic_arn: "arn:aws:sns:us-east-1:123456789012:ml-pipeline-ml-alerts-dev",
-      cloudwatch_dashboard_name: "ml-pipeline-ml-dashboard-dev",
-    };
-  }
 
   // Load outputs from deployment
   beforeAll(() => {
     const outputsPath = path.resolve(__dirname, "../cfn-outputs/all-outputs.json");
 
-    if (fs.existsSync(outputsPath)) {
-      console.log("[INFO] Loading outputs from deployed infrastructure");
-      const rawOutputs = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
-      
-      // Check if this is the correct ML Pipeline deployment
-      // ML Pipeline should have api_gateway_endpoint or raw_data_bucket
-      const hasMLOutputs = rawOutputs.api_gateway_endpoint || rawOutputs.raw_data_bucket || rawOutputs.model_metadata_table;
-      
-      if (hasMLOutputs) {
-        outputs = rawOutputs;
-        isActualDeployment = true;
-      } else {
-        console.log("[WARN] Outputs file exists but doesn't match ML Pipeline - using mock data");
-        outputs = getMockOutputs();
-      }
-    } else {
-      console.log("[WARN] No deployment outputs found, using mock data for local testing");
-      outputs = getMockOutputs();
+    if (!fs.existsSync(outputsPath)) {
+      throw new Error(
+        `Output file not found: ${outputsPath}. ` +
+        'Integration tests require real deployment outputs. ' +
+        'Please deploy the infrastructure first before running integration tests.'
+      );
     }
+
+    console.log("[INFO] Loading outputs from deployed infrastructure");
+    const rawOutputs = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
+    outputs = rawOutputs;
   });
 
   describe("Infrastructure Outputs Validation", () => {
@@ -196,11 +162,6 @@ describe("ML Pipeline Integration Tests", () => {
 
   describe("End-to-End ML Inference Workflow", () => {
     test("API Gateway inference endpoint is accessible", async () => {
-      if (!isActualDeployment) {
-        console.log("Skipping - requires actual deployment");
-        return;
-      }
-
       const inferenceUrl = extractValue(outputs.inference_api_url);
 
       try {
