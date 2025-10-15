@@ -72,9 +72,20 @@ export class TapStack extends TerraformStack {
     console.log('📦 Deploying KMS encryption keys...');
     const kmsModule = new KmsModule(this, 'kms');
 
+    const environment = environmentSuffix;
+    const project = 'TAP-Infrastructure';
     // Deploy VPC and networking
     console.log('🌐 Deploying VPC and networking components...');
-    const vpcModule = new VpcModule(this, 'vpc');
+    const vpcModule = new VpcModule(this, 'vpc', {
+      environment,
+      project,
+      awsRegion,
+      vpcCidr: '10.0.0.0/16',
+      publicSubnetCidrs: ['10.0.1.0/24', '10.0.2.0/24'],
+      privateSubnetCidrs: ['10.0.10.0/24', '10.0.11.0/24'],
+      availabilityZones: [`${awsRegion}a`, `${awsRegion}b`],
+      allowedSshCidr: '0.0.0.0/32', // Change this to your IP for better security
+    });
 
     // Deploy S3 bucket for logging
     console.log('🪣 Deploying S3 bucket for logging...');
@@ -117,7 +128,8 @@ export class TapStack extends TerraformStack {
       'monitoring',
       ec2Module.instance.id,
       rdsModule.instance.id,
-      'admin@example.com' // Replace with your email
+      'admin@example.com', // Replace with your email
+      kmsModule.key
     );
 
     // Deploy CloudFront distribution
@@ -142,11 +154,6 @@ export class TapStack extends TerraformStack {
     new TerraformOutput(this, 'private-subnet-ids', {
       value: vpcModule.privateSubnets.map(s => s.id).join(','),
       description: 'Private subnet identifiers',
-    });
-
-    new TerraformOutput(this, 'nat-gateway-id', {
-      value: vpcModule.natGateway.id,
-      description: 'NAT Gateway identifier',
     });
 
     new TerraformOutput(this, 's3-bucket-name', {

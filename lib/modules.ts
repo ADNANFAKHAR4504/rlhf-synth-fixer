@@ -1,6 +1,13 @@
 import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
 
+// Common interface for module configuration
+export interface BaseModuleConfig {
+  environment: string;
+  project: string;
+  awsRegion: string;
+}
+
 // Common tags applied to all resources
 const commonTags = {
   Environment: 'Production',
@@ -9,25 +16,41 @@ const commonTags = {
   ManagedBy: 'CDKTF',
 };
 
-// VPC Module - Networking Foundation
+// VPC Module Configuration
+export interface VpcModuleConfig extends BaseModuleConfig {
+  vpcCidr: string;
+  publicSubnetCidrs: string[];
+  privateSubnetCidrs: string[];
+  availabilityZones: string[];
+  allowedSshCidr: string;
+}
+
 export class VpcModule extends Construct {
   public readonly vpc: aws.vpc.Vpc;
   public readonly publicSubnets: aws.subnet.Subnet[];
   public readonly privateSubnets: aws.subnet.Subnet[];
-  public readonly natGateway: aws.natGateway.NatGateway;
   public readonly internetGateway: aws.internetGateway.InternetGateway;
+  public readonly natGateways: aws.natGateway.NatGateway[];
+  public readonly securityGroupWeb: aws.securityGroup.SecurityGroup;
+  public readonly securityGroupSsh: aws.securityGroup.SecurityGroup;
 
-  constructor(scope: Construct, id: string) {
+  constructor(scope: Construct, id: string, config: VpcModuleConfig) {
     super(scope, id);
+
+    const commonTags = {
+      Project: config.project,
+      Environment: config.environment,
+      Security: 'Restricted',
+    };
 
     // Create VPC
     this.vpc = new aws.vpc.Vpc(this, 'vpc', {
-      cidrBlock: '10.0.0.0/16',
+      cidrBlock: config.vpcCidr,
       enableDnsHostnames: true,
       enableDnsSupport: true,
       tags: {
         ...commonTags,
-        Name: 'production-vpc',
+        Name: `${config.environment}-network-vpc`,
       },
     });
 
@@ -39,97 +62,87 @@ export class VpcModule extends Construct {
         vpcId: this.vpc.id,
         tags: {
           ...commonTags,
-          Name: 'production-igw',
+          Name: `${config.environment}-network-igw`,
         },
       }
     );
 
-    // Create public subnets across 2 AZs
-    this.publicSubnets = [
-      new aws.subnet.Subnet(this, 'public-subnet-1', {
+    // Create Public Subnets
+    this.publicSubnets = [];
+    config.publicSubnetCidrs.forEach((cidr, index) => {
+      const subnet = new aws.subnet.Subnet(this, `public-subnet-${index}`, {
         vpcId: this.vpc.id,
-        cidrBlock: '10.0.1.0/24',
-        availabilityZone: 'us-west-2a',
+        cidrBlock: cidr,
+        availabilityZone: config.availabilityZones[index],
         mapPublicIpOnLaunch: true,
         tags: {
           ...commonTags,
-          Name: 'public-subnet-1',
-          Type: 'Public',
+          Name: `${config.environment}-network-public-subnet-${index + 1}`,
         },
-      }),
-      new aws.subnet.Subnet(this, 'public-subnet-2', {
-        vpcId: this.vpc.id,
-        cidrBlock: '10.0.2.0/24',
-        availabilityZone: 'us-west-2b',
-        mapPublicIpOnLaunch: true,
-        tags: {
-          ...commonTags,
-          Name: 'public-subnet-2',
-          Type: 'Public',
-        },
-      }),
-    ];
-
-    // Create private subnets across 2 AZs
-    this.privateSubnets = [
-      new aws.subnet.Subnet(this, 'private-subnet-1', {
-        vpcId: this.vpc.id,
-        cidrBlock: '10.0.10.0/24',
-        availabilityZone: 'us-west-2a',
-        tags: {
-          ...commonTags,
-          Name: 'private-subnet-1',
-          Type: 'Private',
-        },
-      }),
-      new aws.subnet.Subnet(this, 'private-subnet-2', {
-        vpcId: this.vpc.id,
-        cidrBlock: '10.0.11.0/24',
-        availabilityZone: 'us-west-2b',
-        tags: {
-          ...commonTags,
-          Name: 'private-subnet-2',
-          Type: 'Private',
-        },
-      }),
-    ];
-
-    // Allocate Elastic IP for NAT Gateway
-    const natEip = new aws.eip.Eip(this, 'nat-eip', {
-      domain: 'vpc',
-      tags: {
-        ...commonTags,
-        Name: 'nat-gateway-eip',
-      },
+      });
+      this.publicSubnets.push(subnet);
     });
 
-    // Create NAT Gateway in first public subnet
-    this.natGateway = new aws.natGateway.NatGateway(this, 'nat-gateway', {
-      allocationId: natEip.id,
-      subnetId: this.publicSubnets[0].id,
-      tags: {
-        ...commonTags,
-        Name: 'production-nat-gateway',
-      },
+    // Create Private Subnets
+    this.privateSubnets = [];
+    config.privateSubnetCidrs.forEach((cidr, index) => {
+      const subnet = new aws.subnet.Subnet(this, `private-subnet-${index}`, {
+        vpcId: this.vpc.id,
+        cidrBlock: cidr,
+        availabilityZone: config.availabilityZones[index],
+        tags: {
+          ...commonTags,
+          Name: `${config.environment}-network-private-subnet-${index + 1}`,
+        },
+      });
+      this.privateSubnets.push(subnet);
     });
 
-    // Create route table for public subnets
-    const publicRouteTable = new aws.routeTable.RouteTable(this, 'public-rt', {
-      vpcId: this.vpc.id,
-      tags: {
-        ...commonTags,
-        Name: 'public-route-table',
-      },
+    // Create Elastic IPs for NAT Gateways
+    this.natGateways = [];
+    this.publicSubnets.forEach((subnet, index) => {
+      const eip = new aws.eip.Eip(this, `nat-eip-${index}`, {
+        domain: 'vpc',
+        tags: {
+          ...commonTags,
+          Name: `${config.environment}-network-nat-eip-${index + 1}`,
+        },
+      });
+
+      const natGateway = new aws.natGateway.NatGateway(
+        this,
+        `nat-gateway-${index}`,
+        {
+          allocationId: eip.id,
+          subnetId: subnet.id,
+          tags: {
+            ...commonTags,
+            Name: `${config.environment}-network-nat-gateway-${index + 1}`,
+          },
+        }
+      );
+      this.natGateways.push(natGateway);
     });
 
-    // Add internet route to public route table
-    new aws.route.Route(this, 'public-internet-route', {
+    // Create Route Tables
+    const publicRouteTable = new aws.routeTable.RouteTable(
+      this,
+      'public-route-table',
+      {
+        vpcId: this.vpc.id,
+        tags: {
+          ...commonTags,
+          Name: `${config.environment}-network-public-rt`,
+        },
+      }
+    );
+
+    new aws.route.Route(this, 'public-route', {
       routeTableId: publicRouteTable.id,
       destinationCidrBlock: '0.0.0.0/0',
       gatewayId: this.internetGateway.id,
     });
 
-    // Associate public subnets with public route table
     this.publicSubnets.forEach((subnet, index) => {
       new aws.routeTableAssociation.RouteTableAssociation(
         this,
@@ -141,28 +154,26 @@ export class VpcModule extends Construct {
       );
     });
 
-    // Create route table for private subnets
-    const privateRouteTable = new aws.routeTable.RouteTable(
-      this,
-      'private-rt',
-      {
-        vpcId: this.vpc.id,
-        tags: {
-          ...commonTags,
-          Name: 'private-route-table',
-        },
-      }
-    );
-
-    // Add NAT route to private route table
-    new aws.route.Route(this, 'private-nat-route', {
-      routeTableId: privateRouteTable.id,
-      destinationCidrBlock: '0.0.0.0/0',
-      natGatewayId: this.natGateway.id,
-    });
-
-    // Associate private subnets with private route table
+    // Private Route Tables
     this.privateSubnets.forEach((subnet, index) => {
+      const privateRouteTable = new aws.routeTable.RouteTable(
+        this,
+        `private-route-table-${index}`,
+        {
+          vpcId: this.vpc.id,
+          tags: {
+            ...commonTags,
+            Name: `${config.environment}-network-private-rt-${index + 1}`,
+          },
+        }
+      );
+
+      new aws.route.Route(this, `private-route-${index}`, {
+        routeTableId: privateRouteTable.id,
+        destinationCidrBlock: '0.0.0.0/0',
+        natGatewayId: this.natGateways[index % this.natGateways.length].id,
+      });
+
       new aws.routeTableAssociation.RouteTableAssociation(
         this,
         `private-rta-${index}`,
@@ -172,9 +183,75 @@ export class VpcModule extends Construct {
         }
       );
     });
+
+    // Security Group for Web Traffic
+    this.securityGroupWeb = new aws.securityGroup.SecurityGroup(
+      this,
+      'sg-web',
+      {
+        vpcId: this.vpc.id,
+        description: 'Security group for web traffic',
+        tags: {
+          ...commonTags,
+          Name: `${config.environment}-network-sg-web`,
+        },
+      }
+    );
+
+    new aws.securityGroupRule.SecurityGroupRule(this, 'sg-web-http', {
+      type: 'ingress',
+      fromPort: 80,
+      toPort: 80,
+      protocol: 'tcp',
+      cidrBlocks: ['0.0.0.0/0'],
+      securityGroupId: this.securityGroupWeb.id,
+    });
+
+    new aws.securityGroupRule.SecurityGroupRule(this, 'sg-web-https', {
+      type: 'ingress',
+      fromPort: 443,
+      toPort: 443,
+      protocol: 'tcp',
+      cidrBlocks: ['0.0.0.0/0'],
+      securityGroupId: this.securityGroupWeb.id,
+    });
+
+    // Security Group for SSH
+    this.securityGroupSsh = new aws.securityGroup.SecurityGroup(
+      this,
+      'sg-ssh',
+      {
+        vpcId: this.vpc.id,
+        description: 'Security group for SSH access',
+        tags: {
+          ...commonTags,
+          Name: `${config.environment}-network-sg-ssh`,
+        },
+      }
+    );
+
+    new aws.securityGroupRule.SecurityGroupRule(this, 'sg-ssh-rule', {
+      type: 'ingress',
+      fromPort: 22,
+      toPort: 22,
+      protocol: 'tcp',
+      cidrBlocks: [config.allowedSshCidr],
+      securityGroupId: this.securityGroupSsh.id,
+    });
+
+    // Egress rules for all security groups
+    [this.securityGroupWeb, this.securityGroupSsh].forEach((sg, index) => {
+      new aws.securityGroupRule.SecurityGroupRule(this, `sg-egress-${index}`, {
+        type: 'egress',
+        fromPort: 0,
+        toPort: 65535,
+        protocol: '-1',
+        cidrBlocks: ['0.0.0.0/0'],
+        securityGroupId: sg.id,
+      });
+    });
   }
 }
-
 // KMS Module - Encryption Key Management
 export class KmsModule extends Construct {
   public readonly key: aws.kmsKey.KmsKey;
@@ -325,7 +402,7 @@ export class IamModule extends Construct {
 
     // Create IAM role for EC2
     this.ec2Role = new aws.iamRole.IamRole(this, 'ec2-role', {
-      name: 'production-ec2-role',
+      name: 'production-ec2-role-12345',
       assumeRolePolicy: assumeRolePolicy,
       tags: commonTags,
     });
@@ -683,7 +760,8 @@ export class MonitoringModule extends Construct {
     id: string,
     ec2InstanceId: string,
     rdsInstanceId: string,
-    emailAddress: string
+    emailAddress: string,
+    kmsKey?: aws.kmsKey.KmsKey
   ) {
     super(scope, id);
 
@@ -709,7 +787,7 @@ export class MonitoringModule extends Construct {
     new aws.cloudwatchLogGroup.CloudwatchLogGroup(this, 'app-logs', {
       name: '/aws/ec2/production',
       retentionInDays: 30,
-      kmsKeyId: 'alias/aws/logs',
+      ...(kmsKey && { kmsKeyId: kmsKey.arn }),
       tags: commonTags,
     });
 
