@@ -465,7 +465,10 @@ The architecture spans two Availability Zones with subnets in each zone. The RDS
               [
                 "#!/bin/bash\n",
                 "yum update -y\n",
-                "yum install -y mysql\n"
+                "yum install -y mysql\n",
+                "yum install -y amazon-ssm-agent\n",
+                "systemctl enable amazon-ssm-agent\n",
+                "systemctl start amazon-ssm-agent\n"
               ]
             ]
           }
@@ -489,7 +492,8 @@ The architecture spans two Availability Zones with subnets in each zone. The RDS
           ]
         },
         "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+          "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
+          "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
         ],
         "Policies": [
           {

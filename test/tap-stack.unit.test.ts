@@ -240,10 +240,13 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('IAM Role Configuration', () => {
-    test('should create EC2 IAM role with CloudWatch policy', () => {
+    test('should create EC2 IAM role with CloudWatch and SSM policies', () => {
       const role = template.Resources.MyEC2Role;
       expect(role.Properties.ManagedPolicyArns).toContain(
         'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
+      );
+      expect(role.Properties.ManagedPolicyArns).toContain(
+        'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
       );
     });
 

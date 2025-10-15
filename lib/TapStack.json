@@ -432,7 +432,10 @@
               [
                 "#!/bin/bash\n",
                 "yum update -y\n",
-                "yum install -y mysql\n"
+                "yum install -y mysql\n",
+                "yum install -y amazon-ssm-agent\n",
+                "systemctl enable amazon-ssm-agent\n",
+                "systemctl start amazon-ssm-agent\n"
               ]
             ]
           }
@@ -456,7 +459,8 @@
           ]
         },
         "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+          "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
+          "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
         ],
         "Policies": [
           {
