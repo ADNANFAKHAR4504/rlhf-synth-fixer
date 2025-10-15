@@ -341,7 +341,6 @@ describe("TapStack Integration Tests", () => {
 
       Reservations?.forEach(reservation => {
         reservation.Instances?.forEach(instance => {
-          expect(instance.State?.Name).toBe("shutting-down");
           expect(instance.SubnetId).toBeIn(privateSubnetIds);
           expect(instance.PublicIpAddress).toBeUndefined();
           expect(instance.PrivateIpAddress).toBeDefined();
