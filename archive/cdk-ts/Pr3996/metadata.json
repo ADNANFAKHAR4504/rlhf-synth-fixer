@@ -1,0 +1,34 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "356246",
+  "team": "2",
+  "startedAt": "2025-10-09T09:41:00.703Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "Transit Gateway",
+    "Aurora Global Database",
+    "RDS",
+    "Secrets Manager",
+    "ECS",
+    "Fargate",
+    "Application Load Balancer",
+    "Global Accelerator",
+    "CloudWatch Logs",
+    "IAM",
+    "SSM Parameter Store"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
+}

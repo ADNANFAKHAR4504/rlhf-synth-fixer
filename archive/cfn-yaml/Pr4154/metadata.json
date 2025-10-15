@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350087",
+  "team": "3",
+  "training_quality": "7",
+  "startedAt": "2025-10-09T14:10:58.619Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "AWS KMS",
+    "Amazon VPC",
+    "AWS IAM",
+    "Elastic Load Balancing",
+    "AWS WAF",
+    "AWS Lambda",
+    "AWS Config",
+    "Amazon RDS",
+    "Amazon S3",
+    "AWS Backup",
+    "Amazon CloudWatch",
+    "AWS Secrets Manager",
+    "Amazon EC2",
+    "AWS Auto Scaling"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "deepaktatineni",
+  "dockerS3Location": ""
+}

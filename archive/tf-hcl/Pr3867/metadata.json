@@ -1,0 +1,37 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350172",
+  "team": "4",
+  "startedAt": "2025-10-08T10:51:05.530Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Infrastructure Provisioning",
+    "Multi-Tier Architecture",
+    "Network Security Configuration"
+  ],
+  "aws_services": "S3 Bucket, VPC, EC2, IAM, CloudWatch, RDS, SNS, KMS, NAT Gateway, Internet Gateway",
+  "training_quality": 8,
+  "training_quality_justification": "High training value: MODEL_RESPONSE showed fundamental comprehension failure by providing migration code (us-west-1 to us-west-2) instead of creating new infrastructure as requested. IDEAL_RESPONSE correctly demonstrates: (1) Creating fresh infrastructure not migration, (2) Single-file Terraform structure with hardcoded values, (3) Proper multi-tier AWS architecture with VPC/EC2/RDS/S3/KMS, (4) Security best practices with least privilege IAM and private subnets, (5) Hardcoded availability zones us-west-2a and us-west-2b, (6) Deterministic CIDR blocks. This teaches the model to distinguish 'create new infrastructure' vs 'migrate existing infrastructure' and demonstrates proper patterns for infrastructure provisioning from scratch.",
+  "testDependencies": {
+    "@aws-sdk/client-ec2": "^3.883.0",
+    "@aws-sdk/client-rds": "^3.883.0",
+    "@aws-sdk/client-s3": "^3.901.0",
+    "@aws-sdk/client-iam": "^3.901.0",
+    "@aws-sdk/client-cloudwatch": "^3.883.0",
+    "@aws-sdk/client-sns": "^3.855.0",
+    "@aws-sdk/client-kms": "^3.901.0",
+    "@types/jest": "^29.5.14",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.4.4",
+    "typescript": "^5.9.2"
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

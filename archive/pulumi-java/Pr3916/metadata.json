@@ -1,0 +1,31 @@
+{
+  "platform": "pulumi",
+  "language": "java",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "92847561",
+  "team": "synth",
+  "startedAt": "2025-10-08T21:20:48+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "training_quality": 8,
+  "training_quality_justification": "This data provides HIGH training value (8/10) because: 1) It demonstrates 9 distinct compilation errors related to Pulumi's Java type system, showcasing common mistakes with Output types, Either types, and builder patterns. 2) The errors reveal language-specific confusion between TypeScript and Java APIs, which is critical for multi-language IaC tools. 3) The fixes are clear and instructive, showing proper use of AssetArchive for Lambda, Either.ofLeft() for polymorphic parameters, and RecordAliasArgs builders for Route53. 4) Code style issues (missing final modifiers) reinforce Java best practices. 5) All errors were systematically fixed by the QA trainer, providing clean before/after comparisons. The training quality is not 10/10 because: 1) Some errors are specific to Pulumi Java SDK rather than general Java/AWS knowledge, and 2) The fixes are relatively mechanical once the pattern is understood. However, this data will significantly improve the model's understanding of type-safe IaC code generation in statically-typed languages.",
+  "aws_services": [
+    "S3",
+    "CloudFront",
+    "Lambda",
+    "Route53",
+    "WAF",
+    "CloudWatch",
+    "SNS",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

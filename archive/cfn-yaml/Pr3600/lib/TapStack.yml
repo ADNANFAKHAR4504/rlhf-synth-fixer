@@ -1,0 +1,1016 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'TAP Stack - Discourse Forum Platform using Existing VPC (tap-app-vpc-east1: vpc-05db96c1cd4cbcdc2)'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Environment Configuration'
+        Parameters:
+          - EnvironmentSuffix
+      - Label:
+          default: 'Domain and DNS Configuration'
+        Parameters:
+          - DomainName
+      - Label:
+          default: 'EC2 Configuration'
+        Parameters:
+          - SSHKeyName
+          - EC2InstanceType
+      - Label:
+          default: 'Database Configuration'
+        Parameters:
+          - DBInstanceClass
+          - DBUsername
+          - DBAllocatedStorage
+      - Label:
+          default: 'Cache Configuration'
+        Parameters:
+          - CacheNodeType
+      - Label:
+          default: 'Monitoring Configuration'
+        Parameters:
+          - AdminEmail
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: 'pr3600'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    MinLength: 1
+    MaxLength: 20
+  
+  DomainName:
+    Type: String
+    Default: 'forum-example-hobbyforum.com'
+    Description: 'Domain name for the forum (e.g., forum.example.com)'
+    MinLength: 3
+    MaxLength: 253
+  
+  SSHKeyName:
+    Type: String
+    Default: 'discourse-forum-key'
+    Description: 'EC2 Key Pair for SSH access (using discourse-forum-key)'
+    AllowedValues:
+      - discourse-forum-key
+      - new-jumpbox-1
+      - latest-key-pair
+  
+  EC2InstanceType:
+    Type: String
+    Default: 't3.small'
+    Description: 'EC2 instance type for Discourse server'
+    AllowedValues:
+      - t3.micro
+      - t3.small
+      - t3.medium
+      - t3.large
+  
+  DBInstanceClass:
+    Type: String
+    Default: 'db.t3.small'
+    Description: 'RDS instance class for PostgreSQL database'
+    AllowedValues:
+      - db.t3.micro
+      - db.t3.small
+      - db.t3.medium
+  
+  DBUsername:
+    Type: String
+    Default: 'discourseadmin'
+    Description: 'Database administrator username'
+    MinLength: 1
+    MaxLength: 16
+  
+  DBAllocatedStorage:
+    Type: Number
+    Default: 20
+    MinValue: 20
+    MaxValue: 100
+    Description: 'Database storage in GB'
+  
+  CacheNodeType:
+    Type: String
+    Default: 'cache.t3.micro'
+    Description: 'ElastiCache node type for Redis'
+    AllowedValues:
+      - cache.t3.micro
+      - cache.t3.small
+      - cache.t3.medium
+  
+  AdminEmail:
+    Type: String
+    Default: 'admin@example.com'
+    Description: 'Email address for CloudWatch alarm notifications'
+    MinLength: 5
+    MaxLength: 100
+
+  CreateDNS:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: 'Create DNS resources (HostedZone, SSL). Set to false to skip DNS setup.'
+
+Conditions:
+  ShouldCreateDNS: !Equals [!Ref CreateDNS, 'true']
+
+# Mappings for Existing VPC Infrastructure
+Mappings:
+  NetworkConfig:
+    ExistingInfrastructure:
+      VPCId: 'vpc-05db96c1cd4cbcdc2'
+      VPCName: 'tap-app-vpc-east1'
+      VPCCIDR: '10.10.0.0/16'
+      PublicSubnet1Id: 'subnet-06f851ff64de1e4aa'
+      PublicSubnet2Id: 'subnet-081e4ea0f27920ff0'
+      PrivateSubnet1Id: 'subnet-06f851ff64de1e4aa'
+      PrivateSubnet2Id: 'subnet-081e4ea0f27920ff0'
+
+Resources:
+  
+  # SECURITY LAYER
+  
+  
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'EC2SecurityGroup-${EnvironmentSuffix}'
+      GroupDescription: 'Security group for Discourse EC2 instance'
+      VpcId: !FindInMap [NetworkConfig, ExistingInfrastructure, VPCId]
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: '0.0.0.0/0'
+          Description: 'Allow HTTP from anywhere'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
+          Description: 'Allow HTTPS from anywhere'
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: '0.0.0.0/0'
+          Description: 'Allow SSH from anywhere'
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: '0.0.0.0/0'
+          Description: 'Allow all outbound traffic'
+      Tags:
+        - Key: Name
+          Value: !Sub 'EC2SecurityGroup-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: 'HobbyForum'
+        - Key: ManagedBy
+          Value: 'CloudFormation'
+  
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'RDSSecurityGroup-${EnvironmentSuffix}'
+      GroupDescription: 'Security group for RDS PostgreSQL instance'
+      VpcId: !FindInMap [NetworkConfig, ExistingInfrastructure, VPCId]
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref EC2SecurityGroup
+          Description: 'Allow PostgreSQL from EC2 instance'
+      Tags:
+        - Key: Name
+          Value: !Sub 'RDSSecurityGroup-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: 'HobbyForum'
+        - Key: ManagedBy
+          Value: 'CloudFormation'
+  
+  ElastiCacheSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'ElastiCacheSecurityGroup-${EnvironmentSuffix}'
+      GroupDescription: 'Security group for ElastiCache Redis cluster'
+      VpcId: !FindInMap [NetworkConfig, ExistingInfrastructure, VPCId]
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 6379
+          ToPort: 6379
+          SourceSecurityGroupId: !Ref EC2SecurityGroup
+          Description: 'Allow Redis from EC2 instance'
+      Tags:
+        - Key: Name
+          Value: !Sub 'ElastiCacheSecurityGroup-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: 'HobbyForum'
+        - Key: ManagedBy
+          Value: 'CloudFormation'
+  
+  
+  # IAM ROLES AND POLICIES
+  
+  
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'DiscourseEC2Role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
+      Policies:
+        - PolicyName: S3AccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                  - 's3:DeleteObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !GetAtt UploadsBucket.Arn
+                  - !Sub '${UploadsBucket.Arn}/*'
+        - PolicyName: SecretsManagerAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'secretsmanager:GetSecretValue'
+                  - 'secretsmanager:DescribeSecret'
+                Resource: !Ref DBSecret
+        - PolicyName: CloudWatchLogsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'logs:DescribeLogStreams'
+                Resource: !GetAtt DiscourseLogGroup.Arn
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: 'HobbyForum'
+        - Key: ManagedBy
+          Value: 'CloudFormation'
+  
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub 'DiscourseEC2InstanceProfile-${EnvironmentSuffix}'
+      Roles:
+        - !Ref EC2Role
+  
+  
+  # SECRETS MANAGER
+  
+  
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+    Properties:
+      Name: !Sub 'ForumDBCredentials-${EnvironmentSuffix}'
+      Description: 'RDS PostgreSQL credentials for Discourse forum'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: 'HobbyForum'
+        - Key: ManagedBy
+          Value: 'CloudFormation'
+  
+  
+  # DATABASE LAYER
+  
+  
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub 'forum-db-subnet-group-${EnvironmentSuffix}'
+      DBSubnetGroupDescription: 'Subnet group for Forum RDS PostgreSQL database'
+      SubnetIds:
+        - !FindInMap [NetworkConfig, ExistingInfrastructure, PrivateSubnet1Id]
+        - !FindInMap [NetworkConfig, ExistingInfrastructure, PrivateSubnet2Id]
+      Tags:
+        - Key: Name
+          Value: !Sub 'ForumDBSubnetGroup-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: 'HobbyForum'
+        - Key: ManagedBy
+          Value: 'CloudFormation'
+  
+  ForumDatabase:
+    Type: AWS::RDS::DBInstance
+    UpdateReplacePolicy: Snapshot
+    DeletionPolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub 'forum-database-${EnvironmentSuffix}'
+      DBName: 'discourse'
+      Engine: postgres
+      EngineVersion: '15.8'
+      DBInstanceClass: !Ref DBInstanceClass
+      AllocatedStorage: !Ref DBAllocatedStorage
+      StorageType: gp3
+      StorageEncrypted: true
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}'
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      MultiAZ: false
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'mon:04:00-mon:05:00'
+      PubliclyAccessible: false
+      EnableCloudwatchLogsExports:
+        - postgresql
+      Tags:
+        - Key: Name
+          Value: !Sub 'ForumDatabase-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: 'HobbyForum'
+        - Key: ManagedBy
+          Value: 'CloudFormation'
+        - Key: BackupEnabled
+          Value: 'true'
+  
+  
+  # CACHING LAYER
+  
+  
+  CacheSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      CacheSubnetGroupName: !Sub 'forum-cache-subnet-group-${EnvironmentSuffix}'
+      Description: 'Subnet group for Forum ElastiCache Redis cluster'
+      SubnetIds:
+        - !FindInMap [NetworkConfig, ExistingInfrastructure, PrivateSubnet1Id]
+        - !FindInMap [NetworkConfig, ExistingInfrastructure, PrivateSubnet2Id]
+      Tags:
+        - Key: Name
+          Value: !Sub 'ForumCacheSubnetGroup-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: 'HobbyForum'
+        - Key: ManagedBy
+          Value: 'CloudFormation'
+  
+  RedisCluster:
+    Type: AWS::ElastiCache::CacheCluster
+    Properties:
+      Engine: redis
+      CacheNodeType: !Ref CacheNodeType
+      NumCacheNodes: 1
+      CacheSubnetGroupName: !Ref CacheSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref ElastiCacheSecurityGroup
+      PreferredMaintenanceWindow: 'sun:05:00-sun:06:00'
+      Tags:
+        - Key: Name
+          Value: !Sub 'RedisCluster-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: 'HobbyForum'
+        - Key: ManagedBy
+          Value: 'CloudFormation'
+  
+  
+  # STORAGE LAYER
+  
+  
+  UploadsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'discourse-uploads-${AWS::AccountId}-${EnvironmentSuffix}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToGlacier
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: GLACIER
+            ExpirationInDays: 90
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'UploadsBucket-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: 'HobbyForum'
+        - Key: ManagedBy
+          Value: 'CloudFormation'
+  
+  BackupsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'discourse-backups-${AWS::AccountId}-${EnvironmentSuffix}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToGlacierAndDelete
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: GLACIER
+            ExpirationInDays: 90
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'BackupsBucket-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: 'HobbyForum'
+        - Key: ManagedBy
+          Value: 'CloudFormation'
+  
+  UploadsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref UploadsBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AllowCloudFrontOAI
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOAI}'
+            Action: 's3:GetObject'
+            Resource: !Sub '${UploadsBucket.Arn}/*'
+          - Sid: AllowEC2RoleAccess
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt EC2Role.Arn
+            Action:
+              - 's3:GetObject'
+              - 's3:PutObject'
+              - 's3:DeleteObject'
+              - 's3:ListBucket'
+            Resource:
+              - !GetAtt UploadsBucket.Arn
+              - !Sub '${UploadsBucket.Arn}/*'
+  
+  BackupsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref BackupsBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AllowEC2RoleAccess
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt EC2Role.Arn
+            Action:
+              - 's3:GetObject'
+              - 's3:PutObject'
+              - 's3:ListBucket'
+            Resource:
+              - !GetAtt BackupsBucket.Arn
+              - !Sub '${BackupsBucket.Arn}/*'
+  
+  
+  # CDN AND DISTRIBUTION
+  
+  
+  CloudFrontOAI:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub 'OAI for Discourse uploads bucket - ${EnvironmentSuffix}'
+  
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub 'CloudFront distribution for Discourse forum - ${EnvironmentSuffix}'
+        DefaultRootObject: ''
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt UploadsBucket.DomainName
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${CloudFrontOAI}'
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          CachedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+          Compress: true
+          MinTTL: 0
+          DefaultTTL: 86400
+          MaxTTL: 31536000
+        CacheBehaviors:
+          - PathPattern: 'images/*'
+            TargetOriginId: S3Origin
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods:
+              - GET
+              - HEAD
+            CachedMethods:
+              - GET
+              - HEAD
+            ForwardedValues:
+              QueryString: false
+              Cookies:
+                Forward: none
+            Compress: true
+            MinTTL: 0
+            DefaultTTL: 604800
+            MaxTTL: 31536000
+        PriceClass: PriceClass_100
+        ViewerCertificate: !If
+          - ShouldCreateDNS
+          - AcmCertificateArn: !Ref SSLCertificate
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - CloudFrontDefaultCertificate: true
+        Aliases: !If
+          - ShouldCreateDNS
+          - [!Ref DomainName]
+          - !Ref AWS::NoValue
+      Tags:
+        - Key: Name
+          Value: !Sub 'CloudFrontDistribution-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: 'HobbyForum'
+        - Key: ManagedBy
+          Value: 'CloudFormation'
+  
+  
+  # DNS AND CERTIFICATE (OPTIONAL - CONDITIONAL)
+  
+  
+  HostedZone:
+    Type: AWS::Route53::HostedZone
+    Condition: ShouldCreateDNS
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+    Properties:
+      Name: !Ref DomainName
+      HostedZoneConfig:
+        Comment: !Sub 'Hosted zone for Discourse forum - ${EnvironmentSuffix}'
+      HostedZoneTags:
+        - Key: Name
+          Value: !Sub 'ForumHostedZone-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: 'HobbyForum'
+        - Key: ManagedBy
+          Value: 'CloudFormation'
+  
+  SSLCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Condition: ShouldCreateDNS
+    Properties:
+      DomainName: !Ref DomainName
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref HostedZone
+      Tags:
+        - Key: Name
+          Value: !Sub 'SSLCertificate-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: 'HobbyForum'
+        - Key: ManagedBy
+          Value: 'CloudFormation'
+  
+  DNSRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: ShouldCreateDNS
+    Properties:
+      HostedZoneId: !Ref HostedZone
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        HostedZoneId: Z2FDTNDATAQYW2
+        DNSName: !GetAtt CloudFrontDistribution.DomainName
+        EvaluateTargetHealth: false
+  
+  
+  # COMPUTE LAYER
+  
+  
+  DiscourseEC2Instance:
+    Type: AWS::EC2::Instance
+    DependsOn:
+      - ForumDatabase
+      - RedisCluster
+      - DBSecret
+    Properties:
+      InstanceType: !Ref EC2InstanceType
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+      KeyName: !Ref SSHKeyName
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          GroupSet:
+            - !Ref EC2SecurityGroup
+          SubnetId: !FindInMap [NetworkConfig, ExistingInfrastructure, PublicSubnet1Id]
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 30
+            VolumeType: gp3
+            Encrypted: true
+            DeleteOnTermination: false
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          exec > >(tee /var/log/user-data.log) 2>&1
+          echo "=== UserData Started ==="
+          yum update -y
+          yum install -y docker git aws-cli jq
+          systemctl start docker
+          systemctl enable docker
+          echo "=== UserData Completed ==="
+          date
+      Tags:
+        - Key: Name
+          Value: !Sub 'DiscourseEC2Instance-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: 'HobbyForum'
+        - Key: ManagedBy
+          Value: 'CloudFormation'
+        - Key: BackupEnabled
+          Value: 'true'
+  
+  
+  # MONITORING AND ALARMS
+  
+  
+  DiscourseLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/discourse/${EnvironmentSuffix}'
+      RetentionInDays: 14
+      Tags:
+        - Key: Name
+          Value: !Sub 'DiscourseLogGroup-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: 'HobbyForum'
+        - Key: ManagedBy
+          Value: 'CloudFormation'
+  
+  AlarmSNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'ForumAlarmTopic-${EnvironmentSuffix}'
+      DisplayName: 'Discourse Forum Alarms'
+      Subscription:
+        - Endpoint: !Ref AdminEmail
+          Protocol: email
+      Tags:
+        - Key: Name
+          Value: !Sub 'AlarmSNSTopic-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: 'HobbyForum'
+        - Key: ManagedBy
+          Value: 'CloudFormation'
+  
+  EC2CPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'EC2-High-CPU-${EnvironmentSuffix}'
+      AlarmDescription: 'Alert when EC2 CPU exceeds 80%'
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref DiscourseEC2Instance
+      AlarmActions:
+        - !Ref AlarmSNSTopic
+      TreatMissingData: notBreaching
+  
+  EC2DiskAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'EC2-High-Disk-${EnvironmentSuffix}'
+      AlarmDescription: 'Alert when EC2 disk usage exceeds 80%'
+      MetricName: disk_used_percent
+      Namespace: CWAgent
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref DiscourseEC2Instance
+        - Name: path
+          Value: '/'
+        - Name: device
+          Value: 'xvda1'
+        - Name: fstype
+          Value: 'xfs'
+      AlarmActions:
+        - !Ref AlarmSNSTopic
+      TreatMissingData: notBreaching
+  
+  EC2MemoryAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'EC2-High-Memory-${EnvironmentSuffix}'
+      AlarmDescription: 'Alert when EC2 memory usage exceeds 80%'
+      MetricName: mem_used_percent
+      Namespace: CWAgent
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref DiscourseEC2Instance
+      AlarmActions:
+        - !Ref AlarmSNSTopic
+      TreatMissingData: notBreaching
+  
+  RDSCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'RDS-High-CPU-${EnvironmentSuffix}'
+      AlarmDescription: 'Alert when RDS CPU exceeds 80%'
+      MetricName: CPUUtilization
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref ForumDatabase
+      AlarmActions:
+        - !Ref AlarmSNSTopic
+      TreatMissingData: notBreaching
+  
+  
+  # BACKUP CONFIGURATION
+  
+  
+  BackupVault:
+    Type: AWS::Backup::BackupVault
+    Properties:
+      BackupVaultName: !Sub 'ForumBackupVault-${EnvironmentSuffix}'
+      BackupVaultTags:
+        Name: !Sub 'BackupVault-${EnvironmentSuffix}'
+        Environment: !Ref EnvironmentSuffix
+        Application: 'HobbyForum'
+        ManagedBy: 'CloudFormation'
+  
+  BackupRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'BackupRole-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: backup.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup'
+        - 'arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: 'HobbyForum'
+        - Key: ManagedBy
+          Value: 'CloudFormation'
+  
+  BackupPlan:
+    Type: AWS::Backup::BackupPlan
+    Properties:
+      BackupPlan:
+        BackupPlanName: !Sub 'ForumBackupPlan-${EnvironmentSuffix}'
+        BackupPlanRule:
+          - RuleName: DailyBackup
+            TargetBackupVault: !Ref BackupVault
+            ScheduleExpression: 'cron(0 2 * * ? *)'
+            StartWindowMinutes: 60
+            CompletionWindowMinutes: 120
+            Lifecycle:
+              DeleteAfterDays: 7
+      BackupPlanTags:
+        Name: !Sub 'BackupPlan-${EnvironmentSuffix}'
+        Environment: !Ref EnvironmentSuffix
+        Application: 'HobbyForum'
+        ManagedBy: 'CloudFormation'
+  
+  BackupSelection:
+    Type: AWS::Backup::BackupSelection
+    Properties:
+      BackupPlanId: !Ref BackupPlan
+      BackupSelection:
+        SelectionName: !Sub 'ForumBackupSelection-${EnvironmentSuffix}'
+        IamRoleArn: !GetAtt BackupRole.Arn
+        ListOfTags:
+          - ConditionType: STRINGEQUALS
+            ConditionKey: BackupEnabled
+            ConditionValue: 'true'
+
+Outputs:
+  ExistingVPCId:
+    Description: 'Existing VPC ID (tap-app-vpc-east1)'
+    Value: !FindInMap [NetworkConfig, ExistingInfrastructure, VPCId]
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCId'
+  
+  ExistingVPCName:
+    Description: 'Existing VPC Name'
+    Value: !FindInMap [NetworkConfig, ExistingInfrastructure, VPCName]
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCName'
+  
+  SSHKeyNameUsed:
+    Description: 'SSH Key Pair Used for EC2 Instance'
+    Value: !Ref SSHKeyName
+    Export:
+      Name: !Sub '${AWS::StackName}-SSHKeyName'
+  
+  PublicSubnet1Id:
+    Description: 'Public Subnet 1 ID'
+    Value: !FindInMap [NetworkConfig, ExistingInfrastructure, PublicSubnet1Id]
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet1Id'
+  
+  PublicSubnet2Id:
+    Description: 'Public Subnet 2 ID'
+    Value: !FindInMap [NetworkConfig, ExistingInfrastructure, PublicSubnet2Id]
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet2Id'
+  
+  PrivateSubnet1Id:
+    Description: 'Private Subnet 1 ID'
+    Value: !FindInMap [NetworkConfig, ExistingInfrastructure, PrivateSubnet1Id]
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet1Id'
+  
+  PrivateSubnet2Id:
+    Description: 'Private Subnet 2 ID'
+    Value: !FindInMap [NetworkConfig, ExistingInfrastructure, PrivateSubnet2Id]
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet2Id'
+  
+  EC2InstanceId:
+    Description: 'Discourse EC2 Instance ID'
+    Value: !Ref DiscourseEC2Instance
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2InstanceId'
+  
+  EC2PublicIP:
+    Description: 'Discourse EC2 Instance Public IP'
+    Value: !GetAtt DiscourseEC2Instance.PublicIp
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2PublicIP'
+  
+  RDSEndpoint:
+    Description: 'RDS PostgreSQL Endpoint'
+    Value: !GetAtt ForumDatabase.Endpoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-RDSEndpoint'
+  
+  RedisEndpoint:
+    Description: 'ElastiCache Redis Endpoint'
+    Value: !GetAtt RedisCluster.RedisEndpoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-RedisEndpoint'
+  
+  UploadsBucketName:
+    Description: 'S3 Uploads Bucket Name'
+    Value: !Ref UploadsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-UploadsBucketName'
+  
+  BackupsBucketName:
+    Description: 'S3 Backups Bucket Name'
+    Value: !Ref BackupsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-BackupsBucketName'
+  
+  CloudFrontURL:
+    Description: 'CloudFront Distribution URL'
+    Value: !GetAtt CloudFrontDistribution.DomainName
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudFrontURL'
+  
+  DomainName:
+    Description: 'Forum Domain Name'
+    Value: !Ref DomainName
+    Export:
+      Name: !Sub '${AWS::StackName}-DomainName'
+  
+  DBSecretArn:
+    Description: 'Database Secret ARN in Secrets Manager'
+    Value: !Ref DBSecret
+    Export:
+      Name: !Sub '${AWS::StackName}-DBSecretArn'
+  
+  LogGroupName:
+    Description: 'CloudWatch Log Group Name'
+    Value: !Ref DiscourseLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-LogGroupName'
+  
+  SNSTopicArn:
+    Description: 'SNS Topic ARN for Alarms'
+    Value: !Ref AlarmSNSTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-SNSTopicArn'
+  
+  BackupVaultName:
+    Description: 'AWS Backup Vault Name'
+    Value: !Ref BackupVault
+    Export:
+      Name: !Sub '${AWS::StackName}-BackupVaultName'
+  
+  StackName:
+    Description: 'Name of this CloudFormation stack'
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub '${AWS::StackName}-StackName'
+  
+  EnvironmentSuffix:
+    Description: 'Environment suffix used for this deployment'
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'

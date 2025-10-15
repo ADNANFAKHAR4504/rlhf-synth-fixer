@@ -1,0 +1,33 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "82741903",
+  "team": "synth",
+  "startedAt": "2025-10-01T13:54:52+00:00",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "training_quality": 8.5,
+  "training_quality_justification": "High training value (8.5/10): The MODEL_RESPONSE contained multiple critical CDK-specific errors including deprecated S3Origin usage, incorrect IAM imports (cdk.aws_iam vs proper import), missing environment isolation patterns, incorrect OAC implementation, and security issues with public bucket access. These are valuable learning examples for modern CDK TypeScript best practices. The fixes demonstrate proper nested stack architecture, Origin Access Control (OAC) patterns, region-specific resource handling (WAF/ACM in us-east-1), environment suffix isolation, and comprehensive security hardening. The comprehensive nature of corrections across infrastructure code, security patterns, and monitoring setup provides substantial training data for improving model knowledge in CDK-based static website deployments with CloudFront, S3, Route53, and WAF.",
+  "aws_services": [
+    "S3",
+    "CloudFront",
+    "Route53",
+    "WAF",
+    "CloudWatch",
+    "ACM",
+    "IAM"
+  ],
+  "subcategory": "static-website-hosting",
+  "review_completed_at": "2025-10-10T11:50:00Z",
+  "reviewer": "iac-code-reviewer-agent",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

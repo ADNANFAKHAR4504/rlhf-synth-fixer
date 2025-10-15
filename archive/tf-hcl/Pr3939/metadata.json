@@ -1,0 +1,44 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "353856",
+  "team": "6",
+  "startedAt": "2025-10-08T13:28:14.499Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Table",
+    "Elastic IP",
+    "Security Group",
+    "VPC Flow Logs",
+    "EC2",
+    "Auto Scaling",
+    "S3",
+    "KMS",
+    "IAM",
+    "CloudTrail",
+    "AWS Config",
+    "CloudWatch",
+    "SNS",
+    "CloudFront",
+    "WAFv2",
+    "API Gateway",
+    "AWS Backup",
+    "AWS Organizations"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "OMO-NOSA",
+  "dockerS3Location": ""
+}

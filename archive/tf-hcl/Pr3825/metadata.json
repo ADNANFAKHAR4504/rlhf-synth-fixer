@@ -1,0 +1,37 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "4A6032",
+  "team": "1",
+  "startedAt": "2025-10-08T07:52:04.249Z",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS Aurora",
+    "DynamoDB",
+    "Application Load Balancer",
+    "Auto Scaling",
+    "Lambda",
+    "CloudWatch",
+    "EventBridge",
+    "SNS",
+    "IAM",
+    "KMS",
+    "Route53",
+    "WAF",
+    "AWS Backup"
+  ],
+  "training_quality": 6,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "emmanuel-turing",
+  "dockerS3Location": ""
+}

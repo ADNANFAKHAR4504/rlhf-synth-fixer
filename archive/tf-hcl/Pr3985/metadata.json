@@ -1,0 +1,46 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350177",
+  "team": "4",
+  "startedAt": "2025-10-09T08:36:30.894Z",
+  "subtask": "Infrastructure Environment Provisioning",
+  "subject_labels": [
+    "Production VPC Setup",
+    "Multi-Tier Architecture",
+    "AWS Infrastructure Provisioning"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "RDS",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "NAT Gateway",
+    "Internet Gateway",
+    "VPC Flow Logs",
+    "Elastic IP"
+  ],
+  "training_quality": 9,
+  "testDependencies": [
+    "jest@^29.7.0",
+    "hcl2-parser@^1.0.3",
+    "aws-sdk@^2.1692.0",
+    "@aws-sdk/client-ec2@^3.883.0",
+    "@aws-sdk/client-rds@^3.883.0",
+    "@aws-sdk/client-auto-scaling@^3.846.0",
+    "@aws-sdk/client-cloudwatch@^3.883.0",
+    "@aws-sdk/client-sns@^3.855.0",
+    "@aws-sdk/client-cloudwatch-logs@^3.901.0"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

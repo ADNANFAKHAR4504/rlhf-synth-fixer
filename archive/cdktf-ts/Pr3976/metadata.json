@@ -1,0 +1,40 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349037",
+  "team": "3",
+  "startedAt": "2025-10-09T07:19:11.356Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Elastic Load Balancing (ALB)",
+    "RDS",
+    "S3",
+    "CloudFront",
+    "Route53",
+    "CloudWatch",
+    "CloudTrail",
+    "IAM",
+    "KMS",
+    "Systems Manager (Parameter Store)",
+    "SNS",
+    "Internet Gateway",
+    "NAT Gateway",
+    "VPC Flow Logs"
+  ],
+  "training_quality": 8,
+  "training_quality_justification": "High-quality training data with comprehensive infrastructure requirements and detailed failure analysis. The PROMPT provides production-grade AWS architecture requirements using CDKTF. MODEL_FAILURES.md documents 14 distinct technical failures with excellent depth, covering critical areas: (1) CDKTF token resolution issues with availability zones, (2) S3 bucket naming anti-patterns breaking Terraform state, (3) RDS password security vulnerabilities, (4) AWS provider version compatibility (S3 resource types), (5) S3 ACL configuration post-2023 AWS changes, (6) Multi-region ELB service account handling, (7) CloudFront certificate region requirements, (8) Resource dependency timing issues. The IDEAL_RESPONSE demonstrates correct patterns with explicit AZ configuration, deterministic naming, AWS Secrets Manager integration, proper resource ordering, and comprehensive security controls. This provides substantial retraining value for learning CDKTF-specific patterns, AWS service integration nuances, security best practices, and infrastructure-as-code principles. Minor deductions: some issues are provider version-specific rather than fundamental architectural patterns, and MODEL_RESPONSE comparison is limited.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tushar-turing8",
+  "dockerS3Location": ""
+}

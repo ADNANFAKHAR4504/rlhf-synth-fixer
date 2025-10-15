@@ -1,0 +1,21 @@
+{
+  "platform": "cdktf",
+  "language": "java",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101F1D",
+  "team": "6",
+  "startedAt": "2025-10-12T12:23:49.437Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring"
+  ],
+  "aws_services": "ECS, Kinesis, Lambda, S3",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "antny-turing",
+  "dockerS3Location": ""
+}

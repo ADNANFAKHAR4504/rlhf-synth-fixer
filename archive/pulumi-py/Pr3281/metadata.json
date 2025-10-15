@@ -1,0 +1,40 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "68720415",
+  "team": "synth",
+  "startedAt": "2025-10-02T02:52:46+05:30",
+  "training_quality": 8.5,
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure",
+    "pulumi",
+    "python",
+    "api-gateway",
+    "lambda",
+    "dynamodb",
+    "cloudwatch",
+    "ssm-parameter-store",
+    "sqs",
+    "observability"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "IAM",
+    "Systems Manager Parameter Store",
+    "SQS",
+    "X-Ray"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

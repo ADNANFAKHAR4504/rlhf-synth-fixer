@@ -1,0 +1,35 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "34586172",
+  "team": "1",
+  "startedAt": "2025-10-06T08:52:51.969Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "ElastiCache",
+    "S3",
+    "CloudFront",
+    "Route53",
+    "ACM",
+    "CloudWatch",
+    "Backup",
+    "IAM",
+    "SecretsManager",
+    "SNS"
+  ],
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raghav-turing",
+  "dockerS3Location": ""
+}

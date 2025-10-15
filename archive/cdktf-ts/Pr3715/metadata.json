@@ -1,0 +1,38 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "10000040",
+  "team": "1",
+  "startedAt": "2025-10-07T08:00:23.631Z",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "IaC Optimization"
+  ],
+  "aws_services": [
+    "DynamoDB",
+    "DynamoDB Streams",
+    "DynamoDB Global Secondary Index",
+    "DynamoDB Local Secondary Index",
+    "Application Auto Scaling",
+    "KMS",
+    "IAM",
+    "VPC",
+    "EC2",
+    "S3",
+    "Lambda",
+    "Route53",
+    "EventBridge",
+    "CloudWatch",
+    "Load Balancer"
+  ],
+  "training_quality": 8.5,
+  "training_quality_justification": "Excellent multi-region disaster recovery implementation with comprehensive CDKTF patterns. High training value due to: (1) Complex AWS architecture spanning 15+ services with proper cross-region configuration, (2) Production-ready security features including per-region KMS encryption, IAM least privilege, and TLS enforcement, (3) Complete disaster recovery workflow with automated failover (RTO < 5 minutes), (4) Comprehensive test coverage with 74 unit tests and 21 integration tests achieving 100% coverage, (5) Well-documented comparison between MODEL_RESPONSE failures and IDEAL_RESPONSE corrections, demonstrating critical CDKTF patterns and AWS best practices. Minor deduction for complexity that may challenge model learning capacity.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
+}

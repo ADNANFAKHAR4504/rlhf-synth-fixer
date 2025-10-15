@@ -1,0 +1,21 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349242",
+  "team": "6",
+  "startedAt": "2025-10-07T16:14:22.022Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC, EC2 (Auto Scaling Group, Launch Template), RDS, ALB, Secrets Manager, ElasticLoadBalancingV2, DynamoDB, IAM (Roles and Policies), Subnets, Security Groups, ACM (Certificate Manager), CloudWatch (Dashboard, Alarms, Logs), NAT Gateway, Elastic IP, Internet Gateway, Route Tables",
+  "training_quality": "excellent",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "OMO-NOSA",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349019",
+  "team": "3",
+  "startedAt": "2025-10-09T20:51:17.978Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "Secrets Manager",
+    "Elastic Load Balancing (ALB)",
+    "NAT Gateway",
+    "Internet Gateway",
+    "VPN Gateway",
+    "IAM"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "misra-s-turing",
+  "dockerS3Location": ""
+}
