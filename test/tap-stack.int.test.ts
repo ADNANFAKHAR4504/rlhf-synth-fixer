@@ -198,17 +198,17 @@ describe('TAP Stack - Live Integration Tests (CloudFormation YAML)', () => {
     test('DynamoDB table supports basic CRUD', async () => {
       const id = `int-${Date.now()}`;
       const item: Record<string, AttributeValue> = {
-        id: { S: id },
+        SessionId: { S: id },
         testData: { S: 'integration' },
         timestamp: { N: String(Date.now()) },
       };
 
       await ddb.send(new PutItemCommand({ TableName: tableName, Item: item }));
 
-      const get = await ddb.send(new GetItemCommand({ TableName: tableName, Key: { id: { S: id } } }));
-      expect(get.Item?.id?.S).toBe(id);
+      const get = await ddb.send(new GetItemCommand({ TableName: tableName, Key: { SessionId: { S: id } } }));
+      expect(get.Item?.SessionId?.S).toBe(id);
 
-      await ddb.send(new DeleteItemCommand({ TableName: tableName, Key: { id: { S: id } } }));
+      await ddb.send(new DeleteItemCommand({ TableName: tableName, Key: { SessionId: { S: id } } }));
     }, 20000);
   }
 });
