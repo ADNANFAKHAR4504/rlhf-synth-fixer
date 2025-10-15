@@ -1,0 +1,33 @@
+{
+  "platform": "cdk",
+  "language": "go",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "410120",
+  "team": "4",
+  "startedAt": "2025-10-08T16:47:03.135Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "DynamoDB",
+    "CloudWatch",
+    "IAM",
+    "X-Ray",
+    "SQS"
+  ],
+  "training_quality": 9,
+  "background": "Build a serverless image processing system using AWS CDK Go that automatically processes uploaded images, generates multiple preview sizes, and stores metadata in DynamoDB. The system must handle S3 event triggers, implement proper error handling with DLQ, provide CloudWatch monitoring and alarms, and follow cost optimization best practices including lifecycle policies and pay-per-request billing.",
+  "reviewed_at": "2025-10-14T00:00:00.000Z",
+  "compliance_percentage": 100,
+  "test_coverage_percentage": 95,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "santhosh-swe",
+  "dockerS3Location": ""
+}

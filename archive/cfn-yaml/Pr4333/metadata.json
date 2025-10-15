@@ -1,0 +1,31 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "2966563502",
+  "team": "synth",
+  "startedAt": "2025-10-14T05:22:45+05:30",
+  "subtask": "Application Deployment",
+  "background": "FinTech Corp needs to deploy a new payment processing database that meets PCI-DSS compliance requirements. The database will store sensitive payment transaction data and must implement proper encryption, secret rotation, and access controls.",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Security Configuration as Code"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "RDS Aurora",
+    "Secrets Manager",
+    "ElastiCache",
+    "KMS",
+    "Lambda",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

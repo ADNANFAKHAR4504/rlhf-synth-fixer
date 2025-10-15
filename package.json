@@ -189,7 +189,8 @@
     "uuid": "^11.1.0",
     "@commitlint/cli": "^19.0.0",
     "@commitlint/config-conventional": "^19.0.0",
-    "husky": "^9.0.0"
+    "husky": "^9.0.0",
+    "esbuild": "^0.24.0"
   },
   "dependencies": {
     "@aws-cdk/aws-pipes-alpha": "^2.204.0-alpha.0",
