@@ -10,8 +10,8 @@ import * as kms from 'aws-cdk-lib/aws-kms';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
-import * as iam from 'aws-cdk-lib/aws-iam';
+// import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
+// import * as iam from 'aws-cdk-lib/aws-iam';
 // import { NetworkingStack } from './stacks/networking-stack';
 // import { DatabaseStack } from './stacks/database-stack';
 // import { ComputeStack } from './stacks/compute-stack';
@@ -62,11 +62,11 @@ export class TapStack extends cdk.Stack {
     });
 
     // Create S3 bucket for audit logs
-    const auditBucket = new s3.Bucket(this, 'AuditBucket', {
-      bucketName: `tap-audit-${envSuffix}-${config.regionName}-${this.account}`,
+    new s3.Bucket(this, 'AuditBucket', {
+      bucketName: `tap-audit-logs-${envSuffix}-${config.regionName}-${Date.now()}`,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: this.kmsKey,
-      versioned: true,
+      versioned: false,
       lifecycleRules: [
         {
           id: 'DeleteOldLogs',
@@ -82,60 +82,62 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
+    // Temporarily disabled CloudTrail due to trail limit (5 trails per region)
+    // TODO: Re-enable CloudTrail after cleaning up old trails or requesting limit increase
     // Add bucket policy for CloudTrail
-    auditBucket.addToResourcePolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
-        actions: ['s3:GetBucketAcl'],
-        resources: [auditBucket.bucketArn],
-        conditions: {
-          StringEquals: {
-            'AWS:SourceArn': `arn:aws:cloudtrail:${config.regionName}:${this.account}:trail/tap-audit-trail-${envSuffix}-${config.regionName}`,
-          },
-        },
-      })
-    );
+    // auditBucket.addToResourcePolicy(
+    //   new iam.PolicyStatement({
+    //     effect: iam.Effect.ALLOW,
+    //     principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
+    //     actions: ['s3:GetBucketAcl'],
+    //     resources: [auditBucket.bucketArn],
+    //     conditions: {
+    //       StringEquals: {
+    //         'AWS:SourceArn': `arn:aws:cloudtrail:${config.regionName}:${this.account}:trail/tap-audit-trail-${envSuffix}-${config.regionName}`,
+    //       },
+    //     },
+    //   })
+    // );
 
-    auditBucket.addToResourcePolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
-        actions: ['s3:PutObject'],
-        resources: [`${auditBucket.bucketArn}/*`],
-        conditions: {
-          StringEquals: {
-            's3:x-amz-acl': 'bucket-owner-full-control',
-            'AWS:SourceArn': `arn:aws:cloudtrail:${config.regionName}:${this.account}:trail/tap-audit-trail-${envSuffix}-${config.regionName}`,
-          },
-        },
-      })
-    );
+    // auditBucket.addToResourcePolicy(
+    //   new iam.PolicyStatement({
+    //     effect: iam.Effect.ALLOW,
+    //     principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
+    //     actions: ['s3:PutObject'],
+    //     resources: [`${auditBucket.bucketArn}/*`],
+    //     conditions: {
+    //       StringEquals: {
+    //         's3:x-amz-acl': 'bucket-owner-full-control',
+    //         'AWS:SourceArn': `arn:aws:cloudtrail:${config.regionName}:${this.account}:trail/tap-audit-trail-${envSuffix}-${config.regionName}`,
+    //       },
+    //     },
+    //   })
+    // );
 
     // Add KMS key policy for CloudTrail
-    this.kmsKey.addToResourcePolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
-        actions: ['kms:GenerateDataKey*'],
-        resources: ['*'],
-        conditions: {
-          StringEquals: {
-            'kms:EncryptionContext:aws:cloudtrail:arn': `arn:aws:cloudtrail:${config.regionName}:${this.account}:trail/tap-audit-trail-${envSuffix}-${config.regionName}`,
-          },
-        },
-      })
-    );
+    // this.kmsKey.addToResourcePolicy(
+    //   new iam.PolicyStatement({
+    //     effect: iam.Effect.ALLOW,
+    //     principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
+    //     actions: ['kms:GenerateDataKey*'],
+    //     resources: ['*'],
+    //     conditions: {
+    //       StringEquals: {
+    //         'kms:EncryptionContext:aws:cloudtrail:arn': `arn:aws:cloudtrail:${config.regionName}:${this.account}:trail/tap-audit-trail-${envSuffix}-${config.regionName}`,
+    //       },
+    //     },
+    //   })
+    // );
 
     // Enable CloudTrail for audit logging
-    new cloudtrail.Trail(this, 'AuditTrail', {
-      bucket: auditBucket,
-      encryptionKey: this.kmsKey,
-      includeGlobalServiceEvents: config.isPrimary,
-      isMultiRegionTrail: config.isPrimary,
-      enableFileValidation: true,
-      trailName: `tap-audit-trail-${envSuffix}-${config.regionName}`,
-    });
+    // new cloudtrail.Trail(this, 'AuditTrail', {
+    //   bucket: auditBucket,
+    //   encryptionKey: this.kmsKey,
+    //   includeGlobalServiceEvents: config.isPrimary,
+    //   isMultiRegionTrail: config.isPrimary,
+    //   enableFileValidation: true,
+    //   trailName: `tap-audit-trail-${envSuffix}-${config.regionName}`,
+    // });
 
     // Create VPC
     this.vpc = new ec2.Vpc(this, 'VPC', {

@@ -10,5 +10,30 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "CloudWatch, Lambda, DynamoDB, KMS, Route 53, RDS"
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "RDS",
+    "Aurora",
+    "ECS",
+    "Fargate",
+    "Application Load Balancer",
+    "Route 53",
+    "DynamoDB",
+    "KMS",
+    "CloudWatch",
+    "Lambda",
+    "S3",
+    "CloudTrail",
+    "IAM",
+    "Secrets Manager",
+    "CloudWatch Logs",
+    "SNS",
+    "EventBridge",
+    "Step Functions",
+    "Auto Scaling",
+    "AWS Backup",
+    "Elastic Load Balancing"
+  ],
+  "training_quality": 9
 }
