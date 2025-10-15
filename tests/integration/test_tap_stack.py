@@ -393,10 +393,15 @@ class TestInfrastructureIntegration(unittest.TestCase):
         # Check that all resource names include environment suffix
         for key, value in flat_outputs.items():
             if "test123" not in key and "test123" not in str(value):
-                # Should have some environment identifier
+                # Should have some environment identifier (including PR-based identifiers like pr4461)
+                import re
+                pr_pattern = r'pr\d+'  # Matches pr followed by digits (e.g., pr4461)
+                has_standard_env = any(suffix in str(value).lower() for suffix in ["test", "dev", "staging", "prod"])
+                has_pr_env = bool(re.search(pr_pattern, str(value).lower()))
+                
                 self.assertTrue(
-                    any(suffix in str(value).lower() for suffix in ["test", "dev", "staging", "prod"]),
-                    f"Resource {key}:{value} should include environment identifier"
+                    has_standard_env or has_pr_env,
+                    f"Resource {key}:{value} should include environment identifier (test/dev/staging/prod/pr####)"
                 )
     
     def test_service_integration_readiness(self):
