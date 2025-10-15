@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "iac-log-analytics",
+  "team": "5",
+  "startedAt": "2025-10-14T15:32:12.198Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "Kinesis Firehose",
+    "S3",
+    "Glue",
+    "Athena",
+    "Lambda",
+    "QuickSight",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "IAM",
+    "SNS",
+    "SSM"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
+}
