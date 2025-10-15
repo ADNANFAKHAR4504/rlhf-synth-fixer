@@ -1,21 +1,18 @@
 """security_construct.py
-KMS encryption keys, CloudTrail, and security configurations.
+KMS encryption keys and security configurations.
 """
 
-from typing import Optional
 from constructs import Construct
 import aws_cdk as cdk
 from aws_cdk import (
     aws_kms as kms,
-    aws_cloudtrail as cloudtrail,
-    aws_s3 as s3,
     aws_iam as iam
 )
 
 
 class SecurityConstruct(Construct):
     """
-    Creates security resources including KMS keys, CloudTrail, and IAM policies
+    Creates security resources including KMS keys and IAM policies
     for HIPAA-compliant healthcare data platform.
     """
 
@@ -65,33 +62,3 @@ class SecurityConstruct(Construct):
                 }
             )
         )
-
-        # Create CloudTrail S3 bucket
-        cloudtrail_bucket = s3.Bucket(
-            self,
-            f"CloudTrailBucket-{environment_suffix}",
-            bucket_name=f"cloudtrail-{environment_suffix}-{cdk.Aws.ACCOUNT_ID}",
-            encryption=s3.BucketEncryption.S3_MANAGED,
-            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-            versioned=True,
-            removal_policy=cdk.RemovalPolicy.DESTROY,
-            auto_delete_objects=True,
-            enforce_ssl=True
-        )
-
-        # Create CloudTrail
-        trail = cloudtrail.Trail(
-            self,
-            f"AuditTrail-{environment_suffix}",
-            trail_name=f"healthcare-trail-{environment_suffix}",
-            bucket=cloudtrail_bucket,
-            enable_file_validation=True,
-            include_global_service_events=True,
-            is_multi_region_trail=True,
-            management_events=cloudtrail.ReadWriteType.ALL,
-            send_to_cloud_watch_logs=True
-        )
-
-        # Store references
-        self.cloudtrail_bucket = cloudtrail_bucket
-        self.trail = trail

@@ -48,7 +48,7 @@ class TapStack(cdk.Stack):
         primary_region = self.region or 'us-east-1'
         dr_region = 'us-west-2' if primary_region == 'us-east-1' else 'us-east-1'
 
-        # Create security construct (KMS keys, CloudTrail)
+        # Create security construct (KMS keys)
         security = SecurityConstruct(
             self,
             f"Security-{environment_suffix}",

@@ -56,7 +56,7 @@ class TestTapStack(unittest.TestCase):
     @mark.it("creates S3 buckets with encryption and versioning")
     def test_creates_s3_buckets(self):
         """Test S3 bucket creation with security features"""
-        # ASSERT - Multiple S3 buckets exist (data, access logs, cloudtrail) - at least 2
+        # ASSERT - Multiple S3 buckets exist (data and access logs) - at least 2
         buckets = self.template.find_resources("AWS::S3::Bucket")
         self.assertGreaterEqual(len(buckets), 2)
 
@@ -106,19 +106,6 @@ class TestTapStack(unittest.TestCase):
         """Test database credentials secret"""
         # ASSERT - Secret exists
         self.template.resource_count_is("AWS::SecretsManager::Secret", 1)
-
-    @mark.it("creates CloudTrail with proper configuration")
-    def test_creates_cloudtrail(self):
-        """Test CloudTrail for audit logging"""
-        # ASSERT - CloudTrail exists
-        self.template.resource_count_is("AWS::CloudTrail::Trail", 1)
-
-        # Trail has file validation and multi-region enabled
-        self.template.has_resource_properties("AWS::CloudTrail::Trail", {
-            "EnableLogFileValidation": True,
-            "IsMultiRegionTrail": True,
-            "IncludeGlobalServiceEvents": True
-        })
 
     @mark.it("creates ECS cluster with container insights")
     def test_creates_ecs_cluster(self):

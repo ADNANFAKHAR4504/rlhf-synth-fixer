@@ -35,7 +35,6 @@ class TestTapStackIntegration(unittest.TestCase):
         cls.rds_client = boto3.client('rds', region_name=cls.region)
         cls.ecs_client = boto3.client('ecs', region_name=cls.region)
         cls.elbv2_client = boto3.client('elbv2', region_name=cls.region)
-        cls.cloudtrail_client = boto3.client('cloudtrail', region_name=cls.region)
         cls.backup_client = boto3.client('backup', region_name=cls.region)
 
     @mark.it("VPC is accessible and has correct configuration")
@@ -252,26 +251,6 @@ class TestTapStackIntegration(unittest.TestCase):
 
         # ASSERT - at least one target should be healthy or initializing
         self.assertGreater(len(health_response['TargetHealthDescriptions']), 0)
-
-    @mark.it("CloudTrail is enabled and logging")
-    def test_cloudtrail_enabled(self):
-        """Test CloudTrail is enabled"""
-        # List trails
-        response = self.cloudtrail_client.describe_trails()
-
-        # ASSERT - at least one trail exists
-        self.assertGreater(len(response['trailList']), 0)
-
-        # Check if any trail is logging
-        for trail in response['trailList']:
-            status = self.cloudtrail_client.get_trail_status(
-                Name=trail['TrailARN']
-            )
-            if status['IsLogging']:
-                # Found an active trail
-                return
-
-        self.fail("No active CloudTrail found")
 
     @mark.it("AWS Backup plan exists and is active")
     def test_backup_plan_exists(self):
