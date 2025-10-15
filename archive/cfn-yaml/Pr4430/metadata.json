@@ -1,0 +1,35 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350061",
+  "team": "6",
+  "startedAt": "2025-10-14T07:35:19.559Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "ElasticLoadBalancingV2",
+    "AutoScaling",
+    "DynamoDB",
+    "SecretsManager",
+    "Route53",
+    "CloudFront",
+    "WAFv2",
+    "CloudWatch",
+    "IAM",
+    "CertificateManager"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mohammadn1-turing",
+  "dockerS3Location": ""
+}
