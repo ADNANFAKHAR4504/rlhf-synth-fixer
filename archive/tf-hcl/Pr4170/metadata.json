@@ -14,7 +14,7 @@
   "aws_services": [
     "S3",
     "S3 Bucket",
-    "S3 Bucket Versioning", 
+    "S3 Bucket Versioning",
     "S3 Server-side Encryption",
     "S3 Static Website Hosting",
     "S3 CORS Configuration",
