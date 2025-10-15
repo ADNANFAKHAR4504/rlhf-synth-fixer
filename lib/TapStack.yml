@@ -94,6 +94,8 @@ Mappings:
       AMI: 'ami-0dfa284c9d92c70cd' # Amazon Linux 2023
     sa-east-1:
       AMI: 'ami-0a0c8eebcdd6dcbd0' # Amazon Linux 2023
+    ap-northeast-3:
+      AMI: 'ami-0c3fd0f5d33134a76' # Amazon Linux 2023
 
 
 Resources:
