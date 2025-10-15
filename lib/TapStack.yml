@@ -1,9 +1,9 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  TapStack.yml — Secure web infra (us-east-1). VPC with public/private subnets, ALB balancing
-  EC2 (T2/T3) across AZs, private RDS, encrypted S3 buckets (CloudFront OAI access), WAFv2,
-  CloudFront, Lambda audit via SNS (from S3 events), SQS logging queue, KMS for EBS/RDS,
-  CloudWatch alarms, and AWS Config. All resources tagged with Environment, Owner, Project.
+  TapStack.yml — Secure web infra (us-east-1). Creates VPC, public/private subnets,
+  ALB balancing EC2 (T2/T3) across AZs, private RDS, encrypted S3 bucket with CloudFront OAI,
+  WAFv2, Lambda audit (SNS from S3 events), SQS logging queue, KMS for EBS/RDS encryption,
+  CloudWatch alarms, AWS Config. All resources tagged with Environment, Owner, Project.
 
 Parameters:
   Environment:
@@ -20,7 +20,7 @@ Parameters:
     Default: tapstack
     Description: Project tag (lowercase)
     AllowedPattern: '^[a-z0-9-]+$'
-    ConstraintDescription: "Project must be lowercase letters, numbers, or hyphen."
+    ConstraintDescription: "Project must use lowercase letters, numbers, or hyphen."
   AllowedSSHLocation:
     Type: String
     Default: 203.0.113.0/32
@@ -32,11 +32,7 @@ Parameters:
   InstanceType:
     Type: String
     Default: t3.micro
-    AllowedValues:
-      - t2.micro
-      - t2.small
-      - t3.micro
-      - t3.small
+    AllowedValues: [t2.micro, t2.small, t3.micro, t3.small]
     Description: EC2 instance type (restricted to T2/T3 family)
 
 Conditions:
@@ -51,9 +47,9 @@ Mappings:
 
 Resources:
 
-  ###########################
-  # VPC & Networking
-  ###########################
+  ####################################
+  # Networking - VPC, Subnets, Routes
+  ####################################
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -218,9 +214,9 @@ Resources:
       SubnetId: !Ref PrivateSubnet2
       RouteTableId: !Ref PrivateRouteTable
 
-  ###########################
-  # IAM & InstanceProfile
-  ###########################
+  ####################################
+  # IAM / Instance Profile for SSM
+  ####################################
   InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -244,11 +240,12 @@ Resources:
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      Roles: [!Ref InstanceRole]
+      Roles:
+        - !Ref InstanceRole
 
-  ###########################
+  ####################################
   # Security Groups
-  ###########################
+  ####################################
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -285,9 +282,9 @@ Resources:
         - Key: Project
           Value: !Ref Project
 
-  ###########################
-  # KMS Key
-  ###########################
+  ####################################
+  # KMS key for encryption
+  ####################################
   KMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -301,9 +298,9 @@ Resources:
         - Key: Project
           Value: !Ref Project
 
-  ###########################
-  # EC2 Instances
-  ###########################
+  ####################################
+  # EC2 Instances (private subnets)
+  ####################################
   EC2Instance1:
     Type: AWS::EC2::Instance
     Properties:
@@ -356,9 +353,9 @@ Resources:
         - Key: Project
           Value: !Ref Project
 
-  ###########################
-  # ALB + Targets
-  ###########################
+  ####################################
+  # ALB (public) + TargetGroup + Listener
+  ####################################
   ALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -396,9 +393,9 @@ Resources:
         - Type: forward
           TargetGroupArn: !Ref TargetGroup
 
-  ###########################
+  ####################################
   # SNS topic + policy (S3 -> SNS)
-  ###########################
+  ####################################
   S3EventsTopic:
     Type: AWS::SNS::Topic
     Properties:
@@ -414,7 +411,8 @@ Resources:
   SNSTopicPolicy:
     Type: AWS::SNS::TopicPolicy
     Properties:
-      Topics: [!Ref S3EventsTopic]
+      Topics:
+        - !Ref S3EventsTopic
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -428,9 +426,9 @@ Resources:
               StringEquals:
                 aws:SourceAccount: !Ref AWS::AccountId
 
-  ###########################
-  # Deterministic S3 bucket name (lowercase) + notifications -> SNS
-  ###########################
+  ####################################
+  # Deterministic S3 bucket name + encryption + notifications -> SNS
+  ####################################
   S3Bucket:
     Type: AWS::S3::Bucket
     DependsOn:
@@ -458,18 +456,18 @@ Resources:
         - Key: Project
           Value: !Ref Project
 
-  ###########################
+  ####################################
   # CloudFront OAI
-  ###########################
+  ####################################
   CloudFrontOAI:
     Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
     Properties:
       CloudFrontOriginAccessIdentityConfig:
         Comment: !Sub "OAI for ${Project} CloudFront origin"
 
-  ###########################
-  # S3 bucket policy: allow CloudFront OAI to GetObject and deny unencrypted uploads
-  ###########################
+  ####################################
+  # S3 Bucket Policy: permit OAI read + deny unencrypted uploads
+  ####################################
   S3BucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -493,9 +491,9 @@ Resources:
               StringNotEquals:
                 "s3:x-amz-server-side-encryption": "AES256"
 
-  ###########################
-  # Lambda (audit) + SNS subscription
-  ###########################
+  ####################################
+  # Lambda (audit) + permission + SNS subscription (NO RawMessageDelivery)
+  ####################################
   LambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -504,10 +502,17 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: [lambda.amazonaws.com]
+              Service: lambda.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
 
   AuditLambda:
     Type: AWS::Lambda::Function
@@ -522,28 +527,36 @@ Resources:
           def handler(event, context):
               print("Audit Lambda event:")
               print(json.dumps(event))
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
 
+  # Lambda permission allowing SNS to invoke this Lambda (SourceArn of the topic)
   LambdaInvokePermissionFromSNS:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Ref AuditLambda
+      FunctionName: !GetAtt AuditLambda.Arn
       Action: lambda:InvokeFunction
       Principal: sns.amazonaws.com
       SourceArn: !Ref S3EventsTopic
-      SourceAccount: !Ref AWS::AccountId
 
+  # SNS subscription for Lambda — do NOT set RawMessageDelivery for protocol 'lambda'
   SNSSubscriptionToLambda:
     Type: AWS::SNS::Subscription
-    DependsOn: LambdaInvokePermissionFromSNS
+    DependsOn:
+      - LambdaInvokePermissionFromSNS
     Properties:
       TopicArn: !Ref S3EventsTopic
       Protocol: lambda
       Endpoint: !GetAtt AuditLambda.Arn
-      RawMessageDelivery: true
 
-  ###########################
-  # RDS (private) + SecretsManager
-  ###########################
+  ####################################
+  # Secrets + RDS (private)
+  ####################################
   DBSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -590,9 +603,9 @@ Resources:
         - Key: Project
           Value: !Ref Project
 
-  ###########################
-  # SQS (logging queue)
-  ###########################
+  ####################################
+  # SQS Queue for application logging
+  ####################################
   AppLoggingQueue:
     Type: AWS::SQS::Queue
     Properties:
@@ -605,9 +618,9 @@ Resources:
         - Key: Project
           Value: !Ref Project
 
-  ###########################
+  ####################################
   # WAFv2 WebACL (for CloudFront) — us-east-1 only
-  ###########################
+  ####################################
   WAFWebACL:
     Type: AWS::WAFv2::WebACL
     Condition: IsUsEast1
@@ -634,10 +647,9 @@ Resources:
             CloudWatchMetricsEnabled: true
             MetricName: rateLimitRule
 
-  ###########################
-  # CloudFront Distribution
-  # NOTE: removed explicit DependsOn for CloudFrontOAI & WAFWebACL (Ref/GetAtt enforce deps)
-  ###########################
+  ####################################
+  # CloudFront Distribution - uses WAF ARN and OAI
+  ####################################
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
     Condition: IsUsEast1
@@ -661,9 +673,9 @@ Resources:
               Forward: none
         WebACLId: !GetAtt WAFWebACL.Arn
 
-  ###########################
-  # CloudWatch Alarms (CPU + memory)
-  ###########################
+  ####################################
+  # CloudWatch Alarms (CPU + memory placeholder)
+  ####################################
   CPUAlarmInstance1:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -694,9 +706,9 @@ Resources:
       Threshold: 80
       ComparisonOperator: GreaterThanThreshold
 
-  ###########################
-  # AWS Config
-  ###########################
+  ####################################
+  # AWS Config (inline policy) and recorder
+  ####################################
   AWSConfigRole:
     Type: AWS::IAM::Role
     Properties:
