@@ -353,9 +353,13 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('CloudWatch Configuration', () => {
-    test('should create CloudWatch dashboard', () => {
+    test('should create CloudWatch dashboard with region-specific name', () => {
       primaryTemplate.hasResourceProperties('AWS::CloudWatch::Dashboard', {
-        DashboardName: Match.stringLikeRegexp(`tap-monitoring-${environmentSuffix}`)
+        DashboardName: Match.stringLikeRegexp(`tap-monitoring-${environmentSuffix}-us-east-1`)
+      });
+      
+      secondaryTemplate.hasResourceProperties('AWS::CloudWatch::Dashboard', {
+        DashboardName: Match.stringLikeRegexp(`tap-monitoring-${environmentSuffix}-ap-south-1`)
       });
     });
 
