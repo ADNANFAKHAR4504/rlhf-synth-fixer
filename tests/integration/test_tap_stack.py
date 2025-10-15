@@ -56,6 +56,7 @@ def aws_clients(aws_credentials):
         'codedeploy': create_client('codedeploy'), 'route53': create_client('route53'),
         'cloudwatch': create_client('cloudwatch'), 'logs': create_client('logs'),
         'cloudformation': create_client('cloudformation'),
+        'cloudformation_us_east_2': create_client('cloudformation', 'us-east-2'),
     }
 
 
@@ -111,79 +112,115 @@ def stack_resources(deployed_stack, aws_clients):
     return resources
 
 
-def get_all_related_stacks(cfn_client, base_stack_name):
-    """Get all stacks that belong to this deployment by name prefix."""
-    all_stack_names = []
+def get_region_from_stack_name(stack_name):
+    """Extract AWS region from stack name."""
+    stack_lower = stack_name.lower()
+    if 'useast1' in stack_lower:
+        return 'us-east-1'
+    elif 'useast2' in stack_lower:
+        return 'us-east-2'
+    # Default to us-east-1 if no region found
+    return 'us-east-1'
+
+
+def get_all_related_stacks(cfn_clients, base_stack_name):
+    """Get all stacks that belong to this deployment from both regions."""
+    all_stack_info = []
     
+    # Check us-east-1
     try:
-        paginator = cfn_client.get_paginator('list_stacks')
+        paginator = cfn_clients['cloudformation'].get_paginator('list_stacks')
         for page in paginator.paginate(StackStatusFilter=['CREATE_COMPLETE', 'UPDATE_COMPLETE']):
             for stack in page['StackSummaries']:
-                stack_name = stack['StackName']
-                # Match stacks that start with base stack name
-                if stack_name.startswith(base_stack_name):
-                    all_stack_names.append(stack_name)
-                    print(f"DEBUG: Found related stack: {stack_name}")
+                if stack['StackName'].startswith(base_stack_name):
+                    all_stack_info.append({
+                        'name': stack['StackName'],
+                        'region': 'us-east-1'
+                    })
     except Exception as e:
-        print(f"DEBUG ERROR: Failed to list stacks: {e}")
+        print(f"DEBUG ERROR: Failed to list stacks in us-east-1: {e}")
     
-    return all_stack_names
+    # Check us-east-2
+    try:
+        paginator = cfn_clients['cloudformation_us_east_2'].get_paginator('list_stacks')
+        for page in paginator.paginate(StackStatusFilter=['CREATE_COMPLETE', 'UPDATE_COMPLETE']):
+            for stack in page['StackSummaries']:
+                if stack['StackName'].startswith(base_stack_name):
+                    all_stack_info.append({
+                        'name': stack['StackName'],
+                        'region': 'us-east-2'
+                    })
+    except Exception as e:
+        print(f"DEBUG ERROR: Failed to list stacks in us-east-2: {e}")
+    
+    return all_stack_info
 
 
-def get_stack_resources_by_type(cfn_client, stack_name, resource_type):
-    """Get physical IDs of resources of a specific type from all related stacks."""
-    resource_ids = []
-    all_stacks = get_all_related_stacks(cfn_client, stack_name)
+def get_stack_resources_by_type(cfn_clients, stack_name, resource_type):
+    """Get resources with their regions from all related stacks."""
+    resources_with_regions = []
+    all_stacks = get_all_related_stacks(cfn_clients, stack_name)
     
     print(f"DEBUG: Checking {len(all_stacks)} related stacks for {resource_type}")
     
-    for stack in all_stacks:
+    for stack_info in all_stacks:
+        stack = stack_info['name']
+        region = stack_info['region']
+        cfn_client = cfn_clients['cloudformation'] if region == 'us-east-1' else cfn_clients['cloudformation_us_east_2']
+        
         try:
             paginator = cfn_client.get_paginator('list_stack_resources')
             for page in paginator.paginate(StackName=stack):
                 for resource in page['StackResourceSummaries']:
                     if resource['ResourceType'] == resource_type:
-                        resource_ids.append(resource['PhysicalResourceId'])
-                        print(f"DEBUG: Found {resource_type}: {resource['PhysicalResourceId']} in stack {stack}")
+                        resources_with_regions.append({
+                            'id': resource['PhysicalResourceId'],
+                            'region': region,
+                            'stack': stack
+                        })
+                        print(f"DEBUG: Found {resource_type}: {resource['PhysicalResourceId']} in {region}")
         except Exception as e:
             print(f"DEBUG ERROR: Failed to check stack {stack}: {e}")
             continue
     
-    return resource_ids
+    return resources_with_regions
 
 
-def get_stack_vpc_ids(cfn_client, stack_name):
+def get_stack_vpc_ids(cfn_clients, stack_name):
     """Get VPC IDs that belong to this stack."""
-    return get_stack_resources_by_type(cfn_client, stack_name, 'AWS::EC2::VPC')
+    return get_stack_resources_by_type(cfn_clients, stack_name, 'AWS::EC2::VPC')
 
 
-def get_stack_cluster_arns(cfn_client, stack_name):
-    """Get ECS cluster ARNs that belong to this stack."""
-    return get_stack_resources_by_type(cfn_client, stack_name, 'AWS::ECS::Cluster')
+def get_stack_cluster_info(cfn_clients, stack_name):
+    """Get ECS cluster info with regions."""
+    return get_stack_resources_by_type(cfn_clients, stack_name, 'AWS::ECS::Cluster')
 
 
-def get_stack_load_balancer_arns(cfn_client, elbv2_client, stack_name):
-    """Get Application Load Balancer ARNs (not NLBs) that belong to this stack."""
-    all_lb_arns = get_stack_resources_by_type(cfn_client, stack_name, 'AWS::ElasticLoadBalancingV2::LoadBalancer')
-    alb_arns = []
-    for lb_arn in all_lb_arns:
+def get_stack_load_balancer_info(cfn_clients, elbv2_clients, stack_name):
+    """Get Application Load Balancer info with regions."""
+    all_lb_info = get_stack_resources_by_type(cfn_clients, stack_name, 'AWS::ElasticLoadBalancingV2::LoadBalancer')
+    alb_info = []
+    
+    for lb in all_lb_info:
+        elbv2_client = elbv2_clients['elbv2'] if lb['region'] == 'us-east-1' else elbv2_clients['elbv2_us_east_2']
         try:
-            lb_info = elbv2_client.describe_load_balancers(LoadBalancerArns=[lb_arn])
-            if lb_info['LoadBalancers'][0]['Type'] == 'application':
-                alb_arns.append(lb_arn)
+            lb_details = elbv2_client.describe_load_balancers(LoadBalancerArns=[lb['id']])
+            if lb_details['LoadBalancers'][0]['Type'] == 'application':
+                alb_info.append(lb)
         except Exception:
             continue
-    return alb_arns
+    
+    return alb_info
 
 
-def get_stack_target_group_arns(cfn_client, stack_name):
-    """Get target group ARNs that belong to this stack."""
-    return get_stack_resources_by_type(cfn_client, stack_name, 'AWS::ElasticLoadBalancingV2::TargetGroup')
+def get_stack_target_group_info(cfn_clients, stack_name):
+    """Get target group info with regions."""
+    return get_stack_resources_by_type(cfn_clients, stack_name, 'AWS::ElasticLoadBalancingV2::TargetGroup')
 
 
-def get_stack_rds_identifiers(cfn_client, stack_name):
-    """Get RDS instance identifiers that belong to this stack."""
-    return get_stack_resources_by_type(cfn_client, stack_name, 'AWS::RDS::DBInstance')
+def get_stack_rds_info(cfn_clients, stack_name):
+    """Get RDS instance info with regions."""
+    return get_stack_resources_by_type(cfn_clients, stack_name, 'AWS::RDS::DBInstance')
 
 
 def test_stack_deployed_successfully(deployed_stack):
@@ -208,107 +245,80 @@ def test_nested_stacks_created(aws_clients, deployed_stack):
 
 def test_vpcs_created_in_both_regions(aws_clients, deployed_stack, stack_name):
     """Verify VPCs belonging to this stack exist in both regions."""
-    cfn = aws_clients['cloudformation']
-    vpc_ids = get_stack_vpc_ids(cfn, stack_name)
+    vpc_info = get_stack_vpc_ids(aws_clients, stack_name)
     
-    assert len(vpc_ids) >= 2, f"Expected at least 2 VPCs (one per region), found {len(vpc_ids)}"
+    assert len(vpc_info) >= 2, f"Expected at least 2 VPCs (one per region), found {len(vpc_info)}"
     
-    vpc_regions = {}
-    for vpc_id in vpc_ids:
-        try:
-            aws_clients['ec2'].describe_vpcs(VpcIds=[vpc_id])
-            vpc_regions['us-east-1'] = vpc_id
-        except:
-            pass
-        try:
-            aws_clients['ec2_us_east_2'].describe_vpcs(VpcIds=[vpc_id])
-            vpc_regions['us-east-2'] = vpc_id
-        except:
-            pass
+    regions_found = set(v['region'] for v in vpc_info)
+    assert 'us-east-1' in regions_found, "No VPC found in us-east-1"
+    assert 'us-east-2' in regions_found, "No VPC found in us-east-2"
     
-    assert 'us-east-1' in vpc_regions, "No VPC found in us-east-1"
-    assert 'us-east-2' in vpc_regions, "No VPC found in us-east-2"
-    print(f"VPC exists in us-east-1: {vpc_regions['us-east-1']}")
-    print(f"VPC exists in us-east-2: {vpc_regions['us-east-2']}")
+    for vpc in vpc_info:
+        print(f"VPC exists in {vpc['region']}: {vpc['id']}")
 
 
 def test_vpc_has_subnets(aws_clients, deployed_stack, stack_name):
     """Verify stack's VPCs have correct number of subnets."""
-    cfn = aws_clients['cloudformation']
-    vpc_ids = get_stack_vpc_ids(cfn, stack_name)
-    assert len(vpc_ids) > 0, f"No VPC found for stack {stack_name}"
+    vpc_info = get_stack_vpc_ids(aws_clients, stack_name)
+    assert len(vpc_info) > 0, f"No VPC found for stack {stack_name}"
     
-    for vpc_id in vpc_ids:
-        try:
-            subnets = aws_clients['ec2'].describe_subnets(Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}])
-        except:
-            subnets = aws_clients['ec2_us_east_2'].describe_subnets(Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}])
+    for vpc in vpc_info:
+        ec2_client = aws_clients['ec2'] if vpc['region'] == 'us-east-1' else aws_clients['ec2_us_east_2']
+        subnets = ec2_client.describe_subnets(Filters=[{'Name': 'vpc-id', 'Values': [vpc['id']]}])
         
-        assert len(subnets['Subnets']) >= 4, f"VPC {vpc_id} should have at least 4 subnets, found {len(subnets['Subnets'])}"
-        print(f"VPC {vpc_id} has {len(subnets['Subnets'])} subnet(s)")
+        assert len(subnets['Subnets']) >= 4, f"VPC {vpc['id']} should have at least 4 subnets, found {len(subnets['Subnets'])}"
+        print(f"VPC {vpc['id']} in {vpc['region']} has {len(subnets['Subnets'])} subnet(s)")
 
 
 def test_internet_gateway_attached(aws_clients, deployed_stack, stack_name):
     """Verify Internet Gateway is attached to stack's VPCs."""
-    cfn = aws_clients['cloudformation']
-    vpc_ids = get_stack_vpc_ids(cfn, stack_name)
-    assert len(vpc_ids) > 0, f"No VPC found for stack {stack_name}"
+    vpc_info = get_stack_vpc_ids(aws_clients, stack_name)
+    assert len(vpc_info) > 0, f"No VPC found for stack {stack_name}"
     
-    for vpc_id in vpc_ids:
-        try:
-            igws = aws_clients['ec2'].describe_internet_gateways(Filters=[{'Name': 'attachment.vpc-id', 'Values': [vpc_id]}])
-        except:
-            igws = aws_clients['ec2_us_east_2'].describe_internet_gateways(Filters=[{'Name': 'attachment.vpc-id', 'Values': [vpc_id]}])
+    for vpc in vpc_info:
+        ec2_client = aws_clients['ec2'] if vpc['region'] == 'us-east-1' else aws_clients['ec2_us_east_2']
+        igws = ec2_client.describe_internet_gateways(Filters=[{'Name': 'attachment.vpc-id', 'Values': [vpc['id']]}])
         
-        assert len(igws['InternetGateways']) > 0, f"No Internet Gateway attached to VPC {vpc_id}"
-        print(f"Internet Gateway attached to VPC {vpc_id}")
+        assert len(igws['InternetGateways']) > 0, f"No Internet Gateway attached to VPC {vpc['id']}"
+        print(f"Internet Gateway attached to VPC {vpc['id']} in {vpc['region']}")
 
 
 def test_ecs_clusters_exist_in_both_regions(aws_clients, deployed_stack, stack_name):
     """Verify ECS clusters exist for this stack in both regions."""
-    cfn = aws_clients['cloudformation']
-    cluster_arns = get_stack_cluster_arns(cfn, stack_name)
+    cluster_info = get_stack_cluster_info(aws_clients, stack_name)
     
-    assert len(cluster_arns) >= 2, f"Expected at least 2 ECS clusters (one per region), found {len(cluster_arns)}"
+    assert len(cluster_info) >= 2, f"Expected at least 2 ECS clusters (one per region), found {len(cluster_info)}"
     
-    east_1_clusters = [c for c in cluster_arns if 'us-east-1' in c]
-    east_2_clusters = [c for c in cluster_arns if 'us-east-2' in c]
+    regions_found = set(c['region'] for c in cluster_info)
+    assert 'us-east-1' in regions_found, "No ECS cluster found in us-east-1"
+    assert 'us-east-2' in regions_found, "No ECS cluster found in us-east-2"
     
-    assert len(east_1_clusters) > 0, "No ECS cluster found in us-east-1"
-    assert len(east_2_clusters) > 0, "No ECS cluster found in us-east-2"
-    
-    for cluster_arn in cluster_arns:
-        region = 'us-east-1' if 'us-east-1' in cluster_arn else 'us-east-2'
-        print(f"ECS cluster in {region}: {cluster_arn}")
+    for cluster in cluster_info:
+        print(f"ECS cluster in {cluster['region']}: {cluster['id']}")
 
 
 def test_ecs_services_running_with_desired_count(aws_clients, deployed_stack, stack_name):
     """Verify stack's ECS services are running with correct task count."""
-    cfn = aws_clients['cloudformation']
-    cluster_arns = get_stack_cluster_arns(cfn, stack_name)
-    assert len(cluster_arns) > 0, f"No ECS clusters found for stack {stack_name}"
+    cluster_info = get_stack_cluster_info(aws_clients, stack_name)
+    assert len(cluster_info) > 0, f"No ECS clusters found for stack {stack_name}"
     
     services_checked = 0
     
-    for cluster_arn in cluster_arns:
-        ecs_client = aws_clients['ecs'] if 'us-east-1' in cluster_arn else aws_clients['ecs_us_east_2']
-        services = ecs_client.list_services(cluster=cluster_arn)
+    for cluster in cluster_info:
+        ecs_client = aws_clients['ecs'] if cluster['region'] == 'us-east-1' else aws_clients['ecs_us_east_2']
+        services = ecs_client.list_services(cluster=cluster['id'])
         
         if not services['serviceArns']:
             continue
         
-        service_details = ecs_client.describe_services(cluster=cluster_arn, services=services['serviceArns'])
+        service_details = ecs_client.describe_services(cluster=cluster['id'], services=services['serviceArns'])
         
         for service in service_details['services']:
             running = service['runningCount']
             desired = service['desiredCount']
             assert running >= 0, f"Service {service['serviceName']} has negative running count"
             
-            if desired > 0 and running == 0:
-                print(f"Service {service['serviceName']}: {running}/{desired} tasks (starting)")
-            else:
-                print(f"ECS Service {service['serviceName']}: {running}/{desired} tasks")
-            
+            print(f"ECS Service {service['serviceName']} in {cluster['region']}: {running}/{desired} tasks")
             services_checked += 1
     
     assert services_checked > 0, f"No services found in stack {stack_name}'s ECS clusters"
@@ -316,46 +326,44 @@ def test_ecs_services_running_with_desired_count(aws_clients, deployed_stack, st
 
 def test_ecs_tasks_are_healthy(aws_clients, deployed_stack, stack_name):
     """Verify stack's ECS tasks are in RUNNING or acceptable startup state."""
-    cfn = aws_clients['cloudformation']
-    cluster_arns = get_stack_cluster_arns(cfn, stack_name)
-    assert len(cluster_arns) > 0, f"No ECS clusters found for stack {stack_name}"
+    cluster_info = get_stack_cluster_info(aws_clients, stack_name)
+    assert len(cluster_info) > 0, f"No ECS clusters found for stack {stack_name}"
     
     has_services = False
     
-    for cluster_arn in cluster_arns:
-        ecs_client = aws_clients['ecs'] if 'us-east-1' in cluster_arn else aws_clients['ecs_us_east_2']
-        services = ecs_client.list_services(cluster=cluster_arn)
+    for cluster in cluster_info:
+        ecs_client = aws_clients['ecs'] if cluster['region'] == 'us-east-1' else aws_clients['ecs_us_east_2']
+        services = ecs_client.list_services(cluster=cluster['id'])
         if services['serviceArns']:
             has_services = True
         
-        tasks = ecs_client.list_tasks(cluster=cluster_arn)
+        tasks = ecs_client.list_tasks(cluster=cluster['id'])
         
         if tasks['taskArns']:
-            task_details = ecs_client.describe_tasks(cluster=cluster_arn, tasks=tasks['taskArns'])
+            task_details = ecs_client.describe_tasks(cluster=cluster['id'], tasks=tasks['taskArns'])
             
             for task in task_details['tasks']:
                 status = task['lastStatus']
                 allowed_statuses = ['RUNNING', 'PENDING', 'PROVISIONING', 'ACTIVATING']
                 assert status in allowed_statuses, f"Task {task['taskArn']} has unexpected status: {status}"
-                print(f"Task in cluster is {status}")
+                print(f"Task in {cluster['region']} is {status}")
     
     assert has_services, f"No services found in stack {stack_name}'s clusters"
 
 
 def test_ecs_uses_code_deploy_controller(aws_clients, deployed_stack, stack_name):
     """Verify stack's ECS services use CODE_DEPLOY deployment controller."""
-    cfn = aws_clients['cloudformation']
-    cluster_arns = get_stack_cluster_arns(cfn, stack_name)
-    assert len(cluster_arns) > 0, f"No ECS clusters found for stack {stack_name}"
+    cluster_info = get_stack_cluster_info(aws_clients, stack_name)
+    assert len(cluster_info) > 0, f"No ECS clusters found for stack {stack_name}"
     
     code_deploy_services = []
     
-    for cluster_arn in cluster_arns:
-        ecs_client = aws_clients['ecs'] if 'us-east-1' in cluster_arn else aws_clients['ecs_us_east_2']
-        services = ecs_client.list_services(cluster=cluster_arn)
+    for cluster in cluster_info:
+        ecs_client = aws_clients['ecs'] if cluster['region'] == 'us-east-1' else aws_clients['ecs_us_east_2']
+        services = ecs_client.list_services(cluster=cluster['id'])
         
         if services['serviceArns']:
-            service_details = ecs_client.describe_services(cluster=cluster_arn, services=services['serviceArns'])
+            service_details = ecs_client.describe_services(cluster=cluster['id'], services=services['serviceArns'])
             
             for service in service_details['services']:
                 controller = service['deploymentController']['type']
@@ -368,57 +376,52 @@ def test_ecs_uses_code_deploy_controller(aws_clients, deployed_stack, stack_name
 
 def test_load_balancers_active(aws_clients, deployed_stack, stack_name):
     """Verify stack's Application Load Balancers are active."""
-    cfn = aws_clients['cloudformation']
-    alb_arns = get_stack_load_balancer_arns(cfn, aws_clients['elbv2'], stack_name)
+    alb_info = get_stack_load_balancer_info(aws_clients, aws_clients, stack_name)
     
-    assert len(alb_arns) >= 1, f"Expected at least 1 Application Load Balancer, found {len(alb_arns)}"
+    assert len(alb_info) >= 1, f"Expected at least 1 Application Load Balancer, found {len(alb_info)}"
     
-    for alb_arn in alb_arns:
-        elbv2_client = aws_clients['elbv2'] if 'us-east-1' in alb_arn else aws_clients['elbv2_us_east_2']
-        lb_info = elbv2_client.describe_load_balancers(LoadBalancerArns=[alb_arn])
-        lb = lb_info['LoadBalancers'][0]
+    for alb in alb_info:
+        elbv2_client = aws_clients['elbv2'] if alb['region'] == 'us-east-1' else aws_clients['elbv2_us_east_2']
+        lb_details = elbv2_client.describe_load_balancers(LoadBalancerArns=[alb['id']])
+        lb = lb_details['LoadBalancers'][0]
         
         assert lb['State']['Code'] == 'active', f"Load balancer {lb['LoadBalancerName']} is not active"
-        region = 'us-east-1' if 'us-east-1' in alb_arn else 'us-east-2'
-        print(f"Load balancer active in {region}: {lb['DNSName']}")
+        print(f"Load balancer active in {alb['region']}: {lb['DNSName']}")
 
 
 def test_load_balancer_listeners_configured(aws_clients, deployed_stack, stack_name):
     """Verify stack's load balancers have HTTP listeners on port 80."""
-    cfn = aws_clients['cloudformation']
-    alb_arns = get_stack_load_balancer_arns(cfn, aws_clients['elbv2'], stack_name)
-    assert len(alb_arns) > 0, f"No Application Load Balancers found for stack {stack_name}"
+    alb_info = get_stack_load_balancer_info(aws_clients, aws_clients, stack_name)
+    assert len(alb_info) > 0, f"No Application Load Balancers found for stack {stack_name}"
     
-    for alb_arn in alb_arns:
-        elbv2_client = aws_clients['elbv2'] if 'us-east-1' in alb_arn else aws_clients['elbv2_us_east_2']
-        listeners = elbv2_client.describe_listeners(LoadBalancerArn=alb_arn)
+    for alb in alb_info:
+        elbv2_client = aws_clients['elbv2'] if alb['region'] == 'us-east-1' else aws_clients['elbv2_us_east_2']
+        listeners = elbv2_client.describe_listeners(LoadBalancerArn=alb['id'])
         
-        assert len(listeners['Listeners']) > 0, f"Load balancer {alb_arn} has no listeners"
+        assert len(listeners['Listeners']) > 0, f"Load balancer {alb['id']} has no listeners"
         http_listeners = [l for l in listeners['Listeners'] if l['Port'] == 80]
-        assert len(http_listeners) > 0, f"Load balancer {alb_arn} has no HTTP listener on port 80"
-        print(f"Load balancer has HTTP listener on port 80")
+        assert len(http_listeners) > 0, f"Load balancer {alb['id']} has no HTTP listener on port 80"
+        print(f"Load balancer in {alb['region']} has HTTP listener on port 80")
 
 
 def test_target_groups_exist(aws_clients, deployed_stack, stack_name):
     """Verify target groups exist for this stack."""
-    cfn = aws_clients['cloudformation']
-    tg_arns = get_stack_target_group_arns(cfn, stack_name)
+    tg_info = get_stack_target_group_info(aws_clients, stack_name)
     
-    assert len(tg_arns) >= 2, f"Stack {stack_name} should have at least 2 target groups (blue and green), found {len(tg_arns)}"
-    print(f"Found {len(tg_arns)} target group(s) for this stack")
+    assert len(tg_info) >= 2, f"Stack {stack_name} should have at least 2 target groups (blue and green), found {len(tg_info)}"
+    print(f"Found {len(tg_info)} target group(s) for this stack")
 
 
 def test_target_groups_have_healthy_targets(aws_clients, deployed_stack, stack_name):
     """Verify at least one target group has registered targets."""
-    cfn = aws_clients['cloudformation']
-    tg_arns = get_stack_target_group_arns(cfn, stack_name)
-    assert len(tg_arns) > 0, f"No target groups found for stack {stack_name}"
+    tg_info = get_stack_target_group_info(aws_clients, stack_name)
+    assert len(tg_info) > 0, f"No target groups found for stack {stack_name}"
     
     any_targets_found = False
     
-    for tg_arn in tg_arns:
-        elbv2_client = aws_clients['elbv2'] if 'us-east-1' in tg_arn else aws_clients['elbv2_us_east_2']
-        health = elbv2_client.describe_target_health(TargetGroupArn=tg_arn)
+    for tg in tg_info:
+        elbv2_client = aws_clients['elbv2'] if tg['region'] == 'us-east-1' else aws_clients['elbv2_us_east_2']
+        health = elbv2_client.describe_target_health(TargetGroupArn=tg['id'])
         
         if len(health['TargetHealthDescriptions']) > 0:
             any_targets_found = True
@@ -431,13 +434,13 @@ def test_target_groups_have_healthy_targets(aws_clients, deployed_stack, stack_n
 
 def test_load_balancer_responds_to_http(aws_clients, deployed_stack, stack_name):
     """Verify stack's load balancer responds to HTTP requests."""
-    cfn = aws_clients['cloudformation']
-    alb_arns = get_stack_load_balancer_arns(cfn, aws_clients['elbv2'], stack_name)
-    assert len(alb_arns) > 0, f"No Application Load Balancers found for stack {stack_name}"
+    alb_info = get_stack_load_balancer_info(aws_clients, aws_clients, stack_name)
+    assert len(alb_info) > 0, f"No Application Load Balancers found for stack {stack_name}"
     
-    elbv2_client = aws_clients['elbv2'] if 'us-east-1' in alb_arns[0] else aws_clients['elbv2_us_east_2']
-    lb_info = elbv2_client.describe_load_balancers(LoadBalancerArns=[alb_arns[0]])
-    lb_dns = lb_info['LoadBalancers'][0]['DNSName']
+    alb = alb_info[0]
+    elbv2_client = aws_clients['elbv2'] if alb['region'] == 'us-east-1' else aws_clients['elbv2_us_east_2']
+    lb_details = elbv2_client.describe_load_balancers(LoadBalancerArns=[alb['id']])
+    lb_dns = lb_details['LoadBalancers'][0]['DNSName']
     url = f"http://{lb_dns}"
     
     max_attempts = 10
@@ -460,75 +463,58 @@ def test_load_balancer_responds_to_http(aws_clients, deployed_stack, stack_name)
 
 def test_rds_instances_exist(aws_clients, deployed_stack, stack_name):
     """Verify RDS instances exist for this stack."""
-    cfn = aws_clients['cloudformation']
-    db_identifiers = get_stack_rds_identifiers(cfn, stack_name)
+    rds_info = get_stack_rds_info(aws_clients, stack_name)
     
-    assert len(db_identifiers) >= 1, f"Expected at least 1 RDS instance, found {len(db_identifiers)}"
+    assert len(rds_info) >= 1, f"Expected at least 1 RDS instance, found {len(rds_info)}"
     
-    for db_id in db_identifiers:
-        try:
-            db_info = aws_clients['rds'].describe_db_instances(DBInstanceIdentifier=db_id)
-            db = db_info['DBInstances'][0]
-            print(f"RDS instance: {db_id} ({db['DBInstanceStatus']})")
-        except:
-            try:
-                db_info = aws_clients['rds_us_east_2'].describe_db_instances(DBInstanceIdentifier=db_id)
-                db = db_info['DBInstances'][0]
-                print(f"RDS instance: {db_id} ({db['DBInstanceStatus']})")
-            except ClientError as e:
-                pytest.fail(f"Could not describe RDS instance {db_id}: {e}")
+    for db in rds_info:
+        rds_client = aws_clients['rds'] if db['region'] == 'us-east-1' else aws_clients['rds_us_east_2']
+        db_details = rds_client.describe_db_instances(DBInstanceIdentifier=db['id'])
+        db_instance = db_details['DBInstances'][0]
+        print(f"RDS instance: {db['id']} in {db['region']} ({db_instance['DBInstanceStatus']})")
 
 
 def test_rds_instances_available(aws_clients, deployed_stack, stack_name):
     """Verify stack's RDS instances are available or in acceptable state."""
-    cfn = aws_clients['cloudformation']
-    db_identifiers = get_stack_rds_identifiers(cfn, stack_name)
-    assert len(db_identifiers) > 0, f"No RDS instances found for stack {stack_name}"
+    rds_info = get_stack_rds_info(aws_clients, stack_name)
+    assert len(rds_info) > 0, f"No RDS instances found for stack {stack_name}"
     
-    for db_id in db_identifiers:
-        try:
-            db_info = aws_clients['rds'].describe_db_instances(DBInstanceIdentifier=db_id)
-        except:
-            db_info = aws_clients['rds_us_east_2'].describe_db_instances(DBInstanceIdentifier=db_id)
+    for db in rds_info:
+        rds_client = aws_clients['rds'] if db['region'] == 'us-east-1' else aws_clients['rds_us_east_2']
+        db_details = rds_client.describe_db_instances(DBInstanceIdentifier=db['id'])
         
-        status = db_info['DBInstances'][0]['DBInstanceStatus']
+        status = db_details['DBInstances'][0]['DBInstanceStatus']
         allowed_states = ['available', 'backing-up', 'creating', 'modifying', 'configuring-enhanced-monitoring', 'storage-optimization']
-        assert status in allowed_states, f"RDS {db_id} is in unexpected state: {status}"
-        print(f"RDS instance {db_id} is {status}")
+        assert status in allowed_states, f"RDS {db['id']} is in unexpected state: {status}"
+        print(f"RDS instance {db['id']} is {status}")
 
 
 def test_rds_not_publicly_accessible(aws_clients, deployed_stack, stack_name):
     """Verify stack's RDS instances are not publicly accessible."""
-    cfn = aws_clients['cloudformation']
-    db_identifiers = get_stack_rds_identifiers(cfn, stack_name)
-    assert len(db_identifiers) > 0, f"No RDS instances found for stack {stack_name}"
+    rds_info = get_stack_rds_info(aws_clients, stack_name)
+    assert len(rds_info) > 0, f"No RDS instances found for stack {stack_name}"
     
-    for db_id in db_identifiers:
-        try:
-            db_info = aws_clients['rds'].describe_db_instances(DBInstanceIdentifier=db_id)
-        except:
-            db_info = aws_clients['rds_us_east_2'].describe_db_instances(DBInstanceIdentifier=db_id)
+    for db in rds_info:
+        rds_client = aws_clients['rds'] if db['region'] == 'us-east-1' else aws_clients['rds_us_east_2']
+        db_details = rds_client.describe_db_instances(DBInstanceIdentifier=db['id'])
         
-        publicly_accessible = db_info['DBInstances'][0]['PubliclyAccessible']
-        assert publicly_accessible == False, f"RDS {db_id} should not be publicly accessible"
-        print(f"RDS instance {db_id} is not publicly accessible")
+        publicly_accessible = db_details['DBInstances'][0]['PubliclyAccessible']
+        assert publicly_accessible == False, f"RDS {db['id']} should not be publicly accessible"
+        print(f"RDS instance {db['id']} is not publicly accessible")
 
 
 def test_rds_has_security_groups(aws_clients, deployed_stack, stack_name):
     """Verify stack's RDS instances have security groups configured."""
-    cfn = aws_clients['cloudformation']
-    db_identifiers = get_stack_rds_identifiers(cfn, stack_name)
-    assert len(db_identifiers) > 0, f"No RDS instances found for stack {stack_name}"
+    rds_info = get_stack_rds_info(aws_clients, stack_name)
+    assert len(rds_info) > 0, f"No RDS instances found for stack {stack_name}"
     
-    for db_id in db_identifiers:
-        try:
-            db_info = aws_clients['rds'].describe_db_instances(DBInstanceIdentifier=db_id)
-        except:
-            db_info = aws_clients['rds_us_east_2'].describe_db_instances(DBInstanceIdentifier=db_id)
+    for db in rds_info:
+        rds_client = aws_clients['rds'] if db['region'] == 'us-east-1' else aws_clients['rds_us_east_2']
+        db_details = rds_client.describe_db_instances(DBInstanceIdentifier=db['id'])
         
-        security_groups = db_info['DBInstances'][0]['VpcSecurityGroups']
-        assert len(security_groups) > 0, f"RDS {db_id} has no security groups"
-        print(f"RDS {db_id} has {len(security_groups)} security group(s)")
+        security_groups = db_details['DBInstances'][0]['VpcSecurityGroups']
+        assert len(security_groups) > 0, f"RDS {db['id']} has no security groups"
+        print(f"RDS {db['id']} has {len(security_groups)} security group(s)")
 
 
 def test_codedeploy_application_exists(aws_clients, deployed_stack):
@@ -605,13 +591,13 @@ def test_cloudwatch_log_groups_exist(aws_clients, deployed_stack):
 
 def test_end_to_end_alb_to_ecs(aws_clients, deployed_stack, stack_name):
     """End-to-end test: HTTP request through ALB to ECS container."""
-    cfn = aws_clients['cloudformation']
-    alb_arns = get_stack_load_balancer_arns(cfn, aws_clients['elbv2'], stack_name)
-    assert len(alb_arns) > 0, f"No ALBs found for end-to-end test"
+    alb_info = get_stack_load_balancer_info(aws_clients, aws_clients, stack_name)
+    assert len(alb_info) > 0, f"No ALBs found for end-to-end test"
     
-    elbv2_client = aws_clients['elbv2'] if 'us-east-1' in alb_arns[0] else aws_clients['elbv2_us_east_2']
-    lb_info = elbv2_client.describe_load_balancers(LoadBalancerArns=[alb_arns[0]])
-    lb_dns = lb_info['LoadBalancers'][0]['DNSName']
+    alb = alb_info[0]
+    elbv2_client = aws_clients['elbv2'] if alb['region'] == 'us-east-1' else aws_clients['elbv2_us_east_2']
+    lb_details = elbv2_client.describe_load_balancers(LoadBalancerArns=[alb['id']])
+    lb_dns = lb_details['LoadBalancers'][0]['DNSName']
     url = f"http://{lb_dns}"
     
     try:
@@ -626,29 +612,29 @@ def test_end_to_end_alb_to_ecs(aws_clients, deployed_stack, stack_name):
 
 def test_ecs_and_rds_in_same_vpc(aws_clients, deployed_stack, stack_name):
     """Verify ECS and RDS are deployed and can communicate."""
-    cfn = aws_clients['cloudformation']
-    cluster_arns = get_stack_cluster_arns(cfn, stack_name)
-    db_identifiers = get_stack_rds_identifiers(cfn, stack_name)
+    cluster_info = get_stack_cluster_info(aws_clients, stack_name)
+    rds_info = get_stack_rds_info(aws_clients, stack_name)
     
-    assert len(cluster_arns) > 0, "No ECS clusters found"
-    assert len(db_identifiers) > 0, "No RDS instances found"
+    assert len(cluster_info) > 0, "No ECS clusters found"
+    assert len(rds_info) > 0, "No RDS instances found"
     print("ECS and RDS are deployed (network connectivity possible)")
 
 
 def test_multi_region_deployment(aws_clients, deployed_stack, stack_name):
     """Verify resources exist in both us-east-1 and us-east-2."""
-    cfn = aws_clients['cloudformation']
-    cluster_arns = get_stack_cluster_arns(cfn, stack_name)
+    cluster_info = get_stack_cluster_info(aws_clients, stack_name)
     
-    east_1_clusters = [c for c in cluster_arns if 'us-east-1' in c]
-    east_2_clusters = [c for c in cluster_arns if 'us-east-2' in c]
+    regions_found = set(c['region'] for c in cluster_info)
     
-    assert len(east_1_clusters) > 0, "No ECS resources found in us-east-1"
-    assert len(east_2_clusters) > 0, "No ECS resources found in us-east-2"
+    assert 'us-east-1' in regions_found, "No ECS resources found in us-east-1"
+    assert 'us-east-2' in regions_found, "No ECS resources found in us-east-2"
+    
+    east_1_count = sum(1 for c in cluster_info if c['region'] == 'us-east-1')
+    east_2_count = sum(1 for c in cluster_info if c['region'] == 'us-east-2')
     
     print(f"Multi-region deployment verified:")
-    print(f"   us-east-1: {len(east_1_clusters)} ECS cluster(s)")
-    print(f"   us-east-2: {len(east_2_clusters)} ECS cluster(s)")
+    print(f"   us-east-1: {east_1_count} ECS cluster(s)")
+    print(f"   us-east-2: {east_2_count} ECS cluster(s)")
 
 
 def test_infrastructure_has_proper_tags(aws_clients, deployed_stack):
@@ -682,24 +668,23 @@ def test_all_resources_in_healthy_state(stack_resources):
 
 def test_system_scalability_indicators(aws_clients, deployed_stack, stack_name):
     """Check scalability configuration for stack's services."""
-    cfn = aws_clients['cloudformation']
-    cluster_arns = get_stack_cluster_arns(cfn, stack_name)
-    assert len(cluster_arns) > 0, "No ECS clusters found for scalability check"
+    cluster_info = get_stack_cluster_info(aws_clients, stack_name)
+    assert len(cluster_info) > 0, "No ECS clusters found for scalability check"
     
     services_found = False
     
-    for cluster_arn in cluster_arns:
-        ecs_client = aws_clients['ecs'] if 'us-east-1' in cluster_arn else aws_clients['ecs_us_east_2']
-        services = ecs_client.list_services(cluster=cluster_arn)
+    for cluster in cluster_info:
+        ecs_client = aws_clients['ecs'] if cluster['region'] == 'us-east-1' else aws_clients['ecs_us_east_2']
+        services = ecs_client.list_services(cluster=cluster['id'])
         
         if services['serviceArns']:
             services_found = True
-            service_details = ecs_client.describe_services(cluster=cluster_arn, services=services['serviceArns'])
+            service_details = ecs_client.describe_services(cluster=cluster['id'], services=services['serviceArns'])
             
             for service in service_details['services']:
                 desired = service['desiredCount']
                 running = service['runningCount']
-                print(f"Service {service['serviceName']}: running={running}, desired={desired}")
+                print(f"Service {service['serviceName']} in {cluster['region']}: running={running}, desired={desired}")
     
     assert services_found, f"No services found in clusters for stack {stack_name}"
 
