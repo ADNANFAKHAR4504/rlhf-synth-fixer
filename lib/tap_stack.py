@@ -192,6 +192,7 @@ import time
 import traceback
 from typing import Dict, Any
 from botocore.exceptions import ClientError
+from decimal import Decimal
 
 # Configure logging
 logger = logging.getLogger()
@@ -210,6 +211,13 @@ ENVIRONMENT = os.environ.get("ENVIRONMENT", "dev")
 table = dynamodb.Table(DYNAMODB_TABLE_NAME) if DYNAMODB_TABLE_NAME else None
 
 
+def decimal_default(obj):
+    \"\"\"JSON serializer for objects not serializable by default json code\"\"\"
+    if isinstance(obj, Decimal):
+        return float(obj)
+    raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+
+
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     \"\"\"
     Main Lambda handler function.
@@ -223,15 +231,15 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     \"\"\"
     
     # Log the incoming event
-    logger.info(f"Received event: {json.dumps(event)}")
+    logger.info(f"Received event: {json.dumps(event, default=str)}")
     logger.info(f"Environment: {ENVIRONMENT}")
     
     try:
         # Extract HTTP method and path
         http_method = event.get("httpMethod", "")
         path = event.get("path", "")
-        path_parameters = event.get("pathParameters", {})
-        query_parameters = event.get("queryStringParameters", {})
+        path_parameters = event.get("pathParameters") or {}
+        query_parameters = event.get("queryStringParameters") or {}
         body = event.get("body", "{}")
         
         logger.info(f"Processing {http_method} request to {path}")
@@ -253,7 +261,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         else:
             response = create_response(404, {"error": "Not found"})
         
-        logger.info(f"Response: {response}")
+        logger.info(f"Response: {json.dumps(response, default=str)}")
         return response
         
     except Exception as e:
@@ -267,11 +275,23 @@ def handle_list_items(query_params: Dict[str, Any]) -> Dict[str, Any]:
     try:
         logger.info("Listing items from DynamoDB")
         
-        response = table.scan(
-            Limit=int(query_params.get("limit", 100))
-        )
+        if not table:
+            logger.error("DynamoDB table not configured")
+            return create_response(500, {"error": "Database not configured"})
         
+        # Use scan to get all items, but exclude deleted items
+        scan_params = {
+            "FilterExpression": "attribute_not_exists(deleted) OR deleted = :false",
+            "ExpressionAttributeValues": {":false": False},
+            "Limit": int(query_params.get("limit", 100))
+        }
+        
+        response = table.scan(**scan_params)
         items = response.get("Items", [])
+        
+        # Convert Decimal objects to regular numbers for JSON serialization
+        items = json.loads(json.dumps(items, default=decimal_default))
+        
         logger.info(f"Retrieved {len(items)} items")
         
         return create_response(200, {"items": items, "count": len(items)})
@@ -279,12 +299,19 @@ def handle_list_items(query_params: Dict[str, Any]) -> Dict[str, Any]:
     except ClientError as e:
         logger.error(f"DynamoDB error: {e}")
         return create_response(500, {"error": "Failed to list items"})
+    except Exception as e:
+        logger.error(f"Unexpected error in handle_list_items: {e}")
+        return create_response(500, {"error": "Failed to list items"})
 
 
 def handle_create_item(data: Dict[str, Any]) -> Dict[str, Any]:
     \"\"\"Create a new item in DynamoDB and optionally store data in S3\"\"\"
     try:
         import uuid
+        
+        if not table:
+            logger.error("DynamoDB table not configured")
+            return create_response(500, {"error": "Database not configured"})
         
         item_id = str(uuid.uuid4())
         timestamp = int(time.time() * 1000)  # Millisecond timestamp
@@ -302,14 +329,14 @@ def handle_create_item(data: Dict[str, Any]) -> Dict[str, Any]:
         table.put_item(Item=item)
         
         # If there's file content, store in S3
-        if "file_content" in data:
+        if "file_content" in data and S3_BUCKET_NAME:
             s3_key = f"items/{item_id}/data.json"
             logger.info(f"Storing file in S3: {s3_key}")
             
             s3_client.put_object(
                 Bucket=S3_BUCKET_NAME,
                 Key=s3_key,
-                Body=json.dumps(data["file_content"]),
+                Body=json.dumps(data["file_content"], default=str),
                 ContentType="application/json",
                 Metadata={
                     "item_id": item_id,
@@ -320,11 +347,17 @@ def handle_create_item(data: Dict[str, Any]) -> Dict[str, Any]:
             
             item["s3_key"] = s3_key
         
+        # Convert Decimal objects for JSON response
+        item = json.loads(json.dumps(item, default=decimal_default))
+        
         logger.info(f"Successfully created item: {item_id}")
         return create_response(201, item)
         
     except ClientError as e:
         logger.error(f"AWS error: {e}")
+        return create_response(500, {"error": "Failed to create item"})
+    except Exception as e:
+        logger.error(f"Unexpected error in handle_create_item: {e}")
         return create_response(500, {"error": "Failed to create item"})
 
 
@@ -333,6 +366,10 @@ def handle_get_item(item_id: str) -> Dict[str, Any]:
     try:
         if not item_id:
             return create_response(400, {"error": "Item ID is required"})
+        
+        if not table:
+            logger.error("DynamoDB table not configured")
+            return create_response(500, {"error": "Database not configured"})
         
         logger.info(f"Getting item: {item_id}")
         
@@ -353,7 +390,7 @@ def handle_get_item(item_id: str) -> Dict[str, Any]:
         item = items[0]
         
         # If there's an S3 key, fetch the content
-        if "s3_key" in item:
+        if "s3_key" in item and S3_BUCKET_NAME:
             try:
                 s3_response = s3_client.get_object(
                     Bucket=S3_BUCKET_NAME,
@@ -363,10 +400,16 @@ def handle_get_item(item_id: str) -> Dict[str, Any]:
             except ClientError as e:
                 logger.warning(f"Failed to fetch S3 content: {e}")
         
+        # Convert Decimal objects for JSON response
+        item = json.loads(json.dumps(item, default=decimal_default))
+        
         return create_response(200, item)
         
     except ClientError as e:
         logger.error(f"DynamoDB error: {e}")
+        return create_response(500, {"error": "Failed to get item"})
+    except Exception as e:
+        logger.error(f"Unexpected error in handle_get_item: {e}")
         return create_response(500, {"error": "Failed to get item"})
 
 
@@ -375,6 +418,10 @@ def handle_update_item(item_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
     try:
         if not item_id:
             return create_response(400, {"error": "Item ID is required"})
+        
+        if not table:
+            logger.error("DynamoDB table not configured")
+            return create_response(500, {"error": "Database not configured"})
         
         logger.info(f"Updating item: {item_id}")
         
@@ -391,11 +438,17 @@ def handle_update_item(item_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
         
         table.put_item(Item=item)
         
+        # Convert Decimal objects for JSON response
+        item = json.loads(json.dumps(item, default=decimal_default))
+        
         logger.info(f"Successfully updated item: {item_id}")
         return create_response(200, item)
         
     except ClientError as e:
         logger.error(f"DynamoDB error: {e}")
+        return create_response(500, {"error": "Failed to update item"})
+    except Exception as e:
+        logger.error(f"Unexpected error in handle_update_item: {e}")
         return create_response(500, {"error": "Failed to update item"})
 
 
@@ -404,6 +457,10 @@ def handle_delete_item(item_id: str) -> Dict[str, Any]:
     try:
         if not item_id:
             return create_response(400, {"error": "Item ID is required"})
+        
+        if not table:
+            logger.error("DynamoDB table not configured")
+            return create_response(500, {"error": "Database not configured"})
         
         logger.info(f"Deleting item: {item_id}")
         
@@ -424,6 +481,9 @@ def handle_delete_item(item_id: str) -> Dict[str, Any]:
         
     except ClientError as e:
         logger.error(f"DynamoDB error: {e}")
+        return create_response(500, {"error": "Failed to delete item"})
+    except Exception as e:
+        logger.error(f"Unexpected error in handle_delete_item: {e}")
         return create_response(500, {"error": "Failed to delete item"})
 
 
@@ -446,7 +506,7 @@ def create_response(status_code: int, body: Dict[str, Any]) -> Dict[str, Any]:
             "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key",
             "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
         },
-        "body": json.dumps(body, default=str),
+        "body": json.dumps(body, default=decimal_default),
     }
 """
 
