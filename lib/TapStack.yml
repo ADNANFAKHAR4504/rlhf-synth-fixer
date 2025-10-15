@@ -556,12 +556,59 @@ Resources:
           Value: 'true'
 
   #---------------------------------------------------------------------------
+  # CloudWatch Log Groups for CodeBuild and EC2
+  #---------------------------------------------------------------------------
+  
+  # Log Group for CodeBuild Build Project
+  BuildLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/codebuild/${ApplicationName}-Build'
+      RetentionInDays: 30
+      Tags:
+        - Key: Project
+          Value: !Ref ApplicationName
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+
+  # Log Group for CodeBuild Test Project
+  TestLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/codebuild/${ApplicationName}-Test'
+      RetentionInDays: 30
+      Tags:
+        - Key: Project
+          Value: !Ref ApplicationName
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+
+  # Log Group for EC2 Application Logs
+  ApplicationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/ec2/${ApplicationName}'
+      RetentionInDays: 14
+      Tags:
+        - Key: Project
+          Value: !Ref ApplicationName
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+
+  #---------------------------------------------------------------------------
   # CodeBuild Projects
   #---------------------------------------------------------------------------
   
   # Build Project
   BuildProject:
     Type: 'AWS::CodeBuild::Project'
+    DependsOn: BuildLogGroup
     Properties:
       Name: !Sub '${ApplicationName}-Build'
       Description: !Sub 'Build project for ${ApplicationName}'
@@ -628,6 +675,7 @@ Resources:
   # Test Project
   TestProject:
     Type: 'AWS::CodeBuild::Project'
+    DependsOn: TestLogGroup
     Properties:
       Name: !Sub '${ApplicationName}-Test'
       Description: !Sub 'Test project for ${ApplicationName}'
@@ -1431,6 +1479,7 @@ Resources:
   # Custom CloudWatch Metric for Application Health
   ApplicationHealthMetric:
     Type: AWS::Logs::MetricFilter
+    DependsOn: ApplicationLogGroup
     Properties:
       LogGroupName: !Sub '/aws/ec2/${ApplicationName}'
       FilterPattern: '[timestamp, request_id, "ERROR"]'
