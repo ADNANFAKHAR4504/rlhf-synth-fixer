@@ -98,21 +98,21 @@ describe("ML Pipeline Integration Tests", () => {
       outputs = {
         api_gateway_endpoint: "https://mock-api-id.execute-api.us-east-1.amazonaws.com/dev",
         inference_api_url: "https://mock-api-id.execute-api.us-east-1.amazonaws.com/dev/inference",
-        raw_data_bucket: "ml-pipeline-raw-data-dev-123456789012",
-        processed_data_bucket: "ml-pipeline-processed-data-dev-123456789012",
-        model_artifacts_bucket: "ml-pipeline-model-artifacts-dev-123456789012",
-        logs_bucket: "ml-pipeline-logs-dev-123456789012",
-        model_metadata_table: "ml-pipeline-model-metadata-dev",
-        training_metrics_table: "ml-pipeline-training-metrics-dev",
-        ab_test_config_table: "ml-pipeline-ab-test-config-dev",
-        kinesis_stream_name: "ml-pipeline-inference-requests-dev",
-        kinesis_stream_arn: "arn:aws:kinesis:us-east-1:123456789012:stream/ml-pipeline-inference-requests-dev",
-        sagemaker_endpoint_a: "ml-pipeline-endpoint-a-dev",
-        sagemaker_endpoint_b: "ml-pipeline-endpoint-b-dev",
-        step_functions_arn: "arn:aws:states:us-east-1:123456789012:stateMachine:ml-pipeline-ml-pipeline-dev",
-        lambda_preprocessing_function: "ml-pipeline-preprocessing-dev",
-        lambda_inference_function: "ml-pipeline-inference-dev",
-        lambda_kinesis_consumer_function: "ml-pipeline-kinesis-consumer-dev",
+        raw_data_bucket: "ml-pipeline-raw-data-dev-abc123-123456789012",
+        processed_data_bucket: "ml-pipeline-processed-data-dev-abc123-123456789012",
+        model_artifacts_bucket: "ml-pipeline-model-artifacts-dev-abc123-123456789012",
+        logs_bucket: "ml-pipeline-logs-dev-abc123-123456789012",
+        model_metadata_table: "ml-pipeline-model-metadata-dev-abc123",
+        training_metrics_table: "ml-pipeline-training-metrics-dev-abc123",
+        ab_test_config_table: "ml-pipeline-ab-test-config-dev-abc123",
+        kinesis_stream_name: "ml-pipeline-inference-requests-dev-abc123",
+        kinesis_stream_arn: "arn:aws:kinesis:us-east-1:123456789012:stream/ml-pipeline-inference-requests-dev-abc123",
+        sagemaker_endpoint_a: "ml-pipeline-endpoint-a-dev-abc123",
+        sagemaker_endpoint_b: "ml-pipeline-endpoint-b-dev-abc123",
+        step_functions_arn: "arn:aws:states:us-east-1:123456789012:stateMachine:ml-pipeline-ml-pipeline-dev-abc123",
+        lambda_preprocessing_function: "ml-pipeline-preprocessing-dev-abc123",
+        lambda_inference_function: "ml-pipeline-inference-dev-abc123",
+        lambda_kinesis_consumer_function: "ml-pipeline-kinesis-consumer-dev-abc123",
         sns_alerts_topic_arn: "arn:aws:sns:us-east-1:123456789012:ml-pipeline-ml-alerts-dev",
         cloudwatch_dashboard_name: "ml-pipeline-ml-dashboard-dev",
       };
@@ -611,7 +611,7 @@ describe("ML Pipeline Integration Tests", () => {
 
       // Mock alarm notification
       const mockAlarmNotification = {
-        AlarmName: "ml-pipeline-model-a-high-latency-dev",
+        AlarmName: "ml-pipeline-model-a-high-latency-dev-abc123",
         AlarmDescription: "Alert when SageMaker Model A latency is too high",
         NewStateValue: "ALARM",
         NewStateReason: "Threshold Crossed: 3 out of 3 datapoints were greater than the threshold (1000.0)",
@@ -928,9 +928,9 @@ describe("ML Pipeline Integration Tests", () => {
       const processedBucket = extractValue(outputs.processed_data_bucket);
       const modelBucket = extractValue(outputs.model_artifacts_bucket);
 
-      expect(rawBucket).toMatch(/^ml-pipeline-raw-data-\w+-\d+$/);
-      expect(processedBucket).toMatch(/^ml-pipeline-processed-data-\w+-\d+$/);
-      expect(modelBucket).toMatch(/^ml-pipeline-model-artifacts-\w+-\d+$/);
+      expect(rawBucket).toMatch(/^ml-pipeline-raw-data-\w+-\w+-\d+$/);
+      expect(processedBucket).toMatch(/^ml-pipeline-processed-data-\w+-\w+-\d+$/);
+      expect(modelBucket).toMatch(/^ml-pipeline-model-artifacts-\w+-\w+-\d+$/);
 
       console.log(`  [VALID] Raw Data Bucket: ${rawBucket}`);
       console.log(`  [VALID] Processed Data Bucket: ${processedBucket}`);
@@ -1179,14 +1179,14 @@ describe("ML Pipeline Integration Tests", () => {
         EndDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
         ModelA: {
           model_id: "resnet50-v1.0",
-          endpoint: "ml-pipeline-endpoint-a-dev",
+          endpoint: "ml-pipeline-endpoint-a-dev-abc123",
           version: "1.0.0",
           traffic_percentage: 50,
           baseline_accuracy: 0.945
         },
         ModelB: {
           model_id: "resnet50-v1.1",
-          endpoint: "ml-pipeline-endpoint-b-dev",
+          endpoint: "ml-pipeline-endpoint-b-dev-abc123",
           version: "1.1.0",
           traffic_percentage: 50,
           baseline_accuracy: 0.952
