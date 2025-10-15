@@ -1,5 +1,5 @@
 export const PRIMARY_REGION = 'us-west-2';
-export const SECONDARY_REGIONS = ['us-east-2','eu-west-2'];
+export const SECONDARY_REGIONS = ['us-east-2'];
 export const REGIONS = [PRIMARY_REGION, ...SECONDARY_REGIONS];
 
 export const AVAILABILITY_TARGET = 0.99999; // 99.999%
