@@ -64,7 +64,7 @@ describe('TapStack Unit Tests', () => {
 
   describe('DynamoDB Table Configuration', () => {
     test('should create DynamoDB table with correct schema', () => {
-      primaryTemplate.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
+      primaryTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
         KeySchema: [
           {
             AttributeName: 'id',
@@ -90,20 +90,15 @@ describe('TapStack Unit Tests', () => {
     });
 
     test('should enable point-in-time recovery', () => {
-      // For GlobalTable, PITR is configured via Replicas
-      primaryTemplate.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
-        Replicas: Match.arrayWith([
-          Match.objectLike({
-            PointInTimeRecoverySpecification: Match.objectLike({
-              PointInTimeRecoveryEnabled: true
-            })
-          })
-        ])
+      primaryTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
+        PointInTimeRecoverySpecification: {
+          PointInTimeRecoveryEnabled: true
+        }
       });
     });
 
     test('should enable streams', () => {
-      primaryTemplate.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
+      primaryTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
         StreamSpecification: {
           StreamViewType: 'NEW_AND_OLD_IMAGES'
         }
@@ -111,7 +106,7 @@ describe('TapStack Unit Tests', () => {
     });
 
     test('should configure TTL attribute', () => {
-      primaryTemplate.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
+      primaryTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
         TimeToLiveSpecification: {
           AttributeName: 'ttl',
           Enabled: true
