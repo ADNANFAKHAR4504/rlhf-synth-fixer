@@ -1,12 +1,12 @@
-import { Construct } from 'constructs';
+import { Cloudtrail } from '@cdktf/provider-aws/lib/cloudtrail';
+import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
+import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
 import { SnsTopic } from '@cdktf/provider-aws/lib/sns-topic';
 import { SnsTopicSubscription } from '@cdktf/provider-aws/lib/sns-topic-subscription';
-import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
-import { Cloudtrail } from '@cdktf/provider-aws/lib/cloudtrail';
-import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
-import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
-import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
-import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { Construct } from 'constructs';
 
 interface MonitoringStackProps {
   environmentSuffix: string;
@@ -81,42 +81,46 @@ export class MonitoringStack extends Construct {
       restrictPublicBuckets: true,
     });
 
-    new S3BucketPolicy(this, 'cloudtrail-bucket-policy', {
-      provider: primaryProvider,
-      bucket: cloudtrailBucket.id,
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Sid: 'AWSCloudTrailAclCheck',
-            Effect: 'Allow',
-            Principal: {
-              Service: 'cloudtrail.amazonaws.com',
+    const cloudtrailBucketPolicy = new S3BucketPolicy(
+      this,
+      'cloudtrail-bucket-policy',
+      {
+        provider: primaryProvider,
+        bucket: cloudtrailBucket.id,
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Sid: 'AWSCloudTrailAclCheck',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'cloudtrail.amazonaws.com',
+              },
+              Action: 's3:GetBucketAcl',
+              Resource: cloudtrailBucket.arn,
             },
-            Action: 's3:GetBucketAcl',
-            Resource: cloudtrailBucket.arn,
-          },
-          {
-            Sid: 'AWSCloudTrailWrite',
-            Effect: 'Allow',
-            Principal: {
-              Service: 'cloudtrail.amazonaws.com',
-            },
-            Action: 's3:PutObject',
-            Resource: `${cloudtrailBucket.arn}/*`,
-            Condition: {
-              StringEquals: {
-                's3:x-amz-acl': 'bucket-owner-full-control',
+            {
+              Sid: 'AWSCloudTrailWrite',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'cloudtrail.amazonaws.com',
+              },
+              Action: 's3:PutObject',
+              Resource: `${cloudtrailBucket.arn}/*`,
+              Condition: {
+                StringEquals: {
+                  's3:x-amz-acl': 'bucket-owner-full-control',
+                },
               },
             },
-          },
-        ],
-      }),
-    });
+          ],
+        }),
+      }
+    );
 
     new Cloudtrail(this, 'audit-trail', {
       provider: primaryProvider,
-      dependsOn: [cloudtrailBucket],
+      dependsOn: [cloudtrailBucket, cloudtrailBucketPolicy],
       name: `healthcare-audit-trail-${environmentSuffix}`,
       s3BucketName: cloudtrailBucket.id,
       enableLogging: true,

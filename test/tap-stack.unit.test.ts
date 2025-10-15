@@ -49,13 +49,13 @@ describe('TapStack', () => {
     const app = Testing.app();
     const stack = new TapStack(app, 'TestStack', {
       environmentSuffix: 'test',
-      awsRegion: 'ap-southeast-1',
+      awsRegion: 'eu-west-2',
     });
 
     const synthesized = Testing.synth(stack);
     const providers = synthesized.replace(/\s/g, '').match(/"region":\s*"[^"]+"/g);
     expect(providers).toBeDefined();
-    expect(synthesized).toContain('ap-southeast-1');
+    expect(synthesized).toContain('eu-west-2');
   });
 
   it('should configure secondary AWS provider with DR region', () => {
@@ -65,7 +65,7 @@ describe('TapStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('ap-southeast-2');
+    expect(synthesized).toContain('eu-west-1');
     expect(synthesized).toContain('secondary');
   });
 
@@ -234,14 +234,14 @@ describe('TapStack', () => {
     expect(synthesized).toContain('eu-west-1');
   });
 
-  it('should use default region ap-southeast-1 when no awsRegion provided', () => {
+  it('should use default region eu-west-2 when no awsRegion provided', () => {
     const app = Testing.app();
     const stack = new TapStack(app, 'TestStack', {
       environmentSuffix: 'test',
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('ap-southeast-1');
+    expect(synthesized).toContain('eu-west-2');
     expect(synthesized).toBeDefined();
   });
 });
@@ -287,8 +287,8 @@ describe('DatabaseStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(containsPattern(synthesized, '"availability_zone":"ap-southeast-1a"')).toBe(true);
-    expect(containsPattern(synthesized, '"availability_zone":"ap-southeast-1b"')).toBe(true);
+    expect(containsPattern(synthesized, '"availability_zone":"eu-west-2a"')).toBe(true);
+    expect(containsPattern(synthesized, '"availability_zone":"eu-west-2b"')).toBe(true);
     expect(containsPattern(synthesized, '"cidr_block":"10.0.1.0/24"')).toBe(true);
     expect(containsPattern(synthesized, '"cidr_block":"10.0.2.0/24"')).toBe(true);
   });
@@ -300,8 +300,8 @@ describe('DatabaseStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(containsPattern(synthesized, '"availability_zone":"ap-southeast-2a"')).toBe(true);
-    expect(containsPattern(synthesized, '"availability_zone":"ap-southeast-2b"')).toBe(true);
+    expect(containsPattern(synthesized, '"availability_zone":"eu-west-1a"')).toBe(true);
+    expect(containsPattern(synthesized, '"availability_zone":"eu-west-1b"')).toBe(true);
   });
 
   it('should create security group for database with PostgreSQL port', () => {
@@ -600,8 +600,8 @@ describe('DisasterRecoveryStack', () => {
 
     const synthesized = Testing.synth(stack);
     expect(containsPattern(synthesized, '"ENVIRONMENT_SUFFIX":"mytest"')).toBe(true);
-    expect(containsPattern(synthesized, '"PRIMARY_REGION":"ap-southeast-1"')).toBe(true);
-    expect(containsPattern(synthesized, '"SECONDARY_REGION":"ap-southeast-2"')).toBe(true);
+    expect(containsPattern(synthesized, '"PRIMARY_REGION":"eu-west-2"')).toBe(true);
+    expect(containsPattern(synthesized, '"SECONDARY_REGION":"eu-west-1"')).toBe(true);
   });
 
   it('should create CloudWatch log group for Lambda', () => {
@@ -680,7 +680,7 @@ describe('DisasterRecoveryStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(containsPattern(synthesized, '"cloudwatch_alarm_region":"ap-southeast-1"')).toBe(true);
+    expect(containsPattern(synthesized, '"cloudwatch_alarm_region":"eu-west-2"')).toBe(true);
   });
 
   it('should set insufficient data as unhealthy for health check', () => {
@@ -888,8 +888,8 @@ describe('StorageStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('KMS key for healthcare data encryption in ap-southeast-1');
-    expect(synthesized).toContain('KMS key for healthcare data encryption in ap-southeast-2');
+    expect(synthesized).toContain('KMS key for healthcare data encryption in eu-west-2');
+    expect(synthesized).toContain('KMS key for healthcare data encryption in eu-west-1');
   });
 
   it('should enable KMS key rotation', () => {

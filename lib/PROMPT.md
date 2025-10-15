@@ -5,8 +5,8 @@ You are an expert AWS Infrastructure Engineer. Create infrastructure using **CDK
 ## Requirements
 
 ### Multi-Region Architecture
-- Primary region: ap-southeast-1
-- Secondary region: ap-southeast-2 for disaster recovery
+- Primary region: eu-west-2
+- Secondary region: eu-west-1 for disaster recovery
 - Automated failover between regions using Route53 health checks
 - Cross-region data replication for all critical data stores
 

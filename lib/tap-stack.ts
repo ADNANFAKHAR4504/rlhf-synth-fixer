@@ -17,15 +17,15 @@ interface TapStackProps {
   defaultTags?: AwsProviderDefaultTags;
 }
 
-const SECONDARY_REGION = 'ap-southeast-2';
+const SECONDARY_REGION = 'eu-west-1';
 
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
-    // Use props.awsRegion if provided, otherwise default to ap-southeast-1
-    const awsRegion = props?.awsRegion || 'ap-southeast-1';
+    // Use props.awsRegion if provided, otherwise default to eu-west-2
+    const awsRegion = props?.awsRegion || 'eu-west-2';
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];

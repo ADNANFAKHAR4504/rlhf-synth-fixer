@@ -1,9 +1,9 @@
-import { RDSClient, DescribeDBClustersCommand } from '@aws-sdk/client-rds';
-import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
-import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
+import { DescribeDBClustersCommand, RDSClient } from '@aws-sdk/client-rds';
+import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
+import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 
-const primaryRegion = process.env.PRIMARY_REGION || 'ap-southeast-1';
-const secondaryRegion = process.env.SECONDARY_REGION || 'ap-southeast-2';
+const primaryRegion = process.env.PRIMARY_REGION || 'eu-west-2';
+const secondaryRegion = process.env.SECONDARY_REGION || 'eu-west-1';
 const snsTopicArn = process.env.SNS_TOPIC_ARN || '';
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
