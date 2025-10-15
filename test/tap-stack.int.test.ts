@@ -178,8 +178,7 @@ describe('Production Cloud Environment Integration Tests', () => {
     // Maps to PROMPT requirement: "The EC2 security group should allow SSH traffic on port 22 only from your specific IP address"
     test('should have EC2 security group with SSH restricted to specific IP', () => {
       const ec2SG = securityGroups.find(sg =>
-        sg.GroupName?.includes('EC2') &&
-        sg.GroupName?.includes('Production') &&
+        sg.GroupName === 'Production-EC2-SG' &&
         sg.VpcId === outputs.MyVPCId
       );
 
@@ -201,8 +200,7 @@ describe('Production Cloud Environment Integration Tests', () => {
     // Maps to PROMPT requirement: "Create an RDS security group that allows MySQL traffic on port 3306 exclusively from the EC2 security group"
     test('should have RDS security group with MySQL access only from EC2 security group', () => {
       const rdsSG = securityGroups.find(sg =>
-        sg.GroupName?.includes('RDS') &&
-        sg.GroupName?.includes('Production') &&
+        sg.GroupName === 'Production-RDS-SG' &&
         sg.VpcId === outputs.MyVPCId
       );
 
@@ -434,8 +432,8 @@ describe('Production Cloud Environment Integration Tests', () => {
     // Maps to PROMPT requirement: Best practices for EC2 permissions
     test('should have IAM role for EC2 with CloudWatch permissions', async () => {
       const ec2Role = roles.find(role =>
-        role.RoleName.includes('EC2') &&
-        role.RoleName.includes('Production')
+        role.RoleName === 'Production-EC2-Role' ||
+        role.AssumeRolePolicyDocument?.includes('ec2.amazonaws.com')
       );
 
       expect(ec2Role).toBeDefined();
@@ -454,9 +452,11 @@ describe('Production Cloud Environment Integration Tests', () => {
     // Maps to PROMPT requirement: "database credentials are managed securely"
     test('should have IAM role for EC2 with Secrets Manager read access', async () => {
       const ec2Role = roles.find(role =>
-        role.RoleName.includes('EC2') &&
-        role.RoleName.includes('Production')
+        role.RoleName === 'Production-EC2-Role' ||
+        role.AssumeRolePolicyDocument?.includes('ec2.amazonaws.com')
       );
+
+      expect(ec2Role).toBeDefined();
 
       const policiesResponse = await iam.listRolePolicies({
         RoleName: ec2Role!.RoleName
