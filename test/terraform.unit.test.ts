@@ -8,6 +8,7 @@ import fs from "fs";
 import path from "path";
 
 const TERRAFORM_FILE = path.resolve(__dirname, "../lib/main.tf");
+const PROVIDER_FILE = path.resolve(__dirname, "../lib/provider.tf");
 let tf: string;
 
 beforeAll(() => {
@@ -15,6 +16,12 @@ beforeAll(() => {
     throw new Error(`Terraform file not found at: ${TERRAFORM_FILE}`);
   }
   tf = fs.readFileSync(TERRAFORM_FILE, "utf8");
+  
+  // Also read provider.tf for provider tests
+  if (fs.existsSync(PROVIDER_FILE)) {
+    const providerContent = fs.readFileSync(PROVIDER_FILE, "utf8");
+    tf += "\n" + providerContent;
+  }
 });
 
 // Helper functions
@@ -374,13 +381,11 @@ describe("S3 Static Asset Storage - Unit Tests", () => {
     });
 
     test("allows GET requests", () => {
-      expect(has(/allowed_methods\s*=\s*```math
-"GET"```/)).toBe(true);
+      expect(has(/allowed_methods\s*=\s*\["GET"\]/)).toBe(true);
     });
 
     test("allows requests from https://example.com", () => {
-      expect(has(/allowed_origins\s*=\s*```math
-"https:\/\/example\.com"```/)).toBe(true);
+      expect(has(/allowed_origins\s*=\s*\["https:\/\/example\.com"\]/)).toBe(true);
     });
 
     test("max_age_seconds is 3600", () => {
@@ -392,8 +397,7 @@ describe("S3 Static Asset Storage - Unit Tests", () => {
     });
 
     test("exposes ETag header", () => {
-      expect(has(/expose_headers\s*=\s*```math
-"ETag"```/)).toBe(true);
+      expect(has(/expose_headers\s*=\s*\["ETag"\]/)).toBe(true);
     });
   });
 
@@ -431,11 +435,14 @@ describe("S3 Static Asset Storage - Unit Tests", () => {
       expect(has(/days\s*=\s*90/)).toBe(true);
     });
 
-    test("all rules have id and status", () => {
-      const rules = tf.match(/rule\s*\{[\s\S]*?^\s*\}/gm) || [];
-      rules.forEach(rule => {
-        expect(/id\s*=/.test(rule)).toBe(true);
-        expect(/status\s*=\s*"Enabled"/.test(rule)).toBe(true);
+    test("all lifecycle rules have id and status", () => {
+      const lifecycleRules = tf.match(/resource\s+"aws_s3_bucket_lifecycle_configuration"[\s\S]*?^\}/gm) || [];
+      lifecycleRules.forEach(lifecycleConfig => {
+        const rules = lifecycleConfig.match(/rule\s*\{[\s\S]*?^\s*\}/gm) || [];
+        rules.forEach(rule => {
+          expect(/id\s*=/.test(rule)).toBe(true);
+          expect(/status\s*=\s*"Enabled"/.test(rule)).toBe(true);
+        });
       });
     });
 
@@ -504,7 +511,7 @@ describe("S3 Static Asset Storage - Unit Tests", () => {
     });
 
     test("policies use jsonencode", () => {
-      expect(count(/jsonencode\s*KATEX_INLINE_OPEN/g)).toBeGreaterThan(0);
+      expect(count(/jsonencode\s*\(/g)).toBeGreaterThan(0);
     });
 
     test("IAM resources reference bucket ARN", () => {
@@ -621,8 +628,7 @@ describe("S3 Static Asset Storage - Unit Tests", () => {
       const policyBlock = tf.match(/resource\s+"aws_s3_bucket_policy"[\s\S]*?^\}/m);
       expect(policyBlock).toBeTruthy();
       if (policyBlock) {
-        expect(/depends_on\s*=\s*```math
-aws_s3_bucket_public_access_block/.test(policyBlock[0])).toBe(true);
+        expect(/depends_on\s*=\s*\[aws_s3_bucket_public_access_block/.test(policyBlock[0])).toBe(true);
       }
     });
 
@@ -673,7 +679,7 @@ aws_s3_bucket_public_access_block/.test(policyBlock[0])).toBe(true);
     });
 
     test("policies use jsonencode not heredoc", () => {
-      expect(has(/jsonencode\s*KATEX_INLINE_OPEN/)).toBe(true);
+      expect(has(/jsonencode\s*\(/)).toBe(true);
       expect(has(/<<EOF/)).toBe(false);
     });
 
