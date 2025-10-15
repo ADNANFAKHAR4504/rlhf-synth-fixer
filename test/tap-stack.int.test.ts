@@ -59,7 +59,7 @@ const TEST_ERROR_MESSAGE = 'Application error occurred - database connection fai
 const TEST_WARN_MESSAGE = 'Warning: High memory usage detected';
 const TEST_INFO_MESSAGE = 'User login successful';
 
-// --- Dedicated Polling Function for S3 (FIXED: Increased Polling Timeout) ---
+// --- Dedicated Polling Function for S3 (Increased Polling Timeout) ---
 
 /**
  * Polls S3 for objects under a specific prefix.
@@ -357,7 +357,7 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
 
       expect(queryResponse.QueryExecutionId).toBeDefined();
 
-      // Polling for query completion (simplified for E2E speed, can be more robust)
+      // Polling for query completion
       let queryStatus: string = 'RUNNING';
       let attempts = 0;
       const maxAttempts = 10; // 10 * 2s = 20s max wait
