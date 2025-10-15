@@ -9,6 +9,7 @@ import { Route } from '@cdktf/provider-aws/lib/route';
 import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
 import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
 import { Eip } from '@cdktf/provider-aws/lib/eip';
+import { DataAwsSecretsmanagerRandomPassword } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-random-password';
 
 // Security Groups
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
@@ -637,6 +638,16 @@ export class RdsModule extends Construct {
     const storageType = config.storageType || 'gp3';
     const parameterGroupFamily = config.parameterGroupFamily || 'postgres15';
 
+    // In your RdsModule constructor:
+    const randomPassword = new DataAwsSecretsmanagerRandomPassword(
+      this,
+      'db-password',
+      {
+        passwordLength: 32,
+        excludeCharacters: '/@" ', // Exclude forbidden characters
+      }
+    );
+
     // DB Subnet Group
     this.dbSubnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
       name: `${config.projectName}-${config.environment}-db-subnet-group`,
@@ -683,7 +694,7 @@ export class RdsModule extends Construct {
       kmsKeyId: config.kmsKeyId,
       dbName: config.dbName,
       username: config.masterUsername,
-      password: masterPassword,
+      password: config.masterPassword || randomPassword.randomPassword,
       dbSubnetGroupName: this.dbSubnetGroup.name,
       vpcSecurityGroupIds: config.securityGroupIds,
       parameterGroupName: this.dbParameterGroup.name,

@@ -23,3 +23,16 @@ TapStackpr4477  ::error::Terraform exited with code 1.
 0 Stacks deploying     1 Stack done     0 Stacks waiting
 Invoking Terraform CLI failed with exit code 1
 Error: Process completed with exit code 1.
+
+TapStackpr4477  ╷
+                │ Error: creating RDS DB Instance (tap-project-pr4477-db): operation error RDS: CreateDBInstance, https response error StatusCode: 400, RequestID: 6b0c4421-e132-4254-8513-f119ca55f2c0, api error InvalidParameterValue: The parameter MasterUserPassword is not a valid password. Only printable ASCII characters besides '/', '@', '"', ' ' may be used.
+                │ 
+                │   with aws_db_instance.rds_db-instance_9631E10E (rds/db-instance),
+                │   on cdk.tf.json line 288, in resource.aws_db_instance.rds_db-instance_9631E10E (rds/db-instance):
+                │  288:       }
+                │ 
+                ╵
+TapStackpr4477  ::error::Terraform exited with code 1.
+0 Stacks deploying     1 Stack done     0 Stacks waiting
+Invoking Terraform CLI failed with exit code 1
+Error: Process completed with exit code 1.
