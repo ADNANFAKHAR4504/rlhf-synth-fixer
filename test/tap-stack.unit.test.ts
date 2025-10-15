@@ -78,6 +78,34 @@ describe('TapStack Unit Tests', () => {
       expect(synthesized.terraform?.backend?.s3?.bucket).toBe(customBucket);
       expect(synthesized.terraform?.backend?.s3?.region).toBe(customRegion);
     });
+
+    test('uses default tags when provided', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestStack', {
+        defaultTags: {
+          tags: {
+            Environment: 'test',
+            ManagedBy: 'Terraform',
+          },
+        },
+      });
+      synthesized = JSON.parse(Testing.synth(stack));
+
+      expect(synthesized.provider?.aws?.[0]?.default_tags).toBeDefined();
+    });
+
+    test('handles missing optional props gracefully', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: undefined,
+        stateBucket: undefined,
+        awsRegion: undefined,
+      });
+      synthesized = JSON.parse(Testing.synth(stack));
+
+      expect(synthesized.provider?.aws?.[0]?.region).toBe('us-east-1');
+      expect(synthesized.terraform?.backend?.s3?.bucket).toBe('iac-rlhf-tf-states');
+    });
   });
 
   describe('Content Delivery Resources', () => {
@@ -174,13 +202,14 @@ describe('TapStack Unit Tests', () => {
       synthesized = JSON.parse(Testing.synth(stack));
     });
 
-    test('creates CodeCommit repository', () => {
-      const repositories =
-        synthesized.resource?.aws_codecommit_repository || {};
-      expect(Object.keys(repositories).length).toBeGreaterThan(0);
+    test('creates S3 source placeholder', () => {
+      const s3Objects = synthesized.resource?.aws_s3_object || {};
+      expect(Object.keys(s3Objects).length).toBeGreaterThan(0);
 
-      const repo = Object.values(repositories)[0] as any;
-      expect(repo.repository_name).toContain('edu-content-repo');
+      const sourceObject = Object.values(s3Objects).find(
+        (obj: any) => obj.key?.includes('source')
+      );
+      expect(sourceObject).toBeDefined();
     });
 
     test('creates CodeBuild project', () => {
@@ -324,8 +353,8 @@ describe('TapStack Unit Tests', () => {
 
       expect(outputKeys).toEqual(
         expect.arrayContaining([
-          'codecommit-repository-url',
-          'codecommit-repository-name',
+          'source-bucket',
+          'source-object-key',
           'codepipeline-name',
           'codebuild-project-name',
           'codedeploy-application-name',

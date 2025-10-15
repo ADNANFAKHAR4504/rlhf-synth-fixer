@@ -1,5 +1,4 @@
 import { Construct } from 'constructs';
-import { CodecommitRepository } from '@cdktf/provider-aws/lib/codecommit-repository';
 import { CodebuildProject } from '@cdktf/provider-aws/lib/codebuild-project';
 import { Codepipeline } from '@cdktf/provider-aws/lib/codepipeline';
 import { CodedeployApp } from '@cdktf/provider-aws/lib/codedeploy-app';
@@ -8,6 +7,7 @@ import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
 import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { S3Object } from '@cdktf/provider-aws/lib/s3-object';
 import { Instance } from '@cdktf/provider-aws/lib/instance';
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
@@ -27,7 +27,7 @@ export interface PipelineModuleProps {
 }
 
 export class PipelineModule extends Construct {
-  public readonly repository: CodecommitRepository;
+  public readonly repositoryName: string;
   public readonly codeBuildProject: CodebuildProject;
   public readonly codePipeline: Codepipeline;
   public readonly codeDeployApp: CodedeployApp;
@@ -124,13 +124,16 @@ export class PipelineModule extends Construct {
       },
     });
 
-    // CodeCommit Repository
-    this.repository = new CodecommitRepository(this, 'repository', {
-      repositoryName: `edu-content-repo-${environmentSuffix}`,
-      description: 'Repository for educational content and application code',
-      defaultBranch: 'main',
+    // Set repository name for reference (S3-based source)
+    this.repositoryName = `edu-content-repo-${environmentSuffix}`;
+
+    // Create a placeholder source file in S3
+    new S3Object(this, 'source-placeholder', {
+      bucket: artifactBucket.bucket,
+      key: `source/${environmentSuffix}/source.zip`,
+      content: 'Placeholder for source code',
       tags: {
-        Name: `edu-content-repo-${environmentSuffix}`,
+        Name: `source-placeholder-${environmentSuffix}`,
       },
     });
 
@@ -173,11 +176,6 @@ export class PipelineModule extends Construct {
             Effect: 'Allow',
             Action: ['s3:GetObject', 's3:GetObjectVersion', 's3:PutObject'],
             Resource: `${artifactBucket.arn}/*`,
-          },
-          {
-            Effect: 'Allow',
-            Action: ['codecommit:GitPull'],
-            Resource: this.repository.arn,
           },
         ],
       }),
@@ -381,7 +379,7 @@ chown ec2-user:ec2-user /var/www/html`,
 
     new IamRolePolicyAttachment(this, 'codedeploy-policy-attachment', {
       role: codeDeployRole.name,
-      policyArn: 'arn:aws:iam::aws:policy/AWSCodeDeployRole',
+      policyArn: 'arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole',
     });
 
     // CodeDeploy Deployment Group
@@ -439,18 +437,13 @@ chown ec2-user:ec2-user /var/www/html`,
         Statement: [
           {
             Effect: 'Allow',
-            Action: ['s3:GetObject', 's3:GetObjectVersion', 's3:PutObject'],
-            Resource: `${artifactBucket.arn}/*`,
-          },
-          {
-            Effect: 'Allow',
             Action: [
-              'codecommit:GetBranch',
-              'codecommit:GetCommit',
-              'codecommit:UploadArchive',
-              'codecommit:GetUploadArchiveStatus',
+              's3:GetObject',
+              's3:GetObjectVersion',
+              's3:PutObject',
+              's3:GetBucketVersioning',
             ],
-            Resource: this.repository.arn,
+            Resource: [`${artifactBucket.arn}`, `${artifactBucket.arn}/*`],
           },
           {
             Effect: 'Allow',
@@ -464,7 +457,7 @@ chown ec2-user:ec2-user /var/www/html`,
               'codedeploy:GetApplication',
               'codedeploy:GetApplicationRevision',
               'codedeploy:GetDeployment',
-              'codedeploy:GetDeployment Config',
+              'codedeploy:GetDeploymentConfig',
               'codedeploy:RegisterApplicationRevision',
             ],
             Resource: '*',
@@ -501,12 +494,12 @@ chown ec2-user:ec2-user /var/www/html`,
               name: 'Source',
               category: 'Source',
               owner: 'AWS',
-              provider: 'CodeCommit',
+              provider: 'S3',
               version: '1',
               outputArtifacts: ['SourceOutput'],
               configuration: {
-                RepositoryName: this.repository.repositoryName,
-                BranchName: 'main',
+                S3Bucket: artifactBucket.bucket,
+                S3ObjectKey: `source/${environmentSuffix}/source.zip`,
                 PollForSourceChanges: 'false',
               },
             },

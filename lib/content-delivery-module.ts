@@ -74,6 +74,11 @@ export class ContentDeliveryModule extends Construct {
         {
           id: 'archive-old-versions',
           status: 'Enabled',
+          filter: [
+            {
+              prefix: '',
+            },
+          ],
           noncurrentVersionTransition: [
             {
               noncurrentDays: 30,
@@ -140,6 +145,11 @@ export class ContentDeliveryModule extends Construct {
         {
           id: 'archive-old-artifacts',
           status: 'Enabled',
+          filter: [
+            {
+              prefix: '',
+            },
+          ],
           transition: [
             {
               days: 30,

@@ -68,14 +68,14 @@ export class TapStack extends TerraformStack {
     });
 
     // Outputs
-    new TerraformOutput(this, 'codecommit-repository-url', {
-      value: pipeline.repository.cloneUrlHttp,
-      description: 'CodeCommit repository HTTPS clone URL',
+    new TerraformOutput(this, 'source-bucket', {
+      value: contentDelivery.artifactBucket.bucket,
+      description: 'S3 bucket for source code',
     });
 
-    new TerraformOutput(this, 'codecommit-repository-name', {
-      value: pipeline.repository.repositoryName,
-      description: 'CodeCommit repository name',
+    new TerraformOutput(this, 'source-object-key', {
+      value: `source/${environmentSuffix}/source.zip`,
+      description: 'S3 object key for source code',
     });
 
     new TerraformOutput(this, 'codepipeline-name', {
