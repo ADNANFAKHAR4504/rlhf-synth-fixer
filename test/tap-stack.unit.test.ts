@@ -157,6 +157,16 @@ describe('S3-triggered Lambda Image Processing CloudFormation Template', () => {
       expect(role).toBeDefined();
       expect(role.Type).toBe('AWS::IAM::Role');
       expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
+
+      // Verify IAM policy has correct S3 permissions
+      const policy = role.Properties.Policies[0];
+      expect(policy.PolicyName).toBe('S3NotificationPolicy');
+      const actions = policy.PolicyDocument.Statement[0].Action;
+      expect(actions).toContain('s3:PutBucketNotification');
+      expect(actions).toContain('s3:GetBucketNotification');
+      // Ensure invalid actions are not present
+      expect(actions).not.toContain('s3:PutBucketNotificationConfiguration');
+      expect(actions).not.toContain('s3:GetBucketNotificationConfiguration');
     });
   });
 

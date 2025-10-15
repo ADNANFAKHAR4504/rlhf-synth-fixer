@@ -428,9 +428,7 @@
                   "Effect": "Allow",
                   "Action": [
                     "s3:PutBucketNotification",
-                    "s3:GetBucketNotification",
-                    "s3:PutBucketNotificationConfiguration",
-                    "s3:GetBucketNotificationConfiguration"
+                    "s3:GetBucketNotification"
                   ],
                   "Resource": {
                     "Fn::GetAtt": [
