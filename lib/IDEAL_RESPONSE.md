@@ -1139,7 +1139,7 @@ Resources:
             const payments = years * 12;
             const x = Math.pow(1 + monthlyRate, payments);
             const monthly = (principal * x * monthlyRate) / (x - 1);
-
+            
             return {
               statusCode: 200,
               headers: {
@@ -1180,7 +1180,7 @@ Resources:
             for (const record of event.Records) {
               const bucket = record.s3.bucket.name;
               const key = decodeURIComponent(record.s3.object.key.replace(/\+/g, ' '));
-
+              
               // Call Rekognition to analyze image
               const rekognitionParams = {
                 Image: {
@@ -1191,10 +1191,10 @@ Resources:
                 },
                 MaxLabels: 10
               };
-
+              
               try {
                 const rekognitionResponse = await rekognition.detectLabels(rekognitionParams).promise();
-
+                
                 // Process and store metadata
                 const metadata = {
                   imageKey: key,
@@ -1204,13 +1204,13 @@ Resources:
                   })),
                   processedAt: new Date().toISOString()
                 };
-
+                
                 // Store metadata in DynamoDB
                 await dynamodb.put({
                   TableName: process.env.METADATA_TABLE,
                   Item: metadata
                 }).promise();
-
+                
                 console.log(`Successfully processed ${key}`);
               } catch (error) {
                 console.error(`Error processing ${key}: ${error.message}`);
@@ -1704,23 +1704,6 @@ Resources:
       Principal: events.amazonaws.com
       SourceArn: !GetAtt DailyMaintenanceRule.Arn
 
-  # AWS Config
-  ConfigRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    Properties:
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
-      RoleARN: !GetAtt ConfigRole.Arn
-
-  ConfigDeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    Properties:
-      ConfigSnapshotDeliveryProperties:
-        DeliveryFrequency: One_Hour
-      S3BucketName: !Ref ConfigBucket
-      S3KeyPrefix: config
-
   ConfigRole:
     Type: AWS::IAM::Role
     Properties:
@@ -1785,11 +1768,11 @@ Resources:
 
           exports.handler = async (event) => {
             console.log('Processing DynamoDB stream records:', JSON.stringify(event));
-
+            
             for (const record of event.Records) {
               if (record.eventName === 'INSERT' || record.eventName === 'MODIFY') {
                 const newImage = AWS.DynamoDB.Converter.unmarshall(record.dynamodb.NewImage);
-
+                
                 // Index to OpenSearch
                 const document = {
                   id: newImage.propertyId,
@@ -1804,11 +1787,11 @@ Resources:
                   description: newImage.description,
                   timestamp: new Date().toISOString()
                 };
-
+                
                 console.log('Indexed document:', document);
               }
             }
-
+            
             return { statusCode: 200 };
           };
       Runtime: nodejs22.x
@@ -1931,9 +1914,9 @@ Resources:
 
           exports.handler = async (event) => {
             const { userId, propertyId, appointmentDate, appointmentTime } = JSON.parse(event.body);
-
+            
             const appointmentId = `${userId}-${propertyId}-${Date.now()}`;
-
+            
             // Store appointment in DynamoDB
             await dynamodb.put({
               TableName: process.env.APPOINTMENTS_TABLE,
@@ -1947,7 +1930,7 @@ Resources:
                 createdAt: new Date().toISOString()
               }
             }).promise();
-
+            
             // Send confirmation email
             const emailParams = {
               Source: 'noreply@example.com',
@@ -1965,9 +1948,9 @@ Resources:
                 }
               }
             };
-
+            
             await ses.sendEmail(emailParams).promise();
-
+            
             return {
               statusCode: 200,
               headers: {
@@ -2089,7 +2072,7 @@ Resources:
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);
             const tomorrowDate = tomorrow.toISOString().split('T')[0];
-
+            
             // Query appointments for tomorrow
             const params = {
               TableName: process.env.APPOINTMENTS_TABLE,
@@ -2101,18 +2084,18 @@ Resources:
             };
 
             const result = await dynamodb.query(params).promise();
-
+            
             // Send reminders for each appointment
             for (const appointment of result.Items) {
               const message = `Reminder: You have an appointment scheduled for ${appointment.appointmentDate} at ${appointment.appointmentTime}`;
-
+              
               await sns.publish({
                 TopicArn: process.env.NOTIFICATION_TOPIC_ARN,
                 Message: message,
                 Subject: 'Appointment Reminder'
               }).promise();
             }
-
+            
             return {
               statusCode: 200,
               body: `Sent ${result.Items.length} reminders`
