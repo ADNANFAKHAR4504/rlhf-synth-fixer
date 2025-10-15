@@ -1,6 +1,6 @@
-1. tap.py
+## File: tap.py
 
-```py
+```python
 #!/usr/bin/env python3
 """
 Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
@@ -49,15 +49,15 @@ stack = TapStack(
 
 ```
 
-2. lib\_\_init\_\_.py
+## File: lib/**init**.py
 
-```py
+```python
 # empty
 ```
 
-3. lib\tap_stack.py
+## File: lib/tap_stack.py
 
-```py
+```python
 """
 tap_stack.py
 
@@ -183,9 +183,9 @@ class TapStack(pulumi.ComponentResource):
 
 ```
 
-4. lib\infrastructure\lambda_code\event_processing.py
+## File: lib/infrastructure/lambda_code/event_processing.py
 
-```py
+```python
 """
 Lambda function for processing trading events.
 
@@ -361,17 +361,17 @@ def send_metrics(event_type: str, status: str) -> None:
 
 ```
 
-5. lib\infrastructure\lambda_code\requirements.txt
+## File: lib/infrastructure/lambda_code/requirements.txt
 
-```py
+```python
 boto3>=1.34.0
 botocore>=1.34.0
 
 ```
 
-6. lib\infrastructure\aws_provider.py
+## File: lib/infrastructure/aws_provider.py
 
-```py
+```python
 """
 AWS Provider configuration for multi-region deployment.
 
@@ -436,9 +436,9 @@ class AWSProviderManager:
 
 ```
 
-7. lib\infrastructure\cloudwatch.py
+## File: lib/infrastructure/cloudwatch.py
 
-```py
+```python
 """
 CloudWatch monitoring and alerting for the event processing pipeline.
 
@@ -639,9 +639,9 @@ class CloudWatchStack:
 
 ```
 
-8. lib\infrastructure\config.py
+## File: lib/infrastructure/config.py
 
-```py
+```python
 """
 Configuration module for the serverless event processing pipeline.
 
@@ -760,9 +760,9 @@ class PipelineConfig:
 
 ```
 
-9. lib\infrastructure\dynamodb.py
+## File: lib/infrastructure/dynamodb.py
 
-```py
+```python
 """
 DynamoDB Global Tables for the event processing pipeline.
 
@@ -904,9 +904,9 @@ class DynamoDBStack:
 
 ```
 
-10. lib\infrastructure\eventbridge.py
+## File: lib/infrastructure/eventbridge.py
 
-```py
+```python
 """
 EventBridge configuration for the event processing pipeline.
 
@@ -1037,9 +1037,9 @@ class EventBridgeStack:
 
 ```
 
-11. lib\infrastructure\iam.py
+## File: lib/infrastructure/iam.py
 
-```py
+```python
 """
 IAM roles and policies for the event processing pipeline.
 
@@ -1241,9 +1241,9 @@ class IAMStack:
 
 ```
 
-12. lib\infrastructure\lambda_functions.py
+## File: lib/infrastructure/lambda_functions.py
 
-```py
+```python
 """
 Lambda functions for the event processing pipeline.
 
