@@ -464,7 +464,7 @@ describe('S3 Static Asset Storage - Integration Tests (Live)', () => {
       
       const response = await s3Client.send(command);
       const rule = response.CORSRules?.[0];
-      expect(rule?.AllowedOrigins).toContain('https://example.com/');
+      expect(rule?.AllowedOrigins).toContain('https://example.com');
     });
 
     test('max age is 3600 seconds', async () => {
@@ -817,7 +817,7 @@ describe('S3 Static Asset Storage - Integration Tests (Live)', () => {
       
       const corsResponse = await s3Client.send(corsCmd);
       expect(corsResponse.CORSRules).toBeDefined();
-      expect(corsResponse.CORSRules![0].AllowedOrigins).toContain('https://example.com/');
+      expect(corsResponse.CORSRules![0].AllowedOrigins).toContain('https://example.com');
       console.log('✓ CORS configured correctly');
 
       // ---------------------------------------------------------------
