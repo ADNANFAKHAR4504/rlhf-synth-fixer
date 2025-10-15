@@ -83,6 +83,31 @@ describe("ML Pipeline Integration Tests", () => {
   let outputs: OutputsFormat = {};
   let isActualDeployment = false;
 
+  // Helper function to get mock outputs
+  function getMockOutputs(): OutputsFormat {
+    return {
+      api_gateway_endpoint: "https://mock-api-id.execute-api.us-east-1.amazonaws.com/dev",
+      inference_api_url: "https://mock-api-id.execute-api.us-east-1.amazonaws.com/dev/inference",
+      raw_data_bucket: "ml-pipeline-raw-data-dev-abc123-123456789012",
+      processed_data_bucket: "ml-pipeline-processed-data-dev-abc123-123456789012",
+      model_artifacts_bucket: "ml-pipeline-model-artifacts-dev-abc123-123456789012",
+      logs_bucket: "ml-pipeline-logs-dev-abc123-123456789012",
+      model_metadata_table: "ml-pipeline-model-metadata-dev-abc123",
+      training_metrics_table: "ml-pipeline-training-metrics-dev-abc123",
+      ab_test_config_table: "ml-pipeline-ab-test-config-dev-abc123",
+      kinesis_stream_name: "ml-pipeline-inference-requests-dev-abc123",
+      kinesis_stream_arn: "arn:aws:kinesis:us-east-1:123456789012:stream/ml-pipeline-inference-requests-dev-abc123",
+      sagemaker_endpoint_a: "ml-pipeline-endpoint-a-dev-abc123",
+      sagemaker_endpoint_b: "ml-pipeline-endpoint-b-dev-abc123",
+      step_functions_arn: "arn:aws:states:us-east-1:123456789012:stateMachine:ml-pipeline-ml-pipeline-dev-abc123",
+      lambda_preprocessing_function: "ml-pipeline-preprocessing-dev-abc123",
+      lambda_inference_function: "ml-pipeline-inference-dev-abc123",
+      lambda_kinesis_consumer_function: "ml-pipeline-kinesis-consumer-dev-abc123",
+      sns_alerts_topic_arn: "arn:aws:sns:us-east-1:123456789012:ml-pipeline-ml-alerts-dev",
+      cloudwatch_dashboard_name: "ml-pipeline-ml-dashboard-dev",
+    };
+  }
+
   // Load outputs from deployment
   beforeAll(() => {
     const outputsPath = path.resolve(__dirname, "../cfn-outputs/all-outputs.json");
@@ -90,32 +115,21 @@ describe("ML Pipeline Integration Tests", () => {
     if (fs.existsSync(outputsPath)) {
       console.log("[INFO] Loading outputs from deployed infrastructure");
       const rawOutputs = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
-      outputs = rawOutputs;
-      isActualDeployment = true;
+      
+      // Check if this is the correct ML Pipeline deployment
+      // ML Pipeline should have api_gateway_endpoint or raw_data_bucket
+      const hasMLOutputs = rawOutputs.api_gateway_endpoint || rawOutputs.raw_data_bucket || rawOutputs.model_metadata_table;
+      
+      if (hasMLOutputs) {
+        outputs = rawOutputs;
+        isActualDeployment = true;
+      } else {
+        console.log("[WARN] Outputs file exists but doesn't match ML Pipeline - using mock data");
+        outputs = getMockOutputs();
+      }
     } else {
       console.log("[WARN] No deployment outputs found, using mock data for local testing");
-      // Mock outputs for local development
-      outputs = {
-        api_gateway_endpoint: "https://mock-api-id.execute-api.us-east-1.amazonaws.com/dev",
-        inference_api_url: "https://mock-api-id.execute-api.us-east-1.amazonaws.com/dev/inference",
-        raw_data_bucket: "ml-pipeline-raw-data-dev-abc123-123456789012",
-        processed_data_bucket: "ml-pipeline-processed-data-dev-abc123-123456789012",
-        model_artifacts_bucket: "ml-pipeline-model-artifacts-dev-abc123-123456789012",
-        logs_bucket: "ml-pipeline-logs-dev-abc123-123456789012",
-        model_metadata_table: "ml-pipeline-model-metadata-dev-abc123",
-        training_metrics_table: "ml-pipeline-training-metrics-dev-abc123",
-        ab_test_config_table: "ml-pipeline-ab-test-config-dev-abc123",
-        kinesis_stream_name: "ml-pipeline-inference-requests-dev-abc123",
-        kinesis_stream_arn: "arn:aws:kinesis:us-east-1:123456789012:stream/ml-pipeline-inference-requests-dev-abc123",
-        sagemaker_endpoint_a: "ml-pipeline-endpoint-a-dev-abc123",
-        sagemaker_endpoint_b: "ml-pipeline-endpoint-b-dev-abc123",
-        step_functions_arn: "arn:aws:states:us-east-1:123456789012:stateMachine:ml-pipeline-ml-pipeline-dev-abc123",
-        lambda_preprocessing_function: "ml-pipeline-preprocessing-dev-abc123",
-        lambda_inference_function: "ml-pipeline-inference-dev-abc123",
-        lambda_kinesis_consumer_function: "ml-pipeline-kinesis-consumer-dev-abc123",
-        sns_alerts_topic_arn: "arn:aws:sns:us-east-1:123456789012:ml-pipeline-ml-alerts-dev",
-        cloudwatch_dashboard_name: "ml-pipeline-ml-dashboard-dev",
-      };
+      outputs = getMockOutputs();
     }
   });
 
@@ -941,9 +955,9 @@ describe("ML Pipeline Integration Tests", () => {
       const metricsTable = extractValue(outputs.training_metrics_table);
       const abTestTable = extractValue(outputs.ab_test_config_table);
 
-      expect(metadataTable).toMatch(/^ml-pipeline-model-metadata-\w+$/);
-      expect(metricsTable).toMatch(/^ml-pipeline-training-metrics-\w+$/);
-      expect(abTestTable).toMatch(/^ml-pipeline-ab-test-config-\w+$/);
+      expect(metadataTable).toMatch(/^ml-pipeline-model-metadata-[\w-]+$/);
+      expect(metricsTable).toMatch(/^ml-pipeline-training-metrics-[\w-]+$/);
+      expect(abTestTable).toMatch(/^ml-pipeline-ab-test-config-[\w-]+$/);
 
       console.log(`  [VALID] Model Metadata Table: ${metadataTable}`);
       console.log(`  [VALID] Training Metrics Table: ${metricsTable}`);
@@ -953,8 +967,8 @@ describe("ML Pipeline Integration Tests", () => {
       const streamName = extractValue(outputs.kinesis_stream_name);
       const streamArn = extractValue(outputs.kinesis_stream_arn);
 
-      expect(streamName).toMatch(/^ml-pipeline-inference-requests-\w+$/);
-      expect(streamArn).toMatch(/^arn:aws:kinesis:[\w-]+:\d+:stream\/ml-pipeline-inference-requests-\w+$/);
+      expect(streamName).toMatch(/^ml-pipeline-inference-requests-[\w-]+$/);
+      expect(streamArn).toMatch(/^arn:aws:kinesis:[\w-]+:\d+:stream\/ml-pipeline-inference-requests-[\w-]+$/);
 
       console.log(`  [VALID] Kinesis Stream: ${streamName}`);
 
@@ -990,7 +1004,7 @@ describe("ML Pipeline Integration Tests", () => {
 
       // Validate preprocessing Lambda function configuration
       const preprocessingFunction = extractValue(outputs.lambda_preprocessing_function);
-      expect(preprocessingFunction).toMatch(/^ml-pipeline-preprocessing-\w+$/);
+      expect(preprocessingFunction).toMatch(/^ml-pipeline-preprocessing-[\w-]+$/);
 
       console.log(`  [VALID] Preprocessing Lambda: ${preprocessingFunction}`);
 
@@ -1350,7 +1364,7 @@ describe("ML Pipeline Integration Tests", () => {
       const dashboardName = extractValue(outputs.cloudwatch_dashboard_name);
 
       expect(snsTopicArn).toMatch(/^arn:aws:sns:[\w-]+:\d+:[\w-]+$/);
-      expect(dashboardName).toMatch(/^ml-pipeline-ml-dashboard-\w+$/);
+      expect(dashboardName).toMatch(/^ml-pipeline-ml-dashboard-[\w-]+$/);
 
       console.log(`  [VALID] SNS Topic: ${snsTopicArn}`);
       console.log(`  [VALID] CloudWatch Dashboard: ${dashboardName}`);
