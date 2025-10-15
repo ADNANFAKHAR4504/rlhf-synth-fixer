@@ -1,0 +1,15 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "19DC43",
+  "team": "1",
+  "startedAt": "2025-10-15T15:54:28.222Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "training_quality": 9,
+  "aws_services": "Route53, DynamoDB, Application Load Balancer, ECS Fargate, Aurora, Lambda, VPC, CloudWatch, IAM, SecurityGroup"
+}
