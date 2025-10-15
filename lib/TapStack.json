@@ -13,7 +13,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "enterprise-log-analytics-${AWS::AccountId}"
+                    "Fn::Sub": "enterprise-log-analytics-${EnvironmentSuffix}-${AWS::AccountId}"
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
@@ -63,7 +63,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "enterprise-log-analytics-athena-results-${AWS::AccountId}"
+                    "Fn::Sub": "enterprise-log-analytics-athena-results-${EnvironmentSuffix}-${AWS::AccountId}"
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
@@ -301,14 +301,18 @@
         "FirehoseLogGroup": {
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
-                "LogGroupName": "/aws/kinesisfirehose/EnterpriseLogDeliveryStream",
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/kinesisfirehose/EnterpriseLogDeliveryStream-${EnvironmentSuffix}"
+                },
                 "RetentionInDays": 30
             }
         },
         "LogDeliveryStream": {
             "Type": "AWS::KinesisFirehose::DeliveryStream",
             "Properties": {
-                "DeliveryStreamName": "EnterpriseLogDeliveryStream",
+                "DeliveryStreamName": {
+                    "Fn::Sub": "EnterpriseLogDeliveryStream-${EnvironmentSuffix}"
+                },
                 "DeliveryStreamType": "DirectPut",
                 "ExtendedS3DestinationConfiguration": {
                     "BucketARN": {
@@ -369,7 +373,9 @@
         "LogProcessorLambda": {
             "Type": "AWS::Lambda::Function",
             "Properties": {
-                "FunctionName": "LogProcessorFunction",
+                "FunctionName": {
+                    "Fn::Sub": "LogProcessorFunction-${EnvironmentSuffix}"
+                },
                 "Handler": "index.handler",
                 "Role": {
                     "Fn::GetAtt": [
@@ -428,7 +434,9 @@
         "S3UploaderLambda": {
             "Type": "AWS::Lambda::Function",
             "Properties": {
-                "FunctionName": "GlueScriptS3Uploader",
+                "FunctionName": {
+                    "Fn::Sub": "GlueScriptS3Uploader-${EnvironmentSuffix}"
+                },
                 "Handler": "index.handler",
                 "Role": {
                     "Fn::GetAtt": [
@@ -467,7 +475,9 @@
                     "Ref": "AWS::AccountId"
                 },
                 "DatabaseInput": {
-                    "Name": "enterprise_log_analytics",
+                    "Name": {
+                        "Fn::Sub": "enterprise-log-analytics-${EnvironmentSuffix}"
+                    },
                     "Description": "Database for enterprise log analytics"
                 }
             }
@@ -476,7 +486,9 @@
             "Type": "AWS::Glue::Crawler",
             "DependsOn": "GlueScriptUploaderCustomResource",
             "Properties": {
-                "Name": "EnterpriseLogCrawler",
+                "Name": {
+                    "Fn::Sub": "EnterpriseLogCrawler-${EnvironmentSuffix}"
+                },
                 "Role": {
                     "Fn::GetAtt": [
                         "GlueServiceRole",
@@ -523,7 +535,9 @@
                     "MaxConcurrentRuns": 2
                 },
                 "MaxRetries": 2,
-                "Name": "EnterpriseLogETLJob",
+                "Name": {
+                    "Fn::Sub": "EnterpriseLogETLJob-${EnvironmentSuffix}"
+                },
                 "Role": {
                     "Fn::GetAtt": [
                         "GlueServiceRole",
@@ -538,7 +552,9 @@
         "LogAnalyticsWorkgroup": {
             "Type": "AWS::Athena::WorkGroup",
             "Properties": {
-                "Name": "EnterpriseLogAnalytics",
+                "Name": {
+                    "Fn::Sub": "EnterpriseLogAnalytics-${EnvironmentSuffix}"
+                },
                 "Description": "Workgroup for enterprise log analytics",
                 "State": "ENABLED",
                 "WorkGroupConfiguration": {
@@ -558,23 +574,29 @@
         "LogAnalyticsDashboard": {
             "Type": "AWS::CloudWatch::Dashboard",
             "Properties": {
-                "DashboardName": "EnterpriseLogAnalyticsDashboard",
+                "DashboardName": {
+                    "Fn::Sub": "EnterpriseLogAnalyticsDashboard-${EnvironmentSuffix}"
+                },
                 "DashboardBody": {
-                    "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"x\": 0,\n      \"y\": 0,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Firehose\", \"DeliveryToS3.Records\", \"DeliveryStreamName\", \"EnterpriseLogDeliveryStream\"],\n          [\"AWS/Firehose\", \"DeliveryToS3.Success\", \"DeliveryStreamName\", \"EnterpriseLogDeliveryStream\"]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Firehose Delivery Metrics\",\n        \"period\": 300\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 12,\n      \"y\": 0,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Invocations\", \"FunctionName\", \"LogProcessorFunction\"],\n          [\"AWS/Lambda\", \"Errors\", \"FunctionName\", \"LogProcessorFunction\"],\n          [\"AWS/Lambda\", \"Duration\", \"FunctionName\", \"LogProcessorFunction\"]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Processor Metrics\",\n        \"period\": 300\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 0,\n      \"y\": 6,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/S3\", \"BucketSizeBytes\", \"BucketName\", \"${LogBucket}\", \"StorageType\", \"StandardStorage\"],\n          [\"AWS/S3\", \"NumberOfObjects\", \"BucketName\", \"${LogBucket}\", \"StorageType\", \"AllStorageTypes\"]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"S3 Storage Metrics\",\n        \"period\": 86400\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 12,\n      \"y\": 6,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Athena\", \"TotalExecutionTime\", \"QueryType\", \"DML\", \"WorkGroup\", \"EnterpriseLogAnalytics\"],\n          [\"AWS/Athena\", \"ProcessedBytes\", \"QueryType\", \"DML\", \"WorkGroup\", \"EnterpriseLogAnalytics\"]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Athena Query Metrics\",\n        \"period\": 300\n      }\n    }\n  ]\n}\n"
+                    "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"x\": 0,\n      \"y\": 0,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Firehose\", \"DeliveryToS3.Records\", \"DeliveryStreamName\", \"${LogDeliveryStream}\"],\n          [\"AWS/Firehose\", \"DeliveryToS3.Success\", \"DeliveryStreamName\", \"${LogDeliveryStream}\"]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Firehose Delivery Metrics\",\n        \"period\": 300\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 12,\n      \"y\": 0,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Invocations\", \"FunctionName\", \"${LogProcessorLambda}\"],\n          [\"AWS/Lambda\", \"Errors\", \"FunctionName\", \"${LogProcessorLambda}\"],\n          [\"AWS/Lambda\", \"Duration\", \"FunctionName\", \"${LogProcessorLambda}\"]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Processor Metrics\",\n        \"period\": 300\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 0,\n      \"y\": 6,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/S3\", \"BucketSizeBytes\", \"BucketName\", \"${LogBucket}\", \"StorageType\", \"StandardStorage\"],\n          [\"AWS/S3\", \"NumberOfObjects\", \"BucketName\", \"${LogBucket}\", \"StorageType\", \"AllStorageTypes\"]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"S3 Storage Metrics\",\n        \"period\": 86400\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 12,\n      \"y\": 6,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Athena\", \"TotalExecutionTime\", \"QueryType\", \"DML\", \"WorkGroup\", \"${LogAnalyticsWorkgroup}\"],\n          [\"AWS/Athena\", \"ProcessedBytes\", \"QueryType\", \"DML\", \"WorkGroup\", \"${LogAnalyticsWorkgroup}\"]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Athena Query Metrics\",\n        \"period\": 300\n      }\n    }\n  ]\n}\n"
                 }
             }
         },
         "LogAnalyticsAlarmTopic": {
             "Type": "AWS::SNS::Topic",
             "Properties": {
-                "TopicName": "LogAnalyticsAlarmTopic",
+                "TopicName": {
+                    "Fn::Sub": "LogAnalyticsAlarmTopic-${EnvironmentSuffix}"
+                },
                 "DisplayName": "Log Analytics Alarms"
             }
         },
         "FirehoseErrorAlarm": {
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
-                "AlarmName": "FirehoseDeliveryError",
+                "AlarmName": {
+                    "Fn::Sub": "FirehoseDeliveryError-${EnvironmentSuffix}"
+                },
                 "AlarmDescription": "Alarm for Firehose delivery errors",
                 "MetricName": "DeliveryToS3.DataFreshness",
                 "Namespace": "AWS/Firehose",
@@ -586,7 +608,9 @@
                 "Dimensions": [
                     {
                         "Name": "DeliveryStreamName",
-                        "Value": "EnterpriseLogDeliveryStream"
+                        "Value": {
+                            "Ref": "LogDeliveryStream"
+                        }
                     }
                 ],
                 "AlarmActions": [
@@ -599,7 +623,9 @@
         "LambdaErrorAlarm": {
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
-                "AlarmName": "LambdaProcessorError",
+                "AlarmName": {
+                    "Fn::Sub": "LambdaProcessorError-${EnvironmentSuffix}"
+                },
                 "AlarmDescription": "Alarm for Lambda processor errors",
                 "MetricName": "Errors",
                 "Namespace": "AWS/Lambda",
@@ -611,7 +637,9 @@
                 "Dimensions": [
                     {
                         "Name": "FunctionName",
-                        "Value": "LogProcessorFunction"
+                        "Value": {
+                            "Ref": "LogProcessorLambda"
+                        }
                     }
                 ],
                 "AlarmActions": [
@@ -624,30 +652,38 @@
         "SyslogLogGroup": {
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
-                "LogGroupName": "/enterprise/servers/syslog",
+                "LogGroupName": {
+                    "Fn::Sub": "/enterprise/servers/syslog-${EnvironmentSuffix}"
+                },
                 "RetentionInDays": 7
             }
         },
         "AuthLogGroup": {
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
-                "LogGroupName": "/enterprise/servers/auth",
+                "LogGroupName": {
+                    "Fn::Sub": "/enterprise/servers/auth-${EnvironmentSuffix}"
+                },
                 "RetentionInDays": 7
             }
         },
         "ApplicationLogGroup": {
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
-                "LogGroupName": "/enterprise/servers/application",
+                "LogGroupName": {
+                    "Fn::Sub": "/enterprise/servers/application-${EnvironmentSuffix}"
+                },
                 "RetentionInDays": 7
             }
         },
         "CloudWatchAgentConfigParameter": {
             "Type": "AWS::SSM::Parameter",
             "Properties": {
-                "Name": "/log-analytics/cloudwatch-agent-config",
+                "Name": {
+                    "Fn::Sub": "/log-analytics/cloudwatch-agent-config-${EnvironmentSuffix}"
+                },
                 "Type": "String",
-                "Value": "{\n  \"agent\": {\n    \"metrics_collection_interval\": 60,\n    \"run_as_user\": \"cwagent\"\n  },\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/syslog\",\n            \"log_group_name\": \"/enterprise/servers/syslog\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timezone\": \"UTC\"\n          },\n          {\n            \"file_path\": \"/var/log/auth.log\",\n            \"log_group_name\": \"/enterprise/servers/auth\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timezone\": \"UTC\"\n          },\n          {\n            \"file_path\": \"/var/log/application.log\",\n            \"log_group_name\": \"/enterprise/servers/application\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timezone\": \"UTC\"\n          }\n        ]\n      }\n    }\n  }\n}\n",
+                "Fn::Sub": "{\n  \"agent\": {\n    \"metrics_collection_interval\": 60,\n    \"run_as_user\": \"cwagent\"\n  },\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/syslog\",\n            \"log_group_name\": \"/enterprise/servers/syslog-${EnvironmentSuffix}\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timezone\": \"UTC\"\n          },\n          {\n            \"file_path\": \"/var/log/auth.log\",\n            \"log_group_name\": \"/enterprise/servers/auth-${EnvironmentSuffix}\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timezone\": \"UTC\"\n          },\n          {\n            \"file_path\": \"/var/log/application.log\",\n            \"log_group_name\": \"/enterprise/servers/application-${EnvironmentSuffix}\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timezone\": \"UTC\"\n          }\n        ]\n      }\n    }\n  }\n}\n",
                 "Description": "Configuration for CloudWatch Agent on servers"
             }
         },
@@ -717,7 +753,9 @@
         "AuditLogGroup": {
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
-                "LogGroupName": "/enterprise/log-analytics/audit",
+                "LogGroupName": {
+                    "Fn::Sub": "/enterprise/log-analytics/audit-${EnvironmentSuffix}"
+                },
                 "RetentionInDays": 365
             }
         },
@@ -776,7 +814,7 @@
                                     "Fn::Sub": "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:table/enterprise_log_analytics/*"
                                 },
                                 {
-                                    "Fn::Sub": "arn:aws:athena:${AWS::Region}:${AWS::AccountId}:workgroup/EnterpriseLogAnalytics"
+                                    "Fn::Sub": "arn:aws:athena:${AWS::Region}:${AWS::AccountId}:workgroup/EnterpriseLogAnalytics-${EnvironmentSuffix}"
                                 }
                             ]
                         }
@@ -826,7 +864,9 @@
         "QuickSightUpdaterLambda": {
             "Type": "AWS::Lambda::Function",
             "Properties": {
-                "FunctionName": "QuickSightPermissionUpdater",
+                "FunctionName": {
+                    "Fn::Sub": "QuickSightPermissionUpdater-${EnvironmentSuffix}"
+                },
                 "Handler": "index.handler",
                 "Role": {
                     "Fn::GetAtt": [
@@ -897,7 +937,7 @@
         "CloudWatchDashboard": {
             "Description": "CloudWatch Dashboard URL",
             "Value": {
-                "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=EnterpriseLogAnalyticsDashboard"
+                "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=EnterpriseLogAnalyticsDashboard-${EnvironmentSuffix}"
             }
         },
         "CloudWatchAgentConfig": {

@@ -42,7 +42,7 @@ describe('TapStack CloudFormation Template - Log Analytics Infrastructure', () =
       const logBucket = template.Resources.LogBucket;
       expect(logBucket).toBeDefined();
       expect(logBucket.Type).toBe('AWS::S3::Bucket');
-      expect(logBucket.Properties.BucketName['Fn::Sub']).toBe('enterprise-log-analytics-${AWS::AccountId}');
+      expect(logBucket.Properties.BucketName['Fn::Sub']).toBe('enterprise-log-analytics-${EnvironmentSuffix}-${AWS::AccountId}');
       expect(logBucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
       expect(logBucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
     });
@@ -75,7 +75,7 @@ describe('TapStack CloudFormation Template - Log Analytics Infrastructure', () =
       const athenaResultsBucket = template.Resources.AthenaQueryResultsBucket;
       expect(athenaResultsBucket).toBeDefined();
       expect(athenaResultsBucket.Type).toBe('AWS::S3::Bucket');
-      expect(athenaResultsBucket.Properties.BucketName['Fn::Sub']).toBe('enterprise-log-analytics-athena-results-${AWS::AccountId}');
+      expect(athenaResultsBucket.Properties.BucketName['Fn::Sub']).toBe('enterprise-log-analytics-athena-results-${EnvironmentSuffix}-${AWS::AccountId}');
       expect(athenaResultsBucket.Properties.LifecycleConfiguration.Rules[0].ExpirationInDays).toBe(30);
     });
   });
@@ -142,7 +142,7 @@ describe('TapStack CloudFormation Template - Log Analytics Infrastructure', () =
       const stream = template.Resources.LogDeliveryStream;
       expect(stream).toBeDefined();
       expect(stream.Type).toBe('AWS::KinesisFirehose::DeliveryStream');
-      expect(stream.Properties.DeliveryStreamName).toBe('EnterpriseLogDeliveryStream');
+      expect(stream.Properties.DeliveryStreamName['Fn::Sub']).toBe('EnterpriseLogDeliveryStream-${EnvironmentSuffix}');
       expect(stream.Properties.DeliveryStreamType).toBe('DirectPut');
     });
 
@@ -169,7 +169,7 @@ describe('TapStack CloudFormation Template - Log Analytics Infrastructure', () =
       const logGroup = template.Resources.FirehoseLogGroup;
       expect(logGroup).toBeDefined();
       expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
-      expect(logGroup.Properties.LogGroupName).toBe('/aws/kinesisfirehose/EnterpriseLogDeliveryStream');
+      expect(logGroup.Properties.LogGroupName['Fn::Sub']).toBe('/aws/kinesisfirehose/EnterpriseLogDeliveryStream-${EnvironmentSuffix}');
       expect(logGroup.Properties.RetentionInDays).toBe(30);
     });
   });
@@ -179,7 +179,7 @@ describe('TapStack CloudFormation Template - Log Analytics Infrastructure', () =
       const lambda = template.Resources.LogProcessorLambda;
       expect(lambda).toBeDefined();
       expect(lambda.Type).toBe('AWS::Lambda::Function');
-      expect(lambda.Properties.FunctionName).toBe('LogProcessorFunction');
+      expect(lambda.Properties.FunctionName['Fn::Sub']).toBe('LogProcessorFunction-${EnvironmentSuffix}');
       expect(lambda.Properties.Runtime).toBe('nodejs20.x');
       expect(lambda.Properties.Handler).toBe('index.handler');
       expect(lambda.Properties.Timeout).toBe(60);
@@ -202,7 +202,7 @@ describe('TapStack CloudFormation Template - Log Analytics Infrastructure', () =
       const lambda = template.Resources.S3UploaderLambda;
       expect(lambda).toBeDefined();
       expect(lambda.Type).toBe('AWS::Lambda::Function');
-      expect(lambda.Properties.FunctionName).toBe('GlueScriptS3Uploader');
+      expect(lambda.Properties.FunctionName['Fn::Sub']).toBe('GlueScriptS3Uploader-${EnvironmentSuffix}');
       expect(lambda.Properties.Runtime).toBe('python3.11');
       expect(lambda.Properties.Handler).toBe('index.handler');
     });
@@ -211,7 +211,7 @@ describe('TapStack CloudFormation Template - Log Analytics Infrastructure', () =
       const lambda = template.Resources.QuickSightUpdaterLambda;
       expect(lambda).toBeDefined();
       expect(lambda.Type).toBe('AWS::Lambda::Function');
-      expect(lambda.Properties.FunctionName).toBe('QuickSightPermissionUpdater');
+      expect(lambda.Properties.FunctionName['Fn::Sub']).toBe('QuickSightPermissionUpdater-${EnvironmentSuffix}');
       expect(lambda.Properties.Runtime).toBe('python3.11');
       expect(lambda.Properties.Timeout).toBe(300);
       
@@ -226,7 +226,7 @@ describe('TapStack CloudFormation Template - Log Analytics Infrastructure', () =
       const database = template.Resources.LogAnalyticsDatabase;
       expect(database).toBeDefined();
       expect(database.Type).toBe('AWS::Glue::Database');
-      expect(database.Properties.DatabaseInput.Name).toBe('enterprise_log_analytics');
+      expect(database.Properties.DatabaseInput.Name['Fn::Sub']).toBe('enterprise-log-analytics-${EnvironmentSuffix}');
       expect(database.Properties.DatabaseInput.Description).toBe('Database for enterprise log analytics');
     });
 
@@ -234,7 +234,7 @@ describe('TapStack CloudFormation Template - Log Analytics Infrastructure', () =
       const crawler = template.Resources.LogCrawler;
       expect(crawler).toBeDefined();
       expect(crawler.Type).toBe('AWS::Glue::Crawler');
-      expect(crawler.Properties.Name).toBe('EnterpriseLogCrawler');
+      expect(crawler.Properties.Name['Fn::Sub']).toBe('EnterpriseLogCrawler-${EnvironmentSuffix}');
       expect(crawler.Properties.Schedule.ScheduleExpression).toBe('cron(0 */3 * * ? *)');
       expect(crawler.Properties.Targets.S3Targets[0].Path['Fn::Sub']).toBe('s3://${LogBucket}/logs/');
     });
@@ -243,7 +243,7 @@ describe('TapStack CloudFormation Template - Log Analytics Infrastructure', () =
       const job = template.Resources.LogETLJob;
       expect(job).toBeDefined();
       expect(job.Type).toBe('AWS::Glue::Job');
-      expect(job.Properties.Name).toBe('EnterpriseLogETLJob');
+      expect(job.Properties.Name['Fn::Sub']).toBe('EnterpriseLogETLJob-${EnvironmentSuffix}');
       expect(job.Properties.GlueVersion).toBe('3.0');
       expect(job.Properties.NumberOfWorkers).toBe(5);
       expect(job.Properties.WorkerType).toBe('G.1X');
@@ -258,11 +258,11 @@ describe('TapStack CloudFormation Template - Log Analytics Infrastructure', () =
       const applicationLogGroup = template.Resources.ApplicationLogGroup;
       
       expect(syslogGroup.Type).toBe('AWS::Logs::LogGroup');
-      expect(syslogGroup.Properties.LogGroupName).toBe('/enterprise/servers/syslog');
+      expect(syslogGroup.Properties.LogGroupName['Fn::Sub']).toBe('/enterprise/servers/syslog-${EnvironmentSuffix}');
       expect(syslogGroup.Properties.RetentionInDays).toBe(7);
       
-      expect(authLogGroup.Properties.LogGroupName).toBe('/enterprise/servers/auth');
-      expect(applicationLogGroup.Properties.LogGroupName).toBe('/enterprise/servers/application');
+      expect(authLogGroup.Properties.LogGroupName['Fn::Sub']).toBe('/enterprise/servers/auth-${EnvironmentSuffix}');
+      expect(applicationLogGroup.Properties.LogGroupName['Fn::Sub']).toBe('/enterprise/servers/application-${EnvironmentSuffix}');
     });
 
     test('should have subscription filters for all log groups', () => {
@@ -282,7 +282,7 @@ describe('TapStack CloudFormation Template - Log Analytics Infrastructure', () =
       const auditGroup = template.Resources.AuditLogGroup;
       expect(auditGroup).toBeDefined();
       expect(auditGroup.Type).toBe('AWS::Logs::LogGroup');
-      expect(auditGroup.Properties.LogGroupName).toBe('/enterprise/log-analytics/audit');
+      expect(auditGroup.Properties.LogGroupName['Fn::Sub']).toBe('/enterprise/log-analytics/audit-${EnvironmentSuffix}');
       expect(auditGroup.Properties.RetentionInDays).toBe(365);
     });
   });
@@ -292,10 +292,10 @@ describe('TapStack CloudFormation Template - Log Analytics Infrastructure', () =
       const param = template.Resources.CloudWatchAgentConfigParameter;
       expect(param).toBeDefined();
       expect(param.Type).toBe('AWS::SSM::Parameter');
-      expect(param.Properties.Name).toBe('/log-analytics/cloudwatch-agent-config');
+      expect(param.Properties.Name['Fn::Sub']).toBe('/log-analytics/cloudwatch-agent-config-${EnvironmentSuffix}');
       expect(param.Properties.Type).toBe('String');
       
-      const config = JSON.parse(param.Properties.Value);
+      const config = JSON.parse(param.Properties['Fn::Sub']);
       expect(config.agent.metrics_collection_interval).toBe(60);
       expect(config.logs.logs_collected.files.collect_list).toHaveLength(3);
     });
@@ -306,7 +306,7 @@ describe('TapStack CloudFormation Template - Log Analytics Infrastructure', () =
       const workgroup = template.Resources.LogAnalyticsWorkgroup;
       expect(workgroup).toBeDefined();
       expect(workgroup.Type).toBe('AWS::Athena::WorkGroup');
-      expect(workgroup.Properties.Name).toBe('EnterpriseLogAnalytics');
+      expect(workgroup.Properties.Name['Fn::Sub']).toBe('EnterpriseLogAnalytics-${EnvironmentSuffix}');
       expect(workgroup.Properties.State).toBe('ENABLED');
       expect(workgroup.Properties.WorkGroupConfiguration.EnforceWorkGroupConfiguration).toBe(true);
       expect(workgroup.Properties.WorkGroupConfiguration.ResultConfiguration.EncryptionConfiguration.EncryptionOption).toBe('SSE_S3');
@@ -318,7 +318,7 @@ describe('TapStack CloudFormation Template - Log Analytics Infrastructure', () =
       const dashboard = template.Resources.LogAnalyticsDashboard;
       expect(dashboard).toBeDefined();
       expect(dashboard.Type).toBe('AWS::CloudWatch::Dashboard');
-      expect(dashboard.Properties.DashboardName).toBe('EnterpriseLogAnalyticsDashboard');
+      expect(dashboard.Properties.DashboardName['Fn::Sub']).toBe('EnterpriseLogAnalyticsDashboard-${EnvironmentSuffix}');
       
       const dashboardBody = JSON.parse(dashboard.Properties.DashboardBody['Fn::Sub']);
       expect(dashboardBody.widgets).toHaveLength(4);
@@ -332,7 +332,7 @@ describe('TapStack CloudFormation Template - Log Analytics Infrastructure', () =
       const topic = template.Resources.LogAnalyticsAlarmTopic;
       expect(topic).toBeDefined();
       expect(topic.Type).toBe('AWS::SNS::Topic');
-      expect(topic.Properties.TopicName).toBe('LogAnalyticsAlarmTopic');
+      expect(topic.Properties.TopicName['Fn::Sub']).toBe('LogAnalyticsAlarmTopic-${EnvironmentSuffix}');
       expect(topic.Properties.DisplayName).toBe('Log Analytics Alarms');
     });
 
@@ -341,11 +341,11 @@ describe('TapStack CloudFormation Template - Log Analytics Infrastructure', () =
       const lambdaAlarm = template.Resources.LambdaErrorAlarm;
       
       expect(firehoseAlarm.Type).toBe('AWS::CloudWatch::Alarm');
-      expect(firehoseAlarm.Properties.AlarmName).toBe('FirehoseDeliveryError');
+      expect(firehoseAlarm.Properties.AlarmName['Fn::Sub']).toBe('FirehoseDeliveryError-${EnvironmentSuffix}');
       expect(firehoseAlarm.Properties.MetricName).toBe('DeliveryToS3.DataFreshness');
       expect(firehoseAlarm.Properties.Threshold).toBe(900);
       
-      expect(lambdaAlarm.Properties.AlarmName).toBe('LambdaProcessorError');
+      expect(lambdaAlarm.Properties.AlarmName['Fn::Sub']).toBe('LambdaProcessorError-${EnvironmentSuffix}');
       expect(lambdaAlarm.Properties.MetricName).toBe('Errors');
       expect(lambdaAlarm.Properties.Threshold).toBe(5);
     });
