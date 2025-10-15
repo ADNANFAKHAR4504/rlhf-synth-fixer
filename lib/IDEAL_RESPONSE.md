@@ -1,5 +1,3 @@
-# ideal_response.md
-
 # Ideal response
 
 This document describes the ideal deliverable for the CloudFormation/TapStack.yml request and what a successful reply should include.

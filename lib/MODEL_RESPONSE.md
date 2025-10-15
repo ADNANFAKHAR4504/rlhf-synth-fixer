@@ -1,5 +1,3 @@
-# model_response.md
-
 # Model response example
 
 Thanks — I reviewed everything and produced a clean, deployable CloudFormation YAML that follows the constraints you gave and addresses the errors you encountered. Below I summarize what I changed, why those changes were required, and the next steps you should take.

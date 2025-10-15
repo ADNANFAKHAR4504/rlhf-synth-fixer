@@ -1,6 +1,6 @@
 ### **Prompt for TapStack.yml Generation**
 
-> I need you to generate a **complete AWS CloudFormation YAML template** named **TapStack.yml** that sets up a brand-new, secure, production-grade web infrastructure in **us-east-1**.
+> Generate a **complete AWS CloudFormation YAML template** named **TapStack.yml** that sets up a brand-new, secure, production-grade web infrastructure in **us-east-1**.
 >
 > The template must include **all variable declarations (Parameters and Mappings)**, **explicit resource logic**, **Outputs**, and **consistent tagging**. It should create every required component fresh — nothing should reference pre-existing resources.
 >

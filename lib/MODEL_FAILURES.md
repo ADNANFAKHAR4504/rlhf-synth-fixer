@@ -1,5 +1,3 @@
-# model_failure.md
-
 # Model failure modes and their root-cause analysis
 
 This document catalogs the common failures that were encountered while iterating on this stack and concrete, human-actionable fixes for each. Follow these to troubleshoot or avoid the same issues.
