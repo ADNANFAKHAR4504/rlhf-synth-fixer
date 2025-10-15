@@ -1,4 +1,7 @@
-from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack, Environment
+from dataclasses import dataclass
+from typing import Optional
+
+from aws_cdk import CfnOutput, Duration, Environment, RemovalPolicy, Stack
 from aws_cdk import aws_athena as athena
 from aws_cdk import aws_cloudwatch as cloudwatch
 from aws_cdk import aws_cloudwatch_actions as cloudwatch_actions
@@ -14,8 +17,6 @@ from aws_cdk import aws_lambda_event_sources as lambda_event_sources
 from aws_cdk import aws_s3 as s3
 from aws_cdk import aws_sns as sns
 from constructs import Construct
-from typing import Optional
-from dataclasses import dataclass
 
 
 @dataclass
@@ -90,7 +91,7 @@ class TapStack(Stack):
         processing_lambda = lambda_.Function(
             self,
             f"TrafficDataProcessor{environment_suffix}",
-            runtime=lambda_.Runtime.PYTHON_3_9,
+            runtime=lambda_.Runtime.PYTHON_3_12,
             handler="index.handler",
             code=lambda_.Code.from_asset(
                 "lib/lambda/processor"
@@ -124,7 +125,7 @@ class TapStack(Stack):
         aggregation_lambda = lambda_.Function(
             self,
             f"TrafficDataAggregator{environment_suffix}",
-            runtime=lambda_.Runtime.PYTHON_3_9,
+            runtime=lambda_.Runtime.PYTHON_3_12,
             handler="index.handler",
             code=lambda_.Code.from_asset(
                 "lib/lambda/aggregator"
@@ -158,7 +159,7 @@ class TapStack(Stack):
         alert_lambda = lambda_.Function(
             self,
             f"TrafficAlertProcessor{environment_suffix}",
-            runtime=lambda_.Runtime.PYTHON_3_9,
+            runtime=lambda_.Runtime.PYTHON_3_12,
             handler="index.handler",
             code=lambda_.Code.from_asset("lib/lambda/alerts"),  # Lambda code in lib directory
             environment={
