@@ -1,4 +1,3 @@
-Ideal response
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'CI/CD Pipeline for Web Application Deployment using CodePipeline, CodeBuild, and CodeDeploy'
