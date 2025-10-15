@@ -2,6 +2,7 @@ import json
 import os
 import time
 import unittest
+
 from pytest import mark
 
 # Load deployment outputs
@@ -302,7 +303,7 @@ class TestTrafficAnalyticsE2E(unittest.TestCase):
         self.assertIn("sensor_id", sensor_message)
         self.assertIn("TS-042", sensor_message)
         self.assertIn("95", sensor_message)  # vehicle_count
-        print("   ✅ Step 1: Sensor data format validated")
+        print("   Step 1: Sensor data format validated")
         
         # Step 2: Validate processing transformation
         max_capacity = sensor_data.get("max_capacity", 100)
@@ -323,14 +324,14 @@ class TestTrafficAnalyticsE2E(unittest.TestCase):
         self.assertEqual(processed_record["sensor_id"], "TS-042")
         self.assertEqual(processed_record["location_id"], "Downtown-A1")
         self.assertEqual(processed_record["average_speed"], 5.0)
-        print(f"   ✅ Step 2: Calculated congestion level: {processed_record['congestion_level']}%")
+        print(f"   Step 2: Calculated congestion level: {processed_record['congestion_level']}%")
         
         # Step 3: Validate alerting trigger
         congestion_threshold = 80.0
         should_alert = processed_record["congestion_level"] >= congestion_threshold
         self.assertTrue(should_alert)
         self.assertGreater(processed_record["congestion_level"], congestion_threshold)
-        print(f"   ✅ Step 3: Alert triggered (95% > {congestion_threshold}%)")
+        print(f"   Step 3: Alert triggered (95% > {congestion_threshold}%)")
         
         # Step 4: Validate aggregation for hourly analytics
         aggregation_input = [processed_record]  # Single record for this test
@@ -362,14 +363,14 @@ class TestTrafficAnalyticsE2E(unittest.TestCase):
         
         self.assertEqual(avg_congestion, 95.0)
         self.assertEqual(avg_speed, 5.0)
-        print(f"   ✅ Step 4: Aggregated - Congestion: {avg_congestion}%, Speed: {avg_speed} mph")
+        print(f"   Step 4: Aggregated - Congestion: {avg_congestion}%, Speed: {avg_speed} mph")
         
         # Final validation: Complete data flow worked for critical congestion event
-        print("\n🎯 End-to-End Flow Results:")
+        print("\nEnd-to-End Flow Results:")
         print(f"   • High congestion detected: {processed_record['congestion_level']}% > {congestion_threshold}%")
         print(f"   • Critical alert triggered for Downtown-A1")
         print(f"   • Data ready for analytics and visualization")
-        print("   ✅ Complete E2E High Congestion Flow Test PASSED")
+        print("   Complete E2E High Congestion Flow Test PASSED")
 
 
 @mark.describe("Integration Test Infrastructure Validation")
