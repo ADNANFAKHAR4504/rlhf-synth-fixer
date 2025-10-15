@@ -49,7 +49,11 @@ describe('CI/CD Pipeline CloudFormation Template', () => {
         'ArtifactBucketName',
         'ApplicationName',
         'RepositoryName',
-        'CreateCodeCommitRepo'
+        'CreateCodeCommitRepo',
+        'DevInstanceType',
+        'ProdInstanceType',
+        'KeyPairName',
+        'VPCCidr'
       ];
 
       requiredParams.forEach(paramName => {
@@ -60,7 +64,7 @@ describe('CI/CD Pipeline CloudFormation Template', () => {
 
     test('ApplicationName parameter should have correct default', () => {
       const appNameParam = template.Parameters.ApplicationName;
-      expect(appNameParam.Default).toBe('WebApp');
+      expect(appNameParam.Default).toBe('WebApp1');
       expect(appNameParam.Description).toBe('Name of the application to be deployed');
     });
 
@@ -68,6 +72,23 @@ describe('CI/CD Pipeline CloudFormation Template', () => {
       const createRepoParam = template.Parameters.CreateCodeCommitRepo;
       expect(createRepoParam.Default).toBe('false');
       expect(createRepoParam.AllowedValues).toEqual(['true', 'false']);
+    });
+
+    test('Infrastructure parameters should have correct defaults', () => {
+      expect(template.Parameters.DevInstanceType.Default).toBe('t3.micro');
+      expect(template.Parameters.ProdInstanceType.Default).toBe('t3.small');
+      expect(template.Parameters.VPCCidr.Default).toBe('10.0.0.0/16');
+      expect(template.Parameters.KeyPairName.Default).toBe('');
+    });
+
+    test('Instance type parameters should have allowed values', () => {
+      const devInstanceParam = template.Parameters.DevInstanceType;
+      expect(devInstanceParam.AllowedValues).toContain('t3.micro');
+      expect(devInstanceParam.AllowedValues).toContain('t3.small');
+      
+      const prodInstanceParam = template.Parameters.ProdInstanceType;
+      expect(prodInstanceParam.AllowedValues).toContain('t3.small');
+      expect(prodInstanceParam.AllowedValues).toContain('t3.medium');
     });
   });
 
@@ -82,6 +103,51 @@ describe('CI/CD Pipeline CloudFormation Template', () => {
       ];
 
       requiredResources.forEach(resourceName => {
+        expect(template.Resources[resourceName]).toBeDefined();
+      });
+    });
+
+    test('should have required VPC infrastructure resources', () => {
+      const vpcResources = [
+        'ApplicationVPC',
+        'InternetGateway',
+        'PublicSubnet1',
+        'PublicSubnet2',
+        'PrivateSubnet1',
+        'PrivateSubnet2',
+        'ApplicationLoadBalancer'
+      ];
+
+      vpcResources.forEach(resourceName => {
+        expect(template.Resources[resourceName]).toBeDefined();
+      });
+    });
+
+    test('should have required Auto Scaling and EC2 resources', () => {
+      const ec2Resources = [
+        'ProdLaunchTemplate',
+        'DevLaunchTemplate',
+        'ProdAutoScalingGroup',
+        'DevAutoScalingGroup',
+        'ALBSecurityGroup',
+        'EC2SecurityGroup'
+      ];
+
+      ec2Resources.forEach(resourceName => {
+        expect(template.Resources[resourceName]).toBeDefined();
+      });
+    });
+
+    test('should have required security and monitoring resources', () => {
+      const securityResources = [
+        'S3KMSKey',
+        'ApplicationSecrets',
+        'CloudTrail',
+        'ApplicationDashboard',
+        'ApplicationHealthMetric'
+      ];
+
+      securityResources.forEach(resourceName => {
         expect(template.Resources[resourceName]).toBeDefined();
       });
     });
@@ -190,14 +256,14 @@ describe('CI/CD Pipeline CloudFormation Template', () => {
       expect(resourceCount).toBeGreaterThan(5); // Should have multiple IAM roles, S3 bucket, CodeBuild projects, etc.
     });
 
-    test('should have seven parameters for CI/CD configuration', () => {
+    test('should have eleven parameters for comprehensive infrastructure configuration', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(7);
+      expect(parameterCount).toBe(11);
     });
 
-    test('should have five outputs (3 always + 2 conditional)', () => {
+    test('should have comprehensive outputs for all infrastructure components', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(5);
+      expect(outputCount).toBe(18); // Includes VPC, ALB, ASG, KMS, CloudTrail, Dashboard, etc.
     });
   });
 
