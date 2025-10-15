@@ -899,10 +899,9 @@ Resources:
           AcmCertificateArn: !Ref CloudFrontCertificate
           SslSupportMethod: sni-only
           MinimumProtocolVersion: TLSv1.2_2021
-        Aliases: !If
-          - HasDomain
-          - [!Ref DomainName, !Sub "www.${DomainName}"]
-          - []
+        Aliases:
+          - !Ref DomainName
+          - !Sub "www.${DomainName}"
         DefaultRootObject: index.html
         Origins:
           - Id: ALBOriginPrimary
@@ -985,7 +984,7 @@ Resources:
           Bucket: !GetAtt LogsBucket.DomainName
           Prefix: cloudfront-logs/
           IncludeCookies: false
-        WebACLId: !If [HasDomain, !Ref WebACL, !Ref "AWS::NoValue"]
+        WebACLId: !Ref WebACL
       Tags:
         - Key: Name
           Value: !Sub "${Team}-${EnvironmentSuffix}-cloudfront"

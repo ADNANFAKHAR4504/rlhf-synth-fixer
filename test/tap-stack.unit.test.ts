@@ -1,6 +1,79 @@
 import fs from 'fs';
 import path from 'path';
 
+describe('TapStack CloudFormation Template', () => {
+  let template: any;
+
+  beforeAll(() => {
+    // unit-tests.sh converts YAML → JSON via: pipenv run cfn-flip-to-json > lib/TapStack.json
+    const templatePath = path.join(__dirname, '../lib/TapStack.json');
+    const templateContent = fs.readFileSync(templatePath, 'utf8');
+    template = JSON.parse(templateContent);
+  });
+
+  describe('Template Structure', () => {
+    test('has valid CloudFormation format version', () => {
+      expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
+    });
+
+    test('has description and metadata', () => {
+      expect(template.Description).toBe('TAP Stack - Task Assignment Platform CloudFormation Template');
+      expect(template.Metadata).toBeDefined();
+      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
+    });
+  });
+
+  describe('Parameters', () => {
+    test('includes EnvironmentSuffix parameter with defaults', () => {
+      expect(template.Parameters).toBeDefined();
+      const p = template.Parameters.EnvironmentSuffix;
+      expect(p).toBeDefined();
+      expect(p.Type).toBe('String');
+      expect(p.Default).toBe('dev');
+      expect(p.Description).toBe('Environment suffix for resource naming (e.g., dev, staging, prod)');
+    });
+  });
+
+  describe('Key Resources', () => {
+    test('creates an Application Load Balancer', () => {
+      const alb = template.Resources['ApplicationLoadBalancer'];
+      expect(alb).toBeDefined();
+      expect(alb.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
+    });
+
+    test('creates an Auto Scaling Group', () => {
+      const asg = template.Resources['AutoScalingGroup'];
+      expect(asg).toBeDefined();
+      expect(asg.Type).toBe('AWS::AutoScaling::AutoScalingGroup');
+    });
+
+    test('creates S3 buckets for assets and logs', () => {
+      const assets = template.Resources['AppAssetsBucket'];
+      const logs = template.Resources['LogsBucket'];
+      expect(assets).toBeDefined();
+      expect(logs).toBeDefined();
+      expect(assets.Type).toBe('AWS::S3::Bucket');
+      expect(logs.Type).toBe('AWS::S3::Bucket');
+    });
+
+    test('creates DynamoDB session table', () => {
+      const table = template.Resources['SessionTable'];
+      expect(table).toBeDefined();
+      expect(table.Type).toBe('AWS::DynamoDB::Table');
+    });
+  });
+
+  describe('Outputs', () => {
+    test('includes key outputs', () => {
+      expect(template.Outputs).toBeDefined();
+      expect(template.Outputs['LoadBalancerDNS']).toBeDefined();
+      expect(template.Outputs['S3AssetsBucket']).toBeDefined();
+      expect(template.Outputs['S3LogsBucket']).toBeDefined();
+    });
+  });
+});
+
+
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 describe('TapStack CloudFormation Template', () => {
