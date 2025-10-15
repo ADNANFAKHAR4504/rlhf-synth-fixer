@@ -178,8 +178,8 @@ describe('Production Cloud Environment Integration Tests', () => {
     // Maps to PROMPT requirement: "The EC2 security group should allow SSH traffic on port 22 only from your specific IP address"
     test('should have EC2 security group with SSH restricted to specific IP', () => {
       const ec2SG = securityGroups.find(sg =>
-        sg.GroupName === 'Production-EC2-SG' &&
-        sg.VpcId === outputs.MyVPCId
+        sg.VpcId === outputs.MyVPCId &&
+        sg.Tags?.some(tag => tag.Key === 'Name' && tag.Value === 'Production-EC2-SG')
       );
 
       expect(ec2SG).toBeDefined();
@@ -200,8 +200,8 @@ describe('Production Cloud Environment Integration Tests', () => {
     // Maps to PROMPT requirement: "Create an RDS security group that allows MySQL traffic on port 3306 exclusively from the EC2 security group"
     test('should have RDS security group with MySQL access only from EC2 security group', () => {
       const rdsSG = securityGroups.find(sg =>
-        sg.GroupName === 'Production-RDS-SG' &&
-        sg.VpcId === outputs.MyVPCId
+        sg.VpcId === outputs.MyVPCId &&
+        sg.Tags?.some(tag => tag.Key === 'Name' && tag.Value === 'Production-RDS-SG')
       );
 
       expect(rdsSG).toBeDefined();
@@ -443,7 +443,7 @@ describe('Production Cloud Environment Integration Tests', () => {
       }).promise();
 
       const hasCloudWatchPolicy = policiesResponse.AttachedPolicies!.some(
-        policy => policy.PolicyName?.includes('CloudWatch')
+        policy => policy.PolicyArn?.includes('CloudWatchAgentServerPolicy')
       );
 
       expect(hasCloudWatchPolicy).toBe(true);
@@ -463,7 +463,7 @@ describe('Production Cloud Environment Integration Tests', () => {
       }).promise();
 
       const hasSecretsPolicy = policiesResponse.PolicyNames!.some(
-        policyName => policyName.includes('SecretsManager')
+        policyName => policyName === 'SecretsManagerReadAccess'
       );
 
       expect(hasSecretsPolicy).toBe(true);
