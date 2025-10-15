@@ -64,7 +64,7 @@ describe('TapStack Unit Tests', () => {
 
   describe('DynamoDB Table Configuration', () => {
     test('should create DynamoDB table with correct schema', () => {
-      primaryTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
+      primaryTemplate.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
         KeySchema: [
           {
             AttributeName: 'id',
@@ -90,15 +90,20 @@ describe('TapStack Unit Tests', () => {
     });
 
     test('should enable point-in-time recovery', () => {
-      primaryTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
-        PointInTimeRecoverySpecification: {
-          PointInTimeRecoveryEnabled: true
-        }
+      // For GlobalTable, PITR is configured via Replicas
+      primaryTemplate.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
+        Replicas: Match.arrayWith([
+          Match.objectLike({
+            PointInTimeRecoverySpecification: Match.objectLike({
+              PointInTimeRecoveryEnabled: true
+            })
+          })
+        ])
       });
     });
 
     test('should enable streams', () => {
-      primaryTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
+      primaryTemplate.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
         StreamSpecification: {
           StreamViewType: 'NEW_AND_OLD_IMAGES'
         }
@@ -106,7 +111,7 @@ describe('TapStack Unit Tests', () => {
     });
 
     test('should configure TTL attribute', () => {
-      primaryTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
+      primaryTemplate.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
         TimeToLiveSpecification: {
           AttributeName: 'ttl',
           Enabled: true
@@ -165,15 +170,28 @@ describe('TapStack Unit Tests', () => {
       });
     });
 
-    test('S3 replication is disabled by default (requires destination bucket)', () => {
-      // S3 replication is commented out to avoid circular dependency
-      // Both regions must be deployed first before enabling replication
+    test('S3 replication is enabled for primary stack', () => {
+      // S3 cross-region replication is now enabled for the asset bucket
       const bucketsWithReplication = primaryTemplate.findResources('AWS::S3::Bucket', {
         Properties: {
           ReplicationConfiguration: Match.anyValue()
         }
       });
-      expect(Object.keys(bucketsWithReplication).length).toBe(0);
+      // Asset bucket should have replication configured
+      expect(Object.keys(bucketsWithReplication).length).toBe(1);
+      
+      // Verify replication role exists
+      primaryTemplate.hasResourceProperties('AWS::IAM::Role', {
+        AssumeRolePolicyDocument: Match.objectLike({
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Principal: Match.objectLike({
+                Service: 's3.amazonaws.com'
+              })
+            })
+          ])
+        })
+      });
     });
   });
 
@@ -589,7 +607,7 @@ describe('TapStack Unit Tests', () => {
       
       const template = Template.fromStack(apSouthPrimaryStack);
       
-      // S3 replication is disabled by default, so verify no replication role exists
+      // S3 replication is now enabled for primary stacks
       const s3ReplicationRoles = template.findResources('AWS::IAM::Role', {
         Properties: {
           AssumeRolePolicyDocument: Match.objectLike({
@@ -604,8 +622,8 @@ describe('TapStack Unit Tests', () => {
         }
       });
       
-      // Should have Lambda and Event roles, but not S3 replication role
-      expect(Object.keys(s3ReplicationRoles).length).toBe(0);
+      // Should have S3 replication role for primary stack
+      expect(Object.keys(s3ReplicationRoles).length).toBe(1);
       
       // Verify the stack was created successfully for ap-south-1
       expect(template.toJSON().Resources).toBeDefined();
