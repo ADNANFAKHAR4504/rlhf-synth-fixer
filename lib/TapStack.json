@@ -1,6 +1,13 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Enterprise Log Analytics System for 500 servers",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Description": "Environment suffix for resource naming to avoid conflicts",
+            "Default": "dev"
+        }
+    },
     "Resources": {
         "LogBucket": {
             "Type": "AWS::S3::Bucket",

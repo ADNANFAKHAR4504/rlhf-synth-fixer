@@ -24,8 +24,16 @@ describe('TapStack CloudFormation Template - Log Analytics Infrastructure', () =
     });
 
     test('should have all required sections', () => {
+      expect(template.Parameters).toBeDefined();
       expect(template.Resources).toBeDefined();
       expect(template.Outputs).toBeDefined();
+    });
+
+    test('should have EnvironmentSuffix parameter', () => {
+      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+      expect(template.Parameters.EnvironmentSuffix.Type).toBe('String');
+      expect(template.Parameters.EnvironmentSuffix.Default).toBe('dev');
+      expect(template.Parameters.EnvironmentSuffix.Description).toContain('Environment suffix');
     });
   });
 
