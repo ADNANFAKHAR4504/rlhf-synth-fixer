@@ -1,0 +1,30 @@
+{
+  "task_id": "1439222270",
+  "po_id": "CFN-MED-HEALTH-API-001",
+  "platform": "cfn",
+  "language": "yaml",
+  "difficulty": "medium",
+  "complexity": "medium",
+  "subtask": "Create a HIPAA-compliant patient data API infrastructure",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Security Configuration as Code",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "team": "synth",
+  "startedAt": "2025-10-14T00:00:00Z",
+  "description": "Design and implement a HIPAA-compliant patient records API infrastructure using CloudFormation. The system should securely store patient records in RDS with proper encryption, access controls, and audit logging capabilities.",
+  "background": "A healthcare provider needs a secure API infrastructure to manage patient records in compliance with HIPAA regulations. The system must ensure data encryption at rest and in transit, maintain detailed audit logs, implement proper access controls, and provide a scalable serverless architecture for handling patient data operations.",
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "Lambda",
+    "API Gateway",
+    "KMS",
+    "Secrets Manager",
+    "CloudWatch Logs",
+    "IAM"
+  ]
+}
