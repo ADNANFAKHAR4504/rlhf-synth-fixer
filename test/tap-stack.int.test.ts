@@ -39,12 +39,12 @@ const dynamoDBClient = new DynamoDBClient({ region });
 const lambdaClient = new LambdaClient({ region });
 const snsClient = new SNSClient({ region });
 
-// Extract resource names from outputs
-const bucketName = outputs[`BucketNamedev`];
-const tableName = outputs[`TableNamedev`];
-const lambdaFunctionName = outputs[`LambdaFunctionNamedev`];
-const errorTopicArn = outputs[`ErrorTopicArndev`];
-const apiUrl = outputs[`ApiUrldev`];
+// Extract resource names from outputs using environment suffix
+const bucketName = outputs[`BucketName${environmentSuffix}`];
+const tableName = outputs[`TableName${environmentSuffix}`];
+const lambdaFunctionName = outputs[`LambdaFunctionName${environmentSuffix}`];
+const errorTopicArn = outputs[`ErrorTopicArn${environmentSuffix}`];
+const apiUrl = outputs[`ApiUrl${environmentSuffix}`];
 
 describe('TAP Stack Integration Tests', () => {
   describe('S3 Bucket', () => {
