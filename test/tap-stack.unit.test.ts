@@ -147,6 +147,9 @@ describe('S3-triggered Lambda Image Processing CloudFormation Template', () => {
       expect(code).toContain('urllib3');
       expect(code).toContain('BucketName is required');
       expect(code).toContain('LambdaFunctionArn is required');
+      // Verify it uses correct S3 API parameter name
+      expect(code).toContain('LambdaFunctionConfigurations');
+      expect(code).not.toContain('LambdaConfigurations');
     });
 
     test('should have IAM role for custom resource Lambda', () => {

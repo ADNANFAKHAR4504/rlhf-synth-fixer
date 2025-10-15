@@ -301,7 +301,7 @@ Resources:
                   if request_type in ['Create', 'Update']:
                       # Configure bucket notifications
                       notification_config = {
-                          'LambdaConfigurations': [
+                          'LambdaFunctionConfigurations': [
                               {
                                   'Id': 'ImageProcessingJPG',
                                   'LambdaFunctionArn': lambda_arn,
