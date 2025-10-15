@@ -41,11 +41,56 @@ export class HealthcareStack extends Construct {
 
     const { environmentSuffix, awsRegion } = props;
 
+    // KMS Key Policy Document for CloudWatch Logs access
+    const kmsKeyPolicyDoc = new DataAwsIamPolicyDocument(this, 'KmsKeyPolicy', {
+      statement: [
+        {
+          sid: 'EnableIAMUserPermissions',
+          effect: 'Allow',
+          principals: [
+            {
+              type: 'AWS',
+              identifiers: [`arn:aws:iam::*:root`],
+            },
+          ],
+          actions: ['kms:*'],
+          resources: ['*'],
+        },
+        {
+          sid: 'AllowCloudWatchLogsEncryption',
+          effect: 'Allow',
+          principals: [
+            {
+              type: 'Service',
+              identifiers: [`logs.${awsRegion}.amazonaws.com`],
+            },
+          ],
+          actions: [
+            'kms:Encrypt',
+            'kms:Decrypt',
+            'kms:ReEncrypt*',
+            'kms:GenerateDataKey*',
+            'kms:DescribeKey',
+            'kms:CreateGrant',
+          ],
+          resources: ['*'],
+          condition: [
+            {
+              test: 'ArnEquals',
+              variable: 'kms:EncryptionContext:aws:logs:arn',
+              values: [`arn:aws:logs:${awsRegion}:*:log-group:/aws/apigateway/healthcare-${environmentSuffix}`],
+            },
+          ],
+        },
+      ],
+    });
+
     // KMS Key for encryption at rest (HIPAA requirement)
     const kmsKey = new KmsKey(this, 'HealthcareKmsKey', {
       description: `KMS key for HIPAA compliance - ${environmentSuffix}`,
       enableKeyRotation: true,
       deletionWindowInDays: 7,
+      policy: kmsKeyPolicyDoc.json,
       tags: {
         Name: `healthcare-kms-${environmentSuffix}`,
         Environment: environmentSuffix,
