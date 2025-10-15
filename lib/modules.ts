@@ -556,7 +556,6 @@ export class RdsModule extends Construct {
     this.instance = new aws.dbInstance.DbInstance(this, 'postgres', {
       identifier: 'production-postgres',
       engine: 'postgres',
-      engineVersion: '14.9',
       instanceClass: 'db.t3.medium',
       allocatedStorage: 100,
       storageType: 'gp3',
@@ -564,7 +563,7 @@ export class RdsModule extends Construct {
       kmsKeyId: kmsKey.arn,
       dbName: 'productiondb',
       username: 'dbadmin',
-      password: 'ChangeMe123!Secure', // In production, use AWS Secrets Manager
+      manageMasterUserPassword: true,
       dbSubnetGroupName: dbSubnetGroup.name,
       vpcSecurityGroupIds: [this.securityGroup.id],
       multiAz: true,
@@ -787,7 +786,7 @@ export class MonitoringModule extends Construct {
     new aws.cloudwatchLogGroup.CloudwatchLogGroup(this, 'app-logs', {
       name: '/aws/ec2/production',
       retentionInDays: 30,
-      ...(kmsKey && { kmsKeyId: kmsKey.arn }),
+      // ...(kmsKey && { kmsKeyId: kmsKey.arn }),
       tags: commonTags,
     });
 
