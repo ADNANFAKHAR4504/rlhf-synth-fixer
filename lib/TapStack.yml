@@ -22,7 +22,7 @@ Parameters:
   ArtifactBucketName:
     Type: String
     Description: 'Name of the S3 bucket to store pipeline artifacts'
-    Default: 'webapp-pipeline-artifact-cicd-pr'
+    Default: 'webapp1-pipeline-artifact-cicd-pr'
   
   # Application Parameters
   ApplicationName:
