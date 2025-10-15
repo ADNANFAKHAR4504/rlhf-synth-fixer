@@ -496,12 +496,12 @@ def handler(event, context):
                 bucket = s3_record['s3']['bucket']['name']
                 key = s3_record['s3']['object']['key']
                 image_id = key.split('/')[-1].split('.')[0]
-        else:
+            else:
                 # Direct message format
                 bucket = message_body['bucket']
                 key = message_body['key']
                 image_id = message_body['image_id']
-        
+            
             print(f"Processing image: {image_id} from {bucket}/{key}")
             
             # Update status to processing
@@ -662,7 +662,7 @@ def handler(event, context):
             
             # Save results to S3
             results_key = f"results/{image_id}.json"
-        s3.put_object(
+            s3.put_object(
                 Bucket=bucket,
                 Key=results_key,
                 Body=json.dumps(predictions, indent=2),
@@ -670,7 +670,7 @@ def handler(event, context):
             )
             
             # Update DynamoDB with results
-        table.update_item(
+            table.update_item(
                 Key={'image_id': image_id},
                 UpdateExpression='''
                     SET #status = :status, 
@@ -680,8 +680,8 @@ def handler(event, context):
                         top_prediction = :top_prediction,
                         confidence = :confidence
                 ''',
-            ExpressionAttributeNames={'#status': 'status'},
-            ExpressionAttributeValues={
+                ExpressionAttributeNames={'#status': 'status'},
+                ExpressionAttributeValues={
                     ':status': 'completed',
                     ':timestamp': int(datetime.utcnow().timestamp()),
                     ':results': json.dumps(predictions),
@@ -693,7 +693,7 @@ def handler(event, context):
             
             print(f"Inference completed for {image_id}: {predictions['classes'][0]} ({predictions['confidence']*100:.1f}%)")
         
-    except Exception as e:
+        except Exception as e:
             print(f"Error during inference: {str(e)}")
             print(traceback.format_exc())
             
@@ -807,7 +807,7 @@ def handler(event, context):
                         image_data = base64.b64decode(body_data['image_base64'])
                         
                         # Upload to S3
-        s3.put_object(
+                        s3.put_object(
                             Bucket=bucket_name,
                             Key=key,
                             Body=image_data
@@ -824,10 +824,10 @@ def handler(event, context):
                         )
                         
                         # Update status
-        table.update_item(
+                        table.update_item(
                             Key={'image_id': image_id},
                             UpdateExpression='SET #status = :status',
-            ExpressionAttributeNames={'#status': 'status'},
+                            ExpressionAttributeNames={'#status': 'status'},
                             ExpressionAttributeValues={':status': 'queued'}
                         )
                 except:
