@@ -6,9 +6,15 @@ Metadata:
     ParameterGroups:
       - Label:
           default: "Environment Configuration"
-        Parameters: []
+        Parameters:
+          - EnvironmentSuffix
 
 Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: "dev"
+    Description: Environment suffix for resource naming (e.g., dev, staging, prod)
+
   SecondaryAlbDnsName:
     Type: String
     Default: ""
@@ -36,15 +42,6 @@ Parameters:
     Type: String
     Default: "default"
     Description: Team or application name for naming convention
-
-  EnvName:
-    Type: String
-    Default: "dev"
-    Description: Environment name for naming convention (e.g., dev, staging, prod)
-    AllowedValues:
-      - dev
-      - staging
-      - prod
 
   Environment:
     Type: String
@@ -117,7 +114,7 @@ Resources:
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: !Sub "${Team}-${EnvName}-vpc"
+          Value: !Sub "${Team}-${EnvironmentSuffix}-vpc"
 
   # Public Subnets for ALB
   PublicSubnet1:
@@ -137,7 +134,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub "${Team}-${EnvName}-subnet-public-1"
+          Value: !Sub "${Team}-${EnvironmentSuffix}-subnet-public-1"
         - Key: Type
           Value: Public
 
@@ -158,7 +155,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub "${Team}-${EnvName}-subnet-public-2"
+          Value: !Sub "${Team}-${EnvironmentSuffix}-subnet-public-2"
         - Key: Type
           Value: Public
 
@@ -171,7 +168,7 @@ Resources:
       AvailabilityZone: !Select [0, !FindInMap [RegionMap, !Ref Region, AZs]]
       Tags:
         - Key: Name
-          Value: !Sub "${Team}-${EnvName}-subnet-private-1"
+          Value: !Sub "${Team}-${EnvironmentSuffix}-subnet-private-1"
         - Key: Type
           Value: Private
 
@@ -183,7 +180,7 @@ Resources:
       AvailabilityZone: !Select [1, !FindInMap [RegionMap, !Ref Region, AZs]]
       Tags:
         - Key: Name
-          Value: !Sub "${Team}-${EnvName}-subnet-private-2"
+          Value: !Sub "${Team}-${EnvironmentSuffix}-subnet-private-2"
         - Key: Type
           Value: Private
 
@@ -193,7 +190,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub "${Team}-${EnvName}-igw"
+          Value: !Sub "${Team}-${EnvironmentSuffix}-igw"
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -233,7 +230,7 @@ Resources:
       VpcId: !If [CreateVPC, !Ref VPC, !Ref VpcId]
       Tags:
         - Key: Name
-          Value: !Sub "${Team}-${EnvName}-rt-public"
+          Value: !Sub "${Team}-${EnvironmentSuffix}-rt-public"
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -261,7 +258,7 @@ Resources:
       VpcId: !If [CreateVPC, !Ref VPC, !Ref VpcId]
       Tags:
         - Key: Name
-          Value: !Sub "${Team}-${EnvName}-rt-private-1"
+          Value: !Sub "${Team}-${EnvironmentSuffix}-rt-private-1"
 
   PrivateRoute1:
     Type: AWS::EC2::Route
@@ -282,7 +279,7 @@ Resources:
       VpcId: !If [CreateVPC, !Ref VPC, !Ref VpcId]
       Tags:
         - Key: Name
-          Value: !Sub "${Team}-${EnvName}-rt-private-2"
+          Value: !Sub "${Team}-${EnvironmentSuffix}-rt-private-2"
 
   PrivateRoute2:
     Type: AWS::EC2::Route
@@ -323,7 +320,7 @@ Resources:
           Description: Allow all outbound traffic
       Tags:
         - Key: Name
-          Value: !Sub "${Team}-${EnvName}-sg-alb"
+          Value: !Sub "${Team}-${EnvironmentSuffix}-sg-alb"
 
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -347,7 +344,7 @@ Resources:
           Description: Allow all outbound traffic
       Tags:
         - Key: Name
-          Value: !Sub "${Team}-${EnvName}-sg-web"
+          Value: !Sub "${Team}-${EnvironmentSuffix}-sg-web"
 
   # ==========================================
   # IAM ROLES AND POLICIES
@@ -356,7 +353,7 @@ Resources:
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${Team}-${EnvName}-ec2-role"
+      RoleName: !Sub "${Team}-${EnvironmentSuffix}-ec2-role"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -418,7 +415,7 @@ Resources:
                 Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/webapp/*"
       Tags:
         - Key: Name
-          Value: !Sub "${Team}-${EnvName}-ec2-role"
+          Value: !Sub "${Team}-${EnvironmentSuffix}-ec2-role"
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -435,7 +432,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      BucketName: !Sub "${Team}-${EnvName}-assets-${AWS::AccountId}-${AWS::Region}"
+      BucketName: !Sub "${Team}-${EnvironmentSuffix}-assets-${AWS::AccountId}-${AWS::Region}"
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -454,14 +451,14 @@ Resources:
             NoncurrentVersionExpirationInDays: 30
       Tags:
         - Key: Name
-          Value: !Sub "${Team}-${EnvName}-assets"
+          Value: !Sub "${Team}-${EnvironmentSuffix}-assets"
 
   LogsBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      BucketName: !Sub "${Team}-${EnvName}-logs-${AWS::AccountId}-${AWS::Region}"
+      BucketName: !Sub "${Team}-${EnvironmentSuffix}-logs-${AWS::AccountId}-${AWS::Region}"
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -483,7 +480,7 @@ Resources:
             ExpirationInDays: 90
       Tags:
         - Key: Name
-          Value: !Sub "${Team}-${EnvName}-logs"
+          Value: !Sub "${Team}-${EnvironmentSuffix}-logs"
 
   LogsBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -550,7 +547,7 @@ Resources:
           HostedZoneId: !If [IsUSEast1, !Ref HostedZone, !Ref "AWS::NoValue"]
       Tags:
         - Key: Name
-          Value: !Sub "${Team}-${EnvName}-alb-cert"
+          Value: !Sub "${Team}-${EnvironmentSuffix}-alb-cert"
 
   CloudFrontCertificate:
     Type: AWS::CertificateManager::Certificate
@@ -565,7 +562,7 @@ Resources:
           HostedZoneId: !Ref HostedZone
       Tags:
         - Key: Name
-          Value: !Sub "${Team}-${EnvName}-cf-cert"
+          Value: !Sub "${Team}-${EnvironmentSuffix}-cf-cert"
 
   # ==========================================
   # APPLICATION LOAD BALANCER
@@ -574,7 +571,7 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub "${Team}-${EnvName}-alb"
+      Name: !Sub "${Team}-${EnvironmentSuffix}-alb"
       Type: application
       Scheme: internet-facing
       IpAddressType: ipv4
@@ -596,12 +593,12 @@ Resources:
           Value: "alb-logs"
       Tags:
         - Key: Name
-          Value: !Sub "${Team}-${EnvName}-alb"
+          Value: !Sub "${Team}-${EnvironmentSuffix}-alb"
 
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub "${Team}-${EnvName}-tg"
+      Name: !Sub "${Team}-${EnvironmentSuffix}-tg"
       Port: 80
       Protocol: HTTP
       VpcId: !If [CreateVPC, !Ref VPC, !Ref VpcId]
@@ -626,7 +623,7 @@ Resources:
           Value: "86400"
       Tags:
         - Key: Name
-          Value: !Sub "${Team}-${EnvName}-tg"
+          Value: !Sub "${Team}-${EnvironmentSuffix}-tg"
 
   HTTPListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -661,7 +658,7 @@ Resources:
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub "${Team}-${EnvName}-launch-template"
+      LaunchTemplateName: !Sub "${Team}-${EnvironmentSuffix}-launch-template"
       LaunchTemplateData:
         ImageId: !Ref AmiId
         InstanceType: !Ref InstanceType
@@ -674,7 +671,7 @@ Resources:
           - ResourceType: instance
             Tags:
               - Key: Name
-                Value: !Sub "${Team}-${EnvName}-web"
+                Value: !Sub "${Team}-${EnvironmentSuffix}-web"
               - Key: Environment
                 Value: !Ref Environment
         UserData:
@@ -695,7 +692,7 @@ Resources:
             cat > /opt/aws/amazon-cloudwatch-agent/etc/config.json <<EOF
             {
               "metrics": {
-                "namespace": "${Team}-${EnvName}",
+                "namespace": "${Team}-${EnvironmentSuffix}",
                 "metrics_collected": {
                   "cpu": {
                     "measurement": [
@@ -738,7 +735,7 @@ Resources:
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: !Sub "${Team}-${EnvName}-asg"
+      AutoScalingGroupName: !Sub "${Team}-${EnvironmentSuffix}-asg"
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
@@ -754,7 +751,7 @@ Resources:
         - !Ref TargetGroup
       Tags:
         - Key: Name
-          Value: !Sub "${Team}-${EnvName}-asg-instance"
+          Value: !Sub "${Team}-${EnvironmentSuffix}-asg-instance"
           PropagateAtLaunch: true
         - Key: Environment
           Value: !Ref Environment
@@ -787,7 +784,7 @@ Resources:
   SessionTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${Team}-${EnvName}-sessions"
+      TableName: !Sub "${Team}-${EnvironmentSuffix}-sessions"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: SessionId
@@ -816,7 +813,7 @@ Resources:
         Enabled: true
       Tags:
         - Key: Name
-          Value: !Sub "${Team}-${EnvName}-sessions"
+          Value: !Sub "${Team}-${EnvironmentSuffix}-sessions"
 
   # ==========================================
   # AWS SECRETS MANAGER
@@ -825,12 +822,12 @@ Resources:
   AppSecrets:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub "${Team}-${EnvName}-app-secrets"
+      Name: !Sub "${Team}-${EnvironmentSuffix}-app-secrets"
       Description: Application secrets for web application
       KmsKeyId: alias/aws/secretsmanager
       Tags:
         - Key: Name
-          Value: !Sub "${Team}-${EnvName}-app-secrets"
+          Value: !Sub "${Team}-${EnvironmentSuffix}-app-secrets"
 
   # ==========================================
   # ROUTE 53
@@ -842,7 +839,7 @@ Resources:
     Properties:
       Name: !Ref DomainName
       HostedZoneConfig:
-        Comment: !Sub "Hosted zone for ${Team}-${EnvName}-${DomainName}"
+        Comment: !Sub "Hosted zone for ${Team}-${EnvironmentSuffix}-${DomainName}"
 
   RecordSetGroup:
     Type: AWS::Route53::RecordSetGroup
@@ -890,7 +887,7 @@ Resources:
     Condition: IsUSEast1
     Properties:
       DistributionConfig:
-        Comment: !Sub "CloudFront distribution for ${Team}-${EnvName}"
+        Comment: !Sub "CloudFront distribution for ${Team}-${EnvironmentSuffix}"
         Enabled: true
         HttpVersion: http2
         PriceClass: PriceClass_100
@@ -986,7 +983,7 @@ Resources:
         WebACLId: !Ref WebACL
       Tags:
         - Key: Name
-          Value: !Sub "${Team}-${EnvName}-cloudfront"
+          Value: !Sub "${Team}-${EnvironmentSuffix}-cloudfront"
 
   # ==========================================
   # WAF WEB ACL
@@ -996,7 +993,7 @@ Resources:
     Type: AWS::WAFv2::WebACL
     Condition: IsUSEast1
     Properties:
-      Name: !Sub "${Team}-${EnvName}-web-acl"
+      Name: !Sub "${Team}-${EnvironmentSuffix}-web-acl"
       Scope: CLOUDFRONT
       DefaultAction:
         Allow: {}
@@ -1028,10 +1025,10 @@ Resources:
       VisibilityConfig:
         SampledRequestsEnabled: true
         CloudWatchMetricsEnabled: true
-        MetricName: !Sub "${Team}-${EnvName}-web-acl"
+        MetricName: !Sub "${Team}-${EnvironmentSuffix}-web-acl"
       Tags:
         - Key: Name
-          Value: !Sub "${Team}-${EnvName}-web-acl"
+          Value: !Sub "${Team}-${EnvironmentSuffix}-web-acl"
 
   # ==========================================
   # CLOUDWATCH MONITORING
@@ -1040,13 +1037,13 @@ Resources:
   ApplicationLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "/aws/webapp/${Team}-${EnvName}"
+      LogGroupName: !Sub "/aws/webapp/${Team}-${EnvironmentSuffix}"
       RetentionInDays: 30
 
   ApplicationDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
-      DashboardName: !Sub "${Team}-${EnvName}-dashboard"
+      DashboardName: !Sub "${Team}-${EnvironmentSuffix}-dashboard"
       DashboardBody: !Sub |
         {
           "widgets": [
@@ -1085,7 +1082,7 @@ Resources:
   HighCPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${Team}-${EnvName}-high-cpu"
+      AlarmName: !Sub "${Team}-${EnvironmentSuffix}-high-cpu"
       AlarmDescription: Alarm when CPU exceeds 80%
       MetricName: CPUUtilization
       Namespace: AWS/EC2
@@ -1101,7 +1098,7 @@ Resources:
   UnhealthyHostAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${Team}-${EnvName}-unhealthy-hosts"
+      AlarmName: !Sub "${Team}-${EnvironmentSuffix}-unhealthy-hosts"
       AlarmDescription: Alarm when unhealthy host count is greater than 0
       MetricName: UnHealthyHostCount
       Namespace: AWS/ApplicationELB
