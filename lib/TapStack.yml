@@ -1,6 +1,12 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Enterprise Log Analytics System for 500 servers'
 
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: Environment suffix for resource naming to avoid conflicts
+    Default: dev
+
 Resources:
   # ==========================================
   # S3 Storage Resources
@@ -8,7 +14,7 @@ Resources:
   LogBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'enterprise-log-analytics-${AWS::AccountId}'
+      BucketName: !Sub 'enterprise-log-analytics-${EnvironmentSuffix}-${AWS::AccountId}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -36,7 +42,7 @@ Resources:
   AthenaQueryResultsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'enterprise-log-analytics-athena-results-${AWS::AccountId}'
+      BucketName: !Sub 'enterprise-log-analytics-athena-results-${EnvironmentSuffix}-${AWS::AccountId}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -169,13 +175,13 @@ Resources:
   FirehoseLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: /aws/kinesisfirehose/EnterpriseLogDeliveryStream
+      LogGroupName: !Sub '/aws/kinesisfirehose/EnterpriseLogDeliveryStream-${EnvironmentSuffix}'
       RetentionInDays: 30
 
   LogDeliveryStream:
     Type: AWS::KinesisFirehose::DeliveryStream
     Properties:
-      DeliveryStreamName: EnterpriseLogDeliveryStream
+      DeliveryStreamName: !Sub 'EnterpriseLogDeliveryStream-${EnvironmentSuffix}'
       DeliveryStreamType: DirectPut
       ExtendedS3DestinationConfiguration:
         BucketARN: !GetAtt LogBucket.Arn
@@ -208,7 +214,7 @@ Resources:
   LogProcessorLambda:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: LogProcessorFunction
+      FunctionName: !Sub 'LogProcessorFunction-${EnvironmentSuffix}'
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Code:
@@ -286,7 +292,7 @@ Resources:
   S3UploaderLambda:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: GlueScriptS3Uploader
+      FunctionName: !Sub 'GlueScriptS3Uploader-${EnvironmentSuffix}'
       Handler: index.handler
       Role: !GetAtt S3UploaderLambdaRole.Arn
       Runtime: python3.11
@@ -418,14 +424,14 @@ Resources:
     Properties:
       CatalogId: !Ref AWS::AccountId
       DatabaseInput:
-        Name: enterprise_log_analytics
+        Name: !Sub 'enterprise-log-analytics-${EnvironmentSuffix}'
         Description: Database for enterprise log analytics
 
   LogCrawler:
     Type: AWS::Glue::Crawler
     DependsOn: GlueScriptUploaderCustomResource # Ensure script is uploaded before job is defined
     Properties:
-      Name: EnterpriseLogCrawler
+      Name: !Sub 'EnterpriseLogCrawler-${EnvironmentSuffix}'
       Role: !GetAtt GlueServiceRole.Arn
       DatabaseName: !Ref LogAnalyticsDatabase
       Targets:
@@ -451,7 +457,7 @@ Resources:
       ExecutionProperty:
         MaxConcurrentRuns: 2
       MaxRetries: 2
-      Name: EnterpriseLogETLJob
+      Name: !Sub 'EnterpriseLogETLJob-${EnvironmentSuffix}'
       Role: !GetAtt GlueServiceRole.Arn
       GlueVersion: '3.0'
       NumberOfWorkers: 5
@@ -463,7 +469,7 @@ Resources:
   LogAnalyticsWorkgroup:
     Type: AWS::Athena::WorkGroup
     Properties:
-      Name: EnterpriseLogAnalytics
+      Name: !Sub 'EnterpriseLogAnalytics-${EnvironmentSuffix}'
       Description: Workgroup for enterprise log analytics
       State: ENABLED
       WorkGroupConfiguration:
@@ -480,7 +486,7 @@ Resources:
   LogAnalyticsDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
-      DashboardName: EnterpriseLogAnalyticsDashboard
+      DashboardName: !Sub 'EnterpriseLogAnalyticsDashboard-${EnvironmentSuffix}'
       DashboardBody: !Sub |
         {
           "widgets": [
@@ -492,8 +498,8 @@ Resources:
               "height": 6,
               "properties": {
                 "metrics": [
-                  ["AWS/Firehose", "DeliveryToS3.Records", "DeliveryStreamName", "EnterpriseLogDeliveryStream"],
-                  ["AWS/Firehose", "DeliveryToS3.Success", "DeliveryStreamName", "EnterpriseLogDeliveryStream"]
+                  ["AWS/Firehose", "DeliveryToS3.Records", "DeliveryStreamName", "${LogDeliveryStream}"],
+                  ["AWS/Firehose", "DeliveryToS3.Success", "DeliveryStreamName", "${LogDeliveryStream}"]
                 ],
                 "view": "timeSeries",
                 "stacked": false,
@@ -510,9 +516,9 @@ Resources:
               "height": 6,
               "properties": {
                 "metrics": [
-                  ["AWS/Lambda", "Invocations", "FunctionName", "LogProcessorFunction"],
-                  ["AWS/Lambda", "Errors", "FunctionName", "LogProcessorFunction"],
-                  ["AWS/Lambda", "Duration", "FunctionName", "LogProcessorFunction"]
+                  ["AWS/Lambda", "Invocations", "FunctionName", "${LogProcessorLambda}"],
+                  ["AWS/Lambda", "Errors", "FunctionName", "${LogProcessorLambda}"],
+                  ["AWS/Lambda", "Duration", "FunctionName", "${LogProcessorLambda}"]
                 ],
                 "view": "timeSeries",
                 "stacked": false,
@@ -547,8 +553,8 @@ Resources:
               "height": 6,
               "properties": {
                 "metrics": [
-                  ["AWS/Athena", "TotalExecutionTime", "QueryType", "DML", "WorkGroup", "EnterpriseLogAnalytics"],
-                  ["AWS/Athena", "ProcessedBytes", "QueryType", "DML", "WorkGroup", "EnterpriseLogAnalytics"]
+                  ["AWS/Athena", "TotalExecutionTime", "QueryType", "DML", "WorkGroup", "${LogAnalyticsWorkgroup}"],
+                  ["AWS/Athena", "ProcessedBytes", "QueryType", "DML", "WorkGroup", "${LogAnalyticsWorkgroup}"]
                 ],
                 "view": "timeSeries",
                 "stacked": false,
@@ -563,13 +569,13 @@ Resources:
   LogAnalyticsAlarmTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: LogAnalyticsAlarmTopic
+      TopicName: !Sub 'LogAnalyticsAlarmTopic-${EnvironmentSuffix}'
       DisplayName: Log Analytics Alarms
 
   FirehoseErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: FirehoseDeliveryError
+      AlarmName: !Sub 'FirehoseDeliveryError-${EnvironmentSuffix}'
       AlarmDescription: Alarm for Firehose delivery errors
       MetricName: DeliveryToS3.DataFreshness
       Namespace: AWS/Firehose
@@ -580,14 +586,14 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: DeliveryStreamName
-          Value: EnterpriseLogDeliveryStream
+          Value: !Ref LogDeliveryStream
       AlarmActions:
         - !Ref LogAnalyticsAlarmTopic
 
   LambdaErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: LambdaProcessorError
+      AlarmName: !Sub 'LambdaProcessorError-${EnvironmentSuffix}'
       AlarmDescription: Alarm for Lambda processor errors
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -598,7 +604,7 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: FunctionName
-          Value: LogProcessorFunction
+          Value: !Ref LogProcessorLambda
       AlarmActions:
         - !Ref LogAnalyticsAlarmTopic
 
@@ -608,27 +614,27 @@ Resources:
   SyslogLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: /enterprise/servers/syslog
+      LogGroupName: !Sub '/enterprise/servers/syslog-${EnvironmentSuffix}'
       RetentionInDays: 7
       
   AuthLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: /enterprise/servers/auth
+      LogGroupName: !Sub '/enterprise/servers/auth-${EnvironmentSuffix}'
       RetentionInDays: 7
       
   ApplicationLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: /enterprise/servers/application
+      LogGroupName: !Sub '/enterprise/servers/application-${EnvironmentSuffix}'
       RetentionInDays: 7
 
   CloudWatchAgentConfigParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /log-analytics/cloudwatch-agent-config
+      Name: !Sub '/log-analytics/cloudwatch-agent-config-${EnvironmentSuffix}'
       Type: String
-      Value: |
+      Value: !Sub |
         {
           "agent": {
             "metrics_collection_interval": 60,
@@ -640,19 +646,19 @@ Resources:
                 "collect_list": [
                   {
                     "file_path": "/var/log/syslog",
-                    "log_group_name": "/enterprise/servers/syslog",
+                    "log_group_name": "/enterprise/servers/syslog-${EnvironmentSuffix}",
                     "log_stream_name": "{instance_id}",
                     "timezone": "UTC"
                   },
                   {
                     "file_path": "/var/log/auth.log",
-                    "log_group_name": "/enterprise/servers/auth",
+                    "log_group_name": "/enterprise/servers/auth-${EnvironmentSuffix}",
                     "log_stream_name": "{instance_id}",
                     "timezone": "UTC"
                   },
                   {
                     "file_path": "/var/log/application.log",
-                    "log_group_name": "/enterprise/servers/application",
+                    "log_group_name": "/enterprise/servers/application-${EnvironmentSuffix}",
                     "log_stream_name": "{instance_id}",
                     "timezone": "UTC"
                   }
@@ -693,7 +699,7 @@ Resources:
   AuditLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: /enterprise/log-analytics/audit
+      LogGroupName: !Sub '/enterprise/log-analytics/audit-${EnvironmentSuffix}'
       RetentionInDays: 365
 
   # ==========================================
@@ -729,9 +735,9 @@ Resources:
               - !GetAtt AthenaQueryResultsBucket.Arn
               - !Sub '${AthenaQueryResultsBucket.Arn}/*'
               - !Sub 'arn:aws:glue:${AWS::Region}:${AWS::AccountId}:catalog'
-              - !Sub 'arn:aws:glue:${AWS::Region}:${AWS::AccountId}:database/enterprise_log_analytics'
-              - !Sub 'arn:aws:glue:${AWS::Region}:${AWS::AccountId}:table/enterprise_log_analytics/*'
-              - !Sub 'arn:aws:athena:${AWS::Region}:${AWS::AccountId}:workgroup/EnterpriseLogAnalytics'
+              - !Sub 'arn:aws:glue:${AWS::Region}:${AWS::AccountId}:database/enterprise-log-analytics-${EnvironmentSuffix}'
+              - !Sub 'arn:aws:glue:${AWS::Region}:${AWS::AccountId}:table/enterprise-log-analytics-${EnvironmentSuffix}/*'
+              - !Sub 'arn:aws:athena:${AWS::Region}:${AWS::AccountId}:workgroup/EnterpriseLogAnalytics-${EnvironmentSuffix}'
 
   # ==========================================
   # QuickSight Permissions Automation (CUSTOM RESOURCE)
@@ -763,7 +769,7 @@ Resources:
   QuickSightUpdaterLambda:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: QuickSightPermissionUpdater
+      FunctionName: !Sub 'QuickSightPermissionUpdater-${EnvironmentSuffix}'
       Handler: index.handler
       Role: !GetAtt QuickSightUpdaterLambdaRole.Arn
       Runtime: python3.11

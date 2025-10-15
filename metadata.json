@@ -10,5 +10,18 @@
   "subject_labels": [
     "Web Application Deployment"
   ],
-  "aws_services": "Kinesis, S3, Glue, Athena, Lambda, Quicksight, CloudWatch, IAM"
+  "aws_services": [
+    "Kinesis Firehose",
+    "S3",
+    "Glue",
+    "Athena", 
+    "Lambda",
+    "QuickSight",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "IAM",
+    "SNS",
+    "SSM"
+  ],
+  "training_quality": 9
 }
