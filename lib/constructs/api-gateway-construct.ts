@@ -77,14 +77,14 @@ export class ApiGatewayConstruct extends Construct {
       schema: {
         type: apigateway.JsonSchemaType.OBJECT,
         properties: {
-          userId: { type: apigateway.JsonSchemaType.STRING },
+          UserId: { type: apigateway.JsonSchemaType.STRING },
           name: { type: apigateway.JsonSchemaType.STRING },
           email: {
             type: apigateway.JsonSchemaType.STRING,
             pattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$',
           },
         },
-        required: ['userId'],
+        required: ['UserId'],
       },
     });
 

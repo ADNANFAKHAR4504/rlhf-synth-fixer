@@ -315,14 +315,14 @@ describe('TapStack Unit Tests', () => {
         Schema: Match.objectLike({
           type: 'object',
           properties: Match.objectLike({
-            userId: { type: 'string' },
+            UserId: { type: 'string' },
             name: { type: 'string' },
             email: Match.objectLike({
               type: 'string',
               pattern: Match.stringLikeRegexp('.*@.*\\..*')
             })
           }),
-          required: ['userId']
+          required: ['UserId']
         })
       });
     });

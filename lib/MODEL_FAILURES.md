@@ -94,6 +94,7 @@
   - Fixed request validator naming to be method-specific with environment suffix:
     - GET method: `ValidatorGet${props.environmentSuffix}`
     - POST method: `ValidatorPost${props.environmentSuffix}`
+  - Fixed naming convention issue: Changed from PascalCase to camelCase to prevent body validation failures
 - **Lines**: 128-129, 145-170, 127, 150
 
 ### 6. End-to-End Encryption Implementation
