@@ -1,7 +1,7 @@
 import fs from 'fs';
 import https from 'https';
 import { 
-  DynamoDBClient, GetItemCommand, PutItemCommand, ScanCommand 
+  DynamoDBClient, GetItemCommand, PutItemCommand, ScanCommand, DeleteItemCommand 
 } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 import { S3Client, GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
@@ -11,12 +11,6 @@ import {
 import { 
   EventBridgeClient, PutEventsCommand, ListEventBusesCommand 
 } from '@aws-sdk/client-eventbridge';
-import { 
-  SyntheticsClient, GetCanaryCommand, GetCanaryRunsCommand 
-} from '@aws-sdk/client-synthetics';
-import { 
-  ApiGatewayClient, GetRestApiCommand, GetStageCommand 
-} from '@aws-sdk/client-api-gateway';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
