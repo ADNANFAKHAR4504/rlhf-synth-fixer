@@ -24,7 +24,7 @@ new TapStack(app, stackName, {
     region: process.env.CDK_DEFAULT_REGION,
   },
   tags: {
-    'Project': 'ServerlessInfra',
-    'Environment': environmentSuffix
-  }
+    Project: 'ServerlessInfra',
+    Environment: environmentSuffix,
+  },
 });

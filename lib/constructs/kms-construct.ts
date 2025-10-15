@@ -26,9 +26,7 @@ export class KmsConstruct extends Construct {
           new iam.PolicyStatement({
             effect: iam.Effect.ALLOW,
             principals: [new iam.AccountRootPrincipal()],
-            actions: [
-              'kms:*',
-            ],
+            actions: ['kms:*'],
             resources: ['*'],
           }),
           // Allow AWS services to use the key for encryption/decryption
@@ -82,6 +80,13 @@ export class KmsConstruct extends Construct {
    * Grant key usage permissions to a principal
    */
   public grantKeyUsage(principal: iam.IGrantable): void {
-    this.key.grant(principal, 'kms:Decrypt', 'kms:DescribeKey', 'kms:Encrypt', 'kms:GenerateDataKey*', 'kms:ReEncrypt*');
+    this.key.grant(
+      principal,
+      'kms:Decrypt',
+      'kms:DescribeKey',
+      'kms:Encrypt',
+      'kms:GenerateDataKey*',
+      'kms:ReEncrypt*'
+    );
   }
 }

@@ -4,7 +4,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
   GetCommand,
-  PutCommand
+  PutCommand,
 } from '@aws-sdk/lib-dynamodb';
 import {
   APIGatewayProxyEvent,
@@ -37,19 +37,23 @@ interface User {
   updatedAt?: string;
 }
 
-interface ApiResponse {
-  success: boolean;
-  data?: any;
-  error?: string;
-  message?: string;
-  requestId?: string;
-}
+// interface ApiResponse {
+//   success: boolean;
+//   data?: any;
+//   error?: string;
+//   message?: string;
+//   requestId?: string;
+// }
 
 // Validation function
 const validateUser = (user: Partial<User>): string[] => {
   const errors: string[] = [];
 
-  if (!user.UserId || typeof user.UserId !== 'string' || user.UserId.trim() === '') {
+  if (
+    !user.UserId ||
+    typeof user.UserId !== 'string' ||
+    user.UserId.trim() === ''
+  ) {
     errors.push('UserId is required and must be a non-empty string');
   }
 
