@@ -92,12 +92,11 @@ export class GlobalDatabase extends Construct {
     }
 
     // Create global cluster from primary cluster
+    // Note: When using sourceDbClusterIdentifier, don't specify engine properties
+    // as they're inherited from the source cluster
     this.globalCluster = new rds.CfnGlobalCluster(this, 'GlobalCluster', {
       globalClusterIdentifier: `financial-app-global-cluster-${envSuffix}`,
       sourceDbClusterIdentifier: this.primaryCluster.clusterArn,
-      storageEncrypted: true,
-      engine: 'aurora-mysql',
-      engineVersion: '8.0.mysql_aurora.3.08.2',
     });
 
     // Create secondary clusters
