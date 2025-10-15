@@ -170,28 +170,15 @@ describe('TapStack Unit Tests', () => {
       });
     });
 
-    test('S3 replication is enabled for primary stack', () => {
-      // S3 cross-region replication is now enabled for the asset bucket
+    test('S3 replication is disabled by default', () => {
+      // S3 cross-region replication is disabled to avoid destination bucket dependency
       const bucketsWithReplication = primaryTemplate.findResources('AWS::S3::Bucket', {
         Properties: {
           ReplicationConfiguration: Match.anyValue()
         }
       });
-      // Asset bucket should have replication configured
-      expect(Object.keys(bucketsWithReplication).length).toBe(1);
-      
-      // Verify replication role exists
-      primaryTemplate.hasResourceProperties('AWS::IAM::Role', {
-        AssumeRolePolicyDocument: Match.objectLike({
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Principal: Match.objectLike({
-                Service: 's3.amazonaws.com'
-              })
-            })
-          ])
-        })
-      });
+      // No buckets should have replication configured
+      expect(Object.keys(bucketsWithReplication).length).toBe(0);
     });
   });
 
@@ -607,7 +594,7 @@ describe('TapStack Unit Tests', () => {
       
       const template = Template.fromStack(apSouthPrimaryStack);
       
-      // S3 replication is now enabled for primary stacks
+      // S3 replication is disabled by default
       const s3ReplicationRoles = template.findResources('AWS::IAM::Role', {
         Properties: {
           AssumeRolePolicyDocument: Match.objectLike({
@@ -622,8 +609,8 @@ describe('TapStack Unit Tests', () => {
         }
       });
       
-      // Should have S3 replication role for primary stack
-      expect(Object.keys(s3ReplicationRoles).length).toBe(1);
+      // Should not have S3 replication role
+      expect(Object.keys(s3ReplicationRoles).length).toBe(0);
       
       // Verify the stack was created successfully for ap-south-1
       expect(template.toJSON().Resources).toBeDefined();
