@@ -82,7 +82,9 @@ export class HealthcareStack extends Construct {
             {
               test: 'ArnEquals',
               variable: 'kms:EncryptionContext:aws:logs:arn',
-              values: [`arn:aws:logs:${awsRegion}:${current.accountId}:log-group:/aws/apigateway/healthcare-${environmentSuffix}`],
+              values: [
+                `arn:aws:logs:${awsRegion}:${current.accountId}:log-group:/aws/apigateway/healthcare-${environmentSuffix}`,
+              ],
             },
           ],
         },

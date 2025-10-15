@@ -8,36 +8,37 @@ This implementation provides a HIPAA-compliant healthcare data processing system
 ### lib/healthcare-stack.ts
 ```typescript
 
-import { Construct } from 'constructs';
-import { TerraformAsset, AssetType } from 'cdktf';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
-import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
-import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
-import { Route } from '@cdktf/provider-aws/lib/route';
-import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
-import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
-import { RdsCluster } from '@cdktf/provider-aws/lib/rds-cluster';
-import { RdsClusterInstance } from '@cdktf/provider-aws/lib/rds-cluster-instance';
-import { ElasticacheSubnetGroup } from '@cdktf/provider-aws/lib/elasticache-subnet-group';
-import { ElasticacheCluster } from '@cdktf/provider-aws/lib/elasticache-cluster';
-import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
-import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
-import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
-import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
 import { Apigatewayv2Api } from '@cdktf/provider-aws/lib/apigatewayv2-api';
-import { Apigatewayv2Stage } from '@cdktf/provider-aws/lib/apigatewayv2-stage';
-import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
-import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
-import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
-import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
 import { Apigatewayv2Integration } from '@cdktf/provider-aws/lib/apigatewayv2-integration';
 import { Apigatewayv2Route } from '@cdktf/provider-aws/lib/apigatewayv2-route';
+import { Apigatewayv2Stage } from '@cdktf/provider-aws/lib/apigatewayv2-stage';
+import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
+import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-policy-document';
+import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
+import { ElasticacheCluster } from '@cdktf/provider-aws/lib/elasticache-cluster';
+import { ElasticacheSubnetGroup } from '@cdktf/provider-aws/lib/elasticache-subnet-group';
 import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
+import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
+import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
+import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
+import { RdsCluster } from '@cdktf/provider-aws/lib/rds-cluster';
+import { RdsClusterInstance } from '@cdktf/provider-aws/lib/rds-cluster-instance';
+import { Route } from '@cdktf/provider-aws/lib/route';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
+import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
+import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { AssetType, TerraformAsset } from 'cdktf';
+import { Construct } from 'constructs';
 import * as path from 'path';
 
 export interface HealthcareStackProps {
@@ -51,6 +52,9 @@ export class HealthcareStack extends Construct {
 
     const { environmentSuffix, awsRegion } = props;
 
+    // Get current AWS account ID
+    const current = new DataAwsCallerIdentity(this, 'current', {});
+
     // KMS Key Policy Document for CloudWatch Logs access
     const kmsKeyPolicyDoc = new DataAwsIamPolicyDocument(this, 'KmsKeyPolicy', {
       statement: [
@@ -60,7 +64,7 @@ export class HealthcareStack extends Construct {
           principals: [
             {
               type: 'AWS',
-              identifiers: [`arn:aws:iam::*:root`],
+              identifiers: [`arn:aws:iam::${current.accountId}:root`],
             },
           ],
           actions: ['kms:*'],
@@ -88,7 +92,9 @@ export class HealthcareStack extends Construct {
             {
               test: 'ArnEquals',
               variable: 'kms:EncryptionContext:aws:logs:arn',
-              values: [`arn:aws:logs:${awsRegion}:*:log-group:/aws/apigateway/healthcare-${environmentSuffix}`],
+              values: [
+                `arn:aws:logs:${awsRegion}:${current.accountId}:log-group:/aws/apigateway/healthcare-${environmentSuffix}`,
+              ],
             },
           ],
         },
@@ -593,6 +599,7 @@ export class HealthcareStack extends Construct {
     });
   }
 }
+
 ```
 
 ### lib/tap-stack.ts
@@ -651,4 +658,5 @@ export class TapStack extends TerraformStack {
     });
   }
 }
+
 ```
