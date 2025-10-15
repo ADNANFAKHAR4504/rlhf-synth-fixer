@@ -1,17 +1,22 @@
 # HIPAA-Compliant Event Processing Pipeline - CloudFormation Implementation
 
-This implementation provides a complete HIPAA-compliant event processing pipeline using AWS CloudFormation YAML template format. The infrastructure includes Kinesis Data Streams for real-time ingestion, ECS Fargate for processing, Aurora Serverless v2 for storage, and comprehensive security controls.
+Complete HIPAA-compliant infrastructure for processing real-time medical device data. Built with AWS CloudFormation YAML and deployed to eu-west-2. Handles 1000+ events/second with full encryption, comprehensive audit logging, and high availability across multiple AZs.
 
 ## Architecture Overview
 
-The solution implements:
-- Real-time data ingestion via Kinesis Data Streams
-- Serverless container processing with ECS Fargate
-- Encrypted Aurora Serverless v2 database
+**Data Flow**: Medical devices → Kinesis Data Streams → ECS Fargate tasks → Aurora Serverless v2
+
+**Security**: Customer-managed KMS keys, CloudTrail audit logging, Secrets Manager for credentials, VPC with private subnets
+
+**High Availability**: Multi-AZ deployment with 3 availability zones, 2 Aurora instances, 2 ECS tasks
+
+**Infrastructure Components**:
+- Kinesis Data Streams for real-time ingestion
+- ECS Fargate for serverless processing
+- Aurora Serverless v2 for storage (MySQL-compatible)
 - API Gateway for external integrations
-- KMS encryption for all data at rest and in transit
-- CloudTrail audit logging
-- VPC with private subnets and endpoints
+- NAT Gateway for internet access from private subnets
+- VPC endpoints for cost-optimized AWS service access
 
 ## File: lib/TapStack.yml
 
@@ -172,6 +177,104 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
+  # Public Subnets for NAT Gateway
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.10.0/24'
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'public-subnet-1-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.11.0/24'
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'public-subnet-2-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub 'igw-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Public Route Table
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'public-route-table-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  # Elastic IP for NAT Gateway
+  NATGatewayEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub 'nat-eip-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # NAT Gateway (in public subnet)
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub 'nat-gateway-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
   # VPC Endpoints for AWS Services (cost optimization)
   S3VPCEndpoint:
     Type: AWS::EC2::VPCEndpoint
@@ -261,6 +364,13 @@ Resources:
           Value: !Sub 'private-route-table-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NATGateway
 
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -876,6 +986,36 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-PrivateSubnet3Id'
 
+  PublicSubnet1Id:
+    Description: 'Public Subnet 1 ID'
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet1Id'
+
+  PublicSubnet2Id:
+    Description: 'Public Subnet 2 ID'
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet2Id'
+
+  InternetGatewayId:
+    Description: 'Internet Gateway ID'
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub '${AWS::StackName}-InternetGatewayId'
+
+  NATGatewayId:
+    Description: 'NAT Gateway ID'
+    Value: !Ref NATGateway
+    Export:
+      Name: !Sub '${AWS::StackName}-NATGatewayId'
+
+  NATGatewayEIP:
+    Description: 'NAT Gateway Elastic IP'
+    Value: !Ref NATGatewayEIP
+    Export:
+      Name: !Sub '${AWS::StackName}-NATGatewayEIP'
+
   KMSKeyId:
     Description: 'KMS Key ID for data encryption'
     Value: !Ref DataEncryptionKey
@@ -977,72 +1117,140 @@ Outputs:
 
 ### HIPAA Compliance Features
 
-1. **Encryption at Rest and in Transit**:
-   - All data encrypted using customer-managed KMS keys with automatic rotation
-   - Kinesis streams encrypted with KMS
-   - Aurora database encrypted with KMS
-   - CloudTrail logs encrypted with KMS
-   - S3 bucket for CloudTrail encrypted with KMS
+**Encryption**:
+- Customer-managed KMS key with automatic annual rotation
+- Kinesis Data Streams encrypted with KMS
+- Aurora database and backups encrypted with KMS
+- CloudWatch Logs encrypted with KMS
+- CloudTrail logs and S3 bucket encrypted with KMS
+- Secrets Manager secrets encrypted with KMS
 
-2. **Audit Logging**:
-   - CloudTrail enabled for all API calls
-   - Log file validation enabled
-   - Comprehensive CloudWatch Logs for ECS tasks and API Gateway
-   - All logs encrypted with KMS
+**Audit Logging**:
+- CloudTrail logs all API calls with log file validation
+- CloudWatch Logs capture ECS container logs
+- API Gateway access logs
+- Aurora logs exported to CloudWatch (error, general, slowquery, audit)
 
-3. **Network Security**:
-   - All resources deployed in private subnets
-   - VPC endpoints used instead of NAT Gateways (cost optimization)
-   - Security groups with least privilege access
-   - No public IP addresses assigned to resources
+**Network Security**:
+- ECS tasks and Aurora deployed in private subnets only
+- NAT Gateway provides controlled internet access for private subnets
+- VPC endpoints for direct private connectivity to AWS services
+- Security groups enforce least privilege access
+- No public IPs on ECS tasks or database instances
 
-4. **Access Control**:
-   - IAM roles with least privilege policies
-   - API Gateway secured with AWS_IAM authentication
-   - SecretsManager for secure credential storage with automatic rotation capability
-   - Database parameter group enforces secure transport (require_secure_transport: ON)
+**Access Control**:
+- IAM roles with minimal required permissions
+- API Gateway uses AWS_IAM authentication
+- Secrets Manager stores database credentials (never hardcoded)
+- Aurora parameter group enforces `require_secure_transport: ON`
 
 ### High Availability
 
-- Multi-AZ deployment with 3 availability zones in eu-west-2
-- Aurora Serverless v2 with 2 instances across AZs
-- ECS service with 2 tasks distributed across subnets
-- Kinesis with 2 shards for 1000 events/second capacity
+- Multi-AZ deployment across 3 availability zones in eu-west-2
+- Aurora Serverless v2 cluster with 2 DB instances
+- ECS service runs 2 tasks distributed across private subnets
+- Kinesis Data Stream with 2 shards (1000+ events/second capacity)
+
+### Network Design
+
+**Private Subnets** (10.0.1.0/24, 10.0.2.0/24, 10.0.3.0/24):
+- ECS Fargate tasks run here
+- Aurora database instances deployed here
+- No direct internet access
+
+**Public Subnets** (10.0.10.0/24, 10.0.11.0/24):
+- NAT Gateway deployed here
+- Internet Gateway attached to VPC
+
+**Why NAT Gateway?**
+ECS tasks need to pull container images from `public.ecr.aws`. VPC endpoints only support private ECR repositories, so NAT Gateway is required for internet access from private subnets.
+
+**VPC Endpoints** (cost optimization):
+- S3 Gateway endpoint (free)
+- Kinesis Streams interface endpoint
+- Secrets Manager interface endpoint
+- ECR API and DKR interface endpoints
+- CloudWatch Logs interface endpoint
+
+These endpoints reduce data transfer costs and keep traffic within the AWS network.
 
 ### Cost Optimization
 
-- Aurora Serverless v2 with 0.5-2 ACU scaling (faster provisioning, pay-per-use)
-- VPC endpoints instead of NAT Gateway (saves ~$32/month per NAT)
-- 7-day log retention for CloudWatch Logs
-- 90-day lifecycle policy for CloudTrail logs
-- ECS Fargate with minimal CPU/memory allocation (512 CPU, 1024 MB)
+- Aurora Serverless v2 scales from 0.5-2 ACUs based on load
+- 7-day CloudWatch Logs retention (adjustable)
+- 90-day lifecycle policy on CloudTrail S3 bucket
+- ECS Fargate minimal allocation (512 CPU, 1024 MB)
+- VPC endpoints reduce NAT data transfer costs
 
 ### Resource Naming
 
-All resources follow the pattern: `{resource-type}-${EnvironmentSuffix}` to prevent naming conflicts and enable parallel deployments.
+All resources use `${EnvironmentSuffix}` in their names:
+- Format: `resource-type-${EnvironmentSuffix}`
+- Examples: `patient-data-stream-dev`, `aurora-cluster-prod`
+- Enables multiple environments in the same AWS account
 
-## Critical Fixes Applied
+## Implementation Notes
 
-### 1. API Gateway Stage Management
-**Issue**: Inline `StageName` in Deployment resource caused duplicate stage creation.
-**Fix**: Removed inline StageName from Deployment, managed stage separately via AWS::ApiGateway::Stage resource.
+### Deployment Configuration
 
-### 2. Security Group Configuration
-**Issue**: Circular dependencies between security groups when using SourceSecurityGroupId in both directions.
-**Fix**: Used CIDR-based rules (10.0.0.0/16) for ECS egress to RDS, maintained SourceSecurityGroupId for RDS ingress.
+- **DeletionPolicy: Delete** on all stateful resources (KMS, Aurora, CloudWatch Logs, S3)
+- **UpdateReplacePolicy: Delete** ensures resources are deleted during stack updates
+- **RDS DeletionProtection: false** allows clean stack teardown
+- Suitable for dev/test environments; production would need stricter settings
 
-### 3. CloudTrail Event Selectors
-**Issue**: AWS::RDS::DBCluster is not a supported DataResource type for CloudTrail EventSelectors.
-**Fix**: Removed RDS DataResource entry, kept only S3 object tracking which is valid.
+### API Gateway Setup
 
-### 4. API Gateway Logging
-**Issue**: API Gateway logging requires IAM role with proper permissions for CloudWatch Logs.
-**Fix**: Removed LoggingLevel and DataTraceEnabled from Stage MethodSettings to avoid deployment failures without account-level setup.
+- Stage managed separately from Deployment resource
+- No inline `StageName` in Deployment to avoid duplicate stages
+- Access logging configured with CloudWatch Logs
+- Usage plan enforces throttling: 500 burst, 100 req/sec
 
-## Deployment Notes
+### Security Group Design
 
-- All resources are configured with `DeletionPolicy: Delete` and `UpdateReplacePolicy: Delete` to ensure clean teardown
-- RDS has `DeletionProtection: false` to allow cleanup
-- All resource names include `${EnvironmentSuffix}` parameter for parallel deployments
-- Stack outputs are exported for integration testing and cross-stack references
-- Deployment to eu-west-2 region as specified in requirements
+- ECS egress uses CIDR blocks (10.0.0.0/16) to avoid circular dependencies
+- RDS ingress references ECS security group directly
+- VPC endpoint security group accepts traffic from ECS security group
+
+### CloudTrail Configuration
+
+- Logs S3 object-level data events
+- Does not log RDS data events (not supported by CloudTrail EventSelectors)
+- Logs stored in S3 with 90-day lifecycle policy
+- Log file validation enabled for integrity
+
+### Aurora Configuration
+
+- Engine: aurora-mysql version 8.0.mysql_aurora.3.04.0
+- ServerlessV2ScalingConfiguration: MinCapacity 0.5, MaxCapacity 2
+- BackupRetentionPeriod: 1 day (increase for production)
+- Cluster parameter group requires secure transport
+- Credentials managed by Secrets Manager with automatic generation
+
+## Deployment Instructions
+
+Deploy to eu-west-2:
+
+```bash
+aws cloudformation deploy \
+  --template-file lib/TapStack.yml \
+  --stack-name TapStackdev \
+  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+  --parameter-overrides EnvironmentSuffix=dev \
+  --region eu-west-2
+```
+
+Deployment takes approximately 15-20 minutes. Aurora instances take the longest (10-12 minutes).
+
+## Stack Outputs
+
+Exports for integration and cross-stack references:
+- VPC and subnet IDs (private and public)
+- Internet Gateway and NAT Gateway IDs
+- KMS key ID and ARN
+- Kinesis stream name and ARN
+- Aurora endpoints (writer and reader)
+- Database secret ARN
+- ECS cluster, service names and ARNs
+- API Gateway ID and URL
+- CloudTrail name and bucket
+- Environment suffix

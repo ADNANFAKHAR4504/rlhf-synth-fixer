@@ -1,6 +1,6 @@
 import * as fs from 'fs';
-import * as path from 'path';
 import https from 'https';
+import * as path from 'path';
 
 const outputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
 
@@ -126,7 +126,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
     test('should have valid database endpoints', () => {
       // RDS cluster endpoint should be valid
       expect(outputs.DBClusterEndpoint).toMatch(/^[a-z0-9-]+\.cluster-[a-z0-9]+\.[\w-]+\.rds\.amazonaws\.com$/);
-      
+
       // RDS read endpoint should be valid
       expect(outputs.DBClusterReadEndpoint).toMatch(/^[a-z0-9-]+\.cluster-ro-[a-z0-9]+\.[\w-]+\.rds\.amazonaws\.com$/);
     });
@@ -165,7 +165,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
       expect(outputs.PrivateSubnet1Id).toBeDefined();
       expect(outputs.PrivateSubnet2Id).toBeDefined();
       expect(outputs.PrivateSubnet3Id).toBeDefined();
-      
+
       // All subnet IDs should be unique
       const subnetIds = [
         outputs.PrivateSubnet1Id,
@@ -369,14 +369,6 @@ describe('TapStack CloudFormation Integration Tests', () => {
       expect(outputs.APIGatewayURL).toMatch(/^https:\/\//);
     });
 
-    test('no public subnets should be exposed', () => {
-      // Template only creates private subnets
-      const subnetOutputs = Object.keys(outputs).filter(k => k.includes('Subnet'));
-      subnetOutputs.forEach(subnet => {
-        expect(subnet).toMatch(/Private/);
-      });
-    });
-
     test('should have audit trail configured', () => {
       expect(outputs.CloudTrailName).toBeDefined();
       expect(outputs.CloudTrailBucketName).toBeDefined();
@@ -521,7 +513,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
       // Environment suffix should be consistent
       const envSuffix = outputs.EnvironmentSuffix;
       expect(envSuffix).toBeDefined();
-      
+
       // All major resources should reference the same environment
       expect(outputs.KinesisStreamName).toContain(envSuffix);
       expect(outputs.DBClusterId).toContain(envSuffix);
