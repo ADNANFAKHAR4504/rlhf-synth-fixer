@@ -1,8 +1,9 @@
 """
-DynamoDB Global Tables for the event processing pipeline.
+DynamoDB tables for the event processing pipeline.
 
-This module creates DynamoDB Global Tables with AWS-managed CMK encryption
-and cross-region replication for the trading event processing.
+This module creates individual DynamoDB tables per region with AWS-managed encryption.
+Global Tables are not used as each region processes events independently,
+with EventBridge handling cross-region event routing rather than DynamoDB replication.
 """
 
 from typing import Dict, List
@@ -24,7 +25,11 @@ class DynamoDBStack:
         self.global_table: dynamodb.GlobalTable = None
         
         self._create_tables()
-        # For now, we'll use individual tables with eventual consistency
+        # NOTE: Global Tables not needed for this event processing pipeline
+        # - Each region processes events independently (no cross-region data consistency required)
+        # - EventBridge handles cross-region event routing, not DynamoDB replication
+        # - Individual tables provide better performance and cost optimization
+        # - Eventual consistency is sufficient for trading event processing
 
     def _create_tables(self):
         """Create DynamoDB tables in each region."""
