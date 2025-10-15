@@ -10,5 +10,7 @@
   "subject_labels": [
     "Security Configuration as Code"
   ],
-  "aws_services": "S3 Bucket, VPC, IAM, CloudTrail, RDS, CloudWatch, CloudFront, KMS, IGW"
+  "aws_services": "S3 Bucket, VPC, IAM, CloudTrail, RDS, CloudWatch, CloudFront, KMS, IGW",
+  "training_quality": 9,
+  "background": "Implement secure AWS production infrastructure using Terraform with encryption, monitoring, and compliance"
 }
