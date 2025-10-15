@@ -12,8 +12,10 @@ Create a single Terraform configuration file named tap_stack.tf containing all v
 11. Create CloudWatch alarms for unauthorized access attempts.
 12. Implement Config rules for mandatory tagging of resources.
 13. Secure all IAM user accounts with mandatory MFA.
-14. . Include AWS Shield for additional DDoS protection
-15. Produce a security audit using AWS Trusted Advisor to identify ongoing issues.
- 16..Ensure compliance with all security constraints including least privilege IAM roles, a configured WAF, and restricted SSH access.
-17. Use consistent, descriptive naming conventions defined by locals or input variables for all resources for easier management.
-18. Give character size 4 suffix in small letters only with each resource so that stack dont get error of "resource already exists". Also use small characters only for this suffix. 
+14. There is no need of cost optimisation.
+15. There is now need of cross regions for DR featiures.
+16. There is no need of ec2 auto scaling.
+17. . Include AWS Shield for additional DDoS protection
+18. Produce a security audit using AWS Trusted Advisor to identify ongoing issues.
+19.Ensure compliance with all security constraints including least privilege IAM roles, a configured WAF, and restricted SSH access.20. Use consistent, descriptive naming conventions defined by locals or input variables for all resources for easier management.
+21. Give character size 4 suffix in small letters only with each resource so that stack dont get error of "resource already exists". Also use small characters only for this suffix. 
