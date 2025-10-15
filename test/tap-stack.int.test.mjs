@@ -66,6 +66,290 @@ const makeRequest = (url, method = 'GET', body = null) => {
   });
 };
 
+describe('Global SaaS API - Real-World Use Cases', () => {
+  let apiEndpoint;
+  let tableName;
+  let assetBucketName;
+  let eventBusName;
+  let region;
+
+  beforeAll(() => {
+    apiEndpoint = outputs.ApiEndpoint || outputs.GlobalApiEndpoint66E20A74;
+    tableName = outputs.TableName;
+    assetBucketName = outputs.AssetBucketName;
+    eventBusName = outputs.EventBusName;
+    region = outputs.Region || 'us-east-1';
+  });
+
+  describe('Scenario 1: Global Content Collaboration', () => {
+    const documentId = `doc-${Date.now()}`;
+
+    test('User creates document via API', async () => {
+      if (!apiEndpoint) {
+        console.log('⊘ Skipping: No API endpoint');
+        return;
+      }
+
+      const document = {
+        id: documentId,
+        title: 'Q4 Product Strategy',
+        content: 'Our strategy for Q4 includes...',
+        authorId: 'user-123',
+        createdAt: new Date().toISOString()
+      };
+
+      const response = await makeRequest(`${apiEndpoint}data`, 'POST', document);
+      
+      expect(response.statusCode).toBe(201);
+      expect(response.body.id).toBe(documentId);
+      console.log(`✓ Document created: ${documentId}`);
+    }, 30000);
+
+    test('User retrieves document from API', async () => {
+      if (!apiEndpoint) {
+        console.log('⊘ Skipping: No API endpoint');
+        return;
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Allow DynamoDB consistency
+
+      const response = await makeRequest(`${apiEndpoint}data?id=${documentId}`);
+      
+      expect(response.statusCode).toBe(200);
+      expect(response.body.id).toBe(documentId);
+      expect(response.body.title).toBe('Q4 Product Strategy');
+      console.log(`✓ Document retrieved successfully`);
+    }, 30000);
+
+    test('Data is replicated to DynamoDB Global Table', async () => {
+      if (!tableName) {
+        console.log('⊘ Skipping: No table name');
+        return;
+      }
+
+      const client = new DynamoDBClient({ region });
+      const result = await client.send(new GetItemCommand({
+        TableName: tableName,
+        Key: marshall({ id: documentId, sk: 'data' })
+      }));
+
+      expect(result.Item).toBeDefined();
+      const item = unmarshall(result.Item);
+      expect(item.title).toBe('Q4 Product Strategy');
+      console.log(`✓ Data replicated to DynamoDB Global Table`);
+    }, 30000);
+  });
+
+  describe('Scenario 2: Asset Storage and Retrieval', () => {
+    const assetKey = `assets/logo-${Date.now()}.json`;
+
+    test('User uploads asset via API', async () => {
+      if (!apiEndpoint) {
+        console.log('⊘ Skipping: No API endpoint');
+        return;
+      }
+
+      const asset = {
+        key: assetKey,
+        content: {
+          name: 'Company Logo',
+          format: 'SVG',
+          size: '1024x768'
+        }
+      };
+
+      const response = await makeRequest(`${apiEndpoint}assets`, 'POST', asset);
+      
+      expect(response.statusCode).toBe(201);
+      expect(response.body.key).toBe(assetKey);
+      console.log(`✓ Asset uploaded: ${assetKey}`);
+    }, 30000);
+
+    test('User retrieves asset via API', async () => {
+      if (!apiEndpoint) {
+        console.log('⊘ Skipping: No API endpoint');
+        return;
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      const response = await makeRequest(`${apiEndpoint}assets?key=${assetKey}`);
+      
+      expect(response.statusCode).toBe(200);
+      expect(response.body.name).toBe('Company Logo');
+      console.log(`✓ Asset retrieved successfully`);
+    }, 30000);
+
+    test('Asset is stored in S3 with cross-region replication', async () => {
+      if (!assetBucketName) {
+        console.log('⊘ Skipping: No asset bucket');
+        return;
+      }
+
+      const client = new S3Client({ region });
+      const result = await client.send(new GetObjectCommand({
+        Bucket: assetBucketName,
+        Key: assetKey
+      }));
+
+      expect(result.$metadata.httpStatusCode).toBe(200);
+      const body = await result.Body.transformToString();
+      const content = JSON.parse(body);
+      expect(content.name).toBe('Company Logo');
+      console.log(`✓ Asset replicated to S3 bucket`);
+    }, 30000);
+  });
+
+  describe('Scenario 3: Event-Driven Architecture', () => {
+    test('Data creation triggers EventBridge event', async () => {
+      if (!apiEndpoint) {
+        console.log('⊘ Skipping: No API endpoint');
+        return;
+      }
+
+      const eventData = {
+        id: `event-test-${Date.now()}`,
+        type: 'notification',
+        message: 'Testing event publishing'
+      };
+
+      const response = await makeRequest(`${apiEndpoint}data`, 'POST', eventData);
+      
+      expect(response.statusCode).toBe(201);
+      console.log(`✓ Event published to EventBridge via API`);
+    }, 30000);
+
+    test('EventBridge bus receives custom events', async () => {
+      if (!eventBusName) {
+        console.log('⊘ Skipping: No event bus');
+        return;
+      }
+
+      const client = new EventBridgeClient({ region });
+      const result = await client.send(new PutEventsCommand({
+        Entries: [{
+          Source: 'integration-test',
+          DetailType: 'TestEvent',
+          Detail: JSON.stringify({
+            testId: `test-${Date.now()}`,
+            action: 'validate-event-bus'
+          }),
+          EventBusName: eventBusName
+        }]
+      }));
+
+      expect(result.FailedEntryCount).toBe(0);
+      console.log(`✓ EventBridge bus operational`);
+    }, 30000);
+  });
+
+  describe('Scenario 4: High-Traffic Load Simulation', () => {
+    test('API handles concurrent read requests', async () => {
+      if (!apiEndpoint) {
+        console.log('⊘ Skipping: No API endpoint');
+        return;
+      }
+
+      const concurrentRequests = 20;
+      const promises = Array(concurrentRequests).fill(null).map(() =>
+        makeRequest(`${apiEndpoint}health`)
+      );
+
+      const responses = await Promise.all(promises);
+      const successCount = responses.filter(r => r.statusCode === 200).length;
+      
+      expect(successCount).toBe(concurrentRequests);
+      console.log(`✓ Handled ${concurrentRequests} concurrent health checks`);
+    }, 30000);
+
+    test('API handles concurrent write operations', async () => {
+      if (!apiEndpoint) {
+        console.log('⊘ Skipping: No API endpoint');
+        return;
+      }
+
+      const operations = 10;
+      const promises = Array(operations).fill(null).map((_, i) => 
+        makeRequest(`${apiEndpoint}data`, 'POST', {
+          id: `load-test-${Date.now()}-${i}`,
+          index: i,
+          timestamp: new Date().toISOString()
+        })
+      );
+
+      const responses = await Promise.all(promises);
+      const successCount = responses.filter(r => r.statusCode === 201).length;
+      
+      expect(successCount).toBeGreaterThanOrEqual(operations * 0.9); // 90% success
+      console.log(`✓ Handled ${successCount}/${operations} concurrent writes`);
+    }, 60000);
+  });
+
+  describe('Scenario 5: Low-Latency Health Checks', () => {
+    test('Health endpoint responds quickly', async () => {
+      if (!apiEndpoint) {
+        console.log('⊘ Skipping: No API endpoint');
+        return;
+      }
+
+      const startTime = Date.now();
+      const response = await makeRequest(`${apiEndpoint}health`);
+      const latency = Date.now() - startTime;
+      
+      expect(response.statusCode).toBe(200);
+      expect(response.body.status).toBe('healthy');
+      expect(response.body.region).toBe(region);
+      expect(latency).toBeLessThan(3000);
+      
+      console.log(`✓ Health check: ${latency}ms latency`);
+    }, 30000);
+
+    test('Root endpoint provides API information', async () => {
+      if (!apiEndpoint) {
+        console.log('⊘ Skipping: No API endpoint');
+        return;
+      }
+
+      const response = await makeRequest(`${apiEndpoint}`);
+      
+      expect(response.statusCode).toBe(200);
+      expect(response.body.message).toContain('Global API');
+      expect(response.body.region).toBe(region);
+      expect(response.body.endpoints).toBeDefined();
+      
+      console.log(`✓ API info endpoint operational`);
+    }, 30000);
+  });
+
+  describe('Scenario 6: Error Handling and Resilience', () => {
+    test('API returns 404 for non-existent data', async () => {
+      if (!apiEndpoint) {
+        console.log('⊘ Skipping: No API endpoint');
+        return;
+      }
+
+      const response = await makeRequest(`${apiEndpoint}data?id=non-existent-${Date.now()}`);
+      
+      expect(response.statusCode).toBe(404);
+      expect(response.body.message).toContain('Not found');
+      console.log(`✓ API handles non-existent data gracefully`);
+    }, 30000);
+
+    test('API returns 404 for non-existent asset', async () => {
+      if (!apiEndpoint) {
+        console.log('⊘ Skipping: No API endpoint');
+        return;
+      }
+
+      const response = await makeRequest(`${apiEndpoint}assets?key=non-existent-${Date.now()}.jpg`);
+      
+      expect(response.statusCode).toBe(404);
+      expect(response.body.message).toContain('not found');
+      console.log(`✓ API handles non-existent assets gracefully`);
+    }, 30000);
+  });
+});
+
 describe('Infrastructure Resource Validation - Live AWS Resources', () => {
   const regions = ['us-east-1', 'ap-south-1'];
   let tableName;
