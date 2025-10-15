@@ -12,5 +12,11 @@
   ],
   "aws_services": "S3 Bucket, VPC, IAM, CloudTrail, RDS, CloudWatch, CloudFront, KMS, IGW",
   "training_quality": 9,
-  "background": "Implement secure AWS production infrastructure using Terraform with encryption, monitoring, and compliance"
+  "background": "Implement secure AWS production infrastructure using Terraform with encryption, monitoring, and compliance",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
 }
