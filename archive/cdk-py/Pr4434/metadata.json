@@ -1,0 +1,31 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349772",
+  "team": "3",
+  "startedAt": "2025-10-14T12:12:43.604Z",
+  "subtask": "Application Deployment",
+  "background": "Design a serverless application using AWS CDK in Python with API Gateway, Lambda, and DynamoDB",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "lambda",
+    "api-gateway",
+    "dynamodb",
+    "ssm",
+    "kms",
+    "cloudwatch",
+    "iam",
+    "logs"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "veera-turing",
+  "dockerS3Location": ""
+}
