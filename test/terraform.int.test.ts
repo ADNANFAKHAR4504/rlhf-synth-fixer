@@ -132,30 +132,19 @@ describe('TAP Stack Live Integration Tests', () => {
   });
 
   it('CloudTrail exists and logging is enabled', async () => {
-    if (!outputs.cloudtrail_name && !outputs.cloudtrail_s3_bucket_name) return;
-    const trails = await cloudtrail.describeTrails({}).promise();
-    // Show trails on failure for debug
-    if (!trails.trailList || !trails.trailList.length) {
-      console.warn('No trails found:', trails);
-    }
-    // Try by name first; fall back to S3 bucket check if needed
-    let trail = trails.trailList?.find(
-      t => t.Name === outputs.cloudtrail_name
-        || (t.S3BucketName && t.S3BucketName === outputs.cloudtrail_s3_bucket_name)
-    );
-    // Print all trails if not found
-    if (!trail) {
-      console.warn(
-        'CloudTrail not found by name, available trails:',
-        trails.trailList?.map(t => ({ Name: t.Name, S3BucketName: t.S3BucketName }))
-      );
-    }
-    expect(trail).toBeDefined();
-    if (trail) {
-      const status = await cloudtrail.getTrailStatus({ Name: trail.Name }).promise();
-      expect(status.IsLogging).toBe(true);
-    }
-  });
+  const { cloudtrail_name } = outputs;
+  if (!cloudtrail_name) return;
+
+  const trails = await cloudtrail.describeTrails({ includeShadowTrails: true }).promise();
+
+  const trail = trails.trailList?.find(t => t.Name === cloudtrail_name);
+  expect(trail).toBeDefined();
+
+  if (trail) {
+    const status = await cloudtrail.getTrailStatus({ Name: trail.Name }).promise();
+    expect(status.IsLogging).toBe(true);
+  }
+});
 
   it('WAF WebACL exists with expected name and ARN', async () => {
     if (!outputs.waf_web_acl_id || !outputs.waf_web_acl_arn) return;
