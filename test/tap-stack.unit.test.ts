@@ -295,7 +295,7 @@ describe('TapStack CloudFormation Template - Log Analytics Infrastructure', () =
       expect(param.Properties.Name['Fn::Sub']).toBe('/log-analytics/cloudwatch-agent-config-${EnvironmentSuffix}');
       expect(param.Properties.Type).toBe('String');
       
-      const config = JSON.parse(param.Properties['Fn::Sub']);
+      const config = JSON.parse(param.Properties.Value['Fn::Sub']);
       expect(config.agent.metrics_collection_interval).toBe(60);
       expect(config.logs.logs_collected.files.collect_list).toHaveLength(3);
     });
