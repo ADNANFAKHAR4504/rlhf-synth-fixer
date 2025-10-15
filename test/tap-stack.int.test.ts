@@ -11,6 +11,8 @@ import {
 } from '@aws-sdk/client-config-service';
 import {
   DescribeInternetGatewaysCommand,
+  DescribeLaunchTemplatesCommand,
+  DescribeLaunchTemplateVersionsCommand,
   DescribeNatGatewaysCommand,
   DescribeRouteTablesCommand,
   DescribeSubnetsCommand,
@@ -24,6 +26,7 @@ import {
   ElasticLoadBalancingV2Client,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
+  GetInstanceProfileCommand,
   GetRoleCommand,
   IAMClient,
   ListAttachedRolePoliciesCommand,
@@ -99,9 +102,7 @@ const snsClient = new SNSClient({ region });
 
 // ---------- helpers (fail-fast) ----------
 async function getVpcId(): Promise<string> {
-  if (outputs.VPCId) {
-    return outputs.VPCId as string;
-  }
+  if (outputs.VPCId) return String(outputs.VPCId);
   const res = await ec2Client.send(
     new DescribeVpcsCommand({
       Filters: [
@@ -454,26 +455,49 @@ describe('TapStack Production Security Infrastructure Integration Tests (fail-fa
     test(
       'EC2 instance role exists and has CloudWatchAgent policy',
       async () => {
-        const roleNames = ['EC2InstanceRole', 'TapStack-EC2InstanceRole'];
-        let found = false;
+        // 1) Find the launch template defined in your stack
+        const lt = await ec2Client.send(
+          new DescribeLaunchTemplatesCommand({
+            LaunchTemplateNames: ['ProductionAppLaunchTemplate'],
+          })
+        );
+        const ltId = lt.LaunchTemplates?.[0]?.LaunchTemplateId;
+        if (!ltId) throw new Error('Launch template "ProductionAppLaunchTemplate" not found');
 
-        for (const roleName of roleNames) {
-          try {
-            const role = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
-            expect(role.Role?.AssumeRolePolicyDocument).toBeDefined();
+        // 2) Read the latest version to get the Instance Profile ARN
+        const ltv = await ec2Client.send(
+          new DescribeLaunchTemplateVersionsCommand({
+            LaunchTemplateId: ltId,
+            Versions: ['$Latest'],
+          })
+        );
+        const ipArn = ltv.LaunchTemplateVersions?.[0]?.LaunchTemplateData?.IamInstanceProfile?.Arn;
+        if (!ipArn) throw new Error('IamInstanceProfile ARN not set on the launch template');
 
-            const policies = await iamClient.send(
-              new ListAttachedRolePoliciesCommand({ RoleName: roleName })
-            );
-            const arns = policies.AttachedPolicies?.map((p) => p.PolicyArn) || [];
-            expect(arns.some((arn) => arn?.includes('CloudWatchAgent'))).toBe(true);
-            found = true;
-            break;
-          } catch {
-            // try next
-          }
-        }
-        if (!found) throw new Error('EC2 instance role not found in expected names');
+        // 3) Resolve the instance profile name from its ARN
+        const instanceProfileName = ipArn.split('/').pop();
+        if (!instanceProfileName) throw new Error('Could not parse Instance Profile name from ARN');
+
+        // 4) Get the instance profile to discover the actual role name
+        const ip = await iamClient.send(
+          new GetInstanceProfileCommand({ InstanceProfileName: instanceProfileName })
+        );
+        const roleName = ip.InstanceProfile?.Roles?.[0]?.RoleName;
+        if (!roleName) throw new Error('No role attached to the Instance Profile');
+
+        // 5) Assert the CloudWatchAgent policy is attached to that role
+        const policies = await iamClient.send(
+          new ListAttachedRolePoliciesCommand({ RoleName: roleName })
+        );
+        const arns = policies.AttachedPolicies?.map((p) => p.PolicyArn) || [];
+        const hasCwAgent =
+          arns.some((arn) => arn?.includes('CloudWatchAgentServerPolicy')) ||
+          arns.some((arn) => arn?.includes('CloudWatchAgent'));
+        expect(hasCwAgent).toBe(true);
+
+        // Sanity: trust policy exists
+        const role = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
+        expect(role.Role?.AssumeRolePolicyDocument).toBeDefined();
       },
       testTimeout
     );
