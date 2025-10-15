@@ -10,5 +10,14 @@
   "subject_labels": [
     "Web Application Deployment"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC"
+  "aws_services": [
+    "VPC",
+    "ECS",
+    "Fargate",
+    "Application Load Balancer",
+    "Cloud Map",
+    "CloudWatch Logs",
+    "IAM"
+  ],
+  "training_quality": 9
 }
