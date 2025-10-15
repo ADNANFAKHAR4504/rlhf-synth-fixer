@@ -1,6 +1,6 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
 import fs from 'fs';
-import { CodePipelineClient, GetPipelineStateCommand, StartPipelineExecutionCommand } from '@aws-sdk/client-codepipeline';
+import { CodePipelineClient, GetPipelineCommand, GetPipelineStateCommand, StartPipelineExecutionCommand } from '@aws-sdk/client-codepipeline';
 import { SNSClient, ListTopicsCommand, GetTopicAttributesCommand } from '@aws-sdk/client-sns';
 import { CloudFormationClient, DescribeStacksCommand, DescribeStackResourcesCommand } from '@aws-sdk/client-cloudformation';
 import { CodeBuildClient, ListProjectsCommand, BatchGetProjectsCommand } from '@aws-sdk/client-codebuild';
@@ -11,11 +11,12 @@ const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
-// Function to fetch AWS account ID
+// Function to fetch AWS account ID using AWS SDK v3
 const getAccountId = async (): Promise<string> => {
-  const sts = new AWS.STS();
+  const stsClient = new STSClient({ region: 'us-east-1' });
   try {
-    const result = await sts.getCallerIdentity().promise();
+    const getCallerIdentityCommand = new GetCallerIdentityCommand({});
+    const result = await stsClient.send(getCallerIdentityCommand);
     return result.Account || '';
   } catch (error) {
     console.warn('Could not fetch account ID:', error);
@@ -63,6 +64,24 @@ async function replaceAccountIdPlaceholders(outputs: any): Promise<any> {
 }
 
 describe('CI/CD Pipeline Integration Tests - Live Traffic Simulation', () => {
+    // Setup: Replace placeholders with actual account ID
+  beforeAll(async () => {
+    const accountId = await getAccountId();
+    if (accountId) {
+      // Replace placeholders in all output values
+      Object.keys(outputs).forEach(key => {
+        if (typeof outputs[key] === 'string') {
+          outputs[key] = replacePlaceholders(outputs[key], accountId);
+        }
+      });
+      console.log('Updated outputs with account ID:', accountId);
+      console.log('S3BucketName:', outputs.S3BucketName);
+      console.log('LambdaFunctionArn:', outputs.LambdaFunctionArn);
+      console.log('SecretArn:', outputs.SecretArn);
+    } else {
+      console.warn('Could not fetch account ID, tests may fail due to placeholder values');
+    }
+  }, 30000); // 30 second timeout for setup
   
   describe('CodePipeline Live Traffic Tests', () => {
     
