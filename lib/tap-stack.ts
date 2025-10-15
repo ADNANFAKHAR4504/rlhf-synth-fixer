@@ -134,10 +134,10 @@ export class TapStack extends cdk.Stack {
       this,
       'DirectConnectGateway',
       {
-        type: 'AWS::DirectConnect::DirectConnectGateway',
+        type: 'AWS::DirectConnect::Gateway',
         properties: {
           amazonSideAsn: 64512,
-          directConnectGatewayName: `HybridDXGW-${environmentSuffix}`,
+          name: `HybridDXGW-${environmentSuffix}`,
         },
       }
     );
@@ -146,11 +146,17 @@ export class TapStack extends cdk.Stack {
       this,
       'DXGWTransitGatewayAssociation',
       {
-        type: 'AWS::DirectConnect::GatewayAssociation',
+        type: 'AWS::EC2::TransitGatewayAttachment',
         properties: {
-          directConnectGatewayId: directConnectGateway.ref,
-          gatewayId: transitGateway.ref,
-          allowedPrefixes: ['10.0.0.0/8'],
+          TransitGatewayId: transitGateway.ref,
+          ResourceType: 'direct-connect-gateway',
+          ResourceId: directConnectGateway.ref,
+          Tags: [
+            {
+              Key: 'Name',
+              Value: `DXGW-TGW-Attachment-${environmentSuffix}`,
+            },
+          ],
         },
       }
     );

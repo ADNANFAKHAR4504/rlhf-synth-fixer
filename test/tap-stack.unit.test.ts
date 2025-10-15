@@ -145,17 +145,17 @@ describe('TapStack', () => {
 
   describe('Direct Connect Gateway', () => {
     test('creates Direct Connect Gateway', () => {
-      template.hasResourceProperties('AWS::DirectConnect::DirectConnectGateway', {
+      template.hasResourceProperties('AWS::DirectConnect::Gateway', {
         amazonSideAsn: 64512,
-        directConnectGatewayName: `HybridDXGW-${environmentSuffix}`,
+        name: `HybridDXGW-${environmentSuffix}`,
       });
     });
 
     test('associates Direct Connect Gateway with Transit Gateway', () => {
-      template.hasResourceProperties('AWS::DirectConnect::GatewayAssociation', {
-        directConnectGatewayId: Match.objectLike({ Ref: Match.anyValue() }),
-        gatewayId: Match.objectLike({ Ref: Match.anyValue() }),
-        allowedPrefixes: ['10.0.0.0/8'],
+      template.hasResourceProperties('AWS::EC2::TransitGatewayAttachment', {
+        ResourceType: 'direct-connect-gateway',
+        ResourceId: Match.objectLike({ Ref: Match.anyValue() }),
+        TransitGatewayId: Match.objectLike({ Ref: Match.anyValue() }),
       });
     });
   });
@@ -358,12 +358,12 @@ describe('TapStack', () => {
       template.resourceCountIs('AWS::EC2::VPNGateway', 1);
       template.resourceCountIs('AWS::EC2::VPNConnection', 1);
       template.resourceCountIs('AWS::EC2::TransitGateway', 1);
-      template.resourceCountIs('AWS::EC2::TransitGatewayAttachment', 1);
+      template.resourceCountIs('AWS::EC2::TransitGatewayAttachment', 2); // VPC + Direct Connect Gateway
     });
 
     test('creates expected number of Direct Connect resources', () => {
-      template.resourceCountIs('AWS::DirectConnect::DirectConnectGateway', 1);
-      template.resourceCountIs('AWS::DirectConnect::GatewayAssociation', 1);
+      template.resourceCountIs('AWS::DirectConnect::Gateway', 1);
+      // Direct Connect Gateway association is now part of TransitGatewayAttachment count
     });
 
     test('creates expected number of Route 53 Resolver resources', () => {
@@ -431,6 +431,22 @@ describe('TapStack', () => {
 
       testTemplate.hasResourceProperties('AWS::IAM::Role', {
         RoleName: 'FederatedUserRole-test123',
+      });
+    });
+
+    test('defaults to "dev" suffix when no props or context provided', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'DefaultStack');
+      const testTemplate = Template.fromStack(testStack);
+
+      testTemplate.hasResourceProperties('AWS::EC2::CustomerGateway', {
+        Tags: Match.arrayWith([
+          { Key: 'Name', Value: 'MainOfficeRouter-dev' },
+        ]),
+      });
+
+      testTemplate.hasResourceProperties('AWS::IAM::SAMLProvider', {
+        Name: 'CorporateIdentityProvider-dev',
       });
     });
   });
