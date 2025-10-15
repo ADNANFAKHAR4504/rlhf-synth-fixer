@@ -66,7 +66,12 @@ describe('S3 Static Asset Storage - Integration Tests (Live)', () => {
       instanceProfileName = outputs.ec2_instance_profile_name;
       region = outputs.region || 'us-west-2';
       
-      s3Client = new S3Client({ region });
+      // Configure S3 client to handle cross-region redirects
+      s3Client = new S3Client({ 
+        region,
+        followRegionRedirects: true,
+        forcePathStyle: false
+      });
       iamClient = new IAMClient({ region });
       
       console.log('🔧 Clients initialized');
@@ -133,7 +138,7 @@ describe('S3 Static Asset Storage - Integration Tests (Live)', () => {
 
     test('output keys follow naming convention', () => {
       Object.keys(outputs).forEach(key => {
-        expect(key).toMatch(/^[a-z_]+$/);
+        expect(key).toMatch(/^[a-z][a-z0-9_]*$/);
       });
     });
 
@@ -452,14 +457,14 @@ describe('S3 Static Asset Storage - Integration Tests (Live)', () => {
       expect(rule?.AllowedMethods).toContain('GET');
     });
 
-    test('allows requests from https://example.com', async () => {
+    test('allows requests from https://example.com/', async () => {
       const command = new GetBucketCorsCommand({
         Bucket: bucketName,
       });
       
       const response = await s3Client.send(command);
       const rule = response.CORSRules?.[0];
-      expect(rule?.AllowedOrigins).toContain('https://example.com');
+      expect(rule?.AllowedOrigins).toContain('https://example.com/');
     });
 
     test('max age is 3600 seconds', async () => {
@@ -812,7 +817,7 @@ describe('S3 Static Asset Storage - Integration Tests (Live)', () => {
       
       const corsResponse = await s3Client.send(corsCmd);
       expect(corsResponse.CORSRules).toBeDefined();
-      expect(corsResponse.CORSRules![0].AllowedOrigins).toContain('https://example.com');
+      expect(corsResponse.CORSRules![0].AllowedOrigins).toContain('https://example.com/');
       console.log('✓ CORS configured correctly');
 
       // ---------------------------------------------------------------

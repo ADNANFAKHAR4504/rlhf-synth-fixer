@@ -201,7 +201,7 @@ resource "aws_s3_bucket_cors_configuration" "static_assets" {
   bucket = aws_s3_bucket.static_assets.id
 
   cors_rule {
-    allowed_origins = ["https://example.com"]
+    allowed_origins = ["https://example.com/"]
     allowed_methods = ["GET"]
     allowed_headers = ["*"]
     expose_headers  = ["ETag"]
@@ -356,4 +356,9 @@ output "ec2_instance_profile_name" {
 output "logging_bucket_name" {
   description = "Name of the logging bucket"
   value       = aws_s3_bucket.logging.id
+}
+
+output "region" {
+  description = "AWS region where resources are deployed"
+  value       = data.aws_region.current.name
 }
