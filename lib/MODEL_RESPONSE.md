@@ -1,6 +1,3 @@
-### Reasoning Trace
----
-
 This is a comprehensive Terraform configuration request. I need to create a single file that includes all the requested resources with proper security configurations. Let me break down what needs to be included:
 
 1. VPC with CIDR 10.0.0.0/16 in us-east-1
@@ -23,8 +20,6 @@ This is a comprehensive Terraform configuration request. I need to create a sing
 18. 4-character random suffix for all resources
 
 Let me create this comprehensive configuration file:
-### Answer 
----
 
 I'll create a comprehensive Terraform configuration file that fulfills all your requirements. This will be a complete, deployable configuration with proper security controls and infrastructure setup.
 
@@ -1365,16 +1360,16 @@ output "resource_suffix" {
 
 This comprehensive Terraform configuration creates a complete, secure AWS infrastructure stack that fulfills all your requirements:
 
-## Key Features Implemented:
+Key Features Implemented:
 
-### 1. **Networking & High Availability**
+networking & High Availability
 - VPC with CIDR 10.0.0.0/16
 - 2 public and 2 private subnets across availability zones
 - NAT Gateways for internet access from private subnets
 - Internet Gateway for public subnet connectivity
 - Route tables with proper associations
 
-### 2. **RDS Database**
+RDS Database
 - Multi-AZ deployment for high availability
 - Read replica for performance
 - Encrypted with KMS
@@ -1382,31 +1377,31 @@ This comprehensive Terraform configuration creates a complete, secure AWS infras
 - Automatic minor version upgrades enabled
 - Not publicly accessible
 
-### 3. **Security Controls**
+Security Controls
 - Network ACLs blocking specific IP ranges
 - Security groups restricting HTTP/HTTPS to VPC CIDR only
 - AWS WAF with rate limiting, SQL injection, and XSS protection
 - AWS Shield for DDoS protection
 - MFA enforcement IAM policy
 
-### 4. **Compliance & Monitoring**
+Compliance & Monitoring
 - CloudTrail for audit logging
 - AWS Config with rules for required tags and encrypted volumes
 - CloudWatch alarms for unauthorized access attempts
 - SNS topic for alarm notifications
 
-### 5. **Storage & Encryption**
+Storage & Encryption
 - S3 bucket with KMS encryption and versioning
 - Public access blocked on all S3 buckets
 - KMS key with rotation enabled
 
-### 6. **Compute**
+Compute
 - EC2 instances with Amazon Linux 2
 - IAM role attached for S3 access
 - Encrypted EBS volumes
 - IMDSv2 enforced
 
-### 7. **Naming Convention**
+Naming Convention
 - Consistent naming with 4-character random suffix
 - All resources tagged appropriately
 - Lowercase naming convention
