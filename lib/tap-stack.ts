@@ -130,40 +130,6 @@ export class TapStack extends cdk.Stack {
     tgwAttachment.addDependency(transitGateway);
     tgwAttachment.addDependency(vpcGatewayAttachment);
 
-    const directConnectGateway = new cdk.CfnResource(
-      this,
-      'DirectConnectGateway',
-      {
-        type: 'AWS::DirectConnect::Gateway',
-        properties: {
-          amazonSideAsn: 64512,
-          name: `HybridDXGW-${environmentSuffix}`,
-        },
-      }
-    );
-
-    const dxgwAssociation = new cdk.CfnResource(
-      this,
-      'DXGWTransitGatewayAssociation',
-      {
-        type: 'AWS::EC2::TransitGatewayAttachment',
-        properties: {
-          TransitGatewayId: transitGateway.ref,
-          ResourceType: 'direct-connect-gateway',
-          ResourceId: directConnectGateway.ref,
-          Tags: [
-            {
-              Key: 'Name',
-              Value: `DXGW-TGW-Attachment-${environmentSuffix}`,
-            },
-          ],
-        },
-      }
-    );
-    dxgwAssociation.addDependency(directConnectGateway);
-    dxgwAssociation.addDependency(transitGateway);
-    dxgwAssociation.addDependency(tgwAttachment);
-
     const vpnConnection = new ec2.CfnVPNConnection(this, 'S2SVpnConnection', {
       customerGatewayId: customerGateway.ref,
       type: 'ipsec.1',
@@ -329,11 +295,6 @@ export class TapStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'TransitGatewayId', {
       value: transitGateway.ref,
       description: 'Transit Gateway ID',
-    });
-
-    new cdk.CfnOutput(this, 'DirectConnectGatewayId', {
-      value: directConnectGateway.ref,
-      description: 'Direct Connect Gateway ID',
     });
 
     new cdk.CfnOutput(this, 'VPNConnectionId', {

@@ -143,23 +143,6 @@ describe('TapStack', () => {
     });
   });
 
-  describe('Direct Connect Gateway', () => {
-    test('creates Direct Connect Gateway', () => {
-      template.hasResourceProperties('AWS::DirectConnect::Gateway', {
-        amazonSideAsn: 64512,
-        name: `HybridDXGW-${environmentSuffix}`,
-      });
-    });
-
-    test('associates Direct Connect Gateway with Transit Gateway', () => {
-      template.hasResourceProperties('AWS::EC2::TransitGatewayAttachment', {
-        ResourceType: 'direct-connect-gateway',
-        ResourceId: Match.objectLike({ Ref: Match.anyValue() }),
-        TransitGatewayId: Match.objectLike({ Ref: Match.anyValue() }),
-      });
-    });
-  });
-
   describe('Site-to-Site VPN', () => {
     test('creates VPN Connection', () => {
       template.hasResourceProperties('AWS::EC2::VPNConnection', {
@@ -308,12 +291,6 @@ describe('TapStack', () => {
       });
     });
 
-    test('exports Direct Connect Gateway ID', () => {
-      template.hasOutput('DirectConnectGatewayId', {
-        Description: 'Direct Connect Gateway ID',
-      });
-    });
-
     test('exports VPN Connection ID', () => {
       template.hasOutput('VPNConnectionId', {
         Description: 'VPN Connection ID',
@@ -358,12 +335,7 @@ describe('TapStack', () => {
       template.resourceCountIs('AWS::EC2::VPNGateway', 1);
       template.resourceCountIs('AWS::EC2::VPNConnection', 1);
       template.resourceCountIs('AWS::EC2::TransitGateway', 1);
-      template.resourceCountIs('AWS::EC2::TransitGatewayAttachment', 2); // VPC + Direct Connect Gateway
-    });
-
-    test('creates expected number of Direct Connect resources', () => {
-      template.resourceCountIs('AWS::DirectConnect::Gateway', 1);
-      // Direct Connect Gateway association is now part of TransitGatewayAttachment count
+      template.resourceCountIs('AWS::EC2::TransitGatewayAttachment', 1);
     });
 
     test('creates expected number of Route 53 Resolver resources', () => {
