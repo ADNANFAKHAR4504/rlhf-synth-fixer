@@ -66,7 +66,11 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
           name: 'prod-public-subnet',
           subnetType: ec2.SubnetType.PUBLIC,
           cidrMask: 24,
-          // SubnetConfiguration does not accept an instanceType; instance types apply to EC2 instances.
+        },
+        {
+          name: 'prod-private-subnet',
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          cidrMask: 24,
         },
       ],
     });
@@ -112,8 +116,8 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
         version: rds.PostgresEngineVersion.VER_15,
       }),
       instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        ec2.InstanceSize.MEDIUM
+        ec2.InstanceClass.M4,
+        ec2.InstanceSize.LARGE
       ),
       vpc,
       vpcSubnets: {
