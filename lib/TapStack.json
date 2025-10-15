@@ -355,8 +355,7 @@
     "S3BucketNotificationCustomResource": {
       "Type": "AWS::CloudFormation::CustomResource",
       "DependsOn": [
-        "LambdaInvokePermission",
-        "ImageProcessorFunction"
+        "LambdaInvokePermission"
       ],
       "Properties": {
         "ServiceToken": {

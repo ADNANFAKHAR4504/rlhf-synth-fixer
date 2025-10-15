@@ -214,7 +214,6 @@ Resources:
     Type: AWS::CloudFormation::CustomResource
     DependsOn:
       - LambdaInvokePermission
-      - ImageProcessorFunction
     Properties:
       ServiceToken: !GetAtt ConfigureS3NotificationFunction.Arn
       BucketName: !Ref SourceBucket
