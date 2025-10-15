@@ -1,4 +1,4 @@
-export const PRIMARY_REGION = 'us-east-1';
+export const PRIMARY_REGION = 'us-west-2';
 export const SECONDARY_REGIONS = [];
 export const REGIONS = [PRIMARY_REGION, ...SECONDARY_REGIONS];
 
