@@ -126,8 +126,8 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
 				version: rds.PostgresEngineVersion.VER_15,
 			}),
 			instanceType: ec2.InstanceType.of(
-				ec2.InstanceClass.T3,
-				ec2.InstanceSize.MEDIUM
+				ec2.InstanceClass.M4,
+				ec2.InstanceSize.LARGE
 			),
 			vpc,
 			vpcSubnets: {
@@ -571,7 +571,7 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
 		cdk.Tags.of(this).add('Environment', 'Production');
 		cdk.Tags.of(this).add('Project', 'MultiComponentApplication');
 		cdk.Tags.of(this).add('ManagedBy', 'CDK');
-		cdk.Tags.of(this).add('Region', 'us-east-1');
+		cdk.Tags.of(this).add('Region', cdk.Aws.REGION);
 		cdk.Tags.of(this).add('iac-rlhf-amazon', 'enabled');
 	}
 }

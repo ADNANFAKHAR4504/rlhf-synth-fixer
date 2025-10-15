@@ -65,8 +65,8 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
         {
           name: 'prod-public-subnet',
           subnetType: ec2.SubnetType.PUBLIC,
-          // Public subnets with /24 mask
           cidrMask: 24,
+          // SubnetConfiguration does not accept an instanceType; instance types apply to EC2 instances.
         },
       ],
     });
@@ -563,7 +563,7 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
     cdk.Tags.of(this).add('Environment', 'Production');
     cdk.Tags.of(this).add('Project', 'MultiComponentApplication');
     cdk.Tags.of(this).add('ManagedBy', 'CDK');
-    cdk.Tags.of(this).add('Region', 'us-east-1');
+    cdk.Tags.of(this).add('Region', cdk.Aws.REGION);
     cdk.Tags.of(this).add('iac-rlhf-amazon', 'enabled');
   }
 }
