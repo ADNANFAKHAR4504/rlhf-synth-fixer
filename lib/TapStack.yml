@@ -873,7 +873,7 @@ Resources:
   WAFAssociation:
     Type: AWS::WAFv2::WebACLAssociation
     Properties:
-      ResourceArn: !Sub 'arn:aws:apigateway:${AWS::Region}::/apis/${HttpApi}'
+      ResourceArn: !Sub 'arn:aws:apigateway:${AWS::Region}::/apis/${HttpApi}/stages/$default'
       WebACLArn: !GetAtt WAFWebACL.Arn
 
   # ==========================================
