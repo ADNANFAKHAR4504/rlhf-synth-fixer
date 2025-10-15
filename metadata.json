@@ -15,7 +15,10 @@
     "Ec2", 
     "Cloudtrail", 
     "RDS", 
-    "Lambda"
+    "Lambda",
+    "APIGateway", 
+    "WAF"
   ],
-   "training_quality": 9  
+  "training_quality": 9 ,
+  "background": "Security configuration as code ensures that policies and controls are versioned, reviewed, and consistently applied across all environments"
 }
