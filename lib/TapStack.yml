@@ -9,7 +9,8 @@ Parameters:
   
   SshAllowedCidr:
     Type: String
-    Description: 'CIDR block allowed for SSH access'
+    Default: '0.0.0.0/0'
+    Description: 'CIDR block allowed for SSH access (use 0.0.0.0/0 to allow all, not recommended for production)'
     AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
   
   DbInstanceClass:
@@ -32,8 +33,9 @@ Parameters:
   
   DomainName:
     Type: String
-    Description: 'Domain name for ACM certificate (e.g., example.com)'
-    AllowedPattern: '^(\*\.)?(((?!-)[A-Za-z0-9-]{0,62}[A-Za-z0-9])\.)+((?!-)[A-Za-z0-9-]{1,62}[A-Za-z0-9])$'
+    Default: ''
+    Description: 'Domain name for ACM certificate (e.g., example.com) - leave empty to skip ACM/Route53 setup'
+    AllowedPattern: '^(\*\.)?(((?!-)[A-Za-z0-9-]{0,62}[A-Za-z0-9])\.)+((?!-)[A-Za-z0-9-]{1,62}[A-Za-z0-9])|^$'
   
   Owner:
     Type: String
