@@ -91,8 +91,16 @@ class TestTapStackInfrastructure(BaseIntegrationTest):
         vpc = response['Vpcs'][0]
         self.assertEqual(vpc['State'], 'available')
         self.assertEqual(vpc['CidrBlock'], '10.0.0.0/16')
-        self.assertTrue(vpc['EnableDnsHostnames'])
-        self.assertTrue(vpc['EnableDnsSupport'])
+        
+        # Check DNS attributes separately
+        dns_hostnames_response = self.ec2_client.describe_vpc_attribute(
+            VpcId=vpc_id, Attribute='enableDnsHostnames'
+        )
+        dns_support_response = self.ec2_client.describe_vpc_attribute(
+            VpcId=vpc_id, Attribute='enableDnsSupport'
+        )
+        self.assertTrue(dns_hostnames_response['EnableDnsHostnames']['Value'])
+        self.assertTrue(dns_support_response['EnableDnsSupport']['Value'])
         
         # Verify subnets exist (should have public and private subnets)
         subnets_response = self.ec2_client.describe_subnets(
@@ -274,7 +282,11 @@ class TestTapStackInfrastructure(BaseIntegrationTest):
         key_metadata = response['KeyMetadata']
         
         self.assertEqual(key_metadata['KeyState'], 'Enabled')
-        self.assertTrue(key_metadata['KeyRotationStatus'])
+        
+        # Check key rotation status separately
+        rotation_response = self.kms_client.get_key_rotation_status(KeyId=kms_key_id)
+        self.assertTrue(rotation_response['KeyRotationEnabled'])
+        
         self.assertEqual(key_metadata['KeyUsage'], 'ENCRYPT_DECRYPT')
 
 
