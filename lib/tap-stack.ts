@@ -47,7 +47,7 @@ export class TapStack extends cdk.Stack {
       DatabaseSecurityGroupId: child.databaseSecurityGroupId,
       LambdaSecurityGroupId: child.lambdaSecurityGroupId,
       LambdaLogGroupName: child.lambdaLogGroupName,
-    } as Record<string, any>;
+    } as Record<string, string | undefined>;
 
     for (const [key, value] of Object.entries(forward)) {
       new cdk.CfnOutput(this, key, {
