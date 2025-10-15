@@ -16,7 +16,7 @@ describe("EKS DR Stack Unit Tests", () => {
     const providers = synthesized.provider.aws;
     expect(providers).toEqual(expect.arrayContaining([
       expect.objectContaining({ alias: "us-east-2", region: "us-east-2" }),
-      expect.objectContaining({ alias: "ap-southeast-1", region: "ap-southeast-1" }),
+      expect.objectContaining({ alias: "eu-central-1", region: "eu-central-1" }),
     ]));
   });
 

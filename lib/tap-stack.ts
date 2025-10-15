@@ -324,8 +324,8 @@ export class EksDrStack extends TerraformStack {
       alias: 'us-east-2',
     });
     const drProvider = new AwsProvider(this, 'dr', {
-      region: 'ap-southeast-1',
-      alias: 'ap-southeast-1',
+      region: 'eu-central-1',
+      alias: 'eu-central-1',
     });
     const primaryNet = new Networking(this, 'PrimaryNetworking', {
       provider: primaryProvider,
@@ -336,7 +336,7 @@ export class EksDrStack extends TerraformStack {
     });
     const drNet = new Networking(this, 'DrNetworking', {
       provider: drProvider,
-      region: 'ap-southeast-1',
+      region: 'eu-central-1',
       cidr: '172.16.0.0/16',
       randomSuffix,
       tags: commonTags,
@@ -351,7 +351,7 @@ export class EksDrStack extends TerraformStack {
     });
     const drEks = new Eks(this, 'DrEks', {
       provider: drProvider,
-      region: 'ap-southeast-1',
+      region: 'eu-central-1',
       randomSuffix,
       vpcId: drNet.vpc.id,
       subnetIds: drNet.privateSubnets.map(s => s.id),
@@ -372,7 +372,7 @@ export class EksDrStack extends TerraformStack {
       tags: commonTags,
     });
     const primaryEndpointFqdn = 'ingress.us-east-2.eks.example.com';
-    const drEndpointFqdn = 'ingress.ap-southeast-1.eks.example.com';
+    const drEndpointFqdn = 'ingress.eu-central-1.eks.example.com';
     const primaryHealthCheck = new Route53HealthCheck(
       this,
       'PrimaryHealthCheck',
