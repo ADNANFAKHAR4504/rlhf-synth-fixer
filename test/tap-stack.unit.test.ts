@@ -128,8 +128,8 @@ describe('S3-triggered Lambda Image Processing CloudFormation Template', () => {
       expect(customResource).toBeDefined();
       expect(customResource.Type).toBe('AWS::CloudFormation::CustomResource');
       expect(customResource.DependsOn).toContain('LambdaInvokePermission');
-      expect(customResource.DependsOn).toContain('ImageProcessorFunction');
-      expect(customResource.DependsOn).toContain('SourceBucket');
+      // ImageProcessorFunction dependency is implicit via !GetAtt reference (W3005 fix)
+      expect(customResource.Properties.LambdaFunctionArn).toEqual({ 'Fn::GetAtt': ['ImageProcessorFunction', 'Arn'] });
     });
 
     test('should have custom resource Lambda function for S3 notifications', () => {
@@ -470,12 +470,12 @@ describe('S3-triggered Lambda Image Processing CloudFormation Template', () => {
     });
 
     test('S3 notification should reference Lambda function ARN', () => {
-      const bucket = template.Resources.SourceBucket;
-      const lambdaConfigs = bucket.Properties.NotificationConfiguration.LambdaConfigurations;
-
-      lambdaConfigs.forEach((config: any) => {
-        expect(config.Function).toEqual({ 'Fn::GetAtt': ['ImageProcessorFunction', 'Arn'] });
-      });
+      // This template uses a custom resource to avoid circular dependencies
+      // Check the custom resource instead of direct bucket notification
+      const customResource = template.Resources.S3BucketNotificationCustomResource;
+      expect(customResource).toBeDefined();
+      expect(customResource.Properties.LambdaFunctionArn).toEqual({ 'Fn::GetAtt': ['ImageProcessorFunction', 'Arn'] });
+      expect(customResource.Properties.BucketName).toEqual({ Ref: 'SourceBucket' });
     });
   });
 
