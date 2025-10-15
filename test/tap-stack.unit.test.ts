@@ -6,7 +6,7 @@ describe("TapStack Unit Tests", () => {
 
   beforeAll(() => {
     const app = Testing.app({ stackTraces: false });
-    const stack = new TapStack(app, "TapStack"); // Corrected stack name
+    const stack = new TapStack(app, "TapStack");
     synthesized = JSON.parse(Testing.synth(stack));
   });
 
@@ -46,7 +46,7 @@ describe("TapStack Unit Tests", () => {
 
   it("should create a Multi-AZ RDS Aurora cluster", () => {
     expect(findResources("aws_rds_cluster")).toHaveLength(1);
-    expect(findResources("aws_rds_cluster_instance")).toHaveLength(2); // Check for 2 instances
+    expect(findResources("aws_rds_cluster_instance")).toHaveLength(2);
   });
 
   it("should create a secret for the database password", () => {
@@ -68,5 +68,11 @@ describe("TapStack Unit Tests", () => {
     expect(synthesized.output).toHaveProperty("DynamoDbTableName");
     expect(synthesized.output).toHaveProperty("EcsClusterName");
     expect(synthesized.output).toHaveProperty("EcsServiceName");
+  });
+
+  it("should define the DbReaderEndpoint output correctly", () => {
+    expect(synthesized.output).toHaveProperty("DbReaderEndpoint");
+    // This check forces Jest to evaluate the line and cover the branch.
+    expect(synthesized.output.DbReaderEndpoint.value).toBeDefined();
   });
 });

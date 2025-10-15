@@ -32,7 +32,8 @@ export class TapStack extends TerraformStack {
     super(scope, name);
 
     const region = 'us-east-2';
-    new AwsProvider(this, 'aws', { region, alias: 'us-east-2' }); // Added alias for clarity
+    new AwsProvider(this, 'aws', { region, alias: 'us-east-2' });
+
     new RandomProvider(this, 'random');
 
     const randomSuffix = Fn.substr(Fn.uuid(), 0, 8);
@@ -47,7 +48,7 @@ export class TapStack extends TerraformStack {
 
     const publicSubnetA = new Subnet(this, 'PublicSubnetA', {
       vpcId: vpc.id,
-      cidrBlock: '10.0.1.0/24',
+      cidrBlock: Fn.cidrsubnet('10.0.0.0/16', 8, 1),
       availabilityZone: `${region}a`,
       mapPublicIpOnLaunch: true,
       tags: { ...commonTags, Name: `public-a-${randomSuffix}` },
@@ -55,7 +56,7 @@ export class TapStack extends TerraformStack {
 
     const publicSubnetB = new Subnet(this, 'PublicSubnetB', {
       vpcId: vpc.id,
-      cidrBlock: '10.0.2.0/24',
+      cidrBlock: Fn.cidrsubnet('10.0.0.0/16', 8, 2),
       availabilityZone: `${region}b`,
       mapPublicIpOnLaunch: true,
       tags: { ...commonTags, Name: `public-b-${randomSuffix}` },
@@ -63,15 +64,17 @@ export class TapStack extends TerraformStack {
 
     const privateSubnetA = new Subnet(this, 'PrivateSubnetA', {
       vpcId: vpc.id,
-      cidrBlock: '10.0.10.0/24',
+      cidrBlock: Fn.cidrsubnet('10.0.0.0/16', 8, 10),
       availabilityZone: `${region}a`,
+      mapPublicIpOnLaunch: false,
       tags: { ...commonTags, Name: `private-a-${randomSuffix}` },
     });
 
     const privateSubnetB = new Subnet(this, 'PrivateSubnetB', {
       vpcId: vpc.id,
-      cidrBlock: '10.0.11.0/24',
+      cidrBlock: Fn.cidrsubnet('10.0.0.0/16', 8, 11),
       availabilityZone: `${region}b`,
+      mapPublicIpOnLaunch: false,
       tags: { ...commonTags, Name: `private-b-${randomSuffix}` },
     });
 
@@ -140,6 +143,9 @@ export class TapStack extends TerraformStack {
           securityGroups: [ecsSg.id],
         },
       ],
+      egress: [
+        { fromPort: 0, toPort: 0, protocol: '-1', cidrBlocks: ['0.0.0.0/0'] },
+      ],
       tags: commonTags,
     });
 
@@ -194,6 +200,11 @@ export class TapStack extends TerraformStack {
         'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy',
     });
 
+    new IamRolePolicyAttachment(this, 'EcsExecAttachLogs', {
+      role: ecsTaskExecutionRole.name,
+      policyArn: 'arn:aws:iam::aws:policy/CloudWatchLogsFullAccess',
+    });
+
     const taskDef = new EcsTaskDefinition(this, 'TaskDef', {
       family: `app-task-${randomSuffix}`,
       cpu: '256',
@@ -206,6 +217,14 @@ export class TapStack extends TerraformStack {
           name: 'app',
           image: 'public.ecr.aws/l6m2t8p7/amazon-ecs-sample:latest',
           portMappings: [{ containerPort: 80 }],
+          logConfiguration: {
+            logDriver: 'awslogs',
+            options: {
+              'awslogs-group': `/ecs/app-${randomSuffix}`,
+              'awslogs-region': region,
+              'awslogs-stream-prefix': 'ecs',
+            },
+          },
         },
       ]),
       tags: commonTags,
@@ -285,6 +304,7 @@ export class TapStack extends TerraformStack {
       availabilityZone: `${region}a`,
     });
 
+    // **FIX**: Removed the unused 'dbInstanceB' constant to resolve the linting error.
     new RdsClusterInstance(this, 'DbInstanceB', {
       clusterIdentifier: dbCluster.id,
       instanceClass: 'db.r6g.large',
@@ -314,13 +334,19 @@ export class TapStack extends TerraformStack {
       requestInterval: 10,
     });
 
+    new TerraformOutput(this, 'AlbDnsName', { value: alb.dnsName });
     new TerraformOutput(this, 'ApplicationEndpoint', {
       value: `http://${alb.dnsName}`,
     });
     new TerraformOutput(this, 'DbClusterIdentifier', {
       value: dbCluster.clusterIdentifier,
     });
-    // Outputs added for robust integration testing
+    new TerraformOutput(this, 'DbWriterEndpoint', {
+      value: dbCluster.endpoint,
+    });
+    new TerraformOutput(this, 'DbReaderEndpoint', {
+      value: dbCluster.readerEndpoint,
+    });
     new TerraformOutput(this, 'DynamoDbTableName', {
       value: sessionTable.name,
     });
