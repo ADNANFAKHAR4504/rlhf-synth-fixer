@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350041",
+  "team": "2",
+  "startedAt": "2025-10-03T10:39:59.339Z",
+  "subtask": "Security Configuration as Code",
+  "subject_labels": [
+    "Security, Compliance and Governance"
+  ],
+  "aws_services": [
+    "S3",
+    "RDS",
+    "CloudTrail",
+    "EC2",
+    "VPC",
+    "IAM",
+    "AWS Config",
+    "EBS",
+    "AWS Budgets",
+    "SNS",
+    "CloudWatch",
+    "CloudFormation",
+    "Secrets Manager"
+  ],
+  "training_quality": 8,
+  "training_quality_justification": "Very high training value (8/10). The MODEL_RESPONSE delivered production-ready infrastructure with advanced features (ALB, WAF, Shield, Auto Scaling, Multi-AZ RDS) but critically missed 4 of 10 explicit security requirements, requiring significant corrections. Missing requirements: (1) IAM MFA enforcement policy with deny conditions - a critical security pattern for user access control, (2) AWS Budgets resource with $10,000 monthly limit and SNS notifications - essential cost governance, (3) Standalone EC2 instances with encrypted EBS volumes - requirement specified encryption validation on actual instances not just launch templates, (4) Required parameterization (SSHSourceCIDR, BudgetAlertEmail) - fundamental CloudFormation reusability pattern, (5) Incorrect AWS Config rule (used IAM_POLICY_NO_STATEMENTS_WITH_ADMIN_ACCESS instead of required S3_BUCKET_PUBLIC_READ_PROHIBITED). The corrected implementation demonstrates: proper MFA enforcement using BoolIfExists conditions, AWS Budgets with multiple notification thresholds (80%, 100% actual, 100% forecasted), EC2 instances in private subnets with encrypted EBS and SSM roles, parameter validation patterns (CIDR regex, email format), correct Config rule selection, and CloudWatch Security Dashboard for monitoring. This training data is exceptionally valuable because: (1) it highlights the critical difference between production features and compliance requirements, (2) teaches specific AWS security service patterns (Budgets, Config rules, MFA policies), (3) demonstrates CloudFormation parameter best practices with validation, (4) shows proper resource placement (EC2 in private subnets vs public), and (5) reveals common mistakes (wrong Config rule, missing parameters, over-engineering with unnecessary services). The gap represents fundamental security compliance knowledge that will significantly improve model performance on security-focused IaC tasks and requirement adherence.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "matkadturing",
+  "dockerS3Location": ""
+}
