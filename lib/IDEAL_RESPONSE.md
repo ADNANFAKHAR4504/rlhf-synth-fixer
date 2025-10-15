@@ -576,8 +576,6 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
 	}
 }
 
-````
-
 ```
 
 ### lib/tap-stack.ts (full source)

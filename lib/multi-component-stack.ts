@@ -65,11 +65,7 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
         {
           name: 'prod-public-subnet',
           subnetType: ec2.SubnetType.PUBLIC,
-          cidrMask: 24,
-        },
-        {
-          name: 'prod-private-subnet',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          // Public subnets with /24 mask
           cidrMask: 24,
         },
       ],
