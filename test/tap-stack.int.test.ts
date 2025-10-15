@@ -220,9 +220,9 @@ describe('Healthcare Stack Integration Tests', () => {
 
       expect(key.KeyState).toBe('Enabled');
 
-      // Check key rotation status using separate API call
+      // Check key rotation status using separate API call with actual key ID
       const rotationCommand = new GetKeyRotationStatusCommand({
-        KeyId: `alias/healthcare-${environmentSuffix}`
+        KeyId: key.KeyId
       });
       const rotationResponse = await kmsClient.send(rotationCommand);
       expect(rotationResponse.KeyRotationEnabled).toBe(true);
