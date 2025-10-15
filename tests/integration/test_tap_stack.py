@@ -725,7 +725,7 @@ class TestEndToEndDataFlow(BaseIntegrationTest):
             
             self.assertEqual(primary_response['FailedEntryCount'], 0, 
                            "Event should be successfully sent to primary EventBridge")
-            print("✓ Event sent to primary EventBridge")
+            print(" Event sent to primary EventBridge")
             
             # STEP 2: Wait for event processing and cross-region routing
             time.sleep(5)  # Allow time for event processing and routing
@@ -750,7 +750,7 @@ class TestEndToEndDataFlow(BaseIntegrationTest):
             self.assertIn(self.primary_region, primary_arn, "Primary bus should be in primary region")
             self.assertIn(self.secondary_region, secondary_arn, "Secondary bus should be in secondary region")
             
-            print("✓ Cross-region event routing capability verified - event sent and processed")
+            print(" Cross-region event routing capability verified - event sent and processed")
             
         except ClientError as e:
             self.fail(f"Cross-region event routing test failed: {e}")
@@ -764,10 +764,18 @@ class TestEndToEndDataFlow(BaseIntegrationTest):
         self.skip_if_resource_missing(f'dynamodb_table_name_{self.secondary_region}', 'Secondary DynamoDB table')
         
         try:
-            # STEP 1: Write test data to primary region table
+            # STEP 1: Get table schema to understand the primary key
+            primary_response = self.dynamodb_client_primary.describe_table(TableName=primary_table_name)
+            primary_table = primary_response['Table']
+            
+            # Find the primary key attribute name
+            primary_key_attr = primary_table['KeySchema'][0]['AttributeName']
+            print(f"ℹ Table primary key attribute: {primary_key_attr}")
+            
+            # STEP 2: Write test data to primary region table with correct primary key
             test_item_id = f'global-table-test-{int(time.time())}'
             test_item = {
-                'id': {'S': test_item_id},
+                primary_key_attr: {'S': test_item_id},
                 'testData': {'S': 'Global Table Replication Test'},
                 'timestamp': {'N': str(int(time.time()))},
                 'region': {'S': self.primary_region}
@@ -779,12 +787,12 @@ class TestEndToEndDataFlow(BaseIntegrationTest):
                 Item=test_item
             )
             self.assertIsNotNone(primary_put_response, "Should successfully write to primary table")
-            print("✓ Test data written to primary DynamoDB table")
+            print(" Test data written to primary DynamoDB table")
             
-            # STEP 2: Wait for Global Table replication
+            # STEP 3: Wait for Global Table replication
             time.sleep(10)  # Allow time for Global Table replication
             
-            # STEP 3: Verify both tables are active and accessible
+            # STEP 4: Verify both tables are active and accessible
             primary_response = self.dynamodb_client_primary.describe_table(TableName=primary_table_name)
             secondary_response = self.dynamodb_client_secondary.describe_table(TableName=secondary_table_name)
             
@@ -794,7 +802,7 @@ class TestEndToEndDataFlow(BaseIntegrationTest):
             self.assertEqual(primary_table['TableStatus'], 'ACTIVE', "Primary table should be active")
             self.assertEqual(secondary_table['TableStatus'], 'ACTIVE', "Secondary table should be active")
             
-            # STEP 4: Verify both tables have the same structure for Global Table replication
+            # STEP 5: Verify both tables have the same structure for Global Table replication
             primary_key_schema = primary_table['KeySchema']
             secondary_key_schema = secondary_table['KeySchema']
             
@@ -810,15 +818,15 @@ class TestEndToEndDataFlow(BaseIntegrationTest):
             self.assertEqual(primary_attributes, secondary_attributes,
                            "Both tables should have identical attribute definitions for Global Table replication")
             
-            # STEP 5: Try to read from secondary table (replication verification)
+            # STEP 6: Try to read from secondary table (replication verification)
             try:
                 secondary_get_response = self.dynamodb_client_secondary.get_item(
                     TableName=secondary_table_name,
-                    Key={'id': {'S': test_item_id}}
+                    Key={primary_key_attr: {'S': test_item_id}}
                 )
                 
                 if secondary_get_response.get('Item'):
-                    print("✓ Data successfully replicated to secondary table")
+                    print(" Data successfully replicated to secondary table")
                 else:
                     print("ℹ Data replication may still be in progress (Global Tables have eventual consistency)")
                     
@@ -826,7 +834,7 @@ class TestEndToEndDataFlow(BaseIntegrationTest):
                 print(f"ℹ Could not verify data replication: {e}")
                 print("ℹ This is expected if Global Tables are not fully configured")
             
-            print("✓ DynamoDB Global Table replication capability verified")
+            print(" DynamoDB Global Table replication capability verified")
             
         except ClientError as e:
             self.fail(f"DynamoDB Global Table replication test failed: {e}")
@@ -866,7 +874,7 @@ class TestEndToEndDataFlow(BaseIntegrationTest):
             
             self.assertEqual(event_response['FailedEntryCount'], 0, 
                            "Event should be successfully sent for security testing")
-            print("✓ Security test event sent through pipeline")
+            print(" Security test event sent through pipeline")
             
             # STEP 2: Wait for event processing
             time.sleep(3)
@@ -876,7 +884,7 @@ class TestEndToEndDataFlow(BaseIntegrationTest):
             sse_description = table_response['Table'].get('SSEDescription', {})
             self.assertEqual(sse_description.get('Status'), 'ENABLED',
                            "DynamoDB should have server-side encryption enabled during data flow")
-            print("✓ DynamoDB encryption verified during data flow")
+            print(" DynamoDB encryption verified during data flow")
             
             # STEP 4: Test Lambda function security during actual invocation
             lambda_response = self.lambda_client_primary.get_function(FunctionName=lambda_name)
@@ -886,7 +894,7 @@ class TestEndToEndDataFlow(BaseIntegrationTest):
             # Verify Lambda is in Active state (can process events securely)
             self.assertEqual(lambda_response['Configuration']['State'], 'Active',
                            "Lambda should be active for secure event processing")
-            print("✓ Lambda security and IAM role verified during execution")
+            print(" Lambda security and IAM role verified during execution")
             
             # STEP 5: Test EventBridge security and permissions
             bus_response = eventbridge_client.describe_event_bus(Name=event_bus_name)
@@ -894,7 +902,7 @@ class TestEndToEndDataFlow(BaseIntegrationTest):
             
             # Verify EventBridge can handle events securely
             self.assertIsNotNone(bus_response.get('Name'), "EventBridge bus should be accessible for secure event routing")
-            print("✓ EventBridge security and permissions verified during event routing")
+            print(" EventBridge security and permissions verified during event routing")
             
             # STEP 6: Test cross-region security consistency
             secondary_table_name = self.get_output_value(f'dynamodb_table_name_{self.secondary_region}')
@@ -903,9 +911,9 @@ class TestEndToEndDataFlow(BaseIntegrationTest):
                 secondary_sse_description = secondary_table_response['Table'].get('SSEDescription', {})
                 self.assertEqual(secondary_sse_description.get('Status'), 'ENABLED',
                                "Secondary DynamoDB should also have encryption enabled")
-                print("✓ Cross-region security consistency verified")
+                print(" Cross-region security consistency verified")
             
-            print("✓ Security and compliance requirements verified across complete pipeline")
+            print(" Security and compliance requirements verified across complete pipeline")
             
         except ClientError as e:
             self.fail(f"Security and compliance test failed: {e}")
