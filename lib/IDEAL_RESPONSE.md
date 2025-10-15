@@ -1,3 +1,12 @@
+# Ideal Response
+
+This document outlines the ideal implementation of the serverless application using AWS CDK v2 in Python.
+
+---
+
+## Project Structure
+
+
 ```python
 
 """tap_stack.py
