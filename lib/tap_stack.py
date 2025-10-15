@@ -20,191 +20,204 @@ class TrafficAnalyticsPlatformStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
-        # S3 bucket for storing analytics data for QuickSight
+        # 1. S3 bucket for storing analytics data for QuickSight/Athena
         analytics_bucket = s3.Bucket(
-            self, "TrafficAnalyticsBucket",
+            self,
+            "TrafficAnalyticsBucket",
             removal_policy=RemovalPolicy.RETAIN,  # Keep the bucket even if stack is deleted
             encryption=s3.BucketEncryption.S3_MANAGED,  # Enable encryption
-            versioned=True,  # Enable versioning for data protection
-            block_public_access=s3.BlockPublicAccess.BLOCK_ALL  # Security best practice
+            versioned=True,  # Enable versioning for data protection (Fault Tolerance)
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,  # Security best practice
         )
 
-        # Kinesis Data Stream for real-time traffic sensor data ingestion
+        # 2. Kinesis Data Stream for real-time traffic sensor data ingestion
         traffic_data_stream = kinesis.Stream(
-            self, "TrafficDataStream",
-            shard_count=50,  # Scaled for 50,000 sensors (approximately 1000 sensors per shard)
+            self,
+            "TrafficDataStream",
+            shard_count=50,  # Scaled for high volume and concurrency
             retention_period=Duration.hours(24),
             stream_mode=kinesis.StreamMode.PROVISIONED,
         )
 
-        # DynamoDB table for storing processed traffic data
+        # 3. DynamoDB table for storing processed traffic data (High Availability & Fault Tolerance)
         traffic_table = dynamodb.Table(
-            self, "TrafficDataTable",
+            self,
+            "TrafficDataTable",
             partition_key=dynamodb.Attribute(
-                name="sensor_id",
-                type=dynamodb.AttributeType.STRING
+                name="sensor_id", type=dynamodb.AttributeType.STRING
             ),
             sort_key=dynamodb.Attribute(
-                name="timestamp",
-                type=dynamodb.AttributeType.NUMBER
+                name="timestamp", type=dynamodb.AttributeType.NUMBER
             ),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,  # Auto-scaling capacity
             point_in_time_recovery=True,  # Enable for fault tolerance and disaster recovery
             removal_policy=RemovalPolicy.RETAIN,  # Keep data if stack is deleted
         )
-        
+
         # Secondary indexes for efficient queries by location and congestion level
         traffic_table.add_global_secondary_index(
             index_name="LocationIndex",
             partition_key=dynamodb.Attribute(
-                name="location_id",
-                type=dynamodb.AttributeType.STRING
+                name="location_id", type=dynamodb.AttributeType.STRING
             ),
             sort_key=dynamodb.Attribute(
-                name="timestamp",
-                type=dynamodb.AttributeType.NUMBER
-            ),
-        )
-        
-        traffic_table.add_global_secondary_index(
-            index_name="CongestionIndex",
-            partition_key=dynamodb.Attribute(
-                name="congestion_level",
-                type=dynamodb.AttributeType.NUMBER
-            ),
-            sort_key=dynamodb.Attribute(
-                name="timestamp",
-                type=dynamodb.AttributeType.NUMBER
+                name="timestamp", type=dynamodb.AttributeType.NUMBER
             ),
         )
 
-        # Lambda for processing Kinesis stream data
+        traffic_table.add_global_secondary_index(
+            index_name="CongestionIndex",
+            partition_key=dynamodb.Attribute(
+                name="congestion_level", type=dynamodb.AttributeType.NUMBER
+            ),
+            sort_key=dynamodb.Attribute(
+                name="timestamp", type=dynamodb.AttributeType.NUMBER
+            ),
+        )
+
+        # 4. Lambda for processing Kinesis stream data (Real-time stream processing)
         processing_lambda = lambda_.Function(
-            self, "TrafficDataProcessor",
+            self,
+            "TrafficDataProcessor",
             runtime=lambda_.Runtime.PYTHON_3_9,
             handler="index.handler",
-            code=lambda_.Code.from_asset("lambda/processor"),
+            code=lambda_.Code.from_asset(
+                "lambda/processor"
+            ),  # Assumes lambda code exists
             environment={
                 "DYNAMODB_TABLE_NAME": traffic_table.table_name,
-                "ANALYTICS_BUCKET_NAME": analytics_bucket.bucket_name
+                "ANALYTICS_BUCKET_NAME": analytics_bucket.bucket_name,
             },
             timeout=Duration.minutes(5),
             memory_size=1024,
-            retry_attempts=2
+            retry_attempts=2,
         )
-        
-        # Grant Lambda permission to read from Kinesis and write to DynamoDB and S3
+
+        # Grant Lambda permission (Least Privilege)
         traffic_data_stream.grant_read(processing_lambda)
         traffic_table.grant_write_data(processing_lambda)
         analytics_bucket.grant_write(processing_lambda)
-        
+
         # Configure Lambda event source mapping with Kinesis
         processing_lambda.add_event_source(
             lambda_event_sources.KinesisEventSource(
                 stream=traffic_data_stream,
-                starting_position=lambda_.StartingPosition.LATEST,
-                batch_size=100,  # Process 100 records at a time
-                max_batching_window=Duration.seconds(60),  # Wait up to 60 seconds to accumulate records
-                retry_attempts=3  # Retry failed batches 3 times
+                starting_position=lambda_.StartingPosition.LATEST,  # Real-time processing
+                batch_size=100,
+                max_batching_window=Duration.seconds(60),
+                retry_attempts=3,  # Fault Tolerance
             )
         )
-        
-        # Lambda for aggregating data for analytics
+
+        # 5. Lambda for aggregating data for analytics (Periodic Batch Processing)
         aggregation_lambda = lambda_.Function(
-            self, "TrafficDataAggregator",
+            self,
+            "TrafficDataAggregator",
             runtime=lambda_.Runtime.PYTHON_3_9,
             handler="index.handler",
-            code=lambda_.Code.from_asset("lambda/aggregator"),
+            code=lambda_.Code.from_asset(
+                "lambda/aggregator"
+            ),  # Assumes lambda code exists
             environment={
                 "DYNAMODB_TABLE_NAME": traffic_table.table_name,
-                "ANALYTICS_BUCKET_NAME": analytics_bucket.bucket_name
+                "ANALYTICS_BUCKET_NAME": analytics_bucket.bucket_name,
             },
             timeout=Duration.minutes(10),
-            memory_size=1024
+            memory_size=1024,
         )
-        
+
         # Grant permissions for aggregation Lambda
         traffic_table.grant_read_data(aggregation_lambda)
         analytics_bucket.grant_write(aggregation_lambda)
-        
+
         # EventBridge rule to trigger aggregation Lambda every 15 minutes
         events.Rule(
-            self, "TrafficAggregationRule",
+            self,
+            "TrafficAggregationRule",
             schedule=events.Schedule.rate(Duration.minutes(15)),
-            targets=[targets.LambdaFunction(aggregation_lambda)]
+            targets=[targets.LambdaFunction(aggregation_lambda)],
         )
-        
-        # SNS topic for congestion alerts
+
+        # 6. SNS topic for congestion alerts
         alerts_topic = sns.Topic(
-            self, "TrafficAlertsTopic",
-            display_name="Traffic Congestion Alerts"
+            self, "TrafficAlertsTopic", display_name="Traffic Congestion Alerts"
         )
-        
-        # Lambda for analyzing traffic and sending congestion alerts
+
+        # 7. Lambda for analyzing traffic and sending congestion alerts (Alerting logic)
         alert_lambda = lambda_.Function(
-            self, "TrafficAlertProcessor",
+            self,
+            "TrafficAlertProcessor",
             runtime=lambda_.Runtime.PYTHON_3_9,
             handler="index.handler",
-            code=lambda_.Code.from_asset("lambda/alerts"),
+            code=lambda_.Code.from_asset("lambda/alerts"),  # Assumes lambda code exists
             environment={
                 "SNS_TOPIC_ARN": alerts_topic.topic_arn,
                 "DYNAMODB_TABLE_NAME": traffic_table.table_name,
-                "CONGESTION_THRESHOLD": "80"  # 80% congestion threshold
+                "CONGESTION_THRESHOLD": "80",  # 80% congestion threshold
             },
             timeout=Duration.minutes(5),
-            memory_size=1024
-        )
-        
-        # Grant permissions for alerts Lambda
-        traffic_table.grant_read_data(alert_lambda)
-        alerts_topic.grant_publish(alert_lambda)
-        
-        # EventBridge rule to trigger alerts Lambda every 5 minutes
-        events.Rule(
-            self, "TrafficAlertRule",
-            schedule=events.Schedule.rate(Duration.minutes(5)),
-            targets=[targets.LambdaFunction(alert_lambda)]
+            memory_size=1024,
         )
 
-        # IoT Core Policy for traffic sensors
+        # Grant permissions for alerts Lambda (Least Privilege)
+        traffic_table.grant_read_data(alert_lambda)
+        alerts_topic.grant_publish(alert_lambda)
+
+        # Grant permission to push custom metrics to CloudWatch for the alarm (CRITICAL FIX)
+        alert_lambda.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=["cloudwatch:PutMetricData"],
+                resources=["*"],  # For custom metrics, "*" is the standard practice
+            )
+        )
+
+        # EventBridge rule to trigger alerts Lambda every 5 minutes
+        events.Rule(
+            self,
+            "TrafficAlertRule",
+            schedule=events.Schedule.rate(Duration.minutes(5)),
+            targets=[targets.LambdaFunction(alert_lambda)],
+        )
+
+        # 8. IoT Core Policy for traffic sensors (Secure communication/Least Privilege)
         iot_policy = iot.CfnPolicy(
-            self, "TrafficSensorPolicy",
+            self,
+            "TrafficSensorPolicy",
             policy_name="traffic-sensor-policy",
             policy_document={
                 "Version": "2012-10-17",
                 "Statement": [
                     {
                         "Effect": "Allow",
-                        "Action": [
-                            "iot:Connect",
-                            "iot:Publish"
-                        ],
+                        "Action": ["iot:Connect", "iot:Publish"],
                         "Resource": [
                             f"arn:aws:iot:{self.region}:{self.account}:client/${{iot:ClientId}}",
-                            f"arn:aws:iot:{self.region}:{self.account}:topic/traffic/data"
-                        ]
+                            f"arn:aws:iot:{self.region}:{self.account}:topic/traffic/data",
+                        ],
                     }
-                ]
-            }
+                ],
+            },
         )
-        
-        # IAM role for IoT rule to publish to Kinesis
+
+        # 9. IAM role for IoT rule to publish to Kinesis (Least Privilege)
         iot_rule_role = iam.Role(
-            self, "IoTRuleRole",
+            self,
+            "IoTRuleRole",
             assumed_by=iam.ServicePrincipal("iot.amazonaws.com"),
         )
-        
-        # Add policy for IoT rule to publish to Kinesis
+
+        # Add policy for IoT rule to publish to Kinesis (Least Privilege)
         iot_rule_role.add_to_policy(
             iam.PolicyStatement(
                 actions=["kinesis:PutRecord", "kinesis:PutRecords"],
-                resources=[traffic_data_stream.stream_arn]
+                resources=[traffic_data_stream.stream_arn],
             )
         )
-        
-        # IoT Rule to forward data from IoT Core to Kinesis
+
+        # 10. IoT Rule to forward data from IoT Core to Kinesis
         iot_to_kinesis_rule = iot.CfnTopicRule(
-            self, "TrafficToKinesisRule",
+            self,
+            "TrafficToKinesisRule",
             rule_name="TrafficToKinesis",
             topic_rule_payload={
                 "sql": "SELECT * FROM 'traffic/data'",  # Process all messages from traffic/data topic
@@ -212,27 +225,27 @@ class TrafficAnalyticsPlatformStack(Stack):
                     {
                         "kinesis": {
                             "streamName": traffic_data_stream.stream_name,
-                            "partitionKey": "${sensor_id}",  # Partition by sensor ID for even distribution
-                            "roleArn": iot_rule_role.role_arn
+                            "partitionKey": "${sensor_id}",  # Highly available: Partition by sensor ID
+                            "roleArn": iot_rule_role.role_arn,
                         }
                     }
                 ],
-                "ruleDisabled": False
-            }
+                "ruleDisabled": False,
+            },
         )
-        
-        # Glue database and tables for QuickSight access via Athena
+
+        # 11. Glue database and tables for QuickSight access via Athena
         analytics_database = glue.CfnDatabase(
-            self, "TrafficAnalyticsDatabase",
+            self,
+            "TrafficAnalyticsDatabase",
             catalog_id=self.account,
-            database_input={
-                "name": "traffic_analytics"
-            }
+            database_input={"name": "traffic_analytics"},
         )
-        
+
         # Define the schema for traffic data to enable SQL queries via Athena
         traffic_data_table = glue.CfnTable(
-            self, "TrafficDataGlueTable",
+            self,
+            "TrafficDataGlueTable",
             catalog_id=self.account,
             database_name=analytics_database.ref,
             table_input={
@@ -245,7 +258,7 @@ class TrafficAnalyticsPlatformStack(Stack):
                         "serializationLibrary": "org.openx.data.jsonserde.JsonSerDe",
                         "parameters": {
                             "paths": "sensor_id,timestamp,location_id,congestion_level,vehicle_count,average_speed"
-                        }
+                        },
                     },
                     "columns": [
                         {"name": "sensor_id", "type": "string"},
@@ -253,136 +266,139 @@ class TrafficAnalyticsPlatformStack(Stack):
                         {"name": "location_id", "type": "string"},
                         {"name": "congestion_level", "type": "double"},
                         {"name": "vehicle_count", "type": "int"},
-                        {"name": "average_speed", "type": "double"}
-                    ]
+                        {"name": "average_speed", "type": "double"},
+                    ],
                 },
-                "tableType": "EXTERNAL_TABLE"
-            }
+                "tableType": "EXTERNAL_TABLE",
+            },
         )
-        
+
         # Athena workgroup for traffic analytics
         analytics_workgroup = athena.CfnWorkGroup(
-            self, "TrafficAnalyticsWorkGroup",
+            self,
+            "TrafficAnalyticsWorkGroup",
             name="traffic_analytics_workgroup",
             state="ENABLED",
             work_group_configuration={
                 "resultConfiguration": {
                     "outputLocation": f"s3://{analytics_bucket.bucket_name}/athena-results/"
                 }
-            }
+            },
         )
 
-        # CloudWatch dashboard for monitoring the system
+        # 12. CloudWatch dashboard for monitoring the system (Metrics)
         dashboard = cloudwatch.Dashboard(
-            self, "TrafficAnalyticsDashboard",
-            dashboard_name="TrafficAnalytics"
+            self, "TrafficAnalyticsDashboard", dashboard_name="TrafficAnalytics"
         )
-        
-        # Add metrics to dashboard for monitoring the system's performance
+
+        # Kinesis, DynamoDB, and Lambda metrics for the dashboard
         kinesis_metrics = cloudwatch.Metric(
             namespace="AWS/Kinesis",
             metric_name="IncomingRecords",
             dimensions_map={"StreamName": traffic_data_stream.stream_name},
             statistic="Sum",
-            period=Duration.minutes(1)
+            period=Duration.minutes(1),
         )
-        
+
         dynamodb_read_metrics = cloudwatch.Metric(
             namespace="AWS/DynamoDB",
             metric_name="ConsumedReadCapacityUnits",
             dimensions_map={"TableName": traffic_table.table_name},
             statistic="Sum",
-            period=Duration.minutes(1)
+            period=Duration.minutes(1),
         )
-        
+
         dynamodb_write_metrics = cloudwatch.Metric(
             namespace="AWS/DynamoDB",
             metric_name="ConsumedWriteCapacityUnits",
             dimensions_map={"TableName": traffic_table.table_name},
             statistic="Sum",
-            period=Duration.minutes(1)
+            period=Duration.minutes(1),
         )
-        
+
         lambda_errors = cloudwatch.Metric(
             namespace="AWS/Lambda",
             metric_name="Errors",
             dimensions_map={"FunctionName": processing_lambda.function_name},
             statistic="Sum",
-            period=Duration.minutes(1)
+            period=Duration.minutes(1),
         )
-        
+
         lambda_duration = cloudwatch.Metric(
             namespace="AWS/Lambda",
             metric_name="Duration",
             dimensions_map={"FunctionName": processing_lambda.function_name},
             statistic="Average",
-            period=Duration.minutes(1)
+            period=Duration.minutes(1),
         )
-        
+
         # Create a dashboard with widgets for key metrics
         dashboard.add_widgets(
             cloudwatch.GraphWidget(
-                title="Kinesis Incoming Records",
-                left=[kinesis_metrics]
+                title="Kinesis Incoming Records", left=[kinesis_metrics]
             ),
             cloudwatch.GraphWidget(
                 title="DynamoDB Consumed Capacity",
-                left=[dynamodb_read_metrics, dynamodb_write_metrics]
+                left=[dynamodb_read_metrics, dynamodb_write_metrics],
             ),
             cloudwatch.GraphWidget(
-                title="Lambda Performance",
-                left=[lambda_errors, lambda_duration]
-            )
+                title="Lambda Performance", left=[lambda_errors, lambda_duration]
+            ),
         )
-        
-        # Alarm for high traffic congestion (custom metric would be pushed by the alert Lambda)
+
+        # Alarm for high traffic congestion (EventBridge for congestion alerts)
+        # This custom metric is pushed by the alert Lambda (TrafficAnalytics namespace)
         high_traffic_alarm = cloudwatch.Alarm(
-            self, "HighTrafficCongestionAlarm",
+            self,
+            "HighTrafficCongestionAlarm",
             metric=cloudwatch.Metric(
                 namespace="TrafficAnalytics",
                 metric_name="CongestionLevel",
                 dimensions_map={"Region": "Downtown"},
                 statistic="Average",
-                period=Duration.minutes(5)
+                period=Duration.minutes(5),
             ),
             threshold=80,  # 80% congestion
             comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
             evaluation_periods=1,
-            alarm_description="Alarm for high traffic congestion in downtown area"
+            alarm_description="Alarm for high traffic congestion in downtown area",
         )
-        
+
         # Add SNS action to alarm to send notifications
-        high_traffic_alarm.add_alarm_action(
-            cloudwatch_actions.SnsAction(alerts_topic)
-        )
-        
+        high_traffic_alarm.add_alarm_action(cloudwatch_actions.SnsAction(alerts_topic))
+
         # Create CloudFormation outputs for important resources
         CfnOutput(
-            self, "KinesisStreamName",
+            self,
+            "KinesisStreamName",
             value=traffic_data_stream.stream_name,
-            description="Name of the Kinesis stream for traffic data"
+            description="Name of the Kinesis stream for traffic data",
         )
-        
+
         CfnOutput(
-            self, "DynamoDBTableName",
+            self,
+            "DynamoDBTableName",
             value=traffic_table.table_name,
-            description="Name of the DynamoDB table for traffic data"
+            description="Name of the DynamoDB table for traffic data",
         )
-        
+
         CfnOutput(
-            self, "AlertsSNSTopic",
+            self,
+            "AlertsSNSTopic",
             value=alerts_topic.topic_arn,
-            description="ARN of the SNS topic for congestion alerts"
+            description="ARN of the SNS topic for congestion alerts",
         )
-        
+
         CfnOutput(
-            self, "AnalyticsBucketName",
+            self,
+            "AnalyticsBucketName",
             value=analytics_bucket.bucket_name,
-            description="Name of the S3 bucket for analytics data"
+            description="Name of the S3 bucket for analytics data",
         )
-        
+
         CfnOutput(
-            self, "GlueDatabaseName",
+            self,
+            "GlueDatabaseName",
             value=analytics_database.ref,
-            description="Name of the Glue database for analytics"
+            description="Name of the Glue database for analytics",
         )
