@@ -1,8 +1,4 @@
-
 ## **model_failure.md**
-
-```markdown
-# Model Failure
 
 During earlier iterations of the TapStack CloudFormation template, several issues prevented successful deployment.  
 These failures occurred due to parameter misconfigurations, invalid property syntax, and CloudFormation sequencing constraints.
