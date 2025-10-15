@@ -68,7 +68,7 @@ class TapStack(cdk.Stack):
             removal_policy=RemovalPolicy.RETAIN,
             stream=dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
         )
-        
+
         # GSI for status queries
         events_table.add_global_secondary_index(
             index_name="status-timestamp-index",
@@ -91,7 +91,7 @@ class TapStack(cdk.Stack):
             retention_period=Duration.days(14),
             visibility_timeout=Duration.seconds(300),
         )
-        
+
         # Main SQS Queue
         main_queue = sqs.Queue(
             self,
@@ -113,18 +113,18 @@ class TapStack(cdk.Stack):
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
             description=f"Execution role for shipment event processor Lambda - {environment_suffix}",
         )
-        
+
         lambda_role.add_managed_policy(
             iam.ManagedPolicy.from_aws_managed_policy_name(
                 "service-role/AWSLambdaBasicExecutionRole"
             )
         )
-        
+
         # Grant permissions
         main_queue.grant_consume_messages(lambda_role)
         dlq.grant_send_messages(lambda_role)
         events_table.grant_read_write_data(lambda_role)
-        
+
         # Lambda Processing Function
         lambda_code = '''
 import json
@@ -143,30 +143,30 @@ table = dynamodb.Table(table_name)
 def lambda_handler(event, context):
     """Process shipment events from SQS with idempotent handling."""
     logger.info(f"Received {len(event['Records'])} messages")
-    
+
     batch_item_failures = []
-    
+
     for record in event['Records']:
         message_id = record['messageId']
-        
+
         try:
             # Parse message
             body = json.loads(record['body'])
-            
+
             # Extract required fields
             shipment_id = body.get('shipment_id')
             event_timestamp = body.get('event_timestamp')
             event_type = body.get('event_type')
             event_data = body.get('event_data', {})
-            
+
             # Validate required fields
             if not all([shipment_id, event_timestamp, event_type]):
                 logger.error(f"Missing required fields in message {message_id}")
                 raise ValueError("Missing required fields")
-            
+
             # Calculate TTL (90 days)
             ttl = int((datetime.now() + timedelta(days=90)).timestamp())
-            
+
             # Prepare item
             item = {
                 'shipment_id': shipment_id,
@@ -179,25 +179,25 @@ def lambda_handler(event, context):
                 'message_id': message_id,
                 'expires_at': ttl
             }
-            
+
             # Idempotent write
             table.put_item(
                 Item=item,
                 ConditionExpression='attribute_not_exists(shipment_id) AND attribute_not_exists(event_timestamp)'
             )
-            
+
             logger.info(f"Successfully processed event for shipment {shipment_id}")
-            
+
         except dynamodb.meta.client.exceptions.ConditionalCheckFailedException:
             logger.info(f"Event already processed for message {message_id} - skipping")
-            
+
         except Exception as e:
             logger.error(f"Error processing message {message_id}: {str(e)}")
             batch_item_failures.append({"itemIdentifier": message_id})
-    
+
     return {"batchItemFailures": batch_item_failures}
 '''
-        
+
         processor_function = lambda_.Function(
             self,
             "ShipmentEventProcessor",
@@ -215,7 +215,7 @@ def lambda_handler(event, context):
             log_retention=logs.RetentionDays.ONE_MONTH,
             tracing=lambda_.Tracing.ACTIVE,
         )
-        
+
         # SQS Event Source
         processor_function.add_event_source(
             lambda_event_sources.SqsEventSource(
@@ -232,7 +232,7 @@ def lambda_handler(event, context):
             "ShipmentEventBus",
             event_bus_name=f"shipment-events-{environment_suffix}"
         )
-        
+
         # Event Rule
         event_rule = events.Rule(
             self,
@@ -251,7 +251,7 @@ def lambda_handler(event, context):
                 )
             ]
         )
-        
+
         # Event Archive
         archive = events.Archive(
             self,
@@ -268,9 +268,9 @@ def lambda_handler(event, context):
         dashboard = cloudwatch.Dashboard(
             self,
             "ShipmentProcessingDashboard",
-            dashboard_name=f"shipment-processing-{environment_suffix}",
+            dashboard_name=f"shipmentprocessing-{environment_suffix}",
         )
-        
+
         # Queue metrics widget
         queue_widget = cloudwatch.GraphWidget(
             title="SQS Queue Metrics",
@@ -289,7 +289,7 @@ def lambda_handler(event, context):
                 ),
             ]
         )
-        
+
         # Lambda metrics widget
         lambda_widget = cloudwatch.GraphWidget(
             title="Lambda Processing Metrics",
@@ -307,9 +307,9 @@ def lambda_handler(event, context):
                 ),
             ],
         )
-        
+
         dashboard.add_widgets(queue_widget, lambda_widget)
-        
+
         # Critical Alarms
         queue_depth_alarm = cloudwatch.Alarm(
             self,
@@ -323,7 +323,7 @@ def lambda_handler(event, context):
             evaluation_periods=2,
             comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
         )
-        
+
         dlq_alarm = cloudwatch.Alarm(
             self,
             "MessagesInDLQAlarm",
@@ -356,24 +356,28 @@ def lambda_handler(event, context):
 ## Key Features Implemented
 
 ### 1. Event Processing Pipeline
+
 - **EventBridge**: Custom event bus with pattern matching for shipment events
 - **SQS**: Standard queue with dead letter queue for failed messages
 - **Lambda**: Python function with idempotent processing and batch failure handling
 - **DynamoDB**: Event storage with TTL, GSI for status queries, and point-in-time recovery
 
 ### 2. Operational Excellence
+
 - **Monitoring**: CloudWatch dashboard with key metrics
 - **Alerting**: Alarms for queue depth and DLQ messages
 - **Logging**: Structured logging with 30-day retention
 - **Tracing**: X-Ray integration for distributed tracing
 
 ### 3. Reliability and Scalability
+
 - **Dead Letter Queue**: 3 retry attempts before moving to DLQ
 - **Batch Processing**: Optimized batch size and timing
 - **Auto-scaling**: Pay-per-request DynamoDB and Lambda concurrency
 - **Event Archive**: 7-day retention for event replay
 
 ### 4. Security and Cost Optimization
+
 - **IAM**: Least privilege permissions using CDK grant methods
 - **Cost Control**: On-demand billing, right-sized resources, log retention
 - **Data Management**: Automatic TTL-based cleanup after 90 days

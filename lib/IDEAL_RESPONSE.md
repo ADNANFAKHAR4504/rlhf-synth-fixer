@@ -7,6 +7,7 @@ This solution implements a serverless, production-ready shipment event processin
 ## Core Components
 
 ### 1. Event Ingestion - Amazon EventBridge
+
 ```python
 # Custom Event Bus for shipment events
 event_bus = events.EventBus(
@@ -36,6 +37,7 @@ event_rule = events.Rule(
 ```
 
 ### 2. Message Buffering - Amazon SQS
+
 ```python
 # Dead Letter Queue for failed messages
 dlq = sqs.Queue(
@@ -62,6 +64,7 @@ main_queue = sqs.Queue(
 ```
 
 ### 3. Event Processing - AWS Lambda
+
 ```python
 # Lambda function with idempotent processing
 processor_function = lambda_.Function(
@@ -94,6 +97,7 @@ processor_function.add_event_source(
 ```
 
 ### 4. Data Storage - Amazon DynamoDB
+
 ```python
 # Events table with composite primary key
 events_table = dynamodb.Table(
@@ -133,13 +137,14 @@ events_table.add_global_secondary_index(
 ## Lambda Processing Logic
 
 ### Idempotent Event Handling
+
 ```python
 def lambda_handler(event, context):
     """Process shipment events from SQS with idempotent handling."""
     logger.info(f"Received {len(event['Records'])} messages")
-    
+
     batch_item_failures = []
-    
+
     for record in event['Records']:
         try:
             # Parse and validate message
@@ -147,32 +152,34 @@ def lambda_handler(event, context):
             shipment_id = body.get('shipment_id')
             event_timestamp = body.get('event_timestamp')
             event_type = body.get('event_type')
-            
+
             # Idempotent write with conditional expression
             table.put_item(
                 Item=item,
                 ConditionExpression='attribute_not_exists(shipment_id) AND attribute_not_exists(event_timestamp)'
             )
-            
+
         except dynamodb.meta.client.exceptions.ConditionalCheckFailedException:
             logger.info(f"Event already processed - skipping")
-            
+
         except Exception as e:
             # Handle failures and add to batch failures for retry
             batch_item_failures.append({"itemIdentifier": message_id})
-    
+
     return {"batchItemFailures": batch_item_failures}
 ```
 
 ## Monitoring and Alerting
 
 ### CloudWatch Dashboard
+
 - **SQS Metrics**: Queue depth, message age, throughput
 - **Lambda Metrics**: Invocations, errors, duration, throttles
 - **DynamoDB Metrics**: Read/write capacity, errors
 - **Dead Letter Queue**: Failed message tracking
 
 ### Critical Alarms
+
 ```python
 # High queue depth alarm (>1000 messages)
 queue_depth_alarm = cloudwatch.Alarm(
@@ -209,6 +216,7 @@ dlq_alarm = cloudwatch.Alarm(
 ## Security and IAM
 
 ### Least Privilege Access
+
 ```python
 # Lambda execution role with minimal permissions
 lambda_role = iam.Role(
@@ -242,6 +250,7 @@ events_table.grant_read_write_data(lambda_role)
 ## Operational Capabilities
 
 ### Event Archive
+
 ```python
 # 7-day event archive for replay capability
 archive = events.Archive(
@@ -254,6 +263,7 @@ archive = events.Archive(
 ```
 
 ### Stack Outputs
+
 ```python
 # Key resource identifiers for integration
 CfnOutput(self, "SQSQueueURL", value=main_queue.queue_url)

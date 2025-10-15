@@ -190,7 +190,7 @@ class TestTapStack(unittest.TestCase):
         # ASSERT
         template.resource_count_is("AWS::CloudWatch::Dashboard", 1)
         template.has_resource_properties("AWS::CloudWatch::Dashboard", {
-            "DashboardName": f"shipment-processing-{env_suffix}"
+            "DashboardName": f"shipmentprocessing-{env_suffix}"
         })
 
     @mark.it("creates CloudWatch alarms")
