@@ -477,66 +477,79 @@ export class MultiComponentApplicationStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'VpcId', {
       value: vpc.vpcId,
       description: 'VPC ID',
+      exportName: `${this.stackName}-VpcId`,
     });
 
     new cdk.CfnOutput(this, 'ApiGatewayUrl', {
       value: api.url,
       description: 'API Gateway URL',
+      exportName: `${this.stackName}-ApiGatewayUrl`,
     });
 
     new cdk.CfnOutput(this, 'LambdaFunctionArn', {
       value: lambdaFunction.functionArn,
       description: 'Lambda Function ARN',
+      exportName: `${this.stackName}-LambdaFunctionArn`,
     });
 
     new cdk.CfnOutput(this, 'RdsEndpoint', {
       value: rdsInstance.dbInstanceEndpointAddress,
       description: 'RDS PostgreSQL Endpoint',
+      exportName: `${this.stackName}-RdsEndpoint`,
     });
 
     new cdk.CfnOutput(this, 'S3BucketName', {
       value: staticFilesBucket.bucketName,
       description: 'S3 Bucket Name',
+      exportName: `${this.stackName}-S3BucketName`,
     });
 
     new cdk.CfnOutput(this, 'SqsQueueUrl', {
       value: asyncQueue.queueUrl,
       description: 'SQS Queue URL',
+      exportName: `${this.stackName}-SqsQueueUrl`,
     });
 
     new cdk.CfnOutput(this, 'CloudFrontDomainName', {
       value: distribution.distributionDomainName,
       description: 'CloudFront Distribution Domain Name',
+      exportName: `${this.stackName}-CloudFrontDomainName`,
     });
 
     new cdk.CfnOutput(this, 'HostedZoneId', {
       value: hostedZone.hostedZoneId,
       description: 'Route 53 Hosted Zone ID',
+      exportName: `${this.stackName}-HostedZoneId`,
     });
 
     new cdk.CfnOutput(this, 'DatabaseSecretArn', {
       value: databaseSecret.secretArn,
       description: 'Database Secret ARN',
+      exportName: `${this.stackName}-DatabaseSecretArn`,
     });
 
     new cdk.CfnOutput(this, 'LambdaRoleArn', {
       value: lambdaRole.roleArn,
       description: 'Lambda IAM Role ARN',
+      exportName: `${this.stackName}-LambdaRoleArn`,
     });
 
     new cdk.CfnOutput(this, 'DatabaseSecurityGroupId', {
       value: databaseSecurityGroup.securityGroupId,
       description: 'Database Security Group ID',
+      exportName: `${this.stackName}-DatabaseSecurityGroupId`,
     });
 
     new cdk.CfnOutput(this, 'LambdaSecurityGroupId', {
       value: lambdaSecurityGroup.securityGroupId,
       description: 'Lambda Security Group ID',
+      exportName: `${this.stackName}-LambdaSecurityGroupId`,
     });
 
     new cdk.CfnOutput(this, 'LambdaLogGroupName', {
       value: lambdaLogGroup.logGroupName,
       description: 'Lambda Log Group Name',
+      exportName: `${this.stackName}-LambdaLogGroupName`,
     });
 
     // Tags for all resources
