@@ -3,6 +3,7 @@
   "language": "python",
   "complexity": "medium",
   "team": "synth",
+  "turn_type": "single",
   "startedAt": "2025-10-14T20:13:10+05:30",
   "subtask": "Application Deployment",
   "background": "An educational technology company needs to deploy a student management system that handles sensitive student data. They require a robust CI/CD pipeline with proper staging environments and database management that complies with educational data protection standards.",
