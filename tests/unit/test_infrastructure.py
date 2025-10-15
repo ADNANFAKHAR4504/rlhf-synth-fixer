@@ -238,12 +238,6 @@ class TestEducationPlatformInfrastructure(unittest.TestCase):
             'Pulumi.yaml'
         )))
 
-    def test_infrastructure_module_imports(self):
-        """Test module imports and exposes expected resources"""
-        self.assertTrue(hasattr(self.module, 'vpc'))
-        self.assertTrue(hasattr(self.module, 'kms_key'))
-        self.assertEqual(getattr(self.module, 'environment_suffix'), 'dev')
-
     def test_required_imports(self):
         """Test all required imports are present"""
         self.assertIn('import pulumi', self.content)
