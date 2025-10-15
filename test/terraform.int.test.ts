@@ -48,17 +48,6 @@ interface StackOutputs {
   sns_topic_arn?: { value: string };
 }
 
-// Mock outputs for local development
-const MOCK_OUTPUTS: StackOutputs = {
-  secrets_manager_template_arn: { value: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:banking-creds-user-cred-template-abc123' },
-  lambda_function_name: { value: 'banking-creds-credential-rotation' },
-  rds_endpoint: { value: 'banking-creds-mysql.123456789012.us-east-1.rds.amazonaws.com:3306' },
-  cloudwatch_dashboard_url: { value: 'https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=banking-creds-rotation-dashboard' },
-  kms_key_id: { value: 'arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012' },
-  cloudtrail_name: { value: 'banking-creds-audit-trail' },
-  sns_topic_arn: { value: 'arn:aws:sns:us-east-1:123456789012:banking-creds-rotation-alerts' },
-};
-
 describe('Terraform Credential Rotation - Integration Tests', () => {
   let outputs: StackOutputs;
   let secretsClient: SecretsManagerClient;
@@ -70,15 +59,18 @@ describe('Terraform Credential Rotation - Integration Tests', () => {
   let sqsClient: SQSClient;
 
   beforeAll(() => {
-    // Load outputs from deployed stack or use mock data
-    if (IS_CICD && fs.existsSync(OUTPUTS_PATH)) {
-      const outputsContent = fs.readFileSync(OUTPUTS_PATH, 'utf8');
-      outputs = JSON.parse(outputsContent);
-      console.log('Using real deployment outputs from CI/CD');
-    } else {
-      outputs = MOCK_OUTPUTS;
-      console.log('Using mock outputs for local development');
+    // Load outputs from deployed stack - required for integration tests
+    if (!fs.existsSync(OUTPUTS_PATH)) {
+      throw new Error(
+        `Outputs file not found: ${OUTPUTS_PATH}\n` +
+        `Integration tests require actual deployment outputs from CI/CD.\n` +
+        `Please ensure infrastructure is deployed before running integration tests.`
+      );
     }
+    
+    const outputsContent = fs.readFileSync(OUTPUTS_PATH, 'utf8');
+    outputs = JSON.parse(outputsContent);
+    console.log('Using deployment outputs from CI/CD');
 
     // Initialize AWS clients
     const clientConfig = { region: AWS_REGION };

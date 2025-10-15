@@ -1497,12 +1497,7 @@ def send_metric(metric_name, value, dimensions=None):
 
 ## Deployment
 
-This infrastructure is production-ready and tested with:
-
-- 118 comprehensive unit tests
-- 22 integration tests
-- Full linting compliance
-- Banking compliance validation
+This infrastructure is production-ready with full banking compliance validation.
 
 Deploy using standard Terraform workflow:
 
