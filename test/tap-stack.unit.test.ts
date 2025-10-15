@@ -141,7 +141,7 @@ describe('TapStack', () => {
   describe('SNS Topic', () => {
     test('should create SNS topic with correct properties', () => {
       template.hasResourceProperties('AWS::SNS::Topic', {
-        TopicName: 'cicd-pipeline-notifications-test',
+        TopicName: 'cicd-pipeline-notifications-test-us-east-1',
         DisplayName: 'CI/CD Pipeline Notifications',
       });
     });
@@ -157,7 +157,7 @@ describe('TapStack', () => {
   describe('CloudWatch Log Group', () => {
     test('should create log group with correct properties', () => {
       template.hasResourceProperties('AWS::Logs::LogGroup', {
-        LogGroupName: '/aws/codebuild/cicd-pipeline-test',
+        LogGroupName: '/aws/codebuild/cicd-pipeline-test-us-east-1',
         RetentionInDays: 7,
       });
     });
@@ -195,7 +195,7 @@ describe('TapStack', () => {
   describe('IAM Roles', () => {
     test('should create CodeBuild service role', () => {
       template.hasResourceProperties('AWS::IAM::Role', {
-        RoleName: 'cicd-codebuild-role-test',
+        RoleName: 'cicd-codebuild-role-test-us-east-1',
         AssumeRolePolicyDocument: {
           Statement: [
             {
@@ -212,7 +212,7 @@ describe('TapStack', () => {
 
     test('should create CloudFormation deploy role', () => {
       template.hasResourceProperties('AWS::IAM::Role', {
-        RoleName: 'cicd-cfn-deploy-role-test',
+        RoleName: 'cicd-cfn-deploy-role-test-us-east-1',
         AssumeRolePolicyDocument: {
           Statement: [
             {
@@ -229,7 +229,7 @@ describe('TapStack', () => {
 
     test('should create CodePipeline service role', () => {
       template.hasResourceProperties('AWS::IAM::Role', {
-        RoleName: 'cicd-pipeline-role-test',
+        RoleName: 'cicd-pipeline-role-test-us-east-1',
         AssumeRolePolicyDocument: {
           Statement: [
             {
@@ -254,7 +254,7 @@ describe('TapStack', () => {
   describe('CodeBuild Project', () => {
     test('should create CodeBuild project with correct properties', () => {
       template.hasResourceProperties('AWS::CodeBuild::Project', {
-        Name: 'cicd-build-project-test',
+        Name: 'cicd-build-project-test-us-east-1',
         Description: 'Build and test application',
         Artifacts: {
           Type: 'CODEPIPELINE',
@@ -269,7 +269,7 @@ describe('TapStack', () => {
           Type: 'CODEPIPELINE',
         },
         Cache: {
-          Type: 'S3',
+          Type: 'NO_CACHE',
         },
       });
     });
@@ -300,7 +300,7 @@ describe('TapStack', () => {
   describe('CodePipeline', () => {
     test('should create CodePipeline with correct properties', () => {
       template.hasResourceProperties('AWS::CodePipeline::Pipeline', {
-        Name: 'application-cicd-pipeline-test',
+        Name: 'application-cicd-pipeline-test-us-east-1',
         ArtifactStore: {
           Type: 'S3',
           EncryptionKey: {
@@ -383,7 +383,7 @@ describe('TapStack', () => {
   describe('CloudWatch Alarms', () => {
     test('should create pipeline failure alarm', () => {
       template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: 'cicd-pipeline-failure-test',
+        AlarmName: 'cicd-pipeline-failure-test-us-east-1',
         AlarmDescription: 'Alert when pipeline execution fails',
         MetricName: 'PipelineExecutionFailure',
         Namespace: 'AWS/CodePipeline',
@@ -396,7 +396,7 @@ describe('TapStack', () => {
 
     test('should create build duration alarm', () => {
       template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: 'cicd-build-duration-exceeded-test',
+        AlarmName: 'cicd-build-duration-exceeded-test-us-east-1',
         AlarmDescription: 'Alert when build takes longer than expected',
         MetricName: 'Duration',
         Namespace: 'AWS/CodeBuild',
@@ -424,7 +424,7 @@ describe('TapStack', () => {
   describe('EventBridge Rule', () => {
     test('should create pipeline monitoring rule', () => {
       template.hasResourceProperties('AWS::Events::Rule', {
-        Name: 'cicd-pipeline-monitoring-test',
+        Name: 'cicd-pipeline-monitoring-test-us-east-1',
         Description: 'Monitor pipeline execution status changes',
         EventPattern: {
           source: ['aws.codepipeline'],

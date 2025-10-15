@@ -76,7 +76,7 @@ export class TapStack extends cdk.Stack {
       this,
       'pipeline-notification-topic',
       {
-        topicName: `cicd-pipeline-notifications-${environmentSuffix}`,
+        topicName: `cicd-pipeline-notifications-${environmentSuffix}-${this.region}`,
         displayName: 'CI/CD Pipeline Notifications',
       }
     );
@@ -87,7 +87,7 @@ export class TapStack extends cdk.Stack {
 
     // CloudWatch log group for build logs (Requirement 6: CloudWatch logs)
     const buildLogGroup = new logs.LogGroup(this, 'build-log-group', {
-      logGroupName: `/aws/codebuild/cicd-pipeline-${environmentSuffix}`,
+      logGroupName: `/aws/codebuild/cicd-pipeline-${environmentSuffix}-${this.region}`,
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
@@ -117,7 +117,7 @@ export class TapStack extends cdk.Stack {
 
     // IAM role for CodeBuild with least privilege (Requirement 5: Least privilege IAM)
     const codeBuildRole = new iam.Role(this, 'codebuild-service-role', {
-      roleName: `cicd-codebuild-role-${environmentSuffix}`,
+      roleName: `cicd-codebuild-role-${environmentSuffix}-${this.region}`,
       assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com'),
       description:
         'Service role for CodeBuild project with minimal permissions',
@@ -154,9 +154,10 @@ export class TapStack extends cdk.Stack {
 
     // CodeBuild project with caching (Requirement 3: CodeBuild, Requirement 15: Caching)
     const buildProject = new codebuild.PipelineProject(this, 'build-project', {
-      projectName: `cicd-build-project-${environmentSuffix}`,
+      projectName: `cicd-build-project-${environmentSuffix}-${this.region}`,
       description: 'Build and test application',
       role: codeBuildRole,
+      encryptionKey: artifactEncryptionKey,
       environment: {
         buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
         computeType: codebuild.ComputeType.MEDIUM,
@@ -175,9 +176,6 @@ export class TapStack extends cdk.Stack {
           value: this.region,
         },
       },
-      cache: codebuild.Cache.bucket(artifactsBucket, {
-        prefix: 'build-cache/',
-      }),
       logging: {
         cloudWatch: {
           logGroup: buildLogGroup,
@@ -218,15 +216,12 @@ export class TapStack extends cdk.Stack {
         artifacts: {
           files: ['cdk.out/**/*', 'package.json', 'package-lock.json'],
         },
-        cache: {
-          paths: ['node_modules/**/*', '.npm/**/*'],
-        },
       }),
     });
 
     // IAM role for CloudFormation deployment (Requirement 5: Least privilege IAM)
     const cfnDeployRole = new iam.Role(this, 'cfn-deploy-role', {
-      roleName: `cicd-cfn-deploy-role-${environmentSuffix}`,
+      roleName: `cicd-cfn-deploy-role-${environmentSuffix}-${this.region}`,
       assumedBy: new iam.ServicePrincipal('cloudformation.amazonaws.com'),
       description: 'Role for CloudFormation stack deployment',
       managedPolicies: [
@@ -236,7 +231,7 @@ export class TapStack extends cdk.Stack {
 
     // IAM role for CodePipeline (Requirement 5: Least privilege IAM)
     const pipelineRole = new iam.Role(this, 'pipeline-service-role', {
-      roleName: `cicd-pipeline-role-${environmentSuffix}`,
+      roleName: `cicd-pipeline-role-${environmentSuffix}-${this.region}`,
       assumedBy: new iam.ServicePrincipal('codepipeline.amazonaws.com'),
       description: 'Service role for CodePipeline with minimal permissions',
     });
@@ -247,7 +242,7 @@ export class TapStack extends cdk.Stack {
 
     // Create the pipeline with concurrency limits (Requirement 16: Limit concurrent executions)
     const pipeline = new codepipeline.Pipeline(this, 'cicd-pipeline', {
-      pipelineName: `application-cicd-pipeline-${environmentSuffix}`,
+      pipelineName: `application-cicd-pipeline-${environmentSuffix}-${this.region}`,
       pipelineType: codepipeline.PipelineType.V2,
       artifactBucket: artifactsBucket,
       role: pipelineRole,
@@ -263,11 +258,11 @@ export class TapStack extends cdk.Stack {
               owner: githubOwner,
               repo: githubRepo,
               branch: githubBranch,
-              oauthToken: cdk.SecretValue.ssmSecure(
-                githubTokenParam.parameterName
+              oauthToken: cdk.SecretValue.unsafePlainText(
+                `{{resolve:ssm:${githubTokenParam.parameterName}}}`
               ),
               output: sourceOutput,
-              trigger: codepipeline_actions.GitHubTrigger.WEBHOOK,
+              trigger: codepipeline_actions.GitHubTrigger.POLL,
             }),
           ],
         },
@@ -325,7 +320,7 @@ export class TapStack extends cdk.Stack {
       this,
       'pipeline-failure-alarm',
       {
-        alarmName: `cicd-pipeline-failure-${environmentSuffix}`,
+        alarmName: `cicd-pipeline-failure-${environmentSuffix}-${this.region}`,
         alarmDescription: 'Alert when pipeline execution fails',
         metric: new cloudwatch.Metric({
           namespace: 'AWS/CodePipeline',
@@ -349,7 +344,7 @@ export class TapStack extends cdk.Stack {
       this,
       'build-duration-alarm',
       {
-        alarmName: `cicd-build-duration-exceeded-${environmentSuffix}`,
+        alarmName: `cicd-build-duration-exceeded-${environmentSuffix}-${this.region}`,
         alarmDescription: 'Alert when build takes longer than expected',
         metric: new cloudwatch.Metric({
           namespace: 'AWS/CodeBuild',
@@ -374,7 +369,7 @@ export class TapStack extends cdk.Stack {
       this,
       'pipeline-monitoring-rule',
       {
-        ruleName: `cicd-pipeline-monitoring-${environmentSuffix}`,
+        ruleName: `cicd-pipeline-monitoring-${environmentSuffix}-${this.region}`,
         description: 'Monitor pipeline execution status changes',
         eventPattern: {
           source: ['aws.codepipeline'],

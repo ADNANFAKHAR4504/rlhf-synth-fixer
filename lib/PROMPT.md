@@ -1,64 +1,64 @@
-You are an expert AWS Cloud Architect specializing in Infrastructure as Code using AWS CDK with TypeScript. You produce clean, modular, and deployable TypeScript code that adheres to AWS best practices, security principles (least privilege), and cost optimization.
+Hey there! I'm working on setting up a CI/CD pipeline for our project and could really use your help with the AWS CDK implementation.
 
----
+## What I'm Looking For
 
-### **USER PROMPT**
+I need to build a **CI/CD pipeline using AWS CodePipeline** with TypeScript CDK. The setup should be pretty straightforward - just two files:
 
-You are tasked with implementing a **CI/CD pipeline** using **AWS CodePipeline** in **TypeScript-based AWS CDK**.
-The output must contain **exactly two files**:
+1. `main.ts` - the entry point that kicks everything off
+2. `cicd-stack.ts` - where all the infrastructure magic happens
 
-1. `main.ts` – entry point that initializes the app and the stack.
-2. `cicd-stack.ts` – defines all infrastructure resources.
+## The Big Picture
 
-Your goal is to design a **production-ready pipeline** that connects **GitHub source**, **CodeBuild build**, **manual approval**, and **CloudFormation deployment**, while meeting all constraints below.
+We're running this across multiple AWS regions (us-east-1 and us-west-2), so I need to make sure everything works smoothly in both places. The pipeline should connect GitHub as our source, run builds with CodeBuild, have a manual approval step, and then deploy via CloudFormation.
 
----
+## What I Need
 
-### **Context:**
+Here's what the pipeline should do:
 
-Environment involves multiple AWS regions (`us-east-1`, `us-west-2`).
-All resource names use **kebab-case**.
-Resources must be **tagged** for cost and compliance (`project`, `env`, `owner`).
-IAM roles follow **least privilege**.
-VPCs already exist per organizational CIDR policy.
+- **GitHub Integration**: Pull code from our GitHub repo (we'll handle the webhook setup separately)
+- **Build Process**: Use CodeBuild to run tests and build our app
+- **Manual Approval**: Someone needs to sign off before we deploy to production
+- **CloudFormation Deploy**: Deploy the actual infrastructure
+- **Multi-region**: Work in both us-east-1 and us-west-2
+- **Security**: Keep everything locked down with proper IAM roles and KMS encryption
+- **Monitoring**: Send notifications when things go wrong and keep logs in CloudWatch
+- **Cost Control**: Don't break the bank - optimize where we can
 
----
+## Specific Requirements
 
-### **Requirements:**
+1. **GitHub Source**: Connect to our repo and trigger on main branch pushes
+2. **CodeBuild**: Run our buildspec tests and make sure they pass
+3. **Manual Approval**: Add a gate between build and deploy
+4. **CloudFormation**: Deploy our stack with proper rollback if things fail
+5. **IAM Roles**: Keep permissions tight - only what's needed
+6. **Logging**: Stream everything to CloudWatch Logs
+7. **Tagging**: Tag all resources for cost tracking and compliance
+8. **SSM Parameters**: Store sensitive config securely
+9. **Multi-region**: Use StackSets for cross-region deployment
+10. **S3 Encryption**: Encrypt artifacts bucket with KMS
+11. **SNS Alerts**: Notify us when pipelines fail
+12. **Build Caching**: Speed up builds with CodeBuild caching
+13. **Concurrency Limits**: Don't overwhelm the system
+14. **CloudWatch Alarms**: Monitor key pipeline metrics
+15. **Cost Optimization**: Be smart about resource usage
 
-1. Integrate **AWS CodePipeline** with a **GitHub repository** as the source stage.
-2. Deploy a **CloudFormation stack** using **CloudFormation actions**.
-3. Include a **build stage** using **AWS CodeBuild**, with buildspec tests that must pass.
-4. Add a **manual approval** action between build and deploy stages.
-5. Use **IAM roles** with minimal permissions for each stage.
-6. Stream logs from all stages to **CloudWatch Logs**.
-7. Tag every resource for **auditing and tracking**.
-8. Securely manage environment variables using **AWS SSM Parameter Store**.
-9. Implement **multi-region deployment** using **StackSets**.
-10. Enable **automatic rollback** on failed deployments.
-11. Encrypt **artifacts S3 bucket** with **KMS (SSE-KMS)**.
-12. Trigger pipeline on **pull requests and main branch pushes**.
-13. Send **SNS notifications** on pipeline execution failures.
-14. Add **CodeBuild caching** for faster builds.
-15. Limit **concurrent pipeline executions**.
-16. Define **CloudWatch alarms** for key pipeline stages.
-17. Ensure **cost optimization** across all services.
+## What I'm Expecting
 
----
+- Two clean TypeScript files that actually work
+- AWS CDK v2 syntax (using aws-cdk-lib)
+- Logical flow: GitHub → Build → Approval → Deploy
+- Good naming conventions and comments
+- Proper error handling and rollback
+- All resources tagged appropriately
+- IAM roles defined inline with minimal permissions
 
-### **Expected Output:**
+## Environment Details
 
-* ✅ **Two TypeScript files only:**
+- **Regions**: us-east-1, us-west-2
+- **Naming**: kebab-case for all resources
+- **VPCs**: Already exist, so don't worry about networking
+- **Tags**: Need project, env, owner tags on everything
 
-  * `main.ts`
-  * `cicd-stack.ts`
-* ✅ Uses AWS CDK v2 syntax (`aws-cdk-lib` imports).
-* ✅ All resources connected logically (GitHub → CodeBuild → Approval → CloudFormation Deploy).
-* ✅ Includes meaningful class names (`CicdPipelineStack`, etc.).
-* ✅ Fully deployable and syntactically correct.
-* ✅ Each resource tagged and commented for clarity.
-* ✅ Use `StackProps` pattern for environment configuration.
-* ✅ Use placeholders where appropriate (e.g., GitHub repo, branch, KMS key).
-* ✅ Include IAM role definitions inline.
+This is for a production environment, so please make sure it's robust and follows AWS best practices. I'll handle the GitHub webhook configuration and any additional setup once I have the CDK code.
 
----
+Thanks for your help! Let me know if you need any clarification on the requirements.

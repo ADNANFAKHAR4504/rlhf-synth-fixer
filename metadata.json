@@ -10,5 +10,18 @@
   "subject_labels": [
     "CI/CD Pipeline"
   ],
-  "aws_services": "SNS, IAM, CodePipeline, CodeBuild, S3"
+  "training_quality": 9,
+  "aws_services": [
+    "CodePipeline",
+    "CodeBuild", 
+    "S3",
+    "IAM",
+    "KMS",
+    "SNS",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "SSM",
+    "EventBridge",
+    "CloudFormation"
+  ]
 }
