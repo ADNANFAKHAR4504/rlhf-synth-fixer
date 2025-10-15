@@ -15,7 +15,7 @@ import pulumi
 from pulumi import ResourceOptions, Output
 from pulumi_aws import (
     ec2, ecs, kinesis, elasticache, rds, efs, apigatewayv2,
-    secretsmanager, iam, cloudwatch, kms, logs
+    secretsmanager, iam, cloudwatch, kms
 )
 
 
