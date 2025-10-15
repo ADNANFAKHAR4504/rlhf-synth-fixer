@@ -1,0 +1,21 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349747",
+  "team": "6",
+  "startedAt": "2025-10-15T12:38:01.779Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "SQS",
+    "CloudWatch",
+    "KMS"
+  ]
+}
