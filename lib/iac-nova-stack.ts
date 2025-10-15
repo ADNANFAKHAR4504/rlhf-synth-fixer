@@ -535,7 +535,6 @@ export class IaCNovaStack extends NestedStack {
         removalPolicy: cdk.RemovalPolicy.SNAPSHOT,
         deletionProtection: false,
         subnetGroup: dbSubnetGroup,
-        instanceIdentifier: formatResourceName('rds'),
         storageEncrypted: true,
         publiclyAccessible: false,
         preferredMaintenanceWindow: 'Sun:01:00-Sun:03:00',
