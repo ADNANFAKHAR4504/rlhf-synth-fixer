@@ -2,7 +2,7 @@
 
 This document provides the corrected and production-ready CloudFormation YAML implementation for a HIPAA-compliant patient records API infrastructure.
 
-## File: cfn-template.yaml
+## File: lib/TapStack.yml
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
