@@ -1,0 +1,35 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "380954",
+  "team": "2",
+  "startedAt": "2025-10-13T14:06:37.929Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "ALB",
+    "IAM",
+    "VPC Flow Logs",
+    "SSM Parameter Store",
+    "EBS",
+    "Security Groups",
+    "Subnets",
+    "Internet Gateway",
+    "Route Tables",
+    "VPC Endpoint"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "ayushj1-turing",
+  "dockerS3Location": ""
+}

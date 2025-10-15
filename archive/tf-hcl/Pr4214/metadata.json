@@ -1,0 +1,35 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349043",
+  "team": "4",
+  "startedAt": "2025-10-13T11:11:40.856Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "EC2",
+    "IAM",
+    "S3",
+    "KMS",
+    "CloudTrail",
+    "CloudWatch",
+    "SNS",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Table",
+    "Security Group"
+  ],
+  "training_quality": 6,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
+}

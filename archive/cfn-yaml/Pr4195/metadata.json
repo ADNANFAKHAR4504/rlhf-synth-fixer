@@ -1,0 +1,39 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "IAC-350024",
+  "team": "5",
+  "startedAt": "2025-10-13T08:10:18.385Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "S3",
+    "EC2",
+    "VPC",
+    "RDS",
+    "CloudFront",
+    "WAFv2",
+    "Lambda",
+    "KMS",
+    "CloudWatch",
+    "CloudTrail",
+    "Route53",
+    "ELB",
+    "Auto Scaling",
+    "Secrets Manager",
+    "SNS",
+    "IAM",
+    "Config"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mithilesh-turing",
+  "dockerS3Location": ""
+}

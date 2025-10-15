@@ -1,0 +1,35 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "XGCE7O000513",
+  "team": "1",
+  "startedAt": "2025-10-10T14:31:27.389Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "RDS",
+    "ElastiCache",
+    "ALB",
+    "ECR",
+    "IAM",
+    "Security Groups",
+    "CloudWatch",
+    "Secrets Manager",
+    "KMS",
+    "Route53"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raghav-turing",
+  "dockerS3Location": ""
+}

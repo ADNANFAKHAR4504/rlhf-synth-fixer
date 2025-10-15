@@ -1,15 +1,16 @@
 #!/bin/bash
-# Script to extract Terraform outputs to JSON for integration tests
+# Script to extract Terraform/CloudFormation outputs to flat-outputs.json for integration tests
 # Usage: ./scripts/extract-outputs.sh
+# Output: cfn-outputs/flat-outputs.json
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 OUTPUT_DIR="$PROJECT_ROOT/cfn-outputs"
-OUTPUT_FILE="$OUTPUT_DIR/all-outputs.json"
+OUTPUT_FILE="$OUTPUT_DIR/flat-outputs.json"
 
-echo "🔍 Extracting Terraform outputs..."
+echo "🔍 Extracting Terraform/CloudFormation outputs..."
 
 # Create output directory if it doesn't exist
 mkdir -p "$OUTPUT_DIR"

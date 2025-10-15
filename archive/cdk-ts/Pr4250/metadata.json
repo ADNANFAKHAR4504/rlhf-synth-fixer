@@ -1,0 +1,34 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "7860653026",
+  "team": "synth",
+  "startedAt": "2025-10-13T18:43:21+05:30",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation",
+    "Security Configuration as Code"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS Aurora",
+    "ECS Fargate",
+    "Application Load Balancer",
+    "ElastiCache Redis",
+    "EFS",
+    "KMS",
+    "Secrets Manager",
+    "CloudWatch Logs",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
