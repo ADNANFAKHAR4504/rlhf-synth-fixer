@@ -11,6 +11,7 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  DeleteObjectsCommand,
   ListObjectsV2Command,
   GetBucketVersioningCommand,
   GetBucketEncryptionCommand,
@@ -863,6 +864,31 @@ describe('S3 Static Asset Storage - Integration Tests (Live)', () => {
         Key: privateFile,
       }));
       console.log('✓ Private file deleted');
+
+      // ---------------------------------------------------------------
+      // Final Step: Comprehensive cleanup - Delete ALL test objects
+      // ---------------------------------------------------------------
+      console.log('Final Step: Performing comprehensive cleanup...');
+      try {
+        const listCmd = new ListObjectsV2Command({ Bucket: bucketName });
+        const listResponse = await s3Client.send(listCmd);
+        
+        if (listResponse.Contents && listResponse.Contents.length > 0) {
+          const deleteParams = {
+            Bucket: bucketName,
+            Delete: {
+              Objects: listResponse.Contents.map(obj => ({ Key: obj.Key! })),
+            },
+          };
+          await s3Client.send(new DeleteObjectsCommand(deleteParams));
+          console.log(`✓ Cleanup: Deleted ${listResponse.Contents.length} remaining objects`);
+        } else {
+          console.log('✓ Cleanup: No objects found to clean up');
+        }
+      } catch (cleanupError) {
+        console.warn('⚠️ Warning: Cleanup failed:', cleanupError);
+        // Don't fail the test if cleanup fails
+      }
 
       console.log('\n🎉 Complete workflow test passed! ✓\n');
     }, 120000); // 120 second timeout
