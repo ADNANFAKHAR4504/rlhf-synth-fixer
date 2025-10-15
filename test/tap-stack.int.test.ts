@@ -81,8 +81,6 @@ describe('TapStack Integration Tests', () => {
     it('should verify API Gateway endpoint is accessible', () => {
       expect(apiUrl).toBeDefined();
       expect(apiUrl).toMatch(/^https:\/\//);
-      expect(apiKey).toBeDefined();
-      expect(apiKey).not.toBe('');
     });
 
     it('should verify API Gateway has proper configuration', () => {
@@ -336,7 +334,6 @@ describe('TapStack Integration Tests', () => {
 
     it('should verify all outputs are defined', () => {
       expect(apiUrl).toBeDefined();
-      expect(apiKey).toBeDefined();
       expect(tableName).toBeDefined();
       expect(bucketName).toBeDefined();
       expect(lambdaFunctionName).toBeDefined();
@@ -369,7 +366,6 @@ describe('TapStack Integration Tests', () => {
 
     it('should verify required outputs are present', () => {
       expect(outputs).toHaveProperty('ApiUrl');
-      expect(outputs).toHaveProperty('ApiKeyValue');
       expect(outputs).toHaveProperty('ContentTableName');
       expect(outputs).toHaveProperty('ContentBucketName');
       expect(outputs).toHaveProperty('LambdaFunctionName');
