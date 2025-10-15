@@ -93,7 +93,7 @@ Resources:
               Service: cloudtrail.amazonaws.com
             Action:
               - 'kms:GenerateDataKey*'
-              - 'kms:DecryptDataKey*'
+              - 'kms:Decrypt'
             Resource: '*'
           - Sid: Allow CloudWatch Logs
             Effect: Allow
@@ -564,7 +564,7 @@ Resources:
       DBInstanceIdentifier: !Sub '${AWS::StackName}-db-instance'
       DBInstanceClass: !Ref DbInstanceClass
       Engine: mysql
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.0.43'
       MasterUsername: !Sub '{{resolve:secretsmanager:${DbMasterSecret}::username}}'
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DbMasterSecret}::password}}'
       AllocatedStorage: 20
@@ -633,7 +633,7 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub '${AWS::StackName}-launch-template'
       LaunchTemplateData:
-        ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
         InstanceType: t3.micro
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
@@ -861,7 +861,7 @@ Resources:
     Type: AWS::Config::ConfigurationRecorder
     Properties:
       Name: !Sub '${AWS::StackName}-config-recorder'
-      RoleArn: !GetAtt ConfigRole.Arn
+      RoleARN: !GetAtt ConfigRole.Arn
       RecordingGroup:
         AllSupported: true
 
