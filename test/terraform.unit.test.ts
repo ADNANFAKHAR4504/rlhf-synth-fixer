@@ -4,8 +4,8 @@
 // NO Terraform commands - just reads main.tf file as text
 // Coverage requirement: 90%+ (MANDATORY - Claude QA enforced)
 
-import fs from "fs";
-import path from "path";
+import * as fs from "fs";
+import * as path from "path";
 
 const TERRAFORM_FILE = path.resolve(__dirname, "../lib/main.tf");
 let tf: string;
@@ -58,8 +58,7 @@ describe("EC2 Web Application Infrastructure - Unit Tests", () => {
     });
 
     test("AMI data source owned by amazon", () => {
-      expect(has(/owners\s*=\s*```math
-"amazon"```/)).toBe(true);
+      expect(has(/owners\s*=\s*\["amazon"\]/)).toBe(true);
     });
 
     test("uses aws_caller_identity for account ID", () => {
@@ -263,12 +262,10 @@ describe("EC2 Web Application Infrastructure - Unit Tests", () => {
       expect(httpsRule).toBeTruthy();
       
       if (sshRule) {
-        expect(/cidr_blocks\s*=\s*```math
-"10\.0\.0\.0\/8"```/.test(sshRule[0])).toBe(true);
+        expect(/cidr_blocks\s*=\s*\["10\.0\.0\.0\/8"\]/.test(sshRule[0])).toBe(true);
       }
       if (httpsRule) {
-        expect(/cidr_blocks\s*=\s*```math
-"10\.0\.0\.0\/8"```/.test(httpsRule[0])).toBe(true);
+        expect(/cidr_blocks\s*=\s*\["10\.0\.0\.0\/8"\]/.test(httpsRule[0])).toBe(true);
       }
     });
 
@@ -295,12 +292,10 @@ describe("EC2 Web Application Infrastructure - Unit Tests", () => {
       const httpsRule = tf.match(/resource\s+"aws_security_group_rule"\s+"allow_https"[\s\S]*?(?=\n\})/);
       
       if (sshRule) {
-        expect(/cidr_blocks\s*=\s*```math
-"0\.0\.0\.0\/0"```/.test(sshRule[0])).toBe(false);
+        expect(/cidr_blocks\s*=\s*\["0\.0\.0\.0\/0"\]/.test(sshRule[0])).toBe(false);
       }
       if (httpsRule) {
-        expect(/cidr_blocks\s*=\s*```math
-"0\.0\.0\.0\/0"```/.test(httpsRule[0])).toBe(false);
+        expect(/cidr_blocks\s*=\s*\["0\.0\.0\.0\/0"\]/.test(httpsRule[0])).toBe(false);
       }
     });
   });
@@ -397,8 +392,7 @@ describe("EC2 Web Application Infrastructure - Unit Tests", () => {
     });
 
     test("instance uses security group", () => {
-      expect(has(/vpc_security_group_ids\s*=\s*```math
-aws_security_group\.webapp_security_group\.id```/)).toBe(true);
+      expect(has(/vpc_security_group_ids\s*=\s*\[aws_security_group\.webapp_security_group\.id\]/)).toBe(true);
     });
 
     test("instance uses IAM instance profile", () => {
@@ -406,7 +400,7 @@ aws_security_group\.webapp_security_group\.id```/)).toBe(true);
     });
 
     test("instance has user_data for SSM agent", () => {
-      expect(has(/user_data_base64\s*=\s*base64encodeKATEX_INLINE_OPENlocal\.user_data_scriptKATEX_INLINE_CLOSE/)).toBe(true);
+      expect(has(/user_data_base64\s*=\s*base64encode\(local\.user_data_script\)/)).toBe(true);
     });
 
     test("instance has Name tag following webapp-instance pattern", () => {
@@ -606,8 +600,7 @@ aws_security_group\.webapp_security_group\.id```/)).toBe(true);
     });
 
     test("policy targets VOLUME resource type", () => {
-      expect(has(/resource_types\s*=\s*```math
-"VOLUME"```/)).toBe(true);
+      expect(has(/resource_types\s*=\s*\["VOLUME"\]/)).toBe(true);
     });
 
     test("policy targets volumes with webapp-volume tag", () => {
@@ -624,8 +617,7 @@ aws_security_group\.webapp_security_group\.id```/)).toBe(true);
     });
 
     test("schedule runs at 2 AM UTC", () => {
-      expect(has(/times\s*=\s*```math
-"02:00"```/)).toBe(true);
+      expect(has(/times\s*=\s*\["02:00"\]/)).toBe(true);
     });
 
     test("retention rule uses variable for days", () => {
@@ -728,8 +720,8 @@ aws_security_group\.webapp_security_group\.id```/)).toBe(true);
       ];
       
       resources.forEach(resourceType => {
-        if (has(new RegExp(`resource\\s+"${resourceType}"`))) {
-          const resourceBlock = tf.match(new RegExp(`resource\\s+"${resourceType}"[\\s\\S]*?(?=\\nresource|\\noutput|\\ndata|$)`));
+        if (has(new RegExp("resource\\\\s+\"" + resourceType + "\""))) {
+          const resourceBlock = tf.match(new RegExp("resource\\\\s+\"" + resourceType + "\"[\\\\s\\\\S]*?(?=\\\\nresource|\\\\noutput|\\\\ndata|$)"));
           expect(resourceBlock).toBeTruthy();
           if (resourceBlock) {
             expect(/tags\s*=/.test(resourceBlock[0])).toBe(true);
@@ -757,8 +749,7 @@ aws_security_group\.webapp_security_group\.id```/)).toBe(true);
     });
 
     test("security groups restrict access to internal network", () => {
-      expect(has(/cidr_blocks\s*=\s*```math
-"10\.0\.0\.0\/8"```/)).toBe(true);
+      expect(has(/cidr_blocks\s*=\s*\["10\.0\.0\.0\/8"\]/)).toBe(true);
     });
 
     test("IMDSv2 is enforced", () => {
@@ -784,7 +775,7 @@ aws_security_group\.webapp_security_group\.id```/)).toBe(true);
     });
 
     test("policies use jsonencode not heredoc", () => {
-      expect(count(/jsonencode\s*KATEX_INLINE_OPEN/g)).toBeGreaterThan(0);
+      expect(count(/jsonencode\s*\(/g)).toBeGreaterThan(0);
       expect(has(/<<(EOF|POLICY)/)).toBe(false);
     });
   });
@@ -900,7 +891,7 @@ aws_security_group\.webapp_security_group\.id```/)).toBe(true);
     });
 
     test("uses merge() for tag combination", () => {
-      expect(count(/merge\s*KATEX_INLINE_OPEN/g)).toBeGreaterThan(0);
+      expect(count(/merge\s*\(/g)).toBeGreaterThan(0);
     });
 
     test("resource references use attributes not strings", () => {
@@ -963,8 +954,7 @@ aws_security_group\.webapp_security_group\.id```/)).toBe(true);
     test("allows SSH and HTTPS from 10.0.0.0/8", () => {
       expect(has(/from_port\s*=\s*22/)).toBe(true);
       expect(has(/from_port\s*=\s*443/)).toBe(true);
-      expect(has(/cidr_blocks\s*=\s*```math
-"10\.0\.0\.0\/8"```/)).toBe(true);
+      expect(has(/cidr_blocks\s*=\s*\["10\.0\.0\.0\/8"\]/)).toBe(true);
     });
 
     test("enables EBS encryption with AWS managed keys", () => {
@@ -978,8 +968,7 @@ aws_security_group\.webapp_security_group\.id```/)).toBe(true);
     });
 
     test("configures daily snapshots at 2 AM UTC", () => {
-      expect(has(/times\s*=\s*```math
-"02:00"```/)).toBe(true);
+      expect(has(/times\s*=\s*\["02:00"\]/)).toBe(true);
       expect(has(/interval\s*=\s*24/)).toBe(true);
     });
 
@@ -1001,11 +990,11 @@ aws_security_group\.webapp_security_group\.id```/)).toBe(true);
       const testGroups = 20;
       const estimatedTests = 155; // Sum of all tests above
       
-      console.log(`\n📊 Test Coverage Summary:`);
-      console.log(`   Test Groups: ${testGroups}`);
-      console.log(`   Total Tests: ${estimatedTests}`);
-      console.log(`   Coverage Target: 90%+`);
-      console.log(`   Status: ✅ ACHIEVED\n`);
+      console.log("\\n Test Coverage Summary:");
+      console.log("   Test Groups: " + testGroups);
+      console.log("   Total Tests: " + estimatedTests);
+      console.log("   Coverage Target: 90%+");
+      console.log("   Status: ACHIEVED\\n");
       
       expect(testGroups).toBeGreaterThanOrEqual(15);
       expect(estimatedTests).toBeGreaterThanOrEqual(90);
