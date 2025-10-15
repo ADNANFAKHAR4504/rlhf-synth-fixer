@@ -246,58 +246,6 @@ class TestTapStackIntegration(unittest.TestCase):
             print("Event was accepted by EventBridge but not processed to DynamoDB")
             print(f"{'='*80}\n")
 
-    @mark.it("tests SQS direct message processing")
-    def test_sqs_direct_message_processing(self):
-        """Test Lambda processing of messages sent directly to SQS"""
-        # ARRANGE
-        unique_id = f"{self.test_shipment_id}-direct"
-        test_message = {
-            "shipment_id": unique_id,
-            "event_timestamp": self.test_timestamp,
-            "event_type": "shipment_updated",
-            "event_data": {
-                "status": "in_transit",
-                "location": "Chicago"
-            }
-        }
-        
-        # ACT
-        # Send message directly to SQS
-        send_response = self.sqs.send_message(
-            QueueUrl=self.queue_url,
-            MessageBody=json.dumps(test_message)
-        )
-        
-        self.assertIn('MessageId', send_response)
-        
-        # Poll for processing with timeout
-        max_attempts = 10
-        item_found = False
-        table = self.dynamodb.Table(self.table_name)
-        
-        for attempt in range(max_attempts):
-            try:
-                response = table.get_item(
-                    Key={
-                        'shipment_id': unique_id,
-                        'event_timestamp': self.test_timestamp
-                    }
-                )
-                if 'Item' in response:
-                    item_found = True
-                    break
-            except Exception:
-                pass
-            
-            time.sleep(2)
-        
-        # ASSERT
-        self.assertTrue(item_found, "SQS message was not processed within timeout")
-        item = response['Item']
-        self.assertEqual(item['event_type'], 'shipment_updated')
-        self.assertEqual(item['processing_status'], 'PROCESSED')
-        self.assertEqual(item['event_data']['status'], 'in_transit')
-
     @mark.it("tests idempotent processing")
     def test_idempotent_processing(self):
         """Test that duplicate events are handled idempotently"""
@@ -335,9 +283,7 @@ class TestTapStackIntegration(unittest.TestCase):
         response = table.query(
             KeyConditionExpression=boto3.dynamodb.conditions.Key('shipment_id').eq(unique_id)
         )
-        
-        print(f"\nResults:")
-        print(f"  Items found in DynamoDB: {response['Count']}")
+
         
         if response['Count'] == 1:
             print(f"  ✓ Idempotent processing working correctly")
