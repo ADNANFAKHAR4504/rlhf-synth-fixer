@@ -255,7 +255,7 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
     }, timeout);
   });
 
-  // --- Section 5: S3 Durable Storage (FIXED) ---
+  // --- Section 5: S3 Durable Storage  ---
   describe('5. S3 Durable Storage', () => {
     test('should verify logs are stored in S3 with proper partitioning', async () => {
       // Use the dedicated polling function, which is now set to poll for 5 minutes
@@ -322,7 +322,7 @@ describe('Log Analytics Pipeline E2E Integration Tests', () => {
     test('should verify Glue ETL job exists and can be started', async () => {
       // This is a START/CHECK status test, the actual job run verification is typically in separate tests
       const jobRunResponse = await glueClient.send(new StartJobRunCommand({
-        JobName: 'EnterpriseLogETLJob' // Assuming this is the name from CDK/CFN
+        JobName: 'EnterpriseLogETLJob'
       }));
 
       expect(jobRunResponse.JobRunId).toBeDefined();
