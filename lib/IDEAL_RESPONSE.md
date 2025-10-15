@@ -296,7 +296,13 @@ variable "lambda_schedule" {
 variable "alert_email" {
   description = "Email address for alert notifications"
   type        = string
+  default     = "admin@example.com"
   sensitive   = true
+
+  validation {
+    condition     = can(regex("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", var.alert_email))
+    error_message = "The alert_email must be a valid email address format."
+  }
 }
 
 variable "create_dashboard" {
@@ -2282,7 +2288,7 @@ fields @timestamp, srcaddr, dstaddr, dstport, action
 | `anomaly_threshold_percent` | number | `20` | Percentage above baseline to trigger anomaly alert | No |
 | `traffic_baseline` | number | `417` | Baseline traffic in requests per hour | No |
 | `lambda_schedule` | string | `"rate(1 hour)"` | Schedule expression for Lambda execution | No |
-| `alert_email` | string | N/A | Email address for alert notifications | Yes |
+| `alert_email` | string | `"admin@example.com"` | Email address for alert notifications | No |
 | `create_dashboard` | bool | `true` | Whether to create CloudWatch dashboard | No |
 | `environment` | string | `"dev"` | Environment name | No |
 | `owner` | string | `"Platform Team"` | Owner tag for resources | No |

@@ -94,7 +94,13 @@ variable "lambda_schedule" {
 variable "alert_email" {
   description = "Email address for alert notifications"
   type        = string
+  default     = "admin@example.com"
   sensitive   = true
+
+  validation {
+    condition     = can(regex("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", var.alert_email))
+    error_message = "The alert_email must be a valid email address format."
+  }
 }
 
 variable "create_dashboard" {
