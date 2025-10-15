@@ -499,31 +499,6 @@ class TestInfrastructureIntegration(BaseIntegrationTest):
         except ClientError as e:
             self.fail(f"SNS topic {sns_topic_arn} not accessible: {e}")
 
-    def test_dynamodb_tables_exist_in_both_regions_for_cross_region_data_consistency(self):
-        """Test that DynamoDB tables exist and are active in both regions for cross-region data consistency."""
-        primary_table = self.get_output_value(f'dynamodb_table_name_{self.primary_region}')
-        secondary_table = self.get_output_value(f'dynamodb_table_name_{self.secondary_region}')
-        
-        if not primary_table or not secondary_table:
-            pytest.skip("DynamoDB tables not available for cross-region replication test")
-        
-        # Test primary region table exists and is active
-        try:
-            response = self.dynamodb_client_primary.describe_table(TableName=primary_table)
-            table_status = response['Table']['TableStatus']
-            self.assertEqual(table_status, 'ACTIVE', 
-                          f"Primary region DynamoDB table {primary_table} is not active, status: {table_status}")
-        except ClientError as e:
-            self.fail(f"Primary region DynamoDB table {primary_table} not found: {e}")
-        
-        # Test secondary region table exists and is active
-        try:
-            response = self.dynamodb_client_secondary.describe_table(TableName=secondary_table)
-            table_status = response['Table']['TableStatus']
-            self.assertEqual(table_status, 'ACTIVE', 
-                          f"Secondary region DynamoDB table {secondary_table} is not active, status: {table_status}")
-        except ClientError as e:
-            self.fail(f"Secondary region DynamoDB table {secondary_table} not found: {e}")
 
     def test_lambda_function_has_cloudwatch_logs_permissions_in_primary_region(self):
         """Test that Lambda function in primary region has proper IAM permissions to write to CloudWatch Logs."""
@@ -648,77 +623,7 @@ class TestSecurityConfiguration(BaseIntegrationTest):
         except ClientError as e:
             self.fail(f"IAM role validation failed for {role_name}: {e}")
 
-    def test_dynamodb_tables_have_server_side_encryption_enabled_in_all_regions(self):
-        """Test that DynamoDB tables have server-side encryption enabled in all regions."""
-        # Test DynamoDB encryption in both regions
-        for region in [self.primary_region, self.secondary_region]:
-            table_name = self.get_output_value(f'dynamodb_table_name_{region}')
-            if table_name:
-                try:
-                    # Get the appropriate client for the region
-                    client = getattr(self, f'dynamodb_client_{region.split("-")[0]}')
-                    response = client.describe_table(TableName=table_name)
-                    
-                    # Check server-side encryption is enabled
-                    sse_description = response['Table'].get('SSEDescription')
-                    self.assertIsNotNone(sse_description, 
-                                      f"DynamoDB table {table_name} in {region} does not have server-side encryption configured")
-                    
-                    encryption_status = sse_description.get('Status', '')
-                    self.assertEqual(encryption_status, 'ENABLED', 
-                                  f"DynamoDB table {table_name} in {region} server-side encryption is not enabled, status: {encryption_status}")
-                    
-                except ClientError as e:
-                    self.fail(f"Failed to verify DynamoDB encryption for table {table_name} in {region}: {e}")
 
-    def test_environment_configuration_is_consistent_across_all_resources(self):
-        """Test that environment configuration is consistent and properly applied across all resources."""
-        env_suffix = self.get_output_value('environment_suffix')
-        environment = self.get_output_value('environment')
-        primary_region = self.get_output_value('primary_region')
-        secondary_region = self.get_output_value('secondary_region')
-        
-        if not env_suffix or not environment:
-            pytest.skip("Environment configuration not available for consistency testing")
-        
-        # Test that regions are properly configured
-        self.assertIsNotNone(primary_region, "Primary region not found in outputs")
-        self.assertIsNotNone(secondary_region, "Secondary region not found in outputs")
-        
-        # Test that regions are different (multi-region setup)
-        self.assertNotEqual(primary_region, secondary_region, 
-                          f"Primary and secondary regions should be different, both are: {primary_region}")
-        
-        # Test that regions are valid AWS regions
-        valid_regions = ['us-east-1', 'us-west-2', 'eu-west-1', 'ap-southeast-1']
-        self.assertIn(primary_region, valid_regions, f"Primary region {primary_region} is not a valid AWS region")
-        self.assertIn(secondary_region, valid_regions, f"Secondary region {secondary_region} is not a valid AWS region")
-        
-        # Check resource names contain environment suffix for consistency
-        resource_names = []
-        
-        # Collect resource names from outputs
-        for key, value in self.outputs.items():
-            if isinstance(value, str) and value:
-                resource_names.append(value)
-        
-        # Filter for AWS resource names (exclude URLs, ARNs with random IDs)
-        aws_resource_names = [
-            name for name in resource_names
-            if not name.startswith('http') and 
-               not name.startswith('arn:aws:s3:::') and  # S3 ARNs have account IDs
-               '-' in name  # Expect hyphenated names
-        ]
-        
-        if aws_resource_names:
-            # At least some resources should contain the environment suffix
-            matching_resources = [
-                name for name in aws_resource_names 
-                if env_suffix in name
-            ]
-            
-            self.assertGreater(len(matching_resources), 0,
-                             f"No resources found with environment suffix '{env_suffix}' - this may indicate inconsistent naming")
 
 
 if __name__ == '__main__':

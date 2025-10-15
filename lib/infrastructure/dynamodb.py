@@ -24,10 +24,8 @@ class DynamoDBStack:
         self.global_table: dynamodb.GlobalTable = None
         
         self._create_tables()
-        # Note: Global Table creation is complex and requires specific table naming
         # For now, we'll use individual tables with eventual consistency
-        # self._create_global_table()
-    
+
     def _create_tables(self):
         """Create DynamoDB tables in each region."""
         for region in self.config.regions:
