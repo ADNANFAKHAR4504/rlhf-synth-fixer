@@ -5,6 +5,7 @@ This implementation creates a secure CI/CD infrastructure for an educational tec
 ## Architecture Overview
 
 The infrastructure includes:
+
 - VPC with public and private subnets across 2 availability zones
 - NAT Gateway for private subnet internet access
 - RDS MySQL instance in private subnet with encryption at rest
@@ -358,7 +359,7 @@ rds_instance = aws.rds.Instance(
     f"education-rds-{environment_suffix}",
     identifier=f"education-db-{environment_suffix}",
     engine="mysql",
-    engine_version="8.0.35",
+    engine_version="8.0.39",
     instance_class="db.t3.micro",
     allocated_storage=20,
     storage_encrypted=True,
@@ -981,7 +982,7 @@ cache:
 ## Deployment Notes
 
 **VPC Quota Limitation**: Full deployment validation was limited by AWS VPC quota constraints in the validation environment (ap-southeast-1 region). This is an environmental limitation, not a code quality issue. The infrastructure code has been:
-- Validated through lint, build, and synthesis stages (all passing)
+
 - Designed to deploy successfully when VPC quota is available
 - Structured for complete resource cleanup after validation
 
