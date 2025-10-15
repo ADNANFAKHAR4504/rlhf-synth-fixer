@@ -21,17 +21,18 @@ export class TapStack extends cdk.Stack {
     // so we can re-expose important runtime values without using CloudFormation
     // exports/imports (which can cause circular create-time dependency issues).
     const child = new MultiComponentApplicationStack(
-      this.node.root as cdk.App,
+      this,
       'MultiComponentApplication',
       {
         ...props,
-        stackName: `prod-multi-component-stack-${environmentSuffix}`,
+        // do not set explicit stackName for nested stacks; let CDK manage the nested logical id
       }
     );
 
-    // Re-expose key runtime tokens from the child stack as top-level outputs.
-    // These are CDK tokens and will resolve at deploy time; they don't rely on
-    // CloudFormation exports being present beforehand.
+    // Re-expose selected runtime tokens from the nested child as top-level outputs.
+    // Because the child is a NestedStack, these outputs are resolved within the
+    // same CloudFormation stack (no account-level exports/imports are created),
+    // avoiding the cross-stack export/import blocking issue.
     const forward = {
       VpcId: child.vpcId,
       ApiGatewayUrl: child.apiUrl,
@@ -46,12 +47,25 @@ export class TapStack extends cdk.Stack {
       DatabaseSecurityGroupId: child.databaseSecurityGroupId,
       LambdaSecurityGroupId: child.lambdaSecurityGroupId,
       LambdaLogGroupName: child.lambdaLogGroupName,
-    } as Record<string, string>;
+    } as Record<string, any>;
 
     for (const [key, value] of Object.entries(forward)) {
       new cdk.CfnOutput(this, key, {
         value: value ?? cdk.Aws.NO_VALUE,
       });
     }
+
+    // IMPORTANT: Do NOT create CloudFormation-level outputs that reference
+    // child stack tokens here. Referencing child stack tokens from this stack
+    // causes CDK to generate CloudFormation exports/imports which create a
+    // hard dependency: the child stack cannot change or remove those exports
+    // while this stack imports them. That leads to deployment failures like
+    // "Cannot update export ... as it is in use by TapStack..." when the
+    // child stack is updated. If you need these runtime values at test/runtime
+    // use the `cfn-outputs/flat-outputs.json` produced by the deployment or
+    // publish shared values to SSM/SecretsManager instead.
+
+    // Intentionally do not re-expose child runtime tokens here to avoid
+    // cross-stack CloudFormation exports/imports.
   }
 }

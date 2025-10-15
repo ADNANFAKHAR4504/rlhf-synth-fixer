@@ -19,11 +19,13 @@ describe('TapStack Unit Tests (single file)', () => {
   beforeAll(() => {
     // Instantiate the stack once to exercise the library code paths
     app = new cdk.App();
-    // TapStack creates a MultiComponentApplicationStack under the app root.
+    // TapStack creates a MultiComponentApplicationStack as a nested stack.
     // To get the resources created by the multi-component stack, instantiate
-    // it directly and inspect its template.
+    // it under a non-nested parent Stack so CDK's NestedStack validation passes
+    // in unit-test environments.
     stack = new TapStack(app, 'TestTapStack', { environmentSuffix });
-    const multi = new MultiComponentApplicationStack(app, 'TestMultiComponent');
+    const parent = new cdk.Stack(app, 'TestParentStack');
+    const multi = new MultiComponentApplicationStack(parent, 'TestMultiComponent');
     template = Template.fromStack(multi);
   });
 
@@ -189,7 +191,8 @@ describe('TapStack Unit Tests (single file)', () => {
 
   test('computeSafeSuffixForLambda exercises both branches', () => {
     const localApp = new cdk.App();
-    const multi = new MultiComponentApplicationStack(localApp, 'ComputeSuffixTest');
+    const parent = new cdk.Stack(localApp, 'ComputeSuffixParent');
+    const multi = new MultiComponentApplicationStack(parent, 'ComputeSuffixTest');
     // defined input
     expect(multi.computeSafeSuffixForLambda('AbC_12:34!@#')).toBe('abc_12-34---');
     // falsy input returns cdk.Aws.NO_VALUE

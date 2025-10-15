@@ -15,7 +15,7 @@ import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
 
-export class MultiComponentApplicationStack extends cdk.Stack {
+export class MultiComponentApplicationStack extends cdk.NestedStack {
   // String suffix for unique resource naming
   private readonly stringSuffix: string;
   // Expose important resource tokens as public properties so other stacks
@@ -44,14 +44,9 @@ export class MultiComponentApplicationStack extends cdk.Stack {
       : cdk.Aws.NO_VALUE;
   }
 
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
-    // Respect props.env if provided by the caller (TapStack/bin), otherwise use CDK defaults
-    const stackProps: cdk.StackProps = {
-      ...props,
-      env: props?.env,
-    };
-
-    super(scope, id, stackProps);
+  constructor(scope: Construct, id: string, props?: cdk.NestedStackProps) {
+    // Respect props by passing them directly to the NestedStack constructor
+    super(scope, id, props);
 
     // Generate unique string suffix
     this.stringSuffix = cdk.Fn.select(2, cdk.Fn.split('-', cdk.Aws.STACK_ID));
