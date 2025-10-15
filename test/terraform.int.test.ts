@@ -151,9 +151,13 @@ describe('DynamoDB Payment Transactions - Integration Tests (Live)', () => {
       console.log('Step 4: Verifying all attributes in batch retrieved items...');
       const retrievedItems = batchGetResponse.Responses![tableName].map(item => unmarshall(item));
       
-      retrievedItems.forEach((item, index) => {
-        expect(item.transaction_id).toBe(batchTransactions[index].transaction_id);
-        expect(item.amount).toBe(batchTransactions[index].amount);
+      // Sort both arrays by transaction_id to ensure consistent comparison
+      const sortedRetrievedItems = retrievedItems.sort((a, b) => a.transaction_id.localeCompare(b.transaction_id));
+      const sortedBatchTransactions = batchTransactions.sort((a, b) => a.transaction_id.localeCompare(b.transaction_id));
+      
+      sortedRetrievedItems.forEach((item, index) => {
+        expect(item.transaction_id).toBe(sortedBatchTransactions[index].transaction_id);
+        expect(item.amount).toBe(sortedBatchTransactions[index].amount);
         expect(item.currency).toBe('USD');
         expect(item.status).toBe('pending');
         expect(item.batch_id).toBe(`BATCH-${baseTimestamp}`);
@@ -1376,17 +1380,29 @@ describe('DynamoDB Payment Transactions - Integration Tests (Live)', () => {
 
       let emptyStringError = false;
       try {
+        // DynamoDB actually allows empty strings, so we need to test with null value instead
+        // or test with an invalid attribute type to trigger ValidationException
+        const invalidTx = {
+          transaction_id: `TXN-INVALID-${baseTimestamp}`,
+          timestamp: baseTimestamp,
+          date: testDate,
+          amount: "invalid_number", // Invalid type - should be Number
+          currency: 'USD',
+          status: 'pending',
+          expiration_time: Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60)
+        };
+        
         await dynamoClient.send(new PutItemCommand({
           TableName: tableName,
-          Item: marshall(emptyStringTx, {
+          Item: marshall(invalidTx, {
             removeUndefinedValues: true,
-            convertEmptyValues: false // Don't allow empty strings
+            convertEmptyValues: false
           })
         }));
       } catch (error: any) {
         emptyStringError = true;
         expect(error.name).toBe('ValidationException');
-        console.log('✓ Empty string attribute rejected (ValidationException)');
+        console.log('✓ Invalid attribute type rejected (ValidationException)');
       }
 
       expect(emptyStringError).toBe(true);
