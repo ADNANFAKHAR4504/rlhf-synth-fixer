@@ -85,12 +85,8 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
       expect(vpc.CidrBlock).toBe('10.0.0.0/16');
       
       // DNS settings
-      if (vpc.EnableDnsHostnames !== undefined) {
-        expect(vpc.EnableDnsHostnames).toBe(true);
-      }
-      if (vpc.EnableDnsSupport !== undefined) {
-        expect(vpc.EnableDnsSupport).toBe(true);
-      }
+      expect(vpc.EnableDnsHostnames).toBe(true);
+      expect(vpc.EnableDnsSupport).toBe(true);
     });
 
     test('Internet Gateway should be attached and functional', async () => {
@@ -102,10 +98,8 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
       expect(igws.InternetGateways).toHaveLength(1);
       const igw = igws.InternetGateways![0];
       
-      // Internet Gateway State might be undefined in some cases
-      if (igw.State !== undefined) {
-        expect(igw.State).toBe('available');
-      }
+      // Internet Gateway State
+      expect(igw.State).toBe('available');
     });
 
     test('NAT Gateway should provide outbound internet access for private subnets', async () => {
@@ -246,16 +240,11 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
       expect(appDataVersioning.Status).toBe('Enabled');
 
       // Logs bucket should have lifecycle policies
-      try {
-        const logsLifecycle = await s3.send(new GetBucketLifecycleConfigurationCommand({ 
-          Bucket: outputs.S3LogsBucket 
-        }));
-        expect(logsLifecycle.Rules).toBeDefined();
-        expect(logsLifecycle.Rules!.length).toBeGreaterThan(0);
-      } catch (error) {
-        // Lifecycle might not be configured yet
-        console.log('Lifecycle configuration not found for logs bucket');
-      }
+      const logsLifecycle = await s3.send(new GetBucketLifecycleConfigurationCommand({ 
+        Bucket: outputs.S3LogsBucket 
+      }));
+      expect(logsLifecycle.Rules).toBeDefined();
+      expect(logsLifecycle.Rules!.length).toBeGreaterThan(0);
     });
   });
 
@@ -330,10 +319,9 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
       const httpsListener = listeners.Listeners!.find((listener: any) => 
         listener.Port === 443 && listener.Protocol === 'HTTPS'
       );
-      if (httpsListener) {
-        expect(httpsListener.Certificates).toBeDefined();
-        expect(httpsListener.Certificates!.length).toBeGreaterThan(0);
-      }
+      expect(httpsListener).toBeDefined();
+      expect(httpsListener!.Certificates).toBeDefined();
+      expect(httpsListener!.Certificates!.length).toBeGreaterThan(0);
     });
 
     test('EC2 instances should be running and properly configured', async () => {
@@ -351,9 +339,8 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
           expect(instance.SecurityGroups!.length).toBeGreaterThan(0);
           
           // Check IAM instance profile
-          if (instance.IamInstanceProfile) {
-            expect(instance.IamInstanceProfile.Arn).toBeDefined();
-          }
+          expect(instance.IamInstanceProfile).toBeDefined();
+          expect(instance.IamInstanceProfile!.Arn).toBeDefined();
 
           // Check tags
           expect(instance.Tags).toBeDefined();
@@ -404,18 +391,10 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
       expect(trail).toBeDefined();
       
       // CloudTrail properties
-      if (trail!.IsLogging !== undefined) {
-        expect(trail!.IsLogging).toBe(true);
-      }
-      if (trail!.IncludeGlobalServiceEvents !== undefined) {
-        expect(trail!.IncludeGlobalServiceEvents).toBe(true);
-      }
-      if (trail!.IsMultiRegionTrail !== undefined) {
-        expect(trail!.IsMultiRegionTrail).toBe(true);
-      }
-      if (trail!.LogFileValidationEnabled !== undefined) {
-        expect(trail!.LogFileValidationEnabled).toBe(true);
-      }
+      expect(trail!.IsLogging).toBe(true);
+      expect(trail!.IncludeGlobalServiceEvents).toBe(true);
+      expect(trail!.IsMultiRegionTrail).toBe(true);
+      expect(trail!.LogFileValidationEnabled).toBe(true);
       expect(trail!.S3BucketName).toBeDefined();
       expect(trail!.S3KeyPrefix).toBeDefined();
     });
@@ -438,16 +417,9 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
         );
       }
       
-      if (ec2LogGroup) {
-        if (ec2LogGroup.retentionInDays !== undefined) {
-          expect(ec2LogGroup.retentionInDays).toBe(30);
-        }
-        if (ec2LogGroup.kmsKeyId !== undefined) {
-          expect(ec2LogGroup.kmsKeyId).toBeDefined();
-        }
-      } else {
-        console.log('EC2 log group not found - checking if it exists with different naming');
-      }
+      expect(ec2LogGroup).toBeDefined();
+      expect(ec2LogGroup!.retentionInDays).toBe(30);
+      expect(ec2LogGroup!.kmsKeyId).toBeDefined();
     });
 
     test('SNS topic should be configured for alerts', async () => {
@@ -510,9 +482,7 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
       expect(trail).toBeDefined();
       
       // CloudTrail IsLogging 
-      if (trail!.IsLogging !== undefined) {
-        expect(trail!.IsLogging).toBe(true);
-      }
+      expect(trail!.IsLogging).toBe(true);
 
       // 2. Verify S3 bucket for logs exists and is accessible
       const logsBucket = await s3.send(new HeadBucketCommand({ 
@@ -770,25 +740,22 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
         ) && !instance.PublicIpAddress
       );
 
-      if (privateInstances.length > 0) {
-        const privateSgId = privateInstances[0].SecurityGroups![0].GroupId;
-        const privateSgDetails = await ec2.send(new DescribeSecurityGroupsCommand({
-          GroupIds: [privateSgId!]
-        }));
+      expect(privateInstances.length).toBeGreaterThan(0);
+      const privateSgId = privateInstances[0].SecurityGroups![0].GroupId;
+      const privateSgDetails = await ec2.send(new DescribeSecurityGroupsCommand({
+        GroupIds: [privateSgId!]
+      }));
 
-        const privateSg = privateSgDetails.SecurityGroups![0];
-        const privateSSHRule = privateSg.IpPermissions!.find((rule: any) =>
-          rule.FromPort === 22 && rule.ToPort === 22 && rule.IpProtocol === 'tcp'
-        );
-        
-        // Verify SSH is allowed from VPC CIDR or security group
-        if (privateSSHRule) {
-          const allowsVpcSSH = privateSSHRule.IpRanges?.some((range: any) =>
-            range.CidrIp.includes('10.0.0.0')
-          ) || privateSSHRule.UserIdGroupPairs?.length > 0;
-          expect(allowsVpcSSH).toBe(true);
-        }
-      }
+      const privateSg = privateSgDetails.SecurityGroups![0];
+      const privateSSHRule = privateSg.IpPermissions!.find((rule: any) =>
+        rule.FromPort === 22 && rule.ToPort === 22 && rule.IpProtocol === 'tcp'
+      );
+      
+      expect(privateSSHRule).toBeDefined();
+      const allowsVpcSSH = privateSSHRule!.IpRanges?.some((range: any) =>
+        range.CidrIp.includes('10.0.0.0')
+      ) || privateSSHRule!.UserIdGroupPairs?.length > 0;
+      expect(allowsVpcSSH).toBe(true);
     });
 
     test('Event-Driven Auditing: S3 upload should be logged by CloudTrail and delivered to logs bucket', async () => {
@@ -831,11 +798,10 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
         );
       });
 
-      // Verify event was captured (may not be immediate)
-      if (putObjectEvent) {
-        expect(putObjectEvent.EventName).toBe('PutObject');
-        expect(putObjectEvent.CloudTrailEvent).toBeDefined();
-      }
+      // Verify event was captured
+      expect(putObjectEvent).toBeDefined();
+      expect(putObjectEvent!.EventName).toBe('PutObject');
+      expect(putObjectEvent!.CloudTrailEvent).toBeDefined();
 
       // Verify CloudTrail logs are being delivered to S3 bucket
       const logsBucket = outputs.S3LogsBucket;
@@ -849,17 +815,15 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
       expect(trail!.S3KeyPrefix).toContain('cloudtrail');
 
       // Verify CloudWatch Logs integration for real-time monitoring
-      if (trail!.CloudWatchLogsLogGroupArn) {
-        const logGroupName = trail!.CloudWatchLogsLogGroupArn.split(':log-group:')[1]?.split(':')[0];
-        
-        if (logGroupName) {
-          const logGroups = await logs.send(new DescribeLogGroupsCommand({
-            logGroupNamePrefix: logGroupName
-          }));
-          expect(logGroups.logGroups).toBeDefined();
-          expect(logGroups.logGroups!.length).toBeGreaterThan(0);
-        }
-      }
+      expect(trail!.CloudWatchLogsLogGroupArn).toBeDefined();
+      const logGroupName = trail!.CloudWatchLogsLogGroupArn!.split(':log-group:')[1]?.split(':')[0];
+      
+      expect(logGroupName).toBeDefined();
+      const logGroups = await logs.send(new DescribeLogGroupsCommand({
+        logGroupNamePrefix: logGroupName!
+      }));
+      expect(logGroups.logGroups).toBeDefined();
+      expect(logGroups.logGroups!.length).toBeGreaterThan(0);
     });
   });
 
@@ -914,11 +878,10 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
         cert.DomainName.includes('enterpriseapp')
       );
 
-      if (certificate) {
-        // Certificate might be in different states depending on DNS validation
-        expect(['ISSUED', 'PENDING_VALIDATION', 'FAILED']).toContain(certificate.Status);
-        expect(certificate.Type).toBe('AMAZON_ISSUED');
-      }
+      expect(certificate).toBeDefined();
+      // Certificate might be in different states depending on DNS validation
+      expect(['ISSUED', 'PENDING_VALIDATION', 'FAILED']).toContain(certificate!.Status);
+      expect(certificate!.Type).toBe('AMAZON_ISSUED');
     });
   });
 
@@ -946,15 +909,16 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
   describe('Complete Resource Coverage', () => {
     test('RDS KMS Key should exist and be properly configured', async () => {
       const dbInstance = await getDatabaseInstance();
-      if (dbInstance && dbInstance.KmsKeyId) {
-        const rdsKey = await kms.send(new DescribeKeyCommand({ KeyId: dbInstance.KmsKeyId }));
-        expect(rdsKey.KeyMetadata).toBeDefined();
-        expect(rdsKey.KeyMetadata!.KeyState).toBe('Enabled');
-        expect(rdsKey.KeyMetadata!.KeyUsage).toBe('ENCRYPT_DECRYPT');
+      expect(dbInstance).toBeDefined();
+      expect(dbInstance.KmsKeyId).toBeDefined();
+      
+      const rdsKey = await kms.send(new DescribeKeyCommand({ KeyId: dbInstance.KmsKeyId }));
+      expect(rdsKey.KeyMetadata).toBeDefined();
+      expect(rdsKey.KeyMetadata!.KeyState).toBe('Enabled');
+      expect(rdsKey.KeyMetadata!.KeyUsage).toBe('ENCRYPT_DECRYPT');
 
-        const rotation = await kms.send(new GetKeyRotationStatusCommand({ KeyId: dbInstance.KmsKeyId }));
-        expect(rotation.KeyRotationEnabled).toBe(true);
-      }
+      const rotation = await kms.send(new GetKeyRotationStatusCommand({ KeyId: dbInstance.KmsKeyId }));
+      expect(rotation.KeyRotationEnabled).toBe(true);
     });
 
     test('VPC Gateway Attachment should be properly configured', async () => {
@@ -976,12 +940,11 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
         Filter: [{ Name: 'vpc-id', Values: [vpcId] }]
       }));
 
-      if (natGateways.NatGateways!.length > 0) {
-        const natGateway = natGateways.NatGateways![0];
-        expect(natGateway.NatGatewayAddresses).toBeDefined();
-        expect(natGateway.NatGatewayAddresses!.length).toBeGreaterThan(0);
-        expect(natGateway.NatGatewayAddresses![0].AllocationId).toBeDefined();
-      }
+      expect(natGateways.NatGateways!.length).toBeGreaterThan(0);
+      const natGateway = natGateways.NatGateways![0];
+      expect(natGateway.NatGatewayAddresses).toBeDefined();
+      expect(natGateway.NatGatewayAddresses!.length).toBeGreaterThan(0);
+      expect(natGateway.NatGatewayAddresses![0].AllocationId).toBeDefined();
     });
 
     test('Route Tables should have correct routes configured', async () => {
@@ -1031,26 +994,20 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
     });
 
     test('S3 Logs Bucket Policy should be properly configured', async () => {
-      try {
-        const bucketPolicy = await s3.send(new GetBucketPolicyCommand({ 
-          Bucket: outputs.S3LogsBucket 
-        }));
-        expect(bucketPolicy.Policy).toBeDefined();
-        
-        const policy = JSON.parse(bucketPolicy.Policy!);
-        expect(policy.Statement).toBeDefined();
-        expect(policy.Statement.length).toBeGreaterThan(0);
-        
-        // Check for CloudTrail permissions
-        const cloudTrailStatement = policy.Statement.find((stmt: any) =>
-          stmt.Principal?.Service === 'cloudtrail.amazonaws.com'
-        );
-        expect(cloudTrailStatement).toBeDefined();
-      } catch (error) {
-        // verify policy status API instead
-        const status = await s3.send(new GetBucketPolicyStatusCommand({ Bucket: outputs.S3LogsBucket }));
-        expect(status.PolicyStatus?.IsPublic).toBe(false);
-      }
+      const bucketPolicy = await s3.send(new GetBucketPolicyCommand({ 
+        Bucket: outputs.S3LogsBucket 
+      }));
+      expect(bucketPolicy.Policy).toBeDefined();
+      
+      const policy = JSON.parse(bucketPolicy.Policy!);
+      expect(policy.Statement).toBeDefined();
+      expect(policy.Statement.length).toBeGreaterThan(0);
+      
+      // Check for CloudTrail permissions
+      const cloudTrailStatement = policy.Statement.find((stmt: any) =>
+        stmt.Principal?.Service === 'cloudtrail.amazonaws.com'
+      );
+      expect(cloudTrailStatement).toBeDefined();
     });
 
     test('EC2 Instance Profile should be properly attached to instances', async () => {
@@ -1061,10 +1018,9 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
 
       instances.Reservations!.forEach(reservation => {
         reservation.Instances!.forEach(instance => {
-          if (instance.IamInstanceProfile) {
-            expect(instance.IamInstanceProfile.Arn).toBeDefined();
-            expect(instance.IamInstanceProfile.Arn).toContain('instance-profile');
-          }
+          expect(instance.IamInstanceProfile).toBeDefined();
+          expect(instance.IamInstanceProfile!.Arn).toBeDefined();
+          expect(instance.IamInstanceProfile!.Arn).toContain('instance-profile');
         });
       });
     });
@@ -1079,58 +1035,31 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
         policy.PolicyName.includes('corp-mfa-policy')
       );
 
-      if (mfaPolicy) {
-        expect(mfaPolicy.PolicyName).toBeDefined();
-        if (mfaPolicy.Description) {
-          expect(mfaPolicy.Description).toContain('MFA');
-        }
-      } else {
-        // Check if MFA policy exists as role
-        const roles = await iam.send(new ListRolesCommand({}));
-        const mfaRole = roles.Roles!.find((role: any) =>
-          role.RoleName.includes('corp-mfa-policy') || 
-          role.AssumeRolePolicyDocument?.includes('MFA')
-        );
-        
-        if (mfaRole) {
-          expect(mfaRole.AssumeRolePolicyDocument).toBeDefined();
-        } else {
-          console.log('MFA policy not found as managed policy or role');
-        }
-      }
+      expect(mfaPolicy).toBeDefined();
+      expect(mfaPolicy!.PolicyName).toBeDefined();
+      expect(mfaPolicy!.Description).toContain('MFA');
     });
 
     test('RDS DB Subnet Group should be properly configured', async () => {
       const dbInstance = await getDatabaseInstance();
-      if (dbInstance) {
-        expect(dbInstance.DBSubnetGroup).toBeDefined();
-        expect(dbInstance.DBSubnetGroup.DBSubnetGroupName).toBeDefined();
-        expect(dbInstance.DBSubnetGroup.Subnets).toBeDefined();
-        expect(dbInstance.DBSubnetGroup.Subnets!.length).toBeGreaterThanOrEqual(2);
-      }
+      expect(dbInstance).toBeDefined();
+      expect(dbInstance.DBSubnetGroup).toBeDefined();
+      expect(dbInstance.DBSubnetGroup.DBSubnetGroupName).toBeDefined();
+      expect(dbInstance.DBSubnetGroup.Subnets).toBeDefined();
+      expect(dbInstance.DBSubnetGroup.Subnets!.length).toBeGreaterThanOrEqual(2);
     });
 
     test('RDS Monitoring Role should exist and be properly configured', async () => {
       const dbInstance = await getDatabaseInstance();
-      if (dbInstance && dbInstance.MonitoringRoleArn) {
-        const roles = await iam.send(new ListRolesCommand({}));
-        const monitoringRole = roles.Roles!.find((role: any) =>
-          role.Arn === dbInstance.MonitoringRoleArn
-        );
-        if (monitoringRole) {
-          expect(monitoringRole.AssumeRolePolicyDocument).toBeDefined();
-        }
-      } else {
-        // Check if the role exists by name 
-        const roles = await iam.send(new ListRolesCommand({}));
-        const monitoringRole = roles.Roles!.find((role: any) =>
-          role.RoleName.includes('CorpRDSMonitoringRole') || 
-          role.RoleName.includes('rds-monitoring')
-        );
-        if (monitoringRole) {
-          expect(monitoringRole.AssumeRolePolicyDocument).toBeDefined();
-        }
-      }
+      expect(dbInstance).toBeDefined();
+      expect(dbInstance.MonitoringRoleArn).toBeDefined();
+      
+      const roles = await iam.send(new ListRolesCommand({}));
+      const monitoringRole = roles.Roles!.find((role: any) =>
+        role.Arn === dbInstance.MonitoringRoleArn
+      );
+      expect(monitoringRole).toBeDefined();
+      expect(monitoringRole!.AssumeRolePolicyDocument).toBeDefined();
     });
 
     test('Backup S3 Bucket should exist and be properly configured', async () => {
@@ -1143,68 +1072,55 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
       // Look for backup bucket through IAM role policies or other means
       instances.Reservations!.forEach(reservation => {
         reservation.Instances!.forEach(instance => {
-          if (instance.IamInstanceProfile) {
-            // The backup bucket would be referenced in IAM policies
-            expect(instance.IamInstanceProfile.Arn).toBeDefined();
-          }
+          expect(instance.IamInstanceProfile).toBeDefined();
+          // The backup bucket would be referenced in IAM policies
+          expect(instance.IamInstanceProfile!.Arn).toBeDefined();
         });
       });
     });
 
     test('WAF Web ACL Association should be properly configured', async () => {
-      if (outputs.WebACLArn && outputs.ALBDNSName) {
-        const loadBalancers = await elbv2.describeLoadBalancers().promise();
-        const alb = loadBalancers.LoadBalancers!.find((lb: any) =>
-          lb.DNSName === outputs.ALBDNSName
-        );
+      expect(outputs.WebACLArn).toBeDefined();
+      expect(outputs.ALBDNSName).toBeDefined();
+      
+      const loadBalancers = await elbv2.describeLoadBalancers().promise();
+      const alb = loadBalancers.LoadBalancers!.find((lb: any) =>
+        lb.DNSName === outputs.ALBDNSName
+      );
 
-        if (alb) {
-          const associations = await wafv2.send(new ListResourcesForWebACLCommand({
-            WebACLArn: outputs.WebACLArn
-          }));
-          expect(associations.ResourceArns).toContain(alb!.LoadBalancerArn);
-        }
-      }
+      expect(alb).toBeDefined();
+      const associations = await wafv2.send(new ListResourcesForWebACLCommand({
+        WebACLArn: outputs.WebACLArn
+      }));
+      expect(associations.ResourceArns).toContain(alb!.LoadBalancerArn);
     });
 
     test('CloudTrail Role should exist and be properly configured', async () => {
       const trails = await cloudtrail.send(new DescribeTrailsCommand({}));
       const trail = trails.trailList!.find((t: any) => t.TrailARN === outputs.CloudTrailArn);
 
-      if (trail && trail.CloudWatchLogsRoleArn) {
-        const roles = await iam.send(new ListRolesCommand({}));
-        const cloudTrailRole = roles.Roles!.find((role: any) =>
-          role.Arn === trail.CloudWatchLogsRoleArn
-        );
-        if (cloudTrailRole) {
-          expect(cloudTrailRole.AssumeRolePolicyDocument).toBeDefined();
-        }
-      } else {
-        // Check if the role exists by name 
-        const roles = await iam.send(new ListRolesCommand({}));
-        const cloudTrailRole = roles.Roles!.find((role: any) =>
-          role.RoleName.includes('CorpCloudTrailRole') || 
-          role.RoleName.includes('cloudtrail')
-        );
-        if (cloudTrailRole) {
-          expect(cloudTrailRole.AssumeRolePolicyDocument).toBeDefined();
-        }
-      }
+      expect(trail).toBeDefined();
+      expect(trail!.CloudWatchLogsRoleArn).toBeDefined();
+      
+      const roles = await iam.send(new ListRolesCommand({}));
+      const cloudTrailRole = roles.Roles!.find((role: any) =>
+        role.Arn === trail!.CloudWatchLogsRoleArn
+      );
+      expect(cloudTrailRole).toBeDefined();
+      expect(cloudTrailRole!.AssumeRolePolicyDocument).toBeDefined();
     });
 
     test('SNS Topic Subscription should be properly configured', async () => {
-      if (outputs.AlarmTopicArn) {
-        const subscriptions = await sns.send(new ListSubscriptionsByTopicCommand({
-          TopicArn: outputs.AlarmTopicArn
-        }));
+      expect(outputs.AlarmTopicArn).toBeDefined();
+      const subscriptions = await sns.send(new ListSubscriptionsByTopicCommand({
+        TopicArn: outputs.AlarmTopicArn
+      }));
 
-        expect(subscriptions.Subscriptions).toBeDefined();
-        if (subscriptions.Subscriptions!.length > 0) {
-          const subscription = subscriptions.Subscriptions![0];
-          expect(subscription.TopicArn).toBe(outputs.AlarmTopicArn);
-          expect(subscription.Protocol).toBe('email');
-        }
-      }
+      expect(subscriptions.Subscriptions).toBeDefined();
+      expect(subscriptions.Subscriptions!.length).toBeGreaterThan(0);
+      const subscription = subscriptions.Subscriptions![0];
+      expect(subscription.TopicArn).toBe(outputs.AlarmTopicArn);
+      expect(subscription.Protocol).toBe('email');
     });
 
     test('All CloudWatch Log Groups should exist and be properly configured', async () => {
@@ -1222,11 +1138,8 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
           (lg.logGroupName || '').toLowerCase().includes('corp')
         );
       }
-      if (ec2LogGroup) {
-        if (ec2LogGroup.retentionInDays !== undefined) {
-          expect(ec2LogGroup.retentionInDays).toBe(30);
-        }
-      }
+      expect(ec2LogGroup).toBeDefined();
+      expect(ec2LogGroup!.retentionInDays).toBe(30);
 
       // Check for CloudTrail log group
       let cloudTrailLogGroup = logGroups.logGroups!.find((lg: any) =>
@@ -1240,11 +1153,8 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
           (lg.logGroupName || '').toLowerCase().includes('corp')
         );
       }
-      if (cloudTrailLogGroup) {
-        if (cloudTrailLogGroup.retentionInDays !== undefined) {
-          expect(cloudTrailLogGroup.retentionInDays).toBe(90);
-        }
-      }
+      expect(cloudTrailLogGroup).toBeDefined();
+      expect(cloudTrailLogGroup!.retentionInDays).toBe(90);
     });
 
     test('SSL Certificate should be properly configured if valid domain provided', async () => {
@@ -1253,11 +1163,10 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
         cert.DomainName.includes('enterpriseapp')
       );
 
-      if (certificate) {
-        expect(['ISSUED', 'PENDING_VALIDATION', 'FAILED']).toContain(certificate.Status);
-        expect(certificate.Type).toBe('AMAZON_ISSUED');
-        expect(certificate.DomainName).toContain('enterpriseapp');
-      }
+      expect(certificate).toBeDefined();
+      expect(['ISSUED', 'PENDING_VALIDATION', 'FAILED']).toContain(certificate!.Status);
+      expect(certificate!.Type).toBe('AMAZON_ISSUED');
+      expect(certificate!.DomainName).toContain('enterpriseapp');
     });
 
     test('All IAM Roles should have proper assume role policies', async () => {
@@ -1318,9 +1227,8 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
           expect(instance.SecurityGroups!.length).toBeGreaterThan(0);
           
           // Check IAM instance profile
-          if (instance.IamInstanceProfile) {
-            expect(instance.IamInstanceProfile.Arn).toBeDefined();
-          }
+          expect(instance.IamInstanceProfile).toBeDefined();
+          expect(instance.IamInstanceProfile!.Arn).toBeDefined();
           
           // Check tags
           expect(instance.Tags).toBeDefined();
@@ -1342,32 +1250,24 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
 
       securityGroups.SecurityGroups!.forEach(sg => {
         // Check ingress rules
-        if (sg.IpPermissions && sg.IpPermissions.length > 0) {
-          sg.IpPermissions.forEach(rule => {
-            expect(rule.IpProtocol).toBeDefined();
-            // FromPort and ToPort might be undefined for ICMP or other protocols
-            if (rule.FromPort !== undefined) {
-              expect(rule.FromPort).toBeDefined();
-            }
-            if (rule.ToPort !== undefined) {
-              expect(rule.ToPort).toBeDefined();
-            }
-          });
-        }
+        expect(sg.IpPermissions).toBeDefined();
+        expect(sg.IpPermissions!.length).toBeGreaterThan(0);
+        sg.IpPermissions!.forEach(rule => {
+          expect(rule.IpProtocol).toBeDefined();
+          // FromPort and ToPort might be undefined for ICMP or other protocols
+          expect(rule.FromPort).toBeDefined();
+          expect(rule.ToPort).toBeDefined();
+        });
         
         // Check egress rules
-        if (sg.IpPermissionsEgress && sg.IpPermissionsEgress.length > 0) {
-          sg.IpPermissionsEgress.forEach(rule => {
-            expect(rule.IpProtocol).toBeDefined();
-            // FromPort and ToPort might be undefined for ICMP or other protocols
-            if (rule.FromPort !== undefined) {
-              expect(rule.FromPort).toBeDefined();
-            }
-            if (rule.ToPort !== undefined) {
-              expect(rule.ToPort).toBeDefined();
-            }
-          });
-        }
+        expect(sg.IpPermissionsEgress).toBeDefined();
+        expect(sg.IpPermissionsEgress!.length).toBeGreaterThan(0);
+        sg.IpPermissionsEgress!.forEach(rule => {
+          expect(rule.IpProtocol).toBeDefined();
+          // FromPort and ToPort might be undefined for ICMP or other protocols
+          expect(rule.FromPort).toBeDefined();
+          expect(rule.ToPort).toBeDefined();
+        });
       });
     });
 
@@ -1377,28 +1277,28 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
         lb.DNSName === outputs.ALBDNSName
       );
 
-      if (alb) {
-        // Check target groups
-        const targetGroups = await elbv2.describeTargetGroups({
-          LoadBalancerArn: alb.LoadBalancerArn
-        }).promise();
-        expect(targetGroups.TargetGroups).toBeDefined();
-        expect(targetGroups.TargetGroups!.length).toBeGreaterThan(0);
+      expect(alb).toBeDefined();
+      
+      // Check target groups
+      const targetGroups = await elbv2.describeTargetGroups({
+        LoadBalancerArn: alb!.LoadBalancerArn
+      }).promise();
+      expect(targetGroups.TargetGroups).toBeDefined();
+      expect(targetGroups.TargetGroups!.length).toBeGreaterThan(0);
 
-        // Check listeners
-        const listeners = await elbv2.describeListeners({
-          LoadBalancerArn: alb.LoadBalancerArn
-        }).promise();
-        expect(listeners.Listeners).toBeDefined();
-        expect(listeners.Listeners!.length).toBeGreaterThan(0);
+      // Check listeners
+      const listeners = await elbv2.describeListeners({
+        LoadBalancerArn: alb!.LoadBalancerArn
+      }).promise();
+      expect(listeners.Listeners).toBeDefined();
+      expect(listeners.Listeners!.length).toBeGreaterThan(0);
 
-        // Check target health
-        for (const tg of targetGroups.TargetGroups!) {
-          const health = await elbv2.describeTargetHealth({
-            TargetGroupArn: tg.TargetGroupArn
-          }).promise();
-          expect(health.TargetHealthDescriptions).toBeDefined();
-        }
+      // Check target health
+      for (const tg of targetGroups.TargetGroups!) {
+        const health = await elbv2.describeTargetHealth({
+          TargetGroupArn: tg.TargetGroupArn
+        }).promise();
+        expect(health.TargetHealthDescriptions).toBeDefined();
       }
     });
   });
