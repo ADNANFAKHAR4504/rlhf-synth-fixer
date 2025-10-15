@@ -18,6 +18,22 @@ import { Construct } from 'constructs';
 export class MultiComponentApplicationStack extends cdk.Stack {
   // String suffix for unique resource naming
   private readonly stringSuffix: string;
+  // Expose important resource tokens as public properties so other stacks
+  // in the same CDK app can reference them without requiring manual
+  // CloudFormation exports/imports.
+  public readonly vpcId!: string;
+  public readonly apiUrl!: string;
+  public readonly lambdaFunctionArn!: string;
+  public readonly rdsEndpoint!: string;
+  public readonly s3BucketName!: string;
+  public readonly sqsQueueUrl!: string;
+  public readonly cloudFrontDomainName!: string;
+  public readonly hostedZoneId!: string;
+  public readonly databaseSecretArn!: string;
+  public readonly lambdaRoleArn!: string;
+  public readonly databaseSecurityGroupId!: string;
+  public readonly lambdaSecurityGroupId!: string;
+  public readonly lambdaLogGroupName!: string;
 
   // Expose a small helper to compute the sanitized suffix used for Lambda names.
   // This is intentionally simple and useful to call from unit tests to exercise
@@ -474,82 +490,82 @@ export class MultiComponentApplicationStack extends cdk.Stack {
     // ========================================
     // Stack Outputs
     // ========================================
+    this.vpcId = vpc.vpcId;
     new cdk.CfnOutput(this, 'VpcId', {
-      value: vpc.vpcId,
+      value: this.vpcId,
       description: 'VPC ID',
-      exportName: `${this.stackName}-VpcId`,
     });
 
+    this.apiUrl = api.url;
     new cdk.CfnOutput(this, 'ApiGatewayUrl', {
-      value: api.url,
+      value: this.apiUrl,
       description: 'API Gateway URL',
-      exportName: `${this.stackName}-ApiGatewayUrl`,
     });
 
+    this.lambdaFunctionArn = lambdaFunction.functionArn;
     new cdk.CfnOutput(this, 'LambdaFunctionArn', {
-      value: lambdaFunction.functionArn,
+      value: this.lambdaFunctionArn,
       description: 'Lambda Function ARN',
-      exportName: `${this.stackName}-LambdaFunctionArn`,
     });
 
+    this.rdsEndpoint = rdsInstance.dbInstanceEndpointAddress;
     new cdk.CfnOutput(this, 'RdsEndpoint', {
-      value: rdsInstance.dbInstanceEndpointAddress,
+      value: this.rdsEndpoint,
       description: 'RDS PostgreSQL Endpoint',
-      exportName: `${this.stackName}-RdsEndpoint`,
     });
 
+    this.s3BucketName = staticFilesBucket.bucketName;
     new cdk.CfnOutput(this, 'S3BucketName', {
-      value: staticFilesBucket.bucketName,
+      value: this.s3BucketName,
       description: 'S3 Bucket Name',
-      exportName: `${this.stackName}-S3BucketName`,
     });
 
+    this.sqsQueueUrl = asyncQueue.queueUrl;
     new cdk.CfnOutput(this, 'SqsQueueUrl', {
-      value: asyncQueue.queueUrl,
+      value: this.sqsQueueUrl,
       description: 'SQS Queue URL',
-      exportName: `${this.stackName}-SqsQueueUrl`,
     });
 
+    this.cloudFrontDomainName = distribution.distributionDomainName;
     new cdk.CfnOutput(this, 'CloudFrontDomainName', {
-      value: distribution.distributionDomainName,
+      value: this.cloudFrontDomainName,
       description: 'CloudFront Distribution Domain Name',
-      exportName: `${this.stackName}-CloudFrontDomainName`,
     });
 
+    this.hostedZoneId = hostedZone.hostedZoneId;
     new cdk.CfnOutput(this, 'HostedZoneId', {
-      value: hostedZone.hostedZoneId,
+      value: this.hostedZoneId,
       description: 'Route 53 Hosted Zone ID',
-      exportName: `${this.stackName}-HostedZoneId`,
     });
 
+    this.databaseSecretArn = databaseSecret.secretArn;
     new cdk.CfnOutput(this, 'DatabaseSecretArn', {
-      value: databaseSecret.secretArn,
+      value: this.databaseSecretArn,
       description: 'Database Secret ARN',
-      exportName: `${this.stackName}-DatabaseSecretArn`,
     });
 
+    this.lambdaRoleArn = lambdaRole.roleArn;
     new cdk.CfnOutput(this, 'LambdaRoleArn', {
-      value: lambdaRole.roleArn,
+      value: this.lambdaRoleArn,
       description: 'Lambda IAM Role ARN',
-      exportName: `${this.stackName}-LambdaRoleArn`,
     });
 
+    this.databaseSecurityGroupId = databaseSecurityGroup.securityGroupId;
     new cdk.CfnOutput(this, 'DatabaseSecurityGroupId', {
-      value: databaseSecurityGroup.securityGroupId,
+      value: this.databaseSecurityGroupId,
       description: 'Database Security Group ID',
-      exportName: `${this.stackName}-DatabaseSecurityGroupId`,
     });
 
+    this.lambdaSecurityGroupId = lambdaSecurityGroup.securityGroupId;
     new cdk.CfnOutput(this, 'LambdaSecurityGroupId', {
-      value: lambdaSecurityGroup.securityGroupId,
+      value: this.lambdaSecurityGroupId,
       description: 'Lambda Security Group ID',
-      exportName: `${this.stackName}-LambdaSecurityGroupId`,
     });
 
+    this.lambdaLogGroupName = lambdaLogGroup.logGroupName;
     new cdk.CfnOutput(this, 'LambdaLogGroupName', {
-      value: lambdaLogGroup.logGroupName,
+      value: this.lambdaLogGroupName,
       description: 'Lambda Log Group Name',
-      exportName: `${this.stackName}-LambdaLogGroupName`,
     });
 
     // Tags for all resources

@@ -17,8 +17,10 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-    // Instantiate the multi-component application stack
-    new MultiComponentApplicationStack(
+    // Instantiate the multi-component application stack and keep a reference
+    // so we can re-expose important runtime values without using CloudFormation
+    // exports/imports (which can cause circular create-time dependency issues).
+    const child = new MultiComponentApplicationStack(
       this.node.root as cdk.App,
       'MultiComponentApplication',
       {
@@ -27,44 +29,29 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // Import and re-expose key outputs from the MultiComponentApplication stack
-    const childStackName = `prod-multi-component-stack-${environmentSuffix}`;
+    // Re-expose key runtime tokens from the child stack as top-level outputs.
+    // These are CDK tokens and will resolve at deploy time; they don't rely on
+    // CloudFormation exports being present beforehand.
+    const forward = {
+      VpcId: child.vpcId,
+      ApiGatewayUrl: child.apiUrl,
+      LambdaFunctionArn: child.lambdaFunctionArn,
+      RdsEndpoint: child.rdsEndpoint,
+      S3BucketName: child.s3BucketName,
+      SqsQueueUrl: child.sqsQueueUrl,
+      CloudFrontDomainName: child.cloudFrontDomainName,
+      HostedZoneId: child.hostedZoneId,
+      DatabaseSecretArn: child.databaseSecretArn,
+      LambdaRoleArn: child.lambdaRoleArn,
+      DatabaseSecurityGroupId: child.databaseSecurityGroupId,
+      LambdaSecurityGroupId: child.lambdaSecurityGroupId,
+      LambdaLogGroupName: child.lambdaLogGroupName,
+    } as Record<string, string>;
 
-    const keysToForward = [
-      'VpcId',
-      'ApiGatewayUrl',
-      'LambdaFunctionArn',
-      'RdsEndpoint',
-      'S3BucketName',
-      'SqsQueueUrl',
-      'CloudFrontDomainName',
-      'HostedZoneId',
-      'DatabaseSecretArn',
-      'LambdaRoleArn',
-      'DatabaseSecurityGroupId',
-      'LambdaSecurityGroupId',
-      'LambdaLogGroupName',
-    ];
-
-    for (const key of keysToForward) {
-      // import the exported value from the child stack (if present) and
-      // create a top-level output so scripts that read TapStack outputs can
-      // find them easily.
-      const importName = `${childStackName}-${key}`;
-      try {
-        const value = cdk.Fn.importValue(importName);
-        new cdk.CfnOutput(this, key, {
-          value: value,
-          exportName: `${this.stackName}-${key}`,
-        });
-      } catch (e) {
-        // If importValue fails during synth (e.g., stack not yet deployed),
-        // fall back to NO_VALUE so synth still succeeds and the output is
-        // omitted at deploy-time.
-        new cdk.CfnOutput(this, `${key}Missing`, {
-          value: cdk.Aws.NO_VALUE,
-        });
-      }
+    for (const [key, value] of Object.entries(forward)) {
+      new cdk.CfnOutput(this, key, {
+        value: value ?? cdk.Aws.NO_VALUE,
+      });
     }
   }
 }
