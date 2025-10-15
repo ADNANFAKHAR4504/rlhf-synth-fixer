@@ -215,7 +215,6 @@ Resources:
     DependsOn:
       - LambdaInvokePermission
       - ImageProcessorFunction
-      - SourceBucket
     Properties:
       ServiceToken: !GetAtt ConfigureS3NotificationFunction.Arn
       BucketName: !Ref SourceBucket
