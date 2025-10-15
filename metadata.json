@@ -17,6 +17,11 @@
     "IOT Core",
     "EventBridge",
     "IAM",
-    "CloudWatch"
-  ]
+    "CloudWatch",
+    "S3",
+    "SNS", 
+    "Athena",
+    "Glue"
+  ],
+  "training_quality": "excellent"
 }
