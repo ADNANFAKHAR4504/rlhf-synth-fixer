@@ -100,4 +100,3 @@ Create a production-grade AWS CloudFormation template named **`production_securi
 **Deliverable**
 
 Return **only** the final single-file CloudFormation template named **`TapStack.yaml`** implementing everything above, with sensible parameter defaults for a common region, and brief comments where trade-offs are made.
-
