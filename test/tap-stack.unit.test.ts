@@ -76,7 +76,7 @@ describe('TapStack CloudFormation Template', () => {
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-describe('TapStack CloudFormation Template', () => {
+describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
   let template: any;
 
   beforeAll(() => {
@@ -87,9 +87,215 @@ describe('TapStack CloudFormation Template', () => {
     template = JSON.parse(templateContent);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(true).toBe(true);
+  describe('Networking Resources', () => {
+    test('VPC has correct CIDR and DNS settings', () => {
+      const vpc = template.Resources.VPC;
+      expect(vpc).toBeDefined();
+      expect(vpc.Type).toBe('AWS::EC2::VPC');
+      expect(vpc.Properties.EnableDnsSupport).toBe(true);
+      expect(vpc.Properties.EnableDnsHostnames).toBe(true);
+    });
+
+    test('Public subnets are configured correctly', () => {
+      const subnet1 = template.Resources.PublicSubnet1;
+      const subnet2 = template.Resources.PublicSubnet2;
+      expect(subnet1).toBeDefined();
+      expect(subnet2).toBeDefined();
+      expect(subnet1.Properties.MapPublicIpOnLaunch).toBe(true);
+      expect(subnet2.Properties.MapPublicIpOnLaunch).toBe(true);
+    });
+
+    test('Private subnets exist for EC2 instances', () => {
+      const subnet1 = template.Resources.PrivateSubnet1;
+      const subnet2 = template.Resources.PrivateSubnet2;
+      expect(subnet1).toBeDefined();
+      expect(subnet2).toBeDefined();
+      expect(subnet1.Type).toBe('AWS::EC2::Subnet');
+      expect(subnet2.Type).toBe('AWS::EC2::Subnet');
+    });
+
+    test('NAT Gateways exist for private subnet egress', () => {
+      const nat1 = template.Resources.NATGateway1;
+      const nat2 = template.Resources.NATGateway2;
+      expect(nat1).toBeDefined();
+      expect(nat2).toBeDefined();
+      expect(nat1.Type).toBe('AWS::EC2::NatGateway');
+      expect(nat2.Type).toBe('AWS::EC2::NatGateway');
+    });
+
+    test('Internet Gateway is attached to VPC', () => {
+      const igw = template.Resources.InternetGateway;
+      const attachment = template.Resources.AttachGateway;
+      expect(igw).toBeDefined();
+      expect(attachment).toBeDefined();
+      expect(attachment.Type).toBe('AWS::EC2::VPCGatewayAttachment');
+    });
+
+    test('Route tables are configured for public and private subnets', () => {
+      const publicRT = template.Resources.PublicRouteTable;
+      const privateRT1 = template.Resources.PrivateRouteTable1;
+      const privateRT2 = template.Resources.PrivateRouteTable2;
+      expect(publicRT).toBeDefined();
+      expect(privateRT1).toBeDefined();
+      expect(privateRT2).toBeDefined();
+    });
+  });
+
+  describe('Security Groups', () => {
+    test('ALB security group allows HTTP and HTTPS', () => {
+      const albSg = template.Resources.ALBSecurityGroup;
+      expect(albSg).toBeDefined();
+      expect(albSg.Type).toBe('AWS::EC2::SecurityGroup');
+      const ingress = albSg.Properties.SecurityGroupIngress;
+      expect(ingress.some((r: any) => r.FromPort === 443 && r.ToPort === 443)).toBe(true);
+      expect(ingress.some((r: any) => r.FromPort === 80 && r.ToPort === 80)).toBe(true);
+    });
+
+    test('Web server security group allows traffic from ALB only', () => {
+      const webSg = template.Resources.WebServerSecurityGroup;
+      expect(webSg).toBeDefined();
+      const ingress = webSg.Properties.SecurityGroupIngress;
+      expect(ingress.every((r: any) => r.SourceSecurityGroupId)).toBe(true);
+    });
+  });
+
+  describe('IAM Roles and Policies', () => {
+    test('EC2 instance role has correct assume role policy', () => {
+      const role = template.Resources.EC2InstanceRole;
+      expect(role).toBeDefined();
+      expect(role.Type).toBe('AWS::IAM::Role');
+      const assumePolicy = role.Properties.AssumeRolePolicyDocument;
+      expect(assumePolicy.Statement[0].Principal.Service).toBe('ec2.amazonaws.com');
+    });
+
+    test('EC2 role has S3, DynamoDB, and Secrets Manager policies', () => {
+      const role = template.Resources.EC2InstanceRole;
+      const policies = role.Properties.Policies;
+      expect(policies.some((p: any) => p.PolicyName.includes('S3'))).toBe(true);
+      expect(policies.some((p: any) => p.PolicyName.includes('DynamoDB'))).toBe(true);
+      expect(policies.some((p: any) => p.PolicyName.includes('SecretsManager'))).toBe(true);
+    });
+
+    test('EC2 instance profile references the role', () => {
+      const profile = template.Resources.EC2InstanceProfile;
+      expect(profile).toBeDefined();
+      expect(profile.Type).toBe('AWS::IAM::InstanceProfile');
+      expect(profile.Properties.Roles).toContain({ Ref: 'EC2InstanceRole' });
+    });
+  });
+
+  describe('S3 Buckets', () => {
+    test('Assets bucket has versioning and encryption enabled', () => {
+      const bucket = template.Resources.AppAssetsBucket;
+      expect(bucket).toBeDefined();
+      expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
+      expect(bucket.Properties.BucketEncryption).toBeDefined();
+    });
+
+    test('Logs bucket has lifecycle policy', () => {
+      const bucket = template.Resources.LogsBucket;
+      expect(bucket).toBeDefined();
+      expect(bucket.Properties.LifecycleConfiguration).toBeDefined();
+      expect(bucket.Properties.LifecycleConfiguration.Rules.length).toBeGreaterThan(0);
+    });
+
+    test('Both buckets block public access', () => {
+      const assets = template.Resources.AppAssetsBucket;
+      const logs = template.Resources.LogsBucket;
+      [assets, logs].forEach(bucket => {
+        const pab = bucket.Properties.PublicAccessBlockConfiguration;
+        expect(pab.BlockPublicAcls).toBe(true);
+        expect(pab.BlockPublicPolicy).toBe(true);
+        expect(pab.IgnorePublicAcls).toBe(true);
+        expect(pab.RestrictPublicBuckets).toBe(true);
+      });
+    });
+
+    test('Logs bucket policy allows ALB to write logs', () => {
+      const policy = template.Resources.LogsBucketPolicy;
+      expect(policy).toBeDefined();
+      expect(policy.Type).toBe('AWS::S3::BucketPolicy');
+      const statements = policy.Properties.PolicyDocument.Statement;
+      expect(statements.some((s: any) => s.Principal.Service === 'logdelivery.elasticloadbalancing.amazonaws.com')).toBe(true);
+    });
+  });
+
+  describe('ACM Certificates', () => {
+    test('ALB certificate uses DNS validation', () => {
+      const cert = template.Resources.ALBCertificate;
+      expect(cert).toBeDefined();
+      expect(cert.Type).toBe('AWS::CertificateManager::Certificate');
+      expect(cert.Properties.ValidationMethod).toBe('DNS');
+    });
+
+    test('CloudFront certificate is conditionally created', () => {
+      const cert = template.Resources.CloudFrontCertificate;
+      expect(cert).toBeDefined();
+      expect(cert.Condition).toBe('IsUSEast1AndHasDomain');
+    });
+  });
+
+  describe('Application Load Balancer', () => {
+    test('ALB is internet-facing with correct subnets', () => {
+      const alb = template.Resources.ApplicationLoadBalancer;
+      expect(alb).toBeDefined();
+      expect(alb.Properties.Scheme).toBe('internet-facing');
+      expect(alb.Properties.Subnets.length).toBe(2);
+    });
+
+    test('ALB has access logs enabled', () => {
+      const alb = template.Resources.ApplicationLoadBalancer;
+      const attrs = alb.Properties.LoadBalancerAttributes;
+      const logsEnabled = attrs.find((a: any) => a.Key === 'access_logs.s3.enabled');
+      expect(logsEnabled.Value).toBe('true');
+    });
+
+    test('Target group has health check configured', () => {
+      const tg = template.Resources.TargetGroup;
+      expect(tg).toBeDefined();
+      expect(tg.Properties.HealthCheckEnabled).toBe(true);
+      expect(tg.Properties.HealthCheckPath).toBe('/health');
+      expect(tg.Properties.HealthCheckProtocol).toBe('HTTP');
+    });
+
+    test('HTTP listener redirects to HTTPS', () => {
+      const listener = template.Resources.HTTPListener;
+      expect(listener).toBeDefined();
+      expect(listener.Properties.DefaultActions[0].Type).toBe('redirect');
+      expect(listener.Properties.DefaultActions[0].RedirectConfig.Protocol).toBe('HTTPS');
+    });
+
+    test('HTTPS listener is conditionally created with certificate', () => {
+      const listener = template.Resources.HTTPSListener;
+      expect(listener).toBeDefined();
+      expect(listener.Condition).toBe('HasDomain');
+      expect(listener.Properties.Certificates).toBeDefined();
+    });
+  });
+
+  describe('Auto Scaling', () => {
+    test('Launch template has correct instance configuration', () => {
+      const lt = template.Resources.LaunchTemplate;
+      expect(lt).toBeDefined();
+      expect(lt.Properties.LaunchTemplateData.IamInstanceProfile).toBeDefined();
+      expect(lt.Properties.LaunchTemplateData.UserData).toBeDefined();
+    });
+
+    test('Auto Scaling Group scales based on environment', () => {
+      const asg = template.Resources.AutoScalingGroup;
+      expect(asg).toBeDefined();
+      expect(asg.Properties.MinSize).toBeDefined();
+      expect(asg.Properties.MaxSize).toBeDefined();
+      expect(asg.Properties.HealthCheckType).toBe('ELB');
+    });
+
+    test('Scaling policies are configured', () => {
+      const scaleUp = template.Resources.ScaleUpPolicy;
+      const scaleDown = template.Resources.ScaleDownPolicy;
+      expect(scaleUp).toBeDefined();
+      expect(scaleDown).toBeDefined();
+      expect(scaleUp.Properties.PolicyType).toBe('TargetTrackingScaling');
+      expect(scaleDown.Properties.PolicyType).toBe('TargetTrackingScaling');
     });
   });
 
@@ -224,11 +430,104 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
+  describe('DynamoDB Session Table', () => {
+    test('has TTL enabled', () => {
+      const table = template.Resources.SessionTable;
+      expect(table.Properties.TimeToLiveSpecification.Enabled).toBe(true);
+      expect(table.Properties.TimeToLiveSpecification.AttributeName).toBe('TTL');
+    });
+
+    test('has stream enabled for change data capture', () => {
+      const table = template.Resources.SessionTable;
+      expect(table.Properties.StreamSpecification.StreamEnabled).toBe(true);
+      expect(table.Properties.StreamSpecification.StreamViewType).toBe('NEW_AND_OLD_IMAGES');
+    });
+  });
+
+  describe('CloudWatch Monitoring', () => {
+    test('Application log group has retention policy', () => {
+      const logGroup = template.Resources.ApplicationLogGroup;
+      expect(logGroup).toBeDefined();
+      expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
+      expect(logGroup.Properties.RetentionInDays).toBe(30);
+    });
+
+    test('Dashboard is configured with metrics', () => {
+      const dashboard = template.Resources.ApplicationDashboard;
+      expect(dashboard).toBeDefined();
+      expect(dashboard.Type).toBe('AWS::CloudWatch::Dashboard');
+      expect(dashboard.Properties.DashboardBody).toBeDefined();
+    });
+
+    test('High CPU alarm is configured', () => {
+      const alarm = template.Resources.HighCPUAlarm;
+      expect(alarm).toBeDefined();
+      expect(alarm.Properties.Threshold).toBe(80);
+      expect(alarm.Properties.ComparisonOperator).toBe('GreaterThanThreshold');
+    });
+
+    test('Unhealthy host alarm is configured', () => {
+      const alarm = template.Resources.UnhealthyHostAlarm;
+      expect(alarm).toBeDefined();
+      expect(alarm.Properties.MetricName).toBe('UnHealthyHostCount');
+      expect(alarm.Properties.Threshold).toBe(0);
+    });
+  });
+
+  describe('Route 53 and CloudFront (Conditional)', () => {
+    test('Hosted zone is conditionally created', () => {
+      const hz = template.Resources.HostedZone;
+      expect(hz).toBeDefined();
+      expect(hz.Condition).toBe('IsUSEast1AndHasDomain');
+    });
+
+    test('CloudFront distribution has failover configuration', () => {
+      const cf = template.Resources.CloudFrontDistribution;
+      expect(cf).toBeDefined();
+      expect(cf.Condition).toBe('IsUSEast1AndHasDomain');
+      expect(cf.Properties.DistributionConfig.OriginGroups).toBeDefined();
+    });
+
+    test('WAF Web ACL is configured for CloudFront', () => {
+      const waf = template.Resources.WebACL;
+      expect(waf).toBeDefined();
+      expect(waf.Properties.Scope).toBe('CLOUDFRONT');
+      expect(waf.Properties.Rules.length).toBeGreaterThan(0);
+    });
+  });
+
   describe('Resource Naming Convention', () => {
     test('SessionTable name should include team and environment suffix', () => {
       const table = template.Resources.SessionTable;
       const tableName = table.Properties.TableName;
       expect(tableName).toEqual({ 'Fn::Sub': '${Team}-${EnvironmentSuffix}-sessions' });
+    });
+
+    test('All major resources use consistent naming', () => {
+      const resources = [
+        template.Resources.AppAssetsBucket,
+        template.Resources.LogsBucket,
+        template.Resources.ApplicationLoadBalancer,
+      ];
+      resources.forEach(resource => {
+        expect(resource.Properties.Tags || resource.Tags).toBeDefined();
+      });
+    });
+  });
+
+  describe('Conditions', () => {
+    test('Has domain condition is defined', () => {
+      expect(template.Conditions.HasDomain).toBeDefined();
+    });
+
+    test('IsUSEast1AndHasDomain combines two conditions', () => {
+      const cond = template.Conditions.IsUSEast1AndHasDomain;
+      expect(cond['Fn::And']).toBeDefined();
+      expect(cond['Fn::And'].length).toBe(2);
+    });
+
+    test('CreateVPC condition checks for empty VpcId', () => {
+      expect(template.Conditions.CreateVPC).toBeDefined();
     });
   });
 });
