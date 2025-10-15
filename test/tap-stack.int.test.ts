@@ -825,7 +825,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       const listResponse = await iamClient.send(listCommand);
       
       const ec2Role = listResponse.Roles?.find(role => 
-        role.RoleName?.includes('EC2InstanceRole')
+        role.RoleName?.match(/.*-EC2InstanceRole-.*/)
       );
       
       if (!ec2Role) {
@@ -851,10 +851,9 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       const listCommand = new ListRolesCommand({});
       const listResponse = await iamClient.send(listCommand);
       
-      // Search for Lambda execution role - it should contain both 'Lambda' and 'ExecutionRole'
+      // Search for Lambda execution role - pattern: *-LambdaExecutionRole-*
       const lambdaRole = listResponse.Roles?.find(role => 
-        role.RoleName?.includes('Lambda') && 
-        role.RoleName?.includes('ExecutionRole') &&
+        role.RoleName?.match(/.*-LambdaExecutionRole-.*/) &&
         !role.RoleName?.includes('SecurityHub')  // Exclude SecurityHub Lambda role
       );
       
@@ -887,7 +886,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       const listResponse = await iamClient.send(listCommand);
       
       const vpcFlowLogRole = listResponse.Roles?.find(role => 
-        role.RoleName?.includes('VPCFlowLogRole')
+        role.RoleName?.match(/.*-VPCFlowLogRole-.*/)
       );
       
       if (!vpcFlowLogRole) {
@@ -904,7 +903,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       const listResponse = await iamClient.send(listCommand);
       
       const securityHubRole = listResponse.Roles?.find(role => 
-        role.RoleName?.includes('SecurityHubLambdaRole')
+        role.RoleName?.match(/.*-SecurityHubLambdaRole-.*/)
       );
       
       if (!securityHubRole) {
@@ -1659,10 +1658,9 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
         const rolesResponse = await iamClient.send(listRolesCommand);
         expect(rolesResponse.Roles).toBeDefined();
 
-        // 2. Find EC2 instance role - search for 'EC2' and 'Role' or 'InstanceRole'
+        // 2. Find EC2 instance role - pattern: *-EC2InstanceRole-*
         const ec2Role = rolesResponse.Roles!.find(role => 
-          role.RoleName?.includes('EC2') && 
-          (role.RoleName?.includes('InstanceRole') || role.RoleName?.includes('Role'))
+          role.RoleName?.match(/.*-EC2InstanceRole-.*/)
         );
         
         expect(ec2Role).toBeDefined();
@@ -1675,15 +1673,13 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
         const assumeRolePolicy = JSON.parse(ec2RoleResponse.Role!.AssumeRolePolicyDocument!);
         expect(assumeRolePolicy.Statement[0].Principal.Service).toBe('ec2.amazonaws.com');
 
-        // 4. Find Lambda execution roles
+        // 4. Find Lambda execution roles - pattern: *-LambdaExecutionRole-* and *-SecurityHubLambdaRole-*
         const lambdaRole = rolesResponse.Roles!.find(role => 
-          role.RoleName?.includes('Lambda') && 
-          role.RoleName?.includes('ExecutionRole') &&
+          role.RoleName?.match(/.*-LambdaExecutionRole-.*/) &&
           !role.RoleName?.includes('SecurityHub')
         );
         const securityHubRole = rolesResponse.Roles!.find(role => 
-          role.RoleName?.includes('SecurityHub') && 
-          role.RoleName?.includes('Lambda')
+          role.RoleName?.match(/.*-SecurityHubLambdaRole-.*/)
         );
 
         expect(lambdaRole).toBeDefined();
