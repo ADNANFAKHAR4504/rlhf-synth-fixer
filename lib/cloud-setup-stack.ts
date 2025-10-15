@@ -222,7 +222,7 @@ export class CloudSetupStack extends cdk.Stack {
     this.albDns = alb.loadBalancerDnsName;
 
     // CloudFront + optional Route53 zone. Do not create a public hosted zone by default
-    const domainNames = props.domainName ? [props.domainName] : undefined;
+    // Only configure alternate domain names (CNAMEs) if a certificate ARN is provided.
     const cfCert = props.cloudFrontCertificateArn
       ? acm.Certificate.fromCertificateArn(
           this,
@@ -230,6 +230,8 @@ export class CloudSetupStack extends cdk.Stack {
           props.cloudFrontCertificateArn
         )
       : undefined;
+    const domainNames =
+      cfCert && props.domainName ? [props.domainName] : undefined;
 
     const cf = new cloudfront.Distribution(this, `cf-${this.suffix}`, {
       defaultBehavior: {
