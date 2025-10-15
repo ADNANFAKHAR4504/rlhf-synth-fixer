@@ -664,5 +664,110 @@ describe('TapStack Unit Tests', () => {
         ])
       });
     });
+
+    test('should enable Route 53 latency routing when hostedZoneId is provided', () => {
+      const testApp = new cdk.App({
+        context: {
+          hostedZoneId: 'Z1234567890ABC',
+          domainName: 'api.example.com'
+        }
+      });
+      
+      const primaryStack = new TapStack(testApp, 'Route53EnabledStack', {
+        environmentSuffix: 'test',
+        isPrimary: true,
+        env: {
+          account: '123456789012',
+          region: 'us-east-1'
+        }
+      });
+      
+      const template = Template.fromStack(primaryStack);
+      
+      // Should create Route 53 latency record
+      template.hasResourceProperties('AWS::Route53::RecordSet', {
+        Type: 'A',
+        SetIdentifier: Match.stringLikeRegexp('global-api-test-us-east-1')
+      });
+      
+      // Should have CustomDomain output
+      template.hasOutput('CustomDomain', {});
+    });
+
+    test('should provide info message when Route 53 is not enabled', () => {
+      const testApp = new cdk.App();
+      
+      const primaryStack = new TapStack(testApp, 'Route53DisabledStack', {
+        environmentSuffix: 'test',
+        isPrimary: true,
+        env: {
+          account: '123456789012',
+          region: 'us-east-1'
+        }
+      });
+      
+      const template = Template.fromStack(primaryStack);
+      
+      // Should have Route53Info output instead
+      template.hasOutput('Route53Info', {});
+    });
+
+    test('should enable QuickSight when enableQuickSight is true', () => {
+      const testApp = new cdk.App({
+        context: {
+          enableQuickSight: true
+        }
+      });
+      
+      const primaryStack = new TapStack(testApp, 'QuickSightEnabledStack', {
+        environmentSuffix: 'test',
+        isPrimary: true,
+        env: {
+          account: '123456789012',
+          region: 'us-east-1'
+        }
+      });
+      
+      const template = Template.fromStack(primaryStack);
+      
+      // Should create QuickSight data source
+      template.hasResourceProperties('AWS::QuickSight::DataSource', {
+        Type: 'ATHENA'
+      });
+      
+      // Should create QuickSight role
+      template.hasResourceProperties('AWS::IAM::Role', {
+        AssumeRolePolicyDocument: Match.objectLike({
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Principal: Match.objectLike({
+                Service: 'quicksight.amazonaws.com'
+              })
+            })
+          ])
+        })
+      });
+      
+      // Should have QuickSightDataSourceId output
+      template.hasOutput('QuickSightDataSourceId', {});
+    });
+
+    test('should provide info message when QuickSight is not enabled', () => {
+      const testApp = new cdk.App();
+      
+      const primaryStack = new TapStack(testApp, 'QuickSightDisabledStack', {
+        environmentSuffix: 'test',
+        isPrimary: true,
+        env: {
+          account: '123456789012',
+          region: 'us-east-1'
+        }
+      });
+      
+      const template = Template.fromStack(primaryStack);
+      
+      // Should have QuickSightInfo output instead
+      template.hasOutput('QuickSightInfo', {});
+    });
   });
 });
