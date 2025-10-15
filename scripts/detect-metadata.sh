@@ -60,12 +60,6 @@ if [ -z "$SUBTASK" ]; then
   ((ERROR_COUNT++))
 fi
 
-# If background is empty, raise error
-if [ -z "$BACKGROUND" ]; then
-  echo "❌ Background is required but not found in metadata.json"
-  ((ERROR_COUNT++))
-fi
-
 # If subject_labels is empty or not an array, raise error
 if [ -z "$SUBJECT_LABELS" ] || [ "$SUBJECT_LABELS" == "null" ]; then
   echo "❌ subject_labels is required but not found in metadata.json"
@@ -79,30 +73,43 @@ else
   fi
 fi
 
-# Check for required documentation files
-echo "🔍 Checking for required documentation files..."
-
-if [ ! -f "lib/PROMPT.md" ]; then
-  echo "❌ lib/PROMPT.md not found"
-  ((ERROR_COUNT++))
-fi
-
-if [ ! -f "lib/MODEL_RESPONSE.md" ]; then
-  echo "❌ lib/MODEL_RESPONSE.md not found"
-  ((ERROR_COUNT++))
-fi
-
-# Additional documentation files that may be required by some workflows
-if [ -f "lib/IDEAL_RESPONSE.md" ]; then
-  echo "✅ lib/IDEAL_RESPONSE.md found"
+# Synthetic task specific validations (only for team="synth")
+if [ "$TEAM" == "synth" ]; then
+  echo "🔍 Detected synthetic task, performing additional validations..."
+  
+  # If background is empty, raise error
+  if [ -z "$BACKGROUND" ]; then
+    echo "❌ Background is required but not found in metadata.json for synthetic tasks"
+    ((ERROR_COUNT++))
+  fi
+  
+  # Check for required documentation files
+  echo "🔍 Checking for required documentation files..."
+  
+  if [ ! -f "lib/PROMPT.md" ]; then
+    echo "❌ lib/PROMPT.md not found"
+    ((ERROR_COUNT++))
+  fi
+  
+  if [ ! -f "lib/MODEL_RESPONSE.md" ]; then
+    echo "❌ lib/MODEL_RESPONSE.md not found"
+    ((ERROR_COUNT++))
+  fi
+  
+  # Additional documentation files that may be required by some workflows
+  if [ -f "lib/IDEAL_RESPONSE.md" ]; then
+    echo "✅ lib/IDEAL_RESPONSE.md found"
+  else
+    echo "ℹ️ lib/IDEAL_RESPONSE.md not found (may not be required for all workflows)"
+  fi
+  
+  if [ -f "lib/MODEL_FAILURES.md" ]; then
+    echo "✅ lib/MODEL_FAILURES.md found"
+  else
+    echo "ℹ️ lib/MODEL_FAILURES.md not found (may not be required for all workflows)"
+  fi
 else
-  echo "ℹ️ lib/IDEAL_RESPONSE.md not found (may not be required for all workflows)"
-fi
-
-if [ -f "lib/MODEL_FAILURES.md" ]; then
-  echo "✅ lib/MODEL_FAILURES.md found"
-else
-  echo "ℹ️ lib/MODEL_FAILURES.md not found (may not be required for all workflows)"
+  echo "ℹ️ Non-synthetic task detected (team=$TEAM), skipping background and documentation file checks"
 fi
 
 # Exit with error if any validation failed

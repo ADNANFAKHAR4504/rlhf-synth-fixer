@@ -1,0 +1,28 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348998",
+  "team": "6",
+  "startedAt": "2025-10-14T13:36:49.681Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "CloudWatch",
+    "IAM",
+    "EIP"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "anukkrit149",
+  "dockerS3Location": ""
+}

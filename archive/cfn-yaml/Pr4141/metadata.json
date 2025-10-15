@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "CLO_YML_MED_EC2_MONITOR_4r9s6t_7g8h2i5oIJ",
+  "team": "4",
+  "startedAt": "2025-10-11T18:47:50.470Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "training_quality": 8,
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "Route Table",
+    "Security Group",
+    "IAM Role",
+    "IAM Instance Profile",
+    "S3 Bucket",
+    "CloudWatch",
+    "SNS"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
+}
