@@ -1,0 +1,14 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "AT4I75000",
+  "team": "6",
+  "startedAt": "2025-10-15T09:45:23.736Z",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": "DynamoDB, Lambda, EventBridge, CloudWatch, SNS, IAM, DynamoDB Global Tables"
+}
