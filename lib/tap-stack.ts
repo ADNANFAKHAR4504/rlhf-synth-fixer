@@ -5,9 +5,9 @@ import {
 import { S3Backend, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 import { DatabaseStack } from './database-stack';
-import { StorageStack } from './storage-stack';
-import { MonitoringStack } from './monitoring-stack';
 import { DisasterRecoveryStack } from './disaster-recovery-stack';
+import { MonitoringStack } from './monitoring-stack';
+import { StorageStack } from './storage-stack';
 
 interface TapStackProps {
   environmentSuffix?: string;
@@ -17,7 +17,6 @@ interface TapStackProps {
   defaultTags?: AwsProviderDefaultTags;
 }
 
-const AWS_REGION_OVERRIDE = 'ap-southeast-1';
 const SECONDARY_REGION = 'ap-southeast-2';
 
 export class TapStack extends TerraformStack {
@@ -25,9 +24,8 @@ export class TapStack extends TerraformStack {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
-    const awsRegion = AWS_REGION_OVERRIDE
-      ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'us-east-1';
+    // Use props.awsRegion if provided, otherwise default to ap-southeast-1
+    const awsRegion = props?.awsRegion || 'ap-southeast-1';
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];

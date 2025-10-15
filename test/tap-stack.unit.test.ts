@@ -1,6 +1,37 @@
 import { Testing } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
 
+// Helper function to parse synthesized JSON
+function parseSynthesized(synthesized: string): any {
+  try {
+    return JSON.parse(synthesized);
+  } catch (error) {
+    // If it's not valid JSON, return the string for backward compatibility
+    return { raw: synthesized };
+  }
+}
+
+// Helper to check if a value exists in nested object
+function findInObject(obj: any, searchValue: any): boolean {
+  const jsonStr = JSON.stringify(obj);
+  if (typeof searchValue === 'string') {
+    return jsonStr.includes(searchValue);
+  }
+  return jsonStr.includes(JSON.stringify(searchValue));
+}
+
+// Helper to normalize JSON for comparison (removes extra whitespace)
+function normalizeJson(jsonString: string): string {
+  return jsonString.replace(/\s+/g, '');
+}
+
+// Helper to check if synthesized output contains a pattern (ignoring whitespace)
+function containsPattern(synthesized: string, pattern: string): boolean {
+  const normalized = normalizeJson(synthesized);
+  const normalizedPattern = normalizeJson(pattern);
+  return normalized.includes(normalizedPattern);
+}
+
 describe('TapStack', () => {
   it('should create stack with default environment suffix', () => {
     const app = Testing.app();
@@ -129,6 +160,90 @@ describe('TapStack', () => {
     expect(synthesized).toContain(`healthcare-alerts-${suffix}`);
     expect(synthesized).toContain(`healthcare-failover-${suffix}`);
   });
+
+  it('should use default environment suffix when not provided', () => {
+    const app = Testing.app();
+    const stack = new TapStack(app, 'TestStack', {});
+
+    const synthesized = Testing.synth(stack);
+    expect(synthesized).toBeDefined();
+    expect(synthesized).toContain('dev');
+  });
+
+  it('should use default state bucket when not provided', () => {
+    const app = Testing.app();
+    const stack = new TapStack(app, 'TestStack', {
+      environmentSuffix: 'test',
+    });
+
+    const synthesized = Testing.synth(stack);
+    expect(synthesized).toContain('iac-rlhf-tf-states');
+  });
+
+  it('should use default state bucket region when not provided', () => {
+    const app = Testing.app();
+    const stack = new TapStack(app, 'TestStack', {
+      environmentSuffix: 'test',
+      stateBucket: 'custom-bucket',
+    });
+
+    const synthesized = Testing.synth(stack);
+    expect(synthesized).toContain('custom-bucket');
+    expect(containsPattern(synthesized, '"region":"us-east-1"')).toBe(true);
+  });
+
+  it('should work without default tags', () => {
+    const app = Testing.app();
+    const stack = new TapStack(app, 'TestStack', {
+      environmentSuffix: 'test',
+    });
+
+    const synthesized = Testing.synth(stack);
+    expect(synthesized).toBeDefined();
+    expect(synthesized).toContain('healthcare-vpc-test');
+  });
+
+  it('should create stack with minimal props', () => {
+    const app = Testing.app();
+    const stack = new TapStack(app, 'MinimalStack', {});
+
+    const synthesized = Testing.synth(stack);
+    expect(synthesized).toBeDefined();
+    // Should have default values
+    expect(synthesized).toContain('iac-rlhf-tf-states');
+    expect(synthesized).toContain('-dev');
+  });
+
+  it('should handle empty props object', () => {
+    const app = Testing.app();
+    const stack = new TapStack(app, 'EmptyPropsStack');
+
+    const synthesized = Testing.synth(stack);
+    expect(synthesized).toBeDefined();
+    expect(synthesized).toContain('dev');
+  });
+
+  it('should use props.awsRegion when provided', () => {
+    const app = Testing.app();
+    const stack = new TapStack(app, 'TestStack', {
+      environmentSuffix: 'test',
+      awsRegion: 'eu-west-1',
+    });
+
+    const synthesized = Testing.synth(stack);
+    expect(synthesized).toContain('eu-west-1');
+  });
+
+  it('should use default region ap-southeast-1 when no awsRegion provided', () => {
+    const app = Testing.app();
+    const stack = new TapStack(app, 'TestStack', {
+      environmentSuffix: 'test',
+    });
+
+    const synthesized = Testing.synth(stack);
+    expect(synthesized).toContain('ap-southeast-1');
+    expect(synthesized).toBeDefined();
+  });
 });
 
 describe('DatabaseStack', () => {
@@ -140,7 +255,7 @@ describe('DatabaseStack', () => {
 
     const synthesized = Testing.synth(stack);
     expect(synthesized).toContain('healthcare-vpc-test');
-    expect(synthesized).toContain('"cidr_block":"10.0.0.0/16"');
+    expect(containsPattern(synthesized, '"cidr_block":"10.0.0.0/16"')).toBe(true);
   });
 
   it('should enable DNS support and hostnames in VPC', () => {
@@ -150,8 +265,8 @@ describe('DatabaseStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('"enable_dns_hostnames":true');
-    expect(synthesized).toContain('"enable_dns_support":true');
+    expect(containsPattern(synthesized, '"enable_dns_hostnames":true')).toBe(true);
+    expect(containsPattern(synthesized, '"enable_dns_support":true')).toBe(true);
   });
 
   it('should create secondary VPC for DR region', () => {
@@ -162,7 +277,7 @@ describe('DatabaseStack', () => {
 
     const synthesized = Testing.synth(stack);
     expect(synthesized).toContain('healthcare-vpc-dr-test');
-    expect(synthesized).toContain('"cidr_block":"10.1.0.0/16"');
+    expect(containsPattern(synthesized, '"cidr_block":"10.1.0.0/16"')).toBe(true);
   });
 
   it('should create multi-AZ subnets in primary region', () => {
@@ -172,10 +287,10 @@ describe('DatabaseStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('"availability_zone":"ap-southeast-1a"');
-    expect(synthesized).toContain('"availability_zone":"ap-southeast-1b"');
-    expect(synthesized).toContain('"cidr_block":"10.0.1.0/24"');
-    expect(synthesized).toContain('"cidr_block":"10.0.2.0/24"');
+    expect(containsPattern(synthesized, '"availability_zone":"ap-southeast-1a"')).toBe(true);
+    expect(containsPattern(synthesized, '"availability_zone":"ap-southeast-1b"')).toBe(true);
+    expect(containsPattern(synthesized, '"cidr_block":"10.0.1.0/24"')).toBe(true);
+    expect(containsPattern(synthesized, '"cidr_block":"10.0.2.0/24"')).toBe(true);
   });
 
   it('should create multi-AZ subnets in secondary region', () => {
@@ -185,8 +300,8 @@ describe('DatabaseStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('"availability_zone":"ap-southeast-2a"');
-    expect(synthesized).toContain('"availability_zone":"ap-southeast-2b"');
+    expect(containsPattern(synthesized, '"availability_zone":"ap-southeast-2a"')).toBe(true);
+    expect(containsPattern(synthesized, '"availability_zone":"ap-southeast-2b"')).toBe(true);
   });
 
   it('should create security group for database with PostgreSQL port', () => {
@@ -197,8 +312,8 @@ describe('DatabaseStack', () => {
 
     const synthesized = Testing.synth(stack);
     expect(synthesized).toContain('healthcare-db-sg-test');
-    expect(synthesized).toContain('"from_port":5432');
-    expect(synthesized).toContain('"to_port":5432');
+    expect(containsPattern(synthesized, '"from_port":5432')).toBe(true);
+    expect(containsPattern(synthesized, '"to_port":5432')).toBe(true);
   });
 
   it('should restrict database access to VPC CIDR only', () => {
@@ -208,7 +323,7 @@ describe('DatabaseStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('"cidr_blocks":["10.0.0.0/16"]');
+    expect(containsPattern(synthesized, '"cidr_blocks":["10.0.0.0/16"]')).toBe(true);
   });
 
   it('should create DB subnet groups with environment suffix', () => {
@@ -230,9 +345,9 @@ describe('DatabaseStack', () => {
 
     const synthesized = Testing.synth(stack);
     expect(synthesized).toContain('healthcare-db-test');
-    expect(synthesized).toContain('"engine":"aurora-postgresql"');
-    expect(synthesized).toContain('"engine_mode":"provisioned"');
-    expect(synthesized).toContain('"engine_version":"15.3"');
+    expect(containsPattern(synthesized, '"engine":"aurora-postgresql"')).toBe(true);
+    expect(containsPattern(synthesized, '"engine_mode":"provisioned"')).toBe(true);
+    expect(containsPattern(synthesized, '"engine_version":"15.3"')).toBe(true);
   });
 
   it('should configure serverless v2 scaling with min and max capacity', () => {
@@ -243,8 +358,8 @@ describe('DatabaseStack', () => {
 
     const synthesized = Testing.synth(stack);
     expect(synthesized).toContain('serverlessv2_scaling_configuration');
-    expect(synthesized).toContain('"min_capacity":0.5');
-    expect(synthesized).toContain('"max_capacity":2');
+    expect(containsPattern(synthesized, '"min_capacity":0.5')).toBe(true);
+    expect(containsPattern(synthesized, '"max_capacity":2')).toBe(true);
   });
 
   it('should enable storage encryption with KMS', () => {
@@ -254,7 +369,7 @@ describe('DatabaseStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('"storage_encrypted":true');
+    expect(containsPattern(synthesized, '"storage_encrypted":true')).toBe(true);
     expect(synthesized).toContain('healthcare-db-kms-test');
   });
 
@@ -265,7 +380,7 @@ describe('DatabaseStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('"backup_retention_period":7');
+    expect(containsPattern(synthesized, '"backup_retention_period":7')).toBe(true);
   });
 
   it('should enable CloudWatch logs export for PostgreSQL', () => {
@@ -275,7 +390,7 @@ describe('DatabaseStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('"enabled_cloudwatch_logs_exports":["postgresql"]');
+    expect(containsPattern(synthesized, '"enabled_cloudwatch_logs_exports":["postgresql"]')).toBe(true);
   });
 
   it('should disable deletion protection for destroyability', () => {
@@ -285,7 +400,7 @@ describe('DatabaseStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('"deletion_protection":false');
+    expect(containsPattern(synthesized, '"deletion_protection":false')).toBe(true);
   });
 
   it('should skip final snapshot on deletion', () => {
@@ -295,7 +410,7 @@ describe('DatabaseStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('"skip_final_snapshot":true');
+    expect(containsPattern(synthesized, '"skip_final_snapshot":true')).toBe(true);
   });
 
   it('should create read replica cluster in secondary region', () => {
@@ -317,7 +432,7 @@ describe('DatabaseStack', () => {
 
     const synthesized = Testing.synth(stack);
     expect(synthesized).toContain('healthcare-db-instance-test');
-    expect(synthesized).toContain('"instance_class":"db.serverless"');
+    expect(containsPattern(synthesized, '"instance_class":"db.serverless"')).toBe(true);
   });
 
   it('should create database credentials in Secrets Manager', () => {
@@ -350,7 +465,7 @@ describe('DatabaseStack', () => {
     const synthesized = Testing.synth(stack);
     expect(synthesized).toContain('healthcare-backup-plan-test');
     expect(synthesized).toContain('continuous-backup');
-    expect(synthesized).toContain('"enable_continuous_backup":true');
+    expect(containsPattern(synthesized, '"enable_continuous_backup":true')).toBe(true);
   });
 
   it('should configure hourly backup schedule for RPO < 15 minutes', () => {
@@ -370,7 +485,7 @@ describe('DatabaseStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('"delete_after":7');
+    expect(containsPattern(synthesized, '"delete_after":7')).toBe(true);
   });
 
   it('should create backup IAM role with correct permissions', () => {
@@ -396,7 +511,7 @@ describe('DisasterRecoveryStack', () => {
     const synthesized = Testing.synth(stack);
     expect(synthesized).toContain('/healthcare/test/database/primary-id');
     expect(synthesized).toContain('/healthcare/test/database/replica-id');
-    expect(synthesized).toContain('"type":"String"');
+    expect(containsPattern(synthesized, '"type":"String"')).toBe(true);
   });
 
   it('should create Lambda execution role with correct trust policy', () => {
@@ -417,9 +532,9 @@ describe('DisasterRecoveryStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('rds:DescribeDBClusters');
-    expect(synthesized).toContain('rds:PromoteReadReplica');
-    expect(synthesized).toContain('rds:ModifyDBCluster');
+    expect(containsPattern(synthesized, 'rds:DescribeDBClusters')).toBe(true);
+    expect(containsPattern(synthesized, 'rds:PromoteReadReplica')).toBe(true);
+    expect(containsPattern(synthesized, 'rds:ModifyDBCluster')).toBe(true);
   });
 
   it('should grant Lambda role CloudWatch Logs permissions', () => {
@@ -429,9 +544,9 @@ describe('DisasterRecoveryStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('logs:CreateLogGroup');
-    expect(synthesized).toContain('logs:CreateLogStream');
-    expect(synthesized).toContain('logs:PutLogEvents');
+    expect(containsPattern(synthesized, 'logs:CreateLogGroup')).toBe(true);
+    expect(containsPattern(synthesized, 'logs:CreateLogStream')).toBe(true);
+    expect(containsPattern(synthesized, 'logs:PutLogEvents')).toBe(true);
   });
 
   it('should grant Lambda role SNS publish permissions', () => {
@@ -441,7 +556,7 @@ describe('DisasterRecoveryStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('sns:Publish');
+    expect(containsPattern(synthesized, 'sns:Publish')).toBe(true);
   });
 
   it('should grant Lambda role SSM parameter access', () => {
@@ -451,8 +566,8 @@ describe('DisasterRecoveryStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('ssm:GetParameter');
-    expect(synthesized).toContain('ssm:GetParameters');
+    expect(containsPattern(synthesized, 'ssm:GetParameter')).toBe(true);
+    expect(containsPattern(synthesized, 'ssm:GetParameters')).toBe(true);
   });
 
   it('should create Lambda function with correct configuration', () => {
@@ -463,8 +578,8 @@ describe('DisasterRecoveryStack', () => {
 
     const synthesized = Testing.synth(stack);
     expect(synthesized).toContain('healthcare-failover-test');
-    expect(synthesized).toContain('"handler":"failover-handler.handler"');
-    expect(synthesized).toContain('"runtime":"nodejs18.x"');
+    expect(containsPattern(synthesized, '"handler":"failover-handler.handler"')).toBe(true);
+    expect(containsPattern(synthesized, '"runtime":"nodejs18.x"')).toBe(true);
   });
 
   it('should configure Lambda with 5-minute timeout', () => {
@@ -474,7 +589,7 @@ describe('DisasterRecoveryStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('"timeout":300');
+    expect(containsPattern(synthesized, '"timeout":300')).toBe(true);
   });
 
   it('should configure Lambda with environment variables', () => {
@@ -484,9 +599,9 @@ describe('DisasterRecoveryStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('"ENVIRONMENT_SUFFIX":"mytest"');
-    expect(synthesized).toContain('"PRIMARY_REGION":"ap-southeast-1"');
-    expect(synthesized).toContain('"SECONDARY_REGION":"ap-southeast-2"');
+    expect(containsPattern(synthesized, '"ENVIRONMENT_SUFFIX":"mytest"')).toBe(true);
+    expect(containsPattern(synthesized, '"PRIMARY_REGION":"ap-southeast-1"')).toBe(true);
+    expect(containsPattern(synthesized, '"SECONDARY_REGION":"ap-southeast-2"')).toBe(true);
   });
 
   it('should create CloudWatch log group for Lambda', () => {
@@ -497,7 +612,7 @@ describe('DisasterRecoveryStack', () => {
 
     const synthesized = Testing.synth(stack);
     expect(synthesized).toContain('/aws/lambda/healthcare-failover-test');
-    expect(synthesized).toContain('"retention_in_days":30');
+    expect(containsPattern(synthesized, '"retention_in_days":30')).toBe(true);
   });
 
   it('should create CloudWatch alarm for database CPU', () => {
@@ -508,9 +623,9 @@ describe('DisasterRecoveryStack', () => {
 
     const synthesized = Testing.synth(stack);
     expect(synthesized).toContain('healthcare-db-cpu-test');
-    expect(synthesized).toContain('"metric_name":"CPUUtilization"');
-    expect(synthesized).toContain('"namespace":"AWS/RDS"');
-    expect(synthesized).toContain('"threshold":80');
+    expect(containsPattern(synthesized, '"metric_name":"CPUUtilization"')).toBe(true);
+    expect(containsPattern(synthesized, '"namespace":"AWS/RDS"')).toBe(true);
+    expect(containsPattern(synthesized, '"threshold":80')).toBe(true);
   });
 
   it('should create CloudWatch alarm for database connections', () => {
@@ -521,7 +636,7 @@ describe('DisasterRecoveryStack', () => {
 
     const synthesized = Testing.synth(stack);
     expect(synthesized).toContain('healthcare-db-connections-test');
-    expect(synthesized).toContain('"metric_name":"DatabaseConnections"');
+    expect(containsPattern(synthesized, '"metric_name":"DatabaseConnections"')).toBe(true);
   });
 
   it('should create CloudWatch alarm for replication lag', () => {
@@ -532,8 +647,8 @@ describe('DisasterRecoveryStack', () => {
 
     const synthesized = Testing.synth(stack);
     expect(synthesized).toContain('healthcare-replication-lag-test');
-    expect(synthesized).toContain('"metric_name":"AuroraGlobalDBReplicationLag"');
-    expect(synthesized).toContain('"threshold":900000');
+    expect(containsPattern(synthesized, '"metric_name":"AuroraGlobalDBReplicationLag"')).toBe(true);
+    expect(containsPattern(synthesized, '"threshold":900000')).toBe(true);
   });
 
   it('should configure replication lag alarm to trigger Lambda', () => {
@@ -554,7 +669,7 @@ describe('DisasterRecoveryStack', () => {
 
     const synthesized = Testing.synth(stack);
     expect(synthesized).toContain('healthcare-health-check-test');
-    expect(synthesized).toContain('"type":"CLOUDWATCH_METRIC"');
+    expect(containsPattern(synthesized, '"type":"CLOUDWATCH_METRIC"')).toBe(true);
     expect(synthesized).toContain('healthcare-replication-lag-test');
   });
 
@@ -565,7 +680,7 @@ describe('DisasterRecoveryStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('"cloudwatch_alarm_region":"ap-southeast-1"');
+    expect(containsPattern(synthesized, '"cloudwatch_alarm_region":"ap-southeast-1"')).toBe(true);
   });
 
   it('should set insufficient data as unhealthy for health check', () => {
@@ -575,7 +690,7 @@ describe('DisasterRecoveryStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('"insufficient_data_health_status":"Unhealthy"');
+    expect(containsPattern(synthesized, '"insufficient_data_health_status":"Unhealthy"')).toBe(true);
   });
 
   it('should configure alarm evaluation periods', () => {
@@ -585,7 +700,7 @@ describe('DisasterRecoveryStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('"evaluation_periods":2');
+    expect(containsPattern(synthesized, '"evaluation_periods":2')).toBe(true);
   });
 
   it('should use GreaterThanThreshold comparison for alarms', () => {
@@ -595,7 +710,7 @@ describe('DisasterRecoveryStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('"comparison_operator":"GreaterThanThreshold"');
+    expect(containsPattern(synthesized, '"comparison_operator":"GreaterThanThreshold"')).toBe(true);
   });
 });
 
@@ -608,7 +723,7 @@ describe('MonitoringStack', () => {
 
     const synthesized = Testing.synth(stack);
     expect(synthesized).toContain('healthcare-alerts-test');
-    expect(synthesized).toContain('"display_name":"Healthcare DR Alerts"');
+    expect(containsPattern(synthesized, '"display_name":"Healthcare DR Alerts"')).toBe(true);
   });
 
   it('should create SNS email subscription', () => {
@@ -618,7 +733,7 @@ describe('MonitoringStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('"protocol":"email"');
+    expect(containsPattern(synthesized, '"protocol":"email"')).toBe(true);
     expect(synthesized).toContain('ops-team@example.com');
   });
 
@@ -630,7 +745,7 @@ describe('MonitoringStack', () => {
 
     const synthesized = Testing.synth(stack);
     expect(synthesized).toContain('/aws/healthcare/application-test');
-    expect(synthesized).toContain('"retention_in_days":30');
+    expect(containsPattern(synthesized, '"retention_in_days":30')).toBe(true);
   });
 
   it('should create CloudWatch log group for disaster recovery', () => {
@@ -660,10 +775,10 @@ describe('MonitoringStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('"block_public_acls":true');
-    expect(synthesized).toContain('"block_public_policy":true');
-    expect(synthesized).toContain('"ignore_public_acls":true');
-    expect(synthesized).toContain('"restrict_public_buckets":true');
+    expect(containsPattern(synthesized, '"block_public_acls":true')).toBe(true);
+    expect(containsPattern(synthesized, '"block_public_policy":true')).toBe(true);
+    expect(containsPattern(synthesized, '"ignore_public_acls":true')).toBe(true);
+    expect(containsPattern(synthesized, '"restrict_public_buckets":true')).toBe(true);
   });
 
   it('should configure CloudTrail bucket policy for CloudTrail service', () => {
@@ -674,8 +789,8 @@ describe('MonitoringStack', () => {
 
     const synthesized = Testing.synth(stack);
     expect(synthesized).toContain('cloudtrail.amazonaws.com');
-    expect(synthesized).toContain('s3:GetBucketAcl');
-    expect(synthesized).toContain('s3:PutObject');
+    expect(containsPattern(synthesized, 's3:GetBucketAcl')).toBe(true);
+    expect(containsPattern(synthesized, 's3:PutObject')).toBe(true);
   });
 
   it('should enable CloudTrail with multi-region support', () => {
@@ -686,8 +801,8 @@ describe('MonitoringStack', () => {
 
     const synthesized = Testing.synth(stack);
     expect(synthesized).toContain('healthcare-audit-trail-test');
-    expect(synthesized).toContain('"is_multi_region_trail":true');
-    expect(synthesized).toContain('"include_global_service_events":true');
+    expect(containsPattern(synthesized, '"is_multi_region_trail":true')).toBe(true);
+    expect(containsPattern(synthesized, '"include_global_service_events":true')).toBe(true);
   });
 
   it('should enable log file validation for CloudTrail', () => {
@@ -697,7 +812,7 @@ describe('MonitoringStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('"enable_log_file_validation":true');
+    expect(containsPattern(synthesized, '"enable_log_file_validation":true')).toBe(true);
   });
 
   it('should configure event selector for all management events', () => {
@@ -707,8 +822,8 @@ describe('MonitoringStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('"read_write_type":"All"');
-    expect(synthesized).toContain('"include_management_events":true');
+    expect(containsPattern(synthesized, '"read_write_type":"All"')).toBe(true);
+    expect(containsPattern(synthesized, '"include_management_events":true')).toBe(true);
   });
 
   it('should tag all monitoring resources with environment', () => {
@@ -718,7 +833,7 @@ describe('MonitoringStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('"Environment":"prod"');
+    expect(containsPattern(synthesized, '"Environment":"prod"')).toBe(true);
   });
 });
 
@@ -731,7 +846,7 @@ describe('StorageStack', () => {
 
     const synthesized = Testing.synth(stack);
     expect(synthesized).toContain('healthcare-data-primary-test');
-    expect(synthesized).toContain('"force_destroy":true');
+    expect(containsPattern(synthesized, '"force_destroy":true')).toBe(true);
   });
 
   it('should create secondary S3 bucket in DR region', () => {
@@ -752,7 +867,7 @@ describe('StorageStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('"status":"Enabled"');
+    expect(containsPattern(synthesized, '"status":"Enabled"')).toBe(true);
   });
 
   it('should configure KMS encryption on primary bucket', () => {
@@ -762,8 +877,8 @@ describe('StorageStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('"sse_algorithm":"aws:kms"');
-    expect(synthesized).toContain('"bucket_key_enabled":true');
+    expect(containsPattern(synthesized, '"sse_algorithm":"aws:kms"')).toBe(true);
+    expect(containsPattern(synthesized, '"bucket_key_enabled":true')).toBe(true);
   });
 
   it('should create separate KMS keys for each region', () => {
@@ -784,7 +899,7 @@ describe('StorageStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('"enable_key_rotation":true');
+    expect(containsPattern(synthesized, '"enable_key_rotation":true')).toBe(true);
   });
 
   it('should create KMS aliases with environment suffix', () => {
@@ -806,8 +921,8 @@ describe('StorageStack', () => {
     const synthesized = Testing.synth(stack);
     expect(synthesized).toContain('s3-replication-role-test');
     expect(synthesized).toContain('s3.amazonaws.com');
-    expect(synthesized).toContain('s3:GetReplicationConfiguration');
-    expect(synthesized).toContain('s3:ReplicateObject');
+    expect(containsPattern(synthesized, 's3:GetReplicationConfiguration')).toBe(true);
+    expect(containsPattern(synthesized, 's3:ReplicateObject')).toBe(true);
   });
 
   it('should grant KMS decrypt and encrypt permissions to replication role', () => {
@@ -817,8 +932,8 @@ describe('StorageStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('kms:Decrypt');
-    expect(synthesized).toContain('kms:Encrypt');
+    expect(containsPattern(synthesized, 'kms:Decrypt')).toBe(true);
+    expect(containsPattern(synthesized, 'kms:Encrypt')).toBe(true);
   });
 
   it('should configure S3 replication with encryption', () => {
@@ -829,7 +944,7 @@ describe('StorageStack', () => {
 
     const synthesized = Testing.synth(stack);
     expect(synthesized).toContain('replicate-all');
-    expect(synthesized).toContain('"status":"Enabled"');
+    expect(containsPattern(synthesized, '"status":"Enabled"')).toBe(true);
     expect(synthesized).toContain('encryption_configuration');
   });
 
@@ -841,7 +956,7 @@ describe('StorageStack', () => {
 
     const synthesized = Testing.synth(stack);
     expect(synthesized).toContain('replication_time');
-    expect(synthesized).toContain('"minutes":15');
+    expect(containsPattern(synthesized, '"minutes":15')).toBe(true);
   });
 
   it('should enable delete marker replication', () => {
@@ -873,7 +988,7 @@ describe('StorageStack', () => {
 
     const synthesized = Testing.synth(stack);
     expect(synthesized).toContain('intelligent-tiering');
-    expect(synthesized).toContain('"days":30');
+    expect(containsPattern(synthesized, '"days":30')).toBe(true);
     expect(synthesized).toContain('INTELLIGENT_TIERING');
   });
 
@@ -886,7 +1001,7 @@ describe('StorageStack', () => {
     const synthesized = Testing.synth(stack);
     expect(synthesized).toContain('cleanup-old-versions');
     expect(synthesized).toContain('noncurrent_version_expiration');
-    expect(synthesized).toContain('"noncurrent_days":90');
+    expect(containsPattern(synthesized, '"noncurrent_days":90')).toBe(true);
   });
 
   it('should set KMS deletion window to 7 days', () => {
@@ -896,6 +1011,6 @@ describe('StorageStack', () => {
     });
 
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('"deletion_window_in_days":7');
+    expect(containsPattern(synthesized, '"deletion_window_in_days":7')).toBe(true);
   });
 });
