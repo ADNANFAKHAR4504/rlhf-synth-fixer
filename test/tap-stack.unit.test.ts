@@ -1,9 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
-describe('TapStack CloudFormation Template', () => {
+describe('CI/CD Pipeline CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
@@ -14,12 +12,6 @@ describe('TapStack CloudFormation Template', () => {
     template = JSON.parse(templateContent);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
-  });
-
   describe('Template Structure', () => {
     test('should have valid CloudFormation format version', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
@@ -28,88 +20,116 @@ describe('TapStack CloudFormation Template', () => {
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
+        'CI/CD Pipeline for Web Application Deployment using CodePipeline, CodeBuild, and CodeDeploy'
       );
     });
 
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
+    test('should have parameters section', () => {
+      expect(template.Parameters).toBeDefined();
+      expect(Object.keys(template.Parameters).length).toBeGreaterThan(0);
+    });
+
+    test('should have resources section', () => {
+      expect(template.Resources).toBeDefined();
+      expect(Object.keys(template.Resources).length).toBeGreaterThan(0);
+    });
+
+    test('should have outputs section', () => {
+      expect(template.Outputs).toBeDefined();
+      expect(Object.keys(template.Outputs).length).toBeGreaterThan(0);
     });
   });
 
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+    test('should have required CI/CD pipeline parameters', () => {
+      const requiredParams = [
+        'DevEnvironmentName',
+        'ProdEnvironmentName', 
+        'NotificationEmail',
+        'ArtifactBucketName',
+        'ApplicationName',
+        'RepositoryName',
+        'CreateCodeCommitRepo'
+      ];
+
+      requiredParams.forEach(paramName => {
+        expect(template.Parameters[paramName]).toBeDefined();
+        expect(template.Parameters[paramName].Type).toBe('String');
+      });
     });
 
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
-      );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
+    test('ApplicationName parameter should have correct default', () => {
+      const appNameParam = template.Parameters.ApplicationName;
+      expect(appNameParam.Default).toBe('WebApp');
+      expect(appNameParam.Description).toBe('Name of the application to be deployed');
+    });
+
+    test('CreateCodeCommitRepo parameter should have correct allowed values', () => {
+      const createRepoParam = template.Parameters.CreateCodeCommitRepo;
+      expect(createRepoParam.Default).toBe('false');
+      expect(createRepoParam.AllowedValues).toEqual(['true', 'false']);
     });
   });
 
   describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
-    });
+    test('should have required CI/CD pipeline resources', () => {
+      const requiredResources = [
+        'CodePipelineServiceRole',
+        'ArtifactBucket',
+        'BuildProject',
+        'TestProject',
+        'Pipeline'
+      ];
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
-    });
-
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
-    });
-
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+      requiredResources.forEach(resourceName => {
+        expect(template.Resources[resourceName]).toBeDefined();
       });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
     });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
-
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
+    test('CodePipelineServiceRole should be an IAM role', () => {
+      const role = template.Resources.CodePipelineServiceRole;
+      expect(role.Type).toBe('AWS::IAM::Role');
     });
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
+    test('ArtifactBucket should be an S3 bucket', () => {
+      const bucket = template.Resources.ArtifactBucket;
+      expect(bucket.Type).toBe('AWS::S3::Bucket');
+    });
 
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+    test('BuildProject should be a CodeBuild project', () => {
+      const project = template.Resources.BuildProject;
+      expect(project.Type).toBe('AWS::CodeBuild::Project');
+    });
+
+    test('TestProject should be a CodeBuild project', () => {
+      const project = template.Resources.TestProject;
+      expect(project.Type).toBe('AWS::CodeBuild::Project');
+    });
+
+    test('Pipeline should be a CodePipeline', () => {
+      const pipeline = template.Resources.Pipeline;
+      expect(pipeline.Type).toBe('AWS::CodePipeline::Pipeline');
+    });
+
+    test('all resources should have rlhf-iac-amazon tags', () => {
+      const resources = template.Resources;
+      Object.keys(resources).forEach(resourceName => {
+        const resource = resources[resourceName];
+        if (resource.Properties && resource.Properties.Tags) {
+          expect(resource.Properties.Tags.some(tag => 
+            tag.Key === 'rlhf-iac-amazon' && tag.Value === 'true'
+          )).toBe(true);
+        }
+      });
     });
   });
 
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
+        'PipelineArn',
+        'PipelineConsoleURL',
+        'NotificationTopicARN',
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -117,44 +137,37 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
+    test('should have conditional CodeCommit outputs when repository creation is enabled', () => {
+      const conditionalOutputs = [
+        'CodeCommitRepositoryCloneUrlHTTPS',
+        'CodeCommitRepositoryCloneUrlSSH',
+      ];
+
+      conditionalOutputs.forEach(outputName => {
+        const output = template.Outputs[outputName];
+        expect(output).toBeDefined();
+        expect(output.Condition).toBe('ShouldCreateCodeCommitRepo');
       });
     });
 
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
+    test('PipelineArn output should be correct', () => {
+      const output = template.Outputs.PipelineArn;
+      expect(output.Description).toBe('ARN of the CI/CD Pipeline');
+      expect(output.Value).toEqual({ Ref: 'Pipeline' });
+    });
+
+    test('PipelineConsoleURL output should reference ApplicationName parameter', () => {
+      const output = template.Outputs.PipelineConsoleURL;
+      expect(output.Description).toBe('Console URL for the CI/CD Pipeline');
       expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
+        'Fn::Sub': 'https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${ApplicationName}-Pipeline',
       });
     });
 
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
-      });
-    });
-
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
-      });
+    test('NotificationTopicARN output should reference PipelineNotificationTopic', () => {
+      const output = template.Outputs.NotificationTopicARN;
+      expect(output.Description).toBe('ARN of the SNS Topic used for pipeline notifications');
+      expect(output.Value).toEqual({ Ref: 'PipelineNotificationTopic' });
     });
   });
 
@@ -172,39 +185,44 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have exactly one resource', () => {
+    test('should have multiple CI/CD pipeline resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
+      expect(resourceCount).toBeGreaterThan(5); // Should have multiple IAM roles, S3 bucket, CodeBuild projects, etc.
     });
 
-    test('should have exactly one parameter', () => {
+    test('should have seven parameters for CI/CD configuration', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
+      expect(parameterCount).toBe(7);
     });
 
-    test('should have exactly four outputs', () => {
+    test('should have five outputs (3 always + 2 conditional)', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      expect(outputCount).toBe(5);
     });
   });
 
-  describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
-
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
+  describe('CI/CD Pipeline Configuration', () => {
+    test('should have conditions for optional CodeCommit repository', () => {
+      expect(template.Conditions).toBeDefined();
+      expect(template.Conditions.ShouldCreateCodeCommitRepo).toBeDefined();
     });
 
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
-      });
+    test('should have conditional resources for CodeCommit repository', () => {
+      const codeCommitRepo = template.Resources.CodeCommitRepo;
+      if (codeCommitRepo) {
+        expect(codeCommitRepo.Condition).toBe('ShouldCreateCodeCommitRepo');
+      }
+    });
+
+    test('should have proper IAM role for CodePipeline', () => {
+      const role = template.Resources.CodePipelineServiceRole;
+      expect(role.Properties.AssumeRolePolicyDocument).toBeDefined();
+      expect(role.Properties.Policies).toBeDefined();
+    });
+
+    test('should reference application name in pipeline configuration', () => {
+      const pipeline = template.Resources.Pipeline;
+      expect(JSON.stringify(pipeline.Properties)).toContain('ApplicationName');
     });
   });
 });
