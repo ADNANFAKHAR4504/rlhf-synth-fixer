@@ -166,6 +166,7 @@ echo "Application deployment script goes here"
       storageType: 'gp3',
       storageEncrypted: true,
       engine: 'postgres',
+      parameterGroupFamily: 'postgres17', // Add this line
       dbName: 'appdb',
       masterUsername: 'dbadmin',
       masterPassword: props?.dbPassword,
