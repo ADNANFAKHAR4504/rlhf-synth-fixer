@@ -23,6 +23,7 @@ export class TapStack extends cdk.Stack {
         env: { region: 'us-east-1', account: props?.env?.account },
         domainName: `cloudsetup-${environmentSuffix}.example.com`,
         environmentSuffix,
+        createHostedZone: false,
       }
     );
 

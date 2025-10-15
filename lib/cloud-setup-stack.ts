@@ -22,6 +22,8 @@ export interface CloudSetupStackProps extends cdk.StackProps {
   // Optional: ARNs for certs if available
   albCertificateArn?: string;
   cloudFrontCertificateArn?: string; // should be in us-east-1 when used
+  // When true, create a public Route53 hosted zone for `domainName`. Default: false.
+  createHostedZone?: boolean;
 }
 
 export class CloudSetupStack extends cdk.Stack {
@@ -219,38 +221,43 @@ export class CloudSetupStack extends cdk.Stack {
     });
     this.albDns = alb.loadBalancerDnsName;
 
-    // Route53 + CloudFront (CloudFront certificate should be in us-east-1 if provided)
-    const hostedZone = new route53.HostedZone(
-      this,
-      `hosted-zone-${this.suffix}`,
-      { zoneName: props.domainName }
-    );
+    // CloudFront + optional Route53 zone. Do not create a public hosted zone by default
+    const domainNames = props.domainName ? [props.domainName] : undefined;
+    const cfCert = props.cloudFrontCertificateArn
+      ? acm.Certificate.fromCertificateArn(
+          this,
+          `cf-cert-${this.suffix}`,
+          props.cloudFrontCertificateArn
+        )
+      : undefined;
+
     const cf = new cloudfront.Distribution(this, `cf-${this.suffix}`, {
       defaultBehavior: {
         origin: new origins.LoadBalancerV2Origin(alb),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
       },
-      domainNames: [props.domainName],
-      certificate: props.cloudFrontCertificateArn
-        ? acm.Certificate.fromCertificateArn(
-            this,
-            `cf-cert-${this.suffix}`,
-            props.cloudFrontCertificateArn
-          )
-        : undefined,
+      domainNames: domainNames,
+      certificate: domainNames && cfCert ? cfCert : undefined,
       minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
       priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
     });
 
     this.cloudFrontUrl = `https://${cf.distributionDomainName}`;
 
-    new route53.ARecord(this, `cf-alias-${this.suffix}`, {
-      zone: hostedZone,
-      recordName: props.domainName,
-      target: route53.RecordTarget.fromAlias(
-        new cdk.aws_route53_targets.CloudFrontTarget(cf)
-      ),
-    });
+    if (props.createHostedZone && props.domainName) {
+      const hostedZone = new route53.HostedZone(
+        this,
+        `hosted-zone-${this.suffix}`,
+        { zoneName: props.domainName }
+      );
+      new route53.ARecord(this, `cf-alias-${this.suffix}`, {
+        zone: hostedZone,
+        recordName: props.domainName,
+        target: route53.RecordTarget.fromAlias(
+          new cdk.aws_route53_targets.CloudFrontTarget(cf)
+        ),
+      });
+    }
 
     // CloudWatch alarm
     new cloudwatch.Alarm(this, `cpu-alarm-${this.suffix}`, {
