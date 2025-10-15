@@ -1,7 +1,7 @@
 # CloudFormation Template Prompt for Node.js Web App Deployment
 
 
-**Task:** Deploy a scalable Node.js web application using AWS CloudFormation and Elastic Beanstalk.  
+**Task:** Deploy a scalable Node.js web application using AWS CloudFormation and Elastic Beanstalk.
 
 
 Write a fully functional and production-ready **AWS CloudFormation template (YAML)** to deploy a Node.js web application with the following requirements:
@@ -64,5 +64,5 @@ Write a fully functional and production-ready **AWS CloudFormation template (YAM
 - Provide minimal **comments** explaining key sections.
 
 
-**Deliverable:**  
+**Deliverable:**
 A single CloudFormation YAML template ready for deployment across AWS accounts, supporting ~4,000 daily users with basic scaling, monitoring, and secure access.
