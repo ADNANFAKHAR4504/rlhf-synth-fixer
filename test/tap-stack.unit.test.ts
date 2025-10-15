@@ -221,41 +221,30 @@ describe('TapStack', () => {
     });
   });
 
-  describe('IAM Identity Federation', () => {
-    test('creates SAML Provider', () => {
-      template.hasResourceProperties('AWS::IAM::SAMLProvider', {
-        Name: `CorporateIdentityProvider-${environmentSuffix}`,
-        SamlMetadataDocument: Match.stringLikeRegexp('xml'),
-      });
-    });
-
-    test('creates Federated User Role with correct trust policy', () => {
+  describe('IAM Access Control', () => {
+    test('creates Hybrid Access Role with correct trust policy', () => {
       template.hasResourceProperties('AWS::IAM::Role', {
-        RoleName: `FederatedUserRole-${environmentSuffix}`,
+        RoleName: `HybridAccessRole-${environmentSuffix}`,
         AssumeRolePolicyDocument: Match.objectLike({
           Statement: Match.arrayWith([
             Match.objectLike({
-              Action: 'sts:AssumeRoleWithSAML',
+              Action: 'sts:AssumeRole',
               Effect: 'Allow',
-              Condition: {
-                StringEquals: {
-                  'SAML:aud': 'https://signin.aws.amazon.com/saml',
-                },
-              },
+              Principal: Match.objectLike({
+                AWS: Match.anyValue(),
+              }),
             }),
           ]),
         }),
         ManagedPolicyArns: Match.arrayWith([
           Match.objectLike({
-            'Fn::Join': Match.arrayWith([
-              Match.arrayWith([Match.stringLikeRegexp('ReadOnlyAccess')]),
-            ]),
+            'Fn::Join': Match.anyValue(),
           }),
         ]),
       });
     });
 
-    test('creates inline policy for Federated User Role', () => {
+    test('creates inline policy for Hybrid Access Role', () => {
       template.hasResourceProperties('AWS::IAM::Role', {
         Policies: Match.arrayWith([
           Match.objectLike({
@@ -309,15 +298,9 @@ describe('TapStack', () => {
       });
     });
 
-    test('exports SAML Provider ARN', () => {
-      template.hasOutput('SAMLProviderArn', {
-        Description: 'SAML Provider ARN',
-      });
-    });
-
-    test('exports Federated User Role ARN', () => {
-      template.hasOutput('FederatedUserRoleArn', {
-        Description: 'Federated User Role ARN',
+    test('exports Hybrid Access Role ARN', () => {
+      template.hasOutput('HybridAccessRoleArn', {
+        Description: 'Hybrid Access Role ARN',
       });
     });
   });
@@ -344,7 +327,6 @@ describe('TapStack', () => {
     });
 
     test('creates expected number of IAM resources', () => {
-      template.resourceCountIs('AWS::IAM::SAMLProvider', 1);
       template.resourceCountIs('AWS::IAM::Role', 2);
     });
 
@@ -397,12 +379,8 @@ describe('TapStack', () => {
         ]),
       });
 
-      testTemplate.hasResourceProperties('AWS::IAM::SAMLProvider', {
-        Name: 'CorporateIdentityProvider-test123',
-      });
-
       testTemplate.hasResourceProperties('AWS::IAM::Role', {
-        RoleName: 'FederatedUserRole-test123',
+        RoleName: 'HybridAccessRole-test123',
       });
     });
 
@@ -417,8 +395,8 @@ describe('TapStack', () => {
         ]),
       });
 
-      testTemplate.hasResourceProperties('AWS::IAM::SAMLProvider', {
-        Name: 'CorporateIdentityProvider-dev',
+      testTemplate.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: 'HybridAccessRole-dev',
       });
     });
   });

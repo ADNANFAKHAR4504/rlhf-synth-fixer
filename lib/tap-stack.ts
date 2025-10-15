@@ -230,30 +230,9 @@ export class TapStack extends cdk.Stack {
       name: `onprem-dns-forwarding-${environmentSuffix}`,
     });
 
-    const samlMetadata =
-      this.node.tryGetContext('samlMetadata') ||
-      '<?xml version="1.0" encoding="UTF-8"?><!-- Placeholder for SAML metadata -->';
-
-    const samlProvider = new iam.CfnSAMLProvider(
-      this,
-      'CorporateSAMLProvider',
-      {
-        name: `CorporateIdentityProvider-${environmentSuffix}`,
-        samlMetadataDocument: samlMetadata,
-      }
-    );
-
-    const federatedUserRole = new iam.Role(this, 'FederatedUserRole', {
-      roleName: `FederatedUserRole-${environmentSuffix}`,
-      assumedBy: new iam.FederatedPrincipal(
-        samlProvider.ref,
-        {
-          StringEquals: {
-            'SAML:aud': 'https://signin.aws.amazon.com/saml',
-          },
-        },
-        'sts:AssumeRoleWithSAML'
-      ),
+    const hybridAccessRole = new iam.Role(this, 'HybridAccessRole', {
+      roleName: `HybridAccessRole-${environmentSuffix}`,
+      assumedBy: new iam.AccountRootPrincipal(),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('ReadOnlyAccess'),
       ],
@@ -312,14 +291,9 @@ export class TapStack extends cdk.Stack {
       description: 'Outbound Route 53 Resolver Endpoint ID',
     });
 
-    new cdk.CfnOutput(this, 'SAMLProviderArn', {
-      value: samlProvider.ref,
-      description: 'SAML Provider ARN',
-    });
-
-    new cdk.CfnOutput(this, 'FederatedUserRoleArn', {
-      value: federatedUserRole.roleArn,
-      description: 'Federated User Role ARN',
+    new cdk.CfnOutput(this, 'HybridAccessRoleArn', {
+      value: hybridAccessRole.roleArn,
+      description: 'Hybrid Access Role ARN',
     });
   }
 }
