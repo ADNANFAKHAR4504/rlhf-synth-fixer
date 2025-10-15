@@ -39,6 +39,18 @@
             "index": "pypi",
             "markers": "python_version >= '3.9'",
             "version": "==25.4.0"
+<<<<<<< HEAD
+=======
+        },
+        "aws-cdk-aws-lambda-python-alpha": {
+            "hashes": [
+                "sha256:58a6fa01d38fbfd6071a6e1b4396e12f6b11190847c6f30dc8344f3338922789",
+                "sha256:7f2d712923428693f111b8535fa88dd2d35877ec2f806cac44ae0fe1c260ff15"
+            ],
+            "index": "pypi",
+            "markers": "python_version ~= '3.9'",
+            "version": "==2.214.0a0"
+>>>>>>> 3e2867fa76167f5c478a4f303fcbc2618753ce11
         },
         "aws-cdk-aws-lambda-python-alpha": {
             "hashes": [
@@ -2676,11 +2688,19 @@
         },
         "pytokens": {
             "hashes": [
+<<<<<<< HEAD
                 "sha256:c9a4bfa0be1d26aebce03e6884ba454e842f186a59ea43a6d3b25af58223c044",
                 "sha256:db7b72284e480e69fb085d9f251f66b3d2df8b7166059261258ff35f50fb711b"
             ],
             "markers": "python_version >= '3.8'",
             "version": "==0.1.10"
+=======
+                "sha256:532d6421364e5869ea57a9523bf385f02586d4662acbcc0342afd69511b4dd43",
+                "sha256:74d4b318c67f4295c13782ddd9abcb7e297ec5630ad060eb90abf7ebbefe59f8"
+            ],
+            "markers": "python_version >= '3.8'",
+            "version": "==0.2.0"
+>>>>>>> 3e2867fa76167f5c478a4f303fcbc2618753ce11
         },
         "pyyaml": {
             "hashes": [
