@@ -46,7 +46,7 @@ export class TapStack extends TerraformStack {
     // Configure S3 Backend
     new S3Backend(this, {
       bucket: stateBucket,
-      key: `${environmentSuffix}/${id}.tfstate`,
+      key: `${environmentSuffix}/${id}s.tfstate`,
       region: stateBucketRegion,
       encrypt: true,
     });
