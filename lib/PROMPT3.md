@@ -15,4 +15,4 @@ MasterUserPassword: '{{resolve:ssm-secure:/tapstack/prod/dbpassword:1}}'
 
 Review the entire template for any other unused parameters or properties to prevent future W2001 warnings.
 
-Ensure the final TapStack.yml passes cfn-lint cleanly with zero warnings or errors.
+Ensure the final TapStack.yml passes cfn-lint cleanly with zero warnings or errors
