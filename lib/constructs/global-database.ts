@@ -50,15 +50,6 @@ export class GlobalDatabase extends Construct {
     // Create parameter group once for reuse
     this.parameterGroup = this.createParameterGroup();
 
-    // Create global cluster with unique identifier
-    this.globalCluster = new rds.CfnGlobalCluster(this, 'GlobalCluster', {
-      globalClusterIdentifier: `financial-app-global-cluster-${envSuffix}`,
-      sourceDbClusterIdentifier: undefined, // Will be set after primary cluster creation
-      storageEncrypted: true,
-      engine: 'aurora-mysql',
-      engineVersion: '8.0.mysql_aurora.3.08.2',
-    });
-
     // Create primary cluster
     const primaryVpc = new ec2.Vpc(this, 'PrimaryVpc', {
       maxAzs: 3,
@@ -100,9 +91,14 @@ export class GlobalDatabase extends Construct {
       cfnCluster.backtrackWindow = 72; // 72 hours
     }
 
-    // Update global cluster with primary cluster ARN
-    this.globalCluster.sourceDbClusterIdentifier =
-      this.primaryCluster.clusterArn;
+    // Create global cluster from primary cluster
+    this.globalCluster = new rds.CfnGlobalCluster(this, 'GlobalCluster', {
+      globalClusterIdentifier: `financial-app-global-cluster-${envSuffix}`,
+      sourceDbClusterIdentifier: this.primaryCluster.clusterArn,
+      storageEncrypted: true,
+      engine: 'aurora-mysql',
+      engineVersion: '8.0.mysql_aurora.3.08.2',
+    });
 
     // Create secondary clusters
     this.createSecondaryClusters(
