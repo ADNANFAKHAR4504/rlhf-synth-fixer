@@ -48,7 +48,6 @@ locals {
   db_subnet_cidrs      = ["10.0.30.0/24", "10.0.40.0/24"]
 }
 
-# Get latest Amazon Linux 2 AMI
 data "aws_ami" "amazon_linux_2" {
   most_recent = true
   owners      = ["amazon"]
