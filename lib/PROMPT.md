@@ -19,7 +19,7 @@
 >    * Define **AWS Config** to continuously monitor resource compliance and trigger CloudWatch alarms for configuration drifts.
 > 3. **Compute**
 >
->    * Launch **two EC2 instances** (parameterized `InstanceType`, allowed values only **T2 and T3 families**) in **different AZs (private subnets)**.
+    * Launch **two EC2 instances** (parameterized `InstanceType`, allowed values only **T2 and T3 families**) in **different AZs (private subnets)**.
     * Attach an **IAM Role and Instance Profile** that grants **SSM agent access**.
     * Apply encryption to all EBS volumes using a dedicated **KMS key**.
  4. **Load Balancing**
