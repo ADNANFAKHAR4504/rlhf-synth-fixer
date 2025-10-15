@@ -226,10 +226,15 @@ describe('TAP Stack - Live Integration Tests (CloudFormation YAML)', () => {
     const lb = lbs.LoadBalancers?.find((x) => x.DNSName?.toLowerCase() === lbDns!.toLowerCase());
     if (!lb) return;
 
-    const tgs = await elbv2.send(new DescribeTargetGroupsCommand({ LoadBalancerArn: lb.LoadBalancerArn }));
-    expect(tgs.TargetGroups?.length || 0).toBeGreaterThan(0);
+    // Query all target groups and filter by LoadBalancerArns
+    const allTgs = await elbv2.send(new DescribeTargetGroupsCommand({}));
+    const tgs = allTgs.TargetGroups?.filter((tg) =>
+      tg.LoadBalancerArns?.some((arn) => arn === lb.LoadBalancerArn)
+    ) || [];
 
-    const tg = tgs.TargetGroups![0];
+    expect(tgs.length).toBeGreaterThan(0);
+
+    const tg = tgs[0];
     const health = await elbv2.send(new DescribeTargetHealthCommand({ TargetGroupArn: tg.TargetGroupArn }));
     expect(health.TargetHealthDescriptions).toBeDefined();
   }, 25000);
