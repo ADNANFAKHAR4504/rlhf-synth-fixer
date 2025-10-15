@@ -422,23 +422,16 @@ describe('Production Cloud Environment Integration Tests', () => {
   });
 
   describe('IAM Role Configuration - SERVICE-LEVEL', () => {
-    let roles: AWS.IAM.RoleList;
-
-    beforeAll(async () => {
-      const response = await iam.listRoles({}).promise();
-      roles = response.Roles || [];
-    });
-
     // Maps to PROMPT requirement: Best practices for EC2 permissions
     test('should have IAM role for EC2 with CloudWatch permissions', async () => {
-      const ec2Role = roles.find(role =>
-        role.RoleName === 'Production-EC2-Role'
-      );
+      const roleResponse = await iam.getRole({
+        RoleName: 'Production-EC2-Role'
+      }).promise();
 
-      expect(ec2Role).toBeDefined();
+      expect(roleResponse.Role).toBeDefined();
 
       const policiesResponse = await iam.listAttachedRolePolicies({
-        RoleName: ec2Role!.RoleName
+        RoleName: roleResponse.Role.RoleName
       }).promise();
 
       const hasCloudWatchPolicy = policiesResponse.AttachedPolicies!.some(
@@ -450,14 +443,14 @@ describe('Production Cloud Environment Integration Tests', () => {
 
     // Maps to PROMPT requirement: "database credentials are managed securely"
     test('should have IAM role for EC2 with Secrets Manager read access', async () => {
-      const ec2Role = roles.find(role =>
-        role.RoleName === 'Production-EC2-Role'
-      );
+      const roleResponse = await iam.getRole({
+        RoleName: 'Production-EC2-Role'
+      }).promise();
 
-      expect(ec2Role).toBeDefined();
+      expect(roleResponse.Role).toBeDefined();
 
       const policiesResponse = await iam.listRolePolicies({
-        RoleName: ec2Role!.RoleName
+        RoleName: roleResponse.Role.RoleName
       }).promise();
 
       const hasSecretsPolicy = policiesResponse.PolicyNames!.some(
