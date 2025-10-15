@@ -254,7 +254,6 @@ export class DatabaseStack extends Construct {
       dbSubnetGroupName: primarySubnetGroup.name,
       vpcSecurityGroupIds: [primarySecurityGroup.id],
       backupRetentionPeriod: 7,
-      preferredBackupWindow: '03:00-04:00',
       preferredMaintenanceWindow: 'mon:04:00-mon:05:00',
       enabledCloudwatchLogsExports: ['postgresql'],
       storageEncrypted: true,
