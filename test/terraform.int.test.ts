@@ -1,6 +1,5 @@
 // Integration tests for global content delivery with WAF protection
-// Tests deployed infrastructure with real AWS resources in CI/CD
-// Supports mock data for local testing
+// Tests deployed infrastructure with real AWS resources
 
 import {
   CloudFrontClient,
@@ -41,9 +40,6 @@ import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
 
-// Check if running in CI/CD
-const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
-
 // Load outputs from deployment
 const OUTPUT_FILE = path.join(__dirname, '../cfn-outputs/all-outputs.json');
 
@@ -72,55 +68,31 @@ interface DeploymentOutputs {
   quicksight_dataset_arn?: string;
 }
 
-// Mock data for local testing
-const MOCK_OUTPUTS: DeploymentOutputs = {
-  cloudfront_distribution_id: 'E1234567890ABC',
-  cloudfront_domain_name: 'd111111abcdef8.cloudfront.net',
-  cloudfront_url: 'https://d111111abcdef8.cloudfront.net',
-  s3_bucket_primary: 'mock-content-us-east-1-12345678',
-  s3_bucket_primary_arn: 'arn:aws:s3:::mock-content-us-east-1-12345678',
-  s3_bucket_secondary: 'mock-content-ap-southeast-1-12345678',
-  s3_bucket_secondary_arn: 'arn:aws:s3:::mock-content-ap-southeast-1-12345678',
-  waf_web_acl_id: 'a1b2c3d4-5678-90ab-cdef-EXAMPLE11111',
-  waf_web_acl_arn: 'arn:aws:wafv2:us-east-1:123456789012:global/webacl/mock-waf/a1b2c3d4-5678-90ab-cdef-EXAMPLE11111',
-  cloudtrail_name: '',
-  cloudtrail_enabled: false,
-  sns_topic_arn: 'arn:aws:sns:us-east-1:123456789012:mock-alerts',
-  lambda_edge_viewer_request_arn: 'arn:aws:lambda:us-east-1:123456789012:function:mock-viewer-request:1',
-  lambda_edge_viewer_response_arn: 'arn:aws:lambda:us-east-1:123456789012:function:mock-viewer-response:1',
-  analytics_bucket: 'mock-analytics-12345678',
-  cloudfront_logs_bucket: 'mock-cf-logs-12345678',
-  cloudwatch_dashboard_name: 'mock-dashboard',
-  primary_region: 'us-east-1',
-  secondary_region: 'ap-southeast-1',
-  s3_replication_enabled: true,
-};
-
-// Load outputs or use mock data
+// Load outputs from deployment
 function loadOutputs(): DeploymentOutputs {
-  if (isCI) {
-    if (!fs.existsSync(OUTPUT_FILE)) {
-      throw new Error(`Output file not found: ${OUTPUT_FILE}. Required for CI/CD testing.`);
-    }
-    const outputsContent = fs.readFileSync(OUTPUT_FILE, 'utf8');
-    const rawOutputs = JSON.parse(outputsContent);
-    
-    // Terraform outputs have format: { "value": "actual-value", "type": "string", "sensitive": false }
-    // Extract just the values
-    const extractedOutputs: DeploymentOutputs = {};
-    for (const [key, val] of Object.entries(rawOutputs)) {
-      if (val && typeof val === 'object' && 'value' in val) {
-        extractedOutputs[key as keyof DeploymentOutputs] = (val as any).value;
-      } else {
-        extractedOutputs[key as keyof DeploymentOutputs] = val as any;
-      }
-    }
-    
-    return extractedOutputs;
+  if (!fs.existsSync(OUTPUT_FILE)) {
+    throw new Error(
+      `Output file not found: ${OUTPUT_FILE}. ` +
+      'Integration tests require real deployment outputs. ' +
+      'Please deploy the infrastructure first before running integration tests.'
+    );
   }
   
-  console.log('Running in local mode with mock data');
-  return MOCK_OUTPUTS;
+  const outputsContent = fs.readFileSync(OUTPUT_FILE, 'utf8');
+  const rawOutputs = JSON.parse(outputsContent);
+  
+  // Terraform outputs have format: { "value": "actual-value", "type": "string", "sensitive": false }
+  // Extract just the values
+  const extractedOutputs: DeploymentOutputs = {};
+  for (const [key, val] of Object.entries(rawOutputs)) {
+    if (val && typeof val === 'object' && 'value' in val) {
+      extractedOutputs[key as keyof DeploymentOutputs] = (val as any).value;
+    } else {
+      extractedOutputs[key as keyof DeploymentOutputs] = val as any;
+    }
+  }
+  
+  return extractedOutputs;
 }
 
 describe('Global Content Delivery Integration Tests', () => {
@@ -156,8 +128,8 @@ describe('Global Content Delivery Integration Tests', () => {
   });
 
   afterAll(async () => {
-    // Cleanup test objects only if running against real infrastructure in CI
-    if (isCI && testObjectsToCleanup.length > 0) {
+    // Cleanup test objects
+    if (testObjectsToCleanup.length > 0) {
       console.log('Cleaning up test objects...');
       for (const key of testObjectsToCleanup) {
         try {
@@ -174,12 +146,6 @@ describe('Global Content Delivery Integration Tests', () => {
 
   describe('S3 Bucket Tests', () => {
     test('primary S3 bucket exists and is accessible', async () => {
-      if (!isCI) {
-        console.log('Skipping in local mode - using mock data');
-        expect(outputs.s3_bucket_primary).toBeDefined();
-        return;
-      }
-
       const command = new HeadBucketCommand({
         Bucket: outputs.s3_bucket_primary,
       });
@@ -188,12 +154,6 @@ describe('Global Content Delivery Integration Tests', () => {
     });
 
     test('secondary S3 bucket exists and is accessible', async () => {
-      if (!isCI) {
-        console.log('Skipping in local mode - using mock data');
-        expect(outputs.s3_bucket_secondary).toBeDefined();
-        return;
-      }
-
       const command = new HeadBucketCommand({
         Bucket: outputs.s3_bucket_secondary,
       });
@@ -202,11 +162,6 @@ describe('Global Content Delivery Integration Tests', () => {
     });
 
     test('primary S3 bucket has versioning enabled', async () => {
-      if (!isCI) {
-        expect(outputs.s3_bucket_primary).toBeDefined();
-        return;
-      }
-
       const command = new GetBucketVersioningCommand({
         Bucket: outputs.s3_bucket_primary,
       });
@@ -216,11 +171,6 @@ describe('Global Content Delivery Integration Tests', () => {
     });
 
     test('primary S3 bucket has encryption enabled', async () => {
-      if (!isCI) {
-        expect(outputs.s3_bucket_primary).toBeDefined();
-        return;
-      }
-
       const command = new GetBucketEncryptionCommand({
         Bucket: outputs.s3_bucket_primary,
       });
@@ -232,7 +182,7 @@ describe('Global Content Delivery Integration Tests', () => {
     });
 
     test('S3 cross-region replication is configured', async () => {
-      if (!isCI || !outputs.s3_replication_enabled) {
+      if (!outputs.s3_replication_enabled) {
         expect(outputs.s3_replication_enabled).toBeDefined();
         return;
       }
@@ -250,11 +200,6 @@ describe('Global Content Delivery Integration Tests', () => {
 
   describe('CloudFront Tests', () => {
     test('CloudFront distribution exists', async () => {
-      if (!isCI) {
-        expect(outputs.cloudfront_distribution_id).toBeDefined();
-        return;
-      }
-
       const command = new GetDistributionCommand({
         Id: outputs.cloudfront_distribution_id,
       });
@@ -265,11 +210,6 @@ describe('Global Content Delivery Integration Tests', () => {
     });
 
     test('CloudFront distribution has WAF attached', async () => {
-      if (!isCI) {
-        expect(outputs.waf_web_acl_id).toBeDefined();
-        return;
-      }
-
       const command = new GetDistributionCommand({
         Id: outputs.cloudfront_distribution_id,
       });
@@ -280,11 +220,6 @@ describe('Global Content Delivery Integration Tests', () => {
     });
 
     test('CloudFront domain is accessible via HTTPS', async () => {
-      if (!isCI) {
-        expect(outputs.cloudfront_url).toBeDefined();
-        return;
-      }
-
       // Just test the domain resolves and responds
       try {
         const response = await axios.get(outputs.cloudfront_url!, {
@@ -301,11 +236,6 @@ describe('Global Content Delivery Integration Tests', () => {
 
   describe('WAF Tests', () => {
     test('WAF Web ACL exists', async () => {
-      if (!isCI) {
-        expect(outputs.waf_web_acl_id).toBeDefined();
-        return;
-      }
-
       const command = new GetWebACLCommand({
         Id: outputs.waf_web_acl_id,
         Name: 'global-content-delivery-cloudfront-waf',
@@ -318,11 +248,6 @@ describe('Global Content Delivery Integration Tests', () => {
     });
 
     test('WAF has managed rule groups configured', async () => {
-      if (!isCI) {
-        expect(outputs.waf_web_acl_id).toBeDefined();
-        return;
-      }
-
       const command = new GetWebACLCommand({
         Id: outputs.waf_web_acl_id,
         Name: 'global-content-delivery-cloudfront-waf',
@@ -345,11 +270,6 @@ describe('Global Content Delivery Integration Tests', () => {
     });
 
     test('WAF has rate limiting configured', async () => {
-      if (!isCI) {
-        expect(outputs.waf_web_acl_id).toBeDefined();
-        return;
-      }
-
       const command = new GetWebACLCommand({
         Id: outputs.waf_web_acl_id,
         Name: 'global-content-delivery-cloudfront-waf',
@@ -369,11 +289,6 @@ describe('Global Content Delivery Integration Tests', () => {
 
   describe('Lambda@Edge Tests', () => {
     test('viewer request Lambda function ARN is configured', async () => {
-      if (!isCI) {
-        expect(outputs.lambda_edge_viewer_request_arn).toBeDefined();
-        return;
-      }
-
       // Verify ARN is defined and has correct format
       expect(outputs.lambda_edge_viewer_request_arn).toBeDefined();
       expect(outputs.lambda_edge_viewer_request_arn).toContain('lambda');
@@ -401,11 +316,6 @@ describe('Global Content Delivery Integration Tests', () => {
     });
 
     test('viewer response Lambda function ARN is configured', async () => {
-      if (!isCI) {
-        expect(outputs.lambda_edge_viewer_response_arn).toBeDefined();
-        return;
-      }
-
       // Verify ARN is defined and has correct format
       expect(outputs.lambda_edge_viewer_response_arn).toBeDefined();
       expect(outputs.lambda_edge_viewer_response_arn).toContain('lambda');
@@ -435,11 +345,6 @@ describe('Global Content Delivery Integration Tests', () => {
 
   describe('CloudWatch Tests', () => {
     test('CloudWatch dashboard exists', async () => {
-      if (!isCI) {
-        expect(outputs.cloudwatch_dashboard_name).toBeDefined();
-        return;
-      }
-
       const command = new GetDashboardCommand({
         DashboardName: outputs.cloudwatch_dashboard_name,
       });
@@ -450,11 +355,6 @@ describe('Global Content Delivery Integration Tests', () => {
     });
 
     test('CloudWatch alarms are configured', async () => {
-      if (!isCI) {
-        expect(outputs.cloudwatch_dashboard_name).toBeDefined();
-        return;
-      }
-
       const command = new DescribeAlarmsCommand({
         AlarmNamePrefix: 'global-content-delivery',
       });
@@ -477,11 +377,6 @@ describe('Global Content Delivery Integration Tests', () => {
 
   describe('SNS Tests', () => {
     test('SNS topic exists with email subscription', async () => {
-      if (!isCI) {
-        expect(outputs.sns_topic_arn).toBeDefined();
-        return;
-      }
-
       const command = new ListSubscriptionsByTopicCommand({
         TopicArn: outputs.sns_topic_arn,
       });
@@ -499,12 +394,6 @@ describe('Global Content Delivery Integration Tests', () => {
 
   describe('CloudTrail Tests', () => {
     test('CloudTrail status matches configuration', async () => {
-      if (!isCI) {
-        // In local mode, just verify the output exists
-        expect(outputs.cloudtrail_enabled !== undefined).toBe(true);
-        return;
-      }
-
       // If CloudTrail is disabled (default), verify it's not deployed
       if (!outputs.cloudtrail_name || outputs.cloudtrail_name === '') {
         expect(outputs.cloudtrail_enabled).toBe(false);
@@ -526,19 +415,10 @@ describe('Global Content Delivery Integration Tests', () => {
     test('QuickSight data source ARN is configured', () => {
       // Simplified test - just verify the output exists
       // Full QuickSight testing requires additional setup and permissions
-      if (isCI) {
-        expect(outputs.quicksight_data_source_arn).toBeDefined();
-      } else {
-        expect(true).toBe(true);
-      }
+      expect(outputs.quicksight_data_source_arn).toBeDefined();
     });
 
     test('Analytics bucket exists for QuickSight data', async () => {
-      if (!isCI) {
-        expect(outputs.analytics_bucket).toBeDefined();
-        return;
-      }
-
       const command = new HeadBucketCommand({
         Bucket: outputs.analytics_bucket,
       });
@@ -549,12 +429,6 @@ describe('Global Content Delivery Integration Tests', () => {
 
   describe('End-to-End Workflow Test', () => {
     test('complete workflow: upload to S3, access via CloudFront, verify security headers', async () => {
-      if (!isCI) {
-        console.log('Skipping E2E test in local mode');
-        expect(true).toBe(true);
-        return;
-      }
-
       // Step 1: Upload test content to primary S3 bucket
       console.log('Step 1: Uploading test content to S3...');
       const putCommand = new PutObjectCommand({
@@ -623,8 +497,8 @@ describe('Global Content Delivery Integration Tests', () => {
     });
 
     test('verify S3 replication to secondary region', async () => {
-      if (!isCI || !outputs.s3_replication_enabled) {
-        console.log('Skipping replication test');
+      if (!outputs.s3_replication_enabled) {
+        console.log('Skipping replication test - replication not enabled');
         expect(true).toBe(true);
         return;
       }
@@ -666,11 +540,6 @@ describe('Global Content Delivery Integration Tests', () => {
     });
 
     test('CloudFront has origin group for failover', async () => {
-      if (!isCI) {
-        expect(outputs.cloudfront_distribution_id).toBeDefined();
-        return;
-      }
-
       const command = new GetDistributionCommand({
         Id: outputs.cloudfront_distribution_id,
       });
