@@ -1,0 +1,14 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349413",
+  "team": "1",
+  "startedAt": "2025-10-15T09:08:19.698Z",
+  "subtask": "CI/CD Pipeline",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": "SNS, IAM, CodePipeline, CodeBuild, S3"
+}
