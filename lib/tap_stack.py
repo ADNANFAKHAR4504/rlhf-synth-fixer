@@ -55,11 +55,68 @@ class TapStack(pulumi.ComponentResource):
             'ManagedBy': 'Pulumi'
         }
 
+        # Get current AWS account ID and region for KMS policy
+        current = aws.get_caller_identity()
+        region = aws.get_region()
+
         # Create KMS key for encryption at rest
         self.kms_key = kms.Key(
             f"healthcare-kms-{self.environment_suffix}",
             description=f"KMS key for healthcare data encryption - {self.environment_suffix}",
             enable_key_rotation=True,
+            policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Sid": "Enable IAM User Permissions",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "AWS": f"arn:aws:iam::{current.account_id}:root"
+                        },
+                        "Action": "kms:*",
+                        "Resource": "*"
+                    },
+                    {
+                        "Sid": "Allow CloudWatch Logs",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": f"logs.{region.name}.amazonaws.com"
+                        },
+                        "Action": [
+                            "kms:Encrypt",
+                            "kms:Decrypt",
+                            "kms:ReEncrypt*",
+                            "kms:GenerateDataKey*",
+                            "kms:CreateGrant",
+                            "kms:DescribeKey"
+                        ],
+                        "Resource": "*",
+                        "Condition": {
+                            "ArnLike": {
+                                "kms:EncryptionContext:aws:logs:arn": f"arn:aws:logs:{region.name}:{current.account_id}:log-group:*"
+                            }
+                        }
+                    },
+                    {
+                        "Sid": "Allow ECS and RDS",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": [
+                                "ecs-tasks.amazonaws.com",
+                                "rds.amazonaws.com",
+                                "ecr.amazonaws.com",
+                                "secretsmanager.amazonaws.com"
+                            ]
+                        },
+                        "Action": [
+                            "kms:Decrypt",
+                            "kms:DescribeKey",
+                            "kms:GenerateDataKey"
+                        ],
+                        "Resource": "*"
+                    }
+                ]
+            }),
             tags=common_tags,
             opts=ResourceOptions(parent=self)
         )
