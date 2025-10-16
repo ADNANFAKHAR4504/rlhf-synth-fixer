@@ -122,28 +122,34 @@ def store_event(event: Dict[str, Any], processed_data: Dict[str, Any]) -> None:
         event: Original event
         processed_data: Processed event data
     """
-    table = dynamodb.Table(TABLE_NAME)
-    
-    # Create DynamoDB item
-    item = {
-        'PK': f"EVENT#{processed_data['eventId']}",
-        'SK': f"REGION#{REGION}",
-        'GSI1PK': f"SYMBOL#{processed_data['tradingData']['symbol']}",
-        'GSI1SK': processed_data['eventTime'],
-        'GSI2PK': f"TYPE#{processed_data['eventType']}",
-        'GSI2SK': processed_data['eventTime'],
-        'EventId': processed_data['eventId'],
-        'EventType': processed_data['eventType'],
-        'EventTime': processed_data['eventTime'],
-        'ProcessedAt': processed_data['processedAt'],
-        'Region': processed_data['region'],
-        'TradingData': processed_data['tradingData'],
-        'TTL': int((datetime.utcnow().timestamp() + (30 * 24 * 60 * 60)))  # 30 days TTL
-    }
-    
-    # Put item in DynamoDB
-    table.put_item(Item=item)
-    logger.info(f"Stored event {processed_data['eventId']} in DynamoDB")
+    try:
+        logger.info(f"Attempting to write to DynamoDB table: {TABLE_NAME}")
+        table = dynamodb.Table(TABLE_NAME)
+        
+        # Create DynamoDB item
+        item = {
+            'PK': f"EVENT#{processed_data['eventId']}",
+            'SK': f"REGION#{REGION}",
+            'GSI1PK': f"SYMBOL#{processed_data['tradingData']['symbol']}",
+            'GSI1SK': processed_data['eventTime'],
+            'GSI2PK': f"TYPE#{processed_data['eventType']}",
+            'GSI2SK': processed_data['eventTime'],
+            'EventId': processed_data['eventId'],
+            'EventType': processed_data['eventType'],
+            'EventTime': processed_data['eventTime'],
+            'ProcessedAt': processed_data['processedAt'],
+            'Region': processed_data['region'],
+            'TradingData': processed_data['tradingData'],
+            'TTL': int((datetime.utcnow().timestamp() + (30 * 24 * 60 * 60)))  # 30 days TTL
+        }
+        
+        # Put item in DynamoDB
+        logger.info(f"Writing item with PK={item['PK']}, SK={item['SK']}")
+        response = table.put_item(Item=item)
+        logger.info(f"Successfully stored event {processed_data['eventId']} in DynamoDB. Response: {response}")
+    except Exception as e:
+        logger.error(f"CRITICAL: Failed to write to DynamoDB table {TABLE_NAME}: {str(e)}")
+        raise  # Re-raise the exception so it gets caught by the main handler
 
 
 def send_metrics(event_type: str, status: str) -> None:
