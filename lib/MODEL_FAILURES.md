@@ -87,3 +87,14 @@ TapStackpr4595  ::error::Terraform exited with code 1.
 Invoking Terraform CLI failed with exit code 1
 0 Stacks deploying     1 Stack done     0 Stacks waiting
 Error: Process completed with exit code 1.
+
+                  ~ public-s3-bucket-name   = "TapStackpr4595-pr4595-public-assets" -> "tapstackpr4595-pr4595-public-assets"
+                ╷
+                │ Error: "kms_key_id" (07d5520b-297f-4bc8-816b-d4ba49ea8da5) is an invalid ARN: arn: invalid prefix
+                │ 
+                │   with aws_db_instance.rds_instance_7ECC54BF (rds/instance),
+                │   on cdk.tf.json line 164, in resource.aws_db_instance.rds_instance_7ECC54BF (rds/instance):
+                │  164:         "kms_key_id": "${aws_kms_key.kms-key (kms-key).id}",
+                │ 
+                ╵
+TapStackpr4595  ::error::Terraform exited with code 1.

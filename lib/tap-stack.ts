@@ -327,7 +327,7 @@ export class TapStack extends TerraformStack {
       backupWindow: '03:00-04:00',
       maintenanceWindow: 'sun:04:00-sun:05:00',
       deletionProtection: environmentSuffix === 'production',
-      kmsKeyId: kmsModule.key.id,
+      kmsKeyId: kmsModule.key.arn, // Changed from .id to .arn
       storageEncrypted: true,
     });
 
