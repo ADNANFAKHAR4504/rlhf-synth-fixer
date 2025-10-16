@@ -14,6 +14,7 @@ Expert that validates and improves IaC through automated testing pipeline.
 **Location**: Inside worktree at `worktree/synth-{task_id}/`
 
 **Verification**:
+
 ```bash
 pwd  # Must end with: /worktree/synth-{task_id}
 git branch --show-current  # Must output: synth-{task_id}
@@ -23,19 +24,23 @@ git branch --show-current  # Must output: synth-{task_id}
 
 ## QA Pipeline Workflow
 
-**Before Starting**: Review `.claude/lessons_learnt.md` for common deployment failures and quick fixes.
+**Before Starting**:
+
+- Review `.claude/lessons_learnt.md` for common deployment failures and quick fixes.
+- Review `.claude/validation_and_testing_guide.md` for comprehensive testing and validation procedures.
 
 ### 1. Project Analysis & Validation
 
-- **Identify Latest Files**: 
+- **Identify Latest Files**:
   - Read all PROMPT files in `lib/` directory (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.) and the MODEL_RESPONSE files
-  (e.g., if MODEL_RESPONSE3.md exists, use that instead of MODEL_RESPONSE.md or MODEL_RESPONSE2.md)
+    (e.g., if MODEL_RESPONSE3.md exists, use that instead of MODEL_RESPONSE.md or MODEL_RESPONSE2.md)
   - If only PROMPT.md exists, use that file
   - If only MODEL_RESPONSE.md exists, use that file
 - Read the PROMPT files, `metadata.json`, and the latest MODEL_RESPONSE file
 - Detect platform (CDK/CDKTF/CFN/Terraform/Pulumi) and language
 
 **CRITICAL: Platform/Language Compliance Check**
+
 - **Compare metadata.json vs actual code**:
   - metadata.json says `"platform": "pulumi"` → lib/ code MUST use Pulumi syntax
   - metadata.json says `"language": "go"` → lib/ code MUST be in Go
@@ -55,27 +60,30 @@ git branch --show-current  # Must output: synth-{task_id}
 
 **CRITICAL GATE: NO DEPLOYMENT WITHOUT CLEAN BUILD**
 
-Important: Use the commands in `package.json` and `pipfile` to run these tasks per platform and langage.
+Important: Use the commands in `package.json` and `pipfile` to run these tasks per platform and language.
 
 - **Lint**: Run platform-specific linters and fix ALL issues
   - **MANDATORY**: Must pass with zero errors before proceeding
   - If linting fails, fix all issues before moving forward
   - Report lint status clearly
-  
+  - See `.claude/validation_and_testing_guide.md` Phase 2.2 for platform-specific commands
 - **Build**: Compile code and fix ALL errors
   - **MANDATORY**: Must complete successfully before proceeding
   - If build fails, fix all compilation errors before moving forward
   - Report build status clearly
-  
+  - See `.claude/validation_and_testing_guide.md` Phase 2.3 for platform-specific commands
 - **Synthesize**: Generate deployment templates (CDK/Terraform/Pulumi)
   - **MANDATORY**: Must synthesize successfully before proceeding
   - If synthesis fails, fix all configuration/syntax errors before moving forward
   - Report synthesis status clearly
+  - See `.claude/validation_and_testing_guide.md` Phase 2.4 for platform-specific commands
 
 **CHECKPOINT**: Verify ALL three steps (lint, build, synth) pass successfully before proceeding to Pre-Deployment Validation.
+
 - If ANY step fails, STOP and fix issues
 - Report blocking status if unable to resolve after multiple attempts
 - Do NOT proceed to deployment with failing lint/build/synth
+- Reference common fixes in `.claude/validation_and_testing_guide.md` Phase 2
 
 ### 2.5. Pre-Deployment Validation
 
@@ -101,47 +109,49 @@ Important: Use the commands in `package.json` and `pipfile` to run these tasks p
 
 - Use the commands in `package.json` and `pipfile` to run the deployment job per platform and language.
 - Ensure that all resources that will be created are destroyable (no Retain policies or protected
- from deletion). Make changes in the IaC code if needed to guarantee this.
+  from deletion). Make changes in the IaC code if needed to guarantee this.
 - Ensure that all resources names have the ENVIRONMENT_SUFFIX to avoid conflicts with other deployments.
 - You can never change the ci-cd .yml files that are deploying this project. Your mission is to create code
-that can be deployed with the current configuration of the ci-cd pipelines.
+  that can be deployed with the current configuration of the ci-cd pipelines.
 - Deploy to AWS (**max 5 attempts** - reduced limit for cost optimization)
   - e.g. If there are refereces to SSM parameters, include those params as part of the deployed resources.
   - If ENVIRONMENT_SUFFIX env variable is not present, set it as `synth{TaskId}`:
     - If running in a github action, use `pr{github_pr_number}` as ENVIRONMENT_SUFFIX
     - Important! Environment_Suffix is not the stack env parameter. Its a special string that should be
-    attached to all resource names to avoid conflicts between deployments. Multiple deployments can be
-    deploying to dev, qa, stage envs. ENVIRONMENT_SUFFIX is there to differentiate resource names deployed to the
-    same envs.
-  - Check `lib/AWS_REGION` to check if there is a specific region to deploy on. if not, deploy to   us-east-1
+      attached to all resource names to avoid conflicts between deployments. Multiple deployments can be
+      deploying to dev, qa, stage envs. ENVIRONMENT_SUFFIX is there to differentiate resource names deployed to the
+      same envs.
+  - Check `lib/AWS_REGION` to check if there is a specific region to deploy on. if not, deploy to us-east-1
   - If deployment fails, fix the code until it deploys succesfully.
   - If you are not able to deploy, report this error and finish your execution with an error message.
   - If there are AWS Quota Limit issues while deploying. Report this to the user, and await for user
-  input to continue.
+    input to continue.
 - Important: Verify that the deployed resources are consistent with the PROMPT files requirements. If
-they are not, fix the code to match the requirements (Except for the guardrails stablished in your agent description)
+  they are not, fix the code to match the requirements (Except for the guardrails stablished in your agent description)
 - Important: Every deployment should be self-sufficient. There should not be references to resources
-    that should be already created. Make sure that every deploy execution can run in isolation.
+  that should be already created. Make sure that every deploy execution can run in isolation.
 - Every Stack should output the values that will be required for integration tests. Make sure that
-all child cfn stacks are named after with the parent stack as prefix: TapStack{ENVIRONMENT_SUFFIX}...
-In CDK this is achievable by instantiating the child stack using `this`. e.g:
+  all child cfn stacks are named after with the parent stack as prefix: TapStack{ENVIRONMENT_SUFFIX}...
+  In CDK this is achievable by instantiating the child stack using `this`. e.g:
 
 ```typescript
 // Create compute stack with EC2 instances
-    const computeStack = new ComputeStack(
-      this, // HERE!!! when using this instead of scope. This stack will be named TapStack{ENVIRONMENT_SUFFIX}Compute...
-      'Compute', {
-      environmentSuffix,
-      vpc: networkStack.vpc,
-      dbInstance: databaseStack.dbInstance,
-      instanceRole: securityStack.ec2Role,
-    });
+const computeStack = new ComputeStack(
+  this, // HERE!!! when using this instead of scope. This stack will be named TapStack{ENVIRONMENT_SUFFIX}Compute...
+  'Compute',
+  {
+    environmentSuffix,
+    vpc: networkStack.vpc,
+    dbInstance: databaseStack.dbInstance,
+    instanceRole: securityStack.ec2Role,
+  }
+);
 ```
 
 - After the deployment succeeds, Save flattened outputs to `cfn-outputs/flat-outputs.json`. Very Important!: Check
-`Get Deployment Outputs` job in `.github/workflows/ci-cd.yml` for reference on
-how to accomplish this per platform and region.
-The result should be similar to this (an object based on plain key, value).
+  `Get Deployment Outputs` job in `.github/workflows/ci-cd.yml` for reference on
+  how to accomplish this per platform and region.
+  The result should be similar to this (an object based on plain key, value).
 
 ```json
 {
@@ -167,7 +177,23 @@ The result should be similar to this (an object based on plain key, value).
     - Report coverage percentage clearly
     - If coverage < 90%, add more tests until requirement is met
     - Test all critical code paths, error handling, and edge cases
-  
+  - **Reference**: See `.claude/validation_and_testing_guide.md` Phase 3 for:
+    - Platform-specific testing patterns and examples
+    - Coverage calculation methods
+    - Testing best practices (what to test vs what NOT to test)
+
+- **Unit Test Validation**:
+  - **Locate Unit Test Files**: Use glob pattern (case-insensitive):
+    - `**/{test,tests}/**/*tap*stack*unit*test*.*`
+  - **Validate Code Coverage**: Read coverage reports and extract percentages:
+    - Check files: `coverage/coverage-summary.json`, `coverage.xml`, `lcov.info`, or framework equivalents
+    - Extract overall line coverage and branch coverage percentages
+    - **Coverage Validation Results**:
+      - If no coverage file found → Flag as "Missing Coverage Report"
+      - If coverage ≤ 90% → Mark as "Insufficient Coverage"
+      - If coverage > 90% → Mark as "Pass"
+    - **MANDATORY**: Report coverage percentage clearly in validation output
+
 - **Integration Tests**: End-to-end testing with real AWS outputs
   - Use the commands in `package.json` and `pipfile` to run the integration tests
   - Use the files and folder structure existent inside test or tests folder.
@@ -181,22 +207,59 @@ The result should be similar to this (an object based on plain key, value).
     - Test resource connections and integrations between services
     - Verify that resources work together as expected
     - Test typical use cases and data flows
-  
+  - **Reference**: See `.claude/validation_and_testing_guide.md` Phase 5 for:
+    - Complete integration test patterns by platform/language
+    - Example tests for common AWS services (S3, RDS, Lambda, etc.)
+    - Best practices for workflow testing
+
+- **Integration Test Quality Validation**:
+  - **Locate Integration Test Files**: Search within test/ or tests/ directories using patterns:
+    - **Direct paths**: `tests/integration/tap_stack_int_test.*`, `test/tap-stack.int.test.*`
+    - **Generic discovery globs** (case-insensitive):
+      - `**/{test,tests}/**/*tap*stack*int*test*.*`
+      - `**/{test,tests}/**/*e2e*.*`
+      - `**/{test,tests}/integration/**/*.*`
+    - **Supported extensions**: `.ts`, `.tsx`, `.js`, `.jsx`, `.go`, `.java`, `.kt`, `.groovy`, `.py`
+  - **Validate Integration Test Quality**:
+    - **Confirm Live End-to-End Tests**: Verify files contain live integration tests validating deployed resources in real AWS environments
+    - **Verify Dynamic Inputs**: Ensure test inputs are derived dynamically (e.g., from synthesized stack outputs or environment variables)
+    - **Check for Hardcoding**: Verify no hardcoded values such as:
+      - Region names, ARNs, account IDs, or credentials used directly
+      - Static or dummy data instead of stack outputs
+    - **Validate No Mocking**: Confirm no mock objects, stubs, or simulated responses that replace actual service interactions
+      - Flag usage of mocking libraries: `jest.mock()`, `sinon.stub()`, `Mockito`, `WireMock`, `gomock`, etc.
+    - **Verify Live Resource Validation**: Ensure tests execute live resource validations, not just configuration file testing
+  - **Integration Test Evaluation**:
+    - **Flag any integration test that**:
+      - References static or dummy data instead of stack outputs
+      - Uses mocking libraries
+      - Tests only configuration files without executing live resource validations
+    - **Evaluate and report**:
+      - **Integration Test Type**: Live / Mock / Partial
+      - **Dynamic Validation**: Yes / No
+      - **Hardcoding Found**: Yes / No
+      - **Recommendation**: Revise / Pass / Needs Review
+    - **Output Summary Table**: Generate integration test quality summary highlighting any tests that do not perform live verification
+
 **CHECKPOINT**: Both unit tests (90%+ coverage) and integration tests must pass before proceeding to Final Steps.
+
 - Report test results with coverage percentage
 - Report any test failures immediately
 - Do NOT proceed without meeting testing requirements
+- Use `.claude/validation_and_testing_guide.md` Common Failure Patterns for troubleshooting
 
 ### 5. Final Steps
 
 - Create `lib/IDEAL_RESPONSE.md` with perfect IaC solution (code-focused). Make the `lib/IDEAL_RESPONSE.md` similar
-in structure to the latest MODEL_RESPONSE file.
+  in structure to the latest MODEL_RESPONSE file.
 - Verify solution meets requirements
 - Important!: Re-run all build, synth (when needed), lint, unit tests with coverage and integration tests to ensure quality.
   - Dont forget to Fix them if they are failing.
 - Generate `lib/MODEL_FAILURES.md` explaining the fixes made to reach the `lib/IDEAL_RESPONSE.md` from the
-conversation logged in the PROMPT and MODEL_RESPONSE files. Do not mention the QA process. Only focus in
-the infrastructure changes needed to fix the latest MODEL_RESPONSE.
+  conversation logged in the PROMPT and MODEL_RESPONSE files. Do not mention the QA process. Only focus in
+  the infrastructure changes needed to fix the latest MODEL_RESPONSE.
+
+**Note**: Do NOT destroy resources. Resource cleanup is handled after manual PR review.
 
 **MODEL_FAILURES.md Structure** (for quality improvement):
 
@@ -239,15 +302,11 @@ the infrastructure changes needed to fix the latest MODEL_RESPONSE.
 ```
 
 **Categorization Guidelines**:
+
 - **Critical**: Security vulnerabilities, deployment blockers, data loss risks, wrong regions/accounts
 - **High**: Significant cost impact (>$50/month), performance degradation (>2x slower), incorrect architecture patterns
 - **Medium**: Suboptimal configurations, missing best practices, moderate cost impact ($10-50/month)
 - **Low**: Naming conventions, minor optimizations, code style issues
-
-### 6. Cleanup
-
-- Destroy all AWS resources (empty S3 buckets first)
-- Ensure complete cleanup regardless of success/failure
 
 ## Key Constraints
 
@@ -255,22 +314,23 @@ the infrastructure changes needed to fix the latest MODEL_RESPONSE.
   - Dont use custom commands unless you cannot find them in those files.
 - **Max 5 deployment attempts** (reduced for cost optimization)
 - **MANDATORY: Pass lint, build, and synth before any deployment attempt**
-- No Retain policies allowed. Every resource created should be destroyable.
 - Use real AWS outputs generated on deployment in integration tests (no mocking). These should come from cfn-outputs/flat-outputs.json
-- DO NOT create or update fildes outside of the lib/ and tests/ folder.
+- DO NOT create or update files outside of the lib/ and tests/ folder.
   - Except you need to install new packages.
 - Keep the file structure as simple as possible. But avoid creating files with too many lines.
-Use your best judgement to decide.
-- Never create or updated code outside of the lib, bin, test folders. That should be your working space to do the QA task.
+  Use your best judgement to decide.
+- Never create or update code outside of the lib, bin, test folders. That should be your working space to do the QA task.
 - Do not create specific github actions or workflows. Those are already created.
 - Do not create any file outside lib/ folder. You can install packages if you need, but DO NOT create garbage files outside
-the lib/ folder
+  the lib/ folder
+- **Do NOT destroy resources** - Resource cleanup is handled after manual PR review
 
 ### Agent-Specific Reporting
+
 - Report start of each QA pipeline stage with current infrastructure being tested
 - Report deployment attempt results (success/failure with attempt number)
 - Report any deployment blockers (missing dependencies, AWS access issues, resource conflicts)
 - Report test execution progress and coverage metrics with current test being run
-- Report cleanup completion status and any cleanup failures
 - Report blocking conditions if infrastructure deployment fails repeatedly
-- Report unit-test coverage.
+- Report unit-test coverage
+- **Note**: Do NOT report cleanup/destroy status - resources remain deployed for manual PR review

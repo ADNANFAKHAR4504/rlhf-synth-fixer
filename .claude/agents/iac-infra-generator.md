@@ -23,7 +23,9 @@ pwd  # Must end with: /worktree/synth-{task_id}
 
 ## Workflow
 
-**Before Starting**: Review `.claude/lessons_learnt.md` for common patterns and pitfalls to avoid unnecessary iterations.
+**Before Starting**: 
+- Review `.claude/lessons_learnt.md` for common patterns and pitfalls to avoid unnecessary iterations.
+- Review `.claude/validation_and_testing_guide.md` Phase 1 for code generation quality requirements.
 
 1. **Analyze Configuration FIRST** (CRITICAL - Do this before generating requirements)
    - Read `metadata.json` for platform (cfn/cdk/cdktf/terraform/pulumi) and language
@@ -33,6 +35,7 @@ pwd  # Must end with: /worktree/synth-{task_id}
      - The exact IaC platform from metadata.json (e.g., "Pulumi", "CDK", "Terraform", "CloudFormation", "CDKTF")
      - The exact language from metadata.json (e.g., "Go", "TypeScript", "Python", "HCL", "YAML")
      - This is NON-NEGOTIABLE - generated code in different platform/language = FAILURE
+   - **Reference**: See `.claude/validation_and_testing_guide.md` Phase 1.1 for platform/language compliance patterns
 
 2. **Generate Requirements**
    - Create  `lib/PROMPT.md` from task description. Restrict the scope of the prompt to generate
@@ -48,6 +51,10 @@ pwd  # Must end with: /worktree/synth-{task_id}
      - Compliance requirements
      - Performance requirements
      - Any specific configurations mentioned
+   - **Resource Naming**: Include explicit requirement for environmentSuffix usage:
+     - "ALL resource names MUST include the environmentSuffix parameter/variable"
+     - "Use pattern: {resource-type}-${environmentSuffix}"
+     - See `.claude/validation_and_testing_guide.md` Phase 1.3 for naming patterns
    - The prompt should look like 'Human generated'. Do not make it more complex than needed.
    - **Cost Optimization**: Include 1-2 AWS features or best practices relevant to the task requirements.
     Reuse patterns from similar completed tasks in the `archive/` directory when applicable.

@@ -1,0 +1,29 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349031",
+  "team": "6",
+  "startedAt": "2025-10-14T20:59:16.604Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "CloudWatch",
+    "IAM",
+    "Secrets Manager",
+    "SSM"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Chandan-devs-tech",
+  "dockerS3Location": ""
+}

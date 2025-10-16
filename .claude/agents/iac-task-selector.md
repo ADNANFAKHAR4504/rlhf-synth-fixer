@@ -33,11 +33,14 @@ ALL CSV operations MUST:
 ### Option 1: CSV Task Selection
 If `tasks.csv` is present:
 
-**Use the optimized task manager script** for all CSV operations. This script is faster and more reliable than Python alternatives.
+**Use the optimized task manager script** for all CSV operations. This script is faster, more reliable than Python alternatives, and **safe for parallel execution**.
 
-1. **Select and update task atomically** (recommended - single operation):
+⚠️ **IMPORTANT FOR PARALLEL EXECUTION**: When running multiple Claude agents simultaneously, **ALWAYS use `select-and-update`** (not separate select/update calls). This ensures atomic task selection with proper file locking.
+
+1. **Select and update task atomically** (recommended - required for parallel execution):
    ```bash
    # Select next pending task and mark as in_progress atomically
+   # This is thread-safe and can be run from multiple agents simultaneously
    TASK_JSON=$(./scripts/task-manager.sh select-and-update)
    
    # Extract task_id and other fields
@@ -50,15 +53,18 @@ If `tasks.csv` is present:
    echo "✅ Selected task $TASK_ID: $SUBTASK"
    ```
 
-2. **Alternative: Separate select and update** (if you need to validate before updating):
+2. **Alternative: Separate select and update** (⚠️ NOT recommended for parallel execution - race condition possible):
    ```bash
+   # ⚠️ WARNING: Use this ONLY if running a single agent at a time
+   # In parallel scenarios, another agent could select the same task between these calls
+   
    # Select next pending task (doesn't modify CSV)
    TASK_JSON=$(./scripts/task-manager.sh select)
    TASK_ID=$(echo "$TASK_JSON" | jq -r '.task_id')
    
    # Validate task or perform checks here...
    
-   # Update status to in_progress
+   # Update status to in_progress (thread-safe update, but task may have been selected by another agent)
    ./scripts/task-manager.sh update "$TASK_ID" "in_progress"
    ```
 
@@ -83,13 +89,15 @@ If `tasks.csv` is present:
    ./scripts/create-task-files.sh /tmp/task_${TASK_ID}.json worktree/synth-${TASK_ID}
    ```
 
-**Benefits of new scripts:**
+**Benefits of task-manager.sh:**
 - **3-5x faster** than Python scripts (native shell/awk processing)
+- **Thread-safe** - supports parallel execution with file locking
 - **Atomic operations** - select and update in single transaction
 - **Less memory usage** - no Python interpreter overhead
 - **Built-in validation** - automatic backup and restore on failure
 - **Single source of truth** - one script for all CSV operations
 - **Better error handling** - clear colored output and exit codes
+- **Parallel-ready** - run multiple Claude agents simultaneously without conflicts
 
 6. **Follow instructions in `task-coordinator` to set up the worktree**:
    - Use EXACT format: `worktree/synth-{task_id}`

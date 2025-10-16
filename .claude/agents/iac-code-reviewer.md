@@ -57,6 +57,10 @@ pwd  # Must end with: /worktree/synth-{task_id}
 - Add `training_quality` to `metadata.json` from the latest PROMPT file, `lib/MODEL_FAILURES.md` and `lib/IDEAL_RESPONSE.md`.
   - This metric should reflect the potential training quality that this data will provide when used for retraining the model
   that generated the MODEL_RESPONSE.
+  - **CRITICAL QUALITY REQUIREMENTS**:
+    - **MINIMUM acceptable score: 8/10** (scores below 8 will BLOCK PR creation)
+    - **TARGET score: 9/10** (aim for this in all tasks)
+    - Scores below 8 indicate insufficient training value and require improvement
   - **Detailed Scoring Rubric** (0-10):
     - **AUTOMATIC PENALTIES**:
       - Platform/Language mismatch with metadata.json: -5 points (CRITICAL FAILURE)
@@ -73,6 +77,8 @@ pwd  # Must end with: /worktree/synth-{task_id}
   - The score should reflect: "How much would a model learn from the MODEL_FAILURES.md differences?"
   - **Quality Impact**: Higher quality scores mean more valuable training data for model improvement
   - **Requirement Completeness**: Verify ALL task requirements are implemented before assigning score ≥6
+  - **If score is below 8**: Report that the task is NOT ready for PR and needs improvement. Provide specific recommendations
+    to increase training value (add features, implement best practices, improve security, etc.)
 - Add `aws_services` to `metadata.json`, extracting from `lib/IDEAL_RESPONSE.md` an array of
 strings of AWS Services used in the task.
 - Provide report on the training_quality metric and it's justification.
@@ -101,6 +107,44 @@ test live resource and it should not use any mocks)
   - **Prioritize uncovered resources** - list what's missing first
   - Only briefly summarize what's already covered
 - Provide Ready/Pending recommendation
+
+### Phase 4: Final Training Quality Gate
+
+**CRITICAL: Training Quality Validation Before Handoff**
+
+Before reporting "Ready" status, perform final training quality validation:
+
+```bash
+# Validate training quality meets minimum threshold
+TRAINING_QUALITY=$(jq -r '.training_quality // 0' metadata.json)
+
+if [ "$TRAINING_QUALITY" -lt 8 ]; then
+  echo "❌ BLOCKED: Training quality ($TRAINING_QUALITY) below minimum threshold of 8"
+  echo "⚠️ Task is NOT ready for PR creation"
+  exit 1
+fi
+
+echo "✅ Training quality validated: $TRAINING_QUALITY/10"
+```
+
+**If training_quality < 8**:
+- Report status: "NOT READY - Training quality below threshold"
+- Provide specific recommendations to improve:
+  1. Review MODEL_FAILURES.md - are the improvements significant?
+  2. Consider adding AWS services or features mentioned in task but not implemented
+  3. Implement additional security best practices (KMS, IAM least privilege, encryption)
+  4. Add monitoring/observability features (CloudWatch, X-Ray, logging)
+  5. Implement error handling, retry logic, or resilience patterns
+  6. Add cost optimization features (auto-scaling, resource tagging)
+- Suggest returning to iac-infra-generator or iac-infra-qa-trainer to enhance the implementation
+- Do NOT proceed to Phase 5 (PR creation) until training_quality ≥ 8
+
+**Only report "Ready" when**:
+- All phases passed
+- Training quality ≥ 8 (target: 9)
+- All metadata fields validated (including `background`)
+- Tests passing
+- Requirements met
 
 ## Focus Areas
 

@@ -1,0 +1,1027 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "PCI-DSS Compliant Payment Processing Database Infrastructure with RDS, Secrets Manager, and ElastiCache",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource naming to avoid conflicts",
+      "MinLength": 1
+    },
+    "VpcCidr": {
+      "Type": "String",
+      "Default": "10.0.0.0/16",
+      "Description": "CIDR block for VPC"
+    },
+    "DBInstanceClass": {
+      "Type": "String",
+      "Default": "db.t3.medium",
+      "Description": "Database instance class for Aurora Serverless v2",
+      "AllowedValues": [
+        "db.t3.medium",
+        "db.t3.large",
+        "db.r5.large",
+        "db.r5.xlarge"
+      ]
+    }
+  },
+  "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "VpcCidr"
+        },
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-vpc-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-igw-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "InternetGatewayAttachment": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        },
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      }
+    },
+    "PublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "CidrBlock": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::Cidr": [
+                {
+                  "Ref": "VpcCidr"
+                },
+                6,
+                8
+              ]
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-public-subnet-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "CidrBlock": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::Cidr": [
+                {
+                  "Ref": "VpcCidr"
+                },
+                6,
+                8
+              ]
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-public-subnet-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "CidrBlock": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::Cidr": [
+                {
+                  "Ref": "VpcCidr"
+                },
+                6,
+                8
+              ]
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-private-subnet-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "CidrBlock": {
+          "Fn::Select": [
+            3,
+            {
+              "Fn::Cidr": [
+                {
+                  "Ref": "VpcCidr"
+                },
+                6,
+                8
+              ]
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-private-subnet-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "NatGatewayEIP": {
+      "Type": "AWS::EC2::EIP",
+      "DependsOn": "InternetGatewayAttachment",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-nat-eip-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "NatGateway": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NatGatewayEIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-nat-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-public-rt-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DefaultPublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "InternetGatewayAttachment",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        }
+      }
+    },
+    "PublicSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        }
+      }
+    },
+    "PrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-private-rt-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DefaultPrivateRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "NatGateway"
+        }
+      }
+    },
+    "PrivateSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "PrivateSubnet1"
+        }
+      }
+    },
+    "PrivateSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "PrivateSubnet2"
+        }
+      }
+    },
+    "DatabaseEncryptionKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for payment database encryption - ${EnvironmentSuffix}"
+        },
+        "EnableKeyRotation": true,
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow RDS to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "rds.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey",
+                "kms:CreateGrant"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow Secrets Manager to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "secretsmanager.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow ElastiCache to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "elasticache.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey",
+                "kms:CreateGrant"
+              ],
+              "Resource": "*"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-db-key-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "DatabaseEncryptionKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/payment-db-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "DatabaseEncryptionKey"
+        }
+      }
+    },
+    "DBMasterSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "payment-db-master-${EnvironmentSuffix}"
+        },
+        "Description": "Master credentials for payment processing database",
+        "KmsKeyId": {
+          "Ref": "DatabaseEncryptionKey"
+        },
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\": \"dbadmin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\",
+          "RequireEachIncludedType": true
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-db-secret-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "DBSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "payment-db-sg-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for payment processing database",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5432,
+            "ToPort": 5432,
+            "CidrIp": {
+              "Ref": "VpcCidr"
+            },
+            "Description": "Allow PostgreSQL access from VPC"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-db-sg-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "CacheSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "payment-cache-sg-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for ElastiCache Redis cluster",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 6379,
+            "ToPort": 6379,
+            "CidrIp": {
+              "Ref": "VpcCidr"
+            },
+            "Description": "Allow Redis access from VPC"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-cache-sg-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "DBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupName": {
+          "Fn::Sub": "payment-db-subnet-group-${EnvironmentSuffix}"
+        },
+        "DBSubnetGroupDescription": "Subnet group for payment processing database",
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-db-subnet-group-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DBCluster": {
+      "Type": "AWS::RDS::DBCluster",
+      "DependsOn": "DBMasterSecret",
+      "Properties": {
+        "DBClusterIdentifier": {
+          "Fn::Sub": "payment-db-cluster-${EnvironmentSuffix}"
+        },
+        "Engine": "aurora-postgresql",
+        "EngineVersion": "14.6",
+        "EngineMode": "provisioned",
+        "ServerlessV2ScalingConfiguration": {
+          "MinCapacity": 0.5,
+          "MaxCapacity": 2
+        },
+        "MasterUsername": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DBMasterSecret}:SecretString:username}}"
+        },
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DBMasterSecret}:SecretString:password}}"
+        },
+        "DatabaseName": "paymentdb",
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "DBSecurityGroup"
+          }
+        ],
+        "BackupRetentionPeriod": 7,
+        "PreferredBackupWindow": "03:00-04:00",
+        "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+        "StorageEncrypted": true,
+        "KmsKeyId": {
+          "Ref": "DatabaseEncryptionKey"
+        },
+        "DeletionProtection": false,
+        "EnableCloudwatchLogsExports": [
+          "postgresql"
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-db-cluster-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "DBInstance": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "payment-db-instance-${EnvironmentSuffix}"
+        },
+        "DBClusterIdentifier": {
+          "Ref": "DBCluster"
+        },
+        "Engine": "aurora-postgresql",
+        "DBInstanceClass": {
+          "Ref": "DBInstanceClass"
+        },
+        "PubliclyAccessible": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-db-instance-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecretRotationLambdaRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "payment-secret-rotation-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "SecretsManagerRotationPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:DescribeSecret",
+                    "secretsmanager:GetSecretValue",
+                    "secretsmanager:PutSecretValue",
+                    "secretsmanager:UpdateSecretVersionStage"
+                  ],
+                  "Resource": {
+                    "Ref": "DBMasterSecret"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetRandomPassword"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:Decrypt",
+                    "kms:GenerateDataKey"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "DatabaseEncryptionKey",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "SecretRotationLambdaSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "payment-rotation-lambda-sg-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for secret rotation Lambda",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-rotation-lambda-sg-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecretRotationLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "payment-secret-rotation-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.9",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "SecretRotationLambdaRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 30,
+        "VpcConfig": {
+          "SecurityGroupIds": [
+            {
+              "Ref": "SecretRotationLambdaSecurityGroup"
+            }
+          ],
+          "SubnetIds": [
+            {
+              "Ref": "PrivateSubnet1"
+            },
+            {
+              "Ref": "PrivateSubnet2"
+            }
+          ]
+        },
+        "Environment": {
+          "Variables": {
+            "SECRETS_MANAGER_ENDPOINT": {
+              "Fn::Sub": "https://secretsmanager.${AWS::Region}.amazonaws.com"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport psycopg2\nimport os\n\ndef handler(event, context):\n    service_client = boto3.client('secretsmanager')\n    arn = event['SecretId']\n    token = event['ClientRequestToken']\n    step = event['Step']\n\n    metadata = service_client.describe_secret(SecretId=arn)\n    if not metadata['RotationEnabled']:\n        raise ValueError(\"Secret %s is not enabled for rotation\" % arn)\n\n    versions = metadata['VersionIdsToStages']\n    if token not in versions:\n        raise ValueError(\"Secret version %s has no stage for rotation\" % token)\n\n    if \"AWSCURRENT\" in versions[token]:\n        return\n    elif \"AWSPENDING\" not in versions[token]:\n        raise ValueError(\"Secret version %s not set as AWSPENDING\" % token)\n\n    if step == \"createSecret\":\n        create_secret(service_client, arn, token)\n    elif step == \"setSecret\":\n        set_secret(service_client, arn, token)\n    elif step == \"testSecret\":\n        test_secret(service_client, arn, token)\n    elif step == \"finishSecret\":\n        finish_secret(service_client, arn, token)\n    else:\n        raise ValueError(\"Invalid step parameter\")\n\ndef create_secret(service_client, arn, token):\n    try:\n        service_client.get_secret_value(SecretId=arn, VersionId=token, VersionStage=\"AWSPENDING\")\n    except service_client.exceptions.ResourceNotFoundException:\n        passwd = service_client.get_random_password(ExcludeCharacters='\"@/\\\\\\'', PasswordLength=32)\n        current_dict = json.loads(service_client.get_secret_value(SecretId=arn, VersionStage=\"AWSCURRENT\")['SecretString'])\n        current_dict['password'] = passwd['RandomPassword']\n        service_client.put_secret_value(SecretId=arn, ClientRequestToken=token, SecretString=json.dumps(current_dict), VersionStages=['AWSPENDING'])\n\ndef set_secret(service_client, arn, token):\n    pending_dict = json.loads(service_client.get_secret_value(SecretId=arn, VersionId=token, VersionStage=\"AWSPENDING\")['SecretString'])\n    current_dict = json.loads(service_client.get_secret_value(SecretId=arn, VersionStage=\"AWSCURRENT\")['SecretString'])\n\n    # Connect to database and update password\n    # This is a simplified version - production should include proper error handling\n    pass\n\ndef test_secret(service_client, arn, token):\n    # Test the AWSPENDING secret\n    pass\n\ndef finish_secret(service_client, arn, token):\n    metadata = service_client.describe_secret(SecretId=arn)\n    current_version = None\n    for version in metadata[\"VersionIdsToStages\"]:\n        if \"AWSCURRENT\" in metadata[\"VersionIdsToStages\"][version]:\n            if version == token:\n                return\n            current_version = version\n            break\n\n    service_client.update_secret_version_stage(SecretId=arn, VersionStage=\"AWSCURRENT\", MoveToVersionId=token, RemoveFromVersionId=current_version)\n"
+        }
+      }
+    },
+    "SecretRotationLambdaPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "SecretRotationLambda"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "secretsmanager.amazonaws.com"
+      }
+    },
+    "SecretRotationSchedule": {
+      "Type": "AWS::SecretsManager::RotationSchedule",
+      "DependsOn": [
+        "SecretRotationLambda",
+        "SecretRotationLambdaPermission",
+        "DBCluster"
+      ],
+      "Properties": {
+        "SecretId": {
+          "Ref": "DBMasterSecret"
+        },
+        "RotationLambdaARN": {
+          "Fn::GetAtt": [
+            "SecretRotationLambda",
+            "Arn"
+          ]
+        },
+        "RotationRules": {
+          "AutomaticallyAfterDays": 30
+        }
+      }
+    },
+    "CacheSubnetGroup": {
+      "Type": "AWS::ElastiCache::SubnetGroup",
+      "Properties": {
+        "Description": "Subnet group for ElastiCache Redis cluster",
+        "CacheSubnetGroupName": {
+          "Fn::Sub": "payment-cache-subnet-group-${EnvironmentSuffix}"
+        },
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          }
+        ]
+      }
+    },
+    "CacheReplicationGroup": {
+      "Type": "AWS::ElastiCache::ReplicationGroup",
+      "Properties": {
+        "ReplicationGroupId": {
+          "Fn::Sub": "payment-cache-${EnvironmentSuffix}"
+        },
+        "ReplicationGroupDescription": "Redis cluster for payment session management",
+        "Engine": "redis",
+        "EngineVersion": "7.0",
+        "CacheNodeType": "cache.t3.micro",
+        "NumCacheClusters": 2,
+        "AutomaticFailoverEnabled": true,
+        "MultiAZEnabled": true,
+        "CacheSubnetGroupName": {
+          "Ref": "CacheSubnetGroup"
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "CacheSecurityGroup"
+          }
+        ],
+        "AtRestEncryptionEnabled": true,
+        "TransitEncryptionEnabled": true,
+        "KmsKeyId": {
+          "Ref": "DatabaseEncryptionKey"
+        },
+        "Port": 6379,
+        "SnapshotRetentionLimit": 5,
+        "SnapshotWindow": "03:00-05:00",
+        "PreferredMaintenanceWindow": "sun:05:00-sun:07:00",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-cache-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "VPCId": {
+      "Description": "VPC ID",
+      "Value": {
+        "Ref": "VPC"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VPC-ID"
+        }
+      }
+    },
+    "PrivateSubnet1Id": {
+      "Description": "Private Subnet 1 ID",
+      "Value": {
+        "Ref": "PrivateSubnet1"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PrivateSubnet1-ID"
+        }
+      }
+    },
+    "PrivateSubnet2Id": {
+      "Description": "Private Subnet 2 ID",
+      "Value": {
+        "Ref": "PrivateSubnet2"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PrivateSubnet2-ID"
+        }
+      }
+    },
+    "DBClusterEndpoint": {
+      "Description": "RDS Aurora Cluster Endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "DBCluster",
+          "Endpoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBClusterEndpoint"
+        }
+      }
+    },
+    "DBClusterPort": {
+      "Description": "RDS Aurora Cluster Port",
+      "Value": {
+        "Fn::GetAtt": [
+          "DBCluster",
+          "Endpoint.Port"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBClusterPort"
+        }
+      }
+    },
+    "DBSecretArn": {
+      "Description": "ARN of the database credentials secret",
+      "Value": {
+        "Ref": "DBMasterSecret"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBSecretArn"
+        }
+      }
+    },
+    "KMSKeyId": {
+      "Description": "KMS Key ID for encryption",
+      "Value": {
+        "Ref": "DatabaseEncryptionKey"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-KMSKeyId"
+        }
+      }
+    },
+    "CacheEndpoint": {
+      "Description": "ElastiCache Redis Primary Endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "CacheReplicationGroup",
+          "PrimaryEndPoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-CacheEndpoint"
+        }
+      }
+    },
+    "CachePort": {
+      "Description": "ElastiCache Redis Port",
+      "Value": {
+        "Fn::GetAtt": [
+          "CacheReplicationGroup",
+          "PrimaryEndPoint.Port"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-CachePort"
+        }
+      }
+    },
+    "DBSecurityGroupId": {
+      "Description": "Database Security Group ID",
+      "Value": {
+        "Ref": "DBSecurityGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBSecurityGroupId"
+        }
+      }
+    },
+    "CacheSecurityGroupId": {
+      "Description": "Cache Security Group ID",
+      "Value": {
+        "Ref": "CacheSecurityGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-CacheSecurityGroupId"
+        }
+      }
+    }
+  }
+}
