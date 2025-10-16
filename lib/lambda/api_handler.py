@@ -5,8 +5,7 @@ Handles API Gateway requests and interacts with RDS database
 import json
 import os
 import logging
-from datetime import datetime
-from decimal import Decimal
+from datetime import datetime, timezone
 
 # Configure logging
 log_level = os.environ.get('LOG_LEVEL', 'INFO')
@@ -18,12 +17,12 @@ def handler(event, context):
     """
     Main handler function for API Gateway requests
     """
-    logger.info(f"Received event: {json.dumps(event)}")
-    
-    path = event.get('path', '')
-    http_method = event.get('httpMethod', '')
-    
     try:
+        logger.info("Received event")
+        
+        path = event.get('path', '')
+        http_method = event.get('httpMethod', '')
+        
         if path == '/health' and http_method == 'GET':
             return handle_health_check(event, context)
         elif path == '/metrics' and http_method == 'GET':
@@ -37,11 +36,11 @@ def handler(event, context):
                 },
                 'body': json.dumps({
                     'error': 'Not Found',
-                    'message': f'Path {path} not found'
+                    'message': 'Path {} not found'.format(path)
                 })
             }
     except Exception as e:
-        logger.error(f"Error processing request: {str(e)}", exc_info=True)
+        logger.error("Error processing request: {}".format(str(e)))
         return {
             'statusCode': 500,
             'headers': {
@@ -67,7 +66,7 @@ def handle_health_check(event, context):
     
     health_status = {
         'status': 'healthy',
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'service': 'cloudwatch-analytics-api',
         'version': '1.0.0',
         'environment': {
@@ -77,10 +76,10 @@ def handle_health_check(event, context):
             'dynamodb_table': dynamodb_table
         },
         'lambda': {
-            'function_name': context.function_name,
-            'memory_limit': context.memory_limit_in_mb,
-            'request_id': context.request_id,
-            'remaining_time': context.get_remaining_time_in_millis()
+            'function_name': getattr(context, 'function_name', 'unknown'),
+            'memory_limit': getattr(context, 'memory_limit_in_mb', 0),
+            'request_id': getattr(context, 'request_id', 'unknown'),
+            'remaining_time': context.get_remaining_time_in_millis() if hasattr(context, 'get_remaining_time_in_millis') else 0
         }
     }
     
@@ -113,7 +112,10 @@ def handle_metrics_request(event, context):
         table = dynamodb.Table(table_name)
         
         # Get query parameters
-        query_params = event.get('queryStringParameters', {}) or {}
+        query_params = event.get('queryStringParameters', {})
+        if query_params is None:
+            query_params = {}
+        
         limit = int(query_params.get('limit', '10'))
         metric_id = query_params.get('metricId')
         
@@ -148,12 +150,12 @@ def handle_metrics_request(event, context):
             'body': json.dumps({
                 'metrics': items,
                 'count': len(items),
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             }, default=decimal_default)
         }
         
     except Exception as e:
-        logger.error(f"Error retrieving metrics: {str(e)}", exc_info=True)
+        logger.error("Error retrieving metrics: {}".format(str(e)))
         return {
             'statusCode': 500,
             'headers': {
@@ -165,4 +167,3 @@ def handle_metrics_request(event, context):
                 'message': str(e)
             })
         }
-
