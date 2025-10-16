@@ -666,6 +666,9 @@ The architecture spans two Availability Zones with subnets in each zone, providi
     "EC2InstanceRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
+        "RoleName": {
+          "Fn::Sub": "EC2InstanceRole-${EnvironmentSuffix}"
+        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
