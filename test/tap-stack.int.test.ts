@@ -401,11 +401,6 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
       
       const trails = await cloudtrail.send(new DescribeTrailsCommand({}));
       const trail = (trails as any).trailList!.find((t: any) => t.TrailARN === outputs.CloudTrailArn);
-
-      if (!trail) {
-        // Trail might have been deleted - check stack resources
-        throw new Error(`CloudTrail with ARN ${outputs.CloudTrailArn} not found in AWS. It may have been deleted outside of CloudFormation.`);
-      }
       
       // Get CloudTrail status separately
       const trailStatus = await cloudtrail.send(new GetTrailStatusCommand({
@@ -433,10 +428,6 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
         lg.logGroupName && lg.logGroupName.includes(`${stackName}-CorpEC2LogGroup`) && lg.retentionInDays === 30
       );
       
-      if (!ec2LogGroup) {
-        const availableLogGroups = logGroups.logGroups!.map(lg => lg.logGroupName).filter(n => n?.includes(stackName.split('pr')[0])).join(', ');
-        throw new Error(`EC2 log group not found. Stack: ${stackName}. Available: ${availableLogGroups}`);
-      }
       
       expect(ec2LogGroup.retentionInDays).toBe(30);
       if (ec2LogGroup.kmsKeyId) {
@@ -502,9 +493,6 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
       const trails = await cloudtrail.send(new DescribeTrailsCommand({}));
       const trail = (trails as any).trailList!.find((t: any) => t.TrailARN === outputs.CloudTrailArn);
       
-      if (!trail) {
-        throw new Error(`CloudTrail with ARN ${outputs.CloudTrailArn} not found in AWS. It may have been deleted outside of CloudFormation.`);
-      }
       
       // Get CloudTrail logging status
       const trailStatus = await cloudtrail.send(new GetTrailStatusCommand({
@@ -646,11 +634,6 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
       const ec2LogGroup = logGroups.logGroups!.find((lg: any) =>
         lg.logGroupName && lg.logGroupName.includes(`${stackName}-CorpEC2LogGroup`) && lg.retentionInDays === 30
       );
-
-      if (!ec2LogGroup) {
-        const availableLogGroups = logGroups.logGroups!.map(lg => lg.logGroupName).filter(n => n?.includes(stackName)).join(', ');
-        throw new Error(`EC2 log group not found. Stack: ${stackName}. Available: ${availableLogGroups}`);
-      }
       
       const recentLogs = await logs.send(new FilterLogEventsCommand({
         logGroupName: ec2LogGroup.logGroupName,
@@ -808,10 +791,6 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
       // Verify CloudTrail is logging
       const trails = await cloudtrail.send(new DescribeTrailsCommand({}));
       const trail = (trails as any).trailList!.find((t: any) => t.TrailARN === outputs.CloudTrailArn);
-      
-      if (!trail) {
-        throw new Error(`CloudTrail with ARN ${outputs.CloudTrailArn} not found in AWS. It may have been deleted outside of CloudFormation.`);
-      }
       
       expect(trail.S3BucketName).toBe(outputs.S3LogsBucket);
 
@@ -1056,11 +1035,6 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
       const mfaPolicy = managedPolicies.Policies!.find((policy: any) =>
         policy.PolicyName.includes(`${stackName}-CorpMFAPolicy`)
       );
-
-      if (!mfaPolicy) {
-        const stackPolicies = managedPolicies.Policies!.filter(p => p.PolicyName.includes(stackName)).map(p => p.PolicyName).join(', ');
-        throw new Error(`MFA Policy not found. Stack: ${stackName}. Stack policies: ${stackPolicies}`);
-      }
       
       expect(mfaPolicy.PolicyName).toBeDefined();
       if (mfaPolicy.Description) {
@@ -1086,10 +1060,6 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
       const monitoringRole = roles.Roles!.find((role: any) =>
         role.Arn === dbInstance.MonitoringRoleArn
       );
-      
-      if (!monitoringRole) {
-        throw new Error(`RDS Monitoring Role with ARN ${dbInstance.MonitoringRoleArn} not found in IAM roles.`);
-      }
       
       expect(monitoringRole.AssumeRolePolicyDocument).toBeDefined();
     });
@@ -1130,10 +1100,6 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
     test('CloudTrail Role should exist and be properly configured', async () => {
       const trails = await cloudtrail.send(new DescribeTrailsCommand({}));
       const trail = (trails as any).trailList!.find((t: any) => t.TrailARN === outputs.CloudTrailArn);
-
-      if (!trail) {
-        throw new Error(`CloudTrail with ARN ${outputs.CloudTrailArn} not found in AWS. It may have been deleted outside of CloudFormation.`);
-      }
       
       expect(trail.CloudWatchLogsRoleArn).toBeDefined();
       
@@ -1167,12 +1133,7 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
       const ec2LogGroup = logGroups.logGroups!.find((lg: any) =>
         lg.logGroupName && lg.logGroupName.includes(`${stackName}-CorpEC2LogGroup`) && lg.retentionInDays === 30
       );
-      
-      if (!ec2LogGroup) {
-        const availableLogGroups = logGroups.logGroups!.map(lg => lg.logGroupName).filter(n => n?.includes(stackName)).join(', ');
-        throw new Error(`EC2 log group not found. Stack: ${stackName}. Available: ${availableLogGroups}`);
-      }
-      
+            
       expect(ec2LogGroup.retentionInDays).toBe(30);
 
       // Check for CloudTrail log group
