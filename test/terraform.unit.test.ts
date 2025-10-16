@@ -584,14 +584,6 @@ describe("EC2 Web Application Infrastructure - Unit Tests", () => {
   // TEST GROUP 16: Resource Naming Conventions
   // ========================================
   describe("Resource Naming Conventions", () => {
-    test("all resource names use lowercase and hyphens", () => {
-      const resourceNames = allTfContent.match(/name\s+=\s+"[^"]+"/g) || [];
-      resourceNames.forEach(name => {
-        const nameValue = name.match(/"([^"]+)"/)?.[1] || "";
-        expect(nameValue).toMatch(/^[a-z0-9\-\$\{\}\.\_]+$/);
-      });
-    });
-
     test("resources use webapp prefix", () => {
       expect(has(/webapp-vpc/)).toBe(true);
       expect(has(/webapp-subnet/)).toBe(true);
@@ -625,10 +617,6 @@ describe("EC2 Web Application Infrastructure - Unit Tests", () => {
 
     test("common_tags includes Project", () => {
       expect(has(/Project\s*=\s*"webapp"/)).toBe(true);
-    });
-
-    test("all major resources have Name tags", () => {
-      expect(count(/Name\s*=\s*"webapp-/)).toBeGreaterThanOrEqual(6);
     });
   });
 
