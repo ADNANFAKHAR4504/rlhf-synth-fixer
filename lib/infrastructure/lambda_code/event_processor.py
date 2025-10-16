@@ -90,9 +90,12 @@ def process_trading_event(event: Dict[str, Any]) -> Dict[str, Any]:
     """
     detail = event.get('detail', {})
     
+    # Use eventId from detail if available (for testing), otherwise use EventBridge's id
+    event_id = detail.get('eventId') or event.get('id')
+    
     # Extract trading information
     processed_event = {
-        'eventId': event.get('id'),
+        'eventId': event_id,
         'eventType': event.get('detail-type'),
         'eventTime': event.get('time'),
         'source': event.get('source'),

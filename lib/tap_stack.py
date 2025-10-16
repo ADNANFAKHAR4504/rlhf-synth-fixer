@@ -80,29 +80,41 @@ class TapStack(pulumi.ComponentResource):
         """Register all outputs for the stack."""
         outputs = {}
         
-        # Lambda function outputs
+        # Lambda function outputs (with both region code and primary/secondary aliases)
         for region in self.config.regions:
+            region_key = 'primary' if region == self.config.primary_region else 'secondary'
             outputs[f'lambda_function_arn_{region}'] = self.lambda_stack.get_function_arn(region)
+            outputs[f'lambda_function_arn_{region_key}'] = self.lambda_stack.get_function_arn(region)
             outputs[f'lambda_function_name_{region}'] = self.lambda_stack.get_function_name(region)
+            outputs[f'lambda_function_name_{region_key}'] = self.lambda_stack.get_function_name(region)
         
-        # DynamoDB outputs
+        # DynamoDB outputs (with both region code and primary/secondary aliases)
         for region in self.config.regions:
+            region_key = 'primary' if region == self.config.primary_region else 'secondary'
             outputs[f'dynamodb_table_arn_{region}'] = self.dynamodb_stack.get_table_arn(region)
+            outputs[f'dynamodb_table_arn_{region_key}'] = self.dynamodb_stack.get_table_arn(region)
             outputs[f'dynamodb_table_name_{region}'] = self.dynamodb_stack.get_table_name(region)
+            outputs[f'dynamodb_table_name_{region_key}'] = self.dynamodb_stack.get_table_name(region)
         
         # Add global table ARN if available
         if self.dynamodb_stack.global_table:
             outputs['dynamodb_global_table_arn'] = self.dynamodb_stack.get_global_table_arn()
         
-        # EventBridge outputs
+        # EventBridge outputs (with both region code and primary/secondary aliases)
         for region in self.config.regions:
+            region_key = 'primary' if region == self.config.primary_region else 'secondary'
             outputs[f'eventbridge_bus_arn_{region}'] = self.eventbridge_stack.get_event_bus_arn(region)
+            outputs[f'eventbridge_bus_arn_{region_key}'] = self.eventbridge_stack.get_event_bus_arn(region)
             outputs[f'eventbridge_bus_name_{region}'] = self.eventbridge_stack.get_event_bus_name(region)
+            outputs[f'eventbridge_bus_name_{region_key}'] = self.eventbridge_stack.get_event_bus_name(region)
             outputs[f'eventbridge_rule_arn_{region}'] = self.eventbridge_stack.get_rule_arn(region)
+            outputs[f'eventbridge_rule_arn_{region_key}'] = self.eventbridge_stack.get_rule_arn(region)
         
-        # CloudWatch outputs
+        # CloudWatch outputs (with both region code and primary/secondary aliases)
         for region in self.config.regions:
+            region_key = 'primary' if region == self.config.primary_region else 'secondary'
             outputs[f'sns_topic_arn_{region}'] = self.cloudwatch_stack.get_sns_topic_arn(region)
+            outputs[f'sns_topic_arn_{region_key}'] = self.cloudwatch_stack.get_sns_topic_arn(region)
         
         # Configuration outputs
         outputs['primary_region'] = self.config.primary_region
