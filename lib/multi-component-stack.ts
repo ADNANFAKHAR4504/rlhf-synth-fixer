@@ -17,6 +17,7 @@ import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
 
 export class MultiComponentApplicationStack extends cdk.NestedStack {
@@ -435,6 +436,44 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
         minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
       }
     );
+
+    // ========================================
+    // WAFv2 WebACL (protect CloudFront and proxied API)
+    // ========================================
+    const webAcl = new wafv2.CfnWebACL(this, 'WebAcl', {
+      defaultAction: { allow: {} },
+      scope: 'CLOUDFRONT',
+      visibilityConfig: {
+        cloudWatchMetricsEnabled: true,
+        metricName: `prod-waf-${safeSuffixForLambda}`,
+        sampledRequestsEnabled: true,
+      },
+      name: `prod-webacl-${safeSuffixForLambda}`,
+      rules: [
+        {
+          name: 'AWSManagedCommonRuleSet',
+          priority: 0,
+          statement: {
+            managedRuleGroupStatement: {
+              vendorName: 'AWS',
+              name: 'AWSManagedRulesCommonRuleSet',
+            },
+          },
+          overrideAction: { none: {} },
+          visibilityConfig: {
+            cloudWatchMetricsEnabled: true,
+            metricName: `aws-managed-${safeSuffixForLambda}`,
+            sampledRequestsEnabled: true,
+          },
+        },
+      ],
+    });
+
+    // Associate the WebACL with the CloudFront distribution (global scope)
+    new wafv2.CfnWebACLAssociation(this, 'WebAclAssociation', {
+      resourceArn: distribution.distributionArn,
+      webAclArn: webAcl.attrArn,
+    });
 
     // Route 53 A Record for CloudFront
     new route53.ARecord(this, 'CloudFrontARecord', {
