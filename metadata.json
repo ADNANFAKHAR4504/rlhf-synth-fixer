@@ -1,9 +1,9 @@
 {
-  "po_id": "CFN-MED-HEALTH-API-001",
+  "po_id": "1439222270",
   "platform": "cfn",
   "language": "yaml",
   "complexity": "medium",
-  "turn_type": "initial",
+  "turn_type": "single",
   "subtask": "Create a HIPAA-compliant patient data API infrastructure",
   "subject_labels": [
     "Cloud Environment Setup",
