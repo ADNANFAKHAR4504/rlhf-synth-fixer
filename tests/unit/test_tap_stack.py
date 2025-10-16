@@ -26,7 +26,7 @@ class TestTapStack(unittest.TestCase):
         # ASSERT
         template.resource_count_is("AWS::DynamoDB::Table", 1)
         template.has_resource_properties("AWS::DynamoDB::Table", {
-            "TableName": f"shipment-events-{env_suffix}",
+            "TableName": f"shipmentevents-{env_suffix}",
             "BillingMode": "PAY_PER_REQUEST",
             "KeySchema": [
                 {"AttributeName": "shipment_id", "KeyType": "HASH"},
@@ -65,14 +65,14 @@ class TestTapStack(unittest.TestCase):
             props = queue_data.get("Properties", {})
             queue_name = props.get("QueueName", "")
             
-            if f"shipment-events-queue-{env_suffix}" == queue_name:
+            if f"shipmentevents-queue-{env_suffix}" == queue_name:
                 main_queue_found = True
                 self.assertEqual(props.get("VisibilityTimeout"), 360)
                 self.assertEqual(props.get("MessageRetentionPeriod"), 345600)
                 self.assertEqual(props.get("ReceiveMessageWaitTimeSeconds"), 20)
                 self.assertIn("RedrivePolicy", props)
             
-            elif f"shipment-events-dlq-{env_suffix}" == queue_name:
+            elif f"shipmentevents-dlq-{env_suffix}" == queue_name:
                 dlq_found = True
                 self.assertEqual(props.get("MessageRetentionPeriod"), 1209600)
                 self.assertEqual(props.get("VisibilityTimeout"), 300)
@@ -168,7 +168,7 @@ class TestTapStack(unittest.TestCase):
         template.resource_count_is("AWS::Events::Archive", 1)
         
         template.has_resource_properties("AWS::Events::EventBus", {
-            "Name": f"shipment-events-{env_suffix}"
+            "Name": f"shipmentevents-{env_suffix}"
         })
         
         template.has_resource_properties("AWS::Events::Rule", {
@@ -290,7 +290,7 @@ class TestTapStack(unittest.TestCase):
 
         # ASSERT
         template.has_resource_properties("AWS::DynamoDB::Table", {
-            "TableName": "shipment-events-dev"
+            "TableName": "shipmentevents-dev"
         })
 
     @mark.it("configures SQS event source for Lambda")
@@ -339,10 +339,10 @@ class TestTapStack(unittest.TestCase):
 
         # ASSERT
         template.has_resource_properties("AWS::DynamoDB::Table", {
-            "TableName": f"shipment-events-{env_suffix}"
+            "TableName": f"shipmentevents-{env_suffix}"
         })
         template.has_resource_properties("AWS::Events::EventBus", {
-            "Name": f"shipment-events-{env_suffix}"
+            "Name": f"shipmentevents-{env_suffix}"
         })
         template.has_resource_properties("AWS::Lambda::Function", {
             "FunctionName": f"shipment-event-processor-{env_suffix}"

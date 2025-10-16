@@ -49,7 +49,7 @@ class TapStack(cdk.Stack):
         events_table = dynamodb.Table(
             self,
             "EventsTable",
-            table_name=f"shipment-events-{environment_suffix}",
+            table_name=f"shipmentevents-{environment_suffix}",
             partition_key=dynamodb.Attribute(
                 name="shipment_id",
                 type=dynamodb.AttributeType.STRING
@@ -87,7 +87,7 @@ class TapStack(cdk.Stack):
         dlq = sqs.Queue(
             self,
             "ShipmentEventsDLQ",
-            queue_name=f"shipment-events-dlq-{environment_suffix}",
+            queue_name=f"shipmentevents-dlq-{environment_suffix}",
             retention_period=Duration.days(14),
             visibility_timeout=Duration.seconds(300),
         )
@@ -96,7 +96,7 @@ class TapStack(cdk.Stack):
         main_queue = sqs.Queue(
             self,
             "ShipmentEventsQueue",
-            queue_name=f"shipment-events-queue-{environment_suffix}",
+            queue_name=f"shipmentevents-queue-{environment_suffix}",
             visibility_timeout=Duration.seconds(360),
             retention_period=Duration.days(4),
             receive_message_wait_time=Duration.seconds(20),
@@ -279,7 +279,7 @@ def lambda_handler(event, context):
         event_bus = events.EventBus(
             self,
             "ShipmentEventBus",
-            event_bus_name=f"shipment-events-{environment_suffix}"
+            event_bus_name=f"shipmentevents-{environment_suffix}"
         )
         
         # Event Rule
@@ -305,7 +305,7 @@ def lambda_handler(event, context):
         archive = events.Archive(
             self,
             "ShipmentEventArchive",
-            archive_name=f"shipment-events-archive-{environment_suffix}",
+            archive_name=f"shipmentevents-archive-{environment_suffix}",
             source_event_bus=event_bus,
             event_pattern=events.EventPattern(
                 source=["shipment.service"]
@@ -321,7 +321,7 @@ def lambda_handler(event, context):
         dashboard = cloudwatch.Dashboard(
             self,
             "ShipmentProcessingDashboard",
-            dashboard_name=f"shipment-processing-{environment_suffix}",
+            dashboard_name=f"shipmentprocessing-{environment_suffix}",
         )
         
         # Queue Metrics Widget

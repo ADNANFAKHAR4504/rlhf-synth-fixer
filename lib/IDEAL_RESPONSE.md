@@ -13,7 +13,7 @@ This solution implements a serverless, production-ready shipment event processin
 event_bus = events.EventBus(
     self,
     "ShipmentEventBus",
-    event_bus_name=f"shipment-events-{environment_suffix}"
+    event_bus_name=f"shipmentevents-{environment_suffix}"
 )
 
 # Event Rule with pattern matching
@@ -43,7 +43,7 @@ event_rule = events.Rule(
 dlq = sqs.Queue(
     self,
     "ShipmentEventsDLQ",
-    queue_name=f"shipment-events-dlq-{environment_suffix}",
+    queue_name=f"shipmentevents-dlq-{environment_suffix}",
     retention_period=Duration.days(14),
     visibility_timeout=Duration.seconds(300),
 )
@@ -52,7 +52,7 @@ dlq = sqs.Queue(
 main_queue = sqs.Queue(
     self,
     "ShipmentEventsQueue",
-    queue_name=f"shipment-events-queue-{environment_suffix}",
+    queue_name=f"shipmentevents-queue-{environment_suffix}",
     visibility_timeout=Duration.seconds(360),  # 6x Lambda timeout
     retention_period=Duration.days(4),
     receive_message_wait_time=Duration.seconds(20),  # Long polling
@@ -103,7 +103,7 @@ processor_function.add_event_source(
 events_table = dynamodb.Table(
     self,
     "EventsTable",
-    table_name=f"shipment-events-{environment_suffix}",
+    table_name=f"shipmentevents-{environment_suffix}",
     partition_key=dynamodb.Attribute(
         name="shipment_id",
         type=dynamodb.AttributeType.STRING
@@ -256,7 +256,7 @@ events_table.grant_read_write_data(lambda_role)
 archive = events.Archive(
     self,
     "ShipmentEventArchive",
-    archive_name=f"shipment-events-archive-{environment_suffix}",
+    archive_name=f"shipmentevents-archive-{environment_suffix}",
     source_event_bus=event_bus,
     retention=Duration.days(7)
 )
