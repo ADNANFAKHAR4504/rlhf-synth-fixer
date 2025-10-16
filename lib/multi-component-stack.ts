@@ -112,6 +112,21 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
 
     // Use a generally-available Postgres engine version. Some regions may not have
     // older minor versions (e.g. 13.7). Prefer Postgres 15.x which has wider availability.
+    // Allow reusing an existing DB subnet group to avoid hitting account quotas
+    // (provide either env var RDS_SUBNET_GROUP_NAME or CDK context key
+    // `rdsSubnetGroupName` to import an existing group). If not provided,
+    // CDK will create a new SubnetGroup automatically.
+    const importedSubnetGroupName =
+      process.env.RDS_SUBNET_GROUP_NAME ||
+      this.node.tryGetContext('rdsSubnetGroupName');
+    const importedSubnetGroup = importedSubnetGroupName
+      ? rds.SubnetGroup.fromSubnetGroupName(
+          this,
+          'ImportedRdsSubnetGroup',
+          String(importedSubnetGroupName)
+        )
+      : undefined;
+
     const rdsInstance = new rds.DatabaseInstance(this, 'PostgresDatabase', {
       instanceIdentifier: `prod-rds-postgres-${this.stringSuffix.toLowerCase().replace(/[^a-z0-9-]/g, '')}`,
       engine: rds.DatabaseInstanceEngine.postgres({
@@ -128,6 +143,8 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
       },
+      // If an imported subnet group was provided, pass it to the DB instance
+      subnetGroup: importedSubnetGroup,
       securityGroups: [databaseSecurityGroup],
       credentials: rds.Credentials.fromSecret(databaseSecret),
       databaseName: 'proddb',
@@ -485,9 +502,20 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
         ],
       });
 
-      // Associate the WebACL with the CloudFront distribution (global scope)
+      // Associate the WebACL with the CloudFront distribution (global scope).
+      // WAF expects a resource ARN like:
+      // arn:${Partition}:cloudfront::${Account}:distribution/${DistributionId}
+      // CloudFront distributions are global; the account in the distribution ARN
+      // can be empty in some CDK constructs. Build the ARN explicitly using the
+      // current partition and account along with the distribution id.
+      const cloudFrontArn = cdk.Stack.of(this).formatArn({
+        service: 'cloudfront',
+        resource: `distribution/${distribution.distributionId}`,
+        arnFormat: cdk.ArnFormat.SLASH_RESOURCE_NAME,
+      });
+
       new wafv2.CfnWebACLAssociation(this, 'WebAclAssociation', {
-        resourceArn: distribution.distributionArn,
+        resourceArn: cloudFrontArn,
         webAclArn: webAcl.attrArn,
       });
     } else {
