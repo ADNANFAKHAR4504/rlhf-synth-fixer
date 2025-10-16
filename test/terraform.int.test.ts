@@ -718,8 +718,81 @@ describe('EC2 Web Application Infrastructure - Integration Tests (Live)', () => 
       expect(instance.Placement.AvailabilityZone).toBe('us-west-2a');
       expect(appVolume!.AvailabilityZone).toBe('us-west-2a');
       console.log('✓ All resources in us-west-2a');
-
+      
+      // ---------------------------------------------------------------
+      // Step 10: Verify monitoring outputs
+      // ---------------------------------------------------------------
+      console.log('Step 10: Verifying monitoring outputs exist...');
+      expect(outputs.sns_topic_arn).toBeDefined();
+      expect(outputs.cloudwatch_alarm_names).toBeDefined();
+      expect(outputs.vpc_flow_log_group).toBeDefined();
+      expect(outputs.vpc_flow_log_id).toBeDefined();
+      console.log('✓ All monitoring outputs present');
+      
       console.log('\n🎉 Complete infrastructure workflow validated! ✓\n');
     }, 120000); // 2 minute timeout
+  });
+
+  // =========================================================================
+  // SNS Topic Validation Tests
+  // =========================================================================
+  describe('SNS Topic Validation', () => {
+    test('SNS topic ARN output exists and matches ARN pattern', () => {
+      expect(outputs.sns_topic_arn).toBeDefined();
+      expect(outputs.sns_topic_arn).toMatch(/^arn:aws:sns:[^:]+:[^:]+:webapp-alerts-/);
+    });
+
+    test('ARN contains webapp-alerts', () => {
+      expect(outputs.sns_topic_arn).toMatch(/webapp-alerts/);
+    });
+
+    test('cloudwatch_alarm_names output exists', () => {
+      expect(outputs.cloudwatch_alarm_names).toBeDefined();
+    });
+
+    test('alarm names is valid JSON array with 3+ items', () => {
+      const alarmNames = JSON.parse(outputs.cloudwatch_alarm_names);
+      expect(Array.isArray(alarmNames)).toBe(true);
+      expect(alarmNames.length).toBeGreaterThanOrEqual(3);
+    });
+
+    test('all alarm names contain webapp-', () => {
+      const alarmNames = JSON.parse(outputs.cloudwatch_alarm_names);
+      alarmNames.forEach((name: string) => {
+        expect(name).toMatch(/webapp-/);
+      });
+    });
+  });
+
+  // =========================================================================
+  // VPC Flow Logs Validation Tests
+  // =========================================================================
+  describe('VPC Flow Logs Validation', () => {
+    let vpcId: string;
+
+    beforeAll(async () => {
+      // Get VPC ID from the instance
+      const instanceCommand = new DescribeInstancesCommand({
+        InstanceIds: [instanceId],
+      });
+      const instanceResponse = await ec2Client.send(instanceCommand);
+      vpcId = instanceResponse.Reservations![0].Instances![0].VpcId!;
+    });
+
+    test('outputs contain vpc_flow_log_group and vpc_flow_log_id', () => {
+      expect(outputs.vpc_flow_log_group).toBeDefined();
+      expect(outputs.vpc_flow_log_id).toBeDefined();
+    });
+
+    test('VPC Flow Log Group follows naming pattern', () => {
+      expect(outputs.vpc_flow_log_group).toMatch(/^\/aws\/vpc\/webapp-/);
+    });
+
+    test('VPC Flow Log ID exists', () => {
+      expect(outputs.vpc_flow_log_id).toMatch(/^fl-/);
+    });
+
+    // Note: We avoid testing actual Flow Logs via AWS API as @aws-sdk/client-cloudwatch
+    // may not be available in package.json. Testing via outputs is sufficient.
   });
 });

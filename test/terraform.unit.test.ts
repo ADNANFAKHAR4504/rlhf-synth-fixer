@@ -669,6 +669,22 @@ describe("EC2 Web Application Infrastructure - Unit Tests", () => {
       expect(has(/output\s+"instance_id"/)).toBe(true);
       expect(has(/output\s+"private_ip_address"/)).toBe(true);
     });
+
+    test("has sns_topic_arn output", () => {
+      expect(has(/output\s+"sns_topic_arn"/)).toBe(true);
+    });
+
+    test("has cloudwatch_alarm_names output", () => {
+      expect(has(/output\s+"cloudwatch_alarm_names"/)).toBe(true);
+    });
+
+    test("has vpc_flow_log_group output", () => {
+      expect(has(/output\s+"vpc_flow_log_group"/)).toBe(true);
+    });
+
+    test("has vpc_flow_log_id output", () => {
+      expect(has(/output\s+"vpc_flow_log_id"/)).toBe(true);
+    });
   });
 
   // ========================================================================
@@ -795,14 +811,8 @@ describe("EC2 Web Application Infrastructure - Unit Tests", () => {
       }
     });
 
-    test("WARNING: skip_destroy on volume attachment may block cleanup", () => {
-      // This is noted as a potential issue
-      const hasSkipDestroy = has(/skip_destroy\s*=\s*true/);
-      if (hasSkipDestroy) {
-        console.warn('⚠️  WARNING: skip_destroy=true may prevent Claude QA cleanup');
-      }
-      // We still validate it exists (as per requirements)
-      expect(hasSkipDestroy).toBe(true);
+    test("no skip_destroy which blocks Claude QA cleanup", () => {
+      expect(has(/skip_destroy\s*=\s*true/)).toBe(false);
     });
 
     test("no DeletionPolicy Retain", () => {
@@ -815,7 +825,138 @@ describe("EC2 Web Application Infrastructure - Unit Tests", () => {
   });
 
   // ========================================================================
-  // TEST GROUP 18: CODE ORGANIZATION (7 tests)
+  // TEST GROUP 18: CRITICAL ANTI-PATTERNS PREVENTION (3 tests)
+  // ========================================================================
+  describe("Critical Anti-Patterns Prevention", () => {
+    test("no skip_destroy anywhere", () => {
+      expect(has(/skip_destroy\s*=\s*true/)).toBe(false);
+    });
+
+    test("AWS provider version is ~> 5.0 not 6.0", () => {
+      expect(has(/version\s*=\s*"~>\s*5\.0"/)).toBe(true);
+      expect(has(/version\s*=\s*"~>\s*6\.0"/)).toBe(false);
+    });
+
+    test("no timestamp() in code", () => {
+      expect(has(/timestamp\s*\(\s*\)/)).toBe(false);
+    });
+  });
+
+  // ========================================================================
+  // TEST GROUP 19: SNS TOPIC FOR ALERTS (5 tests)
+  // ========================================================================
+  describe("SNS Topic for Alerts", () => {
+    test("SNS topic resource exists", () => {
+      expect(has(/resource\s+"aws_sns_topic"\s+"webapp_alerts"/)).toBe(true);
+    });
+
+    test("topic name uses random suffix", () => {
+      expect(has(/name\s*=\s*"webapp-alerts-\$\{random_string\.unique_suffix\.result\}"/)).toBe(true);
+    });
+
+    test("email subscription exists", () => {
+      expect(has(/resource\s+"aws_sns_topic_subscription"\s+"webapp_alerts_email"/)).toBe(true);
+    });
+
+    test("subscription uses email protocol", () => {
+      expect(has(/protocol\s*=\s*"email"/)).toBe(true);
+    });
+
+    test("SNS topic has tags", () => {
+      const snsTopicMatch = tf.match(/resource\s+"aws_sns_topic"\s+"webapp_alerts"[\s\S]*?(?=\n\s*\})/);
+      expect(snsTopicMatch).toBeTruthy();
+      if (snsTopicMatch) {
+        expect(/tags\s*=\s*merge/.test(snsTopicMatch[0])).toBe(true);
+      }
+    });
+  });
+
+  // ========================================================================
+  // TEST GROUP 20: CLOUDWATCH ALARMS (7 tests)
+  // ========================================================================
+  describe("CloudWatch Alarms", () => {
+    test("CPU alarm exists", () => {
+      expect(has(/resource\s+"aws_cloudwatch_metric_alarm"\s+"instance_cpu_high"/)).toBe(true);
+    });
+
+    test("status check alarm exists", () => {
+      expect(has(/resource\s+"aws_cloudwatch_metric_alarm"\s+"instance_status_check_failed"/)).toBe(true);
+    });
+
+    test("EBS throughput alarm exists", () => {
+      expect(has(/resource\s+"aws_cloudwatch_metric_alarm"\s+"ebs_volume_throughput"/)).toBe(true);
+    });
+
+    test("CPU threshold is 80", () => {
+      const cpuAlarmMatch = tf.match(/resource\s+"aws_cloudwatch_metric_alarm"\s+"instance_cpu_high"[\s\S]*?(?=resource|\n\}\n)/);
+      expect(cpuAlarmMatch).toBeTruthy();
+      if (cpuAlarmMatch) {
+        expect(/threshold\s*=\s*"80"/.test(cpuAlarmMatch[0])).toBe(true);
+      }
+    });
+
+    test("all alarms reference SNS topic ARN", () => {
+      expect(count(/alarm_actions\s*=\s*\[aws_sns_topic\.webapp_alerts\.arn\]/g)).toBe(3);
+    });
+
+    test("all alarms have descriptions", () => {
+      expect(count(/alarm_description\s*=/g)).toBeGreaterThanOrEqual(3);
+    });
+
+    test("all alarms have tags", () => {
+      const alarmMatches = tf.match(/resource\s+"aws_cloudwatch_metric_alarm"[\s\S]*?(?=\n\s*resource|\n\s*# |\Z)/g) || [];
+      expect(alarmMatches.length).toBe(3);
+      alarmMatches.forEach(alarm => {
+        expect(/tags\s*=\s*merge/.test(alarm)).toBe(true);
+      });
+    });
+  });
+
+  // ========================================================================
+  // TEST GROUP 21: VPC FLOW LOGS (8 tests)
+  // ========================================================================
+  describe("VPC Flow Logs", () => {
+    test("Flow Log resource exists", () => {
+      expect(has(/resource\s+"aws_flow_log"\s+"webapp_vpc_flow_log"/)).toBe(true);
+    });
+
+    test("CloudWatch Log Group exists", () => {
+      expect(has(/resource\s+"aws_cloudwatch_log_group"\s+"vpc_flow_log"/)).toBe(true);
+    });
+
+    test("IAM role exists", () => {
+      expect(has(/resource\s+"aws_iam_role"\s+"vpc_flow_log_role"/)).toBe(true);
+    });
+
+    test("traffic type is ALL", () => {
+      expect(has(/traffic_type\s*=\s*"ALL"/)).toBe(true);
+    });
+
+    test("log destination is CloudWatch Log Group ARN", () => {
+      expect(has(/log_destination\s*=\s*aws_cloudwatch_log_group\.vpc_flow_log\.arn/)).toBe(true);
+    });
+
+    test("log retention is 7 days", () => {
+      expect(has(/retention_in_days\s*=\s*7/)).toBe(true);
+    });
+
+    test("IAM assume policy references vpc-flow-logs.amazonaws.com", () => {
+      const iamRoleMatch = tf.match(/resource\s+"aws_iam_role"\s+"vpc_flow_log_role"[\s\S]*?(?=\n\s*tags)/);
+      expect(iamRoleMatch).toBeTruthy();
+      if (iamRoleMatch) {
+        expect(/Service.*vpc-flow-logs\.amazonaws\.com/.test(iamRoleMatch[0])).toBe(true);
+      }
+    });
+
+    test("all resources have tags", () => {
+      expect(count(/resource\s+"aws_cloudwatch_log_group"\s+"vpc_flow_log"[\s\S]*?tags\s*=/g)).toBe(1);
+      expect(count(/resource\s+"aws_iam_role"\s+"vpc_flow_log_role"[\s\S]*?tags\s*=/g)).toBe(1);
+      expect(count(/resource\s+"aws_flow_log"\s+"webapp_vpc_flow_log"[\s\S]*?tags\s*=/g)).toBe(1);
+    });
+  });
+
+  // ========================================================================
+  // TEST GROUP 22: CODE ORGANIZATION (7 tests)
   // ========================================================================
   describe("Code Organization", () => {
     test("sections follow logical order", () => {
@@ -987,8 +1128,8 @@ describe("EC2 Web Application Infrastructure - Unit Tests", () => {
   // ========================================================================
   describe("Coverage Summary", () => {
     test("comprehensive test coverage achieved", () => {
-      const testGroups = 20;
-      const estimatedTests = 155; // Sum of all tests above
+      const testGroups = 22;
+      const estimatedTests = 180; // Sum of all tests above (added ~25 new tests)
       
       console.log("\\n Test Coverage Summary:");
       console.log("   Test Groups: " + testGroups);

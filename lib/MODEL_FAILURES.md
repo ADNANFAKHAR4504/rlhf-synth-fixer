@@ -88,3 +88,265 @@ resource "aws_instance" "webapp_instance" {
   )
 }
 ```
+---
+
+## Error 2: skip_destroy Blocks Resource Cleanup
+
+**Issue**: The `aws_volume_attachment` resource had `skip_destroy = true` which blocks Claude QA Stage 6 cleanup, preventing proper testing workflow completion.
+
+**Original Code**:
+```hcl
+resource "aws_volume_attachment" "webapp_volume_attachment" {
+  device_name = "/dev/sdf"
+  volume_id   = aws_ebs_volume.webapp_volume.id
+  instance_id = aws_instance.webapp_instance.id
+
+  # Prevent accidental deletion
+  skip_destroy = true
+}
+```
+
+**Error Message**: Not a deployment error, but blocks automated QA cleanup process.
+
+**Root Cause**: The `skip_destroy = true` lifecycle policy prevents Terraform from destroying the volume attachment during cleanup, causing the QA pipeline to fail at the cleanup stage. Data protection should come from DLM snapshots, not from preventing Terraform destruction.
+
+**Fix Applied**:
+```hcl
+resource "aws_volume_attachment" "webapp_volume_attachment" {
+  device_name = "/dev/sdf"
+  volume_id   = aws_ebs_volume.webapp_volume.id
+  instance_id = aws_instance.webapp_instance.id
+}
+```
+
+**Prevention**: Use DLM policies for data protection instead of preventing resource destruction. This allows proper cleanup while maintaining data safety through automated backups.
+
+**AWS Best Practice**: Volume attachments should be destroyable for development/testing environments. Production data protection comes from backup strategies, not infrastructure permanence.
+
+---
+
+## Error 3: Incorrect AWS Provider Version
+
+**Issue**: Used AWS provider version `~> 6.0` instead of the required `~> 5.0` per QA pipeline standards.
+
+**Original Code**:
+```hcl
+terraform {
+  required_version = ">= 1.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 6.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.5"
+    }
+  }
+}
+```
+
+**Error Message**: Provider version mismatch with pipeline requirements.
+
+**Root Cause**: AWS Provider 6.x has different behavior and compatibility requirements. QA pipeline is standardized on Provider 5.x for consistent testing and validation.
+
+**Fix Applied**:
+```hcl
+terraform {
+  required_version = ">= 1.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.5"
+    }
+  }
+}
+```
+
+**Prevention**: Follow master prompt standards for provider versions to ensure compatibility with QA pipeline and testing environments.
+
+**AWS Best Practice**: Use consistent provider versions across environments to avoid deployment inconsistencies and compatibility issues.
+
+---
+
+## Error 4: Missing CloudWatch Monitoring
+
+**Issue**: Infrastructure lacked operational monitoring with CloudWatch alarms and SNS notifications, reducing production readiness.
+
+**Original Code**: No monitoring infrastructure present in original code.
+
+**Root Cause**: The model focused on basic infrastructure requirements but missed critical operational monitoring needed for production environments. Without monitoring, operational issues would go undetected.
+
+**Fix Applied**:
+```hcl
+# SNS Topic for CloudWatch Alarms
+resource "aws_sns_topic" "webapp_alerts" {
+  name = "webapp-alerts-${random_string.unique_suffix.result}"
+  tags = merge(local.common_tags, { Name = "webapp-alerts" })
+}
+
+resource "aws_sns_topic_subscription" "webapp_alerts_email" {
+  topic_arn = aws_sns_topic.webapp_alerts.arn
+  protocol  = "email"
+  endpoint  = var.alert_email
+}
+
+# CloudWatch Alarms
+resource "aws_cloudwatch_metric_alarm" "instance_cpu_high" {
+  alarm_name          = "webapp-cpu-${random_string.unique_suffix.result}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "80"
+  alarm_description   = "This metric monitors ec2 cpu utilization"
+  alarm_actions       = [aws_sns_topic.webapp_alerts.arn]
+  dimensions = { InstanceId = aws_instance.webapp_instance.id }
+  tags = merge(local.common_tags, { Name = "webapp-cpu-alarm" })
+}
+
+# Additional alarms for status checks and EBS throughput...
+```
+
+**Prevention**: Include operational monitoring as a core requirement for all production infrastructure, not an optional enhancement.
+
+**AWS Best Practice**: CloudWatch alarms with SNS notifications are essential for production workloads to ensure rapid incident response.
+
+---
+
+## Error 5: Missing VPC Flow Logs
+
+**Issue**: Infrastructure lacked VPC Flow Logs for security compliance and network traffic monitoring.
+
+**Original Code**: No VPC Flow Logs configuration present.
+
+**Root Cause**: The model did not include security compliance requirements for network monitoring, which are critical for production environments and security auditing.
+
+**Fix Applied**:
+```hcl
+# VPC Flow Logs
+resource "aws_cloudwatch_log_group" "vpc_flow_log" {
+  name              = "/aws/vpc/webapp-${random_string.unique_suffix.result}"
+  retention_in_days = 7
+  tags = merge(local.common_tags, { Name = "webapp-vpc-flow-logs" })
+}
+
+resource "aws_iam_role" "vpc_flow_log_role" {
+  name = "webapp-vpc-flow-log-role-${random_string.unique_suffix.result}"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = { Service = "vpc-flow-logs.amazonaws.com" }
+    }]
+  })
+  tags = merge(local.common_tags, { Name = "webapp-vpc-flow-log-role" })
+}
+
+resource "aws_flow_log" "webapp_vpc_flow_log" {
+  iam_role_arn    = aws_iam_role.vpc_flow_log_role.arn
+  log_destination = aws_cloudwatch_log_group.vpc_flow_log.arn
+  traffic_type    = "ALL"
+  vpc_id          = aws_vpc.webapp_vpc.id
+  tags = merge(local.common_tags, { Name = "webapp-vpc-flow-log" })
+}
+```
+
+**Prevention**: Include VPC Flow Logs as a standard security requirement for all VPC-based infrastructure.
+
+**AWS Best Practice**: VPC Flow Logs are essential for security compliance, network troubleshooting, and audit requirements in production environments.
+
+---
+
+## Error 6: Limited Cost Allocation Tags
+
+**Issue**: Infrastructure had only 4 cost allocation tags instead of the recommended 6+ for comprehensive financial tracking.
+
+**Original Code**:
+```hcl
+locals {
+  common_tags = {
+    Environment = "production"
+    ManagedBy   = "terraform"
+    Project     = "webapp"
+    CreatedAt   = timestamp()
+  }
+}
+```
+
+**Root Cause**: The model included basic tagging but missed comprehensive cost allocation tags needed for detailed billing analysis and cost optimization.
+
+**Fix Applied**:
+```hcl
+locals {
+  common_tags = {
+    Environment  = "production"
+    ManagedBy    = "terraform"
+    Project      = "webapp"
+    CostCenter   = "engineering"
+    Application  = "web-application"
+    Owner        = "infrastructure-team"
+  }
+}
+```
+
+**Prevention**: Define comprehensive tagging strategy including CostCenter, Application, and Owner tags for all resources.
+
+**AWS Best Practice**: Use detailed cost allocation tags to enable accurate billing analysis, cost optimization, and resource ownership tracking.
+
+---
+
+## Error 7: timestamp() in Tags Causes Plan Inconsistencies
+
+**Issue**: Used `timestamp()` function in tags which causes "Provider produced inconsistent final plan" errors on subsequent runs.
+
+**Original Code**:
+```hcl
+locals {
+  common_tags = {
+    Environment = "production"
+    ManagedBy   = "terraform"
+    Project     = "webapp"
+    CreatedAt   = timestamp()
+  }
+}
+```
+
+**Error Message**: "Provider produced inconsistent final plan" due to timestamp() changing on each plan.
+
+**Root Cause**: The `timestamp()` function returns different values on each Terraform run, causing the plan to be inconsistent and preventing successful applies.
+
+**Fix Applied**: Removed the `CreatedAt = timestamp()` line completely.
+
+**Prevention**: Avoid using time-based functions in resource configurations that cause plan inconsistencies.
+
+**AWS Best Practice**: Use static values for tags or generate timestamps external to Terraform configuration.
+
+---
+
+## Summary
+
+The MODEL_RESPONSE required **7 critical infrastructure fixes** to reach production-ready state:
+
+1. Fix user_data encoding to use user_data_base64 attribute
+2. Remove skip_destroy for cleanup compatibility
+3. Fix provider version to ~> 5.0 for QA compatibility
+4. Add CloudWatch monitoring with alarms and SNS notifications
+5. Add VPC Flow Logs for security compliance
+6. Enhance cost allocation tags for financial tracking
+7. Remove timestamp() function to prevent plan inconsistencies
+
+All fixes focus on:
+- Claude QA pipeline compatibility
+- Operational monitoring and alerting
+- Security compliance and auditing
+- Cost management and optimization
+- AWS Provider 5.x best practices
+- Infrastructure destroyability for testing
