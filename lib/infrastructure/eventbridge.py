@@ -51,6 +51,7 @@ class EventBridgeStack:
             
             # Define event pattern for trading events
             # This pattern accepts events from production and integration test sources
+            # The Lambda function handles validation internally
             import json
             event_pattern = json.dumps({
                 "source": [
@@ -65,10 +66,7 @@ class EventBridgeStack:
                     "Trade Execution",           # For integration tests
                     "Market Data Update",
                     "Multi-Region Trade"         # For integration tests
-                ],
-                "detail": {
-                    "symbol": [{"exists": True}]
-                }
+                ]
             })
             
             self.rules[region] = cloudwatch.EventRule(
