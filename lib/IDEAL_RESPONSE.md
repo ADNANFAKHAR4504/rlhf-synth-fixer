@@ -5,13 +5,13 @@
 This document describes the ideal solution for the global REST API requirements. **All components listed below are now fully implemented** in the actual codebase (`bin/tap.mjs`, `lib/tap-stack.mjs`, `cdk.json`).
 
 ### Implementation Status
-- ✅ **DynamoDB Global Table** - TableV2 with replicas in us-east-1 and ap-south-1
-- ✅ **S3 Cross-Region Replication** - Enabled with KMS encryption
+- ✅ **DynamoDB Global Table** - TableV2 with replicas and import support for retained tables
+- ✅ **S3 Cross-Region Replication** - Full KMS encryption with sseKmsEncryptedObjects and deleteMarkerReplication
 - ✅ **Route 53 Latency Routing** - Documented with example code
 - ✅ **QuickSight** - Excluded with detailed documentation (requires $18/month subscription)
-- ✅ **WAF Protection** - SQL injection and XSS tests added
+- ✅ **WAF Protection** - Rate limiting, SQL injection, and XSS protection
 - ✅ **CloudWatch Synthetics** - Canary execution tests added
-- ✅ **39 Integration Tests** - All passing (32 infrastructure + 7 security tests)
+- ✅ **39 Integration Tests** - All passing (14 use cases + 25 infrastructure tests)
 
 ## Overview
 The ideal response should provide complete, production-ready AWS CDK code in JavaScript (ES modules) that implements a globally distributed REST API architecture with high availability, strong consistency, and comprehensive monitoring.
@@ -78,20 +78,26 @@ app.synth();
 
 #### B. Data Layer
 - **DynamoDB Global Table**
-  - Partition key and sort key defined
-  - Provisioned billing mode with autoscaling
+  - Partition key (`id`) and sort key (`sk`) defined
+  - On-demand billing mode for automatic scaling
   - **Point-in-time recovery enabled**
-  - **Customer-managed KMS encryption**
+  - DynamoDB-owned encryption (simplifies cross-region replication)
   - Replication configured only from primary region
   - TTL attribute configured
+  - **Import support via context flag** for retained tables (prevents AlreadyExists errors)
+  - RemovalPolicy.RETAIN for data safety
 
 - **S3 Buckets**
   - Asset bucket with versioning
   - Backup bucket with lifecycle policies (Glacier transition, expiration)
-  - **Cross-region replication** from primary to secondary
+  - **Cross-region replication** with complete configuration:
+    - sourceSelectionCriteria with sseKmsEncryptedObjects enabled
+    - deleteMarkerReplication enabled
+    - KMS encryption for source and destination
+    - Proper IAM permissions for cross-region KMS keys
   - KMS encryption at rest
   - Block public access enabled
-  - SSL enforcement
+  - SSL enforcement via bucket policy
   - Intelligent-Tiering for cost optimization
 
 #### C. Security
@@ -102,9 +108,10 @@ app.synth();
 
 - **AWS WAF**
   - Regional WebACL (not CloudFront)
+  - **Rate-based rule** (2000 requests per 5 minutes per IP)
   - AWS Managed Rules: CommonRuleSet, SQLiRuleSet
   - Associated with API Gateway stage
-  - CloudWatch metrics enabled
+  - CloudWatch metrics enabled for all rules
 
 - **IAM Roles & Policies**
   - Lambda execution role with managed policies
@@ -160,10 +167,17 @@ app.synth();
   "context": {
     "@aws-cdk/aws-s3:grantWriteWithoutAcl": true,
     "@aws-cdk/aws-kms:defaultKeyPolicies": true,
-    "@aws-cdk/core:stackRelativeExports": true
+    "@aws-cdk/core:stackRelativeExports": true,
+    "importExistingTable": true
   }
 }
 ```
+
+**Custom Context Flags:**
+- `importExistingTable`: Set to `true` to import existing DynamoDB Global Tables instead of creating new ones (useful when table was retained from previous deployment)
+- `hostedZoneId`: Optional Route 53 hosted zone ID for custom domain
+- `domainName`: Optional custom domain name
+- `enableQuickSight`: Set to `true` to enable QuickSight resources
 
 ## Architecture Patterns
 
@@ -241,6 +255,10 @@ app.synth();
 8. **Missing encryption** - All data must be encrypted at rest and in transit
 9. **No monitoring** - CloudWatch Synthetics and Alarms are required
 10. **Lambda code directory** - Code.fromAsset('lambda') assumes directory exists
+11. **S3 Replication without sseKmsEncryptedObjects** - Required when using KMS encryption
+12. **Missing deleteMarkerReplication** - Required for S3 cross-region replication schema
+13. **DynamoDB AlreadyExists errors** - Use importExistingTable flag for retained tables
+14. **Missing rate-based WAF rule** - Important for DDoS protection
 
 ## Validation Checklist
 
