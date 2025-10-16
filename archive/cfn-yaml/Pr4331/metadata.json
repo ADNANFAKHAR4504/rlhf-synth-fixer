@@ -22,5 +22,11 @@
   ],
   "region": "eu-west-2",
   "background": "MediTech Solutions needs to process real-time data from patient monitoring devices across multiple hospitals. The data needs to be collected, processed, and stored while maintaining HIPAA compliance. The solution should handle approximately 1000 events per second during peak hours.",
-  "training_quality": 9
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
