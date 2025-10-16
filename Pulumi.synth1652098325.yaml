@@ -1,4 +1,0 @@
-encryptionsalt: v1:urQq94L8Xdw=:v1:MCIC8iurBr+ETQTs:nHuOd4+LdwuX8HwmN1CmwnMSp673ag==
-config:
-  aws:region: us-east-1
-  pulumi-infra:env: synth1652098325
