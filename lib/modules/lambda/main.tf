@@ -112,7 +112,7 @@ resource "aws_iam_role_policy" "lambda_xray" {
 
 data "archive_file" "lambda_traffic_analyzer" {
   type        = "zip"
-  source_file = var.enable_xray ? "${path.module}/../../lambda/traffic_analyzer_enhanced.py" : "${path.module}/../../lambda/traffic_analyzer.py"
+  source_file = "${path.module}/../../lambda/traffic_analyzer.py"
   output_path = "${path.module}/../../.terraform/lambda/traffic_analyzer.zip"
 }
 
