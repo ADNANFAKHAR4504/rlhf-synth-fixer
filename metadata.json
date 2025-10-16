@@ -1,0 +1,25 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "383545",
+  "team": "2",
+  "startedAt": "2025-10-16T14:24:50.369Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "RDS",
+    "cloudwatch",
+    "lambda",
+    "s3",
+    "vpc",
+    "ec2",
+    "alb",
+    "subnet"
+  ],
+  "training_quality": 9 ,
+  "background": "Security configuration as code ensures that policies and controls are versioned, reviewed, and consistently applied across all environments"
+}
