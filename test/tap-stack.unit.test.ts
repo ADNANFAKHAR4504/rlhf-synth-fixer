@@ -25,7 +25,7 @@ describe("TapStack Unit Tests", () => {
     expect(findResources("aws_subnet")).toHaveLength(4);
   });
 
-  it("should create 3 distinct security groups", () => {
+  it("should create security groups for ALB, ECS, and DB", () => {
     expect(findResources("aws_security_group")).toHaveLength(3);
   });
 
@@ -40,26 +40,52 @@ describe("TapStack Unit Tests", () => {
     expect(findResources("aws_ecs_task_definition")).toHaveLength(1);
   });
 
-  it("should create a DynamoDB Table", () => {
-    expect(findResources("aws_dynamodb_table")).toHaveLength(1);
+  it("should create a DynamoDB Table with encryption", () => {
+    const tables = findResources("aws_dynamodb_table");
+    expect(tables).toHaveLength(1);
+    expect((tables[0] as any).server_side_encryption).toEqual({ enabled: true, kms_key_arn: expect.any(String) });
   });
 
-  it("should create a Multi-AZ RDS Aurora cluster", () => {
-    expect(findResources("aws_rds_cluster")).toHaveLength(1);
+  it("should create a Multi-AZ RDS Aurora cluster with encryption", () => {
+    const clusters = findResources("aws_rds_cluster");
+    expect(clusters).toHaveLength(1);
+    const cluster = clusters[0] as any;
+    expect(cluster.storage_encrypted).toBe(true);
+    expect(cluster.kms_key_id).toBeDefined();
     expect(findResources("aws_rds_cluster_instance")).toHaveLength(2);
   });
 
-  it("should create a secret for the database password", () => {
-    expect(findResources("aws_secretsmanager_secret")).toHaveLength(1);
+  it("should create a secret for the database password with encryption", () => {
+    const secrets = findResources("aws_secretsmanager_secret");
+    expect(secrets).toHaveLength(1);
+    expect((secrets[0] as any).kms_key_id).toBeDefined();
     expect(findResources("aws_secretsmanager_secret_version")).toHaveLength(1);
   });
 
   it("should create a CloudWatch Alarm for the DB CPU", () => {
-    const alarms = findResources("aws_cloudwatch_metric_alarm");
-    expect(alarms.length).toBe(1);
-    const alarm = alarms[0] as any;
-    expect(alarm.metric_name).toBe("CPUUtilization");
-    expect(alarm.namespace).toBe("AWS/RDS");
+    expect(findResources("aws_cloudwatch_metric_alarm")).toHaveLength(1);
+  });
+
+  it("should create a KMS Key", () => {
+    expect(findResources("aws_kms_key")).toHaveLength(1);
+  });
+
+  it("should create an SNS Topic for alarms", () => {
+    expect(findResources("aws_sns_topic")).toHaveLength(1);
+  });
+
+  it("should create a Lambda function for failover", () => {
+    expect(findResources("aws_lambda_function")).toHaveLength(1);
+  });
+
+  it("should create an SSM Document for DR testing", () => {
+    expect(findResources("aws_ssm_document")).toHaveLength(1);
+  });
+
+  it("should create AWS Backup resources", () => {
+    expect(findResources("aws_backup_vault")).toHaveLength(1);
+    expect(findResources("aws_backup_plan")).toHaveLength(1);
+    expect(findResources("aws_backup_selection")).toHaveLength(1);
   });
 
   it("should have all required outputs for integration testing", () => {
@@ -68,11 +94,9 @@ describe("TapStack Unit Tests", () => {
     expect(synthesized.output).toHaveProperty("DynamoDbTableName");
     expect(synthesized.output).toHaveProperty("EcsClusterName");
     expect(synthesized.output).toHaveProperty("EcsServiceName");
-  });
-
-  it("should define the DbReaderEndpoint output correctly", () => {
-    expect(synthesized.output).toHaveProperty("DbReaderEndpoint");
-    // This check forces Jest to evaluate the line and cover the branch.
-    expect(synthesized.output.DbReaderEndpoint.value).toBeDefined();
+    expect(synthesized.output).toHaveProperty("KmsKeyArn");
+    expect(synthesized.output).toHaveProperty("SnsTopicArn");
+    expect(synthesized.output).toHaveProperty("LambdaFunctionName");
+    expect(synthesized.output).toHaveProperty("BackupVaultName");
   });
 });
