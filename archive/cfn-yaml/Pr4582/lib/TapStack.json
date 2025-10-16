@@ -1,0 +1,1703 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Production-ready serverless application with Lambda, API Gateway, DynamoDB, and Step Functions.\nFeatures: VPC integration, X-Ray tracing, CloudWatch monitoring, custom domain support.\nRegion: us-west-2\n",
+    "Parameters": {
+        "Environment": {
+            "Type": "String",
+            "Default": "production",
+            "AllowedValues": [
+                "development",
+                "staging",
+                "production"
+            ],
+            "Description": "Environment name for resource tagging and configuration"
+        },
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional suffix to append to resource names for environment isolation (e.g., -v2, -test)"
+        }
+    },
+    "Mappings": {
+        "EnvironmentConfig": {
+            "development": {
+                "LogRetention": 7,
+                "DynamoDBReadCapacity": 5,
+                "DynamoDBWriteCapacity": 5,
+                "LambdaMemory": 512,
+                "LambdaTimeout": 30
+            },
+            "staging": {
+                "LogRetention": 30,
+                "DynamoDBReadCapacity": 10,
+                "DynamoDBWriteCapacity": 10,
+                "LambdaMemory": 1024,
+                "LambdaTimeout": 60
+            },
+            "production": {
+                "LogRetention": 90,
+                "DynamoDBReadCapacity": 20,
+                "DynamoDBWriteCapacity": 20,
+                "LambdaMemory": 2048,
+                "LambdaTimeout": 90
+            }
+        }
+    },
+    "Resources": {
+        "ApplicationVPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": "10.0.0.0/16",
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-vpc${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnetAZ1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "ApplicationVPC"
+                },
+                "CidrBlock": "10.0.1.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-private-subnet-az1${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Private"
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnetAZ2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "ApplicationVPC"
+                },
+                "CidrBlock": "10.0.2.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-private-subnet-az2${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Private"
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "PublicSubnetAZ1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "ApplicationVPC"
+                },
+                "CidrBlock": "10.0.101.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-public-subnet-az1${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Public"
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-igw${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "AttachGateway": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "ApplicationVPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "NATGatewayEIP": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "Domain": "vpc"
+            }
+        },
+        "NATGateway": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NATGatewayEIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnetAZ1"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-nat-gateway${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "ApplicationVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-public-route-table${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "PublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnetRouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnetAZ1"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PrivateRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "ApplicationVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-private-route-table${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "PrivateRoute": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NATGateway"
+                }
+            }
+        },
+        "PrivateSubnetAZ1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnetAZ1"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                }
+            }
+        },
+        "PrivateSubnetAZ2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnetAZ2"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                }
+            }
+        },
+        "LambdaSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for Lambda functions",
+                "VpcId": {
+                    "Ref": "ApplicationVPC"
+                },
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "HTTPS outbound for AWS services"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3306,
+                        "ToPort": 3306,
+                        "CidrIp": "10.0.0.0/16",
+                        "Description": "MySQL/Aurora access within VPC"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-lambda-sg${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "DynamoDBVPCEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "ApplicationVPC"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.dynamodb"
+                },
+                "RouteTableIds": [
+                    {
+                        "Ref": "PrivateRouteTable"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": "*",
+                            "Action": "*",
+                            "Resource": "*"
+                        }
+                    ]
+                }
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${AWS::StackName}-lambda-execution-role${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole",
+                    "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "LambdaDynamoDBPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:GetItem",
+                                        "dynamodb:PutItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:DeleteItem",
+                                        "dynamodb:Query",
+                                        "dynamodb:Scan",
+                                        "dynamodb:BatchGetItem",
+                                        "dynamodb:BatchWriteItem"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ApplicationTable",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${ApplicationTable.Arn}/index/*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "LambdaCloudWatchLogs",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "StepFunctionsExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${AWS::StackName}-stepfunctions-role${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "states.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "StepFunctionsLambdaInvoke",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "lambda:InvokeFunction"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ProcessingLambda",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ValidationLambda",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "NotificationLambda",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "StepFunctionsXRay",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "xray:PutTraceSegments",
+                                        "xray:PutTelemetryRecords",
+                                        "xray:GetSamplingRules",
+                                        "xray:GetSamplingTargets"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "StepFunctionsCloudWatchLogs",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogDelivery",
+                                        "logs:GetLogDelivery",
+                                        "logs:UpdateLogDelivery",
+                                        "logs:DeleteLogDelivery",
+                                        "logs:ListLogDeliveries",
+                                        "logs:PutResourcePolicy",
+                                        "logs:DescribeResourcePolicies",
+                                        "logs:DescribeLogGroups"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "ApiGatewayExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${AWS::StackName}-apigateway-role${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "apigateway.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "ApplicationTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "${AWS::StackName}-application-table${EnvironmentSuffix}"
+                },
+                "BillingMode": "PROVISIONED",
+                "ProvisionedThroughput": {
+                    "ReadCapacityUnits": {
+                        "Fn::FindInMap": [
+                            "EnvironmentConfig",
+                            {
+                                "Ref": "Environment"
+                            },
+                            "DynamoDBReadCapacity"
+                        ]
+                    },
+                    "WriteCapacityUnits": {
+                        "Fn::FindInMap": [
+                            "EnvironmentConfig",
+                            {
+                                "Ref": "Environment"
+                            },
+                            "DynamoDBWriteCapacity"
+                        ]
+                    }
+                },
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "pk",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "sk",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "gsi1pk",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "gsi1sk",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "pk",
+                        "KeyType": "HASH"
+                    },
+                    {
+                        "AttributeName": "sk",
+                        "KeyType": "RANGE"
+                    }
+                ],
+                "GlobalSecondaryIndexes": [
+                    {
+                        "IndexName": "GSI1",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "gsi1pk",
+                                "KeyType": "HASH"
+                            },
+                            {
+                                "AttributeName": "gsi1sk",
+                                "KeyType": "RANGE"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        },
+                        "ProvisionedThroughput": {
+                            "ReadCapacityUnits": {
+                                "Fn::FindInMap": [
+                                    "EnvironmentConfig",
+                                    {
+                                        "Ref": "Environment"
+                                    },
+                                    "DynamoDBReadCapacity"
+                                ]
+                            },
+                            "WriteCapacityUnits": {
+                                "Fn::FindInMap": [
+                                    "EnvironmentConfig",
+                                    {
+                                        "Ref": "Environment"
+                                    },
+                                    "DynamoDBWriteCapacity"
+                                ]
+                            }
+                        }
+                    }
+                ],
+                "StreamSpecification": {
+                    "StreamViewType": "NEW_AND_OLD_IMAGES"
+                },
+                "SSESpecification": {
+                    "SSEEnabled": true,
+                    "SSEType": "KMS",
+                    "KMSMasterKeyId": "alias/aws/dynamodb"
+                },
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-application-table${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "ProcessingLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${AWS::StackName}-processing-function${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.11",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport os\nimport boto3\nfrom aws_xray_sdk.core import xray_recorder\nfrom aws_xray_sdk.core import patch_all\n\n# Patch AWS SDK for X-Ray tracing\npatch_all()\n\ndynamodb = boto3.resource('dynamodb')\ntable_name = os.environ.get('TABLE_NAME')\n\n@xray_recorder.capture('processing_handler')\ndef handler(event, context):\n    \"\"\"\n    Process incoming requests and store in DynamoDB\n    \"\"\"\n    try:\n        table = dynamodb.Table(table_name)\n        \n        # Parse incoming event\n        body = json.loads(event.get('body', '{}'))\n        \n        # Process and store data\n        response = table.put_item(\n            Item={\n                'pk': f\"USER#{body.get('userId', 'unknown')}\",\n                'sk': f\"REQUEST#{context.request_id}\",\n                'data': body,\n                'timestamp': int(context.aws_request_id.split('-')[0], 16)\n            }\n        )\n        \n        return {\n            'statusCode': 200,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({\n                'message': 'Data processed successfully',\n                'requestId': context.request_id\n            })\n        }\n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({\n                'error': 'Internal server error',\n                'message': str(e)\n            })\n        }\n"
+                },
+                "MemorySize": {
+                    "Fn::FindInMap": [
+                        "EnvironmentConfig",
+                        {
+                            "Ref": "Environment"
+                        },
+                        "LambdaMemory"
+                    ]
+                },
+                "Timeout": {
+                    "Fn::FindInMap": [
+                        "EnvironmentConfig",
+                        {
+                            "Ref": "Environment"
+                        },
+                        "LambdaTimeout"
+                    ]
+                },
+                "Environment": {
+                    "Variables": {
+                        "TABLE_NAME": {
+                            "Ref": "ApplicationTable"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "Environment"
+                        },
+                        "REGION": {
+                            "Ref": "AWS::Region"
+                        }
+                    }
+                },
+                "VpcConfig": {
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "LambdaSecurityGroup"
+                        }
+                    ],
+                    "SubnetIds": [
+                        {
+                            "Ref": "PrivateSubnetAZ1"
+                        },
+                        {
+                            "Ref": "PrivateSubnetAZ2"
+                        }
+                    ]
+                },
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "ProcessingLambdaVersion": {
+            "Type": "AWS::Lambda::Version",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "ProcessingLambda"
+                },
+                "Description": {
+                    "Fn::Sub": "Version for ${Environment} environment"
+                }
+            }
+        },
+        "ProcessingLambdaAlias": {
+            "Type": "AWS::Lambda::Alias",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "ProcessingLambda"
+                },
+                "FunctionVersion": {
+                    "Fn::GetAtt": [
+                        "ProcessingLambdaVersion",
+                        "Version"
+                    ]
+                },
+                "Name": {
+                    "Ref": "Environment"
+                }
+            }
+        },
+        "ValidationLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${AWS::StackName}-validation-function${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.11",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "ZipFile": "import json\nfrom aws_xray_sdk.core import xray_recorder\nfrom aws_xray_sdk.core import patch_all\n\npatch_all()\n\n@xray_recorder.capture('validation_handler')\ndef handler(event, context):\n    \"\"\"\n    Validate incoming data before processing\n    \"\"\"\n    try:\n        # Validation logic\n        required_fields = ['userId', 'action', 'timestamp']\n        \n        for field in required_fields:\n            if field not in event:\n                raise ValueError(f\"Missing required field: {field}\")\n        \n        return {\n            'statusCode': 200,\n            'isValid': True,\n            'data': event\n        }\n    except ValueError as e:\n        return {\n            'statusCode': 400,\n            'isValid': False,\n            'error': str(e)\n        }\n    except Exception as e:\n        return {\n            'statusCode': 500,\n            'isValid': False,\n            'error': 'Internal validation error'\n        }\n"
+                },
+                "MemorySize": 512,
+                "Timeout": 30,
+                "Environment": {
+                    "Variables": {
+                        "ENVIRONMENT": {
+                            "Ref": "Environment"
+                        }
+                    }
+                },
+                "VpcConfig": {
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "LambdaSecurityGroup"
+                        }
+                    ],
+                    "SubnetIds": [
+                        {
+                            "Ref": "PrivateSubnetAZ1"
+                        },
+                        {
+                            "Ref": "PrivateSubnetAZ2"
+                        }
+                    ]
+                },
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "NotificationLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${AWS::StackName}-notification-function${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.11",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport os\nfrom aws_xray_sdk.core import xray_recorder\nfrom aws_xray_sdk.core import patch_all\n\npatch_all()\n\n@xray_recorder.capture('notification_handler')\ndef handler(event, context):\n    \"\"\"\n    Send notifications after successful processing\n    \"\"\"\n    try:\n        # Notification logic (SNS, SES, etc.)\n        notification_type = event.get('notificationType', 'email')\n        recipient = event.get('recipient')\n        message = event.get('message')\n        \n        print(f\"Sending {notification_type} to {recipient}: {message}\")\n        \n        return {\n            'statusCode': 200,\n            'notificationSent': True,\n            'details': {\n                'type': notification_type,\n                'recipient': recipient,\n                'timestamp': context.aws_request_id\n            }\n        }\n    except Exception as e:\n        return {\n            'statusCode': 500,\n            'notificationSent': False,\n            'error': str(e)\n        }\n"
+                },
+                "MemorySize": 512,
+                "Timeout": 30,
+                "Environment": {
+                    "Variables": {
+                        "ENVIRONMENT": {
+                            "Ref": "Environment"
+                        }
+                    }
+                },
+                "VpcConfig": {
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "LambdaSecurityGroup"
+                        }
+                    ],
+                    "SubnetIds": [
+                        {
+                            "Ref": "PrivateSubnetAZ1"
+                        },
+                        {
+                            "Ref": "PrivateSubnetAZ2"
+                        }
+                    ]
+                },
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "ApplicationStateMachine": {
+            "Type": "AWS::StepFunctions::StateMachine",
+            "Properties": {
+                "StateMachineName": {
+                    "Fn::Sub": "${AWS::StackName}-workflow${EnvironmentSuffix}"
+                },
+                "RoleArn": {
+                    "Fn::GetAtt": [
+                        "StepFunctionsExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "TracingConfiguration": {
+                    "Enabled": true
+                },
+                "LoggingConfiguration": {
+                    "Level": "ALL",
+                    "IncludeExecutionData": true,
+                    "Destinations": [
+                        {
+                            "CloudWatchLogsLogGroup": {
+                                "LogGroupArn": {
+                                    "Fn::GetAtt": [
+                                        "StateMachineLogGroup",
+                                        "Arn"
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                "DefinitionString": {
+                    "Fn::Sub": "{\n  \"Comment\": \"Application workflow orchestration\",\n  \"StartAt\": \"ValidateInput\",\n  \"States\": {\n    \"ValidateInput\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"${ValidationLambda.Arn}\",\n      \"ResultPath\": \"$.validation\",\n      \"Next\": \"CheckValidation\",\n      \"Retry\": [\n        {\n          \"ErrorEquals\": [\"Lambda.ServiceException\", \"Lambda.AWSLambdaException\"],\n          \"IntervalSeconds\": 2,\n          \"MaxAttempts\": 3,\n          \"BackoffRate\": 2\n        }\n      ],\n      \"Catch\": [\n        {\n          \"ErrorEquals\": [\"States.ALL\"],\n          \"Next\": \"ValidationFailed\"\n        }\n      ]\n    },\n    \"CheckValidation\": {\n      \"Type\": \"Choice\",\n      \"Choices\": [\n        {\n          \"Variable\": \"$.validation.isValid\",\n          \"BooleanEquals\": true,\n          \"Next\": \"ProcessData\"\n        }\n      ],\n      \"Default\": \"ValidationFailed\"\n    },\n    \"ProcessData\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"${ProcessingLambda.Arn}\",\n      \"ResultPath\": \"$.processing\",\n      \"Next\": \"SendNotification\",\n      \"Retry\": [\n        {\n          \"ErrorEquals\": [\"States.TaskFailed\"],\n          \"IntervalSeconds\": 2,\n          \"MaxAttempts\": 3,\n          \"BackoffRate\": 2\n        }\n      ],\n      \"Catch\": [\n        {\n          \"ErrorEquals\": [\"States.ALL\"],\n          \"Next\": \"ProcessingFailed\"\n        }\n      ]\n    },\n    \"SendNotification\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"${NotificationLambda.Arn}\",\n      \"ResultPath\": \"$.notification\",\n      \"End\": true,\n      \"Retry\": [\n        {\n          \"ErrorEquals\": [\"States.TaskFailed\"],\n          \"IntervalSeconds\": 5,\n          \"MaxAttempts\": 2\n        }\n      ]\n    },\n    \"ValidationFailed\": {\n      \"Type\": \"Fail\",\n      \"Error\": \"ValidationError\",\n      \"Cause\": \"Input validation failed\"\n    },\n    \"ProcessingFailed\": {\n      \"Type\": \"Fail\",\n      \"Error\": \"ProcessingError\",\n      \"Cause\": \"Data processing failed\"\n    }\n  }\n}\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "ApplicationApi": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-api${EnvironmentSuffix}"
+                },
+                "Description": "Serverless Application API Gateway",
+                "EndpointConfiguration": {
+                    "Types": [
+                        "EDGE"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "ApiGatewayAccount": {
+            "Type": "AWS::ApiGateway::Account",
+            "Properties": {
+                "CloudWatchRoleArn": {
+                    "Fn::GetAtt": [
+                        "ApiGatewayExecutionRole",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "ProcessResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApplicationApi"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "ApplicationApi",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "process"
+            }
+        },
+        "ProcessMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApplicationApi"
+                },
+                "ResourceId": {
+                    "Ref": "ProcessResource"
+                },
+                "HttpMethod": "POST",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ProcessingLambda.Arn}/invocations"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200,
+                        "ResponseModels": {
+                            "application/json": "Empty"
+                        }
+                    },
+                    {
+                        "StatusCode": 500,
+                        "ResponseModels": {
+                            "application/json": "Empty"
+                        }
+                    }
+                ]
+            }
+        },
+        "ProcessingLambdaApiPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "ProcessingLambda"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApplicationApi}/*/*"
+                }
+            }
+        },
+        "ApiDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": [
+                "ProcessMethod"
+            ],
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApplicationApi"
+                },
+                "Description": {
+                    "Fn::Sub": "Deployment for ${Environment} environment"
+                }
+            }
+        },
+        "ApiStage": {
+            "Type": "AWS::ApiGateway::Stage",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApplicationApi"
+                },
+                "DeploymentId": {
+                    "Ref": "ApiDeployment"
+                },
+                "StageName": {
+                    "Ref": "Environment"
+                },
+                "TracingEnabled": true,
+                "MethodSettings": [
+                    {
+                        "ResourcePath": "/*",
+                        "HttpMethod": "*",
+                        "LoggingLevel": "INFO",
+                        "DataTraceEnabled": true,
+                        "MetricsEnabled": true,
+                        "ThrottlingBurstLimit": 5000,
+                        "ThrottlingRateLimit": 10000
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "ApiUsagePlan": {
+            "Type": "AWS::ApiGateway::UsagePlan",
+            "Properties": {
+                "UsagePlanName": {
+                    "Fn::Sub": "${AWS::StackName}-usage-plan${EnvironmentSuffix}"
+                },
+                "Description": "Usage plan for API rate limiting",
+                "ApiStages": [
+                    {
+                        "ApiId": {
+                            "Ref": "ApplicationApi"
+                        },
+                        "Stage": {
+                            "Ref": "ApiStage"
+                        }
+                    }
+                ],
+                "Throttle": {
+                    "BurstLimit": 5000,
+                    "RateLimit": 10000
+                },
+                "Quota": {
+                    "Limit": 1000000,
+                    "Period": "MONTH"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "StateMachineLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/stepfunctions/${AWS::StackName}-workflow${EnvironmentSuffix}"
+                },
+                "RetentionInDays": {
+                    "Fn::FindInMap": [
+                        "EnvironmentConfig",
+                        {
+                            "Ref": "Environment"
+                        },
+                        "LogRetention"
+                    ]
+                }
+            }
+        },
+        "ProcessingLambdaLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${ProcessingLambda}"
+                },
+                "RetentionInDays": {
+                    "Fn::FindInMap": [
+                        "EnvironmentConfig",
+                        {
+                            "Ref": "Environment"
+                        },
+                        "LogRetention"
+                    ]
+                }
+            }
+        },
+        "ValidationLambdaLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${ValidationLambda}"
+                },
+                "RetentionInDays": {
+                    "Fn::FindInMap": [
+                        "EnvironmentConfig",
+                        {
+                            "Ref": "Environment"
+                        },
+                        "LogRetention"
+                    ]
+                }
+            }
+        },
+        "NotificationLambdaLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${NotificationLambda}"
+                },
+                "RetentionInDays": {
+                    "Fn::FindInMap": [
+                        "EnvironmentConfig",
+                        {
+                            "Ref": "Environment"
+                        },
+                        "LogRetention"
+                    ]
+                }
+            }
+        },
+        "ProcessingLambdaErrorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-processing-lambda-errors${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert when Processing Lambda has errors",
+                "MetricName": "Errors",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 5,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "ProcessingLambda"
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "ProcessingLambdaDurationAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-processing-lambda-duration${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert when Processing Lambda duration is high",
+                "MetricName": "Duration",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 30000,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "ProcessingLambda"
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "ProcessingLambdaThrottleAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-processing-lambda-throttles${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert when Processing Lambda is throttled",
+                "MetricName": "Throttles",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 10,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "ProcessingLambda"
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "DynamoDBUserErrorsAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-dynamodb-user-errors${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert when DynamoDB has user errors",
+                "MetricName": "UserErrors",
+                "Namespace": "AWS/DynamoDB",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 10,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "TableName",
+                        "Value": {
+                            "Ref": "ApplicationTable"
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "ApiGateway4xxAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-api-4xx-errors${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert on API Gateway 4xx errors",
+                "MetricName": "4XXError",
+                "Namespace": "AWS/ApiGateway",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 100,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "ApiName",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-api${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Name": "Stage",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "ApiGateway5xxAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-api-5xx-errors${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert on API Gateway 5xx errors",
+                "MetricName": "5XXError",
+                "Namespace": "AWS/ApiGateway",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 10,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "ApiName",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-api${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Name": "Stage",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "StepFunctionsFailedExecutionsAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-stepfunctions-failed-executions${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert when Step Functions execution fails",
+                "MetricName": "ExecutionsFailed",
+                "Namespace": "AWS/States",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 5,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "StateMachineArn",
+                        "Value": {
+                            "Ref": "ApplicationStateMachine"
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "LambdaCodeS3Bucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "lambda-code-${AWS::AccountId}-${AWS::Region}${EnvironmentSuffix}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldVersions",
+                            "Status": "Enabled",
+                            "NoncurrentVersionExpirationInDays": 30
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "Lambda deployment artifacts"
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "ApiEndpoint": {
+            "Description": "API Gateway endpoint URL",
+            "Value": {
+                "Fn::Sub": "https://${ApplicationApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-api-endpoint"
+                }
+            }
+        },
+        "DynamoDBTableName": {
+            "Description": "DynamoDB table name",
+            "Value": {
+                "Ref": "ApplicationTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-table-name"
+                }
+            }
+        },
+        "DynamoDBTableArn": {
+            "Description": "DynamoDB table ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ApplicationTable",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-table-arn"
+                }
+            }
+        },
+        "ProcessingLambdaArn": {
+            "Description": "Processing Lambda function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ProcessingLambda",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-processing-lambda-arn"
+                }
+            }
+        },
+        "StateMachineArn": {
+            "Description": "Step Functions State Machine ARN",
+            "Value": {
+                "Ref": "ApplicationStateMachine"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-state-machine-arn"
+                }
+            }
+        },
+        "VPCId": {
+            "Description": "VPC ID",
+            "Value": {
+                "Ref": "ApplicationVPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-vpc-id"
+                }
+            }
+        },
+        "LambdaSecurityGroupId": {
+            "Description": "Lambda Security Group ID",
+            "Value": {
+                "Ref": "LambdaSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-lambda-sg-id"
+                }
+            }
+        },
+        "S3BucketName": {
+            "Description": "S3 bucket for Lambda code deployment",
+            "Value": {
+                "Ref": "LambdaCodeS3Bucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-code-bucket"
+                }
+            }
+        }
+    }
+}
