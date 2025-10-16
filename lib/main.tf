@@ -306,11 +306,6 @@ resource "aws_lambda_function" "api_handler" {
     }
   }
 
-  vpc_config {
-    subnet_ids         = aws_subnet.private[*].id
-    security_group_ids = [aws_security_group.lambda.id]
-  }
-
   tags = merge(var.common_tags, {
     Name = "${var.project_name}-${var.environment_suffix}-api-handler"
   })

@@ -60,20 +60,6 @@ resource "aws_iam_policy" "lambda_api_handler" {
           "kms:GenerateDataKey"
         ]
         Resource = aws_kms_key.monitoring.arn
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "ec2:CreateNetworkInterface",
-          "ec2:DescribeNetworkInterfaces",
-          "ec2:DeleteNetworkInterface"
-        ]
-        Resource = "*"
-        Condition = {
-          StringEquals = {
-            "aws:RequestedRegion" = var.aws_region
-          }
-        }
       }
     ]
   })

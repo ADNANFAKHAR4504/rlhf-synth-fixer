@@ -5,7 +5,7 @@ import {
 import {
   CloudWatchClient,
   DescribeAlarmsCommand,
-  DescribeDashboardsCommand,
+  GetDashboardCommand,
   GetMetricStatisticsCommand,
 } from '@aws-sdk/client-cloudwatch';
 import {
@@ -329,14 +329,14 @@ describe('CloudWatch Analytics System - Integration Tests', () => {
         return;
       }
 
-      const command = new DescribeDashboardsCommand({
-        DashboardNames: [dashboardName],
+      const command = new GetDashboardCommand({
+        DashboardName: dashboardName,
       });
       const response = await cloudwatchClient.send(command);
 
-      expect(response.DashboardEntries).toBeDefined();
-      expect(response.DashboardEntries?.length).toBeGreaterThan(0);
-      expect(response.DashboardEntries?.[0].DashboardName).toBe(dashboardName);
+      expect(response.DashboardName).toBeDefined();
+      expect(response.DashboardName).toBe(dashboardName);
+      expect(response.DashboardBody).toBeDefined();
     }, 30000);
 
     test('should have CloudWatch alarms configured', async () => {
