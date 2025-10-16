@@ -1,4 +1,4 @@
-###  Prompt to Generate `TapStack.yml`
+### Prompt to Generate `TapStack.yml`
 
 Create a **comprehensive AWS CloudFormation template named `TapStack.yml`** that builds a **brand-new secure AWS environment** following strict security best practices.
 
@@ -10,7 +10,6 @@ Create a **comprehensive AWS CloudFormation template named `TapStack.yml`** that
 * The YAML must be clean, modular, and aligned with production best practices.
 
 **Stack Name:** TapStack
-**Regions:** `us-east-1` and `eu-west-1`
 **Naming Convention:** Prefix all resources with environment identifiers like `prod-` or `dev-`.
 
 **Functional Requirements:**
@@ -37,7 +36,7 @@ Create a **comprehensive AWS CloudFormation template named `TapStack.yml`** that
 
 4. **CloudTrail:**
 
-   * Deploy a multi-region CloudTrail with encryption enabled via KMS.
+   * Deploy CloudTrail with encryption enabled via KMS.
    * Store logs in an encrypted S3 bucket with access logging enabled.
 
 5. **API Gateway:**
