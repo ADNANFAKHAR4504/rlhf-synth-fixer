@@ -11,7 +11,7 @@ Failure Recovery and High Availability
 - **Language**: Python
 - **Difficulty**: Hard
 
-## Problem Statement
+## Problem Statement.
 
 Implement a multi-region disaster recovery solution for an e-commerce platform using active-passive configuration.
 
