@@ -45,7 +45,7 @@ export class TapStack extends cdk.Stack {
     });
 
     // Create EventBridge scheduling for automated reports and health checks
-    const scheduling = new SchedulingConstruct(this, 'Scheduling', {
+    new SchedulingConstruct(this, 'Scheduling', {
       environmentSuffix,
       reportTopic: alerting.reportTopic,
       auditTable: audit.table,
