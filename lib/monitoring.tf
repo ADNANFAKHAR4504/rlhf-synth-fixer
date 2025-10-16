@@ -16,9 +16,9 @@ resource "aws_cloudwatch_dashboard" "main" {
         height = 6
         properties = {
           metrics = [
-            ["AWS/ApiGateway", "Count", { stat = "Sum", label = "API Requests", dimensions = { ApiName = aws_api_gateway_rest_api.main.name } }],
-            [".", "4XXError", { stat = "Sum", label = "4XX Errors", dimensions = { ApiName = aws_api_gateway_rest_api.main.name } }],
-            [".", "5XXError", { stat = "Sum", label = "5XX Errors", dimensions = { ApiName = aws_api_gateway_rest_api.main.name } }]
+            ["AWS/ApiGateway", "Count", "ApiName", aws_api_gateway_rest_api.main.name, { stat = "Sum", label = "API Requests" }],
+            [".", "4XXError", ".", ".", { stat = "Sum", label = "4XX Errors" }],
+            [".", "5XXError", ".", ".", { stat = "Sum", label = "5XX Errors" }]
           ]
           view    = "timeSeries"
           stacked = false
@@ -40,9 +40,9 @@ resource "aws_cloudwatch_dashboard" "main" {
         height = 6
         properties = {
           metrics = [
-            ["AWS/ApiGateway", "Latency", { stat = "Average", label = "Average Latency", dimensions = { ApiName = aws_api_gateway_rest_api.main.name } }],
-            [".", ".", { stat = "p99", label = "P99 Latency", dimensions = { ApiName = aws_api_gateway_rest_api.main.name } }],
-            [".", ".", { stat = "p95", label = "P95 Latency", dimensions = { ApiName = aws_api_gateway_rest_api.main.name } }]
+            ["AWS/ApiGateway", "Latency", "ApiName", aws_api_gateway_rest_api.main.name, { stat = "Average", label = "Average Latency" }],
+            ["...", { stat = "p99", label = "P99 Latency" }],
+            ["...", { stat = "p95", label = "P95 Latency" }]
           ]
           view    = "timeSeries"
           stacked = false
@@ -65,9 +65,9 @@ resource "aws_cloudwatch_dashboard" "main" {
         height = 6
         properties = {
           metrics = [
-            ["AWS/Lambda", "Invocations", { stat = "Sum", dimensions = { FunctionName = aws_lambda_function.api_handler.function_name } }],
-            [".", "Errors", { stat = "Sum", dimensions = { FunctionName = aws_lambda_function.api_handler.function_name } }],
-            [".", "Throttles", { stat = "Sum", dimensions = { FunctionName = aws_lambda_function.api_handler.function_name } }]
+            ["AWS/Lambda", "Invocations", "FunctionName", aws_lambda_function.api_handler.function_name, { stat = "Sum" }],
+            [".", "Errors", ".", ".", { stat = "Sum" }],
+            [".", "Throttles", ".", ".", { stat = "Sum" }]
           ]
           view    = "timeSeries"
           stacked = false
@@ -84,9 +84,9 @@ resource "aws_cloudwatch_dashboard" "main" {
         height = 6
         properties = {
           metrics = [
-            ["AWS/Lambda", "Duration", { stat = "Average", dimensions = { FunctionName = aws_lambda_function.api_handler.function_name } }],
-            [".", ".", { stat = "p99", dimensions = { FunctionName = aws_lambda_function.api_handler.function_name } }],
-            [".", ".", { stat = "Maximum", dimensions = { FunctionName = aws_lambda_function.api_handler.function_name } }]
+            ["AWS/Lambda", "Duration", "FunctionName", aws_lambda_function.api_handler.function_name, { stat = "Average" }],
+            ["...", { stat = "p99" }],
+            ["...", { stat = "Maximum" }]
           ]
           view    = "timeSeries"
           stacked = false
@@ -104,9 +104,9 @@ resource "aws_cloudwatch_dashboard" "main" {
         height = 6
         properties = {
           metrics = [
-            ["AWS/RDS", "CPUUtilization", { stat = "Average", dimensions = { DBInstanceIdentifier = aws_db_instance.main.identifier } }],
-            [".", "DatabaseConnections", { stat = "Average", dimensions = { DBInstanceIdentifier = aws_db_instance.main.identifier } }],
-            [".", "FreeableMemory", { stat = "Average", yAxis = "right", dimensions = { DBInstanceIdentifier = aws_db_instance.main.identifier } }]
+            ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", aws_db_instance.main.identifier, { stat = "Average" }],
+            [".", "DatabaseConnections", ".", ".", { stat = "Average" }],
+            [".", "FreeableMemory", ".", ".", { stat = "Average", yAxis = "right" }]
           ]
           view    = "timeSeries"
           stacked = false
@@ -123,10 +123,10 @@ resource "aws_cloudwatch_dashboard" "main" {
         height = 6
         properties = {
           metrics = [
-            ["AWS/RDS", "ReadLatency", { stat = "Average", dimensions = { DBInstanceIdentifier = aws_db_instance.main.identifier } }],
-            [".", "WriteLatency", { stat = "Average", dimensions = { DBInstanceIdentifier = aws_db_instance.main.identifier } }],
-            [".", "ReadThroughput", { stat = "Average", yAxis = "right", dimensions = { DBInstanceIdentifier = aws_db_instance.main.identifier } }],
-            [".", "WriteThroughput", { stat = "Average", yAxis = "right", dimensions = { DBInstanceIdentifier = aws_db_instance.main.identifier } }]
+            ["AWS/RDS", "ReadLatency", "DBInstanceIdentifier", aws_db_instance.main.identifier, { stat = "Average" }],
+            [".", "WriteLatency", ".", ".", { stat = "Average" }],
+            [".", "ReadThroughput", ".", ".", { stat = "Average", yAxis = "right" }],
+            [".", "WriteThroughput", ".", ".", { stat = "Average", yAxis = "right" }]
           ]
           view    = "timeSeries"
           stacked = false

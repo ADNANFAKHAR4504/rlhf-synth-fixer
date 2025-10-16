@@ -472,6 +472,10 @@ resource "aws_api_gateway_stage" "main" {
 
 resource "aws_api_gateway_account" "main" {
   cloudwatch_role_arn = aws_iam_role.api_gateway_cloudwatch.arn
+
+  depends_on = [
+    aws_iam_role_policy_attachment.api_gateway_cloudwatch
+  ]
 }
 
 resource "aws_api_gateway_method_settings" "all" {
