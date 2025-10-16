@@ -19,6 +19,22 @@
       "Type": "String",
       "Default": "10.0.0.0/16",
       "Description": "CIDR IP range allowed to access the secure S3 bucket"
+    },
+    "ExistingGuardDutyDetectorId": {
+      "Type": "String",
+      "Default": "",
+      "Description": "Optional: If a GuardDuty detector already exists in this account/region, provide its ID here. Leave empty to create a new detector."
+    }
+  },
+
+  "Conditions": {
+    "CreateNewGuardDutyDetector": {
+      "Fn::Equals": [
+        {
+          "Ref": "ExistingGuardDutyDetectorId"
+        },
+        ""
+      ]
     }
   },
 
@@ -454,6 +470,7 @@
 
     "GuardDutyDetector": {
       "Type": "AWS::GuardDuty::Detector",
+      "Condition": "CreateNewGuardDutyDetector",
       "Properties": {
         "Enable": true,
         "FindingPublishingFrequency": "FIFTEEN_MINUTES",
@@ -840,7 +857,15 @@
     "GuardDutyDetectorId": {
       "Description": "ID of the GuardDuty Detector",
       "Value": {
-        "Ref": "GuardDutyDetector"
+        "Fn::If": [
+          "CreateNewGuardDutyDetector",
+          {
+            "Ref": "GuardDutyDetector"
+          },
+          {
+            "Ref": "ExistingGuardDutyDetectorId"
+          }
+        ]
       },
       "Export": {
         "Name": {

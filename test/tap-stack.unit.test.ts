@@ -32,7 +32,7 @@ describe('TapStack CloudFormation Template - AWS Security Baseline', () => {
 
     test('should have exactly 3 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(3);
+      expect(parameterCount).toBe(4);
     });
 
     test('should have 24 resources', () => {
@@ -999,7 +999,13 @@ describe('TapStack CloudFormation Template - AWS Security Baseline', () => {
     test('GuardDutyDetectorId output should be correct', () => {
       const output = template.Outputs.GuardDutyDetectorId;
       expect(output.Description).toBe('ID of the GuardDuty Detector');
-      expect(output.Value).toEqual({ Ref: 'GuardDutyDetector' });
+      expect(output.Value).toEqual({
+        'Fn::If': [
+          'CreateNewGuardDutyDetector',
+          { Ref: 'GuardDutyDetector' },
+          { Ref: 'ExistingGuardDutyDetectorId' }
+        ]
+      });
       expect(output.Export.Name).toEqual({
         'Fn::Sub': 'GuardDutyDetector-ID-${EnvironmentSuffix}'
       });
