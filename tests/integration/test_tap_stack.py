@@ -176,13 +176,15 @@ def test_lambda_function_exists(outputs):
         assert config['Timeout'] == 60, f"Expected timeout 60, got {config['Timeout']}"
         assert config['MemorySize'] == 512, f"Expected memory 512MB, got {config['MemorySize']}"
         
-        # Verify environment variables are set
+        # Verify environment variables are set (AWS_REGION is provided automatically by Lambda)
         env_vars = config.get('Environment', {}).get('Variables', {})
-        expected_vars = ['AWS_REGION', 'DYNAMODB_TABLE', 'PROCESSED_BUCKET', 'API_SECRET_ARN', 'ALERT_TOPIC_ARN']
+        expected_vars = ['DYNAMODB_TABLE', 'PROCESSED_BUCKET', 'API_SECRET_ARN', 'ALERT_TOPIC_ARN']
         
         for var in expected_vars:
             assert var in env_vars, f"Environment variable {var} not found"
             assert env_vars[var], f"Environment variable {var} is empty"
+        
+        # AWS_REGION is automatically available in Lambda runtime, no need to set explicitly
         
         # Verify the function has proper execution role
         assert 'Role' in config, "Lambda function should have an execution role"

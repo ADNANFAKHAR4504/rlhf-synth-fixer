@@ -374,8 +374,7 @@ class IotProcessingStack(Construct):
                     "DYNAMODB_TABLE": dynamodb_table.name,
                     "ALERT_TOPIC_ARN": alert_topic.arn,
                     "PROCESSED_BUCKET": processed_data_bucket.id,
-                    "API_SECRET_ARN": api_secret.arn,
-                    "AWS_REGION": aws_region
+                    "API_SECRET_ARN": api_secret.arn
                 }
             },
             depends_on=[lambda_log_group]
