@@ -1,11 +1,12 @@
 IDEAL_RESPONSE
 This document describes the intended, "ideal" behavior of the infrastructure code in `lib/` and provides a concise purpose line for each TypeScript source file present in the directory. It is meant to make code review and handoffs faster by summarizing responsibilities and design decisions.
- # Ideal CI/CD Pipeline Solution
 
- ## AWS CDK Implementation
+# Ideal CI/CD Pipeline Solution
+
+## AWS CDK Implementation
 
 ```typescript
-// lib/cloud-setup-stack.ts
+cloud-setup-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
@@ -172,12 +173,29 @@ export class CloudSetupStack extends cdk.Stack {
 
 		// AutoScalingGroup
 		const userData = ec2.UserData.forLinux();
+		// Install HTTPD and the Amazon CloudWatch Agent, configure it to ship httpd logs
 		userData.addCommands(
 			'yum update -y',
 			'yum install -y httpd',
 			'systemctl enable httpd',
 			'systemctl start httpd',
-			'echo "Hello from CloudSetup" > /var/www/html/index.html'
+			'echo "Hello from CloudSetup" > /var/www/html/index.html',
+			'yum install -y amazon-cloudwatch-agent',
+			"cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<'EOF'",
+			"{ \"agent\": { \"metrics_collection_interval\": 60, \"run_as_user\": \"root\" },",
+			"  \"logs\": {",
+			"    \"logs_collected\": {",
+			"      \"files\": {",
+			"        \"collect_list\": [",
+			"          { \"file_path\": \"/var/log/httpd/access_log\", \"log_group_name\": \"/aws/ecs/cloud-setup-${this.suffix}\", \"log_stream_name\": \"{instance_id}-httpd-access\" },",
+			"          { \"file_path\": \"/var/log/httpd/error_log\", \"log_group_name\": \"/aws/ecs/cloud-setup-${this.suffix}\", \"log_stream_name\": \"{instance_id}-httpd-error\" }",
+			"        ]",
+			"      }",
+			"    }",
+			"  }",
+			"}",
+			"EOF",
+			"/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s"
 		);
 
 		const asg = new autoscaling.AutoScalingGroup(this, `asg-${this.suffix}`, {
@@ -286,11 +304,10 @@ export class CloudSetupStack extends cdk.Stack {
 		// Removed CfnOutputs to avoid cross-stack export conflicts
 	}
 }
+```
 
-// End: lib/cloud-setup-stack.ts
-
-
-// lib/tap-stack.ts
+```typescript
+tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { CloudSetupStack } from './cloud-setup-stack';
@@ -351,14 +368,4 @@ export class TapStack extends cdk.Stack {
 		*/
 	}
 }
-
-
-## Best Practices Implemented
-
- - Modern Node.js runtime (20.x)
- - Explicit log groups (avoids deprecated logRetention)
- - Inline Lambda code (no external assets required)
- - Proper IAM scoping with resource ARNs
- - CloudFormation-native metric definitions
- - Auto-rollback without alarm dependency
- - Environment-aware resource naming
+```

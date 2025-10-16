@@ -164,12 +164,55 @@ export class CloudSetupStack extends cdk.Stack {
 
     // AutoScalingGroup
     const userData = ec2.UserData.forLinux();
+    // Install HTTPD and the Amazon CloudWatch Agent, configure it to ship httpd logs
     userData.addCommands(
       'yum update -y',
       'yum install -y httpd',
       'systemctl enable httpd',
       'systemctl start httpd',
-      'echo "Hello from CloudSetup" > /var/www/html/index.html'
+      'echo "Hello from CloudSetup" > /var/www/html/index.html',
+      'yum install -y amazon-cloudwatch-agent',
+      // write the cloudwatch agent config; inject the stack suffix into the log group name
+      `cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<'EOF'
+{ "agent": { "metrics_collection_interval": 60, "run_as_user": "root" },
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/var/log/httpd/access_log",
+            "log_group_name": "/aws/ecs/cloud-setup-${this.suffix}",
+            "log_stream_name": "{instance_id}-httpd-access"
+          },
+          {
+            "file_path": "/var/log/httpd/error_log",
+            "log_group_name": "/aws/ecs/cloud-setup-${this.suffix}",
+            "log_stream_name": "{instance_id}-httpd-error"
+          }
+        ]
+      }
+    }
+  }
+}
+EOF`,
+      // start the agent using the file-based config
+      '/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s'
+    );
+
+    // Ensure the EC2 role can create log streams and put log events into the target log group
+    ec2Role.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        actions: [
+          'logs:CreateLogGroup',
+          'logs:CreateLogStream',
+          'logs:PutLogEvents',
+          'logs:DescribeLogStreams',
+        ],
+        resources: [
+          // allow the role to write to the specific log group created above
+          `arn:aws:logs:*:*:log-group:/aws/ecs/cloud-setup-${this.suffix}:*`,
+        ],
+      })
     );
 
     const asg = new autoscaling.AutoScalingGroup(this, `asg-${this.suffix}`, {

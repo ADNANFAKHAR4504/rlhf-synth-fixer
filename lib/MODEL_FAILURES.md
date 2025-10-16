@@ -1,4 +1,6 @@
-Below are concise failure causes identified
+# MODEL_FAILURES
+
+Below are concise failures identified
 
 1) Hardcoded and region-mismatched ACM certificate references (CloudFront certificates must be in us-east-1; ALB certificates must be in the ALB's region).
 
