@@ -65,9 +65,9 @@ Mappings:
 
 Resources:
 
-  ####################################################################
+  ########################
   # Central KMS Key & Alias
-  ####################################################################
+  ########################
   TapStackKmsKey:
     Type: AWS::KMS::Key
     Properties:
@@ -75,25 +75,45 @@ Resources:
       KeyPolicy:
         Version: "2012-10-17"
         Statement:
+          # 1) Full admin control for account root (allows account principals to be added by IAM)
           - Sid: AllowRootAccountFullAccess
             Effect: Allow
             Principal:
               AWS: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:root"
             Action: "kms:*"
             Resource: "*"
+
+          # 2) Allow CloudTrail service to use the key (required for CloudTrail deliveries)
           - Sid: AllowCloudTrailToUseKey
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
             Action:
               - kms:GenerateDataKey*
-              - kms:Decrypt
               - kms:Encrypt
+              - kms:Decrypt
               - kms:ReEncrypt*
+              - kms:DescribeKey
             Resource: "*"
             Condition:
               StringEquals:
                 kms:ViaService: !Sub "cloudtrail.${AWS::Region}.amazonaws.com"
+                aws:SourceAccount: !Ref "AWS::AccountId"
+
+          # 3) Allow S3 service to use the key when it needs to write objects (defensive)
+          - Sid: AllowS3ToUseKeyForPutObject
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action:
+              - kms:GenerateDataKey*
+              - kms:Encrypt
+              - kms:ReEncrypt*
+              - kms:Decrypt
+            Resource: "*"
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref "AWS::AccountId"
 
   TapStackKmsAlias:
     Type: AWS::KMS::Alias
@@ -101,15 +121,15 @@ Resources:
       AliasName: !Sub "alias/${Environment}-tapstack-key"
       TargetKeyId: !Ref TapStackKmsKey
 
-  ####################################################################
-  # S3 buckets: logging bucket, cloudtrail bucket, application bucket
-  # (SSE-KMS, Block Public Access, Versioning, Access Logging)
-  ####################################################################
+  ########################
+  # S3 buckets (SSE-KMS, block public, versioning, access logging)
+  ########################
   TapStackLogBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "${Environment}-tapstack-log-bucket-${AWS::AccountId}-${AWS::Region}"
-      VersioningConfiguration: { Status: Enabled }
+      VersioningConfiguration:
+        Status: Enabled
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -125,7 +145,8 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "${Environment}-tapstack-cloudtrail-${AWS::AccountId}-${AWS::Region}"
-      VersioningConfiguration: { Status: Enabled }
+      VersioningConfiguration:
+        Status: Enabled
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -144,7 +165,8 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "${Environment}-tapstack-app-${AWS::AccountId}-${AWS::Region}"
-      VersioningConfiguration: { Status: Enabled }
+      VersioningConfiguration:
+        Status: Enabled
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -159,11 +181,11 @@ Resources:
         DestinationBucketName: !Ref TapStackLogBucket
         LogFilePrefix: app-bucket-access-logs/
 
-  ####################################################################
-  # CLOUDTRAIL S3 BUCKET POLICY (required by CloudTrail)
-  # - allows cloudtrail.amazonaws.com to GetBucketAcl and PutObject to
-  #   the AWSLogs/<AccountId> prefix and enforces bucket-owner-full-control.
-  ####################################################################
+  ###########################################################
+  # CloudTrail S3 Bucket Policy — required for CloudTrail validation
+  # - GetBucketAcl and PutObject to AWSLogs/<AccountId>/*
+  # - Conditions: s3:x-amz-acl = bucket-owner-full-control AND aws:SourceAccount = account
+  ###########################################################
   TapStackCloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -178,6 +200,7 @@ Resources:
             Action:
               - s3:GetBucketAcl
             Resource: !Sub "arn:${AWS::Partition}:s3:::${TapStackCloudTrailBucket}"
+
           - Sid: "AllowCloudTrailPutObject"
             Effect: Allow
             Principal:
@@ -188,10 +211,11 @@ Resources:
             Condition:
               StringEquals:
                 s3:x-amz-acl: "bucket-owner-full-control"
+                aws:SourceAccount: !Ref "AWS::AccountId"
 
-  ####################################################################
-  # VPC, Subnets, IGW, NATs, RouteTables
-  ####################################################################
+  ########################
+  # VPC, Subnets, IGW, NATs, RouteTables (2 AZs)
+  ########################
   TapStackVPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -220,6 +244,7 @@ Resources:
     DependsOn: TapStackIGWAttachment
     Properties:
       Domain: vpc
+
   NatEIP2:
     Type: AWS::EC2::EIP
     DependsOn: TapStackIGWAttachment
@@ -354,9 +379,9 @@ Resources:
       SubnetId: !Ref PrivateSubnet2
       RouteTableId: !Ref PrivateRouteTable2
 
-  ####################################################################
+  ########################
   # Security Groups
-  ####################################################################
+  ########################
   BastionSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -423,9 +448,9 @@ Resources:
         - Key: Name
           Value: !Sub "${Environment}-tapstack-rds-sg"
 
-  ####################################################################
+  ########################
   # IAM: EC2 Role & Instance Profile
-  ####################################################################
+  ########################
   TapStackEC2Role:
     Type: AWS::IAM::Role
     Properties:
@@ -471,9 +496,9 @@ Resources:
       Roles:
         - !Ref TapStackEC2Role
 
-  ####################################################################
+  ########################
   # IAM: Lambda Role (least privilege)
-  ####################################################################
+  ########################
   TapStackLambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -521,9 +546,9 @@ Resources:
                 Resource:
                   - !Sub "arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:key/${TapStackKmsKey}"
 
-  ####################################################################
+  ########################
   # IAM: MFA-enforce managed policy + admin group
-  ####################################################################
+  ########################
   RequireMFAForConsolePolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
@@ -548,9 +573,9 @@ Resources:
         - !Ref RequireMFAForConsolePolicy
         - arn:aws:iam::aws:policy/AdministratorAccess
 
-  ####################################################################
-  # Secrets Manager: DB credentials (encrypted by KMS key)
-  ####################################################################
+  ########################
+  # Secrets Manager: DB credentials (encrypted by KMS)
+  ########################
   DBCredentialsSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -563,9 +588,9 @@ Resources:
         ExcludeCharacters: '"@/\\'
       KmsKeyId: !Ref TapStackKmsKey
 
-  ####################################################################
+  ########################
   # RDS: DB Subnet Group and instance (private, encrypted)
-  ####################################################################
+  ########################
   TapStackDBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -594,9 +619,9 @@ Resources:
       BackupRetentionPeriod: 7
       DeletionProtection: true
 
-  ####################################################################
-  # API Gateway: RestApi, resource (/ping), method (ANY), stage, logs
-  ####################################################################
+  ########################
+  # API Gateway + logging (ensure at least one method so deployment succeeds)
+  ########################
   TapStackApiLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -609,14 +634,14 @@ Resources:
       PolicyName: !Sub "${Environment}-apigateway-logs-policy"
       PolicyDocument: !Sub |
         {
-          "Version": "2012-10-17",
-          "Statement": [
+          "Version":"2012-10-17",
+          "Statement":[
             {
-              "Sid": "AllowAPIGatewayToPutLogs",
-              "Effect": "Allow",
+              "Sid":"AllowAPIGatewayToPutLogs",
+              "Effect":"Allow",
               "Principal": { "Service": "apigateway.amazonaws.com" },
-              "Action": [ "logs:CreateLogGroup","logs:CreateLogStream","logs:PutLogEvents" ],
-              "Resource": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/apigateway/${Environment}-tapstack-api-logs:*"
+              "Action":["logs:CreateLogGroup","logs:CreateLogStream","logs:PutLogEvents"],
+              "Resource":"arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/apigateway/${Environment}-tapstack-api-logs:*"
             }
           ]
         }
@@ -678,9 +703,9 @@ Resources:
           LoggingLevel: INFO
           ResourcePath: "/*"
 
-  ####################################################################
-  # Lambda: VPC-enabled, KMS encryption for env vars, least-priv role
-  ####################################################################
+  ########################
+  # Lambda (VPC-enabled, KMS-encrypted env)
+  ########################
   TapStackLambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -714,14 +739,14 @@ Resources:
                   "headers": {"Content-Type": "text/plain"}
               }
 
-  ####################################################################
-  # Sample EC2 Instance in private subnet (for demonstration)
-  ####################################################################
+  ########################
+  # Optional EC2 Instance (replace AMI)
+  ########################
   TapStackPrivateInstance:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t3.micro
-      # NOTE: Replace with region-appropriate AMI before deploying (this is a placeholder)
+      # UPDATE: replace with a valid region AMI or remove resource
       ImageId: ami-0c94855ba95c71c99
       SubnetId: !Ref PrivateSubnet1
       IamInstanceProfile: !Ref TapStackInstanceProfile
@@ -731,10 +756,10 @@ Resources:
         - Key: Name
           Value: !Sub "${Environment}-tapstack-private-instance"
 
-  ####################################################################
-  # CloudTrail (multi-region) storing logs in encrypted S3 bucket
-  # - Depends on the S3 bucket policy to be present for validation
-  ####################################################################
+  ########################
+  # CloudTrail (multi-region)
+  # Depends only on the S3 bucket policy so CloudTrail validation succeeds.
+  ########################
   TapStackCloudTrail:
     Type: AWS::CloudTrail::Trail
     DependsOn:
@@ -749,9 +774,9 @@ Resources:
       IsOrganizationTrail: false
       IsLogging: true
 
-  ####################################################################
-  # SSM parameter for metadata
-  ####################################################################
+  ########################
+  # SSM Parameter
+  ########################
   TapStackConfigParameter:
     Type: AWS::SSM::Parameter
     Properties:
@@ -835,7 +860,5 @@ Outputs:
 Metadata:
   cfn-lint:
     notes: >
-      - Replace EC2 ImageId with a valid region-specific AMI before deploying,
-        or remove the EC2 resource if unnecessary.
-      - For multi-account, centralized CloudTrail consider AWS Organizations + StackSets.
-
+      - Replace the EC2 ImageId placeholder with a valid regional AMI (or remove the EC2 resource).
+      - For organization-wide centralized CloudTrail across accounts, prefer an Organizations-based trail + StackSets.
