@@ -10,14 +10,13 @@ import { FailoverOrchestrator } from './constructs/failover-orchestrator';
 import { GlobalDatabase } from './constructs/global-database';
 import { HealthCheckSystem } from './constructs/health-check';
 import { RegionalApi } from './constructs/regional-api';
-import { PRIMARY_REGION, REGIONS, SECONDARY_REGIONS } from './utils/constants';
+import { PRIMARY_REGION, SECONDARY_REGIONS } from './utils/constants';
 
 export interface TapStackProps extends cdk.StackProps {
   domainName?: string;
   certificateArn?: string;
   alertEmail: string;
   environmentSuffix?: string;
-  useGlobalAccelerator?: boolean; // Use Global Accelerator instead of Route53
 }
 
 export class TapStack extends cdk.Stack {
@@ -63,21 +62,21 @@ export class TapStack extends cdk.Stack {
     // Deploy regional APIs
     this.deployRegionalInfrastructure(props);
 
-    // Setup health check system
+    // Setup health check system (only for this stack's region)
     this.healthCheckSystem = new HealthCheckSystem(this, 'HealthCheckSystem', {
-      regions: REGIONS,
+      regions: [this.region],
       regionalApis: this.regionalApis,
       globalDatabase: this.globalDatabase,
       alertTopic: globalAlertTopic,
       environmentSuffix: environmentSuffix,
     });
 
-    // Setup failover orchestration
+    // Setup failover orchestration (only for this stack's region)
     const failoverOrchestrator = new FailoverOrchestrator(
       this,
       'FailoverOrchestrator',
       {
-        regions: REGIONS,
+        regions: [this.region],
         regionalApis: this.regionalApis,
         globalDatabase: this.globalDatabase,
         healthCheckSystem: this.healthCheckSystem,
@@ -97,10 +96,10 @@ export class TapStack extends cdk.Stack {
     // Create global dashboard
     this.createGlobalDashboard();
 
-    // Setup chaos testing system
+    // Setup chaos testing system (only for this stack's region)
     if (this.node.tryGetContext('enableChaosTests')) {
       new ChaosTestingSystem(this, 'ChaosTestingSystem', {
-        regions: REGIONS,
+        regions: [this.region],
         regionalApis: this.regionalApis,
         failoverOrchestrator: failoverOrchestrator,
         environmentSuffix: environmentSuffix,
@@ -114,20 +113,19 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-    for (const region of REGIONS) {
-      const regionalApi = new RegionalApi(this, `RegionalApi-${region}`, {
-        region: region,
-        isPrimary: region === PRIMARY_REGION,
-        certificateArn: props.certificateArn,
-        globalDatabase: this.globalDatabase,
-        domainName: props.domainName
-          ? `${region}.${props.domainName}`
-          : undefined,
-        environmentSuffix: environmentSuffix,
-      });
+    // Deploy resources for THIS stack's region only
+    const regionalApi = new RegionalApi(this, `RegionalApi-${this.region}`, {
+      region: this.region,
+      isPrimary: this.region === PRIMARY_REGION,
+      certificateArn: props.certificateArn,
+      globalDatabase: this.globalDatabase,
+      domainName: props.domainName
+        ? `${this.region}.${props.domainName}`
+        : undefined,
+      environmentSuffix: environmentSuffix,
+    });
 
-      this.regionalApis.set(region, regionalApi);
-    }
+    this.regionalApis.set(this.region, regionalApi);
   }
 
   private setupGlobalRouting(domainName: string) {
@@ -172,8 +170,8 @@ export class TapStack extends cdk.Stack {
   }
 
   private outputApiEndpoints() {
-    // Output API endpoints for each region (for non-prod environments without custom domains)
-    for (const region of REGIONS) {
+    // Output API endpoints for this stack's region (for non-prod environments without custom domains)
+    for (const region of Array.from(this.regionalApis.keys())) {
       const api = this.regionalApis.get(region)!;
       new cdk.CfnOutput(this, `${region}-ApiEndpoint`, {
         value: api.api.url,
@@ -188,13 +186,13 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') || 'dev';
 
     const dashboard = new cloudwatch.Dashboard(this, 'GlobalDashboard', {
-      dashboardName: `financial-app-global-dr-${environmentSuffix}`,
+      dashboardName: `financial-app-dr-${this.region}-${environmentSuffix}`,
     });
 
-    // Add widgets for each region
+    // Add widgets for this stack's region
     const widgets: cloudwatch.IWidget[] = [];
 
-    for (const region of REGIONS) {
+    for (const region of Array.from(this.regionalApis.keys())) {
       const api = this.regionalApis.get(region)!;
 
       widgets.push(
