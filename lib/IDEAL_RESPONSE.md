@@ -1222,3 +1222,4 @@ Outputs:
     Value: !Ref NATGateway
     Export:
       Name: !Sub "${Environment}-NATGateway-ID"
+```

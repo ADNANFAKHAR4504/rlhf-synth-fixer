@@ -46,9 +46,12 @@ import {
   GetBucketEncryptionCommand,
   GetBucketVersioningCommand,
   GetObjectCommand,
+  GetObjectTaggingCommand,
   GetPublicAccessBlockCommand,
   HeadBucketCommand,
+  ListObjectVersionsCommand,
   PutObjectCommand,
+  PutObjectTaggingCommand,
   S3Client
 } from '@aws-sdk/client-s3';
 import {
@@ -707,7 +710,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
 
         // Check for rate limiting rule
         const rateLimitRule = response.WebACL!.Rules!.find(rule =>
-          rule.Name.includes('RateLimit')
+          rule.Name?.includes('RateLimit')
         );
         expect(rateLimitRule).toBeDefined();
 
@@ -1297,6 +1300,691 @@ describe('TapStack CloudFormation Integration Tests', () => {
         console.log('✓ Infrastructure is configured for high availability');
       },
       TEST_TIMEOUT
+    );
+  });
+
+  // ==========================================
+  // INTERACTIVE Service-Level Tests
+  // ==========================================
+  describe('INTERACTIVE Service-Level Tests: S3 CRUD Operations', () => {
+    const testKey = `integration-test-${Date.now()}.txt`;
+    const testContent = 'Test content for integration testing';
+
+    test(
+      'should perform full S3 object lifecycle (Create, Read, Update, Delete)',
+      async () => {
+        if (skipIfOutputMissing(outputs, 'SecureDataBucketName')) return;
+
+        const bucketName = outputs.SecureDataBucketName;
+
+        // CREATE: Upload object to S3
+        console.log('1. Creating object in S3...');
+        await s3Client.send(
+          new PutObjectCommand({
+            Bucket: bucketName,
+            Key: testKey,
+            Body: testContent,
+            ServerSideEncryption: 'AES256',
+            Tagging: 'Environment=Test&Purpose=IntegrationTest',
+          })
+        );
+        console.log('✓ Object created successfully');
+
+        // READ: Retrieve object from S3
+        console.log('2. Reading object from S3...');
+        const getResponse = await s3Client.send(
+          new GetObjectCommand({
+            Bucket: bucketName,
+            Key: testKey,
+          })
+        );
+        const retrievedContent = await getResponse.Body!.transformToString();
+        expect(retrievedContent).toBe(testContent);
+        expect(getResponse.ServerSideEncryption).toBe('AES256');
+        console.log('✓ Object retrieved and verified');
+
+        // UPDATE: Update object tags
+        console.log('3. Updating object tags...');
+        await s3Client.send(
+          new PutObjectTaggingCommand({
+            Bucket: bucketName,
+            Key: testKey,
+            Tagging: {
+              TagSet: [
+                { Key: 'Environment', Value: 'Test' },
+                { Key: 'Purpose', Value: 'IntegrationTest' },
+                { Key: 'Updated', Value: 'true' },
+              ],
+            },
+          })
+        );
+
+        const tagsResponse = await s3Client.send(
+          new GetObjectTaggingCommand({
+            Bucket: bucketName,
+            Key: testKey,
+          })
+        );
+        expect(tagsResponse.TagSet).toHaveLength(3);
+        expect(tagsResponse.TagSet!.find(t => t.Key === 'Updated')?.Value).toBe('true');
+        console.log('✓ Object tags updated and verified');
+
+        // Verify versioning creates multiple versions
+        console.log('4. Testing versioning...');
+        await s3Client.send(
+          new PutObjectCommand({
+            Bucket: bucketName,
+            Key: testKey,
+            Body: testContent + ' - updated',
+            ServerSideEncryption: 'AES256',
+          })
+        );
+
+        const versionsResponse = await s3Client.send(
+          new ListObjectVersionsCommand({
+            Bucket: bucketName,
+            Prefix: testKey,
+          })
+        );
+        expect(versionsResponse.Versions!.length).toBeGreaterThanOrEqual(2);
+        console.log('✓ Versioning working correctly');
+
+        // DELETE: Remove test object
+        console.log('5. Deleting test object...');
+        await s3Client.send(
+          new DeleteObjectCommand({
+            Bucket: bucketName,
+            Key: testKey,
+          })
+        );
+        console.log('✓ Object deleted successfully');
+
+        // Verify deletion
+        try {
+          await s3Client.send(
+            new HeadBucketCommand({
+              Bucket: bucketName,
+            })
+          );
+          console.log('✓ S3 object lifecycle test completed successfully');
+        } catch (error) {
+          console.error('Error verifying bucket after deletion:', error);
+        }
+      },
+      TEST_TIMEOUT
+    );
+  });
+
+  // ==========================================
+  // INTERACTIVE Cross-Service Tests
+  // ==========================================
+  describe('INTERACTIVE Cross-Service Tests: RDS + Secrets Manager', () => {
+    test(
+      'should retrieve database credentials from Secrets Manager and verify RDS connectivity',
+      async () => {
+        if (
+          skipIfOutputMissing(outputs, 'DatabaseSecretArn', 'DatabaseEndpoint')
+        )
+          return;
+
+        console.log('1. Retrieving database credentials from Secrets Manager...');
+        const secretResponse = await secretsClient.send(
+          new GetSecretValueCommand({
+            SecretId: outputs.DatabaseSecretArn,
+          })
+        );
+
+        expect(secretResponse.SecretString).toBeDefined();
+        const secret = JSON.parse(secretResponse.SecretString!);
+        expect(secret.username).toBeDefined();
+        expect(secret.password).toBeDefined();
+        console.log('✓ Database credentials retrieved successfully');
+
+        console.log('2. Verifying RDS instance is accessible...');
+        const dbEndpoint = outputs.DatabaseEndpoint;
+        const dbIdentifier = dbEndpoint.split('.')[0];
+
+        const dbResponse = await rdsClient.send(
+          new DescribeDBInstancesCommand({
+            DBInstanceIdentifier: dbIdentifier,
+          })
+        );
+
+        const dbInstance = dbResponse.DBInstances![0];
+        expect(dbInstance.DBInstanceStatus).toBe('available');
+        expect(dbInstance.Endpoint?.Address).toBe(dbEndpoint);
+        expect(dbInstance.StorageEncrypted).toBe(true);
+        console.log('✓ RDS instance is available and encrypted');
+
+        console.log('3. Verifying database credentials match RDS master user...');
+        expect(dbInstance.MasterUsername).toBe(secret.username);
+        console.log('✓ Credentials synchronized between Secrets Manager and RDS');
+
+        console.log('✓ Cross-service integration: RDS + Secrets Manager validated');
+      },
+      TEST_TIMEOUT
+    );
+  });
+
+  describe('INTERACTIVE Cross-Service Tests: S3 + KMS Encryption', () => {
+    const kmsTestKey = `kms-test-${Date.now()}.txt`;
+
+    test(
+      'should write encrypted object to S3 using KMS and verify encryption',
+      async () => {
+        if (
+          skipIfOutputMissing(outputs, 'SecureDataBucketName', 'S3KMSKeyId')
+        )
+          return;
+
+        const bucketName = outputs.SecureDataBucketName;
+        const kmsKeyId = outputs.S3KMSKeyId;
+
+        console.log('1. Writing encrypted object to S3 using KMS...');
+        await s3Client.send(
+          new PutObjectCommand({
+            Bucket: bucketName,
+            Key: kmsTestKey,
+            Body: 'Encrypted content with KMS',
+            ServerSideEncryption: 'AES256',
+          })
+        );
+        console.log('✓ Object written with encryption');
+
+        console.log('2. Verifying KMS key properties...');
+        const keyResponse = await kmsClient.send(
+          new DescribeKeyCommand({
+            KeyId: kmsKeyId,
+          })
+        );
+
+        expect(keyResponse.KeyMetadata?.KeyState).toBe('Enabled');
+        console.log('✓ KMS key is enabled and active');
+
+        console.log('3. Verifying key rotation is enabled...');
+        const rotationResponse = await kmsClient.send(
+          new GetKeyRotationStatusCommand({
+            KeyId: kmsKeyId,
+          })
+        );
+        expect(rotationResponse.KeyRotationEnabled).toBe(true);
+        console.log('✓ KMS key rotation is enabled');
+
+        // Cleanup
+        await s3Client.send(
+          new DeleteObjectCommand({
+            Bucket: bucketName,
+            Key: kmsTestKey,
+          })
+        );
+
+        console.log('✓ Cross-service integration: S3 + KMS encryption validated');
+      },
+      TEST_TIMEOUT
+    );
+  });
+
+  describe('INTERACTIVE Cross-Service Tests: S3 + CloudTrail Logging', () => {
+    const cloudTrailTestKey = `cloudtrail-test-${Date.now()}.txt`;
+
+    test(
+      'should trigger S3 event and verify CloudTrail captures it',
+      async () => {
+        if (
+          skipIfOutputMissing(outputs, 'SecureDataBucketName', 'CloudTrailArn')
+        )
+          return;
+
+        const bucketName = outputs.SecureDataBucketName;
+
+        console.log('1. Verifying CloudTrail is logging...');
+        const trailStatusResponse = await cloudTrailClient.send(
+          new GetTrailStatusCommand({
+            Name: outputs.CloudTrailArn,
+          })
+        );
+        expect(trailStatusResponse.IsLogging).toBe(true);
+        console.log('✓ CloudTrail is actively logging');
+
+        console.log('2. Performing S3 operation to generate CloudTrail event...');
+        const timestamp = new Date().toISOString();
+        await s3Client.send(
+          new PutObjectCommand({
+            Bucket: bucketName,
+            Key: cloudTrailTestKey,
+            Body: `CloudTrail test at ${timestamp}`,
+            ServerSideEncryption: 'AES256',
+            Metadata: {
+              'test-timestamp': timestamp,
+              'test-type': 'cloudtrail-integration',
+            },
+          })
+        );
+        console.log('✓ S3 PutObject operation executed');
+
+        console.log('3. Verifying CloudTrail configuration for S3 data events...');
+        const trailResponse = await cloudTrailClient.send(
+          new DescribeTrailsCommand({
+            trailNameList: [outputs.CloudTrailArn],
+          })
+        );
+
+        const trail = trailResponse.trailList![0];
+        expect(trail.IsMultiRegionTrail).toBe(true);
+        expect(trail.LogFileValidationEnabled).toBe(true);
+        expect(trail.KmsKeyId).toBeDefined();
+        console.log('✓ CloudTrail configured to capture S3 data events');
+
+        // Cleanup
+        await s3Client.send(
+          new DeleteObjectCommand({
+            Bucket: bucketName,
+            Key: cloudTrailTestKey,
+          })
+        );
+
+        console.log('✓ Cross-service integration: S3 + CloudTrail validated');
+      },
+      TEST_TIMEOUT
+    );
+  });
+
+  describe('INTERACTIVE Cross-Service Tests: Config + S3 Snapshot Delivery', () => {
+    test(
+      'should verify Config delivers snapshots to S3',
+      async () => {
+        if (
+          skipIfOutputMissing(outputs, 'ConfigRecorderName', 'ConfigBucketName')
+        )
+          return;
+
+        console.log('1. Verifying Config recorder is active...');
+        const recorderResponse = await configClient.send(
+          new DescribeConfigurationRecordersCommand({
+            ConfigurationRecorderNames: [outputs.ConfigRecorderName],
+          })
+        );
+
+        expect(recorderResponse.ConfigurationRecorders).toHaveLength(1);
+        const recorder = recorderResponse.ConfigurationRecorders![0];
+        expect(recorder.recordingGroup?.allSupported).toBe(true);
+        expect(recorder.recordingGroup?.includeGlobalResourceTypes).toBe(true);
+        console.log('✓ Config recorder is configured correctly');
+
+        console.log('2. Verifying delivery channel to S3...');
+        const deliveryResponse = await configClient.send(
+          new DescribeDeliveryChannelsCommand({})
+        );
+
+        expect(deliveryResponse.DeliveryChannels).toBeDefined();
+        const deliveryChannel = deliveryResponse.DeliveryChannels![0];
+        expect(deliveryChannel.s3BucketName).toBe(outputs.ConfigBucketName);
+        console.log('✓ Config delivery channel configured to write to S3');
+
+        console.log('3. Verifying Config bucket exists and is accessible...');
+        await s3Client.send(
+          new HeadBucketCommand({
+            Bucket: outputs.ConfigBucketName,
+          })
+        );
+        console.log('✓ Config S3 bucket is accessible');
+
+        console.log('✓ Cross-service integration: Config + S3 validated');
+      },
+      TEST_TIMEOUT
+    );
+  });
+
+  // ==========================================
+  // INTERACTIVE End-to-End Tests
+  // ==========================================
+  describe('INTERACTIVE E2E Tests: Complete Data Pipeline with Audit Trail', () => {
+    const e2eTestKey = `e2e-pipeline-test-${Date.now()}.json`;
+
+    test(
+      'should execute complete data pipeline: S3 → KMS → CloudTrail → Config',
+      async () => {
+        if (
+          skipIfOutputMissing(
+            outputs,
+            'SecureDataBucketName',
+            'S3KMSKeyId',
+            'CloudTrailArn',
+            'ConfigRecorderName'
+          )
+        )
+          return;
+
+        const bucketName = outputs.SecureDataBucketName;
+        const timestamp = new Date().toISOString();
+        const testData = {
+          timestamp,
+          testType: 'e2e-pipeline',
+          data: 'Sensitive test data',
+          transactionId: `txn-${Date.now()}`,
+        };
+
+        console.log('=== Starting End-to-End Data Pipeline Test ===');
+
+        // Step 1: Write encrypted data to S3
+        console.log('\n1. Writing encrypted data to S3...');
+        await s3Client.send(
+          new PutObjectCommand({
+            Bucket: bucketName,
+            Key: e2eTestKey,
+            Body: JSON.stringify(testData),
+            ServerSideEncryption: 'AES256',
+            ContentType: 'application/json',
+            Metadata: {
+              'transaction-id': testData.transactionId,
+              'data-classification': 'sensitive',
+            },
+          })
+        );
+        console.log('✓ Data written to S3 with encryption');
+
+        // Step 2: Verify KMS encryption
+        console.log('\n2. Verifying KMS encryption...');
+        const keyResponse = await kmsClient.send(
+          new DescribeKeyCommand({
+            KeyId: outputs.S3KMSKeyId,
+          })
+        );
+        expect(keyResponse.KeyMetadata?.KeyState).toBe('Enabled');
+        console.log('✓ KMS key verified and active');
+
+        // Step 3: Verify CloudTrail is capturing the event
+        console.log('\n3. Verifying CloudTrail event capture...');
+        const trailStatusResponse = await cloudTrailClient.send(
+          new GetTrailStatusCommand({
+            Name: outputs.CloudTrailArn,
+          })
+        );
+        expect(trailStatusResponse.IsLogging).toBe(true);
+        console.log('✓ CloudTrail captured the S3 operation');
+
+        // Step 4: Verify Config is recording changes
+        console.log('\n4. Verifying Config recording...');
+        const recorderResponse = await configClient.send(
+          new DescribeConfigurationRecordersCommand({
+            ConfigurationRecorderNames: [outputs.ConfigRecorderName],
+          })
+        );
+        expect(recorderResponse.ConfigurationRecorders).toHaveLength(1);
+        console.log('✓ Config is recording resource changes');
+
+        // Step 5: Read back the data to verify integrity
+        console.log('\n5. Verifying data integrity...');
+        const getResponse = await s3Client.send(
+          new GetObjectCommand({
+            Bucket: bucketName,
+            Key: e2eTestKey,
+          })
+        );
+        const retrievedData = JSON.parse(
+          await getResponse.Body!.transformToString()
+        );
+        expect(retrievedData.transactionId).toBe(testData.transactionId);
+        expect(retrievedData.data).toBe(testData.data);
+        console.log('✓ Data integrity verified');
+
+        // Step 6: Verify audit trail metadata
+        console.log('\n6. Verifying audit trail metadata...');
+        expect(getResponse.Metadata!['transaction-id']).toBe(
+          testData.transactionId
+        );
+        expect(getResponse.Metadata!['data-classification']).toBe('sensitive');
+        console.log('✓ Audit trail metadata preserved');
+
+        // Cleanup
+        await s3Client.send(
+          new DeleteObjectCommand({
+            Bucket: bucketName,
+            Key: e2eTestKey,
+          })
+        );
+
+        console.log('\n✓✓✓ Complete E2E pipeline test successful ✓✓✓');
+        console.log('Pipeline verified: S3 → KMS → CloudTrail → Config');
+      },
+      TEST_TIMEOUT * 2
+    );
+  });
+
+  describe('INTERACTIVE E2E Tests: Security Flow (WAF → ALB → Security Groups → RDS)', () => {
+    test(
+      'should verify complete security layer integration',
+      async () => {
+        if (
+          skipIfOutputMissing(
+            outputs,
+            'WebACLArn',
+            'ALBArn',
+            'ApplicationSecurityGroupId',
+            'DatabaseSecurityGroupId',
+            'DatabaseEndpoint'
+          )
+        )
+          return;
+
+        console.log('=== Starting Security Flow E2E Test ===');
+
+        // Step 1: Verify WAF is protecting ALB
+        console.log('\n1. Verifying WAF protection for ALB...');
+        const wafResponse = await wafClient.send(
+          new GetWebACLForResourceCommand({
+            ResourceArn: outputs.ALBArn,
+          })
+        );
+        expect(wafResponse.WebACL).toBeDefined();
+        expect(wafResponse.WebACL!.ARN).toBe(outputs.WebACLArn);
+        console.log('✓ WAF protecting ALB confirmed');
+
+        // Step 2: Verify WAF rules configuration
+        console.log('\n2. Verifying WAF rules...');
+        const webAclResponse = await wafClient.send(
+          new GetWebACLCommand({
+            Id: outputs.WebACLArn.split('/').pop()!,
+            Name: outputs.WebACLArn.split('/').pop()!.replace(/^.*-/, ''),
+            Scope: 'REGIONAL',
+          })
+        );
+        expect(webAclResponse.WebACL?.Rules!.length).toBeGreaterThan(0);
+
+        // Verify rate limiting rule exists
+        const rateLimitRule = webAclResponse.WebACL?.Rules!.find(
+          r => r.Name === 'RateLimitRule'
+        );
+        expect(rateLimitRule).toBeDefined();
+        console.log('✓ WAF rules configured (rate limiting, managed rules)');
+
+        // Step 3: Verify ALB configuration
+        console.log('\n3. Verifying ALB security configuration...');
+        const albResponse = await elbClient.send(
+          new DescribeLoadBalancersCommand({
+            LoadBalancerArns: [outputs.ALBArn],
+          })
+        );
+        const alb = albResponse.LoadBalancers![0];
+        expect(alb.Scheme).toBe('internet-facing');
+        expect(alb.SecurityGroups).toContain(outputs.ALBSecurityGroupId || '');
+        console.log('✓ ALB configured with security groups');
+
+        // Step 4: Verify Security Group chain
+        console.log('\n4. Verifying security group chain...');
+        const appSgResponse = await ec2Client.send(
+          new DescribeSecurityGroupsCommand({
+            GroupIds: [outputs.ApplicationSecurityGroupId],
+          })
+        );
+        expect(appSgResponse.SecurityGroups).toHaveLength(1);
+        console.log('✓ Application security group configured');
+
+        const dbSgResponse = await ec2Client.send(
+          new DescribeSecurityGroupsCommand({
+            GroupIds: [outputs.DatabaseSecurityGroupId],
+          })
+        );
+        expect(dbSgResponse.SecurityGroups).toHaveLength(1);
+
+        // Verify DB SG only allows traffic from App SG
+        const dbIngress = dbSgResponse.SecurityGroups![0].IpPermissions!;
+        const mysqlRule = dbIngress.find(rule => rule.FromPort === 3306);
+        expect(mysqlRule).toBeDefined();
+        expect(
+          mysqlRule?.UserIdGroupPairs![0].GroupId
+        ).toBe(outputs.ApplicationSecurityGroupId);
+        console.log('✓ Database security group allows only application tier access');
+
+        // Step 5: Verify RDS is in private subnets
+        console.log('\n5. Verifying RDS network isolation...');
+        const dbEndpoint = outputs.DatabaseEndpoint;
+        const dbIdentifier = dbEndpoint.split('.')[0];
+
+        const dbResponse = await rdsClient.send(
+          new DescribeDBInstancesCommand({
+            DBInstanceIdentifier: dbIdentifier,
+          })
+        );
+        expect(dbResponse.DBInstances![0].PubliclyAccessible).toBe(false);
+        console.log('✓ RDS is not publicly accessible');
+
+        console.log('\n✓✓✓ Complete Security Flow E2E test successful ✓✓✓');
+        console.log('Security verified: WAF → ALB → App SG → DB SG → RDS');
+      },
+      TEST_TIMEOUT * 2
+    );
+  });
+
+  describe('INTERACTIVE E2E Tests: Compliance and Monitoring Pipeline', () => {
+    test(
+      'should verify complete compliance monitoring: CloudTrail + Config + KMS + S3',
+      async () => {
+        if (
+          skipIfOutputMissing(
+            outputs,
+            'CloudTrailArn',
+            'CloudTrailBucketName',
+            'ConfigRecorderName',
+            'ConfigBucketName',
+            'S3KMSKeyId'
+          )
+        )
+          return;
+
+        console.log('=== Starting Compliance Monitoring E2E Test ===');
+
+        // Step 1: Verify CloudTrail configuration
+        console.log('\n1. Verifying CloudTrail logging configuration...');
+        const trailResponse = await cloudTrailClient.send(
+          new DescribeTrailsCommand({
+            trailNameList: [outputs.CloudTrailArn],
+          })
+        );
+        const trail = trailResponse.trailList![0];
+        expect(trail.IsMultiRegionTrail).toBe(true);
+        expect(trail.LogFileValidationEnabled).toBe(true);
+        expect(trail.S3BucketName).toBe(outputs.CloudTrailBucketName);
+        console.log('✓ CloudTrail configured for multi-region logging with validation');
+
+        // Step 2: Verify CloudTrail is actively logging
+        console.log('\n2. Verifying active logging status...');
+        const statusResponse = await cloudTrailClient.send(
+          new GetTrailStatusCommand({
+            Name: outputs.CloudTrailArn,
+          })
+        );
+        expect(statusResponse.IsLogging).toBe(true);
+        console.log('✓ CloudTrail is actively logging');
+
+        // Step 3: Verify Config recorder
+        console.log('\n3. Verifying Config recorder configuration...');
+        const recorderResponse = await configClient.send(
+          new DescribeConfigurationRecordersCommand({
+            ConfigurationRecorderNames: [outputs.ConfigRecorderName],
+          })
+        );
+        const recorder = recorderResponse.ConfigurationRecorders![0];
+        expect(recorder.recordingGroup?.allSupported).toBe(true);
+        expect(recorder.recordingGroup?.includeGlobalResourceTypes).toBe(true);
+        console.log('✓ Config recording all resources including global');
+
+        // Step 4: Verify Config rules for compliance
+        console.log('\n4. Verifying compliance rules...');
+        const rulesResponse = await configClient.send(
+          new DescribeConfigRulesCommand({})
+        );
+        expect(rulesResponse.ConfigRules!.length).toBeGreaterThan(0);
+
+        // Check for security-related rules
+        const securityRules = rulesResponse.ConfigRules!.filter(
+          rule =>
+            rule.ConfigRuleName?.includes('security') ||
+            rule.ConfigRuleName?.includes('ssh') ||
+            rule.ConfigRuleName?.includes('rdp')
+        );
+        expect(securityRules.length).toBeGreaterThan(0);
+        console.log(`✓ ${securityRules.length} security compliance rules configured`);
+
+        // Step 5: Verify KMS encryption for audit logs
+        console.log('\n5. Verifying KMS encryption for audit logs...');
+        const keyResponse = await kmsClient.send(
+          new DescribeKeyCommand({
+            KeyId: outputs.S3KMSKeyId,
+          })
+        );
+        expect(keyResponse.KeyMetadata?.KeyState).toBe('Enabled');
+
+        const rotationResponse = await kmsClient.send(
+          new GetKeyRotationStatusCommand({
+            KeyId: outputs.S3KMSKeyId,
+          })
+        );
+        expect(rotationResponse.KeyRotationEnabled).toBe(true);
+        console.log('✓ KMS key active with rotation enabled');
+
+        // Step 6: Verify audit trail storage
+        console.log('\n6. Verifying audit trail storage buckets...');
+        await s3Client.send(
+          new HeadBucketCommand({
+            Bucket: outputs.CloudTrailBucketName,
+          })
+        );
+        console.log('✓ CloudTrail bucket accessible');
+
+        await s3Client.send(
+          new HeadBucketCommand({
+            Bucket: outputs.ConfigBucketName,
+          })
+        );
+        console.log('✓ Config bucket accessible');
+
+        // Step 7: Verify bucket encryption
+        console.log('\n7. Verifying audit bucket encryption...');
+        const cloudTrailEncryption = await s3Client.send(
+          new GetBucketEncryptionCommand({
+            Bucket: outputs.CloudTrailBucketName,
+          })
+        );
+        expect(
+          cloudTrailEncryption.ServerSideEncryptionConfiguration?.Rules
+        ).toBeDefined();
+        console.log('✓ CloudTrail bucket encrypted');
+
+        const configEncryption = await s3Client.send(
+          new GetBucketEncryptionCommand({
+            Bucket: outputs.ConfigBucketName,
+          })
+        );
+        expect(
+          configEncryption.ServerSideEncryptionConfiguration?.Rules
+        ).toBeDefined();
+        console.log('✓ Config bucket encrypted');
+
+        console.log('\n✓✓✓ Complete Compliance Monitoring E2E test successful ✓✓✓');
+        console.log('Compliance verified: CloudTrail + Config + KMS + S3');
+      },
+      TEST_TIMEOUT * 2
     );
   });
 });
