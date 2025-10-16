@@ -364,8 +364,12 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(mainContent).toMatch(/resource\s+"aws_security_group"/);
     });
 
-    test('should configure Lambda in VPC', () => {
-      expect(mainContent).toMatch(/vpc_config\s*{/);
+    test('should not configure API handler Lambda in VPC', () => {
+      // API handler Lambda is not in VPC to allow access to AWS services
+      // Only RDS needs VPC isolation
+      const apiHandlerSection = mainContent.match(/resource "aws_lambda_function" "api_handler"[\s\S]*?^}/m);
+      expect(apiHandlerSection).toBeDefined();
+      expect(apiHandlerSection![0]).not.toMatch(/vpc_config\s*{/);
     });
 
     test('should not expose RDS publicly', () => {
