@@ -119,15 +119,14 @@ resource "aws_s3_bucket_policy" "media_content" {
   })
 }
 
-# ACM certificate commented out - using CloudFront default certificate to avoid DNS validation timeout
-# resource "aws_acm_certificate" "cdn" {
-#   domain_name       = var.domain_name
-#   validation_method = "DNS"
-# 
-#   lifecycle {
-#     create_before_destroy = true
-#   }
-# }
+resource "aws_acm_certificate" "cdn" {
+  domain_name       = var.domain_name
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
 
 resource "aws_cloudfront_distribution" "media" {
   enabled             = true
@@ -172,8 +171,9 @@ resource "aws_cloudfront_distribution" "media" {
   }
 
   viewer_certificate {
-    cloudfront_default_certificate = true
-    minimum_protocol_version       = "TLSv1.2_2021"
+    acm_certificate_arn      = aws_acm_certificate.cdn.arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
   }
 
   logging_config {
@@ -182,7 +182,10 @@ resource "aws_cloudfront_distribution" "media" {
     prefix          = "cloudfront-logs/"
   }
 
+  aliases = [var.domain_name]
+
   depends_on = [
+    aws_acm_certificate.cdn,
     aws_s3_bucket_policy.media_content
   ]
 }
@@ -193,44 +196,41 @@ resource "aws_route53_zone" "main" {
   force_destroy = true
 }
 
-# ACM validation records commented out - not needed with CloudFront default certificate
-# resource "aws_route53_record" "cert_validation" {
-#   for_each = {
-#     for dvo in aws_acm_certificate.cdn.domain_validation_options : dvo.domain_name => {
-#       name   = dvo.resource_record_name
-#       record = dvo.resource_record_value
-#       type   = dvo.resource_record_type
-#     }
-#   }
-# 
-#   allow_overwrite = true
-#   name            = each.value.name
-#   records         = [each.value.record]
-#   ttl             = 60
-#   type            = each.value.type
-#   zone_id         = aws_route53_zone.main.zone_id
-# }
-# 
-# resource "aws_acm_certificate_validation" "cdn" {
-#   certificate_arn         = aws_acm_certificate.cdn.arn
-#   validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
-# }
+resource "aws_route53_record" "cert_validation" {
+  for_each = {
+    for dvo in aws_acm_certificate.cdn.domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  }
 
-# Route53 A record removed - using CloudFront default domain instead of custom domain
-# Custom domain requires ACM certificate validation which times out in CI/CD
-# resource "aws_route53_record" "cdn" {
-#   zone_id = aws_route53_zone.main.zone_id
-#   name    = var.domain_name
-#   type    = "A"
-# 
-#   alias {
-#     name                   = aws_cloudfront_distribution.media.domain_name
-#     zone_id                = aws_cloudfront_distribution.media.hosted_zone_id
-#     evaluate_target_health = false
-#   }
-# 
-#   depends_on = [aws_cloudfront_distribution.media]
-# }
+  allow_overwrite = true
+  name            = each.value.name
+  records         = [each.value.record]
+  ttl             = 60
+  type            = each.value.type
+  zone_id         = aws_route53_zone.main.zone_id
+}
+
+resource "aws_acm_certificate_validation" "cdn" {
+  certificate_arn         = aws_acm_certificate.cdn.arn
+  validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
+}
+
+resource "aws_route53_record" "cdn" {
+  zone_id = aws_route53_zone.main.zone_id
+  name    = var.domain_name
+  type    = "A"
+
+  alias {
+    name                   = aws_cloudfront_distribution.media.domain_name
+    zone_id                = aws_cloudfront_distribution.media.hosted_zone_id
+    evaluate_target_health = false
+  }
+
+  depends_on = [aws_cloudfront_distribution.media]
+}
 
 resource "aws_cloudwatch_metric_alarm" "high_5xx_errors" {
   alarm_name          = "cloudfront-high-5xx-errors-${var.environment_suffix}"
@@ -376,11 +376,10 @@ output "route53_zone_name_servers" {
   value       = aws_route53_zone.main.name_servers
 }
 
-# ACM certificate output removed - using CloudFront default certificate
-# output "acm_certificate_arn" {
-#   description = "ACM certificate ARN"
-#   value       = aws_acm_certificate.cdn.arn
-# }
+output "acm_certificate_arn" {
+  description = "ACM certificate ARN"
+  value       = aws_acm_certificate.cdn.arn
+}
 
 output "domain_name" {
   description = "Configured domain name"

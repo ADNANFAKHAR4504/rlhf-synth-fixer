@@ -260,11 +260,9 @@ if (!hasInfrastructure) {
         .promise();
 
       const viewerCert = distribution.Distribution?.DistributionConfig?.ViewerCertificate;
-      // CloudFront default certificate returns "TLSv1" - can't customize protocol version with default cert
-      expect(viewerCert?.MinimumProtocolVersion).toBeDefined();
-      expect(viewerCert?.MinimumProtocolVersion).toMatch(/TLSv1/);
-      // Using CloudFront default certificate instead of ACM to avoid DNS validation timeout in CI/CD
-      expect(viewerCert?.CloudFrontDefaultCertificate).toBe(true);
+      expect(viewerCert?.MinimumProtocolVersion).toMatch(/TLSv1\.[2-9]|TLSv1\.[1-9][0-9]/);
+      expect(viewerCert?.ACMCertificateArn).toBeDefined();
+      expect(viewerCert?.SSLSupportMethod).toBe("sni-only");
     }, 30000);
 
     test("S3 buckets have public access blocked", async () => {
