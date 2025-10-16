@@ -35,6 +35,114 @@ Execute these phases in sequence to deliver production-ready IaC:
 
 **Agent**: `iac-task-selector`
 
+### Phase 1.5: Validate Task Selection and Setup
+
+**Goal**: Ensure selected task and generated metadata.json match CLI tool expectations.
+
+**After task selection and metadata.json generation, validate**:
+
+1. **Metadata Completeness Check**:
+   ```
+   Review metadata.json and confirm:
+   ✓ platform field exists and is valid (cdk/cdktf/cfn/tf/pulumi)
+   ✓ language field exists and matches platform
+     - cdk: ts, js, py, java, go
+     - cdktf: ts, py, go, java
+     - pulumi: ts, js, py, java, go
+     - tf: hcl
+     - cfn: yaml, json
+   ✓ complexity matches CSV difficulty value exactly (medium/hard/expert)
+   ✓ turn_type is single or multi
+   ✓ po_id matches selected task ID
+   ✓ team is "synth"
+   ✓ subtask field exists
+   ✓ startedAt timestamp exists
+   ✓ aws_services field exists (may be empty string)
+   ✓ subject_labels array exists (may be empty)
+   
+   Report status:
+   "✅ metadata.json validated - all required fields present"
+   
+   Or if issues:
+   "❌ metadata.json incomplete - missing fields: {LIST}"
+   ```
+
+2. **Platform-Language Compatibility Validation**:
+   ```
+   Extract platform and language from metadata.json
+   
+   Check compatibility matrix:
+   - cdk + (ts|js|py|java|go) ✓
+   - cdktf + (ts|py|go|java) ✓
+   - pulumi + (ts|js|py|java|go) ✓
+   - tf + hcl ✓
+   - cfn + (yaml|json) ✓
+   - Any other combination ✗
+   
+   If invalid:
+   "❌ BLOCKED: Invalid platform-language: {PLATFORM}-{LANGUAGE}"
+   "Valid languages for {PLATFORM}: {LIST}"
+   Stop and fix metadata.json before proceeding.
+   ```
+
+3. **Template Structure Validation**:
+   ```
+   Verify template files were copied:
+   ✓ lib/ directory exists
+   ✓ test/ directory exists
+   ✓ Platform-specific files exist:
+     - ts/js: package.json, tsconfig.json (for ts)
+     - py: Pipfile, setup.py
+     - go: go.mod
+     - java: build.gradle or pom.xml
+     - hcl: (no strict requirements)
+     - yaml/json: (no strict requirements)
+   
+   Report:
+   "✅ Template structure validated for {PLATFORM}-{LANGUAGE}"
+   ```
+
+4. **Task Context Completeness**:
+   ```
+   Verify task context for iac-infra-generator:
+   ✓ Task description is complete (not summarized)
+   ✓ All AWS services mentioned are noted
+   ✓ All constraints are documented
+   ✓ Region requirements identified
+   ✓ Security/compliance requirements captured
+   
+   Remember: Pass COMPLETE task info to iac-infra-generator
+   Do NOT summarize or paraphrase requirements
+   ```
+
+**CHECKPOINT**:
+```
+If all validations pass:
+- Report: "✅ Phase 1.5: Task setup validated - ready for code generation"
+- Proceed to Phase 2 (iac-infra-generator)
+
+If any validation fails:
+- Report: "❌ Phase 1.5: Validation FAILED"
+- List specific issues
+- Fix metadata.json or task setup
+- Re-validate before proceeding
+```
+
+**Handoff to iac-infra-generator**:
+```
+When ready, provide to iac-infra-generator:
+- Complete task description (ALL requirements)
+- Background context
+- Specific constraints from task
+- ALL AWS services mentioned
+- Platform: {PLATFORM}
+- Language: {LANGUAGE}
+- Region: {REGION or default}
+- Complexity: {COMPLEXITY}
+
+Emphasize: "Platform and language are MANDATORY constraints from metadata.json"
+```
+
 ### Phase 2: Code Generation
 
 **Agent**: `iac-infra-generator`
