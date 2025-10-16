@@ -58,11 +58,7 @@
 
 ## 5. Maintainability
 
-### 5.1 Lack of Modular Design
-- **Issue**: The `MODEL_RESPONSE.md` defines Lambda function code inline, making the code harder to maintain.
-  - **Fix in IDEAL_RESPONSE.md**: Moved Lambda function code to a separate file (`lambda/handler.py`) for better modularity.
-
-### 5.2 Hardcoded Values
+### 5.1 Hardcoded Values
 - **Issue**: The `MODEL_RESPONSE.md` hardcodes values like region and account ID.
   - **Fix in IDEAL_RESPONSE.md**: Used CDK context and environment variables to make the stack reusable across environments.
 
@@ -81,5 +77,4 @@
 |                     | Public access to API Gateway                                        | Restricted access with CORS                                      |
 |                     | Lack of encryption for S3 bucket                                    | Enabled `S3_MANAGED` encryption                                  |
 | **Observability**   | Lack of structured logging                                          | Added structured logging                                         |
-| **Maintainability** | Inline Lambda function code                                         | Moved code to separate files                                     |
-|                     | Hardcoded values                                                   | Used CDK context and environment variables                      |
+| **Maintainability** | Hardcoded values                                                   | Used CDK context and environment variables                      |
