@@ -667,6 +667,27 @@ class IotProcessingStack(Construct):
 
         TerraformOutput(
             self,
+            "api_secret_name",
+            value=api_secret.name,
+            description="Name of the API credentials secret"
+        )
+
+        TerraformOutput(
+            self,
+            "sns_topic_name",
+            value=alert_topic.name,
+            description="Name of the SNS topic for alerts"
+        )
+
+        TerraformOutput(
+            self,
+            "firehose_name",
+            value=firehose_stream.name,
+            description="Name of the Kinesis Firehose delivery stream"
+        )
+
+        TerraformOutput(
+            self,
             "dashboard_name",
             value=f"iot-processing-{environment_suffix}",
             description="Name of the CloudWatch dashboard"
