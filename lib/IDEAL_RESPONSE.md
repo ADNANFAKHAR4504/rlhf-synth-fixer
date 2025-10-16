@@ -53,11 +53,52 @@ export class TapStack extends pulumi.ComponentResource {
       Environment: environmentSuffix,
     };
 
-    // 1. KMS Key for encryption (HIPAA requirement)
+    // 1. Get current AWS account ID and region for KMS policy
+    const current = aws.getCallerIdentity({});
+    const currentRegion = aws.getRegion({});
+
+    // 2. KMS Key for encryption (HIPAA requirement)
     const kmsKey = new aws.kms.Key(`healthcare-kms-${environmentSuffix}`, {
       description: `KMS key for HIPAA-compliant healthcare data encryption - ${environmentSuffix}`,
       deletionWindowInDays: 10,
       enableKeyRotation: true,
+      policy: pulumi.all([current, currentRegion]).apply(([caller, region]) =>
+        JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Sid: 'Enable IAM User Permissions',
+              Effect: 'Allow',
+              Principal: {
+                AWS: `arn:aws:iam::${caller.accountId}:root`,
+              },
+              Action: 'kms:*',
+              Resource: '*',
+            },
+            {
+              Sid: 'Allow CloudWatch Logs',
+              Effect: 'Allow',
+              Principal: {
+                Service: `logs.${region.name}.amazonaws.com`,
+              },
+              Action: [
+                'kms:Encrypt',
+                'kms:Decrypt',
+                'kms:ReEncrypt*',
+                'kms:GenerateDataKey*',
+                'kms:CreateGrant',
+                'kms:DescribeKey',
+              ],
+              Resource: '*',
+              Condition: {
+                ArnLike: {
+                  'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${region.name}:${caller.accountId}:log-group:*`,
+                },
+              },
+            },
+          ],
+        })
+      ),
       tags: complianceTags,
     }, { parent: this });
 
@@ -66,15 +107,15 @@ export class TapStack extends pulumi.ComponentResource {
       targetKeyId: kmsKey.keyId,
     }, { parent: this });
 
-    // 2. CloudWatch Log Group for audit logging
+    // 3. CloudWatch Log Group for audit logging
     const auditLogGroup = new aws.cloudwatch.LogGroup(`healthcare-audit-logs-${environmentSuffix}`, {
       name: `/aws/healthcare/audit-${environmentSuffix}`,
       retentionInDays: 90, // HIPAA requires 90 days minimum
       kmsKeyId: kmsKey.arn,
       tags: complianceTags,
-    }, { parent: this });
+    }, { parent: this, dependsOn: [kmsKey] });
 
-    // 3. VPC for network isolation
+    // 4. VPC for network isolation
     const vpc = new aws.ec2.Vpc(`healthcare-vpc-${environmentSuffix}`, {
       cidrBlock: '10.0.0.0/16',
       enableDnsHostnames: true,
@@ -85,7 +126,7 @@ export class TapStack extends pulumi.ComponentResource {
       },
     }, { parent: this });
 
-    // 4. Private subnets for RDS (multi-AZ for HIPAA availability)
+    // 5. Private subnets for RDS (multi-AZ for HIPAA availability)
     const privateSubnet1 = new aws.ec2.Subnet(`healthcare-private-subnet-1-${environmentSuffix}`, {
       vpcId: vpc.id,
       cidrBlock: '10.0.1.0/24',
@@ -106,14 +147,14 @@ export class TapStack extends pulumi.ComponentResource {
       },
     }, { parent: this });
 
-    // 5. DB Subnet Group for RDS
+    // 6. DB Subnet Group for RDS
     const dbSubnetGroup = new aws.rds.SubnetGroup(`healthcare-db-subnet-${environmentSuffix}`, {
       name: `healthcare-db-subnet-${environmentSuffix}`,
       subnetIds: [privateSubnet1.id, privateSubnet2.id],
       tags: complianceTags,
     }, { parent: this });
 
-    // 6. Security Group for RDS (restrictive access)
+    // 7. Security Group for RDS (restrictive access)
     const rdsSecurityGroup = new aws.ec2.SecurityGroup(`healthcare-rds-sg-${environmentSuffix}`, {
       name: `healthcare-rds-sg-${environmentSuffix}`,
       description: 'Security group for HIPAA-compliant RDS instance',
@@ -135,7 +176,7 @@ export class TapStack extends pulumi.ComponentResource {
       tags: complianceTags,
     }, { parent: this });
 
-    // 7. RDS Parameter Group with SSL enforcement
+    // 8. RDS Parameter Group with SSL enforcement
     const rdsParameterGroup = new aws.rds.ParameterGroup(`healthcare-pg-params-${environmentSuffix}`, {
       name: `healthcare-pg-params-${environmentSuffix}`,
       family: 'postgres15',
@@ -157,11 +198,11 @@ export class TapStack extends pulumi.ComponentResource {
       tags: complianceTags,
     }, { parent: this });
 
-    // 8. RDS PostgreSQL Instance (HIPAA-compliant)
+    // 9. RDS PostgreSQL Instance (HIPAA-compliant)
     const rdsInstance = new aws.rds.Instance(`healthcare-rds-${environmentSuffix}`, {
       identifier: `healthcare-rds-${environmentSuffix}`,
       engine: 'postgres',
-      engineVersion: '15.5',
+      engineVersion: '15.8',
       instanceClass: 'db.t3.small', // Cost-effective for synthetic tasks
       allocatedStorage: 20,
       storageType: 'gp3',
@@ -182,7 +223,7 @@ export class TapStack extends pulumi.ComponentResource {
       tags: complianceTags,
     }, { parent: this });
 
-    // 9. Kinesis Data Stream for real-time patient data ingestion
+    // 10. Kinesis Data Stream for real-time patient data ingestion
     const kinesisStream = new aws.kinesis.Stream(`healthcare-stream-${environmentSuffix}`, {
       name: `healthcare-stream-${environmentSuffix}`,
       shardCount: 1, // Single shard for synthetic task
@@ -195,7 +236,7 @@ export class TapStack extends pulumi.ComponentResource {
       tags: complianceTags,
     }, { parent: this });
 
-    // 10. IAM Role for Kinesis Data Stream processing
+    // 11. IAM Role for Kinesis Data Stream processing
     const kinesisRole = new aws.iam.Role(`healthcare-kinesis-role-${environmentSuffix}`, {
       name: `healthcare-kinesis-role-${environmentSuffix}`,
       description: 'IAM role for Kinesis stream processing with least privilege',
@@ -212,7 +253,7 @@ export class TapStack extends pulumi.ComponentResource {
       tags: complianceTags,
     }, { parent: this });
 
-    // 11. IAM Policy for Kinesis access (least privilege)
+    // 12. IAM Policy for Kinesis access (least privilege)
     const kinesisPolicy = new aws.iam.RolePolicy(`healthcare-kinesis-policy-${environmentSuffix}`, {
       name: `healthcare-kinesis-policy-${environmentSuffix}`,
       role: kinesisRole.id,
@@ -254,7 +295,7 @@ export class TapStack extends pulumi.ComponentResource {
       ),
     }, { parent: this });
 
-    // 12. CloudWatch Alarms for monitoring (HIPAA requirement)
+    // 13. CloudWatch Alarms for monitoring (HIPAA requirement)
     const kinesisIteratorAlarm = new aws.cloudwatch.MetricAlarm(`kinesis-iterator-alarm-${environmentSuffix}`, {
       name: `kinesis-iterator-age-${environmentSuffix}`,
       comparisonOperator: 'GreaterThanThreshold',
@@ -333,7 +374,7 @@ export class TapStack extends pulumi.ComponentResource {
 - **RDS Logs**: Connection/disconnection logging enabled
 - **KMS Key Rotation**: Automatic annual rotation enabled
 
-### 4. Monitoring & Alerting
+### 4. Monitoring and Alerting
 - **CloudWatch Alarms**: CPU, iterator age, and other key metrics
 - **Database Activity**: PostgreSQL logs exported to CloudWatch
 
@@ -342,188 +383,43 @@ export class TapStack extends pulumi.ComponentResource {
 - **RDS Backups**: 7-day retention period
 - **Audit Logs**: 90-day retention
 
-## Deployment Instructions
+## Key Implementation Details
 
-### Prerequisites
-```bash
-# Install Pulumi
-curl -fsSL https://get.pulumi.com | sh
+### KMS Key Policy
+The KMS key includes a comprehensive policy that:
+- Grants root account full permissions for key management
+- Allows CloudWatch Logs service to encrypt log data
+- Uses account ID and region dynamically via Pulumi data sources
+- Includes condition for encryption context validation
 
-# Install Node.js dependencies
-npm install
+### RDS Configuration
+The PostgreSQL instance is configured with:
+- Customer-managed KMS key for storage encryption
+- Parameter group enforcing SSL connections
+- Connection and disconnection logging enabled
+- CloudWatch log exports for PostgreSQL logs
+- Private subnet placement with no public access
+- Automatic backups with 7-day retention
 
-# Configure AWS credentials
-aws configure
-```
+### Kinesis Stream
+The data stream provides:
+- KMS encryption at rest
+- 7-day data retention
+- Provisioned mode with single shard
+- Integration with IAM roles for processing
 
-### Deploy Infrastructure
+### Network Security
+The VPC architecture includes:
+- Private subnets in multiple availability zones (ap-southeast-1a, ap-southeast-1b)
+- Security group restricting database access to VPC CIDR only
+- DNS support and hostnames enabled for service discovery
 
-```bash
-# Set environment suffix
-export ENVIRONMENT_SUFFIX=dev
-
-# Preview changes
-pulumi preview --stack dev
-
-# Deploy infrastructure
-pulumi up --stack dev --yes
-
-# View outputs
-pulumi stack output --json
-```
-
-### Configuration
-
-Set required configuration values:
-```bash
-# Set environment
-pulumi config set env dev
-
-# Set AWS region
-pulumi config set aws:region ap-southeast-1
-
-# Optional: Set tags
-pulumi config set repository <repo-url>
-pulumi config set commitAuthor <author>
-```
-
-### Post-Deployment Actions
-
-1. **Rotate RDS Password**: Immediately change the temporary password
-   ```bash
-   aws rds modify-db-instance \
-     --db-instance-identifier healthcare-rds-dev \
-     --master-user-password <new-secure-password> \
-     --region ap-southeast-1
-   ```
-
-2. **Verify Encryption**: Ensure all resources are encrypted
-   ```bash
-   # Check RDS encryption
-   aws rds describe-db-instances \
-     --db-instance-identifier healthcare-rds-dev \
-     --region ap-southeast-1 \
-     --query 'DBInstances[0].StorageEncrypted'
-
-   # Check Kinesis encryption
-   aws kinesis describe-stream \
-     --stream-name healthcare-stream-dev \
-     --region ap-southeast-1 \
-     --query 'StreamDescription.EncryptionType'
-   ```
-
-3. **Test Connectivity**: Verify RDS is accessible from within VPC only
-   ```bash
-   # Should fail from outside VPC
-   psql -h <rds-endpoint> -U hipaaadmin -d patientdata
-   ```
-
-## Testing Patient Data Ingestion
-
-### Send Test Data to Kinesis
-
-```javascript
-const AWS = require('@aws-sdk/client-kinesis');
-const kinesis = new AWS.Kinesis({ region: 'ap-southeast-1' });
-
-const patientData = {
-  patientId: 'P12345',
-  timestamp: new Date().toISOString(),
-  heartRate: 75,
-  bloodPressure: '120/80',
-  temperature: 98.6,
-};
-
-await kinesis.putRecord({
-  StreamName: 'healthcare-stream-dev',
-  PartitionKey: patientData.patientId,
-  Data: Buffer.from(JSON.stringify(patientData)),
-});
-```
-
-### Query Data from RDS
-
-```sql
--- Connect to RDS instance
-psql -h <rds-endpoint> -U hipaaadmin -d patientdata
-
--- Create patient monitoring table
-CREATE TABLE patient_monitoring (
-  id SERIAL PRIMARY KEY,
-  patient_id VARCHAR(50) NOT NULL,
-  timestamp TIMESTAMP NOT NULL,
-  heart_rate INTEGER,
-  blood_pressure VARCHAR(20),
-  temperature DECIMAL(4,2),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Insert sample data
-INSERT INTO patient_monitoring
-  (patient_id, timestamp, heart_rate, blood_pressure, temperature)
-VALUES
-  ('P12345', NOW(), 75, '120/80', 98.6);
-
--- Query recent patient data
-SELECT * FROM patient_monitoring
-WHERE timestamp > NOW() - INTERVAL '24 hours'
-ORDER BY timestamp DESC;
-```
-
-## Cleanup/Destroy Instructions
-
-### Destroy Infrastructure
-
-```bash
-# Destroy all resources
-pulumi destroy --stack dev --yes
-
-# Delete the stack
-pulumi stack rm dev --yes
-```
-
-### Manual Cleanup (if needed)
-
-If destruction fails, manually clean up resources:
-
-```bash
-# Delete RDS instance
-aws rds delete-db-instance \
-  --db-instance-identifier healthcare-rds-dev \
-  --skip-final-snapshot \
-  --region ap-southeast-1
-
-# Delete Kinesis stream
-aws kinesis delete-stream \
-  --stream-name healthcare-stream-dev \
-  --region ap-southeast-1
-
-# Delete KMS key (after 10-day waiting period)
-aws kms schedule-key-deletion \
-  --key-id <key-id> \
-  --pending-window-in-days 10 \
-  --region ap-southeast-1
-```
-
-## Cost Estimation
-
-Approximate monthly costs (ap-southeast-1 region):
-- **RDS db.t3.small**: ~$25/month
-- **Kinesis 1 shard**: ~$11/month
-- **KMS key**: $1/month + API calls
-- **CloudWatch Logs**: ~$0.50/GB ingested
-- **Data Transfer**: Variable
-
-**Total**: ~$40-50/month for this synthetic task
-
-## Security Best Practices
-
-1. **Password Management**: Use AWS Secrets Manager for production
-2. **Network Segmentation**: Deploy in private subnets only
-3. **Audit Reviews**: Regularly review CloudWatch logs
-4. **Access Reviews**: Quarterly IAM policy reviews
-5. **Encryption Validation**: Verify encryption at rest and in transit
-6. **Backup Testing**: Regularly test RDS snapshot restoration
+### IAM Security
+IAM roles implement:
+- Least privilege access to Kinesis streams
+- Scoped permissions for KMS key usage
+- CloudWatch Logs write permissions
+- Trust policy allowing Lambda service assumption
 
 ## Compliance Checklist
 
@@ -537,24 +433,3 @@ Approximate monthly costs (ap-southeast-1 region):
 - [x] Key rotation enabled (KMS)
 - [x] No public access to PHI data
 - [x] Infrastructure fully destroyable
-
-## Troubleshooting
-
-### Issue: RDS connection timeout
-**Solution**: Verify Security Group allows inbound traffic from your source
-
-### Issue: Kinesis PutRecord permission denied
-**Solution**: Check IAM role has necessary permissions and KMS key access
-
-### Issue: CloudWatch Logs not appearing
-**Solution**: Verify KMS key policy allows CloudWatch Logs service to use the key
-
-### Issue: Pulumi destroy fails on RDS
-**Solution**: Ensure `skipFinalSnapshot: true` is set and deletion protection is disabled
-
-## Additional Resources
-
-- [AWS HIPAA Compliance Whitepaper](https://d1.awsstatic.com/whitepapers/compliance/AWS_HIPAA_Compliance_Whitepaper.pdf)
-- [RDS Best Practices](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_BestPractices.html)
-- [Kinesis Security](https://docs.aws.amazon.com/streams/latest/dev/server-side-encryption.html)
-- [Pulumi AWS Provider](https://www.pulumi.com/registry/packages/aws/)
