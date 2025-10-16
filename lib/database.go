@@ -47,18 +47,8 @@ func NewDatabaseConstruct(scope constructs.Construct, id *string, props *Databas
 		jsii.Bool(false),
 	)
 
-	// Create DB subnet group for Multi-AZ deployment
-	subnetGroup := awsrds.NewSubnetGroup(construct, jsii.String("DbSubnetGroup"), &awsrds.SubnetGroupProps{
-		SubnetGroupName: jsii.String(fmt.Sprintf("globalstream-db-subnet-%s", environmentSuffix)),
-		Description:     jsii.String("Subnet group for Aurora Serverless cluster"),
-		Vpc:             props.Vpc,
-		VpcSubnets: &awsec2.SubnetSelection{
-			SubnetType: awsec2.SubnetType_PRIVATE_WITH_EGRESS,
-		},
-		RemovalPolicy: awscdk.RemovalPolicy_DESTROY,
-	})
-
 	// Create Aurora Serverless v2 cluster with PostgreSQL
+	// Note: SubnetGroup is managed automatically via VpcSubnets
 	cluster := awsrds.NewDatabaseCluster(construct, jsii.String("AuroraCluster"), &awsrds.DatabaseClusterProps{
 		ClusterIdentifier: jsii.String(fmt.Sprintf("globalstream-aurora-%s", environmentSuffix)),
 		Engine: awsrds.DatabaseClusterEngine_AuroraPostgres(&awsrds.AuroraPostgresClusterEngineProps{
@@ -81,7 +71,6 @@ func NewDatabaseConstruct(scope constructs.Construct, id *string, props *Databas
 			SubnetType: awsec2.SubnetType_PRIVATE_WITH_EGRESS,
 		},
 		SecurityGroups:      &[]awsec2.ISecurityGroup{dbSecurityGroup},
-		SubnetGroup:         subnetGroup,
 		DefaultDatabaseName: jsii.String("globalstream"),
 		// Enable encryption at rest (LGPD compliance)
 		StorageEncrypted: jsii.Bool(true),

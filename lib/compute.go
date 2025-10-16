@@ -54,8 +54,8 @@ func NewComputeConstruct(scope constructs.Construct, id *string, props *ComputeC
 	cluster := awsecs.NewCluster(construct, jsii.String("MediaProcessingCluster"), &awsecs.ClusterProps{
 		ClusterName: jsii.String(fmt.Sprintf("globalstream-ecs-%s", environmentSuffix)),
 		Vpc:         props.Vpc,
-		// Enable container insights for monitoring
-		ContainerInsights: jsii.Bool(true),
+		// Enable container insights v2 for monitoring (replaces deprecated ContainerInsights)
+		ContainerInsightsV2: awsecs.ContainerInsights_ENABLED,
 	})
 
 	// Create CloudWatch log group for tasks
