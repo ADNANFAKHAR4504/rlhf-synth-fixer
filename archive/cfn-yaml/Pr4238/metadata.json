@@ -11,8 +11,24 @@
     "Security Configuration as Code"
   ],
   "aws_services": [
-    "VPC", "EC2", "RDS", "S3", "KMS", "IAM", 
-    "ELB", "WAF", "CloudTrail", "CloudWatch", "SNS", "ACM"
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "KMS",
+    "IAM",
+    "ELB",
+    "WAF",
+    "CloudTrail",
+    "CloudWatch",
+    "SNS",
+    "ACM"
   ],
-  "training_quality": 8
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mikiaszerihun",
+  "dockerS3Location": ""
 }
