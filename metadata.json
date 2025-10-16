@@ -1,0 +1,14 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "CDK_TS_MED_CLOUDFRONT_S3_5x6y7z_8u9v1w2xGH",
+  "team": "5",
+  "startedAt": "2025-10-16T10:03:01.791Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "route53, cloudfront, s3"
+}
