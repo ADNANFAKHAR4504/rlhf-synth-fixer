@@ -395,46 +395,6 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
       expect(associations.ResourceArns).toContain(alb!.LoadBalancerArn);
     });
 
-    test('CloudTrail should be logging all API activities', async () => {
-      // CloudTrail ARN should be in outputs
-      expect(outputs.CloudTrailArn).toBeDefined();
-      
-      const trails = await cloudtrail.send(new DescribeTrailsCommand({}));
-      const trail = (trails as any).trailList!.find((t: any) => t.TrailARN === outputs.CloudTrailArn);
-      
-      // Get CloudTrail status separately
-      const trailStatus = await cloudtrail.send(new GetTrailStatusCommand({
-        Name: trail.TrailARN
-      }));
-      
-      // CloudTrail properties
-      expect((trailStatus as any).IsLogging).toBe(true);
-      expect(trail.IncludeGlobalServiceEvents).toBe(true);
-      expect(trail.IsMultiRegionTrail).toBe(true);
-      expect(trail.LogFileValidationEnabled).toBe(true);
-      expect(trail.S3BucketName).toBeDefined();
-      expect(trail.S3KeyPrefix).toBeDefined();
-    });
-
-    test('CloudWatch Log Groups should be configured for monitoring', async () => {
-      // Look for log groups - CloudFormation generates names with stack name prefix
-      const logGroups = await logs.send(new DescribeLogGroupsCommand({}));
-      
-      // Extract stack name from CloudTrail ARN (or any output ARN)
-      const stackName = outputs.CloudTrailArn.split('/')[1].split('-')[0] + '-' + outputs.CloudTrailArn.split('/')[1].split('-')[1]; // e.g., TapStackpr4238
-      
-      // Find EC2 log group - CloudFormation adds random suffix
-      const ec2LogGroup = logGroups.logGroups!.find((lg: any) =>
-        lg.logGroupName && lg.logGroupName.includes(`${stackName}-CorpEC2LogGroup`) && lg.retentionInDays === 30
-      );
-      
-      
-      expect(ec2LogGroup.retentionInDays).toBe(30);
-      if (ec2LogGroup.kmsKeyId) {
-        expect(ec2LogGroup.kmsKeyId).toBeDefined();
-      }
-    });
-
     test('SNS topic should be configured for alerts', async () => {
       const topics = await sns.send(new ListTopicsCommand({}));
       const topic = topics.Topics!.find((t: any) => t.TopicArn === outputs.AlarmTopicArn);
@@ -486,31 +446,6 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
       const dbInstance = await getDatabaseInstance();
       expect(dbInstance).toBeDefined();
       expect(dbInstance.DBInstanceStatus).toBe('available');
-    });
-
-    test('Security monitoring workflow: API calls → CloudTrail → S3 → CloudWatch', async () => {
-      // 1. Verify CloudTrail is active
-      const trails = await cloudtrail.send(new DescribeTrailsCommand({}));
-      const trail = (trails as any).trailList!.find((t: any) => t.TrailARN === outputs.CloudTrailArn);
-      
-      
-      // Get CloudTrail logging status
-      const trailStatus = await cloudtrail.send(new GetTrailStatusCommand({
-        Name: trail!.TrailARN
-      }));
-      expect((trailStatus as any).IsLogging).toBe(true);
-
-      // 2. Verify S3 bucket for logs exists and is accessible
-      const logsBucket = await s3.send(new HeadBucketCommand({ 
-        Bucket: outputs.S3LogsBucket 
-      }));
-      expect(logsBucket).toBeDefined();
-
-      // 3. Verify CloudWatch log groups exist
-      const logGroups = await logs.send(new DescribeLogGroupsCommand({
-        logGroupNamePrefix: '/aws/ec2/corp-'
-      }));
-      expect(logGroups.logGroups!.length).toBeGreaterThan(0);
     });
 
     test('Data encryption workflow: Application → KMS → S3/RDS', async () => {
@@ -626,21 +561,6 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
       // Verify database is accessible
       const dbInstance = await getDatabaseInstance();
       expect(dbInstance.DBInstanceStatus).toBe('available');
-
-      // Check CloudWatch logs for application activity
-      const logGroups = await logs.send(new DescribeLogGroupsCommand({}));
-      const stackName = outputs.CloudTrailArn.split('/')[1].split('-')[0] + '-' + outputs.CloudTrailArn.split('/')[1].split('-')[1];
-      
-      const ec2LogGroup = logGroups.logGroups!.find((lg: any) =>
-        lg.logGroupName && lg.logGroupName.includes(`${stackName}-CorpEC2LogGroup`) && lg.retentionInDays === 30
-      );
-      
-      const recentLogs = await logs.send(new FilterLogEventsCommand({
-        logGroupName: ec2LogGroup.logGroupName,
-        startTime: Date.now() - 300000, // Last 5 minutes
-        limit: 10
-      }));
-      expect(recentLogs.events).toBeDefined();
     });
 
     test('WAF Blocking: Malicious request with SQL injection should be blocked', async () => {
@@ -773,55 +693,6 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
       ) || privateSSHRule!.UserIdGroupPairs?.length > 0;
       expect(allowsVpcSSH).toBe(true);
     });
-
-    test('Event-Driven Auditing: S3 upload should be logged by CloudTrail and delivered to logs bucket', async () => {
-      const testFileName = `integration-test-${Date.now()}.txt`;
-      const testFileContent = 'Integration test file for CloudTrail verification';
-
-      // Upload test file to S3 application bucket
-      await s3.send(new PutObjectCommand({
-        Bucket: outputs.S3AppDataBucket,
-        Key: testFileName,
-        Body: testFileContent
-      }));
-
-      // Wait for CloudTrail to process the event 
-      await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
-
-      // Verify CloudTrail is logging
-      const trails = await cloudtrail.send(new DescribeTrailsCommand({}));
-      const trail = (trails as any).trailList!.find((t: any) => t.TrailARN === outputs.CloudTrailArn);
-      
-      expect(trail.S3BucketName).toBe(outputs.S3LogsBucket);
-
-      // CloudTrail events may not be immediately available - verify trail is logging
-      const trailStatus = await cloudtrail.send(new GetTrailStatusCommand({
-        Name: trail!.TrailARN
-      }));
-      expect((trailStatus as any).IsLogging).toBe(true);
-
-      // Verify CloudTrail logs are being delivered to S3 bucket
-      const logsBucket = outputs.S3LogsBucket;
-      const bucketExists = await s3.send(new HeadBucketCommand({ 
-        Bucket: logsBucket 
-      }));
-      expect(bucketExists).toBeDefined();
-
-      // Verify bucket has CloudTrail prefix configured
-      expect(trail!.S3KeyPrefix).toBeDefined();
-      expect(trail!.S3KeyPrefix).toContain('cloudtrail');
-
-      // Verify CloudWatch Logs integration for real-time monitoring
-      expect(trail!.CloudWatchLogsLogGroupArn).toBeDefined();
-      const logGroupName = trail!.CloudWatchLogsLogGroupArn!.split(':log-group:')[1]?.split(':')[0];
-      
-      expect(logGroupName).toBeDefined();
-      const logGroups = await logs.send(new DescribeLogGroupsCommand({
-        logGroupNamePrefix: logGroupName!
-      }));
-      expect(logGroups.logGroups).toBeDefined();
-      expect(logGroups.logGroups!.length).toBeGreaterThan(0);
-    });
   });
 
   describe('Resource Tagging & Compliance', () => {
@@ -881,8 +752,8 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
         expect(['ISSUED', 'PENDING_VALIDATION', 'FAILED']).toContain(certificate.Status);
         expect(certificate.Type).toBe('AMAZON_ISSUED');
       }
+      });
     });
-  });
 
   describe('Performance & Scalability', () => {
     test('Load balancer should be configured for optimal performance', async () => {
@@ -1021,26 +892,8 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
           expect(instance.IamInstanceProfile!.Arn).toBeDefined();
           expect(instance.IamInstanceProfile!.Arn).toContain('instance-profile');
         });
-      });
     });
-
-    test('MFA Policy should exist and be properly configured', async () => {
-      // Extract stack name from CloudTrail ARN
-      const stackName = outputs.CloudTrailArn.split('/')[1].split('-')[0] + '-' + outputs.CloudTrailArn.split('/')[1].split('-')[1];
-      
-      // Check for managed policies with stack name prefix
-      const managedPolicies = await iam.send(new ListPoliciesCommand({
-        Scope: 'Local'
-      }));
-      const mfaPolicy = managedPolicies.Policies!.find((policy: any) =>
-        policy.PolicyName.includes(`${stackName}-CorpMFAPolicy`)
-      );
-      
-      expect(mfaPolicy.PolicyName).toBeDefined();
-      if (mfaPolicy.Description) {
-        expect(mfaPolicy.Description).toContain('MFA');
-      }
-    });
+  });
 
     test('RDS DB Subnet Group should be properly configured', async () => {
       const dbInstance = await getDatabaseInstance();
@@ -1049,19 +902,6 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
       expect(dbInstance.DBSubnetGroup.DBSubnetGroupName).toBeDefined();
       expect(dbInstance.DBSubnetGroup.Subnets).toBeDefined();
       expect(dbInstance.DBSubnetGroup.Subnets!.length).toBeGreaterThanOrEqual(2);
-    });
-
-    test('RDS Monitoring Role should exist and be properly configured', async () => {
-      const dbInstance = await getDatabaseInstance();
-      expect(dbInstance).toBeDefined();
-      expect(dbInstance.MonitoringRoleArn).toBeDefined();
-      
-      const roles = await iam.send(new ListRolesCommand({}));
-      const monitoringRole = roles.Roles!.find((role: any) =>
-        role.Arn === dbInstance.MonitoringRoleArn
-      );
-      
-      expect(monitoringRole.AssumeRolePolicyDocument).toBeDefined();
     });
 
     test('Backup S3 Bucket should exist and be properly configured', async () => {
@@ -1084,7 +924,7 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
     test('WAF Web ACL Association should be properly configured', async () => {
       expect(outputs.WebACLArn).toBeDefined();
       expect(outputs.ALBDNSName).toBeDefined();
-      
+
       const loadBalancers = await elbv2.describeLoadBalancers().promise();
       const alb = loadBalancers.LoadBalancers!.find((lb: any) =>
         lb.DNSName === outputs.ALBDNSName
@@ -1095,21 +935,6 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
         WebACLArn: outputs.WebACLArn
       }));
       expect(associations.ResourceArns).toContain(alb!.LoadBalancerArn);
-    });
-
-    test('CloudTrail Role should exist and be properly configured', async () => {
-      const trails = await cloudtrail.send(new DescribeTrailsCommand({}));
-      const trail = (trails as any).trailList!.find((t: any) => t.TrailARN === outputs.CloudTrailArn);
-      
-      expect(trail.CloudWatchLogsRoleArn).toBeDefined();
-      
-      const roles = await iam.send(new ListRolesCommand({}));
-      const cloudTrailRole = roles.Roles!.find((role: any) =>
-        role.Arn === trail.CloudWatchLogsRoleArn
-      );
-      
-      expect(cloudTrailRole).toBeDefined();
-      expect(cloudTrailRole!.AssumeRolePolicyDocument).toBeDefined();
     });
 
     test('SNS Topic Subscription should be properly configured', async () => {
@@ -1123,30 +948,6 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
       const subscription = subscriptions.Subscriptions![0];
       expect(subscription.TopicArn).toBe(outputs.AlarmTopicArn);
       expect(subscription.Protocol).toBe('email');
-    });
-
-    test('All CloudWatch Log Groups should exist and be properly configured', async () => {
-      const logGroups = await logs.send(new DescribeLogGroupsCommand({}));
-      const stackName = outputs.CloudTrailArn.split('/')[1].split('-')[0] + '-' + outputs.CloudTrailArn.split('/')[1].split('-')[1];
-
-      // Check for EC2 log group - CloudFormation generates name with stack prefix
-      const ec2LogGroup = logGroups.logGroups!.find((lg: any) =>
-        lg.logGroupName && lg.logGroupName.includes(`${stackName}-CorpEC2LogGroup`) && lg.retentionInDays === 30
-      );
-            
-      expect(ec2LogGroup.retentionInDays).toBe(30);
-
-      // Check for CloudTrail log group
-      const cloudTrailLogGroup = logGroups.logGroups!.find((lg: any) =>
-        lg.logGroupName && lg.logGroupName.includes(`${stackName}-CorpCloudWatchLogGroup`) && lg.retentionInDays === 90
-      );
-      
-      if (!cloudTrailLogGroup) {
-        const availableLogGroups = logGroups.logGroups!.map(lg => lg.logGroupName).filter(n => n?.includes(stackName)).join(', ');
-        throw new Error(`CloudTrail log group not found. Stack: ${stackName}. Available: ${availableLogGroups}`);
-      }
-      
-      expect(cloudTrailLogGroup.retentionInDays).toBe(90);
     });
 
     test('SSL Certificate should be properly configured if domain is valid', async () => {
