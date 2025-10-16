@@ -308,14 +308,6 @@ func TestECSClusterConfiguration(t *testing.T) {
 	if *cluster.Status != "ACTIVE" {
 		t.Errorf("ECS cluster is not active: %s", *cluster.Status)
 	}
-
-	hasContainerInsights := false
-	for _, setting := range cluster.Settings {
-		if string(setting.Name) == "containerInsights" && *setting.Value == "enabled" {
-			hasContainerInsights = true
-			break
-		}
-	}
 }
 
 // Test 8: ECS Service Configuration
