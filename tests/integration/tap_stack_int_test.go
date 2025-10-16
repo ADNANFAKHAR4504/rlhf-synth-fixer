@@ -14,36 +14,36 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/apigateway"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	"github.com/aws/aws-sdk-go-v2/service/kinesis"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
+	kmstypes "github.com/aws/aws-sdk-go-v2/service/kms/types"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
-	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
-	kmstypes "github.com/aws/aws-sdk-go-v2/service/kms/types"
 )
 
 type StackOutputs struct {
-	VpcId                 string `json:"vpcId"`
-	VpcCidr               string `json:"vpcCidr"`
-	PublicSubnet1Id       string `json:"publicSubnet1Id"`
-	PublicSubnet2Id       string `json:"publicSubnet2Id"`
-	PrivateSubnet1Id      string `json:"privateSubnet1Id"`
-	PrivateSubnet2Id      string `json:"privateSubnet2Id"`
-	KmsKeyId              string `json:"kmsKeyId"`
-	KmsKeyArn             string `json:"kmsKeyArn"`
-	KinesisStreamName     string `json:"kinesisStreamName"`
-	KinesisStreamArn      string `json:"kinesisStreamArn"`
-	RdsEndpoint           string `json:"rdsEndpoint"`
-	RdsInstanceId         string `json:"rdsInstanceId"`
-	RdsInstanceArn        string `json:"rdsInstanceArn"`
-	DbSecretArn           string `json:"dbSecretArn"`
-	EcsClusterName        string `json:"ecsClusterName"`
-	EcsClusterArn         string `json:"ecsClusterArn"`
-	EcsTaskDefinitionArn  string `json:"ecsTaskDefinitionArn"`
-	ApiGatewayId          string `json:"apiGatewayId"`
-	ApiGatewayUrl         string `json:"apiGatewayUrl"`
-	ApiGatewayEndpoint    string `json:"apiGatewayEndpoint"`
+	VpcId                string `json:"vpcId"`
+	VpcCidr              string `json:"vpcCidr"`
+	PublicSubnet1Id      string `json:"publicSubnet1Id"`
+	PublicSubnet2Id      string `json:"publicSubnet2Id"`
+	PrivateSubnet1Id     string `json:"privateSubnet1Id"`
+	PrivateSubnet2Id     string `json:"privateSubnet2Id"`
+	KmsKeyId             string `json:"kmsKeyId"`
+	KmsKeyArn            string `json:"kmsKeyArn"`
+	KinesisStreamName    string `json:"kinesisStreamName"`
+	KinesisStreamArn     string `json:"kinesisStreamArn"`
+	RdsEndpoint          string `json:"rdsEndpoint"`
+	RdsInstanceId        string `json:"rdsInstanceId"`
+	RdsInstanceArn       string `json:"rdsInstanceArn"`
+	DbSecretArn          string `json:"dbSecretArn"`
+	EcsClusterName       string `json:"ecsClusterName"`
+	EcsClusterArn        string `json:"ecsClusterArn"`
+	EcsTaskDefinitionArn string `json:"ecsTaskDefinitionArn"`
+	ApiGatewayId         string `json:"apiGatewayId"`
+	ApiGatewayUrl        string `json:"apiGatewayUrl"`
+	ApiGatewayEndpoint   string `json:"apiGatewayEndpoint"`
 }
 
 func loadStackOutputs(t *testing.T) *StackOutputs {

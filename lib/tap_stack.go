@@ -173,8 +173,8 @@ func main() {
 		}
 
 		_, err = kms.NewAlias(ctx, "data-encryption-key-alias", &kms.AliasArgs{
-			Name:         pulumi.String(fmt.Sprintf("alias/%s-%s-data-key", projectName, stackName)),
-			TargetKeyId:  kmsKey.KeyId,
+			Name:        pulumi.String(fmt.Sprintf("alias/%s-%s-data-key", projectName, stackName)),
+			TargetKeyId: kmsKey.KeyId,
 		})
 		if err != nil {
 			return err
@@ -379,10 +379,10 @@ func main() {
 			VpcId:       vpc.ID(),
 			Ingress: ec2.SecurityGroupIngressArray{
 				&ec2.SecurityGroupIngressArgs{
-					Protocol:   pulumi.String("tcp"),
-					FromPort:   pulumi.Int(443),
-					ToPort:     pulumi.Int(443),
-					CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
+					Protocol:    pulumi.String("tcp"),
+					FromPort:    pulumi.Int(443),
+					ToPort:      pulumi.Int(443),
+					CidrBlocks:  pulumi.StringArray{pulumi.String("0.0.0.0/0")},
 					Description: pulumi.String("HTTPS for API Gateway"),
 				},
 			},
@@ -800,11 +800,11 @@ func main() {
 
 		// ECS service
 		_, err = ecs.NewService(ctx, "data-processor-service", &ecs.ServiceArgs{
-			Name:            pulumi.String(fmt.Sprintf("%s-%s-data-processor-svc", projectName, stackName)),
-			Cluster:         ecsCluster.Arn,
-			TaskDefinition:  taskDefinition.Arn,
-			DesiredCount:    pulumi.Int(1),
-			LaunchType:      pulumi.String("FARGATE"),
+			Name:           pulumi.String(fmt.Sprintf("%s-%s-data-processor-svc", projectName, stackName)),
+			Cluster:        ecsCluster.Arn,
+			TaskDefinition: taskDefinition.Arn,
+			DesiredCount:   pulumi.Int(1),
+			LaunchType:     pulumi.String("FARGATE"),
 			NetworkConfiguration: &ecs.ServiceNetworkConfigurationArgs{
 				Subnets:        pulumi.StringArray{privateSubnet1.ID(), privateSubnet2.ID()},
 				SecurityGroups: pulumi.StringArray{ecsTasksSG.ID()},
@@ -866,7 +866,7 @@ func main() {
 			HttpMethod:            ingestMethod.HttpMethod,
 			IntegrationHttpMethod: pulumi.String("POST"),
 			Type:                  pulumi.String("AWS"),
-			Uri: pulumi.Sprintf("arn:aws:apigateway:%s:kinesis:action/PutRecord", region),
+			Uri:                   pulumi.Sprintf("arn:aws:apigateway:%s:kinesis:action/PutRecord", region),
 			Credentials:           apiGatewayRole.Arn,
 			RequestTemplates: pulumi.StringMap{
 				"application/json": pulumi.Sprintf(`{
@@ -882,7 +882,7 @@ func main() {
 
 		// Deploy API
 		deployment, err := apigateway.NewDeployment(ctx, "api-deployment", &apigateway.DeploymentArgs{
-			RestApi: restApi.ID(),
+			RestApi:   restApi.ID(),
 			StageName: pulumi.String(stageName),
 		}, pulumi.DependsOn([]pulumi.Resource{ingestMethod, integration}))
 		if err != nil {
@@ -968,9 +968,9 @@ func main() {
 			StageName:  pulumi.String(stageName),
 			MethodPath: pulumi.String("*/*"),
 			Settings: &apigateway.MethodSettingsSettingsArgs{
-				LoggingLevel:      pulumi.String("INFO"),
-				DataTraceEnabled:  pulumi.Bool(true),
-				MetricsEnabled:    pulumi.Bool(true),
+				LoggingLevel:     pulumi.String("INFO"),
+				DataTraceEnabled: pulumi.Bool(true),
+				MetricsEnabled:   pulumi.Bool(true),
 			},
 		}, pulumi.DependsOn([]pulumi.Resource{stage}))
 		if err != nil {
