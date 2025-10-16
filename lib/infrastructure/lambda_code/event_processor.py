@@ -8,7 +8,7 @@ and stores them in DynamoDB with proper error handling and monitoring.
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict
 
@@ -42,7 +42,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Extract event details
         event_id = event.get('id', 'unknown')
         event_type = event.get('detail-type', 'unknown')
-        event_time = event.get('time', datetime.now(datetime.UTC).isoformat())
+        event_time = event.get('time', datetime.now(timezone.utc).isoformat())
         
         logger.info(f"Processing event {event_id} of type {event_type}")
         
@@ -113,10 +113,10 @@ def process_trading_event(event: Dict[str, Any]) -> Dict[str, Any]:
     
     # Use eventId from detail if available (for testing), otherwise use EventBridge's id
     # Fallback to 'unknown' if neither is available
-    event_id = detail.get('eventId') or event.get('id') or f"unknown_{int(datetime.now(datetime.UTC).timestamp())}"
+    event_id = detail.get('eventId') or event.get('id') or f"unknown_{int(datetime.now(timezone.utc).timestamp())}"
     
     # Get event time with fallback
-    event_time = event.get('time') or datetime.now(datetime.UTC).isoformat()
+    event_time = event.get('time') or datetime.now(timezone.utc).isoformat()
     
     # Extract trading information and convert floats to Decimal
     trading_data = {
@@ -138,7 +138,7 @@ def process_trading_event(event: Dict[str, Any]) -> Dict[str, Any]:
         'eventTime': event_time,
         'source': event.get('source', 'unknown'),
         'tradingData': trading_data,
-        'processedAt': datetime.now(datetime.UTC).isoformat(),
+        'processedAt': datetime.now(timezone.utc).isoformat(),
         'region': REGION
     }
     
@@ -171,7 +171,7 @@ def store_event(event: Dict[str, Any], processed_data: Dict[str, Any]) -> None:
             'ProcessedAt': processed_data['processedAt'],
             'Region': processed_data['region'],
             'TradingData': processed_data['tradingData'],
-            'TTL': int((datetime.now(datetime.UTC).timestamp() + (30 * 24 * 60 * 60)))  # 30 days TTL
+            'TTL': int((datetime.now(timezone.utc).timestamp() + (30 * 24 * 60 * 60)))  # 30 days TTL
         }
         
         # Put item in DynamoDB
@@ -204,7 +204,7 @@ def send_metrics(event_type: str, status: str) -> None:
                     ],
                     'Value': 1,
                     'Unit': 'Count',
-                    'Timestamp': datetime.now(datetime.UTC)
+                    'Timestamp': datetime.now(timezone.utc)
                 }
             ]
         )

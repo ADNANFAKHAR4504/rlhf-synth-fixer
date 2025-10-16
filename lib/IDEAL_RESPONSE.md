@@ -183,7 +183,7 @@ class TapStack(pulumi.ComponentResource):
 
 ```
 
-## File: lib/infrastructure/lambda_code/event_processing.py
+## File: lib/infrastructure/lambda_code/event_processor.py
 
 ```python
 """

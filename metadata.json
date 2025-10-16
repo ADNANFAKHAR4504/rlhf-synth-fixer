@@ -7,6 +7,7 @@
   "team": "6",
   "startedAt": "2025-10-15T09:45:23.736Z",
   "subtask": "Failure Recovery and High Availability",
+  "background": "Design and implement a fault-tolerant, multi-region serverless event processing pipeline for a global financial trading platform using AWS CDK. The system must process real-time trading events, maintain transaction consistency, and provide disaster recovery capabilities.",
   "subject_labels": [
     "Failure Recovery Automation"
   ],
