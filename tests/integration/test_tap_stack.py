@@ -33,8 +33,29 @@ def outputs():
                 print(f"✅ Parsed outputs from {filename}: {outputs_data}")
                 print(f"📊 Number of outputs found: {len(outputs_data)}")
                 
-                if outputs_data:  # Only return if not empty
-                    return outputs_data
+                if outputs_data:
+                    # Check if this looks like our IoT infrastructure outputs
+                    # Look for our expected keys either at root level or nested
+                    expected_keys = ['kinesis_stream_name', 'dynamodb_table_name', 'processor_lambda_name']
+                    
+                    # Check root level first
+                    if any(key in outputs_data for key in expected_keys):
+                        print(f"✅ Found IoT infrastructure outputs at root level")
+                        return outputs_data
+                    
+                    # Check nested structures (like TapStackpr4318)
+                    for stack_name, stack_outputs in outputs_data.items():
+                        if isinstance(stack_outputs, dict):
+                            if any(key in stack_outputs for key in expected_keys):
+                                print(f"✅ Found IoT infrastructure outputs in stack: {stack_name}")
+                                return stack_outputs
+                    
+                    print(f"⚠️ {filename} contains outputs but not for our IoT infrastructure")
+                    print(f"   Available keys: {list(outputs_data.keys())}")
+                    if isinstance(list(outputs_data.values())[0], dict):
+                        nested_keys = list(list(outputs_data.values())[0].keys())
+                        print(f"   Nested keys in first stack: {nested_keys}")
+                    print(f"   Trying fallback...")
                 else:
                     print(f"⚠️ {filename} is empty, trying fallback...")
                     
