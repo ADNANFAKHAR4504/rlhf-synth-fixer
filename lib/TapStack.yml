@@ -24,7 +24,7 @@ Resources:
   WorkoutLogsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub 'workout-logs-${EnvironmentSuffix}'
+      TableName: !Sub 'workoutlogs-${EnvironmentSuffix}'
       BillingMode: PROVISIONED
       AttributeDefinitions:
         - AttributeName: userId
@@ -78,7 +78,7 @@ Resources:
   WorkoutLogsWriteScalingPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
     Properties:
-      PolicyName: !Sub 'workout-logs-write-scaling-${EnvironmentSuffix}'
+      PolicyName: !Sub 'workoutlogs-write-scaling-${EnvironmentSuffix}'
       PolicyType: TargetTrackingScaling
       ScalingTargetId: !Ref WorkoutLogsWriteCapacityScalableTarget
       TargetTrackingScalingPolicyConfiguration:
@@ -99,7 +99,7 @@ Resources:
   WorkoutLogsReadScalingPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
     Properties:
-      PolicyName: !Sub 'workout-logs-read-scaling-${EnvironmentSuffix}'
+      PolicyName: !Sub 'workoutlogs-read-scaling-${EnvironmentSuffix}'
       PolicyType: TargetTrackingScaling
       ScalingTargetId: !Ref WorkoutLogsReadCapacityScalableTarget
       TargetTrackingScalingPolicyConfiguration:
@@ -121,7 +121,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - PolicyName: !Sub 'workout-api-dynamodb-policy-${EnvironmentSuffix}'
+        - PolicyName: !Sub 'workoutapi-dynamodb-policy-${EnvironmentSuffix}'
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -245,7 +245,7 @@ Resources:
   GetWorkoutLogsFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub 'get-workout-logs-${EnvironmentSuffix}'
+      FunctionName: !Sub 'get-workoutlogs-${EnvironmentSuffix}'
       Runtime: python3.9
       Handler: index.lambda_handler
       Role: !GetAtt WorkoutApiLambdaRole.Arn
@@ -414,7 +414,7 @@ Resources:
   WorkoutApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: !Sub 'workout-api-${EnvironmentSuffix}'
+      Name: !Sub 'workoutapi-${EnvironmentSuffix}'
       Description: Serverless API for fitness workout logging with comprehensive metrics
       EndpointConfiguration:
         Types:
@@ -523,14 +523,14 @@ Resources:
   ApiGatewayLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/apigateway/workout-api-${EnvironmentSuffix}'
+      LogGroupName: !Sub '/aws/apigateway/workoutapi-${EnvironmentSuffix}'
       RetentionInDays: 30
 
   # CloudWatch Dashboard for monitoring
   WorkoutApiDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
-      DashboardName: !Sub 'workout-api-metrics-${EnvironmentSuffix}'
+      DashboardName: !Sub 'workoutapi-metrics-${EnvironmentSuffix}'
       DashboardBody: !Sub |
         {
           "widgets": [
@@ -615,7 +615,7 @@ Resources:
   ApiErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub 'workout-api-errors-${EnvironmentSuffix}'
+      AlarmName: !Sub 'workoutapi-errors-${EnvironmentSuffix}'
       AlarmDescription: Alert when API error rate exceeds threshold
       MetricName: 5XXError
       Namespace: AWS/ApiGateway
@@ -626,7 +626,7 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: ApiName
-          Value: !Sub 'workout-api-${EnvironmentSuffix}'
+          Value: !Sub 'workoutapi-${EnvironmentSuffix}'
 
   # CloudWatch Alarm for DynamoDB throttling
   DynamoDBThrottleAlarm:
@@ -650,7 +650,7 @@ Outputs:
     Description: API Gateway endpoint URL for the workout logging API
     Value: !Sub 'https://${WorkoutApi}.execute-api.${AWS::Region}.amazonaws.com/${ApiStageName}'
     Export:
-      Name: !Sub 'workout-api-endpoint-${EnvironmentSuffix}'
+      Name: !Sub 'workoutapi-endpoint-${EnvironmentSuffix}'
 
   DynamoDBTableName:
     Description: Name of the DynamoDB table storing workout logs
@@ -660,7 +660,7 @@ Outputs:
 
   DashboardURL:
     Description: CloudWatch Dashboard URL for monitoring API metrics
-    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=workout-api-metrics-${EnvironmentSuffix}'
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=workoutapi-metrics-${EnvironmentSuffix}'
 
   CreateWorkoutEndpoint:
     Description: Endpoint to create new workout logs
