@@ -16,8 +16,9 @@ Tags.of(app).add('Repository', repositoryName);
 Tags.of(app).add('Author', commitAuthor);
 
 // Deploy to primary region
-new TapStack(app, `TapStack-Primary-${environmentSuffix}`, {
-  stackName: `TapStack-Primary-${environmentSuffix}`,
+const primaryStackName = `TapStack${environmentSuffix}`;
+new TapStack(app, primaryStackName, {
+  stackName: primaryStackName,
   environmentSuffix: environmentSuffix,
   domainName: process.env.DOMAIN_NAME,
   certificateArn: process.env.CERTIFICATE_ARN,
@@ -32,8 +33,9 @@ new TapStack(app, `TapStack-Primary-${environmentSuffix}`, {
 // Deploy to secondary regions
 const secondaryRegions = ['us-west-2'];
 for (const region of secondaryRegions) {
-  new TapStack(app, `TapStack-${region}-${environmentSuffix}`, {
-    stackName: `TapStack-${region}-${environmentSuffix}`,
+  const stackName = `TapStack${environmentSuffix}`;
+  new TapStack(app, stackName, {
+    stackName: stackName,
     environmentSuffix: environmentSuffix,
     domainName: process.env.DOMAIN_NAME,
     certificateArn: process.env.CERTIFICATE_ARN,
