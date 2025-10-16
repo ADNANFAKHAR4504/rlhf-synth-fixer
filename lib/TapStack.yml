@@ -1,13 +1,13 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  TapStack.yml — Brand-new, secure AWS environment with VPC, ALB (HTTPS), tightly-scoped S3 access for an EC2 role,
-  centralized logging, versioning & encryption. Designed to deploy cleanly with least-privilege and best practices.
+  TapStack.yml — Brand-new, secure AWS environment with VPC, ALB (conditional HTTPS), tightly-scoped S3 access for an EC2 role,
+  centralized logging, versioning & encryption. Deploys cleanly with or without an ACM certificate; switch to HTTPS by updating AcmCertificateArn.
 
 Parameters:
   Project:
     Type: String
     Default: tapstack
-    Description: Project name used in resource naming (e.g., tapstack)
+    Description: Project name used in resource naming (lowercase, hyphenated)
     AllowedPattern: "^[a-z0-9-]+$"
   Environment:
     Type: String
@@ -47,12 +47,14 @@ Parameters:
     Description: Application port for target group and App Security Group
   AcmCertificateArn:
     Type: String
-    Description: ACM certificate ARN for ALB HTTPS listener (must be in this region)
-    AllowedPattern: "^arn:aws(-[a-z]+)?:acm:[a-z0-9-]+:[0-9]{12}:certificate/[a-f0-9-]+$"
+    Default: ""
+    Description: "Optional: ACM certificate ARN for HTTPS listener (must be in stack region). Leave empty to deploy HTTP-only (no 443)."
 
 Mappings: {}
 
-Conditions: {}
+Conditions:
+  HasCertificate: !Not [!Equals [!Ref AcmCertificateArn, ""]]
+  NoCertificate: !Equals [!Ref AcmCertificateArn, ""]
 
 Resources:
   # --------------------------
@@ -267,22 +269,32 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable
 
   # --------------------------
-  # Security Groups
+  # Security Groups (conditional ports)
   # --------------------------
   AlbSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: !Sub "${Project}-alb-sg-${Environment} - allow HTTPS only"
+      GroupDescription: !Sub "${Project}-alb-sg-${Environment} - HTTPS when cert provided; otherwise HTTP"
       VpcId: !Ref VPC
       SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIpv6: "::/0"
+        # HTTPS 443 only when we have a cert
+        - !If
+          - HasCertificate
+          - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0 }
+          - !Ref "AWS::NoValue"
+        - !If
+          - HasCertificate
+          - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIpv6: "::/0" }
+          - !Ref "AWS::NoValue"
+        # HTTP 80 only when no cert
+        - !If
+          - NoCertificate
+          - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0 }
+          - !Ref "AWS::NoValue"
+        - !If
+          - NoCertificate
+          - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIpv6: "::/0" }
+          - !Ref "AWS::NoValue"
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
@@ -325,7 +337,6 @@ Resources:
   LogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      # Keep names concise to stay <63 chars
       BucketName: !Sub "${Project}-${Environment}-logs-${AWS::AccountId}-${AWS::Region}"
       OwnershipControls:
         Rules:
@@ -382,7 +393,7 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
 
-  # Policies for log delivery (ALB & CloudTrail) to LogsBucket
+  # ALB & CloudTrail log delivery permissions (prefix-aware for ALB)
   LogsBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -390,26 +401,28 @@ Resources:
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
-          # ALB access logs (via AWS log delivery)
-          - Sid: ALBLogDeliveryPut
+          - Sid: ALBLogDeliveryPutWithPrefix
             Effect: Allow
             Principal:
-              Service: delivery.logs.amazonaws.com
+              Service:
+                - delivery.logs.amazonaws.com
+                - logdelivery.elasticloadbalancing.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub "arn:aws:s3:::${LogsBucket}/AWSLogs/${AWS::AccountId}/*"
+            Resource: !Sub "arn:aws:s3:::${LogsBucket}/alb-access/${Project}/${Environment}/AWSLogs/${AWS::AccountId}/*"
             Condition:
               StringEquals:
                 "s3:x-amz-acl": "bucket-owner-full-control"
                 "aws:SourceAccount": !Ref "AWS::AccountId"
               ArnLike:
-                "aws:SourceArn": !Sub "arn:aws:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:loadbalancer/app/*"
+                "aws:SourceArn": !Sub "arn:aws:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:loadbalancer/*"
           - Sid: ALBLogDeliveryAclCheck
             Effect: Allow
             Principal:
-              Service: delivery.logs.amazonaws.com
+              Service:
+                - delivery.logs.amazonaws.com
+                - logdelivery.elasticloadbalancing.amazonaws.com
             Action: s3:GetBucketAcl
             Resource: !Sub "arn:aws:s3:::${LogsBucket}"
-          # CloudTrail delivery
           - Sid: CloudTrailWrite
             Effect: Allow
             Principal:
@@ -468,7 +481,6 @@ Resources:
       InstanceProfileName: !Sub "${Project}-ec2-instanceprofile-${Environment}"
       Roles: [!Ref AppEc2Role]
 
-  # Bucket policy that restricts access to the application bucket to this role only and enforces TLS
   ApplicationBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -500,7 +512,7 @@ Resources:
             Resource: !Sub "arn:aws:s3:::${ApplicationBucket}/*"
 
   # --------------------------
-  # Application Load Balancer (HTTPS only) + Target Group
+  # Application Load Balancer (conditional listeners)
   # --------------------------
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
@@ -552,7 +564,9 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
 
+  # HTTPS listener only when a cert is provided
   HttpsListener:
+    Condition: HasCertificate
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       LoadBalancerArn: !Ref ApplicationLoadBalancer
@@ -560,6 +574,18 @@ Resources:
       Protocol: HTTPS
       Certificates:
         - CertificateArn: !Ref AcmCertificateArn
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref AppTargetGroup
+
+  # HTTP listener only when NO cert (keeps ports minimal in each mode)
+  HttpListener:
+    Condition: NoCertificate
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref AppTargetGroup
