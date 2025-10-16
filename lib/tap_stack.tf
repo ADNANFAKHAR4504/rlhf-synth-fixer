@@ -1,16 +1,4 @@
-#############################################
-# tap_stack.tf — Task-04 (Single File)
-# Multi-Region AWS Infrastructure with strong defaults
-#
-# IMPORTANT CONVENTIONS FOR THIS FILE
-# - Do NOT add any `provider` or backend blocks; CI injects them.
-# - Always pin resources/data sources to aliased providers:
-#     * us-east-1  →  provider = aws.use1
-#     * eu-west-1  →  provider = aws.euw1
-# - Prefer explicit dependencies through references; avoid arbitrary depends_on.
-# - Keep resources destroyable; no lifecycle.prevent_destroy.
-#############################################
-
+# tap_stack.tf
 #############################################
 # VARIABLES
 #############################################
