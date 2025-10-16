@@ -4,6 +4,7 @@
   "language": "ts",
   "subtask": "Failure Recovery and High Availability",
   "complexity": "medium",
+  "turn_type": "single",
   "team": "synth",
   "startedAt": "2025-10-14T05:21:36+05:30",
   "po_id": "2857171312",
