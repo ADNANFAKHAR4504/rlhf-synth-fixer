@@ -6,17 +6,16 @@ from datetime import datetime
 from typing import List, Dict, Any
 
 # Initialize AWS clients
-timestream_write = boto3.client('timestream-write')
+dynamodb = boto3.resource('dynamodb')
 s3 = boto3.client('s3')
 sns = boto3.client('sns')
 secretsmanager = boto3.client('secretsmanager')
 
 # Environment variables
-TIMESTREAM_DATABASE = os.environ.get('TIMESTREAM_DATABASE', '')
-TIMESTREAM_TABLE = os.environ.get('TIMESTREAM_TABLE', '')
+DYNAMODB_TABLE = os.environ.get('DYNAMODB_TABLE', '')
 ALERT_TOPIC_ARN = os.environ.get('ALERT_TOPIC_ARN', '')
 PROCESSED_BUCKET = os.environ.get('PROCESSED_BUCKET', '')
-API_SECRET_ARN = os.environ.get('API_SECRET_ARN', '')
+API_SECRET_NAME = os.environ.get('API_SECRET_NAME', '')
 AWS_REGION = os.environ.get('AWS_REGION', 'eu-central-1')
 
 # Anomaly detection thresholds
@@ -26,9 +25,9 @@ VIBRATION_THRESHOLD = 5.0
 
 
 def get_credentials():
-    """Retrieve API credentials from Secrets Manager."""
+    """Retrieve API credentials from existing Secrets Manager secret."""
     try:
-        response = secretsmanager.get_secret_value(SecretId=API_SECRET_ARN)
+        response = secretsmanager.get_secret_value(SecretId=API_SECRET_NAME)
         return json.loads(response['SecretString'])
     except Exception as e:
         print(f"Error retrieving credentials: {str(e)}")
@@ -75,39 +74,29 @@ def send_alert(sensor_data: Dict[str, Any], anomaly_type: str):
         print(f"Error sending alert: {str(e)}")
 
 
-def write_to_timestream(records: List[Dict[str, Any]]):
-    """Write processed records to Timestream."""
+def write_to_dynamodb(records: List[Dict[str, Any]]):
+    """Write processed records to DynamoDB."""
     try:
-        timestream_records = []
+        table = dynamodb.Table(DYNAMODB_TABLE)
+        
+        with table.batch_writer() as batch:
+            for record in records:
+                # Prepare DynamoDB item
+                item = {
+                    'sensor_id': str(record.get('sensor_id', 'unknown')),
+                    'timestamp': str(record.get('timestamp', datetime.now().timestamp())),
+                    'sensor_type': str(record.get('sensor_type', 'unknown')),
+                    'production_line': str(record.get('production_line', 'unknown')),
+                    'value': float(record.get('value', 0)),
+                    'anomaly_detected': record.get('anomaly_detected', False),
+                    'processed_at': datetime.now().isoformat()
+                }
+                
+                batch.put_item(Item=item)
 
-        for record in records:
-            dimensions = [
-                {'Name': 'sensor_id', 'Value': str(record.get('sensor_id', 'unknown'))},
-                {'Name': 'sensor_type', 'Value': str(record.get('sensor_type', 'unknown'))},
-                {'Name': 'production_line', 'Value': str(record.get('production_line', 'unknown'))}
-            ]
-
-            timestream_record = {
-                'Time': str(int(record.get('timestamp', datetime.now().timestamp()) * 1000)),
-                'TimeUnit': 'MILLISECONDS',
-                'Dimensions': dimensions,
-                'MeasureName': 'sensor_reading',
-                'MeasureValue': str(record.get('value', 0)),
-                'MeasureValueType': 'DOUBLE'
-            }
-
-            timestream_records.append(timestream_record)
-
-        if timestream_records:
-            timestream_write.write_records(
-                DatabaseName=TIMESTREAM_DATABASE,
-                TableName=TIMESTREAM_TABLE,
-                Records=timestream_records
-            )
-            print(f"Successfully wrote {len(timestream_records)} records to Timestream")
-
+        print(f"Successfully wrote {len(records)} records to DynamoDB")
     except Exception as e:
-        print(f"Error writing to Timestream: {str(e)}")
+        print(f"Error writing to DynamoDB: {str(e)}")
         raise
 
 
@@ -162,9 +151,9 @@ def handler(event, context):
                 print(f"Error processing record: {str(e)}")
                 continue
 
-        # Write to Timestream for time-series analysis
+        # Write to DynamoDB for fast queries
         if processed_records:
-            write_to_timestream(processed_records)
+            write_to_dynamodb(processed_records)
 
         # Store processed data in S3
         if processed_records:

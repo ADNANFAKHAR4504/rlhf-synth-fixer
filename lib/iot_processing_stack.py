@@ -31,8 +31,6 @@ from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import CloudwatchMetricAla
 from cdktf_cdktf_provider_aws.sns_topic import SnsTopic
 from cdktf_cdktf_provider_aws.kms_key import KmsKey
 from cdktf_cdktf_provider_aws.kms_alias import KmsAlias
-from cdktf_cdktf_provider_aws.secretsmanager_secret import SecretsmanagerSecret
-from cdktf_cdktf_provider_aws.secretsmanager_secret_version import SecretsmanagerSecretVersion
 from cdktf_cdktf_provider_aws.data_aws_caller_identity import DataAwsCallerIdentity
 from cdktf import TerraformOutput
 import json
@@ -229,25 +227,9 @@ class IotProcessingStack(Construct):
             kms_master_key_id=kms_key.id
         )
 
-        # Secrets Manager for API keys and credentials
-        api_secret = SecretsmanagerSecret(
-            self,
-            "iot-api-secret",
-            name=f"iot-api-credentials-{environment_suffix}",
-            description="API credentials for IoT data processing",
-            kms_key_id=kms_key.id,
-            recovery_window_in_days=7
-        )
-
-        SecretsmanagerSecretVersion(
-            self,
-            "iot-api-secret-version",
-            secret_id=api_secret.id,
-            secret_string=json.dumps({
-                "api_key": "placeholder-key",
-                "api_secret": "placeholder-secret"
-            })
-        )
+        # Use existing Secrets Manager secret (fetch, don't create)
+        # This assumes the secret already exists in the AWS account
+        api_secret_name = f"iot-api-credentials-{environment_suffix}"
 
         # IAM Role for Lambda processing
         lambda_assume_role = DataAwsIamPolicyDocument(
@@ -374,7 +356,7 @@ class IotProcessingStack(Construct):
                     "DYNAMODB_TABLE": dynamodb_table.name,
                     "ALERT_TOPIC_ARN": alert_topic.arn,
                     "PROCESSED_BUCKET": processed_data_bucket.id,
-                    "API_SECRET_ARN": api_secret.arn
+                    "API_SECRET_NAME": api_secret_name
                 }
             },
             depends_on=[lambda_log_group]
@@ -660,15 +642,10 @@ class IotProcessingStack(Construct):
 
         TerraformOutput(
             self,
-            "api_secret_arn",
-            value=api_secret.arn,
-            description="ARN of the API credentials secret"
-        )
-
-        TerraformOutput(
-            self,
             "api_secret_name",
-            value=api_secret.name,
+            value=api_secret_name,
+            description="Name of the existing API credentials secret"
+        )
             description="Name of the API credentials secret"
         )
 

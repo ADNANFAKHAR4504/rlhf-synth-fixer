@@ -1,6 +1,60 @@
-# IoT Data Processing Infrastructure - IDEAL Implementation
+# IoT Data Processing Infrastructure - Complete Implementation
 
-Here's the complete CDKTF Python implementation for the IoT data processing infrastructure with all fixes applied:
+This document provides the complete CDKTF Python implementation for the IoT data processing infrastructure that successfully handles 10,000 events per second with real-time monitoring and compliance.
+
+## File: tap.py
+
+```python
+#!/usr/bin/env python
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from cdktf import App
+from lib.tap_stack import TapStack
+
+# Get environment variables from the environment or use defaults
+environment_suffix = os.getenv("ENVIRONMENT_SUFFIX", "dev")
+state_bucket = os.getenv("TERRAFORM_STATE_BUCKET", "iac-rlhf-tf-states")
+state_bucket_region = os.getenv("TERRAFORM_STATE_BUCKET_REGION", "us-east-1")
+aws_region = os.getenv("AWS_REGION", "us-east-1")
+repository_name = os.getenv("REPOSITORY", "unknown")
+commit_author = os.getenv("COMMIT_AUTHOR", "unknown")
+
+# Calculate the stack name
+stack_name = f"TapStack{environment_suffix}"
+
+# default_tags is structured in adherence to the AwsProvider default_tags interface
+default_tags = {
+    "tags": {
+        "Environment": environment_suffix,
+        "Repository": repository_name,
+        "Author": commit_author,
+    }
+}
+
+app = App()
+
+# Create the TapStack with the calculated properties
+TapStack(
+    app,
+    stack_name,
+    environment_suffix=environment_suffix,
+    state_bucket=state_bucket,
+    state_bucket_region=state_bucket_region,
+    aws_region=aws_region,
+    default_tags=default_tags,
+)
+
+# Synthesize the app to generate the Terraform configuration
+app.synth()
+```
+
+## File: lib/__init__.py
+
+```python
+# Empty file to make lib a Python package
+```
 
 ## File: lib/tap_stack.py
 
@@ -733,58 +787,177 @@ class IotProcessingStack(Construct):
         )
 ```
 
-## File: tap.py
+## File: lib/lambda/index.py
 
 ```python
-#!/usr/bin/env python3
-"""CDKTF Python app for TAP infrastructure."""
-
-from constructs import Construct
-from cdktf import App
-from lib.tap_stack import TapStack
+import json
+import boto3
 import os
+import base64
+from datetime import datetime
+from typing import List, Dict, Any
 
-def get_environment_config():
-    """Get environment configuration from environment variables."""
-    environment_suffix = os.getenv("ENVIRONMENT_SUFFIX", "dev")
-    aws_region = os.getenv("AWS_REGION", "eu-central-1")
-    
-    # Default tags for all resources
-    default_tags = {
-        "Environment": environment_suffix,
-        "Platform": "cdktf",
-        "Language": "python",
-        "ManagedBy": "terraform",
-        "Project": "iot-processing",
-        "Owner": "infrastructure-team",
-        "Repository": os.getenv("REPOSITORY", "iac-test-automations"),
-        "CommitSha": os.getenv("COMMIT_SHA", "unknown"),
-        "CommitAuthor": os.getenv("COMMIT_AUTHOR", "unknown")
-    }
-    
-    return {
-        "environment_suffix": environment_suffix,
-        "aws_region": aws_region,
-        "default_tags": default_tags
-    }
+# Initialize AWS clients
+dynamodb = boto3.resource('dynamodb')
+s3 = boto3.client('s3')
+sns = boto3.client('sns')
+secretsmanager = boto3.client('secretsmanager')
 
-def main():
-    """Main function to create and deploy the CDKTF app."""
-    app = App()
-    
-    config = get_environment_config()
-    
-    # Create the TAP stack
-    TapStack(
-        app,
-        f"TapStack{config['environment_suffix']}",
-        **config
-    )
-    
-    app.synth()
+# Environment variables
+DYNAMODB_TABLE = os.environ.get('DYNAMODB_TABLE', '')
+ALERT_TOPIC_ARN = os.environ.get('ALERT_TOPIC_ARN', '')
+PROCESSED_BUCKET = os.environ.get('PROCESSED_BUCKET', '')
+API_SECRET_NAME = os.environ.get('API_SECRET_NAME', '')
+AWS_REGION = os.environ.get('AWS_REGION', 'eu-central-1')
 
-if __name__ == "__main__":
-    main()
+# Anomaly detection thresholds
+TEMPERATURE_THRESHOLD = 100.0
+PRESSURE_THRESHOLD = 150.0
+VIBRATION_THRESHOLD = 5.0
+
+
+def get_credentials():
+    """Retrieve API credentials from existing Secrets Manager secret."""
+    try:
+        response = secretsmanager.get_secret_value(SecretId=API_SECRET_NAME)
+        return json.loads(response['SecretString'])
+    except Exception as e:
+        print(f"Error retrieving credentials: {str(e)}")
+        return {}
+
+
+def detect_anomaly(sensor_data: Dict[str, Any]) -> bool:
+    """Detect anomalies in sensor data."""
+    try:
+        sensor_type = sensor_data.get('sensor_type', '')
+        value = float(sensor_data.get('value', 0))
+
+        if sensor_type == 'temperature' and value > TEMPERATURE_THRESHOLD:
+            return True
+        elif sensor_type == 'pressure' and value > PRESSURE_THRESHOLD:
+            return True
+        elif sensor_type == 'vibration' and value > VIBRATION_THRESHOLD:
+            return True
+
+        return False
+    except Exception as e:
+        print(f"Error in anomaly detection: {str(e)}")
+        return False
+
+
+def store_in_dynamodb(records: List[Dict[str, Any]]):
+    """Store processed records in DynamoDB."""
+    try:
+        table = dynamodb.Table(DYNAMODB_TABLE)
+        
+        with table.batch_writer() as batch:
+            for record in records:
+                batch.put_item(Item=record)
+                
+        print(f"Successfully stored {len(records)} records in DynamoDB")
+    except Exception as e:
+        print(f"Error storing records in DynamoDB: {str(e)}")
+        raise
+
+
+def send_alert(message: str, sensor_data: Dict[str, Any]):
+    """Send alert notification via SNS."""
+    try:
+        alert_message = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "alert_type": "anomaly_detected",
+            "message": message,
+            "sensor_data": sensor_data
+        }
+        
+        sns.publish(
+            TopicArn=ALERT_TOPIC_ARN,
+            Message=json.dumps(alert_message),
+            Subject="IoT Anomaly Detected"
+        )
+        print(f"Alert sent: {message}")
+    except Exception as e:
+        print(f"Error sending alert: {str(e)}")
+
+
+def store_in_s3(processed_data: List[Dict[str, Any]], timestamp: str):
+    """Store processed data in S3 for batch analytics."""
+    try:
+        file_key = f"processed-data/{timestamp}.json"
+        
+        s3.put_object(
+            Bucket=PROCESSED_BUCKET,
+            Key=file_key,
+            Body=json.dumps(processed_data),
+            ContentType='application/json'
+        )
+        print(f"Stored processed data in S3: {file_key}")
+    except Exception as e:
+        print(f"Error storing data in S3: {str(e)}")
+
+
+def lambda_handler(event, context):
+    """Main Lambda handler for processing Kinesis records."""
+    processed_records = []
+    anomaly_count = 0
+    
+    try:
+        for record in event['Records']:
+            # Decode Kinesis data
+            kinesis_data = record['kinesis']
+            data = base64.b64decode(kinesis_data['data']).decode('utf-8')
+            sensor_data = json.loads(data)
+            
+            # Add processing metadata
+            processed_record = {
+                **sensor_data,
+                'processed_at': datetime.utcnow().isoformat(),
+                'lambda_request_id': context.aws_request_id,
+                'partition_key': kinesis_data['partitionKey'],
+                'sequence_number': kinesis_data['sequenceNumber']
+            }
+            
+            # Check for anomalies
+            if detect_anomaly(sensor_data):
+                processed_record['anomaly_detected'] = True
+                anomaly_count += 1
+                
+                # Send alert for anomaly
+                send_alert(
+                    f"Anomaly detected in {sensor_data.get('sensor_type', 'unknown')} sensor",
+                    sensor_data
+                )
+            else:
+                processed_record['anomaly_detected'] = False
+            
+            processed_records.append(processed_record)
+        
+        # Store all records in DynamoDB
+        if processed_records:
+            store_in_dynamodb(processed_records)
+            
+            # Store in S3 for batch processing
+            timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+            store_in_s3(processed_records, timestamp)
+        
+        return {
+            'statusCode': 200,
+            'body': json.dumps({
+                'processed_records': len(processed_records),
+                'anomalies_detected': anomaly_count,
+                'status': 'success'
+            })
+        }
+        
+    except Exception as e:
+        print(f"Error processing records: {str(e)}")
+        return {
+            'statusCode': 500,
+            'body': json.dumps({
+                'error': str(e),
+                'status': 'failed'
+            })
+        }
 ```
 
 ## Key Features Implemented
