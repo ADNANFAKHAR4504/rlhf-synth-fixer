@@ -171,15 +171,86 @@ export class TapStack extends cdk.Stack {
   }
 
   private outputApiEndpoints() {
-    // Output API endpoints for this stack's region (for non-prod environments without custom domains)
+    // Output comprehensive information for testing
     for (const region of Array.from(this.regionalApis.keys())) {
       const api = this.regionalApis.get(region)!;
+
+      // API Gateway URL
       new cdk.CfnOutput(this, `${region}-ApiEndpoint`, {
         value: api.api.url,
         description: `API Gateway endpoint for ${region}`,
         exportName: `${this.stackName}-${region}-api-endpoint`,
       });
+
+      // API Gateway ID
+      new cdk.CfnOutput(this, `${region}-ApiId`, {
+        value: api.api.restApiId,
+        description: `API Gateway ID for ${region}`,
+        exportName: `${this.stackName}-${region}-api-id`,
+      });
+
+      // DynamoDB Table Name
+      new cdk.CfnOutput(this, `${region}-SessionTableName`, {
+        value: api.sessionTable.tableName,
+        description: `DynamoDB session table for ${region}`,
+        exportName: `${this.stackName}-${region}-session-table`,
+      });
+
+      // Transaction Processor Lambda ARN
+      new cdk.CfnOutput(this, `${region}-TransactionProcessorArn`, {
+        value: api.transactionProcessor.functionArn,
+        description: `Transaction processor Lambda ARN for ${region}`,
+        exportName: `${this.stackName}-${region}-txn-processor-arn`,
+      });
+
+      // Transaction Processor Lambda Name
+      new cdk.CfnOutput(this, `${region}-TransactionProcessorName`, {
+        value: api.transactionProcessor.functionName,
+        description: `Transaction processor Lambda name for ${region}`,
+      });
     }
+
+    // Database outputs
+    new cdk.CfnOutput(this, 'DatabaseEndpoint', {
+      value: this.globalDatabase.primaryCluster.clusterEndpoint.hostname,
+      description: `Database cluster endpoint for ${this.region}`,
+      exportName: `${this.stackName}-db-endpoint`,
+    });
+
+    new cdk.CfnOutput(this, 'DatabasePort', {
+      value: this.globalDatabase.primaryCluster.clusterEndpoint.port.toString(),
+      description: 'Database cluster port',
+    });
+
+    new cdk.CfnOutput(this, 'DatabaseSecretArn', {
+      value: this.globalDatabase.credentials.secretArn,
+      description: 'Database credentials secret ARN',
+      exportName: `${this.stackName}-db-secret-arn`,
+    });
+
+    // Dashboard URL
+    const dashboardUrl = `https://${this.region}.console.aws.amazon.com/cloudwatch/home?region=${this.region}#dashboards:name=financial-app-dr-${this.region}-${this.node.tryGetContext('environmentSuffix') || 'dev'}`;
+    new cdk.CfnOutput(this, 'DashboardUrl', {
+      value: dashboardUrl,
+      description: 'CloudWatch dashboard URL',
+    });
+
+    // Health check Lambda ARN
+    new cdk.CfnOutput(this, 'HealthCheckLambdaArn', {
+      value: this.healthCheckSystem.getHealthCheckId(this.region) || 'N/A',
+      description: 'Health check system identifier',
+    });
+
+    // Region info
+    new cdk.CfnOutput(this, 'DeployedRegion', {
+      value: this.region,
+      description: 'AWS region where this stack is deployed',
+    });
+
+    new cdk.CfnOutput(this, 'IsPrimaryRegion', {
+      value: (this.region === PRIMARY_REGION).toString(),
+      description: 'Whether this is the primary region',
+    });
   }
 
   private createGlobalDashboard() {
