@@ -32,6 +32,7 @@ import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
 
 export class MultiComponentApplicationStack extends cdk.NestedStack {
@@ -210,6 +211,9 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
         iam.ManagedPolicy.fromAwsManagedPolicyName(
           'service-role/AWSLambdaVPCAccessExecutionRole'
         ),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess'
+        ),
       ],
     });
 
@@ -350,6 +354,7 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
         S3_BUCKET: staticFilesBucket.bucketName,
         SQS_QUEUE_URL: asyncQueue.queueUrl,
       },
+      tracing: lambda.Tracing.ACTIVE,
       role: lambdaRole,
       logRetention: logs.RetentionDays.ONE_WEEK,
       reservedConcurrentExecutions: 100,
@@ -447,6 +452,66 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
       }
     );
 
+    // ========================================
+    // WAFv2 WebACL (protect CloudFront and proxied API)
+    // ========================================
+    // WAF scope=CLOUDFRONT is a global resource and must be created in
+    // us-east-1. Guard creation so that when this stack is synthesized or
+    // deployed in other regions (e.g., during multi-region runs) we don't
+    // attempt to create a global WebACL in the wrong region which would
+    // cause CloudFormation failures. To explicitly allow global WAF creation
+    // in another region set the context key `allowGlobalWaf=true` when
+    // running the CDK app.
+    const stackRegion = cdk.Stack.of(this).region;
+    const allowGlobalWaf =
+      this.node.tryGetContext('allowGlobalWaf') === true ||
+      this.node.tryGetContext('allowGlobalWaf') === 'true';
+    const shouldCreateWaf = stackRegion === 'us-east-1' || allowGlobalWaf;
+
+    if (shouldCreateWaf) {
+      const webAcl = new wafv2.CfnWebACL(this, 'WebAcl', {
+        defaultAction: { allow: {} },
+        scope: 'CLOUDFRONT',
+        visibilityConfig: {
+          cloudWatchMetricsEnabled: true,
+          metricName: `prod-waf-${safeSuffixForLambda}`,
+          sampledRequestsEnabled: true,
+        },
+        name: `prod-webacl-${safeSuffixForLambda}`,
+        rules: [
+          {
+            name: 'AWSManagedCommonRuleSet',
+            priority: 0,
+            statement: {
+              managedRuleGroupStatement: {
+                vendorName: 'AWS',
+                name: 'AWSManagedRulesCommonRuleSet',
+              },
+            },
+            overrideAction: { none: {} },
+            visibilityConfig: {
+              cloudWatchMetricsEnabled: true,
+              metricName: `aws-managed-${safeSuffixForLambda}`,
+              sampledRequestsEnabled: true,
+            },
+          },
+        ],
+      });
+
+      // Associate the WebACL with the CloudFront distribution (global scope)
+      new wafv2.CfnWebACLAssociation(this, 'WebAclAssociation', {
+        resourceArn: distribution.distributionArn,
+        webAclArn: webAcl.attrArn,
+      });
+    } else {
+      // Emit an explicit output so reviewers/operators can see the WAF was
+      // intentionally skipped for this region during deploy/synth.
+      new cdk.CfnOutput(this, 'WafCreationSkipped', {
+        value: `WAF not created in region ${stackRegion}. Set context allowGlobalWaf=true to override.`,
+        description: 'Indicates WAF creation was skipped due to region guard',
+      });
+    }
+
     // Route 53 A Record for CloudFront
     new route53.ARecord(this, 'CloudFrontARecord', {
       zone: hostedZone,
@@ -472,8 +537,6 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
     // CloudWatch Alarms and Monitoring
     // ========================================
     // Lambda errors alarm
-    // NOTE: names for alarms and dashboard use `safeSuffixForLambda` (sanitized)
-    // to ensure CloudWatch accepts the DashboardName/AlarmName characters.
     new cdk.aws_cloudwatch.Alarm(this, 'LambdaErrorsAlarm', {
       alarmName: `prod-cloudwatch-lambda-errors-${safeSuffixForLambda}`,
       metric: lambdaFunction.metricErrors(),
@@ -510,7 +573,7 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
     // Central SNS topic for alarm notifications. We do NOT auto-subscribe an email
     // unless ALARM_NOTIFICATION_EMAIL is set in the environment to avoid CI auto-subscribes.
     const alarmsTopic = new sns.Topic(this, 'AlarmsTopic', {
-      displayName: `prod-alarms-${safeSuffixForLambda}`,
+      displayName: `prod-alarms-${this.stringSuffix}`,
     });
 
     if (process.env.ALARM_NOTIFICATION_EMAIL) {
@@ -595,13 +658,11 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
       comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
     });
 
-    // Wire alarms to SNS topic using actions (add actions so they notify)
-    const alarmActions = [new cw_actions.SnsAction(alarmsTopic)];
+    // Wire alarms to SNS topic using actions (add actions so they notify).
+    // We'll attach actions directly when creating alarms below.
 
     // attach alarm actions to some of the alarms we created above
-    // (find by logical id via node.tryFindChild or directly reference if variables were created)
-    // For simplicity we will add actions by creating the alarms as variables instead of reusing above.
-
+    // (we create alarms with attached SnsAction below)
     // Recreate a couple of key alarms with actions attached
     const lambdaErrorsWithAction = new cloudwatch.Alarm(
       this,
@@ -668,6 +729,50 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
     // ========================================
     // Stack Outputs
     // ========================================
+
+    // ========================================
+    // Route53 Health Checks (for monitoring and potential failover)
+    // ========================================
+    // Extract host portion from api.url (https://host/...)
+    const apiHost = cdk.Fn.select(2, cdk.Fn.split('/', this.apiUrl || api.url));
+
+    const apiHealthCheck = new route53.CfnHealthCheck(this, 'ApiHealthCheck', {
+      healthCheckConfig: {
+        type: 'HTTPS',
+        fullyQualifiedDomainName: apiHost,
+        port: 443,
+        // Ping the root path; if you have a dedicated /health path, change resourcePath
+        resourcePath: '/',
+        requestInterval: 30,
+        failureThreshold: 3,
+      },
+    });
+
+    new cdk.CfnOutput(this, 'ApiHealthCheckId', {
+      value: apiHealthCheck.attrHealthCheckId,
+      description: 'Route53 HealthCheckId for API endpoint',
+    });
+
+    // CloudFront domain health check (optional; CloudFront may throttle health probes)
+    const cfHealthCheck = new route53.CfnHealthCheck(
+      this,
+      'CloudFrontHealthCheck',
+      {
+        healthCheckConfig: {
+          type: 'HTTPS',
+          fullyQualifiedDomainName: distribution.distributionDomainName,
+          port: 443,
+          resourcePath: '/',
+          requestInterval: 30,
+          failureThreshold: 3,
+        },
+      }
+    );
+
+    new cdk.CfnOutput(this, 'CloudFrontHealthCheckId', {
+      value: cfHealthCheck.attrHealthCheckId,
+      description: 'Route53 HealthCheckId for CloudFront distribution',
+    });
     this.vpcId = vpc.vpcId;
     new cdk.CfnOutput(this, 'VpcId', {
       value: this.vpcId,
@@ -847,6 +952,3 @@ export default safeSuffix;
 ```
 
 ---
-
-Completed: this file now contains the full sources for the three `lib/` files and a short summary. The updated file is staged for commit when you approve; I haven't created a commit or push yet.
-

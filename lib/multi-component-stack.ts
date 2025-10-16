@@ -440,40 +440,62 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
     // ========================================
     // WAFv2 WebACL (protect CloudFront and proxied API)
     // ========================================
-    const webAcl = new wafv2.CfnWebACL(this, 'WebAcl', {
-      defaultAction: { allow: {} },
-      scope: 'CLOUDFRONT',
-      visibilityConfig: {
-        cloudWatchMetricsEnabled: true,
-        metricName: `prod-waf-${safeSuffixForLambda}`,
-        sampledRequestsEnabled: true,
-      },
-      name: `prod-webacl-${safeSuffixForLambda}`,
-      rules: [
-        {
-          name: 'AWSManagedCommonRuleSet',
-          priority: 0,
-          statement: {
-            managedRuleGroupStatement: {
-              vendorName: 'AWS',
-              name: 'AWSManagedRulesCommonRuleSet',
+    // WAF scope=CLOUDFRONT is a global resource and must be created in
+    // us-east-1. Guard creation so that when this stack is synthesized or
+    // deployed in other regions (e.g., during multi-region runs) we don't
+    // attempt to create a global WebACL in the wrong region which would
+    // cause CloudFormation failures. To explicitly allow global WAF creation
+    // in another region set the context key `allowGlobalWaf=true` when
+    // running the CDK app.
+    const stackRegion = cdk.Stack.of(this).region;
+    const allowGlobalWaf =
+      this.node.tryGetContext('allowGlobalWaf') === true ||
+      this.node.tryGetContext('allowGlobalWaf') === 'true';
+    const shouldCreateWaf = stackRegion === 'us-east-1' || allowGlobalWaf;
+
+    if (shouldCreateWaf) {
+      const webAcl = new wafv2.CfnWebACL(this, 'WebAcl', {
+        defaultAction: { allow: {} },
+        scope: 'CLOUDFRONT',
+        visibilityConfig: {
+          cloudWatchMetricsEnabled: true,
+          metricName: `prod-waf-${safeSuffixForLambda}`,
+          sampledRequestsEnabled: true,
+        },
+        name: `prod-webacl-${safeSuffixForLambda}`,
+        rules: [
+          {
+            name: 'AWSManagedCommonRuleSet',
+            priority: 0,
+            statement: {
+              managedRuleGroupStatement: {
+                vendorName: 'AWS',
+                name: 'AWSManagedRulesCommonRuleSet',
+              },
+            },
+            overrideAction: { none: {} },
+            visibilityConfig: {
+              cloudWatchMetricsEnabled: true,
+              metricName: `aws-managed-${safeSuffixForLambda}`,
+              sampledRequestsEnabled: true,
             },
           },
-          overrideAction: { none: {} },
-          visibilityConfig: {
-            cloudWatchMetricsEnabled: true,
-            metricName: `aws-managed-${safeSuffixForLambda}`,
-            sampledRequestsEnabled: true,
-          },
-        },
-      ],
-    });
+        ],
+      });
 
-    // Associate the WebACL with the CloudFront distribution (global scope)
-    new wafv2.CfnWebACLAssociation(this, 'WebAclAssociation', {
-      resourceArn: distribution.distributionArn,
-      webAclArn: webAcl.attrArn,
-    });
+      // Associate the WebACL with the CloudFront distribution (global scope)
+      new wafv2.CfnWebACLAssociation(this, 'WebAclAssociation', {
+        resourceArn: distribution.distributionArn,
+        webAclArn: webAcl.attrArn,
+      });
+    } else {
+      // Emit an explicit output so reviewers/operators can see the WAF was
+      // intentionally skipped for this region during deploy/synth.
+      new cdk.CfnOutput(this, 'WafCreationSkipped', {
+        value: `WAF not created in region ${stackRegion}. Set context allowGlobalWaf=true to override.`,
+        description: 'Indicates WAF creation was skipped due to region guard',
+      });
+    }
 
     // Route 53 A Record for CloudFront
     new route53.ARecord(this, 'CloudFrontARecord', {
@@ -717,17 +739,20 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
     });
 
     // CloudFront domain health check (optional; CloudFront may throttle health probes)
-    const cfHost = cdk.Fn.select(0, cdk.Fn.split('.', distribution.distributionDomainName));
-    const cfHealthCheck = new route53.CfnHealthCheck(this, 'CloudFrontHealthCheck', {
-      healthCheckConfig: {
-        type: 'HTTPS',
-        fullyQualifiedDomainName: distribution.distributionDomainName,
-        port: 443,
-        resourcePath: '/',
-        requestInterval: 30,
-        failureThreshold: 3,
-      },
-    });
+    const cfHealthCheck = new route53.CfnHealthCheck(
+      this,
+      'CloudFrontHealthCheck',
+      {
+        healthCheckConfig: {
+          type: 'HTTPS',
+          fullyQualifiedDomainName: distribution.distributionDomainName,
+          port: 443,
+          resourcePath: '/',
+          requestInterval: 30,
+          failureThreshold: 3,
+        },
+      }
+    );
 
     new cdk.CfnOutput(this, 'CloudFrontHealthCheckId', {
       value: cfHealthCheck.attrHealthCheckId,
