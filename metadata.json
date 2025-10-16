@@ -1,0 +1,14 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349574",
+  "team": "6",
+  "startedAt": "2025-10-16T10:13:13.718Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "(VPC,IAM Roles, S3 Buckets, RDS, CLoudwatch, WAF)"
+}
