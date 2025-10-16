@@ -458,7 +458,7 @@ resource "aws_kms_alias" "dynamodb_dr" {
 
 resource "aws_s3_bucket" "transaction_logs_primary" {
   provider = aws.primary
-  bucket   = "${var.project_name}-txn-logs-primary-${local.unique_suffix}-${data.aws_caller_identity.current.account_id}"
+  bucket   = "fs-txn-pri-${local.unique_suffix}-${data.aws_caller_identity.current.account_id}"
 
   tags = merge(local.common_tags, {
     Name    = "${var.project_name}-txn-logs-primary-${local.unique_suffix}"
@@ -499,7 +499,7 @@ resource "aws_s3_bucket_public_access_block" "transaction_logs_primary" {
 
 resource "aws_s3_bucket" "transaction_logs_dr" {
   provider = aws.dr
-  bucket   = "${var.project_name}-txn-logs-dr-${local.unique_suffix}-${data.aws_caller_identity.current.account_id}"
+  bucket   = "fs-txn-dr-${local.unique_suffix}-${data.aws_caller_identity.current.account_id}"
 
   tags = merge(local.common_tags, {
     Name    = "${var.project_name}-txn-logs-dr-${local.unique_suffix}"
@@ -644,7 +644,7 @@ resource "aws_s3_bucket_replication_configuration" "transaction_logs_replication
 
 resource "aws_s3_bucket" "vpc_flow_logs_primary" {
   provider = aws.primary
-  bucket   = "${var.project_name}-vpc-flow-logs-primary-${local.unique_suffix}-${data.aws_caller_identity.current.account_id}"
+  bucket   = "fs-vpcfl-pri-${local.unique_suffix}-${data.aws_caller_identity.current.account_id}"
 
   tags = merge(local.common_tags, {
     Name    = "${var.project_name}-vpc-flow-logs-primary-${local.unique_suffix}"
@@ -722,7 +722,7 @@ resource "aws_flow_log" "primary" {
 
 resource "aws_s3_bucket" "vpc_flow_logs_dr" {
   provider = aws.dr
-  bucket   = "${var.project_name}-vpc-flow-logs-dr-${local.unique_suffix}-${data.aws_caller_identity.current.account_id}"
+  bucket   = "fs-vpcfl-dr-${local.unique_suffix}-${data.aws_caller_identity.current.account_id}"
 
   tags = merge(local.common_tags, {
     Name    = "${var.project_name}-vpc-flow-logs-dr-${local.unique_suffix}"
@@ -804,7 +804,7 @@ resource "aws_flow_log" "dr" {
 
 resource "aws_s3_bucket" "alb_logs_primary" {
   provider = aws.primary
-  bucket   = "${var.project_name}-alb-logs-primary-${local.unique_suffix}-${data.aws_caller_identity.current.account_id}"
+  bucket   = "fs-albl-pri-${local.unique_suffix}-${data.aws_caller_identity.current.account_id}"
 
   tags = merge(local.common_tags, {
     Name    = "${var.project_name}-alb-logs-primary-${local.unique_suffix}"
@@ -854,7 +854,7 @@ resource "aws_s3_bucket_policy" "alb_logs_primary" {
 
 resource "aws_s3_bucket" "alb_logs_dr" {
   provider = aws.dr
-  bucket   = "${var.project_name}-alb-logs-dr-${local.unique_suffix}-${data.aws_caller_identity.current.account_id}"
+  bucket   = "fs-albl-dr-${local.unique_suffix}-${data.aws_caller_identity.current.account_id}"
 
   tags = merge(local.common_tags, {
     Name    = "${var.project_name}-alb-logs-dr-${local.unique_suffix}"
