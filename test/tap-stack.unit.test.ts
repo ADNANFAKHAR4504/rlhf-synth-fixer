@@ -1,12 +1,50 @@
 import * as fs from 'fs';
 import * as yaml from 'js-yaml';
 
+// Custom YAML schema to handle CloudFormation intrinsic functions
+const cfnSchema = yaml.DEFAULT_SCHEMA.extend([
+  new yaml.Type('!Sub', {
+    kind: 'scalar',
+    construct: (data: string) => ({ 'Fn::Sub': data }),
+  }),
+  new yaml.Type('!Ref', {
+    kind: 'scalar',
+    construct: (data: string) => ({ Ref: data }),
+  }),
+  new yaml.Type('!GetAtt', {
+    kind: 'scalar',
+    construct: (data: string) => {
+      // Handle both 'Resource.Attribute' and array notation
+      if (typeof data === 'string' && data.includes('.')) {
+        return { 'Fn::GetAtt': data.split('.') };
+      }
+      return { 'Fn::GetAtt': data };
+    },
+  }),
+  new yaml.Type('!Join', {
+    kind: 'sequence',
+    construct: (data: any[]) => ({ 'Fn::Join': data }),
+  }),
+  new yaml.Type('!GetAZs', {
+    kind: 'scalar',
+    construct: (data: string) => ({ 'Fn::GetAZs': data }),
+  }),
+  new yaml.Type('!Select', {
+    kind: 'sequence',
+    construct: (data: any[]) => ({ 'Fn::Select': data }),
+  }),
+  new yaml.Type('!ImportValue', {
+    kind: 'scalar',
+    construct: (data: string) => ({ 'Fn::ImportValue': data }),
+  }),
+]);
+
 // Load the CloudFormation template
 const templateContent = fs.readFileSync(
   './lib/TapStack.yml',
   'utf-8'
 );
-const template = yaml.load(templateContent) as any;
+const template = yaml.load(templateContent, { schema: cfnSchema }) as any;
 
 describe("CloudFormation Template Validation", () => {
   describe("Template Format", () => {
@@ -421,7 +459,9 @@ describe("CloudFormation Template Validation", () => {
 
     test("All resources have EnvironmentSuffix in names", () => {
       const vpc = template.Resources.VPC.Properties.Tags[0].Value;
-      expect(vpc).toContain('${EnvironmentSuffix}');
+      // The !Sub tag is parsed as an object with Fn::Sub property
+      const vpcName = typeof vpc === 'object' && vpc['Fn::Sub'] ? vpc['Fn::Sub'] : vpc;
+      expect(vpcName).toContain('${EnvironmentSuffix}');
     });
   });
 

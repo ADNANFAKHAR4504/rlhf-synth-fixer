@@ -1,12 +1,50 @@
 import * as fs from 'fs';
 import * as yaml from 'js-yaml';
 
+// Custom YAML schema to handle CloudFormation intrinsic functions
+const cfnSchema = yaml.DEFAULT_SCHEMA.extend([
+  new yaml.Type('!Sub', {
+    kind: 'scalar',
+    construct: (data: string) => ({ 'Fn::Sub': data }),
+  }),
+  new yaml.Type('!Ref', {
+    kind: 'scalar',
+    construct: (data: string) => ({ Ref: data }),
+  }),
+  new yaml.Type('!GetAtt', {
+    kind: 'scalar',
+    construct: (data: string) => {
+      // Handle both 'Resource.Attribute' and array notation
+      if (typeof data === 'string' && data.includes('.')) {
+        return { 'Fn::GetAtt': data.split('.') };
+      }
+      return { 'Fn::GetAtt': data };
+    },
+  }),
+  new yaml.Type('!Join', {
+    kind: 'sequence',
+    construct: (data: any[]) => ({ 'Fn::Join': data }),
+  }),
+  new yaml.Type('!GetAZs', {
+    kind: 'scalar',
+    construct: (data: string) => ({ 'Fn::GetAZs': data }),
+  }),
+  new yaml.Type('!Select', {
+    kind: 'sequence',
+    construct: (data: any[]) => ({ 'Fn::Select': data }),
+  }),
+  new yaml.Type('!ImportValue', {
+    kind: 'scalar',
+    construct: (data: string) => ({ 'Fn::ImportValue': data }),
+  }),
+]);
+
 // Load the CloudFormation template and outputs
 const templateContent = fs.readFileSync(
   './lib/TapStack.yml',
   'utf-8'
 );
-const template = yaml.load(templateContent) as any;
+const template = yaml.load(templateContent, { schema: cfnSchema }) as any;
 
 // Mock AWS SDK responses for testing infrastructure outputs
 const mockOutputs = {
@@ -202,7 +240,11 @@ describe("CloudFormation Integration Tests - Infrastructure Deployment", () => {
     test("API Gateway integrates with Lambda", () => {
       const method = template.Resources.ApiGatewayMethodANY.Properties;
       expect(method.Integration.Type).toBe('AWS_PROXY');
-      expect(method.Integration.Uri).toContain('lambda:path');
+      // Handle Fn::Sub parsed as object
+      const uri = typeof method.Integration.Uri === 'object' && method.Integration.Uri['Fn::Sub']
+        ? method.Integration.Uri['Fn::Sub']
+        : method.Integration.Uri;
+      expect(uri).toContain('lambda:path');
     });
 
     test("API Gateway has logging enabled", () => {
@@ -301,7 +343,11 @@ describe("CloudFormation Integration Tests - Infrastructure Deployment", () => {
 
     test("VPC endpoint is configured for Secrets Manager", () => {
       const endpoint = template.Resources.SecretsManagerVPCEndpoint.Properties;
-      expect(endpoint.ServiceName).toContain('secretsmanager');
+      // Handle Fn::Sub parsed as object
+      const serviceName = typeof endpoint.ServiceName === 'object' && endpoint.ServiceName['Fn::Sub']
+        ? endpoint.ServiceName['Fn::Sub']
+        : endpoint.ServiceName;
+      expect(serviceName).toContain('secretsmanager');
       expect(endpoint.VpcEndpointType).toBe('Interface');
       expect(endpoint.PrivateDnsEnabled).toBe(true);
     });
