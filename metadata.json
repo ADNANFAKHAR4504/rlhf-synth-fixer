@@ -1,10 +1,9 @@
 {
-  "task_id": "1439222270",
   "po_id": "CFN-MED-HEALTH-API-001",
   "platform": "cfn",
   "language": "yaml",
-  "difficulty": "medium",
   "complexity": "medium",
+  "turn_type": "initial",
   "subtask": "Create a HIPAA-compliant patient data API infrastructure",
   "subject_labels": [
     "Cloud Environment Setup",
