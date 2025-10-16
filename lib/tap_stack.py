@@ -69,7 +69,7 @@ class TapStack(pulumi.ComponentResource):
         # Initialize infrastructure components
         self.iam_stack = IAMStack(self.config, self.provider_manager)
         self.dynamodb_stack = DynamoDBStack(self.config, self.provider_manager)
-        self.lambda_stack = LambdaStack(self.config, self.provider_manager, self.iam_stack)
+        self.lambda_stack = LambdaStack(self.config, self.provider_manager, self.iam_stack, self.dynamodb_stack)
         self.eventbridge_stack = EventBridgeStack(self.config, self.provider_manager, self.lambda_stack)
         self.cloudwatch_stack = CloudWatchStack(self.config, self.provider_manager, self.lambda_stack, self.dynamodb_stack)
         

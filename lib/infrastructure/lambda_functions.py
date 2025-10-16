@@ -20,10 +20,11 @@ from config import PipelineConfig
 class LambdaStack:
     """Creates Lambda functions for event processing."""
     
-    def __init__(self, config: PipelineConfig, provider_manager: AWSProviderManager, iam_stack: IAMStack):
+    def __init__(self, config: PipelineConfig, provider_manager: AWSProviderManager, iam_stack: IAMStack, dynamodb_stack):
         self.config = config
         self.provider_manager = provider_manager
         self.iam_stack = iam_stack
+        self.dynamodb_stack = dynamodb_stack
         self.functions: Dict[str, lambda_.Function] = {}
         
         self._create_event_processor_function()
@@ -36,9 +37,9 @@ class LambdaStack:
             # Create deployment package
             code_archive = self._create_deployment_package()
             
-            # Environment variables
+            # Environment variables - use actual DynamoDB table name from dynamodb_stack
             environment_vars = {
-                'DYNAMODB_TABLE_NAME': self.config.get_resource_name('trading-events', region),
+                'DYNAMODB_TABLE_NAME': self.dynamodb_stack.get_table_name(region),
                 'LOG_LEVEL': 'INFO'
             }
             
