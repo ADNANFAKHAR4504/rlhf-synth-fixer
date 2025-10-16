@@ -8,7 +8,7 @@ resource "random_id" "suffix" {
 
 locals {
   # Add random suffix to ensure unique resource names across deployments
-  unique_suffix = "${local.unique_suffix}-${random_id.suffix.hex}"
+  unique_suffix = "${var.environment_suffix}-${random_id.suffix.hex}"
 
   common_tags = {
     Environment     = var.environment
