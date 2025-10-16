@@ -16,9 +16,17 @@ const cloudwatchlogs = new AWS.CloudWatchLogs();
 const ec2 = new AWS.EC2();
 
 // Read Terraform outputs
-const outputsPath = path.resolve(__dirname, '../outputs.json');
+// Try multiple paths for outputs file (local dev vs GitHub Actions)
+const possibleOutputsPaths = [
+  path.resolve(__dirname, '../outputs.json'),
+  path.resolve(__dirname, '../cfn-outputs/flat-outputs.json'),
+  path.resolve(process.cwd(), 'outputs.json'),
+  path.resolve(process.cwd(), 'cfn-outputs/flat-outputs.json')
+];
+
 let outputs: any = {};
 let resourcesExist = false;
+let outputsPath = '';
 
 // Test timeouts
 const LAMBDA_INVOKE_TIMEOUT = 90000; // 90 seconds
@@ -26,36 +34,58 @@ const SNS_PUBLISH_TIMEOUT = 30000; // 30 seconds
 const CLOUDWATCH_QUERY_TIMEOUT = 60000; // 60 seconds
 
 beforeAll(async () => {
-  // Check if outputs.json exists
-  if (!fs.existsSync(outputsPath)) {
-    console.warn('[WARNING] outputs.json not found - infrastructure may not be deployed yet');
-    console.warn(`   Expected at: ${outputsPath}`);
-    console.warn('   Run: terraform output -json > outputs.json');
-    return;
+  // Find the outputs file
+  for (const possiblePath of possibleOutputsPaths) {
+    if (fs.existsSync(possiblePath)) {
+      outputsPath = possiblePath;
+      break;
+    }
+  }
+
+  // Throw error if outputs file not found
+  if (!outputsPath) {
+    throw new Error(
+      `Terraform outputs file not found. Tried:\n${possibleOutputsPaths.join('\n')}\n\n` +
+      'Please ensure infrastructure is deployed and outputs are available.\n' +
+      'Run: terraform output -json > outputs.json'
+    );
   }
 
   try {
     const outputsContent = fs.readFileSync(outputsPath, 'utf-8');
     const parsedOutputs = JSON.parse(outputsContent);
 
-    // Extract values from Terraform output format
-    outputs = Object.keys(parsedOutputs).reduce((acc, key) => {
-      acc[key] = parsedOutputs[key].value;
-      return acc;
-    }, {} as any);
+    // Handle both formats: Terraform format {key: {value: "..."}} and flat format {key: "..."}
+    if (parsedOutputs.vpc_a_id && typeof parsedOutputs.vpc_a_id === 'object' && 'value' in parsedOutputs.vpc_a_id) {
+      // Terraform format
+      outputs = Object.keys(parsedOutputs).reduce((acc, key) => {
+        acc[key] = parsedOutputs[key].value;
+        return acc;
+      }, {} as any);
+    } else {
+      // Flat format
+      outputs = parsedOutputs;
+    }
 
     // Check if key resources exist
-    if (outputs.vpc_a_id && outputs.vpc_b_id && outputs.lambda_function_arn) {
-      resourcesExist = true;
-      console.log('[OK] Infrastructure outputs loaded successfully');
-      console.log(`  VPC-A: ${outputs.vpc_a_id}`);
-      console.log(`  VPC-B: ${outputs.vpc_b_id}`);
-      console.log(`  Lambda: ${outputs.lambda_function_name}`);
-    } else {
-      console.warn('[WARNING] Some resources are missing in outputs.json');
+    if (!outputs.vpc_a_id || !outputs.vpc_b_id || !outputs.lambda_function_arn) {
+      throw new Error(
+        'Required outputs are missing. Expected: vpc_a_id, vpc_b_id, lambda_function_arn\n' +
+        `Found: ${Object.keys(outputs).join(', ')}`
+      );
     }
+
+    resourcesExist = true;
+    console.log('[OK] Infrastructure outputs loaded successfully');
+    console.log(`  Outputs file: ${outputsPath}`);
+    console.log(`  VPC-A: ${outputs.vpc_a_id}`);
+    console.log(`  VPC-B: ${outputs.vpc_b_id}`);
+    console.log(`  Lambda: ${outputs.lambda_function_name}`);
   } catch (error) {
-    console.error('[ERROR] Error reading outputs.json:', error);
+    if (error instanceof Error && error.message.includes('Required outputs')) {
+      throw error;
+    }
+    throw new Error(`Error reading outputs file: ${error}`);
   }
 }, 30000);
 
@@ -78,15 +108,7 @@ afterEach(async () => {
 
 describe('VPC Peering Infrastructure Integration Tests', () => {
   describe('Infrastructure Existence', () => {
-    test('outputs.json file exists', () => {
-      expect(fs.existsSync(outputsPath)).toBe(true);
-    });
-
-    test('VPC-A exists', async () => {
-      if (!resourcesExist || !outputs.vpc_a_id) {
-        console.warn('[WARNING] Skipping: VPC-A ID not available');
-        return;
-      }
+    test('VPC-A exists and is properly configured', async () => {
 
       const result = await ec2.describeVpcs({
         VpcIds: [outputs.vpc_a_id]
@@ -98,12 +120,7 @@ describe('VPC Peering Infrastructure Integration Tests', () => {
       console.log(`  [OK] VPC-A verified: ${outputs.vpc_a_id} (${result.Vpcs![0].CidrBlock})`);
     });
 
-    test('VPC-B exists', async () => {
-      if (!resourcesExist || !outputs.vpc_b_id) {
-        console.warn('[WARNING]  Skipping: VPC-B ID not available');
-        return;
-      }
-
+    test('VPC-B exists and is properly configured', async () => {
       const result = await ec2.describeVpcs({
         VpcIds: [outputs.vpc_b_id]
       }).promise();
@@ -115,11 +132,6 @@ describe('VPC Peering Infrastructure Integration Tests', () => {
     });
 
     test('VPC Peering connection is active', async () => {
-      if (!resourcesExist || !outputs.peering_connection_id) {
-        console.warn('[WARNING]  Skipping: Peering connection ID not available');
-        return;
-      }
-
       const result = await ec2.describeVpcPeeringConnections({
         VpcPeeringConnectionIds: [outputs.peering_connection_id]
       }).promise();
@@ -139,11 +151,6 @@ describe('VPC Peering Infrastructure Integration Tests', () => {
 
   describe('SNS Topic Functionality', () => {
     test('can publish test message to SNS topic', async () => {
-      if (!resourcesExist || !outputs.sns_topic_arn) {
-        console.warn('[WARNING]  Skipping: SNS topic ARN not available');
-        return;
-      }
-
       const testMessage = {
         test: true,
         timestamp: new Date().toISOString(),
@@ -166,11 +173,6 @@ describe('VPC Peering Infrastructure Integration Tests', () => {
     }, SNS_PUBLISH_TIMEOUT);
 
     test('SNS topic has email subscription', async () => {
-      if (!resourcesExist || !outputs.sns_topic_arn) {
-        console.warn('[WARNING]  Skipping: SNS topic ARN not available');
-        return;
-      }
-
       const subscriptions = await sns.listSubscriptionsByTopic({
         TopicArn: outputs.sns_topic_arn
       }).promise();
@@ -189,11 +191,6 @@ describe('VPC Peering Infrastructure Integration Tests', () => {
     });
 
     test('SNS topic has correct attributes configured', async () => {
-      if (!resourcesExist || !outputs.sns_topic_arn) {
-        console.warn('[WARNING]  Skipping: SNS topic ARN not available');
-        return;
-      }
-
       const topicAttributes = await sns.getTopicAttributes({
         TopicArn: outputs.sns_topic_arn
       }).promise();
@@ -224,11 +221,6 @@ describe('VPC Peering Infrastructure Integration Tests', () => {
 
   describe('Lambda Function Functionality', () => {
     test('Lambda function exists and is configured correctly', async () => {
-      if (!resourcesExist || !outputs.lambda_function_name) {
-        console.warn('[WARNING]  Skipping: Lambda function name not available');
-        return;
-      }
-
       const functionConfig = await lambda.getFunctionConfiguration({
         FunctionName: outputs.lambda_function_name
       }).promise();
@@ -247,11 +239,6 @@ describe('VPC Peering Infrastructure Integration Tests', () => {
     });
 
     test('Lambda function has required environment variables', async () => {
-      if (!resourcesExist || !outputs.lambda_function_name) {
-        console.warn('[WARNING]  Skipping: Lambda function name not available');
-        return;
-      }
-
       const functionConfig = await lambda.getFunctionConfiguration({
         FunctionName: outputs.lambda_function_name
       }).promise();
@@ -276,11 +263,6 @@ describe('VPC Peering Infrastructure Integration Tests', () => {
     });
 
     test('can invoke Lambda function successfully', async () => {
-      if (!resourcesExist || !outputs.lambda_function_arn) {
-        console.warn('[WARNING]  Skipping: Lambda function ARN not available');
-        return;
-      }
-
       const testEvent = {
         source: 'integration-test',
         time: new Date().toISOString(),
@@ -324,11 +306,6 @@ describe('VPC Peering Infrastructure Integration Tests', () => {
     }, LAMBDA_INVOKE_TIMEOUT);
 
     test('Lambda function logs are being written', async () => {
-      if (!resourcesExist || !outputs.lambda_function_name) {
-        console.warn('[WARNING]  Skipping: Lambda function name not available');
-        return;
-      }
-
       const logGroupName = `/aws/lambda/${outputs.lambda_function_name}`;
 
       try {
@@ -361,11 +338,6 @@ describe('VPC Peering Infrastructure Integration Tests', () => {
 
   describe('CloudWatch Log Groups', () => {
     test('VPC-A Flow Logs log group exists', async () => {
-      if (!resourcesExist || !outputs.vpc_a_log_group_name) {
-        console.warn('[WARNING]  Skipping: VPC-A log group name not available');
-        return;
-      }
-
       const logGroups = await cloudwatchlogs.describeLogGroups({
         logGroupNamePrefix: outputs.vpc_a_log_group_name
       }).promise();
@@ -384,11 +356,6 @@ describe('VPC Peering Infrastructure Integration Tests', () => {
     });
 
     test('VPC-B Flow Logs log group exists', async () => {
-      if (!resourcesExist || !outputs.vpc_b_log_group_name) {
-        console.warn('[WARNING]  Skipping: VPC-B log group name not available');
-        return;
-      }
-
       const logGroups = await cloudwatchlogs.describeLogGroups({
         logGroupNamePrefix: outputs.vpc_b_log_group_name
       }).promise();
@@ -406,11 +373,6 @@ describe('VPC Peering Infrastructure Integration Tests', () => {
     });
 
     test('Flow Logs are being generated for VPC-A', async () => {
-      if (!resourcesExist || !outputs.vpc_a_log_group_name) {
-        console.warn('[WARNING]  Skipping: VPC-A log group name not available');
-        return;
-      }
-
       try {
         const logStreams = await cloudwatchlogs.describeLogStreams({
           logGroupName: outputs.vpc_a_log_group_name,
@@ -442,11 +404,6 @@ describe('VPC Peering Infrastructure Integration Tests', () => {
     });
 
     test('VPC Flow Logs format and parsing validation', async () => {
-      if (!resourcesExist || !outputs.vpc_a_log_group_name) {
-        console.warn('[WARNING]  Skipping: VPC-A log group name not available');
-        return;
-      }
-
       console.log(`  → Testing VPC Flow Logs format and parsing...`);
 
       try {
@@ -567,11 +524,6 @@ describe('VPC Peering Infrastructure Integration Tests', () => {
 
   describe('CloudWatch Metrics and Alarms', () => {
     test('Custom metrics exist in Company/VPCPeering namespace', async () => {
-      if (!resourcesExist) {
-        console.warn('[WARNING]  Skipping: Resources not available');
-        return;
-      }
-
       // List metrics in custom namespace
       const metrics = await cloudwatch.listMetrics({
         Namespace: 'Company/VPCPeering'
@@ -590,11 +542,6 @@ describe('VPC Peering Infrastructure Integration Tests', () => {
     });
 
     test('Lambda publishes metrics with actual data points', async () => {
-      if (!resourcesExist || !outputs.lambda_function_arn) {
-        console.warn('[WARNING]  Skipping: Lambda function ARN not available');
-        return;
-      }
-
       console.log(`  → Invoking Lambda to publish metrics...`);
 
       // Step 1: Invoke Lambda
@@ -671,11 +618,6 @@ describe('VPC Peering Infrastructure Integration Tests', () => {
     }, LAMBDA_INVOKE_TIMEOUT);
 
     test('CloudWatch alarms are configured', async () => {
-      if (!resourcesExist) {
-        console.warn('[WARNING]  Skipping: Resources not available');
-        return;
-      }
-
       // List alarms for VPC Peering
       const alarms = await cloudwatch.describeAlarms({
         AlarmNamePrefix: 'vpc-'
@@ -705,11 +647,6 @@ describe('VPC Peering Infrastructure Integration Tests', () => {
 
   describe('Security Groups', () => {
     test('VPC-A security group exists and has correct rules', async () => {
-      if (!resourcesExist || !outputs.vpc_a_security_group_id) {
-        console.warn('[WARNING]  Skipping: VPC-A security group ID not available');
-        return;
-      }
-
       const securityGroups = await ec2.describeSecurityGroups({
         GroupIds: [outputs.vpc_a_security_group_id]
       }).promise();
@@ -728,11 +665,6 @@ describe('VPC Peering Infrastructure Integration Tests', () => {
     });
 
     test('VPC-B security group exists and has correct rules', async () => {
-      if (!resourcesExist || !outputs.vpc_b_security_group_id) {
-        console.warn('[WARNING]  Skipping: VPC-B security group ID not available');
-        return;
-      }
-
       const securityGroups = await ec2.describeSecurityGroups({
         GroupIds: [outputs.vpc_b_security_group_id]
       }).promise();
@@ -753,11 +685,6 @@ describe('VPC Peering Infrastructure Integration Tests', () => {
 
   describe('EventBridge Scheduling', () => {
     test('EventBridge rule exists and is enabled', async () => {
-      if (!resourcesExist || !outputs.lambda_function_name) {
-        console.warn('[WARNING]  Skipping: Lambda function name not available');
-        return;
-      }
-
       const events = new AWS.EventBridge({ region });
 
       // List rules that might trigger our Lambda
@@ -780,11 +707,6 @@ describe('VPC Peering Infrastructure Integration Tests', () => {
 
   describe('Error Handling and Resilience', () => {
     test('Lambda handles invalid event payload gracefully', async () => {
-      if (!resourcesExist || !outputs.lambda_function_arn) {
-        console.warn('[WARNING]  Skipping: Lambda function ARN not available');
-        return;
-      }
-
       console.log(`  → Testing Lambda with invalid payload...`);
 
       // Test with completely invalid payload
@@ -811,11 +733,6 @@ describe('VPC Peering Infrastructure Integration Tests', () => {
     }, LAMBDA_INVOKE_TIMEOUT);
 
     test('Lambda handles missing environment variables gracefully', async () => {
-      if (!resourcesExist || !outputs.lambda_function_name) {
-        console.warn('[WARNING]  Skipping: Lambda function name not available');
-        return;
-      }
-
       // Verify Lambda has proper error handling by checking configuration
       const functionConfig = await lambda.getFunctionConfiguration({
         FunctionName: outputs.lambda_function_name
@@ -840,11 +757,6 @@ describe('VPC Peering Infrastructure Integration Tests', () => {
     });
 
     test('SNS topic handles malformed messages gracefully', async () => {
-      if (!resourcesExist || !outputs.sns_topic_arn) {
-        console.warn('[WARNING]  Skipping: SNS topic ARN not available');
-        return;
-      }
-
       console.log(`  → Testing SNS with various message formats...`);
 
       // Test 1: Empty message
@@ -888,11 +800,6 @@ describe('VPC Peering Infrastructure Integration Tests', () => {
     }, SNS_PUBLISH_TIMEOUT);
 
     test('CloudWatch Logs handles query errors gracefully', async () => {
-      if (!resourcesExist || !outputs.vpc_a_log_group_name) {
-        console.warn('[WARNING]  Skipping: VPC-A log group name not available');
-        return;
-      }
-
       console.log(`  → Testing CloudWatch Logs Insights with invalid query...`);
 
       // Test with invalid query syntax
@@ -924,11 +831,6 @@ describe('VPC Peering Infrastructure Integration Tests', () => {
 
   describe('Anomaly Detection Workflow', () => {
     test('Lambda detects and processes traffic patterns', async () => {
-      if (!resourcesExist || !outputs.lambda_function_arn) {
-        console.warn('[WARNING]  Skipping: Lambda function ARN not available');
-        return;
-      }
-
       console.log(`  → Testing anomaly detection workflow...`);
 
       // Step 1: Invoke Lambda to trigger analysis
@@ -1046,11 +948,6 @@ describe('VPC Peering Infrastructure Integration Tests', () => {
     }, LAMBDA_INVOKE_TIMEOUT);
 
     test('Traffic baseline thresholds are properly configured', async () => {
-      if (!resourcesExist || !outputs.lambda_function_name) {
-        console.warn('[WARNING]  Skipping: Lambda function name not available');
-        return;
-      }
-
       const functionConfig = await lambda.getFunctionConfiguration({
         FunctionName: outputs.lambda_function_name
       }).promise();
@@ -1081,11 +978,6 @@ describe('VPC Peering Infrastructure Integration Tests', () => {
 
   describe('End-to-End Workflow', () => {
     test('complete traffic analysis workflow', async () => {
-      if (!resourcesExist || !outputs.lambda_function_arn || !outputs.sns_topic_arn) {
-        console.warn('[WARNING]  Skipping: Required resources not available');
-        return;
-      }
-
       console.log(`  → Running end-to-end workflow test...`);
 
       // Step 1: Invoke Lambda to analyze traffic
@@ -1158,21 +1050,18 @@ describe('VPC Peering Infrastructure Integration Tests', () => {
   });
 });
 
-describe('Turn Around Prompt API Integration Tests', () => {
-  describe('Integration Test Requirements', () => {
-    test('infrastructure is deployed before running tests', () => {
-      if (!resourcesExist) {
-        console.warn('\n[WARNING]  IMPORTANT: Infrastructure must be deployed before running integration tests!');
-        console.warn('   Run the following commands:');
-        console.warn('   1. terraform init');
-        console.warn('   2. terraform apply -auto-approve');
-        console.warn('   3. terraform output -json > outputs.json');
-        console.warn('   4. npm test\n');
-      }
+describe('Infrastructure Setup Validation', () => {
+  test('all required outputs are loaded and resources exist', () => {
+    // This test validates that beforeAll successfully loaded all outputs
+    // If beforeAll threw an error, this test won't even run
+    expect(resourcesExist).toBe(true);
+    expect(outputs.vpc_a_id).toBeDefined();
+    expect(outputs.vpc_b_id).toBeDefined();
+    expect(outputs.lambda_function_arn).toBeDefined();
+    expect(outputs.sns_topic_arn).toBeDefined();
+    expect(outputsPath).toBeTruthy();
 
-      // This test will pass if resources exist, otherwise it just logs a warning
-      // This allows the test suite to run without failing in CI/CD
-      expect(true).toBe(true);
-    });
+    console.log('  [OK] All required outputs validated');
+    console.log(`    Outputs loaded from: ${outputsPath}`);
   });
 });
