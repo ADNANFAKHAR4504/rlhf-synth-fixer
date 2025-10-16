@@ -11,7 +11,7 @@ import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
 import { RandomProvider } from '@cdktf/provider-random/lib/provider';
-
+import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
 
 // Import custom modules
 import {
@@ -51,7 +51,6 @@ export class TapStack extends TerraformStack {
 
     new RandomProvider(this, 'random', {});
 
-    
     // Configure S3 Backend with native state locking
     new S3Backend(this, {
       bucket: stateBucket,
@@ -118,7 +117,7 @@ export class TapStack extends TerraformStack {
       projectName: id,
       environment: environmentSuffix,
       tags: commonTags,
-      bucketName: `${id}-${environmentSuffix}-public-assets`,
+      bucketName: `${id.toLowerCase()}-${environmentSuffix}-public-assets`, // Convert to lowercase
       encryption: 'SSE-S3',
       versioning: true,
     });
@@ -127,7 +126,7 @@ export class TapStack extends TerraformStack {
       projectName: id,
       environment: environmentSuffix,
       tags: commonTags,
-      bucketName: `${id}-${environmentSuffix}-private-data`,
+      bucketName: `${id.toLowerCase()}-${environmentSuffix}-private-data`, // Convert to lowercase
       encryption: 'SSE-KMS',
       kmsKeyArn: kmsModule.key.arn,
       versioning: true,
@@ -236,6 +235,16 @@ export class TapStack extends TerraformStack {
       ],
     });
 
+    // ADD THIS: Create instance profile for the role
+    const ec2InstanceProfile = new IamInstanceProfile(
+      this,
+      'ec2-instance-profile',
+      {
+        name: `${id}-${environmentSuffix}-instance-profile`,
+        role: ec2Role.name,
+      }
+    );
+
     // Get latest Amazon Linux 2 AMI
     const ami = new DataAwsAmi(this, 'amazon-linux-2', {
       mostRecent: true,
@@ -264,7 +273,7 @@ export class TapStack extends TerraformStack {
           ami: ami.id,
           subnetId: vpcModule.publicSubnets[0].id,
           vpcSecurityGroupIds: [instanceSecurityGroup.id],
-          iamInstanceProfile: ec2Role.name,
+          iamInstanceProfile: ec2InstanceProfile.name, // Use instance profile name, not role name
           metadataOptions: {
             httpTokens: 'required',
             httpPutResponseHopLimit: 1,
@@ -289,7 +298,7 @@ export class TapStack extends TerraformStack {
           ami: ami.id,
           subnetId: vpcModule.privateSubnets[0].id,
           vpcSecurityGroupIds: [instanceSecurityGroup.id],
-          iamInstanceProfile: ec2Role.name,
+          iamInstanceProfile: ec2InstanceProfile.name, // Use instance profile name, not role name
           metadataOptions: {
             httpTokens: 'required',
             httpPutResponseHopLimit: 1,
@@ -384,4 +393,3 @@ export class TapStack extends TerraformStack {
     });
   }
 }
-
