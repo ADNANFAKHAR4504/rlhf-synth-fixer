@@ -60,6 +60,61 @@ cloudwatch_client_primary = boto3.client('cloudwatch', region_name=PRIMARY_REGIO
 cloudwatch_client_secondary = boto3.client('cloudwatch', region_name=SECONDARY_REGION)
 iam_client_primary = boto3.client('iam', region_name=PRIMARY_REGION)
 iam_client_secondary = boto3.client('iam', region_name=SECONDARY_REGION)
+logs_client_primary = boto3.client('logs', region_name=PRIMARY_REGION)
+logs_client_secondary = boto3.client('logs', region_name=SECONDARY_REGION)
+
+
+def get_recent_lambda_logs(function_name: str, region: str = PRIMARY_REGION, minutes: int = 5) -> list:
+    """
+    Fetch recent Lambda logs from CloudWatch Logs.
+    
+    Args:
+        function_name: Name of the Lambda function
+        region: AWS region
+        minutes: How many minutes back to look
+        
+    Returns:
+        List of log messages
+    """
+    try:
+        logs_client = logs_client_primary if region == PRIMARY_REGION else logs_client_secondary
+        log_group_name = f"/aws/lambda/{function_name}"
+        
+        # Get log streams from the last N minutes
+        end_time = int(time.time() * 1000)
+        start_time = end_time - (minutes * 60 * 1000)
+        
+        # Get recent log streams
+        streams_response = logs_client.describe_log_streams(
+            logGroupName=log_group_name,
+            orderBy='LastEventTime',
+            descending=True,
+            limit=5
+        )
+        
+        log_messages = []
+        for stream in streams_response.get('logStreams', []):
+            stream_name = stream['logStreamName']
+            
+            # Get log events from this stream
+            events_response = logs_client.get_log_events(
+                logGroupName=log_group_name,
+                logStreamName=stream_name,
+                startTime=start_time,
+                endTime=end_time,
+                limit=100
+            )
+            
+            for event in events_response.get('events', []):
+                message = event['message'].strip()
+                if message and not message.startswith('START RequestId') and not message.startswith('END RequestId') and not message.startswith('REPORT RequestId'):
+                    log_messages.append(message)
+        
+        return log_messages
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'ResourceNotFoundException':
+            return [f"Log group not found: {log_group_name}"]
+        return [f"Error fetching logs: {str(e)}"]
 
 
 class BaseIntegrationTest(unittest.TestCase):
@@ -372,6 +427,18 @@ class TestCrossServiceInteractions(BaseIntegrationTest):
                 )
             else:
                 print(f"Lambda invoked but data not found in DynamoDB (may need manual verification)")
+                
+                # Fetch and display Lambda logs for debugging
+                function_name = OUTPUTS.get('lambda_function_name_primary')
+                if function_name:
+                    print(f"\nFetching Lambda logs for debugging...")
+                    logs = get_recent_lambda_logs(function_name, PRIMARY_REGION, minutes=2)
+                    if logs:
+                        print(f"Recent Lambda logs ({len(logs)} messages):")
+                        for log in logs[-20:]:  # Show last 20 log messages
+                            print(f"  {log}")
+                    else:
+                        print("  No recent logs found")
                 
         except ClientError as e:
             print(f"Could not verify DynamoDB write: {e}")
