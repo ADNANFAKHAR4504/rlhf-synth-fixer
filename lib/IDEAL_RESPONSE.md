@@ -628,7 +628,7 @@ export class Infrastructure extends cdk.Stack {
 ```
 
 ```sh
-// userData.sh
+// lib/userData.sh
 #!/bin/bash
 set -e  # Exit on any error
 
@@ -1002,7 +1002,7 @@ echo "<h1>WebApp __PREFIX__ - __ENVIRONMENT_SUFFIX__</h1><p><a href='/test/'>Tes
 ## Usage Example
 
 ```typescript
-// tap-stack.ts
+// lib/tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { Infrastructure } from './infrastructure';
@@ -1031,15 +1031,15 @@ export class TapStack extends cdk.Stack {
     // Create primary region infrastructure
     new Infrastructure(this, 'PrimaryRegionInfrastructure', {
       environmentSuffix: environmentSuffix,
-      region: 'us-east-1',
+      region: 'us-west-2',
       secondaryRegion: 'ap-south-1',
       instanceType: 't3.large',
-      minCapacity: 2,
+      minCapacity: 1,
       maxCapacity: 10,
-      desiredCapacity: 4,
+      desiredCapacity: 1,
       env: {
         account: process.env.CDK_DEFAULT_ACCOUNT,
-        region: 'us-east-1',
+        region: 'us-west-2',
       },
     });
 
@@ -1048,9 +1048,9 @@ export class TapStack extends cdk.Stack {
       environmentSuffix: environmentSuffix,
       region: 'ap-south-1',
       instanceType: 't3.large',
-      minCapacity: 2,
+      minCapacity: 1,
       maxCapacity: 10,
-      desiredCapacity: 4,
+      desiredCapacity: 1,
       env: {
         account: process.env.CDK_DEFAULT_ACCOUNT,
         region: 'ap-south-1',

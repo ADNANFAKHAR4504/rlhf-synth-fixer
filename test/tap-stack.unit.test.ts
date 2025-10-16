@@ -14,7 +14,7 @@ describe('Infrastructure Stack', () => {
     app = new cdk.App();
     stack = new Infrastructure(app, 'TestInfrastructure', {
       environmentSuffix,
-      region: 'us-east-1',
+      region: 'us-west-2',
       secondaryRegion: 'ap-south-1',
       instanceType: 't3.medium',
       minCapacity: 2,
@@ -23,7 +23,7 @@ describe('Infrastructure Stack', () => {
       vpcCidr: '10.0.0.0/16',
       env: {
         account: '123456789012',
-        region: 'us-east-1',
+        region: 'us-west-2',
       },
     });
     template = Template.fromStack(stack);
@@ -383,7 +383,7 @@ describe('Infrastructure Stack', () => {
 
       // Check that both regions are present
       const regions = globalTable.Properties.Replicas.map((replica: any) => replica.Region);
-      expect(regions).toContain('us-east-1');
+      expect(regions).toContain('us-west-2');
       expect(regions).toContain('ap-south-1');
     });
   });
@@ -458,34 +458,34 @@ describe('Infrastructure Stack', () => {
 
   describe('CloudFormation Outputs', () => {
     test('VPC ID is exported for cross-stack references', () => {
-      template.hasOutput('useast1VPCId', {
+      template.hasOutput('uswest2VPCId', {
         Description: 'VPC ID',
         Export: {
-          Name: `vpc-id-${environmentSuffix}-us-east-1`,
+          Name: `vpc-id-${environmentSuffix}-us-west-2`,
         },
       });
     });
 
     test('ALB DNS name is exported for application access', () => {
-      template.hasOutput('useast1ApplicationLoadBalancerDNS', {
+      template.hasOutput('uswest2ApplicationLoadBalancerDNS', {
         Description: 'Application Load Balancer DNS Name',
         Export: {
-          Name: `alb-dns-${environmentSuffix}-us-east-1`,
+          Name: `alb-dns-${environmentSuffix}-us-west-2`,
         },
       });
     });
 
     test('ALB URL is exported for easy access', () => {
-      template.hasOutput('useast1ApplicationLoadBalancerURL', {
+      template.hasOutput('uswest2ApplicationLoadBalancerURL', {
         Description: 'Application Load Balancer URL',
         Export: {
-          Name: `alb-url-${environmentSuffix}-us-east-1`,
+          Name: `alb-url-${environmentSuffix}-us-west-2`,
         },
       });
     });
 
     test('DynamoDB Global Table name is exported for application integration', () => {
-      template.hasOutput('useast1DynamoDBTableName', {
+      template.hasOutput('uswest2DynamoDBTableName', {
         Description: 'DynamoDB Global Table name',
         Export: {
           Name: `dynamodb-global-table-${environmentSuffix}`,
@@ -494,10 +494,10 @@ describe('Infrastructure Stack', () => {
     });
 
     test('S3 log bucket name is exported for log access', () => {
-      template.hasOutput('useast1LogBucket', {
+      template.hasOutput('uswest2LogBucket', {
         Description: 'Log bucket',
         Export: {
-          Name: `log-bucket-${environmentSuffix}-us-east-1`,
+          Name: `log-bucket-${environmentSuffix}-us-west-2`,
         },
       });
     });
@@ -526,7 +526,7 @@ describe('Infrastructure Stack', () => {
     test('Production environment uses RETAIN removal policy', () => {
       const prodInfra = new Infrastructure(app, 'ProdInfrastructure', {
         environmentSuffix: 'prod',
-        region: 'us-east-1',
+        region: 'us-west-2',
       });
       expect(prodInfra.isProduction).toBe(true);
       expect(prodInfra.removalPolicy).toBe(cdk.RemovalPolicy.RETAIN);
@@ -535,7 +535,7 @@ describe('Infrastructure Stack', () => {
     test('Non-production environment uses DESTROY removal policy', () => {
       const devInfra = new Infrastructure(app, 'DevInfrastructure', {
         environmentSuffix: 'dev',
-        region: 'us-east-1',
+        region: 'us-west-2',
       });
       expect(devInfra.isProduction).toBe(false);
       expect(devInfra.removalPolicy).toBe(cdk.RemovalPolicy.DESTROY);
@@ -544,7 +544,7 @@ describe('Infrastructure Stack', () => {
     test('Uses default instance type when not provided', () => {
       const infra = new Infrastructure(app, 'DefaultInstanceInfra', {
         environmentSuffix: 'test',
-        region: 'us-east-1',
+        region: 'us-west-2',
         // instanceType not provided
       });
       expect(infra).toBeDefined();
@@ -553,7 +553,7 @@ describe('Infrastructure Stack', () => {
     test('Uses custom instance type when provided', () => {
       const infra = new Infrastructure(app, 'CustomInstanceInfra', {
         environmentSuffix: 'test',
-        region: 'us-east-1',
+        region: 'us-west-2',
         instanceType: 't3.xlarge',
       });
       expect(infra).toBeDefined();
@@ -562,7 +562,7 @@ describe('Infrastructure Stack', () => {
     test('Uses default capacity values when not provided', () => {
       const infra = new Infrastructure(app, 'DefaultCapacityInfra', {
         environmentSuffix: 'test',
-        region: 'us-east-1',
+        region: 'us-west-2',
         // minCapacity, maxCapacity, desiredCapacity not provided
       });
       expect(infra).toBeDefined();
@@ -571,7 +571,7 @@ describe('Infrastructure Stack', () => {
     test('Uses custom capacity values when provided', () => {
       const infra = new Infrastructure(app, 'CustomCapacityInfra', {
         environmentSuffix: 'test',
-        region: 'us-east-1',
+        region: 'us-west-2',
         minCapacity: 1,
         maxCapacity: 5,
         desiredCapacity: 3,
@@ -582,7 +582,7 @@ describe('Infrastructure Stack', () => {
     test('Uses default VPC CIDR when not provided', () => {
       const infra = new Infrastructure(app, 'DefaultVpcInfra', {
         environmentSuffix: 'test',
-        region: 'us-east-1',
+        region: 'us-west-2',
         // vpcCidr not provided
       });
       expect(infra).toBeDefined();
@@ -591,7 +591,7 @@ describe('Infrastructure Stack', () => {
     test('Uses custom VPC CIDR when provided', () => {
       const infra = new Infrastructure(app, 'CustomVpcInfra', {
         environmentSuffix: 'test',
-        region: 'us-east-1',
+        region: 'us-west-2',
         vpcCidr: '192.168.0.0/16',
       });
       expect(infra).toBeDefined();
@@ -600,7 +600,7 @@ describe('Infrastructure Stack', () => {
     test('Handles undefined keyPairName', () => {
       const infra = new Infrastructure(app, 'NoKeyPairInfra', {
         environmentSuffix: 'test',
-        region: 'us-east-1',
+        region: 'us-west-2',
         keyPairName: undefined,
       });
       expect(infra).toBeDefined();
@@ -609,7 +609,7 @@ describe('Infrastructure Stack', () => {
     test('Handles provided keyPairName', () => {
       const infra = new Infrastructure(app, 'WithKeyPairInfra', {
         environmentSuffix: 'test',
-        region: 'us-east-1',
+        region: 'us-west-2',
         keyPairName: 'my-key-pair',
       });
       expect(infra).toBeDefined();
@@ -662,12 +662,12 @@ describe('TapStack', () => {
   });
 
   describe('Multi-Region Infrastructure Deployment', () => {
-    test('Creates primary region infrastructure in us-east-1', () => {
+    test('Creates primary region infrastructure in us-west-2', () => {
       const primaryInfra = stack.node.children.find(
         child => child.node.id === 'PrimaryRegionInfrastructure'
       ) as Infrastructure;
       expect(primaryInfra).toBeInstanceOf(Infrastructure);
-      expect(primaryInfra.region).toBe('us-east-1');
+      expect(primaryInfra.region).toBe('us-west-2');
     });
 
     test('Creates secondary region infrastructure in ap-south-1', () => {

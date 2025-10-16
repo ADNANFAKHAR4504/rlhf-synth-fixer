@@ -13,7 +13,7 @@ const outputs = JSON.parse(
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 // Extract from actual outputs if not set in environment
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX ||
-  (outputs.useast1DynamoDBTableName ? outputs.useast1DynamoDBTableName.split('-').pop() : 'dev');
+  (outputs.uswest2DynamoDBTableName ? outputs.uswest2DynamoDBTableName.split('-').pop() : 'dev');
 
 // Check if secondary region outputs are available
 const hasSecondaryRegionOutputs = outputs.apsouth1VPCId &&
@@ -36,8 +36,8 @@ describe('Web Application Infrastructure Integration Tests', () => {
   describe('Service-Level Tests', () => {
     test('should verify DynamoDB Global Table exists and can store data', async () => {
       if (skipIfNoCredentials('DynamoDB test')) return;
-      const dynamoClient = new DynamoDBClient({ region: 'us-east-1' });
-      const tableName = outputs.useast1DynamoDBTableName || outputs.DynamoDBTableName;
+      const dynamoClient = new DynamoDBClient({ region: 'us-west-2' });
+      const tableName = outputs.uswest2DynamoDBTableName || outputs.DynamoDBTableName;
       const testId = `test-${Date.now()}`;
       const timestamp = Date.now();
 
@@ -74,8 +74,8 @@ describe('Web Application Infrastructure Integration Tests', () => {
 
     test('should verify S3 log bucket exists and is accessible', async () => {
       if (skipIfNoCredentials('S3 test')) return;
-      const s3Client = new S3Client({ region: 'us-east-1' });
-      const bucketName = outputs.useast1LogBucket || outputs.LogBucket;
+      const s3Client = new S3Client({ region: 'us-west-2' });
+      const bucketName = outputs.uswest2LogBucket || outputs.LogBucket;
 
       const command = new HeadBucketCommand({
         Bucket: bucketName,
@@ -86,13 +86,13 @@ describe('Web Application Infrastructure Integration Tests', () => {
       expect(response.$metadata.httpStatusCode).toBe(200);
 
       // Verify bucket name matches expected pattern
-      expect(bucketName).toMatch(new RegExp(`^webapp-logs-webapp-${environmentSuffix}-us-east-1-(\\d+|\\*+)$`));
+      expect(bucketName).toMatch(new RegExp(`^webapp-logs-webapp-${environmentSuffix}-us-west-2-(\\d+|\\*+)$`));
     });
 
     test('should verify ALB exists and is accessible', async () => {
       if (skipIfNoCredentials('ALB test')) return;
-      const elbClient = new ElasticLoadBalancingV2Client({ region: 'us-east-1' });
-      const albDns = outputs.useast1ApplicationLoadBalancerDNS || outputs.ALBDNS;
+      const elbClient = new ElasticLoadBalancingV2Client({ region: 'us-west-2' });
+      const albDns = outputs.uswest2ApplicationLoadBalancerDNS || outputs.ALBDNS;
 
       const command = new DescribeLoadBalancersCommand({
         Names: [`webapp-alb-${environmentSuffix}`],
@@ -109,8 +109,8 @@ describe('Web Application Infrastructure Integration Tests', () => {
 
     test('should verify VPC exists with correct configuration', async () => {
       if (skipIfNoCredentials('VPC test')) return;
-      const ec2Client = new EC2Client({ region: 'us-east-1' });
-      const vpcId = outputs.useast1VPCId;
+      const ec2Client = new EC2Client({ region: 'us-west-2' });
+      const vpcId = outputs.uswest2VPCId;
 
       const command = new DescribeVpcsCommand({
         VpcIds: [vpcId],
@@ -126,8 +126,8 @@ describe('Web Application Infrastructure Integration Tests', () => {
 
     test('should verify subnets exist in different AZs', async () => {
       if (skipIfNoCredentials('subnet test')) return;
-      const ec2Client = new EC2Client({ region: 'us-east-1' });
-      const vpcId = outputs.useast1VPCId;
+      const ec2Client = new EC2Client({ region: 'us-west-2' });
+      const vpcId = outputs.uswest2VPCId;
 
       const command = new DescribeSubnetsCommand({
         Filters: [
@@ -150,8 +150,8 @@ describe('Web Application Infrastructure Integration Tests', () => {
 
     test('should verify security groups exist with correct rules', async () => {
       if (skipIfNoCredentials('security group test')) return;
-      const ec2Client = new EC2Client({ region: 'us-east-1' });
-      const vpcId = outputs.useast1VPCId;
+      const ec2Client = new EC2Client({ region: 'us-west-2' });
+      const vpcId = outputs.uswest2VPCId;
 
       const command = new DescribeSecurityGroupsCommand({
         Filters: [
@@ -190,7 +190,7 @@ describe('Web Application Infrastructure Integration Tests', () => {
 
   describe('Cross-Service Connectivity Tests', () => {
     test('should verify EC2 test application health endpoint', async () => {
-      const albDns = outputs.useast1ApplicationLoadBalancerDNS || outputs.ALBDNS;
+      const albDns = outputs.uswest2ApplicationLoadBalancerDNS || outputs.ALBDNS;
       const healthUrl = `http://${albDns}/health`;
 
       const response = await fetch(healthUrl);
@@ -198,12 +198,12 @@ describe('Web Application Infrastructure Integration Tests', () => {
 
       const data = await response.json();
       expect(data.status).toBe('healthy');
-      expect(data.region).toBe('us-east-1');
+      expect(data.region).toBe('us-west-2');
       expect(data.timestamp).toBeDefined();
     });
 
     test('should verify EC2 can access S3 through test application', async () => {
-      const albDns = outputs.useast1ApplicationLoadBalancerDNS || outputs.ALBDNS;
+      const albDns = outputs.uswest2ApplicationLoadBalancerDNS || outputs.ALBDNS;
       const s3TestUrl = `http://${albDns}/test/s3`;
 
       const response = await fetch(s3TestUrl);
@@ -214,11 +214,11 @@ describe('Web Application Infrastructure Integration Tests', () => {
       expect(data.message).toBe('S3 test completed successfully');
       expect(data.testData).toBeDefined();
       expect(data.testData.testId).toMatch(/^s3-test-/);
-      expect(data.testData.region).toBe('us-east-1');
+      expect(data.testData.region).toBe('us-west-2');
     });
 
     test('should verify EC2 can access DynamoDB through test application', async () => {
-      const albDns = outputs.useast1ApplicationLoadBalancerDNS || outputs.ALBDNS;
+      const albDns = outputs.uswest2ApplicationLoadBalancerDNS || outputs.ALBDNS;
       const dynamoTestUrl = `http://${albDns}/test/dynamodb`;
 
       const response = await fetch(dynamoTestUrl);
@@ -229,12 +229,12 @@ describe('Web Application Infrastructure Integration Tests', () => {
       expect(data.message).toBe('DynamoDB test completed successfully');
       expect(data.testData).toBeDefined();
       expect(data.testData.id).toMatch(/^dynamodb-test-/);
-      expect(data.testData.region).toBe('us-east-1');
+      expect(data.testData.region).toBe('us-west-2');
       expect(data.testData.testType).toBe('integration-test');
     });
 
     test('should verify EC2 test application status endpoint', async () => {
-      const albDns = outputs.useast1ApplicationLoadBalancerDNS || outputs.ALBDNS;
+      const albDns = outputs.uswest2ApplicationLoadBalancerDNS || outputs.ALBDNS;
       const statusUrl = `http://${albDns}/status`;
 
       const response = await fetch(statusUrl);
@@ -242,10 +242,10 @@ describe('Web Application Infrastructure Integration Tests', () => {
 
       const data = await response.json();
       expect(data.status).toBe('running');
-      expect(data.region).toBe('us-east-1');
+      expect(data.region).toBe('us-west-2');
       expect(data.testResults).toBeDefined();
       expect(data.environment).toBeDefined();
-      expect(data.environment.AWS_REGION).toBe('us-east-1');
+      expect(data.environment.AWS_REGION).toBe('us-west-2');
       expect(data.environment.S3_BUCKET_NAME).toBeDefined();
       expect(data.environment.DYNAMODB_TABLE_NAME).toBeDefined();
     });
@@ -253,7 +253,7 @@ describe('Web Application Infrastructure Integration Tests', () => {
 
   describe('End-to-End (E2E) Workflow Tests', () => {
     test('should verify complete E2E workflow through test application', async () => {
-      const albDns = outputs.useast1ApplicationLoadBalancerDNS || outputs.ALBDNS;
+      const albDns = outputs.uswest2ApplicationLoadBalancerDNS || outputs.ALBDNS;
       const integrationTestUrl = `http://${albDns}/test/integration`;
 
       const response = await fetch(integrationTestUrl);
@@ -278,10 +278,10 @@ describe('Web Application Infrastructure Integration Tests', () => {
 
     test('should verify E2E workflow data persistence in S3 and DynamoDB', async () => {
       if (skipIfNoCredentials('E2E AWS SDK verification')) return;
-      const albDns = outputs.useast1ApplicationLoadBalancerDNS || outputs.ALBDNS;
+      const albDns = outputs.uswest2ApplicationLoadBalancerDNS || outputs.ALBDNS;
       const integrationTestUrl = `http://${albDns}/test/integration`;
-      const tableName = outputs.useast1DynamoDBTableName || outputs.DynamoDBTableName;
-      const bucketName = outputs.useast1LogBucket || outputs.LogBucket;
+      const tableName = outputs.uswest2DynamoDBTableName || outputs.DynamoDBTableName;
+      const bucketName = outputs.uswest2LogBucket || outputs.LogBucket;
 
       // Step 1: Trigger the E2E workflow via ALB
       console.log(`Making API call to: ${integrationTestUrl}`);
@@ -298,7 +298,7 @@ describe('Web Application Infrastructure Integration Tests', () => {
       console.log(`Workflow ID: ${workflowId}, Timestamp: ${timestamp}`);
 
       // Step 2: Verify data exists in DynamoDB using AWS SDK
-      const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({ region: 'us-east-1' }));
+      const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({ region: 'us-west-2' }));
 
       const dynamoGetCommand = new GetCommand({
         TableName: tableName,
@@ -317,7 +317,7 @@ describe('Web Application Infrastructure Integration Tests', () => {
       console.log('✅ DynamoDB verification passed');
 
       // Step 3: Verify data exists in S3 using AWS SDK
-      const s3Client = new S3Client({ region: 'us-east-1' });
+      const s3Client = new S3Client({ region: 'us-west-2' });
       const s3Key = `workflows/${workflowId}.json`;
 
       const s3GetCommand = new GetObjectCommand({
@@ -351,9 +351,9 @@ describe('Web Application Infrastructure Integration Tests', () => {
 
     test('should verify individual S3 test endpoint and data persistence', async () => {
       if (skipIfNoCredentials('S3 individual test verification')) return;
-      const albDns = outputs.useast1ApplicationLoadBalancerDNS || outputs.ALBDNS;
+      const albDns = outputs.uswest2ApplicationLoadBalancerDNS || outputs.ALBDNS;
       const s3TestUrl = `http://${albDns}/test/s3`;
-      const bucketName = outputs.useast1LogBucket || outputs.LogBucket;
+      const bucketName = outputs.uswest2LogBucket || outputs.LogBucket;
 
       // Step 1: Call S3 test endpoint
       console.log(`Making API call to: ${s3TestUrl}`);
@@ -372,7 +372,7 @@ describe('Web Application Infrastructure Integration Tests', () => {
       console.log(`S3 Test ID: ${testId}, Key: ${testKey}`);
 
       // Step 2: Verify data exists in S3 using AWS SDK
-      const s3Client = new S3Client({ region: 'us-east-1' });
+      const s3Client = new S3Client({ region: 'us-west-2' });
 
       const s3GetCommand = new GetObjectCommand({
         Bucket: bucketName,
@@ -384,16 +384,16 @@ describe('Web Application Infrastructure Integration Tests', () => {
 
       const s3Data = JSON.parse(await s3Result.Body!.transformToString());
       expect(s3Data.testId).toBe(testId);
-      expect(s3Data.region).toBe('us-east-1');
+      expect(s3Data.region).toBe('us-west-2');
 
       console.log('✅ S3 individual test verification passed');
     });
 
     test('should verify individual DynamoDB test endpoint and data persistence', async () => {
       if (skipIfNoCredentials('DynamoDB individual test verification')) return;
-      const albDns = outputs.useast1ApplicationLoadBalancerDNS || outputs.ALBDNS;
+      const albDns = outputs.uswest2ApplicationLoadBalancerDNS || outputs.ALBDNS;
       const dynamoTestUrl = `http://${albDns}/test/dynamodb`;
-      const tableName = outputs.useast1DynamoDBTableName || outputs.DynamoDBTableName;
+      const tableName = outputs.uswest2DynamoDBTableName || outputs.DynamoDBTableName;
 
       // Step 1: Call DynamoDB test endpoint
       console.log(`Making API call to: ${dynamoTestUrl}`);
@@ -412,7 +412,7 @@ describe('Web Application Infrastructure Integration Tests', () => {
       console.log(`DynamoDB Test ID: ${testId}, Timestamp: ${timestamp}`);
 
       // Step 2: Verify data exists in DynamoDB using AWS SDK
-      const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({ region: 'us-east-1' }));
+      const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({ region: 'us-west-2' }));
 
       const dynamoGetCommand = new GetCommand({
         TableName: tableName,
@@ -426,14 +426,14 @@ describe('Web Application Infrastructure Integration Tests', () => {
       expect(dynamoResult.Item).toBeDefined();
       expect(dynamoResult.Item!.id).toBe(testId);
       expect(dynamoResult.Item!.testType).toBe('integration-test');
-      expect(dynamoResult.Item!.region).toBe('us-east-1');
+      expect(dynamoResult.Item!.region).toBe('us-west-2');
 
       console.log('✅ DynamoDB individual test verification passed');
     });
 
     test('should verify ALB health check is working with test application', async () => {
-      const elbClient = new ElasticLoadBalancingV2Client({ region: 'us-east-1' });
-      const albDns = outputs.useast1ApplicationLoadBalancerDNS || outputs.ALBDNS;
+      const elbClient = new ElasticLoadBalancingV2Client({ region: 'us-west-2' });
+      const albDns = outputs.uswest2ApplicationLoadBalancerDNS || outputs.ALBDNS;
 
       // Get target group health
       const command = new DescribeLoadBalancersCommand({
@@ -454,7 +454,7 @@ describe('Web Application Infrastructure Integration Tests', () => {
     describe('Secondary Region (ap-south-1) Tests', () => {
       test('should verify DynamoDB Global Table is accessible from secondary region', async () => {
         const dynamoClient = new DynamoDBClient({ region: 'ap-south-1' });
-        const tableName = outputs.useast1DynamoDBTableName || outputs.DynamoDBTableName; // Same table name
+        const tableName = outputs.uswest2DynamoDBTableName || outputs.DynamoDBTableName; // Same table name
         const testId = `test-west-${Date.now()}`;
         const timestamp = Date.now();
 
@@ -557,10 +557,10 @@ describe('Web Application Infrastructure Integration Tests', () => {
 
     describe('Cross-Region Integration Tests', () => {
       test('should verify DynamoDB Global Table replicates across regions', async () => {
-        const eastClient = new DynamoDBClient({ region: 'us-east-1' });
+        const eastClient = new DynamoDBClient({ region: 'us-west-2' });
         const westClient = new DynamoDBClient({ region: 'ap-south-1' });
 
-        const tableName = outputs.useast1DynamoDBTableName || outputs.DynamoDBTableName;
+        const tableName = outputs.uswest2DynamoDBTableName || outputs.DynamoDBTableName;
 
         // Test Global Table replication by writing in one region and reading from another
         const testId = `cross-region-test-${Date.now()}`;
@@ -572,7 +572,7 @@ describe('Web Application Infrastructure Integration Tests', () => {
           Item: {
             id: { S: `${testId}-east` },
             timestamp: { N: timestamp.toString() },
-            region: { S: 'us-east-1' },
+            region: { S: 'us-west-2' },
             testType: { S: 'cross-region-replication' },
           },
         });
@@ -615,7 +615,7 @@ describe('Web Application Infrastructure Integration Tests', () => {
         ]);
 
         expect(eastResponse.Item).toBeDefined();
-        expect(eastResponse.Item?.region?.S).toBe('us-east-1');
+        expect(eastResponse.Item?.region?.S).toBe('us-west-2');
         expect(eastResponse.Item?.testType?.S).toBe('cross-region-replication');
 
         expect(westResponse.Item).toBeDefined();
@@ -629,10 +629,10 @@ describe('Web Application Infrastructure Integration Tests', () => {
           return;
         }
 
-        const eastClient = new S3Client({ region: 'us-east-1' });
+        const eastClient = new S3Client({ region: 'us-west-2' });
         const westClient = new S3Client({ region: 'ap-south-1' });
 
-        const eastBucketName = outputs.useast1LogBucket || outputs.LogBucket;
+        const eastBucketName = outputs.uswest2LogBucket || outputs.LogBucket;
         const westBucketName = outputs.apsouth1LogBucket;
 
         // Verify buckets are different
@@ -694,10 +694,10 @@ describe('Web Application Infrastructure Integration Tests', () => {
           return;
         }
 
-        const eastClient = new ElasticLoadBalancingV2Client({ region: 'us-east-1' });
+        const eastClient = new ElasticLoadBalancingV2Client({ region: 'us-west-2' });
         const westClient = new ElasticLoadBalancingV2Client({ region: 'ap-south-1' });
 
-        const eastAlbDns = outputs.useast1ApplicationLoadBalancerDNS || outputs.ALBDNS;
+        const eastAlbDns = outputs.uswest2ApplicationLoadBalancerDNS || outputs.ALBDNS;
         const westAlbDns = outputs.apsouth1ApplicationLoadBalancerDNS;
 
         // Verify ALBs are different
@@ -730,13 +730,13 @@ describe('Web Application Infrastructure Integration Tests', () => {
     describe('Resource Configuration Validation', () => {
       test('should verify all required outputs are present for both regions', () => {
         const requiredPrimaryOutputs = [
-          'useast1VPCId',
-          'useast1ApplicationLoadBalancerDNS',
-          'useast1ApplicationLoadBalancerURL',
-          'useast1DynamoDBTableName',
-          'useast1LogBucket',
-          'useast1Region',
-          'useast1Environment',
+          'uswest2VPCId',
+          'uswest2ApplicationLoadBalancerDNS',
+          'uswest2ApplicationLoadBalancerURL',
+          'uswest2DynamoDBTableName',
+          'uswest2LogBucket',
+          'uswest2Region',
+          'uswest2Environment',
         ];
 
         const requiredSecondaryOutputs = [
@@ -750,9 +750,9 @@ describe('Web Application Infrastructure Integration Tests', () => {
 
         // Check primary region outputs (with fallback to legacy names)
         requiredPrimaryOutputs.forEach(output => {
-          if (outputs[output] || (output === 'useast1DynamoDBTableName' && outputs.DynamoDBTableName) ||
-            (output === 'useast1LogBucket' && outputs.LogBucket) ||
-            (output === 'useast1ApplicationLoadBalancerDNS' && outputs.ALBDNS)) {
+          if (outputs[output] || (output === 'uswest2DynamoDBTableName' && outputs.DynamoDBTableName) ||
+            (output === 'uswest2LogBucket' && outputs.LogBucket) ||
+            (output === 'uswest2ApplicationLoadBalancerDNS' && outputs.ALBDNS)) {
             expect(outputs[output] || outputs.DynamoDBTableName || outputs.LogBucket || outputs.ALBDNS).toBeDefined();
           }
         });
@@ -770,8 +770,8 @@ describe('Web Application Infrastructure Integration Tests', () => {
 
       test('should verify all resources use correct environment suffix', () => {
         // Primary region
-        const eastTableName = outputs.useast1DynamoDBTableName || outputs.DynamoDBTableName;
-        const eastBucketName = outputs.useast1LogBucket || outputs.LogBucket;
+        const eastTableName = outputs.uswest2DynamoDBTableName || outputs.DynamoDBTableName;
+        const eastBucketName = outputs.uswest2LogBucket || outputs.LogBucket;
 
         expect(eastTableName).toContain(environmentSuffix);
         expect(eastBucketName).toContain(environmentSuffix);
@@ -786,8 +786,8 @@ describe('Web Application Infrastructure Integration Tests', () => {
 
       test('should verify region-specific naming conventions', () => {
         // Primary region
-        const eastBucketName = outputs.useast1LogBucket || outputs.LogBucket;
-        expect(eastBucketName).toMatch(new RegExp(`-us-east-1-(\\d+|\\*+)$`));
+        const eastBucketName = outputs.uswest2LogBucket || outputs.LogBucket;
+        expect(eastBucketName).toMatch(new RegExp(`-us-west-2-(\\d+|\\*+)$`));
 
         // Secondary region (only if available)
         if (hasSecondaryRegionOutputs) {

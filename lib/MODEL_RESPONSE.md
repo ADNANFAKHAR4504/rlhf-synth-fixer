@@ -52,8 +52,8 @@ export class Infrastructure extends cdk.Stack {
       : cdk.RemovalPolicy.DESTROY;
 
     // Set default values for optional parameters
-    const primaryRegion = props.primaryRegion || 'us-east-1';
-    const secondaryRegion = props.secondaryRegion || 'us-west-2';
+    const primaryRegion = props.primaryRegion || 'us-west-2';
+    const secondaryRegion = props.secondaryRegion || 'ap-south-1';
     const instanceType = props.instanceType || 't3.medium';
     const minCapacity = props.minCapacity || 2;
     const maxCapacity = props.maxCapacity || 6;
@@ -731,15 +731,15 @@ const app = new cdk.App();
 // Production deployment
 new Infrastructure(app, 'WebAppInfrastructure', {
   environmentSuffix: 'prod',
-  primaryRegion: 'us-east-1',
-  secondaryRegion: 'us-west-2',
+  primaryRegion: 'us-west-2',
+  secondaryRegion: 'ap-south-1',
   instanceType: 't3.large',
   minCapacity: 2,
   maxCapacity: 10,
   desiredCapacity: 4,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-east-1',
+    region: 'us-west-2',
   },
 });
 
@@ -752,7 +752,7 @@ new Infrastructure(app, 'WebAppInfrastructureDev', {
   desiredCapacity: 1,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-east-1',
+    region: 'ap-south-1',
   },
 });
 ```
