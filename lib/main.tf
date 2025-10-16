@@ -1,23 +1,3 @@
-# Terraform and Provider Configuration
-terraform {
-  required_version = ">= 1.0"
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.5"
-    }
-  }
-  backend "s3" {}
-}
-
-provider "aws" {
-  region = var.region
-}
-
 # Data Sources
 data "aws_ami" "amazon_linux_2" {
   most_recent = true
