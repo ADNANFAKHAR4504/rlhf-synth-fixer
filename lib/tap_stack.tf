@@ -2,13 +2,21 @@
 # RTO: 5 minutes | RPO: 1 minute
 # Primary: us-east-1 | DR: us-west-2
 
+resource "random_id" "suffix" {
+  byte_length = 4
+}
+
 locals {
+  # Add random suffix to ensure unique resource names across deployments
+  unique_suffix = "${local.unique_suffix}-${random_id.suffix.hex}"
+
   common_tags = {
     Environment     = var.environment
     Project         = var.project_name
     ComplianceScope = "PCI-DSS"
     ManagedBy       = "terraform"
     Suffix          = var.environment_suffix
+    UniqueSuffix    = local.unique_suffix
   }
 
   regions = {
@@ -39,7 +47,7 @@ resource "aws_vpc" "primary" {
   enable_dns_support   = true
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-vpc-primary-${var.environment_suffix}"
+    Name   = "${var.project_name}-vpc-primary-${local.unique_suffix}"
     Region = "primary"
   })
 
@@ -53,7 +61,7 @@ resource "aws_internet_gateway" "primary" {
   vpc_id   = aws_vpc.primary.id
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-igw-primary-${var.environment_suffix}"
+    Name   = "${var.project_name}-igw-primary-${local.unique_suffix}"
     Region = "primary"
   })
 
@@ -71,7 +79,7 @@ resource "aws_subnet" "primary_public" {
   map_public_ip_on_launch = true
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-public-${count.index + 1}-primary-${var.environment_suffix}"
+    Name   = "${var.project_name}-public-${count.index + 1}-primary-${local.unique_suffix}"
     Region = "primary"
     Tier   = "public"
   })
@@ -89,7 +97,7 @@ resource "aws_subnet" "primary_private" {
   availability_zone = var.availability_zones_primary[count.index]
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-private-${count.index + 1}-primary-${var.environment_suffix}"
+    Name   = "${var.project_name}-private-${count.index + 1}-primary-${local.unique_suffix}"
     Region = "primary"
     Tier   = "private"
   })
@@ -107,7 +115,7 @@ resource "aws_subnet" "primary_database" {
   availability_zone = var.availability_zones_primary[count.index]
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-database-${count.index + 1}-primary-${var.environment_suffix}"
+    Name   = "${var.project_name}-database-${count.index + 1}-primary-${local.unique_suffix}"
     Region = "primary"
     Tier   = "database"
   })
@@ -123,7 +131,7 @@ resource "aws_eip" "primary_nat" {
   domain   = "vpc"
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-eip-nat-${count.index + 1}-primary-${var.environment_suffix}"
+    Name   = "${var.project_name}-eip-nat-${count.index + 1}-primary-${local.unique_suffix}"
     Region = "primary"
   })
 
@@ -137,7 +145,7 @@ resource "aws_nat_gateway" "primary" {
   subnet_id     = aws_subnet.primary_public[count.index].id
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-nat-${count.index + 1}-primary-${var.environment_suffix}"
+    Name   = "${var.project_name}-nat-${count.index + 1}-primary-${local.unique_suffix}"
     Region = "primary"
   })
 
@@ -154,7 +162,7 @@ resource "aws_route_table" "primary_public" {
   }
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-rt-public-primary-${var.environment_suffix}"
+    Name   = "${var.project_name}-rt-public-primary-${local.unique_suffix}"
     Region = "primary"
   })
 }
@@ -169,7 +177,7 @@ resource "aws_route_table" "primary_private" {
   }
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-rt-private-primary-${var.environment_suffix}"
+    Name   = "${var.project_name}-rt-private-primary-${local.unique_suffix}"
     Region = "primary"
   })
 }
@@ -206,7 +214,7 @@ resource "aws_vpc" "dr" {
   enable_dns_support   = true
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-vpc-dr-${var.environment_suffix}"
+    Name   = "${var.project_name}-vpc-dr-${local.unique_suffix}"
     Region = "dr"
   })
 
@@ -220,7 +228,7 @@ resource "aws_internet_gateway" "dr" {
   vpc_id   = aws_vpc.dr.id
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-igw-dr-${var.environment_suffix}"
+    Name   = "${var.project_name}-igw-dr-${local.unique_suffix}"
     Region = "dr"
   })
 
@@ -238,7 +246,7 @@ resource "aws_subnet" "dr_public" {
   map_public_ip_on_launch = true
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-public-${count.index + 1}-dr-${var.environment_suffix}"
+    Name   = "${var.project_name}-public-${count.index + 1}-dr-${local.unique_suffix}"
     Region = "dr"
     Tier   = "public"
   })
@@ -256,7 +264,7 @@ resource "aws_subnet" "dr_private" {
   availability_zone = var.availability_zones_dr[count.index]
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-private-${count.index + 1}-dr-${var.environment_suffix}"
+    Name   = "${var.project_name}-private-${count.index + 1}-dr-${local.unique_suffix}"
     Region = "dr"
     Tier   = "private"
   })
@@ -274,7 +282,7 @@ resource "aws_subnet" "dr_database" {
   availability_zone = var.availability_zones_dr[count.index]
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-database-${count.index + 1}-dr-${var.environment_suffix}"
+    Name   = "${var.project_name}-database-${count.index + 1}-dr-${local.unique_suffix}"
     Region = "dr"
     Tier   = "database"
   })
@@ -290,7 +298,7 @@ resource "aws_eip" "dr_nat" {
   domain   = "vpc"
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-eip-nat-${count.index + 1}-dr-${var.environment_suffix}"
+    Name   = "${var.project_name}-eip-nat-${count.index + 1}-dr-${local.unique_suffix}"
     Region = "dr"
   })
 
@@ -304,7 +312,7 @@ resource "aws_nat_gateway" "dr" {
   subnet_id     = aws_subnet.dr_public[count.index].id
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-nat-${count.index + 1}-dr-${var.environment_suffix}"
+    Name   = "${var.project_name}-nat-${count.index + 1}-dr-${local.unique_suffix}"
     Region = "dr"
   })
 
@@ -321,7 +329,7 @@ resource "aws_route_table" "dr_public" {
   }
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-rt-public-dr-${var.environment_suffix}"
+    Name   = "${var.project_name}-rt-public-dr-${local.unique_suffix}"
     Region = "dr"
   })
 }
@@ -336,7 +344,7 @@ resource "aws_route_table" "dr_private" {
   }
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-rt-private-dr-${var.environment_suffix}"
+    Name   = "${var.project_name}-rt-private-dr-${local.unique_suffix}"
     Region = "dr"
   })
 }
@@ -373,7 +381,7 @@ resource "aws_kms_key" "aurora_primary" {
   enable_key_rotation     = true
 
   tags = merge(local.common_tags, {
-    Name    = "${var.project_name}-aurora-key-primary-${var.environment_suffix}"
+    Name    = "${var.project_name}-aurora-key-primary-${local.unique_suffix}"
     Purpose = "aurora-encryption"
     Region  = "primary"
   })
@@ -381,7 +389,7 @@ resource "aws_kms_key" "aurora_primary" {
 
 resource "aws_kms_alias" "aurora_primary" {
   provider      = aws.primary
-  name          = "alias/${var.project_name}-aurora-primary-${var.environment_suffix}"
+  name          = "alias/${var.project_name}-aurora-primary-${local.unique_suffix}"
   target_key_id = aws_kms_key.aurora_primary.key_id
 }
 
@@ -392,7 +400,7 @@ resource "aws_kms_key" "aurora_dr" {
   enable_key_rotation     = true
 
   tags = merge(local.common_tags, {
-    Name    = "${var.project_name}-aurora-key-dr-${var.environment_suffix}"
+    Name    = "${var.project_name}-aurora-key-dr-${local.unique_suffix}"
     Purpose = "aurora-encryption"
     Region  = "dr"
   })
@@ -400,7 +408,7 @@ resource "aws_kms_key" "aurora_dr" {
 
 resource "aws_kms_alias" "aurora_dr" {
   provider      = aws.dr
-  name          = "alias/${var.project_name}-aurora-dr-${var.environment_suffix}"
+  name          = "alias/${var.project_name}-aurora-dr-${local.unique_suffix}"
   target_key_id = aws_kms_key.aurora_dr.key_id
 }
 
@@ -411,7 +419,7 @@ resource "aws_kms_key" "dynamodb_primary" {
   enable_key_rotation     = true
 
   tags = merge(local.common_tags, {
-    Name    = "${var.project_name}-dynamodb-key-primary-${var.environment_suffix}"
+    Name    = "${var.project_name}-dynamodb-key-primary-${local.unique_suffix}"
     Purpose = "dynamodb-encryption"
     Region  = "primary"
   })
@@ -419,7 +427,7 @@ resource "aws_kms_key" "dynamodb_primary" {
 
 resource "aws_kms_alias" "dynamodb_primary" {
   provider      = aws.primary
-  name          = "alias/${var.project_name}-dynamodb-primary-${var.environment_suffix}"
+  name          = "alias/${var.project_name}-dynamodb-primary-${local.unique_suffix}"
   target_key_id = aws_kms_key.dynamodb_primary.key_id
 }
 
@@ -430,7 +438,7 @@ resource "aws_kms_key" "dynamodb_dr" {
   enable_key_rotation     = true
 
   tags = merge(local.common_tags, {
-    Name    = "${var.project_name}-dynamodb-key-dr-${var.environment_suffix}"
+    Name    = "${var.project_name}-dynamodb-key-dr-${local.unique_suffix}"
     Purpose = "dynamodb-encryption"
     Region  = "dr"
   })
@@ -438,7 +446,7 @@ resource "aws_kms_key" "dynamodb_dr" {
 
 resource "aws_kms_alias" "dynamodb_dr" {
   provider      = aws.dr
-  name          = "alias/${var.project_name}-dynamodb-dr-${var.environment_suffix}"
+  name          = "alias/${var.project_name}-dynamodb-dr-${local.unique_suffix}"
   target_key_id = aws_kms_key.dynamodb_dr.key_id
 }
 
@@ -448,10 +456,10 @@ resource "aws_kms_alias" "dynamodb_dr" {
 
 resource "aws_s3_bucket" "transaction_logs_primary" {
   provider = aws.primary
-  bucket   = "${var.project_name}-txn-logs-primary-${var.environment_suffix}-${data.aws_caller_identity.current.account_id}"
+  bucket   = "${var.project_name}-txn-logs-primary-${local.unique_suffix}-${data.aws_caller_identity.current.account_id}"
 
   tags = merge(local.common_tags, {
-    Name    = "${var.project_name}-txn-logs-primary-${var.environment_suffix}"
+    Name    = "${var.project_name}-txn-logs-primary-${local.unique_suffix}"
     Purpose = "transaction-logs"
     Region  = "primary"
   })
@@ -489,10 +497,10 @@ resource "aws_s3_bucket_public_access_block" "transaction_logs_primary" {
 
 resource "aws_s3_bucket" "transaction_logs_dr" {
   provider = aws.dr
-  bucket   = "${var.project_name}-txn-logs-dr-${var.environment_suffix}-${data.aws_caller_identity.current.account_id}"
+  bucket   = "${var.project_name}-txn-logs-dr-${local.unique_suffix}-${data.aws_caller_identity.current.account_id}"
 
   tags = merge(local.common_tags, {
-    Name    = "${var.project_name}-txn-logs-dr-${var.environment_suffix}"
+    Name    = "${var.project_name}-txn-logs-dr-${local.unique_suffix}"
     Purpose = "transaction-logs"
     Region  = "dr"
   })
@@ -531,7 +539,7 @@ resource "aws_s3_bucket_public_access_block" "transaction_logs_dr" {
 # S3 Replication Configuration for RPO compliance (~1 minute)
 resource "aws_iam_role" "s3_replication" {
   provider = aws.primary
-  name     = "${var.project_name}-s3-replication-role-${var.environment_suffix}"
+  name     = "${var.project_name}-s3-replication-role-${local.unique_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -634,10 +642,10 @@ resource "aws_s3_bucket_replication_configuration" "transaction_logs_replication
 
 resource "aws_s3_bucket" "vpc_flow_logs_primary" {
   provider = aws.primary
-  bucket   = "${var.project_name}-vpc-flow-logs-primary-${var.environment_suffix}-${data.aws_caller_identity.current.account_id}"
+  bucket   = "${var.project_name}-vpc-flow-logs-primary-${local.unique_suffix}-${data.aws_caller_identity.current.account_id}"
 
   tags = merge(local.common_tags, {
-    Name    = "${var.project_name}-vpc-flow-logs-primary-${var.environment_suffix}"
+    Name    = "${var.project_name}-vpc-flow-logs-primary-${local.unique_suffix}"
     Purpose = "vpc-flow-logs"
     Region  = "primary"
   })
@@ -705,17 +713,17 @@ resource "aws_flow_log" "primary" {
   log_destination      = aws_s3_bucket.vpc_flow_logs_primary.arn
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-flow-log-primary-${var.environment_suffix}"
+    Name   = "${var.project_name}-flow-log-primary-${local.unique_suffix}"
     Region = "primary"
   })
 }
 
 resource "aws_s3_bucket" "vpc_flow_logs_dr" {
   provider = aws.dr
-  bucket   = "${var.project_name}-vpc-flow-logs-dr-${var.environment_suffix}-${data.aws_caller_identity.current.account_id}"
+  bucket   = "${var.project_name}-vpc-flow-logs-dr-${local.unique_suffix}-${data.aws_caller_identity.current.account_id}"
 
   tags = merge(local.common_tags, {
-    Name    = "${var.project_name}-vpc-flow-logs-dr-${var.environment_suffix}"
+    Name    = "${var.project_name}-vpc-flow-logs-dr-${local.unique_suffix}"
     Purpose = "vpc-flow-logs"
     Region  = "dr"
   })
@@ -783,7 +791,7 @@ resource "aws_flow_log" "dr" {
   log_destination      = aws_s3_bucket.vpc_flow_logs_dr.arn
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-flow-log-dr-${var.environment_suffix}"
+    Name   = "${var.project_name}-flow-log-dr-${local.unique_suffix}"
     Region = "dr"
   })
 }
@@ -794,10 +802,10 @@ resource "aws_flow_log" "dr" {
 
 resource "aws_s3_bucket" "alb_logs_primary" {
   provider = aws.primary
-  bucket   = "${var.project_name}-alb-logs-primary-${var.environment_suffix}-${data.aws_caller_identity.current.account_id}"
+  bucket   = "${var.project_name}-alb-logs-primary-${local.unique_suffix}-${data.aws_caller_identity.current.account_id}"
 
   tags = merge(local.common_tags, {
-    Name    = "${var.project_name}-alb-logs-primary-${var.environment_suffix}"
+    Name    = "${var.project_name}-alb-logs-primary-${local.unique_suffix}"
     Purpose = "alb-logs"
     Region  = "primary"
   })
@@ -844,10 +852,10 @@ resource "aws_s3_bucket_policy" "alb_logs_primary" {
 
 resource "aws_s3_bucket" "alb_logs_dr" {
   provider = aws.dr
-  bucket   = "${var.project_name}-alb-logs-dr-${var.environment_suffix}-${data.aws_caller_identity.current.account_id}"
+  bucket   = "${var.project_name}-alb-logs-dr-${local.unique_suffix}-${data.aws_caller_identity.current.account_id}"
 
   tags = merge(local.common_tags, {
-    Name    = "${var.project_name}-alb-logs-dr-${var.environment_suffix}"
+    Name    = "${var.project_name}-alb-logs-dr-${local.unique_suffix}"
     Purpose = "alb-logs"
     Region  = "dr"
   })
@@ -904,7 +912,7 @@ resource "random_password" "db_password" {
 
 resource "aws_rds_global_cluster" "financial_db" {
   provider                  = aws.primary
-  global_cluster_identifier = "${var.project_name}-global-db-${var.environment_suffix}"
+  global_cluster_identifier = "${var.project_name}-global-db-${local.unique_suffix}"
   engine                    = "aurora-postgresql"
   engine_version            = "15.4"
   database_name             = var.database_name
@@ -915,22 +923,22 @@ resource "aws_rds_global_cluster" "financial_db" {
 
 resource "aws_db_subnet_group" "primary" {
   provider   = aws.primary
-  name       = "${var.project_name}-db-subnet-group-primary-${var.environment_suffix}"
+  name       = "${var.project_name}-db-subnet-group-primary-${local.unique_suffix}"
   subnet_ids = aws_subnet.primary_database[*].id
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-db-subnet-group-primary-${var.environment_suffix}"
+    Name   = "${var.project_name}-db-subnet-group-primary-${local.unique_suffix}"
     Region = "primary"
   })
 }
 
 resource "aws_db_subnet_group" "dr" {
   provider   = aws.dr
-  name       = "${var.project_name}-db-subnet-group-dr-${var.environment_suffix}"
+  name       = "${var.project_name}-db-subnet-group-dr-${local.unique_suffix}"
   subnet_ids = aws_subnet.dr_database[*].id
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-db-subnet-group-dr-${var.environment_suffix}"
+    Name   = "${var.project_name}-db-subnet-group-dr-${local.unique_suffix}"
     Region = "dr"
   })
 }
@@ -938,12 +946,12 @@ resource "aws_db_subnet_group" "dr" {
 # Security Groups for Aurora
 resource "aws_security_group" "aurora_primary" {
   provider    = aws.primary
-  name        = "${var.project_name}-aurora-sg-primary-${var.environment_suffix}"
+  name        = "${var.project_name}-aurora-sg-primary-${local.unique_suffix}"
   description = "Security group for Aurora primary cluster"
   vpc_id      = aws_vpc.primary.id
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-aurora-sg-primary-${var.environment_suffix}"
+    Name   = "${var.project_name}-aurora-sg-primary-${local.unique_suffix}"
     Region = "primary"
   })
 
@@ -976,12 +984,12 @@ resource "aws_security_group_rule" "aurora_primary_egress" {
 
 resource "aws_security_group" "aurora_dr" {
   provider    = aws.dr
-  name        = "${var.project_name}-aurora-sg-dr-${var.environment_suffix}"
+  name        = "${var.project_name}-aurora-sg-dr-${local.unique_suffix}"
   description = "Security group for Aurora DR cluster"
   vpc_id      = aws_vpc.dr.id
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-aurora-sg-dr-${var.environment_suffix}"
+    Name   = "${var.project_name}-aurora-sg-dr-${local.unique_suffix}"
     Region = "dr"
   })
 
@@ -1015,7 +1023,7 @@ resource "aws_security_group_rule" "aurora_dr_egress" {
 # IAM Role for RDS Enhanced Monitoring
 resource "aws_iam_role" "rds_monitoring_primary" {
   provider = aws.primary
-  name     = "${var.project_name}-rds-monitoring-primary-${var.environment_suffix}"
+  name     = "${var.project_name}-rds-monitoring-primary-${local.unique_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -1039,7 +1047,7 @@ resource "aws_iam_role_policy_attachment" "rds_monitoring_primary" {
 
 resource "aws_iam_role" "rds_monitoring_dr" {
   provider = aws.dr
-  name     = "${var.project_name}-rds-monitoring-dr-${var.environment_suffix}"
+  name     = "${var.project_name}-rds-monitoring-dr-${local.unique_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -1064,7 +1072,7 @@ resource "aws_iam_role_policy_attachment" "rds_monitoring_dr" {
 # Primary Aurora Cluster
 resource "aws_rds_cluster" "primary" {
   provider                  = aws.primary
-  cluster_identifier        = "${var.project_name}-primary-cluster-${var.environment_suffix}"
+  cluster_identifier        = "${var.project_name}-primary-cluster-${local.unique_suffix}"
   engine                    = aws_rds_global_cluster.financial_db.engine
   engine_version            = aws_rds_global_cluster.financial_db.engine_version
   global_cluster_identifier = aws_rds_global_cluster.financial_db.id
@@ -1081,10 +1089,10 @@ resource "aws_rds_cluster" "primary" {
   kms_key_id                      = aws_kms_key.aurora_primary.arn
   deletion_protection             = false
   skip_final_snapshot             = true
-  final_snapshot_identifier       = "${var.project_name}-primary-final-${var.environment_suffix}"
+  final_snapshot_identifier       = "${var.project_name}-primary-final-${local.unique_suffix}"
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-primary-cluster-${var.environment_suffix}"
+    Name   = "${var.project_name}-primary-cluster-${local.unique_suffix}"
     Region = "primary"
   })
 
@@ -1094,7 +1102,7 @@ resource "aws_rds_cluster" "primary" {
 # DR Aurora Cluster
 resource "aws_rds_cluster" "dr" {
   provider                  = aws.dr
-  cluster_identifier        = "${var.project_name}-dr-cluster-${var.environment_suffix}"
+  cluster_identifier        = "${var.project_name}-dr-cluster-${local.unique_suffix}"
   engine                    = aws_rds_global_cluster.financial_db.engine
   engine_version            = aws_rds_global_cluster.financial_db.engine_version
   global_cluster_identifier = aws_rds_global_cluster.financial_db.id
@@ -1108,10 +1116,10 @@ resource "aws_rds_cluster" "dr" {
   kms_key_id                      = aws_kms_key.aurora_dr.arn
   deletion_protection             = false
   skip_final_snapshot             = true
-  final_snapshot_identifier       = "${var.project_name}-dr-final-${var.environment_suffix}"
+  final_snapshot_identifier       = "${var.project_name}-dr-final-${local.unique_suffix}"
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-dr-cluster-${var.environment_suffix}"
+    Name   = "${var.project_name}-dr-cluster-${local.unique_suffix}"
     Region = "dr"
   })
 
@@ -1122,7 +1130,7 @@ resource "aws_rds_cluster" "dr" {
 resource "aws_rds_cluster_instance" "primary" {
   provider           = aws.primary
   count              = var.aurora_instance_count_primary
-  identifier         = "${var.project_name}-primary-instance-${count.index}-${var.environment_suffix}"
+  identifier         = "${var.project_name}-primary-instance-${count.index}-${local.unique_suffix}"
   cluster_identifier = aws_rds_cluster.primary.id
   instance_class     = var.aurora_instance_class
   engine             = aws_rds_cluster.primary.engine
@@ -1136,7 +1144,7 @@ resource "aws_rds_cluster_instance" "primary" {
   performance_insights_kms_key_id = var.enable_performance_insights ? aws_kms_key.aurora_primary.arn : null
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-primary-instance-${count.index}-${var.environment_suffix}"
+    Name   = "${var.project_name}-primary-instance-${count.index}-${local.unique_suffix}"
     Region = "primary"
   })
 }
@@ -1145,7 +1153,7 @@ resource "aws_rds_cluster_instance" "primary" {
 resource "aws_rds_cluster_instance" "dr" {
   provider           = aws.dr
   count              = var.aurora_instance_count_dr
-  identifier         = "${var.project_name}-dr-instance-${count.index}-${var.environment_suffix}"
+  identifier         = "${var.project_name}-dr-instance-${count.index}-${local.unique_suffix}"
   cluster_identifier = aws_rds_cluster.dr.id
   instance_class     = var.aurora_instance_class_dr
   engine             = aws_rds_cluster.dr.engine
@@ -1158,7 +1166,7 @@ resource "aws_rds_cluster_instance" "dr" {
   performance_insights_kms_key_id = var.enable_performance_insights ? aws_kms_key.aurora_dr.arn : null
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-dr-instance-${count.index}-${var.environment_suffix}"
+    Name   = "${var.project_name}-dr-instance-${count.index}-${local.unique_suffix}"
     Region = "dr"
   })
 }
@@ -1169,7 +1177,7 @@ resource "aws_rds_cluster_instance" "dr" {
 
 resource "aws_dynamodb_table" "session_data" {
   provider         = aws.primary
-  name             = "${var.project_name}-session-data-${var.environment_suffix}"
+  name             = "${var.project_name}-session-data-${local.unique_suffix}"
   billing_mode     = "PAY_PER_REQUEST"
   hash_key         = "session_id"
   range_key        = "timestamp"
@@ -1206,7 +1214,7 @@ resource "aws_dynamodb_table" "session_data" {
   }
 
   tags = merge(local.common_tags, {
-    Name    = "${var.project_name}-session-data-${var.environment_suffix}"
+    Name    = "${var.project_name}-session-data-${local.unique_suffix}"
     Purpose = "session-state"
   })
 }
@@ -1217,12 +1225,12 @@ resource "aws_dynamodb_table" "session_data" {
 
 resource "aws_security_group" "app_primary" {
   provider    = aws.primary
-  name        = "${var.project_name}-app-sg-primary-${var.environment_suffix}"
+  name        = "${var.project_name}-app-sg-primary-${local.unique_suffix}"
   description = "Security group for application tier primary"
   vpc_id      = aws_vpc.primary.id
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-app-sg-primary-${var.environment_suffix}"
+    Name   = "${var.project_name}-app-sg-primary-${local.unique_suffix}"
     Region = "primary"
   })
 
@@ -1266,12 +1274,12 @@ resource "aws_security_group_rule" "app_primary_egress" {
 
 resource "aws_security_group" "app_dr" {
   provider    = aws.dr
-  name        = "${var.project_name}-app-sg-dr-${var.environment_suffix}"
+  name        = "${var.project_name}-app-sg-dr-${local.unique_suffix}"
   description = "Security group for application tier DR"
   vpc_id      = aws_vpc.dr.id
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-app-sg-dr-${var.environment_suffix}"
+    Name   = "${var.project_name}-app-sg-dr-${local.unique_suffix}"
     Region = "dr"
   })
 
@@ -1319,12 +1327,12 @@ resource "aws_security_group_rule" "app_dr_egress" {
 
 resource "aws_security_group" "alb_primary" {
   provider    = aws.primary
-  name        = "${var.project_name}-alb-sg-primary-${var.environment_suffix}"
+  name        = "${var.project_name}-alb-sg-primary-${local.unique_suffix}"
   description = "Security group for ALB primary"
   vpc_id      = aws_vpc.primary.id
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-alb-sg-primary-${var.environment_suffix}"
+    Name   = "${var.project_name}-alb-sg-primary-${local.unique_suffix}"
     Region = "primary"
   })
 
@@ -1368,12 +1376,12 @@ resource "aws_security_group_rule" "alb_primary_egress" {
 
 resource "aws_security_group" "alb_dr" {
   provider    = aws.dr
-  name        = "${var.project_name}-alb-sg-dr-${var.environment_suffix}"
+  name        = "${var.project_name}-alb-sg-dr-${local.unique_suffix}"
   description = "Security group for ALB DR"
   vpc_id      = aws_vpc.dr.id
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-alb-sg-dr-${var.environment_suffix}"
+    Name   = "${var.project_name}-alb-sg-dr-${local.unique_suffix}"
     Region = "dr"
   })
 
@@ -1417,7 +1425,7 @@ resource "aws_security_group_rule" "alb_dr_egress" {
 
 resource "aws_lb" "primary" {
   provider                   = aws.primary
-  name                       = "${substr(var.project_name, 0, 8)}-alb-pri-${var.environment_suffix}"
+  name                       = "${substr(var.project_name, 0, 8)}-alb-pri-${local.unique_suffix}"
   internal                   = false
   load_balancer_type         = "application"
   security_groups            = [aws_security_group.alb_primary.id]
@@ -1432,7 +1440,7 @@ resource "aws_lb" "primary" {
   }
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-alb-primary-${var.environment_suffix}"
+    Name   = "${var.project_name}-alb-primary-${local.unique_suffix}"
     Region = "primary"
   })
 
@@ -1445,7 +1453,7 @@ resource "aws_lb" "primary" {
 
 resource "aws_lb" "dr" {
   provider                   = aws.dr
-  name                       = "${substr(var.project_name, 0, 8)}-alb-dr-${var.environment_suffix}"
+  name                       = "${substr(var.project_name, 0, 8)}-alb-dr-${local.unique_suffix}"
   internal                   = false
   load_balancer_type         = "application"
   security_groups            = [aws_security_group.alb_dr.id]
@@ -1460,7 +1468,7 @@ resource "aws_lb" "dr" {
   }
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-alb-dr-${var.environment_suffix}"
+    Name   = "${var.project_name}-alb-dr-${local.unique_suffix}"
     Region = "dr"
   })
 
@@ -1474,7 +1482,7 @@ resource "aws_lb" "dr" {
 # ALB Target Groups with aggressive health checks for quick failure detection (RTO 5 minutes)
 resource "aws_lb_target_group" "primary" {
   provider             = aws.primary
-  name                 = "${substr(var.project_name, 0, 8)}-tg-pri-${var.environment_suffix}"
+  name                 = "${substr(var.project_name, 0, 8)}-tg-pri-${local.unique_suffix}"
   port                 = 443
   protocol             = "HTTPS"
   vpc_id               = aws_vpc.primary.id
@@ -1499,14 +1507,14 @@ resource "aws_lb_target_group" "primary" {
   }
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-tg-primary-${var.environment_suffix}"
+    Name   = "${var.project_name}-tg-primary-${local.unique_suffix}"
     Region = "primary"
   })
 }
 
 resource "aws_lb_target_group" "dr" {
   provider             = aws.dr
-  name                 = "${substr(var.project_name, 0, 8)}-tg-dr-${var.environment_suffix}"
+  name                 = "${substr(var.project_name, 0, 8)}-tg-dr-${local.unique_suffix}"
   port                 = 443
   protocol             = "HTTPS"
   vpc_id               = aws_vpc.dr.id
@@ -1531,7 +1539,7 @@ resource "aws_lb_target_group" "dr" {
   }
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-tg-dr-${var.environment_suffix}"
+    Name   = "${var.project_name}-tg-dr-${local.unique_suffix}"
     Region = "dr"
   })
 }
@@ -1578,7 +1586,7 @@ resource "aws_route53_health_check" "primary" {
   request_interval  = 10
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-health-check-primary-${var.environment_suffix}"
+    Name = "${var.project_name}-health-check-primary-${local.unique_suffix}"
   })
 }
 
@@ -1591,7 +1599,7 @@ resource "aws_route53_health_check" "dr" {
   request_interval  = 10
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-health-check-dr-${var.environment_suffix}"
+    Name = "${var.project_name}-health-check-dr-${local.unique_suffix}"
   })
 }
 
@@ -1599,7 +1607,7 @@ resource "aws_route53_health_check" "dr" {
 resource "aws_route53_record" "primary" {
   count   = var.route53_zone_id != "" ? 1 : 0
   zone_id = var.route53_zone_id
-  name    = "${var.environment_suffix}.${var.domain_name}"
+  name    = "${local.unique_suffix}.${var.domain_name}"
   type    = "A"
 
   set_identifier = "Primary"
@@ -1619,7 +1627,7 @@ resource "aws_route53_record" "primary" {
 resource "aws_route53_record" "dr" {
   count   = var.route53_zone_id != "" ? 1 : 0
   zone_id = var.route53_zone_id
-  name    = "${var.environment_suffix}.${var.domain_name}"
+  name    = "${local.unique_suffix}.${var.domain_name}"
   type    = "A"
 
   set_identifier = "DR"
@@ -1642,7 +1650,7 @@ resource "aws_route53_record" "dr" {
 
 resource "aws_cloudwatch_metric_alarm" "primary_health" {
   provider            = aws.primary
-  alarm_name          = "${var.project_name}-primary-health-alarm-${var.environment_suffix}"
+  alarm_name          = "${var.project_name}-primary-health-alarm-${local.unique_suffix}"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = 2
   metric_name         = "HealthyHostCount"
@@ -1664,7 +1672,7 @@ resource "aws_cloudwatch_metric_alarm" "primary_health" {
 
 resource "aws_cloudwatch_metric_alarm" "dr_health" {
   provider            = aws.dr
-  alarm_name          = "${var.project_name}-dr-health-alarm-${var.environment_suffix}"
+  alarm_name          = "${var.project_name}-dr-health-alarm-${local.unique_suffix}"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = 2
   metric_name         = "HealthyHostCount"
@@ -1686,7 +1694,7 @@ resource "aws_cloudwatch_metric_alarm" "dr_health" {
 
 resource "aws_cloudwatch_metric_alarm" "aurora_lag_alarm" {
   provider            = aws.primary
-  alarm_name          = "${var.project_name}-aurora-replication-lag-${var.environment_suffix}"
+  alarm_name          = "${var.project_name}-aurora-replication-lag-${local.unique_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
   metric_name         = "AuroraGlobalDBReplicationLag"
@@ -1711,7 +1719,7 @@ resource "aws_cloudwatch_metric_alarm" "aurora_lag_alarm" {
 
 resource "aws_sns_topic" "dr_notifications" {
   provider = aws.primary
-  name     = "${var.project_name}-dr-notifications-${var.environment_suffix}"
+  name     = "${var.project_name}-dr-notifications-${local.unique_suffix}"
 
   tags = merge(local.common_tags, {
     Purpose = "dr-notifications"
@@ -1731,7 +1739,7 @@ resource "aws_sns_topic_subscription" "dr_email" {
 
 resource "aws_sqs_queue" "lambda_dlq" {
   provider                  = aws.primary
-  name                      = "${var.project_name}-lambda-dlq-${var.environment_suffix}"
+  name                      = "${var.project_name}-lambda-dlq-${local.unique_suffix}"
   message_retention_seconds = 1209600
 
   tags = merge(local.common_tags, {
@@ -1741,7 +1749,7 @@ resource "aws_sqs_queue" "lambda_dlq" {
 
 resource "aws_iam_role" "lambda_failover" {
   provider = aws.primary
-  name     = "${var.project_name}-lambda-failover-role-${var.environment_suffix}"
+  name     = "${var.project_name}-lambda-failover-role-${local.unique_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -1792,7 +1800,7 @@ resource "aws_iam_role_policy" "lambda_failover" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "arn:aws:logs:${local.regions.primary}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.project_name}-failover-orchestrator-${var.environment_suffix}:*"
+        Resource = "arn:aws:logs:${local.regions.primary}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.project_name}-failover-orchestrator-${local.unique_suffix}:*"
       },
       {
         Effect = "Allow"
@@ -1807,7 +1815,7 @@ resource "aws_iam_role_policy" "lambda_failover" {
 
 resource "aws_lambda_function" "failover_orchestrator" {
   provider      = aws.primary
-  function_name = "${var.project_name}-failover-orchestrator-${var.environment_suffix}"
+  function_name = "${var.project_name}-failover-orchestrator-${local.unique_suffix}"
   role          = aws_iam_role.lambda_failover.arn
   handler       = "failover_orchestrator.handler"
   runtime       = "python3.11"
@@ -1837,7 +1845,7 @@ resource "aws_lambda_function" "failover_orchestrator" {
 
 resource "aws_iam_role" "lambda_dr_test" {
   provider = aws.primary
-  name     = "${var.project_name}-lambda-dr-test-role-${var.environment_suffix}"
+  name     = "${var.project_name}-lambda-dr-test-role-${local.unique_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -1887,7 +1895,7 @@ resource "aws_iam_role_policy" "lambda_dr_test" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "arn:aws:logs:${local.regions.primary}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.project_name}-dr-test-validator-${var.environment_suffix}:*"
+        Resource = "arn:aws:logs:${local.regions.primary}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.project_name}-dr-test-validator-${local.unique_suffix}:*"
       }
     ]
   })
@@ -1895,7 +1903,7 @@ resource "aws_iam_role_policy" "lambda_dr_test" {
 
 resource "aws_lambda_function" "dr_test_validator" {
   provider      = aws.primary
-  function_name = "${var.project_name}-dr-test-validator-${var.environment_suffix}"
+  function_name = "${var.project_name}-dr-test-validator-${local.unique_suffix}"
   role          = aws_iam_role.lambda_dr_test.arn
   handler       = "dr_test_validator.handler"
   runtime       = "python3.11"
@@ -1924,7 +1932,7 @@ resource "aws_lambda_function" "dr_test_validator" {
 
 resource "aws_cloudwatch_event_rule" "failover_trigger" {
   provider    = aws.primary
-  name        = "${var.project_name}-failover-trigger-${var.environment_suffix}"
+  name        = "${var.project_name}-failover-trigger-${local.unique_suffix}"
   description = "Trigger failover on health check failures"
 
   event_pattern = jsonencode({
@@ -1963,7 +1971,7 @@ resource "aws_lambda_permission" "allow_eventbridge" {
 
 resource "aws_iam_role" "ssm_automation" {
   provider = aws.primary
-  name     = "${var.project_name}-ssm-automation-role-${var.environment_suffix}"
+  name     = "${var.project_name}-ssm-automation-role-${local.unique_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -2018,7 +2026,7 @@ resource "aws_iam_role_policy" "ssm_automation" {
 
 resource "aws_ssm_document" "dr_test_runbook" {
   provider        = aws.primary
-  name            = "${var.project_name}-dr-test-runbook-${var.environment_suffix}"
+  name            = "${var.project_name}-dr-test-runbook-${local.unique_suffix}"
   document_type   = "Automation"
   document_format = "YAML"
 
@@ -2101,7 +2109,7 @@ DOC
 
 resource "aws_secretsmanager_secret" "db_credentials_primary" {
   provider    = aws.primary
-  name        = "${var.project_name}-db-credentials-primary-${var.environment_suffix}"
+  name        = "${var.project_name}-db-credentials-primary-${local.unique_suffix}"
   description = "Aurora database master credentials"
 
   replica {
@@ -2143,7 +2151,7 @@ output "aurora_global_cluster_id" {
 }
 
 output "route53_failover_domain" {
-  value       = var.route53_zone_id != "" ? "${var.environment_suffix}.${var.domain_name}" : "Not configured - Route 53 zone ID not provided"
+  value       = var.route53_zone_id != "" ? "${local.unique_suffix}.${var.domain_name}" : "Not configured - Route 53 zone ID not provided"
   description = "Route 53 failover domain"
 }
 
