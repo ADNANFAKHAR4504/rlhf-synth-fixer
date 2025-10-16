@@ -81,8 +81,7 @@
     "localstack:tf:test": "./scripts/localstack-terraform-test.sh",
     "localstack:tf:cleanup": "./scripts/localstack-terraform-cleanup.sh",
     "release": "semantic-release",
-    "prepare": "husky",
-    "create-ideal-response": "ts-node cli/create-ideal-response.ts"
+    "prepare": "husky"
   },
   "devDependencies": {
     "@aws-sdk/client-api-gateway": "^3.855.0",
