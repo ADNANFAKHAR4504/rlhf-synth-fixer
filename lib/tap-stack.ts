@@ -133,7 +133,7 @@ export class TapStack extends TerraformStack {
 
     // Route 53 for DNS
     new Route53Zone(this, 'hosted-zone', {
-      name: 'example.com',
+      name: 'mytestapp-demo.com',
     });
 
     // S3 for failover
