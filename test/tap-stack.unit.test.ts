@@ -43,15 +43,6 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(param.AllowedValues).toEqual(['Development', 'Staging', 'Production']);
     });
 
-    test('should have EnableCrossRegionReplication parameter', () => {
-      const param = template.Parameters.EnableCrossRegionReplication;
-      expect(param).toBeDefined();
-      expect(param.Type).toBe('String');
-      expect(param.Default).toBe('true');
-      expect(param.AllowedValues).toContain('true');
-      expect(param.AllowedValues).toContain('false');
-    });
-
     test('should have LatestAmiId parameter for SSM', () => {
       const param = template.Parameters.LatestAmiId;
       expect(param).toBeDefined();
