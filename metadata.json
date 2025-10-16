@@ -1,0 +1,14 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349058",
+  "team": "3",
+  "startedAt": "2025-10-16T15:56:56.642Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "VPC, Public Subnet, Private Subnet, Internet Gateway, NAT Gateway, Elastic IP, Route Table, Route, Security Group, Application Load Balancer, HTTPS Listener, Target Group, S3 Bucket (Application), S3 Bucket (Logs), S3 Bucket Policy, IAM Role (EC2), IAM Policy, CloudTrail Trail"
+}
