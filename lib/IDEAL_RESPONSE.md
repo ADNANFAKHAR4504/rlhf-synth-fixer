@@ -10,7 +10,7 @@ The infrastructure includes:
 - **VPC**: Isolated network environment with private subnets
 - **KMS Keys**: Customer-managed encryption keys for data security
 - **CloudWatch**: Comprehensive logging and monitoring
-- **IAM Roles**: Least privilege access policies
+- **IAM Roles**: Least privilege access policy
 - **Security Groups**: Restricted network access
 
 ## Code Implementation
