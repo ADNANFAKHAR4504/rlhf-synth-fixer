@@ -10,7 +10,6 @@ The template should provision the following security resources in the us-west-2 
 3.Logging and Monitoring:
   Enable AWS CloudTrail and configure it to deliver logs to a new, secure S3 bucket.
   Set up a CloudWatch Alarm to trigger on failed AWS console sign-in attempts.
-  Enable AWS GuardDuty for threat detection.
 4.Data Protection:
   Create a customer-managed KMS key for encryption.
   Create a private S3 bucket that is encrypted using the KMS key created above. The bucket policy should restrict access to a specific CIDR block.
