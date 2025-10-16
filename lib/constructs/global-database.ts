@@ -66,7 +66,7 @@ export class GlobalDatabase extends Construct {
         version: rds.AuroraMysqlEngineVersion.VER_3_04_0,
       }),
       credentials: rds.Credentials.fromGeneratedSecret('admin', {
-        secretName: `financial-db-${currentRegion}-credentials-${envSuffix}`,
+        secretName: `findb-${currentRegion}-${envSuffix}`,
       }),
       instanceProps: {
         vpc: vpc,
