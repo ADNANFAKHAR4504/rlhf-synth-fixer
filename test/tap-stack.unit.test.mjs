@@ -453,7 +453,7 @@ describe('HIPAA-Compliant Healthcare Data Pipeline Stack', () => {
       const rdsConfig = mockRdsInstance.mock.calls[0][1];
       expect(rdsConfig.identifier).toBe('healthcare-rds-dev');
       expect(rdsConfig.engine).toBe('postgres');
-      expect(rdsConfig.engineVersion).toBe('15.5');
+      expect(rdsConfig.engineVersion).toBe('15.8');
     });
 
     it('should enable storage encryption with KMS', () => {
