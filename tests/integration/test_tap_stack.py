@@ -496,7 +496,7 @@ class TestTapStack(unittest.TestCase):
         try:
             # Test GET non-existent item
             response = requests.get(f"{self.api_endpoint}items/non-existent-id-12345", timeout=10)
-            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.status_code, 404)
             
             # Test invalid JSON in POST
             response = requests.post(
