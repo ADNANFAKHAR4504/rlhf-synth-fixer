@@ -460,7 +460,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
          t.IsMultiRegionTrail === true) &&
         // Ensure it's active and logging
         t.IsLogging !== false
-      ) || response.trailList?.[0]; /
+      ) || response.trailList?.[0]; 
       
       if (!trail) {
         console.warn('No CloudTrail trails found in the region');
