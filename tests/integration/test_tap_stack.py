@@ -11,27 +11,44 @@ from datetime import datetime, timezone
 REAL_ENVIRONMENT_SUFFIX = os.getenv("ENVIRONMENT_SUFFIX", "dev")
 REAL_AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 
+# Debug output for CI troubleshooting
+print(f"🔍 Integration Tests Configuration:")
+print(f"   ENVIRONMENT_SUFFIX = '{REAL_ENVIRONMENT_SUFFIX}'")
+print(f"   AWS_REGION = '{REAL_AWS_REGION}'")
+
 
 @pytest.fixture
 def outputs():
     """Load CDKTF outputs from terraform-outputs.json or calculate expected names."""
-    try:
-        # Try to load from terraform outputs if available
-        with open('terraform-outputs.json', 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        # If no outputs file, calculate expected resource names based on CDKTF naming
-        return {
-            'kinesis_stream_name': f'iot-data-stream-{REAL_ENVIRONMENT_SUFFIX}',
-            'raw_data_bucket_name': f'iot-raw-data-{REAL_ENVIRONMENT_SUFFIX}-{REAL_AWS_REGION}',
-            'processed_data_bucket_name': f'iot-processed-data-{REAL_ENVIRONMENT_SUFFIX}-{REAL_AWS_REGION}',
-            'dynamodb_table_name': f'iot-sensor-data-{REAL_ENVIRONMENT_SUFFIX}',
-            'processor_lambda_name': f'iot-processor-{REAL_ENVIRONMENT_SUFFIX}',
-            'dashboard_name': f'iot-processing-{REAL_ENVIRONMENT_SUFFIX}',
-            'api_secret_name': f'iot-api-credentials-{REAL_ENVIRONMENT_SUFFIX}',
-            'sns_topic_name': f'iot-anomaly-alerts-{REAL_ENVIRONMENT_SUFFIX}',
-            'firehose_name': f'iot-firehose-{REAL_ENVIRONMENT_SUFFIX}'
-        }
+    
+    # First, try to load from terraform outputs file
+    for filename in ['terraform-outputs.json', 'cdk-outputs.json']:
+        try:
+            with open(filename, 'r', encoding='utf-8') as f:
+                outputs_data = json.load(f)
+                print(f"✅ Loaded outputs from {filename}")
+                return outputs_data
+        except FileNotFoundError:
+            continue
+    
+    # If no outputs file found, calculate expected resource names based on CDKTF naming
+    calculated_outputs = {
+        'kinesis_stream_name': f'iot-data-stream-{REAL_ENVIRONMENT_SUFFIX}',
+        'raw_data_bucket_name': f'iot-raw-data-{REAL_ENVIRONMENT_SUFFIX}-{REAL_AWS_REGION}',
+        'processed_data_bucket_name': f'iot-processed-data-{REAL_ENVIRONMENT_SUFFIX}-{REAL_AWS_REGION}',
+        'dynamodb_table_name': f'iot-sensor-data-{REAL_ENVIRONMENT_SUFFIX}',
+        'processor_lambda_name': f'iot-processor-{REAL_ENVIRONMENT_SUFFIX}',
+        'dashboard_name': f'iot-processing-{REAL_ENVIRONMENT_SUFFIX}',
+        'api_secret_name': f'iot-api-credentials-{REAL_ENVIRONMENT_SUFFIX}',
+        'sns_topic_name': f'iot-anomaly-alerts-{REAL_ENVIRONMENT_SUFFIX}',
+        'firehose_name': f'iot-firehose-{REAL_ENVIRONMENT_SUFFIX}'
+    }
+    
+    print(f"📝 Using calculated resource names for environment '{REAL_ENVIRONMENT_SUFFIX}':")
+    for key, value in calculated_outputs.items():
+        print(f"   {key}: {value}")
+    
+    return calculated_outputs
 
 
 def test_kinesis_stream_exists(outputs):
