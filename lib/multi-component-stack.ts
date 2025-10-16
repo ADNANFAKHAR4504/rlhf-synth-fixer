@@ -3,6 +3,8 @@ import { Duration, RemovalPolicy } from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as cloudfrontOrigins from 'aws-cdk-lib/aws-cloudfront-origins';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cw_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -12,6 +14,8 @@ import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
 
@@ -481,6 +485,166 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
       comparisonOperator:
         cdk.aws_cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
+
+    // ==========================
+    // Monitoring: SNS topic, additional alarms and dashboard
+    // ==========================
+
+    // Central SNS topic for alarm notifications. We do NOT auto-subscribe an email
+    // unless ALARM_NOTIFICATION_EMAIL is set in the environment to avoid CI auto-subscribes.
+    const alarmsTopic = new sns.Topic(this, 'AlarmsTopic', {
+      displayName: `prod-alarms-${this.stringSuffix}`,
+    });
+
+    if (process.env.ALARM_NOTIFICATION_EMAIL) {
+      alarmsTopic.addSubscription(
+        new subscriptions.EmailSubscription(
+          process.env.ALARM_NOTIFICATION_EMAIL
+        )
+      );
+    }
+
+    // SQS alarms
+    new cloudwatch.Alarm(this, 'SqsVisibleMessagesAlarm', {
+      alarmName: `prod-cloudwatch-sqs-visible-${this.stringSuffix}`,
+      metric: asyncQueue.metricApproximateNumberOfMessagesVisible(),
+      threshold: 100,
+      evaluationPeriods: 2,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+    });
+
+    new cloudwatch.Alarm(this, 'SqsOldestMessageAlarm', {
+      alarmName: `prod-cloudwatch-sqs-oldest-${this.stringSuffix}`,
+      metric: asyncQueue.metricApproximateAgeOfOldestMessage(),
+      threshold: 300, // seconds
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+    });
+
+    // S3 metrics (4xx and 5xx errors)
+    const s34xx = new cloudwatch.Metric({
+      namespace: 'AWS/S3',
+      metricName: '4xxErrors',
+      dimensionsMap: { BucketName: staticFilesBucket.bucketName },
+      period: Duration.minutes(5),
+    });
+
+    const s35xx = new cloudwatch.Metric({
+      namespace: 'AWS/S3',
+      metricName: '5xxErrors',
+      dimensionsMap: { BucketName: staticFilesBucket.bucketName },
+      period: Duration.minutes(5),
+    });
+
+    new cloudwatch.Alarm(this, 'S34xxAlarm', {
+      alarmName: `prod-cloudwatch-s3-4xx-${this.stringSuffix}`,
+      metric: s34xx,
+      threshold: 10,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+    });
+
+    new cloudwatch.Alarm(this, 'S35xxAlarm', {
+      alarmName: `prod-cloudwatch-s3-5xx-${this.stringSuffix}`,
+      metric: s35xx,
+      threshold: 5,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+    });
+
+    // Lambda duration and throttles
+    new cloudwatch.Alarm(this, 'LambdaDurationAlarm', {
+      alarmName: `prod-cloudwatch-lambda-duration-${this.stringSuffix}`,
+      metric: lambdaFunction.metricDuration(),
+      threshold: 300000, // milliseconds (5m) - very high, tune as needed
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+    });
+
+    new cloudwatch.Alarm(this, 'LambdaThrottlesAlarm', {
+      alarmName: `prod-cloudwatch-lambda-throttles-${this.stringSuffix}`,
+      metric: lambdaFunction.metricThrottles(),
+      threshold: 1,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+    });
+
+    // RDS additional alarm: free storage space low
+    new cloudwatch.Alarm(this, 'RdsFreeStorageAlarm', {
+      alarmName: `prod-cloudwatch-rds-free-storage-${this.stringSuffix}`,
+      metric: rdsInstance.metricFreeStorageSpace(),
+      threshold: 20 * 1024 * 1024 * 1024, // 20 GiB
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+    });
+
+    // Wire alarms to SNS topic using actions (add actions so they notify).
+    // We'll attach actions directly when creating alarms below.
+
+    // attach alarm actions to some of the alarms we created above
+    // (we create alarms with attached SnsAction below)
+    // Recreate a couple of key alarms with actions attached
+    const lambdaErrorsWithAction = new cloudwatch.Alarm(
+      this,
+      'LambdaErrorsAlarmWithAction',
+      {
+        alarmName: `prod-cloudwatch-lambda-errors-${this.stringSuffix}-with-action`,
+        metric: lambdaFunction.metricErrors(),
+        threshold: 5,
+        evaluationPeriods: 2,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      }
+    );
+    lambdaErrorsWithAction.addAlarmAction(
+      new cw_actions.SnsAction(alarmsTopic)
+    );
+
+    const rdsCpuWithAction = new cloudwatch.Alarm(
+      this,
+      'RdsCpuAlarmWithAction',
+      {
+        alarmName: `prod-cloudwatch-rds-cpu-${this.stringSuffix}-with-action`,
+        metric: rdsInstance.metricCPUUtilization(),
+        threshold: 80,
+        evaluationPeriods: 2,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      }
+    );
+    rdsCpuWithAction.addAlarmAction(new cw_actions.SnsAction(alarmsTopic));
+
+    // Dashboard
+    const dashboard = new cloudwatch.Dashboard(this, 'OperationalDashboard', {
+      dashboardName: `prod-ops-${this.stringSuffix}`,
+    });
+
+    dashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: 'Lambda Errors',
+        left: [lambdaFunction.metricErrors()],
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'Lambda Duration (ms)',
+        left: [lambdaFunction.metricDuration()],
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'RDS CPU %',
+        left: [rdsInstance.metricCPUUtilization()],
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'SQS Visible Messages',
+        left: [asyncQueue.metricApproximateNumberOfMessagesVisible()],
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'S3 4xx Errors',
+        left: [s34xx],
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'API Gateway 5xx',
+        left: [api.metricServerError()],
+      })
+    );
 
     // ========================================
     // Stack Outputs

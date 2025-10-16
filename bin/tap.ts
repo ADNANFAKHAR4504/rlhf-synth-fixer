@@ -37,7 +37,6 @@ if (multiRegion) {
     environmentSuffix: secondarySuffix,
     env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: 'us-west-2' },
   });
-
 } else {
   const stackName = `TapStack${environmentSuffix}`;
   new TapStack(app, stackName, {
