@@ -4,7 +4,6 @@ import { DescribeInstancesCommand, DescribeInternetGatewaysCommand, DescribeNatG
 import { GetBucketVersioningCommand, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, S3Client, ListObjectVersionsCommand, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import { GetRoleCommand, GetInstanceProfileCommand, ListAttachedRolePoliciesCommand, ListRolePoliciesCommand, GetRolePolicyCommand, IAMClient } from '@aws-sdk/client-iam';
 import { SendCommandCommand, GetCommandInvocationCommand, SSMClient } from '@aws-sdk/client-ssm';
-import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import fs from 'fs';
 
 // Configuration - These are coming from cfn-outputs after deployment
@@ -23,26 +22,6 @@ const cloudWatchClient = new CloudWatchClient({ region });
 const s3Client = new S3Client({ region });
 const iamClient = new IAMClient({ region });
 const ssmClient = new SSMClient({ region });
-const secretsManagerClient = new SecretsManagerClient({ region });
-
-// Helper function to get DB password from Secrets Manager
-async function getDBPassword(): Promise<string> {
-  try {
-    const secretArn = outputs.DBSecretArn;
-    const response = await secretsManagerClient.send(new GetSecretValueCommand({
-      SecretId: secretArn
-    }));
-
-    if (response.SecretString) {
-      const secret = JSON.parse(response.SecretString);
-      return secret.password;
-    }
-    throw new Error('Secret string not found');
-  } catch (error) {
-    console.error('Failed to retrieve DB password from Secrets Manager:', error);
-    throw error;
-  }
-}
 
 // Helper function to wait for SSM command completion
 async function waitForCommand(commandId: string, instanceId: string, maxWaitTime = 60000): Promise<any> {
@@ -419,19 +398,20 @@ describe('Cloud Environment Setup Integration Tests', () => {
     test('should allow EC2 instance 1 to connect to RDS MySQL database', async () => {
       const instanceId = outputs.EC2Instance1Id;
       const rdsEndpoint = outputs.RDSInstanceEndpoint;
+      const secretArn = outputs.DBSecretArn;
 
       try {
-        // Get the actual password from Secrets Manager
-        const dbPassword = await getDBPassword();
-
-        // ACTION: EC2 connects to RDS using mysql client
+        // ACTION: EC2 retrieves password from Secrets Manager and connects to RDS
         const command = await ssmClient.send(new SendCommandCommand({
           DocumentName: 'AWS-RunShellScript',
           InstanceIds: [instanceId],
           Parameters: {
             commands: [
               '#!/bin/bash',
-              `mysql -h ${rdsEndpoint} -u admin -p"${dbPassword}" -e "SELECT 1 AS connection_test;" 2>&1`
+              'set -e',
+              `SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id "${secretArn}" --region us-west-1 --query SecretString --output text)`,
+              'DB_PASSWORD=$(echo $SECRET_JSON | jq -r .password)',
+              `mysql -h ${rdsEndpoint} -u admin -p"$DB_PASSWORD" -e "SELECT 1 AS connection_test;" 2>&1`
             ]
           }
         }));
@@ -513,11 +493,9 @@ describe('Cloud Environment Setup Integration Tests', () => {
     test('should execute complete flow: EC2 performs database operations on RDS', async () => {
       const instanceId = outputs.EC2Instance1Id;
       const rdsEndpoint = outputs.RDSInstanceEndpoint;
+      const secretArn = outputs.DBSecretArn;
 
       try {
-        // Get the actual password from Secrets Manager
-        const dbPassword = await getDBPassword();
-
         // E2E ACTION: Complete database workflow
         const command = await ssmClient.send(new SendCommandCommand({
           DocumentName: 'AWS-RunShellScript',
@@ -527,8 +505,12 @@ describe('Cloud Environment Setup Integration Tests', () => {
               '#!/bin/bash',
               'set -e',
               '',
-              '# Step 1: Connect to RDS and perform operations',
-              `mysql -h ${rdsEndpoint} -u admin -p"${dbPassword}" << 'EOF'`,
+              '# Step 1: Retrieve password from Secrets Manager',
+              `SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id "${secretArn}" --region us-west-1 --query SecretString --output text)`,
+              'DB_PASSWORD=$(echo $SECRET_JSON | jq -r .password)',
+              '',
+              '# Step 2: Connect to RDS and perform operations',
+              `mysql -h ${rdsEndpoint} -u admin -p"$DB_PASSWORD" << 'EOF'`,
               '-- Step 2: Create test database',
               'CREATE DATABASE IF NOT EXISTS integration_test;',
               'USE integration_test;',

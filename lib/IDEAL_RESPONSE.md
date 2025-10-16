@@ -790,7 +790,7 @@ The architecture spans two Availability Zones with subnets in each zone, providi
               [
                 "#!/bin/bash\n",
                 "yum update -y\n",
-                "yum install -y mysql amazon-cloudwatch-agent\n",
+                "yum install -y mysql amazon-cloudwatch-agent jq\n",
                 "yum install -y amazon-ssm-agent\n",
                 "systemctl enable amazon-ssm-agent\n",
                 "systemctl start amazon-ssm-agent\n",
@@ -847,7 +847,7 @@ The architecture spans two Availability Zones with subnets in each zone, providi
               [
                 "#!/bin/bash\n",
                 "yum update -y\n",
-                "yum install -y mysql amazon-cloudwatch-agent\n",
+                "yum install -y mysql amazon-cloudwatch-agent jq\n",
                 "yum install -y amazon-ssm-agent\n",
                 "systemctl enable amazon-ssm-agent\n",
                 "systemctl start amazon-ssm-agent\n",
