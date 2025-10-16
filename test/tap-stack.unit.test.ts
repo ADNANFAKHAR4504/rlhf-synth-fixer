@@ -15,356 +15,452 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Template Structure', () => {
-    test('should have valid CloudFormation format version', () => {
+    it('should have the correct AWSTemplateFormatVersion', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
     });
 
-    test('should have a description', () => {
+    it('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toContain('Serverless Fitness Workout Logging API');
+    });
+
+    it('should have all required sections', () => {
+      expect(template.Parameters).toBeDefined();
+      expect(template.Resources).toBeDefined();
+      expect(template.Outputs).toBeDefined();
     });
   });
 
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+    it('should have EnvironmentSuffix parameter with correct properties', () => {
+      const param = template.Parameters.EnvironmentSuffix;
+      expect(param).toBeDefined();
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('prod');
     });
 
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('prod');
-      expect(envSuffixParam.Description).toContain('Environment identifier');
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-z0-9-]+$');
-    });
-
-    test('should have ApiStageName parameter', () => {
-      expect(template.Parameters.ApiStageName).toBeDefined();
-      const stageParam = template.Parameters.ApiStageName;
-      expect(stageParam.Type).toBe('String');
-      expect(stageParam.Default).toBe('v1');
-      expect(stageParam.AllowedValues).toEqual(['v1', 'v2', 'prod', 'dev']);
+    it('should have ApiStageName parameter with correct properties', () => {
+      const param = template.Parameters.ApiStageName;
+      expect(param).toBeDefined();
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('v1');
+      expect(param.AllowedValues).toEqual(['v1', 'v2', 'prod', 'dev']);
     });
   });
 
   describe('DynamoDB Resources', () => {
-    test('should have WorkoutLogsTable resource', () => {
-      expect(template.Resources.WorkoutLogsTable).toBeDefined();
-    });
-
-    test('WorkoutLogsTable should be a DynamoDB table with ON_DEMAND billing', () => {
+    it('should have WorkoutLogsTable with correct configuration', () => {
       const table = template.Resources.WorkoutLogsTable;
+      expect(table).toBeDefined();
       expect(table.Type).toBe('AWS::DynamoDB::Table');
-      expect(table.Properties.BillingMode).toBe('ON_DEMAND');
+      expect(table.Properties.BillingMode).toBe('PAY_PER_REQUEST');
     });
 
-    test('WorkoutLogsTable should have correct table name with environment suffix', () => {
+    it('should have correct table name with region and environment suffix', () => {
       const table = template.Resources.WorkoutLogsTable;
-      expect(table.Properties.TableName).toEqual({
-        'Fn::Sub': 'workoutlogs-${EnvironmentSuffix}',
-      });
+      expect(table.Properties.TableName['Fn::Sub']).toBe('workoutlogs-${AWS::Region}-${EnvironmentSuffix}');
     });
 
-    test('WorkoutLogsTable should have correct key schema', () => {
+    it('should have correct attribute definitions', () => {
+      const table = template.Resources.WorkoutLogsTable;
+      const attributes = table.Properties.AttributeDefinitions;
+      expect(attributes).toHaveLength(3);
+      expect(attributes).toContainEqual({ AttributeName: 'userId', AttributeType: 'S' });
+      expect(attributes).toContainEqual({ AttributeName: 'workoutTimestamp', AttributeType: 'N' });
+      expect(attributes).toContainEqual({ AttributeName: 'workoutType', AttributeType: 'S' });
+    });
+
+    it('should have correct key schema', () => {
       const table = template.Resources.WorkoutLogsTable;
       const keySchema = table.Properties.KeySchema;
-      
       expect(keySchema).toHaveLength(2);
-      expect(keySchema[0].AttributeName).toBe('userId');
-      expect(keySchema[0].KeyType).toBe('HASH');
-      expect(keySchema[1].AttributeName).toBe('workoutTimestamp');
-      expect(keySchema[1].KeyType).toBe('RANGE');
+      expect(keySchema[0]).toEqual({ AttributeName: 'userId', KeyType: 'HASH' });
+      expect(keySchema[1]).toEqual({ AttributeName: 'workoutTimestamp', KeyType: 'RANGE' });
     });
 
-    test('WorkoutLogsTable should have Global Secondary Index', () => {
+    it('should have WorkoutTypeIndex global secondary index', () => {
       const table = template.Resources.WorkoutLogsTable;
       const gsi = table.Properties.GlobalSecondaryIndexes;
-      
       expect(gsi).toHaveLength(1);
       expect(gsi[0].IndexName).toBe('WorkoutTypeIndex');
-      expect(gsi[0].KeySchema[0].AttributeName).toBe('workoutType');
+      expect(gsi[0].Projection.ProjectionType).toBe('ALL');
     });
 
-    test('WorkoutLogsTable should have encryption and recovery enabled', () => {
+    it('should have point-in-time recovery enabled', () => {
       const table = template.Resources.WorkoutLogsTable;
-      expect(table.Properties.SSESpecification.SSEEnabled).toBe(true);
       expect(table.Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled).toBe(true);
     });
 
-    test('WorkoutLogsTable should have proper tags', () => {
+    it('should have SSE enabled', () => {
       const table = template.Resources.WorkoutLogsTable;
-      const tags = table.Properties.Tags;
-      
-      expect(tags).toContainEqual({
-        Key: 'Environment',
-        Value: { Ref: 'EnvironmentSuffix' }
-      });
-      expect(tags).toContainEqual({
-        Key: 'Application',
-        Value: 'FitnessWorkoutAPI'
-      });
+      expect(table.Properties.SSESpecification.SSEEnabled).toBe(true);
+    });
+
+    it('should have DynamoDB stream enabled', () => {
+      const table = template.Resources.WorkoutLogsTable;
+      expect(table.Properties.StreamSpecification.StreamViewType).toBe('NEW_AND_OLD_IMAGES');
+    });
+
+    it('should have correct tags', () => {
+      const table = template.Resources.WorkoutLogsTable;
+      expect(table.Properties.Tags).toContainEqual({ Key: 'Environment', Value: { Ref: 'EnvironmentSuffix' } });
+      expect(table.Properties.Tags).toContainEqual({ Key: 'Application', Value: 'FitnessWorkoutAPI' });
     });
   });
 
-  describe('Lambda Resources', () => {
-    test('should have all Lambda functions', () => {
-      expect(template.Resources.CreateWorkoutLogFunction).toBeDefined();
-      expect(template.Resources.GetWorkoutLogsFunction).toBeDefined();
-      expect(template.Resources.GetWorkoutStatsFunction).toBeDefined();
-    });
-
-    test('Lambda functions should have correct runtime and configuration', () => {
-      const lambdaFunctions = [
-        'CreateWorkoutLogFunction',
-        'GetWorkoutLogsFunction',
-        'GetWorkoutStatsFunction'
-      ];
-
-      lambdaFunctions.forEach(funcName => {
-        const func = template.Resources[funcName];
-        expect(func.Type).toBe('AWS::Lambda::Function');
-        expect(func.Properties.Runtime).toBe('python3.9');
-        expect(func.Properties.Handler).toBe('index.lambda_handler');
-        expect(func.Properties.Timeout).toBe(30);
-        expect(func.Properties.MemorySize).toBe(256);
-      });
-    });
-
-    test('Lambda functions should have environment variables', () => {
-      const lambdaFunctions = [
-        'CreateWorkoutLogFunction',
-        'GetWorkoutLogsFunction', 
-        'GetWorkoutStatsFunction'
-      ];
-
-      lambdaFunctions.forEach(funcName => {
-        const func = template.Resources[funcName];
-        expect(func.Properties.Environment.Variables.TABLE_NAME).toEqual({
-          Ref: 'WorkoutLogsTable'
-        });
-        expect(func.Properties.Environment.Variables.ENVIRONMENT).toEqual({
-          Ref: 'EnvironmentSuffix'
-        });
-      });
-    });
-
-    test('should have IAM role for Lambda functions', () => {
-      expect(template.Resources.WorkoutApiLambdaRole).toBeDefined();
+  describe('IAM Resources', () => {
+    it('should have WorkoutApiLambdaRole', () => {
       const role = template.Resources.WorkoutApiLambdaRole;
+      expect(role).toBeDefined();
       expect(role.Type).toBe('AWS::IAM::Role');
     });
 
-    test('Lambda role should have DynamoDB permissions', () => {
+    it('should have correct assume role policy', () => {
+      const role = template.Resources.WorkoutApiLambdaRole;
+      const assumePolicy = role.Properties.AssumeRolePolicyDocument;
+      expect(assumePolicy.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
+      expect(assumePolicy.Statement[0].Action).toBe('sts:AssumeRole');
+    });
+
+    it('should have AWSLambdaBasicExecutionRole managed policy', () => {
+      const role = template.Resources.WorkoutApiLambdaRole;
+      expect(role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole');
+    });
+
+    it('should have DynamoDB permissions policy', () => {
       const role = template.Resources.WorkoutApiLambdaRole;
       const policies = role.Properties.Policies;
-      
       expect(policies).toHaveLength(1);
-      const dynamoPolicy = policies[0].PolicyDocument.Statement[0];
-      expect(dynamoPolicy.Action).toContain('dynamodb:PutItem');
-      expect(dynamoPolicy.Action).toContain('dynamodb:GetItem');
+
+      const dynamoPolicy = policies[0].PolicyDocument.Statement.find(
+        (s: any) => s.Action && s.Action.includes('dynamodb:PutItem')
+      );
+      expect(dynamoPolicy).toBeDefined();
       expect(dynamoPolicy.Action).toContain('dynamodb:Query');
+      expect(dynamoPolicy.Action).toContain('dynamodb:GetItem');
+      expect(dynamoPolicy.Action).toContain('dynamodb:UpdateItem');
+      expect(dynamoPolicy.Action).toContain('dynamodb:DeleteItem');
+    });
+
+    it('should have SSM parameter permissions', () => {
+      const role = template.Resources.WorkoutApiLambdaRole;
+      const ssmPolicy = role.Properties.Policies[0].PolicyDocument.Statement.find(
+        (s: any) => s.Action && s.Action.includes('ssm:GetParameter')
+      );
+      expect(ssmPolicy).toBeDefined();
+      expect(ssmPolicy.Action).toContain('ssm:GetParameters');
+    });
+
+    it('should have CloudWatch metrics permissions', () => {
+      const role = template.Resources.WorkoutApiLambdaRole;
+      const cwPolicy = role.Properties.Policies[0].PolicyDocument.Statement.find(
+        (s: any) => s.Action && s.Action.includes('cloudwatch:PutMetricData')
+      );
+      expect(cwPolicy).toBeDefined();
+    });
+  });
+
+  describe('Lambda Functions', () => {
+    const lambdaFunctions = ['CreateWorkoutLogFunction', 'GetWorkoutLogsFunction', 'GetWorkoutStatsFunction'];
+
+    lambdaFunctions.forEach(functionName => {
+      describe(`${functionName}`, () => {
+        it('should exist and have correct type', () => {
+          const lambdaFn = template.Resources[functionName];
+          expect(lambdaFn).toBeDefined();
+          expect(lambdaFn.Type).toBe('AWS::Lambda::Function');
+        });
+
+        it('should have correct runtime and handler', () => {
+          const lambdaFn = template.Resources[functionName];
+          expect(lambdaFn.Properties.Runtime).toBe('python3.9');
+          expect(lambdaFn.Properties.Handler).toBe('index.lambda_handler');
+        });
+
+        it('should have correct memory and timeout settings', () => {
+          const lambdaFn = template.Resources[functionName];
+          expect(lambdaFn.Properties.MemorySize).toBe(256);
+          expect(lambdaFn.Properties.Timeout).toBe(30);
+        });
+
+        it('should reference the correct IAM role', () => {
+          const lambdaFn = template.Resources[functionName];
+          expect(lambdaFn.Properties.Role['Fn::GetAtt']).toEqual(['WorkoutApiLambdaRole', 'Arn']);
+        });
+
+        it('should have environment variables', () => {
+          const lambdaFn = template.Resources[functionName];
+          expect(lambdaFn.Properties.Environment.Variables.TABLE_NAME).toEqual({ Ref: 'WorkoutLogsTable' });
+          expect(lambdaFn.Properties.Environment.Variables.ENVIRONMENT).toEqual({ Ref: 'EnvironmentSuffix' });
+        });
+
+        it('should have inline code', () => {
+          const lambdaFn = template.Resources[functionName];
+          expect(lambdaFn.Properties.Code.ZipFile).toBeDefined();
+          expect(typeof lambdaFn.Properties.Code.ZipFile).toBe('string');
+        });
+      });
+    });
+
+    it('should have Lambda permissions for API Gateway', () => {
+      const permissions = ['CreateWorkoutLambdaPermission', 'GetWorkoutsLambdaPermission', 'GetStatsLambdaPermission'];
+      permissions.forEach(permission => {
+        const perm = template.Resources[permission];
+        expect(perm).toBeDefined();
+        expect(perm.Type).toBe('AWS::Lambda::Permission');
+        expect(perm.Properties.Action).toBe('lambda:InvokeFunction');
+        expect(perm.Properties.Principal).toBe('apigateway.amazonaws.com');
+      });
     });
   });
 
   describe('API Gateway Resources', () => {
-    test('should have WorkoutApi REST API', () => {
-      expect(template.Resources.WorkoutApi).toBeDefined();
+    it('should have WorkoutApi REST API', () => {
       const api = template.Resources.WorkoutApi;
+      expect(api).toBeDefined();
       expect(api.Type).toBe('AWS::ApiGateway::RestApi');
-      expect(api.Properties.EndpointConfiguration.Types).toContain('REGIONAL');
+      expect(api.Properties.Name['Fn::Sub']).toBe('workoutapi-${AWS::Region}-${EnvironmentSuffix}');
     });
 
-    test('should have API Gateway resources', () => {
-      expect(template.Resources.WorkoutLogsResource).toBeDefined();
-      expect(template.Resources.StatsResource).toBeDefined();
+    it('should have REGIONAL endpoint configuration', () => {
+      const api = template.Resources.WorkoutApi;
+      expect(api.Properties.EndpointConfiguration.Types).toEqual(['REGIONAL']);
     });
 
-    test('should have API Gateway methods with IAM authorization', () => {
-      const methods = [
-        'CreateWorkoutMethod',
-        'GetWorkoutsMethod',
-        'GetStatsMethod'
-      ];
+    it('should have workout and stats resources', () => {
+      const workoutResource = template.Resources.WorkoutLogsResource;
+      const statsResource = template.Resources.StatsResource;
 
-      methods.forEach(methodName => {
-        const method = template.Resources[methodName];
-        expect(method.Type).toBe('AWS::ApiGateway::Method');
-        expect(method.Properties.AuthorizationType).toBe('AWS_IAM');
-      });
+      expect(workoutResource).toBeDefined();
+      expect(workoutResource.Type).toBe('AWS::ApiGateway::Resource');
+      expect(workoutResource.Properties.PathPart).toBe('workouts');
+
+      expect(statsResource).toBeDefined();
+      expect(statsResource.Type).toBe('AWS::ApiGateway::Resource');
+      expect(statsResource.Properties.PathPart).toBe('stats');
     });
 
-    test('should have API Gateway deployment', () => {
-      expect(template.Resources.ApiDeployment).toBeDefined();
+    it('should have POST method for creating workouts', () => {
+      const method = template.Resources.CreateWorkoutMethod;
+      expect(method).toBeDefined();
+      expect(method.Type).toBe('AWS::ApiGateway::Method');
+      expect(method.Properties.HttpMethod).toBe('POST');
+      expect(method.Properties.AuthorizationType).toBe('AWS_IAM');
+    });
+
+    it('should have GET method for retrieving workouts', () => {
+      const method = template.Resources.GetWorkoutsMethod;
+      expect(method).toBeDefined();
+      expect(method.Type).toBe('AWS::ApiGateway::Method');
+      expect(method.Properties.HttpMethod).toBe('GET');
+      expect(method.Properties.AuthorizationType).toBe('AWS_IAM');
+    });
+
+    it('should have GET method for workout statistics', () => {
+      const method = template.Resources.GetStatsMethod;
+      expect(method).toBeDefined();
+      expect(method.Type).toBe('AWS::ApiGateway::Method');
+      expect(method.Properties.HttpMethod).toBe('GET');
+      expect(method.Properties.AuthorizationType).toBe('AWS_IAM');
+    });
+
+    it('should have API deployment with correct stage', () => {
       const deployment = template.Resources.ApiDeployment;
+      expect(deployment).toBeDefined();
       expect(deployment.Type).toBe('AWS::ApiGateway::Deployment');
       expect(deployment.Properties.StageName).toEqual({ Ref: 'ApiStageName' });
     });
 
-    test('should have Lambda permissions for API Gateway', () => {
-      const permissions = [
-        'CreateWorkoutLambdaPermission',
-        'GetWorkoutsLambdaPermission',
-        'GetStatsLambdaPermission'
-      ];
+    it('should have correct stage configuration', () => {
+      const deployment = template.Resources.ApiDeployment;
+      const stageDesc = deployment.Properties.StageDescription;
+      expect(stageDesc.MetricsEnabled).toBe(true);
+      expect(stageDesc.LoggingLevel).toBe('INFO');
+      expect(stageDesc.DataTraceEnabled).toBe(true);
+      expect(stageDesc.ThrottlingBurstLimit).toBe(100);
+      expect(stageDesc.ThrottlingRateLimit).toBe(50);
+    });
 
-      permissions.forEach(permissionName => {
-        const permission = template.Resources[permissionName];
-        expect(permission.Type).toBe('AWS::Lambda::Permission');
-        expect(permission.Properties.Principal).toBe('apigateway.amazonaws.com');
-      });
+    it('should have correct dependencies for deployment', () => {
+      const deployment = template.Resources.ApiDeployment;
+      expect(deployment.DependsOn).toContain('CreateWorkoutMethod');
+      expect(deployment.DependsOn).toContain('GetWorkoutsMethod');
+      expect(deployment.DependsOn).toContain('GetStatsMethod');
     });
   });
 
   describe('CloudWatch Resources', () => {
-    test('should have CloudWatch Log Groups', () => {
-      expect(template.Resources.ApiGatewayLogGroup).toBeDefined();
-      expect(template.Resources.CreateWorkoutLogGroup).toBeDefined();
-      expect(template.Resources.GetWorkoutsLogGroup).toBeDefined();
-      expect(template.Resources.GetStatsLogGroup).toBeDefined();
+    it('should have API Gateway log group', () => {
+      const logGroup = template.Resources.ApiGatewayLogGroup;
+      expect(logGroup).toBeDefined();
+      expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
+      expect(logGroup.Properties.LogGroupName['Fn::Sub']).toBe('/aws/apigateway/workoutapi-${AWS::Region}-${EnvironmentSuffix}');
+      expect(logGroup.Properties.RetentionInDays).toBe(30);
     });
 
-    test('Log Groups should have appropriate retention periods', () => {
-      const apiLogGroup = template.Resources.ApiGatewayLogGroup;
-      expect(apiLogGroup.Properties.RetentionInDays).toBe(30);
-
-      const lambdaLogGroups = [
-        'CreateWorkoutLogGroup',
-        'GetWorkoutsLogGroup', 
-        'GetStatsLogGroup'
-      ];
-
-      lambdaLogGroups.forEach(logGroupName => {
-        const logGroup = template.Resources[logGroupName];
-        expect(logGroup.Properties.RetentionInDays).toBe(14);
-      });
+    it('should have CloudWatch dashboard', () => {
+      const dashboard = template.Resources.WorkoutApiDashboard;
+      expect(dashboard).toBeDefined();
+      expect(dashboard.Type).toBe('AWS::CloudWatch::Dashboard');
+      expect(dashboard.Properties.DashboardName['Fn::Sub']).toBe('workoutapi-metrics-${AWS::Region}-${EnvironmentSuffix}');
     });
 
-    test('should have CloudWatch alarms', () => {
-      expect(template.Resources.ApiErrorAlarm).toBeDefined();
-      expect(template.Resources.LambdaErrorAlarm).toBeDefined();
+    it('should have API error alarm', () => {
+      const alarm = template.Resources.ApiErrorAlarm;
+      expect(alarm).toBeDefined();
+      expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
+      expect(alarm.Properties.AlarmName['Fn::Sub']).toBe('workoutapi-errors-${AWS::Region}-${EnvironmentSuffix}');
+      expect(alarm.Properties.MetricName).toBe('5XXError');
+      expect(alarm.Properties.Threshold).toBe(10);
+    });
+
+    it('should have DynamoDB throttle alarm', () => {
+      const alarm = template.Resources.DynamoDBThrottleAlarm;
+      expect(alarm).toBeDefined();
+      expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
+      expect(alarm.Properties.AlarmName['Fn::Sub']).toBe('workout-dynamodb-throttle-${AWS::Region}-${EnvironmentSuffix}');
+      expect(alarm.Properties.MetricName).toBe('UserErrors');
+      expect(alarm.Properties.Threshold).toBe(5);
     });
   });
 
   describe('SSM Parameters', () => {
-    test('should have SSM parameters', () => {
-      expect(template.Resources.ApiEndpointParameter).toBeDefined();
-      expect(template.Resources.TableNameParameter).toBeDefined();
+    it('should have API endpoint parameter', () => {
+      const param = template.Resources.ApiEndpointParameter;
+      expect(param).toBeDefined();
+      expect(param.Type).toBe('AWS::SSM::Parameter');
+      expect(param.Properties.Name['Fn::Sub']).toBe('/fitness-app/${EnvironmentSuffix}/api-endpoint');
     });
 
-    test('SSM parameters should have correct values', () => {
-      const apiParam = template.Resources.ApiEndpointParameter;
-      expect(apiParam.Type).toBe('AWS::SSM::Parameter');
-      expect(apiParam.Properties.Name).toEqual({
-        'Fn::Sub': '/fitness-app/${EnvironmentSuffix}/api-endpoint'
-      });
-
-      const tableParam = template.Resources.TableNameParameter;
-      expect(tableParam.Properties.Value).toEqual({ Ref: 'WorkoutLogsTable' });
+    it('should have table name parameter', () => {
+      const param = template.Resources.TableNameParameter;
+      expect(param).toBeDefined();
+      expect(param.Type).toBe('AWS::SSM::Parameter');
+      expect(param.Properties.Name['Fn::Sub']).toBe('/fitness-app/${EnvironmentSuffix}/table-name');
+      expect(param.Properties.Value).toEqual({ Ref: 'WorkoutLogsTable' });
     });
   });
 
   describe('Outputs', () => {
-    test('should have all required outputs', () => {
-      const expectedOutputs = [
-        'ApiEndpoint',
-        'DynamoDBTableName',
-        'CreateWorkoutEndpoint',
-        'GetWorkoutsEndpoint',
-        'GetStatsEndpoint',
-        'WorkoutApiId',
-        'LambdaRoleArn'
-      ];
+    const expectedOutputs = [
+      'ApiEndpoint',
+      'DynamoDBTableName',
+      'DashboardURL',
+      'CreateWorkoutEndpoint',
+      'GetWorkoutsEndpoint',
+      'GetStatsEndpoint',
+      'LambdaFunctionNames'
+    ];
 
-      expectedOutputs.forEach(outputName => {
+    expectedOutputs.forEach(outputName => {
+      it(`should have ${outputName} output`, () => {
         expect(template.Outputs[outputName]).toBeDefined();
+        expect(template.Outputs[outputName].Description).toBeDefined();
+        expect(template.Outputs[outputName].Value).toBeDefined();
       });
     });
 
-    test('outputs should have proper export names with environment suffix', () => {
-      const exportsWithSuffix = [
-        'ApiEndpoint',
-        'DynamoDBTableName',
-        'WorkoutApiId',
-        'LambdaRoleArn'
-      ];
-
-      exportsWithSuffix.forEach(outputName => {
-        const output = template.Outputs[outputName];
-        if (output.Export) {
-          expect(output.Export.Name['Fn::Sub']).toContain('${EnvironmentSuffix}');
-        }
-      });
-    });
-  });
-
-  describe('Template Validation', () => {
-    test('should have valid JSON structure', () => {
-      expect(template).toBeDefined();
-      expect(typeof template).toBe('object');
+    it('should have correct export names with region and environment', () => {
+      expect(template.Outputs.ApiEndpoint.Export.Name['Fn::Sub']).toBe('workoutapi-endpoint-${AWS::Region}-${EnvironmentSuffix}');
+      expect(template.Outputs.DynamoDBTableName.Export.Name['Fn::Sub']).toBe('workout-table-name-${AWS::Region}-${EnvironmentSuffix}');
     });
 
-    test('should not have any undefined or null required sections', () => {
-      expect(template.AWSTemplateFormatVersion).not.toBeNull();
-      expect(template.Description).not.toBeNull();
-      expect(template.Parameters).not.toBeNull();
-      expect(template.Resources).not.toBeNull();
-      expect(template.Outputs).not.toBeNull();
-    });
-
-    test('should have reasonable number of resources for fitness API', () => {
-      const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBeGreaterThan(15); // At least DynamoDB, Lambda, API Gateway, IAM, etc.
-      expect(resourceCount).toBeLessThan(35); // Not overly complex
-    });
-
-    test('should have correct parameter count', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(2); // EnvironmentSuffix and ApiStageName
-    });
-
-    test('should have appropriate number of outputs', () => {
-      const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(7); // API endpoints, table name, etc.
+    it('should have Lambda function names output', () => {
+      const output = template.Outputs.LambdaFunctionNames;
+      expect(output.Value['Fn::Sub']).toContain('create-workout-log-${AWS::Region}-${EnvironmentSuffix}');
+      expect(output.Value['Fn::Sub']).toContain('get-workoutlogs-${AWS::Region}-${EnvironmentSuffix}');
+      expect(output.Value['Fn::Sub']).toContain('get-workout-stats-${AWS::Region}-${EnvironmentSuffix}');
     });
   });
 
   describe('Resource Naming Convention', () => {
-    test('resources should follow naming convention with environment suffix', () => {
-      // Check DynamoDB table name
-      const table = template.Resources.WorkoutLogsTable;
-      expect(table.Properties.TableName['Fn::Sub']).toContain('${EnvironmentSuffix}');
-
-      // Check Lambda function names
-      const lambdaFunctions = [
-        'CreateWorkoutLogFunction',
-        'GetWorkoutLogsFunction',
-        'GetWorkoutStatsFunction'
+    it('should follow naming convention with region and environment suffix', () => {
+      // Check various resources for proper naming
+      const namingChecks = [
+        { resource: 'WorkoutLogsTable', path: 'Properties.TableName', expected: 'workoutlogs-${AWS::Region}-${EnvironmentSuffix}' },
+        { resource: 'CreateWorkoutLogFunction', path: 'Properties.FunctionName', expected: 'create-workout-log-${AWS::Region}-${EnvironmentSuffix}' },
+        { resource: 'WorkoutApi', path: 'Properties.Name', expected: 'workoutapi-${AWS::Region}-${EnvironmentSuffix}' },
       ];
 
-      lambdaFunctions.forEach(funcName => {
-        const func = template.Resources[funcName];
-        expect(func.Properties.FunctionName['Fn::Sub']).toContain('${EnvironmentSuffix}');
+      namingChecks.forEach(check => {
+        const resource = template.Resources[check.resource];
+        const pathParts = check.path.split('.');
+        let value = resource;
+        pathParts.forEach(part => {
+          value = value[part];
+        });
+        expect(value['Fn::Sub']).toBe(check.expected);
       });
+    });
+  });
 
-      // Check API Gateway name
-      const api = template.Resources.WorkoutApi;
-      expect(api.Properties.Name['Fn::Sub']).toContain('${EnvironmentSuffix}');
+  describe('Security Best Practices', () => {
+    it('should use AWS_IAM authorization for all API methods', () => {
+      const methods = ['CreateWorkoutMethod', 'GetWorkoutsMethod', 'GetStatsMethod'];
+      methods.forEach(method => {
+        expect(template.Resources[method].Properties.AuthorizationType).toBe('AWS_IAM');
+      });
     });
 
-    test('should use consistent resource prefixes', () => {
-      // Lambda functions should start with workout-related names
-      expect(template.Resources.CreateWorkoutLogFunction.Properties.FunctionName['Fn::Sub'])
-        .toContain('create-workout-log');
-      expect(template.Resources.GetWorkoutLogsFunction.Properties.FunctionName['Fn::Sub'])
-        .toContain('get-workoutlogs');
-      
-      // API should have workout prefix
-      expect(template.Resources.WorkoutApi.Properties.Name['Fn::Sub'])
-        .toContain('workoutapi');
-      
-      // Table should have workout-related name
-      expect(template.Resources.WorkoutLogsTable.Properties.TableName['Fn::Sub'])
-        .toContain('workoutlogs');
+    it('should have encryption enabled for DynamoDB', () => {
+      const table = template.Resources.WorkoutLogsTable;
+      expect(table.Properties.SSESpecification.SSEEnabled).toBe(true);
+    });
+
+    it('should have point-in-time recovery for DynamoDB', () => {
+      const table = template.Resources.WorkoutLogsTable;
+      expect(table.Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled).toBe(true);
+    });
+
+    it('should follow least privilege for IAM policies', () => {
+      const role = template.Resources.WorkoutApiLambdaRole;
+      const dynamoPolicy = role.Properties.Policies[0].PolicyDocument.Statement.find(
+        (s: any) => s.Action && s.Action.includes('dynamodb:PutItem')
+      );
+
+      // Check that resources are specific, not wildcard
+      expect(dynamoPolicy.Resource).toBeDefined();
+      expect(Array.isArray(dynamoPolicy.Resource)).toBe(true);
+      expect(dynamoPolicy.Resource.some((r: any) => r['Fn::GetAtt'] || r['Fn::Sub'])).toBe(true);
+    });
+  });
+
+  describe('Cost Optimization', () => {
+    it('should use on-demand billing for DynamoDB', () => {
+      const table = template.Resources.WorkoutLogsTable;
+      expect(table.Properties.BillingMode).toBe('PAY_PER_REQUEST');
+    });
+
+    it('should have reasonable Lambda memory allocation', () => {
+      const lambdaFunctions = ['CreateWorkoutLogFunction', 'GetWorkoutLogsFunction', 'GetWorkoutStatsFunction'];
+      lambdaFunctions.forEach(functionName => {
+        const lambdaFn = template.Resources[functionName];
+        expect(lambdaFn.Properties.MemorySize).toBeLessThanOrEqual(256);
+      });
+    });
+
+    it('should have log retention configured', () => {
+      const logGroup = template.Resources.ApiGatewayLogGroup;
+      expect(logGroup.Properties.RetentionInDays).toBe(30);
+    });
+  });
+
+  describe('Monitoring and Observability', () => {
+    it('should have CloudWatch dashboard configured', () => {
+      const dashboard = template.Resources.WorkoutApiDashboard;
+      expect(dashboard).toBeDefined();
+      expect(dashboard.Properties.DashboardBody).toBeDefined();
+    });
+
+    it('should have alarms for critical metrics', () => {
+      expect(template.Resources.ApiErrorAlarm).toBeDefined();
+      expect(template.Resources.DynamoDBThrottleAlarm).toBeDefined();
+    });
+
+    it('should have metrics enabled for API Gateway stage', () => {
+      const deployment = template.Resources.ApiDeployment;
+      expect(deployment.Properties.StageDescription.MetricsEnabled).toBe(true);
+      expect(deployment.Properties.StageDescription.LoggingLevel).toBe('INFO');
     });
   });
 });

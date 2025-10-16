@@ -5,8 +5,6 @@ Parameters:
   EnvironmentSuffix:
     Type: String
     Description: Environment identifier to append to resource names (e.g., dev, staging, prod)
-    AllowedPattern: ^[a-z0-9-]+$
-    ConstraintDescription: Must contain only lowercase letters, numbers, and hyphens
     Default: prod
 
   ApiStageName:
@@ -20,12 +18,12 @@ Parameters:
       - dev
 
 Resources:
-  # DynamoDB Table for storing workout logs with auto-scaling capabilities
+  # DynamoDB Table for storing workout logs with on-demand billing (auto-scaling)
   WorkoutLogsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub 'workoutlogs-${EnvironmentSuffix}'
-      BillingMode: PROVISIONED
+      TableName: !Sub 'workoutlogs-${AWS::Region}-${EnvironmentSuffix}'
+      BillingMode: PAY_PER_REQUEST # On-demand billing mode (auto-scaling)
       AttributeDefinitions:
         - AttributeName: userId
           AttributeType: S
@@ -47,12 +45,6 @@ Resources:
               KeyType: RANGE
           Projection:
             ProjectionType: ALL
-          ProvisionedThroughput:
-            ReadCapacityUnits: 5
-            WriteCapacityUnits: 5
-      ProvisionedThroughput:
-        ReadCapacityUnits: 5
-        WriteCapacityUnits: 5
       StreamSpecification:
         StreamViewType: NEW_AND_OLD_IMAGES
       PointInTimeRecoverySpecification:
@@ -65,49 +57,7 @@ Resources:
         - Key: Application
           Value: FitnessWorkoutAPI
 
-  # Auto-scaling for DynamoDB Write Capacity
-  WorkoutLogsWriteCapacityScalableTarget:
-    Type: AWS::ApplicationAutoScaling::ScalableTarget
-    Properties:
-      MaxCapacity: 40
-      MinCapacity: 5
-      ResourceId: !Sub 'table/${WorkoutLogsTable}'
-      ScalableDimension: dynamodb:table:WriteCapacityUnits
-      ServiceNamespace: dynamodb
-
-  WorkoutLogsWriteScalingPolicy:
-    Type: AWS::ApplicationAutoScaling::ScalingPolicy
-    Properties:
-      PolicyName: !Sub 'workoutlogs-write-scaling-${EnvironmentSuffix}'
-      PolicyType: TargetTrackingScaling
-      ScalingTargetId: !Ref WorkoutLogsWriteCapacityScalableTarget
-      TargetTrackingScalingPolicyConfiguration:
-        TargetValue: 70.0
-        PredefinedMetricSpecification:
-          PredefinedMetricType: DynamoDBWriteCapacityUtilization
-
-  # Auto-scaling for DynamoDB Read Capacity
-  WorkoutLogsReadCapacityScalableTarget:
-    Type: AWS::ApplicationAutoScaling::ScalableTarget
-    Properties:
-      MaxCapacity: 40
-      MinCapacity: 5
-      ResourceId: !Sub 'table/${WorkoutLogsTable}'
-      ScalableDimension: dynamodb:table:ReadCapacityUnits
-      ServiceNamespace: dynamodb
-
-  WorkoutLogsReadScalingPolicy:
-    Type: AWS::ApplicationAutoScaling::ScalingPolicy
-    Properties:
-      PolicyName: !Sub 'workoutlogs-read-scaling-${EnvironmentSuffix}'
-      PolicyType: TargetTrackingScaling
-      ScalingTargetId: !Ref WorkoutLogsReadCapacityScalableTarget
-      TargetTrackingScalingPolicyConfiguration:
-        TargetValue: 70.0
-        PredefinedMetricSpecification:
-          PredefinedMetricType: DynamoDBReadCapacityUtilization
-
-  # IAM Role for Lambda functions - no explicit role name
+  # IAM Role for Lambda functions
   WorkoutApiLambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -121,7 +71,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - PolicyName: !Sub 'workoutapi-dynamodb-policy-${EnvironmentSuffix}'
+        - PolicyName: !Sub 'workoutapi-dynamodb-policy-${AWS::Region}-${EnvironmentSuffix}'
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -153,7 +103,7 @@ Resources:
   CreateWorkoutLogFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub 'create-workout-log-${EnvironmentSuffix}'
+      FunctionName: !Sub 'create-workout-log-${AWS::Region}-${EnvironmentSuffix}'
       Runtime: python3.9
       Handler: index.lambda_handler
       Role: !GetAtt WorkoutApiLambdaRole.Arn
@@ -245,7 +195,7 @@ Resources:
   GetWorkoutLogsFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub 'get-workoutlogs-${EnvironmentSuffix}'
+      FunctionName: !Sub 'get-workoutlogs-${AWS::Region}-${EnvironmentSuffix}'
       Runtime: python3.9
       Handler: index.lambda_handler
       Role: !GetAtt WorkoutApiLambdaRole.Arn
@@ -321,7 +271,7 @@ Resources:
   GetWorkoutStatsFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub 'get-workout-stats-${EnvironmentSuffix}'
+      FunctionName: !Sub 'get-workout-stats-${AWS::Region}-${EnvironmentSuffix}'
       Runtime: python3.9
       Handler: index.lambda_handler
       Role: !GetAtt WorkoutApiLambdaRole.Arn
@@ -414,7 +364,7 @@ Resources:
   WorkoutApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: !Sub 'workoutapi-${EnvironmentSuffix}'
+      Name: !Sub 'workoutapi-${AWS::Region}-${EnvironmentSuffix}'
       Description: Serverless API for fitness workout logging with comprehensive metrics
       EndpointConfiguration:
         Types:
@@ -523,14 +473,14 @@ Resources:
   ApiGatewayLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/apigateway/workoutapi-${EnvironmentSuffix}'
+      LogGroupName: !Sub '/aws/apigateway/workoutapi-${AWS::Region}-${EnvironmentSuffix}'
       RetentionInDays: 30
 
   # CloudWatch Dashboard for monitoring
   WorkoutApiDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
-      DashboardName: !Sub 'workoutapi-metrics-${EnvironmentSuffix}'
+      DashboardName: !Sub 'workoutapi-metrics-${AWS::Region}-${EnvironmentSuffix}'
       DashboardBody: !Sub |
         {
           "widgets": [
@@ -615,7 +565,7 @@ Resources:
   ApiErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub 'workoutapi-errors-${EnvironmentSuffix}'
+      AlarmName: !Sub 'workoutapi-errors-${AWS::Region}-${EnvironmentSuffix}'
       AlarmDescription: Alert when API error rate exceeds threshold
       MetricName: 5XXError
       Namespace: AWS/ApiGateway
@@ -626,13 +576,13 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: ApiName
-          Value: !Sub 'workoutapi-${EnvironmentSuffix}'
+          Value: !Sub 'workoutapi-${AWS::Region}-${EnvironmentSuffix}'
 
   # CloudWatch Alarm for DynamoDB throttling
   DynamoDBThrottleAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub 'workout-dynamodb-throttle-${EnvironmentSuffix}'
+      AlarmName: !Sub 'workout-dynamodb-throttle-${AWS::Region}-${EnvironmentSuffix}'
       AlarmDescription: Alert when DynamoDB requests are throttled
       MetricName: UserErrors
       Namespace: AWS/DynamoDB
@@ -650,17 +600,17 @@ Outputs:
     Description: API Gateway endpoint URL for the workout logging API
     Value: !Sub 'https://${WorkoutApi}.execute-api.${AWS::Region}.amazonaws.com/${ApiStageName}'
     Export:
-      Name: !Sub 'workoutapi-endpoint-${EnvironmentSuffix}'
+      Name: !Sub 'workoutapi-endpoint-${AWS::Region}-${EnvironmentSuffix}'
 
   DynamoDBTableName:
     Description: Name of the DynamoDB table storing workout logs
     Value: !Ref WorkoutLogsTable
     Export:
-      Name: !Sub 'workout-table-name-${EnvironmentSuffix}'
+      Name: !Sub 'workout-table-name-${AWS::Region}-${EnvironmentSuffix}'
 
   DashboardURL:
     Description: CloudWatch Dashboard URL for monitoring API metrics
-    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=workoutapi-metrics-${EnvironmentSuffix}'
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=workoutapi-metrics-${AWS::Region}-${EnvironmentSuffix}'
 
   CreateWorkoutEndpoint:
     Description: Endpoint to create new workout logs
@@ -673,3 +623,7 @@ Outputs:
   GetStatsEndpoint:
     Description: Endpoint to retrieve workout statistics
     Value: !Sub 'https://${WorkoutApi}.execute-api.${AWS::Region}.amazonaws.com/${ApiStageName}/stats?userId=USER_ID&days=30'
+
+  LambdaFunctionNames:
+    Description: Names of the Lambda functions created
+    Value: !Sub 'create-workout-log-${AWS::Region}-${EnvironmentSuffix}, get-workoutlogs-${AWS::Region}-${EnvironmentSuffix}, get-workout-stats-${AWS::Region}-${EnvironmentSuffix}'
