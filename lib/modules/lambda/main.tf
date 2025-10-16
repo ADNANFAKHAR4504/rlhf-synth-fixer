@@ -48,10 +48,7 @@ resource "aws_iam_role_policy" "lambda_traffic_analyzer" {
           "logs:GetQueryResults",
           "logs:DescribeLogGroups"
         ]
-        Resource = [
-          var.vpc_a_log_group_arn,
-          var.vpc_b_log_group_arn
-        ]
+        Resource = "arn:aws:logs:${var.aws_region}:${var.account_id}:log-group:/aws/vpc/flowlogs/*"
       },
       {
         Effect = "Allow"

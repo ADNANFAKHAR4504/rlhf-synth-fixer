@@ -14,10 +14,6 @@ resource "aws_cloudwatch_log_metric_filter" "vpc_a_traffic_volume" {
     namespace = "Company/VPCPeering"
     value     = "1"
     unit      = "Count"
-
-    dimensions = {
-      VPC = "VPC-A"
-    }
   }
 }
 
@@ -31,10 +27,6 @@ resource "aws_cloudwatch_log_metric_filter" "vpc_a_rejected_connections" {
     namespace = "Company/VPCPeering"
     value     = "1"
     unit      = "Count"
-
-    dimensions = {
-      VPC = "VPC-A"
-    }
   }
 }
 
@@ -48,10 +40,6 @@ resource "aws_cloudwatch_log_metric_filter" "vpc_b_traffic_volume" {
     namespace = "Company/VPCPeering"
     value     = "1"
     unit      = "Count"
-
-    dimensions = {
-      VPC = "VPC-B"
-    }
   }
 }
 
@@ -65,10 +53,6 @@ resource "aws_cloudwatch_log_metric_filter" "vpc_b_rejected_connections" {
     namespace = "Company/VPCPeering"
     value     = "1"
     unit      = "Count"
-
-    dimensions = {
-      VPC = "VPC-B"
-    }
   }
 }
 
@@ -145,10 +129,6 @@ resource "aws_cloudwatch_metric_alarm" "vpc_a_traffic_volume" {
   alarm_actions       = [aws_sns_topic.alerts.arn]
   treat_missing_data  = "notBreaching"
 
-  dimensions = {
-    VPC = "VPC-A"
-  }
-
   tags = merge(var.common_tags, {
     Name = "vpc-a-traffic-volume-alarm-${var.suffix}"
     VPC  = "VPC-A"
@@ -169,10 +149,6 @@ resource "aws_cloudwatch_metric_alarm" "vpc_a_rejected_connections" {
   alarm_description   = "Alert when VPC-A rejected connections exceed threshold"
   alarm_actions       = [aws_sns_topic.alerts.arn]
   treat_missing_data  = "notBreaching"
-
-  dimensions = {
-    VPC = "VPC-A"
-  }
 
   tags = merge(var.common_tags, {
     Name = "vpc-a-rejected-connections-alarm-${var.suffix}"
@@ -195,10 +171,6 @@ resource "aws_cloudwatch_metric_alarm" "vpc_b_traffic_volume" {
   alarm_actions       = [aws_sns_topic.alerts.arn]
   treat_missing_data  = "notBreaching"
 
-  dimensions = {
-    VPC = "VPC-B"
-  }
-
   tags = merge(var.common_tags, {
     Name = "vpc-b-traffic-volume-alarm-${var.suffix}"
     VPC  = "VPC-B"
@@ -219,10 +191,6 @@ resource "aws_cloudwatch_metric_alarm" "vpc_b_rejected_connections" {
   alarm_description   = "Alert when VPC-B rejected connections exceed threshold"
   alarm_actions       = [aws_sns_topic.alerts.arn]
   treat_missing_data  = "notBreaching"
-
-  dimensions = {
-    VPC = "VPC-B"
-  }
 
   tags = merge(var.common_tags, {
     Name = "vpc-b-rejected-connections-alarm-${var.suffix}"
@@ -246,8 +214,7 @@ resource "aws_cloudwatch_dashboard" "vpc_peering" {
         type = "metric"
         properties = {
           metrics = [
-            ["Company/VPCPeering", "TrafficVolume", { stat = "Sum", label = "VPC-A Traffic" }, { "visible" = true }],
-            [".", ".", { stat = "Sum", label = "VPC-B Traffic" }, { "visible" = true }]
+            ["Company/VPCPeering", "TrafficVolume"]
           ]
           period = 300
           stat   = "Sum"
@@ -264,8 +231,7 @@ resource "aws_cloudwatch_dashboard" "vpc_peering" {
         type = "metric"
         properties = {
           metrics = [
-            ["Company/VPCPeering", "RejectedConnections", { stat = "Sum", label = "VPC-A Rejected" }],
-            [".", ".", { stat = "Sum", label = "VPC-B Rejected" }]
+            ["Company/VPCPeering", "RejectedConnections"]
           ]
           period = 300
           stat   = "Sum"
@@ -282,9 +248,9 @@ resource "aws_cloudwatch_dashboard" "vpc_peering" {
         type = "metric"
         properties = {
           metrics = var.lambda_function_name != "" ? [
-            ["AWS/Lambda", "Invocations", { "FunctionName" = var.lambda_function_name, stat = "Sum", label = "Lambda Invocations" }],
-            [".", "Errors", { "FunctionName" = var.lambda_function_name, stat = "Sum", label = "Lambda Errors" }],
-            [".", "Duration", { "FunctionName" = var.lambda_function_name, stat = "Average", label = "Lambda Duration (avg)" }]
+            ["AWS/Lambda", "Invocations", "FunctionName", var.lambda_function_name],
+            [".", "Errors", ".", "."],
+            [".", "Duration", ".", "."]
           ] : []
           period = 300
           stat   = "Average"
@@ -304,8 +270,8 @@ resource "aws_cloudwatch_dashboard" "vpc_peering" {
         type = "metric"
         properties = {
           metrics = [
-            ["Company/VPCPeering", "UniqueSourceIPs", { stat = "Average", label = "Unique Source IPs" }],
-            [".", "ExternalTraffic", { stat = "Sum", label = "External Traffic Count" }]
+            ["Company/VPCPeering", "UniqueSourceIPs"],
+            [".", "ExternalTraffic"]
           ]
           period = 300
           stat   = "Sum"
@@ -317,7 +283,7 @@ resource "aws_cloudwatch_dashboard" "vpc_peering" {
         type = "metric"
         properties = {
           metrics = [
-            ["Company/VPCPeering", "TotalBytes", { stat = "Sum", label = "Total Bytes Transferred" }]
+            ["Company/VPCPeering", "TotalBytes"]
           ]
           period = 300
           stat   = "Sum"

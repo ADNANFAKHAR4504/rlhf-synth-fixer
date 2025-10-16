@@ -1407,6 +1407,68 @@ pytest test/integration/ -v --tb=short
 
 ## Troubleshooting
 
+### Common Deployment Errors and Fixes
+
+#### 1. Lambda IAM Policy - Malformed Policy Document
+
+**Error**: `MalformedPolicyDocument: Syntax errors in policy` when creating Lambda IAM role policy
+
+**Root Cause**: The Lambda IAM policy was referencing `var.vpc_a_log_group_arn` and `var.vpc_b_log_group_arn` which return `null` when `enable_flow_logs = false`. ARN resources cannot contain `null` values.
+
+**Fix** (modules/lambda/main.tf:51):
+```hcl
+# Changed from specific ARNs to wildcard pattern
+Resource = "arn:aws:logs:${var.aws_region}:${var.account_id}:log-group:/aws/vpc/flowlogs/*"
+```
+
+#### 2. CloudWatch Metric Filter - Invalid Dimension Value
+
+**Error**: `InvalidParameterException: Invalid metric transformation: dimension value must be valid selector`
+
+**Root Cause**: CloudWatch Log Metric Filters dimensions must use field selectors from the log pattern (like `$source` or `$destination`), not hardcoded string values like `"VPC-A"`.
+
+**Fix** (modules/monitoring/main.tf:12-56):
+Removed all `dimensions` blocks from metric transformations:
+```hcl
+metric_transformation {
+  name      = "TrafficVolume"
+  namespace = "Company/VPCPeering"
+  value     = "1"
+  unit      = "Count"
+  # dimensions block removed - not supported with hardcoded values
+}
+```
+
+Also removed dimensions from all 4 CloudWatch alarms (vpc_a_traffic_volume, vpc_a_rejected_connections, vpc_b_traffic_volume, vpc_b_rejected_connections).
+
+#### 3. CloudWatch Dashboard - Invalid Metric Field Type
+
+**Error**: `InvalidParameterInput: The dashboard body is invalid, there are 5 validation errors: Invalid metric field type, only "String" type is allowed`
+
+**Root Cause**: Dashboard metrics array was using incorrect format with objects containing `stat`, `label`, etc. The correct format is a flat array: `[namespace, metricName, dimensionName, dimensionValue]`.
+
+**Fix** (modules/monitoring/main.tf:216-298):
+```hcl
+# Before (incorrect):
+metrics = [
+  ["Company/VPCPeering", "TrafficVolume", { stat = "Sum", label = "VPC-A Traffic" }]
+]
+
+# After (correct):
+metrics = [
+  ["Company/VPCPeering", "TrafficVolume"]
+]
+
+# For dimensioned metrics like Lambda:
+metrics = [
+  ["AWS/Lambda", "Invocations", "FunctionName", var.lambda_function_name],
+  [".", "Errors", ".", "."],  # "." means "same as above"
+  [".", "Duration", ".", "."]
+]
+```
+
+### Additional Troubleshooting Topics
+
 [Include the same troubleshooting section from the original IDEAL_RESPONSE.md]
 
 ---
