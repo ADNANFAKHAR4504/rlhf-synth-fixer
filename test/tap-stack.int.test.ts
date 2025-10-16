@@ -6,7 +6,7 @@
 // Requirements covered:
 // - 22+ tests validating inputs/standards/outputs
 // - Single file, no skips, clean pass (robust assertions + retries)
-// - Works with conditional HTTPS/HTTP listener logic
+// - Works with conditional HTTPS/HTTP listener logic and ALB DNS variants
 //
 // Dev deps (suggested): jest, ts-jest, @types/jest, @aws-sdk/*
 // Jest timeout is extended to allow for API retries.
@@ -70,16 +70,13 @@ if (!fs.existsSync(outputsPath)) {
 const raw = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
 let outputs: Record<string, string> = {};
 if (Array.isArray(raw)) {
-  // Uncommon, but handle array with OutputKey/OutputValue entries
   for (const o of raw) outputs[o.OutputKey] = o.OutputValue;
 } else {
   const topKeys = Object.keys(raw);
   if (topKeys.length && Array.isArray(raw[topKeys[0]])) {
-    // Nested by StackName
     const arr: { OutputKey: string; OutputValue: string }[] = raw[topKeys[0]];
     for (const o of arr) outputs[o.OutputKey] = o.OutputValue;
   } else {
-    // Flat map
     outputs = raw as Record<string, string>;
   }
 }
@@ -94,12 +91,24 @@ function requireOutput(key: string): string {
   return v;
 }
 
+// Extract a region from common ALB DNS formats:
+// - <name>-<hash>.<region>.elb.amazonaws.com
+// - dualstack.<name>-<hash>.elb.<region>.amazonaws.com
+// If no match, fall back to env region or us-east-1.
+function extractRegionFromAlbDns(dns: string): string | undefined {
+  // region before ".elb"
+  let m = dns.match(/\.(?<region>[a-z]{2}-[a-z]+-\d)\.elb\.[^.]+$/);
+  if (m?.groups?.region) return m.groups.region;
+  // region after ".elb"
+  m = dns.match(/\.elb\.(?<region>[a-z]{2}-[a-z]+-\d)\.[^.]+$/);
+  if (m?.groups?.region) return m.groups.region;
+  return undefined;
+}
+
 function deduceRegion(): string {
-  // Try to infer from an ALB DNS name or fall back to env variables
   const albDns = outputs.AlbDnsName || outputs.LoadBalancerDNSName || "";
-  // Common ALB DNS suffix contains region, e.g., dualstack.<name>-123.elb.<region>.amazonaws.com
-  const m = albDns.match(/\.elb\.([a-z]{2}-[a-z]+-\d)\.amazonaws\.com$/);
-  if (m) return m[1];
+  const fromDns = extractRegionFromAlbDns(albDns);
+  if (fromDns) return fromDns;
   if (process.env.AWS_REGION) return process.env.AWS_REGION;
   if (process.env.AWS_DEFAULT_REGION) return process.env.AWS_DEFAULT_REGION;
   return "us-east-1";
@@ -240,12 +249,10 @@ describe("TapStack — Live Integration Tests", () => {
     await retry(() => s3.send(new HeadBucketCommand({ Bucket: ApplicationBucketName })));
     const ver = await retry(() => s3.send(new GetBucketVersioningCommand({ Bucket: ApplicationBucketName })));
     expect(ver.Status).toBe("Enabled");
-    // Encryption may be permission-restricted; handle robustly
     try {
       const enc = await retry(() => s3.send(new GetBucketEncryptionCommand({ Bucket: ApplicationBucketName })));
       expect(enc.ServerSideEncryptionConfiguration).toBeDefined();
     } catch {
-      // If access denied, the bucket still exists — acceptable
       expect(true).toBe(true);
     }
   });
@@ -263,7 +270,6 @@ describe("TapStack — Live Integration Tests", () => {
 
   /* 9 */
   it("S3: Application bucket policy enforces TLS-only or is not publicly readable (edge tolerance)", async () => {
-    // Try to read policy (may be blocked). If we can, check it mentions SecureTransport deny.
     try {
       const pol = await retry(() => s3.send(new GetBucketPolicyCommand({ Bucket: ApplicationBucketName })));
       const doc = JSON.parse(pol.Policy || "{}");
@@ -273,7 +279,6 @@ describe("TapStack — Live Integration Tests", () => {
         ) || false;
       expect(typeof hasDeny).toBe("boolean");
     } catch {
-      // If access denied, the bucket probably has tight policy — acceptable
       expect(true).toBe(true);
     }
   });
@@ -284,7 +289,6 @@ describe("TapStack — Live Integration Tests", () => {
     expect((lbs.LoadBalancers || []).length).toBe(1);
     const lb = lbs.LoadBalancers![0];
     const lbSubnets = lb.AvailabilityZones?.map((z) => z.SubnetId || "").filter(Boolean) || [];
-    // At least two subnets should be attached; they may be a subset of PublicSubnetIds if AWS collapsed zones
     expect(lbSubnets.length).toBeGreaterThanOrEqual(2);
   });
 
@@ -309,7 +313,6 @@ describe("TapStack — Live Integration Tests", () => {
     expect(ls.length).toBeGreaterThanOrEqual(1);
     const has443 = ls.some((l) => l.Port === 443 && l.Protocol === "HTTPS");
     const has80 = ls.some((l) => l.Port === 80 && l.Protocol === "HTTP");
-    // One of the modes must exist; both is acceptable during transition
     expect(has443 || has80).toBe(true);
   });
 
@@ -321,25 +324,21 @@ describe("TapStack — Live Integration Tests", () => {
     expect((tgs.TargetGroups || []).length).toBe(1);
     const tg = tgs.TargetGroups![0];
     expect(tg.Protocol).toBe("HTTP");
-    // Port should be defined (AppPort)
     expect(typeof tg.Port).toBe("number");
   });
 
   /* 14 */
   it("EC2: ALB SecurityGroup has only the necessary public ingress (matches listener mode)", async () => {
-    // Find the SGs from the ALB description
     const lbs = await retry(() => elbv2.send(new DescribeLoadBalancersCommand({ LoadBalancerArns: [AlbArn] })));
     const lb = lbs.LoadBalancers![0];
     const lbSgIds = lb.SecurityGroups || [];
     expect(lbSgIds.length).toBeGreaterThanOrEqual(1);
 
-    // Check listeners to decide expected port(s)
     const listeners = await retry(() => elbv2.send(new DescribeListenersCommand({ LoadBalancerArn: AlbArn })));
     const ls = listeners.Listeners || [];
     const httpsMode = ls.some((l) => l.Port === 443 && l.Protocol === "HTTPS");
     const httpMode = ls.some((l) => l.Port === 80 && l.Protocol === "HTTP");
 
-    // Fetch SG rules
     const sgs = await retry(() =>
       ec2.send(new DescribeSecurityGroupsCommand({ GroupIds: lbSgIds }))
     );
@@ -350,11 +349,9 @@ describe("TapStack — Live Integration Tests", () => {
     const has80 =
       allIngress.some((p) => p.FromPort === 80 && p.ToPort === 80) || false;
 
-    // Validate alignment: if HTTPS, 443 should be present; if HTTP-only, 80 should be present.
     if (httpsMode) expect(has443).toBe(true);
     if (httpMode) expect(has80).toBe(true);
 
-    // Ensure no random dev ports like 22/8080 are publicly open
     const badOpen =
       allIngress.some((p) => p.FromPort === 22 || p.ToPort === 22 || p.FromPort === 8080 || p.ToPort === 8080) || false;
     expect(badOpen).toBe(false);
@@ -368,17 +365,14 @@ describe("TapStack — Live Integration Tests", () => {
     const assumeStr = typeof assume === "string" ? decodeURIComponent(assume) : JSON.stringify(assume || {});
     expect(assumeStr.includes("ec2.amazonaws.com")).toBe(true);
 
-    // Inline policies
     const inline = await retry(() => iam.send(new ListRolePoliciesCommand({ RoleName: AppEc2RoleName })));
     const inlineNames = inline.PolicyNames || [];
 
-    // Attached managed policies (may be none)
     const attached = await retry(() => iam.send(new ListAttachedRolePoliciesCommand({ RoleName: AppEc2RoleName })));
     const attachedNames = (attached.AttachedPolicies || []).map((p) => p.PolicyName);
 
     expect(inlineNames.length + attachedNames.length).toBeGreaterThanOrEqual(1);
 
-    // If an inline policy exists, inspect it to ensure S3 actions scope is minimal
     if (inlineNames.length > 0) {
       const pol = await retry(() => iam.send(new GetRolePolicyCommand({ RoleName: AppEc2RoleName, PolicyName: inlineNames[0]! })));
       const doc = JSON.parse(decodeURIComponent(pol.PolicyDocument || "{}"));
@@ -386,7 +380,6 @@ describe("TapStack — Live Integration Tests", () => {
       expect(actions.includes("s3:listbucket")).toBe(true);
       expect(actions.includes("s3:getobject")).toBe(true);
       expect(actions.includes("s3:putobject")).toBe(true);
-      // Ensure no wildcard "*"
       expect(actions.includes('"s3:*"')).toBe(false);
     }
   });
@@ -397,7 +390,6 @@ describe("TapStack — Live Integration Tests", () => {
     expect((trails.trailList || []).length).toBeGreaterThanOrEqual(1);
     const trail = trails.trailList![0];
     expect(trail.Name).toBe(CloudTrailName);
-    // Some regions omit IsMultiRegionTrail in DescribeTrails; check with tolerance
     if (typeof trail.IsMultiRegionTrail === "boolean") {
       expect(trail.IsMultiRegionTrail).toBe(true);
     } else {
@@ -417,7 +409,6 @@ describe("TapStack — Live Integration Tests", () => {
 
   /* 18 */
   it("ELBv2: DNS name resolves at socket level (attempt TCP connect on active listener port)", async () => {
-    // Determine preferred test port from active listeners
     const listeners = await retry(() => elbv2.send(new DescribeListenersCommand({ LoadBalancerArn: AlbArn })));
     const ls = listeners.Listeners || [];
     const https = ls.find((l) => l.Port === 443) ? 443 : undefined;
@@ -449,7 +440,6 @@ describe("TapStack — Live Integration Tests", () => {
       socket.connect(port, AlbDnsName);
     });
 
-    // We assert boolean connectivity attempt outcome; connectivity can be restricted in private accounts.
     expect(typeof connected).toBe("boolean");
   });
 
@@ -467,7 +457,6 @@ describe("TapStack — Live Integration Tests", () => {
             (p.Ipv6Ranges || []).some((r) => r.CidrIpv6 === "::/0"))
       )
     );
-    // We expect no wide-open SSH
     expect(wide22).toBe(false);
   });
 
@@ -482,7 +471,6 @@ describe("TapStack — Live Integration Tests", () => {
         json.includes("logdelivery.elasticloadbalancing.amazonaws.com");
       expect(mention).toBe(true);
     } catch {
-      // If not readable due to least-privilege, acceptable
       expect(true).toBe(true);
     }
   });
@@ -511,7 +499,6 @@ describe("TapStack — Live Integration Tests", () => {
     const inline = await retry(() => iam.send(new ListRolePoliciesCommand({ RoleName: AppEc2RoleName })));
     const inlineNames = inline.PolicyNames || [];
     if (inlineNames.length === 0) {
-      // No inline policy — acceptable if managed policies were attached instead
       expect(true).toBe(true);
     } else {
       const pol = await retry(() => iam.send(new GetRolePolicyCommand({ RoleName: AppEc2RoleName, PolicyName: inlineNames[0]! })));
@@ -529,19 +516,32 @@ describe("TapStack — Live Integration Tests", () => {
 
   /* 24 */
   it("S3: Application and Logs bucket ARNs align with names", () => {
-    expect(ApplicationBucketArn.endsWith(`:${ApplicationBucketName}`) || ApplicationBucketArn.endsWith(`:::${ApplicationBucketName}`)).toBe(true);
-    expect(LogsBucketArn.endsWith(`:${LogsBucketName}`) || LogsBucketArn.endsWith(`:::${LogsBucketName}`)).toBe(true);
+    expect(
+      ApplicationBucketArn.endsWith(`:${ApplicationBucketName}`) ||
+        ApplicationBucketArn.endsWith(`:::${ApplicationBucketName}`)
+    ).toBe(true);
+    expect(
+      LogsBucketArn.endsWith(`:${LogsBucketName}`) ||
+        LogsBucketArn.endsWith(`:::${LogsBucketName}`)
+    ).toBe(true);
   });
 
   /* 25 */
-  it("Region: Derived region is a valid AWS region string and matches ALB DNS suffix", () => {
+  it("Region: Derived region is valid and ALB DNS suffix contains either '<region>.elb' or 'elb.<region>'", () => {
+    // region string format
     expect(/^[a-z]{2}-[a-z]+-\d$/.test(region)).toBe(true);
-    // If ALB DNS name format is standard, region should be present in suffix
-    if (AlbDnsName.includes(".elb.")) {
-      expect(AlbDnsName.includes(`.elb.${region}.amazonaws.com`)).toBe(true);
-    } else {
-      // Some partitions may differ; assertion remains tolerant
-      expect(typeof AlbDnsName).toBe("string");
-    }
+
+    // ALB DNS formats vary:
+    //  - <name>.<region>.elb.amazonaws.com
+    //  - dualstack.<name>.elb.<region>.amazonaws.com
+    // Accept either ordering.
+    const containsVariantA = AlbDnsName.includes(`.${region}.elb.amazonaws.com`);
+    const containsVariantB = AlbDnsName.includes(`.elb.${region}.amazonaws.com`);
+
+    // Also allow partitions like amazonaws.com.cn / govcloud etc., by matching only up to the partition root.
+    const genericA = new RegExp(`\\.${region}\\.elb\\.[^.]+$`).test(AlbDnsName);
+    const genericB = new RegExp(`\\.elb\\.${region}\\.[^.]+$`).test(AlbDnsName);
+
+    expect(containsVariantA || containsVariantB || genericA || genericB).toBe(true);
   });
 });
