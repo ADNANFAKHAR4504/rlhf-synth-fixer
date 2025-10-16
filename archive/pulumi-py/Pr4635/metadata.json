@@ -1,0 +1,22 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349174",
+  "team": "6",
+  "startedAt": "2025-10-16T14:42:25.867Z",
+  "subtask": "Failure Recovery and High Availability",
+  "background": "This task requires an understanding of AWS CloudFormation, Python scripting, and AWS services like Auto Scaling, SNS, Lambda, CloudWatch, and Parameter Store. The goal is to ensure high availability and quick recovery from failures, maintaining system integrity.",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": "S3, Lambda, CloudWatch, IAM, SSM Parameter Store, SNS, VPC, EC2, Auto Scaling",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
+}
