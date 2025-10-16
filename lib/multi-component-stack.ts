@@ -458,7 +458,7 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
     // ========================================
     // Lambda errors alarm
     new cdk.aws_cloudwatch.Alarm(this, 'LambdaErrorsAlarm', {
-      alarmName: `prod-cloudwatch-lambda-errors-${this.stringSuffix}`,
+      alarmName: `prod-cloudwatch-lambda-errors-${safeSuffixForLambda}`,
       metric: lambdaFunction.metricErrors(),
       threshold: 5,
       evaluationPeriods: 2,
@@ -468,7 +468,7 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
 
     // RDS CPU utilization alarm
     new cdk.aws_cloudwatch.Alarm(this, 'RdsCpuAlarm', {
-      alarmName: `prod-cloudwatch-rds-cpu-${this.stringSuffix}`,
+      alarmName: `prod-cloudwatch-rds-cpu-${safeSuffixForLambda}`,
       metric: rdsInstance.metricCPUUtilization(),
       threshold: 80,
       evaluationPeriods: 2,
@@ -478,7 +478,7 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
 
     // API Gateway 5xx errors alarm
     new cdk.aws_cloudwatch.Alarm(this, 'ApiGateway5xxAlarm', {
-      alarmName: `prod-cloudwatch-apigateway-5xx-${this.stringSuffix}`,
+      alarmName: `prod-cloudwatch-apigateway-5xx-${safeSuffixForLambda}`,
       metric: api.metricServerError(),
       threshold: 5,
       evaluationPeriods: 2,
@@ -506,7 +506,7 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
 
     // SQS alarms
     new cloudwatch.Alarm(this, 'SqsVisibleMessagesAlarm', {
-      alarmName: `prod-cloudwatch-sqs-visible-${this.stringSuffix}`,
+      alarmName: `prod-cloudwatch-sqs-visible-${safeSuffixForLambda}`,
       metric: asyncQueue.metricApproximateNumberOfMessagesVisible(),
       threshold: 100,
       evaluationPeriods: 2,
@@ -514,7 +514,7 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
     });
 
     new cloudwatch.Alarm(this, 'SqsOldestMessageAlarm', {
-      alarmName: `prod-cloudwatch-sqs-oldest-${this.stringSuffix}`,
+      alarmName: `prod-cloudwatch-sqs-oldest-${safeSuffixForLambda}`,
       metric: asyncQueue.metricApproximateAgeOfOldestMessage(),
       threshold: 300, // seconds
       evaluationPeriods: 1,
@@ -537,7 +537,7 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
     });
 
     new cloudwatch.Alarm(this, 'S34xxAlarm', {
-      alarmName: `prod-cloudwatch-s3-4xx-${this.stringSuffix}`,
+      alarmName: `prod-cloudwatch-s3-4xx-${safeSuffixForLambda}`,
       metric: s34xx,
       threshold: 10,
       evaluationPeriods: 1,
@@ -545,7 +545,7 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
     });
 
     new cloudwatch.Alarm(this, 'S35xxAlarm', {
-      alarmName: `prod-cloudwatch-s3-5xx-${this.stringSuffix}`,
+      alarmName: `prod-cloudwatch-s3-5xx-${safeSuffixForLambda}`,
       metric: s35xx,
       threshold: 5,
       evaluationPeriods: 1,
@@ -554,7 +554,7 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
 
     // Lambda duration and throttles
     new cloudwatch.Alarm(this, 'LambdaDurationAlarm', {
-      alarmName: `prod-cloudwatch-lambda-duration-${this.stringSuffix}`,
+      alarmName: `prod-cloudwatch-lambda-duration-${safeSuffixForLambda}`,
       metric: lambdaFunction.metricDuration(),
       threshold: 300000, // milliseconds (5m) - very high, tune as needed
       evaluationPeriods: 1,
@@ -562,7 +562,7 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
     });
 
     new cloudwatch.Alarm(this, 'LambdaThrottlesAlarm', {
-      alarmName: `prod-cloudwatch-lambda-throttles-${this.stringSuffix}`,
+      alarmName: `prod-cloudwatch-lambda-throttles-${safeSuffixForLambda}`,
       metric: lambdaFunction.metricThrottles(),
       threshold: 1,
       evaluationPeriods: 1,
@@ -571,7 +571,7 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
 
     // RDS additional alarm: free storage space low
     new cloudwatch.Alarm(this, 'RdsFreeStorageAlarm', {
-      alarmName: `prod-cloudwatch-rds-free-storage-${this.stringSuffix}`,
+      alarmName: `prod-cloudwatch-rds-free-storage-${safeSuffixForLambda}`,
       metric: rdsInstance.metricFreeStorageSpace(),
       threshold: 20 * 1024 * 1024 * 1024, // 20 GiB
       evaluationPeriods: 1,
@@ -588,7 +588,7 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
       this,
       'LambdaErrorsAlarmWithAction',
       {
-        alarmName: `prod-cloudwatch-lambda-errors-${this.stringSuffix}-with-action`,
+        alarmName: `prod-cloudwatch-lambda-errors-${safeSuffixForLambda}-with-action`,
         metric: lambdaFunction.metricErrors(),
         threshold: 5,
         evaluationPeriods: 2,
@@ -604,7 +604,7 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
       this,
       'RdsCpuAlarmWithAction',
       {
-        alarmName: `prod-cloudwatch-rds-cpu-${this.stringSuffix}-with-action`,
+        alarmName: `prod-cloudwatch-rds-cpu-${safeSuffixForLambda}-with-action`,
         metric: rdsInstance.metricCPUUtilization(),
         threshold: 80,
         evaluationPeriods: 2,
@@ -616,7 +616,7 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
 
     // Dashboard
     const dashboard = new cloudwatch.Dashboard(this, 'OperationalDashboard', {
-      dashboardName: `prod-ops-${this.stringSuffix}`,
+      dashboardName: `prod-ops-${safeSuffixForLambda}`,
     });
 
     dashboard.addWidgets(
