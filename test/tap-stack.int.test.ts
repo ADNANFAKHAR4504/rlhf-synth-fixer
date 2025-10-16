@@ -120,8 +120,8 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
       }));
 
       expect(natGateways.NatGateways).toHaveLength(1);
-      const natGateway = natGateways.NatGateways![0];
-      expect(natGateway.State).toBe('available');
+        const natGateway = natGateways.NatGateways![0];
+        expect(natGateway.State).toBe('available');
       expect(natGateway.VpcId).toBe(vpcId);
     });
 
@@ -169,7 +169,7 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
 
     test('S3 buckets should have comprehensive security controls', async () => {
       const buckets = [outputs.S3AppDataBucket, outputs.S3LogsBucket];
-      
+
       for (const bucketName of buckets) {
         // Check encryption
         const encryption = await s3.send(new GetBucketEncryptionCommand({ Bucket: bucketName }));
@@ -227,12 +227,12 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
     test('RDS database should be properly configured with encryption and monitoring', async () => {
       const dbInstance = await getDatabaseInstance();
       expect(dbInstance).toBeDefined();
-      
-      expect(dbInstance.DBInstanceStatus).toBe('available');
-      expect(dbInstance.Engine).toBe('mysql');
-      expect(dbInstance.EngineVersion).toBe('8.0.39');
-      expect(dbInstance.StorageEncrypted).toBe(true);
-      expect(dbInstance.KmsKeyId).toBeDefined();
+
+        expect(dbInstance.DBInstanceStatus).toBe('available');
+        expect(dbInstance.Engine).toBe('mysql');
+        expect(dbInstance.EngineVersion).toBe('8.0.39');
+        expect(dbInstance.StorageEncrypted).toBe(true);
+        expect(dbInstance.KmsKeyId).toBeDefined();
       expect(dbInstance.BackupRetentionPeriod).toBe(30);
       expect(dbInstance.DeletionProtection).toBe(false);
       expect(dbInstance.MonitoringInterval).toBe(60);
@@ -363,9 +363,9 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
           expect(tagNames).toContain('team');
           expect(tagNames).toContain('iac-rlhf-amazon');
         });
+        });
       });
     });
-  });
 
   describe('Security & Monitoring', () => {
     test('WAF should be protecting the application', async () => {
@@ -422,25 +422,25 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
     });
 
     test('CloudWatch Log Groups should be configured for monitoring', async () => {
-      // Look for log groups - CloudFormation generates names if not specified
+      // Look for log groups - CloudFormation generates names with stack name prefix
       const logGroups = await logs.send(new DescribeLogGroupsCommand({}));
       
-      // Find EC2 log group - search by stack name pattern
-      const stackName = outputs.VPCId.split('-')[0]; // Derive stack name from VPC ID
+      // Extract stack name from CloudTrail ARN (or any output ARN)
+      const stackName = outputs.CloudTrailArn.split('/')[1].split('-')[0] + '-' + outputs.CloudTrailArn.split('/')[1].split('-')[1]; // e.g., TapStackpr4238
+      
+      // Find EC2 log group - CloudFormation adds random suffix
       const ec2LogGroup = logGroups.logGroups!.find((lg: any) =>
-        lg.logGroupName && (
-          lg.logGroupName.includes('CorpEC2LogGroup') ||
-          lg.logGroupName.includes(`${stackName}-CorpEC2LogGroup`) ||
-          (lg.logGroupName.includes('/aws/ec2/corp-') && lg.retentionInDays === 30)
-        )
+        lg.logGroupName && lg.logGroupName.includes(`${stackName}-CorpEC2LogGroup`) && lg.retentionInDays === 30
       );
       
-      expect(ec2LogGroup).toBeDefined();
-      if (ec2LogGroup!.retentionInDays !== undefined) {
-        expect(ec2LogGroup!.retentionInDays).toBe(30);
+      if (!ec2LogGroup) {
+        const availableLogGroups = logGroups.logGroups!.map(lg => lg.logGroupName).filter(n => n?.includes(stackName.split('pr')[0])).join(', ');
+        throw new Error(`EC2 log group not found. Stack: ${stackName}. Available: ${availableLogGroups}`);
       }
-      if (ec2LogGroup!.kmsKeyId) {
-        expect(ec2LogGroup!.kmsKeyId).toBeDefined();
+      
+      expect(ec2LogGroup.retentionInDays).toBe(30);
+      if (ec2LogGroup.kmsKeyId) {
+        expect(ec2LogGroup.kmsKeyId).toBeDefined();
       }
     });
 
@@ -476,9 +476,9 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
       expect(alb!.State!.Code).toBe('active');
 
       // 2. Verify target groups have healthy targets
-      const targetGroups = await elbv2.describeTargetGroups({
-        LoadBalancerArn: alb!.LoadBalancerArn
-      }).promise();
+        const targetGroups = await elbv2.describeTargetGroups({
+          LoadBalancerArn: alb!.LoadBalancerArn
+        }).promise();
 
       for (const tg of targetGroups.TargetGroups!) {
         const health = await elbv2.describeTargetHealth({
@@ -641,17 +641,15 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
 
       // Check CloudWatch logs for application activity
       const logGroups = await logs.send(new DescribeLogGroupsCommand({}));
-      const stackName = outputs.VPCId.split('-')[0];
+      const stackName = outputs.CloudTrailArn.split('/')[1].split('-')[0] + '-' + outputs.CloudTrailArn.split('/')[1].split('-')[1];
+      
       const ec2LogGroup = logGroups.logGroups!.find((lg: any) =>
-        lg.logGroupName && (
-          lg.logGroupName.includes('CorpEC2LogGroup') ||
-          lg.logGroupName.includes(`${stackName}-CorpEC2LogGroup`) ||
-          (lg.logGroupName.includes('/aws/ec2/corp-') && lg.retentionInDays === 30)
-        )
+        lg.logGroupName && lg.logGroupName.includes(`${stackName}-CorpEC2LogGroup`) && lg.retentionInDays === 30
       );
 
       if (!ec2LogGroup) {
-        throw new Error(`EC2 log group not found. Searched for patterns: CorpEC2LogGroup, ${stackName}-CorpEC2LogGroup, /aws/ec2/corp-`);
+        const availableLogGroups = logGroups.logGroups!.map(lg => lg.logGroupName).filter(n => n?.includes(stackName)).join(', ');
+        throw new Error(`EC2 log group not found. Stack: ${stackName}. Available: ${availableLogGroups}`);
       }
       
       const recentLogs = await logs.send(new FilterLogEventsCommand({
@@ -681,8 +679,8 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
         req.setTimeout(10000, () => {
           req.destroy();
           reject(new Error('Request timeout'));
-        });
-      });
+    });
+  });
 
       // Verify WAF blocked the request (403 Forbidden)
       expect(response.statusCode).toBe(403);
@@ -850,7 +848,7 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
   describe('Resource Tagging & Compliance', () => {
     test('All resources should have consistent tagging strategy', async () => {
       const vpcId = await getVpcId();
-      
+
       // Test VPC tags
       const vpcs = await ec2.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
       const vpc = vpcs.Vpcs![0];
@@ -874,8 +872,8 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
           expect(tagNames).toContain('Application');
           expect(tagNames).toContain('team');
           expect(tagNames).toContain('iac-rlhf-amazon');
-        });
       });
+    });
 
       // Test S3 bucket tags
       const buckets = [outputs.S3AppDataBucket, outputs.S3LogsBucket];
@@ -925,8 +923,8 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
       expect(dbInstance.DBInstanceClass).toMatch(/^db\./); // Should be a valid RDS instance class
       expect(dbInstance.AllocatedStorage).toBeGreaterThanOrEqual(100); // Adequate storage
       expect(dbInstance.BackupRetentionPeriod).toBe(30); // Good backup retention
+      });
     });
-  });
 
   describe('Complete Resource Coverage', () => {
     test('RDS KMS Key should exist and be properly configured', async () => {
@@ -1048,19 +1046,20 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
     });
 
     test('MFA Policy should exist and be properly configured', async () => {
-      // Check for managed policies first
+      // Extract stack name from CloudTrail ARN
+      const stackName = outputs.CloudTrailArn.split('/')[1].split('-')[0] + '-' + outputs.CloudTrailArn.split('/')[1].split('-')[1];
+      
+      // Check for managed policies with stack name prefix
       const managedPolicies = await iam.send(new ListPoliciesCommand({
         Scope: 'Local'
       }));
       const mfaPolicy = managedPolicies.Policies!.find((policy: any) =>
-        policy.PolicyName.includes('CorpMFAPolicy') || 
-        policy.PolicyName.includes('corp-mfa-policy') ||
-        policy.PolicyName.includes('MFA')
+        policy.PolicyName.includes(`${stackName}-CorpMFAPolicy`)
       );
 
       if (!mfaPolicy) {
-        const policyNames = managedPolicies.Policies!.map(p => p.PolicyName).join(', ');
-        throw new Error(`MFA Policy not found. Available policies: ${policyNames}`);
+        const stackPolicies = managedPolicies.Policies!.filter(p => p.PolicyName.includes(stackName)).map(p => p.PolicyName).join(', ');
+        throw new Error(`MFA Policy not found. Stack: ${stackName}. Stack policies: ${stackPolicies}`);
       }
       
       expect(mfaPolicy.PolicyName).toBeDefined();
@@ -1109,8 +1108,8 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
           // The backup bucket would be referenced in IAM policies
           expect(instance.IamInstanceProfile!.Arn).toBeDefined();
         });
-      });
     });
+  });
 
     test('WAF Web ACL Association should be properly configured', async () => {
       expect(outputs.WebACLArn).toBeDefined();
@@ -1162,41 +1161,31 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
 
     test('All CloudWatch Log Groups should exist and be properly configured', async () => {
       const logGroups = await logs.send(new DescribeLogGroupsCommand({}));
-      const stackName = outputs.VPCId.split('-')[0];
+      const stackName = outputs.CloudTrailArn.split('/')[1].split('-')[0] + '-' + outputs.CloudTrailArn.split('/')[1].split('-')[1];
 
-      // Check for EC2 log group - CloudFormation generates name if not specified
+      // Check for EC2 log group - CloudFormation generates name with stack prefix
       const ec2LogGroup = logGroups.logGroups!.find((lg: any) =>
-        lg.logGroupName && (
-          lg.logGroupName.includes('CorpEC2LogGroup') ||
-          lg.logGroupName.includes(`${stackName}-CorpEC2LogGroup`) ||
-          (lg.logGroupName.includes('/aws/ec2/corp-') && lg.retentionInDays === 30)
-        )
+        lg.logGroupName && lg.logGroupName.includes(`${stackName}-CorpEC2LogGroup`) && lg.retentionInDays === 30
       );
       
       if (!ec2LogGroup) {
-        throw new Error(`EC2 log group not found. Searched for: CorpEC2LogGroup, ${stackName}-CorpEC2LogGroup`);
+        const availableLogGroups = logGroups.logGroups!.map(lg => lg.logGroupName).filter(n => n?.includes(stackName)).join(', ');
+        throw new Error(`EC2 log group not found. Stack: ${stackName}. Available: ${availableLogGroups}`);
       }
       
-      if (ec2LogGroup.retentionInDays !== undefined) {
-        expect(ec2LogGroup.retentionInDays).toBe(30);
-      }
+      expect(ec2LogGroup.retentionInDays).toBe(30);
 
       // Check for CloudTrail log group
       const cloudTrailLogGroup = logGroups.logGroups!.find((lg: any) =>
-        lg.logGroupName && (
-          lg.logGroupName.includes('CorpCloudWatchLogGroup') ||
-          lg.logGroupName.includes(`${stackName}-CorpCloudWatchLogGroup`) ||
-          (lg.logGroupName.includes('/aws/cloudtrail/') && lg.retentionInDays === 90)
-        )
+        lg.logGroupName && lg.logGroupName.includes(`${stackName}-CorpCloudWatchLogGroup`) && lg.retentionInDays === 90
       );
       
       if (!cloudTrailLogGroup) {
-        throw new Error(`CloudTrail log group not found. Searched for: CorpCloudWatchLogGroup, ${stackName}-CorpCloudWatchLogGroup`);
+        const availableLogGroups = logGroups.logGroups!.map(lg => lg.logGroupName).filter(n => n?.includes(stackName)).join(', ');
+        throw new Error(`CloudTrail log group not found. Stack: ${stackName}. Available: ${availableLogGroups}`);
       }
       
-      if (cloudTrailLogGroup.retentionInDays !== undefined) {
-        expect(cloudTrailLogGroup.retentionInDays).toBe(90);
-      }
+      expect(cloudTrailLogGroup.retentionInDays).toBe(90);
     });
 
     test('SSL Certificate should be properly configured if domain is valid', async () => {
@@ -1283,8 +1272,8 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
           expect(tagNames).toContain('team');
           expect(tagNames).toContain('iac-rlhf-amazon');
         });
-      });
     });
+  });
 
     test('All Security Groups should have proper rules', async () => {
       const vpcId = await getVpcId();
