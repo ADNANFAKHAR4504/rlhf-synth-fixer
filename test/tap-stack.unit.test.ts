@@ -207,5 +207,28 @@ describe('TapStack Unit Tests (single file)', () => {
   test('safeSuffix normalizes characters', () => {
     expect(safeSuffix('AbC_12:34!@#')).toBe('abc_12-34---');
   });
+
+  test('creates WAF WebACL when region is us-east-1', () => {
+    const app = new cdk.App();
+    const parent = new cdk.Stack(app, 'WafCreateParent', {
+      env: { region: 'us-east-1' },
+    });
+    const multi = new MultiComponentApplicationStack(parent, 'WafCreateTest');
+    const template = Template.fromStack(multi);
+    const webAcls = template.findResources('AWS::WAFv2::WebACL');
+    expect(Object.keys(webAcls).length).toBeGreaterThanOrEqual(1);
+  });
+
+  test('skips WAF creation when region is not us-east-1', () => {
+    const app = new cdk.App();
+    const parent = new cdk.Stack(app, 'WafSkipParent', {
+      env: { region: 'us-west-2' },
+    });
+    const multi = new MultiComponentApplicationStack(parent, 'WafSkipTest');
+    const template = Template.fromStack(multi);
+    // The else branch emits a CfnOutput named WafCreationSkipped
+    const outputs = template.toJSON().Outputs || {};
+    expect(outputs).toHaveProperty('WafCreationSkipped');
+  });
 });
 
