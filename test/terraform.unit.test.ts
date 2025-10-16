@@ -114,7 +114,7 @@ describe("Variables", () => {
       ["alb_cert_arn_use1", ""],
       ["cloudfront_cert_arn_use1", ""],
       ["use1_cidr", "10.10.0.0/16"],
-      ["euw1_cidr", "10.20.0.0/16"],
+      ["euw2_cidr", "10.20.0.0/16"],
       ["web_instance_type", "t3.micro"],
       ["rds_engine", "postgres"],
       ["rds_engine_version", "15.4"],
@@ -151,11 +151,11 @@ describe("Variables", () => {
   describe("Data sources", () => {
     it("AZs & AL2023 AMIs via SSM in both regions + caller identity", () => {
       expect(!!getBlock(tf, "data", "aws_availability_zones", "use1")).toBe(true);
-      expect(!!getBlock(tf, "data", "aws_availability_zones", "euw1")).toBe(true);
+      expect(!!getBlock(tf, "data", "aws_availability_zones", "euw2")).toBe(true);
       expect(!!getBlock(tf, "data", "aws_ssm_parameter", "al2023_ami_use1")).toBe(true);
-      expect(!!getBlock(tf, "data", "aws_ssm_parameter", "al2023_ami_euw1")).toBe(true);
+      expect(!!getBlock(tf, "data", "aws_ssm_parameter", "al2023_ami_euw2")).toBe(true);
       expect(!!getBlock(tf, "data", "aws_caller_identity", "current")).toBe(true);
-      expect(!!getBlock(tf, "data", "aws_caller_identity", "current_euw1")).toBe(true);
+      expect(!!getBlock(tf, "data", "aws_caller_identity", "current_euw2")).toBe(true);
     });
 
     it("optional Route53 zone lookup is count-guarded", () => {
@@ -166,11 +166,11 @@ describe("Variables", () => {
   });
 
   describe("KMS", () => {
-    it("CMKs + aliases in use1 & euw1; separate logs CMK in use1 with policy", () => {
+    it("CMKs + aliases in use1 & euw2; separate logs CMK in use1 with policy", () => {
       expectMatch(getBlock(tf, "resource", "aws_kms_key", "use1"), /enable_key_rotation\s*=\s*true/);
       expectMatch(getBlock(tf, "resource", "aws_kms_alias", "use1"), /target_key_id\s*=\s*aws_kms_key\.use1\.key_id/);
-      expectMatch(getBlock(tf, "resource", "aws_kms_key", "euw1"), /enable_key_rotation\s*=\s*true/);
-      expectMatch(getBlock(tf, "resource", "aws_kms_alias", "euw1"), /target_key_id\s*=\s*aws_kms_key\.euw1\.key_id/);
+      expectMatch(getBlock(tf, "resource", "aws_kms_key", "euw2"), /enable_key_rotation\s*=\s*true/);
+      expectMatch(getBlock(tf, "resource", "aws_kms_alias", "euw2"), /target_key_id\s*=\s*aws_kms_key\.euw2\.key_id/);
       const logsPol = getBlock(tf, "data", "aws_iam_policy_document", "use1_logs_key");
       const logsK = getBlock(tf, "resource", "aws_kms_key", "use1_logs");
       expect(logsPol).toBeTruthy();
@@ -179,15 +179,15 @@ describe("Variables", () => {
   });
 
   describe("Networking — VPCs, IGW, Subnets, NAT, RTs (both regions)", () => {
-    it("VPC + IGW for use1 & euw1", () => {
+    it("VPC + IGW for use1 & euw2", () => {
       expect(!!getBlock(tf, "resource", "aws_vpc", "use1")).toBe(true);
       expect(!!getBlock(tf, "resource", "aws_internet_gateway", "use1")).toBe(true);
-      expect(!!getBlock(tf, "resource", "aws_vpc", "euw1")).toBe(true);
-      expect(!!getBlock(tf, "resource", "aws_internet_gateway", "euw1")).toBe(true);
+      expect(!!getBlock(tf, "resource", "aws_vpc", "euw2")).toBe(true);
+      expect(!!getBlock(tf, "resource", "aws_internet_gateway", "euw2")).toBe(true);
     });
 
     it("public & private subnets in both AZs for each region (publics mapPublicIpOnLaunch=true)", () => {
-      for (const p of ["use1", "euw1"] as const) {
+      for (const p of ["use1", "euw2"] as const) {
         const pubA = getBlock(tf, "resource", "aws_subnet", `${p}_public_a`);
         const pubB = getBlock(tf, "resource", "aws_subnet", `${p}_public_b`);
         const priA = getBlock(tf, "resource", "aws_subnet", `${p}_private_a`);
@@ -201,34 +201,34 @@ describe("Variables", () => {
     it("NAT EIP + NAT GW in both regions", () => {
       expect(!!getBlock(tf, "resource", "aws_eip", "use1_nat")).toBe(true);
       expect(!!getBlock(tf, "resource", "aws_nat_gateway", "use1")).toBe(true);
-      expect(!!getBlock(tf, "resource", "aws_eip", "euw1_nat")).toBe(true);
-      expect(!!getBlock(tf, "resource", "aws_nat_gateway", "euw1")).toBe(true);
+      expect(!!getBlock(tf, "resource", "aws_eip", "euw2_nat")).toBe(true);
+      expect(!!getBlock(tf, "resource", "aws_nat_gateway", "euw2")).toBe(true);
     });
 
     it("Route tables + 0.0.0.0/0 routes via IGW (public) and NAT (private)", () => {
       expectMatch(getBlock(tf, "resource", "aws_route", "use1_public_igw"), /0\.0\.0\.0\/0/);
       expectMatch(getBlock(tf, "resource", "aws_route", "use1_private_a_nat"), /0\.0\.0\.0\/0/);
       expectMatch(getBlock(tf, "resource", "aws_route", "use1_private_b_nat"), /0\.0\.0\.0\/0/);
-      expectMatch(getBlock(tf, "resource", "aws_route", "euw1_public_a_igw"), /0\.0\.0\.0\/0/);
-      expectMatch(getBlock(tf, "resource", "aws_route", "euw1_public_b_igw"), /0\.0\.0\.0\/0/);
-      expectMatch(getBlock(tf, "resource", "aws_route", "euw1_private_a_nat"), /0\.0\.0\.0\/0/);
-      expectMatch(getBlock(tf, "resource", "aws_route", "euw1_private_b_nat"), /0\.0\.0\.0\/0/);
+      expectMatch(getBlock(tf, "resource", "aws_route", "euw2_public_a_igw"), /0\.0\.0\.0\/0/);
+      expectMatch(getBlock(tf, "resource", "aws_route", "euw2_public_b_igw"), /0\.0\.0\.0\/0/);
+      expectMatch(getBlock(tf, "resource", "aws_route", "euw2_private_a_nat"), /0\.0\.0\.0\/0/);
+      expectMatch(getBlock(tf, "resource", "aws_route", "euw2_private_b_nat"), /0\.0\.0\.0\/0/);
     });
   });
 
   describe("VPC Peering + routes", () => {
     it("PCX request, accepter, and bidirectional routes exist", () => {
-      expect(!!getBlock(tf, "resource", "aws_vpc_peering_connection", "use1_to_euw1")).toBe(true);
-      expect(!!getBlock(tf, "resource", "aws_vpc_peering_connection_accepter", "euw1_accept")).toBe(true);
-      expect(!!getBlock(tf, "resource", "aws_route", "use1_public_to_euw1_pcx")).toBe(true);
-      expect(!!getBlock(tf, "resource", "aws_route", "use1_private_a_to_euw1_pcx")).toBe(true);
-      expect(!!getBlock(tf, "resource", "aws_route", "use1_private_b_to_euw1_pcx")).toBe(true);
-      expect(!!getBlock(tf, "resource", "aws_route", "euw1_public_a_to_use1_pcx")).toBe(true);
-      expect(!!getBlock(tf, "resource", "aws_route", "euw1_public_b_to_use1_pcx")).toBe(true);
-      expect(!!getBlock(tf, "resource", "aws_route", "euw1_private_a_to_use1_pcx")).toBe(true);
-      expect(!!getBlock(tf, "resource", "aws_route", "euw1_private_b_to_use1_pcx")).toBe(true);
-      expect(!!getBlock(tf, "resource", "aws_route_table", "euw1_main")).toBe(true);
-      expect(!!getBlock(tf, "resource", "aws_route", "euw1_main_to_use1_pcx")).toBe(true);
+      expect(!!getBlock(tf, "resource", "aws_vpc_peering_connection", "use1_to_euw2")).toBe(true);
+      expect(!!getBlock(tf, "resource", "aws_vpc_peering_connection_accepter", "euw2_accept")).toBe(true);
+      expect(!!getBlock(tf, "resource", "aws_route", "use1_public_to_euw2_pcx")).toBe(true);
+      expect(!!getBlock(tf, "resource", "aws_route", "use1_private_a_to_euw2_pcx")).toBe(true);
+      expect(!!getBlock(tf, "resource", "aws_route", "use1_private_b_to_euw2_pcx")).toBe(true);
+      expect(!!getBlock(tf, "resource", "aws_route", "euw2_public_a_to_use1_pcx")).toBe(true);
+      expect(!!getBlock(tf, "resource", "aws_route", "euw2_public_b_to_use1_pcx")).toBe(true);
+      expect(!!getBlock(tf, "resource", "aws_route", "euw2_private_a_to_use1_pcx")).toBe(true);
+      expect(!!getBlock(tf, "resource", "aws_route", "euw2_private_b_to_use1_pcx")).toBe(true);
+      expect(!!getBlock(tf, "resource", "aws_route_table", "euw2_main")).toBe(true);
+      expect(!!getBlock(tf, "resource", "aws_route", "euw2_main_to_use1_pcx")).toBe(true);
     });
   });
 
@@ -390,10 +390,10 @@ describe("Variables", () => {
 describe("Outputs", () => {
   it("exports all required outputs (single test)", () => {
     const outputs = [
-      "use1_vpc_id","euw1_vpc_id",
+      "use1_vpc_id","euw2_vpc_id",
       "use1_public_subnet_ids","use1_private_subnet_ids",
-      "euw1_public_subnet_ids","euw1_private_subnet_ids",
-      "use1_kms_key_arn","euw1_kms_key_arn",
+      "euw2_public_subnet_ids","euw2_private_subnet_ids",
+      "use1_kms_key_arn","euw2_kms_key_arn",
       "upload_bucket_name",
       "lambda_on_upload_name","lambda_on_upload_arn","lambda_heartbeat_name",
       "alb_arn","alb_dns_name",
@@ -402,7 +402,7 @@ describe("Outputs", () => {
       "app_role_name","app_role_arn",
       "sns_alarms_topic_arn",
       "cw_log_group_use1",
-      "use1_cidr","euw1_cidr",
+      "use1_cidr","euw2_cidr",
       "web_sg_id","ec2_instance_id","ec2_public_ip",
       "cloudtrail_bucket_name"
     ];
@@ -443,11 +443,11 @@ test("Unit requirements coverage summary (>=95%)", () => {
                /["']?CostCenter["']?\s*=\s*var\.cost_center/.test(bt);
       })(),
     ],
-    ["VPCs+IGWs both regions", has("resource","aws_vpc","use1") && has("resource","aws_vpc","euw1") && has("resource","aws_internet_gateway","use1") && has("resource","aws_internet_gateway","euw1")],
-    ["Subnets 2+2 both regions", ["use1_public_a","use1_public_b","use1_private_a","use1_private_b","euw1_public_a","euw1_public_b","euw1_private_a","euw1_private_b"].every(n=>has("resource","aws_subnet",n))],
-    ["NAT both regions", has("resource","aws_nat_gateway","use1") && has("resource","aws_nat_gateway","euw1")],
-    ["PCX req+accept", has("resource","aws_vpc_peering_connection","use1_to_euw1") && has("resource","aws_vpc_peering_connection_accepter","euw1_accept")],
-    ["PCX routes both ways", ["use1_public_to_euw1_pcx","use1_private_a_to_euw1_pcx","use1_private_b_to_euw1_pcx","euw1_public_a_to_use1_pcx","euw1_public_b_to_use1_pcx","euw1_private_a_to_use1_pcx","euw1_private_b_to_use1_pcx","euw1_main_to_use1_pcx"].every(n=>has("resource","aws_route",n))],
+    ["VPCs+IGWs both regions", has("resource","aws_vpc","use1") && has("resource","aws_vpc","euw2") && has("resource","aws_internet_gateway","use1") && has("resource","aws_internet_gateway","euw2")],
+    ["Subnets 2+2 both regions", ["use1_public_a","use1_public_b","use1_private_a","use1_private_b","euw2_public_a","euw2_public_b","euw2_private_a","euw2_private_b"].every(n=>has("resource","aws_subnet",n))],
+    ["NAT both regions", has("resource","aws_nat_gateway","use1") && has("resource","aws_nat_gateway","euw2")],
+    ["PCX req+accept", has("resource","aws_vpc_peering_connection","use1_to_euw2") && has("resource","aws_vpc_peering_connection_accepter","euw2_accept")],
+    ["PCX routes both ways", ["use1_public_to_euw2_pcx","use1_private_a_to_euw2_pcx","use1_private_b_to_euw2_pcx","euw2_public_a_to_use1_pcx","euw2_public_b_to_use1_pcx","euw2_private_a_to_use1_pcx","euw2_private_b_to_use1_pcx","euw2_main_to_use1_pcx"].every(n=>has("resource","aws_route",n))],
     ["ALB SG + 80 ingress", has("resource","aws_security_group","use1_alb_https") && has("resource","aws_vpc_security_group_ingress_rule","use1_alb_http_80")],
     ["App SG from ALB", has("resource","aws_security_group","use1_app") && has("resource","aws_vpc_security_group_ingress_rule","use1_app_http_from_alb")],
     ["RDS SG 5432 from app", has("resource","aws_security_group","use1_rds") && has("resource","aws_vpc_security_group_ingress_rule","use1_rds_5432_from_app")],
@@ -465,10 +465,10 @@ test("Unit requirements coverage summary (>=95%)", () => {
     [
       "All required outputs present",
       [
-        "use1_vpc_id","euw1_vpc_id",
+        "use1_vpc_id","euw2_vpc_id",
         "use1_public_subnet_ids","use1_private_subnet_ids",
-        "euw1_public_subnet_ids","euw1_private_subnet_ids",
-        "use1_kms_key_arn","euw1_kms_key_arn",
+        "euw2_public_subnet_ids","euw2_private_subnet_ids",
+        "use1_kms_key_arn","euw2_kms_key_arn",
         "upload_bucket_name",
         "lambda_on_upload_name","lambda_on_upload_arn","lambda_heartbeat_name",
         "alb_arn","alb_dns_name",
@@ -477,7 +477,7 @@ test("Unit requirements coverage summary (>=95%)", () => {
         "app_role_name","app_role_arn",
         "sns_alarms_topic_arn",
         "cw_log_group_use1",
-        "use1_cidr","euw1_cidr",
+        "use1_cidr","euw2_cidr",
         "web_sg_id","ec2_instance_id","ec2_public_ip",
         "cloudtrail_bucket_name"
       ].every(o => new RegExp(String.raw`\boutput\s+"${o}"\s*\{`).test(c))

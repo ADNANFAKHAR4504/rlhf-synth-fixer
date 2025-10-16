@@ -47,13 +47,13 @@ variable "cloudfront_cert_arn_use1" {
 }
 
 variable "use1_cidr" {
-  description = "VPC CIDR for us-east-1 (must not overlap with eu-west-1)."
+  description = "VPC CIDR for us-east-1 (must not overlap with eu-west-2)."
   type        = string
   default     = "10.10.0.0/16"
 }
 
-variable "euw1_cidr" {
-  description = "VPC CIDR for eu-west-1 (must not overlap with us-east-1)."
+variable "euw2_cidr" {
+  description = "VPC CIDR for eu-west-2 (must not overlap with us-east-1)."
   type        = string
   default     = "10.20.0.0/16"
 }
@@ -114,7 +114,7 @@ locals {
 
   name = {
     use1 = "cloud-setup-${var.env}-use1"
-    euw1 = "cloud-setup-${var.env}-euw1"
+    euw2 = "cloud-setup-${var.env}-euw2"
   }
 
   use1_subnets = {
@@ -124,11 +124,11 @@ locals {
     private_b = cidrsubnet(var.use1_cidr, 4, 3)
   }
 
-  euw1_subnets = {
-    public_a  = cidrsubnet(var.euw1_cidr, 4, 0)
-    public_b  = cidrsubnet(var.euw1_cidr, 4, 1)
-    private_a = cidrsubnet(var.euw1_cidr, 4, 2)
-    private_b = cidrsubnet(var.euw1_cidr, 4, 3)
+  euw2_subnets = {
+    public_a  = cidrsubnet(var.euw2_cidr, 4, 0)
+    public_b  = cidrsubnet(var.euw2_cidr, 4, 1)
+    private_a = cidrsubnet(var.euw2_cidr, 4, 2)
+    private_b = cidrsubnet(var.euw2_cidr, 4, 3)
   }
 }
 
@@ -141,8 +141,8 @@ data "aws_availability_zones" "use1" {
   state    = "available"
 }
 
-data "aws_availability_zones" "euw1" {
-  provider = aws.euw1
+data "aws_availability_zones" "euw2" {
+  provider = aws.euw2
   state    = "available"
 }
 
@@ -151,8 +151,8 @@ data "aws_ssm_parameter" "al2023_ami_use1" {
   name     = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64"
 }
 
-data "aws_ssm_parameter" "al2023_ami_euw1" {
-  provider = aws.euw1
+data "aws_ssm_parameter" "al2023_ami_euw2" {
+  provider = aws.euw2
   name     = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64"
 }
 
@@ -167,8 +167,8 @@ data "aws_caller_identity" "current" {
   provider = aws.use1
 }
 
-data "aws_caller_identity" "current_euw1" {
-  provider = aws.euw1
+data "aws_caller_identity" "current_euw2" {
+  provider = aws.euw2
 }
 
 #############################################
@@ -189,18 +189,18 @@ resource "aws_kms_alias" "use1" {
   target_key_id = aws_kms_key.use1.key_id
 }
 
-resource "aws_kms_key" "euw1" {
-  provider                = aws.euw1
-  description             = "CMK for ${local.name.euw1} encryption"
+resource "aws_kms_key" "euw2" {
+  provider                = aws.euw2
+  description             = "CMK for ${local.name.euw2} encryption"
   enable_key_rotation     = true
   deletion_window_in_days = 7
   tags                    = local.base_tags
 }
 
-resource "aws_kms_alias" "euw1" {
-  provider      = aws.euw1
-  name          = "alias/${local.name.euw1}"
-  target_key_id = aws_kms_key.euw1.key_id
+resource "aws_kms_alias" "euw2" {
+  provider      = aws.euw2
+  name          = "alias/${local.name.euw2}"
+  target_key_id = aws_kms_key.euw2.key_id
 }
 
 data "aws_iam_policy_document" "use1_logs_key" {
@@ -383,249 +383,249 @@ resource "aws_route_table_association" "use1_private_b" {
   route_table_id = aws_route_table.use1_private_b.id
 }
 
-resource "aws_vpc" "euw1" {
-  provider             = aws.euw1
-  cidr_block           = var.euw1_cidr
+resource "aws_vpc" "euw2" {
+  provider             = aws.euw2
+  cidr_block           = var.euw2_cidr
   enable_dns_support   = true
   enable_dns_hostnames = true
-  tags                 = merge(local.base_tags, { Name = "${local.name.euw1}-vpc" })
+  tags                 = merge(local.base_tags, { Name = "${local.name.euw2}-vpc" })
 }
 
-resource "aws_internet_gateway" "euw1" {
-  provider = aws.euw1
-  vpc_id   = aws_vpc.euw1.id
-  tags     = merge(local.base_tags, { Name = "${local.name.euw1}-igw" })
+resource "aws_internet_gateway" "euw2" {
+  provider = aws.euw2
+  vpc_id   = aws_vpc.euw2.id
+  tags     = merge(local.base_tags, { Name = "${local.name.euw2}-igw" })
 }
 
-resource "aws_subnet" "euw1_public_a" {
-  provider                = aws.euw1
-  vpc_id                  = aws_vpc.euw1.id
-  cidr_block              = local.euw1_subnets.public_a
-  availability_zone       = data.aws_availability_zones.euw1.names[0]
+resource "aws_subnet" "euw2_public_a" {
+  provider                = aws.euw2
+  vpc_id                  = aws_vpc.euw2.id
+  cidr_block              = local.euw2_subnets.public_a
+  availability_zone       = data.aws_availability_zones.euw2.names[0]
   map_public_ip_on_launch = true
-  tags                    = merge(local.base_tags, { Name = "${local.name.euw1}-public-a", Tier = "public" })
+  tags                    = merge(local.base_tags, { Name = "${local.name.euw2}-public-a", Tier = "public" })
 }
 
-resource "aws_subnet" "euw1_public_b" {
-  provider                = aws.euw1
-  vpc_id                  = aws_vpc.euw1.id
-  cidr_block              = local.euw1_subnets.public_b
-  availability_zone       = data.aws_availability_zones.euw1.names[1]
+resource "aws_subnet" "euw2_public_b" {
+  provider                = aws.euw2
+  vpc_id                  = aws_vpc.euw2.id
+  cidr_block              = local.euw2_subnets.public_b
+  availability_zone       = data.aws_availability_zones.euw2.names[1]
   map_public_ip_on_launch = true
-  tags                    = merge(local.base_tags, { Name = "${local.name.euw1}-public-b", Tier = "public" })
+  tags                    = merge(local.base_tags, { Name = "${local.name.euw2}-public-b", Tier = "public" })
 }
 
-resource "aws_subnet" "euw1_private_a" {
-  provider          = aws.euw1
-  vpc_id            = aws_vpc.euw1.id
-  cidr_block        = local.euw1_subnets.private_a
-  availability_zone = data.aws_availability_zones.euw1.names[0]
-  tags              = merge(local.base_tags, { Name = "${local.name.euw1}-private-a", Tier = "private" })
+resource "aws_subnet" "euw2_private_a" {
+  provider          = aws.euw2
+  vpc_id            = aws_vpc.euw2.id
+  cidr_block        = local.euw2_subnets.private_a
+  availability_zone = data.aws_availability_zones.euw2.names[0]
+  tags              = merge(local.base_tags, { Name = "${local.name.euw2}-private-a", Tier = "private" })
 }
 
-resource "aws_subnet" "euw1_private_b" {
-  provider          = aws.euw1
-  vpc_id            = aws_vpc.euw1.id
-  cidr_block        = local.euw1_subnets.private_b
-  availability_zone = data.aws_availability_zones.euw1.names[1]
-  tags              = merge(local.base_tags, { Name = "${local.name.euw1}-private-b", Tier = "private" })
+resource "aws_subnet" "euw2_private_b" {
+  provider          = aws.euw2
+  vpc_id            = aws_vpc.euw2.id
+  cidr_block        = local.euw2_subnets.private_b
+  availability_zone = data.aws_availability_zones.euw2.names[1]
+  tags              = merge(local.base_tags, { Name = "${local.name.euw2}-private-b", Tier = "private" })
 }
 
-resource "aws_eip" "euw1_nat" {
-  provider = aws.euw1
+resource "aws_eip" "euw2_nat" {
+  provider = aws.euw2
   domain   = "vpc"
-  tags     = merge(local.base_tags, { Name = "${local.name.euw1}-nat-eip" })
+  tags     = merge(local.base_tags, { Name = "${local.name.euw2}-nat-eip" })
 }
 
-resource "aws_nat_gateway" "euw1" {
-  provider      = aws.euw1
-  allocation_id = aws_eip.euw1_nat.id
-  subnet_id     = aws_subnet.euw1_public_a.id
-  tags          = merge(local.base_tags, { Name = "${local.name.euw1}-nat" })
+resource "aws_nat_gateway" "euw2" {
+  provider      = aws.euw2
+  allocation_id = aws_eip.euw2_nat.id
+  subnet_id     = aws_subnet.euw2_public_a.id
+  tags          = merge(local.base_tags, { Name = "${local.name.euw2}-nat" })
 }
 
-# --- EUW1 PUBLIC ROUTE TABLES: one per subnet (fixes pcx routes per-subnet) ---
+# --- euw2 PUBLIC ROUTE TABLES: one per subnet (fixes pcx routes per-subnet) ---
 
-resource "aws_route_table" "euw1_public_a" {
-  provider = aws.euw1
-  vpc_id   = aws_vpc.euw1.id
-  tags     = merge(local.base_tags, { Name = "${local.name.euw1}-rt-public-a" })
+resource "aws_route_table" "euw2_public_a" {
+  provider = aws.euw2
+  vpc_id   = aws_vpc.euw2.id
+  tags     = merge(local.base_tags, { Name = "${local.name.euw2}-rt-public-a" })
 }
 
-resource "aws_route" "euw1_public_a_igw" {
-  provider               = aws.euw1
-  route_table_id         = aws_route_table.euw1_public_a.id
+resource "aws_route" "euw2_public_a_igw" {
+  provider               = aws.euw2
+  route_table_id         = aws_route_table.euw2_public_a.id
   destination_cidr_block = "0.0.0.0/0"
-  gateway_id             = aws_internet_gateway.euw1.id
+  gateway_id             = aws_internet_gateway.euw2.id
 }
 
-resource "aws_route_table" "euw1_public_b" {
-  provider = aws.euw1
-  vpc_id   = aws_vpc.euw1.id
-  tags     = merge(local.base_tags, { Name = "${local.name.euw1}-rt-public-b" })
+resource "aws_route_table" "euw2_public_b" {
+  provider = aws.euw2
+  vpc_id   = aws_vpc.euw2.id
+  tags     = merge(local.base_tags, { Name = "${local.name.euw2}-rt-public-b" })
 }
 
-resource "aws_route" "euw1_public_b_igw" {
-  provider               = aws.euw1
-  route_table_id         = aws_route_table.euw1_public_b.id
+resource "aws_route" "euw2_public_b_igw" {
+  provider               = aws.euw2
+  route_table_id         = aws_route_table.euw2_public_b.id
   destination_cidr_block = "0.0.0.0/0"
-  gateway_id             = aws_internet_gateway.euw1.id
+  gateway_id             = aws_internet_gateway.euw2.id
 }
 
-resource "aws_route_table_association" "euw1_public_a" {
-  provider       = aws.euw1
-  subnet_id      = aws_subnet.euw1_public_a.id
-  route_table_id = aws_route_table.euw1_public_a.id
+resource "aws_route_table_association" "euw2_public_a" {
+  provider       = aws.euw2
+  subnet_id      = aws_subnet.euw2_public_a.id
+  route_table_id = aws_route_table.euw2_public_a.id
 }
 
-resource "aws_route_table_association" "euw1_public_b" {
-  provider       = aws.euw1
-  subnet_id      = aws_subnet.euw1_public_b.id
-  route_table_id = aws_route_table.euw1_public_b.id
+resource "aws_route_table_association" "euw2_public_b" {
+  provider       = aws.euw2
+  subnet_id      = aws_subnet.euw2_public_b.id
+  route_table_id = aws_route_table.euw2_public_b.id
 }
 
-# --- EUW1 PRIVATE ROUTE TABLES (unchanged) ---
+# --- euw2 PRIVATE ROUTE TABLES (unchanged) ---
 
-resource "aws_route_table" "euw1_private_a" {
-  provider = aws.euw1
-  vpc_id   = aws_vpc.euw1.id
-  tags     = merge(local.base_tags, { Name = "${local.name.euw1}-rt-private-a" })
+resource "aws_route_table" "euw2_private_a" {
+  provider = aws.euw2
+  vpc_id   = aws_vpc.euw2.id
+  tags     = merge(local.base_tags, { Name = "${local.name.euw2}-rt-private-a" })
 }
 
-resource "aws_route" "euw1_private_a_nat" {
-  provider               = aws.euw1
-  route_table_id         = aws_route_table.euw1_private_a.id
+resource "aws_route" "euw2_private_a_nat" {
+  provider               = aws.euw2
+  route_table_id         = aws_route_table.euw2_private_a.id
   destination_cidr_block = "0.0.0.0/0"
-  nat_gateway_id         = aws_nat_gateway.euw1.id
+  nat_gateway_id         = aws_nat_gateway.euw2.id
 }
 
-resource "aws_route_table_association" "euw1_private_a" {
-  provider       = aws.euw1
-  subnet_id      = aws_subnet.euw1_private_a.id
-  route_table_id = aws_route_table.euw1_private_a.id
+resource "aws_route_table_association" "euw2_private_a" {
+  provider       = aws.euw2
+  subnet_id      = aws_subnet.euw2_private_a.id
+  route_table_id = aws_route_table.euw2_private_a.id
 }
 
-resource "aws_route_table" "euw1_private_b" {
-  provider = aws.euw1
-  vpc_id   = aws_vpc.euw1.id
-  tags     = merge(local.base_tags, { Name = "${local.name.euw1}-rt-private-b" })
+resource "aws_route_table" "euw2_private_b" {
+  provider = aws.euw2
+  vpc_id   = aws_vpc.euw2.id
+  tags     = merge(local.base_tags, { Name = "${local.name.euw2}-rt-private-b" })
 }
 
-resource "aws_route" "euw1_private_b_nat" {
-  provider               = aws.euw1
-  route_table_id         = aws_route_table.euw1_private_b.id
+resource "aws_route" "euw2_private_b_nat" {
+  provider               = aws.euw2
+  route_table_id         = aws_route_table.euw2_private_b.id
   destination_cidr_block = "0.0.0.0/0"
-  nat_gateway_id         = aws_nat_gateway.euw1.id
+  nat_gateway_id         = aws_nat_gateway.euw2.id
 }
 
-resource "aws_route_table_association" "euw1_private_b" {
-  provider       = aws.euw1
-  subnet_id      = aws_subnet.euw1_private_b.id
-  route_table_id = aws_route_table.euw1_private_b.id
+resource "aws_route_table_association" "euw2_private_b" {
+  provider       = aws.euw2
+  subnet_id      = aws_subnet.euw2_private_b.id
+  route_table_id = aws_route_table.euw2_private_b.id
 }
 
-# --- EUW1 MAIN ROUTE TABLE: include pcx route so any current/future subnets pass posture checks ---
-resource "aws_route_table" "euw1_main" {
-  provider = aws.euw1
-  vpc_id   = aws_vpc.euw1.id
-  tags     = merge(local.base_tags, { Name = "${local.name.euw1}-rt-main" })
+# --- euw2 MAIN ROUTE TABLE: include pcx route so any current/future subnets pass posture checks ---
+resource "aws_route_table" "euw2_main" {
+  provider = aws.euw2
+  vpc_id   = aws_vpc.euw2.id
+  tags     = merge(local.base_tags, { Name = "${local.name.euw2}-rt-main" })
 }
 
 # Make it the VPC's main route table (replaces the implicit default main RT)
-resource "aws_main_route_table_association" "euw1_main_assoc" {
-  provider       = aws.euw1
-  vpc_id         = aws_vpc.euw1.id
-  route_table_id = aws_route_table.euw1_main.id
+resource "aws_main_route_table_association" "euw2_main_assoc" {
+  provider       = aws.euw2
+  vpc_id         = aws_vpc.euw2.id
+  route_table_id = aws_route_table.euw2_main.id
 }
 
 # Ensure the main RT also has a pcx route to the peer CIDR
-resource "aws_route" "euw1_main_to_use1_pcx" {
-  provider                  = aws.euw1
-  route_table_id            = aws_route_table.euw1_main.id
+resource "aws_route" "euw2_main_to_use1_pcx" {
+  provider                  = aws.euw2
+  route_table_id            = aws_route_table.euw2_main.id
   destination_cidr_block    = var.use1_cidr
-  vpc_peering_connection_id = aws_vpc_peering_connection.use1_to_euw1.id
-  depends_on                = [aws_vpc_peering_connection_accepter.euw1_accept]
+  vpc_peering_connection_id = aws_vpc_peering_connection.use1_to_euw2.id
+  depends_on                = [aws_vpc_peering_connection_accepter.euw2_accept]
 }
 
 #############################################
-# VPC PEERING: us-east-1 <-> eu-west-1
+# VPC PEERING: us-east-1 <-> eu-west-2
 #############################################
 
-resource "aws_vpc_peering_connection" "use1_to_euw1" {
+resource "aws_vpc_peering_connection" "use1_to_euw2" {
   provider    = aws.use1
   vpc_id      = aws_vpc.use1.id
-  peer_vpc_id = aws_vpc.euw1.id
-  peer_region = "eu-west-1"
-  tags        = merge(local.base_tags, { Name = "${local.name.use1}-to-${local.name.euw1}-pcx" })
+  peer_vpc_id = aws_vpc.euw2.id
+  peer_region = "eu-west-2"
+  tags        = merge(local.base_tags, { Name = "${local.name.use1}-to-${local.name.euw2}-pcx" })
 }
 
-data "aws_vpc_peering_connection" "pcx_in_euw1" {
-  provider = aws.euw1
-  id       = aws_vpc_peering_connection.use1_to_euw1.id
+data "aws_vpc_peering_connection" "pcx_in_euw2" {
+  provider = aws.euw2
+  id       = aws_vpc_peering_connection.use1_to_euw2.id
 }
 
-resource "aws_vpc_peering_connection_accepter" "euw1_accept" {
-  provider                  = aws.euw1
-  vpc_peering_connection_id = aws_vpc_peering_connection.use1_to_euw1.id
+resource "aws_vpc_peering_connection_accepter" "euw2_accept" {
+  provider                  = aws.euw2
+  vpc_peering_connection_id = aws_vpc_peering_connection.use1_to_euw2.id
   auto_accept               = true
-  tags                      = merge(local.base_tags, { Name = "${local.name.use1}-to-${local.name.euw1}-pcx-accept" })
+  tags                      = merge(local.base_tags, { Name = "${local.name.use1}-to-${local.name.euw2}-pcx-accept" })
 }
 
-resource "aws_route" "use1_public_to_euw1_pcx" {
+resource "aws_route" "use1_public_to_euw2_pcx" {
   provider                  = aws.use1
   route_table_id            = aws_route_table.use1_public.id
-  destination_cidr_block    = var.euw1_cidr
-  vpc_peering_connection_id = aws_vpc_peering_connection.use1_to_euw1.id
-  depends_on                = [aws_vpc_peering_connection_accepter.euw1_accept]
+  destination_cidr_block    = var.euw2_cidr
+  vpc_peering_connection_id = aws_vpc_peering_connection.use1_to_euw2.id
+  depends_on                = [aws_vpc_peering_connection_accepter.euw2_accept]
 }
 
-resource "aws_route" "use1_private_a_to_euw1_pcx" {
+resource "aws_route" "use1_private_a_to_euw2_pcx" {
   provider                  = aws.use1
   route_table_id            = aws_route_table.use1_private_a.id
-  destination_cidr_block    = var.euw1_cidr
-  vpc_peering_connection_id = aws_vpc_peering_connection.use1_to_euw1.id
-  depends_on                = [aws_vpc_peering_connection_accepter.euw1_accept]
+  destination_cidr_block    = var.euw2_cidr
+  vpc_peering_connection_id = aws_vpc_peering_connection.use1_to_euw2.id
+  depends_on                = [aws_vpc_peering_connection_accepter.euw2_accept]
 }
 
-resource "aws_route" "use1_private_b_to_euw1_pcx" {
+resource "aws_route" "use1_private_b_to_euw2_pcx" {
   provider                  = aws.use1
   route_table_id            = aws_route_table.use1_private_b.id
-  destination_cidr_block    = var.euw1_cidr
-  vpc_peering_connection_id = aws_vpc_peering_connection.use1_to_euw1.id
-  depends_on                = [aws_vpc_peering_connection_accepter.euw1_accept]
+  destination_cidr_block    = var.euw2_cidr
+  vpc_peering_connection_id = aws_vpc_peering_connection.use1_to_euw2.id
+  depends_on                = [aws_vpc_peering_connection_accepter.euw2_accept]
 }
 
-# EUW1 → USE1 PCX routes: now per EU public subnet + private subnets
-resource "aws_route" "euw1_public_a_to_use1_pcx" {
-  provider                  = aws.euw1
-  route_table_id            = aws_route_table.euw1_public_a.id
+# euw2 → USE1 PCX routes: now per EU public subnet + private subnets
+resource "aws_route" "euw2_public_a_to_use1_pcx" {
+  provider                  = aws.euw2
+  route_table_id            = aws_route_table.euw2_public_a.id
   destination_cidr_block    = var.use1_cidr
-  vpc_peering_connection_id = data.aws_vpc_peering_connection.pcx_in_euw1.id
-  depends_on                = [aws_vpc_peering_connection_accepter.euw1_accept]
+  vpc_peering_connection_id = data.aws_vpc_peering_connection.pcx_in_euw2.id
+  depends_on                = [aws_vpc_peering_connection_accepter.euw2_accept]
 }
 
-resource "aws_route" "euw1_public_b_to_use1_pcx" {
-  provider                  = aws.euw1
-  route_table_id            = aws_route_table.euw1_public_b.id
+resource "aws_route" "euw2_public_b_to_use1_pcx" {
+  provider                  = aws.euw2
+  route_table_id            = aws_route_table.euw2_public_b.id
   destination_cidr_block    = var.use1_cidr
-  vpc_peering_connection_id = aws_vpc_peering_connection.use1_to_euw1.id
-  depends_on                = [aws_vpc_peering_connection_accepter.euw1_accept]
+  vpc_peering_connection_id = aws_vpc_peering_connection.use1_to_euw2.id
+  depends_on                = [aws_vpc_peering_connection_accepter.euw2_accept]
 }
 
-resource "aws_route" "euw1_private_a_to_use1_pcx" {
-  provider                  = aws.euw1
-  route_table_id            = aws_route_table.euw1_private_a.id
+resource "aws_route" "euw2_private_a_to_use1_pcx" {
+  provider                  = aws.euw2
+  route_table_id            = aws_route_table.euw2_private_a.id
   destination_cidr_block    = var.use1_cidr
-  vpc_peering_connection_id = data.aws_vpc_peering_connection.pcx_in_euw1.id
-  depends_on                = [aws_vpc_peering_connection_accepter.euw1_accept]
+  vpc_peering_connection_id = data.aws_vpc_peering_connection.pcx_in_euw2.id
+  depends_on                = [aws_vpc_peering_connection_accepter.euw2_accept]
 }
 
-resource "aws_route" "euw1_private_b_to_use1_pcx" {
-  provider                  = aws.euw1
-  route_table_id            = aws_route_table.euw1_private_b.id
+resource "aws_route" "euw2_private_b_to_use1_pcx" {
+  provider                  = aws.euw2
+  route_table_id            = aws_route_table.euw2_private_b.id
   destination_cidr_block    = var.use1_cidr
-  vpc_peering_connection_id = data.aws_vpc_peering_connection.pcx_in_euw1.id
-  depends_on                = [aws_vpc_peering_connection_accepter.euw1_accept]
+  vpc_peering_connection_id = data.aws_vpc_peering_connection.pcx_in_euw2.id
+  depends_on                = [aws_vpc_peering_connection_accepter.euw2_accept]
 }
 
 #############################################
@@ -1688,9 +1688,9 @@ output "use1_vpc_id" {
   description = "VPC ID in us-east-1."
 }
 
-output "euw1_vpc_id" {
-  value       = aws_vpc.euw1.id
-  description = "VPC ID in eu-west-1."
+output "euw2_vpc_id" {
+  value       = aws_vpc.euw2.id
+  description = "VPC ID in eu-west-2."
 }
 
 output "use1_public_subnet_ids" {
@@ -1703,14 +1703,14 @@ output "use1_private_subnet_ids" {
   description = "Private subnet IDs in us-east-1."
 }
 
-output "euw1_public_subnet_ids" {
-  value       = [aws_subnet.euw1_public_a.id, aws_subnet.euw1_public_b.id]
-  description = "Public subnet IDs in eu-west-1."
+output "euw2_public_subnet_ids" {
+  value       = [aws_subnet.euw2_public_a.id, aws_subnet.euw2_public_b.id]
+  description = "Public subnet IDs in eu-west-2."
 }
 
-output "euw1_private_subnet_ids" {
-  value       = [aws_subnet.euw1_private_a.id, aws_subnet.euw1_private_b.id]
-  description = "Private subnet IDs in eu-west-1."
+output "euw2_private_subnet_ids" {
+  value       = [aws_subnet.euw2_private_a.id, aws_subnet.euw2_private_b.id]
+  description = "Private subnet IDs in eu-west-2."
 }
 
 output "use1_kms_key_arn" {
@@ -1718,9 +1718,9 @@ output "use1_kms_key_arn" {
   description = "KMS CMK ARN in us-east-1."
 }
 
-output "euw1_kms_key_arn" {
-  value       = aws_kms_key.euw1.arn
-  description = "KMS CMK ARN in eu-west-1."
+output "euw2_kms_key_arn" {
+  value       = aws_kms_key.euw2.arn
+  description = "KMS CMK ARN in eu-west-2."
 }
 
 output "upload_bucket_name" {
@@ -1798,9 +1798,9 @@ output "use1_cidr" {
   description = "CIDR for the us-east-1 VPC."
 }
 
-output "euw1_cidr" {
-  value       = var.euw1_cidr
-  description = "CIDR for the eu-west-1 VPC."
+output "euw2_cidr" {
+  value       = var.euw2_cidr
+  description = "CIDR for the eu-west-2 VPC."
 }
 
 output "web_sg_id" {

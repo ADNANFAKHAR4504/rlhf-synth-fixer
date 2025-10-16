@@ -209,9 +209,9 @@ log('[DEBUG] Outputs summary:', JSON.stringify({
   use1_vpc_id: OUTPUTS.use1_vpc_id,
   use1_public_subnet_ids: OUTPUTS.use1_public_subnet_ids,
   use1_private_subnet_ids: OUTPUTS.use1_private_subnet_ids,
-  euw1_vpc_id: OUTPUTS.euw1_vpc_id,
-  euw1_public_subnet_ids: OUTPUTS.euw1_public_subnet_ids,
-  euw1_private_subnet_ids: OUTPUTS.euw1_private_subnet_ids,
+  euw2_vpc_id: OUTPUTS.euw2_vpc_id,
+  euw2_public_subnet_ids: OUTPUTS.euw2_public_subnet_ids,
+  euw2_private_subnet_ids: OUTPUTS.euw2_private_subnet_ids,
   alb_dns_name: OUTPUTS.alb_dns_name,
   alb_target_group_arn: OUTPUTS.alb_target_group_arn,
   api_invoke_url: OUTPUTS.api_invoke_url,
@@ -227,7 +227,7 @@ log('--- E2E TESTS START ---');
 /* ---------------- region + clients ---------------- */
 const REGION = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
 const ec2  = new EC2Client({ region: REGION });
-const ec2EU = new EC2Client({ region: 'eu-west-1' });
+const ec2EU = new EC2Client({ region: 'eu-west-2' });
 const ssm  = new SSMClient({ region: REGION });
 const s3   = new S3Client({ region: REGION });
 const logs = new CloudWatchLogsClient({ region: REGION });
@@ -442,7 +442,7 @@ describe('Two VPCs + Peering posture', () => {
 
   it('Routes to peer CIDRs via pcx present in all use1 subnets', async () => {
     const use1Subs: string[] = [...OUTPUTS.use1_public_subnet_ids, ...OUTPUTS.use1_private_subnet_ids];
-    const euCidr = (OUTPUTS.euw1_cidr || '10.20.0.0/16') as string;
+    const euCidr = (OUTPUTS.euw2_cidr || '10.20.0.0/16') as string;
     for (const sn of use1Subs) {
       const rt = await ec2.send(new DescribeRouteTablesCommand({
         Filters: [{ Name: 'association.subnet-id', Values: [sn] }]
@@ -456,8 +456,8 @@ describe('Two VPCs + Peering posture', () => {
     }
   });
 
-  it('Routes to peer CIDRs via pcx present in all euw1 subnets', async () => {
-    const euSubs: string[] = [...OUTPUTS.euw1_public_subnet_ids, ...OUTPUTS.euw1_private_subnet_ids];
+  it('Routes to peer CIDRs via pcx present in all euw2 subnets', async () => {
+    const euSubs: string[] = [...OUTPUTS.euw2_public_subnet_ids, ...OUTPUTS.euw2_private_subnet_ids];
     const usCidr = (OUTPUTS.use1_cidr || '10.10.0.0/16') as string;
     for (const sn of euSubs) {
       const rt = await ec2EU.send(new DescribeRouteTablesCommand({
