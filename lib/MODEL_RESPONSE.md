@@ -24,8 +24,8 @@ interface TapStackProps {
   defaultTags?: AwsProviderDefaultTags;
 }
 
-const AWS_REGION_OVERRIDE = 'ap-southeast-1';
-const SECONDARY_REGION = 'ap-southeast-2';
+const AWS_REGION_OVERRIDE = 'eu-west-2';
+const SECONDARY_REGION = 'eu-west-1';
 
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
@@ -1176,8 +1176,8 @@ import { RDSClient, PromoteReadReplicaCommand, DescribeDBClustersCommand } from 
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 
-const primaryRegion = process.env.PRIMARY_REGION || 'ap-southeast-1';
-const secondaryRegion = process.env.SECONDARY_REGION || 'ap-southeast-2';
+const primaryRegion = process.env.PRIMARY_REGION || 'eu-west-2';
+const secondaryRegion = process.env.SECONDARY_REGION || 'eu-west-1';
 const snsTopicArn = process.env.SNS_TOPIC_ARN || '';
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
@@ -1320,7 +1320,7 @@ ${message}
 
 This implementation provides a comprehensive HIPAA-compliant disaster recovery solution with:
 
-1. Multi-region architecture with primary (ap-southeast-1) and secondary (ap-southeast-2) regions
+1. Multi-region architecture with primary (eu-west-2) and secondary (eu-west-1) regions
 2. Aurora Serverless v2 PostgreSQL with cross-region replication for RPO < 15 minutes
 3. S3 cross-region replication with KMS encryption
 4. AWS Backup for automated backups with 7-day retention
