@@ -76,7 +76,7 @@ export class FailoverOrchestrator extends Construct {
       this,
       'FailoverStateMachine',
       {
-        definition,
+        definitionBody: stepfunctions.DefinitionBody.fromChainable(definition),
         stateMachineName: `financial-app-failover-${stackRegion}-${envSuffix}`,
         timeout: cdk.Duration.minutes(15),
       }

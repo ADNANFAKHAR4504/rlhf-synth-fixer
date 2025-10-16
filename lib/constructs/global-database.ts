@@ -57,7 +57,7 @@ export class GlobalDatabase extends Construct {
     const vpc = new ec2.Vpc(this, `Vpc-${currentRegion}`, {
       maxAzs: 3,
       natGateways: 3,
-      cidr: '10.0.0.0/16',
+      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
     });
 
     // Create database cluster for this region
@@ -68,17 +68,30 @@ export class GlobalDatabase extends Construct {
       credentials: rds.Credentials.fromGeneratedSecret('admin', {
         secretName: `findb-${currentRegion}-${envSuffix}`,
       }),
-      instanceProps: {
-        vpc: vpc,
+      vpc: vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      writer: rds.ClusterInstance.provisioned('writer', {
         instanceType: ec2.InstanceType.of(
           ec2.InstanceClass.R6G,
           ec2.InstanceSize.XLARGE4
         ),
-        vpcSubnets: {
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-        },
-      },
-      instances: 3,
+      }),
+      readers: [
+        rds.ClusterInstance.provisioned('reader1', {
+          instanceType: ec2.InstanceType.of(
+            ec2.InstanceClass.R6G,
+            ec2.InstanceSize.XLARGE4
+          ),
+        }),
+        rds.ClusterInstance.provisioned('reader2', {
+          instanceType: ec2.InstanceType.of(
+            ec2.InstanceClass.R6G,
+            ec2.InstanceSize.XLARGE4
+          ),
+        }),
+      ],
       backup: {
         retention: cdk.Duration.days(props.backupRetentionDays),
         preferredWindow: '03:00-04:00',
