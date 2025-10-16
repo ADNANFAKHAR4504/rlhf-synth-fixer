@@ -290,7 +290,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should create EC2 IAM role with S3 access policy', () => {
       const role = template.Resources.EC2InstanceRole;
-      expect(role.Properties.Policies).toHaveLength(1);
+      expect(role.Properties.Policies).toHaveLength(2);
 
       const s3Policy = role.Properties.Policies[0];
       expect(s3Policy.PolicyName).toBe('S3AccessPolicy');
@@ -303,6 +303,16 @@ describe('TapStack CloudFormation Template', () => {
       expect(statement.Resource).toHaveLength(2);
       expect(statement.Resource[0]).toEqual({ 'Fn::GetAtt': ['S3Bucket', 'Arn'] });
       expect(statement.Resource[1]).toEqual({ 'Fn::Sub': '${S3Bucket.Arn}/*' });
+
+      const smPolicy = role.Properties.Policies[1];
+      expect(smPolicy.PolicyName).toBe('SecretsManagerReadAccess');
+      expect(smPolicy.PolicyDocument.Version).toBe('2012-10-17');
+      expect(smPolicy.PolicyDocument.Statement).toHaveLength(1);
+
+      const smStatement = smPolicy.PolicyDocument.Statement[0];
+      expect(smStatement.Effect).toBe('Allow');
+      expect(smStatement.Action).toEqual(['secretsmanager:GetSecretValue', 'secretsmanager:DescribeSecret']);
+      expect(smStatement.Resource).toEqual({ Ref: 'DBSecret' });
     });
 
     test('should create instance profile referencing EC2 role', () => {

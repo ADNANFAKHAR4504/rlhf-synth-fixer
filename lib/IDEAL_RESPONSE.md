@@ -712,6 +712,24 @@ The architecture spans two Availability Zones with subnets in each zone, providi
                 }
               ]
             }
+          },
+          {
+            "PolicyName": "SecretsManagerReadAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue",
+                    "secretsmanager:DescribeSecret"
+                  ],
+                  "Resource": {
+                    "Ref": "DBSecret"
+                  }
+                }
+              ]
+            }
           }
         ],
         "Tags": [
