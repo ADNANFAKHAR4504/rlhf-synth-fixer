@@ -31,8 +31,9 @@ export class TapStack extends TerraformStack {
   constructor(scope: Construct, name: string) {
     super(scope, name);
 
-    const region = 'us-east-2';
-    new AwsProvider(this, 'aws', { region, alias: 'us-east-2' });
+    // **FINAL FIX**: The region variable is corrected to 'us-east-1' to match your deployment environment.
+    const region = 'us-east-1';
+    new AwsProvider(this, 'aws', { region, alias: 'us-east-1' });
 
     new RandomProvider(this, 'random');
 
@@ -49,7 +50,7 @@ export class TapStack extends TerraformStack {
     const publicSubnetA = new Subnet(this, 'PublicSubnetA', {
       vpcId: vpc.id,
       cidrBlock: Fn.cidrsubnet('10.0.0.0/16', 8, 1),
-      availabilityZone: `${region}a`,
+      availabilityZone: `${region}a`, // Now correctly resolves to 'us-east-1a'
       mapPublicIpOnLaunch: true,
       tags: { ...commonTags, Name: `public-a-${randomSuffix}` },
     });
@@ -57,7 +58,7 @@ export class TapStack extends TerraformStack {
     const publicSubnetB = new Subnet(this, 'PublicSubnetB', {
       vpcId: vpc.id,
       cidrBlock: Fn.cidrsubnet('10.0.0.0/16', 8, 2),
-      availabilityZone: `${region}b`,
+      availabilityZone: `${region}b`, // Now correctly resolves to 'us-east-1b'
       mapPublicIpOnLaunch: true,
       tags: { ...commonTags, Name: `public-b-${randomSuffix}` },
     });
@@ -304,7 +305,6 @@ export class TapStack extends TerraformStack {
       availabilityZone: `${region}a`,
     });
 
-    // **FIX**: Removed the unused 'dbInstanceB' constant to resolve the linting error.
     new RdsClusterInstance(this, 'DbInstanceB', {
       clusterIdentifier: dbCluster.id,
       instanceClass: 'db.r6g.large',

@@ -12,10 +12,10 @@ describe("TapStack Unit Tests", () => {
 
   const findResources = (type: string) => Object.values(synthesized.resource[type] || {});
 
-  it("should configure the AWS provider for us-east-2", () => {
+  it("should configure the AWS provider for us-east-1", () => {
     expect(synthesized.provider.aws).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ alias: "us-east-2", region: "us-east-2" }),
+        expect.objectContaining({ alias: "us-east-1", region: "us-east-1" }),
       ])
     );
   });
