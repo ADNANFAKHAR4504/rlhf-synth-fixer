@@ -1,5 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 import {
   KMSClient,
   DescribeKeyCommand,
@@ -34,21 +36,11 @@ import {
   GetRolePolicyCommand,
 } from '@aws-sdk/client-iam';
 
-interface StackOutputs {
-  vpcId?: string;
-  kmsKeyId?: string;
-  kinesisStreamName?: string;
-  kinesisStreamArn?: string;
-  rdsEndpoint?: string;
-  rdsInstanceId?: string;
-  auditLogGroupName?: string;
-  kinesisRoleArn?: string;
-  bucketName?: string;
-  [key: string]: any;
-}
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 describe('HIPAA-Compliant Healthcare Data Pipeline Integration Tests', () => {
-  let outputs: StackOutputs;
+  let outputs = {};
   const region = process.env.AWS_REGION || 'us-east-1';
   const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr4313';
 
@@ -68,7 +60,7 @@ describe('HIPAA-Compliant Healthcare Data Pipeline Integration Tests', () => {
       path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json'),
     ];
 
-    let outputsPath: string | undefined;
+    let outputsPath;
     for (const p of possiblePaths) {
       if (fs.existsSync(p)) {
         outputsPath = p;
@@ -149,8 +141,8 @@ describe('HIPAA-Compliant Healthcare Data Pipeline Integration Tests', () => {
       const response = await kmsClient.send(command);
 
       expect(response.KeyMetadata).toBeDefined();
-      expect(response.KeyMetadata!.KeyState).toBe('Enabled');
-      expect(response.KeyMetadata!.Description).toContain('HIPAA');
+      expect(response.KeyMetadata.KeyState).toBe('Enabled');
+      expect(response.KeyMetadata.Description).toContain('HIPAA');
     }, 30000);
 
     test('should have key rotation enabled for KMS key', async () => {
@@ -183,9 +175,9 @@ describe('HIPAA-Compliant Healthcare Data Pipeline Integration Tests', () => {
       const response = await logsClient.send(command);
 
       expect(response.logGroups).toBeDefined();
-      expect(response.logGroups!.length).toBeGreaterThanOrEqual(1);
+      expect(response.logGroups.length).toBeGreaterThanOrEqual(1);
 
-      const logGroup = response.logGroups![0];
+      const logGroup = response.logGroups[0];
       expect(logGroup.retentionInDays).toBeGreaterThanOrEqual(90); // HIPAA requirement
       expect(logGroup.kmsKeyId).toBeDefined(); // Encryption requirement
     }, 30000);
@@ -205,11 +197,11 @@ describe('HIPAA-Compliant Healthcare Data Pipeline Integration Tests', () => {
       const response = await ec2Client.send(command);
 
       expect(response.Vpcs).toBeDefined();
-      expect(response.Vpcs!.length).toBe(1);
-      expect(response.Vpcs![0].VpcId).toBe(outputs.vpcId);
-      expect(response.Vpcs![0].State).toBe('available');
-      expect(response.Vpcs![0].EnableDnsHostnames).toBe(true);
-      expect(response.Vpcs![0].EnableDnsSupport).toBe(true);
+      expect(response.Vpcs.length).toBe(1);
+      expect(response.Vpcs[0].VpcId).toBe(outputs.vpcId);
+      expect(response.Vpcs[0].State).toBe('available');
+      expect(response.Vpcs[0].EnableDnsHostnames).toBe(true);
+      expect(response.Vpcs[0].EnableDnsSupport).toBe(true);
     }, 30000);
 
     test('should have private subnets for RDS', async () => {
@@ -230,10 +222,10 @@ describe('HIPAA-Compliant Healthcare Data Pipeline Integration Tests', () => {
       const response = await ec2Client.send(command);
 
       expect(response.Subnets).toBeDefined();
-      expect(response.Subnets!.length).toBeGreaterThanOrEqual(2); // Multi-AZ requirement
+      expect(response.Subnets.length).toBeGreaterThanOrEqual(2); // Multi-AZ requirement
 
       // Verify subnets are in different availability zones
-      const azs = response.Subnets!.map((s: any) => s.AvailabilityZone);
+      const azs = response.Subnets.map((s) => s.AvailabilityZone);
       const uniqueAzs = new Set(azs);
       expect(uniqueAzs.size).toBeGreaterThanOrEqual(2);
     }, 30000);
@@ -260,16 +252,16 @@ describe('HIPAA-Compliant Healthcare Data Pipeline Integration Tests', () => {
       const response = await ec2Client.send(command);
 
       expect(response.SecurityGroups).toBeDefined();
-      expect(response.SecurityGroups!.length).toBeGreaterThanOrEqual(1);
+      expect(response.SecurityGroups.length).toBeGreaterThanOrEqual(1);
 
-      const rdsSg = response.SecurityGroups![0];
+      const rdsSg = response.SecurityGroups[0];
       expect(rdsSg.IpPermissions).toBeDefined();
 
       // Verify PostgreSQL port (5432) is restricted to VPC CIDR
-      const pgRule = rdsSg.IpPermissions!.find((rule: any) => rule.FromPort === 5432);
+      const pgRule = rdsSg.IpPermissions.find((rule) => rule.FromPort === 5432);
       expect(pgRule).toBeDefined();
-      expect(pgRule!.IpRanges).toBeDefined();
-      expect(pgRule!.IpRanges![0].CidrIp).toMatch(/^10\.0\.0\.0\/\d+$/);
+      expect(pgRule.IpRanges).toBeDefined();
+      expect(pgRule.IpRanges[0].CidrIp).toMatch(/^10\.0\.0\.0\/\d+$/);
     }, 30000);
   });
 
@@ -287,9 +279,9 @@ describe('HIPAA-Compliant Healthcare Data Pipeline Integration Tests', () => {
       const response = await rdsClient.send(command);
 
       expect(response.DBInstances).toBeDefined();
-      expect(response.DBInstances!.length).toBe(1);
+      expect(response.DBInstances.length).toBe(1);
 
-      const dbInstance = response.DBInstances![0];
+      const dbInstance = response.DBInstances[0];
       expect(dbInstance.DBInstanceStatus).toBe('available');
       expect(dbInstance.StorageEncrypted).toBe(true); // HIPAA requirement
       expect(dbInstance.PubliclyAccessible).toBe(false); // HIPAA requirement
@@ -308,8 +300,8 @@ describe('HIPAA-Compliant Healthcare Data Pipeline Integration Tests', () => {
       });
 
       const describeResponse = await rdsClient.send(describeCommand);
-      const dbInstance = describeResponse.DBInstances![0];
-      const parameterGroupName = dbInstance.DBParameterGroups![0].DBParameterGroupName;
+      const dbInstance = describeResponse.DBInstances[0];
+      const parameterGroupName = dbInstance.DBParameterGroups[0].DBParameterGroupName;
 
       // Check parameters
       const paramsCommand = new DescribeDBParametersCommand({
@@ -321,14 +313,14 @@ describe('HIPAA-Compliant Healthcare Data Pipeline Integration Tests', () => {
       expect(paramsResponse.Parameters).toBeDefined();
 
       // Verify SSL enforcement
-      const sslParam = paramsResponse.Parameters!.find((p: any) => p.ParameterName === 'rds.force_ssl');
+      const sslParam = paramsResponse.Parameters.find((p) => p.ParameterName === 'rds.force_ssl');
       expect(sslParam).toBeDefined();
-      expect(sslParam!.ParameterValue).toBe('1');
+      expect(sslParam.ParameterValue).toBe('1');
 
       // Verify connection logging
-      const logConnectionsParam = paramsResponse.Parameters!.find((p: any) => p.ParameterName === 'log_connections');
+      const logConnectionsParam = paramsResponse.Parameters.find((p) => p.ParameterName === 'log_connections');
       expect(logConnectionsParam).toBeDefined();
-      expect(logConnectionsParam!.ParameterValue).toBe('1');
+      expect(logConnectionsParam.ParameterValue).toBe('1');
     }, 60000);
 
     test('should have CloudWatch logs export enabled', async () => {
@@ -342,7 +334,7 @@ describe('HIPAA-Compliant Healthcare Data Pipeline Integration Tests', () => {
       });
 
       const response = await rdsClient.send(command);
-      const dbInstance = response.DBInstances![0];
+      const dbInstance = response.DBInstances[0];
 
       expect(dbInstance.EnabledCloudwatchLogsExports).toBeDefined();
       expect(dbInstance.EnabledCloudwatchLogsExports).toContain('postgresql');
@@ -363,10 +355,10 @@ describe('HIPAA-Compliant Healthcare Data Pipeline Integration Tests', () => {
       const response = await kinesisClient.send(command);
 
       expect(response.StreamDescription).toBeDefined();
-      expect(response.StreamDescription!.StreamStatus).toBe('ACTIVE');
-      expect(response.StreamDescription!.EncryptionType).toBe('KMS');
-      expect(response.StreamDescription!.KeyId).toBeDefined();
-      expect(response.StreamDescription!.RetentionPeriodHours).toBeGreaterThanOrEqual(168); // 7 days
+      expect(response.StreamDescription.StreamStatus).toBe('ACTIVE');
+      expect(response.StreamDescription.EncryptionType).toBe('KMS');
+      expect(response.StreamDescription.KeyId).toBeDefined();
+      expect(response.StreamDescription.RetentionPeriodHours).toBeGreaterThanOrEqual(168); // 7 days
     }, 30000);
 
     test('should have appropriate shard count configured', async () => {
@@ -382,8 +374,8 @@ describe('HIPAA-Compliant Healthcare Data Pipeline Integration Tests', () => {
       const response = await kinesisClient.send(command);
 
       expect(response.StreamDescription).toBeDefined();
-      expect(response.StreamDescription!.Shards).toBeDefined();
-      expect(response.StreamDescription!.Shards!.length).toBeGreaterThanOrEqual(1);
+      expect(response.StreamDescription.Shards).toBeDefined();
+      expect(response.StreamDescription.Shards.length).toBeGreaterThanOrEqual(1);
     }, 30000);
   });
 
@@ -394,7 +386,7 @@ describe('HIPAA-Compliant Healthcare Data Pipeline Integration Tests', () => {
         return;
       }
 
-      const roleName = outputs.kinesisRoleArn.split('/').pop()!;
+      const roleName = outputs.kinesisRoleArn.split('/').pop();
       const command = new GetRoleCommand({
         RoleName: roleName,
       });
@@ -402,12 +394,12 @@ describe('HIPAA-Compliant Healthcare Data Pipeline Integration Tests', () => {
       const response = await iamClient.send(command);
 
       expect(response.Role).toBeDefined();
-      expect(response.Role!.Description).toContain('least privilege');
+      expect(response.Role.Description).toContain('least privilege');
 
       // Verify assume role policy allows Lambda
-      const assumeRolePolicy = JSON.parse(decodeURIComponent(response.Role!.AssumeRolePolicyDocument!));
+      const assumeRolePolicy = JSON.parse(decodeURIComponent(response.Role.AssumeRolePolicyDocument));
       expect(assumeRolePolicy.Statement).toBeDefined();
-      const lambdaStatement = assumeRolePolicy.Statement.find((s: any) =>
+      const lambdaStatement = assumeRolePolicy.Statement.find((s) =>
         s.Principal?.Service === 'lambda.amazonaws.com'
       );
       expect(lambdaStatement).toBeDefined();
@@ -419,7 +411,7 @@ describe('HIPAA-Compliant Healthcare Data Pipeline Integration Tests', () => {
         return;
       }
 
-      const roleName = outputs.kinesisRoleArn.split('/').pop()!;
+      const roleName = outputs.kinesisRoleArn.split('/').pop();
       const policyName = `healthcare-kinesis-policy-${environmentSuffix}`;
 
       const command = new GetRolePolicyCommand({
@@ -431,18 +423,18 @@ describe('HIPAA-Compliant Healthcare Data Pipeline Integration Tests', () => {
 
       expect(response.PolicyDocument).toBeDefined();
 
-      const policyDoc = JSON.parse(decodeURIComponent(response.PolicyDocument!));
+      const policyDoc = JSON.parse(decodeURIComponent(response.PolicyDocument));
       expect(policyDoc.Statement).toBeDefined();
 
       // Verify Kinesis permissions
-      const kinesisStatement = policyDoc.Statement.find((s: any) =>
-        s.Action?.some((a: string) => a.includes('kinesis:'))
+      const kinesisStatement = policyDoc.Statement.find((s) =>
+        s.Action?.some((a) => a.includes('kinesis:'))
       );
       expect(kinesisStatement).toBeDefined();
 
       // Verify KMS permissions
-      const kmsStatement = policyDoc.Statement.find((s: any) =>
-        s.Action?.some((a: string) => a.includes('kms:'))
+      const kmsStatement = policyDoc.Statement.find((s) =>
+        s.Action?.some((a) => a.includes('kms:'))
       );
       expect(kmsStatement).toBeDefined();
     }, 30000);
@@ -458,8 +450,8 @@ describe('HIPAA-Compliant Healthcare Data Pipeline Integration Tests', () => {
 
       expect(response.MetricAlarms).toBeDefined();
 
-      if (response.MetricAlarms!.length > 0) {
-        const alarm = response.MetricAlarms![0];
+      if (response.MetricAlarms.length > 0) {
+        const alarm = response.MetricAlarms[0];
         expect(alarm.MetricName).toBe('GetRecords.IteratorAgeMilliseconds');
         expect(alarm.Namespace).toBe('AWS/Kinesis');
         expect(alarm.Threshold).toBe(60000);
@@ -476,8 +468,8 @@ describe('HIPAA-Compliant Healthcare Data Pipeline Integration Tests', () => {
 
       expect(response.MetricAlarms).toBeDefined();
 
-      if (response.MetricAlarms!.length > 0) {
-        const alarm = response.MetricAlarms![0];
+      if (response.MetricAlarms.length > 0) {
+        const alarm = response.MetricAlarms[0];
         expect(alarm.MetricName).toBe('CPUUtilization');
         expect(alarm.Namespace).toBe('AWS/RDS');
         expect(alarm.Threshold).toBe(80);
@@ -489,12 +481,12 @@ describe('HIPAA-Compliant Healthcare Data Pipeline Integration Tests', () => {
       const command = new DescribeAlarmsCommand({});
       const response = await cwClient.send(command);
 
-      const stackAlarms = response.MetricAlarms?.filter((alarm: any) =>
+      const stackAlarms = response.MetricAlarms?.filter((alarm) =>
         alarm.AlarmName?.includes(environmentSuffix)
       );
 
       if (stackAlarms && stackAlarms.length > 0) {
-        stackAlarms.forEach((alarm: any) => {
+        stackAlarms.forEach((alarm) => {
           expect(alarm.EvaluationPeriods).toBeGreaterThanOrEqual(2);
           expect(alarm.Period).toBeGreaterThanOrEqual(300);
         });
