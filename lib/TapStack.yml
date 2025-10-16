@@ -2,7 +2,6 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production-ready Node.js web application deployment using Elastic Beanstalk with VPC, Auto-scaling, S3, and CloudWatch monitoring'
 
 
-# Template Parameters
 Parameters:
   ApplicationName:
     Type: String
@@ -89,7 +88,6 @@ Parameters:
 
 
 Resources:
-  # VPC Configuration
   VPC:
     Type: 'AWS::EC2::VPC'
     Properties:
