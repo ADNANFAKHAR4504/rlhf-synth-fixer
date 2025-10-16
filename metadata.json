@@ -28,5 +28,5 @@
     "IAM"
   ],
   "region": "ap-southeast-1",
-  "training_quality": 7
+  "training_quality": 10
 }

@@ -803,10 +803,6 @@ npm run synth
 
 # Deploy to AWS
 npm run cdk:deploy
-
-# Run tests
-npm run test:unit
-npm run test:integration
 ```
 
 ## FERPA Compliance Features
