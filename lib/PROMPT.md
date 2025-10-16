@@ -10,7 +10,7 @@ I need a comprehensive Terraform configuration for setting up a secure AWS envir
 - Implement MFA requirements for console access
 - Set up comprehensive audit logging with CloudTrail
 
-### Network Security
+### Network Security:
 - Create secure network architecture with proper subnets
 - Configure Security Groups and NACLs to prevent unauthorized access
 - No open internet access (0.0.0.0/0) on inbound rules for sensitive resources
