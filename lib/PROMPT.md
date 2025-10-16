@@ -22,7 +22,7 @@ I need a comprehensive Terraform configuration for setting up a secure AWS envir
 - Create S3 bucket for secure log storage with versioning and encryption
 - Ensure all resources are properly tagged for cost tracking and management
 
-### Resource Requirements
+### Resource Requirements:
 - Everything needs to be in us-west-2 region
 - All code should be in a single Terraform file for simplicity
 - Need consistent tagging across all resources (CostCenter, Environment, ManagedBy)
