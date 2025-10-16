@@ -737,7 +737,6 @@ export class StorageStack extends Construct {
           deleteMarkerReplication: {
             status: 'Enabled',
           },
-          filter: {},
           destination: {
             bucket: secondaryBucket.arn,
             replicationTime: {
