@@ -13,6 +13,7 @@ export interface GlobalDatabaseProps {
   backupRetentionDays: number;
   enableBacktrack: boolean;
   environmentSuffix?: string;
+  currentRegion?: string; // The region this stack is being deployed to
 }
 
 export class GlobalDatabase extends Construct {
@@ -29,12 +30,14 @@ export class GlobalDatabase extends Construct {
     super(scope, id);
 
     const envSuffix = props.environmentSuffix || 'dev';
+    const currentRegion = props.currentRegion || cdk.Stack.of(this).region;
+    const isPrimaryRegion = currentRegion === props.primaryRegion;
 
-    // Create encryption key
+    // Create encryption key (region-specific)
     const encryptionKey = new kms.Key(this, 'DatabaseEncryptionKey', {
-      description: 'Global database encryption key',
+      description: `Database encryption key for ${currentRegion}`,
       enableKeyRotation: true,
-      alias: `financial-app-db-key-${envSuffix}`,
+      alias: `financial-app-db-key-${currentRegion}-${envSuffix}`,
     });
 
     // Create credentials
@@ -50,22 +53,23 @@ export class GlobalDatabase extends Construct {
     // Create parameter group once for reuse
     this.parameterGroup = this.createParameterGroup();
 
-    // Create primary cluster
-    const primaryVpc = new ec2.Vpc(this, 'PrimaryVpc', {
+    // Create VPC for this region
+    const vpc = new ec2.Vpc(this, `Vpc-${currentRegion}`, {
       maxAzs: 3,
       natGateways: 3,
       cidr: '10.0.0.0/16',
     });
 
-    this.primaryCluster = new rds.DatabaseCluster(this, 'PrimaryCluster', {
+    // Create database cluster for this region
+    const cluster = new rds.DatabaseCluster(this, `Cluster-${currentRegion}`, {
       engine: rds.DatabaseClusterEngine.auroraMysql({
         version: rds.AuroraMysqlEngineVersion.VER_3_04_0,
       }),
       credentials: rds.Credentials.fromGeneratedSecret('admin', {
-        secretName: `financial-db-primary-credentials-${envSuffix}`,
+        secretName: `financial-db-${currentRegion}-credentials-${envSuffix}`,
       }),
       instanceProps: {
-        vpc: primaryVpc,
+        vpc: vpc,
         instanceType: ec2.InstanceType.of(
           ec2.InstanceClass.R6G,
           ec2.InstanceSize.XLARGE4
@@ -84,28 +88,19 @@ export class GlobalDatabase extends Construct {
       parameterGroup: this.parameterGroup,
     });
 
-    // Note: Backtrack is not supported for Global Databases
-    // For non-global deployments, you can enable backtrack:
-    // if (props.enableBacktrack) {
-    //   const cfnCluster = this.primaryCluster.node
-    //     .defaultChild as rds.CfnDBCluster;
-    //   cfnCluster.backtrackWindow = 72; // 72 hours
-    // }
+    // Set the primary cluster reference
+    this.primaryCluster = cluster;
 
-    // Create global cluster from primary cluster
-    // Note: When using sourceDbClusterIdentifier, don't specify engine properties
-    // as they're inherited from the source cluster
-    this.globalCluster = new rds.CfnGlobalCluster(this, 'GlobalCluster', {
-      globalClusterIdentifier: `financial-app-global-cluster-${envSuffix}`,
-      sourceDbClusterIdentifier: this.primaryCluster.clusterArn,
-    });
-
-    // Create secondary clusters
-    this.createSecondaryClusters(
-      props.secondaryRegions,
-      encryptionKey,
-      envSuffix
-    );
+    // Create Global Cluster ONLY in the primary region
+    if (isPrimaryRegion) {
+      // Create global cluster from primary cluster
+      // Note: When using sourceDbClusterIdentifier, don't specify engine properties
+      // as they're inherited from the source cluster
+      this.globalCluster = new rds.CfnGlobalCluster(this, 'GlobalCluster', {
+        globalClusterIdentifier: `financial-app-global-cluster-${envSuffix}`,
+        sourceDbClusterIdentifier: cluster.clusterArn,
+      });
+    }
 
     // Setup replication monitoring
     this.setupReplicationMonitoring(
@@ -132,53 +127,15 @@ export class GlobalDatabase extends Construct {
     });
   }
 
+  // Note: Secondary clusters are now created in their own regional stacks
+  // This method is kept for backward compatibility but may not be needed
   private createSecondaryClusters(
-    regions: string[],
-    encryptionKey: kms.IKey,
-    envSuffix: string
+    _regions: string[],
+    _encryptionKey: kms.IKey,
+    _envSuffix: string
   ) {
-    for (const region of regions) {
-      // Note: In practice, you'd need to create these in separate stacks per region
-      // This is a simplified representation
-      const secondaryVpc = new ec2.Vpc(this, `SecondaryVpc-${region}`, {
-        maxAzs: 3,
-        natGateways: 3,
-        cidr: `10.${regions.indexOf(region) + 1}.0.0/16`,
-      });
-
-      const secondaryCluster = new rds.DatabaseCluster(
-        this,
-        `SecondaryCluster-${region}`,
-        {
-          engine: rds.DatabaseClusterEngine.auroraMysql({
-            version: rds.AuroraMysqlEngineVersion.VER_3_04_0,
-          }),
-          credentials: rds.Credentials.fromGeneratedSecret('admin', {
-            secretName: `financial-db-${region}-credentials-${envSuffix}`,
-          }),
-          instanceProps: {
-            vpc: secondaryVpc,
-            instanceType: ec2.InstanceType.of(
-              ec2.InstanceClass.R6G,
-              ec2.InstanceSize.XLARGE4
-            ),
-            vpcSubnets: {
-              subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-            },
-          },
-          instances: 3,
-          storageEncrypted: true,
-          storageEncryptionKey: encryptionKey,
-          parameterGroup: this.parameterGroup,
-        }
-      );
-
-      this.secondaryClusters.set(region, secondaryCluster);
-
-      // Note: Secondary clusters are automatically part of the global cluster
-      // through the globalClusterIdentifier property. No need to create
-      // separate CfnGlobalCluster resources for each region.
-    }
+    // In multi-region deployment, each region creates its own cluster
+    // No need to create secondary clusters here
   }
 
   private setupReplicationMonitoring(
@@ -215,11 +172,8 @@ export class GlobalDatabase extends Construct {
     return this.replicationMetrics.get(region)!;
   }
 
-  public getConnectionString(region: string): string {
-    // For LocalStack/single-stack deployment, all regions use the primary cluster
-    // For production multi-region deployment, each region would use its own cluster
-    const cluster = this.secondaryClusters.get(region) || this.primaryCluster;
-
-    return cluster.clusterEndpoint.socketAddress;
+  public getConnectionString(_region: string): string {
+    // Each region uses its own cluster (primaryCluster holds this region's cluster)
+    return this.primaryCluster.clusterEndpoint.socketAddress;
   }
 }

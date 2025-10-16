@@ -34,10 +34,10 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-    // Create global monitoring topic
+    // Create global monitoring topic (region-specific)
     const globalAlertTopic = new sns.Topic(this, 'GlobalAlertTopic', {
-      topicName: `financial-app-global-alerts-${environmentSuffix}`,
-      displayName: `Financial Application Global Alerts - ${environmentSuffix}`,
+      topicName: `financial-app-alerts-${this.region}-${environmentSuffix}`,
+      displayName: `Financial Application Alerts - ${this.region} - ${environmentSuffix}`,
     });
 
     globalAlertTopic.addSubscription(
@@ -57,6 +57,7 @@ export class TapStack extends cdk.Stack {
       backupRetentionDays: 30,
       enableBacktrack: false, // Backtrack not supported for Global Databases
       environmentSuffix: environmentSuffix,
+      currentRegion: this.region, // Pass the current stack's region
     });
 
     // Deploy regional APIs

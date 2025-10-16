@@ -27,19 +27,20 @@ export class HealthCheckSystem extends Construct {
 
     // Create comprehensive health check Lambda
     const envSuffix = props.environmentSuffix || 'dev';
+    const stackRegion = cdk.Stack.of(this).region;
 
     const healthCheckerLogGroup = new logs.LogGroup(
       this,
       'HealthCheckerLogGroup',
       {
-        logGroupName: `/aws/lambda/financial-app-health-checker-${envSuffix}`,
+        logGroupName: `/aws/lambda/financial-app-health-checker-${stackRegion}-${envSuffix}`,
         retention: logs.RetentionDays.ONE_WEEK,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
       }
     );
 
     const healthChecker = new lambda.Function(this, 'HealthChecker', {
-      functionName: `financial-app-health-checker-${envSuffix}`,
+      functionName: `financial-app-health-checker-${stackRegion}-${envSuffix}`,
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'index.handler',
       code: lambda.Code.fromAsset('lib/lambda/health-checker'),

@@ -22,17 +22,18 @@ export class ChaosTestingSystem extends Construct {
     super(scope, id);
 
     const envSuffix = props.environmentSuffix || 'dev';
+    const stackRegion = cdk.Stack.of(this).region;
 
     // Create log group for chaos runner with deletion policy
     const chaosLogGroup = new logs.LogGroup(this, 'ChaosRunnerLogGroup', {
-      logGroupName: `/aws/lambda/financial-app-chaos-runner-${envSuffix}`,
+      logGroupName: `/aws/lambda/financial-app-chaos-runner-${stackRegion}-${envSuffix}`,
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // Create chaos testing Lambda
     const chaosRunner = new lambda.Function(this, 'ChaosRunner', {
-      functionName: `financial-app-chaos-runner-${envSuffix}`,
+      functionName: `financial-app-chaos-runner-${stackRegion}-${envSuffix}`,
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'index.handler',
       code: lambda.Code.fromAsset('lib/lambda/chaos-runner'),
@@ -70,9 +71,9 @@ export class ChaosTestingSystem extends Construct {
       })
     );
 
-    // Create SSM parameter for enabling/disabling chaos tests
+    // Create SSM parameter for enabling/disabling chaos tests (region-specific)
     new ssm.StringParameter(this, 'ChaosTestingEnabled', {
-      parameterName: `/financial-app/chaos-testing/enabled-${envSuffix}`,
+      parameterName: `/financial-app/chaos-testing/enabled-${stackRegion}-${envSuffix}`,
       stringValue: 'false',
       description: 'Enable or disable chaos testing',
     });
@@ -117,9 +118,11 @@ export class ChaosTestingSystem extends Construct {
   private createTestResultStorage() {
     const envSuffix =
       cdk.Stack.of(this).node.tryGetContext('environmentSuffix') || 'dev';
-    // Create S3 bucket for test results
+    const stackRegion = cdk.Stack.of(this).region;
+    // Create S3 bucket for test results (region-specific)
+    // Keep name short to stay under 63 character limit
     new s3.Bucket(this, 'ChaosTestResults', {
-      bucketName: `financial-app-chaos-test-results-${envSuffix}-${cdk.Stack.of(this).account}`,
+      bucketName: `chaos-results-${stackRegion}-${envSuffix}-${cdk.Stack.of(this).account}`,
       versioned: true,
       lifecycleRules: [
         {

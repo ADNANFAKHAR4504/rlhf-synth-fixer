@@ -71,12 +71,13 @@ export class FailoverOrchestrator extends Construct {
     const definition = validateHealth.next(checkNeedFailover);
 
     const envSuffix = props.environmentSuffix || 'dev';
+    const stackRegion = cdk.Stack.of(this).region;
     this.stateMachine = new stepfunctions.StateMachine(
       this,
       'FailoverStateMachine',
       {
         definition,
-        stateMachineName: `financial-app-failover-${envSuffix}`,
+        stateMachineName: `financial-app-failover-${stackRegion}-${envSuffix}`,
         timeout: cdk.Duration.minutes(15),
       }
     );
