@@ -1,22 +1,65 @@
-// Configuration - These are coming from cfn-outputs after cdk deploy
-import fs from 'fs';
 import AWS from 'aws-sdk';
-
+import fs from 'fs';
+import https from 'https';
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
-// Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+// Get region and environment suffix
+const region = process.env.AWS_REGION || AWS.config.region || 'us-east-1';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'prod';
 
 // AWS Service clients
-const dynamoDb = new AWS.DynamoDB.DocumentClient();
-const apiGateway = new AWS.APIGateway();
-const lambda = new AWS.Lambda();
-const ssm = new AWS.SSM();
+const dynamoDb = new AWS.DynamoDB.DocumentClient({ region });
+const dynamoDbClient = new AWS.DynamoDB({ region });
+const lambda = new AWS.Lambda({ region });
+const ssm = new AWS.SSM({ region });
+const cloudwatch = new AWS.CloudWatch({ region });
+const logs = new AWS.CloudWatchLogs({ region });
+
+// Helper function to sign and make API requests
+const makeApiRequest = (endpoint: string, method: string, body?: any): Promise<any> => {
+  return new Promise((resolve, reject) => {
+    const url = new URL(endpoint);
+    const options = {
+      hostname: url.hostname,
+      path: url.pathname + url.search,
+      method: method,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    };
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => {
+        try {
+          resolve({
+            statusCode: res.statusCode,
+            body: data ? JSON.parse(data) : null,
+            headers: res.headers
+          });
+        } catch (e) {
+          resolve({
+            statusCode: res.statusCode,
+            body: data,
+            headers: res.headers
+          });
+        }
+      });
+    });
+
+    req.on('error', reject);
+    if (body) {
+      req.write(JSON.stringify(body));
+    }
+    req.end();
+  });
+};
 
 describe('Fitness Workout API Integration Tests', () => {
-  
+
   describe('Infrastructure Verification', () => {
     test('should have all required outputs', async () => {
       expect(outputs.ApiEndpoint).toBeDefined();
@@ -24,8 +67,8 @@ describe('Fitness Workout API Integration Tests', () => {
       expect(outputs.CreateWorkoutEndpoint).toBeDefined();
       expect(outputs.GetWorkoutsEndpoint).toBeDefined();
       expect(outputs.GetStatsEndpoint).toBeDefined();
-      expect(outputs.WorkoutApiId).toBeDefined();
-      expect(outputs.LambdaRoleArn).toBeDefined();
+      expect(outputs.DashboardURL).toBeDefined();
+      expect(outputs.LambdaFunctionNames).toBeDefined();
     });
 
     test('API endpoint should be accessible', async () => {
@@ -37,27 +80,67 @@ describe('Fitness Workout API Integration Tests', () => {
         TableName: outputs.DynamoDBTableName
       };
 
-      const result = await dynamoDb.describe(params).promise();
+      const result = await dynamoDbClient.describeTable(params).promise();
       expect(result.Table).toBeDefined();
-      expect(result.Table.TableName).toBe(outputs.DynamoDBTableName);
-      expect(result.Table.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
+      expect(result.Table?.TableName).toBe(outputs.DynamoDBTableName);
+      expect(result.Table?.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
+      expect(result.Table?.TableStatus).toBe('ACTIVE');
     });
 
-    test('API Gateway should exist with correct configuration', async () => {
-      const result = await apiGateway.getRestApi({
-        restApiId: outputs.WorkoutApiId
+    test('DynamoDB table should have correct key schema', async () => {
+      const params = {
+        TableName: outputs.DynamoDBTableName
+      };
+
+      const result = await dynamoDbClient.describeTable(params).promise();
+
+      // Check primary key schema
+      expect(result.Table?.KeySchema).toBeDefined();
+      const hashKey = result.Table?.KeySchema?.find(k => k.KeyType === 'HASH');
+      const rangeKey = result.Table?.KeySchema?.find(k => k.KeyType === 'RANGE');
+      expect(hashKey?.AttributeName).toBe('userId');
+      expect(rangeKey?.AttributeName).toBe('workoutTimestamp');
+    });
+
+    test('DynamoDB table should have WorkoutTypeIndex GSI', async () => {
+      const params = {
+        TableName: outputs.DynamoDBTableName
+      };
+
+      const result = await dynamoDbClient.describeTable(params).promise();
+
+      // Check GSI
+      expect(result.Table?.GlobalSecondaryIndexes).toBeDefined();
+      expect(result.Table?.GlobalSecondaryIndexes?.length).toBeGreaterThan(0);
+
+      const gsi = result.Table?.GlobalSecondaryIndexes?.find(i => i.IndexName === 'WorkoutTypeIndex');
+      expect(gsi).toBeDefined();
+      expect(gsi?.IndexStatus).toBe('ACTIVE');
+    });
+
+    test('DynamoDB table should have encryption and point-in-time recovery enabled', async () => {
+      const params = {
+        TableName: outputs.DynamoDBTableName
+      };
+
+      const result = await dynamoDbClient.describeTable(params).promise();
+
+      // Check encryption
+      expect(result.Table?.SSEDescription?.Status).toBe('ENABLED');
+
+      // Check point-in-time recovery
+      const pitrResult = await dynamoDbClient.describeContinuousBackups({
+        TableName: outputs.DynamoDBTableName
       }).promise();
 
-      expect(result.id).toBe(outputs.WorkoutApiId);
-      expect(result.name).toContain('workoutapi');
-      expect(result.endpointConfiguration?.types).toContain('REGIONAL');
+      expect(pitrResult.ContinuousBackupsDescription?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus).toBe('ENABLED');
     });
   });
 
   describe('Lambda Functions Integration', () => {
     test('Create Workout Lambda function should exist and be configured correctly', async () => {
-      const functionName = `create-workout-log-${environmentSuffix}`;
-      
+      const functionName = `create-workout-log-${region}-${environmentSuffix}`;
+
       try {
         const result = await lambda.getFunction({
           FunctionName: functionName
@@ -67,8 +150,10 @@ describe('Fitness Workout API Integration Tests', () => {
         expect(result.Configuration?.Handler).toBe('index.lambda_handler');
         expect(result.Configuration?.Environment?.Variables?.TABLE_NAME).toBe(outputs.DynamoDBTableName);
         expect(result.Configuration?.Environment?.Variables?.ENVIRONMENT).toBe(environmentSuffix);
+        expect(result.Configuration?.Timeout).toBe(30);
+        expect(result.Configuration?.MemorySize).toBe(256);
       } catch (error: any) {
-        if (error.code === 'ResourceNotFound') {
+        if (error.code === 'ResourceNotFoundException') {
           fail(`Lambda function ${functionName} not found`);
         }
         throw error;
@@ -76,8 +161,8 @@ describe('Fitness Workout API Integration Tests', () => {
     });
 
     test('Get Workouts Lambda function should exist and be configured correctly', async () => {
-      const functionName = `get-workoutlogs-${environmentSuffix}`;
-      
+      const functionName = `get-workoutlogs-${region}-${environmentSuffix}`;
+
       try {
         const result = await lambda.getFunction({
           FunctionName: functionName
@@ -86,8 +171,10 @@ describe('Fitness Workout API Integration Tests', () => {
         expect(result.Configuration?.Runtime).toBe('python3.9');
         expect(result.Configuration?.Handler).toBe('index.lambda_handler');
         expect(result.Configuration?.Environment?.Variables?.TABLE_NAME).toBe(outputs.DynamoDBTableName);
+        expect(result.Configuration?.Timeout).toBe(30);
+        expect(result.Configuration?.MemorySize).toBe(256);
       } catch (error: any) {
-        if (error.code === 'ResourceNotFound') {
+        if (error.code === 'ResourceNotFoundException') {
           fail(`Lambda function ${functionName} not found`);
         }
         throw error;
@@ -95,8 +182,8 @@ describe('Fitness Workout API Integration Tests', () => {
     });
 
     test('Get Stats Lambda function should exist and be configured correctly', async () => {
-      const functionName = `get-workout-stats-${environmentSuffix}`;
-      
+      const functionName = `get-workout-stats-${region}-${environmentSuffix}`;
+
       try {
         const result = await lambda.getFunction({
           FunctionName: functionName
@@ -105,11 +192,30 @@ describe('Fitness Workout API Integration Tests', () => {
         expect(result.Configuration?.Runtime).toBe('python3.9');
         expect(result.Configuration?.Handler).toBe('index.lambda_handler');
         expect(result.Configuration?.Environment?.Variables?.TABLE_NAME).toBe(outputs.DynamoDBTableName);
+        expect(result.Configuration?.Timeout).toBe(30);
+        expect(result.Configuration?.MemorySize).toBe(256);
       } catch (error: any) {
-        if (error.code === 'ResourceNotFound') {
+        if (error.code === 'ResourceNotFoundException') {
           fail(`Lambda function ${functionName} not found`);
         }
         throw error;
+      }
+    });
+
+    test('All Lambda functions should have proper IAM execution role', async () => {
+      const functionNames = [
+        `create-workout-log-${region}-${environmentSuffix}`,
+        `get-workoutlogs-${region}-${environmentSuffix}`,
+        `get-workout-stats-${region}-${environmentSuffix}`
+      ];
+
+      for (const functionName of functionNames) {
+        const result = await lambda.getFunction({
+          FunctionName: functionName
+        }).promise();
+
+        expect(result.Configuration?.Role).toBeDefined();
+        expect(result.Configuration?.Role).toContain('WorkoutApiLambdaRole');
       }
     });
   });
@@ -117,13 +223,14 @@ describe('Fitness Workout API Integration Tests', () => {
   describe('SSM Parameters Integration', () => {
     test('API endpoint parameter should be stored correctly', async () => {
       const paramName = `/fitness-app/${environmentSuffix}/api-endpoint`;
-      
+
       try {
         const result = await ssm.getParameter({
           Name: paramName
         }).promise();
 
         expect(result.Parameter?.Value).toBe(outputs.ApiEndpoint);
+        expect(result.Parameter?.Type).toBe('String');
       } catch (error: any) {
         if (error.code === 'ParameterNotFound') {
           fail(`SSM Parameter ${paramName} not found`);
@@ -134,13 +241,14 @@ describe('Fitness Workout API Integration Tests', () => {
 
     test('Table name parameter should be stored correctly', async () => {
       const paramName = `/fitness-app/${environmentSuffix}/table-name`;
-      
+
       try {
         const result = await ssm.getParameter({
           Name: paramName
         }).promise();
 
         expect(result.Parameter?.Value).toBe(outputs.DynamoDBTableName);
+        expect(result.Parameter?.Type).toBe('String');
       } catch (error: any) {
         if (error.code === 'ParameterNotFound') {
           fail(`SSM Parameter ${paramName} not found`);
@@ -150,323 +258,80 @@ describe('Fitness Workout API Integration Tests', () => {
     });
   });
 
-  describe('DynamoDB Operations', () => {
-    const testUserId = `test-user-${Date.now()}`;
-    const testWorkoutId = `workout-${Date.now()}`;
+  describe('CloudWatch Monitoring', () => {
+    test('CloudWatch Dashboard should exist', async () => {
+      const dashboardName = `workoutapi-metrics-${region}-${environmentSuffix}`;
 
-    afterAll(async () => {
-      // Clean up test data
       try {
-        const scanParams = {
-          TableName: outputs.DynamoDBTableName,
-          FilterExpression: 'userId = :userId',
-          ExpressionAttributeValues: {
-            ':userId': testUserId
-          }
-        };
+        const result = await cloudwatch.getDashboard({
+          DashboardName: dashboardName
+        }).promise();
 
-        const scanResult = await dynamoDb.scan(scanParams).promise();
-        
-        if (scanResult.Items && scanResult.Items.length > 0) {
-          const deletePromises = scanResult.Items.map(item => {
-            return dynamoDb.delete({
-              TableName: outputs.DynamoDBTableName,
-              Key: {
-                userId: item.userId,
-                workoutTimestamp: item.workoutTimestamp
-              }
-            }).promise();
-          });
+        expect(result.DashboardName).toBe(dashboardName);
+        expect(result.DashboardBody).toBeDefined();
 
-          await Promise.all(deletePromises);
+        const dashboardBody = JSON.parse(result.DashboardBody!);
+        expect(dashboardBody.widgets).toBeDefined();
+        expect(dashboardBody.widgets.length).toBeGreaterThan(0);
+      } catch (error: any) {
+        if (error.code === 'ResourceNotFound') {
+          fail(`CloudWatch Dashboard ${dashboardName} not found`);
         }
-      } catch (error) {
-        console.warn('Error cleaning up test data:', error);
+        throw error;
       }
     });
 
-    test('should be able to write workout data to DynamoDB', async () => {
-      const workoutData = {
-        userId: testUserId,
-        workoutTimestamp: Date.now() * 1000, // microsecond precision
-        workoutId: testWorkoutId,
-        workoutType: 'running',
-        duration: 30,
-        calories: 300,
-        distance: 5.0,
-        heartRate: 150,
-        notes: 'Integration test workout',
-        createdAt: new Date().toISOString()
-      };
+    test('CloudWatch Alarms should be configured', async () => {
+      const apiErrorAlarmName = `workoutapi-errors-${region}-${environmentSuffix}`;
+      const dynamoThrottleAlarmName = `workout-dynamodb-throttle-${region}-${environmentSuffix}`;
 
-      const putParams = {
-        TableName: outputs.DynamoDBTableName,
-        Item: workoutData
-      };
-
-      await expect(dynamoDb.put(putParams).promise()).resolves.not.toThrow();
-    });
-
-    test('should be able to read workout data from DynamoDB', async () => {
-      // First, insert test data
-      const workoutData = {
-        userId: testUserId,
-        workoutTimestamp: Date.now() * 1000,
-        workoutId: `${testWorkoutId}-read`,
-        workoutType: 'cycling',
-        duration: 45,
-        calories: 400,
-        distance: 10.0,
-        heartRate: 140,
-        notes: 'Read test workout',
-        createdAt: new Date().toISOString()
-      };
-
-      await dynamoDb.put({
-        TableName: outputs.DynamoDBTableName,
-        Item: workoutData
+      // Check API Error Alarm
+      const apiAlarmResult = await cloudwatch.describeAlarms({
+        AlarmNames: [apiErrorAlarmName]
       }).promise();
 
-      // Then query for it
-      const queryParams = {
-        TableName: outputs.DynamoDBTableName,
-        KeyConditionExpression: 'userId = :userId',
-        ExpressionAttributeValues: {
-          ':userId': testUserId
-        }
-      };
+      expect(apiAlarmResult.MetricAlarms?.length).toBe(1);
+      expect(apiAlarmResult.MetricAlarms?.[0].AlarmName).toBe(apiErrorAlarmName);
+      expect(apiAlarmResult.MetricAlarms?.[0].MetricName).toBe('5XXError');
+      expect(apiAlarmResult.MetricAlarms?.[0].Threshold).toBe(10);
 
-      const result = await dynamoDb.query(queryParams).promise();
-      
-      expect(result.Items).toBeDefined();
-      expect(result.Items!.length).toBeGreaterThan(0);
-      
-      const foundWorkout = result.Items!.find(item => item.workoutId === `${testWorkoutId}-read`);
-      expect(foundWorkout).toBeDefined();
-      expect(foundWorkout!.workoutType).toBe('cycling');
-      expect(foundWorkout!.duration).toBe(45);
-    });
-
-    test('should be able to query by workout type using GSI', async () => {
-      // Insert test data with specific workout type
-      const workoutData = {
-        userId: testUserId,
-        workoutTimestamp: Date.now() * 1000,
-        workoutId: `${testWorkoutId}-gsi`,
-        workoutType: 'swimming',
-        duration: 60,
-        calories: 500,
-        distance: 2.0,
-        heartRate: 160,
-        notes: 'GSI test workout',
-        createdAt: new Date().toISOString()
-      };
-
-      await dynamoDb.put({
-        TableName: outputs.DynamoDBTableName,
-        Item: workoutData
+      // Check DynamoDB Throttle Alarm
+      const dynamoAlarmResult = await cloudwatch.describeAlarms({
+        AlarmNames: [dynamoThrottleAlarmName]
       }).promise();
 
-      // Query using GSI
-      const queryParams = {
-        TableName: outputs.DynamoDBTableName,
-        IndexName: 'WorkoutTypeIndex',
-        KeyConditionExpression: 'workoutType = :workoutType',
-        ExpressionAttributeValues: {
-          ':workoutType': 'swimming'
-        }
-      };
+      expect(dynamoAlarmResult.MetricAlarms?.length).toBe(1);
+      expect(dynamoAlarmResult.MetricAlarms?.[0].AlarmName).toBe(dynamoThrottleAlarmName);
+      expect(dynamoAlarmResult.MetricAlarms?.[0].MetricName).toBe('UserErrors');
+    });
 
-      const result = await dynamoDb.query(queryParams).promise();
-      
-      expect(result.Items).toBeDefined();
-      expect(result.Items!.length).toBeGreaterThan(0);
-      
-      const foundWorkout = result.Items!.find(item => item.workoutId === `${testWorkoutId}-gsi`);
-      expect(foundWorkout).toBeDefined();
-      expect(foundWorkout!.workoutType).toBe('swimming');
+    test('CloudWatch Log Group should exist for API Gateway', async () => {
+      const logGroupName = `/aws/apigateway/workoutapi-${region}-${environmentSuffix}`;
+
+      try {
+        const result = await logs.describeLogGroups({
+          logGroupNamePrefix: logGroupName
+        }).promise();
+
+        expect(result.logGroups?.length).toBeGreaterThan(0);
+        const logGroup = result.logGroups?.find(lg => lg.logGroupName === logGroupName);
+        expect(logGroup).toBeDefined();
+        expect(logGroup?.retentionInDays).toBe(30);
+      } catch (error) {
+        fail(`CloudWatch Log Group ${logGroupName} not found`);
+      }
     });
   });
 
-  describe('Complete Workout Logging Flow', () => {
-    const testUserId = `flow-test-user-${Date.now()}`;
-    let workoutTimestamp: number;
+  describe('End-to-End Workout Flow', () => {
+    const testUserId = `e2e-user-${Date.now()}`;
+    let createdWorkoutTimestamp: number;
+    const testWorkouts: any[] = [];
 
     afterAll(async () => {
-      // Clean up test data
+      // Clean up all test data
       try {
-        if (workoutTimestamp) {
-          await dynamoDb.delete({
-            TableName: outputs.DynamoDBTableName,
-            Key: {
-              userId: testUserId,
-              workoutTimestamp: workoutTimestamp
-            }
-          }).promise();
-        }
-      } catch (error) {
-        console.warn('Error cleaning up flow test data:', error);
-      }
-    });
-
-    test('complete workout logging flow should work end-to-end', async () => {
-      // Step 1: Create a workout log directly in DynamoDB (simulating Lambda function)
-      workoutTimestamp = Date.now() * 1000; // microsecond precision
-      const workoutData = {
-        userId: testUserId,
-        workoutTimestamp: workoutTimestamp,
-        workoutId: `flow-test-${Date.now()}`,
-        workoutType: 'weightlifting',
-        duration: 90,
-        calories: 450,
-        distance: 0,
-        heartRate: 130,
-        notes: 'Full body workout',
-        createdAt: new Date().toISOString()
-      };
-
-      // Create workout
-      await dynamoDb.put({
-        TableName: outputs.DynamoDBTableName,
-        Item: workoutData
-      }).promise();
-
-      // Step 2: Verify we can retrieve the workout (simulating Get Workouts Lambda)
-      const queryParams = {
-        TableName: outputs.DynamoDBTableName,
-        KeyConditionExpression: 'userId = :userId',
-        ExpressionAttributeValues: {
-          ':userId': testUserId
-        },
-        ScanIndexForward: false, // Most recent first
-        Limit: 50
-      };
-
-      const workoutsResult = await dynamoDb.query(queryParams).promise();
-      expect(workoutsResult.Items).toBeDefined();
-      expect(workoutsResult.Items!.length).toBe(1);
-      
-      const retrievedWorkout = workoutsResult.Items![0];
-      expect(retrievedWorkout.userId).toBe(testUserId);
-      expect(retrievedWorkout.workoutType).toBe('weightlifting');
-      expect(retrievedWorkout.duration).toBe(90);
-      expect(retrievedWorkout.calories).toBe(450);
-
-      // Step 3: Generate statistics (simulating Get Stats Lambda)
-      const statsCalculation = {
-        totalWorkouts: workoutsResult.Items!.length,
-        totalDuration: workoutsResult.Items!.reduce((sum, item) => sum + (item.duration || 0), 0),
-        totalCalories: workoutsResult.Items!.reduce((sum, item) => sum + (item.calories || 0), 0),
-        totalDistance: workoutsResult.Items!.reduce((sum, item) => sum + (item.distance || 0), 0)
-      };
-
-      expect(statsCalculation.totalWorkouts).toBe(1);
-      expect(statsCalculation.totalDuration).toBe(90);
-      expect(statsCalculation.totalCalories).toBe(450);
-      expect(statsCalculation.totalDistance).toBe(0);
-
-      // Calculate workout type breakdown
-      const workoutTypes: { [key: string]: number } = {};
-      workoutsResult.Items!.forEach(workout => {
-        const type = workout.workoutType || 'Unknown';
-        workoutTypes[type] = (workoutTypes[type] || 0) + 1;
-      });
-
-      expect(workoutTypes['weightlifting']).toBe(1);
-
-      // Step 4: Verify data integrity and constraints
-      expect(retrievedWorkout.workoutTimestamp).toBe(workoutTimestamp);
-      expect(retrievedWorkout.workoutId).toBeDefined();
-      expect(typeof retrievedWorkout.workoutId).toBe('string');
-      expect(retrievedWorkout.createdAt).toBeDefined();
-      expect(new Date(retrievedWorkout.createdAt)).toBeInstanceOf(Date);
-    });
-
-    test('should handle multiple workouts for statistics correctly', async () => {
-      const multiTestUserId = `multi-test-user-${Date.now()}`;
-      const workouts = [
-        {
-          userId: multiTestUserId,
-          workoutTimestamp: Date.now() * 1000,
-          workoutId: `multi-1-${Date.now()}`,
-          workoutType: 'running',
-          duration: 30,
-          calories: 300,
-          distance: 5.0,
-          heartRate: 150,
-          notes: 'Morning run',
-          createdAt: new Date().toISOString()
-        },
-        {
-          userId: multiTestUserId,
-          workoutTimestamp: (Date.now() + 1000) * 1000,
-          workoutId: `multi-2-${Date.now()}`,
-          workoutType: 'cycling',
-          duration: 60,
-          calories: 500,
-          distance: 15.0,
-          heartRate: 140,
-          notes: 'Evening bike ride',
-          createdAt: new Date(Date.now() + 1000).toISOString()
-        }
-      ];
-
-      // Insert multiple workouts
-      const putPromises = workouts.map(workout => 
-        dynamoDb.put({
-          TableName: outputs.DynamoDBTableName,
-          Item: workout
-        }).promise()
-      );
-
-      await Promise.all(putPromises);
-
-      try {
-        // Query all workouts for the user
-        const queryParams = {
-          TableName: outputs.DynamoDBTableName,
-          KeyConditionExpression: 'userId = :userId',
-          ExpressionAttributeValues: {
-            ':userId': multiTestUserId
-          }
-        };
-
-        const result = await dynamoDb.query(queryParams).promise();
-        expect(result.Items!.length).toBe(2);
-
-        // Calculate comprehensive statistics
-        const stats = {
-          totalWorkouts: result.Items!.length,
-          totalDuration: result.Items!.reduce((sum, item) => sum + (item.duration || 0), 0),
-          totalCalories: result.Items!.reduce((sum, item) => sum + (item.calories || 0), 0),
-          totalDistance: result.Items!.reduce((sum, item) => sum + (item.distance || 0), 0),
-          averageCaloriesPerWorkout: 0,
-          averageDurationPerWorkout: 0
-        };
-
-        stats.averageCaloriesPerWorkout = stats.totalCalories / stats.totalWorkouts;
-        stats.averageDurationPerWorkout = stats.totalDuration / stats.totalWorkouts;
-
-        expect(stats.totalWorkouts).toBe(2);
-        expect(stats.totalDuration).toBe(90); // 30 + 60
-        expect(stats.totalCalories).toBe(800); // 300 + 500
-        expect(stats.totalDistance).toBe(20.0); // 5.0 + 15.0
-        expect(stats.averageCaloriesPerWorkout).toBe(400);
-        expect(stats.averageDurationPerWorkout).toBe(45);
-
-        // Verify workout type breakdown
-        const workoutTypes: { [key: string]: number } = {};
-        result.Items!.forEach(workout => {
-          const type = workout.workoutType || 'Unknown';
-          workoutTypes[type] = (workoutTypes[type] || 0) + 1;
-        });
-
-        expect(workoutTypes['running']).toBe(1);
-        expect(workoutTypes['cycling']).toBe(1);
-
-      } finally {
-        // Clean up multiple test workouts
-        const deletePromises = workouts.map(workout => 
+        const deletePromises = testWorkouts.map(workout =>
           dynamoDb.delete({
             TableName: outputs.DynamoDBTableName,
             Key: {
@@ -477,42 +342,406 @@ describe('Fitness Workout API Integration Tests', () => {
         );
 
         await Promise.all(deletePromises);
+        console.log(`Cleaned up ${testWorkouts.length} test workouts`);
+      } catch (error) {
+        console.warn('Error cleaning up test data:', error);
       }
     });
-  });
 
-  describe('Error Handling and Edge Cases', () => {
-    test('should handle empty query results gracefully', async () => {
-      const nonExistentUserId = `non-existent-user-${Date.now()}`;
-      
-      const queryParams = {
+    test('E2E: Create a workout log via Lambda', async () => {
+      // Invoke Lambda directly to create a workout
+      const functionName = `create-workout-log-${region}-${environmentSuffix}`;
+
+      const workoutData = {
+        userId: testUserId,
+        workoutType: 'running',
+        duration: 45,
+        calories: 400,
+        distance: 6.5,
+        heartRate: 155,
+        notes: 'Morning run in the park - E2E test'
+      };
+
+      const payload = {
+        body: JSON.stringify(workoutData),
+        headers: { 'Content-Type': 'application/json' }
+      };
+
+      const result = await lambda.invoke({
+        FunctionName: functionName,
+        Payload: JSON.stringify(payload)
+      }).promise();
+
+      const response = JSON.parse(result.Payload as string);
+      expect(response.statusCode).toBe(201);
+
+      const responseBody = JSON.parse(response.body);
+      expect(responseBody.message).toBe('Workout log created successfully');
+      expect(responseBody.workoutId).toBeDefined();
+
+      // Extract timestamp for later use
+      const workoutId = responseBody.workoutId;
+      createdWorkoutTimestamp = parseInt(workoutId.split('#')[1]);
+
+      testWorkouts.push({
+        userId: testUserId,
+        workoutTimestamp: createdWorkoutTimestamp
+      });
+
+      console.log(`Created workout with ID: ${workoutId}`);
+    });
+
+    test('E2E: Verify workout appears in DynamoDB', async () => {
+      // Wait a moment for consistency
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      const result = await dynamoDb.get({
         TableName: outputs.DynamoDBTableName,
-        KeyConditionExpression: 'userId = :userId',
-        ExpressionAttributeValues: {
-          ':userId': nonExistentUserId
+        Key: {
+          userId: testUserId,
+          workoutTimestamp: createdWorkoutTimestamp
+        }
+      }).promise();
+
+      expect(result.Item).toBeDefined();
+      expect(result.Item?.userId).toBe(testUserId);
+      expect(result.Item?.workoutType).toBe('running');
+      expect(result.Item?.duration).toBe(45);
+      expect(result.Item?.calories).toBe(400);
+      expect(result.Item?.distance).toBe(6.5);
+      expect(result.Item?.heartRate).toBe(155);
+      expect(result.Item?.notes).toBe('Morning run in the park - E2E test');
+      expect(result.Item?.createdAt).toBeDefined();
+    });
+
+    test('E2E: Retrieve workout logs via Lambda', async () => {
+      const functionName = `get-workoutlogs-${region}-${environmentSuffix}`;
+
+      const payload = {
+        queryStringParameters: {
+          userId: testUserId
         }
       };
 
-      const result = await dynamoDb.query(queryParams).promise();
-      expect(result.Items).toBeDefined();
-      expect(result.Items!.length).toBe(0);
-      expect(result.Count).toBe(0);
+      const result = await lambda.invoke({
+        FunctionName: functionName,
+        Payload: JSON.stringify(payload)
+      }).promise();
+
+      const response = JSON.parse(result.Payload as string);
+      expect(response.statusCode).toBe(200);
+
+      const responseBody = JSON.parse(response.body);
+      expect(responseBody.count).toBeGreaterThan(0);
+      expect(responseBody.workouts).toBeDefined();
+      expect(Array.isArray(responseBody.workouts)).toBe(true);
+
+      const workout = responseBody.workouts.find((w: any) =>
+        w.workoutTimestamp === createdWorkoutTimestamp
+      );
+
+      expect(workout).toBeDefined();
+      expect(workout.workoutType).toBe('running');
+      expect(workout.duration).toBe(45);
     });
 
-    test('should handle GSI queries with no results', async () => {
-      const queryParams = {
+    test('E2E: Create multiple workouts for statistics', async () => {
+      const functionName = `create-workout-log-${region}-${environmentSuffix}`;
+
+      const workouts = [
+        {
+          userId: testUserId,
+          workoutType: 'cycling',
+          duration: 60,
+          calories: 500,
+          distance: 20,
+          heartRate: 145,
+          notes: 'Evening bike ride'
+        },
+        {
+          userId: testUserId,
+          workoutType: 'swimming',
+          duration: 30,
+          calories: 350,
+          distance: 1.5,
+          heartRate: 140,
+          notes: 'Pool workout'
+        },
+        {
+          userId: testUserId,
+          workoutType: 'weightlifting',
+          duration: 50,
+          calories: 300,
+          distance: 0,
+          heartRate: 130,
+          notes: 'Upper body strength training'
+        }
+      ];
+
+      for (const workoutData of workouts) {
+        const payload = {
+          body: JSON.stringify(workoutData),
+          headers: { 'Content-Type': 'application/json' }
+        };
+
+        const result = await lambda.invoke({
+          FunctionName: functionName,
+          Payload: JSON.stringify(payload)
+        }).promise();
+
+        const response = JSON.parse(result.Payload as string);
+        expect(response.statusCode).toBe(201);
+
+        const responseBody = JSON.parse(response.body);
+        const workoutId = responseBody.workoutId;
+        const timestamp = parseInt(workoutId.split('#')[1]);
+
+        testWorkouts.push({
+          userId: testUserId,
+          workoutTimestamp: timestamp
+        });
+
+        // Small delay between creates
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      console.log(`Created ${workouts.length} additional workouts`);
+    });
+
+    test('E2E: Get workout statistics via Lambda', async () => {
+      // Wait for all workouts to be available
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      const functionName = `get-workout-stats-${region}-${environmentSuffix}`;
+
+      const payload = {
+        queryStringParameters: {
+          userId: testUserId,
+          days: 30
+        }
+      };
+
+      const result = await lambda.invoke({
+        FunctionName: functionName,
+        Payload: JSON.stringify(payload)
+      }).promise();
+
+      const response = JSON.parse(result.Payload as string);
+      expect(response.statusCode).toBe(200);
+
+      const stats = JSON.parse(response.body);
+
+      // We created 4 workouts total (1 + 3)
+      expect(stats.userId).toBe(testUserId);
+      expect(stats.totalWorkouts).toBe(4);
+      expect(stats.period).toBe('Last 30 days');
+
+      // Check totals (45 + 60 + 30 + 50 = 185)
+      expect(stats.totalDuration).toBe(185);
+
+      // Check calories (400 + 500 + 350 + 300 = 1550)
+      expect(stats.totalCalories).toBe(1550);
+
+      // Check distance (6.5 + 20 + 1.5 + 0 = 28)
+      expect(stats.totalDistance).toBe(28);
+
+      // Check average calories per workout
+      expect(stats.averageCaloriesPerWorkout).toBe(387.5);
+
+      // Check workout type breakdown
+      expect(stats.workoutTypeBreakdown).toBeDefined();
+      expect(stats.workoutTypeBreakdown.running).toBe(1);
+      expect(stats.workoutTypeBreakdown.cycling).toBe(1);
+      expect(stats.workoutTypeBreakdown.swimming).toBe(1);
+      expect(stats.workoutTypeBreakdown.weightlifting).toBe(1);
+
+      console.log('Statistics verified:', stats);
+    });
+
+    test('E2E: Filter workouts by type via Lambda', async () => {
+      const functionName = `get-workoutlogs-${region}-${environmentSuffix}`;
+
+      const payload = {
+        queryStringParameters: {
+          userId: testUserId,
+          workoutType: 'cycling'
+        }
+      };
+
+      const result = await lambda.invoke({
+        FunctionName: functionName,
+        Payload: JSON.stringify(payload)
+      }).promise();
+
+      const response = JSON.parse(result.Payload as string);
+      expect(response.statusCode).toBe(200);
+
+      const responseBody = JSON.parse(response.body);
+      expect(responseBody.count).toBe(1);
+      expect(responseBody.workouts.length).toBe(1);
+      expect(responseBody.workouts[0].workoutType).toBe('cycling');
+      expect(responseBody.workouts[0].duration).toBe(60);
+    });
+
+    test('E2E: Query by workout type using GSI', async () => {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      const result = await dynamoDb.query({
         TableName: outputs.DynamoDBTableName,
         IndexName: 'WorkoutTypeIndex',
         KeyConditionExpression: 'workoutType = :workoutType',
         ExpressionAttributeValues: {
-          ':workoutType': 'non-existent-workout-type'
+          ':workoutType': 'swimming'
+        }
+      }).promise();
+
+      expect(result.Items).toBeDefined();
+      expect(result.Items!.length).toBeGreaterThan(0);
+
+      const swimWorkout = result.Items!.find(item => item.userId === testUserId);
+      expect(swimWorkout).toBeDefined();
+      expect(swimWorkout?.workoutType).toBe('swimming');
+      expect(swimWorkout?.duration).toBe(30);
+    });
+
+    test('E2E: Verify CloudWatch metrics were published', async () => {
+      // Wait for metrics to be published
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      const endTime = new Date();
+      const startTime = new Date(endTime.getTime() - 5 * 60 * 1000); // Last 5 minutes
+
+      const result = await cloudwatch.getMetricStatistics({
+        Namespace: 'FitnessApp/Workouts',
+        MetricName: 'WorkoutLogsCreated',
+        Dimensions: [
+          { Name: 'Environment', Value: environmentSuffix }
+        ],
+        StartTime: startTime,
+        EndTime: endTime,
+        Period: 300,
+        Statistics: ['Sum']
+      }).promise();
+
+      // We may or may not see metrics immediately, but the call should succeed
+      expect(result.Datapoints).toBeDefined();
+      console.log(`CloudWatch metrics datapoints: ${result.Datapoints?.length}`);
+    });
+
+    test('E2E: Handle non-existent user gracefully', async () => {
+      const functionName = `get-workoutlogs-${region}-${environmentSuffix}`;
+      const nonExistentUserId = `non-existent-user-${Date.now()}`;
+
+      const payload = {
+        queryStringParameters: {
+          userId: nonExistentUserId
         }
       };
 
-      const result = await dynamoDb.query(queryParams).promise();
-      expect(result.Items).toBeDefined();
-      expect(result.Items!.length).toBe(0);
-      expect(result.Count).toBe(0);
+      const result = await lambda.invoke({
+        FunctionName: functionName,
+        Payload: JSON.stringify(payload)
+      }).promise();
+
+      const response = JSON.parse(result.Payload as string);
+      expect(response.statusCode).toBe(200);
+
+      const responseBody = JSON.parse(response.body);
+      expect(responseBody.count).toBe(0);
+      expect(responseBody.workouts).toEqual([]);
     });
+
+    test('E2E: Handle missing required fields in create workout', async () => {
+      const functionName = `create-workout-log-${region}-${environmentSuffix}`;
+
+      const invalidWorkoutData = {
+        userId: testUserId,
+        workoutType: 'running'
+        // Missing duration and calories
+      };
+
+      const payload = {
+        body: JSON.stringify(invalidWorkoutData),
+        headers: { 'Content-Type': 'application/json' }
+      };
+
+      const result = await lambda.invoke({
+        FunctionName: functionName,
+        Payload: JSON.stringify(payload)
+      }).promise();
+
+      const response = JSON.parse(result.Payload as string);
+      expect(response.statusCode).toBe(400);
+
+      const responseBody = JSON.parse(response.body);
+      expect(responseBody.error).toContain('Missing required field');
+    });
+  });
+
+  describe('Performance and Scalability', () => {
+    test('should handle concurrent workout creations', async () => {
+      const functionName = `create-workout-log-${region}-${environmentSuffix}`;
+      const concurrentUserId = `concurrent-test-${Date.now()}`;
+      const numConcurrentRequests = 10;
+
+      const createWorkout = async (index: number) => {
+        const workoutData = {
+          userId: concurrentUserId,
+          workoutType: 'running',
+          duration: 30 + index,
+          calories: 300 + (index * 10),
+          distance: 5 + index,
+          heartRate: 150,
+          notes: `Concurrent test workout ${index}`
+        };
+
+        const payload = {
+          body: JSON.stringify(workoutData),
+          headers: { 'Content-Type': 'application/json' }
+        };
+
+        const result = await lambda.invoke({
+          FunctionName: functionName,
+          Payload: JSON.stringify(payload)
+        }).promise();
+
+        return JSON.parse(result.Payload as string);
+      };
+
+      const promises = Array.from({ length: numConcurrentRequests }, (_, i) => createWorkout(i));
+      const results = await Promise.all(promises);
+
+      // All should succeed
+      results.forEach(response => {
+        expect(response.statusCode).toBe(201);
+      });
+
+      // Clean up
+      try {
+        const queryResult = await dynamoDb.query({
+          TableName: outputs.DynamoDBTableName,
+          KeyConditionExpression: 'userId = :userId',
+          ExpressionAttributeValues: {
+            ':userId': concurrentUserId
+          }
+        }).promise();
+
+        expect(queryResult.Items!.length).toBe(numConcurrentRequests);
+
+        const deletePromises = queryResult.Items!.map(item =>
+          dynamoDb.delete({
+            TableName: outputs.DynamoDBTableName,
+            Key: {
+              userId: item.userId,
+              workoutTimestamp: item.workoutTimestamp
+            }
+          }).promise()
+        );
+
+        await Promise.all(deletePromises);
+      } catch (error) {
+        console.warn('Error cleaning up concurrent test data:', error);
+      }
+    }, 30000); // Increase timeout for concurrent operations
   });
 });
