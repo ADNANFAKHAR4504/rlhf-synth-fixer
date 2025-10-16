@@ -1,0 +1,41 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "B93231",
+  "team": "1",
+  "startedAt": "2025-10-15T11:03:48.281Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "A financial services company operates a mission-critical trading platform and needs to ensure full business continuity even during regional AWS outages. The solution must achieve RPO < 1 minute and RTO < 5 minutes during failover with automatic failover requiring no manual intervention. The system must maintain data consistency, service continuity, and cross-region availability with comprehensive monitoring, alerting, and health checks that automatically trigger failover when an outage is detected.",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Tables",
+    "Security Groups",
+    "Aurora RDS Global Database",
+    "DynamoDB",
+    "Route 53",
+    "Transit Gateway",
+    "Application Load Balancer",
+    "Lambda",
+    "KMS",
+    "SNS",
+    "CloudWatch",
+    "CloudTrail",
+    "S3",
+    "IAM"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Gahdloot",
+  "dockerS3Location": ""
+}
