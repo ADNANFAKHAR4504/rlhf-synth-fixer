@@ -20,15 +20,11 @@ terraform {
 # }
 provider "aws" {
   alias  = "use1"
-  region = var.aws_region_use1 != "" ? var.aws_region_use1 : (
-    try(env.AWS_REGION, "us-east-1")
-  )
+  region = "us-east-1"
 }
 
 # eu-west-1 alias used by resources: provider = aws.euw1
 provider "aws" {
   alias  = "euw1"
-  region = var.aws_region_euw1 != "" ? var.aws_region_euw1 : (
-    try(env.AWS_REGION_ALT, "eu-west-1")
-  )
+  region = "eu-west-1"
 }
