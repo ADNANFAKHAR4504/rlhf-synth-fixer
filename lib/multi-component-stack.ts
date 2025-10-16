@@ -195,6 +195,9 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
         iam.ManagedPolicy.fromAwsManagedPolicyName(
           'service-role/AWSLambdaVPCAccessExecutionRole'
         ),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess'
+        ),
       ],
     });
 
@@ -335,6 +338,7 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
         S3_BUCKET: staticFilesBucket.bucketName,
         SQS_QUEUE_URL: asyncQueue.queueUrl,
       },
+      tracing: lambda.Tracing.ACTIVE,
       role: lambdaRole,
       logRetention: logs.RetentionDays.ONE_WEEK,
       reservedConcurrentExecutions: 100,
