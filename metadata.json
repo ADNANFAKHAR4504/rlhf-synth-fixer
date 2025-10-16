@@ -1,9 +1,9 @@
 {
   "platform": "cdk",
   "language": "ts",
-  "complexity": "moderate",
+  "complexity": "medium",
   "team": "synth",
-  "turn_type": "synth_infra",
+  "turn_type": "single",
   "startedAt": "2025-10-14T05:28:52+05:30",
   "subtask": "Failure Recovery and High Availability",
   "background": "Infrastructure task for CDK",
