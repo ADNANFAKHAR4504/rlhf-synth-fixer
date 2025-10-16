@@ -450,15 +450,24 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       const command = new DescribeTrailsCommand({});
       const response = await cloudTrailClient.send(command);
 
-      // Use the first available CloudTrail trail for testing
-      const trail = response.trailList?.[0];
+      // Filter for CloudTrail trails that are likely from our stack or relevant for testing
+      const trail = response.trailList?.find(t => 
+        // Look for trails that might be from our stack, have trail-related names, or are multi-region
+        (t.Name?.includes('tapstack') || 
+         t.Name?.includes('pr4042') ||
+         t.Name?.includes('cloudtrail') ||
+         t.Name?.includes('trail') ||
+         t.IsMultiRegionTrail === true) &&
+        // Ensure it's active and logging
+        t.IsLogging !== false
+      ) || response.trailList?.[0]; /
       
       if (!trail) {
         console.warn('No CloudTrail trails found in the region');
         return;
       }
       
-      console.log(`Testing with CloudTrail: ${trail.Name}`);
+      console.log(`Testing with CloudTrail: ${trail.Name} (MultiRegion: ${trail.IsMultiRegionTrail})`);
       
       expect(trail).toBeDefined();
       expect(trail!.Name).toBeDefined();
@@ -1442,15 +1451,24 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
         const cloudTrailCommand = new DescribeTrailsCommand({});
         const cloudTrailResponse = await cloudTrailClient.send(cloudTrailCommand);
         
-        // Use the first available CloudTrail trail for testing
-        const trail = cloudTrailResponse.trailList?.[0];
+        // Filter for CloudTrail trails that are likely from our stack or relevant for testing
+        const trail = cloudTrailResponse.trailList?.find(t => 
+          // Look for trails that might be from our stack, have trail-related names, or are multi-region
+          (t.Name?.includes('tapstack') || 
+           t.Name?.includes('pr4042') ||
+           t.Name?.includes('cloudtrail') ||
+           t.Name?.includes('trail') ||
+           t.IsMultiRegionTrail === true) &&
+          // Ensure it's active and logging
+          t.IsLogging !== false
+        ) || cloudTrailResponse.trailList?.[0]; 
         
         if (!trail) {
           console.warn('No CloudTrail trails found in the region');
           return;
         }
         
-        console.log(`Testing with CloudTrail: ${trail.Name}`);
+        console.log(`Testing with CloudTrail: ${trail.Name} (MultiRegion: ${trail.IsMultiRegionTrail})`);
         
         expect(trail).toBeDefined();
         expect(trail!.IncludeGlobalServiceEvents).toBe(true);
@@ -1917,8 +1935,19 @@ def lambda_handler(event, context):
           const trailsResponse = await cloudTrailClient.send(describeTrailsCommand);
           
           if (trailsResponse.trailList && trailsResponse.trailList.length > 0) {
-            const trail = trailsResponse.trailList[0];
-            console.log(`Testing CloudTrail logging with: ${trail.Name}`);
+            // Filter for CloudTrail trails that are likely from our stack or relevant for testing
+            const trail = trailsResponse.trailList.find(t => 
+              // Look for trails that might be from our stack, have trail-related names, or are multi-region
+              (t.Name?.includes('tapstack') || 
+               t.Name?.includes('pr4042') ||
+               t.Name?.includes('cloudtrail') ||
+               t.Name?.includes('trail') ||
+               t.IsMultiRegionTrail === true) &&
+              // Ensure it's active and logging
+              t.IsLogging !== false
+            ) || trailsResponse.trailList[0]; 
+            
+            console.log(`Testing CloudTrail logging with: ${trail.Name} (MultiRegion: ${trail.IsMultiRegionTrail})`);
             
             const getTrailStatusCommand = new GetTrailStatusCommand({
               Name: trail.Name
