@@ -372,7 +372,10 @@ export class Infrastructure extends cdk.Stack {
     userDataScript = userDataScript
       .replace(/__AWS_REGION__/g, this.region)
       .replace(/__S3_BUCKET_NAME__/g, this.logBucket.bucketName)
-      .replace(/__DYNAMODB_TABLE_NAME__/g, this.globalTable?.tableName || `webapp-data-${this.environmentSuffix}`)
+      .replace(
+        /__DYNAMODB_TABLE_NAME__/g,
+        this.globalTable?.tableName || `webapp-data-${this.environmentSuffix}`
+      )
       .replace(/__ENVIRONMENT_SUFFIX__/g, this.environmentSuffix)
       .replace(/__PREFIX__/g, prefix);
 
