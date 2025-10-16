@@ -242,6 +242,29 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
+  describe('Secrets Manager Configuration', () => {
+    test('should create DB secret for RDS credentials', () => {
+      const secret = template.Resources.DBSecret;
+      expect(secret.Type).toBe('AWS::SecretsManager::Secret');
+    });
+
+    test('should create DB secret with auto-generated password', () => {
+      const secret = template.Resources.DBSecret;
+      expect(secret.Properties.GenerateSecretString).toBeDefined();
+      expect(secret.Properties.GenerateSecretString.SecretStringTemplate).toBe('{"username": "admin"}');
+      expect(secret.Properties.GenerateSecretString.GenerateStringKey).toBe('password');
+      expect(secret.Properties.GenerateSecretString.PasswordLength).toBe(32);
+      expect(secret.Properties.GenerateSecretString.ExcludeCharacters).toBe('"@/\\');
+      expect(secret.Properties.GenerateSecretString.RequireEachIncludedType).toBe(true);
+    });
+
+    test('should create DB secret with correct name and description', () => {
+      const secret = template.Resources.DBSecret;
+      expect(secret.Properties.Name).toEqual({ 'Fn::Sub': 'RDS-Credentials-${EnvironmentSuffix}' });
+      expect(secret.Properties.Description).toBe('RDS MySQL database master credentials');
+    });
+  });
+
   describe('IAM Role Configuration', () => {
     test('should create EC2 IAM role with correct assume role policy', () => {
       const role = template.Resources.EC2InstanceRole;
@@ -327,8 +350,8 @@ describe('TapStack CloudFormation Template', () => {
       const instance = template.Resources.EC2Instance1;
       expect(instance.Properties.UserData).toBeDefined();
       expect(instance.Properties.UserData['Fn::Base64']).toBeDefined();
-      expect(instance.Properties.UserData['Fn::Base64']['Fn::Sub']).toContain('yum update -y');
-      expect(instance.Properties.UserData['Fn::Base64']['Fn::Sub']).toContain('yum install -y mysql amazon-cloudwatch-agent');
+      expect(instance.Properties.UserData['Fn::Base64']).toContain('yum update -y');
+      expect(instance.Properties.UserData['Fn::Base64']).toContain('yum install -y mysql amazon-cloudwatch-agent');
     });
 
     test('should create EC2 instance 1 with correct tags', () => {
@@ -383,8 +406,8 @@ describe('TapStack CloudFormation Template', () => {
       const instance = template.Resources.EC2Instance2;
       expect(instance.Properties.UserData).toBeDefined();
       expect(instance.Properties.UserData['Fn::Base64']).toBeDefined();
-      expect(instance.Properties.UserData['Fn::Base64']['Fn::Sub']).toContain('yum update -y');
-      expect(instance.Properties.UserData['Fn::Base64']['Fn::Sub']).toContain('yum install -y mysql amazon-cloudwatch-agent');
+      expect(instance.Properties.UserData['Fn::Base64']).toContain('yum update -y');
+      expect(instance.Properties.UserData['Fn::Base64']).toContain('yum install -y mysql amazon-cloudwatch-agent');
     });
 
     test('should create EC2 instance 2 with correct tags', () => {
@@ -426,10 +449,14 @@ describe('TapStack CloudFormation Template', () => {
       expect(rds.Properties.DBInstanceClass).toEqual({ Ref: 'DBInstanceClass' });
     });
 
-    test('should create RDS instance with correct credentials from parameters', () => {
+    test('should create RDS instance with credentials from Secrets Manager', () => {
       const rds = template.Resources.RDSInstance;
-      expect(rds.Properties.MasterUsername).toEqual({ Ref: 'DBUsername' });
-      expect(rds.Properties.MasterUserPassword).toEqual({ Ref: 'DBPassword' });
+      expect(rds.Properties.MasterUsername).toEqual({
+        'Fn::Sub': '{{resolve:secretsmanager:${DBSecret}:SecretString:username}}'
+      });
+      expect(rds.Properties.MasterUserPassword).toEqual({
+        'Fn::Sub': '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}'
+      });
       expect(rds.Properties.DBName).toEqual({ Ref: 'DBName' });
     });
 

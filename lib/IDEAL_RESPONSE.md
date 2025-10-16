@@ -77,9 +77,7 @@ The architecture spans two Availability Zones with subnets in each zone, providi
           },
           "Parameters": [
             "DBInstanceClass",
-            "DBName",
-            "DBUsername",
-            "DBPassword"
+            "DBName"
           ]
         }
       ]
@@ -153,24 +151,6 @@ The architecture spans two Availability Zones with subnets in each zone, providi
       "MinLength": "1",
       "MaxLength": "64",
       "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9]*$"
-    },
-    "DBUsername": {
-      "Type": "String",
-      "Default": "admin",
-      "Description": "Database master username",
-      "MinLength": "1",
-      "MaxLength": "16",
-      "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9]*$",
-      "NoEcho": true
-    },
-    "DBPassword": {
-      "Type": "String",
-      "Description": "Database master password",
-      "MinLength": "8",
-      "MaxLength": "41",
-      "AllowedPattern": "^[a-zA-Z0-9]*$",
-      "NoEcho": true,
-      "ConstraintDescription": "Must contain only alphanumeric characters, minimum 8 characters"
     }
   },
   "Resources": {
@@ -649,6 +629,40 @@ The architecture spans two Availability Zones with subnets in each zone, providi
         ]
       }
     },
+    "DBSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "RDS-Credentials-${EnvironmentSuffix}"
+        },
+        "Description": "RDS MySQL database master credentials",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\": \"admin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\",
+          "RequireEachIncludedType": true
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "DBSecret-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "CloudEnvironmentSetup"
+          }
+        ]
+      }
+    },
     "EC2InstanceRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
@@ -864,10 +878,10 @@ The architecture spans two Availability Zones with subnets in each zone, providi
         "Engine": "mysql",
         "EngineVersion": "8.0.43",
         "MasterUsername": {
-          "Ref": "DBUsername"
+          "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:username}}"
         },
         "MasterUserPassword": {
-          "Ref": "DBPassword"
+          "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}"
         },
         "DBName": {
           "Ref": "DBName"
