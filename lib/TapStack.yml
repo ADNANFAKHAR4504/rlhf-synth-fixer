@@ -66,7 +66,7 @@ Mappings:
 Resources:
 
   ########################
-  # Central KMS Key & Alias
+  # Central KMS Key & Alias (improved policy for CloudTrail & S3)
   ########################
   TapStackKmsKey:
     Type: AWS::KMS::Key
@@ -75,7 +75,7 @@ Resources:
       KeyPolicy:
         Version: "2012-10-17"
         Statement:
-          # 1) Full admin control for account root (allows account principals to be added by IAM)
+          # Full control for account root (admin)
           - Sid: AllowRootAccountFullAccess
             Effect: Allow
             Principal:
@@ -83,37 +83,49 @@ Resources:
             Action: "kms:*"
             Resource: "*"
 
-          # 2) Allow CloudTrail service to use the key (required for CloudTrail deliveries)
+          # Allow CloudTrail service to use the key (for multi-region trails)
           - Sid: AllowCloudTrailToUseKey
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
             Action:
-              - kms:GenerateDataKey*
               - kms:Encrypt
               - kms:Decrypt
               - kms:ReEncrypt*
+              - kms:GenerateDataKey*
               - kms:DescribeKey
+              - kms:CreateGrant
             Resource: "*"
             Condition:
+              # Allow the CloudTrail service when it uses this key via CloudTrail in any region
+              StringLike:
+                kms:ViaService: "cloudtrail.*.amazonaws.com"
               StringEquals:
-                kms:ViaService: !Sub "cloudtrail.${AWS::Region}.amazonaws.com"
                 aws:SourceAccount: !Ref "AWS::AccountId"
 
-          # 3) Allow S3 service to use the key when it needs to write objects (defensive)
+          # Allow S3 service to use the key while writing objects (defensive)
           - Sid: AllowS3ToUseKeyForPutObject
             Effect: Allow
             Principal:
               Service: s3.amazonaws.com
             Action:
               - kms:GenerateDataKey*
-              - kms:Encrypt
-              - kms:ReEncrypt*
               - kms:Decrypt
             Resource: "*"
             Condition:
               StringEquals:
                 aws:SourceAccount: !Ref "AWS::AccountId"
+
+          # Allow IAM principals in this account (so IAM users/roles can be granted use via IAM)
+          - Sid: AllowUseByAccountRoles
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:root"
+            Action:
+              - kms:DescribeKey
+              - kms:ListKeys
+              - kms:ListGrants
+            Resource: "*"
 
   TapStackKmsAlias:
     Type: AWS::KMS::Alias
@@ -122,7 +134,7 @@ Resources:
       TargetKeyId: !Ref TapStackKmsKey
 
   ########################
-  # S3 buckets (SSE-KMS, block public, versioning, access logging)
+  # S3: logging bucket, cloudtrail bucket, application bucket (SSE-KMS)
   ########################
   TapStackLogBucket:
     Type: AWS::S3::Bucket
@@ -746,7 +758,7 @@ Resources:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t3.micro
-      # UPDATE: replace with a valid region AMI or remove resource
+      # IMPORTANT: Replace with a valid region AMI if you keep this resource
       ImageId: ami-0c94855ba95c71c99
       SubnetId: !Ref PrivateSubnet1
       IamInstanceProfile: !Ref TapStackInstanceProfile
@@ -758,12 +770,13 @@ Resources:
 
   ########################
   # CloudTrail (multi-region)
-  # Depends only on the S3 bucket policy so CloudTrail validation succeeds.
+  # Ensure bucket policy & KMS alias exist before CloudTrail validates
   ########################
   TapStackCloudTrail:
     Type: AWS::CloudTrail::Trail
     DependsOn:
       - TapStackCloudTrailBucketPolicy
+      - TapStackKmsAlias
     Properties:
       TrailName: !Sub "${Environment}-tapstack-cloudtrail"
       IsMultiRegionTrail: true
@@ -860,5 +873,7 @@ Outputs:
 Metadata:
   cfn-lint:
     notes: >
-      - Replace the EC2 ImageId placeholder with a valid regional AMI (or remove the EC2 resource).
-      - For organization-wide centralized CloudTrail across accounts, prefer an Organizations-based trail + StackSets.
+      - Before deploying, replace the EC2 ImageId placeholder (or remove EC2).
+      - Deploy per-region (us-east-1, eu-west-1). If CloudTrail is still failing,
+        paste the exact CloudFormation event failure message (copy-paste) so I can debug further.
+
