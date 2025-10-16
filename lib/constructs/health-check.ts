@@ -126,8 +126,9 @@ export class HealthCheckSystem extends Construct {
   private createHealthDashboard(regions: string[]) {
     const envSuffix =
       cdk.Stack.of(this).node.tryGetContext('environmentSuffix') || 'dev';
+    const stackRegion = cdk.Stack.of(this).region;
     const dashboard = new cloudwatch.Dashboard(this, 'HealthDashboard', {
-      dashboardName: `financial-app-health-${envSuffix}`,
+      dashboardName: `financial-app-health-${stackRegion}-${envSuffix}`,
     });
 
     const widgets = regions.map(
