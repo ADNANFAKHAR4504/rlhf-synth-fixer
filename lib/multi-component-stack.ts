@@ -196,9 +196,11 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
         iam.ManagedPolicy.fromAwsManagedPolicyName(
           'service-role/AWSLambdaVPCAccessExecutionRole'
         ),
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess'
-        ),
+        // Use the managed policy name (not a full ARN) so CDK renders the
+        // correct ARN for the current partition. The earlier code used a
+        // duplicated ARN string which produced an invalid managed policy name
+        // and caused CloudFormation to reject the role creation.
+        iam.ManagedPolicy.fromAwsManagedPolicyName('AWSXRayDaemonWriteAccess'),
       ],
     });
 
