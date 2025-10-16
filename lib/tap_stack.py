@@ -174,9 +174,6 @@ class TapStack(pulumi.ComponentResource):
         )
         
         # EventBridge target
-        # Note: AWS requires targets to be removed before deleting the rule
-        # Pulumi automatically handles this during normal destroy operations
-        # For manual cleanup, run: aws events remove-targets --rule <rule-name> --ids <target-id>
         health_check_target = aws.cloudwatch.EventTarget(
             'health-check-target',
             rule=health_check_rule.name,
