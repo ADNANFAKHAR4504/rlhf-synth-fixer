@@ -1,6 +1,6 @@
-1. Generated response by the model had failures related to the security group naming conventions.
+1. Generated response by the model had failures related to the security group naming conventions, it used the sg with naming starrting from sg- which is not allowed as per AWS rules.
 
-2. Model used wrong IAM role for config 
+2. Model used wrong IAM role arn for aws config setup which is again not allowed as per AWS rules and failed the deployment. Model worngly used this ARN with config which is not allowed.
 ```
 
 ╷
