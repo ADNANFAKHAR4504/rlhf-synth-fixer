@@ -376,14 +376,15 @@ export class TapStack extends TerraformStack {
       }),
     });
 
+    // **FIX**: Corrected the path to include the 'lambda' subdirectory.
     const failoverLambda = new LambdaFunction(this, 'FailoverLambda', {
       functionName: `automated-failover-${randomSuffix}`,
       runtime: 'python3.9',
       handler: 'index.handler',
       role: failoverLambdaRole.arn,
       timeout: 60,
-      filename: `${__dirname}/lambda_failover.zip`,
-      sourceCodeHash: Fn.filebase64sha256(`${__dirname}/lambda_failover.py`),
+      filename: `${__dirname}/lambda/failover.zip`,
+      sourceCodeHash: Fn.filebase64sha256(`${__dirname}/lambda/failover.zip`),
       tags: commonTags,
     });
 
@@ -412,7 +413,7 @@ export class TapStack extends TerraformStack {
       sourceArn: failoverRule.arn,
     });
 
-    new SsmDocument(this, 'DrTestDocument', {
+    const ssmDoc = new SsmDocument(this, 'DrTestDocument', {
       name: `dr-test-simulation-${randomSuffix}`,
       documentType: 'Automation',
       documentFormat: 'YAML',
@@ -449,10 +450,13 @@ mainSteps:
           },
         ],
       }),
-      managedPolicyArns: [
-        'arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup',
-      ],
       tags: commonTags,
+    });
+
+    new IamRolePolicyAttachment(this, 'BackupRolePolicyAttachment', {
+      role: backupRole.name,
+      policyArn:
+        'arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup',
     });
 
     const backupPlan = new BackupPlan(this, 'BackupPlan', {
@@ -472,7 +476,6 @@ mainSteps:
       iamRoleArn: backupRole.arn,
       planId: backupPlan.id,
       resources: [dbCluster.arn],
-      // **FIX**: Removed the tags property as it's not supported here.
     });
 
     new Route53HealthCheck(this, 'AlbHealthCheck', {
@@ -500,5 +503,6 @@ mainSteps:
       value: failoverLambda.functionName,
     });
     new TerraformOutput(this, 'BackupVaultName', { value: backupVault.name });
+    new TerraformOutput(this, 'SsmDocumentName', { value: ssmDoc.name });
   }
 }
