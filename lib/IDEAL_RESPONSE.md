@@ -26,7 +26,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 6.0"
     }
     random = {
       source  = "hashicorp/random"
@@ -616,76 +616,3 @@ output "vpc_flow_log_id" {
   value       = aws_flow_log.webapp_vpc_flow_log.id
 }
 ```
-
----
-
-## Outputs
-
-The infrastructure provides the following outputs:
-
-1. **instance_id** - ID of the EC2 instance for reference and management
-2. **private_ip_address** - Private IP address for internal access
-3. **sns_topic_arn** - SNS topic ARN for alarm notifications
-4. **cloudwatch_alarm_names** - Array of all configured alarm names
-5. **vpc_flow_log_group** - CloudWatch Log Group name for VPC Flow Logs
-6. **vpc_flow_log_id** - VPC Flow Log resource ID for management
-
-## Deployment
-
-Deploy the infrastructure using standard Terraform commands:
-
-```bash
-terraform init
-terraform plan
-terraform apply
-```
-
-## Features
-
-- ✅ **EC2 instance with Amazon Linux 2** - Latest AMI with automatic updates
-- ✅ **Encrypted EBS volumes** - Root and application volumes with AWS managed encryption
-- ✅ **Private networking** - No public IP addresses, secure internal communication
-- ✅ **IMDSv2 enforcement** - Modern instance metadata service security
-- ✅ **SSM integration** - Secure shell access without SSH keys
-- ✅ **DLM automated backups** - Daily snapshots with 7-day retention
-- ✅ **CloudWatch monitoring with 3 alarms** - CPU, status checks, EBS throughput
-- ✅ **SNS email notifications** - Real-time alert delivery to operations team
-- ✅ **VPC Flow Logs for compliance** - Network traffic monitoring and security auditing
-
-## Security
-
-- **Encryption at rest** - All EBS volumes encrypted with AWS managed keys
-- **IMDSv2 enforcement** - Prevents credential theft via metadata service
-- **Private networking** - No public IP addresses, internal-only access
-- **Restrictive security groups** - SSH and HTTPS only from internal networks (10.0.0.0/8)
-- **VPC Flow Logs with 7-day retention** - Network traffic monitoring for security compliance
-- **IAM roles with minimal permissions** - Principle of least privilege for all services
-
-## Monitoring
-
-- **CPU Utilization Alarm**: 80% threshold with 5-minute evaluation periods
-- **Instance Status Check**: Immediate notification on system or instance failure
-- **EBS Throughput Alarm**: 95% capacity alert to prevent performance degradation
-- **SNS Notifications**: Email alerts delivered to operations team for immediate response
-- **VPC Flow Logs**: Network traffic monitoring for security analysis and compliance
-
-## Cost Optimization
-
-- **GP3 volumes** - Cost-optimized storage with baseline performance
-- **7-day retention** - Balanced backup protection vs. storage costs
-- **Enhanced cost allocation tags** - CostCenter, Application, Owner for detailed billing analysis
-- **CloudWatch Logs retention** - 7-day retention to minimize long-term storage costs
-
-## Compliance
-
-- **Enhanced cost allocation tags** - 6 comprehensive tags for financial tracking
-- **VPC Flow Logs for audit** - Network traffic logging for security compliance
-- **No skip_destroy policies** - Full infrastructure destroyability for testing environments
-- **AWS Provider 5.x compatibility** - Tested and validated against latest provider standards
-
-## Notes
-
-- All resources use unique naming with random suffixes to prevent conflicts
-- Infrastructure is fully destroyable for development and testing environments
-- CloudWatch alarms provide comprehensive monitoring coverage
-- VPC Flow Logs enable network security monitoring and compliance reporting

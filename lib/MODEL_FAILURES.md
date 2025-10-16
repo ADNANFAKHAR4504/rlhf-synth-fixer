@@ -49,10 +49,6 @@ Warning: Value is base64 encoded
 The value is base64 encoded. If you want to use base64 encoding, please use the user_data_base64 argument. user_data attribute is set as cleartext in state
 ```
 
-**Root Cause**: 
-
-The user_data attribute expects cleartext input. When using base64encode() function, AWS Provider 5.x requires the user_data_base64 attribute to ensure proper state management.
-
 **Corrected Code**:
 ```
 resource "aws_instance" "webapp_instance" {
@@ -88,92 +84,8 @@ resource "aws_instance" "webapp_instance" {
   )
 }
 ```
----
 
-## Error 2: skip_destroy Blocks Resource Cleanup
-
-**Issue**: The `aws_volume_attachment` resource had `skip_destroy = true` which blocks Claude QA Stage 6 cleanup, preventing proper testing workflow completion.
-
-**Original Code**:
-```hcl
-resource "aws_volume_attachment" "webapp_volume_attachment" {
-  device_name = "/dev/sdf"
-  volume_id   = aws_ebs_volume.webapp_volume.id
-  instance_id = aws_instance.webapp_instance.id
-
-  # Prevent accidental deletion
-  skip_destroy = true
-}
-```
-
-**Error Message**: Not a deployment error, but blocks automated QA cleanup process.
-
-**Root Cause**: The `skip_destroy = true` lifecycle policy prevents Terraform from destroying the volume attachment during cleanup, causing the QA pipeline to fail at the cleanup stage. Data protection should come from DLM snapshots, not from preventing Terraform destruction.
-
-**Fix Applied**:
-```hcl
-resource "aws_volume_attachment" "webapp_volume_attachment" {
-  device_name = "/dev/sdf"
-  volume_id   = aws_ebs_volume.webapp_volume.id
-  instance_id = aws_instance.webapp_instance.id
-}
-```
-
-**Prevention**: Use DLM policies for data protection instead of preventing resource destruction. This allows proper cleanup while maintaining data safety through automated backups.
-
-**AWS Best Practice**: Volume attachments should be destroyable for development/testing environments. Production data protection comes from backup strategies, not infrastructure permanence.
-
----
-
-## Error 3: Incorrect AWS Provider Version
-
-**Issue**: Used AWS provider version `~> 6.0` instead of the required `~> 5.0` per QA pipeline standards.
-
-**Original Code**:
-```hcl
-terraform {
-  required_version = ">= 1.0"
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 6.0"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.5"
-    }
-  }
-}
-```
-
-**Error Message**: Provider version mismatch with pipeline requirements.
-
-**Root Cause**: AWS Provider 6.x has different behavior and compatibility requirements. QA pipeline is standardized on Provider 5.x for consistent testing and validation.
-
-**Fix Applied**:
-```hcl
-terraform {
-  required_version = ">= 1.0"
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.5"
-    }
-  }
-}
-```
-
-**Prevention**: Follow master prompt standards for provider versions to ensure compatibility with QA pipeline and testing environments.
-
-**AWS Best Practice**: Use consistent provider versions across environments to avoid deployment inconsistencies and compatibility issues.
-
----
-
-## Error 4: Missing CloudWatch Monitoring
+## Error 2: Missing CloudWatch Monitoring
 
 **Issue**: Infrastructure lacked operational monitoring with CloudWatch alarms and SNS notifications, reducing production readiness.
 
@@ -220,7 +132,7 @@ resource "aws_cloudwatch_metric_alarm" "instance_cpu_high" {
 
 ---
 
-## Error 5: Missing VPC Flow Logs
+## Error 3: Missing VPC Flow Logs
 
 **Issue**: Infrastructure lacked VPC Flow Logs for security compliance and network traffic monitoring.
 
@@ -265,7 +177,7 @@ resource "aws_flow_log" "webapp_vpc_flow_log" {
 
 ---
 
-## Error 6: Limited Cost Allocation Tags
+## Error 4: Limited Cost Allocation Tags
 
 **Issue**: Infrastructure had only 4 cost allocation tags instead of the recommended 6+ for comprehensive financial tracking.
 
@@ -303,7 +215,7 @@ locals {
 
 ---
 
-## Error 7: timestamp() in Tags Causes Plan Inconsistencies
+## Error 5: timestamp() in Tags Causes Plan Inconsistencies
 
 **Issue**: Used `timestamp()` function in tags which causes "Provider produced inconsistent final plan" errors on subsequent runs.
 
@@ -333,20 +245,10 @@ locals {
 
 ## Summary
 
-The MODEL_RESPONSE required **7 critical infrastructure fixes** to reach production-ready state:
+The MODEL_RESPONSE required **5 critical infrastructure fixes** to reach production-ready state:
 
 1. Fix user_data encoding to use user_data_base64 attribute
-2. Remove skip_destroy for cleanup compatibility
-3. Fix provider version to ~> 5.0 for QA compatibility
-4. Add CloudWatch monitoring with alarms and SNS notifications
-5. Add VPC Flow Logs for security compliance
-6. Enhance cost allocation tags for financial tracking
-7. Remove timestamp() function to prevent plan inconsistencies
-
-All fixes focus on:
-- Claude QA pipeline compatibility
-- Operational monitoring and alerting
-- Security compliance and auditing
-- Cost management and optimization
-- AWS Provider 5.x best practices
-- Infrastructure destroyability for testing
+2. Add CloudWatch monitoring with alarms and SNS notifications
+3. Add VPC Flow Logs for security compliance
+4. Enhance cost allocation tags for financial tracking
+5. Remove timestamp() function to prevent plan inconsistencies
