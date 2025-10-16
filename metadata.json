@@ -21,12 +21,19 @@
     "ELB",
     "KMS",
     "Secrets Manager",
-    "CloudTrail"
+    "CloudTrail",
+    "DynamoDB",
+    "Lambda",
+    "EventBridge",
+    "WAF",
+    "ACM",
+    "NAT Gateway"
   ],
   "coverage": {
     "lines": 100,
     "branches": 100
   },
+  "training_quality": 9,
   "author": "kanishkah-turing",
   "dockerS3Location": ""
 }
