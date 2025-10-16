@@ -113,7 +113,7 @@ variable "database_name" {
 variable "db_master_username" {
   description = "Master username for Aurora"
   type        = string
-  default     = "admin"
+  default     = "dbadmin"
   sensitive   = true
 }
 
