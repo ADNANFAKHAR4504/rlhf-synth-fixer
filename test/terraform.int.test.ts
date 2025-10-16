@@ -13,6 +13,7 @@ import {
   DescribeSecurityGroupsCommand,
   DescribeVpcsCommand,
   DescribeSubnetsCommand,
+  DescribeVpcAttributeCommand,
 } from '@aws-sdk/client-ec2';
 import {
   IAMClient,
@@ -299,6 +300,8 @@ describe('EC2 Web Application Infrastructure - Integration Tests (Live)', () => 
   describe('VPC and Networking Validation', () => {
     let vpc: any;
     let subnet: any;
+    let vpcDnsSupport: boolean;
+    let vpcDnsHostnames: boolean;
 
     beforeAll(async () => {
       // Get VPC ID from instance
@@ -316,6 +319,22 @@ describe('EC2 Web Application Infrastructure - Integration Tests (Live)', () => 
       });
       const vpcResponse = await ec2Client.send(vpcCommand);
       vpc = vpcResponse.Vpcs![0];
+
+      // Get VPC DNS support attribute
+      const dnsSupportCommand = new DescribeVpcAttributeCommand({
+        VpcId: vpcId!,
+        Attribute: 'enableDnsSupport',
+      });
+      const dnsSupportResponse = await ec2Client.send(dnsSupportCommand);
+      vpcDnsSupport = dnsSupportResponse.EnableDnsSupport?.Value || false;
+
+      // Get VPC DNS hostnames attribute
+      const dnsHostnamesCommand = new DescribeVpcAttributeCommand({
+        VpcId: vpcId!,
+        Attribute: 'enableDnsHostnames',
+      });
+      const dnsHostnamesResponse = await ec2Client.send(dnsHostnamesCommand);
+      vpcDnsHostnames = dnsHostnamesResponse.EnableDnsHostnames?.Value || false;
 
       // Get Subnet details
       const subnetCommand = new DescribeSubnetsCommand({
@@ -335,11 +354,11 @@ describe('EC2 Web Application Infrastructure - Integration Tests (Live)', () => 
     });
 
     test('VPC has DNS support enabled', () => {
-      expect(vpc.EnableDnsSupport).toBe(true);
+      expect(vpcDnsSupport).toBe(true);
     });
 
     test('VPC has DNS hostnames enabled', () => {
-      expect(vpc.EnableDnsHostnames).toBe(true);
+      expect(vpcDnsHostnames).toBe(true);
     });
 
     test('VPC has Name tag', () => {
