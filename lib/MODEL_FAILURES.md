@@ -48,41 +48,21 @@
 
 ---
 
-## 4. Performance Issues
+## 4. Observability and Debugging
 
-### 4.1 Lack of Caching in API Gateway
-- **Issue**: The `MODEL_RESPONSE.md` does not enable caching for read-heavy API Gateway methods.
-  - **Fix in IDEAL_RESPONSE.md**: Enabled caching for the `GET /images` method with a TTL of 60 seconds.
-
-### 4.2 Inefficient DynamoDB Queries
-- **Issue**: The `MODEL_RESPONSE.md` does not optimize DynamoDB queries, leading to potential performance bottlenecks.
-  - **Fix in IDEAL_RESPONSE.md**: Added query filters to exclude unnecessary items and limit the number of scanned items.
-
-### 4.3 Missing Reserved Concurrency for Lambda
-- **Issue**: The `MODEL_RESPONSE.md` does not set reserved concurrency for Lambda functions, which can lead to runaway scaling.
-  - **Fix in IDEAL_RESPONSE.md**: Set `reserved_concurrent_executions` to 100 to control scaling.
-
----
-
-## 5. Observability and Debugging
-
-### 5.1 Missing CloudWatch Alarms
-- **Issue**: The `MODEL_RESPONSE.md` does not include CloudWatch alarms for monitoring Lambda errors and throttling.
-  - **Fix in IDEAL_RESPONSE.md**: Added alarms for Lambda error rates and throttling.
-
-### 5.2 Lack of Structured Logging
+### 4.1 Lack of Structured Logging
 - **Issue**: The Lambda functions in `MODEL_RESPONSE.md` do not include structured logging.
   - **Fix in IDEAL_RESPONSE.md**: Added structured logging with log levels and request tracing.
 
 ---
 
-## 6. Maintainability
+## 5. Maintainability
 
-### 6.1 Lack of Modular Design
+### 5.1 Lack of Modular Design
 - **Issue**: The `MODEL_RESPONSE.md` defines Lambda function code inline, making the code harder to maintain.
   - **Fix in IDEAL_RESPONSE.md**: Moved Lambda function code to a separate file (`lambda/handler.py`) for better modularity.
 
-### 6.2 Hardcoded Values
+### 5.2 Hardcoded Values
 - **Issue**: The `MODEL_RESPONSE.md` hardcodes values like region and account ID.
   - **Fix in IDEAL_RESPONSE.md**: Used CDK context and environment variables to make the stack reusable across environments.
 
@@ -100,10 +80,6 @@
 | **Security**        | Overly permissive IAM roles                                          | Implemented least privilege                                      |
 |                     | Public access to API Gateway                                        | Restricted access with CORS                                      |
 |                     | Lack of encryption for S3 bucket                                    | Enabled `S3_MANAGED` encryption                                  |
-| **Performance**     | Lack of caching in API Gateway                                       | Enabled caching for read-heavy methods                          |
-|                     | Inefficient DynamoDB queries                                        | Added query filters                                              |
-|                     | Missing reserved concurrency for Lambda                             | Set `reserved_concurrent_executions`                            |
-| **Observability**   | Missing CloudWatch alarms                                           | Added alarms for Lambda errors and throttling                   |
-|                     | Lack of structured logging                                          | Added structured logging                                         |
+| **Observability**   | Lack of structured logging                                          | Added structured logging                                         |
 | **Maintainability** | Inline Lambda function code                                         | Moved code to separate files                                     |
 |                     | Hardcoded values                                                   | Used CDK context and environment variables                      |
