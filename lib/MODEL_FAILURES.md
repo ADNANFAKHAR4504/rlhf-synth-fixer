@@ -106,25 +106,50 @@ The model failed to understand that when using customer-managed KMS keys with AW
 
 ## Summary
 
-- **Total failures categorized**: 1 Critical
+- **Total failures categorized**: 1 Critical, 1 Major
 - **Primary knowledge gaps**:
   1. KMS key policy requirements for AWS service integration
   2. Understanding service principal permissions vs. IAM user/role permissions
   3. CloudWatch Logs encryption requirements with customer-managed keys
+  4. Distinguishing API Gateway deployments from stages when exporting invoke URLs
 
 - **Training value**: **7/10**
   - The infrastructure design was fundamentally sound and well-architected
   - All resource configurations were correct (VPC, subnets, security groups, RDS, ECS, API Gateway, Kinesis, Secrets Manager)
-  - The single critical failure (KMS policy) is a common mistake that represents valuable training data
-  - This failure type is representative of real-world scenarios where developers understand resource creation but miss service integration requirements
-  - The fix required both AWS SDK knowledge (GetCallerIdentity) and deep understanding of KMS key policies
-  - High training value because it demonstrates the difference between creating a resource and properly integrating it with AWS services
+  - The critical KMS policy gap and the major API Gateway export issue both mirror common production mistakes
+  - These failures demonstrate the difference between creating resources and wiring service integrations correctly
+  - Fixes required AWS SDK knowledge (`GetCallerIdentity`), IAM trust/policy design, and Pulumi API familiarity
 
 **Lessons Learned**:
 1. Always include service principals in KMS key policies when the key will be used by AWS services
 2. Test encryption features early in deployment to catch policy issues before full stack deployment
 3. KMS key policies require region-specific and account-specific ARN patterns
 4. The `kms:CreateGrant` action is essential for CloudWatch Logs to create the necessary grants for encryption
+5. API Gateway invoke URLs are stage-specific—always model an explicit stage (or compute the URL) instead of relying on deployment resources
+
+### 2. Incorrect API Gateway Export (Compile-Time Failure)
+
+**Impact Level**: Major
+
+**MODEL_RESPONSE Issue**:
+The model attempted to export `deployment.InvokeUrl` assuming the API Gateway deployment resource exposes an invoke URL. The Pulumi `apigateway.Deployment` type does **not** have this property, which caused the Go compiler to fail with:
+
+```
+./lib/tap_stack.go: cannot refer to field or method InvokeUrl on type *apigateway.Deployment
+```
+
+**IDEAL_RESPONSE Fix**:
+- Introduced an explicit `apigateway.Stage` resource that binds the deployment to the `prod` stage
+- Configured a dedicated CloudWatch Log Group, IAM role, and API Gateway account for access logging
+- Exported the invoke URL using a deterministic format string (`https://<apiId>.execute-api.<region>.amazonaws.com/prod/ingest`)
+
+**Root Cause**:
+The model conflated deployment and stage concepts in API Gateway. A deployment snapshot alone does not provide an invoke URL—traffic is routed through named stages. Without creating a stage (or computing the URL manually), the stack cannot expose a usable endpoint, and the code fails to compile.
+
+**Training Value**:
+- Reinforces the distinction between deployments and stages in API Gateway
+- Demonstrates how to wire API Gateway access logging (log group, IAM role, `AWS::ApiGateway::Account`)
+- Highlights the importance of verifying generated SDK properties instead of assuming parity with CloudFormation attributes.
 
 **Recommendation for Model Training**:
 This task provides excellent training data because it showcases:

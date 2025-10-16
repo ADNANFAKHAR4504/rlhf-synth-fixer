@@ -23,6 +23,7 @@ import (
 const (
 	region       = "us-east-1"
 	vpcCIDR      = "10.0.0.0/16"
+	stageName    = "prod"
 	az1          = "us-east-1a"
 	az2          = "us-east-1b"
 	publicCIDR1  = "10.0.1.0/24"
@@ -882,8 +883,81 @@ func main() {
 		// Deploy API
 		deployment, err := apigateway.NewDeployment(ctx, "api-deployment", &apigateway.DeploymentArgs{
 			RestApi: restApi.ID(),
-			StageName: pulumi.String("prod"),
+			StageName: pulumi.String(stageName),
 		}, pulumi.DependsOn([]pulumi.Resource{ingestMethod, integration}))
+		if err != nil {
+			return err
+		}
+
+		// CloudWatch log group for API Gateway access logs
+		apiGatewayLogGroup, err := cloudwatch.NewLogGroup(ctx, "api-gateway-log-group", &cloudwatch.LogGroupArgs{
+			Name:            pulumi.String(fmt.Sprintf("/aws/apigateway/%s-%s", projectName, stackName)),
+			RetentionInDays: pulumi.Int(14),
+			KmsKeyId:        kmsKey.Arn,
+			Tags: pulumi.StringMap{
+				"Name":        pulumi.String(fmt.Sprintf("%s-%s-api-gw-logs", projectName, stackName)),
+				"Environment": pulumi.String(stackName),
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		// IAM role for API Gateway to push logs to CloudWatch
+		apiGatewayLogRole, err := iam.NewRole(ctx, "api-gateway-cloudwatch-role", &iam.RoleArgs{
+			AssumeRolePolicy: pulumi.String(`{
+				"Version": "2012-10-17",
+				"Statement": [{
+					"Effect": "Allow",
+					"Principal": { "Service": "apigateway.amazonaws.com" },
+					"Action": "sts:AssumeRole"
+				}]
+			}`),
+			Tags: pulumi.StringMap{
+				"Name":        pulumi.String(fmt.Sprintf("%s-%s-api-gw-cloudwatch-role", projectName, stackName)),
+				"Environment": pulumi.String(stackName),
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = iam.NewRolePolicyAttachment(ctx, "api-gateway-cloudwatch-policy", &iam.RolePolicyAttachmentArgs{
+			Role:      apiGatewayLogRole.Name,
+			PolicyArn: pulumi.String("arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"),
+		})
+		if err != nil {
+			return err
+		}
+
+		apiGatewayAccount, err := apigateway.NewAccount(ctx, "api-gateway-account", &apigateway.AccountArgs{
+			CloudwatchRoleArn: apiGatewayLogRole.Arn,
+		})
+		if err != nil {
+			return err
+		}
+
+		// Explicit stage with access logging
+		stage, err := apigateway.NewStage(ctx, "api-stage", &apigateway.StageArgs{
+			RestApi:    restApi.ID(),
+			Deployment: deployment.ID(),
+			StageName:  pulumi.String(stageName),
+			AccessLogSettings: &apigateway.StageAccessLogSettingsArgs{
+				DestinationArn: apiGatewayLogGroup.Arn,
+				Format: pulumi.String(`{
+					"requestId": "$context.requestId",
+					"ip": "$context.identity.sourceIp",
+					"routeKey": "$context.routeKey",
+					"status": "$context.status",
+					"integrationStatus": "$context.integration.status",
+					"responseLength": "$context.responseLength"
+				}`),
+			},
+			Tags: pulumi.StringMap{
+				"Name":        pulumi.String(fmt.Sprintf("%s-%s-api-stage", projectName, stackName)),
+				"Environment": pulumi.String(stackName),
+			},
+		}, pulumi.DependsOn([]pulumi.Resource{deployment, apiGatewayAccount, apiGatewayLogGroup}))
 		if err != nil {
 			return err
 		}
@@ -891,14 +965,14 @@ func main() {
 		// CloudWatch logging for API Gateway
 		_, err = apigateway.NewMethodSettings(ctx, "api-method-settings", &apigateway.MethodSettingsArgs{
 			RestApi:    restApi.ID(),
-			StageName:  pulumi.String("prod"),
+			StageName:  pulumi.String(stageName),
 			MethodPath: pulumi.String("*/*"),
 			Settings: &apigateway.MethodSettingsSettingsArgs{
 				LoggingLevel:      pulumi.String("INFO"),
 				DataTraceEnabled:  pulumi.Bool(true),
 				MetricsEnabled:    pulumi.Bool(true),
 			},
-		}, pulumi.DependsOn([]pulumi.Resource{deployment}))
+		}, pulumi.DependsOn([]pulumi.Resource{stage}))
 		if err != nil {
 			return err
 		}
@@ -924,8 +998,8 @@ func main() {
 		ctx.Export("ecsClusterArn", ecsCluster.Arn)
 		ctx.Export("ecsTaskDefinitionArn", taskDefinition.Arn)
 		ctx.Export("apiGatewayId", restApi.ID())
-		ctx.Export("apiGatewayUrl", pulumi.Sprintf("https://%s.execute-api.%s.amazonaws.com/prod/ingest", restApi.ID(), region))
-		ctx.Export("apiGatewayEndpoint", deployment.InvokeUrl)
+		ctx.Export("apiGatewayUrl", pulumi.Sprintf("https://%s.execute-api.%s.amazonaws.com/%s/ingest", restApi.ID(), region, stageName))
+		ctx.Export("apiGatewayEndpoint", pulumi.Sprintf("https://%s.execute-api.%s.amazonaws.com/%s/ingest", restApi.ID(), region, stageName))
 
 		return nil
 	})

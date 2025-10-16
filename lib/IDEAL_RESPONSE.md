@@ -71,6 +71,11 @@ This infrastructure implements a FedRAMP Moderate compliant data processing pipe
 - Allows API Gateway to write records to Kinesis stream
 - Permissions: `kinesis:PutRecord`, `kinesis:PutRecords`
 
+#### API Gateway CloudWatch Role
+- Trust relationship with `apigateway.amazonaws.com`
+- Attached policy: `AmazonAPIGatewayPushToCloudWatchLogs`
+- Registered through `AWS::ApiGateway::Account` for access logging
+
 #### ECS Task Execution Role
 - Allows ECS to pull container images and write logs
 - Uses AWS managed policy: `AmazonECSTaskExecutionRolePolicy`
@@ -87,8 +92,11 @@ This infrastructure implements a FedRAMP Moderate compliant data processing pipe
 - **Authentication**: AWS IAM (Signature v4)
 - **Integration**: Direct integration with Kinesis PutRecord action
 - **Request Transformation**: JSON payload base64-encoded and sent to Kinesis
-- **Logging**: CloudWatch logging enabled (INFO level, data trace, metrics)
-- **Stage**: `prod` deployment
+- **Logging**:
+  - Dedicated KMS-encrypted CloudWatch Log Group (`/aws/apigateway/<project>-<stack>`)
+  - Access logs enabled with structured JSON format
+  - Method settings enforce INFO logging, data trace, and metrics
+- **Stage**: Explicit `prod` stage resource managing deployment lifecycle
 
 ## Data Flow
 
