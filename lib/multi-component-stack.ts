@@ -121,10 +121,10 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
       this.node.tryGetContext('rdsSubnetGroupName');
     const importedSubnetGroup = importedSubnetGroupName
       ? rds.SubnetGroup.fromSubnetGroupName(
-          this,
-          'ImportedRdsSubnetGroup',
-          String(importedSubnetGroupName)
-        )
+        this,
+        'ImportedRdsSubnetGroup',
+        String(importedSubnetGroupName)
+      )
       : undefined;
 
     const rdsInstance = new rds.DatabaseInstance(this, 'PostgresDatabase', {
@@ -508,10 +508,15 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
       // CloudFront distributions are global; the account in the distribution ARN
       // can be empty in some CDK constructs. Build the ARN explicitly using the
       // current partition and account along with the distribution id.
+      // Build the CloudFront distribution ARN explicitly for WAF. CloudFront
+      // is a global service: the ARN must have an empty region ("") and the
+      // account ID. Example: arn:aws:cloudfront::123456789012:distribution/EDFDVBD632BHDS5
       const cloudFrontArn = cdk.Stack.of(this).formatArn({
         service: 'cloudfront',
         resource: `distribution/${distribution.distributionId}`,
         arnFormat: cdk.ArnFormat.SLASH_RESOURCE_NAME,
+        region: '',
+        account: cdk.Aws.ACCOUNT_ID,
       });
 
       new wafv2.CfnWebACLAssociation(this, 'WebAclAssociation', {
