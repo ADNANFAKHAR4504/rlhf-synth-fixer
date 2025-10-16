@@ -8,7 +8,6 @@ Create a **comprehensive AWS CloudFormation template named `TapStack.yml`** that
 * Include **Parameters**, **Mappings**, **Resources**, and **Outputs** sections.
 * All variable declarations and default values should be present inside the same file.
 * The YAML must be clean, modular, and aligned with production best practices.
-* Avoid SSL certificate or ACM configurations — exclude them completely.
 
 **Stack Name:** TapStack
 **Regions:** `us-east-1` and `eu-west-1`

@@ -387,8 +387,16 @@ Resources:
           ToPort: 3306
           SourceSecurityGroupId: !Ref PrivateInstanceSecurityGroup
         - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref PrivateInstanceSecurityGroup
+        - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
           SourceSecurityGroupId: !Ref LambdaSecurityGroup
       Tags:
         - Key: Name
@@ -570,6 +578,29 @@ Resources:
       LogGroupName: !Sub "/aws/apigateway/${Environment}-tapstack-api-logs"
       RetentionInDays: !Ref LogRetentionDays
 
+  # AWS::Logs::ResourcePolicy requires PolicyDocument as a string (not a map).
+  ApiGatewayCloudWatchLogsPolicy:
+    Type: AWS::Logs::ResourcePolicy
+    Properties:
+      PolicyName: !Sub "${Environment}-apigateway-logs-policy"
+      PolicyDocument: !Sub |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AllowAPIGatewayToPutLogs",
+              "Effect": "Allow",
+              "Principal": { "Service": "apigateway.amazonaws.com" },
+              "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/apigateway/${Environment}-tapstack-api-logs:*"
+            }
+          ]
+        }
+
   TapStackRestApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
@@ -578,10 +609,41 @@ Resources:
         Types:
           - REGIONAL
 
+  # Ensure the API has at least one resource + method (prevents Deployment error).
+  TapStackApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref TapStackRestApi
+      ParentId: !GetAtt TapStackRestApi.RootResourceId
+      PathPart: ping
+
+  TapStackApiMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref TapStackRestApi
+      ResourceId: !Ref TapStackApiResource
+      HttpMethod: ANY
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub >-
+          arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${TapStackLambdaFunction.Arn}/invocations
+
+  TapStackLambdaPermissionForAPIGateway:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref TapStackLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${TapStackRestApi}/*/*/ping"
+
   TapStackApiDeployment:
     Type: AWS::ApiGateway::Deployment
     Properties:
       RestApiId: !Ref TapStackRestApi
+    DependsOn:
+      - TapStackApiMethod
 
   TapStackApiStage:
     Type: AWS::ApiGateway::Stage
@@ -590,7 +652,7 @@ Resources:
       RestApiId: !Ref TapStackRestApi
       DeploymentId: !Ref TapStackApiDeployment
       AccessLogSetting:
-        DestinationArn: !GetAtt TapStackApiLogGroup.Arn
+        DestinationArn: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/apigateway/${Environment}-tapstack-api-logs"
         Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","caller":"$context.identity.caller","user":"$context.identity.user","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath","status":"$context.status","protocol":"$context.protocol"}'
       MethodSettings:
         - DataTraceEnabled: true
@@ -631,8 +693,11 @@ Resources:
       Code:
         ZipFile: |
           def lambda_handler(event, context):
-              print("TapStack sample handler - secure environment")
-              return {"status": "ok"}
+              return {
+                  "statusCode": 200,
+                  "body": "pong",
+                  "headers": {"Content-Type": "text/plain"}
+              }
 
   ####################################################################
   # Sample EC2 Instance in private subnet (for demonstration)
@@ -664,7 +729,6 @@ Resources:
       S3BucketName: !Ref TapStackCloudTrailBucket
       KMSKeyId: !Ref TapStackKmsKey
       IsOrganizationTrail: false
-      # Ensure CloudTrail starts logging on creation
       IsLogging: true
 
   ####################################################################
@@ -737,5 +801,5 @@ Outputs:
 Metadata:
   cfn-lint:
     Notes: >
-      - Ensure AMI IDs are valid for chosen region (ImageId in EC2).
-      - To operate CloudTrail across an organization, prefer an Organization-level trail + StackSets.
+      - Replace the EC2 AMI (ImageId) with a valid region AMI before deployment or remove the instance.
+      - To create a true org-level multi-account trail, prefer an Organizations trail + StackSets.
