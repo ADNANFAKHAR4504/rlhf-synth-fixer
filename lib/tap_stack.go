@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
+	"os"
 	"regexp"
 	"strings"
 
@@ -21,11 +22,8 @@ import (
 )
 
 const (
-	region       = "us-east-1"
 	vpcCIDR      = "10.0.0.0/16"
 	stageName    = "prod"
-	az1          = "us-east-1a"
-	az2          = "us-east-1b"
 	publicCIDR1  = "10.0.1.0/24"
 	publicCIDR2  = "10.0.2.0/24"
 	privateCIDR1 = "10.0.3.0/24"
@@ -102,6 +100,24 @@ func main() {
 		projectName := ctx.Project()
 		stackName := ctx.Stack()
 
+		awsRegion := os.Getenv("AWS_REGION")
+		if awsRegion == "" {
+			awsRegion = os.Getenv("AWS_DEFAULT_REGION")
+		}
+		if awsRegion == "" {
+			awsRegion = "us-east-1"
+		}
+
+		azResult, err := aws.GetAvailabilityZones(ctx, &aws.GetAvailabilityZonesArgs{}, nil)
+		if err != nil {
+			return fmt.Errorf("failed to look up availability zones: %w", err)
+		}
+		if len(azResult.Names) < 2 {
+			return fmt.Errorf("expected at least two availability zones, got %d", len(azResult.Names))
+		}
+		az1 := azResult.Names[0]
+		az2 := azResult.Names[1]
+
 		// Generate database credentials
 		dbUsername, err := generateDBUsername(12)
 		if err != nil {
@@ -161,7 +177,7 @@ func main() {
 						}
 					}
 				]
-			}`, accountId, region, region, accountId)),
+			}`, accountId, awsRegion, awsRegion, accountId)),
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String(fmt.Sprintf("%s-%s-kms-key", projectName, stackName)),
 				"Environment": pulumi.String(stackName),
@@ -788,7 +804,7 @@ func main() {
 					{"name": "KINESIS_STREAM", "value": "%s"},
 					{"name": "DB_SECRET_ARN", "value": "%s"}
 				]
-			}]`, ecsLogGroup.Name, pulumi.String(region), kinesisStream.Name, dbSecret.Arn),
+			}]`, ecsLogGroup.Name, awsRegion, kinesisStream.Name, dbSecret.Arn),
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String(fmt.Sprintf("%s-%s-task-def", projectName, stackName)),
 				"Environment": pulumi.String(stackName),
@@ -866,7 +882,7 @@ func main() {
 			HttpMethod:            ingestMethod.HttpMethod,
 			IntegrationHttpMethod: pulumi.String("POST"),
 			Type:                  pulumi.String("AWS"),
-			Uri:                   pulumi.Sprintf("arn:aws:apigateway:%s:kinesis:action/PutRecord", region),
+			Uri:                   pulumi.Sprintf("arn:aws:apigateway:%s:kinesis:action/PutRecord", awsRegion),
 			Credentials:           apiGatewayRole.Arn,
 			RequestTemplates: pulumi.StringMap{
 				"application/json": pulumi.Sprintf(`{
@@ -998,8 +1014,8 @@ func main() {
 		ctx.Export("ecsClusterArn", ecsCluster.Arn)
 		ctx.Export("ecsTaskDefinitionArn", taskDefinition.Arn)
 		ctx.Export("apiGatewayId", restApi.ID())
-		ctx.Export("apiGatewayUrl", pulumi.Sprintf("https://%s.execute-api.%s.amazonaws.com/%s/ingest", restApi.ID(), region, stageName))
-		ctx.Export("apiGatewayEndpoint", pulumi.Sprintf("https://%s.execute-api.%s.amazonaws.com/%s/ingest", restApi.ID(), region, stageName))
+		ctx.Export("apiGatewayUrl", pulumi.Sprintf("https://%s.execute-api.%s.amazonaws.com/%s/ingest", restApi.ID(), awsRegion, stageName))
+		ctx.Export("apiGatewayEndpoint", pulumi.Sprintf("https://%s.execute-api.%s.amazonaws.com/%s/ingest", restApi.ID(), awsRegion, stageName))
 
 		return nil
 	})
