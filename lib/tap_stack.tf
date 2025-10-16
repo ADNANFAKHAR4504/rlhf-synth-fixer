@@ -912,8 +912,9 @@ resource "aws_s3_bucket_policy" "alb_logs_dr" {
 # ========================================
 
 resource "random_password" "db_password" {
-  length  = 32
-  special = true
+  length           = 32
+  special          = true
+  override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 
 resource "aws_rds_global_cluster" "financial_db" {
