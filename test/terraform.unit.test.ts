@@ -638,10 +638,14 @@ describe('Resource Naming - Environment Suffix', () => {
     stackContent = fs.readFileSync(stackPath, 'utf8');
   });
 
-  test('Resources include environment_suffix in their names', () => {
-    const suffixMatches = stackContent.match(/\$\{var\.environment_suffix\}/g);
+  test('Resources include unique_suffix in their names', () => {
+    const suffixMatches = stackContent.match(/\$\{local\.unique_suffix\}/g);
     expect(suffixMatches).toBeTruthy();
     expect(suffixMatches!.length).toBeGreaterThan(50);
+  });
+
+  test('Random ID resource is defined for unique naming', () => {
+    expect(stackContent).toMatch(/resource\s+"random_id"\s+"suffix"/);
   });
 
   test('Tags include environment suffix', () => {
