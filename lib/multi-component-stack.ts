@@ -653,6 +653,47 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
     // ========================================
     // Stack Outputs
     // ========================================
+
+    // ========================================
+    // Route53 Health Checks (for monitoring and potential failover)
+    // ========================================
+    // Extract host portion from api.url (https://host/...)
+    const apiHost = cdk.Fn.select(2, cdk.Fn.split('/', this.apiUrl || api.url));
+
+    const apiHealthCheck = new route53.CfnHealthCheck(this, 'ApiHealthCheck', {
+      healthCheckConfig: {
+        type: 'HTTPS',
+        fullyQualifiedDomainName: apiHost,
+        port: 443,
+        // Ping the root path; if you have a dedicated /health path, change resourcePath
+        resourcePath: '/',
+        requestInterval: 30,
+        failureThreshold: 3,
+      },
+    });
+
+    new cdk.CfnOutput(this, 'ApiHealthCheckId', {
+      value: apiHealthCheck.attrHealthCheckId,
+      description: 'Route53 HealthCheckId for API endpoint',
+    });
+
+    // CloudFront domain health check (optional; CloudFront may throttle health probes)
+    const cfHost = cdk.Fn.select(0, cdk.Fn.split('.', distribution.distributionDomainName));
+    const cfHealthCheck = new route53.CfnHealthCheck(this, 'CloudFrontHealthCheck', {
+      healthCheckConfig: {
+        type: 'HTTPS',
+        fullyQualifiedDomainName: distribution.distributionDomainName,
+        port: 443,
+        resourcePath: '/',
+        requestInterval: 30,
+        failureThreshold: 3,
+      },
+    });
+
+    new cdk.CfnOutput(this, 'CloudFrontHealthCheckId', {
+      value: cfHealthCheck.attrHealthCheckId,
+      description: 'Route53 HealthCheckId for CloudFront distribution',
+    });
     this.vpcId = vpc.vpcId;
     new cdk.CfnOutput(this, 'VpcId', {
       value: this.vpcId,
