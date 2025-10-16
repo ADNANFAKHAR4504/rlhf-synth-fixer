@@ -1,4 +1,4 @@
-name: healthcare-infra
+name: TapStack
 runtime:
   name: python
 description: HIPAA-compliant Healthcare Data Processing Infrastructure
