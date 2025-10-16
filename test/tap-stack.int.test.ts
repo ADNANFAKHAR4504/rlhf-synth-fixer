@@ -30,17 +30,17 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
       vpcId = outputs.VPCId;
 
-    ec2Client = new EC2Client({ region: process.env.AWS_REGION || 'us-east-1' });
-    s3Client = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
-    rdsClient = new RDSClient({ region: process.env.AWS_REGION || 'us-east-1' });
-    lambdaClient = new LambdaClient({ region: process.env.AWS_REGION || 'us-east-1' });
-    elbv2Client = new ElasticLoadBalancingV2Client({ region: process.env.AWS_REGION || 'us-east-1' });
-    wafv2Client = new WAFV2Client({ region: process.env.AWS_REGION || 'us-east-1' });
-    cloudTrailClient = new CloudTrailClient({ region: process.env.AWS_REGION || 'us-east-1' });
-    secretsManagerClient = new SecretsManagerClient({ region: process.env.AWS_REGION || 'us-east-1' });
-    cloudWatchLogsClient = new CloudWatchLogsClient({ region: process.env.AWS_REGION || 'us-east-1' });
-    autoScalingClient = new AutoScalingClient({ region: process.env.AWS_REGION || 'us-east-1' });
-    iamClient = new IAMClient({ region: process.env.AWS_REGION || 'us-east-1' });
+    ec2Client = new EC2Client({ region: process.env.AWS_REGION || 'ca-central-1' });
+    s3Client = new S3Client({ region: process.env.AWS_REGION || 'ca-central-1' });
+    rdsClient = new RDSClient({ region: process.env.AWS_REGION || 'ca-central-1' });
+    lambdaClient = new LambdaClient({ region: process.env.AWS_REGION || 'ca-central-1' });
+    elbv2Client = new ElasticLoadBalancingV2Client({ region: process.env.AWS_REGION || 'ca-central-1' });
+    wafv2Client = new WAFV2Client({ region: process.env.AWS_REGION || 'ca-central-1' });
+    cloudTrailClient = new CloudTrailClient({ region: process.env.AWS_REGION || 'ca-central-1' });
+    secretsManagerClient = new SecretsManagerClient({ region: process.env.AWS_REGION || 'ca-central-1' });
+    cloudWatchLogsClient = new CloudWatchLogsClient({ region: process.env.AWS_REGION || 'ca-central-1' });
+    autoScalingClient = new AutoScalingClient({ region: process.env.AWS_REGION || 'ca-central-1' });
+    iamClient = new IAMClient({ region: process.env.AWS_REGION || 'ca-central-1' });
   });
 
   describe('VPC and Networking Infrastructure', () => {
@@ -451,7 +451,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
       const response = await cloudTrailClient.send(command);
 
       const trail = response.trailList?.find(t => 
-        t.Name === 'tapstack-cloudtrail'
+        t.Name === outputs.CloudTrailName
       );
       
       // CloudTrail might not exist due to CloudFormation issues
@@ -1443,7 +1443,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
         const cloudTrailResponse = await cloudTrailClient.send(cloudTrailCommand);
         
         const trail = cloudTrailResponse.trailList?.find(t => 
-          t.Name?.includes('cloudtrail')
+          t.Name === outputs.CloudTrailName
         );
         
         // CloudTrail might not exist due to CloudFormation issues
@@ -1911,7 +1911,7 @@ def lambda_handler(event, context):
         // 4. Verify CloudTrail is logging (if it exists)
         try {
           const getTrailStatusCommand = new GetTrailStatusCommand({
-            Name: 'tapstack-cloudtrail'
+            Name: outputs.CloudTrailName
           });
           const trailStatus = await cloudTrailClient.send(getTrailStatusCommand);
           expect(trailStatus.IsLogging).toBe(true);
@@ -1939,6 +1939,7 @@ def lambda_handler(event, context):
         const logGroupsResponse = await cloudWatchLogsClient.send(describeLogGroupsCommand);
         
         const flowLogsGroup = logGroupsResponse.logGroups?.find(group =>
+          group.logGroupName?.startsWith('/aws/vpc/flowlogs/') &&
           group.logGroupName?.includes(vpcId)
         );
         expect(flowLogsGroup).toBeDefined();
