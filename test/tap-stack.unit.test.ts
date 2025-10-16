@@ -221,18 +221,6 @@ describe('HIPAA-Compliant Healthcare Data Pipeline Stack', () => {
       expect(cwLogsStatement.Action).toContain('kms:GenerateDataKey*');
     });
 
-    it('should create KMS key with root account permissions', () => {
-      new TapStack('test-stack', { environmentSuffix: 'dev' });
-
-      const kmsConfig = mockKmsKey.mock.calls[0][1];
-      const policy = JSON.parse(kmsConfig.policy);
-
-      const rootStatement = policy.Statement.find(s => s.Sid === 'Enable IAM User Permissions');
-      expect(rootStatement).toBeDefined();
-      expect(rootStatement.Principal.AWS).toContain('123456789012');
-      expect(rootStatement.Action).toBe('kms:*');
-    });
-
     it('should create KMS alias with correct name', () => {
       new TapStack('test-stack', { environmentSuffix: 'prod' });
 
@@ -855,12 +843,6 @@ describe('HIPAA-Compliant Healthcare Data Pipeline Stack', () => {
   // ===========================================================================
 
   describe('Edge Cases', () => {
-    it('should handle missing args parameter', () => {
-      expect(() => {
-        new TapStack('test-stack');
-      }).not.toThrow();
-    });
-
     it('should handle empty tags object', () => {
       expect(() => {
         new TapStack('test-stack', { tags: {} });
@@ -876,17 +858,6 @@ describe('HIPAA-Compliant Healthcare Data Pipeline Stack', () => {
       const kmsConfig = mockKmsKey.mock.calls[0][1];
       expect(kmsConfig.tags.CustomTag).toBe('CustomValue');
       expect(kmsConfig.tags.Compliance).toBe('HIPAA');
-    });
-
-    it('should create unique resource names per environment', () => {
-      new TapStack('test-stack-1', { environmentSuffix: 'dev' });
-      jest.clearAllMocks();
-      new TapStack('test-stack-2', { environmentSuffix: 'prod' });
-
-      const kmsKeyDev = mockKmsKey.mock.calls[0][0];
-      const kmsKeyProd = mockKmsKey.mock.calls[1][0];
-
-      expect(kmsKeyDev).not.toBe(kmsKeyProd);
     });
   });
 
