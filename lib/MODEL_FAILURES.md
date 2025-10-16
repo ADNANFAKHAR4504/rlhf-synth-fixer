@@ -1,6 +1,5 @@
 1. Generated response by the model had failures related to the security group naming conventions, it used the sg with naming starrting from sg- which is not allowed as per AWS rules.
 
-2. Model used wrong IAM role arn for aws config setup which is again not allowed as per AWS rules and failed the deployment. Model worngly used this ARN with config which is not allowed.
 ```
 
 ╷
@@ -20,9 +19,11 @@
 │ 
 ╵
 Error: Terraform exited with code 1.
-❌ All deployment attempts failed. Check for state lock issues.
+All deployment attempts failed. Check for state lock issues.
 
 ```
+
+2. Model used wrong IAM role arn for aws config setup which is again not allowed as per AWS rules and failed the deployment. Model worngly used this ARN with config which is not allowed.
 
 ```
 
@@ -34,7 +35,11 @@ Error: Terraform exited with code 1.
 │   on tap_stack.tf line 1014, in resource "aws_iam_role_policy_attachment" "config":
 
 │ 1014: resource "aws_iam_role_policy_attachment" "config" {
+```
 
+3. Model used wrong resource completely creation completely which doesn't even exists. The shield protection happens for the overall account and not just for EC2.
+
+```
 │ Error: creating Shield Protection (shield-ec2-1-tap-stack-bmup): operation error Shield: CreateProtection, https response error StatusCode: 400, RequestID: 40a98bdb-2ca9-45ec-ab52-72a47400e087, InvalidResourceException: Unrecognized resource 'instance' of service 'ec2'.
 │ 
 
