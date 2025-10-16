@@ -6,6 +6,8 @@ import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export interface InfrastructureProps extends cdk.StackProps {
   environmentSuffix: string;
@@ -172,6 +174,11 @@ export class Infrastructure extends cdk.Stack {
 
     // Grant S3 permissions to instances
     this.logBucket.grantReadWrite(this.instanceRole);
+
+    // Grant DynamoDB permissions to instances (if global table exists)
+    if (this.globalTable) {
+      this.globalTable.grantReadWriteData(this.instanceRole);
+    }
   }
 
   private createVpc(name: string, cidr: string): ec2.Vpc {
@@ -357,17 +364,21 @@ export class Infrastructure extends cdk.Stack {
     desiredCapacity: number,
     keyPairName?: string
   ): autoscaling.AutoScalingGroup {
-    // User data script for web application
+    // Read userData.sh script and substitute CDK variables
+    const userDataScriptPath = path.join(__dirname, 'userData.sh');
+    let userDataScript = fs.readFileSync(userDataScriptPath, 'utf8');
+
+    // Substitute placeholders in the script
+    userDataScript = userDataScript
+      .replace(/__AWS_REGION__/g, this.region)
+      .replace(/__S3_BUCKET_NAME__/g, this.logBucket.bucketName)
+      .replace(/__DYNAMODB_TABLE_NAME__/g, this.globalTable?.tableName || `webapp-data-${this.environmentSuffix}`)
+      .replace(/__ENVIRONMENT_SUFFIX__/g, this.environmentSuffix)
+      .replace(/__PREFIX__/g, prefix);
+
+    // User data script for web application with test app
     const userData = ec2.UserData.forLinux();
-    userData.addCommands(
-      'yum update -y',
-      'yum install -y httpd',
-      'systemctl start httpd',
-      'systemctl enable httpd',
-      `echo "<h1>WebApp ${prefix} - ${this.environmentSuffix}</h1>" > /var/www/html/index.html`,
-      'yum install -y amazon-cloudwatch-agent',
-      'yum install -y aws-cli'
-    );
+    userData.addCommands(userDataScript);
 
     // Create launch template for better control
     const launchTemplate = new ec2.LaunchTemplate(
@@ -376,7 +387,7 @@ export class Infrastructure extends cdk.Stack {
       {
         launchTemplateName: `webapp-lt-${this.environmentSuffix}`,
         instanceType: new ec2.InstanceType(instanceType),
-        machineImage: ec2.MachineImage.latestAmazonLinux2(),
+        machineImage: ec2.MachineImage.latestAmazonLinux2023(),
         userData,
         role: this.instanceRole,
         securityGroup,
@@ -434,7 +445,7 @@ export class Infrastructure extends cdk.Stack {
         targets: [asg],
         healthCheck: {
           enabled: true,
-          path: '/',
+          path: '/health',
           healthyHttpCodes: '200',
           interval: cdk.Duration.seconds(30),
           timeout: cdk.Duration.seconds(5),

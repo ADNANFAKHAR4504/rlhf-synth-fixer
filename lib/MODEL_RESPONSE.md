@@ -1,29 +1,3 @@
-### Reasoning Trace
-
----
-
-This is a comprehensive AWS CDK TypeScript infrastructure requirement. Let me break down what needs to be done:
-
-1. Deploy across two AWS regions (primary and secondary)
-2. Create VPC in each region (10.0.0.0/16) with 2 public and 2 private subnets
-3. ALB in public subnets
-4. EC2 instances in private subnets
-5. Security groups restricting EC2 traffic to HTTP/HTTPS from ALB only
-6. S3 buckets with cross-region replication
-7. DynamoDB Global Tables
-8. IAM roles with least privilege
-9. Tagging all resources
-10. Everything in the Infrastructure class
-11. Use environmentSuffix for naming
-12. Non-prod resources should be removable
-13. All parameters except environmentSuffix should be optional
-
-Let me design this solution:
-
-### Answer
-
----
-
 I'll build a comprehensive high-availability infrastructure using AWS CDK TypeScript that meets all your requirements. This solution will deploy resources across two AWS regions with proper security configurations.
 
 ## Complete Infrastructure Solution

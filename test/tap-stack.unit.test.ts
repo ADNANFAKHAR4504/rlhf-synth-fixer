@@ -131,7 +131,7 @@ describe('Infrastructure Stack', () => {
       template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
         Port: 80,
         Protocol: 'HTTP',
-        HealthCheckPath: '/',
+        HealthCheckPath: '/health',
         HealthCheckEnabled: true,
         HealthCheckIntervalSeconds: 30,
         HealthCheckTimeoutSeconds: 5,
@@ -223,7 +223,15 @@ describe('Infrastructure Stack', () => {
     test('Launch template has user data for web server setup', () => {
       const launchTemplate = template.findResources('AWS::EC2::LaunchTemplate');
       const ltResource = Object.values(launchTemplate)[0];
-      expect(ltResource.Properties.LaunchTemplateData.UserData['Fn::Base64']).toContain('httpd');
+      const userData = ltResource.Properties.LaunchTemplateData.UserData;
+
+      // Check if user data contains the expected content
+      expect(userData['Fn::Base64']).toBeDefined();
+      expect(userData['Fn::Base64']['Fn::Join']).toBeDefined();
+      const joinContent = userData['Fn::Base64']['Fn::Join'][1].join('');
+      expect(joinContent).toContain('httpd');
+      expect(joinContent).toContain('nodejs');
+      expect(joinContent).toContain('webapp-test');
     });
   });
 
