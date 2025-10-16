@@ -11,5 +11,12 @@
   "subject_labels": [
     "Failure Recovery Automation"
   ],
-  "aws_services": "DynamoDB, Lambda, EventBridge, CloudWatch, SNS, IAM, DynamoDB Global Tables"
+  "aws_services": "DynamoDB, Lambda, EventBridge, CloudWatch, SNS, IAM, DynamoDB Global Tables",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
 }
