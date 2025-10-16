@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -47,17 +48,42 @@ type StackOutputs struct {
 }
 
 func loadStackOutputs(t *testing.T) *StackOutputs {
-	data, err := os.ReadFile("cfn-outputs/flat-outputs.json")
-	if err != nil {
-		t.Fatalf("Failed to read outputs file: %v", err)
+	candidates := []string{
+		os.Getenv("STACK_OUTPUTS_FILE"),
+		"cfn-outputs/flat-outputs.json",
+		"../cfn-outputs/flat-outputs.json",
+		"../../cfn-outputs/flat-outputs.json",
+		"../../../cfn-outputs/flat-outputs.json",
 	}
 
-	var outputs StackOutputs
-	if err := json.Unmarshal(data, &outputs); err != nil {
-		t.Fatalf("Failed to parse outputs JSON: %v", err)
+	var data []byte
+	var err error
+	tried := make([]string, 0, len(candidates))
+
+	for _, candidate := range candidates {
+		if candidate == "" {
+			continue
+		}
+		tried = append(tried, candidate)
+
+		if _, statErr := os.Stat(candidate); statErr != nil {
+			continue
+		}
+
+		data, err = os.ReadFile(candidate)
+		if err != nil {
+			continue
+		}
+
+		var outputs StackOutputs
+		if jsonErr := json.Unmarshal(data, &outputs); jsonErr != nil {
+			t.Fatalf("Failed to parse outputs JSON from %s: %v", candidate, jsonErr)
+		}
+		return &outputs
 	}
 
-	return &outputs
+	t.Fatalf("Failed to read stack outputs. Tried paths: %s", strings.Join(tried, ", "))
+	return nil
 }
 
 func getAWSConfig(t *testing.T) aws.Config {
@@ -158,7 +184,8 @@ func TestKMSKeyConfiguration(t *testing.T) {
 		t.Fatalf("Failed to get key policy: %v", err)
 	}
 
-	if !strings.Contains(*policyResult.Policy, "logs.us-east-1.amazonaws.com") {
+	logsPrincipal := fmt.Sprintf("logs.%s.amazonaws.com", cfg.Region)
+	if !strings.Contains(*policyResult.Policy, logsPrincipal) {
 		t.Error("KMS key policy does not contain CloudWatch Logs service permission")
 	}
 }
