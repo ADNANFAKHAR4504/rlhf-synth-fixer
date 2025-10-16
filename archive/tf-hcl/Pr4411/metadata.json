@@ -1,0 +1,21 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349049",
+  "team": "4",
+  "startedAt": "2025-10-14T15:29:12.509Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": "VPC, Subent, EC2, RDS, S3, Config, Cloudtrail, WAF, IAM",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
+}
