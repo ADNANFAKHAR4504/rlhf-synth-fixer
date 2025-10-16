@@ -32,7 +32,17 @@ variable "hosted_zone_id" {
   type        = string
   default     = ""
 }
+variable "aws_region_use1" {
+  description = "Local/override region for alias aws.use1"
+  type        = string
+  default     = ""
+}
 
+variable "aws_region_euw1" {
+  description = "Local/override region for alias aws.euw1"
+  type        = string
+  default     = ""
+}
 variable "alb_cert_arn_use1" {
   description = "ACM certificate ARN in us-east-1 for the ALB HTTPS listener."
   type        = string
