@@ -281,6 +281,25 @@ Resources:
         - Key: Region
           Value: !Ref "AWS::Region"
 
+  EC2LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/ec2/${AWS::StackName}"
+      RetentionInDays: 30
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-${AWS::Region}-LogGroup"
+        - Key: EnvName
+          Value: !Ref EnvironmentName
+        - Key: ProjectName
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: Region
+          Value: !Ref "AWS::Region"
+
   # IAM Role for EC2
   EC2Role:
     Type: AWS::IAM::Role
@@ -311,6 +330,20 @@ Resources:
                   - !Sub "${GeneralStorageBucket.Arn}/*"
                   - !GetAtt LogsBucket.Arn
                   - !Sub "${LogsBucket.Arn}/*"
+
+        - PolicyName: CloudWatchFullAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                  - logs:PutLogEvents
+                  - logs:PutRetentionPolicy
+                Resource: "*"
       Tags:
         - Key: Name
           Value: !Sub "${AWS::StackName}-${AWS::Region}-EC2Role"
@@ -352,11 +385,58 @@ Resources:
             Encrypted: true
             DeleteOnTermination: true
       UserData:
-        Fn::Base64: |
+        Fn::Base64: !Sub |
           #!/bin/bash
           yum update -y
-          wget https://amazoncloudwatch-agent.s3.amazonaws.com/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
-          rpm -U ./amazon-cloudwatch-agent.rpm
+
+          yum install -y wget
+          wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+          rpm -Uvh amazon-cloudwatch-agent.rpm
+
+          # Create CloudWatch Agent configuration (JSON). ${AWS::StackName} and ${EnvironmentName} will be substituted by CloudFormation.
+          cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF
+          {
+            "agent": {
+              "metrics_collection_interval": 60,
+              "run_as_user": "root"
+            },
+            "logs": {
+              "logs_collected": {
+                "files": {
+                  "collect_list": [
+                    {
+                      "file_path": "/var/log/messages",
+                      "log_group_name": "${EC2LogGroup}",
+                      "log_stream_name": "{instance_id}-messages",
+                      "timezone": "UTC"
+                    }
+                  ]
+                }
+              }
+            },
+            "metrics": {
+              "namespace": "EC2/${EnvironmentName}",
+              "metrics_collected": {
+                "cpu": {
+                  "measurement": ["cpu_usage_idle","cpu_usage_system","cpu_usage_user"],
+                  "metrics_collection_interval": 60
+                },
+                "mem": {
+                  "measurement": ["mem_used_percent"],
+                  "metrics_collection_interval": 60
+                }
+              }
+            }
+          }
+          EOF
+
+          /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+
+          # Enable and start the web server
+          yum install -y httpd
+          systemctl enable httpd
+          echo "<h1>SaaS App - Instance $(hostname)</h1>" > /var/www/html/index.html
+          systemctl start httpd
       Tags:
         - Key: Name
           Value: !Sub "${AWS::StackName}-${AWS::Region}-EC2Instance"
@@ -370,6 +450,7 @@ Resources:
           Value: !Ref CostCenter
         - Key: Region
           Value: !Ref "AWS::Region"
+
 
   # Elastic IP
   ElasticIP:
@@ -541,3 +622,21 @@ Outputs:
     Value: !Ref EC2KeyPair
     Export:
       Name: !Sub "${AWS::StackName}-${AWS::Region}-KeyPair"
+
+  EC2RoleName:
+    Description: "IAM Role Name for EC2"
+    Value: !Ref EC2Role
+    Export:
+      Name: !Sub "${AWS::StackName}-${AWS::Region}-EC2RoleName"
+
+  EC2InstanceProfileName:
+    Description: "EC2 Instance Profile Name"
+    Value: !Ref EC2InstanceProfile
+    Export:
+      Name: !Sub "${AWS::StackName}-${AWS::Region}-EC2InstanceProfileName"
+
+  EC2LogGroupName:
+    Description: "CloudWatch Log Group for EC2"
+    Value: !Ref EC2LogGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-${AWS::Region}-EC2LogGroupName"

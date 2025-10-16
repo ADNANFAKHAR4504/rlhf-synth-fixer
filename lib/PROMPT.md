@@ -6,8 +6,6 @@ You are tasked to set up a **foundational cloud environment** using **AWS CloudF
 The environment must be deployed in the **`us-east-1`** region and follow best practices for networking, security, monitoring, and cost allocation.  
 This infrastructure will serve as a baseline for enterprise-grade applications or development environments.
 
----
-
 ### **Requirements**
 
 #### 1. Networking
@@ -50,8 +48,6 @@ This infrastructure will serve as a baseline for enterprise-grade applications o
   - Elastic IP
   - S3 Bucket Names
 
----
-
 ### **Constraints & Standards**
 
 - **Region:** `us-east-1` (use `AWS::Region` pseudoparameter; do not hardcode).
@@ -67,8 +63,6 @@ This infrastructure will serve as a baseline for enterprise-grade applications o
 - **Cost Allocation:**
   - Consistent tagging on all resources.
 
----
-
 ### **Expected Output**
 
 - A **fully functional CloudFormation YAML template** implementing the above requirements.
@@ -83,13 +77,9 @@ This infrastructure will serve as a baseline for enterprise-grade applications o
   - Avoid all hardcoded values.
   - Use intrinsic functions like `!Ref`, `!Sub`, `!GetAtt`, and pseudoparameters (`${AWS::AccountId}`, `${AWS::Region}`).
 
----
-
 ### **Subtask**
 
 - **Cloud Environment Setup** in `us-east-1`.
-
----
 
 ### **Additional Notes**
 
@@ -97,7 +87,6 @@ This infrastructure will serve as a baseline for enterprise-grade applications o
 - All created resources must comply with **AWS best practices** for scalability, security, and maintainability.
 - Define resource dependencies to ensure proper provisioning order.
 
----
 
 **Example Prompt Usage:**  
 > “Generate a CloudFormation YAML template that implements the above task, following the constraints and expected output. Use parameters for AMI ID, instance type, and other configurable values. Ensure the template is production-ready.”

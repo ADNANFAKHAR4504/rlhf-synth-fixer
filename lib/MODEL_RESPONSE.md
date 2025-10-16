@@ -1,36 +1,59 @@
-### Reasoning Trace
----
+# AWS CloudFormation Template Analysis
 
-This is a comprehensive CloudFormation template generation task. Let me break down the requirements:
+## Requirements Analysis
 
-1. **Networking**: VPC with CIDR 10.0.0.0/16, 2 subnets in different AZs, Internet Gateway, Route Table
-2. **Compute**: EC2 instance with AMI parameter, Elastic IP, Security Group (HTTP/SSH), detailed monitoring, EBS encryption
-3. **IAM**: IAM Role and Instance Profile for EC2 to access S3
-4. **Storage**: Two S3 buckets (general and logs) with versioning and encryption
-5. **Security**: Encryption for all storage, resource tagging
-6. **Monitoring**: CloudWatch alarm for CPU > 80%
-7. **Outputs**: Various resource IDs
+### Key Components
 
-Key constraints:
-- Region: us-east-1 (use AWS::Region pseudoparameter)
-- No hardcoding
-- Cross-account executable
-- Security best practices
-- Cost allocation tagging
+1. **Networking**
+   - VPC with CIDR 10.0.0.0/16
+   - 2 subnets in different AZs
+   - Internet Gateway
+   - Route Table
 
-I need to create a CloudFormation YAML template with:
-- Parameters section
-- Metadata section for parameter grouping
-- Resources section with all required resources
-- Outputs section
+2. **Compute**
+   - EC2 instance with AMI parameter
+   - Elastic IP
+   - Security Group (HTTP/SSH)
+   - Detailed monitoring
+   - EBS encryption
 
-Let me structure this properly:
-### Answer 
----
+3. **IAM**
+   - IAM Role and Instance Profile
+   - EC2 to S3 access permissions
 
-I'll create a comprehensive CloudFormation template that meets all your requirements. This template will set up a foundational cloud environment with proper networking, security, monitoring, and compliance.
+4. **Storage**
+   - Two S3 buckets (general and logs)
+   - Versioning enabled
+   - Encryption enabled
 
-## CloudFormation Template
+5. **Security**
+   - Storage encryption
+   - Resource tagging
+
+6. **Monitoring**
+   - CloudWatch alarm (CPU > 80%)
+
+7. **Outputs**
+   - Various resource IDs
+
+### Key Constraints
+
+- **Region**: us-east-1 (using AWS::Region pseudoparameter)
+- **Cross-Account Compatibility**: Must be executable across accounts
+- **No Hardcoding**: Use parameters and pseudo-parameters
+- **Security**: Follow AWS best practices
+- **Cost Management**: Implement allocation tagging
+
+### Template Structure
+
+The CloudFormation template will include:
+1. Parameters section
+2. Metadata section (parameter grouping)
+3. Resources section
+4. Outputs section
+## Implementation
+
+The following CloudFormation template implements all requirements with proper security, monitoring, and compliance measures.
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
