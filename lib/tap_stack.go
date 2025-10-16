@@ -960,7 +960,7 @@ func main() {
 			StageName:  pulumi.String(stageName),
 			AccessLogSettings: &apigateway.StageAccessLogSettingsArgs{
 				DestinationArn: apiGatewayLogGroup.Arn,
-				Format: pulumi.String(`{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","routeKey":"$context.routeKey","status":"$context.status","integrationStatus":"$context.integration.status","responseLength":"$context.responseLength"}`),
+				Format:         pulumi.String(`{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","routeKey":"$context.routeKey","status":"$context.status","integrationStatus":"$context.integration.status","responseLength":"$context.responseLength"}`),
 			},
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String(fmt.Sprintf("%s-%s-api-stage", projectName, stackName)),
