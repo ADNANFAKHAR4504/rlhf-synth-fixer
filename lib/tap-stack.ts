@@ -61,7 +61,8 @@ export class TapStack extends cdk.Stack {
         versioned: true,
         encryption: s3.BucketEncryption.S3_MANAGED,
         blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-        removalPolicy: cdk.RemovalPolicy.RETAIN,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        autoDeleteObjects: true,
         cors: [
           {
             allowedHeaders: ['*'],
@@ -99,7 +100,7 @@ export class TapStack extends cdk.Stack {
         billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
         pointInTimeRecovery: true,
         encryption: dynamodb.TableEncryption.AWS_MANAGED,
-        removalPolicy: cdk.RemovalPolicy.RETAIN,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
       }
     );
 
