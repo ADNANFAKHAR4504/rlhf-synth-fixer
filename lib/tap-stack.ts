@@ -10,6 +10,8 @@ import { Instance } from '@cdktf/provider-aws/lib/instance';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
+import { RandomProvider } from '@cdktf/provider-random/lib/provider';
+
 
 // Import custom modules
 import {
@@ -47,6 +49,9 @@ export class TapStack extends TerraformStack {
       defaultTags: defaultTags,
     });
 
+    new RandomProvider(this, 'random', {});
+
+    
     // Configure S3 Backend with native state locking
     new S3Backend(this, {
       bucket: stateBucket,
@@ -116,12 +121,6 @@ export class TapStack extends TerraformStack {
       bucketName: `${id}-${environmentSuffix}-public-assets`,
       encryption: 'SSE-S3',
       versioning: true,
-      lifecycleRules: [
-        {
-          id: 'expire-old-versions',
-          expirationDays: 90,
-        },
-      ],
     });
 
     const privateS3Module = new S3BucketConstruct(this, 'private-s3', {
@@ -305,10 +304,10 @@ export class TapStack extends TerraformStack {
 
     // Create RDS instance
     const rdsModule = new RDSConstruct(this, 'rds', {
-      projectName: id,
+      projectName: id.toLowerCase(),
       environment: environmentSuffix,
       tags: commonTags,
-      instanceIdentifier: `${id}-${environmentSuffix}-db`,
+      instanceIdentifier: `${id.toLowerCase()}-${environmentSuffix}-db`,
       instanceClass: 'db.t3.micro',
       allocatedStorage: 20,
       engine: 'postgres',
@@ -385,3 +384,4 @@ export class TapStack extends TerraformStack {
     });
   }
 }
+

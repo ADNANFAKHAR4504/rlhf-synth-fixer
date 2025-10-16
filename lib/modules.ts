@@ -22,6 +22,9 @@ import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
 import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
 
+// Add to imports
+import { Password } from '@cdktf/provider-random/lib/password';
+
 // RDS
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
@@ -49,7 +52,6 @@ import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versionin
 import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
 import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
 import { S3BucketLoggingA } from '@cdktf/provider-aws/lib/s3-bucket-logging';
-import { S3BucketLifecycleConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-lifecycle-configuration';
 
 // SSM
 import { SsmParameter } from '@cdktf/provider-aws/lib/ssm-parameter';
@@ -476,12 +478,6 @@ export interface S3BucketConstructProps extends BaseConstructProps {
   encryption?: 'SSE-S3' | 'SSE-KMS';
   kmsKeyArn?: string;
   versioning?: boolean;
-  lifecycleRules?: Array<{
-    id: string;
-    expirationDays?: number;
-    transitionDays?: number;
-    transitionStorageClass?: string;
-  }>;
   accessLogging?: {
     targetBucket: string;
     targetPrefix: string;
@@ -573,32 +569,6 @@ export class S3BucketConstruct extends Construct {
         targetPrefix: props.accessLogging.targetPrefix,
       });
     }
-
-    // Lifecycle rules
-    if (props.lifecycleRules && props.lifecycleRules.length > 0) {
-      new S3BucketLifecycleConfiguration(this, 'lifecycle', {
-        bucket: this.bucket.id,
-        rule: props.lifecycleRules.map(rule => ({
-          id: rule.id,
-          status: 'Enabled',
-          expiration: rule.expirationDays
-            ? [
-                {
-                  days: rule.expirationDays,
-                },
-              ]
-            : undefined,
-          transition: rule.transitionDays
-            ? [
-                {
-                  days: rule.transitionDays,
-                  storageClass: rule.transitionStorageClass || 'STANDARD_IA',
-                },
-              ]
-            : undefined,
-        })),
-      });
-    }
   }
 }
 
@@ -626,13 +596,21 @@ export class RDSConstruct extends Construct {
   public readonly instance: DbInstance;
   public readonly secret: SecretsmanagerSecret;
   public readonly secretVersion: SecretsmanagerSecretVersion;
+  public readonly dbPassword: Password;
 
   constructor(scope: Construct, id: string, props: RDSConstructProps) {
     super(scope, id);
 
-    // Create DB subnet group
+    // Generate random password for database
+    this.dbPassword = new Password(this, 'db-password', {
+      length: 32,
+      special: true,
+      overrideSpecial: '!#$%&*()-_=+[]{}<>:?',
+    });
+
+    // Create DB subnet group - use lowercase name
     const subnetGroup = new DbSubnetGroup(this, 'subnet-group', {
-      name: `${props.instanceIdentifier}-subnet-group`,
+      name: `${props.instanceIdentifier.toLowerCase()}-subnet-group`,
       subnetIds: props.subnetIds,
       tags: {
         ...props.tags,
@@ -650,26 +628,9 @@ export class RDSConstruct extends Construct {
       },
     });
 
-    // Generate secret values
-    this.secretVersion = new SecretsmanagerSecretVersion(
-      this,
-      'secret-version',
-      {
-        secretId: this.secret.id,
-        secretString: JSON.stringify({
-          username: 'dbadmin',
-          password: '${random_password.db.result}',
-          engine: props.engine,
-          host: '${aws_db_instance.main.endpoint}',
-          port: props.engine === 'postgres' ? 5432 : 3306,
-          dbname: 'appdb',
-        }),
-      }
-    );
-
     // Create RDS instance
     this.instance = new DbInstance(this, 'instance', {
-      identifier: props.instanceIdentifier,
+      identifier: props.instanceIdentifier.toLowerCase(),
       engine: props.engine,
       instanceClass: props.instanceClass,
       allocatedStorage: props.allocatedStorage,
@@ -679,7 +640,7 @@ export class RDSConstruct extends Construct {
 
       // Credentials
       username: 'dbadmin',
-      password: '${random_password.db.result}',
+      password: this.dbPassword.result,
 
       // Multi-AZ and subnet configuration
       multiAz: props.multiAz,
@@ -694,7 +655,7 @@ export class RDSConstruct extends Construct {
       // Security
       deletionProtection: props.deletionProtection,
       skipFinalSnapshot: !props.deletionProtection,
-      finalSnapshotIdentifier: `${props.instanceIdentifier}-final-snapshot`,
+      finalSnapshotIdentifier: `${props.instanceIdentifier.toLowerCase()}-final-snapshot`,
 
       // Performance Insights
       performanceInsightsEnabled: true,
@@ -705,6 +666,23 @@ export class RDSConstruct extends Construct {
         Name: props.instanceIdentifier,
       },
     });
+
+    // Generate secret values with proper references
+    this.secretVersion = new SecretsmanagerSecretVersion(
+      this,
+      'secret-version',
+      {
+        secretId: this.secret.id,
+        secretString: JSON.stringify({
+          username: 'dbadmin',
+          password: this.dbPassword.result,
+          engine: props.engine,
+          host: this.instance.endpoint,
+          port: props.engine === 'postgres' ? 5432 : 3306,
+          dbname: 'appdb',
+        }),
+      }
+    );
   }
 }
 
