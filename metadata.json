@@ -1,0 +1,14 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "410126",
+  "team": "4",
+  "startedAt": "2025-10-16T15:40:54.107Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC"
+}
