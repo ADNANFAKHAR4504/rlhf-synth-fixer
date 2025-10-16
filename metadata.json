@@ -10,5 +10,21 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "Route53"
+  "background": "MISSING - MUST BE SET FROM tasks.csv",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "Lambda",
+    "ELB",
+    "Route53",
+    "CloudFront",
+    "CloudWatch",
+    "KMS",
+    "IAM",
+    "AutoScaling",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 9
 }
