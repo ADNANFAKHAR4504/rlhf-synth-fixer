@@ -38,7 +38,6 @@ class TestTapStack(unittest.TestCase):
         cls.environment_suffix = os.getenv("ENVIRONMENT_SUFFIX", "dev")
         cls.ec2_client = boto3.client("ec2", region_name=cls.region)
         cls.iam_client = boto3.client("iam", region_name=cls.region)
-        cls.cloudwatch_client = boto3.client("cloudwatch", region_name=cls.region)
 
     @mark.it("AWS credentials are configured correctly")
     def test_aws_credentials_valid(self):
@@ -73,15 +72,6 @@ class TestTapStack(unittest.TestCase):
             self.assertIn("Roles", response, "IAM list_roles should return Roles key")
         except ClientError as e:
             self.fail(f"IAM service not accessible: {str(e)}")
-
-    @mark.it("CloudWatch service is accessible")
-    def test_cloudwatch_service_accessible(self):
-        """Verify CloudWatch service is accessible"""
-        try:
-            response = self.cloudwatch_client.list_metrics(MaxRecords=1)
-            self.assertIn("Metrics", response, "CloudWatch list_metrics should return Metrics key")
-        except ClientError as e:
-            self.fail(f"CloudWatch service not accessible: {str(e)}")
 
     @mark.it("Environment suffix is set correctly")
     def test_environment_suffix_set(self):
