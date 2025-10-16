@@ -8,7 +8,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as http from 'http';
 import * as https from 'https';
-import { HttpRequest } from '@aws-sdk/protocol-http';
+
+// ✅ Smithy imports (present transitively via @aws-sdk/client-*)
+import { HttpRequest } from '@smithy/protocol-http';
+import { SignatureV4 } from '@smithy/signature-v4';
 
 import {
   EC2Client,
@@ -48,7 +51,6 @@ import {
 } from '@aws-sdk/client-cloudwatch';
 
 import { RDSClient } from '@aws-sdk/client-rds';
-import { SignatureV4 } from '@aws-sdk/signature-v4';
 import { Sha256 } from '@aws-crypto/sha256-js';
 import { defaultProvider } from '@aws-sdk/credential-provider-node';
 import { describe, it, expect, afterAll } from '@jest/globals';
@@ -98,6 +100,7 @@ async function httpGetSigned(urlStr: string, timeoutMs = 8000): Promise<{ status
     service: 'execute-api',
     region,
     credentials: defaultProvider(),
+    // @ts-expect-error smithy types accept constructors; this is fine at runtime
     sha256: Sha256 as any,
   });
 
@@ -110,7 +113,7 @@ async function httpGetSigned(urlStr: string, timeoutMs = 8000): Promise<{ status
   });
 
   const signed = await signer.sign(reqToSign);
-  const signedHeaders = signed.headers as Record<string, string>;
+  const signedHeaders = (signed as any).headers as Record<string, string>;
 
   return new Promise((resolve, reject) => {
     const req = https.request(
@@ -227,7 +230,8 @@ log('--- E2E TESTS START ---');
 /* ---------------- region + clients ---------------- */
 const REGION = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
 const ec2  = new EC2Client({ region: REGION });
-const ec2EU = new EC2Client({ region: 'eu-west-2' });
+//  your Terraform uses eu-west-1 ("euw2"), not eu-west-2
+const ec2EU = new EC2Client({ region: 'eu-west-1' });
 const ssm  = new SSMClient({ region: REGION });
 const s3   = new S3Client({ region: REGION });
 const logs = new CloudWatchLogsClient({ region: REGION });
@@ -673,10 +677,8 @@ describe('End-to-end smoke: ALB -> EC2(private) -> RDS', () => {
   }
 
   it('ALB serves, EC2 can reach ALB AND RDS in one SSM run', async () => {
-    // 0) If we can, wait for a healthy target (covers replaced/booting instances)
     await waitAlbHealthyTarget(8 * 60 * 1000);
 
-    // 1) Probe ALB from runner (external check)
     const albRes = await retry(async () => {
       try {
         const r = await httpGet(`http://${albDns}/alb.html`, 6000);
@@ -686,7 +688,6 @@ describe('End-to-end smoke: ALB -> EC2(private) -> RDS', () => {
     expect(albRes.status).toBeGreaterThanOrEqual(200);
     expect(albRes.status).toBeLessThan(400);
 
-    // 2) One SSM script on a private instance to curl ALB + psql RDS
     const id = await pickAppInstance(vpcId);
     await waitSsm(id);
     await waitReachable(id);
