@@ -759,8 +759,8 @@ export class MonitoringModule extends Construct {
     id: string,
     ec2InstanceId: string,
     rdsInstanceId: string,
-    emailAddress: string,
-    kmsKey?: aws.kmsKey.KmsKey
+    emailAddress: string
+    // kmsKey?: aws.kmsKey.KmsKey
   ) {
     super(scope, id);
 
@@ -784,7 +784,7 @@ export class MonitoringModule extends Construct {
 
     // CloudWatch Log Group
     new aws.cloudwatchLogGroup.CloudwatchLogGroup(this, 'app-logs', {
-      name: '/aws/ec2/production',
+      name: '/aws/ec2/productionts',
       retentionInDays: 30,
       // ...(kmsKey && { kmsKeyId: kmsKey.arn }),
       tags: commonTags,

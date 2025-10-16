@@ -128,8 +128,8 @@ export class TapStack extends TerraformStack {
       'monitoring',
       ec2Module.instance.id,
       rdsModule.instance.id,
-      'admin@example.com', // Replace with your email
-      kmsModule.key
+      'admin@example.com' // Replace with your email
+      // kmsModule.key
     );
 
     // Deploy CloudFront distribution
