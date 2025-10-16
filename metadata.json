@@ -12,5 +12,5 @@
     "Cloud Environment Setup"
   ],
   "aws_services": ["EC2", "EBS", "VPC", "DLM", "SNS", "CloudWatch", "IAM"],
-  "training_quality": 8
+  "training_quality": 9
 }
