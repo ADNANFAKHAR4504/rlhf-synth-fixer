@@ -11,5 +11,12 @@
   "subject_labels": [
     "Failure Recovery Automation"
   ],
-  "aws_services": "S3, Lambda, CloudWatch, IAM, SSM Parameter Store, SNS, VPC, EC2, Auto Scaling"
+  "aws_services": "S3, Lambda, CloudWatch, IAM, SSM Parameter Store, SNS, VPC, EC2, Auto Scaling",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
 }
