@@ -1178,7 +1178,7 @@ resource "aws_guardduty_detector" "main" {
 | Audit Coverage | 100% (all actions) |
 
 
-## Summary
+## Summary:
 
 This Terraform configuration represents the **gold standard** for Security Configuration as Code:
 
