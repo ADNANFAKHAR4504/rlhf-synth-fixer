@@ -102,7 +102,8 @@ Resources:
       TargetKeyId: !Ref TapStackKmsKey
 
   ####################################################################
-  # S3: app bucket, cloudtrail bucket, access log bucket (SSE-KMS)
+  # S3 buckets: logging bucket, cloudtrail bucket, application bucket
+  # (SSE-KMS, Block Public Access, Versioning, Access Logging)
   ####################################################################
   TapStackLogBucket:
     Type: AWS::S3::Bucket
@@ -159,7 +160,37 @@ Resources:
         LogFilePrefix: app-bucket-access-logs/
 
   ####################################################################
-  # VPC, subnets, IGW, NATs, route tables
+  # CLOUDTRAIL S3 BUCKET POLICY (required by CloudTrail)
+  # - allows cloudtrail.amazonaws.com to GetBucketAcl and PutObject to
+  #   the AWSLogs/<AccountId> prefix and enforces bucket-owner-full-control.
+  ####################################################################
+  TapStackCloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref TapStackCloudTrailBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "AllowCloudTrailGetBucketAcl"
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - s3:GetBucketAcl
+            Resource: !Sub "arn:${AWS::Partition}:s3:::${TapStackCloudTrailBucket}"
+          - Sid: "AllowCloudTrailPutObject"
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - s3:PutObject
+            Resource: !Sub "arn:${AWS::Partition}:s3:::${TapStackCloudTrailBucket}/AWSLogs/${AWS::AccountId}/*"
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: "bucket-owner-full-control"
+
+  ####################################################################
+  # VPC, Subnets, IGW, NATs, RouteTables
   ####################################################################
   TapStackVPC:
     Type: AWS::EC2::VPC
@@ -167,12 +198,16 @@ Resources:
       CidrBlock: !Ref VpcCidr
       EnableDnsSupport: true
       EnableDnsHostnames: true
-      Tags: [ { Key: Name, Value: !Sub "${Environment}-tapstack-vpc" } ]
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-tapstack-vpc"
 
   TapStackInternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
-      Tags: [ { Key: Name, Value: !Sub "${Environment}-tapstack-igw" } ]
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-tapstack-igw"
 
   TapStackIGWAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -183,12 +218,13 @@ Resources:
   NatEIP1:
     Type: AWS::EC2::EIP
     DependsOn: TapStackIGWAttachment
-    Properties: { Domain: vpc }
-
+    Properties:
+      Domain: vpc
   NatEIP2:
     Type: AWS::EC2::EIP
     DependsOn: TapStackIGWAttachment
-    Properties: { Domain: vpc }
+    Properties:
+      Domain: vpc
 
   PublicSubnet1:
     Type: AWS::EC2::Subnet
@@ -196,7 +232,9 @@ Resources:
       VpcId: !Ref TapStackVPC
       CidrBlock: !Ref PublicSubnet1Cidr
       AvailabilityZone: !FindInMap [ AZMap, !Ref "AWS::Region", AZ1 ]
-      Tags: [ { Key: Name, Value: !Sub "${Environment}-tapstack-public-1" } ]
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-tapstack-public-1"
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -204,7 +242,9 @@ Resources:
       VpcId: !Ref TapStackVPC
       CidrBlock: !Ref PublicSubnet2Cidr
       AvailabilityZone: !FindInMap [ AZMap, !Ref "AWS::Region", AZ2 ]
-      Tags: [ { Key: Name, Value: !Sub "${Environment}-tapstack-public-2" } ]
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-tapstack-public-2"
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -212,7 +252,9 @@ Resources:
       VpcId: !Ref TapStackVPC
       CidrBlock: !Ref PrivateSubnet1Cidr
       AvailabilityZone: !FindInMap [ AZMap, !Ref "AWS::Region", AZ1 ]
-      Tags: [ { Key: Name, Value: !Sub "${Environment}-tapstack-private-1" } ]
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-tapstack-private-1"
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -220,13 +262,17 @@ Resources:
       VpcId: !Ref TapStackVPC
       CidrBlock: !Ref PrivateSubnet2Cidr
       AvailabilityZone: !FindInMap [ AZMap, !Ref "AWS::Region", AZ2 ]
-      Tags: [ { Key: Name, Value: !Sub "${Environment}-tapstack-private-2" } ]
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-tapstack-private-2"
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref TapStackVPC
-      Tags: [ { Key: Name, Value: !Sub "${Environment}-tapstack-public-rt" } ]
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-tapstack-public-rt"
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -253,20 +299,26 @@ Resources:
     Properties:
       AllocationId: !GetAtt NatEIP1.AllocationId
       SubnetId: !Ref PublicSubnet1
-      Tags: [ { Key: Name, Value: !Sub "${Environment}-tapstack-nat-1" } ]
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-tapstack-nat-1"
 
   TapStackNatGateway2:
     Type: AWS::EC2::NatGateway
     Properties:
       AllocationId: !GetAtt NatEIP2.AllocationId
       SubnetId: !Ref PublicSubnet2
-      Tags: [ { Key: Name, Value: !Sub "${Environment}-tapstack-nat-2" } ]
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-tapstack-nat-2"
 
   PrivateRouteTable1:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref TapStackVPC
-      Tags: [ { Key: Name, Value: !Sub "${Environment}-tapstack-private-rt-1" } ]
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-tapstack-private-rt-1"
 
   PrivateRoute1:
     Type: AWS::EC2::Route
@@ -285,7 +337,9 @@ Resources:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref TapStackVPC
-      Tags: [ { Key: Name, Value: !Sub "${Environment}-tapstack-private-rt-2" } ]
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-tapstack-private-rt-2"
 
   PrivateRoute2:
     Type: AWS::EC2::Route
@@ -313,7 +367,9 @@ Resources:
           FromPort: 22
           ToPort: 22
           CidrIp: !Ref AdminCIDR
-      Tags: [ { Key: Name, Value: !Sub "${Environment}-tapstack-bastion-sg" } ]
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-tapstack-bastion-sg"
 
   PrivateInstanceSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -325,7 +381,9 @@ Resources:
           FromPort: 22
           ToPort: 22
           SourceSecurityGroupId: !Ref BastionSecurityGroup
-      Tags: [ { Key: Name, Value: !Sub "${Environment}-tapstack-private-sg" } ]
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-tapstack-private-sg"
 
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -335,7 +393,9 @@ Resources:
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
-      Tags: [ { Key: Name, Value: !Sub "${Environment}-tapstack-lambda-sg" } ]
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-tapstack-lambda-sg"
 
   RdsSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -359,7 +419,9 @@ Resources:
           FromPort: 5432
           ToPort: 5432
           SourceSecurityGroupId: !Ref LambdaSecurityGroup
-      Tags: [ { Key: Name, Value: !Sub "${Environment}-tapstack-rds-sg" } ]
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-tapstack-rds-sg"
 
   ####################################################################
   # IAM: EC2 Role & Instance Profile
@@ -372,8 +434,12 @@ Resources:
         Version: "2012-10-17"
         Statement:
           - Effect: Allow
-            Principal: { Service: [ ec2.amazonaws.com ] }
-            Action: [ sts:AssumeRole ]
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
       Policies:
@@ -382,23 +448,31 @@ Resources:
             Version: "2012-10-17"
             Statement:
               - Effect: Allow
-                Action: [ s3:GetObject, s3:PutObject ]
-                Resource: !Sub "arn:${AWS::Partition}:s3:::${Environment}-tapstack-app-${AWS::AccountId}-${AWS::Region}/*"
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:s3:::${Environment}-tapstack-app-${AWS::AccountId}-${AWS::Region}/*"
               - Effect: Allow
-                Action: [ secretsmanager:GetSecretValue ]
-                Resource: !Ref DBCredentialsSecret
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref DBCredentialsSecret
               - Effect: Allow
-                Action: [ kms:Decrypt ]
-                Resource: !Sub "arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:key/${TapStackKmsKey}"
+                Action:
+                  - kms:Decrypt
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:key/${TapStackKmsKey}"
 
   TapStackInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
       InstanceProfileName: !Sub "${Environment}-TapStack-InstanceProfile"
-      Roles: [ !Ref TapStackEC2Role ]
+      Roles:
+        - !Ref TapStackEC2Role
 
   ####################################################################
-  # IAM: Lambda Role (least privilege) — FIXED: log resource uses !Sub with correct log-group ARN
+  # IAM: Lambda Role (least privilege)
   ####################################################################
   TapStackLambdaRole:
     Type: AWS::IAM::Role
@@ -408,8 +482,12 @@ Resources:
         Version: "2012-10-17"
         Statement:
           - Effect: Allow
-            Principal: { Service: [ lambda.amazonaws.com ] }
-            Action: [ sts:AssumeRole ]
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
       Policies:
@@ -419,20 +497,29 @@ Resources:
             Statement:
               - Sid: AllowLambdaLogsWrite
                 Effect: Allow
-                Action: [ logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents ]
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
                 Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${Environment}-tapstack-handler:*"
               - Sid: AllowSecretsManagerRead
                 Effect: Allow
-                Action: [ secretsmanager:GetSecretValue ]
-                Resource: !Ref DBCredentialsSecret
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref DBCredentialsSecret
               - Sid: AllowRdsDescribe
                 Effect: Allow
-                Action: [ rds:DescribeDBInstances ]
+                Action:
+                  - rds:DescribeDBInstances
                 Resource: "*"
               - Sid: AllowKmsUse
                 Effect: Allow
-                Action: [ kms:Decrypt, kms:GenerateDataKey ]
-                Resource: !Sub "arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:key/${TapStackKmsKey}"
+                Action:
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:key/${TapStackKmsKey}"
 
   ####################################################################
   # IAM: MFA-enforce managed policy + admin group
@@ -449,7 +536,9 @@ Resources:
             Effect: Deny
             Action: "*"
             Resource: "*"
-            Condition: { Bool: { aws:MultiFactorAuthPresent: "false" } }
+            Condition:
+              Bool:
+                aws:MultiFactorAuthPresent: "false"
 
   TapStackAdminGroup:
     Type: AWS::IAM::Group
@@ -481,7 +570,9 @@ Resources:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupDescription: !Sub "${Environment} TapStack DB subnet group"
-      SubnetIds: [ !Ref PrivateSubnet1, !Ref PrivateSubnet2 ]
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
       DBSubnetGroupName: !Sub "${Environment}-tapstack-db-subnet-group"
 
   TapStackDBInstance:
@@ -494,7 +585,8 @@ Resources:
       DBName: !Ref DBName
       MasterUsername: !Join ['', [ "{{resolve:secretsmanager:", !Ref DBCredentialsSecret, ":SecretString:username}}" ]]
       MasterUserPassword: !Join ['', [ "{{resolve:secretsmanager:", !Ref DBCredentialsSecret, ":SecretString:password}}" ]]
-      VPCSecurityGroups: [ !Ref RdsSecurityGroup ]
+      VPCSecurityGroups:
+        - !Ref RdsSecurityGroup
       DBSubnetGroupName: !Ref TapStackDBSubnetGroup
       PubliclyAccessible: false
       StorageEncrypted: true
@@ -533,7 +625,9 @@ Resources:
     Type: AWS::ApiGateway::RestApi
     Properties:
       Name: !Sub "${Environment}-tapstack-api"
-      EndpointConfiguration: { Types: [ REGIONAL ] }
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
 
   TapStackApiResource:
     Type: AWS::ApiGateway::Resource
@@ -566,7 +660,8 @@ Resources:
     Type: AWS::ApiGateway::Deployment
     Properties:
       RestApiId: !Ref TapStackRestApi
-    DependsOn: [ TapStackApiMethod ]
+    DependsOn:
+      - TapStackApiMethod
 
   TapStackApiStage:
     Type: AWS::ApiGateway::Stage
@@ -578,10 +673,10 @@ Resources:
         DestinationArn: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/apigateway/${Environment}-tapstack-api-logs"
         Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","caller":"$context.identity.caller","user":"$context.identity.user","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath","status":"$context.status","protocol":"$context.protocol"}'
       MethodSettings:
-        - ResourcePath: "/*"
+        - DataTraceEnabled: true
           HttpMethod: "*"
           LoggingLevel: INFO
-          DataTraceEnabled: true
+          ResourcePath: "/*"
 
   ####################################################################
   # Lambda: VPC-enabled, KMS encryption for env vars, least-priv role
@@ -601,8 +696,11 @@ Resources:
       Role: !GetAtt TapStackLambdaRole.Arn
       KmsKeyArn: !Sub "arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:key/${TapStackKmsKey}"
       VpcConfig:
-        SubnetIds: [ !Ref PrivateSubnet1, !Ref PrivateSubnet2 ]
-        SecurityGroupIds: [ !Ref LambdaSecurityGroup ]
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
       Environment:
         Variables:
           DB_SECRET_ARN: !Ref DBCredentialsSecret
@@ -617,23 +715,30 @@ Resources:
               }
 
   ####################################################################
-  # Optional EC2 instance for testing (replace AMI per region)
+  # Sample EC2 Instance in private subnet (for demonstration)
   ####################################################################
   TapStackPrivateInstance:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t3.micro
-      ImageId: ami-0c94855ba95c71c99  # REPLACE with region-appropriate AMI
+      # NOTE: Replace with region-appropriate AMI before deploying (this is a placeholder)
+      ImageId: ami-0c94855ba95c71c99
       SubnetId: !Ref PrivateSubnet1
       IamInstanceProfile: !Ref TapStackInstanceProfile
-      SecurityGroupIds: [ !Ref PrivateInstanceSecurityGroup ]
-      Tags: [ { Key: Name, Value: !Sub "${Environment}-tapstack-private-instance" } ]
+      SecurityGroupIds:
+        - !Ref PrivateInstanceSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-tapstack-private-instance"
 
   ####################################################################
-  # CloudTrail (multi-region)
+  # CloudTrail (multi-region) storing logs in encrypted S3 bucket
+  # - Depends on the S3 bucket policy to be present for validation
   ####################################################################
   TapStackCloudTrail:
     Type: AWS::CloudTrail::Trail
+    DependsOn:
+      - TapStackCloudTrailBucketPolicy
     Properties:
       TrailName: !Sub "${Environment}-tapstack-cloudtrail"
       IsMultiRegionTrail: true
@@ -658,62 +763,74 @@ Outputs:
   VpcId:
     Description: VPC ID
     Value: !Ref TapStackVPC
-    Export: { Name: !Sub "${Environment}-TapStack-VpcId" }
+    Export:
+      Name: !Sub "${Environment}-TapStack-VpcId"
 
   PublicSubnetIds:
     Description: Public subnet IDs
     Value: !Join [ ",", [ !Ref PublicSubnet1, !Ref PublicSubnet2 ] ]
-    Export: { Name: !Sub "${Environment}-TapStack-PublicSubnets" }
+    Export:
+      Name: !Sub "${Environment}-TapStack-PublicSubnets"
 
   PrivateSubnetIds:
     Description: Private subnet IDs
     Value: !Join [ ",", [ !Ref PrivateSubnet1, !Ref PrivateSubnet2 ] ]
-    Export: { Name: !Sub "${Environment}-TapStack-PrivateSubnets" }
+    Export:
+      Name: !Sub "${Environment}-TapStack-PrivateSubnets"
 
   AppBucketName:
     Description: App S3 bucket
     Value: !Ref TapStackAppBucket
-    Export: { Name: !Sub "${Environment}-TapStack-AppBucket" }
+    Export:
+      Name: !Sub "${Environment}-TapStack-AppBucket"
 
   CloudTrailBucketName:
     Description: CloudTrail S3 bucket
     Value: !Ref TapStackCloudTrailBucket
-    Export: { Name: !Sub "${Environment}-TapStack-CloudTrailBucket" }
+    Export:
+      Name: !Sub "${Environment}-TapStack-CloudTrailBucket"
 
   LogBucketName:
     Description: Access log bucket
     Value: !Ref TapStackLogBucket
-    Export: { Name: !Sub "${Environment}-TapStack-LogBucket" }
+    Export:
+      Name: !Sub "${Environment}-TapStack-LogBucket"
 
   KmsKeyId:
     Description: KMS Key Id
     Value: !Ref TapStackKmsKey
-    Export: { Name: !Sub "${Environment}-TapStack-KmsKeyId" }
+    Export:
+      Name: !Sub "${Environment}-TapStack-KmsKeyId"
 
   KmsKeyArn:
     Description: KMS Key ARN
     Value: !Sub "arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:key/${TapStackKmsKey}"
-    Export: { Name: !Sub "${Environment}-TapStack-KmsKeyArn" }
+    Export:
+      Name: !Sub "${Environment}-TapStack-KmsKeyArn"
 
   LambdaRoleArn:
     Description: Lambda role ARN
     Value: !GetAtt TapStackLambdaRole.Arn
-    Export: { Name: !Sub "${Environment}-TapStack-LambdaRoleArn" }
+    Export:
+      Name: !Sub "${Environment}-TapStack-LambdaRoleArn"
 
   Ec2InstanceProfile:
     Description: EC2 instance profile name
     Value: !Ref TapStackInstanceProfile
-    Export: { Name: !Sub "${Environment}-TapStack-InstanceProfile" }
+    Export:
+      Name: !Sub "${Environment}-TapStack-InstanceProfile"
 
   RdsEndpoint:
     Description: RDS endpoint
     Value: !GetAtt TapStackDBInstance.Endpoint.Address
-    Export: { Name: !Sub "${Environment}-TapStack-RdsEndpoint" }
+    Export:
+      Name: !Sub "${Environment}-TapStack-RdsEndpoint"
 
   RequireMFAManagedPolicyArn:
     Description: MFA-managed policy ARN
     Value: !Ref RequireMFAForConsolePolicy
-    Export: { Name: !Sub "${Environment}-TapStack-RequireMFAPolicyArn" }
+    Export:
+      Name: !Sub "${Environment}-TapStack-RequireMFAPolicyArn"
 
 Metadata:
   cfn-lint:
