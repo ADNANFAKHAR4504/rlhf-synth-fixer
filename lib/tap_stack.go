@@ -86,13 +86,6 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		KinesisStream:     analytics.Stream,
 	})
 
-	// Note: CodePipeline with CodeCommit disabled due to AWS account restrictions
-	// CodeCommit requires at least one existing repository in the account
-	// Uncomment when account has CodeCommit enabled
-	// NewCicdConstruct(stack, jsii.String("Cicd"), &CicdConstructProps{
-	// 	EnvironmentSuffix: jsii.String(environmentSuffix),
-	// })
-
 	// Output important resource identifiers
 	awscdk.NewCfnOutput(stack, jsii.String("VpcId"), &awscdk.CfnOutputProps{
 		Value:       network.Vpc.VpcId(),
