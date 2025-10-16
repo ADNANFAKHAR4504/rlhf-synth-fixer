@@ -384,7 +384,7 @@ class TestCrossServiceInteractions(BaseIntegrationTest):
                 'id': test_event_id,
                 'detail-type': 'Trade Execution',
                 'source': 'integration.test.direct',
-                'time': datetime.utcnow().isoformat(),
+                'time': datetime.now(datetime.UTC).isoformat(),
                 'detail': {
                     'eventId': test_event_id,
                     'symbol': 'DIRECTTEST',
@@ -463,7 +463,7 @@ class TestCrossServiceInteractions(BaseIntegrationTest):
                 'id': test_event_id,
                 'detail-type': 'Trade Execution',
                 'source': 'integration.test.direct',
-                'time': datetime.utcnow().isoformat(),
+                'time': datetime.now(datetime.UTC).isoformat(),
                 'detail': {
                     'eventId': test_event_id,
                     'symbol': 'DIRECTTEST',
@@ -528,7 +528,7 @@ class TestCrossServiceInteractions(BaseIntegrationTest):
                 'id': test_event_id,
                 'detail-type': 'Trade Execution',
                 'source': 'integration.test.metrics',
-                'time': datetime.utcnow().isoformat(),
+                'time': datetime.now(datetime.UTC).isoformat(),
                 'detail': {
                     'eventId': test_event_id,
                     'symbol': 'METRICSTEST',
@@ -581,7 +581,7 @@ class TestCrossServiceInteractions(BaseIntegrationTest):
                 'id': test_event_id,
                 'detail-type': 'Trade Execution',
                 'source': 'integration.test.metrics',
-                'time': datetime.utcnow().isoformat(),
+                'time': datetime.now(datetime.UTC).isoformat(),
                 'detail': {
                     'eventId': test_event_id,
                     'symbol': 'METRICSTEST',

@@ -9,6 +9,7 @@ import json
 import logging
 import os
 from datetime import datetime
+from decimal import Decimal
 from typing import Any, Dict
 
 import boto3
@@ -41,7 +42,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Extract event details
         event_id = event.get('id', 'unknown')
         event_type = event.get('detail-type', 'unknown')
-        event_time = event.get('time', datetime.utcnow().isoformat())
+        event_time = event.get('time', datetime.now(datetime.UTC).isoformat())
         
         logger.info(f"Processing event {event_id} of type {event_type}")
         
@@ -78,6 +79,26 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
 
 
+def convert_floats_to_decimal(obj):
+    """
+    Recursively convert all float values to Decimal for DynamoDB compatibility.
+    
+    Args:
+        obj: Object to convert (dict, list, or primitive)
+        
+    Returns:
+        Object with floats converted to Decimals
+    """
+    if isinstance(obj, dict):
+        return {k: convert_floats_to_decimal(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_floats_to_decimal(item) for item in obj]
+    elif isinstance(obj, float):
+        return Decimal(str(obj))
+    else:
+        return obj
+
+
 def process_trading_event(event: Dict[str, Any]) -> Dict[str, Any]:
     """
     Process a trading event and extract relevant information.
@@ -91,23 +112,33 @@ def process_trading_event(event: Dict[str, Any]) -> Dict[str, Any]:
     detail = event.get('detail', {})
     
     # Use eventId from detail if available (for testing), otherwise use EventBridge's id
-    event_id = detail.get('eventId') or event.get('id')
+    # Fallback to 'unknown' if neither is available
+    event_id = detail.get('eventId') or event.get('id') or f"unknown_{int(datetime.now(datetime.UTC).timestamp())}"
+    
+    # Get event time with fallback
+    event_time = event.get('time') or datetime.now(datetime.UTC).isoformat()
+    
+    # Extract trading information and convert floats to Decimal
+    trading_data = {
+        'symbol': detail.get('symbol', 'UNKNOWN'),
+        'price': detail.get('price'),
+        'quantity': detail.get('quantity'),
+        'side': detail.get('side'),  # buy/sell
+        'orderId': detail.get('orderId'),
+        'timestamp': detail.get('timestamp')
+    }
+    
+    # Convert all floats to Decimals for DynamoDB
+    trading_data = convert_floats_to_decimal(trading_data)
     
     # Extract trading information
     processed_event = {
         'eventId': event_id,
-        'eventType': event.get('detail-type'),
-        'eventTime': event.get('time'),
-        'source': event.get('source'),
-        'tradingData': {
-            'symbol': detail.get('symbol'),
-            'price': detail.get('price'),
-            'quantity': detail.get('quantity'),
-            'side': detail.get('side'),  # buy/sell
-            'orderId': detail.get('orderId'),
-            'timestamp': detail.get('timestamp')
-        },
-        'processedAt': datetime.utcnow().isoformat(),
+        'eventType': event.get('detail-type', 'unknown'),
+        'eventTime': event_time,
+        'source': event.get('source', 'unknown'),
+        'tradingData': trading_data,
+        'processedAt': datetime.now(datetime.UTC).isoformat(),
         'region': REGION
     }
     
@@ -140,7 +171,7 @@ def store_event(event: Dict[str, Any], processed_data: Dict[str, Any]) -> None:
             'ProcessedAt': processed_data['processedAt'],
             'Region': processed_data['region'],
             'TradingData': processed_data['tradingData'],
-            'TTL': int((datetime.utcnow().timestamp() + (30 * 24 * 60 * 60)))  # 30 days TTL
+            'TTL': int((datetime.now(datetime.UTC).timestamp() + (30 * 24 * 60 * 60)))  # 30 days TTL
         }
         
         # Put item in DynamoDB
@@ -173,7 +204,7 @@ def send_metrics(event_type: str, status: str) -> None:
                     ],
                     'Value': 1,
                     'Unit': 'Count',
-                    'Timestamp': datetime.utcnow()
+                    'Timestamp': datetime.now(datetime.UTC)
                 }
             ]
         )
