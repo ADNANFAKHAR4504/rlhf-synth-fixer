@@ -36,7 +36,7 @@ const outputs = getStackOutputs();
 if (outputs) {
   describe("Live Infrastructure Integration Tests", () => {
 
-    const region = 'us-east-2';
+    const region = 'us-east-1';
     const dynamoClient = new DynamoDB.DocumentClient({ region });
     const ecsClient = new ECS({ region });
     const rdsClient = new RDS({ region });

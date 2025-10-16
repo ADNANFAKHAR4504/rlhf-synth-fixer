@@ -31,8 +31,8 @@ export class TapStack extends TerraformStack {
   constructor(scope: Construct, name: string) {
     super(scope, name);
 
-    const region = 'us-east-2';
-    new AwsProvider(this, 'aws', { region, alias: 'us-east-2' }); // Added alias for clarity
+    const region = 'us-east-1';
+    new AwsProvider(this, 'aws', { region, alias: 'us-east-1' }); // Added alias for clarity
     new RandomProvider(this, 'random');
 
     const randomSuffix = Fn.substr(Fn.uuid(), 0, 8);
