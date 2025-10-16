@@ -233,16 +233,6 @@ resource "aws_cloudwatch_metric_alarm" "vpc_b_rejected_connections" {
 }
 
 # ============================================================================
-# CLOUDWATCH ANOMALY DETECTOR (Commented - requires newer provider version)
-# ============================================================================
-
-# resource "aws_cloudwatch_anomaly_detector" "vpc_traffic" {
-#   metric_name = "TrafficVolume"
-#   namespace   = "Company/VPCPeering"
-#   stat        = "Average"
-# }
-
-# ============================================================================
 # CLOUDWATCH DASHBOARD
 # ============================================================================
 

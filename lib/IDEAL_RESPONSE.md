@@ -182,9 +182,8 @@ This infrastructure solution implements a secure VPC peering connection between 
 
 **Previous**: Basic `traffic_analyzer.py`
 
-**Current**: Two versions available:
-- `traffic_analyzer.py` - Standard version
-- `traffic_analyzer_enhanced.py` - With X-Ray tracing, Parameter Store integration, protocol analysis
+**Current**: Single Lambda function with X-Ray support:
+- `traffic_analyzer.py` - With optional X-Ray tracing via tracing_config, Parameter Store integration, protocol analysis
 
 **New Features**:
 - X-Ray subsegment tracking for each analysis step
@@ -237,8 +236,7 @@ iac-test-automations/
 │   │       └── outputs.tf                   # Lambda module outputs
 │   │
 │   ├── lambda/
-│   │   ├── traffic_analyzer.py              # Standard Lambda function
-│   │   └── traffic_analyzer_enhanced.py     # Enhanced with X-Ray tracing
+│   │   └── traffic_analyzer.py              # Lambda function with X-Ray support
 │   │
 │   ├── IDEAL_RESPONSE.md                    # This documentation file
 │   ├── MODEL_FAILURES.md                    # Analysis of improvements
@@ -417,10 +415,22 @@ variable "owner" {
   default     = "Platform Team"
 }
 
-variable "enable_xray" {
-  description = "Enable AWS X-Ray tracing for Lambda function"
+variable "enable_synthetics" {
+  description = "Enable CloudWatch Synthetics for connectivity testing"
   type        = bool
-  default     = false
+  default     = true
+}
+
+variable "enable_config_rules" {
+  description = "Enable AWS Config rules for compliance monitoring"
+  type        = bool
+  default     = true
+}
+
+variable "enable_xray" {
+  description = "Enable AWS X-Ray tracing"
+  type        = bool
+  default     = true
 }
 
 # ============================================================================
@@ -498,13 +508,17 @@ module "vpc_a" {
   private_subnets         = local.vpc_a_private_subnets
   availability_zones      = local.azs
 
-  enable_flow_logs            = true
+  enable_flow_logs            = false # Disabled to prevent conflict with existing resources
   flow_logs_retention_days    = var.retention_days
   flow_logs_role_arn          = module.security.flow_logs_role_arn
 
   enable_dns_hostnames                 = true
   enable_dns_support                   = true
   enable_network_address_usage_metrics = true
+  enable_peering                       = true
+  peer_vpc_id                          = module.vpc_b.vpc_id
+  peer_vpc_cidr                        = var.vpc_b_cidr
+  peering_connection_id                = aws_vpc_peering_connection.a_to_b.id
 }
 
 # ============================================================================
@@ -523,17 +537,21 @@ module "vpc_b" {
   private_subnets         = local.vpc_b_private_subnets
   availability_zones      = local.azs
 
-  enable_flow_logs            = true
+  enable_flow_logs            = false # Disabled to prevent conflict with existing resources
   flow_logs_retention_days    = var.retention_days
   flow_logs_role_arn          = module.security.flow_logs_role_arn
 
   enable_dns_hostnames                 = true
   enable_dns_support                   = true
   enable_network_address_usage_metrics = true
+  enable_peering                       = true
+  peer_vpc_id                          = module.vpc_a.vpc_id
+  peer_vpc_cidr                        = var.vpc_a_cidr
+  peering_connection_id                = aws_vpc_peering_connection.a_to_b.id
 }
 
 # ============================================================================
-# VPC PEERING
+# VPC PEERING CONNECTION
 # ============================================================================
 
 resource "aws_vpc_peering_connection" "a_to_b" {
@@ -555,13 +573,18 @@ resource "aws_vpc_peering_connection" "a_to_b" {
   })
 }
 
-# Add peering routes to VPC-A
+# ============================================================================
+# PEERING ROUTES
+# ============================================================================
+
+# VPC-A public route table to VPC-B
 resource "aws_route" "vpc_a_public_to_vpc_b" {
   route_table_id            = module.vpc_a.public_route_table_id
   destination_cidr_block    = var.vpc_b_cidr
   vpc_peering_connection_id = aws_vpc_peering_connection.a_to_b.id
 }
 
+# VPC-A private route tables to VPC-B
 resource "aws_route" "vpc_a_private_to_vpc_b" {
   count                     = length(module.vpc_a.private_route_table_ids)
   route_table_id            = module.vpc_a.private_route_table_ids[count.index]
@@ -569,13 +592,14 @@ resource "aws_route" "vpc_a_private_to_vpc_b" {
   vpc_peering_connection_id = aws_vpc_peering_connection.a_to_b.id
 }
 
-# Add peering routes to VPC-B
+# VPC-B public route table to VPC-A
 resource "aws_route" "vpc_b_public_to_vpc_a" {
   route_table_id            = module.vpc_b.public_route_table_id
   destination_cidr_block    = var.vpc_a_cidr
   vpc_peering_connection_id = aws_vpc_peering_connection.a_to_b.id
 }
 
+# VPC-B private route tables to VPC-A
 resource "aws_route" "vpc_b_private_to_vpc_a" {
   count                     = length(module.vpc_b.private_route_table_ids)
   route_table_id            = module.vpc_b.private_route_table_ids[count.index]
@@ -590,16 +614,15 @@ resource "aws_route" "vpc_b_private_to_vpc_a" {
 module "security" {
   source = "./modules/security"
 
-  suffix      = local.suffix
-  common_tags = local.common_tags
-
-  vpc_a_id   = module.vpc_a.vpc_id
-  vpc_b_id   = module.vpc_b.vpc_id
-  vpc_a_cidr = var.vpc_a_cidr
-  vpc_b_cidr = var.vpc_b_cidr
-
-  vpc_a_allowed_ports = ["443", "8080"]
-  vpc_b_allowed_ports = ["443", "3306"]
+  vpc_a_id      = module.vpc_a.vpc_id
+  vpc_b_id      = module.vpc_b.vpc_id
+  vpc_a_cidr    = var.vpc_a_cidr
+  vpc_b_cidr    = var.vpc_b_cidr
+  allowed_ports = var.allowed_ports
+  suffix        = local.suffix
+  common_tags   = local.common_tags
+  aws_region    = var.aws_region
+  account_id    = data.aws_caller_identity.current.account_id
 }
 
 # ============================================================================
@@ -609,20 +632,16 @@ module "security" {
 module "monitoring" {
   source = "./modules/monitoring"
 
-  suffix       = local.suffix
-  common_tags  = local.common_tags
-  aws_region   = var.aws_region
-
-  vpc_a_log_group_name = module.vpc_a.flow_logs_log_group_name
-  vpc_b_log_group_name = module.vpc_b.flow_logs_log_group_name
-
-  traffic_volume_threshold        = var.traffic_volume_threshold
-  rejected_connections_threshold  = var.rejected_connections_threshold
-
-  alert_email                     = var.alert_email
-
-  create_dashboard                = var.create_dashboard
-  lambda_function_name            = module.lambda.function_name
+  vpc_a_log_group_name           = module.vpc_a.flow_log_group_name
+  vpc_b_log_group_name           = module.vpc_b.flow_log_group_name
+  traffic_volume_threshold       = var.traffic_volume_threshold
+  rejected_connections_threshold = var.rejected_connections_threshold
+  alert_email                    = var.alert_email
+  create_dashboard               = var.create_dashboard
+  suffix                         = local.suffix
+  common_tags                    = local.common_tags
+  aws_region                     = var.aws_region
+  lambda_function_name           = module.lambda.function_name
 }
 
 # ============================================================================
@@ -632,30 +651,24 @@ module "monitoring" {
 module "lambda" {
   source = "./modules/lambda"
 
-  suffix       = local.suffix
-  common_tags  = local.common_tags
-  aws_region   = var.aws_region
-  account_id   = data.aws_caller_identity.current.account_id
-
-  function_name = "vpc-traffic-analyzer-${local.suffix}"
-
-  vpc_a_log_group_name = module.vpc_a.flow_logs_log_group_name
-  vpc_b_log_group_name = module.vpc_b.flow_logs_log_group_name
-  vpc_a_log_group_arn  = module.vpc_a.flow_logs_log_group_arn
-  vpc_b_log_group_arn  = module.vpc_b.flow_logs_log_group_arn
-
-  sns_topic_arn = module.monitoring.sns_topic_arn
-
+  function_name             = "vpc-traffic-analyzer-${local.suffix}"
+  vpc_a_log_group_name      = module.vpc_a.flow_log_group_name
+  vpc_b_log_group_name      = module.vpc_b.flow_log_group_name
+  vpc_a_log_group_arn       = module.vpc_a.flow_log_group_arn
+  vpc_b_log_group_arn       = module.vpc_b.flow_log_group_arn
   traffic_baseline          = var.traffic_baseline
-  anomaly_threshold_percent = var.anomaly_threshold_percent
+  sns_topic_arn             = module.monitoring.sns_topic_arn
   allowed_ports             = var.allowed_ports
+  anomaly_threshold_percent = var.anomaly_threshold_percent
   vpc_a_cidr                = var.vpc_a_cidr
   vpc_b_cidr                = var.vpc_b_cidr
-
-  lambda_schedule   = var.lambda_schedule
-  retention_days    = var.retention_days
-
-  enable_xray       = var.enable_xray
+  lambda_schedule           = var.lambda_schedule
+  retention_days            = var.retention_days
+  suffix                    = local.suffix
+  common_tags               = local.common_tags
+  aws_region                = var.aws_region
+  account_id                = data.aws_caller_identity.current.account_id
+  enable_xray               = var.enable_xray
 }
 
 # ============================================================================
@@ -699,12 +712,12 @@ output "vpc_b_security_group_id" {
 
 output "vpc_a_log_group_name" {
   description = "CloudWatch log group name for VPC-A Flow Logs"
-  value       = module.vpc_a.flow_logs_log_group_name
+  value       = module.vpc_a.flow_log_group_name
 }
 
 output "vpc_b_log_group_name" {
   description = "CloudWatch log group name for VPC-B Flow Logs"
-  value       = module.vpc_b.flow_logs_log_group_name
+  value       = module.vpc_b.flow_log_group_name
 }
 
 output "lambda_function_arn" {
@@ -731,6 +744,21 @@ output "alert_email" {
   description = "Email address receiving alerts"
   value       = var.alert_email
   sensitive   = true
+}
+
+output "waf_web_acl_arn" {
+  description = "ARN of the WAF Web ACL for additional protection"
+  value       = module.security.waf_web_acl_arn
+}
+
+output "parameter_store_paths" {
+  description = "AWS Systems Manager Parameter Store paths"
+  value = {
+    traffic_baseline  = aws_ssm_parameter.traffic_baseline.name
+    anomaly_threshold = aws_ssm_parameter.anomaly_threshold.name
+    allowed_ports     = aws_ssm_parameter.allowed_ports.name
+    alert_settings    = aws_ssm_parameter.alert_settings.name
+  }
 }
 ```
 
@@ -787,14 +815,14 @@ output "internet_gateway_id" {
   value       = aws_internet_gateway.this.id
 }
 
-output "flow_logs_log_group_name" {
-  description = "Name of the VPC Flow Logs CloudWatch log group"
-  value       = var.enable_flow_logs ? aws_cloudwatch_log_group.flow_logs[0].name : null
+output "flow_log_group_name" {
+  description = "CloudWatch log group name for VPC Flow Logs"
+  value       = var.enable_flow_logs ? try(aws_cloudwatch_log_group.flow_logs[0].name, null) : "/aws/vpc/flowlogs/${var.vpc_name}-${var.suffix}"
 }
 
-output "flow_logs_log_group_arn" {
-  description = "ARN of the VPC Flow Logs CloudWatch log group"
-  value       = var.enable_flow_logs ? aws_cloudwatch_log_group.flow_logs[0].arn : null
+output "flow_log_group_arn" {
+  description = "CloudWatch log group ARN for VPC Flow Logs"
+  value       = try(aws_cloudwatch_log_group.flow_logs[0].arn, null)
 }
 
 output "s3_endpoint_id" {
@@ -888,8 +916,34 @@ variable "enable_network_address_usage_metrics" {
 
 ```hcl
 # modules/vpc/peering.tf - VPC Peering Configuration
-# Note: Peering connection is created in root module
-# This file is reserved for future peering-related resources
+
+# NOTE: Peering routes are managed in the root module (main.tf) to avoid
+# circular dependencies and count issues with peering_connection_id.
+# The peering_connection_id is created in main.tf and passed to route resources there.
+
+variable "enable_peering" {
+  description = "Enable VPC peering configuration"
+  type        = bool
+  default     = false
+}
+
+variable "peer_vpc_id" {
+  description = "ID of the peer VPC"
+  type        = string
+  default     = ""
+}
+
+variable "peer_vpc_cidr" {
+  description = "CIDR block of the peer VPC"
+  type        = string
+  default     = ""
+}
+
+variable "peering_connection_id" {
+  description = "ID of the VPC peering connection"
+  type        = string
+  default     = ""
+}
 ```
 
 ---
@@ -924,22 +978,22 @@ output "flow_logs_role_name" {
   description = "Name of VPC Flow Logs IAM role"
   value       = aws_iam_role.flow_logs.name
 }
+
+output "waf_web_acl_arn" {
+  description = "ARN of the WAF Web ACL"
+  value       = aws_wafv2_web_acl.vpc_protection.arn
+}
+
+output "waf_web_acl_id" {
+  description = "ID of the WAF Web ACL"
+  value       = aws_wafv2_web_acl.vpc_protection.id
+}
 ```
 
 #### modules/security/variables.tf
 
 ```hcl
 # modules/security/variables.tf - Security Module Variables
-
-variable "suffix" {
-  description = "Suffix for resource naming"
-  type        = string
-}
-
-variable "common_tags" {
-  description = "Common tags to apply to all resources"
-  type        = map(string)
-}
 
 variable "vpc_a_id" {
   description = "ID of VPC-A"
@@ -961,16 +1015,31 @@ variable "vpc_b_cidr" {
   type        = string
 }
 
-variable "vpc_a_allowed_ports" {
-  description = "List of ports allowed for VPC-A ingress from VPC-B"
+variable "allowed_ports" {
+  description = "List of allowed ports for cross-VPC communication"
   type        = list(string)
-  default     = ["443", "8080"]
+  default     = ["443", "8080", "3306"]
 }
 
-variable "vpc_b_allowed_ports" {
-  description = "List of ports allowed for VPC-B ingress from VPC-A"
-  type        = list(string)
-  default     = ["443", "3306"]
+variable "suffix" {
+  description = "Suffix for resource naming"
+  type        = string
+}
+
+variable "common_tags" {
+  description = "Common tags to apply to all resources"
+  type        = map(string)
+  default     = {}
+}
+
+variable "aws_region" {
+  description = "AWS region"
+  type        = string
+}
+
+variable "account_id" {
+  description = "AWS account ID"
+  type        = string
 }
 ```
 
@@ -1209,6 +1278,10 @@ variable "enable_xray" {
 4. **Python**: Python 3.12 (for Lambda function)
 5. **S3 Backend**: S3 bucket for Terraform state storage
 
+### Important Notes
+
+**Current Deployment State**: VPC Flow Logs are disabled (`enable_flow_logs = false`) in both VPCs to prevent conflicts with existing resources during migration from monolithic to modular architecture. The monitoring module references log group names that would be created if flow logs were enabled. Once the state migration is complete, flow logs can be re-enabled by changing the setting to `true`.
+
 ### Step 1: Prepare Backend Configuration
 
 Create a `backend-config.tfvars` file:
@@ -1240,7 +1313,9 @@ alert_email                     = "alerts@example.com"
 create_dashboard                = true
 environment                     = "dev"
 owner                           = "Platform Team"
-enable_xray                     = false  # Set to true for X-Ray tracing
+enable_synthetics               = true
+enable_config_rules             = true
+enable_xray                     = true  # Set to false to disable X-Ray tracing
 ```
 
 ### Step 3: Initialize Terraform

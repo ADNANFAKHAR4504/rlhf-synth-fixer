@@ -213,7 +213,7 @@ module "vpc_a" {
   availability_zones                   = local.azs
   suffix                               = local.suffix
   common_tags                          = local.common_tags
-  enable_flow_logs                     = true
+  enable_flow_logs                     = false # Disabled to prevent conflict with existing resources
   flow_logs_retention_days             = var.retention_days
   flow_logs_role_arn                   = module.security.flow_logs_role_arn
   enable_dns_hostnames                 = true
@@ -239,7 +239,7 @@ module "vpc_b" {
   availability_zones                   = local.azs
   suffix                               = local.suffix
   common_tags                          = local.common_tags
-  enable_flow_logs                     = true
+  enable_flow_logs                     = false # Disabled to prevent conflict with existing resources
   flow_logs_retention_days             = var.retention_days
   flow_logs_role_arn                   = module.security.flow_logs_role_arn
   enable_dns_hostnames                 = true
@@ -371,44 +371,6 @@ module "lambda" {
   account_id                = data.aws_caller_identity.current.account_id
   enable_xray               = var.enable_xray
 }
-
-# ============================================================================
-# AWS CONFIG MODULE (PLANNED)
-# ============================================================================
-
-# module "config" {
-#   count  = var.enable_config_rules ? 1 : 0
-#   source = "./modules/config"
-#
-#   vpc_a_id              = module.vpc_a.vpc_id
-#   vpc_b_id              = module.vpc_b.vpc_id
-#   security_group_ids    = [module.security.vpc_a_security_group_id, module.security.vpc_b_security_group_id]
-#   peering_connection_id = aws_vpc_peering_connection.a_to_b.id
-#   suffix                = local.suffix
-#   common_tags           = local.common_tags
-#   aws_region            = var.aws_region
-#   account_id            = data.aws_caller_identity.current.account_id
-# }
-
-# ============================================================================
-# CLOUDWATCH SYNTHETICS MODULE (PLANNED)
-# ============================================================================
-
-# module "synthetics" {
-#   count  = var.enable_synthetics ? 1 : 0
-#   source = "./modules/synthetics"
-#
-#   vpc_a_id            = module.vpc_a.vpc_id
-#   vpc_b_id            = module.vpc_b.vpc_id
-#   vpc_a_subnets       = module.vpc_a.private_subnet_ids
-#   vpc_b_subnets       = module.vpc_b.private_subnet_ids
-#   security_group_a_id = module.security.vpc_a_security_group_id
-#   security_group_b_id = module.security.vpc_b_security_group_id
-#   sns_topic_arn       = module.monitoring.sns_topic_arn
-#   suffix              = local.suffix
-#   common_tags         = local.common_tags
-#   aws_region          = var.aws_region
-# }
 
 # ============================================================================
 # AWS SYSTEMS MANAGER PARAMETER STORE
@@ -546,16 +508,6 @@ output "waf_web_acl_arn" {
   description = "ARN of the WAF Web ACL for additional protection"
   value       = module.security.waf_web_acl_arn
 }
-
-# output "config_recorder_name" {
-#   description = "Name of the AWS Config recorder"
-#   value       = var.enable_config_rules ? module.config[0].recorder_name : null
-# }
-
-# output "synthetics_canary_names" {
-#   description = "Names of CloudWatch Synthetics canaries"
-#   value       = var.enable_synthetics ? module.synthetics[0].canary_names : []
-# }
 
 output "parameter_store_paths" {
   description = "AWS Systems Manager Parameter Store paths"

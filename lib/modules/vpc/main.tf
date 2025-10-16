@@ -159,6 +159,10 @@ resource "aws_cloudwatch_log_group" "flow_logs" {
     Name = "${var.vpc_name}-flow-logs-${var.suffix}"
     VPC  = var.vpc_name
   })
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 resource "aws_flow_log" "this" {

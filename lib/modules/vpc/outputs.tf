@@ -72,7 +72,7 @@ output "flow_log_id" {
 
 output "flow_log_group_name" {
   description = "CloudWatch log group name for VPC Flow Logs"
-  value       = try(aws_cloudwatch_log_group.flow_logs[0].name, null)
+  value       = var.enable_flow_logs ? try(aws_cloudwatch_log_group.flow_logs[0].name, null) : "/aws/vpc/flowlogs/${var.vpc_name}-${var.suffix}"
 }
 
 output "flow_log_group_arn" {
