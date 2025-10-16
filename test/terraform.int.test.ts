@@ -259,6 +259,15 @@ describe('Terraform CloudFront CDN Integration Tests - Deployed Resources', () =
       expect(response.Configuration!.Role).toBeDefined();
       expect(response.Configuration!.Role).toMatch(/lambda-edge-auth-role/);
     });
+
+    test('should NOT have environment variables (Lambda@Edge restriction)', async () => {
+      if (!outputs.lambda_edge_function_name) return;
+
+      const response = await lambda.getFunction({ FunctionName: outputs.lambda_edge_function_name }).promise();
+
+      // Lambda@Edge functions cannot have environment variables
+      expect(response.Configuration!.Environment).toBeUndefined();
+    });
   });
 
   describe('Lambda Log Processor Function', () => {

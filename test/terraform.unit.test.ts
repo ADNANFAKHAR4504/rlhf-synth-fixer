@@ -108,6 +108,10 @@ describe('Terraform CloudFront CDN Infrastructure Unit Tests', () => {
     test('should define CloudFront log delivery canonical user data source', () => {
       expect(terraformCode).toMatch(/data\s+"aws_cloudfront_log_delivery_canonical_user_id"\s+"current"/);
     });
+
+    test('should define canonical user ID data source', () => {
+      expect(terraformCode).toMatch(/data\s+"aws_canonical_user_id"\s+"current"/);
+    });
   });
 
   describe('Random Resources', () => {
@@ -200,6 +204,10 @@ describe('Terraform CloudFront CDN Infrastructure Unit Tests', () => {
       expect(terraformCode).toMatch(/days\s*=\s*var\.glacier_transition_days/);
     });
 
+    test('should have lifecycle policy with filter block', () => {
+      expect(terraformCode).toMatch(/resource\s+"aws_s3_bucket_lifecycle_configuration"\s+"origin"[\s\S]*?filter\s+\{\s*\}/);
+    });
+
     test('should enforce bucket owner', () => {
       expect(terraformCode).toMatch(/resource\s+"aws_s3_bucket_ownership_controls"\s+"origin"/);
       expect(terraformCode).toMatch(/object_ownership\s*=\s*"BucketOwnerEnforced"/);
@@ -220,6 +228,15 @@ describe('Terraform CloudFront CDN Infrastructure Unit Tests', () => {
     test('should have lifecycle policy to delete old logs', () => {
       expect(terraformCode).toMatch(/resource\s+"aws_s3_bucket_lifecycle_configuration"\s+"logs"/);
       expect(terraformCode).toMatch(/days\s*=\s*var\.log_retention_days/);
+    });
+
+    test('should have lifecycle policy with filter block', () => {
+      expect(terraformCode).toMatch(/resource\s+"aws_s3_bucket_lifecycle_configuration"\s+"logs"[\s\S]*?filter\s+\{\s*\}/);
+    });
+
+    test('should use canonical user IDs in ACL configuration', () => {
+      expect(terraformCode).toMatch(/owner[\s\S]*?id\s*=\s*data\.aws_canonical_user_id\.current\.id/);
+      expect(terraformCode).toMatch(/grantee[\s\S]*?id\s*=\s*data\.aws_canonical_user_id\.current\.id/);
     });
 
     test('should have ACL for CloudFront log delivery', () => {
@@ -319,10 +336,10 @@ describe('Terraform CloudFront CDN Infrastructure Unit Tests', () => {
       expect(terraformCode).toMatch(/publish\s*=\s*true/);
     });
 
-    test('should have environment variables for auth', () => {
-      expect(terraformCode).toMatch(/AUTH_TYPE\s*=\s*var\.auth_type/);
-      expect(terraformCode).toMatch(/DYNAMODB_TABLE/);
-      expect(terraformCode).toMatch(/JWT_SECRET_ARN/);
+    test('should NOT have environment variables (Lambda@Edge restriction)', () => {
+      expect(terraformCode).not.toMatch(/environment\s+{[\s\S]*?AUTH_TYPE/);
+      expect(terraformCode).not.toMatch(/environment\s+{[\s\S]*?DYNAMODB_TABLE/);
+      expect(terraformCode).not.toMatch(/environment\s+{[\s\S]*?JWT_SECRET_ARN/);
     });
   });
 
@@ -610,6 +627,16 @@ describe('Terraform CloudFront CDN Infrastructure Unit Tests', () => {
 
     test('should output Athena database name conditionally', () => {
       expect(terraformCode).toMatch(/output\s+"athena_database_name"/);
+    });
+
+    test('should output CloudFront public key ID as sensitive', () => {
+      expect(terraformCode).toMatch(/output\s+"cloudfront_public_key_id"/);
+      expect(terraformCode).toMatch(/cloudfront_public_key_id"[\s\S]*?sensitive\s*=\s*true/);
+    });
+
+    test('should output CloudFront key group ID as sensitive', () => {
+      expect(terraformCode).toMatch(/output\s+"cloudfront_key_group_id"/);
+      expect(terraformCode).toMatch(/cloudfront_key_group_id"[\s\S]*?sensitive\s*=\s*true/);
     });
   });
 

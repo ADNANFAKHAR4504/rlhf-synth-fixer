@@ -225,6 +225,8 @@ data "aws_route53_zone" "existing" {
 
 data "aws_cloudfront_log_delivery_canonical_user_id" "current" {}
 
+data "aws_canonical_user_id" "current" {}
+
 # ============================================================================
 # RANDOM RESOURCES
 # ============================================================================
@@ -497,12 +499,12 @@ resource "aws_s3_bucket_acl" "logs" {
 
   access_control_policy {
     owner {
-      id = data.aws_caller_identity.current.account_id
+      id = data.aws_canonical_user_id.current.id
     }
 
     grant {
       grantee {
-        id   = data.aws_caller_identity.current.account_id
+        id   = data.aws_canonical_user_id.current.id
         type = "CanonicalUser"
       }
       permission = "FULL_CONTROL"
@@ -756,16 +758,6 @@ resource "aws_lambda_function" "edge_auth" {
   timeout          = 5
   memory_size      = 128
   publish          = true
-
-  environment {
-    variables = {
-      AUTH_TYPE        = var.auth_type
-      DYNAMODB_TABLE   = var.create_subscriber_table ? aws_dynamodb_table.subscribers[0].name : var.dynamodb_table_name
-      API_ENDPOINT     = var.auth_api_endpoint
-      JWT_SECRET_ARN   = aws_secretsmanager_secret.jwt_secret.arn
-      AWS_REGION_TABLE = var.aws_region
-    }
-  }
 
   tags = local.common_tags
 

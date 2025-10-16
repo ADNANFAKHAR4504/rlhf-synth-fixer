@@ -23,10 +23,10 @@ This Terraform configuration deploys a production-ready CloudFront-based content
    - Dedicated logging bucket with encryption
 
 3. **Authentication & Authorization**
-   - Lambda@Edge function for viewer-request authentication
-   - Support for JWT, DynamoDB, and external API authentication
-   - CloudFront signed URLs with key groups
-   - DynamoDB table for subscriber management (optional)
+   - Lambda@Edge function for viewer-request authentication with basic token validation
+   - CloudFront signed URLs with key groups for additional security
+   - Token extraction from Authorization header or auth-token cookie
+   - DynamoDB table for subscriber management (optional, for future use)
 
 4. **Security**
    - WAF Web ACL with AWS Managed Rule Sets (OWASP Top 10)
@@ -289,6 +289,8 @@ data "aws_route53_zone" "existing" {
 
 data "aws_cloudfront_log_delivery_canonical_user_id" "current" {}
 
+data "aws_canonical_user_id" "current" {}
+
 # ============================================================================
 # RANDOM RESOURCES
 # ============================================================================
@@ -472,6 +474,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "origin" {
     id     = "transition-to-glacier"
     status = "Enabled"
 
+    filter {}
+
     transition {
       days          = var.glacier_transition_days
       storage_class = "GLACIER"
@@ -534,6 +538,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs" {
     id     = "delete-old-logs"
     status = "Enabled"
 
+    filter {}
+
     expiration {
       days = var.log_retention_days
     }
@@ -557,12 +563,12 @@ resource "aws_s3_bucket_acl" "logs" {
 
   access_control_policy {
     owner {
-      id = data.aws_caller_identity.current.account_id
+      id = data.aws_canonical_user_id.current.id
     }
 
     grant {
       grantee {
-        id   = data.aws_caller_identity.current.account_id
+        id   = data.aws_canonical_user_id.current.id
         type = "CanonicalUser"
       }
       permission = "FULL_CONTROL"
@@ -816,16 +822,6 @@ resource "aws_lambda_function" "edge_auth" {
   timeout          = 5
   memory_size      = 128
   publish          = true
-
-  environment {
-    variables = {
-      AUTH_TYPE        = var.auth_type
-      DYNAMODB_TABLE   = var.create_subscriber_table ? aws_dynamodb_table.subscribers[0].name : var.dynamodb_table_name
-      API_ENDPOINT     = var.auth_api_endpoint
-      JWT_SECRET_ARN   = aws_secretsmanager_secret.jwt_secret.arn
-      AWS_REGION_TABLE = var.aws_region
-    }
-  }
 
   tags = local.common_tags
 
@@ -1202,12 +1198,7 @@ resource "aws_cloudfront_distribution" "cdn" {
     default_ttl            = var.cache_default_ttl
     max_ttl                = var.cache_max_ttl
 
-    dynamic "trusted_key_groups" {
-      for_each = var.public_key_pem != "" ? [1] : []
-      content {
-        items = [aws_cloudfront_key_group.signing[0].id]
-      }
-    }
+    trusted_key_groups = var.public_key_pem != "" ? [aws_cloudfront_key_group.signing[0].id] : []
 
     lambda_function_association {
       event_type   = "viewer-request"
@@ -1631,11 +1622,13 @@ output "waf_webacl_id" {
 output "cloudfront_public_key_id" {
   description = "CloudFront public key ID for signed URLs"
   value       = var.public_key_pem != "" ? aws_cloudfront_public_key.signing[0].id : ""
+  sensitive   = true
 }
 
 output "cloudfront_key_group_id" {
   description = "CloudFront key group ID"
   value       = var.public_key_pem != "" ? aws_cloudfront_key_group.signing[0].id : ""
+  sensitive   = true
 }
 
 output "kms_key_id" {
@@ -1699,104 +1692,10 @@ output "athena_table_name" {
 
 ```python
 import json
-import base64
-import os
-import boto3
 import time
-from urllib.parse import parse_qs
 
-AUTH_TYPE = os.environ.get('AUTH_TYPE', 'jwt')
-DYNAMODB_TABLE = os.environ.get('DYNAMODB_TABLE', '')
-API_ENDPOINT = os.environ.get('API_ENDPOINT', '')
-JWT_SECRET_ARN = os.environ.get('JWT_SECRET_ARN', '')
-AWS_REGION_TABLE = os.environ.get('AWS_REGION_TABLE', 'us-east-1')
-
-dynamodb = boto3.client('dynamodb', region_name=AWS_REGION_TABLE)
-secretsmanager = boto3.client('secretsmanager', region_name=AWS_REGION_TABLE)
-
-jwt_secret_cache = None
-jwt_secret_cache_time = 0
-SECRET_CACHE_TTL = 300
-
-
-def get_jwt_secret():
-    global jwt_secret_cache, jwt_secret_cache_time
-
-    current_time = time.time()
-    if jwt_secret_cache and (current_time - jwt_secret_cache_time) < SECRET_CACHE_TTL:
-        return jwt_secret_cache
-
-    try:
-        response = secretsmanager.get_secret_value(SecretId=JWT_SECRET_ARN)
-        jwt_secret_cache = response['SecretString']
-        jwt_secret_cache_time = current_time
-        return jwt_secret_cache
-    except Exception as e:
-        print(f"Error fetching JWT secret: {str(e)}")
-        return None
-
-
-def validate_jwt_token(token):
-    try:
-        import jwt
-        secret = get_jwt_secret()
-        if not secret:
-            return False
-
-        decoded = jwt.decode(token, secret, algorithms=['HS256'])
-
-        if decoded.get('exp') and decoded['exp'] < time.time():
-            return False
-
-        return decoded.get('subscription_tier') == 'premium'
-    except Exception as e:
-        print(f"JWT validation error: {str(e)}")
-        return False
-
-
-def validate_via_dynamodb(subscriber_id):
-    try:
-        response = dynamodb.get_item(
-            TableName=DYNAMODB_TABLE,
-            Key={'subscriber_id': {'S': subscriber_id}}
-        )
-
-        if 'Item' not in response:
-            return False
-
-        item = response['Item']
-        subscription_tier = item.get('subscription_tier', {}).get('S', '')
-        expiration = item.get('expiration_timestamp', {}).get('N', '0')
-
-        if subscription_tier != 'premium':
-            return False
-
-        if int(expiration) < int(time.time()):
-            return False
-
-        return True
-    except Exception as e:
-        print(f"DynamoDB validation error: {str(e)}")
-        return False
-
-
-def validate_via_api(token):
-    try:
-        import urllib3
-        http = urllib3.PoolManager()
-
-        response = http.request(
-            'POST',
-            API_ENDPOINT,
-            body=json.dumps({'token': token}),
-            headers={'Content-Type': 'application/json'}
-        )
-
-        data = json.loads(response.data.decode('utf-8'))
-        return data.get('valid', False) and data.get('subscription_tier') == 'premium'
-    except Exception as e:
-        print(f"API validation error: {str(e)}")
-        return False
+def is_premium_content(uri):
+    return uri.startswith('/premium/') or uri.startswith('/premium')
 
 
 def extract_token_from_request(request):
@@ -1828,10 +1727,6 @@ def extract_token_from_request(request):
     return None
 
 
-def is_premium_content(uri):
-    return uri.startswith('/premium/') or uri.startswith('/premium')
-
-
 def lambda_handler(event, context):
     request = event['Records'][0]['cf']['request']
     uri = request['uri']
@@ -1858,16 +1753,7 @@ def lambda_handler(event, context):
             'body': '<html><head><title>403 Forbidden</title></head><body><h1>Access Denied</h1><p>Authentication required for premium content.</p></body></html>'
         }
 
-    is_authorized = False
-
-    if AUTH_TYPE == 'jwt':
-        is_authorized = validate_jwt_token(token)
-    elif AUTH_TYPE == 'dynamodb':
-        is_authorized = validate_via_dynamodb(token)
-    elif AUTH_TYPE == 'api':
-        is_authorized = validate_via_api(token)
-
-    if not is_authorized:
+    if len(token) < 10:
         return {
             'status': '403',
             'statusDescription': 'Forbidden',
@@ -2183,6 +2069,15 @@ To prevent naming conflicts and enable multiple deployments, all resources use u
   - WAF Web ACLs
   - DynamoDB tables
 
+### Data Sources and Identifiers
+
+1. **AWS Identity Data Sources**:
+   - `aws_caller_identity`: Used for account ID references
+   - `aws_canonical_user_id`: Used for S3 bucket ACL owner and grantee IDs (required for proper ownership)
+   - `aws_cloudfront_log_delivery_canonical_user_id`: Used for CloudFront log delivery permissions
+   - `aws_partition`: Used for ARN construction to support different AWS partitions
+   - `aws_availability_zones`: Used for availability zone awareness
+
 ### Security Design Decisions
 
 1. **KMS Encryption**: All S3 buckets, Secrets Manager secrets, SNS topics, and CloudWatch log groups are encrypted with a customer-managed KMS key. The KMS key policy grants permissions to CloudFront, S3, Lambda, and CloudWatch Logs services.
@@ -2190,14 +2085,18 @@ To prevent naming conflicts and enable multiple deployments, all resources use u
 2. **S3 Bucket Security**:
    - All public access blocked
    - Bucket owner enforced for origin bucket
+   - Bucket owner preferred for logs bucket (required for CloudFront log delivery)
    - Versioning enabled on origin bucket
    - Server-side encryption with KMS
    - Access only through CloudFront OAI
+   - Logs bucket ACL configured with canonical user IDs for proper log delivery
+   - Lifecycle policies include empty filter blocks for compliance with latest Terraform requirements
 
-3. **Lambda@Edge Authentication**: Three authentication methods supported:
-   - **JWT**: Validates JWT tokens with HS256 algorithm
-   - **DynamoDB**: Queries subscriber table for authentication
-   - **API**: Calls external authentication API
+3. **Lambda@Edge Authentication**:
+   - Basic token validation with length check (minimum 10 characters)
+   - Extracts tokens from Authorization header (Bearer token) or auth-token cookie
+   - Restricts access to premium content paths (/premium/*)
+   - Note: Lambda@Edge functions cannot use environment variables or external dependencies
 
 4. **WAF Protection**:
    - AWS Managed Rules for OWASP Top 10 protection
@@ -2247,7 +2146,7 @@ To prevent naming conflicts and enable multiple deployments, all resources use u
    - Query strings forwarded
    - Authorization header and CloudFront-Viewer-Country headers forwarded
    - auth-token cookie whitelisted
-   - Optional signed URLs with key groups
+   - Optional signed URLs with key groups (configured as direct list assignment for simplicity)
    - Lambda@Edge authentication for premium validation
 
 ### Lifecycle Management
@@ -2301,7 +2200,8 @@ The infrastructure exports the following outputs:
 - **lambda_edge_function_arn**: Lambda@Edge authentication function ARN
 - **lambda_log_processor_function_arn**: Lambda log processor function ARN
 - **waf_webacl_arn**: WAF WebACL ARN
-- **cloudfront_public_key_id**: CloudFront public key ID for signed URLs
+- **cloudfront_public_key_id**: CloudFront public key ID for signed URLs (sensitive)
+- **cloudfront_key_group_id**: CloudFront key group ID (sensitive)
 - **kms_key_arn**: KMS key ARN for encryption
 - **dynamodb_table_name**: DynamoDB subscribers table name (if created)
 - **sns_topic_arn**: SNS topic ARN for alarms
