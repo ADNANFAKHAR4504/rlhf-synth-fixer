@@ -33,7 +33,7 @@ new TapStack(app, primaryStackName, {
 // Deploy to secondary regions
 const secondaryRegions = ['us-west-2'];
 for (const region of secondaryRegions) {
-  const stackName = `TapStack${environmentSuffix}`;
+  const stackName = `TapStack${environmentSuffix}-${region}`;
   new TapStack(app, stackName, {
     stackName: stackName,
     environmentSuffix: environmentSuffix,
