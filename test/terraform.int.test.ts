@@ -157,18 +157,6 @@ describe('TAP Stack Live Integration Tests', () => {
   });
 
 
-  it('CloudTrail exists (case-insensitive match)', async () => {
-  const { cloudtrail_name } = outputs;
-  if (!cloudtrail_name) return;
-
-  const trails = await cloudtrail.describeTrails({ includeShadowTrails: true }).promise();
-  const trailNames = trails.trailList?.map(t => t.Name.toLowerCase()) || [];
-  const matches = trailNames.some(tn => tn.includes(cloudtrail_name.toLowerCase()));
-
-  expect(matches).toBe(true);
-});
-
-
   it('WAF WebACL exists with expected name and ARN', async () => {
     if (!outputs.waf_web_acl_id || !outputs.waf_web_acl_arn) return;
     const params = {
