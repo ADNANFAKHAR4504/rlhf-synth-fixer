@@ -1081,40 +1081,6 @@ resource "aws_guardduty_detector" "main" {
 └────────────────────────────────────────────────────────────────┘
 ```
 
-## Deployment Process
-
-```bash
-# Step 1: Navigate to lib directory
-cd lib
-
-# Step 2: Initialize Terraform
-terraform init
-# Downloads AWS provider v5.x
-# Creates .terraform directory
-
-# Step 3: Format code
-terraform fmt -recursive
-# Ensures consistent formatting
-
-# Step 4: Validate configuration
-terraform validate
-# Success! The configuration is valid.
-
-# Step 5: Review plan
-terraform plan
-# Plan: 58 to add, 0 to change, 0 to destroy
-
-# Step 6: Deploy infrastructure
-terraform apply
-# Type 'yes' to confirm
-# Deployment time: ~12-15 minutes
-
-# Step 7: Capture outputs
-terraform output -json > ../cfn-outputs/flat-outputs.json
-
-# Step 8: Verify deployment
-terraform show
-```
 
 ## Security Compliance Matrix
 
@@ -1211,66 +1177,6 @@ terraform show
 | MFA Coverage | 100% (all users) |
 | Audit Coverage | 100% (all actions) |
 
-## Post-Deployment Validation
-
-After deployment, validate the following:
-
-**✅ KMS Encryption**
-```bash
-aws kms describe-key --key-id alias/master-encryption-key
-# Should show: KeyState: Enabled, KeyRotationEnabled: true
-```
-
-**✅ S3 Security**
-```bash
-aws s3api get-bucket-versioning --bucket security-logs-*
-# Should show: Status: Enabled
-
-aws s3api get-bucket-encryption --bucket security-logs-*
-# Should show: SSEAlgorithm: aws:kms
-```
-
-**✅ CloudTrail Logging**
-```bash
-aws cloudtrail get-trail --name main-trail
-# Should show: IsMultiRegionTrail: true, LogFileValidationEnabled: true
-```
-
-**✅ AWS Config**
-```bash
-aws configservice describe-configuration-recorders
-# Should show: recording: true
-
-aws configservice describe-compliance-by-config-rule
-# Should show compliance status for all rules
-```
-
-**✅ GuardDuty**
-```bash
-aws guardduty list-detectors
-# Should return detector ID
-
-aws guardduty get-detector --detector-id <id>
-# Should show: Status: ENABLED
-```
-
-**✅ VPC Flow Logs**
-```bash
-aws ec2 describe-flow-logs
-# Should show: LogDestinationType: cloud-watch-logs
-```
-
-**✅ IAM Password Policy**
-```bash
-aws iam get-account-password-policy
-# Should show: MinimumPasswordLength: 14
-```
-
-**✅ Budget Alerts**
-```bash
-aws budgets describe-budgets --account-id <account-id>
-# Should show: BudgetLimit: 100 USD
-```
 
 ## Summary
 
