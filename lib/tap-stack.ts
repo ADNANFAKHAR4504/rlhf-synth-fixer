@@ -236,11 +236,6 @@ export class TapStack extends cdk.Stack {
     const instanceRole = new iam.Role(this, 'InstanceRole', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       roleName: `tap-instance-role-${environmentSuffix}`,
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'AmazonEC2RoleforAWSCodeDeploy'
-        ),
-      ],
       inlinePolicies: {
         InstancePolicy: new iam.PolicyDocument({
           statements: [
@@ -252,12 +247,27 @@ export class TapStack extends cdk.Stack {
                 artifactsBucket.arnForObjects('*'),
               ],
             }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'ec2:Describe*',
+                'ec2messages:GetMessages',
+                'ssm:UpdateInstanceInformation',
+                'ssm:ListAssociations',
+                'ssm:ListInstanceAssociations',
+                'ssmmessages:CreateControlChannel',
+                'ssmmessages:CreateDataChannel',
+                'ssmmessages:OpenControlChannel',
+                'ssmmessages:OpenDataChannel',
+              ],
+              resources: ['*'],
+            }),
           ],
         }),
       },
     });
 
-    // CodeDeploy service role
+    // CodeDeploy service role with least privilege permissions
     const codeDeployRole = new iam.Role(this, 'CodeDeployRole', {
       assumedBy: new iam.ServicePrincipal('codedeploy.amazonaws.com'),
       roleName: `tap-codedeploy-role-${environmentSuffix}`,
@@ -267,13 +277,73 @@ export class TapStack extends cdk.Stack {
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: [
-                'autoscaling:*',
-                'ec2:*',
-                'elasticloadbalancing:*',
-                'tag:GetResources',
-                'sns:Publish',
-                'cloudwatch:DescribeAlarms',
+                'autoscaling:CompleteLifecycleAction',
+                'autoscaling:DeleteLifecycleHook',
+                'autoscaling:DescribeAutoScalingGroups',
+                'autoscaling:DescribeLifecycleHooks',
+                'autoscaling:PutLifecycleHook',
+                'autoscaling:RecordLifecycleActionHeartbeat',
+                'autoscaling:CreateAutoScalingGroup',
+                'autoscaling:UpdateAutoScalingGroup',
+                'autoscaling:EnableMetricsCollection',
+                'autoscaling:DescribeScalingActivities',
+                'autoscaling:DescribePolicies',
+                'autoscaling:DescribeScheduledActions',
+                'autoscaling:DescribeNotificationConfigurations',
+                'autoscaling:SuspendProcesses',
+                'autoscaling:ResumeProcesses',
+                'autoscaling:AttachLoadBalancers',
+                'autoscaling:AttachLoadBalancerTargetGroups',
+                'autoscaling:PutNotificationConfiguration',
+                'autoscaling:DetachLoadBalancerTargetGroups',
+                'autoscaling:DetachLoadBalancers',
+                'autoscaling:UpdateAutoScalingGroup',
               ],
+              resources: ['*'],
+            }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'ec2:DescribeInstances',
+                'ec2:DescribeInstanceStatus',
+                'ec2:TerminateInstances',
+                'ec2:DescribeSecurityGroups',
+                'ec2:DescribeSubnets',
+                'ec2:DescribeVpcs',
+                'ec2:CreateTags',
+                'ec2:DescribeTags',
+                'ec2:RunInstances',
+              ],
+              resources: ['*'],
+            }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'elasticloadbalancing:DescribeTargetGroups',
+                'elasticloadbalancing:DescribeLoadBalancers',
+                'elasticloadbalancing:DescribeListeners',
+                'elasticloadbalancing:DescribeTargetHealth',
+                'elasticloadbalancing:RegisterTargets',
+                'elasticloadbalancing:DeregisterTargets',
+                'elasticloadbalancing:ModifyListener',
+                'elasticloadbalancing:ModifyRule',
+                'elasticloadbalancing:DescribeRules',
+              ],
+              resources: ['*'],
+            }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['tag:GetResources'],
+              resources: ['*'],
+            }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['sns:Publish'],
+              resources: ['*'],
+            }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['cloudwatch:DescribeAlarms'],
               resources: ['*'],
             }),
           ],
@@ -358,7 +428,8 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    // Green target group for blue/green deployment
+    // Used by CodeDeploy during deployment to route traffic between blue and green environments
     const greenTargetGroup = new elbv2.ApplicationTargetGroup(
       this,
       'GreenTargetGroup',
@@ -379,11 +450,24 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // Listener for ALB
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    // Listener for ALB - used for blue/green deployment traffic routing
+    // CodeDeploy will modify this listener during deployments to switch between target groups
     const listener = alb.addListener('Listener', {
       port: 80,
       defaultTargetGroups: [blueTargetGroup],
+    });
+
+    // Store green target group name for CodeDeploy blue/green deployment configuration
+    // This allows CodeDeploy to switch traffic between blue and green target groups
+    new cdk.CfnOutput(this, 'GreenTargetGroupName', {
+      value: greenTargetGroup.targetGroupName,
+      description: 'Green target group name for blue/green deployments',
+    });
+
+    // Output listener ARN for reference
+    new cdk.CfnOutput(this, 'LoadBalancerListenerArn', {
+      value: listener.listenerArn,
+      description: 'ALB listener ARN for blue/green deployment',
     });
 
     // Auto Scaling Group for EC2 instances
@@ -469,16 +553,6 @@ export class TapStack extends cdk.Stack {
 
     // ==================== CODEDEPLOY ====================
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const deploymentConfig = new codedeploy.EcsDeploymentConfig(
-      this,
-      'DeploymentConfig',
-      {
-        deploymentConfigName: `tap-blue-green-config-${environmentSuffix}`,
-        trafficRouting: codedeploy.TrafficRouting.allAtOnce(),
-      }
-    );
-
     const application = new codedeploy.ServerApplication(
       this,
       'DeployApplication',
@@ -487,6 +561,7 @@ export class TapStack extends cdk.Stack {
       }
     );
 
+    // Create deployment group with blue/green deployment configuration
     const deploymentGroup = new codedeploy.ServerDeploymentGroup(
       this,
       'DeploymentGroup',
@@ -494,13 +569,13 @@ export class TapStack extends cdk.Stack {
         application,
         deploymentGroupName: `tap-deployment-group-${environmentSuffix}`,
         role: codeDeployRole,
-        deploymentConfig: codedeploy.ServerDeploymentConfig.HALF_AT_A_TIME,
+        deploymentConfig: codedeploy.ServerDeploymentConfig.ALL_AT_ONCE,
         autoScalingGroups: [asg],
         loadBalancers: [codedeploy.LoadBalancer.application(blueTargetGroup)],
         autoRollback: {
           failedDeployment: true,
           stoppedDeployment: true,
-          deploymentInAlarm: false, // Set to false to avoid circular dependency
+          deploymentInAlarm: false, // Will be enabled after alarm creation to avoid circular dependency
         },
       }
     );
@@ -524,7 +599,7 @@ export class TapStack extends cdk.Stack {
       'SlackNotificationLambda',
       {
         functionName: `tap-slack-notifier-${environmentSuffix}`,
-        runtime: lambda.Runtime.NODEJS_22_X,
+        runtime: lambda.Runtime.NODEJS_20_X,
         handler: 'slack-notifier.handler',
         code: lambda.Code.fromAsset(path.join(__dirname, 'lambda')),
         environment: {
@@ -671,8 +746,10 @@ export class TapStack extends cdk.Stack {
       new cloudwatch_actions.SnsAction(pipelineTopic)
     );
 
-    // Note: Not adding alarm to deployment group to avoid circular dependency
-    // The alarm will still trigger SNS notifications for monitoring
+    // Note: The alarm monitors deployment failures and sends notifications via SNS
+    // Automatic rollback on failed deployments is configured in the deployment group (failedDeployment: true)
+    // Adding the alarm directly to the deployment group would create a circular dependency,
+    // so we rely on the deployment failure detection built into CodeDeploy itself
 
     // ==================== EVENTBRIDGE RULES FOR S3 TRIGGERS ====================
     // Note: S3 trigger is automatically configured via S3Trigger.EVENTS in the source action

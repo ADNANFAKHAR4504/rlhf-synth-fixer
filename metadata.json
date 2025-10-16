@@ -10,5 +10,5 @@
   "subject_labels": [
     "CI/CD Pipeline"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC"
+  "aws_services": "S3, CodePipeline, CodeBuild, CodeDeploy, EC2, Auto Scaling, Application Load Balancer, VPC, Lambda, SNS, EventBridge, CloudWatch, Secrets Manager, Budgets, IAM"
 }
