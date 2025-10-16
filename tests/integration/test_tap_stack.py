@@ -676,41 +676,48 @@ class TestEndToEndDataFlow(BaseIntegrationTest):
         
         # STEP 3: E2E PROOF - Check if data reached DynamoDB (final destination)
         print(f"Checking DynamoDB for event {test_event_id}...")
-        try:
-            dynamo_response = dynamodb_client_primary.get_item(
-                TableName=table_name,
-                Key={
-                    'PK': {'S': f"EVENT#{test_event_id}"},
-                    'SK': {'S': f"REGION#{PRIMARY_REGION}"}
-                }
-            )
+        dynamo_response = dynamodb_client_primary.get_item(
+            TableName=table_name,
+            Key={
+                'PK': {'S': f"EVENT#{test_event_id}"},
+                'SK': {'S': f"REGION#{PRIMARY_REGION}"}
+            }
+        )
+        
+        # ASSERT: Event must be in DynamoDB (EventBridge → Lambda → DynamoDB flow)
+        if 'Item' not in dynamo_response:
+            # Event not found - fetch Lambda logs for debugging before failing
+            print(f"\nERROR: Event {test_event_id} not found in DynamoDB!")
+            function_name = OUTPUTS.get('lambda_function_name_primary')
+            if function_name:
+                print(f"\nFetching Lambda logs for debugging...")
+                logs = get_recent_lambda_logs(function_name, PRIMARY_REGION, minutes=2)
+                if logs:
+                    print(f"Recent Lambda logs ({len(logs)} messages):")
+                    for log in logs[-30:]:  # Show last 30 log messages
+                        print(f"  {log}")
+                else:
+                    print("  No recent logs found (Lambda may not have been invoked)")
             
-            if 'Item' in dynamo_response:
-                # SUCCESS: Event flowed through entire pipeline!
-                print(f"E2E SUCCESS: Event found in DynamoDB!")
-                print(f"   EventId: {dynamo_response['Item']['EventId']['S']}")
-                print(f"   Symbol: {dynamo_response['Item']['TradingData']['M']['symbol']['S']}")
-                print(f"   EventBridge triggered Lambda, Lambda wrote to DynamoDB!")
-                
-                self.assertEqual(dynamo_response['Item']['EventId']['S'], test_event_id)
-                self.assertEqual(dynamo_response['Item']['TradingData']['M']['symbol']['S'], 'E2ETEST')
-                
-                # Cleanup
-                dynamodb_client_primary.delete_item(
-                    TableName=table_name,
-                    Key={
-                        'PK': {'S': f"EVENT#{test_event_id}"},
-                        'SK': {'S': f"REGION#{PRIMARY_REGION}"}
-                    }
-                )
-            else:
-                # Event not found - EventBridge rule may not be configured
-                print(f"Event not found in DynamoDB")
-                print(f"   This means EventBridge rules are not configured to trigger Lambda")
-                print(f"   (This is expected for infrastructure-only deployments)")
-                
-        except ClientError as e:
-            print(f"Could not verify DynamoDB: {e}")
+            self.fail(f"Event {test_event_id} not found in DynamoDB. EventBridge did not trigger Lambda!")
+        
+        # SUCCESS: Event flowed through entire pipeline!
+        print(f"E2E SUCCESS: Event found in DynamoDB!")
+        print(f"   EventId: {dynamo_response['Item']['EventId']['S']}")
+        print(f"   Symbol: {dynamo_response['Item']['TradingData']['M']['symbol']['S']}")
+        print(f"   EventBridge triggered Lambda, Lambda wrote to DynamoDB!")
+        
+        self.assertEqual(dynamo_response['Item']['EventId']['S'], test_event_id)
+        self.assertEqual(dynamo_response['Item']['TradingData']['M']['symbol']['S'], 'E2ETEST')
+        
+        # Cleanup
+        dynamodb_client_primary.delete_item(
+            TableName=table_name,
+            Key={
+                'PK': {'S': f"EVENT#{test_event_id}"},
+                'SK': {'S': f"REGION#{PRIMARY_REGION}"}
+            }
+        )
 
     def test_multi_region_eventbridge_to_dynamodb_replication_flow(self):
         """
@@ -766,61 +773,67 @@ class TestEndToEndDataFlow(BaseIntegrationTest):
         
         # STEP 3: Check PRIMARY region DynamoDB
         print(f"Checking PRIMARY region ({PRIMARY_REGION}) DynamoDB...")
-        try:
-            dynamo_response_primary = dynamodb_client_primary.get_item(
-                TableName=table_name_primary,
-                Key={
-                    'PK': {'S': f"EVENT#{test_event_id}"},
-                    'SK': {'S': f"REGION#{PRIMARY_REGION}"}
-                }
-            )
-            
-            if 'Item' in dynamo_response_primary:
-                print(f"Event found in PRIMARY region DynamoDB!")
-                self.assertEqual(dynamo_response_primary['Item']['EventId']['S'], test_event_id)
-                
-                # Cleanup primary
-                dynamodb_client_primary.delete_item(
-                    TableName=table_name_primary,
-                    Key={
-                        'PK': {'S': f"EVENT#{test_event_id}"},
-                        'SK': {'S': f"REGION#{PRIMARY_REGION}"}
-                    }
-                )
-            else:
-                print(f"Event not found in PRIMARY region DynamoDB")
-                
-        except ClientError as e:
-            print(f"Could not verify PRIMARY region: {e}")
+        dynamo_response_primary = dynamodb_client_primary.get_item(
+            TableName=table_name_primary,
+            Key={
+                'PK': {'S': f"EVENT#{test_event_id}"},
+                'SK': {'S': f"REGION#{PRIMARY_REGION}"}
+            }
+        )
         
-        # STEP 4: Check SECONDARY region DynamoDB (if cross-region routing is configured)
+        # ASSERT: Event must be in primary region
+        if 'Item' not in dynamo_response_primary:
+            # Event not found - fetch Lambda logs for debugging before failing
+            print(f"\nERROR: Event {test_event_id} not found in PRIMARY region DynamoDB!")
+            function_name = OUTPUTS.get('lambda_function_name_primary')
+            if function_name:
+                print(f"\nFetching PRIMARY region Lambda logs for debugging...")
+                logs = get_recent_lambda_logs(function_name, PRIMARY_REGION, minutes=2)
+                if logs:
+                    print(f"Recent Lambda logs ({len(logs)} messages):")
+                    for log in logs[-30:]:  # Show last 30 log messages
+                        print(f"  {log}")
+                else:
+                    print("  No recent logs found (Lambda may not have been invoked)")
+            
+            self.fail(f"Event {test_event_id} not found in PRIMARY region. EventBridge did not trigger Lambda!")
+        
+        print(f"Event found in PRIMARY region DynamoDB!")
+        self.assertEqual(dynamo_response_primary['Item']['EventId']['S'], test_event_id)
+        
+        # Cleanup primary
+        dynamodb_client_primary.delete_item(
+            TableName=table_name_primary,
+            Key={
+                'PK': {'S': f"EVENT#{test_event_id}"},
+                'SK': {'S': f"REGION#{PRIMARY_REGION}"}
+            }
+        )
+        
+        # STEP 4: Check SECONDARY region DynamoDB (cross-region routing optional)
         print(f"Checking SECONDARY region ({SECONDARY_REGION}) DynamoDB...")
-        try:
-            dynamo_response_secondary = dynamodb_client_secondary.get_item(
+        dynamo_response_secondary = dynamodb_client_secondary.get_item(
+            TableName=table_name_secondary,
+            Key={
+                'PK': {'S': f"EVENT#{test_event_id}"},
+                'SK': {'S': f"REGION#{SECONDARY_REGION}"}
+            }
+        )
+        
+        if 'Item' in dynamo_response_secondary:
+            print(f"Event ALSO found in SECONDARY region DynamoDB!")
+            print(f"   Cross-region routing is working!")
+            
+            # Cleanup secondary
+            dynamodb_client_secondary.delete_item(
                 TableName=table_name_secondary,
                 Key={
                     'PK': {'S': f"EVENT#{test_event_id}"},
                     'SK': {'S': f"REGION#{SECONDARY_REGION}"}
                 }
             )
-            
-            if 'Item' in dynamo_response_secondary:
-                print(f"Event ALSO found in SECONDARY region DynamoDB!")
-                print(f"   Cross-region routing is working!")
-                
-                # Cleanup secondary
-                dynamodb_client_secondary.delete_item(
-                    TableName=table_name_secondary,
-                    Key={
-                        'PK': {'S': f"EVENT#{test_event_id}"},
-                        'SK': {'S': f"REGION#{SECONDARY_REGION}"}
-                    }
-                )
-            else:
-                print(f"Event not in SECONDARY region (cross-region routing not configured)")
-                
-        except ClientError as e:
-            print(f"Secondary region check: {e}")
+        else:
+            print(f"Event not in SECONDARY region (cross-region routing not configured)")
 
     def test_eventbridge_to_dynamodb_with_cloudwatch_monitoring_flow(self):
         """
@@ -869,56 +882,58 @@ class TestEndToEndDataFlow(BaseIntegrationTest):
         
         # STEP 3: Verify DynamoDB write
         print(f"Checking DynamoDB for event {test_event_id}...")
-        dynamodb_verified = False
-        try:
-            dynamo_response = dynamodb_client_primary.get_item(
-                TableName=table_name,
-                Key={
-                    'PK': {'S': f"EVENT#{test_event_id}"},
-                    'SK': {'S': f"REGION#{PRIMARY_REGION}"}
-                }
-            )
+        dynamo_response = dynamodb_client_primary.get_item(
+            TableName=table_name,
+            Key={
+                'PK': {'S': f"EVENT#{test_event_id}"},
+                'SK': {'S': f"REGION#{PRIMARY_REGION}"}
+            }
+        )
+        
+        # ASSERT: Event must be in DynamoDB
+        if 'Item' not in dynamo_response:
+            # Event not found - fetch Lambda logs for debugging before failing
+            print(f"\nERROR: Event {test_event_id} not found in DynamoDB!")
+            function_name = OUTPUTS.get('lambda_function_name_primary')
+            if function_name:
+                print(f"\nFetching Lambda logs for debugging...")
+                logs = get_recent_lambda_logs(function_name, PRIMARY_REGION, minutes=2)
+                if logs:
+                    print(f"Recent Lambda logs ({len(logs)} messages):")
+                    for log in logs[-30:]:  # Show last 30 log messages
+                        print(f"  {log}")
+                else:
+                    print("  No recent logs found (Lambda may not have been invoked)")
             
-            if 'Item' in dynamo_response:
-                print(f"Event found in DynamoDB!")
-                dynamodb_verified = True
-                self.assertEqual(dynamo_response['Item']['EventId']['S'], test_event_id)
-                
-                # Cleanup
-                dynamodb_client_primary.delete_item(
-                    TableName=table_name,
-                    Key={
-                        'PK': {'S': f"EVENT#{test_event_id}"},
-                        'SK': {'S': f"REGION#{PRIMARY_REGION}"}
-                    }
-                )
-            else:
-                print(f"Event not found in DynamoDB")
-                
-        except ClientError as e:
-            print(f"DynamoDB check failed: {e}")
+            self.fail(f"Event {test_event_id} not found in DynamoDB. EventBridge did not trigger Lambda!")
+        
+        print(f"Event found in DynamoDB!")
+        self.assertEqual(dynamo_response['Item']['EventId']['S'], test_event_id)
         
         # STEP 4: Verify CloudWatch Metrics (Lambda should have sent them)
         print(f"Checking CloudWatch for custom metrics...")
-        try:
-            metrics_response = cloudwatch_client_primary.list_metrics(
-                Namespace='TradingPlatform/EventProcessing',
-                MetricName='EventsProcessed'
-            )
-            
-            if metrics_response['Metrics']:
-                print(f"CloudWatch metrics found: {len(metrics_response['Metrics'])} metrics")
-                print(f"   Lambda sent custom metrics to CloudWatch!")
-                self.assertGreater(len(metrics_response['Metrics']), 0)
-            else:
-                print(f"Custom metrics not yet available in CloudWatch")
-                
-        except ClientError as e:
-            print(f"CloudWatch check failed: {e}")
+        metrics_response = cloudwatch_client_primary.list_metrics(
+            Namespace='TradingPlatform/EventProcessing',
+            MetricName='EventsProcessed'
+        )
         
-        # E2E verification
-        if dynamodb_verified:
-            print(f"\nE2E MONITORING TEST: Event processed through entire pipeline with observability!")
+        if metrics_response['Metrics']:
+            print(f"CloudWatch metrics found: {len(metrics_response['Metrics'])} metrics")
+            print(f"   Lambda sent custom metrics to CloudWatch!")
+            self.assertGreater(len(metrics_response['Metrics']), 0)
+        else:
+            print(f"Custom metrics not yet available in CloudWatch (timing issue)")
+        
+        # Cleanup
+        dynamodb_client_primary.delete_item(
+            TableName=table_name,
+            Key={
+                'PK': {'S': f"EVENT#{test_event_id}"},
+                'SK': {'S': f"REGION#{PRIMARY_REGION}"}
+            }
+        )
+        
+        print(f"\nE2E MONITORING TEST: Event processed through entire pipeline with observability!")
 
 
 # ============================================================================

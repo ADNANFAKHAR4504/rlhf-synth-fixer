@@ -104,8 +104,8 @@ class EventBridgeStack:
             # Get Lambda function name
             lambda_name = self.lambda_stack.get_function_name(region)
             
-            # Get event bus ARN
-            event_bus_arn = self.event_buses[region].arn
+            # Get rule ARN - EventBridge invokes Lambda through the rule, not the bus
+            rule_arn = self.rules[region].arn
             
             self.permissions[region] = lambda_.Permission(
                 f"eventbridge-lambda-permission-{region}",
@@ -113,7 +113,7 @@ class EventBridgeStack:
                 action="lambda:InvokeFunction",
                 function=lambda_name,
                 principal="events.amazonaws.com",
-                source_arn=event_bus_arn,
+                source_arn=rule_arn,
                 opts=pulumi.ResourceOptions(provider=self.provider_manager.get_provider(region))
             )
     
