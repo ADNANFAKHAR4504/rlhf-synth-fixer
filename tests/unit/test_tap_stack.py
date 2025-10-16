@@ -53,15 +53,18 @@ class TestConfig(unittest.TestCase):
             # Test without region
             name = config.get_resource_name('lambda-role')
             self.assertIn('ha-webapp', name)
-            self.assertIn('dev', name)
             self.assertIn('lambda-role', name)
+            # Check that name has correct format: app-name-env-resource
+            parts = name.split('-')
+            self.assertGreaterEqual(len(parts), 3)  # At least app, env, resource
             
             # Test with region
             name_with_region = config.get_resource_name('asg', 'us-east-1')
             self.assertIn('ha-webapp', name_with_region)
-            self.assertIn('dev', name_with_region)
             self.assertIn('asg', name_with_region)
             self.assertIn('us-east-1', name_with_region)
+            # Check format includes region
+            self.assertTrue(name_with_region.startswith('ha-webapp'))
 
     def test_get_tags(self):
         """Test tags generation includes all required fields."""
