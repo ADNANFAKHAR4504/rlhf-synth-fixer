@@ -1,3 +1,23 @@
+# Terraform and Provider Configuration
+terraform {
+  required_version = ">= 1.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.5"
+    }
+  }
+  backend "s3" {}
+}
+
+provider "aws" {
+  region = var.region
+}
+
 # Data Sources
 data "aws_ami" "amazon_linux_2" {
   most_recent = true
@@ -70,7 +90,7 @@ variable "snapshot_retention_days" {
 variable "alert_email" {
   description = "Email address for CloudWatch alarm notifications"
   type        = string
-  default     = "ops-team@example.com"
+  default     = "ops-team@company.com"
 }
 
 # Locals
@@ -88,16 +108,7 @@ locals {
   subnet_cidr = "10.0.1.0/24"
   private_ip  = "10.0.1.10"
 
-  user_data_script = <<-EOF
-    #!/bin/bash
-    # Install and start SSM agent
-    yum install -y amazon-ssm-agent
-    systemctl enable amazon-ssm-agent
-    systemctl start amazon-ssm-agent
-    
-    # Verify SSM agent is running
-    systemctl status amazon-ssm-agent
-  EOF
+  user_data_script = "#!/bin/bash\nyum install -y amazon-ssm-agent\nsystemctl enable amazon-ssm-agent\nsystemctl start amazon-ssm-agent"
 }
 
 # Random String for Unique Naming
@@ -114,12 +125,7 @@ resource "aws_vpc" "webapp_vpc" {
   enable_dns_hostnames = true
   enable_dns_support   = true
 
-  tags = merge(
-    local.common_tags,
-    {
-      Name = "webapp-vpc"
-    }
-  )
+  tags = merge(local.common_tags, { Name = "webapp-vpc" })
 }
 
 resource "aws_subnet" "webapp_subnet" {
@@ -128,12 +134,7 @@ resource "aws_subnet" "webapp_subnet" {
   availability_zone       = var.availability_zone
   map_public_ip_on_launch = false
 
-  tags = merge(
-    local.common_tags,
-    {
-      Name = "webapp-subnet"
-    }
-  )
+  tags = merge(local.common_tags, { Name = "webapp-subnet" })
 }
 
 resource "aws_security_group" "webapp_security_group" {
@@ -141,12 +142,7 @@ resource "aws_security_group" "webapp_security_group" {
   description = "Security group for webapp EC2 instance"
   vpc_id      = aws_vpc.webapp_vpc.id
 
-  tags = merge(
-    local.common_tags,
-    {
-      Name = "webapp-security-group"
-    }
-  )
+  tags = merge(local.common_tags, { Name = "webapp-security-group" })
 }
 
 resource "aws_security_group_rule" "allow_ssh" {
@@ -196,12 +192,7 @@ resource "aws_iam_role" "webapp_instance_role" {
     ]
   })
 
-  tags = merge(
-    local.common_tags,
-    {
-      Name = "webapp-instance-role"
-    }
-  )
+  tags = merge(local.common_tags, { Name = "webapp-instance-role" })
 }
 
 resource "aws_iam_role_policy_attachment" "ssm_managed_instance_core" {
@@ -213,12 +204,7 @@ resource "aws_iam_instance_profile" "webapp_instance_profile" {
   name = "webapp-instance-profile-${random_string.unique_suffix.result}"
   role = aws_iam_role.webapp_instance_role.name
 
-  tags = merge(
-    local.common_tags,
-    {
-      Name = "webapp-instance-profile"
-    }
-  )
+  tags = merge(local.common_tags, { Name = "webapp-instance-profile" })
 }
 
 # EC2 Instance
@@ -248,12 +234,7 @@ resource "aws_instance" "webapp_instance" {
     delete_on_termination = true
   }
 
-  tags = merge(
-    local.common_tags,
-    {
-      Name = "webapp-instance"
-    }
-  )
+  tags = merge(local.common_tags, { Name = "webapp-instance" })
 }
 
 # EBS Volume for Application Data
@@ -263,21 +244,17 @@ resource "aws_ebs_volume" "webapp_volume" {
   type              = "gp3"
   encrypted         = true  # Uses AWS managed keys by default
 
-  tags = merge(
-    local.common_tags,
-    {
-      Name                 = "webapp-volume"
-      DeletionProtection   = "true"
-      Purpose              = "Application Data"
-    }
-  )
+  tags = merge(local.common_tags, {
+    Name = "webapp-volume"
+    DeletionProtection = "true"
+    Purpose = "Application Data"
+  })
 }
 
 resource "aws_volume_attachment" "webapp_volume_attachment" {
   device_name = "/dev/sdf"
   volume_id   = aws_ebs_volume.webapp_volume.id
   instance_id = aws_instance.webapp_instance.id
-
 }
 
 # IAM Role for DLM
@@ -373,169 +350,6 @@ resource "aws_dlm_lifecycle_policy" "webapp_snapshot_policy" {
   )
 }
 
-# SNS Topic for CloudWatch Alarms
-resource "aws_sns_topic" "webapp_alerts" {
-  name = "webapp-alerts-${random_string.unique_suffix.result}"
-
-  tags = merge(
-    local.common_tags,
-    {
-      Name = "webapp-alerts"
-    }
-  )
-}
-
-resource "aws_sns_topic_subscription" "webapp_alerts_email" {
-  topic_arn = aws_sns_topic.webapp_alerts.arn
-  protocol  = "email"
-  endpoint  = var.alert_email
-}
-
-# CloudWatch Alarms
-resource "aws_cloudwatch_metric_alarm" "instance_cpu_high" {
-  alarm_name          = "webapp-cpu-${random_string.unique_suffix.result}"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/EC2"
-  period              = "300"
-  statistic           = "Average"
-  threshold           = "80"
-  alarm_description   = "This metric monitors ec2 cpu utilization"
-  alarm_actions       = [aws_sns_topic.webapp_alerts.arn]
-
-  dimensions = {
-    InstanceId = aws_instance.webapp_instance.id
-  }
-
-  tags = merge(
-    local.common_tags,
-    {
-      Name = "webapp-cpu-alarm"
-    }
-  )
-}
-
-resource "aws_cloudwatch_metric_alarm" "instance_status_check_failed" {
-  alarm_name          = "webapp-status-${random_string.unique_suffix.result}"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "StatusCheckFailed"
-  namespace           = "AWS/EC2"
-  period              = "60"
-  statistic           = "Maximum"
-  threshold           = "0"
-  alarm_description   = "This metric monitors ec2 status check"
-  alarm_actions       = [aws_sns_topic.webapp_alerts.arn]
-
-  dimensions = {
-    InstanceId = aws_instance.webapp_instance.id
-  }
-
-  tags = merge(
-    local.common_tags,
-    {
-      Name = "webapp-status-alarm"
-    }
-  )
-}
-
-resource "aws_cloudwatch_metric_alarm" "ebs_volume_throughput" {
-  alarm_name          = "webapp-ebs-throughput-${random_string.unique_suffix.result}"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "VolumeThroughputPercentage"
-  namespace           = "AWS/EBS"
-  period              = "300"
-  statistic           = "Average"
-  threshold           = "95"
-  alarm_description   = "This metric monitors EBS volume throughput"
-  alarm_actions       = [aws_sns_topic.webapp_alerts.arn]
-
-  dimensions = {
-    VolumeId = aws_ebs_volume.webapp_volume.id
-  }
-
-  tags = merge(
-    local.common_tags,
-    {
-      Name = "webapp-ebs-throughput-alarm"
-    }
-  )
-}
-
-# VPC Flow Logs
-resource "aws_cloudwatch_log_group" "vpc_flow_log" {
-  name              = "/aws/vpc/webapp-${random_string.unique_suffix.result}"
-  retention_in_days = 7
-
-  tags = merge(
-    local.common_tags,
-    {
-      Name = "webapp-vpc-flow-logs"
-    }
-  )
-}
-
-resource "aws_iam_role" "vpc_flow_log_role" {
-  name = "webapp-vpc-flow-log-role-${random_string.unique_suffix.result}"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "vpc-flow-logs.amazonaws.com"
-        }
-      }
-    ]
-  })
-
-  tags = merge(
-    local.common_tags,
-    {
-      Name = "webapp-vpc-flow-log-role"
-    }
-  )
-}
-
-resource "aws_iam_role_policy" "vpc_flow_log_policy" {
-  name = "webapp-vpc-flow-log-policy-${random_string.unique_suffix.result}"
-  role = aws_iam_role.vpc_flow_log_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents",
-          "logs:DescribeLogGroups",
-          "logs:DescribeLogStreams"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-}
-
-resource "aws_flow_log" "webapp_vpc_flow_log" {
-  iam_role_arn    = aws_iam_role.vpc_flow_log_role.arn
-  log_destination = aws_cloudwatch_log_group.vpc_flow_log.arn
-  traffic_type    = "ALL"
-  vpc_id          = aws_vpc.webapp_vpc.id
-
-  tags = merge(
-    local.common_tags,
-    {
-      Name = "webapp-vpc-flow-log"
-    }
-  )
-}
 
 # Outputs
 output "instance_id" {
@@ -560,6 +374,107 @@ output "cloudwatch_alarm_names" {
     aws_cloudwatch_metric_alarm.instance_status_check_failed.alarm_name,
     aws_cloudwatch_metric_alarm.ebs_volume_throughput.alarm_name,
   ]
+}
+
+# SNS Topic for CloudWatch Alarms
+resource "aws_sns_topic" "webapp_alerts" {
+  name = "webapp-alerts-${random_string.unique_suffix.result}"
+  tags = merge(local.common_tags, { Name = "webapp-alerts" })
+}
+
+resource "aws_sns_topic_subscription" "webapp_alerts_email" {
+  topic_arn = aws_sns_topic.webapp_alerts.arn
+  protocol  = "email"
+  endpoint  = var.alert_email
+}
+
+# CloudWatch Alarms
+resource "aws_cloudwatch_metric_alarm" "instance_cpu_high" {
+  alarm_name          = "webapp-cpu-${random_string.unique_suffix.result}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "80"
+  alarm_description   = "This metric monitors ec2 cpu utilization"
+  alarm_actions       = [aws_sns_topic.webapp_alerts.arn]
+  dimensions          = { InstanceId = aws_instance.webapp_instance.id }
+  tags                = merge(local.common_tags, { Name = "webapp-cpu-alarm" })
+}
+
+resource "aws_cloudwatch_metric_alarm" "instance_status_check_failed" {
+  alarm_name          = "webapp-status-${random_string.unique_suffix.result}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "StatusCheckFailed"
+  namespace           = "AWS/EC2"
+  period              = "60"
+  statistic           = "Maximum"
+  threshold           = "0"
+  alarm_description   = "This metric monitors ec2 status check"
+  alarm_actions       = [aws_sns_topic.webapp_alerts.arn]
+  dimensions          = { InstanceId = aws_instance.webapp_instance.id }
+  tags                = merge(local.common_tags, { Name = "webapp-status-alarm" })
+}
+
+resource "aws_cloudwatch_metric_alarm" "ebs_volume_throughput" {
+  alarm_name          = "webapp-ebs-throughput-${random_string.unique_suffix.result}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "VolumeThroughputPercentage"
+  namespace           = "AWS/EBS"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "95"
+  alarm_description   = "This metric monitors EBS volume throughput"
+  alarm_actions       = [aws_sns_topic.webapp_alerts.arn]
+  dimensions          = { VolumeId = aws_ebs_volume.webapp_volume.id }
+  tags                = merge(local.common_tags, { Name = "webapp-ebs-throughput-alarm" })
+}
+
+# VPC Flow Logs
+resource "aws_cloudwatch_log_group" "vpc_flow_log" {
+  name              = "/aws/vpc/webapp-${random_string.unique_suffix.result}"
+  retention_in_days = 7
+  tags = merge(local.common_tags, {
+    Name = "webapp-vpc-flow-logs"
+  })
+}
+
+resource "aws_iam_role" "vpc_flow_log_role" {
+  name = "webapp-vpc-flow-log-role-${random_string.unique_suffix.result}"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = { Service = "vpc-flow-logs.amazonaws.com" }
+    }]
+  })
+  tags = merge(local.common_tags, { Name = "webapp-vpc-flow-log-role" })
+}
+
+resource "aws_iam_role_policy" "vpc_flow_log_policy" {
+  name = "webapp-vpc-flow-log-policy-${random_string.unique_suffix.result}"
+  role = aws_iam_role.vpc_flow_log_role.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogGroups", "logs:DescribeLogStreams"]
+      Resource = "*"
+    }]
+  })
+}
+
+resource "aws_flow_log" "webapp_vpc_flow_log" {
+  iam_role_arn    = aws_iam_role.vpc_flow_log_role.arn
+  log_destination = aws_cloudwatch_log_group.vpc_flow_log.arn
+  traffic_type    = "ALL"
+  vpc_id          = aws_vpc.webapp_vpc.id
+  tags = merge(local.common_tags, { Name = "webapp-vpc-flow-log" })
 }
 
 output "vpc_flow_log_group" {
