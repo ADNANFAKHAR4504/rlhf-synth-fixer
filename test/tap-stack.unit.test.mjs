@@ -27,8 +27,8 @@ const mockResources = {
   kmsAlias: { id: 'mock-kms-alias-id', name: 'alias/healthcare-dev' },
   logGroup: { id: 'mock-log-group-id', name: '/aws/healthcare/audit-dev', arn: 'arn:aws:logs:ap-southeast-1:123456789012:log-group:/aws/healthcare/audit-dev' },
   vpc: { id: 'vpc-mock123', cidrBlock: '10.0.0.0/16' },
-  privateSubnet1: { id: 'subnet-mock-private-1', availabilityZone: 'ap-southeast-1a' },
-  privateSubnet2: { id: 'subnet-mock-private-2', availabilityZone: 'ap-southeast-1b' },
+  privateSubnet1: { id: 'subnet-mock-private-1', availabilityZone: 'us-east-1a' },
+  privateSubnet2: { id: 'subnet-mock-private-2', availabilityZone: 'us-east-1b' },
   dbSubnetGroup: { id: 'mock-db-subnet-group', name: 'healthcare-db-subnet-dev' },
   rdsSecurityGroup: { id: 'sg-mock-rds', name: 'healthcare-rds-sg-dev' },
   rdsParameterGroup: { id: 'mock-pg-params', name: 'healthcare-pg-params-dev' },
@@ -320,8 +320,8 @@ describe('HIPAA-Compliant Healthcare Data Pipeline Stack', () => {
       expect(subnet1Config.cidrBlock).toBe('10.0.1.0/24');
       expect(subnet2Config.cidrBlock).toBe('10.0.2.0/24');
 
-      expect(subnet1Config.availabilityZone).toBe('ap-southeast-1a');
-      expect(subnet2Config.availabilityZone).toBe('ap-southeast-1b');
+      expect(subnet1Config.availabilityZone).toBe('us-east-1a');
+      expect(subnet2Config.availabilityZone).toBe('us-east-1b');
     });
 
     test('should associate subnets with VPC', () => {
