@@ -275,7 +275,7 @@ export class TapStack extends TerraformStack {
     const dbSecret = new SecretsmanagerSecret(this, 'DbSecret', {
       name: `aurora-master-secret-${randomSuffix}`,
       description: 'Aurora master password for app (auto-generated)',
-      kmsKeyId: kmsKey.id,
+      kmsKeyId: kmsKey.arn, // **FIX**: Use .arn instead of .id
       tags: commonTags,
     });
 
@@ -301,7 +301,7 @@ export class TapStack extends TerraformStack {
       vpcSecurityGroupIds: [dbSg.id],
       skipFinalSnapshot: true,
       storageEncrypted: true,
-      kmsKeyId: kmsKey.id,
+      kmsKeyId: kmsKey.arn, // **FIX**: Use .arn instead of .id
       tags: commonTags,
     });
 
@@ -335,7 +335,7 @@ export class TapStack extends TerraformStack {
 
     const alarmTopic = new SnsTopic(this, 'AlarmTopic', {
       name: `app-alarms-${randomSuffix}`,
-      kmsMasterKeyId: kmsKey.id,
+      kmsMasterKeyId: kmsKey.arn, // **FIX**: Use .arn instead of .id
       tags: commonTags,
     });
 
@@ -376,7 +376,6 @@ export class TapStack extends TerraformStack {
       }),
     });
 
-    // **FIX**: Corrected the path to include the 'lambda' subdirectory.
     const failoverLambda = new LambdaFunction(this, 'FailoverLambda', {
       functionName: `automated-failover-${randomSuffix}`,
       runtime: 'python3.9',
