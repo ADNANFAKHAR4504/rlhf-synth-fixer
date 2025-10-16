@@ -731,6 +731,7 @@ artifacts:
       ],
     });
 
+
     // EC2 instance for deployment
     this.ec2Instance = new Instance(this, 'ec2-instance', {
       ami: ami.id,
