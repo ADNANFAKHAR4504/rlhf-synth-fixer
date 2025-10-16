@@ -1,12 +1,9 @@
-# FedRAMP Data Processing Pipeline (Pulumi Go)
+# FedRAMP Data Pipeline – Pulumi Go Build Brief
 
-Our federal program office needs a Pulumi (Go) stack that stands up the secure data pipeline described in the master prompt. Re-state the business context in your own words (PII ingestion via API Gateway, streaming through Kinesis, containerized processing on ECS/Fargate, and durable storage in an encrypted PostgreSQL RDS instance). Highlight the FedRAMP Moderate controls we must satisfy: encryption at rest/in transit with customer-managed KMS keys, audited access, least-privilege IAM, and fully private networking for stateful services.
+We’re standing up the production-grade Pulumi Go stack for the FedRAMP Moderate data pipeline project. Please capture the work request in plain language for the engineering channel:
 
-Spell out the minimum infrastructure components you expect the solution to contain, including:
-- VPC layout (public subnets for the NAT/Amazon-managed endpoints, private subnets for ECS and RDS, route tables, and a single NAT gateway for egress)
-- Security groups and networking rules that keep RDS private and allow only the necessary flows (API Gateway → ECS → RDS)
-- KMS key usage patterns (who needs grants, rotation requirements, and log encryption considerations)
-- Secret management expectations (Secrets Manager, no inline credentials)
-- Observability requirements (CloudWatch logs, API Gateway access logging, ECS Container Insights)
+1. Start with a short recap of the mission: PII enters through API Gateway, flows across Kinesis, gets processed on ECS Fargate, and lands in an encrypted PostgreSQL RDS instance. Call out the compliance bar (FedRAMP Moderate) so nobody misses the security context.
+2. List the infrastructure building blocks we expect to see in the stack. At a minimum cover networking (VPC, subnets, NAT), security groups, the customer-managed KMS key, Secrets Manager usage, observability/logging expectations, and the IAM roles that glue everything together.
+3. Close with the handful of “don’t break these” conventions we already agreed on: naming based on Pulumi project/stack, tagging requirements, destroy behaviour for non-prod, and the expectation that unit + integration tests ship with the change.
 
-Close with any non-negotiable conventions the Pulumi program must follow (naming tied to `project`/`stack`, destroyable resources for CI/CD, tagging, and unit/integration test expectations). Keep the voice natural, as if you were writing the ticket for an experienced cloud engineer on our team. No boilerplate or AI tells—just the facts we would communicate internally.
+Write this the way we normally brief senior engineers—direct, specific, and free of AI-sounding filler.

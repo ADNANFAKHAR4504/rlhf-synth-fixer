@@ -1,203 +1,41 @@
-# Secure Data Processing Pipeline for Federal Agency
+# Pulumi Implementation Overview
 
-## Implementation Overview
+The Pulumi Go program in this branch provisions the entire FedRAMP Moderate data pipeline described in the task. It builds the networking foundation, security controls, data plane, and supporting observability/stewardship resources. Every resource name, tag, and ARN suffix is derived from `ctx.Project()` and `ctx.Stack()` so multiple environments can coexist without clashes.
 
-This infrastructure implements a FedRAMP Moderate compliant data processing pipeline for a federal agency handling citizen PII data. The solution leverages containerized processing with end-to-end encryption and proper audit trails.
+## What the stack creates
 
-## Architecture Components
+- **Customer-managed KMS key** with yearly rotation, a 7‑day deletion window, and an explicit policy that lets CloudWatch Logs, Secrets Manager, RDS, and other service principals use the key. An alias (`alias/<project>-<stack>-data-key`) is registered for operational convenience.
+- **VPC (CIDR 10.0.0.0/16)** with two automatically discovered AZs (`GetAvailabilityZones`). For each AZ the stack creates a public /24 subnet (NAT + endpoints) and a private /24 subnet (ECS + RDS). DNS hostnames/support are enabled and tagging captures project, environment, and compliance metadata.
+- **Single NAT gateway** (cost-optimised for non-prod) plus public/private route tables, default routes, and subnet associations so private workloads reach AWS APIs without any public exposure.
+- **Security groups**:
+  - `*-ecs-tasks-sg` allows Fargate tasks to talk out (0.0.0.0/0) but only accepts traffic from the VPC on port 8080.
+  - `*-db-sg` only allows PostgreSQL traffic (5432) from the ECS tasks security group and has no public ingress.
+- **Kinesis data stream** with one shard (24‑hour retention) encrypted via the customer key.
+- **Secrets Manager secret (`*-db-credentials`)** that stores the randomly generated database username/password along with connection metadata. A `SecretVersion` resource seeds the secret and is encrypted with the same KMS key.
+- **RDS PostgreSQL instance** (`postgres 16.3`, `db.t3.micro`, gp3 storage) in the isolated subnets, encrypted with the KMS key, private only, with log exports (`postgresql`, `upgrade`), seven-day backups, and the `*-db-sg` attached.
+- **ECS Fargate cluster/service** with Container Insights enabled, a `data-processor` task definition (256 CPU / 512 MiB), AWS Logs driver pointed to a dedicated log group, and environment variables referencing the Kinesis stream and the database secret.
+- **IAM roles & policies**:
+  - API Gateway integration role allowed to `kinesis:PutRecord(s)`.
+  - ECS task execution role with the managed execution policy.
+  - ECS task role allowed to read the stream, decrypt via KMS, and read the database secret.
+- **API Gateway REST API** with a `/ingest` POST method integrated directly with Kinesis, an IAM auth type, a Kinesis request template, and a `prod` stage. Logging is wired through `aws_api_gateway_account`, a dedicated KMS-encrypted log group, and method settings that enable INFO logs, data trace, and metrics.
+- **CloudWatch log groups** for the ECS workload and API Gateway, each encrypted with the customer key.
+- **Outputs** exposing VPC/subnet identifiers, Kinesis attributes, RDS details, the database secret ARN, ECS cluster/task definition ARNs, and the API ID/URL/endpoint so integration tests and downstream automation can discover the deployed resources.
 
-### 1. AWS KMS (Encryption at Rest and In Transit)
-- Customer-managed KMS key with automatic rotation enabled
-- Used for encrypting:
-  - Kinesis data streams
-  - RDS PostgreSQL database
-  - Secrets Manager credentials
-  - CloudWatch logs
-- Deletion window: 7 days (destroyable for CI/CD)
+## Security & compliance highlights
 
-### 2. VPC and Networking
-- **VPC**: 10.0.0.0/16 CIDR block with DNS support enabled
-- **Public Subnets**: 2 subnets across us-east-1a and us-east-1b for NAT Gateway
-- **Private Subnets**: 2 subnets for ECS tasks and RDS (no public access)
-- **NAT Gateway**: Single NAT Gateway for cost optimization (private subnets can access AWS services)
-- **Internet Gateway**: For public subnet connectivity
-- **Route Tables**: Separate routing for public and private subnets
+- **Encryption**: All stateful services (Kinesis, RDS, Secrets Manager, CloudWatch Logs) rely on the same customer KMS key. The key policy explicitly grants `logs.<region>.amazonaws.com`, aligning with CloudWatch Logs requirements.
+- **Network isolation**: No resource with data-at-rest receives a public IP. All outbound-only dependencies flow through the NAT gateway. Security groups enforce ECS→RDS access while keeping RDS isolated from the internet.
+- **Credential hygiene**: Database credentials are generated at deployment time and stored exclusively in Secrets Manager; they never appear in code, config, or Pulumi state in plaintext.
+- **Observability**: ECS uses Container Insights and its own CloudWatch log group. API Gateway access logs are structured JSON and stored in a KMS-encrypted log group. Kinesis uses enhanced metrics, and RDS enables log exports suitable for FedRAMP auditing.
+- **Tagging**: Every resource is tagged with Environment, Compliance (FedRAMP-Moderate), and descriptive names so compliance tooling and cost allocation reports can filter easily.
 
-### 3. Security Groups (Least Privilege)
-- **API Gateway SG**: HTTPS (443) ingress from anywhere
-- **ECS Tasks SG**: Port 8080 ingress from API Gateway SG only, egress to all
-- **RDS SG**: PostgreSQL (5432) ingress from ECS Tasks SG only, no egress
+## Operational notes
 
-### 4. Amazon Kinesis Data Stream
-- Stream for real-time data ingestion from API Gateway
-- Single shard configuration (suitable for moderate workloads)
-- 24-hour retention period
-- KMS encryption enabled using customer-managed key
-- Provides buffering between API Gateway and ECS processing
-
-### 5. Amazon RDS PostgreSQL
-- **Engine**: PostgreSQL 16.3 on db.t3.micro
-- **Storage**: 20 GB gp3 with encryption at rest (KMS)
-- **Network**: Private subnets only, no public accessibility
-- **Security**:
-  - Encrypted at rest using KMS
-  - Only accessible from ECS tasks
-  - CloudWatch logs export enabled (postgresql, upgrade)
-- **Backup**: 7-day retention, daily at 3:00 AM
-- **Compliance**: Deletion protection disabled, skip final snapshot (for CI/CD)
-
-### 6. AWS Secrets Manager
-- Stores database credentials encrypted with KMS
-- Secret includes: username, password, host, port, database name
-- Accessible only by ECS tasks via IAM role
-- Demonstrates secure credential management pattern
-
-### 7. Amazon ECS (Fargate)
-- **Cluster**: Container Insights enabled for monitoring
-- **Task Definition**:
-  - Fargate launch type (serverless)
-  - 256 CPU units, 512 MB memory
-  - Sample container image (amazon/amazon-ecs-sample)
-  - Environment variables: Kinesis stream name, DB secret ARN
-- **Service**:
-  - 1 desired task count
-  - Runs in private subnets
-  - No public IP assignment
-- **Logging**: CloudWatch Logs with KMS encryption
-
-### 8. IAM Roles and Policies (Least Privilege)
-
-#### API Gateway Role
-- Allows API Gateway to write records to Kinesis stream
-- Permissions: `kinesis:PutRecord`, `kinesis:PutRecords`
-
-#### API Gateway CloudWatch Role
-- Trust relationship with `apigateway.amazonaws.com`
-- Attached policy: `AmazonAPIGatewayPushToCloudWatchLogs`
-- Registered through `AWS::ApiGateway::Account` for access logging
-
-#### ECS Task Execution Role
-- Allows ECS to pull container images and write logs
-- Uses AWS managed policy: `AmazonECSTaskExecutionRolePolicy`
-
-#### ECS Task Role
-- Allows application code to:
-  - Read from Kinesis stream
-  - Retrieve secrets from Secrets Manager
-  - Decrypt using KMS
-
-### 9. Amazon API Gateway
-- **Type**: Regional REST API
-- **Endpoint**: `/ingest` resource with POST method
-- **Authentication**: AWS IAM (Signature v4)
-- **Integration**: Direct integration with Kinesis PutRecord action
-- **Request Transformation**: JSON payload base64-encoded and sent to Kinesis
-- **Logging**:
-  - Dedicated KMS-encrypted CloudWatch Log Group (`/aws/apigateway/<project>-<stack>`)
-  - Access logs enabled with structured JSON format
-  - Method settings enforce INFO logging, data trace, and metrics
-- **Stage**: Explicit `prod` stage resource managing deployment lifecycle
-
-## Data Flow
-
-1. **Ingestion**: Client sends POST request to API Gateway `/ingest` endpoint with IAM authentication
-2. **Streaming**: API Gateway transforms request and writes to Kinesis data stream
-3. **Processing**: ECS Fargate tasks consume records from Kinesis stream
-4. **Storage**: Processed data written to PostgreSQL database in private subnet
-5. **Credentials**: ECS tasks retrieve DB credentials from Secrets Manager at runtime
-
-## Security Controls
-
-### Encryption
-- **In Transit**: TLS 1.2+ for all API calls, HTTPS endpoints
-- **At Rest**: KMS encryption for Kinesis, RDS, Secrets Manager, CloudWatch Logs
-
-### Network Isolation
-- RDS in private subnets with no public access
-- ECS tasks in private subnets
-- Security groups enforce least privilege access
-
-### Identity and Access Management
-- IAM roles with minimum required permissions
-- No hardcoded credentials
-- Service-to-service authentication
-
-### Audit and Monitoring
-- CloudWatch Logs for API Gateway, ECS tasks, RDS
-- Container Insights for ECS cluster monitoring
-- API Gateway metrics and tracing enabled
-
-### FedRAMP Moderate Compliance Features
-- Encryption at rest and in transit
-- Audit logging enabled
-- Network isolation
-- Principle of least privilege
-- Automatic key rotation
-- Backup and recovery capabilities
-
-## Stack Outputs
-
-The infrastructure exports the following outputs:
-
-```yaml
-vpcId: VPC identifier
-vpcCidr: VPC CIDR block
-publicSubnet1Id: Public subnet 1 ID
-publicSubnet2Id: Public subnet 2 ID
-privateSubnet1Id: Private subnet 1 ID
-privateSubnet2Id: Private subnet 2 ID
-kmsKeyId: KMS key ID
-kmsKeyArn: KMS key ARN
-kinesisStreamName: Kinesis stream name
-kinesisStreamArn: Kinesis stream ARN
-rdsEndpoint: RDS instance endpoint (host:port)
-rdsInstanceId: RDS instance identifier
-rdsInstanceArn: RDS instance ARN
-dbSecretArn: Secrets Manager secret ARN
-ecsClusterName: ECS cluster name
-ecsClusterArn: ECS cluster ARN
-ecsTaskDefinitionArn: ECS task definition ARN
-apiGatewayId: API Gateway REST API ID
-apiGatewayUrl: Full API Gateway URL (https://[api-id].execute-api.us-east-1.amazonaws.com/prod/ingest)
-apiGatewayEndpoint: API Gateway invoke URL
-```
-
-## Deployment Instructions
-
-### Prerequisites
-- Pulumi CLI installed
-- AWS CLI configured with appropriate credentials
-- Go 1.23+ installed
-
-### Deployment Steps
-
-1. **Initialize Pulumi Stack**:
-   ```bash
-   cd /path/to/worktree/synth-2237444138
-   pulumi stack init dev
-   ```
-
-2. **Install Dependencies**:
-   ```bash
-   go mod tidy
-   ```
-
-3. **Set AWS Region**:
-   ```bash
-   pulumi config set aws:region us-east-1
-   ```
-
-4. **Preview Changes**:
-   ```bash
-   pulumi preview
-   ```
-
-5. **Deploy Infrastructure**:
-   ```bash
-   pulumi up --yes
-   ```
-
-6. **View Outputs**:
+- The stack derives availability zones dynamically, so it works in any region where two AZs are available.
+- Random credentials are produced via helper functions (`generateDBUsername`, `generateDBPassword`) to stay within RDS constraints.
+- Deployments tolerate re-runs because all dependent resources (for example, API Gateway stage, log group, IAM roles) are modelled explicitly; no manual ordering is required.
+- Outputs are designed to match what the integration suite expects (e.g., `ApiGatewayEndpoint`, `EcsClusterArn`, `DbSecretArn`).
    ```bash
    pulumi stack output
    ```
