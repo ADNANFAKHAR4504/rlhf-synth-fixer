@@ -1,3 +1,22 @@
+# Terraform and Provider Configuration
+terraform {
+  required_version = ">= 1.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.5"
+    }
+  }
+}
+
+provider "aws" {
+  region = var.region
+}
+
 # Data Sources
 data "aws_ami" "amazon_linux_2" {
   most_recent = true
@@ -9,13 +28,13 @@ data "aws_ami" "amazon_linux_2" {
   }
 
   filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
+    name = "virtualization-type"
+    values = ["hvm"]  # virtualization-type hvm
   }
 
   filter {
-    name   = "architecture"
-    values = ["x86_64"]
+    name = "architecture"
+    values = ["x86_64"]  # architecture x86_64
   }
 
   filter {
@@ -88,7 +107,12 @@ locals {
   subnet_cidr = "10.0.1.0/24"
   private_ip  = "10.0.1.10"
 
-  user_data_script = "#!/bin/bash\nyum install -y amazon-ssm-agent\nsystemctl enable amazon-ssm-agent\nsystemctl start amazon-ssm-agent"
+  user_data_script = <<-EOF
+    #!/bin/bash
+    yum install -y amazon-ssm-agent
+    systemctl enable amazon-ssm-agent
+    systemctl start amazon-ssm-agent
+  EOF
 }
 
 # Random String for Unique Naming
@@ -118,7 +142,7 @@ resource "aws_subnet" "webapp_subnet" {
 }
 
 resource "aws_security_group" "webapp_security_group" {
-  name        = "webapp-security-group-${random_string.unique_suffix.result}"
+  name = "webapp-security-group-${random_string.unique_suffix.result}"
   description = "Security group for webapp EC2 instance"
   vpc_id      = aws_vpc.webapp_vpc.id
 
@@ -222,7 +246,7 @@ resource "aws_ebs_volume" "webapp_volume" {
   availability_zone = var.availability_zone
   size              = var.volume_size
   type              = "gp3"
-  encrypted         = true  # Uses AWS managed keys by default
+  encrypted = true
 
   tags = merge(local.common_tags, {
     Name = "webapp-volume"
