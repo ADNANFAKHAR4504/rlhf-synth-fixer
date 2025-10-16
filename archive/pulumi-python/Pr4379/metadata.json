@@ -3,6 +3,7 @@
   "language": "python",
   "complexity": "hard",
   "team": "synth",
+  "turn_type": "single",
   "startedAt": "2025-10-14T14:18:15+05:30",
   "po_id": "3757826587",
   "subtask": "Application Deployment",
