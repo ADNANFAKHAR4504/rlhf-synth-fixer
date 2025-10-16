@@ -1,5 +1,3 @@
-This is a comprehensive Terraform configuration request. I need to create a single file that includes all the requested resources with proper security configurations. Let me break down what needs to be included:
-
 1. VPC with CIDR 10.0.0.0/16 in us-east-1
 2. 2 public and 2 private subnets across AZs
 3. NAT Gateways, Internet Gateway, Route Tables
@@ -1354,10 +1352,6 @@ output "resource_suffix" {
   value       = local.suffix
 }
 ```
-
-This comprehensive Terraform configuration creates a complete, secure AWS infrastructure stack that fulfills all your requirements:
-
-Key Features Implemented:
 
 networking & High Availability
 VPC with CIDR 10.0.0.0/16

@@ -20,3 +20,4 @@ Create a single Terraform configuration file named tap_stack.tf containing all v
 18. Produce a security audit using AWS Trusted Advisor to identify ongoing issues.
 19.Ensure compliance with all security constraints including least privilege IAM roles, a configured WAF, and restricted SSH access.20. Use consistent, descriptive naming conventions defined by locals or input variables for all resources for easier management.
 21. Give character size 4 suffix in small letters only with each resource so that stack dont get error of "resource already exists". Also use small characters only for this suffix. 
+22. There is no need of VPC flow logs, Cloudtrail log encryption with KMS key , S3 lifecycle policies and cloud watch logs groups as per the task requirements.

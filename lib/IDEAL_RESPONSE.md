@@ -1340,8 +1340,7 @@ output "region" {
 
 ```
 
-```hcl
-
+```
 # provider.tf
 
 terraform {
@@ -1362,5 +1361,4 @@ terraform {
 provider "aws" {
   region = var.aws_region
 }
-
 ```
