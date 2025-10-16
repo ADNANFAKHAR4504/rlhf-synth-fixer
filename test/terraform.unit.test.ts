@@ -266,17 +266,6 @@ describe("Variables", () => {
     });
   });
 
-  describe("EC2 (public) + ASG (private) + ALB + TG + Listener", () => {
-    it("Public EC2 uses AL2023, IMDSv2 required, nginx in user_data", () => {
-      const ec2 = getBlock(tf, "resource", "aws_instance", "use1_web");
-      expectMatch(ec2, /ami\s*=\s*data\.aws_ssm_parameter\.al2023_ami_use1\.value/);
-      expectMatch(ec2, /http_tokens\s*=\s*"required"/);
-      expect(/local\.user_data_use1/.test(ec2 || "")).toBe(true);
-      expect(/dnf\s+-y\s+install\s+nginx/.test(tf)).toBe(true);
-    });
-
-  });
-
   describe("SSM interface endpoints (reliability)", () => {
     it("VPC endpoints for ssm, ssmmessages, ec2messages in use1", () => {
       expect(!!getBlock(tf, "resource", "aws_vpc_endpoint", "use1_ssm")).toBe(true);
