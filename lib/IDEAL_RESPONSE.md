@@ -1,6 +1,4 @@
 ```hcl
-
-
 # tap_stack.tf - Complete Infrastructure Stack Configuration
 
 # ==============================================================================
@@ -1385,7 +1383,7 @@ output "region" {
 
 ```
 
-```hcl
+```
 # provider.tf
 
 terraform {

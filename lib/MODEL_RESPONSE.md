@@ -1,6 +1,3 @@
-### Reasoning Trace
----
-
 This is a comprehensive Terraform infrastructure request. Let me break down what's needed:
 
 1. VPC with 10.0.0.0/16 CIDR in us-east-1
@@ -16,12 +13,6 @@ This is a comprehensive Terraform infrastructure request. Let me break down what
 11. Least privilege, WAF, restricted SSH
 12. Consistent naming with locals/variables
 13. 4-character random suffix for uniqueness
-
-Let me create a comprehensive tap_stack.tf file.
-### Answer 
----
-
-I'll create a comprehensive Terraform configuration file that meets all your requirements. This will be a complete, production-ready infrastructure setup with security best practices.
 
 ```hcl
 # tap_stack.tf - Complete Infrastructure Stack Configuration
@@ -1402,11 +1393,7 @@ output "stack_name" {
 }
 ```
 
-This comprehensive Terraform configuration file (`tap_stack.tf`) includes:
-
-## **Key Features Implemented:**
-
-### **1. Networking Architecture:**
+Networking Architecture:
 - VPC with 10.0.0.0/16 CIDR block
 - 2 public subnets for ALB
 - 2 private subnets for EC2/Lambda
@@ -1415,7 +1402,7 @@ This comprehensive Terraform configuration file (`tap_stack.tf`) includes:
 - Internet Gateway for public access
 - Proper route tables and associations
 
-### **2. Security Implementation:**
+Security Implementation:
 - KMS encryption for all storage resources
 - Security groups with least privilege access
 - WAF with rate limiting and SQL injection protection
@@ -1423,45 +1410,44 @@ This comprehensive Terraform configuration file (`tap_stack.tf`) includes:
 - IMDSv2 enforced on EC2 instances
 - No public access to RDS instances
 
-### **3. High Availability:**
+High Availability:
 - Multi-AZ RDS deployment with read replica
 - Auto Scaling Group with minimum 2 instances
 - Load balancer across multiple availability zones
 - NAT Gateway redundancy
 
-### **4. IAM Roles (Least Privilege):**
+IAM Roles (Least Privilege):
 - EC2 role with minimal permissions
 - Lambda role with VPC and S3 access only
 - No wildcard permissions
 
-### **5. Database Security:**
+Database Security:
 - Random username starting with letter (8 chars)
 - Random password with special characters (16 chars)
 - Credentials stored in Secrets Manager and Parameter Store
 - Encrypted with KMS
 - Automatic minor version upgrades
 
-### **6. Lambda Function:**
+Lambda Function:
 - Inline Python code (no external ZIP required)
 - Triggered by S3 events
 - VPC-enabled for secure database access
 
-### **7. Monitoring & Compliance:**
+Monitoring & Compliance:
 - CloudWatch alarms for auto-scaling
 - CloudWatch logs with encryption
 - WAF logging and metrics
 - Comprehensive tagging strategy
 
-### **8. Resource Naming:**
+Resource Naming:
 - 4-character random suffix for uniqueness
 - Consistent naming convention
 - Environment-based naming
 
-## **Deployment Instructions:**
+Deployment Instructions:
 
 1. Save this file as `tap_stack.tf`
 2. Initialize Terraform: `terraform init`
 3. Review the plan: `terraform plan`
 4. Apply the configuration: `terraform apply`
 
-The configuration is fully self-contained and production-ready, implementing all security best practices including encryption, least privilege access, network segmentation, and comprehensive monitoring.
