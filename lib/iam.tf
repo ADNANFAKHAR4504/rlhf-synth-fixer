@@ -196,11 +196,12 @@ resource "aws_iam_role" "api_gateway_cloudwatch" {
     Version = "2012-10-17"
     Statement = [
       {
-        Action = "sts:AssumeRole"
+        Sid    = ""
         Effect = "Allow"
         Principal = {
           Service = "apigateway.amazonaws.com"
         }
+        Action = "sts:AssumeRole"
       }
     ]
   })
@@ -210,36 +211,9 @@ resource "aws_iam_role" "api_gateway_cloudwatch" {
   })
 }
 
-resource "aws_iam_policy" "api_gateway_cloudwatch" {
-  name        = "${var.project_name}-${var.environment_suffix}-apigw-cw-policy"
-  description = "Policy for API Gateway CloudWatch logging"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:DescribeLogGroups",
-          "logs:DescribeLogStreams",
-          "logs:PutLogEvents",
-          "logs:GetLogEvents",
-          "logs:FilterLogEvents"
-        ]
-        Resource = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/apigateway/${var.project_name}-${var.environment_suffix}:*"
-      }
-    ]
-  })
-
-  tags = merge(var.common_tags, {
-    Name = "${var.project_name}-${var.environment_suffix}-apigw-cw-policy"
-  })
-}
-
+# Use AWS managed policy for API Gateway CloudWatch logging
 resource "aws_iam_role_policy_attachment" "api_gateway_cloudwatch" {
-  policy_arn = aws_iam_policy.api_gateway_cloudwatch.arn
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
   role       = aws_iam_role.api_gateway_cloudwatch.name
 }
 
