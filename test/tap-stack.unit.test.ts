@@ -16,17 +16,17 @@
 
 const mockOutputs = {};
 const mockResources = {
-  kmsKey: { id: 'mock-kms-key-id', arn: 'arn:aws:kms:us-east-1:123456789012:key/mock-key-id', keyId: 'mock-key-id' },
+  kmsKey: { id: 'mock-kms-key-id', arn: 'arn:aws:kms:ap-southeast-1:123456789012:key/mock-key-id', keyId: 'mock-key-id' },
   kmsAlias: { id: 'mock-kms-alias-id', name: 'alias/healthcare-dev' },
-  logGroup: { id: 'mock-log-group-id', name: '/aws/healthcare/audit-dev', arn: 'arn:aws:logs:us-east-1:123456789012:log-group:/aws/healthcare/audit-dev' },
+  logGroup: { id: 'mock-log-group-id', name: '/aws/healthcare/audit-dev', arn: 'arn:aws:logs:ap-southeast-1:123456789012:log-group:/aws/healthcare/audit-dev' },
   vpc: { id: 'vpc-mock123', cidrBlock: '10.0.0.0/16' },
-  privateSubnet1: { id: 'subnet-mock-private-1', availabilityZone: 'us-east-1a' },
-  privateSubnet2: { id: 'subnet-mock-private-2', availabilityZone: 'us-east-1b' },
+  privateSubnet1: { id: 'subnet-mock-private-1', availabilityZone: 'ap-southeast-1a' },
+  privateSubnet2: { id: 'subnet-mock-private-2', availabilityZone: 'ap-southeast-1b' },
   dbSubnetGroup: { id: 'mock-db-subnet-group', name: 'healthcare-db-subnet-dev' },
   rdsSecurityGroup: { id: 'sg-mock-rds', name: 'healthcare-rds-sg-dev' },
   rdsParameterGroup: { id: 'mock-pg-params', name: 'healthcare-pg-params-dev' },
-  rdsInstance: { id: 'mock-rds-instance', identifier: 'healthcare-rds-dev', endpoint: 'healthcare-rds-dev.123456.us-east-1.rds.amazonaws.com:5432' },
-  kinesisStream: { id: 'mock-kinesis-stream', name: 'healthcare-stream-dev', arn: 'arn:aws:kinesis:us-east-1:123456789012:stream/healthcare-stream-dev' },
+  rdsInstance: { id: 'mock-rds-instance', identifier: 'healthcare-rds-dev', endpoint: 'healthcare-rds-dev.123456.ap-southeast-1.rds.amazonaws.com:5432' },
+  kinesisStream: { id: 'mock-kinesis-stream', name: 'healthcare-stream-dev', arn: 'arn:aws:kinesis:ap-southeast-1:123456789012:stream/healthcare-stream-dev' },
   kinesisRole: { id: 'mock-kinesis-role', name: 'healthcare-kinesis-role-dev', arn: 'arn:aws:iam::123456789012:role/healthcare-kinesis-role-dev' },
   kinesisPolicy: { id: 'mock-kinesis-policy' },
   kinesisIteratorAlarm: { id: 'mock-iterator-alarm' },
@@ -63,7 +63,7 @@ jest.mock('@pulumi/pulumi', () => {
 
 // Mock AWS SDK functions
 const mockGetCallerIdentity = jest.fn(() => Promise.resolve({ accountId: '123456789012' }));
-const mockGetRegion = jest.fn(() => Promise.resolve({ name: 'us-east-1' }));
+const mockGetRegion = jest.fn(() => Promise.resolve({ name: 'ap-southeast-1' }));
 
 // Mock AWS resources with call tracking
 const createMockResource = (resourceData) => jest.fn().mockImplementation(() => resourceData);
@@ -317,8 +317,8 @@ describe('HIPAA-Compliant Healthcare Data Pipeline Stack', () => {
       expect(subnet1Config.cidrBlock).toBe('10.0.1.0/24');
       expect(subnet2Config.cidrBlock).toBe('10.0.2.0/24');
 
-      expect(subnet1Config.availabilityZone).toBe('us-east-1a');
-      expect(subnet2Config.availabilityZone).toBe('us-east-1b');
+      expect(subnet1Config.availabilityZone).toBe('ap-southeast-1a');
+      expect(subnet2Config.availabilityZone).toBe('ap-southeast-1b');
     });
 
     it('should associate subnets with VPC', () => {
