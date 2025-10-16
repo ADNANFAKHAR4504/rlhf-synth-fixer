@@ -431,11 +431,13 @@ PYTHON_SCRIPT
       - CSV specifies `platform: Pulumi` and `language: Go` → metadata.json MUST have `"platform": "pulumi", "language": "go"`
       - CSV specifies `platform: CDK` and `language: TypeScript` → metadata.json MUST have `"platform": "cdk", "language": "ts"`
       - CSV specifies `platform: Terraform` and `language: HCL` → metadata.json MUST have `"platform": "tf", "language": "hcl"`
+      - **CSV specifies `language: Python` or `language: py` → metadata.json MUST have `"language": "py"` (normalize "python" to "py")**
       - **Do NOT change or override these values** - they are fixed requirements
     - Validate `cli/create-task.ts` exists before mimicking its actions
     - If `cli/create-task.ts` is missing, use fallback platform detection logic:
     - Determine platform (cdk, cdktf, cfn, tf, pulumi) from task description
     - Determine language (ts, py, yaml, json, hcl, go) from task description
+    - **CRITICAL**: Normalize language value: if "python" → use "py"
     - Prefer TypeScript for tests only, avoid Python where possible (unless the project is in python e.g. pulumi-py, cdktf-py)
     - **CRITICAL**: Set `complexity` field to EXACT value from CSV `difficulty` column (NOT "difficulty")
       - Read the `difficulty` value from tasks.csv for the selected task
