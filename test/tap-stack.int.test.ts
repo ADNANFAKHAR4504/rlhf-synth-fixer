@@ -11,7 +11,7 @@ describe('TapStack Integration Tests', () => {
     app = new App();
     stack = new TapStack(app, 'TestTapStack', {
       env: {
-        region: 'ca-central-1',
+        region: 'us-west-2',
       },
     });
     synthesized = JSON.parse(Testing.synth(stack));

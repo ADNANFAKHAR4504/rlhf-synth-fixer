@@ -22,7 +22,7 @@ export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, config: TapStackConfig) {
     super(scope, id);
 
-  const region = config.env.region || 'ca-central-1';
+  const region = config.env.region || 'us-west-2';
     const randomSuffix = Fn.substr(Fn.uuid(), 0, 8);
 
     // AWS Provider
