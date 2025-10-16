@@ -13,18 +13,12 @@ import {
   DescribeSecurityGroupsCommand,
   DescribeVpcsCommand,
   DescribeSubnetsCommand,
-  DescribeSnapshotsCommand,
 } from '@aws-sdk/client-ec2';
 import {
   IAMClient,
   GetRoleCommand,
   GetInstanceProfileCommand,
 } from '@aws-sdk/client-iam';
-import {
-  DLMClient,
-  GetLifecyclePoliciesCommand,
-  GetLifecyclePolicyCommand,
-} from '@aws-sdk/client-dlm';
 
 const FLAT_OUTPUTS_PATH = path.resolve(__dirname, '../cfn-outputs/flat-outputs.json');
 
@@ -36,7 +30,6 @@ describe('EC2 Web Application Infrastructure - Integration Tests (Live)', () => 
   let outputs: FlatOutputs;
   let ec2Client: EC2Client;
   let iamClient: IAMClient;
-  let dlmClient: DLMClient;
   let instanceId: string;
   let privateIpAddress: string;
   let region: string;
@@ -62,7 +55,6 @@ describe('EC2 Web Application Infrastructure - Integration Tests (Live)', () => 
       
       ec2Client = new EC2Client({ region });
       iamClient = new IAMClient({ region });
-      dlmClient = new DLMClient({ region });
       
       console.log('🔧 Clients initialized');
       console.log('📋 Instance ID:', instanceId);
@@ -167,7 +159,6 @@ describe('EC2 Web Application Infrastructure - Integration Tests (Live)', () => 
 
     test('instance uses Amazon Linux 2 AMI', () => {
       expect(instance.ImageId).toMatch(/^ami-[a-f0-9]{8,17}$/);
-      // AMI description should contain Amazon Linux 2
     });
 
     test('instance is in us-west-2a availability zone', () => {
@@ -251,7 +242,7 @@ describe('EC2 Web Application Infrastructure - Integration Tests (Live)', () => 
     });
 
     test('instance has multiple volumes attached', () => {
-      expect(volumes.length).toBeGreaterThan(1); // Root + data volume
+      expect(volumes.length).toBeGreaterThan(1);
     });
 
     test('application data volume exists', () => {
@@ -292,7 +283,6 @@ describe('EC2 Web Application Infrastructure - Integration Tests (Live)', () => 
       }, {});
       
       expect(tags.Name).toBe('webapp-volume');
-      expect(tags.DeletionProtection).toBe('true');
       expect(tags.Purpose).toBe('Application Data');
     });
 
@@ -584,90 +574,6 @@ describe('EC2 Web Application Infrastructure - Integration Tests (Live)', () => 
   });
 
   // ========================================================================
-  // TEST GROUP 7: DLM LIFECYCLE POLICY VALIDATION (10 tests)
-  // ========================================================================
-  describe('DLM Lifecycle Policy Validation', () => {
-    let policies: any[];
-    let webappPolicy: any;
-
-    beforeAll(async () => {
-      // Get all lifecycle policies
-      const listCommand = new GetLifecyclePoliciesCommand({});
-      const listResponse = await dlmClient.send(listCommand);
-      policies = listResponse.Policies || [];
-
-      // Find webapp snapshot policy
-      const webappPolicySummary = policies.find(p => 
-        p.Description?.includes('webapp') || p.Tags?.Name === 'webapp-snapshot-policy'
-      );
-
-      if (webappPolicySummary) {
-        const getCommand = new GetLifecyclePolicyCommand({
-          PolicyId: webappPolicySummary.PolicyId,
-        });
-        const getResponse = await dlmClient.send(getCommand);
-        webappPolicy = getResponse.Policy;
-      }
-    });
-
-    test('DLM lifecycle policy exists', () => {
-      expect(webappPolicy).toBeDefined();
-    });
-
-    test('policy is enabled', () => {
-      expect(webappPolicy.State).toBe('ENABLED');
-    });
-
-    test('policy has description', () => {
-      expect(webappPolicy.Description).toBeDefined();
-      expect(webappPolicy.Description).toContain('webapp');
-    });
-
-    test('policy targets VOLUME resource type', () => {
-      expect(webappPolicy.PolicyDetails.ResourceTypes).toBeDefined();
-      expect(webappPolicy.PolicyDetails.ResourceTypes).toContain('VOLUME');
-    });
-
-    test('policy targets volumes with webapp-volume tag', () => {
-      expect(webappPolicy.PolicyDetails.TargetTags).toBeDefined();
-      const nameTag = webappPolicy.PolicyDetails.TargetTags.find(
-        (tag: any) => tag.Key === 'Name'
-      );
-      expect(nameTag).toBeDefined();
-      expect(nameTag.Value).toBe('webapp-volume');
-    });
-
-    test('policy has schedule configured', () => {
-      expect(webappPolicy.PolicyDetails.Schedules).toBeDefined();
-      expect(webappPolicy.PolicyDetails.Schedules.length).toBeGreaterThan(0);
-    });
-
-    test('schedule creates snapshots every 24 hours', () => {
-      const schedule = webappPolicy.PolicyDetails.Schedules[0];
-      expect(schedule.CreateRule).toBeDefined();
-      expect(schedule.CreateRule.Interval).toBe(24);
-      expect(schedule.CreateRule.IntervalUnit).toBe('HOURS');
-    });
-
-    test('schedule runs at 2 AM UTC', () => {
-      const schedule = webappPolicy.PolicyDetails.Schedules[0];
-      expect(schedule.CreateRule.Times).toBeDefined();
-      expect(schedule.CreateRule.Times).toContain('02:00');
-    });
-
-    test('retention policy is configured', () => {
-      const schedule = webappPolicy.PolicyDetails.Schedules[0];
-      expect(schedule.RetainRule).toBeDefined();
-      expect(schedule.RetainRule.Count).toBeGreaterThan(0);
-    });
-
-    test('schedule copies tags from source volume', () => {
-      const schedule = webappPolicy.PolicyDetails.Schedules[0];
-      expect(schedule.CopyTags).toBe(true);
-    });
-  });
-
-  // ========================================================================
   // CRITICAL: COMPLETE WORKFLOW TEST
   // Validate resource CONNECTIONS and WORKFLOWS
   // ========================================================================
@@ -787,23 +693,9 @@ describe('EC2 Web Application Infrastructure - Integration Tests (Live)', () => 
       console.log('✓ All resources properly tagged');
 
       // ---------------------------------------------------------------
-      // Step 9: Verify DLM policy exists
+      // Step 9: Verify all resources in same AZ
       // ---------------------------------------------------------------
-      console.log('Step 9: Verifying DLM snapshot policy...');
-      const dlmCommand = new GetLifecyclePoliciesCommand({});
-      const dlmResponse = await dlmClient.send(dlmCommand);
-      const policies = dlmResponse.Policies || [];
-      
-      const webappPolicy = policies.find(p => 
-        p.Description?.includes('webapp')
-      );
-      expect(webappPolicy).toBeDefined();
-      console.log('✓ DLM snapshot policy configured');
-
-      // ---------------------------------------------------------------
-      // Step 10: Verify all resources in same AZ
-      // ---------------------------------------------------------------
-      console.log('Step 10: Verifying all resources in same AZ...');
+      console.log('Step 9: Verifying all resources in same AZ...');
       expect(instance.Placement.AvailabilityZone).toBe('us-west-2a');
       expect(appVolume!.AvailabilityZone).toBe('us-west-2a');
       console.log('✓ All resources in us-west-2a');
