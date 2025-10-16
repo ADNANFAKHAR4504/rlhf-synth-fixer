@@ -9,7 +9,7 @@
 const parameterGroupFamily = config.parameterGroupFamily || "postgres15";
 
 // In tap-stack.ts  
-parameterGroupFamily: 'postgres17', // Mismatched with default
+parameterGroupFamily: ' postgres17 ', // Mismatched with default
 ```
 
 **Deployment Error:**
