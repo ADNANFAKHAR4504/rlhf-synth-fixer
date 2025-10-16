@@ -513,7 +513,8 @@ describe('TapStack CloudFormation Integration Tests', () => {
           decodeURIComponent(roleResponse.Role!.AssumeRolePolicyDocument!)
         );
         const statement = assumeRolePolicy.Statement[0];
-        expect(statement.Condition?.Bool?.['aws:MultiFactorAuthPresent']).toBe(true);
+        // AWS returns boolean conditions as strings
+        expect(statement.Condition?.Bool?.['aws:MultiFactorAuthPresent']).toBe('true');
         expect(roleResponse.Role!.MaxSessionDuration).toBe(3600);
 
         console.log('✓ Admin role has MFA requirement');
