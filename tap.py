@@ -43,10 +43,3 @@ props = TapStackProps(
 TapStack(app, STACK_NAME, props=props)
 
 app.synth()
-app.synth()
-app.synth()
-app.synth()
-app.synth()
-app.synth()
-app.synth()
-app.synth()
