@@ -6,9 +6,22 @@ import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
 import { ListSubscriptionsByTopicCommand, SNSClient } from '@aws-sdk/client-sns';
 import fs from 'fs';
 
-const outputs = JSON.parse(
+const rawOutputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
+
+// Map CDK-generated output names to expected test property names
+const outputs = {
+  DashboardURL: rawOutputs.DashboardURL,
+  MonitoringSystemStatus: rawOutputs.MonitoringSystemStatus,
+  TotalAlarmsCreated: rawOutputs.TotalAlarmsCreated,
+  AuditTableName: rawOutputs.AuditAuditTableNameC79E1923,
+  AuditTableArn: rawOutputs.AuditAuditTableArn5D567FFC,
+  AlarmTopicArn: rawOutputs.AlertingAlarmTopicArnFBBFBD79,
+  ReportTopicArn: rawOutputs.AlertingReportTopicArn1366F5D3,
+  ReportingLambdaArn: rawOutputs.SchedulingReportingLambdaArn934FF7FE,
+  HealthCheckLambdaArn: rawOutputs.SchedulingHealthCheckLambdaArnA5C3E592,
+};
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -62,7 +75,7 @@ describe('CloudWatch Monitoring System Integration Tests', () => {
     });
 
     test('should use environment suffix in all resource names', () => {
-      // Extract environment suffix from outputs (using pr4624 for this test)
+      // Extract environment suffix from outputs
       const expectedSuffix = outputs.AuditTableName.split('-').pop();
 
       expect(outputs.AuditTableName).toContain(expectedSuffix);
@@ -178,7 +191,8 @@ describe('CloudWatch Monitoring System Integration Tests', () => {
         expect(name?.toLowerCase()).not.toContain('production');
 
         // Should contain environment suffix for proper isolation
-        expect(name).toContain('pr4624');
+        const expectedSuffix = outputs.AuditTableName.split('-').pop();
+        expect(name).toContain(expectedSuffix);
       });
     });
 
