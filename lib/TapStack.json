@@ -712,9 +712,7 @@
         },
         "Monitoring": true,
         "UserData": {
-          "Fn::Base64": {
-            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y mysql amazon-cloudwatch-agent\necho 'EC2Instance1 setup complete' > /var/log/userdata.log\n"
-          }
+          "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y mysql amazon-cloudwatch-agent\necho 'EC2Instance1 setup complete' > /var/log/userdata.log\n"
         },
         "Tags": [
           {
@@ -758,9 +756,7 @@
         },
         "Monitoring": true,
         "UserData": {
-          "Fn::Base64": {
-            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y mysql amazon-cloudwatch-agent\necho 'EC2Instance2 setup complete' > /var/log/userdata.log\n"
-          }
+          "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y mysql amazon-cloudwatch-agent\necho 'EC2Instance2 setup complete' > /var/log/userdata.log\n"
         },
         "Tags": [
           {
@@ -825,7 +821,7 @@
           "Ref": "DBInstanceClass"
         },
         "Engine": "mysql",
-        "EngineVersion": "8.0.35",
+        "EngineVersion": "8.0.43",
         "MasterUsername": {
           "Ref": "DBUsername"
         },
@@ -879,6 +875,7 @@
     "S3Bucket": {
       "Type": "AWS::S3::Bucket",
       "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
       "Properties": {
         "BucketName": {
           "Fn::Sub": "cloud-env-bucket-${AWS::AccountId}-${EnvironmentSuffix}"
