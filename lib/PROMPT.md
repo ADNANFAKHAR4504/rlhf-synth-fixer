@@ -8,3 +8,8 @@
 8. Deploy a Lambda function which is triggered by events from an S3 bucket.   with a Lambda function for data processing on upload events. But dont rely on any zip file infact use the basic code in the tap_stack.tf file itself for this lambda. But please ensure that  I dont need zip file for the lambda function just create it with inline code. so please create tap_stack.tf file accordingly
 9. Ensure that encryption at rest is enabled for all storage resources including EBS and RDS volumes. 
 10. Apply all relevant security best practices during this setup.
+11. There is no need of Add VPC Flow Logs, CloudTrail, AWS Config rules
+12. there is no need of CloudWatch dashboards, X-Ray tracing, SNS notifications
+13. Automated backup/recovery, disaster recovery procedures is not required as per the requirements.
+14. S3 lifecycle policies, resource tagging strategy are not required as per the original task requriements.
+15. Systems Manager Session Manager, enhanced IAM policies are not requried for this task.
