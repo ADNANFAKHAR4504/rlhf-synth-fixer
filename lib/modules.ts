@@ -361,7 +361,7 @@ export class IAMConstruct extends Construct {
     // Attach inline policies
     config.policies.forEach(policy => {
       new IamRolePolicy(this, `${config.roleName}-${policy.policyName}`, {
-        role: role.id,
+        role: role.name, // Changed from role.id to role.name
         name: policy.policyName,
         policy: JSON.stringify(policy.policyDocument),
       });
