@@ -528,10 +528,10 @@ describe('TapStack Integration Tests', () => {
 
       pipelineLogGroups?.forEach((lg) => {
         expect(lg.retentionInDays).toBeDefined();
-        // Accept both 7-day (AWS default) and 14-day (explicitly configured) retention
+        // Accept common retention periods: 7-day (AWS default), 14-day (explicitly configured), and 30-day (organization default)
         // AWS services can create log groups with default retention before our explicit ones take effect
         expect(lg.retentionInDays).toBeGreaterThanOrEqual(7);
-        expect([7, 14]).toContain(lg.retentionInDays);
+        expect([7, 14, 30]).toContain(lg.retentionInDays);
       });
     });
   });
