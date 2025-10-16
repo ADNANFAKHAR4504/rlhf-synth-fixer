@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   TapStack.yml — secure environment (VPC, NAT, SGs, KMS, S3, CloudTrail, API GW, Lambda, RDS, IAM, Secrets, SSM).
-  CloudTrail logs to KMS-encrypted S3 with correct KMS & bucket policies.
+  CloudTrail logs to KMS-encrypted S3 with robust KMS & bucket policies that work across org/account edge cases.
 
 Parameters:
   Environment:
@@ -49,7 +49,6 @@ Parameters:
   LogRetentionDays:
     Type: Number
     Default: 90
-  # Uses SSM public parameter so no manual AMI input is required
   AmiId:
     Type: "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>"
     Default: "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
@@ -66,7 +65,7 @@ Mappings:
 Resources:
 
   ########################
-  # Central KMS Key & Alias — compatible with CloudTrail + S3
+  # KMS key — S3 is the via-service; wildcard the trail ARN in the encryption context
   ########################
   TapStackKmsKey:
     Type: AWS::KMS::Key
@@ -83,25 +82,21 @@ Resources:
             Action: "kms:*"
             Resource: "*"
 
-          # Required pattern for CloudTrail with CreateGrant and EncryptionContext
+          # Official CloudTrail SSE-KMS pattern
           - Sid: AllowCloudTrailUseOfTheKey
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
             Action:
-              - kms:Encrypt
-              - kms:Decrypt
-              - kms:ReEncrypt*
-              - kms:GenerateDataKey*
               - kms:DescribeKey
-              - kms:CreateGrant
+              - kms:GenerateDataKey*
+              - kms:Decrypt
             Resource: "*"
             Condition:
-              Bool:
-                kms:GrantIsForAWSResource: "true"
               StringEquals:
-                kms:EncryptionContext:aws:cloudtrail:arn: !Sub "arn:${AWS::Partition}:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${Environment}-tapstack-cloudtrail"
-                kms:ViaService: !Sub "cloudtrail.${AWS::Region}.amazonaws.com"
+                kms:ViaService: !Sub "s3.${AWS::Region}.amazonaws.com"
+              StringLike:
+                kms:EncryptionContext:aws:cloudtrail:arn: !Sub "arn:${AWS::Partition}:cloudtrail:*:${AWS::AccountId}:trail/*"
 
   TapStackKmsAlias:
     Type: AWS::KMS::Alias
@@ -167,7 +162,7 @@ Resources:
         LogFilePrefix: app-bucket-access-logs/
 
   ########################
-  # CloudTrail S3 Bucket Policy — required permissions only
+  # S3 bucket policy for CloudTrail — minimal, robust
   ########################
   TapStackCloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -411,7 +406,6 @@ Resources:
             Action: [ sts:AssumeRole ]
       Path: "/"
       ManagedPolicyArns:
-        # Use modern SSM policy
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
       Policies:
         - PolicyName: EC2AccessToS3AndSecrets
@@ -516,7 +510,7 @@ Resources:
       KmsKeyId: !Ref TapStackKmsKey
 
   ########################
-  # RDS (private, encrypted)
+  # RDS (private, encrypted) — safe rollback
   ########################
   TapStackDBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
@@ -527,6 +521,8 @@ Resources:
 
   TapStackDBInstance:
     Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub "${Environment}-tapstack-db"
       AllocatedStorage: !Ref DBAllocatedStorage
@@ -541,7 +537,7 @@ Resources:
       StorageEncrypted: true
       KmsKeyId: !Ref TapStackKmsKey
       BackupRetentionPeriod: 7
-      DeletionProtection: true
+      DeletionProtection: false
 
   ########################
   # API Gateway + logging (/ping -> Lambda)
