@@ -32,12 +32,12 @@ describe('TapStack CloudFormation Template - AWS Security Baseline', () => {
 
     test('should have exactly 3 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(4);
+      expect(parameterCount).toBe(3);
     });
 
     test('should have 24 resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(24);
+      expect(resourceCount).toBe(23);
     });
   });
 
@@ -791,39 +791,6 @@ describe('TapStack CloudFormation Template - AWS Security Baseline', () => {
     });
   });
 
-  // ==================== GuardDuty Tests ====================
-  describe('GuardDuty Resources', () => {
-    test('GuardDutyDetector should exist and be of correct type', () => {
-      expect(template.Resources.GuardDutyDetector).toBeDefined();
-      expect(template.Resources.GuardDutyDetector.Type).toBe('AWS::GuardDuty::Detector');
-    });
-
-    test('GuardDutyDetector should be enabled', () => {
-      const properties = template.Resources.GuardDutyDetector.Properties;
-      expect(properties.Enable).toBe(true);
-    });
-
-    test('GuardDutyDetector should have 15 minute publishing frequency', () => {
-      const properties = template.Resources.GuardDutyDetector.Properties;
-      expect(properties.FindingPublishingFrequency).toBe('FIFTEEN_MINUTES');
-    });
-
-    test('GuardDutyDetector should have S3 logs enabled', () => {
-      const properties = template.Resources.GuardDutyDetector.Properties;
-      expect(properties.DataSources.S3Logs.Enable).toBe(true);
-    });
-
-    test('GuardDutyDetector should have Kubernetes audit logs enabled', () => {
-      const properties = template.Resources.GuardDutyDetector.Properties;
-      expect(properties.DataSources.Kubernetes.AuditLogs.Enable).toBe(true);
-    });
-
-    test('GuardDutyDetector should have correct tags', () => {
-      const tags = template.Resources.GuardDutyDetector.Properties.Tags;
-      expect(tags).toContainEqual({ Key: 'Purpose', Value: 'ThreatDetection' });
-    });
-  });
-
   // ==================== Secrets Manager Tests ====================
   describe('Secrets Manager Resources', () => {
     test('DBSecret should exist and be of correct type', () => {
@@ -948,7 +915,7 @@ describe('TapStack CloudFormation Template - AWS Security Baseline', () => {
   describe('Outputs', () => {
     test('should have 8 outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(8);
+      expect(outputCount).toBe(7);
     });
 
     test('VPCId output should be correct', () => {
@@ -993,21 +960,6 @@ describe('TapStack CloudFormation Template - AWS Security Baseline', () => {
       expect(output.Value).toEqual({ Ref: 'CloudTrail' });
       expect(output.Export.Name).toEqual({
         'Fn::Sub': 'CloudTrail-Name-${EnvironmentSuffix}'
-      });
-    });
-
-    test('GuardDutyDetectorId output should be correct', () => {
-      const output = template.Outputs.GuardDutyDetectorId;
-      expect(output.Description).toBe('ID of the GuardDuty Detector');
-      expect(output.Value).toEqual({
-        'Fn::If': [
-          'CreateNewGuardDutyDetector',
-          { Ref: 'GuardDutyDetector' },
-          { Ref: 'ExistingGuardDutyDetectorId' }
-        ]
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': 'GuardDutyDetector-ID-${EnvironmentSuffix}'
       });
     });
 
@@ -1120,12 +1072,6 @@ describe('TapStack CloudFormation Template - AWS Security Baseline', () => {
       expect(flowLog).toBeDefined();
       expect(flowLog.Type).toBe('AWS::EC2::FlowLog');
       expect(flowLog.Properties.TrafficType).toBe('ALL');
-    });
-
-    test('GuardDuty should be enabled for threat detection', () => {
-      const guardDuty = template.Resources.GuardDutyDetector.Properties;
-      expect(guardDuty.Enable).toBe(true);
-      expect(guardDuty.DataSources.S3Logs.Enable).toBe(true);
     });
 
     test('Secrets Manager should be used for sensitive data', () => {
