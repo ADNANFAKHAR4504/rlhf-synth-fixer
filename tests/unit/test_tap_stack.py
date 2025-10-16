@@ -129,8 +129,8 @@ def test_stack_creates_kinesis_stream():
     assert REAL_ENVIRONMENT_SUFFIX.lower() in synthesized_str
 
 
-def test_stack_creates_timestream_resources():
-    """Test that Timestream database and table are created with real naming."""
+def test_stack_creates_dynamodb_resources():
+    """Test that DynamoDB table is created with proper configuration."""
     app = Testing.app()
     stack = TapStack(
         app,
@@ -142,10 +142,11 @@ def test_stack_creates_timestream_resources():
 
     synthesized = Testing.synth(stack)
     synthesized_str = json.dumps(synthesized).lower()
-    # Verify Timestream resources exist
-    assert "timestream" in synthesized_str
-    assert "database" in synthesized_str
-    assert "table" in synthesized_str
+    # Verify DynamoDB resources exist
+    assert "dynamodb_table" in synthesized_str
+    assert "sensor_id" in synthesized_str  # Hash key
+    assert "timestamp" in synthesized_str  # Range key
+    assert "pay_per_request" in synthesized_str  # Billing mode
 
 
 def test_stack_creates_s3_buckets():
@@ -278,7 +279,7 @@ def test_stack_creates_kinesis_stream():
 
 
 def test_stack_creates_timestream_resources():
-    """Test that Timestream database and table are created."""
+    """Test that DynamoDB table is created (replacing Timestream)."""
     app = Testing.app()
     stack = TapStack(
         app,
@@ -288,8 +289,8 @@ def test_stack_creates_timestream_resources():
     )
 
     synthesized = Testing.synth(stack)
-    # Verify Timestream resources exist
-    assert "timestream" in str(synthesized).lower()
+    # Verify DynamoDB resources exist (replaced Timestream)
+    assert "dynamodb" in str(synthesized).lower()
 
 
 def test_stack_creates_s3_buckets():

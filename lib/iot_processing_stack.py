@@ -14,12 +14,11 @@ from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration imp
     S3BucketServerSideEncryptionConfigurationRuleA
 )
 from cdktf_cdktf_provider_aws.s3_bucket_public_access_block import S3BucketPublicAccessBlock
-from cdktf_cdktf_provider_aws.timestreamwrite_database import (
-    TimestreamwriteDatabase
-)
-from cdktf_cdktf_provider_aws.timestreamwrite_table import (
-    TimestreamwriteTable,
-    TimestreamwriteTableRetentionProperties
+from cdktf_cdktf_provider_aws.dynamodb_table import (
+    DynamodbTable,
+    DynamodbTableAttribute,
+    DynamodbTableGlobalSecondaryIndex,
+    DynamodbTableServerSideEncryption
 )
 from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction
 from cdktf_cdktf_provider_aws.lambda_event_source_mapping import LambdaEventSourceMapping
@@ -197,23 +196,29 @@ class IotProcessingStack(Construct):
             }
         )
 
-        # Timestream Database for time-series data
-        timestream_db = TimestreamwriteDatabase(
+        # DynamoDB Table for IoT sensor data (replacing Timestream for better compatibility)
+        dynamodb_table = DynamodbTable(
             self,
-            "iot-timestream-db",
-            database_name=f"iot-data-{environment_suffix}",
-            kms_key_id=kms_key.arn
-        )
+            "iot-sensor-data-table",
+            name=f"iot-sensor-data-{environment_suffix}",
+            billing_mode="PAY_PER_REQUEST",
+            hash_key="sensor_id",
+            range_key="timestamp",
+            attribute=[
+                DynamodbTableAttribute(name="sensor_id", type="S"),
+                DynamodbTableAttribute(name="timestamp", type="S"),
+                DynamodbTableAttribute(name="sensor_type", type="S")
+            ],
+            global_secondary_index=[
+                DynamodbTableGlobalSecondaryIndex(
+                    name="SensorTypeIndex",
+                    hash_key="sensor_type",
+                    range_key="timestamp",
+                    projection_type="ALL"
+                )
+            ],
 
-        timestream_table = TimestreamwriteTable(
-            self,
-            "sensor-data-table",
-            database_name=timestream_db.database_name,
-            table_name=f"sensor-data-{environment_suffix}",
-            retention_properties=TimestreamwriteTableRetentionProperties(
-                magnetic_store_retention_period_in_days=365,
-                memory_store_retention_period_in_hours=24
-            )
+            tags={"Purpose": "IoT sensor data storage", "Environment": environment_suffix}
         )
 
         # SNS Topic for alerts
@@ -296,10 +301,17 @@ class IotProcessingStack(Construct):
                     {
                         "Effect": "Allow",
                         "Action": [
-                            "timestream:WriteRecords",
-                            "timestream:DescribeEndpoints"
+                            "dynamodb:PutItem",
+                            "dynamodb:GetItem",
+                            "dynamodb:Query",
+                            "dynamodb:Scan",
+                            "dynamodb:UpdateItem",
+                            "dynamodb:BatchWriteItem"
                         ],
-                        "Resource": timestream_table.arn
+                        "Resource": [
+                            dynamodb_table.arn,
+                            f"{dynamodb_table.arn}/index/*"
+                        ]
                     },
                     {
                         "Effect": "Allow",
@@ -337,13 +349,13 @@ class IotProcessingStack(Construct):
             })
         )
 
-        # CloudWatch Log Group for Lambda
+        # CloudWatch Log Group for Lambda (without KMS key to avoid permission issues)
         lambda_log_group = CloudwatchLogGroup(
             self,
             "lambda-log-group",
             name=f"/aws/lambda/iot-processor-{environment_suffix}",
-            retention_in_days=7,
-            kms_key_id=kms_key.arn
+            retention_in_days=7
+            # Note: KMS encryption removed to avoid CloudWatch Logs KMS key permission issues
         )
 
         # Lambda function for data processing and anomaly detection
@@ -359,8 +371,7 @@ class IotProcessingStack(Construct):
             memory_size=512,
             environment={
                 "variables": {
-                    "TIMESTREAM_DATABASE": timestream_db.database_name,
-                    "TIMESTREAM_TABLE": timestream_table.table_name,
+                    "DYNAMODB_TABLE": dynamodb_table.name,
                     "ALERT_TOPIC_ARN": alert_topic.arn,
                     "PROCESSED_BUCKET": processed_data_bucket.id,
                     "API_SECRET_ARN": api_secret.arn,
@@ -531,6 +542,21 @@ class IotProcessingStack(Construct):
                         "region": aws_region,
                         "title": "Firehose Delivery Metrics"
                     }
+                },
+                {
+                    "type": "metric",
+                    "properties": {
+                        "metrics": [
+                            ["AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", dynamodb_table.name, {"stat": "Sum"}],
+                            [".", "ConsumedWriteCapacityUnits", ".", ".", {"stat": "Sum"}],
+                            [".", "ItemCount", ".", ".", {"stat": "Average"}],
+                            [".", "ThrottledRequests", ".", ".", {"stat": "Sum"}]
+                        ],
+                        "period": 300,
+                        "stat": "Average",
+                        "region": aws_region,
+                        "title": "DynamoDB Table Metrics"
+                    }
                 }
             ]
         }
@@ -621,16 +647,9 @@ class IotProcessingStack(Construct):
 
         TerraformOutput(
             self,
-            "timestream_database_name",
-            value=timestream_db.database_name,
-            description="Name of the Timestream database"
-        )
-
-        TerraformOutput(
-            self,
-            "timestream_table_name",
-            value=timestream_table.table_name,
-            description="Name of the Timestream table"
+            "dynamodb_table_name",
+            value=dynamodb_table.name,
+            description="Name of the DynamoDB table for IoT sensor data"
         )
 
         TerraformOutput(

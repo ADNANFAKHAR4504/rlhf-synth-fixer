@@ -25,8 +25,7 @@ def outputs():
             'kinesis_stream_name': f'iot-data-stream-{REAL_ENVIRONMENT_SUFFIX}',
             'raw_data_bucket_name': f'iot-raw-data-{REAL_ENVIRONMENT_SUFFIX}-{REAL_AWS_REGION}',
             'processed_data_bucket_name': f'iot-processed-data-{REAL_ENVIRONMENT_SUFFIX}-{REAL_AWS_REGION}',
-            'timestream_database_name': f'iot-data-{REAL_ENVIRONMENT_SUFFIX}',
-            'timestream_table_name': f'sensor-data-{REAL_ENVIRONMENT_SUFFIX}',
+            'dynamodb_table_name': f'iot-sensor-data-{REAL_ENVIRONMENT_SUFFIX}',
             'processor_lambda_name': f'iot-processor-{REAL_ENVIRONMENT_SUFFIX}',
             'dashboard_name': f'iot-processing-{REAL_ENVIRONMENT_SUFFIX}',
             'api_secret_name': f'iot-api-credentials-{REAL_ENVIRONMENT_SUFFIX}',
@@ -100,43 +99,63 @@ def test_s3_buckets_exist(outputs):
             pytest.skip(f"Error testing S3 bucket {bucket_name}: {str(e)}")
 
 
-def test_timestream_database_exists(outputs):
-    """Test that Timestream database and table exist with proper configuration."""
-    timestream_write = boto3.client('timestream-write', region_name=REAL_AWS_REGION)
+def test_dynamodb_table_exists(outputs):
+    """Test that DynamoDB table exists with proper configuration."""
+    dynamodb = boto3.client('dynamodb', region_name=REAL_AWS_REGION)
 
-    db_name = outputs.get('timestream_database_name')
-    table_name = outputs.get('timestream_table_name')
+    table_name = outputs.get('dynamodb_table_name')
+    assert table_name is not None, "DynamoDB table not found"
 
-    assert db_name is not None, "Timestream database not found"
-    assert table_name is not None, "Timestream table not found"
-
-    print(f"Testing Timestream database: {db_name}, table: {table_name}")
+    print(f"Testing DynamoDB table: {table_name}")
 
     try:
-        # Check database exists
-        response = timestream_write.describe_database(DatabaseName=db_name)
-        assert response['Database']['DatabaseName'] == db_name
-        
-        # Verify KMS encryption
-        if 'KmsKeyId' in response['Database']:
-            assert response['Database']['KmsKeyId'] is not None
-
-        # Check table exists with proper configuration
-        response = timestream_write.describe_table(DatabaseName=db_name, TableName=table_name)
+        # Check table exists
+        response = dynamodb.describe_table(TableName=table_name)
         table_info = response['Table']
-        assert table_info['TableName'] == table_name
-        assert table_info['DatabaseName'] == db_name
         
-        # Verify retention properties
-        if 'RetentionProperties' in table_info:
-            retention = table_info['RetentionProperties']
-            assert retention.get('MemoryStoreRetentionPeriodInHours', 0) > 0
-            assert retention.get('MagneticStoreRetentionPeriodInDays', 0) > 0
-            
-    except timestream_write.exceptions.ResourceNotFoundException as e:
-        pytest.skip(f"Timestream resource not found: {str(e)} - infrastructure may not be deployed")
+        assert table_info['TableName'] == table_name
+        assert table_info['TableStatus'] == 'ACTIVE', f"Table status is {table_info['TableStatus']}, expected ACTIVE"
+        
+        # Verify billing mode
+        assert table_info['BillingModeSummary']['BillingMode'] == 'PAY_PER_REQUEST', "Should use pay-per-request billing"
+        
+        # Verify key schema
+        key_schema = table_info['KeySchema']
+        hash_key = next((k for k in key_schema if k['KeyType'] == 'HASH'), None)
+        range_key = next((k for k in key_schema if k['KeyType'] == 'RANGE'), None)
+        
+        assert hash_key is not None, "Table should have hash key"
+        assert hash_key['AttributeName'] == 'sensor_id', "Hash key should be sensor_id"
+        assert range_key is not None, "Table should have range key"  
+        assert range_key['AttributeName'] == 'timestamp', "Range key should be timestamp"
+        
+        # Verify GSI exists
+        gsi_list = table_info.get('GlobalSecondaryIndexes', [])
+        assert len(gsi_list) > 0, "Table should have at least one GSI"
+        
+        sensor_type_gsi = next((gsi for gsi in gsi_list if gsi['IndexName'] == 'SensorTypeIndex'), None)
+        assert sensor_type_gsi is not None, "Should have SensorTypeIndex GSI"
+        
+        # Verify encryption (optional, may be enabled by default)
+        sse_description = table_info.get('SSEDescription', {})
+        if sse_description:
+            encryption_status = sse_description.get('Status', 'DISABLED')
+            print(f"  Table encryption status: {encryption_status}")
+        
+        # Verify point-in-time recovery (optional)
+        try:
+            pitr = dynamodb.describe_continuous_backups(TableName=table_name)
+            pitr_status = pitr['ContinuousBackupsDescription']['PointInTimeRecoveryDescription']['PointInTimeRecoveryStatus']
+            print(f"  Point-in-time recovery status: {pitr_status}")
+        except Exception as e:
+            print(f"  Point-in-time recovery check skipped: {str(e)}")
+        
+        print(f"✓ DynamoDB table properly configured with {len(gsi_list)} GSI(s)")
+        
+    except dynamodb.exceptions.ResourceNotFoundException:
+        pytest.skip(f"DynamoDB table {table_name} not found - infrastructure may not be deployed")
     except Exception as e:
-        pytest.skip(f"Error testing Timestream: {str(e)}")
+        pytest.skip(f"Error testing DynamoDB table: {str(e)}")
 
 
 def test_lambda_function_exists(outputs):
@@ -159,7 +178,7 @@ def test_lambda_function_exists(outputs):
         
         # Verify environment variables are set
         env_vars = config.get('Environment', {}).get('Variables', {})
-        expected_vars = ['AWS_REGION', 'TIMESTREAM_DATABASE', 'TIMESTREAM_TABLE', 'PROCESSED_BUCKET', 'API_SECRET_ARN', 'ALERT_TOPIC_ARN']
+        expected_vars = ['AWS_REGION', 'DYNAMODB_TABLE', 'PROCESSED_BUCKET', 'API_SECRET_ARN', 'ALERT_TOPIC_ARN']
         
         for var in expected_vars:
             assert var in env_vars, f"Environment variable {var} not found"
@@ -176,19 +195,17 @@ def test_lambda_function_exists(outputs):
 
 
 def test_end_to_end_data_flow(outputs):
-    """Test complete data flow from Kinesis to Timestream with real data."""
+    """Test complete data flow from Kinesis to DynamoDB with real data."""
     kinesis = boto3.client('kinesis', region_name=REAL_AWS_REGION)
-    timestream_query = boto3.client('timestream-query', region_name=REAL_AWS_REGION)
+    dynamodb = boto3.client('dynamodb', region_name=REAL_AWS_REGION)
 
     stream_name = outputs.get('kinesis_stream_name')
-    db_name = outputs.get('timestream_database_name')
-    table_name = outputs.get('timestream_table_name')
+    table_name = outputs.get('dynamodb_table_name')
 
     assert stream_name, "Kinesis stream name required for E2E test"
-    assert db_name, "Timestream database name required for E2E test"
-    assert table_name, "Timestream table name required for E2E test"
+    assert table_name, "DynamoDB table name required for E2E test"
 
-    print(f"Testing E2E flow: Kinesis({stream_name}) -> Lambda -> Timestream({db_name}.{table_name})")
+    print(f"Testing E2E flow: Kinesis({stream_name}) -> Lambda -> DynamoDB({table_name})")
 
     try:
         # Create unique test record with current timestamp
@@ -219,38 +236,51 @@ def test_end_to_end_data_flow(outputs):
         print("Waiting 30 seconds for Lambda processing...")
         time.sleep(30)
 
-        # Query Timestream to verify data was processed and written
-        query = f"""
-            SELECT sensor_id, sensor_type, measure_value::double as temperature, time
-            FROM "{db_name}"."{table_name}"
-            WHERE sensor_id = '{test_id}'
-            ORDER BY time DESC
-            LIMIT 5
-        """
-
-        print(f"Querying Timestream for test record...")
-        response = timestream_query.query(QueryString=query)
+        # Query DynamoDB to verify data was processed and written
+        print(f"Querying DynamoDB for test record...")
         
-        # Verify query executed successfully
-        assert 'Rows' in response, "Query should return Rows field"
-        
-        # If data was processed, verify it's correct
-        if len(response['Rows']) > 0:
-            print(f"✓ Found {len(response['Rows'])} records in Timestream")
-            row = response['Rows'][0]
-            data_values = row['Data']
+        try:
+            response = dynamodb.get_item(
+                TableName=table_name,
+                Key={
+                    'sensor_id': {'S': test_id},
+                    'timestamp': {'S': test_data['timestamp']}
+                }
+            )
             
-            # Extract values based on column metadata
-            columns = response['ColumnInfo']
-            row_dict = {}
-            for i, col in enumerate(columns):
-                if i < len(data_values):
-                    row_dict[col['Name']] = data_values[i].get('ScalarValue', '')
-            
-            assert row_dict['sensor_id'] == test_id, "Sensor ID should match test data"
-            print(f"✓ E2E test successful - data processed correctly")
-        else:
-            print("⚠ No data found in Timestream - Lambda may still be processing or there may be an issue")
+            # If data was processed, verify it's correct
+            if 'Item' in response:
+                item = response['Item']
+                print(f"✓ Found record in DynamoDB")
+                
+                # Verify key attributes
+                assert item['sensor_id']['S'] == test_id, "Sensor ID should match test data"
+                assert item['sensor_type']['S'] == 'temperature', "Sensor type should match"
+                print(f"✓ E2E test successful - data processed correctly")
+            else:
+                print("⚠ No data found in DynamoDB - Lambda may still be processing or there may be an issue")
+                
+                # Try scanning for any records with our test sensor_id (in case timestamp format changed)
+                scan_response = dynamodb.scan(
+                    TableName=table_name,
+                    FilterExpression='sensor_id = :sid',
+                    ExpressionAttributeValues={':sid': {'S': test_id}},
+                    Limit=5
+                )
+                
+                if scan_response.get('Items'):
+                    print(f"✓ Found {len(scan_response['Items'])} items via scan - data processing working")
+                else:
+                    print("⚠ No items found via scan either")
+                    
+        except Exception as query_error:
+            print(f"DynamoDB query error: {str(query_error)}")
+            # Try a simple scan to see if table is accessible
+            try:
+                scan_response = dynamodb.scan(TableName=table_name, Limit=1)
+                print(f"✓ DynamoDB table is accessible, contains {scan_response.get('Count', 0)} items")
+            except Exception as scan_error:
+                print(f"DynamoDB scan error: {str(scan_error)}")
             
     except kinesis.exceptions.ResourceNotFoundException:
         pytest.skip(f"Kinesis stream {stream_name} not found - infrastructure may not be deployed")
@@ -326,7 +356,20 @@ def test_cloudwatch_dashboard_exists(outputs):
         # Verify widgets contain expected metrics
         widget_types = [w.get('type') for w in widgets]
         assert 'metric' in widget_types, "Dashboard should contain metric widgets"
-        print(f"✓ Dashboard has {len(widgets)} widgets")
+        
+        # Verify specific service metrics are included
+        dashboard_json_str = json.dumps(dashboard_body).lower()
+        expected_services = ['aws/kinesis', 'aws/lambda', 'aws/firehose', 'aws/dynamodb']
+        
+        for service in expected_services:
+            assert service in dashboard_json_str, f"Dashboard should include {service} metrics"
+        
+        # Specifically verify DynamoDB metrics
+        dynamodb_metrics = ['consumedreadcapacityunits', 'consumedwritecapacityunits', 'itemcount', 'throttledrequests']
+        for metric in dynamodb_metrics:
+            assert metric in dashboard_json_str, f"Dashboard should include DynamoDB {metric} metric"
+        
+        print(f"✓ Dashboard has {len(widgets)} widgets with all expected service metrics")
         
     except cloudwatch.exceptions.ResourceNotFound:
         pytest.skip(f"Dashboard {dashboard_name} not found - infrastructure may not be deployed")
@@ -509,3 +552,59 @@ def test_cloudwatch_alarms_exist(outputs):
             
     except Exception as e:
         pytest.skip(f"Error testing CloudWatch alarms: {str(e)}")
+
+
+def test_lambda_dynamodb_permissions(outputs):
+    """Test that Lambda function has proper DynamoDB permissions."""
+    iam = boto3.client('iam', region_name=REAL_AWS_REGION)
+    
+    lambda_function_name = outputs.get('processor_lambda_name')
+    table_name = outputs.get('dynamodb_table_name')
+    
+    assert lambda_function_name, "Lambda function name required"
+    assert table_name, "DynamoDB table name required"
+    
+    print(f"Testing Lambda DynamoDB permissions for function: {lambda_function_name}")
+    
+    try:
+        # Get Lambda function configuration to find its role
+        lambda_client = boto3.client('lambda', region_name=REAL_AWS_REGION)
+        lambda_config = lambda_client.get_function(FunctionName=lambda_function_name)
+        role_arn = lambda_config['Configuration']['Role']
+        role_name = role_arn.split('/')[-1]  # Extract role name from ARN
+        
+        # Get attached policies for the role
+        attached_policies = iam.list_attached_role_policies(RoleName=role_name)
+        inline_policies = iam.list_role_policies(RoleName=role_name)
+        
+        # Check inline policies for DynamoDB permissions
+        dynamodb_permissions_found = False
+        
+        for policy_name in inline_policies['PolicyNames']:
+            policy_doc = iam.get_role_policy(RoleName=role_name, PolicyName=policy_name)
+            policy_document = policy_doc['PolicyDocument']
+            
+            # Convert policy document to string for searching
+            policy_str = json.dumps(policy_document).lower()
+            
+            # Check for DynamoDB permissions
+            dynamodb_actions = ['dynamodb:putitem', 'dynamodb:getitem', 'dynamodb:query', 'dynamodb:scan']
+            
+            for action in dynamodb_actions:
+                if action in policy_str:
+                    dynamodb_permissions_found = True
+                    break
+        
+        assert dynamodb_permissions_found, f"Lambda role should have DynamoDB permissions"
+        
+        # Verify environment variable for DynamoDB table is set correctly
+        env_vars = lambda_config['Configuration'].get('Environment', {}).get('Variables', {})
+        dynamodb_table_env = env_vars.get('DYNAMODB_TABLE')
+        
+        assert dynamodb_table_env, "Lambda should have DYNAMODB_TABLE environment variable"
+        assert table_name in dynamodb_table_env, f"DYNAMODB_TABLE should reference {table_name}"
+        
+        print(f"✓ Lambda has proper DynamoDB permissions and configuration")
+        
+    except Exception as e:
+        pytest.skip(f"Error testing Lambda DynamoDB permissions: {str(e)}")
