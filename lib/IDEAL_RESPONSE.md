@@ -1492,8 +1492,8 @@ resource "aws_lb" "dr" {
 resource "aws_lb_target_group" "primary" {
   provider             = aws.primary
   name                 = "${substr(var.project_name, 0, 8)}-tg-pri-${local.unique_suffix}"
-  port                 = 443
-  protocol             = "HTTPS"
+  port                 = 80
+  protocol             = "HTTP"
   vpc_id               = aws_vpc.primary.id
   deregistration_delay = 5
 
@@ -1504,7 +1504,7 @@ resource "aws_lb_target_group" "primary" {
     matcher             = "200"
     path                = "/health"
     port                = "traffic-port"
-    protocol            = "HTTPS"
+    protocol            = "HTTP"
     timeout             = 5
     unhealthy_threshold = 2
   }
@@ -1524,8 +1524,8 @@ resource "aws_lb_target_group" "primary" {
 resource "aws_lb_target_group" "dr" {
   provider             = aws.dr
   name                 = "${substr(var.project_name, 0, 8)}-tg-dr-${local.unique_suffix}"
-  port                 = 443
-  protocol             = "HTTPS"
+  port                 = 80
+  protocol             = "HTTP"
   vpc_id               = aws_vpc.dr.id
   deregistration_delay = 5
 
@@ -1536,7 +1536,7 @@ resource "aws_lb_target_group" "dr" {
     matcher             = "200"
     path                = "/health"
     port                = "traffic-port"
-    protocol            = "HTTPS"
+    protocol            = "HTTP"
     timeout             = 5
     unhealthy_threshold = 2
   }
@@ -1553,8 +1553,21 @@ resource "aws_lb_target_group" "dr" {
   })
 }
 
-# ALB Listeners
+# ALB Listeners (HTTP for testing, HTTPS if certificates provided)
+resource "aws_lb_listener" "primary_http" {
+  provider          = aws.primary
+  load_balancer_arn = aws_lb.primary.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.primary.arn
+  }
+}
+
 resource "aws_lb_listener" "primary_https" {
+  count             = var.acm_certificate_arn_primary != "" ? 1 : 0
   provider          = aws.primary
   load_balancer_arn = aws_lb.primary.arn
   port              = "443"
@@ -1568,7 +1581,20 @@ resource "aws_lb_listener" "primary_https" {
   }
 }
 
+resource "aws_lb_listener" "dr_http" {
+  provider          = aws.dr
+  load_balancer_arn = aws_lb.dr.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.dr.arn
+  }
+}
+
 resource "aws_lb_listener" "dr_https" {
+  count             = var.acm_certificate_arn_dr != "" ? 1 : 0
   provider          = aws.dr
   load_balancer_arn = aws_lb.dr.arn
   port              = "443"
@@ -1588,8 +1614,8 @@ resource "aws_lb_listener" "dr_https" {
 
 resource "aws_route53_health_check" "primary" {
   fqdn              = aws_lb.primary.dns_name
-  port              = 443
-  type              = "HTTPS"
+  port              = 80
+  type              = "HTTP"
   resource_path     = "/health"
   failure_threshold = 2
   request_interval  = 10
@@ -1601,8 +1627,8 @@ resource "aws_route53_health_check" "primary" {
 
 resource "aws_route53_health_check" "dr" {
   fqdn              = aws_lb.dr.dns_name
-  port              = 443
-  type              = "HTTPS"
+  port              = 80
+  type              = "HTTP"
   resource_path     = "/health"
   failure_threshold = 2
   request_interval  = 10
