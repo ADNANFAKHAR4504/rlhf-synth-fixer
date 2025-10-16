@@ -1269,6 +1269,12 @@ The architecture spans two Availability Zones with subnets in each zone, providi
           "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
         }
       }
+    },
+    "DBSecretArn": {
+      "Description": "ARN of the Secrets Manager secret containing database credentials",
+      "Value": {
+        "Ref": "DBSecret"
+      }
     }
   }
 }

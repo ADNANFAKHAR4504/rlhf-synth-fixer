@@ -4,6 +4,7 @@ import { DescribeInstancesCommand, DescribeInternetGatewaysCommand, DescribeNatG
 import { GetBucketVersioningCommand, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, S3Client, ListObjectVersionsCommand, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import { GetRoleCommand, GetInstanceProfileCommand, ListAttachedRolePoliciesCommand, ListRolePoliciesCommand, GetRolePolicyCommand, IAMClient } from '@aws-sdk/client-iam';
 import { SendCommandCommand, GetCommandInvocationCommand, SSMClient } from '@aws-sdk/client-ssm';
+import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import fs from 'fs';
 
 // Configuration - These are coming from cfn-outputs after deployment
@@ -22,6 +23,26 @@ const cloudWatchClient = new CloudWatchClient({ region });
 const s3Client = new S3Client({ region });
 const iamClient = new IAMClient({ region });
 const ssmClient = new SSMClient({ region });
+const secretsManagerClient = new SecretsManagerClient({ region });
+
+// Helper function to get DB password from Secrets Manager
+async function getDBPassword(): Promise<string> {
+  try {
+    const secretArn = outputs.DBSecretArn;
+    const response = await secretsManagerClient.send(new GetSecretValueCommand({
+      SecretId: secretArn
+    }));
+
+    if (response.SecretString) {
+      const secret = JSON.parse(response.SecretString);
+      return secret.password;
+    }
+    throw new Error('Secret string not found');
+  } catch (error) {
+    console.error('Failed to retrieve DB password from Secrets Manager:', error);
+    throw error;
+  }
+}
 
 // Helper function to wait for SSM command completion
 async function waitForCommand(commandId: string, instanceId: string, maxWaitTime = 60000): Promise<any> {
@@ -400,6 +421,9 @@ describe('Cloud Environment Setup Integration Tests', () => {
       const rdsEndpoint = outputs.RDSInstanceEndpoint;
 
       try {
+        // Get the actual password from Secrets Manager
+        const dbPassword = await getDBPassword();
+
         // ACTION: EC2 connects to RDS using mysql client
         const command = await ssmClient.send(new SendCommandCommand({
           DocumentName: 'AWS-RunShellScript',
@@ -407,7 +431,7 @@ describe('Cloud Environment Setup Integration Tests', () => {
           Parameters: {
             commands: [
               '#!/bin/bash',
-              `mysql -h ${rdsEndpoint} -u admin -p"${process.env.DB_PASSWORD || 'testpassword123'}" -e "SELECT 1 AS connection_test;" 2>&1`
+              `mysql -h ${rdsEndpoint} -u admin -p"${dbPassword}" -e "SELECT 1 AS connection_test;" 2>&1`
             ]
           }
         }));
@@ -491,6 +515,9 @@ describe('Cloud Environment Setup Integration Tests', () => {
       const rdsEndpoint = outputs.RDSInstanceEndpoint;
 
       try {
+        // Get the actual password from Secrets Manager
+        const dbPassword = await getDBPassword();
+
         // E2E ACTION: Complete database workflow
         const command = await ssmClient.send(new SendCommandCommand({
           DocumentName: 'AWS-RunShellScript',
@@ -501,7 +528,7 @@ describe('Cloud Environment Setup Integration Tests', () => {
               'set -e',
               '',
               '# Step 1: Connect to RDS and perform operations',
-              `mysql -h ${rdsEndpoint} -u admin -p"${process.env.DB_PASSWORD || 'testpassword123'}" << 'EOF'`,
+              `mysql -h ${rdsEndpoint} -u admin -p"${dbPassword}" << 'EOF'`,
               '-- Step 2: Create test database',
               'CREATE DATABASE IF NOT EXISTS integration_test;',
               'USE integration_test;',
