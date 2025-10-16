@@ -1,3 +1,5 @@
+// lib/IDEAL_RESPONSE.md
+
 ```typescript
 import { Construct } from 'constructs';
 import { TerraformStack, TerraformOutput, Fn } from 'cdktf';
@@ -26,17 +28,41 @@ import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-sec
 import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
 import { RandomProvider } from '@cdktf/provider-random/lib/provider';
 import { Password } from '@cdktf/provider-random/lib/password';
+import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
+import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
+import { SnsTopic } from '@cdktf/provider-aws/lib/sns-topic';
+import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
+import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
+import { CloudwatchEventRule } from '@cdktf/provider-aws/lib/cloudwatch-event-rule';
+import { CloudwatchEventTarget } from '@cdktf/provider-aws/lib/cloudwatch-event-target';
+import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
+import { SsmDocument } from '@cdktf/provider-aws/lib/ssm-document';
+import { BackupVault } from '@cdktf/provider-aws/lib/backup-vault';
+import { BackupPlan } from '@cdktf/provider-aws/lib/backup-plan';
+import { BackupSelection } from '@cdktf/provider-aws/lib/backup-selection';
 
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, name: string) {
     super(scope, name);
 
     const region = 'us-east-1';
-    new AwsProvider(this, 'aws', { region, alias: 'us-east-1' }); // Added alias for clarity
+    new AwsProvider(this, 'aws', { region, alias: 'us-east-1' });
+
     new RandomProvider(this, 'random');
 
     const randomSuffix = Fn.substr(Fn.uuid(), 0, 8);
     const commonTags = { Project: 'iac-rlhf-amazon' };
+
+    const kmsKey = new KmsKey(this, 'KmsKey', {
+      description: 'Master KMS key for application encryption',
+      enableKeyRotation: true,
+      tags: commonTags,
+    });
+
+    new KmsAlias(this, 'KmsAlias', {
+      name: `alias/app-key-${randomSuffix}`,
+      targetKeyId: kmsKey.id,
+    });
 
     const vpc = new Vpc(this, 'Vpc', {
       cidrBlock: '10.0.0.0/16',
@@ -230,6 +256,7 @@ export class TapStack extends TerraformStack {
         },
       ],
       dependsOn: [listener, targetGroup],
+      tags: commonTags,
     });
 
     const sessionTable = new DynamodbTable(this, 'SessionStateTable', {
@@ -237,6 +264,7 @@ export class TapStack extends TerraformStack {
       billingMode: 'PAY_PER_REQUEST',
       hashKey: 'sessionId',
       attribute: [{ name: 'sessionId', type: 'S' }],
+      serverSideEncryption: { enabled: true, kmsKeyArn: kmsKey.arn },
       tags: commonTags,
     });
 
@@ -249,6 +277,7 @@ export class TapStack extends TerraformStack {
     const dbSecret = new SecretsmanagerSecret(this, 'DbSecret', {
       name: `aurora-master-secret-${randomSuffix}`,
       description: 'Aurora master password for app (auto-generated)',
+      kmsKeyId: kmsKey.arn,
       tags: commonTags,
     });
 
@@ -263,18 +292,18 @@ export class TapStack extends TerraformStack {
       tags: commonTags,
     });
 
-    const masterUsername = 'dbadmin';
-
     const dbCluster = new RdsCluster(this, 'RegionalDbCluster', {
       clusterIdentifier: `app-db-${randomSuffix}`,
       engine: 'aurora-postgresql',
       engineVersion: '13.9',
-      masterUsername,
+      masterUsername: 'dbadmin',
       masterPassword: dbPassword.result,
       databaseName: 'appdb',
       dbSubnetGroupName: dbSubnetGroup.name,
       vpcSecurityGroupIds: [dbSg.id],
       skipFinalSnapshot: true,
+      storageEncrypted: true,
+      kmsKeyId: kmsKey.arn,
       tags: commonTags,
     });
 
@@ -292,7 +321,7 @@ export class TapStack extends TerraformStack {
       availabilityZone: `${region}b`,
     });
 
-    new CloudwatchMetricAlarm(this, 'DbCpuAlarm', {
+    const dbCpuAlarm = new CloudwatchMetricAlarm(this, 'DbCpuAlarm', {
       alarmName: `AuroraCPUHigh-${randomSuffix}`,
       comparisonOperator: 'GreaterThanThreshold',
       evaluationPeriods: 5,
@@ -304,6 +333,150 @@ export class TapStack extends TerraformStack {
       alarmDescription: 'Trigger when DB CPU utilization > 70% for 5 minutes',
       dimensions: { DBInstanceIdentifier: dbInstanceA.identifier },
       tags: commonTags,
+    });
+
+    const alarmTopic = new SnsTopic(this, 'AlarmTopic', {
+      name: `app-alarms-${randomSuffix}`,
+      kmsMasterKeyId: kmsKey.arn,
+      tags: commonTags,
+    });
+
+    const failoverLambdaRole = new IamRole(this, 'FailoverLambdaRole', {
+      name: `failover-lambda-role-${randomSuffix}`,
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
+            Principal: { Service: 'lambda.amazonaws.com' },
+          },
+        ],
+      }),
+      tags: commonTags,
+    });
+
+    new IamRolePolicyAttachment(this, 'LambdaBasicExec', {
+      role: failoverLambdaRole.name,
+      policyArn:
+        'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+    });
+
+    new IamRolePolicy(this, 'LambdaDrPolicy', {
+      name: `lambda-dr-policy-${randomSuffix}`,
+      role: failoverLambdaRole.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: ['rds:FailoverDBCluster', 'rds:DescribeDBClusters'],
+            Resource: [dbCluster.arn],
+          },
+          { Effect: 'Allow', Action: 'sns:Publish', Resource: alarmTopic.arn },
+        ],
+      }),
+    });
+
+    const failoverLambda = new LambdaFunction(this, 'FailoverLambda', {
+      functionName: `automated-failover-${randomSuffix}`,
+      runtime: 'python3.9',
+      handler: 'index.handler',
+      role: failoverLambdaRole.arn,
+      timeout: 60,
+      filename: `${__dirname}/lambda/failover.zip`,
+      sourceCodeHash: Fn.filebase64sha256(`${__dirname}/lambda/failover.zip`),
+      tags: commonTags,
+    });
+
+    const failoverRule = new CloudwatchEventRule(this, 'FailoverRule', {
+      name: `failover-rule-${randomSuffix}`,
+      description: 'Trigger failover Lambda on DB CPU alarm',
+      eventPattern: JSON.stringify({
+        source: ['aws.cloudwatch'],
+        'detail-type': ['CloudWatch Alarm State Change'],
+        resources: [dbCpuAlarm.arn],
+        detail: { state: { value: ['ALARM'] } },
+      }),
+      tags: commonTags,
+    });
+
+    new CloudwatchEventTarget(this, 'FailoverTarget', {
+      rule: failoverRule.name,
+      arn: failoverLambda.arn,
+    });
+
+    new LambdaPermission(this, 'AllowCwToCallLambda', {
+      statementId: 'AllowExecutionFromCloudWatch',
+      action: 'lambda:InvokeFunction',
+      functionName: failoverLambda.functionName,
+      principal: 'events.amazonaws.com',
+      sourceArn: failoverRule.arn,
+    });
+
+    const ssmDoc = new SsmDocument(this, 'DrTestDocument', {
+      name: `dr-test-simulation-${randomSuffix}`,
+      documentType: 'Automation',
+      documentFormat: 'YAML',
+      content: `
+schemaVersion: '0.3'
+description: 'Simulates a DR test by triggering a notification.'
+mainSteps:
+  - name: NotifyDrTestStart
+    action: aws:executeAwsApi
+    inputs:
+      Service: sns
+      Api: Publish
+      TopicArn: ${alarmTopic.arn}
+      Message: 'Automated DR test simulation started.'
+`,
+      tags: commonTags,
+    });
+
+    const backupVault = new BackupVault(this, 'BackupVault', {
+      name: `app-backup-vault-${randomSuffix}`,
+      kmsKeyArn: kmsKey.arn,
+      tags: commonTags,
+    });
+
+    const backupRole = new IamRole(this, 'BackupRole', {
+      name: `backup-role-${randomSuffix}`,
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
+            Principal: { Service: 'backup.amazonaws.com' },
+          },
+        ],
+      }),
+      tags: commonTags,
+    });
+
+    new IamRolePolicyAttachment(this, 'BackupRolePolicyAttachment', {
+      role: backupRole.name,
+      policyArn:
+        'arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup',
+    });
+
+    const backupPlan = new BackupPlan(this, 'BackupPlan', {
+      name: `app-backup-plan-${randomSuffix}`,
+      rule: [
+        {
+          ruleName: 'daily-backups',
+          targetVaultName: backupVault.name,
+          schedule: 'cron(0 5 * * ? *)',
+        },
+      ],
+      tags: commonTags,
+    });
+
+    new BackupSelection(this, 'BackupSelection', {
+      name: `rds-backup-selection-${randomSuffix}`,
+      iamRoleArn: backupRole.arn,
+      planId: backupPlan.id,
+      resources: [dbCluster.arn],
     });
 
     new Route53HealthCheck(this, 'AlbHealthCheck', {
@@ -320,12 +493,18 @@ export class TapStack extends TerraformStack {
     new TerraformOutput(this, 'DbClusterIdentifier', {
       value: dbCluster.clusterIdentifier,
     });
-    // Outputs added for robust integration testing
     new TerraformOutput(this, 'DynamoDbTableName', {
       value: sessionTable.name,
     });
     new TerraformOutput(this, 'EcsClusterName', { value: cluster.name });
     new TerraformOutput(this, 'EcsServiceName', { value: ecsService.name });
+    new TerraformOutput(this, 'KmsKeyArn', { value: kmsKey.arn });
+    new TerraformOutput(this, 'SnsTopicArn', { value: alarmTopic.arn });
+    new TerraformOutput(this, 'LambdaFunctionName', {
+      value: failoverLambda.functionName,
+    });
+    new TerraformOutput(this, 'BackupVaultName', { value: backupVault.name });
+    new TerraformOutput(this, 'SsmDocumentName', { value: ssmDoc.name });
   }
 }
 ```
