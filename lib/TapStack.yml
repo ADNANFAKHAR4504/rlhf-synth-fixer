@@ -1,17 +1,12 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  TapStack.yml — secure environment.
-  VPC with public/private subnets (2 AZs), NAT GW, EC2 IAM role + instance profile,
-  encrypted S3 buckets (KMS), CloudTrail (multi-region), API Gateway with access logging,
-  RDS (private, encrypted), Lambda in private subnets with least-privilege role,
-  centralized KMS key, and MFA-enforce managed policy.
+  TapStack.yml — secure environment (VPC, NAT, SGs, KMS, S3, CloudTrail, API GW, Lambda, RDS, IAM, Secrets, SSM).
 
 Parameters:
   Environment:
     Type: String
     Default: prod
-    AllowedValues: [ prod, dev ]
-    Description: Environment prefix (prod|dev)
+    AllowedValues: [prod, dev]
   VpcCidr:
     Type: String
     Default: 10.0.0.0/16
@@ -34,7 +29,7 @@ Parameters:
   DBEngine:
     Type: String
     Default: mysql
-    AllowedValues: [ mysql, postgres ]
+    AllowedValues: [mysql, postgres]
   DBInstanceClass:
     Type: String
     Default: db.t3.medium
@@ -53,6 +48,9 @@ Parameters:
   LogRetentionDays:
     Type: Number
     Default: 90
+  AmiId:
+    Type: AWS::EC2::Image::Id
+    Description: Valid AMI for this region (e.g., latest Amazon Linux 2)
 
 Mappings:
   AZMap:
@@ -66,12 +64,13 @@ Mappings:
 Resources:
 
   ########################
-  # Central KMS Key & Alias (finalized policy for CloudTrail + S3)
+  # Central KMS Key & Alias — compatible with CloudTrail + S3
   ########################
   TapStackKmsKey:
     Type: AWS::KMS::Key
     Properties:
       Description: !Sub "TapStack ${Environment} KMS key – encrypt S3, RDS, CloudTrail, Lambda env"
+      EnableKeyRotation: true
       KeyPolicy:
         Version: "2012-10-17"
         Statement:
@@ -83,8 +82,8 @@ Resources:
             Action: "kms:*"
             Resource: "*"
 
-          # Allow CloudTrail to use the key (CreateGrant + EncryptionContext + ViaService)
-          - Sid: AllowCloudTrailToUseKey
+          # Allow CloudTrail to use the key (required actions + grant for AWS resource)
+          - Sid: AllowCloudTrailUseOfTheKey
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
@@ -100,24 +99,8 @@ Resources:
               Bool:
                 kms:GrantIsForAWSResource: "true"
               StringEquals:
-                aws:SourceAccount: !Ref "AWS::AccountId"
-                # CloudTrail sets this encryption context to the trail ARN
                 kms:EncryptionContext:aws:cloudtrail:arn: !Sub "arn:${AWS::Partition}:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${Environment}-tapstack-cloudtrail"
-              StringLike:
-                kms:ViaService: "cloudtrail.*.amazonaws.com"
-
-          # Allow S3 service (defensive; not strictly required by CloudTrail but useful)
-          - Sid: AllowS3ToUseKeyForPutObject
-            Effect: Allow
-            Principal:
-              Service: s3.amazonaws.com
-            Action:
-              - kms:GenerateDataKey*
-              - kms:Decrypt
-            Resource: "*"
-            Condition:
-              StringEquals:
-                aws:SourceAccount: !Ref "AWS::AccountId"
+                kms:ViaService: !Sub "cloudtrail.${AWS::Region}.amazonaws.com"
 
   TapStackKmsAlias:
     Type: AWS::KMS::Alias
@@ -183,7 +166,7 @@ Resources:
         LogFilePrefix: app-bucket-access-logs/
 
   ###########################################################
-  # CloudTrail S3 Bucket Policy — include aws:SourceArn to the trail
+  # CloudTrail S3 Bucket Policy — required permissions
   ###########################################################
   TapStackCloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -192,18 +175,14 @@ Resources:
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
-          - Sid: "AllowCloudTrailGetBucketAcl"
+          - Sid: AllowCloudTrailGetBucketAcl
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:GetBucketAcl
             Resource: !Sub "arn:${AWS::Partition}:s3:::${TapStackCloudTrailBucket}"
-            Condition:
-              StringEquals:
-                aws:SourceAccount: !Ref "AWS::AccountId"
-                aws:SourceArn: !Sub "arn:${AWS::Partition}:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${Environment}-tapstack-cloudtrail"
 
-          - Sid: "AllowCloudTrailPutObject"
+          - Sid: AllowCloudTrailPutObject
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
@@ -212,8 +191,6 @@ Resources:
             Condition:
               StringEquals:
                 s3:x-amz-acl: "bucket-owner-full-control"
-                aws:SourceAccount: !Ref "AWS::AccountId"
-                aws:SourceArn: !Sub "arn:${AWS::Partition}:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${Environment}-tapstack-cloudtrail"
 
   ########################
   # VPC, Subnets, IGW, NATs, RouteTables (2 AZs)
@@ -604,6 +581,30 @@ Resources:
       ParentId: !GetAtt TapStackRestApi.RootResourceId
       PathPart: ping
 
+  TapStackLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-tapstack-handler"
+      Handler: handler.lambda_handler
+      Runtime: !Ref LambdaRuntime
+      Role: !GetAtt TapStackLambdaRole.Arn
+      KmsKeyArn: !GetAtt TapStackKmsKey.Arn
+      VpcConfig:
+        SubnetIds: [ !Ref PrivateSubnet1, !Ref PrivateSubnet2 ]
+        SecurityGroupIds: [ !Ref LambdaSecurityGroup ]
+      Environment:
+        Variables:
+          DB_SECRET_ARN: !Ref DBCredentialsSecret
+          ENV: !Ref Environment
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {
+                  "statusCode": 200,
+                  "body": "pong",
+                  "headers": {"Content-Type": "text/plain"}
+              }
+
   TapStackApiMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -626,9 +627,9 @@ Resources:
 
   TapStackApiDeployment:
     Type: AWS::ApiGateway::Deployment
+    DependsOn: [ TapStackApiMethod ]
     Properties:
       RestApiId: !Ref TapStackRestApi
-    DependsOn: [ TapStackApiMethod ]
 
   TapStackApiStage:
     Type: AWS::ApiGateway::Stage
@@ -646,53 +647,20 @@ Resources:
           DataTraceEnabled: true
 
   ########################
-  # Lambda (VPC-enabled, KMS-encrypted env)
-  ########################
-  TapStackLambdaLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub "/aws/lambda/${Environment}-tapstack-handler"
-      RetentionInDays: !Ref LogRetentionDays
-
-  TapStackLambdaFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: !Sub "${Environment}-tapstack-handler"
-      Handler: handler.lambda_handler
-      Runtime: !Ref LambdaRuntime
-      Role: !GetAtt TapStackLambdaRole.Arn
-      KmsKeyArn: !Sub "arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:key/${TapStackKmsKey}"
-      VpcConfig:
-        SubnetIds: [ !Ref PrivateSubnet1, !Ref PrivateSubnet2 ]
-        SecurityGroupIds: [ !Ref LambdaSecurityGroup ]
-      Environment:
-        Variables:
-          DB_SECRET_ARN: !Ref DBCredentialsSecret
-          ENV: !Ref Environment
-      Code:
-        ZipFile: |
-          def lambda_handler(event, context):
-              return {
-                  "statusCode": 200,
-                  "body": "pong",
-                  "headers": {"Content-Type": "text/plain"}
-              }
-
-  ########################
-  # Optional EC2 Instance (replace AMI or remove resource)
+  # Optional EC2 Instance (no hardcoded AMI)
   ########################
   TapStackPrivateInstance:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t3.micro
-      ImageId: ami-0c94855ba95c71c99  # replace with valid regional AMI
+      ImageId: !Ref AmiId
       SubnetId: !Ref PrivateSubnet1
       IamInstanceProfile: !Ref TapStackInstanceProfile
       SecurityGroupIds: [ !Ref PrivateInstanceSecurityGroup ]
       Tags: [ { Key: Name, Value: !Sub "${Environment}-tapstack-private-instance" } ]
 
   ########################
-  # CloudTrail (multi-region) — MUST come after bucket policy
+  # CloudTrail (multi-region) — after bucket policy
   ########################
   TapStackCloudTrail:
     Type: AWS::CloudTrail::Trail
@@ -704,7 +672,7 @@ Resources:
       IncludeGlobalServiceEvents: true
       EnableLogFileValidation: true
       S3BucketName: !Ref TapStackCloudTrailBucket
-      KMSKeyId: !Ref TapStackKmsKey
+      KMSKeyId: !GetAtt TapStackKmsKey.Arn
       IsOrganizationTrail: false
       IsLogging: true
 
@@ -718,6 +686,9 @@ Resources:
       Type: String
       Value: !Sub "created-by=cfn;env=${Environment}"
 
+# ----------------
+# Outputs
+# ----------------
 Outputs:
   VpcId:
     Description: VPC ID
@@ -756,7 +727,7 @@ Outputs:
 
   KmsKeyArn:
     Description: KMS Key ARN
-    Value: !Sub "arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:key/${TapStackKmsKey}"
+    Value: !GetAtt TapStackKmsKey.Arn
     Export: { Name: !Sub "${Environment}-TapStack-KmsKeyArn" }
 
   LambdaRoleArn:
