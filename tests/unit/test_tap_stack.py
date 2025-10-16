@@ -417,13 +417,14 @@ class TestLambdaStack(unittest.TestCase):
         self.config = PipelineConfig()
         self.mock_provider = MagicMock()
         self.mock_iam_stack = MagicMock()
+        self.mock_dynamodb_stack = MagicMock()
 
     @patch('pulumi_aws.lambda_.Function')
     def test_lambda_function_creation(self, mock_function):
         """Test Lambda function creation with correct configuration."""
         from infrastructure.lambda_functions import LambdaStack
         
-        lambda_stack = LambdaStack(self.config, self.mock_provider, self.mock_iam_stack)
+        lambda_stack = LambdaStack(self.config, self.mock_provider, self.mock_iam_stack, self.mock_dynamodb_stack)
 
         # Verify Lambda functions were created for each region
         self.assertEqual(mock_function.call_count, 2)  # Two regions
@@ -442,7 +443,7 @@ class TestLambdaStack(unittest.TestCase):
         with patch('pulumi_aws.lambda_.Function') as mock_function:
             from infrastructure.lambda_functions import LambdaStack
             
-            lambda_stack = LambdaStack(self.config, self.mock_provider, self.mock_iam_stack)
+            lambda_stack = LambdaStack(self.config, self.mock_provider, self.mock_iam_stack, self.mock_dynamodb_stack)
             
             # Test getters return the function attributes
             function_arn = lambda_stack.get_function_arn('us-east-1')
@@ -632,7 +633,7 @@ class TestTapStack(unittest.TestCase):
         mock_provider.assert_called_once_with(mock_config_instance)
         mock_iam.assert_called_once_with(mock_config_instance, mock_provider_instance)
         mock_dynamodb.assert_called_once_with(mock_config_instance, mock_provider_instance)
-        mock_lambda.assert_called_once_with(mock_config_instance, mock_provider_instance, mock_iam_instance)
+        mock_lambda.assert_called_once_with(mock_config_instance, mock_provider_instance, mock_iam_instance, mock_dynamodb_instance)
         mock_eventbridge.assert_called_once_with(mock_config_instance, mock_provider_instance, mock_lambda_instance)
         mock_cloudwatch.assert_called_once_with(mock_config_instance, mock_provider_instance, mock_lambda_instance, mock_dynamodb_instance)
 
