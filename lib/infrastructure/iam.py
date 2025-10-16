@@ -90,12 +90,7 @@ class IAMStack:
                             "ec2:DescribeInstances",
                             "ec2:DescribeInstanceStatus"
                         ],
-                        "Resource": "*",
-                        "Condition": {
-                            "StringEquals": {
-                                "ec2:ResourceTag/Application": args[1]
-                            }
-                        }
+                        "Resource": "*"
                     },
                     {
                         "Sid": "SSMParameterAccess",
@@ -207,12 +202,7 @@ class IAMStack:
                             "ec2:DescribeInstances",
                             "ec2:DescribeInstanceStatus"
                         ],
-                        "Resource": "*",
-                        "Condition": {
-                            "StringEquals": {
-                                "ec2:ResourceTag/Application": args[1]
-                            }
-                        }
+                        "Resource": "*"
                     },
                     {
                         "Sid": "LambdaInvoke",
