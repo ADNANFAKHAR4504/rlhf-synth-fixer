@@ -11,7 +11,7 @@ describe('TapStack Integration Tests', () => {
     app = new App();
     stack = new TapStack(app, 'TestTapStack', {
       env: {
-        region: 'us-west-2',
+        region: 'ap-southeast-2',
       },
     });
     synthesized = JSON.parse(Testing.synth(stack));
@@ -27,7 +27,7 @@ describe('TapStack Integration Tests', () => {
       expect(synthesized).toBeDefined();
       expect(synthesized.resource).toBeDefined();
       expect(synthesized.provider).toBeDefined();
-      
+
       console.log('CDKTF synthesis validation passed');
     });
 
@@ -37,7 +37,7 @@ describe('TapStack Integration Tests', () => {
       expect(synthesized.resource.aws_db_instance).toBeDefined();
       expect(synthesized.resource.aws_s3_bucket).toBeDefined();
       expect(synthesized.resource.aws_elastic_beanstalk_application).toBeDefined();
-      
+
       console.log('Infrastructure configuration validation passed');
     });
   });
@@ -45,19 +45,19 @@ describe('TapStack Integration Tests', () => {
   describe('Security Validation', () => {
     test('RDS security configuration', () => {
       const rdsInstance = Object.values(synthesized.resource.aws_db_instance)[0] as any;
-      
+
       // Verify security best practices
       expect(rdsInstance.storage_encrypted).toBe(true);
       expect(rdsInstance.manage_master_user_password).toBe(true);
       expect(rdsInstance.multi_az).toBe(true);
-      
+
       console.log('RDS security validation passed');
     });
 
     test('Security groups are properly configured', () => {
       const securityGroups = Object.values(synthesized.resource.aws_security_group);
       expect(securityGroups.length).toBeGreaterThan(0);
-      
+
       console.log('Security groups validation passed');
     });
   });
@@ -66,14 +66,14 @@ describe('TapStack Integration Tests', () => {
     test('Multi-AZ deployment configuration', () => {
       const rdsInstance = Object.values(synthesized.resource.aws_db_instance)[0] as any;
       expect(rdsInstance.multi_az).toBe(true);
-      
+
       console.log('Multi-AZ configuration validated');
     });
 
     test('Network redundancy validation', () => {
       const subnets = Object.values(synthesized.resource.aws_subnet);
       expect(subnets.length).toBeGreaterThanOrEqual(4); // 2 public + 2 private
-      
+
       console.log('Network redundancy validated');
     });
   });

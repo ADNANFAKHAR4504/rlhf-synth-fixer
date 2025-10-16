@@ -6,7 +6,7 @@ const app = new App();
 
 new TapStack(app, 'tap-stack', {
   env: {
-    region: 'us-west-2',
+    region: 'ap-southeast-2',
   },
 });
 
