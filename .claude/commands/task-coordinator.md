@@ -444,6 +444,7 @@ PYTHON_SCRIPT
       - Valid values: "medium", "hard", "expert" (must match CSV exactly)
       - This value will be displayed in the PR body - ensure accuracy
     - Set `team` as "synth" (REQUIRED - validation will fail without this)
+    - Set `turn_type` as "single" (REQUIRED - validation will fail without this)
     - Set `startedAt` as current timestamp using `date -Iseconds` (REQUIRED - validation will fail without this)
     - **Extract `subtask`, `background`, and `subject_labels` from tasks.csv** (REQUIRED - validation will fail without these):
       - Read the selected task row from tasks.csv
