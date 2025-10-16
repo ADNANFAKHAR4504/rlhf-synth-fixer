@@ -25,10 +25,24 @@ def outputs():
     for filename in ['terraform-outputs.json', 'cdk-outputs.json']:
         try:
             with open(filename, 'r', encoding='utf-8') as f:
+                file_content = f.read()
+                print(f"📄 Raw content of {filename}: {file_content}")
+                
+                f.seek(0)  # Reset file pointer
                 outputs_data = json.load(f)
-                print(f"✅ Loaded outputs from {filename}")
-                return outputs_data
+                print(f"✅ Parsed outputs from {filename}: {outputs_data}")
+                print(f"📊 Number of outputs found: {len(outputs_data)}")
+                
+                if outputs_data:  # Only return if not empty
+                    return outputs_data
+                else:
+                    print(f"⚠️ {filename} is empty, trying fallback...")
+                    
         except FileNotFoundError:
+            print(f"❌ {filename} not found")
+            continue
+        except json.JSONDecodeError as e:
+            print(f"❌ Invalid JSON in {filename}: {e}")
             continue
     
     # If no outputs file found, calculate expected resource names based on CDKTF naming
