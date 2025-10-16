@@ -26,5 +26,5 @@ provider "aws" {
 # eu-west-1 alias used by resources: provider = aws.euw1
 provider "aws" {
   alias  = "use2"
-  region = "us-east-2"
+  region = "eu-west-2"
 }
