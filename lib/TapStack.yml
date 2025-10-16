@@ -1,6 +1,7 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   TapStack.yml — secure environment (VPC, NAT, SGs, KMS, S3, CloudTrail, API GW, Lambda, RDS, IAM, Secrets, SSM).
+  CloudTrail logs to KMS-encrypted S3 with correct KMS & bucket policies.
 
 Parameters:
   Environment:
@@ -48,9 +49,10 @@ Parameters:
   LogRetentionDays:
     Type: Number
     Default: 90
+  # Uses SSM public parameter so no manual AMI input is required
   AmiId:
-    Type: AWS::EC2::Image::Id
-    Description: Valid AMI for this region (e.g., latest Amazon Linux 2)
+    Type: "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>"
+    Default: "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
 
 Mappings:
   AZMap:
@@ -74,7 +76,6 @@ Resources:
       KeyPolicy:
         Version: "2012-10-17"
         Statement:
-          # Full control for account root
           - Sid: AllowRootAccountFullAccess
             Effect: Allow
             Principal:
@@ -82,7 +83,7 @@ Resources:
             Action: "kms:*"
             Resource: "*"
 
-          # Allow CloudTrail to use the key (required actions + grant for AWS resource)
+          # Required pattern for CloudTrail with CreateGrant and EncryptionContext
           - Sid: AllowCloudTrailUseOfTheKey
             Effect: Allow
             Principal:
@@ -165,9 +166,9 @@ Resources:
         DestinationBucketName: !Ref TapStackLogBucket
         LogFilePrefix: app-bucket-access-logs/
 
-  ###########################################################
-  # CloudTrail S3 Bucket Policy — required permissions
-  ###########################################################
+  ########################
+  # CloudTrail S3 Bucket Policy — required permissions only
+  ########################
   TapStackCloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -410,7 +411,8 @@ Resources:
             Action: [ sts:AssumeRole ]
       Path: "/"
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
+        # Use modern SSM policy
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
       Policies:
         - PolicyName: EC2AccessToS3AndSecrets
           PolicyDocument:
@@ -647,7 +649,7 @@ Resources:
           DataTraceEnabled: true
 
   ########################
-  # Optional EC2 Instance (no hardcoded AMI)
+  # Optional EC2 Instance (AMI via SSM param)
   ########################
   TapStackPrivateInstance:
     Type: AWS::EC2::Instance
@@ -686,9 +688,6 @@ Resources:
       Type: String
       Value: !Sub "created-by=cfn;env=${Environment}"
 
-# ----------------
-# Outputs
-# ----------------
 Outputs:
   VpcId:
     Description: VPC ID
