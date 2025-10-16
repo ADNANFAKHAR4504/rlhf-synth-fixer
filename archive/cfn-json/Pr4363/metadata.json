@@ -1,0 +1,48 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "moderate",
+  "team": "synth",
+  "startedAt": "2025-10-14T14:02:03+05:30",
+  "subtask": "Application Deployment",
+  "background": "Infrastructure task for CloudFormation",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Cloud Environment Setup",
+    "Security Configuration as Code"
+  ],
+  "po_id": "3256838105",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "AutoScaling",
+    "ElasticLoadBalancingV2",
+    "S3",
+    "KMS",
+    "IAM",
+    "CloudWatch",
+    "CloudWatchLogs",
+    "CloudWatchAlarms",
+    "CodeDeploy",
+    "CodeBuild",
+    "CodePipeline",
+    "SecurityGroups",
+    "RouteTables",
+    "InternetGateway",
+    "VPCEndpoints",
+    "SSM",
+    "TargetGroups",
+    "LaunchTemplates",
+    "Subnets",
+    "NetworkACLs",
+    "CloudFormation"
+  ],
+  "region": "ap-southeast-1",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

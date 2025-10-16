@@ -1,0 +1,1755 @@
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CI/CD Pipeline for Web Application Deployment using CodePipeline, CodeBuild, and CodeDeploy'
+
+Parameters:
+  # Environment Parameters
+  DevEnvironmentName:
+    Type: String
+    Default: 'Development'
+    Description: 'Name of the Development environment'
+  
+  ProdEnvironmentName:
+    Type: String
+    Default: 'Production'
+    Description: 'Name of the Production environment'
+  
+  NotificationEmail:
+    Type: String
+    Description: 'Email address to receive pipeline notifications'
+    Default: 'admin@example.com'
+  
+  # Storage Parameters
+  ArtifactBucketName:
+    Type: String
+    Description: 'Name of the S3 bucket to store pipeline artifacts'
+    Default: 'webapp1-pipeline-artifact-cicd-pr'
+  
+  # Application Parameters
+  ApplicationName:
+    Type: String
+    Default: 'WebApp1'
+    Description: 'Name of the application to be deployed'
+  
+  RepositoryName:
+    Type: String
+    Default: 'WebAppRepo'
+    Description: 'Name of the CodeCommit repository'
+
+  CreateCodeCommitRepo:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: 'Whether to create a CodeCommit repository (set to false if CodeCommit is not available)'
+
+  # EC2 Parameters for Application Infrastructure
+  DevInstanceType:
+    Type: String
+    Default: 't3.micro'
+    AllowedValues:
+      - 't3.micro'
+      - 't3.small'
+      - 't3.medium'
+    Description: 'EC2 instance type for Development environment'
+
+  ProdInstanceType:
+    Type: String
+    Default: 't3.small'
+    AllowedValues:
+      - 't3.small'
+      - 't3.medium'
+      - 't3.large'
+      - 't3.xlarge'
+    Description: 'EC2 instance type for Production environment'
+
+  KeyPairName:
+    Type: String
+    Default: ''
+    Description: 'EC2 Key Pair name for SSH access (leave empty to skip SSH access)'
+
+  VPCCidr:
+    Type: String
+    Default: '10.0.0.0/16'
+    Description: 'CIDR block for the VPC'
+    AllowedPattern: '^(10\.(0|[1-9]\d?|1\d{2}|2[0-4]\d|25[0-5])|(172\.(1[6-9]|2\d|3[01]))|(192\.168))\.\d{1,3}\.\d{1,3}\/\d{1,2}$'
+
+# Mappings for region-specific AMI IDs
+Mappings:
+  RegionMap:
+    us-east-1:
+      AMI: 'ami-0c02fb55956c7d316'  # Amazon Linux 2 AMI
+    us-east-2:
+      AMI: 'ami-0f924dc71d44d23e2'
+    us-west-1:
+      AMI: 'ami-0d382e80be7ffdae5'
+    us-west-2:
+      AMI: 'ami-0c2d3e23fd27b9971'
+    eu-west-1:
+      AMI: 'ami-0c9c942bd7bf113a2'
+
+Conditions:
+  ShouldCreateCodeCommitRepo: !Equals [!Ref CreateCodeCommitRepo, 'true']
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
+
+Resources:
+  #---------------------------------------------------------------------------
+  # VPC Infrastructure for Application Deployment
+  #---------------------------------------------------------------------------
+  
+  # VPC for Application Infrastructure
+  ApplicationVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VPCCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ApplicationName}-vpc'
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${ApplicationName}-igw'
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref ApplicationVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Public Subnets for Load Balancer
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref ApplicationVPC
+      CidrBlock: '10.0.1.0/24'
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ApplicationName}-public-subnet-1'
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref ApplicationVPC
+      CidrBlock: '10.0.2.0/24'
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ApplicationName}-public-subnet-2'
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+
+  # Private Subnets for Application Servers
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref ApplicationVPC
+      CidrBlock: '10.0.10.0/24'
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${ApplicationName}-private-subnet-1'
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref ApplicationVPC
+      CidrBlock: '10.0.11.0/24'
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${ApplicationName}-private-subnet-2'
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+
+  # Route Tables
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref ApplicationVPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ApplicationName}-public-rt'
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref ApplicationVPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ApplicationName}-private-rt'
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+
+  PrivateSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  #---------------------------------------------------------------------------
+  # Security Groups
+  #---------------------------------------------------------------------------
+  
+  # Security Group for Application Load Balancer
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Application Load Balancer
+      VpcId: !Ref ApplicationVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${ApplicationName}-alb-sg'
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+
+  # Security Group for EC2 Instances
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for EC2 instances
+      VpcId: !Ref ApplicationVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${ApplicationName}-ec2-sg'
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+
+  # Add SSH access if KeyPair is provided
+  SSHSecurityGroupRule:
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: HasKeyPair
+    Properties:
+      GroupId: !Ref EC2SecurityGroup
+      IpProtocol: tcp
+      FromPort: 22
+      ToPort: 22
+      CidrIp: 10.0.0.0/16  # Restrict SSH to VPC only
+
+  #---------------------------------------------------------------------------
+  # IAM Roles and Policies
+  #---------------------------------------------------------------------------
+  
+  # CodePipeline Service Role
+  CodePipelineServiceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: CodePipelineAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:GetObjectVersion'
+                  - 's3:GetBucketVersioning'
+                  - 's3:PutObject'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${ArtifactBucketName}'
+                  - !Sub 'arn:aws:s3:::${ArtifactBucketName}/*'
+              - !If
+                - ShouldCreateCodeCommitRepo
+                - Effect: Allow
+                  Action:
+                    - 'codecommit:GetBranch'
+                    - 'codecommit:GetCommit'
+                    - 'codecommit:UploadArchive'
+                    - 'codecommit:GetUploadArchiveStatus'
+                    - 'codecommit:CancelUploadArchive'
+                  Resource: !GetAtt CodeCommitRepo.Arn
+                - !Ref AWS::NoValue
+              - Effect: Allow
+                Action:
+                  - 'codebuild:BatchGetBuilds'
+                  - 'codebuild:StartBuild'
+                Resource: 
+                  - !GetAtt BuildProject.Arn
+                  - !GetAtt TestProject.Arn
+              - Effect: Allow
+                Action:
+                  - 'codedeploy:CreateDeployment'
+                  - 'codedeploy:GetApplicationRevision'
+                  - 'codedeploy:GetDeployment'
+                  - 'codedeploy:GetDeploymentConfig'
+                  - 'codedeploy:RegisterApplicationRevision'
+                Resource: 
+                  - !Sub 'arn:aws:codedeploy:${AWS::Region}:${AWS::AccountId}:application:${ApplicationName}'
+                  - !Sub 'arn:aws:codedeploy:${AWS::Region}:${AWS::AccountId}:deploymentgroup:${ApplicationName}/${ApplicationName}-${DevEnvironmentName}'
+                  - !Sub 'arn:aws:codedeploy:${AWS::Region}:${AWS::AccountId}:deploymentgroup:${ApplicationName}/${ApplicationName}-${ProdEnvironmentName}'
+                  - !Sub 'arn:aws:codedeploy:${AWS::Region}:${AWS::AccountId}:deploymentconfig:*'
+              - Effect: Allow
+                Action:
+                  - 'sns:Publish'
+                Resource: !Ref PipelineNotificationTopic
+      Tags:
+        - Key: Project
+          Value: !Ref ApplicationName
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+  
+  # CodeBuild Service Role
+  CodeBuildServiceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: CodeBuildAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: 
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/*'
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:GetObjectVersion'
+                  - 's3:PutObject'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${ArtifactBucketName}'
+                  - !Sub 'arn:aws:s3:::${ArtifactBucketName}/*'
+              - !If
+                - ShouldCreateCodeCommitRepo
+                - Effect: Allow
+                  Action:
+                    - 'codecommit:GitPull'
+                  Resource: !GetAtt CodeCommitRepo.Arn
+                - !Ref AWS::NoValue
+      Tags:
+        - Key: Project
+          Value: !Ref ApplicationName
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+  
+  # CodeDeploy Service Role
+  CodeDeployServiceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codedeploy.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole'
+      Tags:
+        - Key: Project
+          Value: !Ref ApplicationName
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+  
+  # EC2 Instance Role for CodeDeploy
+  EC2InstanceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess'
+      Policies:
+        - PolicyName: CodeDeployEC2Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${ArtifactBucketName}'
+                  - !Sub 'arn:aws:s3:::${ArtifactBucketName}/*'
+                  - !Sub 'arn:aws:s3:::aws-codedeploy-${AWS::Region}/*'
+      Tags:
+        - Key: Project
+          Value: !Ref ApplicationName
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+  
+  # EC2 Instance Profile
+  EC2InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Roles:
+        - !Ref EC2InstanceRole
+
+  #---------------------------------------------------------------------------
+  # S3 Bucket for Pipeline Artifacts
+  #---------------------------------------------------------------------------
+  
+  ArtifactBucket:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Ref ArtifactBucketName
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref S3KMSKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldArtifacts
+            Status: Enabled
+            ExpirationInDays: 90
+            NoncurrentVersionExpirationInDays: 30
+      Tags:
+        - Key: Project
+          Value: !Ref ApplicationName
+        - Key: Environment
+          Value: 'Shared'
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+  
+  ArtifactBucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref ArtifactBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyUnEncryptedObjectUploads
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:PutObject'
+            Resource: !Sub 'arn:aws:s3:::${ArtifactBucketName}/*'
+            Condition:
+              StringNotEquals:
+                's3:x-amz-server-side-encryption': 'AES256'
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource: !Sub 'arn:aws:s3:::${ArtifactBucketName}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': false
+
+  #---------------------------------------------------------------------------
+  # CodeCommit Repository
+  #---------------------------------------------------------------------------
+  
+  CodeCommitRepo:
+    Type: 'AWS::CodeCommit::Repository'
+    Condition: ShouldCreateCodeCommitRepo
+    Properties:
+      RepositoryName: !Ref RepositoryName
+      RepositoryDescription: !Sub 'Repository for ${ApplicationName} source code'
+      Tags:
+        - Key: Project
+          Value: !Ref ApplicationName
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+
+  #---------------------------------------------------------------------------
+  # CloudWatch Log Groups for CodeBuild and EC2
+  #---------------------------------------------------------------------------
+  
+  # Log Group for CodeBuild Build Project
+  BuildLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/codebuild/${ApplicationName}-Build'
+      RetentionInDays: 30
+      Tags:
+        - Key: Project
+          Value: !Ref ApplicationName
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+
+  # Log Group for CodeBuild Test Project
+  TestLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/codebuild/${ApplicationName}-Test'
+      RetentionInDays: 30
+      Tags:
+        - Key: Project
+          Value: !Ref ApplicationName
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+
+  # Log Group for EC2 Application Logs
+  ApplicationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/ec2/${ApplicationName}'
+      RetentionInDays: 14
+      Tags:
+        - Key: Project
+          Value: !Ref ApplicationName
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+
+  #---------------------------------------------------------------------------
+  # CodeBuild Projects
+  #---------------------------------------------------------------------------
+  
+  # Build Project
+  BuildProject:
+    Type: 'AWS::CodeBuild::Project'
+    DependsOn: BuildLogGroup
+    Properties:
+      Name: !Sub '${ApplicationName}-Build'
+      Description: !Sub 'Build project for ${ApplicationName}'
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        PrivilegedMode: false
+        EnvironmentVariables:
+          - Name: ARTIFACT_BUCKET
+            Value: !Ref ArtifactBucketName
+          - Name: APPLICATION_NAME
+            Value: !Ref ApplicationName
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: |
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                nodejs: 14
+              commands:
+                - echo Installing dependencies...
+                - npm install
+            build:
+              commands:
+                - echo Build started on `date`
+                - npm run build
+            post_build:
+              commands:
+                - echo Build completed on `date`
+                - echo Preparing deployment package...
+                - mkdir -p dist/scripts
+                - cp -r scripts dist/
+                - cp appspec.yml dist/
+          artifacts:
+            files:
+              - appspec.yml
+              - 'scripts/**/*'
+              - 'dist/**/*'
+              - 'public/**/*'
+              - package.json
+              - package-lock.json
+            discard-paths: no
+          cache:
+            paths:
+              - 'node_modules/**/*'
+      TimeoutInMinutes: 15
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: !Sub '/aws/codebuild/${ApplicationName}-Build'
+      Tags:
+        - Key: Project
+          Value: !Ref ApplicationName
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+  
+  # Test Project
+  TestProject:
+    Type: 'AWS::CodeBuild::Project'
+    DependsOn: TestLogGroup
+    Properties:
+      Name: !Sub '${ApplicationName}-Test'
+      Description: !Sub 'Test project for ${ApplicationName}'
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        PrivilegedMode: false
+        EnvironmentVariables:
+          - Name: APPLICATION_NAME
+            Value: !Ref ApplicationName
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: |
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                nodejs: 14
+              commands:
+                - echo Installing dependencies...
+                - npm install
+            pre_build:
+              commands:
+                - echo Running linting...
+                - npm run lint
+            build:
+              commands:
+                - echo Running tests...
+                - npm test
+            post_build:
+              commands:
+                - echo Testing completed on `date`
+                - echo Generating test reports...
+          reports:
+            test-reports:
+              files:
+                - 'test-reports/**/*'
+              base-directory: './'
+          artifacts:
+            files:
+              - 'test-reports/**/*'
+            discard-paths: no
+      TimeoutInMinutes: 10
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: !Sub '/aws/codebuild/${ApplicationName}-Test'
+      Tags:
+        - Key: Project
+          Value: !Ref ApplicationName
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+
+  #---------------------------------------------------------------------------
+  # CodeDeploy Application and Deployment Groups
+  #---------------------------------------------------------------------------
+  
+  # CodeDeploy Application
+  CodeDeployApplication:
+    Type: 'AWS::CodeDeploy::Application'
+    Properties:
+      ApplicationName: !Ref ApplicationName
+      ComputePlatform: Server
+      Tags:
+        - Key: Project
+          Value: !Ref ApplicationName
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+  
+  # Development Deployment Group
+  DevDeploymentGroup:
+    Type: 'AWS::CodeDeploy::DeploymentGroup'
+    Properties:
+      ApplicationName: !Ref CodeDeployApplication
+      DeploymentGroupName: !Sub '${ApplicationName}-${DevEnvironmentName}'
+      ServiceRoleArn: !GetAtt CodeDeployServiceRole.Arn
+      DeploymentConfigName: CodeDeployDefault.AllAtOnce
+      Ec2TagFilters:
+        - Key: Environment
+          Value: !Ref DevEnvironmentName
+          Type: KEY_AND_VALUE
+        - Key: Application
+          Value: !Ref ApplicationName
+          Type: KEY_AND_VALUE
+      AutoRollbackConfiguration:
+        Enabled: true
+        Events:
+          - DEPLOYMENT_FAILURE
+          - DEPLOYMENT_STOP_ON_ALARM
+          - DEPLOYMENT_STOP_ON_REQUEST
+      AlarmConfiguration:
+        Enabled: true
+        Alarms:
+          - Name: !Ref DevDeploymentAlarm
+      Tags:
+        - Key: Project
+          Value: !Ref ApplicationName
+        - Key: Environment
+          Value: !Ref DevEnvironmentName
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+  
+  # Production Deployment Group
+  ProdDeploymentGroup:
+    Type: 'AWS::CodeDeploy::DeploymentGroup'
+    Properties:
+      ApplicationName: !Ref CodeDeployApplication
+      DeploymentGroupName: !Sub '${ApplicationName}-${ProdEnvironmentName}'
+      ServiceRoleArn: !GetAtt CodeDeployServiceRole.Arn
+      DeploymentConfigName: CodeDeployDefault.OneAtATime
+      Ec2TagFilters:
+        - Key: Environment
+          Value: !Ref ProdEnvironmentName
+          Type: KEY_AND_VALUE
+        - Key: Application
+          Value: !Ref ApplicationName
+          Type: KEY_AND_VALUE
+      AutoRollbackConfiguration:
+        Enabled: true
+        Events:
+          - DEPLOYMENT_FAILURE
+          - DEPLOYMENT_STOP_ON_ALARM
+          - DEPLOYMENT_STOP_ON_REQUEST
+      AlarmConfiguration:
+        Enabled: true
+        Alarms:
+          - Name: !Ref ProdDeploymentAlarm
+      Tags:
+        - Key: Project
+          Value: !Ref ApplicationName
+        - Key: Environment
+          Value: !Ref ProdEnvironmentName
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+
+  #---------------------------------------------------------------------------
+  # CloudWatch Alarms
+  #---------------------------------------------------------------------------
+  
+  # Development Deployment Alarm
+  DevDeploymentAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmName: !Sub '${ApplicationName}-${DevEnvironmentName}-DeploymentError'
+      AlarmDescription: !Sub 'Alarm for deployment errors in the ${DevEnvironmentName} environment'
+      MetricName: DeploymentFailure
+      Namespace: 'AWS/CodeDeploy'
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: ApplicationName
+          Value: !Ref ApplicationName
+        - Name: DeploymentGroupName
+          Value: !Sub '${ApplicationName}-${DevEnvironmentName}'
+      AlarmActions:
+        - !Ref PipelineNotificationTopic
+      Tags:
+        - Key: Project
+          Value: !Ref ApplicationName
+        - Key: Environment
+          Value: !Ref DevEnvironmentName
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+  
+  # Production Deployment Alarm
+  ProdDeploymentAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmName: !Sub '${ApplicationName}-${ProdEnvironmentName}-DeploymentError'
+      AlarmDescription: !Sub 'Alarm for deployment errors in the ${ProdEnvironmentName} environment'
+      MetricName: DeploymentFailure
+      Namespace: 'AWS/CodeDeploy'
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: ApplicationName
+          Value: !Ref ApplicationName
+        - Name: DeploymentGroupName
+          Value: !Sub '${ApplicationName}-${ProdEnvironmentName}'
+      AlarmActions:
+        - !Ref PipelineNotificationTopic
+      Tags:
+        - Key: Project
+          Value: !Ref ApplicationName
+        - Key: Environment
+          Value: !Ref ProdEnvironmentName
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+
+  #---------------------------------------------------------------------------
+  # SNS Topic for Notifications
+  #---------------------------------------------------------------------------
+  
+  PipelineNotificationTopic:
+    Type: 'AWS::SNS::Topic'
+    Properties:
+      TopicName: !Sub '${ApplicationName}-Pipeline-Notifications'
+      Tags:
+        - Key: Project
+          Value: !Ref ApplicationName
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+  
+  PipelineNotificationSubscription:
+    Type: 'AWS::SNS::Subscription'
+    Properties:
+      TopicArn: !Ref PipelineNotificationTopic
+      Protocol: email
+      Endpoint: !Ref NotificationEmail
+
+  #---------------------------------------------------------------------------
+  # CodePipeline
+  #---------------------------------------------------------------------------
+  
+  Pipeline:
+    Type: 'AWS::CodePipeline::Pipeline'
+    Properties:
+      Name: !Sub '${ApplicationName}-Pipeline'
+      RoleArn: !GetAtt CodePipelineServiceRole.Arn
+      ArtifactStore:
+        Type: S3
+        Location: !Ref ArtifactBucket
+        EncryptionKey:
+          Id: alias/aws/s3
+          Type: KMS
+      Stages:
+        - Name: Source
+          Actions:
+            - !If
+              - ShouldCreateCodeCommitRepo
+              - Name: Source
+                ActionTypeId:
+                  Category: Source
+                  Owner: AWS
+                  Provider: CodeCommit
+                  Version: '1'
+                Configuration:
+                  RepositoryName: !Ref RepositoryName
+                  BranchName: main
+                OutputArtifacts:
+                  - Name: SourceCode
+                RunOrder: 1
+              - Name: Source
+                ActionTypeId:
+                  Category: Source
+                  Owner: AWS
+                  Provider: S3
+                  Version: '1'
+                Configuration:
+                  S3Bucket: !Ref ArtifactBucket
+                  S3ObjectKey: 'source.zip'
+                OutputArtifacts:
+                  - Name: SourceCode
+                RunOrder: 1
+        
+        - Name: Build
+          Actions:
+            - Name: BuildApp
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref BuildProject
+              InputArtifacts:
+                - Name: SourceCode
+              OutputArtifacts:
+                - Name: BuildOutput
+              RunOrder: 1
+        
+        - Name: Test
+          Actions:
+            - Name: TestApp
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref TestProject
+              InputArtifacts:
+                - Name: SourceCode
+              RunOrder: 1
+        
+        - Name: DeployToDev
+          Actions:
+            - Name: DeployToDev
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CodeDeploy
+                Version: '1'
+              Configuration:
+                ApplicationName: !Ref CodeDeployApplication
+                DeploymentGroupName: !Sub '${ApplicationName}-${DevEnvironmentName}'
+              InputArtifacts:
+                - Name: BuildOutput
+              RunOrder: 1
+        
+        - Name: Approval
+          Actions:
+            - Name: ApproveProduction
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Provider: Manual
+                Version: '1'
+              Configuration:
+                NotificationArn: !Ref PipelineNotificationTopic
+                CustomData: !Sub 'Approve deployment of ${ApplicationName} to Production?'
+              RunOrder: 1
+        
+        - Name: DeployToProd
+          Actions:
+            - Name: DeployToProd
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CodeDeploy
+                Version: '1'
+              Configuration:
+                ApplicationName: !Ref CodeDeployApplication
+                DeploymentGroupName: !Sub '${ApplicationName}-${ProdEnvironmentName}'
+              InputArtifacts:
+                - Name: BuildOutput
+              RunOrder: 1
+      Tags:
+        - Key: Project
+          Value: !Ref ApplicationName
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+
+  # Pipeline Status Event Rule
+  PipelineEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "Rule for capturing CodePipeline state changes"
+      EventPattern:
+        source:
+          - "aws.codepipeline"
+        detail-type:
+          - "CodePipeline Pipeline Execution State Change"
+        detail:
+          pipeline:
+            - !Sub "${ApplicationName}-Pipeline"
+          state:
+            - "FAILED"
+            - "SUCCEEDED"
+      State: ENABLED
+      Targets:
+        - Arn: !Ref PipelineNotificationTopic
+          Id: "PipelineNotificationTarget"
+
+  #---------------------------------------------------------------------------
+  # Application Infrastructure - Load Balancer & Auto Scaling
+  #---------------------------------------------------------------------------
+
+  # Application Load Balancer
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${ApplicationName}-ALB'
+      Scheme: internet-facing
+      Type: application
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${ApplicationName}-ALB'
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+
+  # Target Group for Production Environment
+  ProdTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${ApplicationName}-Prod-TG'
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref ApplicationVPC
+      HealthCheckPath: /health
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Tags:
+        - Key: Name
+          Value: !Sub '${ApplicationName}-Prod-TG'
+        - Key: Environment
+          Value: !Ref ProdEnvironmentName
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+
+  # Target Group for Development Environment
+  DevTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${ApplicationName}-Dev-TG'
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref ApplicationVPC
+      HealthCheckPath: /health
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Tags:
+        - Key: Name
+          Value: !Sub '${ApplicationName}-Dev-TG'
+        - Key: Environment
+          Value: !Ref DevEnvironmentName
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+
+  # ALB Listener
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ProdTargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  # Launch Template for Production Environment
+  ProdLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${ApplicationName}-Prod-LT'
+      LaunchTemplateData:
+        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        InstanceType: !Ref ProdInstanceType
+        KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
+        SecurityGroupIds:
+          - !Ref EC2SecurityGroup
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            yum update -y
+            yum install -y ruby wget aws-cli
+            
+            # Install CodeDeploy agent
+            cd /home/ec2-user
+            wget https://aws-codedeploy-${AWS::Region}.s3.${AWS::Region}.amazonaws.com/latest/install
+            chmod +x ./install
+            ./install auto
+            
+            # Install CloudWatch agent
+            wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+            rpm -U ./amazon-cloudwatch-agent.rpm
+            
+            # Create application directory
+            mkdir -p /var/www/html
+            echo "<!DOCTYPE html><html><head><title>Production Environment</title></head><body><h1>Production Environment - ${ApplicationName}</h1><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p></body></html>" > /var/www/html/index.html
+            
+            # Install and start Apache
+            yum install -y httpd
+            systemctl start httpd
+            systemctl enable httpd
+            
+            # Health check endpoint
+            echo "OK" > /var/www/html/health
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub '${ApplicationName}-Prod-Instance'
+              - Key: Environment
+                Value: !Ref ProdEnvironmentName
+              - Key: rlhf-iac-amazon
+                Value: 'true'
+
+  # Launch Template for Development Environment
+  DevLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${ApplicationName}-Dev-LT'
+      LaunchTemplateData:
+        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        InstanceType: !Ref DevInstanceType
+        KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
+        SecurityGroupIds:
+          - !Ref EC2SecurityGroup
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            yum update -y
+            yum install -y ruby wget aws-cli
+            
+            # Install CodeDeploy agent
+            cd /home/ec2-user
+            wget https://aws-codedeploy-${AWS::Region}.s3.${AWS::Region}.amazonaws.com/latest/install
+            chmod +x ./install
+            ./install auto
+            
+            # Install CloudWatch agent
+            wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+            rpm -U ./amazon-cloudwatch-agent.rpm
+            
+            # Create application directory
+            mkdir -p /var/www/html
+            echo "<!DOCTYPE html><html><head><title>Development Environment</title></head><body><h1>Development Environment - ${ApplicationName}</h1><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p></body></html>" > /var/www/html/index.html
+            
+            # Install and start Apache
+            yum install -y httpd
+            systemctl start httpd
+            systemctl enable httpd
+            
+            # Health check endpoint
+            echo "OK" > /var/www/html/health
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub '${ApplicationName}-Dev-Instance'
+              - Key: Environment
+                Value: !Ref DevEnvironmentName
+              - Key: rlhf-iac-amazon
+                Value: 'true'
+
+  # Auto Scaling Group for Production Environment
+  ProdAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub '${ApplicationName}-Prod-ASG'
+      LaunchTemplate:
+        LaunchTemplateId: !Ref ProdLaunchTemplate
+        Version: !GetAtt ProdLaunchTemplate.LatestVersionNumber
+      MinSize: 1
+      MaxSize: 5
+      DesiredCapacity: 2
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      TargetGroupARNs:
+        - !Ref ProdTargetGroup
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      Tags:
+        - Key: Name
+          Value: !Sub '${ApplicationName}-Prod-ASG'
+          PropagateAtLaunch: false
+        - Key: Environment
+          Value: !Ref ProdEnvironmentName
+          PropagateAtLaunch: true
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+          PropagateAtLaunch: true
+
+  # Auto Scaling Group for Development Environment
+  DevAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub '${ApplicationName}-Dev-ASG'
+      LaunchTemplate:
+        LaunchTemplateId: !Ref DevLaunchTemplate
+        Version: !GetAtt DevLaunchTemplate.LatestVersionNumber
+      MinSize: 1
+      MaxSize: 3
+      DesiredCapacity: 1
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      TargetGroupARNs:
+        - !Ref DevTargetGroup
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      Tags:
+        - Key: Name
+          Value: !Sub '${ApplicationName}-Dev-ASG'
+          PropagateAtLaunch: false
+        - Key: Environment
+          Value: !Ref DevEnvironmentName
+          PropagateAtLaunch: true
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+          PropagateAtLaunch: true
+
+  #---------------------------------------------------------------------------
+  # Enhanced Security & Best Practices (Option 2)
+  #---------------------------------------------------------------------------
+
+  # KMS Key for S3 Bucket Encryption
+  S3KMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for S3 bucket encryption
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow S3 Service
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+            Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ApplicationName}-s3-kms-key'
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+
+  S3KMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${ApplicationName}-s3-encryption'
+      TargetKeyId: !Ref S3KMSKey
+
+  # VPC Endpoints for AWS Services (Cost optimization & Security)
+  S3VPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref ApplicationVPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+      RouteTableIds:
+        - !Ref PrivateRouteTable
+
+  CodeDeployVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref ApplicationVPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.codedeploy'
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref VPCEndpointSecurityGroup
+
+  VPCEndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for VPC endpoints
+      VpcId: !Ref ApplicationVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref VPCCidr
+      Tags:
+        - Key: Name
+          Value: !Sub '${ApplicationName}-vpc-endpoint-sg'
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+
+  # Secrets Manager for Application Secrets
+  ApplicationSecrets:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${ApplicationName}-secrets'
+      Description: Application secrets for deployment
+      SecretString: !Sub |
+        {
+          "database_password": "placeholder-password-${AWS::StackName}",
+          "api_key": "placeholder-api-key",
+          "encryption_key": "placeholder-encryption-key"
+        }
+      KmsKeyId: !Ref S3KMSKey
+      Tags:
+        - Key: Name
+          Value: !Sub '${ApplicationName}-secrets'
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+
+  # CloudTrail for Audit Logging
+  CloudTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: CloudTrailLogsBucketPolicy
+    Properties:
+      TrailName: !Sub '${ApplicationName}-audit-trail'
+      S3BucketName: !Ref CloudTrailLogsBucket
+      IncludeGlobalServiceEvents: true
+      IsLogging: true
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ApplicationName}-audit-trail'
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+
+  # S3 Bucket for CloudTrail Logs
+  CloudTrailLogsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Sub 'webapp-cloudtrail-logs-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref S3KMSKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ApplicationName}-cloudtrail-logs'
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+
+  # S3 Bucket Policy for CloudTrail
+  CloudTrailLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailLogsBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt CloudTrailLogsBucket.Arn
+            Condition:
+              StringEquals:
+                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ApplicationName}-audit-trail'
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${CloudTrailLogsBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': bucket-owner-full-control
+                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ApplicationName}-audit-trail'
+
+  #---------------------------------------------------------------------------
+  # Monitoring & Observability (Option 3)
+  #---------------------------------------------------------------------------
+
+  # CloudWatch Dashboard
+  ApplicationDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub '${ApplicationName}-Dashboard'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/ApplicationELB", "RequestCount", "LoadBalancer", "${ApplicationLoadBalancer.LoadBalancerFullName}" ],
+                  [ ".", "TargetResponseTime", ".", "." ],
+                  [ ".", "HTTPCode_Target_2XX_Count", ".", "." ],
+                  [ ".", "HTTPCode_Target_4XX_Count", ".", "." ],
+                  [ ".", "HTTPCode_Target_5XX_Count", ".", "." ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Application Load Balancer Metrics",
+                "period": 300
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/AutoScaling", "GroupDesiredCapacity", "AutoScalingGroupName", "${ProdAutoScalingGroup}" ],
+                  [ ".", "GroupInServiceInstances", ".", "." ],
+                  [ ".", "GroupMinSize", ".", "." ],
+                  [ ".", "GroupMaxSize", ".", "." ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Auto Scaling Group Metrics",
+                "period": 300
+              }
+            }
+          ]
+        }
+
+  # Custom CloudWatch Metric for Application Health
+  ApplicationHealthMetric:
+    Type: AWS::Logs::MetricFilter
+    DependsOn: ApplicationLogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/ec2/${ApplicationName}'
+      FilterPattern: '[timestamp, request_id, ERROR]'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ApplicationName}/Application'
+          MetricName: 'ErrorCount'
+          MetricValue: '1'
+
+  #---------------------------------------------------------------------------
+  # Enhanced Error Handling & Resilience (Option 4)
+  #---------------------------------------------------------------------------
+
+  # CloudWatch Alarm for High Error Rate
+  HighErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ApplicationName}-HighErrorRate'
+      AlarmDescription: 'Alarm for high error rate on ALB'
+      MetricName: HTTPCode_Target_5XX_Count
+      Namespace: AWS/ApplicationELB
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !GetAtt ApplicationLoadBalancer.LoadBalancerFullName
+      AlarmActions:
+        - !Ref PipelineNotificationTopic
+      TreatMissingData: notBreaching
+
+  # CloudWatch Alarm for High Response Time
+  HighResponseTimeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ApplicationName}-HighResponseTime'
+      AlarmDescription: 'Alarm for high response time on ALB'
+      MetricName: TargetResponseTime
+      Namespace: AWS/ApplicationELB
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 2.0
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !GetAtt ApplicationLoadBalancer.LoadBalancerFullName
+      AlarmActions:
+        - !Ref PipelineNotificationTopic
+      TreatMissingData: notBreaching
+
+  # Auto Scaling Policies for Production Environment
+  ProdScaleUpPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref ProdAutoScalingGroup
+      Cooldown: 300
+      ScalingAdjustment: 1
+
+  ProdScaleDownPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref ProdAutoScalingGroup
+      Cooldown: 300
+      ScalingAdjustment: -1
+
+  # CloudWatch Alarms for Auto Scaling
+  CPUAlarmHigh:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ApplicationName}-CPUAlarmHigh'
+      AlarmDescription: 'Scale up on high CPU'
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 70
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref ProdScaleUpPolicy
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref ProdAutoScalingGroup
+
+  CPUAlarmLow:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ApplicationName}-CPUAlarmLow'
+      AlarmDescription: 'Scale down on low CPU'
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 30
+      ComparisonOperator: LessThanThreshold
+      AlarmActions:
+        - !Ref ProdScaleDownPolicy
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref ProdAutoScalingGroup
+
+  # Pipeline Failure Detection and Rollback
+  PipelineFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ApplicationName}-PipelineFailure'
+      AlarmDescription: 'Alarm for pipeline failures'
+      MetricName: PipelineExecutionFailure
+      Namespace: AWS/CodePipeline
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: PipelineName
+          Value: !Sub '${ApplicationName}-Pipeline'
+      AlarmActions:
+        - !Ref PipelineNotificationTopic
+      TreatMissingData: notBreaching
+
+  # Enhanced Health Checks
+  ALBHealthCheckAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ApplicationName}-UnhealthyTargets'
+      AlarmDescription: 'Alarm for unhealthy targets'
+      MetricName: UnHealthyHostCount
+      Namespace: AWS/ApplicationELB
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: TargetGroup
+          Value: !GetAtt ProdTargetGroup.TargetGroupFullName
+        - Name: LoadBalancer
+          Value: !GetAtt ApplicationLoadBalancer.LoadBalancerFullName
+      AlarmActions:
+        - !Ref PipelineNotificationTopic
+      TreatMissingData: notBreaching
+
+Outputs:
+  CodeCommitRepositoryCloneUrlHTTPS:
+    Condition: ShouldCreateCodeCommitRepo
+    Description: 'HTTPS URL for cloning the CodeCommit repository'
+    Value: !GetAtt CodeCommitRepo.CloneUrlHttp
+  
+  CodeCommitRepositoryCloneUrlSSH:
+    Condition: ShouldCreateCodeCommitRepo
+    Description: 'SSH URL for cloning the CodeCommit repository'
+    Value: !GetAtt CodeCommitRepo.CloneUrlSsh
+  
+  PipelineArn:
+    Description: 'ARN of the CI/CD Pipeline'
+    Value: !Ref Pipeline
+  
+  PipelineConsoleURL:
+    Description: 'Console URL for the CI/CD Pipeline'
+    Value: !Sub 'https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${ApplicationName}-Pipeline'
+  
+  NotificationTopicARN:
+    Description: 'ARN of the SNS Topic used for pipeline notifications'
+    Value: !Ref PipelineNotificationTopic
+  
+  # Application Infrastructure Outputs
+  ApplicationLoadBalancerDNSName:
+    Description: 'DNS name of the Application Load Balancer'
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub '${AWS::StackName}-ALB-DNSName'
+  
+  ApplicationLoadBalancerURL:
+    Description: 'URL of the Application Load Balancer'
+    Value: !Sub 'http://${ApplicationLoadBalancer.DNSName}'
+    Export:
+      Name: !Sub '${AWS::StackName}-ALB-URL'
+  
+  VPCId:
+    Description: 'ID of the Application VPC'
+    Value: !Ref ApplicationVPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC-ID'
+  
+  PublicSubnet1Id:
+    Description: 'ID of Public Subnet 1'
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet1-ID'
+  
+  PublicSubnet2Id:
+    Description: 'ID of Public Subnet 2'
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet2-ID'
+  
+  PrivateSubnet1Id:
+    Description: 'ID of Private Subnet 1'
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet1-ID'
+  
+  PrivateSubnet2Id:
+    Description: 'ID of Private Subnet 2'
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet2-ID'
+  
+  ProdAutoScalingGroupName:
+    Description: 'Name of the Production Auto Scaling Group'
+    Value: !Ref ProdAutoScalingGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-Prod-ASG-Name'
+  
+  DevAutoScalingGroupName:
+    Description: 'Name of the Development Auto Scaling Group'
+    Value: !Ref DevAutoScalingGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-Dev-ASG-Name'
+  
+  ApplicationSecretsArn:
+    Description: 'ARN of the Application Secrets in Secrets Manager'
+    Value: !Ref ApplicationSecrets
+    Export:
+      Name: !Sub '${AWS::StackName}-Secrets-ARN'
+  
+  KMSKeyId:
+    Description: 'ID of the KMS Key for S3 encryption'
+    Value: !Ref S3KMSKey
+    Export:
+      Name: !Sub '${AWS::StackName}-KMS-Key-ID'
+  
+  CloudTrailArn:
+    Description: 'ARN of the CloudTrail for audit logging'
+    Value: !GetAtt CloudTrail.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrail-ARN'
+  
+  DashboardURL:
+    Description: 'URL of the CloudWatch Dashboard'
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${ApplicationName}-Dashboard'
+    Export:
+      Name: !Sub '${AWS::StackName}-Dashboard-URL'
+```

@@ -1,0 +1,29 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "356247",
+  "team": "2",
+  "startedAt": "2025-10-14T17:58:23.095Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "ECS",
+    "Fargate",
+    "Application Load Balancer",
+    "Cloud Map",
+    "CloudWatch Logs",
+    "IAM"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
+}
