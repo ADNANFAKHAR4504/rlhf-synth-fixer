@@ -26,5 +26,11 @@
     "S3 Bucket",
     "CloudWatch Alarm",
     "SSM Parameter"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
 }
