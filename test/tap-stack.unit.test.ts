@@ -350,8 +350,18 @@ describe('TapStack CloudFormation Template', () => {
       const instance = template.Resources.EC2Instance1;
       expect(instance.Properties.UserData).toBeDefined();
       expect(instance.Properties.UserData['Fn::Base64']).toBeDefined();
-      expect(instance.Properties.UserData['Fn::Base64']).toContain('yum update -y');
-      expect(instance.Properties.UserData['Fn::Base64']).toContain('yum install -y mysql amazon-cloudwatch-agent');
+      const userData = instance.Properties.UserData['Fn::Base64'];
+      if (userData['Fn::Join']) {
+        const userDataString = userData['Fn::Join'][1].join('');
+        expect(userDataString).toContain('yum update -y');
+        expect(userDataString).toContain('yum install -y mysql amazon-cloudwatch-agent');
+        expect(userDataString).toContain('yum install -y amazon-ssm-agent');
+        expect(userDataString).toContain('systemctl enable amazon-ssm-agent');
+        expect(userDataString).toContain('systemctl start amazon-ssm-agent');
+      } else {
+        expect(userData).toContain('yum update -y');
+        expect(userData).toContain('yum install -y mysql amazon-cloudwatch-agent');
+      }
     });
 
     test('should create EC2 instance 1 with correct tags', () => {
@@ -406,8 +416,18 @@ describe('TapStack CloudFormation Template', () => {
       const instance = template.Resources.EC2Instance2;
       expect(instance.Properties.UserData).toBeDefined();
       expect(instance.Properties.UserData['Fn::Base64']).toBeDefined();
-      expect(instance.Properties.UserData['Fn::Base64']).toContain('yum update -y');
-      expect(instance.Properties.UserData['Fn::Base64']).toContain('yum install -y mysql amazon-cloudwatch-agent');
+      const userData = instance.Properties.UserData['Fn::Base64'];
+      if (userData['Fn::Join']) {
+        const userDataString = userData['Fn::Join'][1].join('');
+        expect(userDataString).toContain('yum update -y');
+        expect(userDataString).toContain('yum install -y mysql amazon-cloudwatch-agent');
+        expect(userDataString).toContain('yum install -y amazon-ssm-agent');
+        expect(userDataString).toContain('systemctl enable amazon-ssm-agent');
+        expect(userDataString).toContain('systemctl start amazon-ssm-agent');
+      } else {
+        expect(userData).toContain('yum update -y');
+        expect(userData).toContain('yum install -y mysql amazon-cloudwatch-agent');
+      }
     });
 
     test('should create EC2 instance 2 with correct tags', () => {

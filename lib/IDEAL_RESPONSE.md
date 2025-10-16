@@ -767,7 +767,18 @@ The architecture spans two Availability Zones with subnets in each zone, providi
         "Monitoring": true,
         "UserData": {
           "Fn::Base64": {
-            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y mysql amazon-cloudwatch-agent\necho 'EC2Instance1 setup complete' > /var/log/userdata.log\n"
+            "Fn::Join": [
+              "",
+              [
+                "#!/bin/bash\n",
+                "yum update -y\n",
+                "yum install -y mysql amazon-cloudwatch-agent\n",
+                "yum install -y amazon-ssm-agent\n",
+                "systemctl enable amazon-ssm-agent\n",
+                "systemctl start amazon-ssm-agent\n",
+                "echo 'EC2Instance1 setup complete' > /var/log/userdata.log\n"
+              ]
+            ]
           }
         },
         "Tags": [
@@ -813,7 +824,18 @@ The architecture spans two Availability Zones with subnets in each zone, providi
         "Monitoring": true,
         "UserData": {
           "Fn::Base64": {
-            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y mysql amazon-cloudwatch-agent\necho 'EC2Instance2 setup complete' > /var/log/userdata.log\n"
+            "Fn::Join": [
+              "",
+              [
+                "#!/bin/bash\n",
+                "yum update -y\n",
+                "yum install -y mysql amazon-cloudwatch-agent\n",
+                "yum install -y amazon-ssm-agent\n",
+                "systemctl enable amazon-ssm-agent\n",
+                "systemctl start amazon-ssm-agent\n",
+                "echo 'EC2Instance2 setup complete' > /var/log/userdata.log\n"
+              ]
+            ]
           }
         },
         "Tags": [
