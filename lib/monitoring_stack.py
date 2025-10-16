@@ -120,6 +120,7 @@ class MonitoringStack(Construct):
         self.kinesis_stream = kinesis.Stream(
             self,
             "LogAggregationStream",
+            stream_name=f"monitoring-logss-{env_suffix}",
             encryption=kinesis.StreamEncryption.KMS,
             encryption_key=self.kms_key,
             retention_period=cdk.Duration.days(7)
@@ -223,9 +224,8 @@ class MonitoringStack(Construct):
             subnet_ids=self.vpc.select_subnets(
                 subnet_type=ec2.SubnetType.PRIVATE_ISOLATED
             ).subnet_ids,
-            cache_subnet_group_name=f"redis-subnet-group-{env_suffix}"
+            cache_subnet_group_name=f"monitoring-redis-subnet-{env_suffix}"
         )
-
         # ElastiCache Redis cluster
         self.redis_cluster = elasticache.CfnReplicationGroup(
             self,
