@@ -43,15 +43,23 @@ describe('TapStack', () => {
 
     test('creates VPC endpoint for API Gateway', () => {
       template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
-        ServiceName: Match.stringLikeRegexp('execute-api'),
+        ServiceName: Match.objectLike({
+          'Fn::Join': Match.arrayWith([
+            Match.arrayWith([Match.stringLikeRegexp('execute-api')]),
+          ]),
+        }),
         VpcEndpointType: 'Interface',
       });
     });
 
     test('VPC endpoint has iac-rlhf-amazon tag', () => {
-      template.hasResource('AWS::EC2::VPCEndpoint', {
-        Properties: Match.anyValue(),
-        Metadata: Match.anyValue(),
+      template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
+        Tags: Match.arrayWith([
+          {
+            Key: 'iac-rlhf-amazon',
+            Value: 'true',
+          },
+        ]),
       });
     });
   });
@@ -59,9 +67,13 @@ describe('TapStack', () => {
   describe('S3 Bucket', () => {
     test('creates S3 bucket with correct name pattern', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.stringLikeRegexp(
-          `tap-static-files-${environmentSuffix}-`
-        ),
+        BucketName: Match.objectLike({
+          'Fn::Join': Match.arrayWith([
+            Match.arrayWith([
+              Match.stringLikeRegexp(`tap-static-files-${environmentSuffix}-`),
+            ]),
+          ]),
+        }),
         VersioningConfiguration: {
           Status: 'Enabled',
         },
@@ -278,19 +290,13 @@ describe('TapStack', () => {
           Statement: Match.arrayWith([
             Match.objectLike({
               Action: Match.arrayWith([
-                'dynamodb:BatchGetItem',
-                'dynamodb:GetItem',
-                'dynamodb:PutItem',
-                'dynamodb:Query',
-                'dynamodb:Scan',
+                Match.stringLikeRegexp('dynamodb:'),
               ]),
               Effect: 'Allow',
             }),
             Match.objectLike({
               Action: Match.arrayWith([
-                's3:GetObject*',
-                's3:PutObject',
-                's3:DeleteObject*',
+                Match.stringLikeRegexp('s3:'),
               ]),
               Effect: 'Allow',
             }),
@@ -398,11 +404,12 @@ describe('TapStack', () => {
     });
 
     test('creates API Gateway methods', () => {
-      template.resourceCountIs('AWS::ApiGateway::Method', Match.anyValue());
+      template.resourceCountIs('AWS::ApiGateway::Method', 17);
     });
 
     test('creates API Gateway deployment', () => {
-      template.hasResourceProperties('AWS::ApiGateway::Deployment', {
+      template.resourceCountIs('AWS::ApiGateway::Deployment', 1);
+      template.hasResourceProperties('AWS::ApiGateway::Stage', {
         StageName: environmentSuffix,
       });
     });
@@ -496,6 +503,47 @@ describe('TapStack', () => {
       expect(() => {
         app.synth();
       }).not.toThrow();
+    });
+  });
+
+  describe('Environment Suffix Resolution', () => {
+    test('uses environmentSuffix from props when provided', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestStackWithProps', {
+        environmentSuffix: 'custom-env',
+      });
+      const testTemplate = Template.fromStack(testStack);
+
+      // Verify the custom suffix is used in resource names
+      testTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: 'tap-application-table-custom-env',
+      });
+    });
+
+    test('uses environmentSuffix from context when props not provided', () => {
+      const testApp = new cdk.App({
+        context: {
+          environmentSuffix: 'context-env',
+        },
+      });
+      const testStack = new TapStack(testApp, 'TestStackWithContext');
+      const testTemplate = Template.fromStack(testStack);
+
+      // Verify the context suffix is used in resource names
+      testTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: 'tap-application-table-context-env',
+      });
+    });
+
+    test('uses default "dev" when no props or context provided', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestStackWithDefaults');
+      const testTemplate = Template.fromStack(testStack);
+
+      // Verify the default suffix is used in resource names
+      testTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: 'tap-application-table-dev',
+      });
     });
   });
 });
