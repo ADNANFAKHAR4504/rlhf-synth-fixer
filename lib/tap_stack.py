@@ -37,7 +37,7 @@ class TapStackArgs:
         self,
         environment_suffix: Optional[str] = None,
         email_endpoint: Optional[str] = None,
-        use_default_vpc: bool = True
+        use_default_vpc: bool = False
     ):
         self.environment_suffix = environment_suffix
         self.email_endpoint = email_endpoint
@@ -174,11 +174,13 @@ class TapStack(pulumi.ComponentResource):
         )
         
         # EventBridge target
+        # Note: AWS requires targets to be removed before deleting the rule
+        # Pulumi automatically handles this during normal destroy operations
+        # For manual cleanup, run: aws events remove-targets --rule <rule-name> --ids <target-id>
         health_check_target = aws.cloudwatch.EventTarget(
             'health-check-target',
             rule=health_check_rule.name,
-            arn=self.lambda_stack.get_monitoring_lambda_arn(),
-            opts=pulumi.ResourceOptions(delete_before_replace=True)
+            arn=self.lambda_stack.get_monitoring_lambda_arn()
         )
         
         # Cleanup schedule (daily)
@@ -204,8 +206,7 @@ class TapStack(pulumi.ComponentResource):
         cleanup_target = aws.cloudwatch.EventTarget(
             'cleanup-target',
             rule=cleanup_rule.name,
-            arn=self.lambda_stack.get_cleanup_lambda_arn(),
-            opts=pulumi.ResourceOptions(delete_before_replace=True)
+            arn=self.lambda_stack.get_cleanup_lambda_arn()
         )
     
     def _register_outputs(self):
