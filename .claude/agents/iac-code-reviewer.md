@@ -30,58 +30,323 @@ pwd  # Must end with: /worktree/synth-{task_id}
 - Confirm integration tests in `test/` folder
 - Return "PR is not ready" if missing
 
-### Phase 1.5: Metadata Enhancement & Compliance Validation
+### Phase 1.5: Metadata Enhancement & Deep Compliance Validation
 
-- **Identify Latest Files**: 
-  - Read all PROMPT files in `lib/` directory (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.) and the MODEL_RESPONSE files
-  (e.g., if MODEL_RESPONSE3.md exists, use that instead of MODEL_RESPONSE.md or MODEL_RESPONSE2.md)
-  - If only PROMPT.md exists, use that file
-  - If only MODEL_RESPONSE.md exists, use that file
-- Read `lib/MODEL_FAILURES.md` and analyze the failures/fixes described
-- **Verify metadata.json already contains `subtask`, `background`, and `subject_labels`**:
-  - These fields should have been populated from tasks.csv during task setup
-  - If missing, report BLOCKED status - these must be set from the source CSV
-  - The `background` field is REQUIRED for PR title generation in Phase 5
+#### Step 1: Identify Latest Files
 
-**CRITICAL: Platform/Language Compliance Validation**
-- **Verify IDEAL_RESPONSE.md matches metadata.json constraints**:
-  - Check that platform in metadata.json matches the IaC tool used in IDEAL_RESPONSE.md
-  - Check that language in metadata.json matches the programming language in IDEAL_RESPONSE.md
-  - **If mismatch detected**: This is a CRITICAL QUALITY FAILURE
-    - Reduce training_quality score by 5 points minimum
-    - Report this as a blocking issue in the review
-    - Example failures to catch:
-      - metadata.json: `"platform": "pulumi", "language": "go"` but IDEAL_RESPONSE has CDK TypeScript code
-      - metadata.json: `"platform": "terraform", "language": "hcl"` but IDEAL_RESPONSE has Pulumi Python code
+```
+Read lib/ directory for all PROMPT and MODEL_RESPONSE files:
+- If PROMPT3.md exists, use that (most recent iteration)
+- If only PROMPT2.md exists, use that
+- If only PROMPT.md exists, use that
+- Same logic for MODEL_RESPONSE files
 
-- Add `training_quality` to `metadata.json` from the latest PROMPT file, `lib/MODEL_FAILURES.md` and `lib/IDEAL_RESPONSE.md`.
-  - This metric should reflect the potential training quality that this data will provide when used for retraining the model
-  that generated the MODEL_RESPONSE.
-  - **CRITICAL QUALITY REQUIREMENTS**:
-    - **MINIMUM acceptable score: 8/10** (scores below 8 will BLOCK PR creation)
-    - **TARGET score: 9/10** (aim for this in all tasks)
-    - Scores below 8 indicate insufficient training value and require improvement
-  - **Detailed Scoring Rubric** (0-10):
-    - **AUTOMATIC PENALTIES**:
-      - Platform/Language mismatch with metadata.json: -5 points (CRITICAL FAILURE)
-      - Missing required AWS services from task description: -2 points per missing service
-      - Wrong region deployment: -3 points
-    - **8-10 (Excellent)**: Significant model knowledge gaps identified, complex multi-service integration, novel failure patterns, 
-      security/performance issues uncovered, real-world edge cases discovered, ALL requirements met correctly
-    - **6-7 (Good)**: Moderate improvements, standard service integrations with some complexity, common failure patterns 
-      with clear fixes, useful deployment insights, minor requirement mismatches
-    - **4-5 (Fair)**: Minor fixes, simple configurations, trivial errors (typos, missing imports), basic resource setup,
-      some requirements not fully met
-    - **0-3 (Poor)**: Minimal training value, no meaningful improvements, only formatting changes, platform/language mismatch,
-      major requirements not met, consider excluding from training set
-  - The score should reflect: "How much would a model learn from the MODEL_FAILURES.md differences?"
-  - **Quality Impact**: Higher quality scores mean more valuable training data for model improvement
-  - **Requirement Completeness**: Verify ALL task requirements are implemented before assigning score ≥6
-  - **If score is below 8**: Report that the task is NOT ready for PR and needs improvement. Provide specific recommendations
-    to increase training value (add features, implement best practices, improve security, etc.)
-- Add `aws_services` to `metadata.json`, extracting from `lib/IDEAL_RESPONSE.md` an array of
-strings of AWS Services used in the task.
-- Provide report on the training_quality metric and it's justification.
+Report: "Using PROMPT file: {FILENAME}"
+Report: "Using MODEL_RESPONSE file: {FILENAME}"
+```
+
+#### Step 2: Metadata Required Fields Validation
+
+```
+Verify metadata.json contains fields from task setup:
+✓ subtask (task category)
+✓ background (business context)
+✓ subject_labels (array)
+✓ platform
+✓ language
+✓ complexity
+✓ po_id
+✓ team (must be "synth")
+✓ startedAt
+
+If ANY required field missing:
+- Report: "❌ BLOCKED: metadata.json missing required field: {FIELD}"
+- Explain: "These must be set from tasks.csv during task setup"
+- Do NOT proceed - task-coordinator must fix this
+```
+
+#### Step 3: PROMPT.md Human-Style Validation
+
+**Goal**: Ensure PROMPT.md follows CLI tool pattern, not AI-generated format.
+
+```
+Read the latest PROMPT file and validate:
+
+❌ FAIL CONDITIONS (AI-generated style):
+1. Starts with "ROLE:" or "CONTEXT:" or "CONSTRAINTS:"
+2. Contains emojis or special symbols (✨ 🚀 📊 etc.)
+3. Has "Here is a comprehensive prompt..." phrasing
+4. Overly formal template-like structure
+5. Perfect formatting that suggests AI assistance
+
+✅ PASS CONDITIONS (Human conversational style):
+1. Opens naturally: "Hey team" or "Hi" or "We need to build"
+2. Casual business language
+3. Clear sections but conversational tone
+4. No emojis or special formatting
+5. Reads like a colleague briefing another colleague
+
+If FAIL conditions detected:
+- Document in training_quality penalty: -2 points
+- Note: "PROMPT.md appears AI-generated rather than human-written"
+- Reference: archive/cdk-ts/Pr4133/lib/PROMPT.md for correct style
+```
+
+#### Step 4: CRITICAL Platform/Language Compliance Validation
+
+**This is the most important validation - catches major training data quality issues.**
+
+```
+Extract from metadata.json:
+- expected_platform = metadata.json.platform
+- expected_language = metadata.json.language
+
+Analyze IDEAL_RESPONSE.md code blocks:
+
+Check for platform-specific patterns:
+
+IF expected_platform == "cdk":
+  ✓ Must have: "import * as cdk from 'aws-cdk-lib'"
+  ✓ Must have: "new cdk.Stack" or "extends cdk.Stack"
+  ✗ Must NOT have: Terraform/Pulumi/CDKTF imports
+
+IF expected_platform == "pulumi":
+  ✓ Must have: Pulumi imports (language-specific)
+  ✓ For Go: "package main" + "pulumi.Run()"
+  ✓ For TypeScript: "import * as pulumi"
+  ✗ Must NOT have: CDK/Terraform/CDKTF code
+
+IF expected_platform == "tf":
+  ✓ Must have: "provider \"aws\"" and "resource \"aws_"
+  ✓ Must be HCL syntax
+  ✗ Must NOT have: imports from other IaC tools
+
+IF expected_platform == "cdktf":
+  ✓ Must have: "from cdktf import" (Python) or "import { TerraformStack }" (TS)
+  ✗ Must NOT have: Pure CDK or Terraform code
+
+IF expected_platform == "cfn":
+  ✓ Must have: "AWSTemplateFormatVersion" or similar CFN structure
+  ✓ Must have: "Resources:" with "Type: AWS::"
+  ✗ Must NOT have: IaC tool code
+
+Check for language-specific patterns:
+
+IF expected_language == "ts":
+  ✓ Must have: TypeScript syntax, imports
+  ✗ Must NOT have: Python syntax (def, :, import statements)
+
+IF expected_language == "py":
+  ✓ Must have: Python syntax, def, imports
+  ✗ Must NOT have: TypeScript syntax
+
+IF expected_language == "go":
+  ✓ Must have: "package main", Go imports
+  ✗ Must NOT have: Python/TypeScript syntax
+
+IF expected_language == "java":
+  ✓ Must have: Java class syntax, public class
+  ✗ Must NOT have: Python/TypeScript/Go syntax
+
+IF expected_language == "hcl":
+  ✓ Must be HCL syntax (resource blocks)
+  ✗ Must NOT have: programming language imports
+
+IF expected_language == "yaml" or "json":
+  ✓ Must be CloudFormation template format
+  ✗ Must NOT have: code in programming languages
+
+**MISMATCH DETECTION**:
+
+If platform OR language mismatch detected:
+- This is a CRITICAL QUALITY FAILURE
+- Document clearly:
+  "❌ CRITICAL: Platform/Language Mismatch Detected
+   Expected: {expected_platform}-{expected_language}
+   Found in IDEAL_RESPONSE.md: {actual_platform}-{actual_language}
+   
+   This means the task does not match CLI tool expectations.
+   The generated code is for the wrong IaC tool or language."
+
+- Apply penalty: training_quality -= 5 (minimum)
+- If training_quality < 8 after penalty:
+  Report: "BLOCKED - Quality below threshold due to platform/language mismatch"
+  Recommend: "Return to iac-infra-generator to regenerate with correct platform"
+
+Example failures to catch:
+- metadata: "pulumi + go" but code is CDK TypeScript
+- metadata: "terraform + hcl" but code is Pulumi Python
+- metadata: "cdk + py" but code is CDK TypeScript
+- metadata: "cfn + yaml" but code has Python imports
+
+Report result:
+"✅ Platform/language validation PASSED - code matches metadata.json"
+or
+"❌ Platform/language validation FAILED - mismatch detected"
+```
+
+#### Step 5: AWS Services Completeness Check
+
+```
+If metadata.json has aws_services field:
+- Extract expected services
+- Scan IDEAL_RESPONSE.md for these services
+- Report coverage:
+  "AWS Services Coverage:
+   ✓ Service1 - implemented
+   ✓ Service2 - implemented
+   ✗ Service3 - MISSING
+   
+   Coverage: X/Y services (Z%)"
+
+If coverage < 80%:
+- Document in training_quality: penalty based on missing services
+- Note which services from requirements were not implemented
+```
+
+#### Step 6: environmentSuffix Usage Validation
+
+```
+Scan IDEAL_RESPONSE.md code for resource naming:
+
+Look for patterns:
+- TypeScript/JavaScript: `${environmentSuffix}` or `${props.environmentSuffix}`
+- Python: f"{environment_suffix}" or f"-{environment_suffix}"
+- Go: fmt.Sprintf("...-{%s}", environmentSuffix)
+- HCL: "${var.environment_suffix}"
+- CloudFormation: !Sub "...-${EnvironmentSuffix}"
+
+Count resources with suffix vs without suffix.
+
+If < 80% of named resources have suffix:
+- Document: "⚠️ environmentSuffix not consistently used in resource names"
+- Penalty: -1 to training_quality
+- Note: "Resource naming doesn't follow CLI tool pattern"
+```
+
+#### Step 7: Training Quality Scoring (Enhanced)
+
+**Calculate training_quality score (0-10) with detailed rubric:**
+
+```
+START with base score: 10
+
+AUTOMATIC PENALTIES:
+- Platform/language mismatch: -5 points (CRITICAL)
+- Missing AWS service from requirements: -2 per service
+- Wrong region deployment: -3 points
+- PROMPT.md AI-generated style: -2 points
+- Inconsistent environmentSuffix usage (<80%): -1 point
+- Missing destroyability (has Retain policies): -1 point
+
+QUALITY ASSESSMENT:
+
+Review MODEL_FAILURES.md:
+- Significant fixes (security, architecture, integrations): +0 (maintain score)
+- Moderate fixes (configuration, standard patterns): subtract 1-2
+- Minor fixes (typos, formatting, simple errors): subtract 2-4
+- Minimal fixes (almost no changes): subtract 4-6
+
+Review IDEAL_RESPONSE.md:
+- Complex multi-service integration: +0 (maintain)
+- Security best practices implemented: +0 (maintain)
+- Monitoring/observability included: +0 (maintain)
+- Basic single-service setup: subtract 1-2
+- Missing error handling: subtract 1
+- Missing logging/monitoring: subtract 1
+
+FINAL SCORE INTERPRETATION:
+- 9-10: Excellent training value, complex, secure, best practices
+- 8: Good training value, meets all requirements, solid implementation
+- 6-7: Fair training value, some missing elements, basic implementation
+- 4-5: Poor training value, minimal complexity, missing requirements
+- 0-3: Insufficient for training, major issues, consider excluding
+
+**CRITICAL THRESHOLD: Must be ≥ 8 for PR creation**
+
+If score < 8:
+- Report: "❌ Training quality below threshold: {SCORE}/10"
+- Provide specific recommendations:
+  "To improve to ≥8, consider:
+   1. [Specific recommendation based on penalties]
+   2. [Specific recommendation based on gaps]
+   3. [Specific recommendation based on MODEL_FAILURES]"
+- Do NOT report "Ready" status
+- Do NOT proceed to PR creation
+
+If score ≥ 8:
+- Report: "✅ Training quality meets threshold: {SCORE}/10"
+- Provide justification for the score
+- Proceed with review
+```
+
+#### Step 8: Add Enhanced Fields to metadata.json
+
+```
+Add or update:
+1. training_quality: {CALCULATED_SCORE}
+2. aws_services: [array of AWS services from IDEAL_RESPONSE.md]
+
+Report:
+"✅ metadata.json enhanced with training_quality: {SCORE}/10"
+"AWS services identified: {COUNT} services"
+```
+
+#### Step 9: Final Quality Gate
+
+**Before reporting "Ready" status:**
+
+```
+FINAL CHECKLIST:
+☐ training_quality ≥ 8
+☐ Platform matches metadata.json
+☐ Language matches metadata.json
+☐ PROMPT.md is human-style (not AI-generated)
+☐ environmentSuffix used in resource names
+☐ All required metadata fields present
+☐ AWS services from task are implemented
+☐ No Retain policies (destroyable)
+☐ Tests exist and pass
+☐ Background field exists (for PR title)
+
+If ALL boxes checked:
+- Report: "✅ READY for PR creation"
+- Provide summary of quality validation
+- Hand off to task-coordinator Phase 5
+
+If ANY box unchecked:
+- Report: "❌ NOT READY - Quality gates not met"
+- List specific issues
+- Provide recommendations
+- Do NOT proceed to PR creation
+```
+
+**Quality Validation Report Template:**
+
+```markdown
+## Code Review Summary
+
+### Validation Results
+- ✅/❌ Platform/Language Compliance: {PLATFORM}-{LANGUAGE}
+- ✅/❌ PROMPT Style: {human/ai-generated}
+- ✅/❌ environmentSuffix Usage: {X}%
+- ✅/❌ AWS Services Coverage: {Y}/{Z} services
+- ✅/❌ Training Quality: {SCORE}/10
+
+### Training Quality Analysis
+**Score: {SCORE}/10**
+
+Justification:
+- {Reason 1}
+- {Reason 2}
+- {Reason 3}
+
+{If < 8: Recommendations for improvement}
+
+### Status: {READY / NOT READY}
+
+{Next steps or blocking issues}
+```
 
 ### Phase 2: Compliance Analysis
 

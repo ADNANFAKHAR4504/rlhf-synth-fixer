@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "4476",
+  "team": "5",
+  "startedAt": "2025-10-15T08:55:55.795Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "Virtual Private Gateway",
+    "Site-to-Site VPN",
+    "Transit Gateway",
+    "VPC Flow Logs",
+    "CloudWatch",
+    "Route 53 Resolver",
+    "IAM",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Customer Gateway",
+    "Security Groups",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sivakumar-turing",
+  "dockerS3Location": ""
+}

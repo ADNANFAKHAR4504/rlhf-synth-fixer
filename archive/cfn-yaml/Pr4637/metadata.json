@@ -1,0 +1,38 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350095",
+  "team": "2",
+  "startedAt": "2025-10-16T12:51:35.816Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "CloudFormation",
+    "VPC",
+    "Subnets",
+    "EC2",
+    "IAM",
+    "NAT Gateway",
+    "RDS",
+    "Application Load Balancer",
+    "CloudWatch",
+    "S3",
+    "Lambda",
+    "KMS",
+    "SSM Parameter Store",
+    "ElastiCache",
+    "SNS",
+    "WAF"
+  ],
+  "training_quality": "9",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
+}
