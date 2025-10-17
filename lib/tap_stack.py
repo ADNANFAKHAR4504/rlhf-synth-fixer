@@ -424,11 +424,7 @@ class TapStack(TerraformStack):
                     },
                     "Action": "sts:AssumeRole"
                 }]
-            }),
-            tags={
-                **self.common_tags,
-                "Name": f"lms-ecs-task-exec-role-{self.environment_suffix}"
-            }
+            })
         )
 
         # Attach AWS managed policy for ECS task execution
