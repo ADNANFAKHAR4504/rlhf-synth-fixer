@@ -1,46 +1,46 @@
-import fs from 'fs';
-import path from 'path';
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeSecurityGroupsCommand,
+  BackupClient,
+  DescribeBackupVaultCommand,
+  GetBackupPlanCommand,
+} from '@aws-sdk/client-backup';
+import {
   DescribeNatGatewaysCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
 } from '@aws-sdk/client-ec2';
 import {
-  ECSClient,
   DescribeClustersCommand,
   DescribeServicesCommand,
   DescribeTaskDefinitionCommand,
+  ECSClient,
   ListServicesCommand,
 } from '@aws-sdk/client-ecs';
 import {
-  RDSClient,
-  DescribeDBClustersCommand,
-  DescribeDBInstancesCommand,
-} from '@aws-sdk/client-rds';
-import {
-  ElastiCacheClient,
-  DescribeReplicationGroupsCommand,
-} from '@aws-sdk/client-elasticache';
-import {
-  EFSClient,
   DescribeFileSystemsCommand,
   DescribeMountTargetsCommand,
+  EFSClient,
 } from '@aws-sdk/client-efs';
 import {
-  SecretsManagerClient,
-  GetSecretValueCommand,
-} from '@aws-sdk/client-secrets-manager';
+  DescribeReplicationGroupsCommand,
+  ElastiCacheClient,
+} from '@aws-sdk/client-elasticache';
 import {
   KMSClient,
   ListAliasesCommand,
 } from '@aws-sdk/client-kms';
 import {
-  BackupClient,
-  GetBackupPlanCommand,
-  DescribeBackupVaultCommand,
-} from '@aws-sdk/client-backup';
+  DescribeDBClustersCommand,
+  DescribeDBInstancesCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
+import {
+  GetSecretValueCommand,
+  SecretsManagerClient,
+} from '@aws-sdk/client-secrets-manager';
+import fs from 'fs';
+import path from 'path';
 
 const region = 'eu-central-1';
 
@@ -412,9 +412,9 @@ describe('TapStack Integration Tests - LMS Infrastructure', () => {
 
       const aliases = response.Aliases!.map(a => a.AliasName);
 
-      // Find our keys by alias name pattern
-      const dbKeyAlias = aliases.find(a => a?.includes('database-synth'));
-      const efsKeyAlias = aliases.find(a => a?.includes('efs-synth'));
+      // Find our keys by alias name pattern (using environment suffix from outputs or default patterns)
+      const dbKeyAlias = aliases.find(a => a?.includes('database-'));
+      const efsKeyAlias = aliases.find(a => a?.includes('efs-'));
 
       expect(dbKeyAlias).toBeDefined();
       expect(efsKeyAlias).toBeDefined();
