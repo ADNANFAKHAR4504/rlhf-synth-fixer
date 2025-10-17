@@ -16,11 +16,11 @@ import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
-import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
+import { S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
-import { PipelineModule } from './pipeline-module';
 import { ContentDeliveryModule } from './content-delivery-module';
 import { MonitoringModule } from './monitoring-module';
+import { PipelineModule } from './pipeline-module';
 
 interface TapStackProps {
   environmentSuffix?: string;
@@ -29,6 +29,9 @@ interface TapStackProps {
   awsRegion?: string;
   defaultTags?: AwsProviderDefaultTags;
 }
+
+// If you need to override the AWS Region for the terraform provider for any particular task,
+// you can set it here. Otherwise, it will default to 'us-east-1'.
 
 const AWS_REGION_OVERRIDE = '';
 
@@ -44,21 +47,23 @@ export class TapStack extends TerraformStack {
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
-    // Configure AWS Provider
+    // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
     new AwsProvider(this, 'aws', {
       region: awsRegion,
       defaultTags: defaultTags,
     });
 
-    // Configure S3 Backend with native state locking
+    // Configure S3 Backend with state locking
+    // Note: DynamoDB table for state locking must be created externally before running this stack
+    // Table name: terraform-state-lock-${environmentSuffix}
+    // Hash key: LockID (String)
     new S3Backend(this, {
       bucket: stateBucket,
       key: `${environmentSuffix}/${id}.tfstate`,
       region: stateBucketRegion,
       encrypt: true,
+      dynamodbTable: `terraform-state-lock-${environmentSuffix}`,
     });
-
-    this.addOverride('terraform.backend.s3.use_lockfile', true);
 
     // Create Content Delivery Module (S3 + CloudFront)
     const contentDelivery = new ContentDeliveryModule(
@@ -81,14 +86,14 @@ export class TapStack extends TerraformStack {
     });
 
     // Outputs
-    new TerraformOutput(this, 'codecommit-repository-url', {
-      value: pipeline.repository.cloneUrlHttp,
-      description: 'CodeCommit repository HTTPS clone URL',
+    new TerraformOutput(this, 'source-bucket', {
+      value: contentDelivery.artifactBucket.bucket,
+      description: 'S3 bucket for source code',
     });
 
-    new TerraformOutput(this, 'codecommit-repository-name', {
-      value: pipeline.repository.repositoryName,
-      description: 'CodeCommit repository name',
+    new TerraformOutput(this, 'source-object-key', {
+      value: `source/${environmentSuffix}/source.zip`,
+      description: 'S3 object key for source code',
     });
 
     new TerraformOutput(this, 'codepipeline-name', {
@@ -102,7 +107,7 @@ export class TapStack extends TerraformStack {
     });
 
     new TerraformOutput(this, 'codedeploy-application-name', {
-      value: pipeline.codeDeployApp.applicationName,
+      value: pipeline.codeDeployApp.name,
       description: 'CodeDeploy application name',
     });
 
@@ -139,6 +144,11 @@ export class TapStack extends TerraformStack {
     new TerraformOutput(this, 'ec2-instance-id', {
       value: pipeline.ec2Instance.id,
       description: 'EC2 instance ID for deployment',
+    });
+
+    new TerraformOutput(this, 'state-lock-table-name', {
+      value: `terraform-state-lock-${environmentSuffix}`,
+      description: 'DynamoDB table name for Terraform state locking (must be created externally)',
     });
   }
 }

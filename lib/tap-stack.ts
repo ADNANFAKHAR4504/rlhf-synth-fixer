@@ -2,11 +2,11 @@ import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
-import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
+import { S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
-import { PipelineModule } from './pipeline-module';
 import { ContentDeliveryModule } from './content-delivery-module';
 import { MonitoringModule } from './monitoring-module';
+import { PipelineModule } from './pipeline-module';
 
 interface TapStackProps {
   environmentSuffix?: string;
@@ -40,11 +40,15 @@ export class TapStack extends TerraformStack {
     });
 
     // Configure S3 Backend with state locking
+    // Note: DynamoDB table for state locking must be created externally before running this stack
+    // Table name: terraform-state-lock-${environmentSuffix}
+    // Hash key: LockID (String)
     new S3Backend(this, {
       bucket: stateBucket,
       key: `${environmentSuffix}/${id}.tfstate`,
       region: stateBucketRegion,
       encrypt: true,
+      dynamodbTable: `terraform-state-lock-${environmentSuffix}`,
     });
 
     // Create Content Delivery Module (S3 + CloudFront)
@@ -126,6 +130,11 @@ export class TapStack extends TerraformStack {
     new TerraformOutput(this, 'ec2-instance-id', {
       value: pipeline.ec2Instance.id,
       description: 'EC2 instance ID for deployment',
+    });
+
+    new TerraformOutput(this, 'state-lock-table-name', {
+      value: `terraform-state-lock-${environmentSuffix}`,
+      description: 'DynamoDB table name for Terraform state locking (must be created externally)',
     });
   }
 }
