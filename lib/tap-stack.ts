@@ -14,8 +14,12 @@ import { Construct } from 'constructs';
 
 interface TapStackConfig {
   env: {
-    region: string; // updated region type
+    region: string;
   };
+  environmentSuffix?: string;
+  stateBucket?: string;
+  stateBucketRegion?: string;
+  defaultTags?: { tags: Record<string, string> };
 }
 
 export class TapStack extends TerraformStack {
