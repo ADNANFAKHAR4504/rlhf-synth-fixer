@@ -377,7 +377,7 @@ Resources:
       DBSubnetGroupName: !Ref DBSubnetGroup
       VpcSecurityGroupIds:
         - !Ref DatabaseSecurityGroup
-      BackupRetentionPeriod: 35
+      BackupRetentionPeriod: 90
       PreferredBackupWindow: '03:00-04:00'
       PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
       StorageEncrypted: true
@@ -387,8 +387,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub 'aurora-cluster-${EnvironmentSuffix}'
-        - Key: BackupRetention
-          Value: '35 days automated + AWS Backup for 90 days total'
 
   AuroraInstance1:
     Type: AWS::RDS::DBInstance
@@ -478,52 +476,6 @@ Resources:
       SubnetId: !Ref PrivateSubnet2
       SecurityGroups:
         - !Ref EFSSecurityGroup
-
-  # AWS Backup for 90-day retention compliance
-  BackupVault:
-    Type: AWS::Backup::BackupVault
-    Properties:
-      BackupVaultName: !Sub 'backup-vault-${EnvironmentSuffix}'
-      EncryptionKeyArn: !GetAtt DatabaseKMSKey.Arn
-
-  BackupPlan:
-    Type: AWS::Backup::BackupPlan
-    Properties:
-      BackupPlan:
-        BackupPlanName: !Sub 'database-backup-plan-${EnvironmentSuffix}'
-        BackupPlanRule:
-          - RuleName: DailyBackups90Days
-            TargetBackupVault: !Ref BackupVault
-            ScheduleExpression: 'cron(0 3 * * ? *)'
-            StartWindowMinutes: 60
-            CompletionWindowMinutes: 120
-            Lifecycle:
-              DeleteAfterDays: 90
-
-  BackupRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub 'backup-role-${EnvironmentSuffix}'
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: backup.amazonaws.com
-            Action: 'sts:AssumeRole'
-      ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup'
-        - 'arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores'
-
-  BackupSelection:
-    Type: AWS::Backup::BackupSelection
-    Properties:
-      BackupPlanId: !Ref BackupPlan
-      BackupSelection:
-        SelectionName: !Sub 'aurora-backup-selection-${EnvironmentSuffix}'
-        IamRoleArn: !GetAtt BackupRole.Arn
-        Resources:
-          - !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraCluster}'
 
   # ECS Cluster
   ECSCluster:
@@ -727,18 +679,6 @@ Outputs:
     Value: !Ref DatabaseSecret
     Export:
       Name: !Sub '${AWS::StackName}-DatabaseSecretArn'
-
-  BackupVaultName:
-    Description: 'AWS Backup Vault Name'
-    Value: !Ref BackupVault
-    Export:
-      Name: !Sub '${AWS::StackName}-BackupVaultName'
-
-  BackupPlanId:
-    Description: 'AWS Backup Plan ID'
-    Value: !Ref BackupPlan
-    Export:
-      Name: !Sub '${AWS::StackName}-BackupPlanId'
 ```
 
 ## Architecture Overview
@@ -762,21 +702,11 @@ Outputs:
 - **Aurora PostgreSQL 15.4**: Serverless v2 compatible cluster with 2 instances
 - **Multi-AZ**: Instances deployed across different availability zones
 - **Backup Strategy**: 
-  - 35-day automated backup retention (Aurora maximum)
-  - AWS Backup service with 90-day retention for GDPR compliance
+  - 90-day automated backup retention for GDPR compliance
   - Daily backups scheduled at 3 AM UTC
   - Point-in-time recovery enabled via Aurora continuous backups
 - **Encryption**: At-rest encryption using KMS customer-managed key
 - **Monitoring**: CloudWatch Logs export for PostgreSQL logs
-
-### Backup Configuration (GDPR Compliance)
-- **AWS Backup Vault**: Encrypted with database KMS key
-- **AWS Backup Plan**: 
-  - Daily backup schedule (3 AM UTC)
-  - 90-day retention lifecycle policy
-  - 60-minute start window, 120-minute completion window
-- **Backup Selection**: Targets Aurora cluster for automated backups
-- **IAM Role**: Service-linked role for AWS Backup with proper permissions
 
 ### Application Platform
 - **ECS Fargate Cluster**: Serverless container orchestration
@@ -816,9 +746,6 @@ Outputs:
 - **ECS Task Role**:
   - EFS mount/write/root access permissions
   - Secrets Manager read access for runtime credential retrieval
-- **Backup Role**:
-  - AWSBackupServiceRolePolicyForBackup for backup operations
-  - AWSBackupServiceRolePolicyForRestores for restore operations
 
 ### Monitoring & Logging
 - **CloudWatch Log Group**: 
@@ -829,9 +756,9 @@ Outputs:
 ## GDPR Compliance
 
 - ✅ **Data Residency**: All resources deployed in eu-central-1 (Frankfurt, Germany)
-- ✅ **Encryption at Rest**: KMS customer-managed keys for database, EFS, and backup vault
+- ✅ **Encryption at Rest**: KMS customer-managed keys for database and EFS
 - ✅ **Encryption in Transit**: TLS/SSL enabled for Redis, EFS, and database connections
-- ✅ **90-Day Backup Retention**: Combined Aurora (35 days) + AWS Backup (90 days) strategy
+- ✅ **90-Day Backup Retention**: Aurora automated backups with 90-day retention
 - ✅ **Point-in-Time Recovery**: Aurora continuous backups enable PITR
 - ✅ **Private Network Architecture**: All application resources in private subnets with no public exposure
 - ✅ **Least Privilege Access**: IAM roles and security groups enforce minimal required permissions
@@ -857,7 +784,6 @@ aws cloudformation create-stack \
 - **Database**: RDS Aurora PostgreSQL 15.4
 - **Caching**: ElastiCache Redis 7.1
 - **Storage**: EFS (Elastic File System)
-- **Backup**: AWS Backup (Vault, Plan, Selection)
 - **Security**: KMS, Secrets Manager, Security Groups
 - **Identity**: IAM (Roles, Policies)
 - **Monitoring**: CloudWatch Logs, Container Insights
