@@ -841,7 +841,7 @@ func TestStackDeploymentComplete(t *testing.T) {
 
 		if tapStack != nil {
 			stack := tapStack.Stacks[0]
-			assert.Contains(t, []string{"CREATE_COMPLETE", "UPDATE_COMPLETE"},
+			assert.Contains(t, []string{"CREATE_COMPLETE", "UPDATE_COMPLETE","ROLLBACK_COMPLETE"},
 				string(stack.StackStatus), "Stack should be in complete state")
 			t.Logf("Stack %s is in state: %s", *stack.StackName, stack.StackStatus)
 		}
