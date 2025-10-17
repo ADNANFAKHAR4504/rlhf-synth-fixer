@@ -34,8 +34,9 @@ resource "aws_dynamodb_table" "transactions" {
   }
 
   server_side_encryption {
-    enabled     = true
-    kms_key_arn = aws_kms_key.dynamodb.arn
+    enabled = true
+    # Using AWS-managed keys for Global Table compatibility
+    # Customer-managed KMS keys not supported with Global Table v1 (2017.11.29)
   }
 
   point_in_time_recovery {
@@ -97,8 +98,8 @@ resource "aws_dynamodb_table" "transactions_secondary" {
   }
 
   server_side_encryption {
-    enabled     = true
-    kms_key_arn = aws_kms_key.dynamodb_secondary.arn
+    enabled = true
+    # Using AWS-managed keys for Global Table compatibility
   }
 
   point_in_time_recovery {
@@ -108,24 +109,27 @@ resource "aws_dynamodb_table" "transactions_secondary" {
   tags = var.common_tags
 }
 
-# KMS keys for encryption
-resource "aws_kms_key" "dynamodb" {
-  provider                = aws.primary
-  description             = "KMS key for DynamoDB encryption"
-  deletion_window_in_days = 30
-  enable_key_rotation     = true
-
-  tags = var.common_tags
-}
-
-resource "aws_kms_key" "dynamodb_secondary" {
-  provider                = aws.secondary
-  description             = "KMS key for DynamoDB encryption"
-  deletion_window_in_days = 30
-  enable_key_rotation     = true
-
-  tags = var.common_tags
-}
+# KMS keys for encryption - Not used with Global Table v1
+# Global Table v1 (2017.11.29) doesn't support customer-managed KMS keys
+# Using AWS-managed encryption instead
+# Uncomment and configure if migrating to Global Table v2 (2019.11.21)
+# resource "aws_kms_key" "dynamodb" {
+#   provider                = aws.primary
+#   description             = "KMS key for DynamoDB encryption"
+#   deletion_window_in_days = 30
+#   enable_key_rotation     = true
+#
+#   tags = var.common_tags
+# }
+#
+# resource "aws_kms_key" "dynamodb_secondary" {
+#   provider                = aws.secondary
+#   description             = "KMS key for DynamoDB encryption"
+#   deletion_window_in_days = 30
+#   enable_key_rotation     = true
+#
+#   tags = var.common_tags
+# }
 
 # Secrets Manager for API keys
 resource "aws_secretsmanager_secret" "api_keys" {
@@ -736,7 +740,8 @@ resource "aws_cloudfront_distribution" "api" {
 
     forwarded_values {
       query_string = true
-      headers      = ["Authorization", "Content-Type", "X-Amz-Date", "X-Api-Key", "X-Amz-Security-Token"]
+      # Forward only necessary headers (AWS signature headers like X-Amz-Date not allowed)
+      headers = ["Authorization", "Content-Type", "Accept"]
 
       cookies {
         forward = "none"

@@ -277,34 +277,35 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
-# IAM policy for encryption
-resource "aws_iam_policy" "encryption" {
-  name        = "${var.project_name}-encryption-policy"
-  description = "Policy for encryption operations"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "kms:Decrypt",
-          "kms:DescribeKey"
-        ]
-        Resource = [
-          aws_kms_key.dynamodb.arn,
-          aws_kms_key.dynamodb_secondary.arn
-        ]
-      }
-    ]
-  })
-}
-
-# Attach encryption policy to Lambda role
-resource "aws_iam_role_policy_attachment" "lambda_encryption" {
-  role       = aws_iam_role.lambda_execution.name
-  policy_arn = aws_iam_policy.encryption.arn
-}
+# IAM policy for encryption - Not needed with AWS-managed encryption
+# Uncomment if migrating to customer-managed KMS keys
+# resource "aws_iam_policy" "encryption" {
+#   name        = "${var.project_name}-encryption-policy"
+#   description = "Policy for encryption operations"
+#
+#   policy = jsonencode({
+#     Version = "2012-10-17"
+#     Statement = [
+#       {
+#         Effect = "Allow"
+#         Action = [
+#           "kms:Decrypt",
+#           "kms:DescribeKey"
+#         ]
+#         Resource = [
+#           aws_kms_key.dynamodb.arn,
+#           aws_kms_key.dynamodb_secondary.arn
+#         ]
+#       }
+#     ]
+#   })
+# }
+#
+# # Attach encryption policy to Lambda role
+# resource "aws_iam_role_policy_attachment" "lambda_encryption" {
+#   role       = aws_iam_role.lambda_execution.name
+#   policy_arn = aws_iam_policy.encryption.arn
+# }
 
 # S3 bucket for WAF logs
 resource "aws_s3_bucket" "waf_logs" {
@@ -379,11 +380,6 @@ resource "aws_s3_bucket_policy" "waf_logs" {
         }
         Action   = "s3:PutObject"
         Resource = "${aws_s3_bucket.waf_logs.arn}/*"
-        Condition = {
-          StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
-          }
-        }
       },
       {
         Sid    = "AWSLogDeliveryAclCheck"
@@ -401,10 +397,11 @@ resource "aws_s3_bucket_policy" "waf_logs" {
 }
 
 # WAF logging configuration
+# Note: WAF v2 logging to S3 requires the bucket ARN without path suffix
 resource "aws_wafv2_web_acl_logging_configuration" "api_protection" {
   provider                = aws.global
   resource_arn            = aws_wafv2_web_acl.api_protection.arn
-  log_destination_configs = ["${aws_s3_bucket.waf_logs.arn}/waf-logs/"]
+  log_destination_configs = [aws_s3_bucket.waf_logs.arn]
 
   redacted_fields {
     single_header {
