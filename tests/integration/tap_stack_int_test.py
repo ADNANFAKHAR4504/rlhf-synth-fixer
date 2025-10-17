@@ -84,8 +84,19 @@ class TestVPCConfiguration:
         vpc = response['Vpcs'][0]
         assert vpc['State'] == 'available'
         assert vpc['CidrBlock'] == '10.0.0.0/16'
-        assert vpc['EnableDnsHostnames'] is True
-        assert vpc['EnableDnsSupport'] is True
+
+        # DNS attributes need to be queried separately
+        dns_hostnames = ec2_client.describe_vpc_attribute(
+            VpcId=vpc_id,
+            Attribute='enableDnsHostnames'
+        )
+        assert dns_hostnames['EnableDnsHostnames']['Value'] is True
+
+        dns_support = ec2_client.describe_vpc_attribute(
+            VpcId=vpc_id,
+            Attribute='enableDnsSupport'
+        )
+        assert dns_support['EnableDnsSupport']['Value'] is True
 
     def test_subnets_exist_in_multiple_azs(self, deployment_outputs, aws_clients):
         """Verify subnets are created across multiple availability zones."""
