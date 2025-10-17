@@ -1,0 +1,12 @@
+# Example terraform.tfvars file
+project_name     = "fintech-api"
+primary_region   = "us-east-1"
+secondary_region = "us-west-2"
+api_stage        = "prod"
+enable_route53   = false
+domain_name      = ""
+master_api_key   = "dummy-key-for-testing"
+jwt_secret       = "dummy-secret-for-testing"
+alarm_email      = "test@example.com"
+enable_vpc       = false
+
