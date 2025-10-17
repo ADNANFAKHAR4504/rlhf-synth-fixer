@@ -29,7 +29,7 @@ try {
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const region = 'us-east-1';
+const region = process.env.AWS_REGION || 'us-east-1';
 const accountId = process.env.AWS_ACCOUNT_ID || '149536495831';
 const accountLast5 = accountId.slice(-5);
 
