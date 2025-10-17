@@ -960,6 +960,214 @@ def lambda_handler(event, context):
         }
 ```
 
+## File: lib/lambda/processor.py
+
+**⚠️ LEGACY FILE - ORIGINAL BROKEN IMPLEMENTATION**
+
+This file contains the original Timestream-based implementation that was replaced due to AWS service compatibility issues. It is included for training purposes to show the evolution from broken to working implementation.
+
+**Critical Issues in this file:**
+- Uses Timestream (not available in all AWS account types)
+- Uses reserved `AWS_REGION` environment variable (causes Lambda deployment failures)
+- Missing proper error handling for service unavailability
+
+**This implementation was replaced by `index.py` with DynamoDB.**
+
+```python
+import json
+import boto3
+import os
+import base64
+from datetime import datetime
+from typing import List, Dict, Any
+
+# Initialize AWS clients
+timestream_write = boto3.client('timestream-write')
+s3 = boto3.client('s3')
+sns = boto3.client('sns')
+secretsmanager = boto3.client('secretsmanager')
+
+# Environment variables - PROBLEMATIC: AWS_REGION is reserved
+TIMESTREAM_DATABASE = os.environ['TIMESTREAM_DATABASE']
+TIMESTREAM_TABLE = os.environ['TIMESTREAM_TABLE']
+ALERT_TOPIC_ARN = os.environ['ALERT_TOPIC_ARN']
+PROCESSED_BUCKET = os.environ['PROCESSED_BUCKET']
+API_SECRET_ARN = os.environ['API_SECRET_ARN']
+AWS_REGION = os.environ['AWS_REGION']  # ❌ RESERVED VARIABLE - CAUSES DEPLOYMENT FAILURE
+
+# Anomaly detection thresholds
+TEMPERATURE_THRESHOLD = 100.0
+PRESSURE_THRESHOLD = 150.0
+VIBRATION_THRESHOLD = 5.0
+
+
+def get_credentials():
+    """Retrieve API credentials from Secrets Manager."""
+    try:
+        response = secretsmanager.get_secret_value(SecretId=API_SECRET_ARN)
+        return json.loads(response['SecretString'])
+    except Exception as e:
+        print(f"Error retrieving credentials: {str(e)}")
+        return {}
+
+
+def detect_anomaly(sensor_data: Dict[str, Any]) -> bool:
+    """Detect anomalies in sensor data."""
+    try:
+        sensor_type = sensor_data.get('sensor_type', '')
+        value = float(sensor_data.get('value', 0))
+
+        if sensor_type == 'temperature' and value > TEMPERATURE_THRESHOLD:
+            return True
+        elif sensor_type == 'pressure' and value > PRESSURE_THRESHOLD:
+            return True
+        elif sensor_type == 'vibration' and value > VIBRATION_THRESHOLD:
+            return True
+
+        return False
+    except Exception as e:
+        print(f"Error in anomaly detection: {str(e)}")
+        return False
+
+
+def send_alert(sensor_data: Dict[str, Any], anomaly_type: str):
+    """Send alert notification via SNS."""
+    try:
+        message = {
+            'timestamp': sensor_data.get('timestamp'),
+            'sensor_id': sensor_data.get('sensor_id'),
+            'sensor_type': sensor_data.get('sensor_type'),
+            'value': sensor_data.get('value'),
+            'anomaly_type': anomaly_type,
+            'severity': 'HIGH'
+        }
+
+        sns.publish(
+            TopicArn=ALERT_TOPIC_ARN,
+            Subject=f'Anomaly Detected: {anomaly_type}',
+            Message=json.dumps(message, indent=2)
+        )
+    except Exception as e:
+        print(f"Error sending alert: {str(e)}")
+
+
+def write_to_timestream(records: List[Dict[str, Any]]):
+    """❌ PROBLEMATIC: Write processed records to Timestream (service not available in all AWS accounts)."""
+    try:
+        timestream_records = []
+
+        for record in records:
+            dimensions = [
+                {'Name': 'sensor_id', 'Value': str(record.get('sensor_id', 'unknown'))},
+                {'Name': 'sensor_type', 'Value': str(record.get('sensor_type', 'unknown'))},
+                {'Name': 'production_line', 'Value': str(record.get('production_line', 'unknown'))}
+            ]
+
+            timestream_record = {
+                'Time': str(int(record.get('timestamp', datetime.now().timestamp()) * 1000)),
+                'TimeUnit': 'MILLISECONDS',
+                'Dimensions': dimensions,
+                'MeasureName': 'sensor_reading',
+                'MeasureValue': str(record.get('value', 0)),
+                'MeasureValueType': 'DOUBLE'
+            }
+
+            timestream_records.append(timestream_record)
+
+        if timestream_records:
+            # ❌ THIS FAILS: Timestream not available in many AWS account types
+            timestream_write.write_records(
+                DatabaseName=TIMESTREAM_DATABASE,
+                TableName=TIMESTREAM_TABLE,
+                Records=timestream_records
+            )
+            print(f"Successfully wrote {len(timestream_records)} records to Timestream")
+
+    except Exception as e:
+        print(f"❌ Error writing to Timestream: {str(e)}")
+        raise
+
+
+def store_processed_data(records: List[Dict[str, Any]]):
+    """Store processed data in S3 for analytics."""
+    try:
+        timestamp = datetime.now()
+        key = f"processed/{timestamp.year}/{timestamp.month:02d}/{timestamp.day:02d}/{timestamp.hour:02d}/{timestamp.timestamp()}.json"
+
+        s3.put_object(
+            Bucket=PROCESSED_BUCKET,
+            Key=key,
+            Body=json.dumps(records, indent=2),
+            ContentType='application/json',
+            ServerSideEncryption='aws:kms'
+        )
+        print(f"Stored {len(records)} records in S3: {key}")
+
+    except Exception as e:
+        print(f"Error storing processed data: {str(e)}")
+
+
+def lambda_handler(event, context):
+    """❌ ORIGINAL HANDLER - Contains multiple critical issues that prevent deployment."""
+    processed_records = []
+    anomalies_detected = 0
+
+    try:
+        for record in event['Records']:
+            try:
+                # Decode Kinesis data
+                kinesis_data = record['kinesis']
+                data = base64.b64decode(kinesis_data['data']).decode('utf-8')
+                sensor_data = json.loads(data)
+
+                # Add processing metadata
+                processed_record = {
+                    **sensor_data,
+                    'processed_at': datetime.now().isoformat(),
+                    'lambda_request_id': context.aws_request_id,
+                    'anomaly_detected': False
+                }
+
+                # Check for anomalies
+                if detect_anomaly(sensor_data):
+                    processed_record['anomaly_detected'] = True
+                    anomalies_detected += 1
+                    
+                    # Send alert
+                    anomaly_type = f"{sensor_data.get('sensor_type', 'unknown')}_anomaly"
+                    send_alert(sensor_data, anomaly_type)
+
+                processed_records.append(processed_record)
+
+            except Exception as e:
+                print(f"Error processing record: {str(e)}")
+                continue
+
+        # ❌ CRITICAL FAILURE POINT: Timestream write fails in most AWS accounts
+        if processed_records:
+            write_to_timestream(processed_records)
+
+        # Store processed data in S3
+        if processed_records:
+            store_processed_data(processed_records)
+
+        return {
+            'statusCode': 200,
+            'body': json.dumps({
+                'processed_records': len(processed_records),
+                'anomalies_detected': anomalies_detected
+            })
+        }
+
+    except Exception as e:
+        print(f"❌ Error in handler: {str(e)}")
+        raise
+```
+
+**End of Legacy Implementation**
+
+---
+
 ## Key Features Implemented
 
 ### 1. **IoT Data Processing Pipeline**
