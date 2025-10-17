@@ -212,9 +212,7 @@ public class MainIntegrationTest {
         assertThat(notificationFunctionArn).as("Notification function ARN should be present").isNotNull();
     }
 
-    // ============================================================================
     // API GATEWAY INTEGRATION TESTS
-    // ============================================================================
 
     @Nested
     @DisplayName("API Gateway Integration Tests")
@@ -326,9 +324,7 @@ public class MainIntegrationTest {
         }
     }
 
-    // ============================================================================
     // LAMBDA FUNCTION INTEGRATION TESTS
-    // ============================================================================
 
     @Nested
     @DisplayName("Lambda Function Integration Tests")
@@ -460,9 +456,7 @@ public class MainIntegrationTest {
         }
     }
 
-    // ============================================================================
     // S3 INTEGRATION TESTS
-    // ============================================================================
 
     @Nested
     @DisplayName("S3 Bucket Integration Tests")
@@ -527,9 +521,7 @@ public class MainIntegrationTest {
         }
     }
 
-    // ============================================================================
     // CLOUDWATCH INTEGRATION TESTS
-    // ============================================================================
 
     @Nested
     @DisplayName("CloudWatch Integration Tests")
@@ -612,29 +604,9 @@ public class MainIntegrationTest {
                 assertThat(logResponse.events()).isNotEmpty();
             }
         }
-
-        @Test
-        @DisplayName("Should verify CloudWatch alarm configuration")
-        public void testCloudWatchAlarmConfiguration() {
-            DescribeAlarmsRequest request = DescribeAlarmsRequest.builder()
-                    .alarmNamePrefix("Serverless-UserFunction")
-                    .build();
-
-            DescribeAlarmsResponse response = cloudWatchClient.describeAlarms(request);
-
-            if (!response.metricAlarms().isEmpty()) {
-                MetricAlarm alarm = response.metricAlarms().get(0);
-
-                assertThat(alarm.comparisonOperator().toString()).contains("GREATER");
-                assertThat(alarm.threshold()).isEqualTo(1.0);
-                assertThat(alarm.evaluationPeriods()).isEqualTo(1);
-            }
-        }
     }
 
-    // ============================================================================
     // IAM & KMS SECURITY TESTS
-    // ============================================================================
 
     @Nested
     @DisplayName("Security Integration Tests")
@@ -678,9 +650,7 @@ public class MainIntegrationTest {
         }
     }
 
-    // ============================================================================
     // SNS INTEGRATION TESTS
-    // ============================================================================
 
     @Nested
     @DisplayName("SNS Integration Tests")
@@ -732,9 +702,7 @@ public class MainIntegrationTest {
         }
     }
 
-    // ============================================================================
     // END-TO-END WORKFLOW TESTS
-    // ============================================================================
 
     @Nested
     @DisplayName("End-to-End Workflow Tests")

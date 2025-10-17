@@ -44,9 +44,7 @@ public class MainTest {
         System.clearProperty("CDK_DEFAULT_ACCOUNT");
     }
 
-    // ============================================================================
     // TAPSTACKPROPS TESTS
-    // ============================================================================
 
     @Nested
     @DisplayName("TapStackProps Tests")
@@ -123,9 +121,7 @@ public class MainTest {
         }
     }
 
-    // ============================================================================
     // TAPSTACK TESTS
-    // ============================================================================
 
     @Nested
     @DisplayName("TapStack Tests")
@@ -206,9 +202,7 @@ public class MainTest {
         }
     }
 
-    // ============================================================================
     // SECURITYSTACK TESTS
-    // ============================================================================
 
     @Nested
     @DisplayName("SecurityStack Tests")
@@ -251,9 +245,7 @@ public class MainTest {
         }
     }
 
-    // ============================================================================
     // SERVERLESSSTACK TESTS
-    // ============================================================================
 
     @Nested
     @DisplayName("ServerlessStack Tests")
@@ -472,9 +464,7 @@ public class MainTest {
         }
     }
 
-    // ============================================================================
     // MAIN APPLICATION TESTS
-    // ============================================================================
 
     @Nested
     @DisplayName("Main Application Tests")
@@ -531,9 +521,7 @@ public class MainTest {
         }
     }
 
-    // ============================================================================
     // LAMBDA CODE GENERATION TESTS
-    // ============================================================================
 
     @Nested
     @DisplayName("Lambda Code Generation Tests")
@@ -574,9 +562,7 @@ public class MainTest {
         }
     }
 
-    // ============================================================================
     // EDGE CASES TESTS
-    // ============================================================================
 
     @Nested
     @DisplayName("Edge Cases and Error Handling")
@@ -640,9 +626,7 @@ public class MainTest {
         }
     }
 
-    // ============================================================================
-    // LEGACY TESTS (Original tests for backward compatibility)
-    // ============================================================================
+    // LEGACY TESTS 
 
     @Test
     @DisplayName("Legacy: Stack creation test")
