@@ -401,7 +401,7 @@ describe('Cloud Environment Setup Integration Tests', () => {
       const secretArn = outputs.DBSecretArn;
 
       try {
-        // ACTION: EC2 retrieves password from Secrets Manager and connects to RDS
+        // ACTION: Install jq if not present, then connect to RDS
         const command = await ssmClient.send(new SendCommandCommand({
           DocumentName: 'AWS-RunShellScript',
           InstanceIds: [instanceId],
@@ -409,6 +409,7 @@ describe('Cloud Environment Setup Integration Tests', () => {
             commands: [
               '#!/bin/bash',
               'set -e',
+              'sudo yum install -y jq',
               `SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id "${secretArn}" --region us-west-1 --query SecretString --output text)`,
               'DB_PASSWORD=$(echo $SECRET_JSON | jq -r .password)',
               `mysql -h ${rdsEndpoint} -u admin -p"$DB_PASSWORD" -e "SELECT 1 AS connection_test;" 2>&1`
@@ -510,6 +511,9 @@ describe('Cloud Environment Setup Integration Tests', () => {
             commands: [
               '#!/bin/bash',
               'set -e',
+              '',
+              '# Step 0: Install jq if not present',
+              'sudo yum install -y jq',
               '',
               '# Step 1: Retrieve password from Secrets Manager',
               `SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id "${secretArn}" --region us-west-1 --query SecretString --output text)`,
