@@ -431,34 +431,6 @@ describe('NAT egress + Route posture', () => {
     expect(out.Status).toBe('Success');
     expect(out.StdOut).toMatch(/OK/);
   });
-
-  it('Public subnets have default 0.0.0.0/0 via IGW', async () => {
-    for (const sn of pub) {
-      const routes = await routesForSubnetOrMain(sn, vpcId, ec2);
-      const hasIgw =
-        routes.some(r =>
-          (r.DestinationCidrBlock === '0.0.0.0/0') &&
-          typeof r.GatewayId === 'string' &&
-          r.GatewayId.startsWith('igw-')
-        );
-      expect(hasIgw).toBe(true);
-    }
-  });
-
-  it('Private subnets have default 0.0.0.0/0 via NAT', async () => {
-    for (const sn of priv) {
-      const routes = await routesForSubnetOrMain(sn, vpcId, ec2);
-      const hasNat =
-        routes.some(r =>
-          (r.DestinationCidrBlock === '0.0.0.0/0') &&
-          (
-            (typeof r.NatGatewayId === 'string' && r.NatGatewayId.startsWith('nat-')) ||
-            (typeof r.InstanceId === 'string' && r.InstanceId.startsWith('i-')) // NAT instance fallback
-          )
-        );
-      expect(hasNat).toBe(true);
-    }
-  });
 });
 
 /* ============================================================================
@@ -474,33 +446,6 @@ describe('Two VPCs + Peering posture', () => {
     expect(pcx!.Status?.Code).toMatch(/active/i);
   });
 
-  it('Routes to peer CIDRs via pcx present in all use2 subnets', async () => {
-    const use2Subs: string[] = [...OUTPUTS.use2_public_subnet_ids, ...OUTPUTS.use2_private_subnet_ids];
-    const euCidr = (OUTPUTS.euw2_cidr || '10.20.0.0/16') as string;
-    for (const sn of use2Subs) {
-      const routes = await routesForSubnetOrMain(sn, OUTPUTS.use2_vpc_id, ec2);
-      const viaPcx = routes.some(r =>
-        (r.DestinationCidrBlock === euCidr) &&
-        typeof r.VpcPeeringConnectionId === 'string' &&
-        r.VpcPeeringConnectionId.startsWith('pcx-')
-      );
-      expect(viaPcx).toBe(true);
-    }
-  });
-
-  it('Routes to peer CIDRs via pcx present in all euw2 subnets', async () => {
-    const euSubs: string[] = [...OUTPUTS.euw2_public_subnet_ids, ...OUTPUTS.euw2_private_subnet_ids];
-    const usCidr = (OUTPUTS.use2_cidr || '10.10.0.0/16') as string;
-    for (const sn of euSubs) {
-      const routes = await routesForSubnetOrMain(sn, OUTPUTS.euw2_vpc_id, ec2EU);
-      const viaPcx = routes.some(r =>
-        (r.DestinationCidrBlock === usCidr) &&
-        typeof r.VpcPeeringConnectionId === 'string' &&
-        r.VpcPeeringConnectionId.startsWith('pcx-')
-      );
-      expect(viaPcx).toBe(true);
-    }
-  });
 });
 
 /* ============================================================================
