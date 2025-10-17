@@ -9,6 +9,8 @@ import unittest
 from unittest.mock import patch, MagicMock, Mock
 import pulumi
 
+pulumi.export = lambda name, value: None
+
 try:
     from cdktf_cdktf_provider_aws.elasticache_replication_group import (
         ElasticacheReplicationGroup as _ElasticacheReplicationGroup,
