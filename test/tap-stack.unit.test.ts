@@ -38,10 +38,10 @@ describe('TapStack - CI/CD Pipeline', () => {
     test('should create public and private subnets', () => {
       // Check for public subnets
       template.resourceCountIs('AWS::EC2::Subnet', 4); // 2 public + 2 private
-      
+
       // Check for Internet Gateway
       template.resourceCountIs('AWS::EC2::InternetGateway', 1);
-      
+
       // Check for NAT Gateway
       template.resourceCountIs('AWS::EC2::NatGateway', 1);
     });
@@ -50,7 +50,7 @@ describe('TapStack - CI/CD Pipeline', () => {
       // Check application security group
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
         GroupDescription: 'Security group for application EC2 instances',
-        GroupName: 'sg-test-application',
+        GroupName: 'test-application-sg',
         SecurityGroupIngress: Match.arrayWith([
           {
             Description: 'Allow HTTP from VPC',
@@ -65,7 +65,7 @@ describe('TapStack - CI/CD Pipeline', () => {
       // Check CodeBuild security group
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
         GroupDescription: 'Security group for CodeBuild projects',
-        GroupName: 'sg-test-codebuild',
+        GroupName: 'test-codebuild-sg',
       });
     });
   });
@@ -88,21 +88,8 @@ describe('TapStack - CI/CD Pipeline', () => {
           IgnorePublicAcls: true,
           RestrictPublicBuckets: true,
         },
-        VersioningConfiguration: {
-          Status: 'Enabled',
-        },
-        LifecycleConfiguration: {
-          Rules: [
-            {
-              ExpirationInDays: 90,
-              Id: 'delete-old-artifacts',
-              NoncurrentVersionExpiration: {
-                NoncurrentDays: 30,
-              },
-              Status: 'Enabled',
-            },
-          ],
-        },
+        // VersioningConfiguration removed (versioning disabled)
+        // LifecycleConfiguration removed
       });
     });
 
@@ -152,7 +139,8 @@ describe('TapStack - CI/CD Pipeline', () => {
           ExcludeCharacters: ' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
           GenerateStringKey: 'password',
           PasswordLength: 32,
-          SecretStringTemplate: '{"username":"dbadmin","engine":"mysql","host":"prod-db.example.com","port":3306}',
+          SecretStringTemplate:
+            '{"username":"dbadmin","engine":"mysql","host":"prod-db.example.com","port":3306}',
         },
       });
     });
@@ -174,7 +162,8 @@ describe('TapStack - CI/CD Pipeline', () => {
           ],
           Version: '2012-10-17',
         },
-        Description: 'Service role for CodePipeline with least privilege access',
+        Description:
+          'Service role for CodePipeline with least privilege access',
       });
     });
 
@@ -193,7 +182,7 @@ describe('TapStack - CI/CD Pipeline', () => {
           ],
           Version: '2012-10-17',
         },
-        ManagedPolicyArns: Match.anyValue(),
+        ManagedPolicyArns: Match.absent(), // No managed policies, using inline policies
       });
     });
 
@@ -212,7 +201,7 @@ describe('TapStack - CI/CD Pipeline', () => {
           ],
           Version: '2012-10-17',
         },
-        ManagedPolicyArns: Match.anyValue(),
+        ManagedPolicyArns: Match.anyValue(), // May have managed policies from CDK
       });
     });
 
@@ -231,7 +220,7 @@ describe('TapStack - CI/CD Pipeline', () => {
           ],
           Version: '2012-10-17',
         },
-        ManagedPolicyArns: Match.anyValue(),
+        ManagedPolicyArns: Match.absent(), // No managed policies, using inline policies
       });
     });
 
@@ -250,7 +239,7 @@ describe('TapStack - CI/CD Pipeline', () => {
           ],
           Version: '2012-10-17',
         },
-        ManagedPolicyArns: Match.anyValue(),
+        ManagedPolicyArns: Match.absent(), // No managed policies, using inline policies
       });
     });
   });
@@ -326,13 +315,14 @@ describe('TapStack - CI/CD Pipeline', () => {
     test('should have correct buildspec configuration', () => {
       const buildProject = template.findResources('AWS::CodeBuild::Project');
       const project = Object.values(buildProject)[0];
-      
+
       expect(project.Properties.Source.BuildSpec).toContain('"version": "0.2"');
       expect(project.Properties.Source.BuildSpec).toContain('pre_build');
       expect(project.Properties.Source.BuildSpec).toContain('build');
       expect(project.Properties.Source.BuildSpec).toContain('post_build');
       expect(project.Properties.Source.BuildSpec).toContain('artifacts');
-      expect(project.Properties.Source.BuildSpec).toContain('cache');
+      // Cache is disabled to avoid circular dependency
+      // expect(project.Properties.Source.BuildSpec).toContain('cache');
     });
   });
 
@@ -351,10 +341,7 @@ describe('TapStack - CI/CD Pipeline', () => {
         DeploymentConfigName: 'CodeDeployDefault.OneAtATime',
         AutoRollbackConfiguration: {
           Enabled: true,
-          Events: [
-            'DEPLOYMENT_FAILURE',
-            'DEPLOYMENT_STOP_ON_REQUEST',
-          ],
+          Events: ['DEPLOYMENT_FAILURE', 'DEPLOYMENT_STOP_ON_REQUEST'],
         },
         Ec2TagSet: {
           Ec2TagSetList: [
@@ -445,7 +432,8 @@ describe('TapStack - CI/CD Pipeline', () => {
                 },
                 Name: 'ApproveDeployment',
                 Configuration: {
-                  CustomData: 'Please review the build artifacts and approve deployment to production.',
+                  CustomData:
+                    'Please review the build artifacts and approve deployment to production. Ensure SNS email subscribers have confirmed their subscription.',
                   NotificationArn: Match.anyValue(),
                 },
                 RoleArn: Match.anyValue(),
@@ -626,7 +614,7 @@ describe('TapStack - CI/CD Pipeline', () => {
         },
       });
       const defaultTemplate = Template.fromStack(defaultStack);
-      
+
       defaultTemplate.hasResourceProperties('AWS::EC2::VPC', {
         Tags: Match.arrayWith([
           {
@@ -647,7 +635,7 @@ describe('TapStack - CI/CD Pipeline', () => {
         },
       });
       const customTemplate = Template.fromStack(customStack);
-      
+
       customTemplate.hasResourceProperties('AWS::EC2::VPC', {
         Tags: Match.arrayWith([
           {
@@ -667,32 +655,32 @@ describe('TapStack - CI/CD Pipeline', () => {
       template.resourceCountIs('AWS::EC2::SecurityGroup', 2);
       template.resourceCountIs('AWS::EC2::InternetGateway', 1);
       template.resourceCountIs('AWS::EC2::NatGateway', 1);
-      
+
       // Storage and secrets
       template.resourceCountIs('AWS::S3::Bucket', 1);
       template.resourceCountIs('AWS::SecretsManager::Secret', 1);
-      
+
       // Logging
       template.resourceCountIs('AWS::Logs::LogGroup', 2);
-      
+
       // IAM (includes pipeline action roles)
       template.resourceCountIs('AWS::IAM::Role', 10);
-      
+
       // CI/CD
       template.resourceCountIs('AWS::CodePipeline::Pipeline', 1);
       template.resourceCountIs('AWS::CodeBuild::Project', 1);
       template.resourceCountIs('AWS::CodeDeploy::Application', 1);
       template.resourceCountIs('AWS::CodeDeploy::DeploymentGroup', 1);
-      
+
       // Notifications
       template.resourceCountIs('AWS::SNS::Topic', 1);
       template.resourceCountIs('AWS::SNS::Subscription', 1);
       template.resourceCountIs('AWS::Lambda::Function', 1);
-      
+
       // Monitoring
       template.resourceCountIs('AWS::CloudWatch::Alarm', 2);
       template.resourceCountIs('AWS::Events::Rule', 2);
-      
+
       // Outputs (CDK outputs are not CloudFormation resources)
       // template.resourceCountIs('AWS::CloudFormation::Output', 4);
     });

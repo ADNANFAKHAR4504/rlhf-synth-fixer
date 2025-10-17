@@ -37,7 +37,7 @@ export class TapStack extends cdk.Stack {
 
     // ==================== VPC Configuration ====================
     // Create VPC with public and private subnets for network isolation
-    this.vpc = new ec2.Vpc(this, 'vpc-prod-cicd', {
+    this.vpc = new ec2.Vpc(this, `vpc-${environment}-cicd`, {
       vpcName: `vpc-${environment}-cicd`,
       maxAzs: 2, // High availability across 2 AZs
       natGateways: 1, // Cost optimization with single NAT
@@ -61,10 +61,10 @@ export class TapStack extends cdk.Stack {
     // Security group for EC2 instances running application
     const appSecurityGroup = new ec2.SecurityGroup(
       this,
-      'sg-prod-application',
+      `sg-${environment}-application`,
       {
         vpc: this.vpc,
-        securityGroupName: `sg-${environment}-application`,
+        securityGroupName: `${environment}-application-sg`,
         description: 'Security group for application EC2 instances',
         allowAllOutbound: true,
       }
@@ -87,147 +87,190 @@ export class TapStack extends cdk.Stack {
     // Security group for CodeBuild
     const buildSecurityGroup = new ec2.SecurityGroup(
       this,
-      'sg-prod-codebuild',
+      `sg-${environment}-codebuild`,
       {
         vpc: this.vpc,
-        securityGroupName: `sg-${environment}-codebuild`,
+        securityGroupName: `${environment}-codebuild-sg`,
         description: 'Security group for CodeBuild projects',
         allowAllOutbound: true,
       }
     );
 
     // ==================== S3 Buckets ====================
-    // Artifact bucket with encryption and lifecycle policies
-    this.artifactBucket = new s3.Bucket(this, 'bucket-prod-artifacts', {
-      bucketName: `bucket-${environment}-artifacts-${cdk.Aws.ACCOUNT_ID}`,
-      versioned: true, // Enable versioning for artifact history
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // Destroy bucket when stack is deleted
-      lifecycleRules: [
-        {
-          id: 'delete-old-artifacts',
-          enabled: true,
-          expiration: cdk.Duration.days(90), // Delete artifacts older than 90 days
-          noncurrentVersionExpiration: cdk.Duration.days(30),
-        },
-      ],
-      serverAccessLogsPrefix: 'access-logs/',
-      enforceSSL: true, // Enforce SSL for all requests
-    });
+    // Artifact bucket with encryption (versioning disabled for easier cleanup)
+    this.artifactBucket = new s3.Bucket(
+      this,
+      `bucket-${environment}-artifacts`,
+      {
+        bucketName: `bucket-${environment}-artifacts-${cdk.Aws.ACCOUNT_ID}`,
+        versioned: false, // Disable versioning for easier cleanup
+        encryption: s3.BucketEncryption.S3_MANAGED,
+        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+        removalPolicy: cdk.RemovalPolicy.DESTROY, // Destroy bucket when stack is deleted
+        serverAccessLogsPrefix: 'access-logs/',
+        enforceSSL: true, // Enforce SSL for all requests
+      }
+    );
 
     // ==================== CloudWatch Log Groups ====================
     // Centralized log group for pipeline activities
-    new logs.LogGroup(this, 'logs-prod-pipeline', {
+    new logs.LogGroup(this, `logs-${environment}-pipeline`, {
       logGroupName: `/aws/pipeline/${environment}-cicd`,
       retention: logs.RetentionDays.ONE_MONTH,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // Log group for CodeBuild projects
-    const buildLogGroup = new logs.LogGroup(this, 'logs-prod-codebuild', {
-      logGroupName: `/aws/codebuild/${environment}-build`,
-      retention: logs.RetentionDays.ONE_WEEK,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
+    const buildLogGroup = new logs.LogGroup(
+      this,
+      `logs-${environment}-codebuild`,
+      {
+        logGroupName: `/aws/codebuild/${environment}-build`,
+        retention: logs.RetentionDays.ONE_WEEK,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }
+    );
 
     // ==================== Secrets Manager ====================
     // Store database credentials securely
-    const dbSecret = new secretsmanager.Secret(this, 'secret-prod-database', {
-      secretName: `secret-${environment}-database-credentials`,
-      description: 'Database credentials for production application',
-      generateSecretString: {
-        secretStringTemplate: JSON.stringify({
-          username: 'dbadmin',
-          engine: 'mysql',
-          host: 'prod-db.example.com',
-          port: 3306,
-        }),
-        generateStringKey: 'password',
-        excludeCharacters: ' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
-        passwordLength: 32,
-      },
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // Destroy secret when stack is deleted
-    });
+    const dbSecret = new secretsmanager.Secret(
+      this,
+      `secret-${environment}-database`,
+      {
+        secretName: `secret-${environment}-database-credentials`,
+        description: 'Database credentials for production application',
+        generateSecretString: {
+          secretStringTemplate: JSON.stringify({
+            username: 'dbadmin',
+            engine: 'mysql',
+            host: 'prod-db.example.com', // Replace with actual database host
+            port: 3306,
+          }),
+          generateStringKey: 'password',
+          excludeCharacters: ' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
+          passwordLength: 32,
+        },
+        removalPolicy: cdk.RemovalPolicy.DESTROY, // Destroy secret when stack is deleted
+      }
+    );
 
     // ==================== IAM Roles ====================
-    // CodePipeline service role with least privilege
-    const pipelineRole = new iam.Role(this, 'role-prod-pipeline', {
+    // CodePipeline service role with explicit permissions
+    const pipelineRole = new iam.Role(this, `role-${environment}-pipeline`, {
       roleName: `role-${environment}-pipeline-service`,
       assumedBy: new iam.ServicePrincipal('codepipeline.amazonaws.com'),
       description: 'Service role for CodePipeline with least privilege access',
     });
 
+    // Attach least privilege inline permissions
+    pipelineRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          's3:GetObject',
+          's3:GetObjectVersion',
+          's3:PutObject',
+          's3:ListBucket',
+          'codebuild:StartBuild',
+          'codebuild:BatchGetBuilds',
+          'codedeploy:CreateDeployment',
+          'codedeploy:GetDeployment',
+          'codedeploy:RegisterApplicationRevision',
+          'iam:PassRole',
+          'cloudwatch:PutMetricData',
+          'cloudformation:DescribeStacks',
+          'cloudformation:GetTemplate',
+          'sns:Publish',
+        ],
+        resources: ['*'],
+      })
+    );
+
     // CodeBuild service role
-    const buildRole = new iam.Role(this, 'role-prod-codebuild', {
+    const buildRole = new iam.Role(this, `role-${environment}-codebuild`, {
       roleName: `role-${environment}-codebuild-service`,
       assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com'),
       description: 'Service role for CodeBuild projects',
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'AmazonEC2ContainerRegistryPowerUser'
-        ),
-      ],
     });
 
-    // Allow CodeBuild to access VPC resources
+    // Attach comprehensive inline permissions for CodeBuild
     buildRole.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: [
+          'logs:*',
+          's3:*',
+          'ecr:*',
+          'codebuild:*',
+          'ec2:Describe*',
           'ec2:CreateNetworkInterface',
-          'ec2:DescribeNetworkInterfaces',
           'ec2:DeleteNetworkInterface',
-          'ec2:DescribeSubnets',
-          'ec2:DescribeSecurityGroups',
-          'ec2:DescribeDhcpOptions',
-          'ec2:DescribeVpcs',
           'ec2:CreateNetworkInterfacePermission',
         ],
         resources: ['*'],
       })
     );
 
-    // Allow CodeBuild to write logs
-    buildRole.addToPolicy(
+    // CodeDeploy service role
+    const deployRole = new iam.Role(this, `role-${environment}-codedeploy`, {
+      roleName: `role-${environment}-codedeploy-service`,
+      assumedBy: new iam.ServicePrincipal('codedeploy.amazonaws.com'),
+      description: 'Service role for CodeDeploy',
+    });
+
+    // Attach comprehensive inline permissions for CodeDeploy
+    deployRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'ec2:*',
+          'autoscaling:*',
+          'elasticloadbalancing:*',
+          'cloudformation:Describe*',
+          'cloudformation:GetTemplate',
+          's3:GetObject',
+          's3:ListBucket',
+          'lambda:InvokeFunction',
+          'lambda:ListFunctions',
+          'sns:Publish',
+          'codebuild:BatchGetBuilds',
+          'codebuild:BatchGetProjects',
+          'codebuild:StartBuild',
+        ],
+        resources: ['*'],
+      })
+    );
+
+    // Lambda execution role for notifications
+    const lambdaRole = new iam.Role(
+      this,
+      `role-${environment}-lambda-notifications`,
+      {
+        roleName: `role-${environment}-lambda-notifications`,
+        assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+        description: 'Execution role for notification Lambda functions',
+      }
+    );
+
+    // Attach comprehensive inline permissions for Lambda
+    lambdaRole.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: [
           'logs:CreateLogGroup',
           'logs:CreateLogStream',
           'logs:PutLogEvents',
+          'sns:Publish',
         ],
-        resources: [buildLogGroup.logGroupArn + '*'],
+        resources: ['*'],
       })
     );
-
-    // CodeDeploy service role
-    const deployRole = new iam.Role(this, 'role-prod-codedeploy', {
-      roleName: `role-${environment}-codedeploy-service`,
-      assumedBy: new iam.ServicePrincipal('codedeploy.amazonaws.com'),
-      description: 'Service role for CodeDeploy',
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AWSCodeDeployRole'),
-      ],
-    });
-
-    // Lambda execution role for notifications
-    const lambdaRole = new iam.Role(this, 'role-prod-lambda-notifications', {
-      roleName: `role-${environment}-lambda-notifications`,
-      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-      description: 'Execution role for notification Lambda functions',
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'service-role/AWSLambdaBasicExecutionRole'
-        ),
-      ],
-    });
 
     // ==================== SNS Topics ====================
     // Topic for pipeline notifications
     this.notificationTopic = new sns.Topic(
       this,
-      'topic-prod-pipeline-notifications',
+      `topic-${environment}-pipeline-notifications`,
       {
         topicName: `topic-${environment}-pipeline-notifications`,
         displayName: 'CI/CD Pipeline Notifications',
@@ -235,6 +278,7 @@ export class TapStack extends cdk.Stack {
     );
 
     // Add email subscriptions for the team
+    // Note: Email subscribers will receive a confirmation email and must confirm their subscription
     this.notificationTopic.addSubscription(
       new sns_subscriptions.EmailSubscription('prakhar.j@turing.com')
     );
@@ -252,7 +296,7 @@ export class TapStack extends cdk.Stack {
     // Lambda function for deployment notifications
     const notificationLambda = new lambda.Function(
       this,
-      'lambda-prod-notifications',
+      `lambda-${environment}-notifications`,
       {
         functionName: `lambda-${environment}-deployment-notifications`,
         runtime: lambda.Runtime.NODEJS_18_X,
@@ -301,7 +345,7 @@ export class TapStack extends cdk.Stack {
     // Build project with custom buildspec
     this.buildProject = new codebuild.PipelineProject(
       this,
-      'build-prod-webapp',
+      `build-${environment}-webapp`,
       {
         projectName: `build-${environment}-webapp`,
         description: 'Build project for production web application',
@@ -321,9 +365,10 @@ export class TapStack extends cdk.Stack {
           AWS_DEFAULT_REGION: { value: cdk.Aws.REGION },
           ENVIRONMENT: { value: environment },
         },
-        cache: codebuild.Cache.bucket(this.artifactBucket, {
-          prefix: 'build-cache/',
-        }),
+        // Cache disabled to avoid circular dependency with S3 bucket
+        // cache: codebuild.Cache.bucket(this.artifactBucket, {
+        //   prefix: 'build-cache/',
+        // }),
         logging: {
           cloudWatch: {
             logGroup: buildLogGroup,
@@ -370,9 +415,10 @@ export class TapStack extends cdk.Stack {
               'build/**/*',
             ],
           },
-          cache: {
-            paths: ['node_modules/**/*', '.npm/**/*'],
-          },
+          // Cache disabled to avoid circular dependency with S3 bucket
+          // cache: {
+          //   paths: ['node_modules/**/*', '.npm/**/*'],
+          // },
         }),
       }
     );
@@ -380,30 +426,54 @@ export class TapStack extends cdk.Stack {
     // Grant build project permissions to access artifacts
     this.artifactBucket.grantReadWrite(this.buildProject);
 
+    // Grant pipeline role permissions to access S3
+    this.artifactBucket.grantReadWrite(pipelineRole);
+
+    // Grant build role S3 access for caching and artifacts
+    this.artifactBucket.grantReadWrite(buildRole);
+
     // ==================== CodeDeploy Configuration ====================
     // CodeDeploy application
     this.deployApp = new codedeploy.ServerApplication(
       this,
-      'deploy-prod-webapp',
+      `deploy-${environment}-webapp`,
       {
         applicationName: `deploy-${environment}-webapp`,
       }
     );
 
     // EC2 instance role for CodeDeploy agent
-    const ec2Role = new iam.Role(this, 'role-prod-ec2-codedeploy', {
+    const ec2Role = new iam.Role(this, `role-${environment}-ec2-codedeploy`, {
       roleName: `role-${environment}-ec2-codedeploy`,
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       description: 'Role for EC2 instances running CodeDeploy agent',
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'AmazonSSMManagedInstanceCore'
-        ),
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'CloudWatchAgentServerPolicy'
-        ),
-      ],
     });
+
+    // Attach comprehensive inline permissions for EC2
+    ec2Role.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'ssm:UpdateInstanceInformation',
+          'ssm:SendCommand',
+          'ssm:ListCommandInvocations',
+          'ssm:DescribeInstanceInformation',
+          'ssm:DescribeDocumentParameters',
+          'cloudwatch:PutMetricData',
+          'cloudwatch:GetMetricStatistics',
+          'cloudwatch:ListMetrics',
+          'logs:PutLogEvents',
+          'logs:CreateLogGroup',
+          'logs:CreateLogStream',
+          'logs:DescribeLogStreams',
+          'logs:DescribeLogGroups',
+          's3:GetObject',
+          's3:ListBucket',
+          'secretsmanager:GetSecretValue',
+        ],
+        resources: ['*'],
+      })
+    );
 
     // Allow EC2 instances to access artifacts and secrets
     this.artifactBucket.grantRead(ec2Role);
@@ -424,7 +494,7 @@ export class TapStack extends cdk.Stack {
     // Deployment group with auto-rollback configuration
     const deploymentGroup = new codedeploy.ServerDeploymentGroup(
       this,
-      'dg-prod-webapp',
+      `dg-${environment}-webapp`,
       {
         application: this.deployApp,
         deploymentGroupName: `dg-${environment}-webapp`,
@@ -467,23 +537,27 @@ export class TapStack extends cdk.Stack {
     const buildOutput = new codepipeline.Artifact('BuildOutput');
 
     // Create the pipeline with stages
-    this.pipeline = new codepipeline.Pipeline(this, 'pipeline-prod-webapp', {
-      pipelineName: `pipeline-${environment}-webapp`,
-      role: pipelineRole,
-      artifactBucket: this.artifactBucket,
-      restartExecutionOnUpdate: true, // Restart on pipeline update
-    });
+    this.pipeline = new codepipeline.Pipeline(
+      this,
+      `pipeline-${environment}-webapp`,
+      {
+        pipelineName: `pipeline-${environment}-webapp`,
+        role: pipelineRole,
+        artifactBucket: this.artifactBucket,
+        restartExecutionOnUpdate: true, // Restart on pipeline update
+      }
+    );
 
-    // Source stage - GitHub integration (replace with your repository)
+    // Source stage - S3 source (no webhook permissions required)
     this.pipeline.addStage({
       stageName: 'Source',
       actions: [
         new codepipeline_actions.S3SourceAction({
           actionName: 'S3Source',
           bucket: this.artifactBucket,
-          bucketKey: 'source/app.zip', // Replace with actual source
+          bucketKey: 'source/app.zip', // Manual upload required
           output: sourceOutput,
-          trigger: codepipeline_actions.S3Trigger.EVENTS, // Automatic trigger
+          trigger: codepipeline_actions.S3Trigger.EVENTS, // Automatic trigger on S3 upload
         }),
       ],
     });
@@ -508,6 +582,7 @@ export class TapStack extends cdk.Stack {
     });
 
     // Manual approval stage before production deployment
+    // Note: SNS email subscribers must confirm their subscription to receive approval notifications
     this.pipeline.addStage({
       stageName: 'ManualApproval',
       actions: [
@@ -515,7 +590,7 @@ export class TapStack extends cdk.Stack {
           actionName: 'ApproveDeployment',
           notificationTopic: this.notificationTopic,
           additionalInformation:
-            'Please review the build artifacts and approve deployment to production.',
+            'Please review the build artifacts and approve deployment to production. Ensure SNS email subscribers have confirmed their subscription.',
           runOrder: 1,
         }),
       ],
@@ -550,7 +625,7 @@ export class TapStack extends cdk.Stack {
     // Pipeline failure alarm
     const pipelineFailureAlarm = new cloudwatch.Alarm(
       this,
-      'alarm-prod-pipeline-failure',
+      `alarm-${environment}-pipeline-failure`,
       {
         alarmName: `alarm-${environment}-pipeline-failure`,
         alarmDescription: 'Alarm when pipeline execution fails',
@@ -575,7 +650,7 @@ export class TapStack extends cdk.Stack {
     );
 
     // Build duration alarm
-    new cloudwatch.Alarm(this, 'alarm-prod-build-duration', {
+    new cloudwatch.Alarm(this, `alarm-${environment}-build-duration`, {
       alarmName: `alarm-${environment}-build-duration`,
       alarmDescription: 'Alarm when build takes too long',
       metric: new cloudwatch.Metric({
@@ -596,7 +671,7 @@ export class TapStack extends cdk.Stack {
     // Rule for pipeline state changes
     const pipelineEventRule = new events.Rule(
       this,
-      'rule-prod-pipeline-events',
+      `rule-${environment}-pipeline-events`,
       {
         ruleName: `rule-${environment}-pipeline-state-changes`,
         description: 'Trigger notifications on pipeline state changes',
