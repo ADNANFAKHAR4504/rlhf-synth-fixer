@@ -1,0 +1,14 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350155",
+  "team": "2",
+  "startedAt": "2025-10-17T11:44:40.056Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "aws_services": "S3 Bucket, CloudFormation, Lambda, Fargate, VPC"
+}
