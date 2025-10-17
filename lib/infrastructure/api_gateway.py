@@ -76,7 +76,6 @@ class APIGatewayStack:
         )
         
         # Create integrations and routes for each Lambda function
-        # This fixes the Output key issue by not using Outputs as dictionary keys
         self._create_routes(api, stage_name)
         
         # Create stage

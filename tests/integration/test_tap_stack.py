@@ -635,14 +635,14 @@ class TestEndToEndFlows(BaseIntegrationTest):
     """
     End-to-End tests - complete flows involving 3+ services.
     These tests validate the entire serverless backend workflow.
-    TRUE E2E: Tests trigger the entry point and verify the complete flow.
+    Tests trigger the entry point and verify the complete flow.
     """
 
     def test_complete_api_gateway_to_lambda_to_cloudwatch_flow(self):
         """
         E2E TEST: API Gateway → Lambda → CloudWatch Logs (3 services)
         
-        TRUE E2E: HTTP request triggers API Gateway → invokes Lambda → logs to CloudWatch.
+        HTTP request triggers API Gateway → invokes Lambda → logs to CloudWatch.
         Tests the complete RESTful API request flow.
         Maps to PROMPT: Complete RESTful API with logging
         """
@@ -658,7 +658,7 @@ class TestEndToEndFlows(BaseIntegrationTest):
         print(f"Lambda: {users_function_name}")
         print(f"{'='*70}\n")
 
-        # TRUE E2E: Make HTTP request to API Gateway (ENTRY POINT)
+        # E2E: Make HTTP request to API Gateway (ENTRY POINT)
         endpoint = f"{api_url_dev}/users"
         unique_id = str(uuid.uuid4())
         
@@ -738,7 +738,7 @@ class TestEndToEndFlows(BaseIntegrationTest):
         """
         E2E TEST: API Gateway → Lambda → S3 → CloudWatch (4 services)
         
-        TRUE E2E: HTTP POST creates item → Lambda writes to S3 → logs to CloudWatch.
+        HTTP POST creates item → Lambda writes to S3 → logs to CloudWatch.
         Verifies the complete data persistence flow.
         Maps to PROMPT: Complete serverless backend with storage
         """
@@ -756,7 +756,7 @@ class TestEndToEndFlows(BaseIntegrationTest):
         print(f"S3 Bucket: {uploads_bucket_name}")
         print(f"{'='*70}\n")
 
-        # TRUE E2E: POST to API Gateway (ENTRY POINT)
+        # POST to API Gateway (ENTRY POINT)
         endpoint = f"{api_url_dev}/items"
         test_item_id = f"e2e-test-{uuid.uuid4()}"
         
@@ -855,7 +855,7 @@ class TestEndToEndFlows(BaseIntegrationTest):
         """
         E2E TEST: API Gateway → Lambda → SSM → S3 → CloudWatch (5 services)
         
-        TRUE E2E: HTTP request triggers Lambda which retrieves SSM config → writes to S3 → logs to CloudWatch.
+        HTTP request triggers Lambda which retrieves SSM config → writes to S3 → logs to CloudWatch.
         Tests the complete serverless backend with configuration management.
         Maps to PROMPT: Complete serverless architecture with SSM and S3
         """
@@ -871,7 +871,7 @@ class TestEndToEndFlows(BaseIntegrationTest):
         print(f"API URL: {api_url_dev}")
         print(f"{'='*70}\n")
 
-        # TRUE E2E: GET request to API Gateway (ENTRY POINT)
+        # GET request to API Gateway (ENTRY POINT)
         endpoint = f"{api_url_dev}/users"
         
         print(f"ENTRY POINT: HTTP GET to API Gateway")
