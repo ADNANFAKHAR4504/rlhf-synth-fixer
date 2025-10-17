@@ -693,21 +693,21 @@ func buildElastiCacheComponent(ctx *pulumi.Context, environmentSuffix string, vp
 	}
 
 	replicationGroup, err := elasticache.NewReplicationGroup(ctx, "RedisCluster", &elasticache.ReplicationGroupArgs{
-		ReplicationGroupId: pulumi.String(fmt.Sprintf("healthcare-redis-%s", environmentSuffix)),
-		Description:        pulumi.String("ElastiCache Redis for healthcare data caching"),
-		Engine:             pulumi.String("redis"),
-		EngineVersion:               pulumi.String("7.0"),
-		NodeType:                    pulumi.String("cache.t3.micro"),
-		NumCacheClusters:            pulumi.Int(2),
-		AutomaticFailoverEnabled:    pulumi.Bool(true),
-		MultiAzEnabled:              pulumi.Bool(true),
-		SubnetGroupName:             subnetGroup.Name,
-		SecurityGroupIds:            pulumi.StringArray{sg.ID()},
-		AtRestEncryptionEnabled:     pulumi.Bool(true),
-		TransitEncryptionEnabled:    pulumi.Bool(true),
-		KmsKeyId:                    kmsKey.Arn,
-		SnapshotRetentionLimit:      pulumi.Int(5),
-		SnapshotWindow:              pulumi.String("03:00-05:00"),
+		ReplicationGroupId:       pulumi.String(fmt.Sprintf("healthcare-redis-%s", environmentSuffix)),
+		Description:              pulumi.String("ElastiCache Redis for healthcare data caching"),
+		Engine:                   pulumi.String("redis"),
+		EngineVersion:            pulumi.String("7.0"),
+		NodeType:                 pulumi.String("cache.t3.micro"),
+		NumCacheClusters:         pulumi.Int(2),
+		AutomaticFailoverEnabled: pulumi.Bool(true),
+		MultiAzEnabled:           pulumi.Bool(true),
+		SubnetGroupName:          subnetGroup.Name,
+		SecurityGroupIds:         pulumi.StringArray{sg.ID()},
+		AtRestEncryptionEnabled:  pulumi.Bool(true),
+		TransitEncryptionEnabled: pulumi.Bool(true),
+		KmsKeyId:                 kmsKey.Arn,
+		SnapshotRetentionLimit:   pulumi.Int(5),
+		SnapshotWindow:           pulumi.String("03:00-05:00"),
 		Tags: pulumi.StringMap{
 			"Name":        pulumi.String(fmt.Sprintf("healthcare-redis-%s", environmentSuffix)),
 			"Environment": pulumi.String(environmentSuffix),
@@ -1070,7 +1070,7 @@ func buildAPIGatewayComponent(ctx *pulumi.Context, environmentSuffix string) (*A
 
 	deployment, err := apigateway.NewDeployment(ctx, "APIDeployment", &apigateway.DeploymentArgs{
 		RestApi: restAPI.ID(),
-	}, pulumi.DependsOn([]pulumi.Resource{method}))
+	}, pulumi.DependsOn([]pulumi.Resource{integration, methodResponse}))
 	if err != nil {
 		return nil, err
 	}
