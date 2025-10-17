@@ -5,7 +5,7 @@ This implementation creates a comprehensive high-throughput IoT monitoring syste
 ## Architecture Overview
 
 The system consists of:
-1. **IoT Core** - Device connectivity and MQTT messaging
+1. **IoT Core** - Device connectivity and MQTT messaging 
 2. **Kinesis Data Streams** - High-throughput real-time data ingestion
 3. **Lambda Functions** - Serverless data processing and transformation
 4. **DynamoDB** - Time-series data storage with TTL for hot/cold tiers
