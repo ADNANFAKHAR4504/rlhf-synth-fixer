@@ -35,7 +35,6 @@ interface TapStackProps {
   hostedZoneId?: string;
 }
 
-
 const AWS_REGION_OVERRIDE = '';
 
 export class TapStack extends TerraformStack {
