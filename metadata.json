@@ -1,0 +1,14 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349032",
+  "team": "3",
+  "startedAt": "2025-10-17T10:01:24.871Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "VPC, Subnet, RouteTable, Route, SubnetRouteTableAssociation, InternetGateway, VPCGatewayAttachment, EIP, NatGateway, SecurityGroup, FlowLog, LogGroup, LoadBalancer, TargetGroup, Listener, LaunchTemplate, AutoScalingGroup, DBSubnetGroup, DBInstance, Bucket, BucketPolicy, Key, Alias, Role, Policy, InstanceProfile, Parameter, Trail"
+}
