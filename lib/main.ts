@@ -53,8 +53,10 @@ export class FinTechTradingStack extends TerraformStack {
 
     // Configure S3 Backend for state management if available
     const stateBucket = process.env.TERRAFORM_STATE_BUCKET;
-    const stateBucketRegion = process.env.TERRAFORM_STATE_BUCKET_REGION || 'us-east-1';
-    const stateKey = process.env.TERRAFORM_STATE_BUCKET_KEY || environmentSuffix;
+    const stateBucketRegion =
+      process.env.TERRAFORM_STATE_BUCKET_REGION || 'us-east-1';
+    const stateKey =
+      process.env.TERRAFORM_STATE_BUCKET_KEY || environmentSuffix;
 
     if (stateBucket) {
       new S3Backend(this, {
@@ -770,6 +772,7 @@ export class FinTechTradingStack extends TerraformStack {
         requestParameters: {
           StreamName: kinesisStream.name,
           PartitionKey: '$request.body.partitionKey',
+          Data: '$request.body.data',
         },
         payloadFormatVersion: '1.0',
         timeoutMilliseconds: 29000,
