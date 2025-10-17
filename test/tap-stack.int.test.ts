@@ -537,11 +537,11 @@ describe('Multi-Region Payment Gateway - Integration Tests', () => {
         // Must have either format
         if (!hasCanonicalUser && !hasCloudFrontOAI) return false;
 
-        // Check if action is s3:GetObject (can be string or array)
+        // Check if action includes s3:GetObject* (can be string or array)
         if (typeof s.Action === 'string') {
-          return s.Action === 's3:GetObject';
+          return s.Action === 's3:GetObject' || s.Action.includes('GetObject');
         } else if (Array.isArray(s.Action)) {
-          return s.Action.includes('s3:GetObject');
+          return s.Action.some((action: string) => action === 's3:GetObject' || action.includes('GetObject'));
         }
         return false;
       });

@@ -278,6 +278,9 @@ export class RegionalStack extends cdk.Stack {
       `PaymentsApi-${props.environmentSuffix}`,
       {
         restApiName: `payments-api-${props.environmentSuffix}`,
+        endpointConfiguration: {
+          types: [apigateway.EndpointType.REGIONAL],
+        },
         deployOptions: {
           stageName: 'prod',
           loggingLevel: apigateway.MethodLoggingLevel.INFO,

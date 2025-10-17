@@ -40,11 +40,13 @@ This CDK TypeScript project implements a secure, serverless Global Payments Gate
 
 1. **VPC Architecture**: Use VPC endpoints (DynamoDB, S3) instead of NAT Gateway for cost optimization and faster deployments
 2. **VPC Link Architecture**: REST API Gateway requires NLB → ALB → Lambda (NLB supports VPC Link, ALB supports Lambda targets)
-3. **CloudFront Function**: Path rewriting (`/api/*` → `/prod/*`) for API Gateway integration
-4. **S3 Bucket Policies**: Use CloudFront OAI (Origin Access Identity) with CanonicalUser, SSL enforcement
-5. **Composite Primary Key**: DynamoDB needs both `transactionId` (partition) and `timestamp` (sort) for unique transactions
-6. **KMS in Each Region**: Global Tables require separate KMS keys per region
-7. **Environment Suffix**: All resources must use parameterized environment suffix (no hardcoded values)
+3. **Lambda@Edge (CRITICAL)**: Use Lambda@Edge for origin request path rewriting (`/api/*` → `/prod/*`), NOT CloudFront Function
+4. **REGIONAL API Gateway (CRITICAL)**: Must use REGIONAL endpoint type (not EDGE) to avoid CloudFront→CloudFront routing issues
+5. **Origin Request Policy (CRITICAL)**: Use `ALL_VIEWER_EXCEPT_HOST_HEADER` for REGIONAL API Gateway compatibility
+6. **S3 Bucket Policies**: Use CloudFront OAI (Origin Access Identity) with CanonicalUser, SSL enforcement
+7. **Composite Primary Key**: DynamoDB needs both `transactionId` (partition) and `timestamp` (sort) for unique transactions
+8. **KMS in Each Region**: Global Tables require separate KMS keys per region
+9. **Environment Suffix**: All resources must use parameterized environment suffix (no hardcoded values)
 
 ---
 
@@ -207,7 +209,9 @@ export class DatabaseStack extends cdk.Stack {
 
 ### 3. Regional Stack (lib/regional-stack.ts)
 
-Regional infrastructure with **optimized VPC architecture** (no NAT Gateway, uses VPC endpoints):
+Regional infrastructure with **optimized VPC architecture** (no NAT Gateway, uses VPC endpoints).
+
+**CRITICAL**: API Gateway must be **REGIONAL** endpoint type (not EDGE) to avoid double CloudFront layer issues.
 
 ```typescript
 import * as cdk from 'aws-cdk-lib';
@@ -461,11 +465,15 @@ export class RegionalStack extends cdk.Stack {
     );
 
     // API Gateway with Lambda Authorizer
+    // CRITICAL: Must use REGIONAL endpoint type to avoid CloudFront→CloudFront routing
     this.apiGateway = new apigateway.RestApi(
       this,
       `PaymentsApi-${props.environmentSuffix}`,
       {
         restApiName: `payments-api-${props.environmentSuffix}`,
+        endpointConfiguration: {
+          types: [apigateway.EndpointType.REGIONAL],
+        },
         deployOptions: {
           stageName: 'prod',
           loggingLevel: apigateway.MethodLoggingLevel.INFO,
@@ -654,13 +662,21 @@ export class SecurityStack extends cdk.Stack {
 
 ### 5. Global Stack (lib/global-stack.ts)
 
-CloudFront with path rewriting function and Route 53 failover:
+CloudFront with **Lambda@Edge** path rewriting and Route 53 failover.
+
+**CRITICAL FIXES**:
+
+1. Use **Lambda@Edge** (not CloudFront Function) for origin request path rewriting
+2. Use `edgeLambdas` property (CDK v2 syntax, not `lambdaFunctionAssociations`)
+3. Use `ALL_VIEWER_EXCEPT_HOST_HEADER` origin request policy (required for REGIONAL API Gateway)
+4. Path pattern must be `'api/*'` (no leading slash per CDK requirements)
 
 ```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
@@ -1427,73 +1443,3 @@ exports.handler = async event => {
   </body>
 </html>
 ```
-
-## Key Implementation Details
-
-### 1. VPC Architecture Without NAT Gateway
-
-- Uses `PRIVATE_ISOLATED` subnets
-- VPC Gateway Endpoints for DynamoDB and S3
-- Faster deployment, lower cost
-
-### 2. VPC Link Architecture
-
-- **NLB → ALB → Lambda** (REST API Gateway requires NLB for VPC Link, ALB supports Lambda targets)
-- Private API Gateway integration
-- No public internet access required
-
-### 3. CloudFront Function
-
-- Rewrites `/api/*` → `/prod/*` paths
-- Executes at edge locations
-- Sub-millisecond latency
-
-### 4. DynamoDB Composite Key
-
-- Partition key: `transactionId`
-- Sort key: `timestamp`
-- Allows multiple transactions per ID with time ordering
-
-### 5. KMS Keys Per Region
-
-- Global Tables require separate KMS keys in each region
-- Automatic key rotation enabled
-- Predictable alias naming for cross-region references
-
-### 6. S3 Bucket Policies
-
-- CloudFront OAI using `CanonicalUser` principal
-- SSL enforcement via `Deny` policy
-- No public access (BlockPublicAccess enabled)
-
-### 7. Environment Suffix Pattern
-
-- All resources parameterized with `environmentSuffix`
-- Supports multiple environments (dev, staging, prod)
-- No hardcoded values
-
-## Test Coverage
-
-This implementation achieves:
-
-- **100% unit test coverage** (169 tests)
-- **31/38 integration tests passing**
-- All security requirements validated
-- Cross-region replication confirmed
-- Failover mechanisms tested
-
-## Deployment
-
-```bash
-# Set environment suffix
-export ENVIRONMENT_SUFFIX=dev
-
-# Deploy all stacks
-npx cdk deploy --all --context environmentSuffix=$ENVIRONMENT_SUFFIX
-
-# Run tests
-npm run test:unit      # Unit tests
-npm run test:integration  # Integration tests
-```
-
-This implementation represents the ideal solution, addressing all requirements for a production-ready, secure, serverless global payments gateway with automatic failover capabilities.
