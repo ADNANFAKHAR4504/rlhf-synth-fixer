@@ -14,7 +14,7 @@ The template should provision the following security resources in the us-west-2 
   Create a customer-managed KMS key for encryption.
   Create a private S3 bucket that is encrypted using the KMS key created above. The bucket policy should restrict access to a specific CIDR block.
 5.Secrets Management:
-  Store a sample database password securely in the AWS Systems Manager Parameter Store as a SecureString.
+  Store a sample database password securely in AWS Secrets Manager with automatic encryption.
 6.Compliance:
   Add an AWS Config rule to check for and flag publicly accessible S3 buckets.
 

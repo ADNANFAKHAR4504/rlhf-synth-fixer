@@ -1,18 +1,66 @@
 
-### 1. SSM Parameter with Hardcoded Password Instead of Secrets Manager
+### 1. Insecure S3 Bucket Policy Design Pattern
 
 **Model Response:**
 ```json
-"DatabasePasswordParameter": {
-  "Type": "AWS::SSM::Parameter",
+"PrivateS3BucketPolicy": {
+  "Type": "AWS::S3::BucketPolicy",
   "Properties": {
-    "Name": "/security/database/password",
-    "Description": "Securely stored database password",
-    "Type": "SecureString",
-    "Value": "ChangeMeImmediately123!",
-    "Tags": {
-      "Purpose": "DatabaseCredentials",
-      "Environment": "Production"
+    "Bucket": {
+      "Ref": "PrivateS3Bucket"
+    },
+    "PolicyDocument": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "DenyInsecureConnections",
+          "Effect": "Deny",
+          "Principal": "*",
+          "Action": "s3:*",
+          "Resource": [
+            {
+              "Fn::GetAtt": ["PrivateS3Bucket", "Arn"]
+            },
+            {
+              "Fn::Sub": "${PrivateS3Bucket.Arn}/*"
+            }
+          ],
+          "Condition": {
+            "Bool": {
+              "aws:SecureTransport": "false"
+            }
+          }
+        },
+        {
+          "Sid": "AllowAccessFromSpecificCIDR",
+          "Effect": "Allow",
+          "Principal": {
+            "AWS": {
+              "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+            }
+          },
+          "Action": [
+            "s3:GetObject",
+            "s3:PutObject",
+            "s3:ListBucket"
+          ],
+          "Resource": [
+            {
+              "Fn::GetAtt": ["PrivateS3Bucket", "Arn"]
+            },
+            {
+              "Fn::Sub": "${PrivateS3Bucket.Arn}/*"
+            }
+          ],
+          "Condition": {
+            "IpAddress": {
+              "aws:SourceIp": {
+                "Ref": "S3BucketAccessCIDR"
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }
@@ -20,36 +68,64 @@
 
 **Actual Fix (IDEAL_RESPONSE):**
 ```json
-"DBSecret": {
-  "Type": "AWS::SecretsManager::Secret",
+"SecureS3BucketPolicy": {
+  "Type": "AWS::S3::BucketPolicy",
   "Properties": {
-    "Name": {
-      "Fn::Sub": "/security/database/credentials-${EnvironmentSuffix}"
+    "Bucket": {
+      "Ref": "SecureS3Bucket"
     },
-    "Description": "Securely stored database credentials",
-    "GenerateSecretString": {
-      "SecretStringTemplate": "{\"username\": \"admin\"}",
-      "GenerateStringKey": "password",
-      "PasswordLength": 32,
-      "ExcludeCharacters": "\"@/\\"
-    },
-    "Tags": [
-      {
-        "Key": "Purpose",
-        "Value": "DatabaseCredentials"
-      },
-      {
-        "Key": "Environment",
-        "Value": "Production"
-      }
-    ]
+    "PolicyDocument": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "DenyInsecureConnections",
+          "Effect": "Deny",
+          "Principal": "*",
+          "Action": "s3:*",
+          "Resource": [
+            {
+              "Fn::GetAtt": ["SecureS3Bucket", "Arn"]
+            },
+            {
+              "Fn::Sub": "${SecureS3Bucket.Arn}/*"
+            }
+          ],
+          "Condition": {
+            "Bool": {
+              "aws:SecureTransport": "false"
+            }
+          }
+        },
+        {
+          "Sid": "RestrictAccessToSpecificCIDR",
+          "Effect": "Deny",
+          "Principal": "*",
+          "Action": "s3:*",
+          "Resource": [
+            {
+              "Fn::GetAtt": ["SecureS3Bucket", "Arn"]
+            },
+            {
+              "Fn::Sub": "${SecureS3Bucket.Arn}/*"
+            }
+          ],
+          "Condition": {
+            "NotIpAddress": {
+              "aws:SourceIp": {
+                "Ref": "S3AccessCIDR"
+              }
+            }
+          }
+        }
+      ]
+    }
   }
 }
 ```
 
-**Failure Impact:** Uses AWS::SSM::Parameter with hardcoded password value "ChangeMeImmediately123!" stored as SecureString, creating security risk and requiring manual password rotation. Tags format is incorrect (object instead of array), causing deployment error.
+**Failure Impact:** Uses "Allow" effect with IpAddress condition for CIDR restriction, creating allow-by-default security posture. This requires explicit IAM permissions to be combined with bucket policy, making access control complex and error-prone. If IAM permissions are too broad, users outside the CIDR can still access the bucket.
 
-**Root Cause:** Model used SSM Parameter Store with static hardcoded password instead of AWS Secrets Manager with auto-generated credentials. The ideal implementation uses Secrets Manager's GenerateSecretString to create a secure 32-character password automatically, eliminating hardcoded credentials and enabling automatic rotation.
+**Root Cause:** Model used "Effect: Allow" with positive IpAddress condition instead of "Effect: Deny" with NotIpAddress condition. The ideal implementation uses deny-by-default approach where access is denied unless source IP matches the allowed CIDR, providing stronger security guarantees regardless of IAM permissions.
 
 ---
 

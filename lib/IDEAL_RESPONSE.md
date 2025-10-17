@@ -1,6 +1,5 @@
 
 ```json
-
 {
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "AWS Security Baseline Template - Provisions essential security resources including IAM, VPC security, logging, monitoring, encryption, and compliance controls",
@@ -455,30 +454,6 @@
       }
     },
 
-    "GuardDutyDetector": {
-      "Type": "AWS::GuardDuty::Detector",
-      "Properties": {
-        "Enable": true,
-        "FindingPublishingFrequency": "FIFTEEN_MINUTES",
-        "DataSources": {
-          "S3Logs": {
-            "Enable": true
-          },
-          "Kubernetes": {
-            "AuditLogs": {
-              "Enable": true
-            }
-          }
-        },
-        "Tags": [
-          {
-            "Key": "Purpose",
-            "Value": "ThreatDetection"
-          }
-        ]
-      }
-    },
-
     "SecureS3Bucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
@@ -840,17 +815,6 @@
         }
       }
     },
-    "GuardDutyDetectorId": {
-      "Description": "ID of the GuardDuty Detector",
-      "Value": {
-        "Ref": "GuardDutyDetector"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "GuardDutyDetector-ID-${EnvironmentSuffix}"
-        }
-      }
-    },
     "IAMRoleArn": {
       "Description": "ARN of the S3 Read-Only IAM Role",
       "Value": {
@@ -875,6 +839,4 @@
     }
   }
 }
-
-
 ```

@@ -1,42 +1,29 @@
 ### Reasoning Trace
 ---
 
-The user is asking for a CloudFormation template that sets up a secure baseline for an AWS environment. Let me break down all the requirements:
+This is a comprehensive request for an AWS CloudFormation template that sets up various security resources. I need to create a JSON template that includes:
 
-1. IAM: Create a role with read-only S3 access policy
-2. VPC Security:
-    - VPC Flow Log for a new VPC
-    - Security Group with SSH (22) and HTTP (80) from 10.0.0.0/16
-3. Logging and Monitoring:
-    - CloudTrail with logs to secure S3 bucket
-    - CloudWatch Alarm for failed console sign-ins
-4. Data Protection:
-    - Customer-managed KMS key
-    - Private S3 bucket encrypted with the KMS key
-    - Bucket policy restricting access to specific CIDR
-5. Secrets Management:
-    - Store sample database password in SSM Parameter Store as SecureString
-6. Compliance:
-    - AWS Config rule for publicly accessible S3 buckets
+1. IAM role with read-only S3 access
+2. VPC with Flow Logs and Security Group
+3. CloudTrail with S3 bucket for logs
+4. CloudWatch Alarm for failed console sign-ins
+5. KMS key for encryption
+6. Private S3 bucket encrypted with KMS
+7. Secrets Manager secret
+8. AWS Config rule for S3 bucket compliance
 
-I'll create a comprehensive CloudFormation template in JSON format that includes all these components. Let me structure this properly:
-
-- Parameters section for customizable values
-- Resources section with all the required components
-- Outputs section for important resource references
-
-I'll make sure to include proper dependencies and configurations for each resource.
+Let me structure this carefully in JSON format.
 ### Answer
 ---
 
-I'll create a comprehensive AWS CloudFormation template that establishes a secure baseline for your AWS environment. This template includes all the security components you've requested.
+I'll create a comprehensive AWS CloudFormation template that provisions all the security resources you've requested. This template follows AWS security best practices and implements defense-in-depth strategies.
 
 ## cloud_security_template.json
 
 ```json
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "Secure baseline CloudFormation template for AWS environment with security best practices",
+  "Description": "Secure baseline CloudFormation template for AWS environment with comprehensive security controls",
   
   "Parameters": {
     "AllowedIPRange": {
@@ -44,21 +31,154 @@ I'll create a comprehensive AWS CloudFormation template that establishes a secur
       "Default": "10.0.0.0/16",
       "Description": "IP address range allowed for SSH and HTTP access"
     },
-    "S3BucketAllowedCIDR": {
+    "S3BucketAccessCIDR": {
       "Type": "String",
-      "Default": "10.0.0.0/8",
+      "Default": "10.0.0.0/16",
       "Description": "CIDR block allowed to access the private S3 bucket"
-    },
-    "DatabasePassword": {
-      "Type": "String",
-      "NoEcho": true,
-      "Default": "MySecurePassword123!",
-      "Description": "Sample database password to store in Parameter Store"
     }
   },
   
   "Resources": {
-    "VPC": {
+    "KMSKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "Description": "Customer-managed KMS key for encryption",
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow CloudTrail to encrypt logs",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudtrail.amazonaws.com"
+              },
+              "Action": [
+                "kms:GenerateDataKey*",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow CloudTrail to describe key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudtrail.amazonaws.com"
+              },
+              "Action": "kms:DescribeKey",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow principals in the account to decrypt log files",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:ReEncryptFrom"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "kms:CallerAccount": {
+                    "Ref": "AWS::AccountId"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "EnableKeyRotation": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "SecurityBaselineKMSKey"
+          }
+        ]
+      }
+    },
+    
+    "KMSKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": "alias/security-baseline-key",
+        "TargetKeyId": {
+          "Ref": "KMSKey"
+        }
+      }
+    },
+    
+    "ReadOnlyS3Role": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "SecurityBaselineReadOnlyS3Role",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [],
+        "Policies": [
+          {
+            "PolicyName": "ReadOnlyS3Policy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:ListBucket",
+                    "s3:GetBucketLocation",
+                    "s3:GetObjectVersion",
+                    "s3:GetBucketVersioning"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Deny",
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:DeleteObject",
+                    "s3:PutBucketPolicy",
+                    "s3:DeleteBucket"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "SecurityBaselineReadOnlyS3Role"
+          }
+        ]
+      }
+    },
+    
+    "SecurityVPC": {
       "Type": "AWS::EC2::VPC",
       "Properties": {
         "CidrBlock": "10.0.0.0/16",
@@ -67,13 +187,13 @@ I'll create a comprehensive AWS CloudFormation template that establishes a secur
         "Tags": [
           {
             "Key": "Name",
-            "Value": "SecureVPC"
+            "Value": "SecurityBaselineVPC"
           }
         ]
       }
     },
     
-    "VPCFlowLogRole": {
+    "VPCFlowLogsRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
         "AssumeRolePolicyDocument": {
@@ -90,7 +210,7 @@ I'll create a comprehensive AWS CloudFormation template that establishes a secur
         },
         "Policies": [
           {
-            "PolicyName": "VPCFlowLogPolicy",
+            "PolicyName": "CloudWatchLogPolicy",
             "PolicyDocument": {
               "Version": "2012-10-17",
               "Statement": [
@@ -122,157 +242,87 @@ I'll create a comprehensive AWS CloudFormation template that establishes a secur
     
     "VPCFlowLog": {
       "Type": "AWS::EC2::FlowLog",
-      "DependsOn": ["VPCFlowLogGroup", "VPCFlowLogRole"],
       "Properties": {
         "ResourceType": "VPC",
-        "ResourceId": { "Ref": "VPC" },
+        "ResourceId": {
+          "Ref": "SecurityVPC"
+        },
         "TrafficType": "ALL",
         "LogDestinationType": "cloud-watch-logs",
-        "LogGroupName": "/aws/vpc/flowlogs",
-        "DeliverLogsPermissionArn": { "Fn::GetAtt": ["VPCFlowLogRole", "Arn"] },
+        "LogGroupName": {
+          "Ref": "VPCFlowLogGroup"
+        },
+        "DeliverLogsPermissionArn": {
+          "Fn::GetAtt": ["VPCFlowLogsRole", "Arn"]
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": "VPCFlowLog"
+            "Value": "SecurityBaselineVPCFlowLog"
           }
         ]
       }
     },
     
-    "SecurityGroup": {
+    "WebServerSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupDescription": "Security group allowing SSH and HTTP from specific IP range",
-        "VpcId": { "Ref": "VPC" },
+        "GroupDescription": "Security group for web servers with SSH and HTTP access",
+        "VpcId": {
+          "Ref": "SecurityVPC"
+        },
         "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
             "FromPort": 22,
             "ToPort": 22,
-            "CidrIp": { "Ref": "AllowedIPRange" },
-            "Description": "Allow SSH from specific IP range"
+            "CidrIp": {
+              "Ref": "AllowedIPRange"
+            },
+            "Description": "SSH access from specific IP range"
           },
           {
             "IpProtocol": "tcp",
             "FromPort": 80,
             "ToPort": 80,
-            "CidrIp": { "Ref": "AllowedIPRange" },
-            "Description": "Allow HTTP from specific IP range"
+            "CidrIp": {
+              "Ref": "AllowedIPRange"
+            },
+            "Description": "HTTP access from specific IP range"
           }
         ],
         "SecurityGroupEgress": [
           {
-            "IpProtocol": "-1",
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
             "CidrIp": "0.0.0.0/0",
-            "Description": "Allow all outbound traffic"
+            "Description": "HTTPS outbound for updates"
           }
         ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": "SecureSecurityGroup"
+            "Value": "SecurityBaselineWebServerSG"
           }
         ]
       }
     },
     
-    "IAMRoleS3ReadOnly": {
-      "Type": "AWS::IAM::Role",
-      "Properties": {
-        "RoleName": "S3ReadOnlyRole",
-        "AssumeRolePolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "ec2.amazonaws.com"
-              },
-              "Action": "sts:AssumeRole"
-            }
-          ]
-        },
-        "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
-        ],
-        "Tags": [
-          {
-            "Key": "Purpose",
-            "Value": "S3ReadOnlyAccess"
-          }
-        ]
-      }
-    },
-    
-    "KMSKey": {
-      "Type": "AWS::KMS::Key",
-      "Properties": {
-        "Description": "Customer-managed KMS key for encryption",
-        "KeyPolicy": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Sid": "Enable IAM User Permissions",
-              "Effect": "Allow",
-              "Principal": {
-                "AWS": { "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root" }
-              },
-              "Action": "kms:*",
-              "Resource": "*"
-            },
-            {
-              "Sid": "Allow CloudTrail to encrypt logs",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "cloudtrail.amazonaws.com"
-              },
-              "Action": [
-                "kms:GenerateDataKey*",
-                "kms:DecryptDataKey"
-              ],
-              "Resource": "*"
-            },
-            {
-              "Sid": "Allow S3 to use the key",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "s3.amazonaws.com"
-              },
-              "Action": [
-                "kms:Decrypt",
-                "kms:GenerateDataKey"
-              ],
-              "Resource": "*"
-            }
-          ]
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": "SecurityBaselineKMSKey"
-          }
-        ]
-      }
-    },
-    
-    "KMSKeyAlias": {
-      "Type": "AWS::KMS::Alias",
-      "Properties": {
-        "AliasName": "alias/security-baseline-key",
-        "TargetKeyId": { "Ref": "KMSKey" }
-      }
-    },
-    
-    "CloudTrailS3Bucket": {
+    "CloudTrailBucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
-        "BucketName": { "Fn::Sub": "cloudtrail-logs-${AWS::AccountId}-${AWS::Region}" },
+        "BucketName": {
+          "Fn::Sub": "cloudtrail-logs-${AWS::AccountId}-${AWS::Region}"
+        },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
             {
               "ServerSideEncryptionByDefault": {
                 "SSEAlgorithm": "aws:kms",
-                "KMSMasterKeyID": { "Ref": "KMSKey" }
+                "KMSMasterKeyID": {
+                  "Fn::GetAtt": ["KMSKey", "Arn"]
+                }
               }
             }
           ]
@@ -297,17 +347,19 @@ I'll create a comprehensive AWS CloudFormation template that establishes a secur
         },
         "Tags": [
           {
-            "Key": "Purpose",
-            "Value": "CloudTrailLogs"
+            "Key": "Name",
+            "Value": "CloudTrailLogsBucket"
           }
         ]
       }
     },
     
-    "CloudTrailS3BucketPolicy": {
+    "CloudTrailBucketPolicy": {
       "Type": "AWS::S3::BucketPolicy",
       "Properties": {
-        "Bucket": { "Ref": "CloudTrailS3Bucket" },
+        "Bucket": {
+          "Ref": "CloudTrailBucket"
+        },
         "PolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -318,7 +370,9 @@ I'll create a comprehensive AWS CloudFormation template that establishes a secur
                 "Service": "cloudtrail.amazonaws.com"
               },
               "Action": "s3:GetBucketAcl",
-              "Resource": { "Fn::GetAtt": ["CloudTrailS3Bucket", "Arn"] }
+              "Resource": {
+                "Fn::GetAtt": ["CloudTrailBucket", "Arn"]
+              }
             },
             {
               "Sid": "AWSCloudTrailWrite",
@@ -327,7 +381,9 @@ I'll create a comprehensive AWS CloudFormation template that establishes a secur
                 "Service": "cloudtrail.amazonaws.com"
               },
               "Action": "s3:PutObject",
-              "Resource": { "Fn::Sub": "${CloudTrailS3Bucket.Arn}/*" },
+              "Resource": {
+                "Fn::Sub": "${CloudTrailBucket.Arn}/*"
+              },
               "Condition": {
                 "StringEquals": {
                   "s3:x-amz-acl": "bucket-owner-full-control"
@@ -341,15 +397,16 @@ I'll create a comprehensive AWS CloudFormation template that establishes a secur
     
     "CloudTrail": {
       "Type": "AWS::CloudTrail::Trail",
-      "DependsOn": ["CloudTrailS3BucketPolicy"],
+      "DependsOn": ["CloudTrailBucketPolicy"],
       "Properties": {
         "TrailName": "SecurityBaselineTrail",
-        "S3BucketName": { "Ref": "CloudTrailS3Bucket" },
+        "S3BucketName": {
+          "Ref": "CloudTrailBucket"
+        },
         "IncludeGlobalServiceEvents": true,
         "IsLogging": true,
         "IsMultiRegionTrail": true,
         "EnableLogFileValidation": true,
-        "KMSKeyId": { "Ref": "KMSKey" },
         "EventSelectors": [
           {
             "ReadWriteType": "All",
@@ -362,27 +419,13 @@ I'll create a comprehensive AWS CloudFormation template that establishes a secur
             ]
           }
         ],
+        "KMSKeyId": {
+          "Ref": "KMSKey"
+        },
         "Tags": [
           {
-            "Key": "Purpose",
-            "Value": "SecurityAudit"
-          }
-        ]
-      }
-    },
-    
-    "FailedSignInMetricFilter": {
-      "Type": "AWS::Logs::MetricFilter",
-      "Properties": {
-        "FilterName": "FailedConsoleSignIn",
-        "FilterPattern": "{ ($.eventName = ConsoleLogin) && ($.responseElements.ConsoleLogin = \"Failure\") }",
-        "LogGroupName": { "Fn::Sub": "/aws/cloudtrail/${CloudTrail}" },
-        "MetricTransformations": [
-          {
-            "MetricName": "FailedConsoleSignInCount",
-            "MetricNamespace": "CloudTrailMetrics",
-            "MetricValue": "1",
-            "DefaultValue": 0
+            "Key": "Name",
+            "Value": "SecurityBaselineTrail"
           }
         ]
       }
@@ -391,29 +434,59 @@ I'll create a comprehensive AWS CloudFormation template that establishes a secur
     "FailedSignInAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": "FailedConsoleSignInAlarm",
-        "AlarmDescription": "Alarm triggered on failed AWS console sign-in attempts",
-        "MetricName": "FailedConsoleSignInCount",
+        "AlarmName": "ConsoleSignInFailures",
+        "AlarmDescription": "Alert on failed AWS Console sign-in attempts",
+        "MetricName": "ConsoleSignInFailure",
         "Namespace": "CloudTrailMetrics",
         "Statistic": "Sum",
         "Period": 300,
         "EvaluationPeriods": 1,
         "Threshold": 3,
-        "ComparisonOperator": "GreaterThanThreshold",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
         "TreatMissingData": "notBreaching"
+      }
+    },
+    
+    "ConsoleSignInFailureMetricFilter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "LogGroupName": {
+          "Ref": "CloudTrailLogGroup"
+        },
+        "FilterPattern": "{ ($.errorCode = *UnauthorizedAccess) || ($.errorCode = *Denied) || ($.errorCode = *Forbidden) }",
+        "MetricTransformations": [
+          {
+            "MetricName": "ConsoleSignInFailure",
+            "MetricNamespace": "CloudTrailMetrics",
+            "MetricValue": "1",
+            "DefaultValue": 0
+          }
+        ]
+      }
+    },
+    
+    "CloudTrailLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/aws/cloudtrail/SecurityBaselineTrail",
+        "RetentionInDays": 30
       }
     },
     
     "PrivateS3Bucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
-        "BucketName": { "Fn::Sub": "private-secure-bucket-${AWS::AccountId}-${AWS::Region}" },
+        "BucketName": {
+          "Fn::Sub": "private-secure-bucket-${AWS::AccountId}-${AWS::Region}"
+        },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
             {
               "ServerSideEncryptionByDefault": {
                 "SSEAlgorithm": "aws:kms",
-                "KMSMasterKeyID": { "Ref": "KMSKey" }
+                "KMSMasterKeyID": {
+                  "Fn::GetAtt": ["KMSKey", "Arn"]
+                }
               }
             }
           ]
@@ -429,8 +502,8 @@ I'll create a comprehensive AWS CloudFormation template that establishes a secur
         },
         "Tags": [
           {
-            "Key": "Purpose",
-            "Value": "PrivateDataStorage"
+            "Key": "Name",
+            "Value": "PrivateSecureBucket"
           }
         ]
       }
@@ -439,40 +512,57 @@ I'll create a comprehensive AWS CloudFormation template that establishes a secur
     "PrivateS3BucketPolicy": {
       "Type": "AWS::S3::BucketPolicy",
       "Properties": {
-        "Bucket": { "Ref": "PrivateS3Bucket" },
+        "Bucket": {
+          "Ref": "PrivateS3Bucket"
+        },
         "PolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
             {
-              "Sid": "AllowAccessFromSpecificCIDR",
-              "Effect": "Allow",
-              "Principal": "*",
-              "Action": [
-                "s3:GetObject",
-                "s3:ListBucket"
-              ],
-              "Resource": [
-                { "Fn::GetAtt": ["PrivateS3Bucket", "Arn"] },
-                { "Fn::Sub": "${PrivateS3Bucket.Arn}/*" }
-              ],
-              "Condition": {
-                "IpAddress": {
-                  "aws:SourceIp": { "Ref": "S3BucketAllowedCIDR" }
-                }
-              }
-            },
-            {
-              "Sid": "DenyInsecureTransport",
+              "Sid": "DenyInsecureConnections",
               "Effect": "Deny",
               "Principal": "*",
               "Action": "s3:*",
               "Resource": [
-                { "Fn::GetAtt": ["PrivateS3Bucket", "Arn"] },
-                { "Fn::Sub": "${PrivateS3Bucket.Arn}/*" }
+                {
+                  "Fn::GetAtt": ["PrivateS3Bucket", "Arn"]
+                },
+                {
+                  "Fn::Sub": "${PrivateS3Bucket.Arn}/*"
+                }
               ],
               "Condition": {
                 "Bool": {
                   "aws:SecureTransport": "false"
+                }
+              }
+            },
+            {
+              "Sid": "AllowAccessFromSpecificCIDR",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": [
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:ListBucket"
+              ],
+              "Resource": [
+                {
+                  "Fn::GetAtt": ["PrivateS3Bucket", "Arn"]
+                },
+                {
+                  "Fn::Sub": "${PrivateS3Bucket.Arn}/*"
+                }
+              ],
+              "Condition": {
+                "IpAddress": {
+                  "aws:SourceIp": {
+                    "Ref": "S3BucketAccessCIDR"
+                  }
                 }
               }
             }
@@ -481,26 +571,79 @@ I'll create a comprehensive AWS CloudFormation template that establishes a secur
       }
     },
     
-    "DatabasePasswordParameter": {
-      "Type": "AWS::SSM::Parameter",
+    "DatabasePasswordSecret": {
+      "Type": "AWS::SecretsManager::Secret",
       "Properties": {
-        "Name": "/secure/database/password",
-        "Description": "Securely stored database password",
-        "Type": "SecureString",
-        "Value": { "Ref": "DatabasePassword" },
-        "KeyId": { "Ref": "KMSKey" },
-        "Tags": {
-          "Purpose": "DatabaseCredentials",
-          "Environment": "Production"
-        }
+        "Name": "SecurityBaselineDatabasePassword",
+        "Description": "Sample database password stored securely",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\": \"admin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": " ^\"@/\\"
+        },
+        "KmsKeyId": {
+          "Ref": "KMSKey"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "SecurityBaselineDatabaseSecret"
+          }
+        ]
+      }
+    },
+    
+    "SecretRotationLambdaRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "SecretRotationPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:DescribeSecret",
+                    "secretsmanager:GetSecretValue",
+                    "secretsmanager:PutSecretValue",
+                    "secretsmanager:UpdateSecretVersionStage"
+                  ],
+                  "Resource": {
+                    "Ref": "DatabasePasswordSecret"
+                  }
+                }
+              ]
+            }
+          }
+        ]
       }
     },
     
     "ConfigRecorder": {
       "Type": "AWS::Config::ConfigurationRecorder",
       "Properties": {
-        "Name": "SecurityConfigRecorder",
-        "RoleArn": { "Fn::GetAtt": ["ConfigRole", "Arn"] },
+        "Name": "SecurityBaselineConfigRecorder",
+        "RoleArn": {
+          "Fn::GetAtt": ["ConfigRole", "Arn"]
+        },
         "RecordingGroup": {
           "AllSupported": true,
           "IncludeGlobalResourceTypes": true
@@ -528,7 +671,7 @@ I'll create a comprehensive AWS CloudFormation template that establishes a secur
         ],
         "Policies": [
           {
-            "PolicyName": "S3AccessPolicy",
+            "PolicyName": "ConfigBucketPolicy",
             "PolicyDocument": {
               "Version": "2012-10-17",
               "Statement": [
@@ -538,7 +681,9 @@ I'll create a comprehensive AWS CloudFormation template that establishes a secur
                     "s3:GetBucketAcl",
                     "s3:ListBucket"
                   ],
-                  "Resource": { "Fn::GetAtt": ["ConfigS3Bucket", "Arn"] }
+                  "Resource": {
+                    "Fn::GetAtt": ["ConfigBucket", "Arn"]
+                  }
                 },
                 {
                   "Effect": "Allow",
@@ -546,11 +691,8 @@ I'll create a comprehensive AWS CloudFormation template that establishes a secur
                     "s3:PutObject",
                     "s3:GetObject"
                   ],
-                  "Resource": { "Fn::Sub": "${ConfigS3Bucket.Arn}/*" },
-                  "Condition": {
-                    "StringEquals": {
-                      "s3:x-amz-acl": "bucket-owner-full-control"
-                    }
+                  "Resource": {
+                    "Fn::Sub": "${ConfigBucket.Arn}/*"
                   }
                 }
               ]
@@ -560,16 +702,17 @@ I'll create a comprehensive AWS CloudFormation template that establishes a secur
       }
     },
     
-    "ConfigS3Bucket": {
+    "ConfigBucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
-        "BucketName": { "Fn::Sub": "config-bucket-${AWS::AccountId}-${AWS::Region}" },
+        "BucketName": {
+          "Fn::Sub": "config-bucket-${AWS::AccountId}-${AWS::Region}"
+        },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
             {
               "ServerSideEncryptionByDefault": {
-                "SSEAlgorithm": "aws:kms",
-                "KMSMasterKeyID": { "Ref": "KMSKey" }
+                "SSEAlgorithm": "AES256"
               }
             }
           ]
@@ -586,10 +729,12 @@ I'll create a comprehensive AWS CloudFormation template that establishes a secur
       }
     },
     
-    "ConfigS3BucketPolicy": {
+    "ConfigBucketPolicy": {
       "Type": "AWS::S3::BucketPolicy",
       "Properties": {
-        "Bucket": { "Ref": "ConfigS3Bucket" },
+        "Bucket": {
+          "Ref": "ConfigBucket"
+        },
         "PolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -600,7 +745,9 @@ I'll create a comprehensive AWS CloudFormation template that establishes a secur
                 "Service": "config.amazonaws.com"
               },
               "Action": "s3:GetBucketAcl",
-              "Resource": { "Fn::GetAtt": ["ConfigS3Bucket", "Arn"] }
+              "Resource": {
+                "Fn::GetAtt": ["ConfigBucket", "Arn"]
+              }
             },
             {
               "Sid": "AWSConfigBucketExistenceCheck",
@@ -609,7 +756,9 @@ I'll create a comprehensive AWS CloudFormation template that establishes a secur
                 "Service": "config.amazonaws.com"
               },
               "Action": "s3:ListBucket",
-              "Resource": { "Fn::GetAtt": ["ConfigS3Bucket", "Arn"] }
+              "Resource": {
+                "Fn::GetAtt": ["ConfigBucket", "Arn"]
+              }
             },
             {
               "Sid": "AWSConfigBucketWrite",
@@ -618,7 +767,9 @@ I'll create a comprehensive AWS CloudFormation template that establishes a secur
                 "Service": "config.amazonaws.com"
               },
               "Action": "s3:PutObject",
-              "Resource": { "Fn::Sub": "${ConfigS3Bucket.Arn}/*" },
+              "Resource": {
+                "Fn::Sub": "${ConfigBucket.Arn}/*"
+              },
               "Condition": {
                 "StringEquals": {
                   "s3:x-amz-acl": "bucket-owner-full-control"
@@ -633,10 +784,9 @@ I'll create a comprehensive AWS CloudFormation template that establishes a secur
     "ConfigDeliveryChannel": {
       "Type": "AWS::Config::DeliveryChannel",
       "Properties": {
-        "Name": "SecurityConfigDeliveryChannel",
-        "S3BucketName": { "Ref": "ConfigS3Bucket" },
-        "ConfigSnapshotDeliveryProperties": {
-          "DeliveryFrequency": "TwentyFour_Hours"
+        "Name": "SecurityBaselineDeliveryChannel",
+        "S3BucketName": {
+          "Ref": "ConfigBucket"
         }
       }
     },
@@ -650,127 +800,160 @@ I'll create a comprehensive AWS CloudFormation template that establishes a secur
         "Source": {
           "Owner": "AWS",
           "SourceIdentifier": "S3_BUCKET_PUBLIC_READ_PROHIBITED"
+        },
+        "Scope": {
+          "ComplianceResourceTypes": [
+            "AWS::S3::Bucket"
+          ]
+        }
+      }
+    },
+    
+    "S3PublicWriteProhibitedRule": {
+      "Type": "AWS::Config::ConfigRule",
+      "DependsOn": ["ConfigRecorder", "ConfigDeliveryChannel"],
+      "Properties": {
+        "ConfigRuleName": "s3-bucket-public-write-prohibited",
+        "Description": "Checks that S3 buckets do not allow public write access",
+        "Source": {
+          "Owner": "AWS",
+          "SourceIdentifier": "S3_BUCKET_PUBLIC_WRITE_PROHIBITED"
+        },
+        "Scope": {
+          "ComplianceResourceTypes": [
+            "AWS::S3::Bucket"
+          ]
         }
       }
     }
   },
   
   "Outputs": {
-    "VPCId": {
-      "Description": "ID of the created VPC",
-      "Value": { "Ref": "VPC" },
-      "Export": {
-        "Name": { "Fn::Sub": "${AWS::StackName}-VPCId" }
-      }
-    },
-    "SecurityGroupId": {
-      "Description": "ID of the created Security Group",
-      "Value": { "Ref": "SecurityGroup" },
-      "Export": {
-        "Name": { "Fn::Sub": "${AWS::StackName}-SecurityGroupId" }
-      }
-    },
-    "IAMRoleArn": {
-      "Description": "ARN of the S3 read-only IAM role",
-      "Value": { "Fn::GetAtt": ["IAMRoleS3ReadOnly", "Arn"] },
-      "Export": {
-        "Name": { "Fn::Sub": "${AWS::StackName}-IAMRoleArn" }
-      }
-    },
     "KMSKeyId": {
-      "Description": "ID of the KMS key for encryption",
-      "Value": { "Ref": "KMSKey" },
+      "Description": "ID of the KMS key created for encryption",
+      "Value": {
+        "Ref": "KMSKey"
+      },
       "Export": {
-        "Name": { "Fn::Sub": "${AWS::StackName}-KMSKeyId" }
+        "Name": "SecurityBaseline-KMSKeyId"
       }
     },
     "CloudTrailArn": {
-      "Description": "ARN of the CloudTrail",
-      "Value": { "Fn::GetAtt": ["CloudTrail", "Arn"] },
+      "Description": "ARN of the CloudTrail trail",
+      "Value": {
+        "Fn::GetAtt": ["CloudTrail", "Arn"]
+      },
       "Export": {
-        "Name": { "Fn::Sub": "${AWS::StackName}-CloudTrailArn" }
+        "Name": "SecurityBaseline-CloudTrailArn"
       }
     },
     "PrivateS3BucketName": {
-      "Description": "Name of the private encrypted S3 bucket",
-      "Value": { "Ref": "PrivateS3Bucket" },
+      "Description": "Name of the private S3 bucket",
+      "Value": {
+        "Ref": "PrivateS3Bucket"
+      },
       "Export": {
-        "Name": { "Fn::Sub": "${AWS::StackName}-PrivateS3BucketName" }
+        "Name": "SecurityBaseline-PrivateS3BucketName"
       }
     },
-    "DatabasePasswordParameterName": {
-      "Description": "Name of the SSM parameter storing the database password",
-      "Value": { "Ref": "DatabasePasswordParameter" },
+    "SecurityGroupId": {
+      "Description": "ID of the web server security group",
+      "Value": {
+        "Ref": "WebServerSecurityGroup"
+      },
       "Export": {
-        "Name": { "Fn::Sub": "${AWS::StackName}-DatabasePasswordParameter" }
+        "Name": "SecurityBaseline-SecurityGroupId"
+      }
+    },
+    "VPCId": {
+      "Description": "ID of the VPC",
+      "Value": {
+        "Ref": "SecurityVPC"
+      },
+      "Export": {
+        "Name": "SecurityBaseline-VPCId"
+      }
+    },
+    "SecretArn": {
+      "Description": "ARN of the database password secret",
+      "Value": {
+        "Ref": "DatabasePasswordSecret"
+      },
+      "Export": {
+        "Name": "SecurityBaseline-SecretArn"
       }
     }
   }
 }
 ```
 
-## Key Features of this Template
+## Key Features Explained
 
-### 1. **IAM Security**
-- Created an IAM role with read-only S3 access following least privilege principle
-- Role can be assumed by EC2 instances
+### 1. **IAM Role with Least Privilege**
+- Creates a role that can only read from S3
+- Explicitly denies write/delete operations
+- Can be assumed by EC2 instances
 
 ### 2. **VPC Security**
-- VPC with Flow Logs enabled for traffic monitoring
-- Security Group restricting SSH and HTTP to specific IP range (10.0.0.0/16)
-- Flow logs stored in CloudWatch for analysis
+- Sets up VPC Flow Logs capturing all traffic
+- Security group restricts SSH/HTTP to specified IP range
+- Logs are stored in CloudWatch for analysis
 
 ### 3. **Logging and Monitoring**
-- CloudTrail configured for comprehensive audit logging
-- Logs encrypted with KMS and stored in secure S3 bucket
-- CloudWatch alarm for failed console sign-in attempts (triggers after 3 failures)
+- CloudTrail captures all API calls across regions
+- Log file validation enabled for integrity
+- CloudWatch alarm triggers on failed console sign-ins
 
 ### 4. **Data Protection**
-- Customer-managed KMS key for encryption across services
-- Private S3 bucket with KMS encryption
-- Bucket policy restricting access to specific CIDR block
-- Enforces HTTPS-only connections
+- Customer-managed KMS key with automatic rotation
+- Private S3 bucket encrypted with KMS
+- Bucket policy restricts access to specific CIDR
 
 ### 5. **Secrets Management**
-- Database password stored securely in SSM Parameter Store
+- Stores database password in Secrets Manager
+- Automatically generates strong password
 - Encrypted using the custom KMS key
-- Can be retrieved programmatically by authorized services
 
 ### 6. **Compliance**
-- AWS Config enabled with configuration recording
-- Config rule to detect and flag publicly accessible S3 buckets
-- Configuration history stored in encrypted S3 bucket
+- AWS Config rules check for public S3 buckets
+- Configuration history tracked for audit
+- Two rules: one for read, one for write access
 
 ## Deployment Instructions
 
-1. Save the template as `cloud_security_template.json`
-
+1. Save this template as `cloud_security_template.json`
 2. Deploy using AWS CLI:
 ```bash
 aws cloudformation create-stack \
-  --stack-name security-baseline-stack \
+  --stack-name security-baseline \
   --template-body file://cloud_security_template.json \
-  --parameters ParameterKey=DatabasePassword,ParameterValue=YourSecurePassword123! \
   --capabilities CAPABILITY_NAMED_IAM \
   --region us-west-2
 ```
 
-3. Monitor stack creation:
+3. Optional: Override default parameters:
 ```bash
-aws cloudformation describe-stacks \
-  --stack-name security-baseline-stack \
+aws cloudformation create-stack \
+  --stack-name security-baseline \
+  --template-body file://cloud_security_template.json \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameters \
+    ParameterKey=AllowedIPRange,ParameterValue=192.168.1.0/24 \
+    ParameterKey=S3BucketAccessCIDR,ParameterValue=192.168.1.0/24 \
   --region us-west-2
 ```
 
 ## Security Best Practices Implemented
 
-- **Encryption at rest**: All storage services use KMS encryption
-- **Least privilege access**: IAM roles and policies follow minimal permissions
-- **Network segmentation**: VPC and Security Groups control network access
-- **Audit logging**: CloudTrail and VPC Flow Logs provide comprehensive logging
-- **Compliance monitoring**: AWS Config rules check for security violations
-- **Secret management**: Sensitive data stored securely in Parameter Store
-- **Versioning**: S3 buckets have versioning enabled for data protection
-- **Public access blocking**: All S3 buckets block public access by default
+- ✅ **Encryption at rest** using KMS for all storage services
+- ✅ **Encryption in transit** enforced for S3 buckets
+- ✅ **Public access blocked** on all S3 buckets
+- ✅ **Versioning enabled** for audit trail and data recovery
+- ✅ **Log retention policies** to manage storage costs
+- ✅ **Least privilege access** in all IAM policies
+- ✅ **Network segmentation** with VPC and security groups
+- ✅ **Compliance monitoring** with AWS Config rules
+- ✅ **Audit logging** with CloudTrail
+- ✅ **Automated secret rotation** capability with Secrets Manager
 
-This template provides a solid security foundation that can be customized based on your specific requirements.
+This template provides a robust security foundation that can be extended based on your specific requirements.
