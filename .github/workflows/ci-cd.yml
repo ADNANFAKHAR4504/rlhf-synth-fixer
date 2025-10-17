@@ -248,6 +248,11 @@ jobs:
     needs: detect-metadata
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.subtask == 'IaC Program Optimization' }}
     environment: dev
+    env:
+      AWS_ENDPOINT_URL: http://127.0.0.1:5000
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
     permissions:
       contents: write
       pull-requests: write
@@ -368,7 +373,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No analysis output changes to commit"
           else
-            git commit -m "Add analysis results for ${{ env.IAC_ANALYSIS_SUBTASK }} task [skip-jobs]"
+            git commit -m "Add analysis results for IaC Program Optimization task [skip-jobs]"
             git push origin HEAD:refs/heads/${{ github.head_ref }}
             echo "Analysis results committed to PR branch"
           fi
@@ -654,7 +659,7 @@ jobs:
         if: ${{ needs.detect-metadata.outputs.subtask == env.IAC_ANALYSIS_CATEGORY }}
         run: |
           if [ ! -f "lib/analyze.py" ] && [ ! -f "lib/analyse.sh" ]; then
-            echo "❌ Expected lib/analyze.py or lib/analyse.sh for ${{ env.IAC_ANALYSIS_SUBTASK }} task"
+            echo "❌ Expected lib/analyze.py or lib/analyse.sh for IaC Program Optimization task"
             exit 1
           fi
 

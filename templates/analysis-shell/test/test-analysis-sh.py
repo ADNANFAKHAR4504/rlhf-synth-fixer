@@ -8,21 +8,14 @@ import time
 import boto3
 import pytest
 
-ENDPOINT = "http://127.0.0.1:5000"
-AWS_ENV = {
-    "AWS_ACCESS_KEY_ID": "test",
-    "AWS_SECRET_ACCESS_KEY": "test",
-    "AWS_DEFAULT_REGION": "us-east-1",
-}
-
 
 def boto_client(service: str):
     return boto3.client(
         service,
-        endpoint_url=ENDPOINT,
-        region_name="us-east-1",
-        aws_access_key_id="test",
-        aws_secret_access_key="test",
+        endpoint_url=os.environ.get("AWS_ENDPOINT_URL"),
+        region_name=os.environ.get("AWS_DEFAULT_REGION"),
+        aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
     )
 
 
@@ -99,7 +92,7 @@ def run_analysis_script(tmp_path):
     script.write_text(content)
     script.chmod(0o755)
 
-    env = {**os.environ, **AWS_ENV, "AWS_ENDPOINT_URL": ENDPOINT}
+    env = {**os.environ}
     result = subprocess.run([str(script)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
     return result.stdout
 
