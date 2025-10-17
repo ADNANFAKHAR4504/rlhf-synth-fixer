@@ -8,7 +8,21 @@
   "startedAt": "2025-10-17T05:03:30-07:00",
   "subtask": "Infrastructure Analysis/Monitoring",
   "background": "FinTech Corp needs to process credit card transactions through their trading platform. They require a secure, compliant database infrastructure that meets PCI-DSS requirements while ensuring high availability and disaster recovery capabilities. The solution must handle approximately 10,000 transactions per minute during peak trading hours.",
-  "subject_labels": ["Failure Recovery Automation", "Infrastructure Analysis/Monitoring", "Security Configuration as Code"],
-  "aws_services": "RDS Aurora, ElastiCache Redis, EFS, Secrets Manager, API Gateway, Kinesis Data Streams, KMS, VPC, CloudWatch",
+  "subject_labels": [
+    "Failure Recovery Automation",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "RDS Aurora",
+    "ElastiCache Redis",
+    "EFS",
+    "Secrets Manager",
+    "API Gateway",
+    "Kinesis Data Streams",
+    "KMS",
+    "VPC",
+    "CloudWatch"
+  ],
   "training_quality": 8
 }
