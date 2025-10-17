@@ -4,14 +4,12 @@
   "complexity": "hard",
   "team": "synth",
   "startedAt": "2025-10-17T06:37:44+05:30",
-  "subtask": "Industrial IoT Monitoring System with Real-time Analytics",
+  "subtask": "Failure Recovery and High Availability",
   "background": "Infrastructure task for Pulumi",
   "subject_labels": [
-    "aws",
-    "infrastructure",
-    "iot",
-    "monitoring",
-    "manufacturing"
+    "Cloud Environment Setup",
+    "Failure Recovery Automation",
+    "Security Configuration as Code"
   ],
   "po_id": "4474569941",
   "aws_services": [
