@@ -258,7 +258,7 @@ describe("tap_stack.tf — static unit checks (no AWS calls)", () => {
     });
   });
 
-  describe("CloudWatch Logs (us-east-1) with KMS", () => {
+  describe("CloudWatch Logs (us-east-2) with KMS", () => {
     it("log group is KMS-encrypted", () => {
       const lg = getBlock(tf, "resource", "aws_cloudwatch_log_group", "use1_app");
       expectMatch(lg, /kms_key_id\s*=\s*aws_kms_key\.use1_logs\.arn/);

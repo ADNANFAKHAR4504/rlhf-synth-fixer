@@ -92,7 +92,7 @@ function httpGet(urlStr: string, timeoutMs = 8000): Promise<{ status: number; bo
 
 async function httpGetSigned(urlStr: string, timeoutMs = 8000): Promise<{ status: number; body: string }> {
   const u = new URL(urlStr);
-  const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
+  const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-2';
 
   const signer = new SignatureV4({
     service: 'execute-api',
@@ -206,9 +206,9 @@ function findOutputsPath(): string {
 }
 const OUTPUTS: FlatOutputs = JSON.parse(fs.readFileSync(findOutputsPath(), 'utf8'));
 log('[DEBUG] Outputs summary:', JSON.stringify({
-  use1_vpc_id: OUTPUTS.use1_vpc_id,
-  use1_public_subnet_ids: OUTPUTS.use1_public_subnet_ids,
-  use1_private_subnet_ids: OUTPUTS.use1_private_subnet_ids,
+  use2_vpc_id: OUTPUTS.use2_vpc_id,
+  use2_public_subnet_ids: OUTPUTS.use2_public_subnet_ids,
+  use2_private_subnet_ids: OUTPUTS.use2_private_subnet_ids,
   euw2_vpc_id: OUTPUTS.euw2_vpc_id,
   euw2_public_subnet_ids: OUTPUTS.euw2_public_subnet_ids,
   euw2_private_subnet_ids: OUTPUTS.euw2_private_subnet_ids,
@@ -225,7 +225,7 @@ log('[DEBUG] Outputs summary:', JSON.stringify({
 log('--- E2E TESTS START ---');
 
 /* ---------------- region + clients ---------------- */
-const REGION = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
+const REGION = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-2';
 const ec2  = new EC2Client({ region: REGION });
 const ec2EU = new EC2Client({ region: 'eu-west-2' });
 const ssm  = new SSMClient({ region: REGION });
@@ -366,7 +366,7 @@ async function dumpAlbTargetHealth() {
  * ==========================================================================*/
 describe('ALB & EC2 reachability', () => {
   const albDns: string = OUTPUTS.alb_dns_name;
-  const vpcId: string  = OUTPUTS.use1_vpc_id;
+  const vpcId: string  = OUTPUTS.use2_vpc_id;
 
   it('ALB serves index over HTTP', async () => {
     await waitAlbHealthyTarget(8 * 60 * 1000);
@@ -398,9 +398,9 @@ describe('ALB & EC2 reachability', () => {
  * NAT egress + Route posture
  * ==========================================================================*/
 describe('NAT egress + Route posture', () => {
-  const vpcId: string = OUTPUTS.use1_vpc_id;
-  const priv: string[] = OUTPUTS.use1_private_subnet_ids;
-  const pub: string[]  = OUTPUTS.use1_public_subnet_ids;
+  const vpcId: string = OUTPUTS.use2_vpc_id;
+  const priv: string[] = OUTPUTS.use2_private_subnet_ids;
+  const pub: string[]  = OUTPUTS.use2_public_subnet_ids;
 
   it('Private EC2 egress OK (curl https://example.com)', async () => {
     const id = await pickAppInstance(vpcId);
@@ -440,10 +440,10 @@ describe('Two VPCs + Peering posture', () => {
     expect(pcx!.Status?.Code).toMatch(/active/i);
   });
 
-  it('Routes to peer CIDRs via pcx present in all use1 subnets', async () => {
-    const use1Subs: string[] = [...OUTPUTS.use1_public_subnet_ids, ...OUTPUTS.use1_private_subnet_ids];
+  it('Routes to peer CIDRs via pcx present in all use2 subnets', async () => {
+    const use2Subs: string[] = [...OUTPUTS.use2_public_subnet_ids, ...OUTPUTS.use2_private_subnet_ids];
     const euCidr = (OUTPUTS.euw2_cidr || '10.20.0.0/16') as string;
-    for (const sn of use1Subs) {
+    for (const sn of use2Subs) {
       const rt = await ec2.send(new DescribeRouteTablesCommand({
         Filters: [{ Name: 'association.subnet-id', Values: [sn] }]
       }));
@@ -458,7 +458,7 @@ describe('Two VPCs + Peering posture', () => {
 
   it('Routes to peer CIDRs via pcx present in all euw2 subnets', async () => {
     const euSubs: string[] = [...OUTPUTS.euw2_public_subnet_ids, ...OUTPUTS.euw2_private_subnet_ids];
-    const usCidr = (OUTPUTS.use1_cidr || '10.10.0.0/16') as string;
+    const usCidr = (OUTPUTS.use2_cidr || '10.10.0.0/16') as string;
     for (const sn of euSubs) {
       const rt = await ec2EU.send(new DescribeRouteTablesCommand({
         Filters: [{ Name: 'association.subnet-id', Values: [sn] }]
@@ -551,7 +551,7 @@ describe('RDS CRUD from EC2 (no skip)', () => {
   const endpoint = OUTPUTS.rds_endpoint as string;
   const port = Number(OUTPUTS.rds_port || 5432);
   const user = (OUTPUTS.rds_username as string) || 'dbadmin';
-  const vpcId = OUTPUTS.use1_vpc_id as string;
+  const vpcId = OUTPUTS.use2_vpc_id as string;
 
   async function resolvePassword(): Promise<string> {
     const direct = OUTPUTS.rds_password as string | undefined;
@@ -659,7 +659,7 @@ describe('CloudWatch Alarm (CPU) — exists and can toggle state', () => {
 /* ---- End-to-end “happy path” smoke (ALB -> EC2(private) -> RDS) ---- */
 describe('End-to-end smoke: ALB -> EC2(private) -> RDS', () => {
   const albDns: string = OUTPUTS.alb_dns_name;
-  const vpcId: string  = OUTPUTS.use1_vpc_id as string;
+  const vpcId: string  = OUTPUTS.use2_vpc_id as string;
   const endpoint = OUTPUTS.rds_endpoint as string;
   const port     = Number(OUTPUTS.rds_port || 5432);
   const user     = (OUTPUTS.rds_username as string) || 'dbadmin';
