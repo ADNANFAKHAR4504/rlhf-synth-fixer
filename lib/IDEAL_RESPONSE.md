@@ -1368,6 +1368,24 @@ ${message}
 }
 ```
 
+### Lambda Dependencies
+
+**lib/lambda/package.json**
+
+```json
+{
+  "name": "failover-handler",
+  "version": "1.0.0",
+  "description": "Healthcare disaster recovery failover handler",
+  "main": "failover-handler.js",
+  "dependencies": {
+    "@aws-sdk/client-rds": "^3.400.0",
+    "@aws-sdk/client-sns": "^3.400.0",
+    "@aws-sdk/client-ssm": "^3.400.0"
+  }
+}
+```
+
 ## Key Features
 
 ### Security and Compliance
