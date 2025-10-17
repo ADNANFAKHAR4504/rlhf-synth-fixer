@@ -11,5 +11,12 @@
   "subject_labels": [
     "Serverless Infrastructure (Functions as Code)"
   ],
-  "aws_services": "Lambda, API Gateway, S3 Bucket, SSM Parameter Store, IAM Role, CloudWatch LogGroup, CloudWatch Metric Alarm"
+  "aws_services": "Lambda, API Gateway, S3 Bucket, SSM Parameter Store, IAM Role, CloudWatch LogGroup, CloudWatch Metric Alarm",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
 }
