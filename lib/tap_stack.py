@@ -98,7 +98,7 @@ class TapStack(pulumi.ComponentResource):
 
         # Create S3 bucket for CloudWatch logs
         logs_bucket = aws.s3.Bucket("cloudwatch-logs-bucket",
-            bucket=f"{project_name}-logs-{stack_name}",
+            bucket=f"{project_name}-logs-{stack_name}".lower(),
             tags={**base_tags, "Purpose": "Logging"}
         )
 
@@ -124,7 +124,7 @@ class TapStack(pulumi.ComponentResource):
         # ====================
 
         main_bucket = aws.s3.Bucket("main-storage-bucket",
-            bucket=f"{project_name}-main-{stack_name}",
+            bucket=f"{project_name}-main-{stack_name}".lower(),
             tags={
                 **base_tags,
                 "Purpose": "MainStorage",
@@ -238,7 +238,7 @@ class TapStack(pulumi.ComponentResource):
         # ====================
 
         inventory_bucket = aws.s3.Bucket("inventory-bucket",
-            bucket=f"{project_name}-inventory-{stack_name}",
+            bucket=f"{project_name}-inventory-{stack_name}".lower(),
             tags={**base_tags, "Purpose": "Inventory"}
         )
 
@@ -600,7 +600,7 @@ def lambda_handler(event, context):
         )
 
         replica_bucket = aws.s3.Bucket("replica-bucket",
-            bucket=f"{project_name}-replica-{stack_name}",
+            bucket=f"{project_name}-replica-{stack_name}".lower(),
             tags={**base_tags, "Purpose": "DisasterRecovery"},
             opts=pulumi.ResourceOptions(provider=replica_provider)
         )
