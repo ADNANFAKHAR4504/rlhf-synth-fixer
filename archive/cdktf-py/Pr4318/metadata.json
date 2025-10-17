@@ -26,5 +26,11 @@
   "region": "eu-central-1",
   "background": "A large manufacturing company operates multiple production lines with IoT sensors generating 10,000 events per second. They need a scalable infrastructure to ingest, process, and analyze this data in real-time while maintaining data integrity and compliance with industrial regulations.",
   "training_quality": 9,
-  "completedAt": "2025-10-14T03:49:00+05:30"
+  "completedAt": "2025-10-14T03:49:00+05:30",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
