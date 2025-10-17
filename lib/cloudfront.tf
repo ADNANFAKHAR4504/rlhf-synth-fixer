@@ -29,7 +29,7 @@ resource "aws_cloudfront_distribution" "main" {
   # Default cache behavior
   default_cache_behavior {
     allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
-    cached_methods   = ["GET", "HEAD", "OPTIONS"]
+    cached_methods   = ["GET", "HEAD"]
     target_origin_id = "api-gateway"
 
     forwarded_values {
@@ -43,8 +43,8 @@ resource "aws_cloudfront_distribution" "main" {
 
     viewer_protocol_policy = "redirect-to-https"
     min_ttl                = 0
-    default_ttl            = 0
-    max_ttl                = 0
+    default_ttl            = 60
+    max_ttl                = 300
     compress               = true
   }
 

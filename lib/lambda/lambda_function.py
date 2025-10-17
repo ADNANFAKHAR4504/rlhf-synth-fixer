@@ -110,7 +110,7 @@ def create_profile(event):
         return response(400, {'error': 'Invalid JSON in request body'})
     except Exception as e:
         print(f"Error creating profile: {str(e)}")
-        return response(500, {'error': 'Internal server error'})
+        return response(500, {'error': 'Unable to process request'})
 
 
 def get_profile(event):
@@ -131,7 +131,7 @@ def get_profile(event):
         
     except Exception as e:
         print(f"Error getting profile: {str(e)}")
-        return response(500, {'error': 'Internal server error'})
+        return response(500, {'error': 'Unable to retrieve profile'})
 
 
 def update_profile(event):
@@ -197,7 +197,7 @@ def update_profile(event):
         return response(400, {'error': 'Invalid JSON in request body'})
     except Exception as e:
         print(f"Error updating profile: {str(e)}")
-        return response(500, {'error': 'Internal server error'})
+        return response(500, {'error': 'Unable to update profile'})
 
 
 def delete_profile(event):
@@ -228,7 +228,7 @@ def delete_profile(event):
         
     except Exception as e:
         print(f"Error deleting profile: {str(e)}")
-        return response(500, {'error': 'Internal server error'})
+        return response(500, {'error': 'Unable to delete profile'})
 
 
 def list_profiles(event):
@@ -249,7 +249,7 @@ def list_profiles(event):
         
     except Exception as e:
         print(f"Error listing profiles: {str(e)}")
-        return response(500, {'error': 'Internal server error'})
+        return response(500, {'error': 'Unable to retrieve profiles'})
 
 
 def lambda_handler(event, context):
@@ -280,5 +280,5 @@ def lambda_handler(event, context):
             
     except Exception as e:
         print(f"Unexpected error: {str(e)}")
-        return response(500, {'error': 'Internal server error'})
+        return response(500, {'error': 'Unable to process request'})
 

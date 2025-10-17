@@ -43,12 +43,6 @@ resource "aws_dynamodb_table" "user_profiles" {
     attribute_name = "expiresAt"
   }
 
-  # Global table replica in secondary region
-  replica {
-    region_name            = var.secondary_region
-    point_in_time_recovery = true
-  }
-
   tags = merge(
     var.tags,
     {
