@@ -138,22 +138,6 @@ jest.mock("../lib/modules", () => ({
         alarmArn: `arn:aws:cloudwatch:us-east-1:123456789012:alarm:${config.projectName}-${config.environment}-rds-storage`
       }
     ]
-  })),
-  WAFModule: jest.fn().mockImplementation((scope: any, id: string, config: any) => ({
-    webAcl: {
-      id: `waf-${config.projectName}-${config.environment}`,
-      arn: `arn:aws:wafv2:us-east-1:123456789012:regional/webacl/${config.projectName}-${config.environment}-waf`
-    }
-  })),
-  BackupModule: jest.fn().mockImplementation((scope: any, id: string, config: any) => ({
-    backupPlan: {
-      id: `backup-plan-${config.projectName}-${config.environment}`,
-      arn: `arn:aws:backup:us-east-1:123456789012:backup-plan:${config.projectName}-${config.environment}`
-    },
-    backupVault: {
-      name: `${config.projectName}-${config.environment}-backup-vault`,
-      arn: `arn:aws:backup:us-east-1:123456789012:backup-vault:${config.projectName}-${config.environment}-backup-vault`
-    }
   }))
 }));
 
@@ -572,7 +556,7 @@ describe("TapStack Unit Tests", () => {
       const app = new App();
       new TapStack(app, "TestStack");
 
-      expect(TerraformOutput).toHaveBeenCalledTimes(18);
+      expect(TerraformOutput).toHaveBeenCalledTimes(14);
 
       const outputCalls = TerraformOutput.mock.calls;
       const outputIds = outputCalls.map((call: any) => call[1]);
@@ -811,7 +795,7 @@ describe("TapStack Unit Tests", () => {
       expect(S3Backend).toHaveBeenCalledTimes(1);
 
       // Verify outputs
-      expect(TerraformOutput).toHaveBeenCalledTimes(18);
+      expect(TerraformOutput).toHaveBeenCalledTimes(14);
     });
 
     test("should maintain proper module relationships", () => {

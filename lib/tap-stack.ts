@@ -13,15 +13,11 @@ import {
   ContainerServiceModule,
   StaticAssetsModule,
   MonitoringModule,
-  WAFModule,
-  BackupModule,
   NetworkingModuleConfig,
   DatabaseModuleConfig,
   ContainerServiceModuleConfig,
   StaticAssetsModuleConfig,
   MonitoringModuleConfig,
-  WAFModuleConfig,
-  BackupModuleConfig,
 } from './modules';
 
 interface TapStackProps {
@@ -179,24 +175,6 @@ export class TapStack extends TerraformStack {
       monitoringConfig
     );
 
-    // WAF Module for enhanced security
-    const wafConfig: WAFModuleConfig = {
-      environment: environmentSuffix,
-      projectName: projectName,
-      albArn: containerService.alb.arn,
-    };
-
-    const waf = new WAFModule(this, 'waf', wafConfig);
-
-    // Backup Module for disaster recovery
-    const backupConfig: BackupModuleConfig = {
-      environment: environmentSuffix,
-      projectName: projectName,
-      rdsArn: database.rdsInstance.arn,
-    };
-
-    const backup = new BackupModule(this, 'backup', backupConfig);
-
     // Networking Outputs
     new TerraformOutput(this, 'vpc-id', {
       value: networking.vpc.id,
@@ -272,28 +250,6 @@ export class TapStack extends TerraformStack {
     new TerraformOutput(this, 'log-group-name', {
       value: containerService.logGroup.name,
       description: 'CloudWatch Log Group name for ECS tasks',
-    });
-
-    // WAF Outputs
-    new TerraformOutput(this, 'waf-acl-id', {
-      value: waf.webAcl.id,
-      description: 'WAF Web ACL ID for enhanced security',
-    });
-
-    new TerraformOutput(this, 'waf-acl-arn', {
-      value: waf.webAcl.arn,
-      description: 'WAF Web ACL ARN',
-    });
-
-    // Backup Outputs
-    new TerraformOutput(this, 'backup-plan-id', {
-      value: backup.backupPlan.id,
-      description: 'AWS Backup Plan ID for RDS disaster recovery',
-    });
-
-    new TerraformOutput(this, 'backup-vault-name', {
-      value: backup.backupVault.name,
-      description: 'AWS Backup Vault name',
     });
   }
 }

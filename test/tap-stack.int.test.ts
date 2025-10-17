@@ -738,6 +738,7 @@ describe('Production ECS Environment Integration Tests', () => {
           console.log('IAM role not accessible');
         }
 
+        // Step 3: ACTION - Simulate credential retrieval
         
         console.log('E2E Security: Credentials properly managed through Secrets Manager');
       }
