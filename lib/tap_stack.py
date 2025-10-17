@@ -339,11 +339,11 @@ class TapStack(pulumi.ComponentResource):
         # 6. Bucket Policies for Security
         # ====================
 
-        bucket_encryption = aws.s3.BucketServerSideEncryptionConfigurationV2("bucket-encryption",
+        bucket_encryption = aws.s3.BucketServerSideEncryptionConfiguration("bucket-encryption",
             bucket=main_bucket.id,
             rules=[
-                aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
-                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+                aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
                         sse_algorithm="AES256"
                     ),
                     bucket_key_enabled=True  # Reduces encryption costs
@@ -671,33 +671,33 @@ def lambda_handler(event, context):
         )
 
         # Configure replication
-        replication_configuration = aws.s3.BucketReplicationConfiguration("replication-config",
+        replication_configuration = aws.s3.BucketReplicationConfig("replication-config",
             bucket=main_bucket.id,
             role=replication_role.arn,
             rules=[
-                aws.s3.BucketReplicationConfigurationRuleArgs(
+                aws.s3.BucketReplicationConfigRuleArgs(
                     id="replicate-compliance-data",
                     status="Enabled",
                     priority=1,
-                    filter=aws.s3.BucketReplicationConfigurationRuleFilterArgs(
+                    filter=aws.s3.BucketReplicationConfigRuleFilterArgs(
                         prefix="compliance/",
-                        tag=aws.s3.BucketReplicationConfigurationRuleFilterTagArgs(
+                        tag=aws.s3.BucketReplicationConfigRuleFilterTagArgs(
                             key="DataType",
                             value="Compliance"
                         )
                     ),
-                    destination=aws.s3.BucketReplicationConfigurationRuleDestinationArgs(
+                    destination=aws.s3.BucketReplicationConfigRuleDestinationArgs(
                         bucket=replica_bucket.arn,
                         storage_class="GLACIER",  # Cost-optimized storage
-                        replication_time=aws.s3.BucketReplicationConfigurationRuleDestinationReplicationTimeArgs(
+                        replication_time=aws.s3.BucketReplicationConfigRuleDestinationReplicationTimeArgs(
                             status="Enabled",
-                            time=aws.s3.BucketReplicationConfigurationRuleDestinationReplicationTimeTimeArgs(
+                            time=aws.s3.BucketReplicationConfigRuleDestinationReplicationTimeTimeArgs(
                                 minutes=15
                             )
                         ),
-                        metrics=aws.s3.BucketReplicationConfigurationRuleDestinationMetricsArgs(
+                        metrics=aws.s3.BucketReplicationConfigRuleDestinationMetricsArgs(
                             status="Enabled",
-                            event_threshold=aws.s3.BucketReplicationConfigurationRuleDestinationMetricsEventThresholdArgs(
+                            event_threshold=aws.s3.BucketReplicationConfigRuleDestinationMetricsEventThresholdArgs(
                                 minutes=15
                             )
                         )
