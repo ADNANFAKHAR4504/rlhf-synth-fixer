@@ -1,0 +1,14 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101000245",
+  "team": "4",
+  "startedAt": "2025-10-17T06:16:28.058Z",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "IaC Optimization"
+  ],
+  "aws_services": "S3, Lambda, Cloudwatch"
+}
