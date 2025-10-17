@@ -311,9 +311,9 @@ describe("TapStack Terraform Unit Tests (Full Coverage)", () => {
     );
 
     test("Application log group retention days is 30", () => {
-      expect(tfContent).toMatch(/name\s*=\s*\/aws\/application\//);
-      expect(tfContent).toMatch(/retention_in_days\s*=\s*30/);
-    });
+  expect(tfContent).toMatch(/name\s*=\s*["']\/aws\/application\/.*["']/);
+  expect(tfContent).toMatch(/retention_in_days\s*=\s*30/);
+});
 
     test("RDS log groups retention days is 7", () => {
       expect(tfContent).toMatch(/\/aws\/rds\/cluster\/.*\/error/);
