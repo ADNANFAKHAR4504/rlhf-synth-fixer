@@ -34,7 +34,6 @@ import software.amazon.awscdk.services.lambda.Code;
 import software.amazon.awscdk.services.lambda.Function;
 import software.amazon.awscdk.services.lambda.Runtime;
 import software.amazon.awscdk.services.lambda.Version;
-import software.amazon.awscdk.services.logs.LogGroup;
 import software.amazon.awscdk.services.logs.RetentionDays;
 import software.amazon.awscdk.services.s3.BlockPublicAccess;
 import software.amazon.awscdk.services.s3.Bucket;
@@ -231,17 +230,11 @@ class ServerlessStack extends Stack {
                         .build()))
                 .build();
 
-        // Create Log Group for the function
-        LogGroup logGroup = LogGroup.Builder.create(this, functionName + "LogGroup")
-                .logGroupName("/aws/lambda/serverless-" + environmentSuffix + "-" + functionType)
-                .retention(RetentionDays.ONE_YEAR)
-                .removalPolicy(RemovalPolicy.DESTROY)
-                .build();
-
         // Lambda function code
         String lambdaCode = generateLambdaCode(functionType, environmentSuffix);
 
-        // Create Lambda function
+        // Create Lambda function with log retention
+        // CDK will automatically create and manage the log group
         Function function = Function.Builder.create(this, functionName)
                 .functionName("serverless-" + environmentSuffix + "-" + functionType)
                 .runtime(Runtime.PYTHON_3_9)
@@ -257,6 +250,7 @@ class ServerlessStack extends Stack {
                 .timeout(Duration.seconds(30))
                 .memorySize(256)
                 .reservedConcurrentExecutions(100)
+                .logRetention(RetentionDays.ONE_YEAR)
                 .build();
 
         return function;
