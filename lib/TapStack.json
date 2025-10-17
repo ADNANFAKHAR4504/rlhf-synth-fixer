@@ -752,6 +752,7 @@
               "",
               [
                 "#!/bin/bash\n",
+                "# Include jq for JSON parsing\n",
                 "yum update -y\n",
                 "yum install -y mysql amazon-cloudwatch-agent jq\n",
                 "yum install -y amazon-ssm-agent\n",
@@ -809,6 +810,7 @@
               "",
               [
                 "#!/bin/bash\n",
+                "# Include jq for JSON parsing\n",
                 "yum update -y\n",
                 "yum install -y mysql amazon-cloudwatch-agent jq\n",
                 "yum install -y amazon-ssm-agent\n",
