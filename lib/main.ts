@@ -488,11 +488,12 @@ export class FinTechTradingStack extends TerraformStack {
     const rotationLambda = new LambdaFunction(this, 'rotation-lambda', {
       functionName: `db-rotation-lambda-${environmentSuffix}`,
       role: rotationLambdaRole.arn,
-      handler: 'index.handler',
+      handler: 'lambda_rotation_handler.handler',
       runtime: 'python3.11',
       timeout: 30,
-      filename: 'lambda-rotation.zip', // Placeholder - in production, provide actual Lambda code
-      sourceCodeHash: 'placeholder',
+      filename: 'lib/lambda-rotation.zip',
+      sourceCodeHash:
+        'Njk0MGY0MjU4ODMyNzZjYmJiNGEzMDJmOGE0MGJkZTI3ZWQwNzljODRiNzM0NzM4NjA4Njg5NTcxZTdhZjk1Ywo=',
       vpcConfig: {
         subnetIds: [privateSubnet1.id, privateSubnet2.id],
         securityGroupIds: [rdsSecurityGroup.id],
@@ -759,7 +760,7 @@ export class FinTechTradingStack extends TerraformStack {
       {
         apiId: api.id,
         integrationType: 'AWS_PROXY',
-        integrationSubtype: 'EventBridge-PutEvents',
+        integrationSubtype: 'Kinesis-PutRecord',
         credentialsArn: apiGatewayRole.arn,
         requestParameters: {
           StreamName: kinesisStream.name,
