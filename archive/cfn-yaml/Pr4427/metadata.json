@@ -1,0 +1,53 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348981",
+  "team": "3",
+  "startedAt": "2025-10-14T16:29:17.379Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2::Subnet",
+    "EC2::InternetGateway",
+    "EC2::NatGateway",
+    "EC2::RouteTable",
+    "EC2::SecurityGroup",
+    "IAM::Role",
+    "IAM::ManagedPolicy",
+    "IAM::InstanceProfile",
+    "EC2::Instance",
+    "KMS::Key",
+    "ElasticLoadBalancingV2::LoadBalancer",
+    "ElasticLoadBalancingV2::TargetGroup",
+    "ElasticLoadBalancingV2::Listener",
+    "S3::Bucket",
+    "S3::BucketPolicy",
+    "RDS::DBInstance",
+    "RDS::DBSubnetGroup",
+    "SQS::Queue",
+    "Lambda::Function",
+    "Lambda::Permission",
+    "CloudFront::Distribution",
+    "CloudFront::CloudFrontOriginAccessIdentity",
+    "WAFv2::WebACL",
+    "CloudWatch::Alarm",
+    "Config::ConfigurationRecorder",
+    "Config::DeliveryChannel",
+    "SNS::Topic",
+    "SNS::TopicPolicy",
+    "SNS::Subscription",
+    "SecretsManager::Secret"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
+}

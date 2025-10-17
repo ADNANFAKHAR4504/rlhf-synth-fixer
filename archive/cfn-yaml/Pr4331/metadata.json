@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "moderate",
+  "team": "synth",
+  "startedAt": "2025-10-14T05:28:01+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "po_id": "3039452700",
+  "aws_services": [
+    "Kinesis Data Streams",
+    "ECS Fargate",
+    "RDS Aurora",
+    "SecretsManager",
+    "API Gateway",
+    "KMS",
+    "CloudTrail"
+  ],
+  "region": "eu-west-2",
+  "background": "MediTech Solutions needs to process real-time data from patient monitoring devices across multiple hospitals. The data needs to be collected, processed, and stored while maintaining HIPAA compliance. The solution should handle approximately 1000 events per second during peak hours.",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
