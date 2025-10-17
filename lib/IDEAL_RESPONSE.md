@@ -124,7 +124,8 @@ from cdktf_cdktf_provider_aws.kinesis_firehose_delivery_stream import (
 from cdktf_cdktf_provider_aws.dynamodb_table import (
     DynamodbTable,
     DynamodbTableAttribute,
-    DynamodbTableGlobalSecondaryIndex
+    DynamodbTableGlobalSecondaryIndex,
+    DynamodbTableServerSideEncryption
 )
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioning
@@ -325,6 +326,12 @@ class IotProcessingStack(Construct):
                     hash_key="sensor_type",
                     range_key="timestamp",
                     projection_type="ALL"
+                )
+            ],
+            server_side_encryption=[
+                DynamodbTableServerSideEncryption(
+                    enabled=True,
+                    kms_key_arn=kms_key.arn
                 )
             ],
             tags={"Purpose": "IoT sensor data storage", "Environment": environment_suffix}
