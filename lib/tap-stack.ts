@@ -115,24 +115,24 @@ export class TapStack extends pulumi.ComponentResource {
     this.ecsSecurityGroup = securityResources.ecsSecurityGroup;
     this.rdsSecurityGroup = securityResources.rdsSecurityGroup;
 
-    // === PHASE 3: IAM ROLES ===
-    const iamResources = this.createIAMRoles();
-    this.ecsTaskExecutionRole = iamResources.ecsTaskExecutionRole;
-    this.ecsTaskRole = iamResources.ecsTaskRole;
-    this.autoScalingRole = iamResources.autoScalingRole;
-
-    // === PHASE 4: DATA & STORAGE ===
-    const storageResources = this.createStorageResources();
-    this.ecrApiRepository = storageResources.ecrApiRepository;
-    this.ecrFrontendRepository = storageResources.ecrFrontendRepository;
-
-    // === PHASE 5: DATABASE ===
+    // === PHASE 3: DATABASE (MOVED BEFORE IAM) ===
     const databaseResources = this.createDatabaseResources();
     this.auroraSubnetGroup = databaseResources.auroraSubnetGroup;
     this.auroraParameterGroup = databaseResources.auroraParameterGroup;
     this.auroraCluster = databaseResources.auroraCluster;
     this.auroraWriterInstance = databaseResources.auroraWriterInstance;
     this.auroraReaderInstance = databaseResources.auroraReaderInstance;
+
+    // === PHASE 4: IAM ROLES (NOW AFTER DATABASE) ===
+    const iamResources = this.createIAMRoles();
+    this.ecsTaskExecutionRole = iamResources.ecsTaskExecutionRole;
+    this.ecsTaskRole = iamResources.ecsTaskRole;
+    this.autoScalingRole = iamResources.autoScalingRole;
+
+    // === PHASE 5: DATA & STORAGE ===
+    const storageResources = this.createStorageResources();
+    this.ecrApiRepository = storageResources.ecrApiRepository;
+    this.ecrFrontendRepository = storageResources.ecrFrontendRepository;
 
     // === PHASE 6: LOAD BALANCING ===
     const lbResources = this.createLoadBalancer();
@@ -351,6 +351,74 @@ export class TapStack extends pulumi.ComponentResource {
     return { albSecurityGroup, ecsSecurityGroup, rdsSecurityGroup };
   }
 
+  private createDatabaseResources() {
+    const auroraSubnetGroup = new aws.rds.SubnetGroup(`tap-aurora-subnet-group-${this.environmentSuffix}`, {
+      subnetIds: this.databaseSubnets.map(s => s.id),
+      description: 'Subnet group for Aurora PostgreSQL',
+      tags: { ...this.defaultTags, Name: `tap-aurora-subnet-group` },
+    }, { parent: this });
+
+    const auroraParameterGroup = new aws.rds.ClusterParameterGroup(`tap-aurora-params-${this.environmentSuffix}`, {
+      family: 'aurora-postgresql14',
+      description: 'Parameter group for trading analytics Aurora PostgreSQL',
+      parameters: [
+        { name: 'shared_preload_libraries', value: 'pg_stat_statements' },
+        { name: 'log_statement', value: 'all' },
+        { name: 'log_connections', value: '1' },
+        { name: 'log_disconnections', value: '1' },
+        { name: 'max_connections', value: '1000' },
+        { name: 'statement_timeout', value: '30000' },
+      ],
+      tags: { ...this.defaultTags, Name: `tap-aurora-params` },
+    }, { parent: this });
+
+    const dbPassword = this.config.requireSecret('dbPassword');
+    
+    const auroraCluster = new aws.rds.Cluster(`tap-aurora-cluster-${this.environmentSuffix}`, {
+      engine: 'aurora-postgresql',
+      engineVersion: '14.6',
+      databaseName: 'tradinganalytics',
+      masterUsername: 'dbadmin',
+      masterPassword: dbPassword,
+      dbSubnetGroupName: auroraSubnetGroup.name,
+      dbClusterParameterGroupName: auroraParameterGroup.name,
+      vpcSecurityGroupIds: [this.rdsSecurityGroup.id],
+      storageEncrypted: true,
+      backupRetentionPeriod: 30,
+      preferredBackupWindow: '03:00-04:00',
+      preferredMaintenanceWindow: 'mon:04:00-mon:05:00',
+      enabledCloudwatchLogsExports: ['postgresql'],
+      iamDatabaseAuthenticationEnabled: true,
+      deletionProtection: false,
+      skipFinalSnapshot: true,
+      tags: { ...this.defaultTags, Name: `tap-aurora-cluster` },
+    }, { parent: this });
+
+    const auroraWriterInstance = new aws.rds.ClusterInstance(`tap-aurora-writer-${this.environmentSuffix}`, {
+      clusterIdentifier: auroraCluster.id,
+      instanceClass: 'db.r6g.large',
+      engine: 'aurora-postgresql',
+      engineVersion: '14.6',
+      performanceInsightsEnabled: true,
+      performanceInsightsRetentionPeriod: 7,
+      publiclyAccessible: false,
+      tags: { ...this.defaultTags, Name: `tap-aurora-writer`, Role: 'writer' },
+    }, { parent: this });
+
+    const auroraReaderInstance = new aws.rds.ClusterInstance(`tap-aurora-reader-${this.environmentSuffix}`, {
+      clusterIdentifier: auroraCluster.id,
+      instanceClass: 'db.r6g.large',
+      engine: 'aurora-postgresql',
+      engineVersion: '14.6',
+      performanceInsightsEnabled: true,
+      performanceInsightsRetentionPeriod: 7,
+      publiclyAccessible: false,
+      tags: { ...this.defaultTags, Name: `tap-aurora-reader`, Role: 'reader' },
+    }, { parent: this });
+
+    return { auroraSubnetGroup, auroraParameterGroup, auroraCluster, auroraWriterInstance, auroraReaderInstance };
+  }
+
   private createIAMRoles() {
     const ecsTaskExecutionRole = new aws.iam.Role(`tap-ecs-task-execution-role-${this.environmentSuffix}`, {
       assumeRolePolicy: JSON.stringify({
@@ -506,75 +574,6 @@ export class TapStack extends pulumi.ComponentResource {
     }, { parent: this });
 
     return { ecrApiRepository, ecrFrontendRepository };
-  }
-
-  private createDatabaseResources() {
-    const auroraSubnetGroup = new aws.rds.SubnetGroup(`tap-aurora-subnet-group-${this.environmentSuffix}`, {
-      subnetIds: this.databaseSubnets.map(s => s.id),
-      description: 'Subnet group for Aurora PostgreSQL',
-      tags: { ...this.defaultTags, Name: `tap-aurora-subnet-group` },
-    }, { parent: this });
-
-    const auroraParameterGroup = new aws.rds.ClusterParameterGroup(`tap-aurora-params-${this.environmentSuffix}`, {
-      family: 'aurora-postgresql14',
-      description: 'Parameter group for trading analytics Aurora PostgreSQL',
-      parameters: [
-        { name: 'shared_preload_libraries', value: 'pg_stat_statements' },
-        { name: 'log_statement', value: 'all' },
-        { name: 'log_connections', value: '1' },
-        { name: 'log_disconnections', value: '1' },
-        { name: 'max_connections', value: '1000' },
-        { name: 'statement_timeout', value: '30000' },
-      ],
-      tags: { ...this.defaultTags, Name: `tap-aurora-params` },
-    }, { parent: this });
-
-    const dbPassword = this.config.requireSecret('dbPassword');
-    
-    const auroraCluster = new aws.rds.Cluster(`tap-aurora-cluster-${this.environmentSuffix}`, {
-      engine: 'aurora-postgresql',
-      engineVersion: '14.6',
-      databaseName: 'tradinganalytics',
-      masterUsername: 'dbadmin',
-      masterPassword: dbPassword,
-      dbSubnetGroupName: auroraSubnetGroup.name,
-      dbClusterParameterGroupName: auroraParameterGroup.name,
-      vpcSecurityGroupIds: [this.rdsSecurityGroup.id],
-      storageEncrypted: true,
-      backupRetentionPeriod: 30,
-      preferredBackupWindow: '03:00-04:00',
-      preferredMaintenanceWindow: 'mon:04:00-mon:05:00',
-      enabledCloudwatchLogsExports: ['postgresql'],
-      iamDatabaseAuthenticationEnabled: true,
-      deletionProtection: true,
-      skipFinalSnapshot: false,
-      finalSnapshotIdentifier: `tap-aurora-final-snapshot-${this.environmentSuffix}`,
-      tags: { ...this.defaultTags, Name: `tap-aurora-cluster` },
-    }, { parent: this });
-
-    const auroraWriterInstance = new aws.rds.ClusterInstance(`tap-aurora-writer-${this.environmentSuffix}`, {
-      clusterIdentifier: auroraCluster.id,
-      instanceClass: 'db.r6g.large',
-      engine: 'aurora-postgresql',
-      engineVersion: '14.6',
-      performanceInsightsEnabled: true,
-      performanceInsightsRetentionPeriod: 7,
-      publiclyAccessible: false,
-      tags: { ...this.defaultTags, Name: `tap-aurora-writer`, Role: 'writer' },
-    }, { parent: this });
-
-    const auroraReaderInstance = new aws.rds.ClusterInstance(`tap-aurora-reader-${this.environmentSuffix}`, {
-      clusterIdentifier: auroraCluster.id,
-      instanceClass: 'db.r6g.large',
-      engine: 'aurora-postgresql',
-      engineVersion: '14.6',
-      performanceInsightsEnabled: true,
-      performanceInsightsRetentionPeriod: 7,
-      publiclyAccessible: false,
-      tags: { ...this.defaultTags, Name: `tap-aurora-reader`, Role: 'reader' },
-    }, { parent: this });
-
-    return { auroraSubnetGroup, auroraParameterGroup, auroraCluster, auroraWriterInstance, auroraReaderInstance };
   }
 
   private createLoadBalancer() {
