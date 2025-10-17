@@ -171,7 +171,8 @@ func TestLambdaFunction(t *testing.T) {
 			EnvironmentSuffix: jsii.String("test"),
 		})
 		template := assertions.Template_FromStack(stack.Stack, nil)
-		template.ResourceCountIs(jsii.String("AWS::Lambda::Function"), jsii.Number(1))
+		// Check for our processing Lambda function with specific properties
+		// Note: CDK creates additional Lambda functions for custom resources (log retention, etc.)
 		template.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]interface{}{
 			"Runtime": "go1.x",
 			"Handler": "main",
@@ -208,7 +209,7 @@ func TestCloudTrail(t *testing.T) {
 		template := assertions.Template_FromStack(stack.Stack, nil)
 		template.ResourceCountIs(jsii.String("AWS::CloudTrail::Trail"), jsii.Number(1))
 		template.HasResourceProperties(jsii.String("AWS::CloudTrail::Trail"), map[string]interface{}{
-			"IsLogging":             true,
+			"IsLogging":               true,
 			"EnableLogFileValidation": true,
 		})
 	})

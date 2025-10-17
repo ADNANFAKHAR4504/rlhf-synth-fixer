@@ -88,11 +88,11 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	// KMS Key for S3 bucket encryption
 	// HIPAA requires customer-managed keys for PHI data encryption
 	s3KmsKey := awskms.NewKey(stack, jsii.String("S3EncryptionKey"), &awskms.KeyProps{
-		Description:         jsii.String(fmt.Sprintf("KMS key for S3 bucket encryption - %s", environmentSuffix)),
-		EnableKeyRotation:   jsii.Bool(true), // HIPAA best practice: automatic key rotation
-		RemovalPolicy:       awscdk.RemovalPolicy_DESTROY,
-		PendingWindow:       awscdk.Duration_Days(jsii.Number(7)),
-		Alias:               jsii.String(fmt.Sprintf("alias/healthcare-s3-key-%s", environmentSuffix)),
+		Description:       jsii.String(fmt.Sprintf("KMS key for S3 bucket encryption - %s", environmentSuffix)),
+		EnableKeyRotation: jsii.Bool(true), // HIPAA best practice: automatic key rotation
+		RemovalPolicy:     awscdk.RemovalPolicy_DESTROY,
+		PendingWindow:     awscdk.Duration_Days(jsii.Number(7)),
+		Alias:             jsii.String(fmt.Sprintf("alias/healthcare-s3-key-%s", environmentSuffix)),
 	})
 
 	// Apply compliance tags
@@ -114,6 +114,29 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		awscdk.Tags_Of(logsKmsKey).Add(jsii.String(key), value, nil)
 	}
 
+	// Grant CloudWatch Logs service permission to use the key
+	logsKmsKey.AddToResourcePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+		Sid:    jsii.String("Allow CloudWatch Logs to use the key"),
+		Effect: awsiam.Effect_ALLOW,
+		Principals: &[]awsiam.IPrincipal{
+			awsiam.NewServicePrincipal(jsii.String(fmt.Sprintf("logs.%s.amazonaws.com", *stack.Region())), nil),
+		},
+		Actions: &[]*string{
+			jsii.String("kms:Encrypt"),
+			jsii.String("kms:Decrypt"),
+			jsii.String("kms:ReEncrypt*"),
+			jsii.String("kms:GenerateDataKey*"),
+			jsii.String("kms:CreateGrant"),
+			jsii.String("kms:DescribeKey"),
+		},
+		Resources: &[]*string{jsii.String("*")},
+		Conditions: &map[string]interface{}{
+			"ArnLike": map[string]interface{}{
+				"kms:EncryptionContext:aws:logs:arn": jsii.String(fmt.Sprintf("arn:aws:logs:%s:%s:*", *stack.Region(), *stack.Account())),
+			},
+		},
+	}), nil)
+
 	// KMS Key for CloudTrail encryption
 	// HIPAA audit trail must be encrypted
 	trailKmsKey := awskms.NewKey(stack, jsii.String("TrailEncryptionKey"), &awskms.KeyProps{
@@ -130,8 +153,8 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 
 	// Grant CloudTrail service permission to use the key
 	trailKmsKey.AddToResourcePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
-		Sid:       jsii.String("Allow CloudTrail to encrypt logs"),
-		Effect:    awsiam.Effect_ALLOW,
+		Sid:    jsii.String("Allow CloudTrail to encrypt logs"),
+		Effect: awsiam.Effect_ALLOW,
 		Principals: &[]awsiam.IPrincipal{
 			awsiam.NewServicePrincipal(jsii.String("cloudtrail.amazonaws.com"), nil),
 		},
@@ -159,8 +182,8 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		AutoDeleteObjects: jsii.Bool(true),
 		LifecycleRules: &[]*awss3.LifecycleRule{
 			{
-				Id:      jsii.String("ExpireOldLogs"),
-				Enabled: jsii.Bool(true),
+				Id:         jsii.String("ExpireOldLogs"),
+				Enabled:    jsii.Bool(true),
 				Expiration: awscdk.Duration_Days(jsii.Number(2190)), // 6 years for HIPAA compliance
 			},
 		},
@@ -177,14 +200,14 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	// - MFA delete for critical data protection
 	// - Access logging for audit trail
 	dataBucket := awss3.NewBucket(stack, jsii.String("DataBucket"), &awss3.BucketProps{
-		BucketName:        jsii.String(fmt.Sprintf("healthcare-data-%s", environmentSuffix)),
-		Encryption:        awss3.BucketEncryption_KMS,
-		EncryptionKey:     s3KmsKey,
-		Versioned:         jsii.Bool(true),      // HIPAA: Track all data modifications
-		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(), // HIPAA: No public access
-		EnforceSSL:        jsii.Bool(true),      // HIPAA: Encryption in transit
-		RemovalPolicy:     awscdk.RemovalPolicy_DESTROY,
-		AutoDeleteObjects: jsii.Bool(true),      // For testing environment only
+		BucketName:             jsii.String(fmt.Sprintf("healthcare-data-%s", environmentSuffix)),
+		Encryption:             awss3.BucketEncryption_KMS,
+		EncryptionKey:          s3KmsKey,
+		Versioned:              jsii.Bool(true),                     // HIPAA: Track all data modifications
+		BlockPublicAccess:      awss3.BlockPublicAccess_BLOCK_ALL(), // HIPAA: No public access
+		EnforceSSL:             jsii.Bool(true),                     // HIPAA: Encryption in transit
+		RemovalPolicy:          awscdk.RemovalPolicy_DESTROY,
+		AutoDeleteObjects:      jsii.Bool(true),  // For testing environment only
 		ServerAccessLogsBucket: accessLogsBucket, // Enable access logging
 		ServerAccessLogsPrefix: jsii.String("data-bucket-logs/"),
 		LifecycleRules: &[]*awss3.LifecycleRule{
@@ -193,8 +216,8 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 				Enabled: jsii.Bool(true),
 				Transitions: &[]*awss3.Transition{
 					{
-						StorageClass:     awss3.StorageClass_INTELLIGENT_TIERING(),
-						TransitionAfter:  awscdk.Duration_Days(jsii.Number(90)),
+						StorageClass:    awss3.StorageClass_INTELLIGENT_TIERING(),
+						TransitionAfter: awscdk.Duration_Days(jsii.Number(90)),
 					},
 				},
 			},
@@ -207,14 +230,14 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 
 	// Processed Data Bucket - Stores processed healthcare analytics
 	processedBucket := awss3.NewBucket(stack, jsii.String("ProcessedBucket"), &awss3.BucketProps{
-		BucketName:        jsii.String(fmt.Sprintf("healthcare-processed-%s", environmentSuffix)),
-		Encryption:        awss3.BucketEncryption_KMS,
-		EncryptionKey:     s3KmsKey,
-		Versioned:         jsii.Bool(true),
-		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
-		EnforceSSL:        jsii.Bool(true),
-		RemovalPolicy:     awscdk.RemovalPolicy_DESTROY,
-		AutoDeleteObjects: jsii.Bool(true),
+		BucketName:             jsii.String(fmt.Sprintf("healthcare-processed-%s", environmentSuffix)),
+		Encryption:             awss3.BucketEncryption_KMS,
+		EncryptionKey:          s3KmsKey,
+		Versioned:              jsii.Bool(true),
+		BlockPublicAccess:      awss3.BlockPublicAccess_BLOCK_ALL(),
+		EnforceSSL:             jsii.Bool(true),
+		RemovalPolicy:          awscdk.RemovalPolicy_DESTROY,
+		AutoDeleteObjects:      jsii.Bool(true),
 		ServerAccessLogsBucket: accessLogsBucket, // Enable access logging
 		ServerAccessLogsPrefix: jsii.String("processed-bucket-logs/"),
 	})
@@ -230,9 +253,9 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	// Create VPC with private subnets only (no public subnets or internet gateway)
 	// HIPAA: Network isolation for data processing functions
 	vpc := awsec2.NewVpc(stack, jsii.String("HealthcareVpc"), &awsec2.VpcProps{
-		VpcName:          jsii.String(fmt.Sprintf("healthcare-vpc-%s", environmentSuffix)),
-		MaxAzs:           jsii.Number(2),
-		NatGateways:      jsii.Number(0), // No NAT gateway - use VPC endpoint instead
+		VpcName:     jsii.String(fmt.Sprintf("healthcare-vpc-%s", environmentSuffix)),
+		MaxAzs:      jsii.Number(2),
+		NatGateways: jsii.Number(0), // No NAT gateway - use VPC endpoint instead
 		SubnetConfiguration: &[]*awsec2.SubnetConfiguration{
 			{
 				Name:       jsii.String("Private"),
@@ -277,10 +300,10 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	// Log group for data processing Lambda
 	// HIPAA: All logs must be encrypted and retained for compliance period
 	processingLogGroup := awslogs.NewLogGroup(stack, jsii.String("ProcessingLogGroup"), &awslogs.LogGroupProps{
-		LogGroupName:   jsii.String(fmt.Sprintf("/aws/lambda/healthcare-processing-%s", environmentSuffix)),
-		EncryptionKey:  logsKmsKey,
-		Retention:      awslogs.RetentionDays_SIX_YEARS, // HIPAA: 6-year retention requirement
-		RemovalPolicy:  awscdk.RemovalPolicy_DESTROY,
+		LogGroupName:  jsii.String(fmt.Sprintf("/aws/lambda/healthcare-processing-%s", environmentSuffix)),
+		EncryptionKey: logsKmsKey,
+		Retention:     awslogs.RetentionDays_SIX_YEARS, // HIPAA: 6-year retention requirement
+		RemovalPolicy: awscdk.RemovalPolicy_DESTROY,
 	})
 
 	for key, value := range complianceTags {
@@ -335,11 +358,13 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 
 	// Data processing Lambda function
 	// HIPAA: Deployed in VPC private subnet with no internet access
+	// Use a dummy asset path for testing - tests should mock or override this
+	lambdaAssetPath := jsii.String("lib/lambda/processing")
 	processingFunction := awslambda.NewFunction(stack, jsii.String("ProcessingFunction"), &awslambda.FunctionProps{
 		FunctionName: jsii.String(fmt.Sprintf("healthcare-data-processing-%s", environmentSuffix)),
 		Runtime:      awslambda.Runtime_GO_1_X(),
 		Handler:      jsii.String("main"),
-		Code:         awslambda.Code_FromAsset(jsii.String("lambda/processing"), nil),
+		Code:         awslambda.Code_FromAsset(lambdaAssetPath, nil),
 		Role:         processingLambdaRole,
 		Vpc:          vpc,
 		VpcSubnets: &awsec2.SubnetSelection{
@@ -386,8 +411,8 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		AutoDeleteObjects: jsii.Bool(true),
 		LifecycleRules: &[]*awss3.LifecycleRule{
 			{
-				Id:      jsii.String("ExpireOldTrailLogs"),
-				Enabled: jsii.Bool(true),
+				Id:         jsii.String("ExpireOldTrailLogs"),
+				Enabled:    jsii.Bool(true),
 				Expiration: awscdk.Duration_Days(jsii.Number(2190)), // 6 years for HIPAA
 			},
 		},
@@ -399,13 +424,13 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 
 	// CloudTrail - Log all API activity for HIPAA audit requirements
 	trail := awscloudtrail.NewTrail(stack, jsii.String("HealthcareTrail"), &awscloudtrail.TrailProps{
-		TrailName:         jsii.String(fmt.Sprintf("healthcare-audit-trail-%s", environmentSuffix)),
-		Bucket:            trailBucket,
-		EncryptionKey:     trailKmsKey,
+		TrailName:                  jsii.String(fmt.Sprintf("healthcare-audit-trail-%s", environmentSuffix)),
+		Bucket:                     trailBucket,
+		EncryptionKey:              trailKmsKey,
 		IncludeGlobalServiceEvents: jsii.Bool(true),
-		IsMultiRegionTrail:        jsii.Bool(false), // Single region for this deployment
+		IsMultiRegionTrail:         jsii.Bool(false), // Single region for this deployment
 		EnableFileValidation:       jsii.Bool(true),  // HIPAA: Log file integrity validation
-		SendToCloudWatchLogs:      jsii.Bool(true),
+		SendToCloudWatchLogs:       jsii.Bool(true),
 		CloudWatchLogGroup: awslogs.NewLogGroup(stack, jsii.String("TrailLogGroup"), &awslogs.LogGroupProps{
 			LogGroupName:  jsii.String(fmt.Sprintf("/aws/cloudtrail/healthcare-%s", environmentSuffix)),
 			EncryptionKey: logsKmsKey,
@@ -421,15 +446,15 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	// Add data events for S3 buckets - HIPAA: Track all data access
 	trail.AddS3EventSelector(&[]*awscloudtrail.S3EventSelector{
 		{
-			Bucket:              dataBucket,
-			ObjectPrefix:        jsii.String(""),
+			Bucket:       dataBucket,
+			ObjectPrefix: jsii.String(""),
 		},
 		{
-			Bucket:              processedBucket,
-			ObjectPrefix:        jsii.String(""),
+			Bucket:       processedBucket,
+			ObjectPrefix: jsii.String(""),
 		},
 	}, &awscloudtrail.AddEventSelectorOptions{
-		ReadWriteType: awscloudtrail.ReadWriteType_ALL,
+		ReadWriteType:           awscloudtrail.ReadWriteType_ALL,
 		IncludeManagementEvents: jsii.Bool(true),
 	})
 

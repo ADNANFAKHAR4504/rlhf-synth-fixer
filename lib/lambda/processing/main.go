@@ -63,9 +63,9 @@ func Handler(ctx context.Context, s3Event events.S3Event) error {
 		// Store processed data in processed bucket
 		// HIPAA: Data is encrypted using KMS key configured on bucket
 		putObjectInput := &s3.PutObjectInput{
-			Bucket: &processedBucket,
-			Key:    &processedKey,
-			Body:   result.Body,
+			Bucket:               &processedBucket,
+			Key:                  &processedKey,
+			Body:                 result.Body,
 			ServerSideEncryption: "aws:kms", // Use KMS encryption
 		}
 
