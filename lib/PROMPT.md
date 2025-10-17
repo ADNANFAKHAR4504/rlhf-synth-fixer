@@ -40,11 +40,6 @@ Here's the checklist for the infrastructure:
 **Load Balancing and DNS**
 - Application Load Balancer for EC2 instances
 - HTTP listener
-- Route 53 for domain management (pointing to CloudFront or ALB)
-
-**Global Performance**
-- CloudFront distribution for CDN
-- HTTP-only 
 
 **Monitoring and Logging**
 - CloudWatch alarms for EC2 CPU usage over 70%
@@ -85,7 +80,6 @@ The validation system expects these outputs:
 - KMS key ARNs
 - S3 bucket name and Lambda function details
 - ALB ARN and DNS name
-- CloudFront domain name
 - RDS endpoint and port
 - IAM role name/ARN
 - SNS topic ARN

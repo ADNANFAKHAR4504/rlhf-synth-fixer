@@ -1,5 +1,3 @@
-I'll provide a comprehensive Terraform migration plan for moving your AWS application from us-west-1 to us-west-2. This approach uses `terraform import` to preserve resource identities and minimize downtime.
-
 ```hcl
 # main.tf
 terraform {
@@ -33,887 +31,1610 @@ provider "aws" {
   region = "us-west-1"
 }
 
-# Data sources for existing resources in new region
-data "aws_availability_zones" "available" {
-  state = "available"
-}
-
-data "aws_caller_identity" "current" {}
-
-# VPC and Networking
-resource "aws_vpc" "main" {
-  cidr_block           = var.vpc_cidr
-  enable_dns_hostnames = true
-  enable_dns_support   = true
-
-  tags = {
-    Name = "${var.project_name}-vpc"
-  }
-}
-
-resource "aws_internet_gateway" "main" {
-  vpc_id = aws_vpc.main.id
-
-  tags = {
-    Name = "${var.project_name}-igw"
-  }
-}
-
-resource "aws_subnet" "public" {
-  count = length(var.public_subnet_cidrs)
-
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = var.public_subnet_cidrs[count.index]
-  availability_zone       = data.aws_availability_zones.available.names[count.index]
-  map_public_ip_on_launch = true
-
-  tags = {
-    Name = "${var.project_name}-public-subnet-${count.index + 1}"
-    Type = "public"
-  }
-}
-
-resource "aws_subnet" "private" {
-  count = length(var.private_subnet_cidrs)
-
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = var.private_subnet_cidrs[count.index]
-  availability_zone = data.aws_availability_zones.available.names[count.index]
-
-  tags = {
-    Name = "${var.project_name}-private-subnet-${count.index + 1}"
-    Type = "private"
-  }
-}
-
-# Route Tables
-resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.main.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.main.id
-  }
-
-  tags = {
-    Name = "${var.project_name}-public-rt"
-  }
-}
-
-resource "aws_route_table" "private" {
-  count  = length(aws_subnet.private)
-  vpc_id = aws_vpc.main.id
-
-  tags = {
-    Name = "${var.project_name}-private-rt-${count.index + 1}"
-  }
-}
-
-resource "aws_route_table_association" "public" {
-  count = length(aws_subnet.public)
-
-  subnet_id      = aws_subnet.public[count.index].id
-  route_table_id = aws_route_table.public.id
-}
-
-resource "aws_route_table_association" "private" {
-  count = length(aws_subnet.private)
-
-  subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = aws_route_table.private[count.index].id
-}
-
-# Security Groups
-resource "aws_security_group" "web" {
-  name_prefix = "${var.project_name}-web-"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${var.project_name}-web-sg"
-  }
-}
-
-resource "aws_security_group" "app" {
-  name_prefix = "${var.project_name}-app-"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    from_port       = 8080
-    to_port         = 8080
-    protocol        = "tcp"
-    security_groups = [aws_security_group.web.id]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${var.project_name}-app-sg"
-  }
-}
-
-resource "aws_security_group" "database" {
-  name_prefix = "${var.project_name}-db-"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    from_port       = 3306
-    to_port         = 3306
-    protocol        = "tcp"
-    security_groups = [aws_security_group.app.id]
-  }
-
-  tags = {
-    Name = "${var.project_name}-db-sg"
-  }
-}
-
-# Application Load Balancer
-resource "aws_lb" "main" {
-  name               = "${var.project_name}-alb"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.web.id]
-  subnets            = aws_subnet.public[*].id
-
-  enable_deletion_protection = var.enable_deletion_protection
-
-  tags = {
-    Name = "${var.project_name}-alb"
-  }
-}
-
-resource "aws_lb_target_group" "app" {
-  name     = "${var.project_name}-app-tg"
-  port     = 8080
-  protocol = "HTTP"
-  vpc_id   = aws_vpc.main.id
-
-  health_check {
-    enabled             = true
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
-    timeout             = 5
-    interval            = 30
-    path                = "/health"
-    matcher             = "200"
-  }
-
-  tags = {
-    Name = "${var.project_name}-app-tg"
-  }
-}
-
-resource "aws_lb_listener" "app" {
-  load_balancer_arn = aws_lb.main.arn
-  port              = "80"
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app.arn
-  }
-}
-
-# Launch Template and Auto Scaling Group
-resource "aws_launch_template" "app" {
-  name_prefix   = "${var.project_name}-app-"
-  image_id      = var.ami_id
-  instance_type = var.instance_type
-  key_name      = var.key_pair_name
-
-  vpc_security_group_ids = [aws_security_group.app.id]
-
-  user_data = base64encode(var.user_data_script)
-
-  tag_specifications {
-    resource_type = "instance"
-    tags = {
-      Name = "${var.project_name}-app-instance"
-    }
-  }
-
-  tags = {
-    Name = "${var.project_name}-app-lt"
-  }
-}
-
-resource "aws_autoscaling_group" "app" {
-  name                = "${var.project_name}-app-asg"
-  vpc_zone_identifier = aws_subnet.private[*].id
-  target_group_arns   = [aws_lb_target_group.app.arn]
-  health_check_type   = "ELB"
-  health_check_grace_period = 300
-
-  min_size         = var.asg_min_size
-  max_size         = var.asg_max_size
-  desired_capacity = var.asg_desired_capacity
-
-  launch_template {
-    id      = aws_launch_template.app.id
-    version = "$Latest"
-  }
-
-  tag {
-    key                 = "Name"
-    value               = "${var.project_name}-app-asg"
-    propagate_at_launch = false
-  }
-}
-
-# RDS Subnet Group and Database
-resource "aws_db_subnet_group" "main" {
-  name       = "${var.project_name}-db-subnet-group"
-  subnet_ids = aws_subnet.private[*].id
-
-  tags = {
-    Name = "${var.project_name}-db-subnet-group"
-  }
-}
-
-resource "aws_db_instance" "main" {
-  identifier = "${var.project_name}-database"
-
-  engine         = "mysql"
-  engine_version = var.db_engine_version
-  instance_class = var.db_instance_class
-
-  allocated_storage     = var.db_allocated_storage
-  max_allocated_storage = var.db_max_allocated_storage
-  storage_type          = "gp2"
-  storage_encrypted     = true
-
-  db_name  = var.db_name
-  username = var.db_username
-  password = var.db_password
-
-  vpc_security_group_ids = [aws_security_group.database.id]
-  db_subnet_group_name   = aws_db_subnet_group.main.name
-
-  backup_retention_period = var.db_backup_retention_period
-  backup_window          = var.db_backup_window
-  maintenance_window     = var.db_maintenance_window
-
-  skip_final_snapshot = var.skip_final_snapshot
-  deletion_protection = var.enable_deletion_protection
-
-  tags = {
-    Name = "${var.project_name}-database"
-  }
-}
-```
-
-```hcl
-# variables.tf
-variable "aws_region" {
-  description = "AWS region for resources"
-  type        = string
-  default     = "us-west-2"
-}
-
-variable "environment" {
+# Variables
+variable "env" {
   description = "Environment name"
   type        = string
-  default     = "production"
+  default     = "dev"
 }
 
-variable "project_name" {
-  description = "Project name for resource naming"
+variable "owner" {
+  description = "Owner of the resources"
   type        = string
-  default     = "myapp"
+  default     = "cloud-team"
 }
 
-variable "migration_date" {
-  description = "Date of migration for tagging"
+variable "cost_center" {
+  description = "Cost center for billing"
   type        = string
-  default     = "2024-01-15"
+  default     = "cloud-ops"
 }
 
-# Network Configuration
-variable "vpc_cidr" {
-  description = "CIDR block for VPC"
+variable "use2_cidr" {
+  description = "CIDR block for us-east-2 VPC"
   type        = string
-  default     = "10.0.0.0/16"
+  default     = "10.10.0.0/16"
 }
 
-variable "public_subnet_cidrs" {
-  description = "CIDR blocks for public subnets"
-  type        = list(string)
-  default     = ["10.0.1.0/24", "10.0.2.0/24"]
-}
-
-variable "private_subnet_cidrs" {
-  description = "CIDR blocks for private subnets"
-  type        = list(string)
-  default     = ["10.0.10.0/24", "10.0.20.0/24"]
-}
-
-# EC2 Configuration
-variable "ami_id" {
-  description = "AMI ID for EC2 instances"
+variable "euw2_cidr" {
+  description = "CIDR block for eu-west-2 VPC"
   type        = string
-  default     = "ami-0c02fb55956c7d316" # Amazon Linux 2 in us-west-2
+  default     = "10.20.0.0/16"
 }
 
-variable "instance_type" {
-  description = "EC2 instance type"
+variable "use2_public_subnets" {
+  description = "Public subnet CIDR blocks for us-east-2"
+  type        = map(string)
+  default     = {
+    "us-east-2a" = "10.10.1.0/24"
+    "us-east-2b" = "10.10.2.0/24"
+  }
+}
+
+variable "use2_private_subnets" {
+  description = "Private subnet CIDR blocks for us-east-2"
+  type        = map(string)
+  default     = {
+    "us-east-2a" = "10.10.11.0/24"
+    "us-east-2b" = "10.10.12.0/24"
+  }
+}
+
+variable "euw2_public_subnets" {
+  description = "Public subnet CIDR blocks for eu-west-2"
+  type        = map(string)
+  default     = {
+    "eu-west-2a" = "10.20.1.0/24"
+    "eu-west-2b" = "10.20.2.0/24"
+  }
+}
+
+variable "euw2_private_subnets" {
+  description = "Private subnet CIDR blocks for eu-west-2"
+  type        = map(string)
+  default     = {
+    "eu-west-2a" = "10.20.11.0/24"
+    "eu-west-2b" = "10.20.12.0/24"
+  }
+}
+
+variable "web_instance_type" {
+  description = "EC2 instance type for web servers"
   type        = string
-  default     = "t3.medium"
+  default     = "t3.micro"
 }
 
-variable "key_pair_name" {
-  description = "EC2 Key Pair name"
+variable "rds_engine_version" {
+  description = "RDS PostgreSQL engine version"
   type        = string
-  default     = "myapp-keypair"
+  default     = "13.4"
 }
 
-variable "user_data_script" {
-  description = "User data script for EC2 instances"
-  type        = string
-  default     = <<-EOF
-    #!/bin/bash
-    yum update -y
-    yum install -y docker
-    service docker start
-    usermod -a -G docker ec2-user
-    # Add your application startup commands here
-  EOF
-}
-
-# Auto Scaling Configuration
-variable "asg_min_size" {
-  description = "Minimum size of Auto Scaling Group"
-  type        = number
-  default     = 2
-}
-
-variable "asg_max_size" {
-  description = "Maximum size of Auto Scaling Group"
-  type        = number
-  default     = 6
-}
-
-variable "asg_desired_capacity" {
-  description = "Desired capacity of Auto Scaling Group"
-  type        = number
-  default     = 2
-}
-
-# Database Configuration
-variable "db_engine_version" {
-  description = "RDS engine version"
-  type        = string
-  default     = "8.0.35"
-}
-
-variable "db_instance_class" {
+variable "rds_instance_class" {
   description = "RDS instance class"
   type        = string
-  default     = "db.t3.micro"
+  default     = "db.t3.small"
 }
 
-variable "db_allocated_storage" {
-  description = "RDS allocated storage in GB"
+variable "rds_storage_size" {
+  description = "RDS storage size in GB"
   type        = number
   default     = 20
 }
 
-variable "db_max_allocated_storage" {
-  description = "RDS maximum allocated storage in GB"
+variable "s3_file_expiration_days" {
+  description = "Number of days to retain files in S3"
   type        = number
-  default     = 100
+  default     = 90
 }
+Now, let's start creating the resources for each region. We'll begin with the network foundation.
 
-variable "db_name" {
-  description = "Database name"
-  type        = string
-  default     = "myappdb"
-}
+# US-EAST-2 Resources
 
-variable "db_username" {
-  description = "Database username"
-  type        = string
-  default     = "admin"
-  sensitive   = true
-}
-
-variable "db_password" {
-  description = "Database password"
-  type        = string
-  sensitive   = true
-}
-
-variable "db_backup_retention_period" {
-  description = "Database backup retention period in days"
-  type        = number
-  default     = 7
-}
-
-variable "db_backup_window" {
-  description = "Database backup window"
-  type        = string
-  default     = "03:00-04:00"
-}
-
-variable "db_maintenance_window" {
-  description = "Database maintenance window"
-  type        = string
-  default     = "sun:04:00-sun:05:00"
-}
-
-# General Configuration
-variable "enable_deletion_protection" {
-  description = "Enable deletion protection for critical resources"
-  type        = bool
-  default     = true
-}
-
-variable "skip_final_snapshot" {
-  description = "Skip final snapshot when destroying RDS instance"
-  type        = bool
-  default     = false
-}
-```
-
-```hcl
-# backend.tf
-terraform {
-  backend "s3" {
-    bucket         = "PLACEHOLDER-terraform-state-bucket"
-    key            = "myapp/us-west-2/terraform.tfstate"
-    region         = "us-west-2"
-    encrypt        = true
-    dynamodb_table = "PLACEHOLDER-terraform-locks"
-    
-    # Optional: Use assume role for cross-account access
-    # role_arn = "arn:aws:iam::ACCOUNT-ID:role/TerraformRole"
+# VPC in us-east-2
+resource "aws_vpc" "use2_vpc" {
+  provider = aws.use2
+  
+  cidr_block           = var.use2_cidr
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-use2-vpc"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
   }
 }
 
-# Alternative backend configuration for remote state management
-# terraform {
-#   backend "remote" {
-#     hostname     = "app.terraform.io"
-#     organization = "PLACEHOLDER-ORG-NAME"
-#
-#     workspaces {
-#       name = "myapp-us-west-2"
-#     }
-#   }
-# }
-
-# Local backend for testing (not recommended for production)
-# terraform {
-#   backend "local" {
-#     path = "terraform.tfstate"
-#   }
-# }
-```
-
-```markdown
-# state-migration.md
-
-# Terraform State Migration Guide: us-west-1 → us-west-2
-
-## Prerequisites
-
-1. Ensure you have appropriate AWS credentials configured
-2. Backup existing Terraform state files
-3. Verify all resources exist in both regions
-4. Have the old resource IDs documented (see id-mapping.csv)
-
-## Step 1: Backup Current State
-
-```bash
-# Backup current state from us-west-1
-terraform workspace select myapp-us-west-1
-terraform state pull > backup-us-west-1-$(date +%Y%m%d-%H%M%S).json
-
-# List all resources in current state
-terraform state list > resources-us-west-1.txt
-```
-
-## Step 2: Create New Workspace for us-west-2
-
-```bash
-# Create new workspace for us-west-2
-terraform workspace new myapp-us-west-2
-
-# Or select if already exists
-terraform workspace select myapp-us-west-2
-
-# Initialize the new workspace
-terraform init
-```
-
-## Step 3: Import Resources to New State
-
-**Important**: Execute imports in dependency order (VPC → Subnets → Security Groups → etc.)
-
-### Network Resources
-
-```bash
-# Import VPC
-terraform import aws_vpc.main vpc-0123456789abcdef0
-
-# Import Internet Gateway
-terraform import aws_internet_gateway.main igw-0123456789abcdef0
-
-# Import Subnets
-terraform import 'aws_subnet.public[0]' subnet-0123456789abcdef0
-terraform import 'aws_subnet.public[1]' subnet-0123456789abcdef1
-terraform import 'aws_subnet.private[0]' subnet-0123456789abcdef2
-terraform import 'aws_subnet.private[1]' subnet-0123456789abcdef3
-
-# Import Route Tables
-terraform import aws_route_table.public rtb-0123456789abcdef0
-terraform import 'aws_route_table.private[0]' rtb-0123456789abcdef1
-terraform import 'aws_route_table.private[1]' rtb-0123456789abcdef2
-
-# Import Route Table Associations
-terraform import 'aws_route_table_association.public[0]' subnet-0123456789abcdef0/rtb-0123456789abcdef0
-terraform import 'aws_route_table_association.public[1]' subnet-0123456789abcdef1/rtb-0123456789abcdef0
-terraform import 'aws_route_table_association.private[0]' subnet-0123456789abcdef2/rtb-0123456789abcdef1
-terraform import 'aws_route_table_association.private[1]' subnet-0123456789abcdef3/rtb-0123456789abcdef2
-```
-
-### Security Groups
-
-```bash
-# Import Security Groups
-terraform import aws_security_group.web sg-0123456789abcdef0
-terraform import aws_security_group.app sg-0123456789abcdef1
-terraform import aws_security_group.database sg-0123456789abcdef2
-```
-
-### Load Balancer Resources
-
-```bash
-# Import ALB
-terraform import aws_lb.main arn:aws:elasticloadbalancing:us-west-2:123456789012:loadbalancer/app/myapp-alb/1234567890123456
-
-# Import Target Group
-terraform import aws_lb_target_group.app arn:aws:elasticloadbalancing:us-west-2:123456789012:targetgroup/myapp-app-tg/1234567890123456
-
-# Import Listener
-terraform import aws_lb_listener.app arn:aws:elasticloadbalancing:us-west-2:123456789012:listener/app/myapp-alb/1234567890123456/1234567890123456
-```
-
-### Auto Scaling Resources
-
-```bash
-# Import Launch Template
-terraform import aws_launch_template.app lt-0123456789abcdef0
-
-# Import Auto Scaling Group
-terraform import aws_autoscaling_group.app myapp-app-asg
-```
-
-### Database Resources
-
-```bash
-# Import DB Subnet Group
-terraform import aws_db_subnet_group.main myapp-db-subnet-group
-
-# Import RDS Instance
-terraform import aws_db_instance.main myapp-database
-```
-
-## Step 4: Verify State Consistency
-
-```bash
-# Plan should show no changes if import was successful
-terraform plan
-
-# If there are differences, review and adjust configuration
-terraform show
-
-# Verify all resources are in state
-terraform state list
-```
-
-## Step 5: Test Configuration
-
-```bash
-# Validate configuration
-terraform validate
-
-# Run plan to ensure no unexpected changes
-terraform plan -out=migration-plan
-
-# Apply only if plan shows expected results
-# terraform apply migration-plan
-```
-
-## Step 6: State Verification Commands
-
-```bash
-# Compare resource counts
-echo "Old region resources:"
-wc -l resources-us-west-1.txt
-
-echo "New region resources:"
-terraform state list | wc -l
-
-# Verify specific resources
-terraform state show aws_vpc.main
-terraform state show aws_db_instance.main
-terraform state show aws_lb.main
-
-# Check for any drift
-terraform plan -detailed-exitcode
-```
-
-## Rollback Procedure
-
-If migration fails:
-
-```bash
-# Switch back to old workspace
-terraform workspace select myapp-us-west-1
-
-# Restore from backup if needed
-terraform state push backup-us-west-1-TIMESTAMP.json
-
-# Delete problematic new workspace
-terraform workspace select default
-terraform workspace delete myapp-us-west-2
-```
-
-## Post-Migration Cleanup
-
-```bash
-# After successful migration and testing
-terraform workspace select myapp-us-west-1
-
-# Document old resources for cleanup
-terraform state list > old-resources-for-cleanup.txt
-
-# Eventually destroy old resources (after DNS cutover)
-# terraform destroy
-```
-```
-
-```csv
-# id-mapping.csv
-resource,address,old_id,new_id,notes
-VPC,aws_vpc.main,vpc-abc123def456,vpc-def456abc123,Main application VPC
-Internet Gateway,aws_internet_gateway.main,igw-abc123def456,igw-def456abc123,Main internet gateway
-Public Subnet 1,aws_subnet.public[0],subnet-abc123def456,subnet-def456abc123,Public subnet AZ-a
-Public Subnet 2,aws_subnet.public[1],subnet-bcd234efa567,subnet-efa567bcd234,Public subnet AZ-b
-Private Subnet 1,aws_subnet.private[0],subnet-cde345fgb678,subnet-fgb678cde345,Private subnet AZ-a
-Private Subnet 2,aws_subnet.private[1],subnet-def456ghc789,subnet-ghc789def456,Private subnet AZ-b
-Public Route Table,aws_route_table.public,rtb-abc123def456,rtb-def456abc123,Public route table
-Private Route Table 1,aws_route_table.private[0],rtb-bcd234efa567,rtb-efa567bcd234,Private route table AZ-a
-Private Route Table 2,aws_route_table.private[1],rtb-cde345fgb678,rtb-fgb678cde345,Private route table AZ-b
-Web Security Group,aws_security_group.web,sg-abc123def456,sg-def456abc123,Web tier security group
-App Security Group,aws_security_group.app,sg-bcd234efa567,sg-efa567bcd234,Application tier security group
-DB Security Group,aws_security_group.database,sg-cde345fgb678,sg-fgb678cde345,Database tier security group
-Application Load Balancer,aws_lb.main,arn:aws:elasticloadbalancing:us-west-1:123456789012:loadbalancer/app/myapp-alb/50dc6c495c0c9188,arn:aws:elasticloadbalancing:us-west-2:123456789012:loadbalancer/app/myapp-alb/60ec7d596d1d9299,Main application load balancer
-Target Group,aws_lb_target_group.app,arn:aws:elasticloadbalancing:us-west-1:123456789012:targetgroup/myapp-app-tg/73e2d6ba618ba529,arn:aws:elasticloadbalancing:us-west-2:123456789012:targetgroup/myapp-app-tg/84f3e7cb729cb63a,Application target group
-ALB Listener,aws_lb_listener.app,arn:aws:elasticloadbalancing:us-west-1:123456789012:listener/app/myapp-alb/50dc6c495c0c9188/f2f7dc8efc522ab2,arn:aws:elasticloadbalancing:us-west-2:123456789012:listener/app/myapp-alb/60ec7d596d1d9299/g3g8ed9fgd633bc3,HTTP listener port 80
-Launch Template,aws_launch_template.app,lt-abc123def456,lt-def456abc123,Application launch template
-Auto Scaling Group,aws_autoscaling_group.app,myapp-app-asg,myapp-app-asg,Application auto scaling group
-DB Subnet Group,aws_db_subnet_group.main,myapp-db-subnet-group,myapp-db-subnet-group,Database subnet group
-RDS Instance,aws_db_instance.main,myapp-database,myapp-database,Main database instance
-Route Table Association 1,aws_route_table_association.public[0],subnet-abc123def456/rtb-abc123def456,subnet-def456abc123/rtb-def456abc123,Public subnet 1 association
-Route Table Association 2,aws_route_table_association.public[1],subnet-bcd234efa567/rtb-abc123def456,subnet-efa567bcd234/rtb-def456abc123,Public subnet 2 association
-Route Table Association 3,aws_route_table_association.private[0],subnet-cde345fgb678/rtb-bcd234efa567,subnet-fgb678cde345/rtb-efa567bcd234,Private subnet 1 association
-Route Table Association 4,aws_route_table_association.private[1],subnet-def456ghc789/rtb-cde345fgb678,subnet-ghc789def456/rtb-fgb678cde345,Private subnet 2 association
-```
-
-```markdown
-# runbook.md
-
-# AWS Region Migration Runbook: us-west-1 → us-west-2
-
-## Overview
-
-This runbook provides step-by-step instructions for migrating the application from us-west-1 to us-west-2 with minimal downtime.
-
-## Pre-Migration Checklist
-
-- [ ] All stakeholders notified of maintenance window
-- [ ] Backup verification completed
-- [ ] New region resources provisioned and tested
-- [ ] Database replication/backup restored in new region
-- [ ] Application configuration updated for new region
-- [ ] DNS TTL reduced to 60 seconds (24-48 hours before migration)
-- [ ] Monitoring and alerting configured for new region
-- [ ] Rollback procedures tested
-
-## Migration Timeline
-
-**Total Estimated Downtime: 15-30 minutes**
-
-### Phase 1: Pre-Cutover (No Downtime)
-*Duration: 2-4 hours*
-
-#### Step 1: Final Data Sync
-```bash
-# Stop application writes (enable maintenance mode)
-# Perform final database backup/sync
-aws rds create-db-snapshot \
-  --db-instance-identifier myapp-database \
-  --db-snapshot-identifier myapp-final-snapshot-$(date +%Y%m%d-%H%M%S) \
-  --region us-west-1
-
-# Wait for snapshot completion
-aws rds wait db-snapshot-completed \
-  --db-snapshot-identifier myapp-final-snapshot-TIMESTAMP \
-  --region us-west-1
-
-# Restore snapshot in new region
-aws rds restore-db-instance-from-db-snapshot \
-  --db-instance-identifier myapp-database \
-  --db-snapshot-identifier myapp-final-snapshot-TIMESTAMP \
-  --region us-west-2
-```
-
-#### Step 2: Application Deployment
-```bash
-# Deploy application to new region
-terraform workspace select myapp-us-west-2
-terraform apply
-
-# Verify application health
-curl -f https://internal-alb-us-west-2.example.com/health
-```
-
-#### Step 3: Pre-Cutover Testing
-```bash
-# Test application functionality
-./scripts/smoke-test.sh us-west-2
-
-# Verify database connectivity
-./scripts/db-connectivity-test.sh us-west-2
-
-# Load test (optional)
-./scripts/load-test.sh us-west-2
-```
-
-### Phase 2: DNS Cutover (Downtime Begins)
-*Duration: 5-10 minutes*
-
-#### Step 4: Update DNS Records
-```bash
-# Get new ALB DNS name
-NEW_ALB_DNS=$(aws elbv2 describe-load-balancers \
-  --names myapp-alb \
-  --region us-west-2 \
-  --query 'LoadBalancers[0].DNSName' \
-  --output text)
-
-echo "New ALB DNS: $NEW_ALB_DNS"
-
-# Update Route 53 records
-aws route53 change-resource-record-sets \
-  --hosted-zone-id Z123456789 \
-  --change-batch '{
-    "Changes": [{
-      "Action": "UPSERT",
-      "ResourceRecordSet": {
-        "Name": "api.example.com",
-        "Type": "CNAME",
-        "TTL": 60,
-        "ResourceRecords": [{"Value": "'$NEW_ALB_DNS'"}]
+# Internet Gateway for us-east-2
+resource "aws_internet_gateway" "use2_igw" {
+  provider = aws.use2
+  
+  vpc_id = aws_vpc.use2_vpc.id
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-use2-igw"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# Public subnets in us-east-2
+resource "aws_subnet" "use2_public" {
+  provider = aws.use2
+  
+  for_each = var.use2_public_subnets
+  
+  vpc_id                  = aws_vpc.use2_vpc.id
+  cidr_block              = each.value
+  availability_zone       = each.key
+  map_public_ip_on_launch = true
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-use2-public-${substr(each.key, -1, 1)}"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# Private subnets in us-east-2
+resource "aws_subnet" "use2_private" {
+  provider = aws.use2
+  
+  for_each = var.use2_private_subnets
+  
+  vpc_id                  = aws_vpc.use2_vpc.id
+  cidr_block              = each.value
+  availability_zone       = each.key
+  map_public_ip_on_launch = false
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-use2-private-${substr(each.key, -1, 1)}"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# Elastic IP for NAT Gateway in us-east-2
+resource "aws_eip" "use2_nat_eip" {
+  provider = aws.use2
+  domain   = "vpc"
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-use2-nat-eip"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# NAT Gateway in us-east-2
+resource "aws_nat_gateway" "use2_nat" {
+  provider = aws.use2
+  
+  allocation_id = aws_eip.use2_nat_eip.id
+  subnet_id     = aws_subnet.use2_public[keys(var.use2_public_subnets)[0]].id
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-use2-nat"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# Public route table in us-east-2
+resource "aws_route_table" "use2_public_rt" {
+  provider = aws.use2
+  
+  vpc_id = aws_vpc.use2_vpc.id
+  
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.use2_igw.id
+  }
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-use2-public-rt"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# Private route table in us-east-2
+resource "aws_route_table" "use2_private_rt" {
+  provider = aws.use2
+  
+  vpc_id = aws_vpc.use2_vpc.id
+  
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.use2_nat.id
+  }
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-use2-private-rt"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# Public subnet route table associations in us-east-2
+resource "aws_route_table_association" "use2_public" {
+  provider = aws.use2
+  
+  for_each = aws_subnet.use2_public
+  
+  subnet_id      = each.value.id
+  route_table_id = aws_route_table.use2_public_rt.id
+}
+
+# Private subnet route table associations in us-east-2
+resource "aws_route_table_association" "use2_private" {
+  provider = aws.use2
+  
+  for_each = aws_subnet.use2_private
+  
+  subnet_id      = each.value.id
+  route_table_id = aws_route_table.use2_private_rt.id
+}
+Now, let's repeat this for EU-WEST-2 region:
+
+# EU-WEST-2 Resources
+
+# VPC in eu-west-2
+resource "aws_vpc" "euw2_vpc" {
+  provider = aws.euw2
+  
+  cidr_block           = var.euw2_cidr
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-euw2-vpc"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# Internet Gateway for eu-west-2
+resource "aws_internet_gateway" "euw2_igw" {
+  provider = aws.euw2
+  
+  vpc_id = aws_vpc.euw2_vpc.id
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-euw2-igw"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# Public subnets in eu-west-2
+resource "aws_subnet" "euw2_public" {
+  provider = aws.euw2
+  
+  for_each = var.euw2_public_subnets
+  
+  vpc_id                  = aws_vpc.euw2_vpc.id
+  cidr_block              = each.value
+  availability_zone       = each.key
+  map_public_ip_on_launch = true
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-euw2-public-${substr(each.key, -1, 1)}"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# Private subnets in eu-west-2
+resource "aws_subnet" "euw2_private" {
+  provider = aws.euw2
+  
+  for_each = var.euw2_private_subnets
+  
+  vpc_id                  = aws_vpc.euw2_vpc.id
+  cidr_block              = each.value
+  availability_zone       = each.key
+  map_public_ip_on_launch = false
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-euw2-private-${substr(each.key, -1, 1)}"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# Elastic IP for NAT Gateway in eu-west-2
+resource "aws_eip" "euw2_nat_eip" {
+  provider = aws.euw2
+  domain   = "vpc"
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-euw2-nat-eip"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# NAT Gateway in eu-west-2
+resource "aws_nat_gateway" "euw2_nat" {
+  provider = aws.euw2
+  
+  allocation_id = aws_eip.euw2_nat_eip.id
+  subnet_id     = aws_subnet.euw2_public[keys(var.euw2_public_subnets)[0]].id
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-euw2-nat"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# Public route table in eu-west-2
+resource "aws_route_table" "euw2_public_rt" {
+  provider = aws.euw2
+  
+  vpc_id = aws_vpc.euw2_vpc.id
+  
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.euw2_igw.id
+  }
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-euw2-public-rt"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# Private route table in eu-west-2
+resource "aws_route_table" "euw2_private_rt" {
+  provider = aws.euw2
+  
+  vpc_id = aws_vpc.euw2_vpc.id
+  
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.euw2_nat.id
+  }
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-euw2-private-rt"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# Public subnet route table associations in eu-west-2
+resource "aws_route_table_association" "euw2_public" {
+  provider = aws.euw2
+  
+  for_each = aws_subnet.euw2_public
+  
+  subnet_id      = each.value.id
+  route_table_id = aws_route_table.euw2_public_rt.id
+}
+
+# Private subnet route table associations in eu-west-2
+resource "aws_route_table_association" "euw2_private" {
+  provider = aws.euw2
+  
+  for_each = aws_subnet.euw2_private
+  
+  subnet_id      = each.value.id
+  route_table_id = aws_route_table.euw2_private_rt.id
+}
+Next, let's create the KMS keys for encryption in both regions:
+
+# KMS key in us-east-2
+resource "aws_kms_key" "use2_kms" {
+  provider = aws.use2
+  
+  description             = "KMS key for encrypting resources in us-east-2"
+  deletion_window_in_days = 30
+  enable_key_rotation     = true
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-use2-kms"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+resource "aws_kms_alias" "use2_kms_alias" {
+  provider = aws.use2
+  
+  name          = "alias/cloud-setup-${var.env}-use2-kms"
+  target_key_id = aws_kms_key.use2_kms.key_id
+}
+
+# KMS key in eu-west-2
+resource "aws_kms_key" "euw2_kms" {
+  provider = aws.euw2
+  
+  description             = "KMS key for encrypting resources in eu-west-2"
+  deletion_window_in_days = 30
+  enable_key_rotation     = true
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-euw2-kms"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+resource "aws_kms_alias" "euw2_kms_alias" {
+  provider = aws.euw2
+  
+  name          = "alias/cloud-setup-${var.env}-euw2-kms"
+  target_key_id = aws_kms_key.euw2_kms.key_id
+}
+Now, let's create the security groups for our instances in both regions:
+
+# Security group for web servers in us-east-2
+resource "aws_security_group" "use2_web_sg" {
+  provider = aws.use2
+  
+  name        = "cloud-setup-${var.env}-use2-web-sg"
+  description = "Security group for web servers in us-east-2"
+  vpc_id      = aws_vpc.use2_vpc.id
+  
+  ingress {
+    description      = "HTTPS from anywhere"
+    from_port        = 443
+    to_port          = 443
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+  
+  ingress {
+    description      = "HTTP from anywhere (for ALB)"
+    from_port        = 80
+    to_port          = 80
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+  
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-use2-web-sg"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# Security group for RDS in us-east-2
+resource "aws_security_group" "use2_rds_sg" {
+  provider = aws.use2
+  
+  name        = "cloud-setup-${var.env}-use2-rds-sg"
+  description = "Security group for RDS in us-east-2"
+  vpc_id      = aws_vpc.use2_vpc.id
+  
+  ingress {
+    description     = "PostgreSQL from web tier"
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.use2_web_sg.id]
+  }
+  
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-use2-rds-sg"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# Security group for web servers in eu-west-2
+resource "aws_security_group" "euw2_web_sg" {
+  provider = aws.euw2
+  
+  name        = "cloud-setup-${var.env}-euw2-web-sg"
+  description = "Security group for web servers in eu-west-2"
+  vpc_id      = aws_vpc.euw2_vpc.id
+  
+  ingress {
+    description      = "HTTPS from anywhere"
+    from_port        = 443
+    to_port          = 443
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+  
+  ingress {
+    description      = "HTTP from anywhere (for ALB)"
+    from_port        = 80
+    to_port          = 80
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+  
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-euw2-web-sg"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# Security group for RDS in eu-west-2
+resource "aws_security_group" "euw2_rds_sg" {
+  provider = aws.euw2
+  
+  name        = "cloud-setup-${var.env}-euw2-rds-sg"
+  description = "Security group for RDS in eu-west-2"
+  vpc_id      = aws_vpc.euw2_vpc.id
+  
+  ingress {
+    description     = "PostgreSQL from web tier"
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.euw2_web_sg.id]
+  }
+  
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-euw2-rds-sg"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+Now, let's create IAM roles and policies for EC2 instances:
+
+# IAM role for EC2 instances with SSM access
+resource "aws_iam_role" "ec2_role" {
+  provider = aws.use2
+  
+  name = "cloud-setup-${var.env}-ec2-role"
+  
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      },
+    ]
+  })
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-ec2-role"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# Attach AmazonEC2ReadOnlyAccess policy to EC2 role
+resource "aws_iam_role_policy_attachment" "ec2_ro_attach" {
+  provider = aws.use2
+  
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess"
+}
+
+# Attach AmazonSSMManagedInstanceCore policy for SSM access
+resource "aws_iam_role_policy_attachment" "ssm_attach" {
+  provider = aws.use2
+  
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+# Instance profile for EC2 instances
+resource "aws_iam_instance_profile" "ec2_profile" {
+  provider = aws.use2
+  
+  name = "cloud-setup-${var.env}-ec2-profile"
+  role = aws_iam_role.ec2_role.name
+}
+Let's create RDS instances in both regions:
+
+# RDS subnet group in us-east-2
+resource "aws_db_subnet_group" "use2_db_subnet_group" {
+  provider = aws.use2
+  
+  name        = "cloud-setup-${var.env}-use2-db-subnet-group"
+  description = "DB subnet group for RDS in us-east-2"
+  subnet_ids  = [for subnet in aws_subnet.use2_private : subnet.id]
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-use2-db-subnet-group"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# RDS parameter group in us-east-2
+resource "aws_db_parameter_group" "use2_db_param_group" {
+  provider = aws.use2
+  
+  name        = "cloud-setup-${var.env}-use2-postgres"
+  family      = "postgres13"
+  description = "PostgreSQL parameter group for RDS in us-east-2"
+  
+  parameter {
+    name  = "log_connections"
+    value = "1"
+  }
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-use2-postgres"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# RDS instance in us-east-2
+resource "aws_db_instance" "use2_db" {
+  provider = aws.use2
+  
+  identifier             = "cloud-setup-${var.env}-use2-db"
+  engine                 = "postgres"
+  engine_version         = var.rds_engine_version
+  instance_class         = var.rds_instance_class
+  allocated_storage      = var.rds_storage_size
+  storage_type           = "gp2"
+  storage_encrypted      = true
+  kms_key_id             = aws_kms_key.use2_kms.arn
+  username               = "dbadmin"
+  password               = "YourStrongPasswordHere123!"  # In a real scenario, use aws_secretsmanager_secret
+  db_subnet_group_name   = aws_db_subnet_group.use2_db_subnet_group.name
+  parameter_group_name   = aws_db_parameter_group.use2_db_param_group.name
+  vpc_security_group_ids = [aws_security_group.use2_rds_sg.id]
+  multi_az               = true
+  publicly_accessible    = false
+  skip_final_snapshot    = true
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-use2-db"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# RDS subnet group in eu-west-2
+resource "aws_db_subnet_group" "euw2_db_subnet_group" {
+  provider = aws.euw2
+  
+  name        = "cloud-setup-${var.env}-euw2-db-subnet-group"
+  description = "DB subnet group for RDS in eu-west-2"
+  subnet_ids  = [for subnet in aws_subnet.euw2_private : subnet.id]
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-euw2-db-subnet-group"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# RDS parameter group in eu-west-2
+resource "aws_db_parameter_group" "euw2_db_param_group" {
+  provider = aws.euw2
+  
+  name        = "cloud-setup-${var.env}-euw2-postgres"
+  family      = "postgres13"
+  description = "PostgreSQL parameter group for RDS in eu-west-2"
+  
+  parameter {
+    name  = "log_connections"
+    value = "1"
+  }
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-euw2-postgres"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# RDS instance in eu-west-2
+resource "aws_db_instance" "euw2_db" {
+  provider = aws.euw2
+  
+  identifier             = "cloud-setup-${var.env}-euw2-db"
+  engine                 = "postgres"
+  engine_version         = var.rds_engine_version
+  instance_class         = var.rds_instance_class
+  allocated_storage      = var.rds_storage_size
+  storage_type           = "gp2"
+  storage_encrypted      = true
+  kms_key_id             = aws_kms_key.euw2_kms.arn
+  username               = "dbadmin"
+  password               = "YourStrongPasswordHere123!"  # In a real scenario, use aws_secretsmanager_secret
+  db_subnet_group_name   = aws_db_subnet_group.euw2_db_subnet_group.name
+  parameter_group_name   = aws_db_parameter_group.euw2_db_param_group.name
+  vpc_security_group_ids = [aws_security_group.euw2_rds_sg.id]
+  multi_az               = true
+  publicly_accessible    = false
+  skip_final_snapshot    = true
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-euw2-db"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+Let's create S3 buckets and Lambda functions for file processing:
+
+# S3 bucket in us-east-2
+resource "aws_s3_bucket" "use2_bucket" {
+  provider = aws.use2
+  
+  bucket = "cloud-setup-${var.env}-use2-files-${random_id.suffix.hex}"
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-use2-files"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+resource "random_id" "suffix" {
+  byte_length = 4
+}
+
+# S3 bucket versioning in us-east-2
+resource "aws_s3_bucket_versioning" "use2_bucket_versioning" {
+  provider = aws.use2
+  
+  bucket = aws_s3_bucket.use2_bucket.id
+  
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# S3 bucket server-side encryption in us-east-2
+resource "aws_s3_bucket_server_side_encryption_configuration" "use2_bucket_encryption" {
+  provider = aws.use2
+  
+  bucket = aws_s3_bucket.use2_bucket.id
+  
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.use2_kms.arn
+      sse_algorithm     = "aws:kms"
+    }
+  }
+}
+
+# S3 bucket public access block in us-east-2
+resource "aws_s3_bucket_public_access_block" "use2_bucket_public_access_block" {
+  provider = aws.use2
+  
+  bucket                  = aws_s3_bucket.use2_bucket.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# Lambda IAM role
+resource "aws_iam_role" "use2_lambda_role" {
+  provider = aws.use2
+  
+  name = "cloud-setup-${var.env}-use2-lambda-role"
+  
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      },
+    ]
+  })
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-use2-lambda-role"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# Lambda IAM policy for S3 access
+resource "aws_iam_policy" "use2_lambda_s3_policy" {
+  provider = aws.use2
+  
+  name        = "cloud-setup-${var.env}-use2-lambda-s3-policy"
+  description = "Policy for Lambda to access S3"
+  
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "s3:GetObject",
+          "s3:ListBucket"
+        ]
+        Effect   = "Allow"
+        Resource = [
+          aws_s3_bucket.use2_bucket.arn,
+          "${aws_s3_bucket.use2_bucket.arn}/*"
+        ]
+      },
+      {
+        Action = [
+          "kms:Decrypt"
+        ]
+        Effect   = "Allow"
+        Resource = aws_kms_key.use2_kms.arn
       }
-    }]
-  }'
+    ]
+  })
+}
+
+# Attach policy to Lambda role
+resource "aws_iam_role_policy_attachment" "use2_lambda_s3_attach" {
+  provider = aws.use2
+  
+  role       = aws_iam_role.use2_lambda_role.name
+  policy_arn = aws_iam_policy.use2_lambda_s3_policy.arn
+}
+
+# Lambda basic execution role attachment
+resource "aws_iam_role_policy_attachment" "use2_lambda_basic_exec_attach" {
+  provider = aws.use2
+  
+  role       = aws_iam_role.use2_lambda_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+# Lambda function in us-east-2
+resource "aws_lambda_function" "use2_lambda" {
+  provider = aws.use2
+  
+  function_name    = "cloud-setup-${var.env}-use2-processor"
+  role             = aws_iam_role.use2_lambda_role.arn
+  handler          = "index.handler"
+  runtime          = "nodejs14.x"
+  filename         = "lambda.zip"  # In a real scenario, this would be your actual Lambda code
+  source_code_hash = filebase64sha256("lambda.zip")
+  
+  environment {
+    variables = {
+      REGION = "us-east-2"
+      BUCKET = aws_s3_bucket.use2_bucket.bucket
+    }
+  }
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-use2-processor"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# S3 bucket notification for Lambda trigger
+resource "aws_s3_bucket_notification" "use2_bucket_notification" {
+  provider = aws.use2
+  
+  bucket = aws_s3_bucket.use2_bucket.id
+  
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.use2_lambda.arn
+    events              = ["s3:ObjectCreated:*"]
+    filter_prefix       = "uploads/"
+  }
+}
+
+# Lambda permission for S3 invocation
+resource "aws_lambda_permission" "use2_allow_bucket" {
+  provider = aws.use2
+  
+  statement_id  = "AllowExecutionFromS3Bucket"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.use2_lambda.function_name
+  principal     = "s3.amazonaws.com"
+  source_arn    = aws_s3_bucket.use2_bucket.arn
+}
+Now let's do the same for EU-WEST-2:
+
+# S3 bucket in eu-west-2
+resource "aws_s3_bucket" "euw2_bucket" {
+  provider = aws.euw2
+  
+  bucket = "cloud-setup-${var.env}-euw2-files-${random_id.suffix.hex}"
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-euw2-files"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# S3 bucket versioning in eu-west-2
+resource "aws_s3_bucket_versioning" "euw2_bucket_versioning" {
+  provider = aws.euw2
+  
+  bucket = aws_s3_bucket.euw2_bucket.id
+  
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# S3 bucket server-side encryption in eu-west-2
+resource "aws_s3_bucket_server_side_encryption_configuration" "euw2_bucket_encryption" {
+  provider = aws.euw2
+  
+  bucket = aws_s3_bucket.euw2_bucket.id
+  
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.euw2_kms.arn
+      sse_algorithm     = "aws:kms"
+    }
+  }
+}
+
+# S3 bucket public access block in eu-west-2
+resource "aws_s3_bucket_public_access_block" "euw2_bucket_public_access_block" {
+  provider = aws.euw2
+  
+  bucket                  = aws_s3_bucket.euw2_bucket.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# Lambda IAM role for eu-west-2
+resource "aws_iam_role" "euw2_lambda_role" {
+  provider = aws.euw2
+  
+  name = "cloud-setup-${var.env}-euw2-lambda-role"
+  
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      },
+    ]
+  })
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-euw2-lambda-role"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# Lambda IAM policy for S3 access in eu-west-2
+resource "aws_iam_policy" "euw2_lambda_s3_policy" {
+  provider = aws.euw2
+  
+  name        = "cloud-setup-${var.env}-euw2-lambda-s3-policy"
+  description = "Policy for Lambda to access S3 in eu-west-2"
+  
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "s3:GetObject",
+          "s3:ListBucket"
+        ]
+        Effect   = "Allow"
+        Resource = [
+          aws_s3_bucket.euw2_bucket.arn,
+          "${aws_s3_bucket.euw2_bucket.arn}/*"
+        ]
+      },
+      {
+        Action = [
+          "kms:Decrypt"
+        ]
+        Effect   = "Allow"
+        Resource = aws_kms_key.euw2_kms.arn
+      }
+    ]
+  })
+}
+
+# Attach policy to Lambda role in eu-west-2
+resource "aws_iam_role_policy_attachment" "euw2_lambda_s3_attach" {
+  provider = aws.euw2
+  
+  role       = aws_iam_role.euw2_lambda_role.name
+  policy_arn = aws_iam_policy.euw2_lambda_s3_policy.arn
+}
+
+# Lambda basic execution role attachment in eu-west-2
+resource "aws_iam_role_policy_attachment" "euw2_lambda_basic_exec_attach" {
+  provider = aws.euw2
+  
+  role       = aws_iam_role.euw2_lambda_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+# Lambda function in eu-west-2
+resource "aws_lambda_function" "euw2_lambda" {
+  provider = aws.euw2
+  
+  function_name    = "cloud-setup-${var.env}-euw2-processor"
+  role             = aws_iam_role.euw2_lambda_role.arn
+  handler          = "index.handler"
+  runtime          = "nodejs14.x"
+  filename         = "lambda.zip"  # In a real scenario, this would be your actual Lambda code
+  source_code_hash = filebase64sha256("lambda.zip")
+  
+  environment {
+    variables = {
+      REGION = "eu-west-2"
+      BUCKET = aws_s3_bucket.euw2_bucket.bucket
+    }
+  }
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-euw2-processor"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# S3 bucket notification for Lambda trigger in eu-west-2
+resource "aws_s3_bucket_notification" "euw2_bucket_notification" {
+  provider = aws.euw2
+  
+  bucket = aws_s3_bucket.euw2_bucket.id
+  
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.euw2_lambda.arn
+    events              = ["s3:ObjectCreated:*"]
+    filter_prefix       = "uploads/"
+  }
+}
+
+# Lambda permission for S3 invocation in eu-west-2
+resource "aws_lambda_permission" "euw2_allow_bucket" {
+  provider = aws.euw2
+  
+  statement_id  = "AllowExecutionFromS3Bucket"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.euw2_lambda.function_name
+  principal     = "s3.amazonaws.com"
+  source_arn    = aws_s3_bucket.euw2_bucket.arn
+}
+Now, let's create EC2 instances and ALB in both regions:
+
+# EC2 instances in us-east-2
+resource "aws_instance" "use2_web" {
+  provider = aws.use2
+  
+  count = 2
+  
+  ami                    = "ami-0c55b159cbfafe1f0"  # Amazon Linux 2 AMI (example)
+  instance_type          = var.web_instance_type
+  subnet_id              = aws_subnet.use2_private[keys(var.use2_private_subnets)[count.index % length(keys(var.use2_private_subnets))]].id
+  vpc_security_group_ids = [aws_security_group.use2_web_sg.id]
+  iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
+  
+  metadata_options {
+    http_endpoint = "enabled"
+    http_tokens   = "required"  # Enforce IMDSv2
+  }
+  
+  user_data = <<-EOF
+              #!/bin/bash
+              yum update -y
+              yum install -y httpd
+              systemctl start httpd
+              systemctl enable httpd
+              echo '<html><body><h1>Hello from us-east-2 instance ${count.index}</h1></body></html>' > /var/www/html/index.html
+              EOF
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-use2-web-${count.index}"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# ALB in us-east-2
+resource "aws_lb" "use2_alb" {
+  provider = aws.use2
+  
+  name               = "cloud-setup-${var.env}-use2-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.use2_web_sg.id]
+  subnets            = [for subnet in aws_subnet.use2_public : subnet.id]
+  
+  enable_deletion_protection = false
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-use2-alb"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# ALB target group in us-east-2
+resource "aws_lb_target_group" "use2_tg" {
+  provider = aws.use2
+  
+  name     = "cloud-setup-${var.env}-use2-tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.use2_vpc.id
+  
+  health_check {
+    enabled             = true
+    path                = "/"
+    healthy_threshold   = 3
+    unhealthy_threshold = 3
+    timeout             = 5
+    interval            = 30
+    matcher             = "200"
+  }
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-use2-tg"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# ALB target group attachment in us-east-2
+resource "aws_lb_target_group_attachment" "use2_tg_attachment" {
+  provider = aws.use2
+  
+  count            = length(aws_instance.use2_web)
+  target_group_arn = aws_lb_target_group.use2_tg.arn
+  target_id        = aws_instance.use2_web[count.index].id
+  port             = 80
+}
+
+# ALB listener in us-east-2
+resource "aws_lb_listener" "use2_listener" {
+  provider = aws.use2
+  
+  load_balancer_arn = aws_lb.use2_alb.arn
+  port              = "80"
+  protocol          = "HTTP"
+  
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.use2_tg.arn
+  }
+}
+
+# EC2 instances in eu-west-2
+resource "aws_instance" "euw2_web" {
+  provider = aws.euw2
+  
+  count = 2
+  
+  ami                    = "ami-0c55b159cbfafe1f0"  # Amazon Linux 2 AMI (example)
+  instance_type          = var.web_instance_type
+  subnet_id              = aws_subnet.euw2_private[keys(var.euw2_private_subnets)[count.index % length(keys(var.euw2_private_subnets))]].id
+  vpc_security_group_ids = [aws_security_group.euw2_web_sg.id]
+  iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
+  
+  metadata_options {
+    http_endpoint = "enabled"
+    http_tokens   = "required"  # Enforce IMDSv2
+  }
+  
+  user_data = <<-EOF
+              #!/bin/bash
+              yum update -y
+              yum install -y httpd
+              systemctl start httpd
+              systemctl enable httpd
+              echo '<html><body><h1>Hello from eu-west-2 instance ${count.index}</h1></body></html>' > /var/www/html/index.html
+              EOF
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-euw2-web-${count.index}"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# ALB in eu-west-2
+resource "aws_lb" "euw2_alb" {
+  provider = aws.euw2
+  
+  name               = "cloud-setup-${var.env}-euw2-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.euw2_web_sg.id]
+  subnets            = [for subnet in aws_subnet.euw2_public : subnet.id]
+  
+  enable_deletion_protection = false
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-euw2-alb"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# ALB target group in eu-west-2
+resource "aws_lb_target_group" "euw2_tg" {
+  provider = aws.euw2
+  
+  name     = "cloud-setup-${var.env}-euw2-tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.euw2_vpc.id
+  
+  health_check {
+    enabled             = true
+    path                = "/"
+    healthy_threshold   = 3
+    unhealthy_threshold = 3
+    timeout             = 5
+    interval            = 30
+    matcher             = "200"
+  }
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-euw2-tg"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# ALB target group attachment in eu-west-2
+resource "aws_lb_target_group_attachment" "euw2_tg_attachment" {
+  provider = aws.euw2
+  
+  count            = length(aws_instance.euw2_web)
+  target_group_arn = aws_lb_target_group.euw2_tg.arn
+  target_id        = aws_instance.euw2_web[count.index].id
+  port             = 80
+}
+
+# ALB listener in eu-west-2
+resource "aws_lb_listener" "euw2_listener" {
+  provider = aws.euw2
+  
+  load_balancer_arn = aws_lb.euw2_alb.arn
+  port              = "80"
+  protocol          = "HTTP"
+  
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.euw2_tg.arn
+  }
+}
+Finally, let's create CloudWatch alarms and SNS topics:
+
+# SNS topic for us-east-2
+resource "aws_sns_topic" "use2_alerts" {
+  provider = aws.use2
+  
+  name = "cloud-setup-${var.env}-use2-alerts"
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-use2-alerts"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# CloudWatch alarm for EC2 CPU in us-east-2
+resource "aws_cloudwatch_metric_alarm" "use2_cpu_alarm" {
+  provider = aws.use2
+  
+  count               = length(aws_instance.use2_web)
+  alarm_name          = "cloud-setup-${var.env}-use2-cpu-alarm-${count.index}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 120
+  statistic           = "Average"
+  threshold           = 70
+  alarm_description   = "This metric monitors EC2 CPU utilization"
+  alarm_actions       = [aws_sns_topic.use2_alerts.arn]
+  
+  dimensions = {
+    InstanceId = aws_instance.use2_web[count.index].id
+  }
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-use2-cpu-alarm-${count.index}"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# CloudWatch log group for EC2 in us-east-2
+resource "aws_cloudwatch_log_group" "use2_logs" {
+  provider = aws.use2
+  
+  name              = "/aws/ec2/cloud-setup-${var.env}-use2"
+  retention_in_days = 30
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-use2-logs"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# SNS topic for eu-west-2
+resource "aws_sns_topic" "euw2_alerts" {
+  provider = aws.euw2
+  
+  name = "cloud-setup-${var.env}-euw2-alerts"
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-euw2-alerts"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# CloudWatch alarm for EC2 CPU in eu-west-2
+resource "aws_cloudwatch_metric_alarm" "euw2_cpu_alarm" {
+  provider = aws.euw2
+  
+  count               = length(aws_instance.euw2_web)
+  alarm_name          = "cloud-setup-${var.env}-euw2-cpu-alarm-${count.index}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 120
+  statistic           = "Average"
+  threshold           = 70
+  alarm_description   = "This metric monitors EC2 CPU utilization"
+  alarm_actions       = [aws_sns_topic.euw2_alerts.arn]
+  
+  dimensions = {
+    InstanceId = aws_instance.euw2_web[count.index].id
+  }
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-euw2-cpu-alarm-${count.index}"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+
+# CloudWatch log group for EC2 in eu-west-2
+resource "aws_cloudwatch_log_group" "euw2_logs" {
+  provider = aws.euw2
+  
+  name              = "/aws/ec2/cloud-setup-${var.env}-euw2"
+  retention_in_days = 30
+  
+  tags = {
+    Name        = "cloud-setup-${var.env}-euw2-logs"
+    Environment = var.env
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    project     = "cloud-setup"
+  }
+}
+Finally, let's define the outputs required by the validation system:
+
+# Outputs
+output "use2_vpc_id" {
+  description = "ID of the VPC in us-east-2"
+  value       = aws_vpc.use2_vpc.id
+}
+
+output "use2_public_subnet_ids" {
+  description = "IDs of public subnets in us-east-2"
+  value       = [for subnet in aws_subnet.use2_public : subnet.id]
+}
+
+output "use2_private_subnet_ids" {
+  description = "IDs of private subnets in us-east-2"
+  value       = [for subnet in aws_subnet.use2_private : subnet.id]
+}
+
+output "euw2_vpc_id" {
+  description = "ID of the VPC in eu-west-2"
+  value       = aws_vpc.euw2_vpc.id
+}
+
+output "euw2_public_subnet_ids" {
+  description = "IDs of public subnets in eu-west-2"
+  value       = [for subnet in aws_subnet.euw2_public : subnet.id]
+}
+
+output "euw2_private_subnet_ids" {
+  description = "IDs of private subnets in eu-west-2"
+  value       = [for subnet in aws_subnet.euw2_private : subnet.id]
+}
+
+output "use2_kms_key_arn" {
+  description = "ARN of the KMS key in us-east-2"
+  value       = aws_kms_key.use2_kms.arn
+}
+
+output "euw2_kms_key_arn" {
+  description = "ARN of the KMS key in eu-west-2"
+  value       = aws_kms_key.euw2_kms.arn
+}
+
+output "use2_s3_bucket_name" {
+  description = "Name of the S3 bucket in us-east-2"
+  value       = aws_s3_bucket.use2_bucket.bucket
+}
+
+output "euw2_s3_bucket_name" {
+  description = "Name of the S3 bucket in eu-west-2"
+  value       = aws_s3_bucket.euw2_bucket.bucket
+}
+
+output "use2_lambda_function" {
+  description = "Details of the Lambda function in us-east-2"
+  value       = aws_lambda_function.use2_lambda.function_name
+}
+
+output "euw2_lambda_function" {
+  description = "Details of the Lambda function in eu-west-2"
+  value       = aws_lambda_function.euw2_lambda.function_name
+}
+
+output "use2_alb_arn" {
+  description = "ARN of the ALB in us-east-2"
+  value       = aws_lb.use2_alb.arn
+}
+
+output "use2_alb_dns_name" {
+  description = "DNS name of the ALB in us-east-2"
+  value       = aws_lb.use2_alb.dns_name
+}
+
+output "euw2_alb_arn" {
+  description = "ARN of the ALB in eu-west-2"
+  value       = aws_lb.euw2_alb.arn
+}
+
+output "euw2_alb_dns_name" {
+  description = "DNS name of the ALB in eu-west-2"
+  value       = aws_lb.euw2_alb.dns_name
+}
+
+output "use2_rds_endpoint" {
+  description = "Endpoint of the RDS instance in us-east-2"
+  value       = aws_db_instance.use2_db### Answer 
 ```
-
-#### Step 5: Verify DNS Propagation
-```bash
-# Monitor DNS propagation
-while true; do
-  RESOLVED=$(dig +short api.example.com)
-  echo "$(date): DNS resolves to: $RESOLVED"
-  if [[ "$RESOLVED" == *"us-west-2"* ]]; then
-    echo "DNS cutover successful!"
-    break
-  fi
-  sleep 10
-done
-```
-
-### Phase 3: Post-Cutover Verification (Downtime Ends)
-*Duration: 10-15 minutes*
-
-#### Step 6: Application Health Checks
-```bash
-# Verify application is responding
-curl -f https://api.example.com/health
-
-# Check application logs
-aws logs tail /aws/ec2/myapp --region us-west-2 --follow
-
-# Verify database connectivity
-./scripts/db-connectivity-test.sh production
-```
-
-#### Step 7: Traffic Monitoring
-```bash
-# Monitor ALB metrics
-aws cloudwatch get-metric-statistics \
-  --namespace AWS/ApplicationELB \
-  --metric-name RequestCount \
-  --dimensions Name=LoadBalancer,Value=app/myapp-alb/1234567890123456 \
-  --start-time $(date -u -d '10 minutes ago' +%Y-%m-%dT%H:%M:%S) \
-  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
-  --period 300 \
-  --statistics Sum \
-  --region us-west-2
-
-# Check error rates
-aws cloudwatch get-metric-statistics \
-  --namespace AWS/ApplicationELB \
-  --metric-name HTTPCode_ELB_5XX_Count \
-  --dimensions Name=LoadBalancer,Value=app/myapp-alb/1234567890123456 \
-  --start-time $(date -u -d '10 minutes ago' +%Y-%m-%dT%H:%M:%S) \
-  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
-  --period 300 \
-  --statistics Sum \
-  --region us-west-2
-```
-
-## Post-Migration Tasks
-
-### Immediate (Within 1 hour)
-- [ ] Verify all application functionality
-- [ ] Confirm monitoring and alerting are working
-- [ ] Update documentation with new resource IDs
-- [ ] Notify stakeholders of successful migration
-- [ ] Monitor application performance for anomalies
-
-### Within 24 hours
-- [ ] Increase DNS TTL back to normal values (300-3600 seconds)
-- [ ] Update any hardcoded references to old region
-- [ ] Verify backup procedures are working in new region
-- [ ] Update disaster recovery procedures
-
-### Within 1 week

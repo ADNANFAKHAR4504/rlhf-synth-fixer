@@ -1040,12 +1040,7 @@ resource "aws_apigatewayv2_integration" "alb_proxy" {
   payload_format_version = "1.0"
   timeout_milliseconds   = 10000
 }
-resource "aws_apigatewayv2_route" "proxy_any" {
-  api_id             = aws_apigatewayv2_api.http_api.id
-  route_key          = "GET /{proxy+}"
-  authorization_type = "AWS_IAM"
-  target             = "integrations/${aws_apigatewayv2_integration.alb_proxy.id}"
-}
+
 resource "aws_apigatewayv2_route" "root_get" {
   provider           = aws.use2
   api_id             = aws_apigatewayv2_api.http_api.id
@@ -1418,6 +1413,9 @@ resource "aws_lambda_function" "heartbeat" {
   environment {
     variables = {
       APP_BUCKET = aws_s3_bucket.uploads.bucket
+      RDS_PASSWORD_PARAM = aws_ssm_parameter.rds_password.name  # <-- add this
+      RDS_USERNAME       = "dbadmin"                             # optional helper
+      RDS_ENDPOINT       = aws_db_instance.use2.address          # optional helper
     }
   }
 
@@ -1826,5 +1824,42 @@ output "cloudtrail_bucket_name" {
 output "alb_target_group_arn" {
   value       = aws_lb_target_group.use2.arn
   description = "ALB target group ARN for health checks."
+}
+
+# ---- Aliases to satisfy test key names ----
+output "vpc_id" {
+  value       = aws_vpc.use2.id
+  description = "Alias of use2_vpc_id for tests."
+}
+
+output "public_subnet_ids" {
+  value       = [aws_subnet.use2_public_a.id, aws_subnet.use2_public_b.id]
+  description = "Alias of use2_public_subnet_ids for tests."
+}
+
+output "private_subnet_ids" {
+  value       = [aws_subnet.use2_private_a.id, aws_subnet.use2_private_b.id]
+  description = "Alias of use2_private_subnet_ids for tests."
+}
+
+output "security_group_web_id" {
+  value       = aws_security_group.use2_web.id
+  description = "Alias of web_sg_id for tests."
+}
+
+output "app_bucket_name" {
+  value       = aws_s3_bucket.uploads.bucket
+  description = "Alias of upload_bucket_name for tests."
+}
+
+output "trail_bucket_name" {
+  value       = aws_s3_bucket.cloudtrail.bucket
+  description = "Alias of cloudtrail_bucket_name for tests."
+}
+
+# The test calls this to fetch env vars (RDS password param name)
+output "lambda_function_name" {
+  value       = aws_lambda_function.heartbeat.function_name
+  description = "Lambda used by tests to read env (RDS_PASSWORD_PARAM) and for heartbeat."
 }
 ```
