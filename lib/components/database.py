@@ -2,6 +2,8 @@ import pulumi
 import pulumi_aws as aws
 from pulumi import Output
 import json
+import secrets
+import string
 
 class DatabaseStack:
     def __init__(self, name: str, 
@@ -15,7 +17,11 @@ class DatabaseStack:
         self.db_name = db_name
         self.environment = environment
         
-        # Generate secure random password
+        # Generate secure random password using Python's secrets module
+        # This generates a strong password with letters, digits, and special characters
+        alphabet = string.ascii_letters + string.digits + "!#$%&*()-_=+[]{}<>:?"
+        password = ''.join(secrets.choice(alphabet) for i in range(32))
+        
         db_password = aws.secretsmanager.Secret(
             f"{name}-db-password",
             description="RDS Aurora password",
@@ -25,13 +31,7 @@ class DatabaseStack:
         db_password_version = aws.secretsmanager.SecretVersion(
             f"{name}-db-password-version",
             secret_id=db_password.id,
-            secret_string=pulumi.Output.secret(
-                aws.secretsmanager.get_random_password(
-                    length=32,
-                    special=True,
-                    exclude_characters="\"@/\\"
-                ).result
-            )
+            secret_string=pulumi.Output.secret(password)
         )
         
         # KMS key for encryption
