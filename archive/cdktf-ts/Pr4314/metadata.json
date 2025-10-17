@@ -8,7 +8,11 @@
   "startedAt": "2025-10-14T03:56:15+05:30",
   "subtask": "Application Deployment",
   "background": "Infrastructure task for CDKTF",
-  "subject_labels": ["CI/CD Pipeline", "Cloud Environment Setup", "Security Configuration as Code"],
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Cloud Environment Setup",
+    "Security Configuration as Code"
+  ],
   "training_quality": 8,
   "aws_services": [
     "CodeCommit",
@@ -23,5 +27,11 @@
     "CloudWatch Logs",
     "CloudWatch Alarms",
     "IAM"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
