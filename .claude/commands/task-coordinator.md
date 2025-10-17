@@ -300,9 +300,9 @@ Task ID: ${TASK_ID}"
    # Complexity is already extracted at line 154 from metadata.json
    
    # Create PR with error handling
-   # PR Title Format: synth-{TASK_ID} (lowercase "synth")
+   # PR Title Format: synth-{TASK_ID} {SUBTASK} (lowercase "synth")
    if gh pr create \
-     --title "synth-${TASK_ID}" \
+     --title "synth-${TASK_ID} {SUBTASK}" \
      --body "**Platform**: ${PLATFORM}-${LANGUAGE}
 **Complexity**: ${COMPLEXITY}
 **Training Quality**: ${TRAINING_QUALITY}/10
