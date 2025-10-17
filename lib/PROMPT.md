@@ -29,7 +29,7 @@ Create two security groups with least privilege access:
 - Only allow HTTPS outbound (port 443) 
 - Restrict everything else - we want tight control here
 
-## IAM Setup
+## IAM Setup:
 
 Need an IAM Role for our EC2 instances with read-only access to our S3 backup bucket. Set this up with proper IAM Policy and Instance Profile - no hardcoded credentials anywhere.
 
