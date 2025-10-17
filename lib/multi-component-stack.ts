@@ -495,7 +495,17 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
     const allowGlobalWaf =
       this.node.tryGetContext('allowGlobalWaf') === true ||
       this.node.tryGetContext('allowGlobalWaf') === 'true';
-    const shouldCreateWaf = stackRegion === 'us-east-1' || allowGlobalWaf;
+
+    // New: WAF is disabled by default to avoid cross-region/global resource
+    // creation surprises during CI. Enable it explicitly by setting the
+    // CDK context `enableWaf=true` or environment var `ENABLE_WAF=true`.
+    const enableWafContext = this.node.tryGetContext('enableWaf');
+    const enableWafEnv = process.env.ENABLE_WAF === 'true';
+    const enableWaf =
+      enableWafContext === true || enableWafContext === 'true' || enableWafEnv;
+
+    const shouldCreateWaf =
+      enableWaf && (stackRegion === 'us-east-1' || allowGlobalWaf);
 
     if (shouldCreateWaf) {
       const webAcl = new wafv2.CfnWebACL(this, 'WebAcl', {
