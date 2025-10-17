@@ -473,7 +473,7 @@ export class TapStack extends cdk.Stack {
       alarmDescription:
         'Triggered when Lambda function errors exceed threshold',
       metric: lambdaFunction.metricErrors({
-        statistic: cloudwatch.Statistic.SUM,
+        statistic: 'Sum',
         period: Duration.minutes(5),
       }),
       threshold: 5,
@@ -489,7 +489,7 @@ export class TapStack extends cdk.Stack {
       alarmName: `lambda-dlq-messages-${environmentSuffix}`,
       alarmDescription: 'Triggered when messages are sent to DLQ',
       metric: deadLetterQueue.metricApproximateNumberOfMessagesVisible({
-        statistic: cloudwatch.Statistic.SUM,
+        statistic: 'Sum',
         period: Duration.minutes(5),
       }),
       threshold: 1,
