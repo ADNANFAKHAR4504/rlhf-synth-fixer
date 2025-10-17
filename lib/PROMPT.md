@@ -1,4 +1,4 @@
-# Prompt: Generate `TapStack.yml` (secure ALB + VPC + IAM + S3)
+# Prompt: 
 
 Generate **single CloudFormation template named `TapStack.yml`** (YAML format) that builds a **brand-new, secure AWS environment** for a critical application. The template must be fully self-contained (no references to any pre-existing resources) and include **Parameters, Mappings (if needed), Resources, and Outputs** in the same file. All variables/values/logic and outputs belong in this one file.
 
