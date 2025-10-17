@@ -50,6 +50,7 @@ class TapStack:
             ),
             server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
                 rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                    # pylint: disable=line-too-long
                     apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
                         sse_algorithm="AES256"
                     )
@@ -413,8 +414,7 @@ def publish_metrics(processed, errors, anomalies):
             environment=aws.lambda_.FunctionEnvironmentArgs(
                 variables={
                     "DYNAMODB_TABLE": self.sensor_data_table.name,
-                    "S3_BUCKET": self.archival_bucket.id,
-                    "AWS_REGION": self.region
+                    "S3_BUCKET": self.archival_bucket.id
                 }
             ),
             reserved_concurrent_executions=10,
@@ -533,28 +533,118 @@ def publish_metrics(processed, errors, anomalies):
         return policy
 
     def _create_iot_rule(self):
-        """Create IoT rule to forward sensor data to Kinesis"""
+        """Create IoT rule to forward sensor data to Kinesis via Lambda"""
+        # Create a bridge Lambda that writes to Kinesis
+        bridge_lambda_code = """
+import json
+import boto3
+import os
+
+kinesis = boto3.client('kinesis')
+stream_name = os.environ['KINESIS_STREAM_NAME']
+
+def lambda_handler(event, context):
+    try:
+        # Forward IoT messages to Kinesis
+        kinesis.put_record(
+            StreamName=stream_name,
+            Data=json.dumps(event),
+            PartitionKey=str(event.get('timestamp', context.request_id))
+        )
+        return {'statusCode': 200}
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        raise
+"""
+
+        # Create role for bridge Lambda
+        bridge_lambda_role = aws.iam.Role(
+            f"iot-bridge-lambda-role-{self.environment_suffix}",
+            name=f"iot-bridge-lambda-role-{self.environment_suffix}",
+            assume_role_policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Action": "sts:AssumeRole",
+                    "Effect": "Allow",
+                    "Principal": {"Service": "lambda.amazonaws.com"}
+                }]
+            }),
+            tags={
+                "Name": f"iot-bridge-lambda-role-{self.environment_suffix}",
+                "Environment": "production"
+            }
+        )
+
+        aws.iam.RolePolicyAttachment(
+            f"bridge-lambda-basic-execution-{self.environment_suffix}",
+            role=bridge_lambda_role.name,
+            policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        )
+
+        # Grant Kinesis write permissions to bridge Lambda
+        bridge_lambda_policy = aws.iam.Policy(
+            f"iot-bridge-lambda-policy-{self.environment_suffix}",
+            name=f"iot-bridge-lambda-policy-{self.environment_suffix}",
+            policy=self.kinesis_stream.arn.apply(lambda arn: json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Action": ["kinesis:PutRecord", "kinesis:PutRecords"],
+                    "Resource": arn
+                }]
+            }))
+        )
+
+        aws.iam.RolePolicyAttachment(
+            f"bridge-lambda-policy-attachment-{self.environment_suffix}",
+            role=bridge_lambda_role.name,
+            policy_arn=bridge_lambda_policy.arn
+        )
+
+        bridge_lambda = aws.lambda_.Function(
+            f"iot-bridge-{self.environment_suffix}",
+            name=f"iot-bridge-{self.environment_suffix}",
+            runtime="python3.11",
+            handler="index.lambda_handler",
+            role=bridge_lambda_role.arn,
+            code=pulumi.AssetArchive({
+                "index.py": pulumi.StringAsset(bridge_lambda_code)
+            }),
+            timeout=30,
+            memory_size=128,
+            environment=aws.lambda_.FunctionEnvironmentArgs(
+                variables={
+                    "KINESIS_STREAM_NAME": self.kinesis_stream.name
+                }
+            ),
+            tags={
+                "Name": f"iot-bridge-{self.environment_suffix}",
+                "Environment": "production"
+            }
+        )
+
+        # Grant IoT permission to invoke the bridge Lambda
+        aws.lambda_.Permission(
+            f"iot-invoke-bridge-lambda-{self.environment_suffix}",
+            action="lambda:InvokeFunction",
+            function=bridge_lambda.name,
+            principal="iot.amazonaws.com"
+        )
+
+        # Create IoT rule that invokes bridge Lambda
         rule = aws.iot.TopicRule(
             f"iot-sensor-rule-{self.environment_suffix}",
             name=f"iot_sensor_rule_{self.environment_suffix}".replace("-", "_"),
             enabled=True,
             sql="SELECT * FROM 'sensor/data/#'",
             sql_version="2016-03-23",
-            kinesis=aws.iot.TopicRuleKinesisArgs(
-                stream_name=self.kinesis_stream.name,
-                role_arn=self.iot_role.arn,
-                partition_key="${timestamp()}"
-            ),
-            error_action=aws.iot.TopicRuleErrorActionArgs(
-                cloudwatch_logs=aws.iot.TopicRuleErrorActionCloudwatchLogsArgs(
-                    log_group_name=f"/aws/iot/rules/{self.environment_suffix}",
-                    role_arn=self.iot_role.arn
-                )
-            ),
+            lambdas=[aws.iot.TopicRuleLambdaArgs(
+                function_arn=bridge_lambda.arn
+            )],
             tags={
                 "Name": f"iot-sensor-rule-{self.environment_suffix}",
                 "Environment": "production",
-                "Purpose": "Forward sensor data to Kinesis"
+                "Purpose": "Forward sensor data to Kinesis via Lambda"
             }
         )
 
@@ -664,18 +754,183 @@ def publish_metrics(processed, errors, anomalies):
         pulumi.export("region", self.region)
 ```
 
-## File: __main__.py
+## File: lib/tap_stack_integration_test.go
 
-```python
-import pulumi
-from lib.tap_stack import TapStack
+```go
+//go:build integration
 
-# Get configuration
-config = pulumi.Config()
-environment_suffix = config.get("environmentSuffix") or "dev"
+package integration
 
-# Create the IoT monitoring stack
-stack = TapStack(environment_suffix)
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/efs"
+	efstypes "github.com/aws/aws-sdk-go-v2/service/efs/types"
+	"github.com/aws/aws-sdk-go-v2/service/elasticache"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
+	kmstypes "github.com/aws/aws-sdk-go-v2/service/kms/types"
+	"github.com/aws/aws-sdk-go-v2/service/rds"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+type stackOutputs struct {
+	RDSEndpoint         string `json:"RDSEndpoint"`
+	SecretArn           string `json:"SecretArn"`
+	KMSKeyId            string `json:"KMSKeyId"`
+	ElastiCacheEndpoint string `json:"ElastiCacheEndpoint"`
+	EFSFileSystemId     string `json:"EFSFileSystemId"`
+	VpcId               string `json:"VpcId"`
+}
+
+func loadOutputs(t *testing.T) *stackOutputs {
+	t.Helper()
+
+	data, err := os.ReadFile("../../cfn-outputs/flat-outputs.json")
+	if err != nil {
+		t.Skip("integration outputs file not found; skipping live tests")
+	}
+
+	var outputs stackOutputs
+	if err := json.Unmarshal(data, &outputs); err != nil {
+		t.Fatalf("unable to parse stack outputs: %v", err)
+	}
+
+	return &outputs
+}
+
+func awsConfig(t *testing.T) aws.Config {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		t.Skipf("unable to load AWS config (%v); skipping live tests", err)
+	}
+
+	return cfg
+}
+
+func rdsIdentifierFromEndpoint(endpoint string) string {
+	host := endpoint
+	if idx := strings.Index(host, ":"); idx != -1 {
+		host = host[:idx]
+	}
+	if idx := strings.Index(host, "."); idx != -1 {
+		host = host[:idx]
+	}
+	return host
+}
+
+func cacheClusterIDFromEndpoint(endpoint string) string {
+	if idx := strings.Index(endpoint, "."); idx != -1 {
+		return endpoint[:idx]
+	}
+	return endpoint
+}
+
+func TestTapStackLiveResources(t *testing.T) {
+	outputs := loadOutputs(t)
+	cfg := awsConfig(t)
+	ctx := context.Background()
+
+	t.Run("RDS instance is available with encryption and Multi-AZ", func(t *testing.T) {
+		rdsClient := rds.NewFromConfig(cfg)
+		identifier := rdsIdentifierFromEndpoint(outputs.RDSEndpoint)
+		require.NotEmpty(t, identifier, "could not derive DB identifier from endpoint")
+
+		result, err := rdsClient.DescribeDBInstances(ctx, &rds.DescribeDBInstancesInput{
+			DBInstanceIdentifier: aws.String(identifier),
+		})
+		require.NoError(t, err, "describe RDS instance")
+		require.Len(t, result.DBInstances, 1, "expected exactly one DB instance")
+
+		db := result.DBInstances[0]
+		assert.Equal(t, "mysql", aws.ToString(db.Engine), "engine should be MySQL")
+		assert.True(t, aws.ToBool(db.MultiAZ), "Multi-AZ should be enabled")
+		assert.True(t, aws.ToBool(db.StorageEncrypted), "storage should be encrypted")
+		assert.NotEmpty(t, aws.ToString(db.KmsKeyId), "KMS key should be configured")
+	})
+
+	t.Run("KMS key exists and rotation enabled", func(t *testing.T) {
+		kmsClient := kms.NewFromConfig(cfg)
+
+		describe, err := kmsClient.DescribeKey(ctx, &kms.DescribeKeyInput{
+			KeyId: aws.String(outputs.KMSKeyId),
+		})
+		require.NoError(t, err, "describe KMS key")
+
+		key := describe.KeyMetadata
+		require.NotNil(t, key, "key metadata is nil")
+		assert.Equal(t, kmstypes.KeyStateEnabled, key.KeyState, "key should be enabled")
+		assert.True(t, key.Enabled, "key should be enabled")
+
+		rotation, err := kmsClient.GetKeyRotationStatus(ctx, &kms.GetKeyRotationStatusInput{
+			KeyId: aws.String(outputs.KMSKeyId),
+		})
+		require.NoError(t, err, "get key rotation status")
+		assert.True(t, rotation.KeyRotationEnabled, "automatic rotation must be enabled")
+	})
+
+	t.Run("Secrets Manager secret is retrievable", func(t *testing.T) {
+		secretsClient := secretsmanager.NewFromConfig(cfg)
+
+		secret, err := secretsClient.DescribeSecret(ctx, &secretsmanager.DescribeSecretInput{
+			SecretId: aws.String(outputs.SecretArn),
+		})
+		require.NoError(t, err, "describe secret")
+
+		assert.NotNil(t, secret.ARN, "secret ARN should be present")
+		assert.NotNil(t, secret.KmsKeyId, "secret must be encrypted")
+
+		val, err := secretsClient.GetSecretValue(ctx, &secretsmanager.GetSecretValueInput{
+			SecretId: aws.String(outputs.SecretArn),
+		})
+		require.NoError(t, err, "get secret value")
+		assert.NotEmpty(t, aws.ToString(val.SecretString), "secret value should exist")
+	})
+
+	t.Run("ElastiCache cluster is available", func(t *testing.T) {
+		cacheClient := elasticache.NewFromConfig(cfg)
+		clusterID := cacheClusterIDFromEndpoint(outputs.ElastiCacheEndpoint)
+		require.NotEmpty(t, clusterID, "could not derive cache cluster ID from endpoint")
+
+		out, err := cacheClient.DescribeCacheClusters(ctx, &elasticache.DescribeCacheClustersInput{
+			CacheClusterId:    aws.String(clusterID),
+			ShowCacheNodeInfo: aws.Bool(true),
+		})
+		require.NoError(t, err, "describe cache clusters")
+		require.Len(t, out.CacheClusters, 1, "expected a single cache cluster")
+
+		cluster := out.CacheClusters[0]
+		assert.Equal(t, "redis", aws.ToString(cluster.Engine), "Redis engine expected")
+		assert.True(t, strings.EqualFold(aws.ToString(cluster.CacheClusterStatus), "available"), "cluster should be available")
+	})
+
+	t.Run("EFS file system is present", func(t *testing.T) {
+		efsClient := efs.NewFromConfig(cfg)
+
+		resp, err := efsClient.DescribeFileSystems(ctx, &efs.DescribeFileSystemsInput{
+			FileSystemId: aws.String(outputs.EFSFileSystemId),
+		})
+		require.NoError(t, err, "describe EFS file system")
+		require.Len(t, resp.FileSystems, 1, "expected one file system")
+
+		fs := resp.FileSystems[0]
+		assert.Equal(t, outputs.EFSFileSystemId, aws.ToString(fs.FileSystemId))
+		assert.Equal(t, efstypes.LifeCycleStateAvailable, fs.LifeCycleState, "EFS should be available")
+	})
+}
 ```
 
 ## Implementation Notes
