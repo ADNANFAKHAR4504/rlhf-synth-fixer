@@ -27,12 +27,19 @@ class TestTapStackIntegration(unittest.TestCase):
 
     def setUp(self):
         """Set up AWS clients for testing"""
-        self.ec2_client = boto3.client('ec2', region_name='ap-northeast-1')
-        self.ecs_client = boto3.client('ecs', region_name='ap-northeast-1')
-        self.rds_client = boto3.client('rds', region_name='ap-northeast-1')
-        self.elasticache_client = boto3.client('elasticache', region_name='ap-northeast-1')
-        self.efs_client = boto3.client('efs', region_name='ap-northeast-1')
-        self.apigateway_client = boto3.client('apigateway', region_name='ap-northeast-1')
+        # Get region from environment or AWS_REGION file
+        region = os.environ.get('AWS_REGION', 'ap-northeast-1')
+        region_file = os.path.join(base_dir, '..', '..', 'lib', 'AWS_REGION')
+        if os.path.exists(region_file):
+            with open(region_file, 'r', encoding='utf-8') as f:
+                region = f.read().strip()
+        
+        self.ec2_client = boto3.client('ec2', region_name=region)
+        self.ecs_client = boto3.client('ecs', region_name=region)
+        self.rds_client = boto3.client('rds', region_name=region)
+        self.elasticache_client = boto3.client('elasticache', region_name=region)
+        self.efs_client = boto3.client('efs', region_name=region)
+        self.apigateway_client = boto3.client('apigateway', region_name=region)
 
     @mark.it("VPC exists and is available")
     def test_vpc_exists(self):

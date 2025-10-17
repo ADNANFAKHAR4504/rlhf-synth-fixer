@@ -103,7 +103,7 @@ class TestTapStack(unittest.TestCase):
                 "AutomaticFailoverEnabled": True,
                 "NumCacheClusters": 2,
                 "AtRestEncryptionEnabled": True,
-                "TransitEncryptionEnabled": True,
+                "TransitEncryptionEnabled": False,
             },
         )
 

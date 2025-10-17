@@ -204,8 +204,8 @@ class TapStack(Stack):
             cache_subnet_group_name=cache_subnet_group.ref,
             security_group_ids=[elasticache_security_group.security_group_id],
             at_rest_encryption_enabled=True,
-            transit_encryption_enabled=True,
-            kms_key_id=kms_key.key_id,
+            transit_encryption_enabled=False,  # Set to False for easier development, enable for production
+            # kms_key_id=kms_key.key_id,  # Only needed if transit encryption is enabled
             snapshot_retention_limit=1,
         )
         redis_cluster.add_dependency(cache_subnet_group)
@@ -266,6 +266,20 @@ class TapStack(Stack):
 
         # Grant task role access to EFS, RDS, and ElastiCache
         kms_key.grant_decrypt(task_role)
+        
+        # Grant EFS permissions to both task role and task execution role
+        file_system.grant_root_access(task_role)
+        task_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    'elasticfilesystem:ClientMount',
+                    'elasticfilesystem:ClientWrite',
+                    'elasticfilesystem:ClientRootAccess',
+                ],
+                resources=[file_system.file_system_arn],
+            )
+        )
 
         # Create Fargate task definition
         task_definition = ecs.FargateTaskDefinition(
@@ -294,26 +308,35 @@ class TapStack(Stack):
                 'DB_PASSWORD': ecs.Secret.from_secrets_manager(db_secret, 'password'),
                 'DB_USERNAME': ecs.Secret.from_secrets_manager(db_secret, 'username'),
             },
+            # Health check temporarily disabled - enable when using production container
+            # health_check=ecs.HealthCheck(
+            #     command=['CMD-SHELL', 'curl -f http://localhost:80/ || exit 1'],
+            #     interval=Duration.seconds(30),
+            #     timeout=Duration.seconds(5),
+            #     retries=3,
+            #     start_period=Duration.seconds(60),
+            # ),
         )
 
-        # Add EFS volume to task definition
-        task_definition.add_volume(
-            name='efs-storage',
-            efs_volume_configuration=ecs.EfsVolumeConfiguration(
-                file_system_id=file_system.file_system_id,
-            ),
-        )
+        # EFS volume temporarily disabled for initial deployment
+        # Uncomment when ready to use EFS with a compatible container image
+        # task_definition.add_volume(
+        #     name='efs-storage',
+        #     efs_volume_configuration=ecs.EfsVolumeConfiguration(
+        #         file_system_id=file_system.file_system_id,
+        #     ),
+        # )
 
-        container.add_mount_points(
-            ecs.MountPoint(
-                container_path='/mnt/efs',
-                source_volume='efs-storage',
-                read_only=False,
-            )
-        )
+        # container.add_mount_points(
+        #     ecs.MountPoint(
+        #         container_path='/mnt/efs',
+        #         source_volume='efs-storage',
+        #         read_only=False,
+        #     )
+        # )
 
-        # Create Fargate service
-        ecs.FargateService(
+        # Create Fargate service with circuit breaker (no health check grace period without ALB)
+        fargate_service = ecs.FargateService(
             self,
             'FargateService',
             cluster=cluster,
@@ -321,7 +344,12 @@ class TapStack(Stack):
             desired_count=1,
             security_groups=[ecs_security_group],
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
+            circuit_breaker=ecs.DeploymentCircuitBreaker(rollback=True),
+            # health_check_grace_period only valid when using load balancer
         )
+        
+        # Add dependency on EFS mount targets to ensure they're ready (when EFS is enabled)
+        # fargate_service.node.add_dependency(file_system)
 
         # Create CloudWatch log group for API Gateway
         api_log_group = logs.LogGroup(

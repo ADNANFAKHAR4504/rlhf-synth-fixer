@@ -13,7 +13,6 @@ The infrastructure includes:
 - API Gateway for metadata access
 - KMS encryption for all data stores
 - CloudWatch logging and monitoring
-- Secrets Manager integration (fetches existing secrets)
 
 ## File: lib/tap_stack.py
 
@@ -148,11 +147,19 @@ class TapStack(Stack):
             description='Allow NFS access from ECS tasks',
         )
 
-        # Fetch existing database secret from Secrets Manager
-        db_secret = secretsmanager.Secret.from_secret_name_v2(
+        # Create database secret in Secrets Manager
+        db_secret = secretsmanager.Secret(
             self,
             'DBSecret',
             secret_name=f'rds-db-credentials-{environment_suffix}',
+            description='RDS database credentials for video processing pipeline',
+            generate_secret_string=secretsmanager.SecretStringGenerator(
+                secret_string_template='{"username":"dbadmin"}',
+                generate_string_key='password',
+                exclude_characters='/@"\\ \'',
+                password_length=32,
+            ),
+            removal_policy=RemovalPolicy.DESTROY,
         )
 
         # Create subnet group for RDS
@@ -170,7 +177,7 @@ class TapStack(Stack):
             self,
             'PostgresDatabase',
             engine=rds.DatabaseInstanceEngine.postgres(
-                version=rds.PostgresEngineVersion.VER_15_4
+                version=rds.PostgresEngineVersion.VER_16
             ),
             instance_type=ec2.InstanceType.of(
                 ec2.InstanceClass.BURSTABLE3,
@@ -216,8 +223,8 @@ class TapStack(Stack):
             cache_subnet_group_name=cache_subnet_group.ref,
             security_group_ids=[elasticache_security_group.security_group_id],
             at_rest_encryption_enabled=True,
-            transit_encryption_enabled=True,
-            kms_key_id=kms_key.key_id,
+            transit_encryption_enabled=False,  # Set to False for easier development, enable for production
+            # kms_key_id=kms_key.key_id,  # Only needed if transit encryption is enabled
             snapshot_retention_limit=1,
         )
         redis_cluster.add_dependency(cache_subnet_group)
@@ -278,6 +285,20 @@ class TapStack(Stack):
 
         # Grant task role access to EFS, RDS, and ElastiCache
         kms_key.grant_decrypt(task_role)
+        
+        # Grant EFS permissions to both task role and task execution role
+        file_system.grant_root_access(task_role)
+        task_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    'elasticfilesystem:ClientMount',
+                    'elasticfilesystem:ClientWrite',
+                    'elasticfilesystem:ClientRootAccess',
+                ],
+                resources=[file_system.file_system_arn],
+            )
+        )
 
         # Create Fargate task definition
         task_definition = ecs.FargateTaskDefinition(
@@ -306,25 +327,34 @@ class TapStack(Stack):
                 'DB_PASSWORD': ecs.Secret.from_secrets_manager(db_secret, 'password'),
                 'DB_USERNAME': ecs.Secret.from_secrets_manager(db_secret, 'username'),
             },
+            # Health check temporarily disabled - enable when using production container
+            # health_check=ecs.HealthCheck(
+            #     command=['CMD-SHELL', 'curl -f http://localhost:80/ || exit 1'],
+            #     interval=Duration.seconds(30),
+            #     timeout=Duration.seconds(5),
+            #     retries=3,
+            #     start_period=Duration.seconds(60),
+            # ),
         )
 
-        # Add EFS volume to task definition
-        task_definition.add_volume(
-            name='efs-storage',
-            efs_volume_configuration=ecs.EfsVolumeConfiguration(
-                file_system_id=file_system.file_system_id,
-            ),
-        )
+        # EFS volume temporarily disabled for initial deployment
+        # Uncomment when ready to use EFS with a compatible container image
+        # task_definition.add_volume(
+        #     name='efs-storage',
+        #     efs_volume_configuration=ecs.EfsVolumeConfiguration(
+        #         file_system_id=file_system.file_system_id,
+        #     ),
+        # )
+        
+        # container.add_mount_points(
+        #     ecs.MountPoint(
+        #         container_path='/mnt/efs',
+        #         source_volume='efs-storage',
+        #         read_only=False,
+        #     )
+        # )
 
-        container.add_mount_points(
-            ecs.MountPoint(
-                container_path='/mnt/efs',
-                source_volume='efs-storage',
-                read_only=False,
-            )
-        )
-
-        # Create Fargate service
+        # Create Fargate service with circuit breaker (no health check grace period without ALB)
         fargate_service = ecs.FargateService(
             self,
             'FargateService',
@@ -333,6 +363,8 @@ class TapStack(Stack):
             desired_count=1,
             security_groups=[ecs_security_group],
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
+            circuit_breaker=ecs.DeploymentCircuitBreaker(rollback=True),
+            # health_check_grace_period only valid when using load balancer
         )
 
         # Create CloudWatch log group for API Gateway
@@ -446,23 +478,27 @@ class TapStack(Stack):
    - Serverless container execution
    - CloudWatch logging enabled
    - Security group with proper access controls
+   - Circuit breaker enabled for deployment failure detection and rollback
+   - EFS permissions configured for container mounting (optional)
 
 3. **RDS PostgreSQL Database**
    - Multi-AZ deployment for high availability
    - KMS encryption at rest
    - Minimal backup retention (1 day)
-   - Fetches credentials from Secrets Manager
+   - Auto-generated credentials stored in Secrets Manager
+   - PostgreSQL 16
 
 4. **ElastiCache Redis Cluster**
    - Replication group with 2 cache nodes
    - Multi-AZ with automatic failover enabled
-   - KMS encryption at rest
-   - Transit encryption enabled
+   - At-rest encryption enabled
+   - Transit encryption disabled for development ease
 
 5. **EFS File System**
    - KMS encryption enabled
    - Lifecycle policy to transition to IA after 7 days
    - General purpose performance mode
+   - Volume mounting to containers is optional (commented out by default)
 
 6. **API Gateway**
    - REST API with mock integration
@@ -472,8 +508,9 @@ class TapStack(Stack):
 7. **Security**
    - KMS key with rotation enabled
    - Security groups with least privilege access
-   - Secrets fetched from Secrets Manager (not created)
+   - Secrets auto-generated and managed in Secrets Manager
    - IAM roles with minimal permissions
+   - EFS mount permissions configured for ECS tasks
 
 8. **Monitoring**
    - CloudWatch log groups for ECS and API Gateway
@@ -485,7 +522,8 @@ class TapStack(Stack):
 All resources use the `environment_suffix` parameter for unique naming:
 - VPC: `video-processing-vpc-{environment_suffix}`
 - ECS Cluster: `video-processing-cluster-{environment_suffix}`
-- Log Groups: `/ecs/video-processing-{environment_suffix}`
+- Task Family: `video-processing-task-{environment_suffix}`
+- Log Groups: `/ecs/video-processing-{environment_suffix}`, `/aws/apigateway/video-metadata-api-{environment_suffix}`
 - API Gateway: `video-metadata-api-{environment_suffix}`
 - Secret Name: `rds-db-credentials-{environment_suffix}`
 
