@@ -5,7 +5,7 @@ describe('TapStack CDKTF Tests', () => {
   test('Stack synthesis works', () => {
     const app = new App();
     const stack = new TapStack(app, 'TestStack', {
-      env: { region: 'us-east-1' }
+      env: { region: 'us-east-2' }
     });
 
     const synthesized = JSON.parse(Testing.synth(stack));
