@@ -835,8 +835,7 @@ def handler(event, context):
         cost_report_rule = aws.cloudwatch.EventRule("monthly-cost-report",
             name=f"{project_name}-monthly-cost-report",
             description="Trigger monthly S3 cost analysis",
-            schedule_expression="rate(30 days)",
-            tags=base_tags
+            schedule_expression="rate(30 days)"
         )
 
         cost_report_target = aws.cloudwatch.EventTarget("cost-report-target",
@@ -899,8 +898,7 @@ def handler(event, context):
 
         monitoring_dashboard = aws.cloudwatch.Dashboard("s3-cost-optimization-dashboard",
             dashboard_name=f"{project_name}-s3-optimization",
-            dashboard_body=json.dumps(dashboard_body),
-            tags=base_tags
+            dashboard_body=json.dumps(dashboard_body)
         )
 
         # High-frequency access pattern detector
@@ -986,8 +984,7 @@ def handler(event, context):
         access_analysis_rule = aws.cloudwatch.EventRule("daily-access-analysis",
             name=f"{project_name}-daily-access-analysis",
             description="Analyze S3 access patterns daily",
-            schedule_expression="rate(1 day)",
-            tags=base_tags
+            schedule_expression="rate(1 day)"
         )
 
         access_analysis_target = aws.cloudwatch.EventTarget("access-analysis-target",
