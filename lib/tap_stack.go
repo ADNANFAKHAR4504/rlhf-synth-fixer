@@ -2,6 +2,9 @@ package lib
 
 import (
 	"fmt"
+	"math/rand"
+	"os"
+	"time"
 
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudtrail"
@@ -72,6 +75,15 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	} else {
 		environmentSuffix = "dev"
 	}
+
+	// Generate 4-character random suffix for globally unique bucket names
+	rand.Seed(time.Now().UnixNano())
+	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
+	randomSuffix := make([]byte, 4)
+	for i := range randomSuffix {
+		randomSuffix[i] = charset[rand.Intn(len(charset))]
+	}
+	bucketSuffix := string(randomSuffix)
 
 	// HIPAA Compliance Tags - Required for all resources
 	complianceTags := map[string]*string{
@@ -173,7 +185,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	// HIPAA requires access logging for all data storage
 	// Must be created first before data bucket can reference it
 	accessLogsBucket := awss3.NewBucket(stack, jsii.String("AccessLogsBucket"), &awss3.BucketProps{
-		BucketName:        jsii.String(fmt.Sprintf("healthcare-access-logs-%s", environmentSuffix)),
+		BucketName:        jsii.String(fmt.Sprintf("healthcare-access-logs-%s-%s", bucketSuffix, environmentSuffix)),
 		Encryption:        awss3.BucketEncryption_KMS,
 		EncryptionKey:     s3KmsKey,
 		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
@@ -200,7 +212,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	// - MFA delete for critical data protection
 	// - Access logging for audit trail
 	dataBucket := awss3.NewBucket(stack, jsii.String("DataBucket"), &awss3.BucketProps{
-		BucketName:             jsii.String(fmt.Sprintf("healthcare-data-%s", environmentSuffix)),
+		BucketName:             jsii.String(fmt.Sprintf("healthcare-data-%s-%s", bucketSuffix, environmentSuffix)),
 		Encryption:             awss3.BucketEncryption_KMS,
 		EncryptionKey:          s3KmsKey,
 		Versioned:              jsii.Bool(true),                     // HIPAA: Track all data modifications
@@ -230,7 +242,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 
 	// Processed Data Bucket - Stores processed healthcare analytics
 	processedBucket := awss3.NewBucket(stack, jsii.String("ProcessedBucket"), &awss3.BucketProps{
-		BucketName:             jsii.String(fmt.Sprintf("healthcare-processed-%s", environmentSuffix)),
+		BucketName:             jsii.String(fmt.Sprintf("healthcare-processed-%s-%s", bucketSuffix, environmentSuffix)),
 		Encryption:             awss3.BucketEncryption_KMS,
 		EncryptionKey:          s3KmsKey,
 		Versioned:              jsii.Bool(true),
@@ -358,13 +370,18 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 
 	// Data processing Lambda function
 	// HIPAA: Deployed in VPC private subnet with no internet access
-	// Use a dummy asset path for testing - tests should mock or override this
-	lambdaAssetPath := jsii.String("lib/lambda/processing")
+	// Determine the correct asset path based on current working directory
+	// During deployment: runs from root, needs "lib/lambda/processing"
+	// During testing: runs from lib/, needs "lambda/processing"
+	lambdaAssetPath := "lambda/processing"
+	if _, err := os.Stat("lib/lambda/processing"); err == nil {
+		lambdaAssetPath = "lib/lambda/processing"
+	}
 	processingFunction := awslambda.NewFunction(stack, jsii.String("ProcessingFunction"), &awslambda.FunctionProps{
 		FunctionName: jsii.String(fmt.Sprintf("healthcare-data-processing-%s", environmentSuffix)),
-		Runtime:      awslambda.Runtime_GO_1_X(),
-		Handler:      jsii.String("main"),
-		Code:         awslambda.Code_FromAsset(lambdaAssetPath, nil),
+		Runtime:      awslambda.Runtime_PROVIDED_AL2023(),
+		Handler:      jsii.String("bootstrap"),
+		Code:         awslambda.Code_FromAsset(jsii.String(lambdaAssetPath), nil),
 		Role:         processingLambdaRole,
 		Vpc:          vpc,
 		VpcSubnets: &awsec2.SubnetSelection{
@@ -402,7 +419,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	// S3 bucket for CloudTrail logs
 	// HIPAA: Secure storage of audit trail
 	trailBucket := awss3.NewBucket(stack, jsii.String("TrailBucket"), &awss3.BucketProps{
-		BucketName:        jsii.String(fmt.Sprintf("healthcare-trail-%s", environmentSuffix)),
+		BucketName:        jsii.String(fmt.Sprintf("healthcare-trail-%s-%s", bucketSuffix, environmentSuffix)),
 		Encryption:        awss3.BucketEncryption_KMS,
 		EncryptionKey:     trailKmsKey,
 		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),

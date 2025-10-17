@@ -22,6 +22,9 @@ package lib
 
 import (
 	"fmt"
+	"math/rand"
+	"os"
+	"time"
 
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudtrail"
@@ -92,6 +95,15 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	} else {
 		environmentSuffix = "dev"
 	}
+
+	// Generate 4-character random suffix for globally unique bucket names
+	rand.Seed(time.Now().UnixNano())
+	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
+	randomSuffix := make([]byte, 4)
+	for i := range randomSuffix {
+		randomSuffix[i] = charset[rand.Intn(len(charset))]
+	}
+	bucketSuffix := string(randomSuffix)
 
 	// HIPAA Compliance Tags - Required for all resources
 	complianceTags := map[string]*string{
@@ -193,7 +205,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	// HIPAA requires access logging for all data storage
 	// Must be created first before data bucket can reference it
 	accessLogsBucket := awss3.NewBucket(stack, jsii.String("AccessLogsBucket"), &awss3.BucketProps{
-		BucketName:        jsii.String(fmt.Sprintf("healthcare-access-logs-%s", environmentSuffix)),
+		BucketName:        jsii.String(fmt.Sprintf("healthcare-access-logs-%s-%s", bucketSuffix, environmentSuffix)),
 		Encryption:        awss3.BucketEncryption_KMS,
 		EncryptionKey:     s3KmsKey,
 		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
@@ -220,7 +232,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	// - MFA delete for critical data protection
 	// - Access logging for audit trail
 	dataBucket := awss3.NewBucket(stack, jsii.String("DataBucket"), &awss3.BucketProps{
-		BucketName:        jsii.String(fmt.Sprintf("healthcare-data-%s", environmentSuffix)),
+		BucketName:        jsii.String(fmt.Sprintf("healthcare-data-%s-%s", bucketSuffix, environmentSuffix)),
 		Encryption:        awss3.BucketEncryption_KMS,
 		EncryptionKey:     s3KmsKey,
 		Versioned:         jsii.Bool(true),      // HIPAA: Track all data modifications
@@ -250,7 +262,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 
 	// Processed Data Bucket - Stores processed healthcare analytics
 	processedBucket := awss3.NewBucket(stack, jsii.String("ProcessedBucket"), &awss3.BucketProps{
-		BucketName:        jsii.String(fmt.Sprintf("healthcare-processed-%s", environmentSuffix)),
+		BucketName:        jsii.String(fmt.Sprintf("healthcare-processed-%s-%s", bucketSuffix, environmentSuffix)),
 		Encryption:        awss3.BucketEncryption_KMS,
 		EncryptionKey:     s3KmsKey,
 		Versioned:         jsii.Bool(true),
@@ -378,11 +390,18 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 
 	// Data processing Lambda function
 	// HIPAA: Deployed in VPC private subnet with no internet access
+	// Determine the correct asset path based on current working directory
+	// During deployment: runs from root, needs "lib/lambda/processing"
+	// During testing: runs from lib/, needs "lambda/processing"
+	lambdaAssetPath := "lambda/processing"
+	if _, err := os.Stat("lib/lambda/processing"); err == nil {
+		lambdaAssetPath = "lib/lambda/processing"
+	}
 	processingFunction := awslambda.NewFunction(stack, jsii.String("ProcessingFunction"), &awslambda.FunctionProps{
 		FunctionName: jsii.String(fmt.Sprintf("healthcare-data-processing-%s", environmentSuffix)),
-		Runtime:      awslambda.Runtime_GO_1_X(),
-		Handler:      jsii.String("main"),
-		Code:         awslambda.Code_FromAsset(jsii.String("lambda/processing"), nil),
+		Runtime:      awslambda.Runtime_PROVIDED_AL2023(),
+		Handler:      jsii.String("bootstrap"),
+		Code:         awslambda.Code_FromAsset(jsii.String(lambdaAssetPath), nil),
 		Role:         processingLambdaRole,
 		Vpc:          vpc,
 		VpcSubnets: &awsec2.SubnetSelection{
@@ -420,7 +439,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	// S3 bucket for CloudTrail logs
 	// HIPAA: Secure storage of audit trail
 	trailBucket := awss3.NewBucket(stack, jsii.String("TrailBucket"), &awss3.BucketProps{
-		BucketName:        jsii.String(fmt.Sprintf("healthcare-trail-%s", environmentSuffix)),
+		BucketName:        jsii.String(fmt.Sprintf("healthcare-trail-%s-%s", bucketSuffix, environmentSuffix)),
 		Encryption:        awss3.BucketEncryption_KMS,
 		EncryptionKey:     trailKmsKey,
 		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
@@ -682,7 +701,8 @@ require (
 3. **Build Lambda Function**:
    ```bash
    cd lib/lambda/processing
-   GOOS=linux GOARCH=amd64 go build -o bootstrap main.go
+   # Build for Amazon Linux 2023 with custom runtime
+   GOOS=linux GOARCH=amd64 go build -tags lambda.norpc -o bootstrap main.go
    cd ../../..
    ```
 
@@ -714,8 +734,9 @@ require (
 
 1. **Upload Test Data**:
    ```bash
-   # Get the data bucket name from outputs
-   aws s3 cp test-data.txt s3://healthcare-data-dev/incoming/test-data.txt
+   # Get the data bucket name from outputs (note the random suffix in bucket name)
+   # Example: healthcare-data-x7k9-dev
+   aws s3 cp test-data.txt s3://healthcare-data-{random}-dev/incoming/test-data.txt
    ```
 
 2. **Monitor Lambda Execution**:
@@ -726,8 +747,8 @@ require (
 
 3. **Verify Processed Data**:
    ```bash
-   # Check processed bucket
-   aws s3 ls s3://healthcare-processed-dev/processed/
+   # Check processed bucket (note the random suffix in bucket name)
+   aws s3 ls s3://healthcare-processed-{random}-dev/processed/
    ```
 
 ### Cleanup
@@ -754,7 +775,10 @@ All resources in this implementation follow HIPAA compliance requirements:
 ## Notes
 
 - The `environmentSuffix` parameter ensures resource names are unique across deployments
+- A 4-character random suffix (e.g., `x7k9`) is generated for S3 bucket names to ensure global uniqueness
+- Lambda functions use the `provided.al2023` custom runtime (required as AWS deprecated managed Go runtimes)
 - Lambda functions have a 5-minute timeout for processing large healthcare datasets
 - S3 lifecycle rules transition old data to Intelligent Tiering after 90 days
 - All KMS keys have a 7-day pending window before deletion
 - CloudTrail log file integrity validation is enabled for tamper detection
+- The Lambda asset path automatically adjusts based on whether tests are running from `lib/` or project root

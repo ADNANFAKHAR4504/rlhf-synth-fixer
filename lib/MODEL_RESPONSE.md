@@ -359,8 +359,8 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	// HIPAA: Deployed in VPC private subnet with no internet access
 	processingFunction := awslambda.NewFunction(stack, jsii.String("ProcessingFunction"), &awslambda.FunctionProps{
 		FunctionName: jsii.String(fmt.Sprintf("healthcare-data-processing-%s", environmentSuffix)),
-		Runtime:      awslambda.Runtime_GO_1_X(),
-		Handler:      jsii.String("main"),
+		Runtime:      awslambda.Runtime_PROVIDED_AL2023(),
+		Handler:      jsii.String("bootstrap"),
 		Code:         awslambda.Code_FromAsset(jsii.String("lambda/processing"), nil),
 		Role:         processingLambdaRole,
 		Vpc:          vpc,

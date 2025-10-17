@@ -174,8 +174,8 @@ func TestLambdaFunction(t *testing.T) {
 		// Check for our processing Lambda function with specific properties
 		// Note: CDK creates additional Lambda functions for custom resources (log retention, etc.)
 		template.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]interface{}{
-			"Runtime": "go1.x",
-			"Handler": "main",
+			"Runtime": "provided.al2023",
+			"Handler": "bootstrap",
 		})
 	})
 
