@@ -875,7 +875,7 @@ Resources:
     Type: AWS::WAFv2::WebACL
     Properties:
       Name: ProductionWebACL
-      Scope: CLOUDFRONT
+      Scope: REGIONAL
       DefaultAction:
         Allow: {}
       Rules:
