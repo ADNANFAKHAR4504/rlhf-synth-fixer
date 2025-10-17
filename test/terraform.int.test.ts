@@ -1,14 +1,14 @@
-import { readFileSync } from 'fs';
-import { join } from 'path';
 import { EC2Client, DescribeVpcsCommand, DescribeInternetGatewaysCommand, DescribeSubnetsCommand, DescribeNatGatewaysCommand, DescribeSecurityGroupsCommand } from "@aws-sdk/client-ec2";
 import { IAMClient, GetRoleCommand, GetInstanceProfileCommand } from "@aws-sdk/client-iam";
 import { RDSClient, DescribeDBClustersCommand, DescribeDBInstancesCommand } from "@aws-sdk/client-rds";
-import { ELBv2Client, DescribeLoadBalancersCommand, DescribeTargetGroupsCommand } from "@aws-sdk/client-elastic-load-balancing-v2";
+import { ElasticLoadBalancingV2Client, DescribeLoadBalancersCommand, DescribeTargetGroupsCommand } from "@aws-sdk/client-elastic-load-balancing-v2"; // Corrected import
 import { AutoScalingClient, DescribeAutoScalingGroupsCommand, DescribePoliciesCommand } from "@aws-sdk/client-auto-scaling";
 import { S3Client, HeadBucketCommand } from "@aws-sdk/client-s3";
 import { SecretsManagerClient, DescribeSecretCommand } from "@aws-sdk/client-secrets-manager";
 import { CloudWatchLogsClient, DescribeLogGroupsCommand } from "@aws-sdk/client-cloudwatch-logs";
 import { KMSClient, DescribeKeyCommand } from "@aws-sdk/client-kms";
+
+const elbv2Client = new ElasticLoadBalancingV2Client({ region });
 
 const outputsPath = join(__dirname, '../cfn-outputs/flat-outputs.json');
 const outputsRaw = readFileSync(outputsPath, 'utf-8');
@@ -19,7 +19,6 @@ const region = 'us-east-1';
 const ec2Client = new EC2Client({ region });
 const iamClient = new IAMClient({ region });
 const rdsClient = new RDSClient({ region });
-const elbv2Client = new ELBv2Client({ region });
 const asClient = new AutoScalingClient({ region });
 const s3Client = new S3Client({ region });
 const secretsClient = new SecretsManagerClient({ region });
