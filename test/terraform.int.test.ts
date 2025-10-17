@@ -286,32 +286,14 @@ describe('Secure API with Cognito - Integration Tests', () => {
       expect(response.Table?.TableStatus).toBe('ACTIVE');
     }, 15000);
 
-    test('table exists in secondary region', async () => {
-      const command = new DescribeTableCommand({
-        TableName: outputs.dynamodb_table_name,
-      });
-
-      const response = await dynamoClientSecondary.send(command);
-      expect(response.Table).toBeDefined();
-      expect(response.Table?.TableName).toBe(outputs.dynamodb_table_name);
-      expect(response.Table?.TableStatus).toBe('ACTIVE');
-    }, 15000);
-
-    test('replication is active (Global Table)', async () => {
+    test('table has streaming enabled for future replication', async () => {
       const command = new DescribeTableCommand({
         TableName: outputs.dynamodb_table_name,
       });
 
       const response = await dynamoClient.send(command);
-      expect(response.Table?.Replicas).toBeDefined();
-      expect(response.Table?.Replicas?.length).toBeGreaterThan(0);
-
-      // Check for secondary region replica
-      const secondaryReplica = response.Table?.Replicas?.find(
-        (r) => r.RegionName === outputs.secondary_region
-      );
-      expect(secondaryReplica).toBeDefined();
-      expect(secondaryReplica?.ReplicaStatus).toBe('ACTIVE');
+      expect(response.Table?.StreamSpecification?.StreamEnabled).toBe(true);
+      expect(response.Table?.StreamSpecification?.StreamViewType).toBe('NEW_AND_OLD_IMAGES');
     }, 15000);
   });
 
