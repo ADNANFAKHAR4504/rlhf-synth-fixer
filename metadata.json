@@ -3,9 +3,10 @@
   "platform": "pulumi",
   "language": "py",
   "complexity": "hard",
+  "turn_type": "single",
   "po_id": "1652098325",
   "subtask": "Failure Recovery and High Availability",
-  "background": "A retail organization needs a Pulumi-based disaster recovery environment spanning two AWS regions to ensure continued operations during primary region outages.",
+  "background": "Infrastructure task for Pulumi",
   "subject_labels": [
     "Cloud Environment Setup",
     "Failure Recovery Automation",
