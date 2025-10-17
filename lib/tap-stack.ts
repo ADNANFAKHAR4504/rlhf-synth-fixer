@@ -37,7 +37,9 @@ export class TapStack extends cdk.Stack {
         'enablePointInTimeRecovery'
       ),
       logRetentionDays: this.node.tryGetContext('logRetentionDays'),
-      enableApiGatewayCaching: this.node.tryGetContext('enableApiGatewayCaching'),
+      enableApiGatewayCaching: this.node.tryGetContext(
+        'enableApiGatewayCaching'
+      ),
       apiGatewayCacheSize: this.node.tryGetContext('apiGatewayCacheSize'),
       apiGatewayCacheTtl: this.node.tryGetContext('apiGatewayCacheTtl'),
     });

@@ -369,8 +369,12 @@ export class InfraStack extends cdk.Stack {
         metricsEnabled: true,
         cachingEnabled: config.enableApiGatewayCaching,
         cacheClusterEnabled: config.enableApiGatewayCaching,
-        cacheClusterSize: config.enableApiGatewayCaching ? `${config.apiGatewayCacheSize}` : undefined,
-        cacheTtl: config.enableApiGatewayCaching ? cdk.Duration.seconds(config.apiGatewayCacheTtl) : undefined,
+        cacheClusterSize: config.enableApiGatewayCaching
+          ? `${config.apiGatewayCacheSize}`
+          : undefined,
+        cacheTtl: config.enableApiGatewayCaching
+          ? cdk.Duration.seconds(config.apiGatewayCacheTtl)
+          : undefined,
       },
       defaultCorsPreflightOptions: {
         allowOrigins: apigateway.Cors.ALL_ORIGINS,
