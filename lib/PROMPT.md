@@ -6,7 +6,7 @@ Platform: cdktf
 Language: python  
 Region: eu-central-1
 
-## Background.
+## Background
 A large manufacturing company operates multiple production lines with IoT sensors generating 10,000 events per second. They need a scalable infrastructure to ingest, process, and analyze this data in real-time while maintaining data integrity and compliance with industrial regulations. The system must support both real-time monitoring and historical analysis.
 
 ## Problem Statement
