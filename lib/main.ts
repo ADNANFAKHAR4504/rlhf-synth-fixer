@@ -28,7 +28,7 @@ import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { TerraformOutput, TerraformStack } from 'cdktf';
+import { S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 // import { Apigatewayv2DomainName } from '@cdktf/provider-aws/lib/apigatewayv2-domain-name';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
@@ -50,6 +50,23 @@ export class FinTechTradingStack extends TerraformStack {
 
     const { environmentSuffix, region, vpcCidr, dbUsername } = config;
     // enableMutualTls from config is not currently used but kept in interface for future mutual TLS implementation
+
+    // Configure S3 Backend for state management if available
+    const stateBucket = process.env.TERRAFORM_STATE_BUCKET;
+    const stateBucketRegion = process.env.TERRAFORM_STATE_BUCKET_REGION || 'us-east-1';
+    const stateKey = process.env.TERRAFORM_STATE_BUCKET_KEY || environmentSuffix;
+
+    if (stateBucket) {
+      new S3Backend(this, {
+        bucket: stateBucket,
+        key: `${stateKey}/fintech-trading-stack.tfstate`,
+        region: stateBucketRegion,
+        encrypt: true,
+      });
+
+      // Enable S3 state locking using escape hatch
+      this.addOverride('terraform.backend.s3.use_lockfile', true);
+    }
 
     // AWS Provider
     new AwsProvider(this, 'aws', {
