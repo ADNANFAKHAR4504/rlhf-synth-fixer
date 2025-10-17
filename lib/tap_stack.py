@@ -436,7 +436,7 @@ class TapStack(TerraformStack):
 
         # Create ElastiCache Redis Replication Group
         # Note: Using num_node_groups and replicas_per_node_group for cluster mode
-        # Encryption requires auth_token when transit_encryption_enabled is used
+        # Cluster mode enabled requires automatic_failover_enabled=True
         redis = ElasticacheReplicationGroup(
             self,
             "redis_cluster",
@@ -451,6 +451,7 @@ class TapStack(TerraformStack):
             parameter_group_name="default.redis7.cluster.on",
             subnet_group_name=elasticache_subnet_group.name,
             security_group_ids=[redis_sg.id],
+            automatic_failover_enabled=True,
             tags={
                 "Name": f"iot-redis-{environment_suffix}"
             }
@@ -473,7 +474,7 @@ class TapStack(TerraformStack):
             "postgres_db",
             identifier=f"iot-postgres-{environment_suffix}",
             engine="postgres",
-            engine_version="15.4",
+            engine_version="15.14",
             instance_class="db.t3.micro",
             allocated_storage=20,
             storage_type="gp3",
