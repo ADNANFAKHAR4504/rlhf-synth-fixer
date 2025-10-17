@@ -1,6 +1,6 @@
-Build a serverless infrastructure in AWS using CDK TypeScript that creates a RESTful API with the following requirements:
+Build a serverless infrastructure in AWS using CDK TypeScript that creates a RESTful API.
 
-The solution should create a REST API with AWS API Gateway that triggers an AWS Lambda function using HTTP POST. Implement the Lambda function in TypeScript ensuring it logs activity to CloudWatch and uses AWS SDK for JavaScript v3. Design an AWS DynamoDB table for data persistence with a primary key called `RequestId` and a Global Secondary Index (GSI) on `Timestamp`.
+It should create a REST API with AWS API Gateway that triggers an AWS Lambda function using HTTP POST. Implement the Lambda function in TypeScript ensuring it logs activity to CloudWatch and uses AWS SDK for JavaScript v3. Design an AWS DynamoDB table for data persistence with a primary key called `RequestId` and a Global Secondary Index (GSI) on `Timestamp`.
 
 Set up an S3 bucket with AES-256 encryption and versioning enabled to store media files. Incorporate security and operational best practices such as least privilege for the Lambda IAM role, enabling CORS for GET and POST methods, and setting up AWS WAF to block SQL injections. Throttle API Gateway requests to 100 requests per second and handle Lambda retries for transient errors.
 

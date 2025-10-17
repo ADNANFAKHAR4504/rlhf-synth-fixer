@@ -19,6 +19,9 @@ export interface InfraStackProps extends cdk.StackProps {
   dynamodbWriteCapacity?: number;
   enablePointInTimeRecovery?: boolean;
   logRetentionDays?: number;
+  enableApiGatewayCaching?: boolean;
+  apiGatewayCacheSize?: number;
+  apiGatewayCacheTtl?: number;
 }
 
 export class InfraStack extends cdk.Stack {
@@ -54,6 +57,9 @@ export class InfraStack extends cdk.Stack {
       enablePointInTimeRecovery:
         props.enablePointInTimeRecovery ?? isProduction,
       logRetentionDays: props.logRetentionDays || (isProduction ? 90 : 7),
+      enableApiGatewayCaching: props.enableApiGatewayCaching ?? isProduction,
+      apiGatewayCacheSize: Math.max(0, props.apiGatewayCacheSize || 0.5), // 0.5 GB default, ensure non-negative
+      apiGatewayCacheTtl: Math.max(0, props.apiGatewayCacheTtl || 300), // 5 minutes default, ensure non-negative
     };
 
     // Common tags
@@ -361,6 +367,10 @@ export class InfraStack extends cdk.Stack {
         loggingLevel: apigateway.MethodLoggingLevel.INFO,
         dataTraceEnabled: true,
         metricsEnabled: true,
+        cachingEnabled: config.enableApiGatewayCaching,
+        cacheClusterEnabled: config.enableApiGatewayCaching,
+        cacheClusterSize: config.enableApiGatewayCaching ? `${config.apiGatewayCacheSize}` : undefined,
+        cacheTtl: config.enableApiGatewayCaching ? cdk.Duration.seconds(config.apiGatewayCacheTtl) : undefined,
       },
       defaultCorsPreflightOptions: {
         allowOrigins: apigateway.Cors.ALL_ORIGINS,
@@ -388,6 +398,12 @@ export class InfraStack extends cdk.Stack {
     cfnApi.addMetadata(
       'Throttling',
       `${config.apiThrottleRate} req/sec with ${config.apiThrottleBurst} burst`
+    );
+    cfnApi.addMetadata(
+      'Caching',
+      config.enableApiGatewayCaching
+        ? `Enabled with ${config.apiGatewayCacheSize}GB cluster and ${config.apiGatewayCacheTtl}s TTL`
+        : 'Disabled'
     );
 
     // Create Lambda integration

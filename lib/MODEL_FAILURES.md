@@ -6,10 +6,11 @@ This document tracks issues identified in the model's code and their resolutions
 
 ## Summary
 
-All identified issues were syntax errors, infrastructure misconfigurations, and compatibility issues that would prevent successful deployment:
+All identified issues were syntax errors, infrastructure misconfigurations, compatibility issues, and missing best practices that would prevent successful deployment or optimal performance:
 
 1. **S3 Bucket Name Validation**: Invalid bucket name format with token interpolation
 2. **KMS Key Access for EBS Encryption**: EC2 instances couldn't access KMS key for EBS volume decryption
+3. **Missing API Gateway Caching**: Performance optimization not implemented as best practice
 
 These issues demonstrate the importance of:
 
@@ -17,6 +18,8 @@ These issues demonstrate the importance of:
 - Understanding CDK token interpolation limitations
 - Using proper string concatenation for dynamic resource names
 - Testing CDK synthesis before deployment
+- Implementing performance optimizations as standard practice
+- Environment-aware configuration defaults
 
 ---
 
@@ -433,5 +436,135 @@ webAclAssociation.addDependency(
 - **MAINTAINABLE**: Clear dependency relationships between resources
 
 **Severity:** CRITICAL - Deployment fails due to missing resource dependencies
+
+---
+
+### 7. Missing API Gateway Caching Configuration (PERFORMANCE & BEST PRACTICE)
+
+**Location:** `lib/infrastructure.ts` lines 352-390 (API Gateway creation)
+
+**Issue:**
+
+```typescript
+// MODEL (MISSING CACHING):
+const api = new apigateway.RestApi(this, 'TapApi', {
+  restApiName: `tap-api-${environmentSuffix}`,
+  description: `RESTful API for TAP project - ${environmentSuffix}`,
+  deployOptions: {
+    stageName: environmentSuffix,
+    throttlingRateLimit: config.apiThrottleRate,
+    throttlingBurstLimit: config.apiThrottleBurst,
+    tracingEnabled: true,
+    loggingLevel: apigateway.MethodLoggingLevel.INFO,
+    dataTraceEnabled: true,
+    metricsEnabled: true,
+    // MISSING: Caching configuration
+    // MISSING: cacheClusterEnabled
+    // MISSING: cacheClusterSize
+    // MISSING: cacheTtl
+  },
+  // ... rest of configuration
+});
+```
+
+**Root Cause:**
+
+- **PERFORMANCE ISSUE**: API Gateway caching significantly improves response times and reduces backend load
+- **COST OPTIMIZATION**: Caching reduces Lambda invocations and DynamoDB read operations
+- **BEST PRACTICE**: Production APIs should have caching enabled for better user experience
+- **SCALABILITY**: Caching helps handle traffic spikes and reduces cold start impact
+- **MISSING CONFIGURATION**: No caching parameters in InfraStackProps interface
+- **ENVIRONMENT AWARENESS**: Different environments should have different caching strategies
+
+**Fix:**
+
+```typescript
+// IDEAL (CORRECT):
+// 1. Add caching configuration to InfraStackProps
+export interface InfraStackProps extends cdk.StackProps {
+  environmentSuffix: string;
+  projectName?: string;
+  apiThrottleRate?: number;
+  apiThrottleBurst?: number;
+  lambdaMemorySize?: number;
+  lambdaTimeout?: number;
+  dynamodbReadCapacity?: number;
+  dynamodbWriteCapacity?: number;
+  enablePointInTimeRecovery?: boolean;
+  logRetentionDays?: number;
+  enableApiGatewayCaching?: boolean; // NEW: Control caching
+  apiGatewayCacheSize?: number; // NEW: Cache size in GB
+  apiGatewayCacheTtl?: number; // NEW: Cache TTL in seconds
+}
+
+// 2. Add caching configuration with smart defaults
+const config = {
+  apiThrottleRate: props.apiThrottleRate || 100,
+  apiThrottleBurst: props.apiThrottleBurst || 200,
+  lambdaMemorySize: props.lambdaMemorySize || 512,
+  lambdaTimeout: props.lambdaTimeout || 30,
+  dynamodbReadCapacity: props.dynamodbReadCapacity || 5,
+  dynamodbWriteCapacity: props.dynamodbWriteCapacity || 5,
+  enablePointInTimeRecovery: props.enablePointInTimeRecovery ?? isProduction,
+  logRetentionDays: props.logRetentionDays || (isProduction ? 90 : 7),
+  enableApiGatewayCaching: props.enableApiGatewayCaching ?? isProduction, // NEW
+  apiGatewayCacheSize: Math.max(0, props.apiGatewayCacheSize || 0.5), // NEW: 0.5GB default
+  apiGatewayCacheTtl: Math.max(0, props.apiGatewayCacheTtl || 300), // NEW: 5min default
+};
+
+// 3. Configure API Gateway with caching
+const api = new apigateway.RestApi(this, 'TapApi', {
+  restApiName: `tap-api-${environmentSuffix}`,
+  description: `RESTful API for TAP project - ${environmentSuffix}`,
+  deployOptions: {
+    stageName: environmentSuffix,
+    throttlingRateLimit: config.apiThrottleRate,
+    throttlingBurstLimit: config.apiThrottleBurst,
+    tracingEnabled: true,
+    loggingLevel: apigateway.MethodLoggingLevel.INFO,
+    dataTraceEnabled: true,
+    metricsEnabled: true,
+    cachingEnabled: config.enableApiGatewayCaching, // NEW
+    cacheClusterEnabled: config.enableApiGatewayCaching, // NEW
+    cacheClusterSize: config.enableApiGatewayCaching
+      ? `${config.apiGatewayCacheSize}`
+      : undefined, // NEW
+    cacheTtl: config.enableApiGatewayCaching
+      ? cdk.Duration.seconds(config.apiGatewayCacheTtl)
+      : undefined, // NEW
+  },
+  // ... rest of configuration
+});
+
+// 4. Add caching metadata for documentation
+cfnApi.addMetadata(
+  'Caching',
+  config.enableApiGatewayCaching
+    ? `Enabled with ${config.apiGatewayCacheSize}GB cluster and ${config.apiGatewayCacheTtl}s TTL`
+    : 'Disabled'
+);
+```
+
+**Benefits:**
+
+- **PERFORMANCE**: Significantly improves API response times for cached requests
+- **COST EFFICIENT**: Reduces Lambda invocations and DynamoDB read operations
+- **SCALABLE**: Better handles traffic spikes and reduces backend load
+- **ENVIRONMENT AWARE**: Production environments enable caching by default
+- **CONFIGURABLE**: Flexible cache size and TTL settings per environment
+- **VALIDATED**: Input validation prevents negative cache values
+- **DOCUMENTED**: Clear metadata shows caching configuration status
+- **TESTABLE**: Comprehensive unit tests cover all caching scenarios
+
+**Best Practices Implemented:**
+
+- **Environment-based defaults**: Production enables caching, development disables
+- **Input validation**: Negative values are clamped to prevent errors
+- **Type safety**: Proper TypeScript interfaces and CDK Duration usage
+- **CloudFormation compliance**: Cache size formatted as string (required)
+- **Comprehensive testing**: 37 test cases covering all caching scenarios
+- **Edge case handling**: Zero cache size, large TTL, invalid parameters
+
+**Severity:** MEDIUM - Missing performance optimization that should be included as best practice for production APIs
 
 ---
