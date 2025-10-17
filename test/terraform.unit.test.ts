@@ -103,50 +103,49 @@ describe("tap_stack.tf — static unit checks (no AWS calls)", () => {
     });
   });
 
-describe("Variables", () => {
-  it("defines all required variables with expected defaults (single test)", () => {
-    const vars: Array<[string, string | number]> = [
-      ["env", "dev"],
-      ["owner", "platform-team"],
-      ["cost_center", "cc-0001"],
-      ["domain_name", ""],
-      ["hosted_zone_id", ""],
-      ["alb_cert_arn_use1", ""],
-      ["cloudfront_cert_arn_use1", ""],
-      ["use1_cidr", "10.10.0.0/16"],
-      ["euw2_cidr", "10.20.0.0/16"],
-      ["web_instance_type", "t3.micro"],
-      ["rds_engine", "postgres"],
-      ["rds_engine_version", "15.4"],
-      ["rds_instance_class", "db.t3.micro"],
-      ["rds_allocated_storage", 20],
-      ["s3_upload_bucket_name", ""],
-      ["s3_upload_prefix", ""],
-    ];
+  describe("Variables", () => {
+    it("defines all required variables with expected defaults (single test)", () => {
+      const vars: Array<[string, string | number]> = [
+        ["env", "dev"],
+        ["owner", "platform-team"],
+        ["cost_center", "cc-0001"],
+        ["domain_name", ""],
+        ["hosted_zone_id", ""],
+        ["alb_cert_arn_use1", ""],
+        ["cloudfront_cert_arn_use1", ""],
+        ["use1_cidr", "10.10.0.0/16"],
+        ["euw2_cidr", "10.20.0.0/16"],
+        ["web_instance_type", "t3.micro"],
+        ["rds_engine", "postgres"],
+        ["rds_engine_version", "15.4"],
+        ["rds_instance_class", "db.t3.micro"],
+        ["rds_allocated_storage", 20],
+        ["s3_upload_bucket_name", ""],
+        ["s3_upload_prefix", ""],
+      ];
 
-    const failures: string[] = [];
-    for (const [name, defVal] of vars) {
-      const v = getBlock(tf, "variable", name);
-      if (!v) {
-        failures.push(`missing variable "${name}"`);
-        continue;
+      const failures: string[] = [];
+      for (const [name, defVal] of vars) {
+        const v = getBlock(tf, "variable", name);
+        if (!v) {
+          failures.push(`missing variable "${name}"`);
+          continue;
+        }
+        const defRe =
+          typeof defVal === "number"
+            ? new RegExp(String.raw`^\s*default\s*=\s*${defVal}\b`, "m")
+            : new RegExp(String.raw`^\s*default\s*=\s*"?${defVal}"?`, "m");
+        if (!defRe.test(v)) {
+          failures.push(`variable "${name}" default mismatch`);
+        }
       }
-      const defRe =
-        typeof defVal === "number"
-          ? new RegExp(String.raw`^\s*default\s*=\s*${defVal}\b`, "m")
-          : new RegExp(String.raw`^\s*default\s*=\s*"?${defVal}"?`, "m");
-      if (!defRe.test(v)) {
-        failures.push(`variable "${name}" default mismatch`);
+      if (failures.length) {
+        // eslint-disable-next-line no-console
+        console.error("Variable checks failed:\n - " + failures.join("\n - "));
       }
-    }
-    if (failures.length) {
-      // eslint-disable-next-line no-console
-      console.error("Variable checks failed:\n - " + failures.join("\n - "));
-    }
-    expect(failures.length).toBe(0);
+      expect(failures.length).toBe(0);
+    });
   });
-});
-
 
   describe("Data sources", () => {
     it("AZs & AL2023 AMIs via SSM in both regions + caller identity", () => {
@@ -313,6 +312,11 @@ describe("Variables", () => {
       expectMatch(sse, /sse_algorithm\s*=\s*"aws:kms"[\s\S]*kms_master_key_id\s*=\s*aws_kms_key\.use1\.arn/);
       expectMatch(polDoc, /DenyInsecureTransport/);
       expectMatch(bp, /policy\s*=\s*data\.aws_iam_policy_document\.uploads_policy\.json/);
+      // PAB posture (all true)
+      expectMatch(
+        pab,
+        /block_public_acls\s*=\s*true[\s\S]*block_public_policy\s*=\s*true[\s\S]*ignore_public_acls\s*=\s*true[\s\S]*restrict_public_buckets\s*=\s*true/
+      );
     });
   });
 
@@ -387,48 +391,64 @@ describe("Variables", () => {
     });
   });
 
-describe("Outputs", () => {
-  it("exports all required outputs (single test)", () => {
-    const outputs = [
-      "use1_vpc_id","euw2_vpc_id",
-      "use1_public_subnet_ids","use1_private_subnet_ids",
-      "euw2_public_subnet_ids","euw2_private_subnet_ids",
-      "use1_kms_key_arn","euw2_kms_key_arn",
-      "upload_bucket_name",
-      "lambda_on_upload_name","lambda_on_upload_arn","lambda_heartbeat_name",
-      "alb_arn","alb_dns_name",
-      "api_invoke_url","cloudfront_domain_name",
-      "rds_endpoint","rds_port",
-      "app_role_name","app_role_arn",
-      "sns_alarms_topic_arn",
-      "cw_log_group_use1",
-      "use1_cidr","euw2_cidr",
-      "web_sg_id","ec2_instance_id","ec2_public_ip",
-      "cloudtrail_bucket_name"
-    ];
+  describe("Outputs", () => {
+    it("exports all required outputs (single test)", () => {
+      const outputs = [
+        "use1_vpc_id","euw2_vpc_id",
+        "use1_public_subnet_ids","use1_private_subnet_ids",
+        "euw2_public_subnet_ids","euw2_private_subnet_ids",
+        "use1_kms_key_arn","euw2_kms_key_arn",
+        "upload_bucket_name",
+        "lambda_on_upload_name","lambda_on_upload_arn","lambda_heartbeat_name",
+        "alb_arn","alb_dns_name",
+        "api_invoke_url","cloudfront_domain_name",
+        "rds_endpoint","rds_port",
+        "app_role_name","app_role_arn",
+        "sns_alarms_topic_arn",
+        "cw_log_group_use1",
+        "use1_cidr","euw2_cidr",
+        "web_sg_id","ec2_instance_id","ec2_public_ip",
+        "cloudtrail_bucket_name"
+      ];
 
-    const missing = outputs.filter(
-      (o) => !new RegExp(String.raw`\boutput\s+"${o}"\s*\{`).test(tf)
-    );
+      const missing = outputs.filter(
+        (o) => !new RegExp(String.raw`\boutput\s+"${o}"\s*\{`).test(tf)
+      );
 
-    if (missing.length) {
-      // eslint-disable-next-line no-console
-      console.error("Missing outputs:\n - " + missing.join("\n - "));
-    }
-    expect(missing.length).toBe(0);
+      if (missing.length) {
+        // eslint-disable-next-line no-console
+        console.error("Missing outputs:\n - " + missing.join("\n - "));
+      }
+      expect(missing.length).toBe(0);
+    });
   });
-});
 
 });
 
 // ---------------------------------------------------------------------------
-// Final requirement summary — must be 100%
+// Final requirement summary — must be >=95%
 // ---------------------------------------------------------------------------
 test("Unit requirements coverage summary (>=95%)", () => {
   const c = fs.readFileSync(path.join(LIB_DIR, "tap_stack.tf"), "utf8");
 
   const has = (kind: "resource" | "data" | "variable" | "locals", t: string, n?: string) =>
     getBlock(c, kind, t, n) !== null;
+
+  // Helper to parse signatures like:
+  //   "aws_s3_bucket uploads"                        -> resource
+  //   "data aws_iam_policy_document uploads_policy"  -> data
+  function hasSig(sig: string): boolean {
+    const parts = sig.trim().split(/\s+/);
+    if (parts.length === 2) {
+      const [type, name] = parts;
+      return has("resource", type as any, name);
+    }
+    if (parts.length === 3) {
+      const [kind, type, name] = parts as ["resource" | "data", string, string];
+      return has(kind, type, name);
+    }
+    return false;
+  }
 
   const checks: Array<[string, boolean]> = [
     ["No provider/backend blocks", !/^\s*provider\s+"aws"/m.test(c) && !/^\s*backend\s+"/m.test(c)],
@@ -457,7 +477,16 @@ test("Unit requirements coverage summary (>=95%)", () => {
     ["SSM VPC endpoints (3)", ["use1_ssm","use1_ssmmessages","use1_ec2messages"].every(n=>has("resource","aws_vpc_endpoint",n))],
     ["HTTP API → ALB (IAM)", has("resource","aws_apigatewayv2_api","http_api") && has("resource","aws_apigatewayv2_integration","alb_proxy") && has("resource","aws_apigatewayv2_route","root_get") && has("resource","aws_apigatewayv2_route","ec2_get") && has("resource","aws_apigatewayv2_stage","default")],
     ["RDS enc+private + SSM pwd", has("resource","aws_db_subnet_group","use1") && has("resource","random_password","rds_master") && has("resource","aws_ssm_parameter","rds_password") && has("resource","aws_db_instance","use1")],
-    ["S3 uploads: versioning+SSE-KMS+PAB+TLS-only", ["aws_s3_bucket uploads","aws_s3_bucket_versioning uploads","aws_s3_bucket_server_side_encryption_configuration uploads","aws_s3_bucket_public_access_block uploads","data aws_iam_policy_document uploads_policy","aws_s3_bucket_policy uploads"].every(sig=>{const [k, n] = sig.split(" ");return has(k as any, n as any);})],
+    ["S3 uploads: versioning+SSE-KMS+PAB+TLS-only",
+      [
+        "aws_s3_bucket uploads",
+        "aws_s3_bucket_versioning uploads",
+        "aws_s3_bucket_server_side_encryption_configuration uploads",
+        "aws_s3_bucket_public_access_block uploads",
+        "data aws_iam_policy_document uploads_policy",
+        "aws_s3_bucket_policy uploads"
+      ].every(hasSig)
+    ],
     ["Lambdas + trigger + KMS grant + warm-ups", has("data","archive_file","lambda_zip") && has("resource","aws_lambda_function","on_upload") && has("data","archive_file","heartbeat_zip") && has("resource","aws_lambda_function","heartbeat") && has("resource","aws_lambda_permission","allow_s3_invoke") && has("resource","aws_s3_bucket_notification","uploads") && has("resource","aws_kms_grant","lambda_upload_kms") && has("data","aws_lambda_invocation","on_upload_warm") && has("data","aws_lambda_invocation","heartbeat_warm")],
     ["CloudFront & Route53 alias", has("resource","aws_cloudfront_distribution","cdn") && has("resource","aws_route53_record","app_alias_alb")],
     ["CloudTrail multi-region + bucket policy", has("resource","aws_cloudtrail","main") && has("resource","aws_s3_bucket_policy","cloudtrail")],
@@ -499,5 +528,5 @@ test("Unit requirements coverage summary (>=95%)", () => {
 
   // eslint-disable-next-line no-console
   console.log(`Unit requirements coverage: ${passed}/${total} (${pct}%)`);
-  expect(pct).toBe(95);
+  expect(pct).toBeGreaterThanOrEqual(100);
 });

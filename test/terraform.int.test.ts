@@ -8,10 +8,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as http from 'http';
 import * as https from 'https';
-
-// ✅ Smithy imports (present transitively via @aws-sdk/client-*)
-import { HttpRequest } from '@smithy/protocol-http';
-import { SignatureV4 } from '@smithy/signature-v4';
+import { HttpRequest } from '@aws-sdk/protocol-http';
 
 import {
   EC2Client,
@@ -19,7 +16,6 @@ import {
   DescribeInstanceStatusCommand,
   DescribeRouteTablesCommand,
   DescribeVpcPeeringConnectionsCommand,
-  DescribeSubnetsCommand, // ← added
   Tag as Ec2Tag,
 } from '@aws-sdk/client-ec2';
 
@@ -52,6 +48,7 @@ import {
 } from '@aws-sdk/client-cloudwatch';
 
 import { RDSClient } from '@aws-sdk/client-rds';
+import { SignatureV4 } from '@aws-sdk/signature-v4';
 import { Sha256 } from '@aws-crypto/sha256-js';
 import { defaultProvider } from '@aws-sdk/credential-provider-node';
 import { describe, it, expect, afterAll } from '@jest/globals';
@@ -101,7 +98,6 @@ async function httpGetSigned(urlStr: string, timeoutMs = 8000): Promise<{ status
     service: 'execute-api',
     region,
     credentials: defaultProvider(),
-    // @ts-expect-error smithy types accept constructors; this is fine at runtime
     sha256: Sha256 as any,
   });
 
@@ -114,7 +110,7 @@ async function httpGetSigned(urlStr: string, timeoutMs = 8000): Promise<{ status
   });
 
   const signed = await signer.sign(reqToSign);
-  const signedHeaders = (signed as any).headers as Record<string, string>;
+  const signedHeaders = signed.headers as Record<string, string>;
 
   return new Promise((resolve, reject) => {
     const req = https.request(
@@ -231,7 +227,6 @@ log('--- E2E TESTS START ---');
 /* ---------------- region + clients ---------------- */
 const REGION = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
 const ec2  = new EC2Client({ region: REGION });
-// moved to eu-west-2 per your stack update
 const ec2EU = new EC2Client({ region: 'eu-west-2' });
 const ssm  = new SSMClient({ region: REGION });
 const s3   = new S3Client({ region: REGION });
@@ -366,37 +361,6 @@ async function dumpAlbTargetHealth() {
   }
 }
 
-/* ---------------- Route-table helpers (fix false negatives) ---------------- */
-async function effectiveRouteTablesForSubnet(ec2c: EC2Client, subnetId: string) {
-  // First: route table explicitly associated to the subnet
-  const direct = await ec2c.send(new DescribeRouteTablesCommand({
-    Filters: [{ Name: 'association.subnet-id', Values: [subnetId] }],
-  }));
-  if ((direct.RouteTables || []).length) return direct.RouteTables!;
-
-  // Fallback: the VPC's main route table (covers subnets inheriting main)
-  const sn = await ec2c.send(new DescribeSubnetsCommand({ SubnetIds: [subnetId] }));
-  const vpcId = sn.Subnets?.[0]?.VpcId;
-  if (!vpcId) return [];
-  const main = await ec2c.send(new DescribeRouteTablesCommand({
-    Filters: [
-      { Name: 'vpc-id', Values: [vpcId] },
-      { Name: 'association.main', Values: ['true'] },
-    ],
-  }));
-  return main.RouteTables || [];
-}
-
-async function hasPeerRouteViaPcx(ec2c: EC2Client, subnetId: string, peerCidr: string) {
-  const rts = await effectiveRouteTablesForSubnet(ec2c, subnetId);
-  return rts.some(t =>
-    (t.Routes || []).some(r =>
-      r.DestinationCidrBlock === peerCidr &&
-      (r.VpcPeeringConnectionId || '').startsWith('pcx-')
-    )
-  );
-}
-
 /* ============================================================================
  * ALB + EC2 reachability
  * ==========================================================================*/
@@ -448,31 +412,17 @@ describe('NAT egress + Route posture', () => {
 
   it('Public subnets have default 0.0.0.0/0 via IGW', async () => {
     for (const sn of pub) {
-      const ok = await retry(async () => {
-        const rts = await effectiveRouteTablesForSubnet(ec2, sn);
-        const hasIgw = rts.some(t =>
-          (t.Routes || []).some(r =>
-            r.DestinationCidrBlock === '0.0.0.0/0' && (r.GatewayId || '').startsWith('igw-')
-          )
-        );
-        return hasIgw ? true : null;
-      }, 8, 2000, `pub-igw:${sn}`);
-      expect(ok).toBe(true);
+      const rt = await ec2.send(new DescribeRouteTablesCommand({ Filters: [{ Name: 'association.subnet-id', Values: [sn] }] }));
+      const hasIgw = (rt.RouteTables || []).some(t => (t.Routes || []).some(r => r.DestinationCidrBlock === '0.0.0.0/0' && (r.GatewayId || '').startsWith('igw-')));
+      expect(hasIgw).toBe(true);
     }
   });
 
   it('Private subnets have default 0.0.0.0/0 via NAT', async () => {
     for (const sn of priv) {
-      const ok = await retry(async () => {
-        const rts = await effectiveRouteTablesForSubnet(ec2, sn);
-        const hasNat = rts.some(t =>
-          (t.Routes || []).some(r =>
-            r.DestinationCidrBlock === '0.0.0.0/0' && (r.NatGatewayId || '').startsWith('nat-')
-          )
-        );
-        return hasNat ? true : null;
-      }, 8, 2000, `priv-nat:${sn}`);
-      expect(ok).toBe(true);
+      const rt = await ec2.send(new DescribeRouteTablesCommand({ Filters: [{ Name: 'association.subnet-id', Values: [sn] }] }));
+      const hasNat = (rt.RouteTables || []).some(t => (t.Routes || []).some(r => r.DestinationCidrBlock === '0.0.0.0/0' && (r.NatGatewayId || '').startsWith('nat-')));
+      expect(hasNat).toBe(true);
     }
   });
 });
@@ -494,8 +444,15 @@ describe('Two VPCs + Peering posture', () => {
     const use1Subs: string[] = [...OUTPUTS.use1_public_subnet_ids, ...OUTPUTS.use1_private_subnet_ids];
     const euCidr = (OUTPUTS.euw2_cidr || '10.20.0.0/16') as string;
     for (const sn of use1Subs) {
-      const ok = await retry(() => hasPeerRouteViaPcx(ec2, sn, euCidr).then(v => v ? true : null), 8, 2000, `use1->eu:${sn}`);
-      expect(ok).toBe(true);
+      const rt = await ec2.send(new DescribeRouteTablesCommand({
+        Filters: [{ Name: 'association.subnet-id', Values: [sn] }]
+      }));
+      const viaPcx = (rt.RouteTables || []).some(t =>
+        (t.Routes || []).some(r =>
+          r.DestinationCidrBlock === euCidr && (r.VpcPeeringConnectionId || '').startsWith('pcx-')
+        )
+      );
+      expect(viaPcx).toBe(true);
     }
   });
 
@@ -503,8 +460,15 @@ describe('Two VPCs + Peering posture', () => {
     const euSubs: string[] = [...OUTPUTS.euw2_public_subnet_ids, ...OUTPUTS.euw2_private_subnet_ids];
     const usCidr = (OUTPUTS.use1_cidr || '10.10.0.0/16') as string;
     for (const sn of euSubs) {
-      const ok = await retry(() => hasPeerRouteViaPcx(ec2EU, sn, usCidr).then(v => v ? true : null), 8, 2000, `eu->use1:${sn}`);
-      expect(ok).toBe(true);
+      const rt = await ec2EU.send(new DescribeRouteTablesCommand({
+        Filters: [{ Name: 'association.subnet-id', Values: [sn] }]
+      }));
+      const viaPcx = (rt.RouteTables || []).some(t =>
+        (t.Routes || []).some(r =>
+          r.DestinationCidrBlock === usCidr && (r.VpcPeeringConnectionId || '').startsWith('pcx-')
+        )
+      );
+      expect(viaPcx).toBe(true);
     }
   });
 });
@@ -709,8 +673,10 @@ describe('End-to-end smoke: ALB -> EC2(private) -> RDS', () => {
   }
 
   it('ALB serves, EC2 can reach ALB AND RDS in one SSM run', async () => {
+    // 0) If we can, wait for a healthy target (covers replaced/booting instances)
     await waitAlbHealthyTarget(8 * 60 * 1000);
 
+    // 1) Probe ALB from runner (external check)
     const albRes = await retry(async () => {
       try {
         const r = await httpGet(`http://${albDns}/alb.html`, 6000);
@@ -720,6 +686,7 @@ describe('End-to-end smoke: ALB -> EC2(private) -> RDS', () => {
     expect(albRes.status).toBeGreaterThanOrEqual(200);
     expect(albRes.status).toBeLessThan(400);
 
+    // 2) One SSM script on a private instance to curl ALB + psql RDS
     const id = await pickAppInstance(vpcId);
     await waitSsm(id);
     await waitReachable(id);
