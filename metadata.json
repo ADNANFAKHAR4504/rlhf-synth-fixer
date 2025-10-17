@@ -1,6 +1,6 @@
 {
   "platform": "pulumi",
-  "language": "javascript",
+  "language": "js",
   "complexity": "medium",
   "team": "synth",
   "turn_type": "single",
