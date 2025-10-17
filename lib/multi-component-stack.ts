@@ -221,6 +221,31 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
       ],
     });
 
+    // API Gateway needs an account-level CloudWatch role to push logs.
+    // Create a role that API Gateway can assume to write to CloudWatch Logs
+    // and then set it on the API Gateway account via the L1 CfnAccount resource.
+    const apiGatewayCloudWatchRole = new iam.Role(
+      this,
+      'ApiGatewayCloudWatchRole',
+      {
+        assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
+        description:
+          'Role allowing API Gateway to write logs to CloudWatch Logs',
+        managedPolicies: [
+          // AWS managed policy that grants API Gateway permissions to push logs
+          iam.ManagedPolicy.fromAwsManagedPolicyName(
+            'service-role/AmazonAPIGatewayPushToCloudWatchLogs'
+          ),
+        ],
+      }
+    );
+
+    // Set the account-level CloudWatch role for API Gateway so stages can enable logging.
+    // This maps to the AWS::ApiGateway::Account resource.
+    new apigateway.CfnAccount(this, 'ApiGatewayAccount', {
+      cloudWatchRoleArn: apiGatewayCloudWatchRole.roleArn,
+    });
+
     // Lambda permissions
     lambdaRole.addToPolicy(
       new iam.PolicyStatement({
