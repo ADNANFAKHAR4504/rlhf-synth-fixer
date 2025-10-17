@@ -3,6 +3,7 @@
   "language": "python",
   "complexity": "medium",
   "team": "synth",
+  "turn_type": "single",
   "startedAt": "2025-10-17T00:56:51+05:30",
   "subtask": "Application Deployment",
   "background": "MedTech Solutions needs to deploy a containerized application that processes patient healthcare records. The system must maintain HIPAA compliance while providing efficient data processing capabilities. The application will receive patient data, process it, and store it in an encrypted database.",
