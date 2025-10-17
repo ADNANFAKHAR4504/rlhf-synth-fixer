@@ -1,0 +1,571 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "E-commerce Order Processing Monitoring System with comprehensive audit logging",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Environment suffix for resource naming",
+      "Default": "dev"
+    }
+  },
+  "Resources": {
+    "OrderEventsTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "order-events-${EnvironmentSuffix}"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "orderId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "timestamp",
+            "AttributeType": "N"
+          },
+          {
+            "AttributeName": "status",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "orderId",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "timestamp",
+            "KeyType": "RANGE"
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "status-timestamp-index",
+            "KeySchema": [
+              {
+                "AttributeName": "status",
+                "KeyType": "HASH"
+              },
+              {
+                "AttributeName": "timestamp",
+                "KeyType": "RANGE"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "order-events-table-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Purpose",
+            "Value": "Order events storage and tracking"
+          }
+        ]
+      }
+    },
+    "AuditLogsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "audit-logs-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "TransitionToGlacier",
+              "Status": "Enabled",
+              "Transitions": [
+                {
+                  "TransitionInDays": 90,
+                  "StorageClass": "GLACIER"
+                }
+              ]
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "audit-logs-bucket-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Purpose",
+            "Value": "Order audit logs storage"
+          }
+        ]
+      }
+    },
+    "OrderAlertsTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "order-alerts-${EnvironmentSuffix}"
+        },
+        "DisplayName": "Order Processing Alerts",
+        "KmsMasterKeyId": "alias/aws/sns",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "order-alerts-topic-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Purpose",
+            "Value": "Order processing alerts and notifications"
+          }
+        ]
+      }
+    },
+    "OrderProcessorLambdaRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "order-processor-lambda-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "OrderProcessorPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:DeleteItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "OrderEventsTable",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "${OrderEventsTable.Arn}/index/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject",
+                    "s3:DeleteObject"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "${AuditLogsBucket.Arn}/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sns:Publish"
+                  ],
+                  "Resource": [
+                    {
+                      "Ref": "OrderAlertsTopic"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:DescribeStream",
+                    "dynamodb:GetRecords",
+                    "dynamodb:GetShardIterator",
+                    "dynamodb:ListStreams"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "OrderEventsTable",
+                        "StreamArn"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "OrderProcessorLambdaLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/order-processor-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 7
+      }
+    },
+    "OrderProcessorLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "order-processor-${EnvironmentSuffix}"
+        },
+        "Runtime": "nodejs20.x",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "OrderProcessorLambdaRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 60,
+        "MemorySize": 256,
+        "Environment": {
+          "Variables": {
+            "ORDER_EVENTS_TABLE": {
+              "Ref": "OrderEventsTable"
+            },
+            "AUDIT_BUCKET_NAME": {
+              "Ref": "AuditLogsBucket"
+            },
+            "SNS_TOPIC_ARN": {
+              "Ref": "OrderAlertsTopic"
+            },
+            "ENVIRONMENT_SUFFIX": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": {
+            "Fn::Join": [
+              "\n",
+              [
+                "const { DynamoDBClient, PutItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');",
+                "const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');",
+                "const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');",
+                "",
+                "const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });",
+                "const s3Client = new S3Client({ region: process.env.AWS_REGION });",
+                "const snsClient = new SNSClient({ region: process.env.AWS_REGION });",
+                "",
+                "exports.handler = async (event) => {",
+                "  console.log('Processing order event:', JSON.stringify(event));",
+                "  ",
+                "  try {",
+                "    // Process DynamoDB Stream events",
+                "    for (const record of event.Records || []) {",
+                "      if (record.eventSource === 'aws:dynamodb') {",
+                "        await processDynamoDBRecord(record);",
+                "      }",
+                "    }",
+                "    ",
+                "    return {",
+                "      statusCode: 200,",
+                "      body: JSON.stringify({ message: 'Order processed successfully' })",
+                "    };",
+                "  } catch (error) {",
+                "    console.error('Error processing order:', error);",
+                "    ",
+                "    // Send alert for failed processing",
+                "    await snsClient.send(new PublishCommand({",
+                "      TopicArn: process.env.SNS_TOPIC_ARN,",
+                "      Subject: 'Order Processing Error',",
+                "      Message: `Error processing order: ${error.message}`",
+                "    }));",
+                "    ",
+                "    throw error;",
+                "  }",
+                "};",
+                "",
+                "async function processDynamoDBRecord(record) {",
+                "  const orderId = record.dynamodb?.Keys?.orderId?.S;",
+                "  const status = record.dynamodb?.NewImage?.status?.S;",
+                "  const timestamp = Date.now();",
+                "  ",
+                "  // Create audit log",
+                "  const auditLog = {",
+                "    timestamp: new Date().toISOString(),",
+                "    orderId: orderId,",
+                "    eventName: record.eventName,",
+                "    status: status,",
+                "    record: record",
+                "  };",
+                "  ",
+                "  // Save audit log to S3 with pattern: orders/{orderId}/{timestamp}.json",
+                "  await s3Client.send(new PutObjectCommand({",
+                "    Bucket: process.env.AUDIT_BUCKET_NAME,",
+                "    Key: `orders/${orderId}/${timestamp}.json`,",
+                "    Body: JSON.stringify(auditLog),",
+                "    ContentType: 'application/json'",
+                "  }));",
+                "  ",
+                "  // Send alert for FAILED orders",
+                "  if (status === 'FAILED') {",
+                "    await snsClient.send(new PublishCommand({",
+                "      TopicArn: process.env.SNS_TOPIC_ARN,",
+                "      Subject: 'Failed Order Alert',",
+                "      Message: `Order ${orderId} has failed processing`",
+                "    }));",
+                "  }",
+                "}"
+              ]
+            ]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "order-processor-lambda-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Purpose",
+            "Value": "Order status change processing and audit logging"
+          }
+        ]
+      }
+    },
+    "DynamoDBStreamEventSourceMapping": {
+      "Type": "AWS::Lambda::EventSourceMapping",
+      "Properties": {
+        "EventSourceArn": {
+          "Fn::GetAtt": [
+            "OrderEventsTable",
+            "StreamArn"
+          ]
+        },
+        "FunctionName": {
+          "Ref": "OrderProcessorLambda"
+        },
+        "StartingPosition": "LATEST",
+        "BatchSize": 10,
+        "MaximumBatchingWindowInSeconds": 5
+      }
+    },
+    "LambdaErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "lambda-error-alarm-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alarm when Lambda error rate exceeds 5% over 5 minutes",
+        "Metrics": [
+          {
+            "Id": "errors",
+            "MetricStat": {
+              "Metric": {
+                "Namespace": "AWS/Lambda",
+                "MetricName": "Errors",
+                "Dimensions": [
+                  {
+                    "Name": "FunctionName",
+                    "Value": {
+                      "Ref": "OrderProcessorLambda"
+                    }
+                  }
+                ]
+              },
+              "Period": 300,
+              "Stat": "Sum"
+            },
+            "ReturnData": false
+          },
+          {
+            "Id": "invocations",
+            "MetricStat": {
+              "Metric": {
+                "Namespace": "AWS/Lambda",
+                "MetricName": "Invocations",
+                "Dimensions": [
+                  {
+                    "Name": "FunctionName",
+                    "Value": {
+                      "Ref": "OrderProcessorLambda"
+                    }
+                  }
+                ]
+              },
+              "Period": 300,
+              "Stat": "Sum"
+            },
+            "ReturnData": false
+          },
+          {
+            "Id": "error_rate",
+            "Expression": "(errors / invocations) * 100",
+            "Label": "Error Rate (%)",
+            "ReturnData": true
+          }
+        ],
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Threshold": 5,
+        "EvaluationPeriods": 1,
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "OrderAlertsTopic"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "OrderEventsTableName": {
+      "Description": "Name of the order events DynamoDB table",
+      "Value": {
+        "Ref": "OrderEventsTable"
+      }
+    },
+    "OrderEventsTableArn": {
+      "Description": "ARN of the order events DynamoDB table",
+      "Value": {
+        "Fn::GetAtt": [
+          "OrderEventsTable",
+          "Arn"
+        ]
+      }
+    },
+    "OrderEventsTableStreamArn": {
+      "Description": "ARN of the order events DynamoDB table stream",
+      "Value": {
+        "Fn::GetAtt": [
+          "OrderEventsTable",
+          "StreamArn"
+        ]
+      }
+    },
+    "AuditLogsBucketName": {
+      "Description": "Name of the audit logs S3 bucket",
+      "Value": {
+        "Ref": "AuditLogsBucket"
+      }
+    },
+    "AuditLogsBucketArn": {
+      "Description": "ARN of the audit logs S3 bucket",
+      "Value": {
+        "Fn::GetAtt": [
+          "AuditLogsBucket",
+          "Arn"
+        ]
+      }
+    },
+    "OrderProcessorLambdaName": {
+      "Description": "Name of the order processor Lambda function",
+      "Value": {
+        "Ref": "OrderProcessorLambda"
+      }
+    },
+    "OrderProcessorLambdaArn": {
+      "Description": "ARN of the order processor Lambda function",
+      "Value": {
+        "Fn::GetAtt": [
+          "OrderProcessorLambda",
+          "Arn"
+        ]
+      }
+    },
+    "OrderAlertsTopicArn": {
+      "Description": "ARN of the order alerts SNS topic",
+      "Value": {
+        "Ref": "OrderAlertsTopic"
+      }
+    },
+    "LambdaErrorAlarmName": {
+      "Description": "Name of the Lambda error CloudWatch alarm",
+      "Value": {
+        "Ref": "LambdaErrorAlarm"
+      }
+    },
+    "StackName": {
+      "Description": "CloudFormation stack name",
+      "Value": {
+        "Ref": "AWS::StackName"
+      }
+    },
+    "EnvironmentSuffix": {
+      "Description": "Environment suffix used for resource naming",
+      "Value": {
+        "Ref": "EnvironmentSuffix"
+      }
+    }
+  }
+}
