@@ -91,7 +91,7 @@ The model did not recognize that meeting the 90-day backup retention requirement
 
 **Impact Level**: Medium
 
-**MODEL_RESPONSE Issue** (during QA fixes):
+**MODEL_RESPONSE Issue**:
 Initial AWS Backup configuration attempted to use cold storage transition with insufficient retention period:
 
 ```yaml
