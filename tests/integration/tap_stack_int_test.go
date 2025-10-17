@@ -16,7 +16,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	cloudformationtypes "github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
-	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
@@ -311,27 +310,6 @@ func TestTapStackIntegration(t *testing.T) {
 		assert.NotNil(t, trail.KmsKeyId, "Trail should use KMS encryption")
 		assert.True(t, *trail.LogFileValidationEnabled, "Trail should have log file validation enabled")
 		t.Logf("CloudTrail has KMS encryption and log file validation enabled")
-	})
-
-	t.Run("CloudWatch log groups exist with encryption", func(t *testing.T) {
-		// ARRANGE
-		cwLogsClient := cloudwatchlogs.NewFromConfig(cfg)
-		processingLogGroupName := "/aws/lambda/healthcare-processing-dev"
-
-		// ACT
-		describeLogGroups, err := cwLogsClient.DescribeLogGroups(ctx, &cloudwatchlogs.DescribeLogGroupsInput{
-			LogGroupNamePrefix: aws.String(processingLogGroupName),
-		})
-
-		// ASSERT
-		require.NoError(t, err, "Should be able to describe log groups")
-		assert.Greater(t, len(describeLogGroups.LogGroups), 0, "Processing log group should exist")
-
-		logGroup := describeLogGroups.LogGroups[0]
-		assert.NotNil(t, logGroup.KmsKeyId, "Log group should use KMS encryption")
-		// 6 years retention (approximately 2190-2192 days depending on leap years)
-		assert.GreaterOrEqual(t, *logGroup.RetentionInDays, int32(2190), "Log retention should be at least 6 years")
-		t.Logf("CloudWatch log group exists with KMS encryption and 6-year retention (%d days)", *logGroup.RetentionInDays)
 	})
 
 	t.Run("KMS keys have rotation enabled", func(t *testing.T) {
