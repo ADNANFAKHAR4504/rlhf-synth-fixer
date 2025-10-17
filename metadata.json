@@ -1,0 +1,15 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349754",
+  "team": "3",
+  "startedAt": "2025-10-17T09:48:23.877Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC",
+  "background": "Deploy a secure, multi-tier AWS infrastructure using CDK TypeScript following security best practices. The infrastructure includes VPC with multi-AZ configuration, KMS-encrypted S3 buckets, private RDS MySQL database, Lambda functions with VPC integration, CloudWatch Logs with encryption, and IAM roles with least privilege. All resources are properly tagged and configured for dev/prod environments. Comprehensive unit tests (96.55% coverage) and integration tests (23 tests) validate the deployment in ap-northeast-1 region."
+}
