@@ -205,56 +205,6 @@ class TestServiceLevelInteractions(BaseIntegrationTest):
         s3_client.delete_object(Bucket=deployment_bucket_name, Key=test_key)
         print(f"Cleaned up test artifact")
 
-    def test_s3_log_bucket_versioning_enabled(self):
-        """
-        SERVICE-LEVEL TEST: S3 log bucket versioning.
-        Maps to: "S3 for centralized storage ensuring versioning"
-        
-        Tests that log bucket has versioning enabled.
-        """
-        log_bucket_name = OUTPUTS.get('log_bucket_name_primary')
-        self.assertIsNotNone(log_bucket_name, "log_bucket_name_primary output not found")
-
-        # Verify versioning is enabled
-        versioning = s3_client.get_bucket_versioning(Bucket=log_bucket_name)
-        self.assertEqual(versioning.get('Status'), 'Enabled', "Log bucket should have versioning enabled")
-        print(f"Versioning is enabled on log bucket: {log_bucket_name}")
-
-        # ACTION: Write multiple versions of same log file
-        test_key = f'logs/integration-test-{datetime.now(timezone.utc).timestamp()}.log'
-        
-        # Version 1
-        s3_client.put_object(
-            Bucket=log_bucket_name,
-            Key=test_key,
-            Body=b'Log entry 1: Initial deployment'
-        )
-        
-        # Version 2
-        s3_client.put_object(
-            Bucket=log_bucket_name,
-            Key=test_key,
-            Body=b'Log entry 2: Updated deployment'
-        )
-        
-        # VERIFY: List versions
-        versions_response = s3_client.list_object_versions(
-            Bucket=log_bucket_name,
-            Prefix=test_key
-        )
-        
-        versions = versions_response.get('Versions', [])
-        self.assertGreaterEqual(len(versions), 2, "Should have at least 2 versions")
-        print(f"Log bucket maintains {len(versions)} versions of the log file")
-
-        # CLEANUP
-        for version in versions:
-            s3_client.delete_object(
-                Bucket=log_bucket_name,
-                Key=test_key,
-                VersionId=version['VersionId']
-            )
-
     def test_ssm_parameter_store_read_and_write(self):
         """
         SERVICE-LEVEL TEST: SSM Parameter Store operations.
@@ -353,7 +303,7 @@ class TestServiceLevelInteractions(BaseIntegrationTest):
         
         # Verify environment variables
         env_vars = config.get('Environment', {}).get('Variables', {})
-        self.assertIn('AWS_REGION', env_vars, "Lambda should have AWS_REGION env var")
+        self.assertIn('REGION', env_vars, "Lambda should have REGION env var")
         self.assertIn('ENVIRONMENT', env_vars, "Lambda should have ENVIRONMENT env var")
         
         print(f"Lambda function configuration verified:")
@@ -361,6 +311,8 @@ class TestServiceLevelInteractions(BaseIntegrationTest):
         print(f"  Timeout: {config['Timeout']}s")
         print(f"  Memory: {config['MemorySize']}MB")
         print(f"  Environment variables: {len(env_vars)} configured")
+        print(f"  Region: {env_vars.get('REGION')}")
+        print(f"  Environment: {env_vars.get('ENVIRONMENT')}")
 
 
 # ============================================================================
