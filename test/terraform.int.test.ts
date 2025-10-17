@@ -671,7 +671,7 @@ describe('Payment API Gateway - Integration Tests (Live)', () => {
       // Step 7: Verify transaction ID format
       // ---------------------------------------------------------------
       console.log('Step 7: Validating transaction ID...');
-      expect(paymentData.transaction_id).toMatch(/^txn_\d{14}$/);
+      expect(paymentData.transaction_id).toMatch(/^txn_\d{20}$/);
       console.log(`✓ Transaction ID generated: ${paymentData.transaction_id}`);
 
       // ---------------------------------------------------------------

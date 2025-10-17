@@ -49,7 +49,8 @@ def lambda_handler(event, context):
     
     # Simulate payment processing
     # In real implementation, this would integrate with payment gateway
-    transaction_id = f"txn_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+    # Use microseconds for unique transaction IDs even for concurrent requests
+    transaction_id = f"txn_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}"
     
     # Success response
     response = {
