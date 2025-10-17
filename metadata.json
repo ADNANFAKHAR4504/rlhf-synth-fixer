@@ -1,0 +1,14 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349067",
+  "team": "6",
+  "startedAt": "2025-10-17T12:07:35.078Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "VPC, EC2, RDS, S3, Auto Scaling, CloudFront, Route 53, ACM, CloudWatch, IAM, Secrets Manager, NAT Gateway, Internet Gateway, AWS WAF, AWS Backup"
+}
