@@ -48,6 +48,12 @@ variable "office_cidr" {
   default     = "203.0.113.0/24" # Replace with your actual office CIDR
 }
 
+variable "environment_suffix" {
+  description = "Environment suffix to avoid resource conflicts"
+  type        = string
+  default     = ""
+}
+
 variable "s3_backup_bucket" {
   description = "S3 bucket name for backups"
   type        = string
@@ -85,7 +91,7 @@ resource "aws_vpc" "prod_vpc" {
   enable_dns_support   = true
 
   tags = merge(local.common_tags, {
-    Name = "prod-VPC"
+    Name = "prod-VPC-${var.environment_suffix}"
   })
 }
 
@@ -97,7 +103,7 @@ resource "aws_internet_gateway" "prod_igw" {
   vpc_id = aws_vpc.prod_vpc.id
 
   tags = merge(local.common_tags, {
-    Name = "prod-IGW"
+    Name = "prod-IGW-${var.environment_suffix}"
   })
 }
 
@@ -114,7 +120,7 @@ resource "aws_subnet" "public_subnets" {
   map_public_ip_on_launch = true
 
   tags = merge(local.common_tags, {
-    Name = "prod-subnet-public-${substr(local.azs[count.index], -1, 1)}"
+    Name = "prod-subnet-public-${substr(local.azs[count.index], -1, 1)}-${var.environment_suffix}"
     Type = "Public"
   })
 }
@@ -131,7 +137,7 @@ resource "aws_subnet" "private_subnets" {
   availability_zone = local.azs[count.index]
 
   tags = merge(local.common_tags, {
-    Name = "prod-subnet-private-${substr(local.azs[count.index], -1, 1)}"
+    Name = "prod-subnet-private-${substr(local.azs[count.index], -1, 1)}-${var.environment_suffix}"
     Type = "Private"
   })
 }
@@ -146,7 +152,7 @@ resource "aws_eip" "nat_eips" {
   domain = "vpc"
 
   tags = merge(local.common_tags, {
-    Name = "prod-EIP-NAT-${substr(local.azs[count.index], -1, 1)}"
+    Name = "prod-EIP-NAT-${substr(local.azs[count.index], -1, 1)}-${var.environment_suffix}"
   })
 
   depends_on = [aws_internet_gateway.prod_igw]
@@ -163,7 +169,7 @@ resource "aws_nat_gateway" "nat_gateways" {
   subnet_id     = aws_subnet.public_subnets[count.index].id
 
   tags = merge(local.common_tags, {
-    Name = "prod-NAT-${substr(local.azs[count.index], -1, 1)}"
+    Name = "prod-NAT-${substr(local.azs[count.index], -1, 1)}-${var.environment_suffix}"
   })
 
   depends_on = [aws_internet_gateway.prod_igw]
@@ -182,7 +188,7 @@ resource "aws_route_table" "public_route_table" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "prod-route-table-public"
+    Name = "prod-route-table-public-${var.environment_suffix}"
     Type = "Public"
   })
 }
@@ -210,7 +216,7 @@ resource "aws_route_table" "private_route_tables" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "prod-route-table-private-${substr(local.azs[count.index], -1, 1)}"
+    Name = "prod-route-table-private-${substr(local.azs[count.index], -1, 1)}-${var.environment_suffix}"
     Type = "Private"
   })
 }
@@ -229,7 +235,7 @@ resource "aws_route_table_association" "private_associations" {
 
 # Web Server Security Group
 resource "aws_security_group" "web_server_sg" {
-  name_prefix = "prod-web-server-sg"
+  name_prefix = "prod-web-server-sg-${var.environment_suffix}-"
   description = "Security group for web servers"
   vpc_id      = aws_vpc.prod_vpc.id
 
@@ -261,13 +267,13 @@ resource "aws_security_group" "web_server_sg" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "prod-web-server-sg"
+    Name = "prod-web-server-sg-${var.environment_suffix}"
   })
 }
 
 # Private Instance Security Group
 resource "aws_security_group" "private_instance_sg" {
-  name_prefix = "prod-private-instance-sg"
+  name_prefix = "prod-private-instance-sg-${var.environment_suffix}-"
   description = "Security group for private instances with restricted outbound"
   vpc_id      = aws_vpc.prod_vpc.id
 
@@ -307,7 +313,7 @@ resource "aws_security_group" "private_instance_sg" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "prod-private-instance-sg"
+    Name = "prod-private-instance-sg-${var.environment_suffix}"
   })
 }
 
@@ -317,7 +323,7 @@ resource "aws_security_group" "private_instance_sg" {
 
 # IAM Role for EC2 instances
 resource "aws_iam_role" "ec2_role" {
-  name = "prod-ec2-s3-readonly-role"
+  name = "prod-ec2-s3-readonly-role-${var.environment_suffix}"
   path = "/"
 
   assume_role_policy = jsonencode({
@@ -338,7 +344,7 @@ resource "aws_iam_role" "ec2_role" {
 
 # IAM Policy for S3 read-only access
 resource "aws_iam_policy" "s3_readonly_policy" {
-  name        = "prod-s3-backup-readonly-policy"
+  name        = "prod-s3-backup-readonly-policy-${var.environment_suffix}"
   path        = "/"
   description = "Read-only access to backup S3 bucket"
 
@@ -372,7 +378,7 @@ resource "aws_iam_role_policy_attachment" "ec2_s3_attachment" {
 
 # Instance Profile for EC2
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "prod-ec2-instance-profile"
+  name = "prod-ec2-instance-profile-${var.environment_suffix}"
   role = aws_iam_role.ec2_role.name
 
   tags = local.common_tags
@@ -384,7 +390,7 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 
 # CloudWatch Log Group for VPC Flow Logs
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
-  name              = "/aws/vpc/prod-vpc-flow-logs"
+  name              = "/aws/vpc/prod-vpc-flow-logs-${var.environment_suffix}"
   retention_in_days = 30
 
   tags = local.common_tags
@@ -392,7 +398,7 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
 
 # IAM Role for VPC Flow Logs
 resource "aws_iam_role" "vpc_flow_log_role" {
-  name = "prod-vpc-flow-log-role"
+  name = "prod-vpc-flow-log-role-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -412,7 +418,7 @@ resource "aws_iam_role" "vpc_flow_log_role" {
 
 # IAM Policy for VPC Flow Logs
 resource "aws_iam_role_policy" "vpc_flow_log_policy" {
-  name = "prod-vpc-flow-log-policy"
+  name = "prod-vpc-flow-log-policy-${var.environment_suffix}"
   role = aws_iam_role.vpc_flow_log_role.id
 
   policy = jsonencode({
@@ -441,7 +447,7 @@ resource "aws_flow_log" "vpc_flow_log" {
   vpc_id          = aws_vpc.prod_vpc.id
 
   tags = merge(local.common_tags, {
-    Name = "prod-vpc-flow-logs"
+    Name = "prod-vpc-flow-logs-${var.environment_suffix}"
   })
 }
 
@@ -451,7 +457,7 @@ resource "aws_flow_log" "vpc_flow_log" {
 
 # Metric Filter for DDoS Detection
 resource "aws_cloudwatch_log_metric_filter" "ddos_detection" {
-  name           = "prod-ddos-detection-filter"
+  name           = "prod-ddos-detection-filter-${var.environment_suffix}"
   log_group_name = aws_cloudwatch_log_group.vpc_flow_logs.name
   pattern        = "[version, account, eni, source, destination, srcport, destport, protocol, packets > 10000, bytes, windowstart, windowend, action, flowlogstatus]"
 
@@ -465,7 +471,7 @@ resource "aws_cloudwatch_log_metric_filter" "ddos_detection" {
 
 # CloudWatch Alarm for potential DDoS
 resource "aws_cloudwatch_metric_alarm" "ddos_alarm" {
-  alarm_name          = "prod-potential-ddos-alarm"
+  alarm_name          = "prod-potential-ddos-alarm-${var.environment_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "HighPacketCount"
@@ -490,7 +496,7 @@ resource "aws_vpn_gateway" "prod_vpn_gateway" {
   vpc_id = aws_vpc.prod_vpc.id
 
   tags = merge(local.common_tags, {
-    Name = "prod-VPN-Gateway"
+    Name = "prod-VPN-Gateway-${var.environment_suffix}"
   })
 }
 
@@ -514,7 +520,7 @@ resource "aws_customer_gateway" "main" {
   type       = "ipsec.1"
 
   tags = merge(local.common_tags, {
-    Name = "prod-Customer-Gateway"
+    Name = "prod-Customer-Gateway-${var.environment_suffix}"
   })
 }
 
@@ -526,7 +532,7 @@ resource "aws_vpn_connection" "main" {
   static_routes_only  = true
 
   tags = merge(local.common_tags, {
-    Name = "prod-VPN-Connection"
+    Name = "prod-VPN-Connection-${var.environment_suffix}"
   })
 }
 

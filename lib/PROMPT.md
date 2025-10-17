@@ -1,121 +1,70 @@
-You are tasked with creating a secure and production-ready network infrastructure for an AWS environment using Terraform.
-The architecture must emphasize security, scalability, and compliance while following AWS best practices and organizational naming standards.
+Hey team,
 
-This infrastructure will serve as the backbone for production workloads requiring network segmentation, VPN-based secure access, and centralized monitoring with VPC Flow Logs and CloudWatch alarms.
+We need to build a secure and production-ready network infrastructure for our AWS environment using Terraform. This is going to serve as the backbone for our production workloads, so security and scalability are critical. Let me break down what we need.
 
-Core Implementation Requirements
+## Network Infrastructure Requirements
 
-VPC & Subnets
+We need a VPC called prod-VPC with a proper multi-AZ setup. I want two Availability Zones with both public and private subnets in each:
 
-Create a VPC named prod-VPC.
+- Public subnets: prod-subnet-public-a, prod-subnet-public-b  
+- Private subnets: prod-subnet-private-a, prod-subnet-private-b
 
-Define two Availability Zones (AZs).
+Make sure we have proper CIDR allocation and tag everything consistently.
 
-Within each AZ, create:
+## Internet Access & NAT Gateways
 
-One public subnet (e.g., prod-subnet-public-a, prod-subnet-public-b)
+Set up NAT Gateways in each public subnet - we need high availability here, so one NAT per AZ. Each NAT should have its own Elastic IP. The private subnets need to route outbound traffic through these NAT Gateways for internet access.
 
-One private subnet (e.g., prod-subnet-private-a, prod-subnet-private-b)
+Also need an Internet Gateway attached to the VPC with proper routing for the public subnets.
 
-Ensure proper CIDR allocation and tagging for all resources.
+## Security Groups
 
-NAT Gateways
+Create two security groups with least privilege access:
 
-Deploy a NAT Gateway in each public subnet.
+**Web server security group:**
+- SSH access (port 22) only from our office CIDR range - definitely not from 0.0.0.0/0!
+- HTTP access (port 80) from anywhere for web traffic
 
-Associate Elastic IPs with NAT Gateways.
+**Private instance security group:**
+- Only allow HTTPS outbound (port 443) 
+- Restrict everything else - we want tight control here
 
-Configure private route tables to use the NAT Gateways for outbound internet access.
+## IAM Setup
 
-Internet Gateway & Routing
+Need an IAM Role for our EC2 instances with read-only access to our S3 backup bucket. Set this up with proper IAM Policy and Instance Profile - no hardcoded credentials anywhere.
 
-Attach an Internet Gateway (IGW) to the VPC.
+## Monitoring & VPN
 
-Configure public route tables for internet access.
+Enable VPC Flow Logs and send them to CloudWatch Logs. Set up a CloudWatch Alarm to detect potential DDoS activity when traffic spikes above normal thresholds.
 
-Security Groups
+For secure remote access, implement a VPN Gateway and associate it with the VPC.
 
-Create a web server security group:
+## Naming and Compliance
 
-Allow SSH (port 22) access from a specific IP range (e.g., your office CIDR).
+Follow our standard naming conventions:
+- VPC: prod-VPC
+- Subnets: prod-subnet-public-a, prod-subnet-private-b, etc.
+- Use organization-approved secure AMIs only
+- Tag everything consistently for environment and ownership
 
-Allow HTTP (port 80) access from anywhere.
+## Technical Constraints
 
-Create a private instance security group:
+Put everything in a single Terraform file (main.tf) - no modules for this one. The template needs to be valid and deployable. Keep security tight with least privilege IAM and minimal open ports.
 
-Restrict outbound traffic to HTTPS (port 443) only.
+Use variables and locals for AZs, CIDR ranges, and consistent naming. Make sure all the subnet routing and NAT Gateway dependencies are handled properly.
 
-Ensure least privilege rules are followed.
+Keep the code organized with comments and logical grouping even though it's all in one file.
 
-IAM Roles
+## What I Need
 
-Create an IAM Role for EC2 instances with:
+A single Terraform file that:
+- Defines all the AWS resources listed above
+- Implements secure network segmentation  
+- Provides internet access via NAT Gateways for private subnets only
+- Includes IAM roles, logging, monitoring, and VPN Gateway
+- Follows Terraform best practices with proper tagging and dependencies
+- Passes our security and compliance checks for production use
 
-Read-only access to an S3 bucket used for backups.
+The output needs to be ready to deploy with `terraform apply` after initialization. Make sure the HCL syntax is correct and include inline comments explaining each resource.
 
-Attach an appropriate IAM Policy and Instance Profile.
-
-Monitoring & Logging
-
-Enable VPC Flow Logs to capture network traffic.
-
-Deliver logs to CloudWatch Logs.
-
-Create a CloudWatch Alarm that triggers when VPC traffic exceeds thresholds (indicating potential DDoS activity).
-
-VPN Gateway
-
-Implement a VPN Gateway to enable secure remote access.
-
-Associate it with the VPC for administrative access.
-
-Compliance & Naming
-
-Follow naming conventions:
-
-VPC: prod-VPC
-
-Subnets: prod-subnet-public-a, prod-subnet-private-b, etc.
-
-Ensure AMIs used for EC2 instances are organization-approved secure AMIs.
-
-Apply consistent tagging across all resources for environment and ownership.
-
-Constraints
-
-All resources must be declared in a single Terraform file (main.tf).
-
-The template must be valid, deployable, and follow Terraform best practices.
-
-Implement least privilege IAM and minimal open ports.
-
-Use variables and locals for AZs, CIDR ranges, and resource naming consistency.
-
-Ensure inter-subnet routing and NAT Gateway dependencies are properly handled.
-
-Maintain clean modular organization within a single file (using comments and logical grouping).
-
-Expected Output
-
-A single Terraform file (main.tf) that:
-
-Defines all AWS resources listed above.
-
-Implements secure network segmentation.
-
-Provides internet access only via NAT Gateways for private subnets.
-
-Includes IAM roles, logging, monitoring, and VPN Gateway.
-
-Follows Terraform best practices, including tags, naming standards, and dependencies.
-
-Passes compliance and security checks for production-grade infrastructure.
-
-
-Output Instructions 
-
-You must output a single complete Terraform file named main.tf that includes all the above requirements in one file.
-Be formatted correctly in HCL syntax.
-Do not split the solution into modules or multiple files.
-Use Terraform syntax blocks and include inline comments explaining each resource.
-The output must be ready to deploy on AWS using terraform apply after initialization.
+This is going into production, so let's make sure it's solid!
