@@ -134,8 +134,7 @@ class MonitoringStack:
         
         # High CPU alarm
         aws.cloudwatch.MetricAlarm(
-            f"{self.name}-{deployment_type}-cpu-alarm",
-            alarm_name=f"{self.name}-{deployment_type}-high-cpu",
+            f"{self.name}-{deployment_type}-high-cpu",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=2,
             threshold=80,
@@ -154,8 +153,7 @@ class MonitoringStack:
         
         # High Memory alarm
         aws.cloudwatch.MetricAlarm(
-            f"{self.name}-{deployment_type}-memory-alarm",
-            alarm_name=f"{self.name}-{deployment_type}-high-memory",
+            f"{self.name}-{deployment_type}-high-memory",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=2,
             threshold=85,
@@ -174,8 +172,7 @@ class MonitoringStack:
         
         # Running task count alarm
         aws.cloudwatch.MetricAlarm(
-            f"{self.name}-{deployment_type}-task-alarm",
-            alarm_name=f"{self.name}-{deployment_type}-low-tasks",
+            f"{self.name}-{deployment_type}-low-tasks",
             comparison_operator="LessThanThreshold",
             evaluation_periods=2,
             threshold=1,
@@ -200,8 +197,7 @@ class MonitoringStack:
         
         # High latency alarm
         aws.cloudwatch.MetricAlarm(
-            f"{self.name}-alb-latency-alarm",
-            alarm_name=f"{self.name}-alb-high-latency",
+            f"{self.name}-alb-high-latency",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=2,
             threshold=1.0,
@@ -219,8 +215,7 @@ class MonitoringStack:
         
         # High 5xx errors alarm
         aws.cloudwatch.MetricAlarm(
-            f"{self.name}-alb-5xx-alarm",
-            alarm_name=f"{self.name}-alb-high-5xx",
+            f"{self.name}-alb-high-5xx",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=2,
             threshold=10,
