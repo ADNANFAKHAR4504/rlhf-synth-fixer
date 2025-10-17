@@ -207,7 +207,7 @@ class TapStack(cdk.Stack):
                 "LOG_LEVEL": "INFO"
             },
             role=self.lambda_role,
-            reserved_concurrent_executions=1000,  # Limit concurrent executions
+            reserved_concurrent_executions=10,  # Limit concurrent executions
             log_group=self.lambda_log_group,
             tracing=_lambda.Tracing.ACTIVE  # Enable X-Ray tracing
         )
