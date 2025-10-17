@@ -12,3 +12,4 @@ Create a single Terraform configuration file named tap_stack.tf containing all v
 11.Ensure compliance with all security constraints including least privilege IAM roles.
 12. Use consistent, descriptive naming conventions defined by locals or input variables for all resources for easier management.
 13. Give character size 4 suffix in small letters only with each resource so that stack dont get error of "resource already exists". Also use small characters only for this suffix. 
+14. S3 access logging, VPC flow logs and KMS encryption for S3 is not required as per the task requirement.
