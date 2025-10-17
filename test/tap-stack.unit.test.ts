@@ -406,7 +406,7 @@ describe('TapStack CloudFormation Template - Comprehensive Cloud Environment', (
       const asg = template.Resources.AutoScalingGroup;
       expect(asg.Type).toBe('AWS::AutoScaling::AutoScalingGroup');
       expect(asg.Properties.LaunchTemplate.LaunchTemplateId).toEqual({ Ref: 'LaunchTemplate' });
-      expect(asg.Properties.LaunchTemplate.Version).toBe('$Latest');
+      expect(asg.Properties.LaunchTemplate.Version).toEqual({ 'Fn::GetAtt': ['LaunchTemplate', 'LatestVersionNumber'] });
     });
 
     test('should create Auto Scaling Group with correct size configuration', () => {

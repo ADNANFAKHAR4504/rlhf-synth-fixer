@@ -972,7 +972,12 @@ The architecture achieves high availability through multiple mechanisms. Two NAT
           "LaunchTemplateId": {
             "Ref": "LaunchTemplate"
           },
-          "Version": "$Latest"
+          "Version": {
+            "Fn::GetAtt": [
+              "LaunchTemplate",
+              "LatestVersionNumber"
+            ]
+          }
         },
         "MinSize": {
           "Ref": "MinSize"
@@ -1976,7 +1981,7 @@ The architecture achieves high reliability through multi-layer redundancy. Resou
 
 ### Auto Scaling with Launch Templates
 
-The infrastructure uses Launch Templates rather than legacy Launch Configurations. Launch Templates support versioning (using $Latest for automatic updates), allowing configuration updates without replacement and enabling easy rollback. The template references the latest version dynamically, ensuring the Auto Scaling Group always uses the most recent configuration. Launch Templates support more instance features than Launch Configurations including T2/T3 unlimited mode, dedicated hosts, and placement groups. The user data script installs required software (httpd, mysql, jq, CloudWatch agent) and starts services automatically on instance launch. Tag specifications in the Launch Template automatically tag instances created by the ASG.
+The infrastructure uses Launch Templates rather than legacy Launch Configurations. Launch Templates support versioning (using GetAtt LatestVersionNumber for automatic updates), allowing configuration updates without replacement and enabling easy rollback. The template references the latest version dynamically using Fn::GetAtt, ensuring the Auto Scaling Group always uses the most recent configuration. Launch Templates support more instance features than Launch Configurations including T2/T3 unlimited mode, dedicated hosts, and placement groups. The user data script installs required software (httpd, mysql, jq, CloudWatch agent, SSM agent) and starts services automatically on instance launch. Tag specifications in the Launch Template automatically tag instances created by the ASG.
 
 ### Secrets Manager for Credential Management
 
