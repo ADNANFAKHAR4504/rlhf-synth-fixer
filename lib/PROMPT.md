@@ -51,7 +51,7 @@ Create a real-time IoT sensor data processing system using **CDKTF with Python**
 - Use **AWS ElastiCache Redis** for caching layer
 - Use **AWS RDS PostgreSQL** for permanent storage
 - Use **AWS Secrets Manager** with 30-day automatic rotation
-- Deploy to **eu-west-1** region
+- Deploy to **eu-west-2** region
 - Create VPC with public and private subnets across at least 2 Availability Zones
 - Resource names must include a **string suffix** for uniqueness
 - Follow naming convention: `resource-type-environment-suffix`
@@ -61,7 +61,7 @@ Create a real-time IoT sensor data processing system using **CDKTF with Python**
 
 ### Constraints
 
-- ALL resources must be deployed in **eu-west-1** region
+- ALL resources must be deployed in **eu-west-2** region
 - Database credentials must rotate automatically every **30 days** via Secrets Manager
 - System must handle **real-time data processing** from IoT sensors
 - Data must be stored securely for **manufacturing compliance**

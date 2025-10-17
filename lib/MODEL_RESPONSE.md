@@ -1,6 +1,6 @@
 # Manufacturing IoT Sensor Data Processing System - CDKTF Python Implementation
 
-This implementation provides a complete real-time IoT sensor data processing system using CDKTF with Python, deployed in the eu-west-1 region.
+This implementation provides a complete real-time IoT sensor data processing system using CDKTF with Python, deployed in the eu-west-2 region.
 
 ## Architecture Overview
 
@@ -61,7 +61,7 @@ class TapStack(TerraformStack):
 
         # Extract configuration from kwargs
         environment_suffix = kwargs.get('environment_suffix', 'dev')
-        aws_region = kwargs.get('aws_region', 'eu-west-1')
+        aws_region = kwargs.get('aws_region', 'eu-west-2')
         state_bucket_region = kwargs.get('state_bucket_region', 'us-east-1')
         state_bucket = kwargs.get('state_bucket', 'iac-rlhf-tf-states')
         default_tags = kwargs.get('default_tags', {})
@@ -700,7 +700,7 @@ class TapStack(TerraformStack):
 
 ### Deployment Considerations
 
-1. **Region**: All resources deployed to eu-west-1
+1. **Region**: All resources deployed to eu-west-2
 2. **Naming**: All resources include environment_suffix for uniqueness
 3. **Destroyability**: skip_final_snapshot=true, deletion_protection=false
 4. **Cost Optimization**: Using t3.micro instances for development/testing
