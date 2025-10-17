@@ -10,6 +10,7 @@
     "Serverless Infrastructure (Functions as Code)"
   ],
   "po_id": "4660942654",
+  "background": "Infrastructure task for CloudFormation",
   "aws_services": [
     "S3",
     "MediaConvert",
