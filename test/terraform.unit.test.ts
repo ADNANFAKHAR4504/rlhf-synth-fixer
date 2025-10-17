@@ -530,3 +530,4 @@ test("Unit requirements coverage summary (>=95%)", () => {
   console.log(`Unit requirements coverage: ${passed}/${total} (${pct}%)`);
   expect(pct).toBeGreaterThanOrEqual(100);
 });
+
