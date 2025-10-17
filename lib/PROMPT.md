@@ -1,1 +1,15 @@
-Please design a production-ready CDKTF (Cloud Development Kit for Terraform) solution using TypeScript to deploy a robust, highly-available, and secure containerized web application on AWS in the us-east-1 region. The infrastructure must be split into two files: a reusable module (modules.ts) and the main stack definition (taps-stack.ts). This deployment needs to leverage Amazon ECS Fargate for container orchestration with automatic scaling across multiple Availability Zones, use an Application Load Balancer (ALB) for traffic distribution, and include a private, multi-AZ PostgreSQL RDS instance for the application database. Crucially, the solution must adhere to strict security standards by integrating AWS Secrets Manager for database credentials, utilizing IAM roles for least-privilege permissions, enforcing encryption in transit and at rest, managing DNS via Amazon Route 53, using Amazon S3 for static assets, and ensuring comprehensive logging and metrics capture with CloudWatch. The final output should only be the complete, well-structured TypeScript code for the two specified files, ready for execution.
+Hey team, we need to build a production-grade containerized web app on AWS using CDKTF with TypeScript. The app needs to be super robust and secure, running in us-east-1.
+
+Here's what we're looking for - split the code into two files: modules.ts for reusable components and taps-stack.ts for the main stack. 
+
+For the architecture, we want:
+- ECS Fargate to run our containers with auto-scaling across multiple AZs
+- Application Load Balancer to handle traffic distribution
+- Private PostgreSQL RDS instance with multi-AZ setup for the database
+- Proper security with Secrets Manager for DB creds, least-privilege IAM roles
+- Everything encrypted in transit and at rest
+- Route 53 for DNS management
+- S3 bucket for static assets
+- CloudWatch for comprehensive logging and monitoring
+
+Just give us the complete TypeScript code for both files - ready to deploy!

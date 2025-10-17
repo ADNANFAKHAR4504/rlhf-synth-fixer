@@ -10,5 +10,21 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC"
+  "background": "Production-ready CDKTF containerized web application with ECS Fargate, RDS, ALB, and S3",
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS", 
+    "ECS",
+    "ALB",
+    "S3",
+    "CloudWatch",
+    "Secrets Manager",
+    "IAM",
+    "Application Auto Scaling",
+    "SNS",
+    "WAF",
+    "AWS Backup"
+  ]
 }
