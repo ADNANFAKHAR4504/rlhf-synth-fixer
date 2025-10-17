@@ -1,5 +1,5 @@
-import 'cdktf/lib/testing/adapters/jest';
 import { Testing } from 'cdktf';
+import 'cdktf/lib/testing/adapters/jest';
 import { TapStack } from '../lib/tap-stack';
 
 describe('TapStack', () => {
@@ -491,6 +491,112 @@ describe('TapStack', () => {
         rule.from_port === 80 && rule.type === 'ingress'
       );
       expect(httpRule).toBeDefined();
+    });
+  });
+
+  describe('Environment Variable Handling', () => {
+    it('should use AWS_REGION environment variable in ECS logs when set', () => {
+      const originalRegion = process.env.AWS_REGION;
+      process.env.AWS_REGION = 'eu-central-1';
+
+      const appWithRegion = Testing.app();
+      const stackWithRegion = new TapStack(appWithRegion, 'test-stack-env-region', {
+        environmentSuffix: testEnvironmentSuffix,
+      });
+      const synthesizedWithRegion = Testing.synth(stackWithRegion);
+      const resourcesWithRegion = JSON.parse(synthesizedWithRegion);
+
+      const taskDefs = resourcesWithRegion.resource?.aws_ecs_task_definition || {};
+      const taskDef = taskDefs[Object.keys(taskDefs)[0]];
+      const containerDefs = JSON.parse(taskDef.container_definitions);
+      const logConfig = containerDefs[0].logConfiguration.options;
+
+      expect(logConfig['awslogs-region']).toBe('eu-central-1');
+
+      // Restore original
+      if (originalRegion) {
+        process.env.AWS_REGION = originalRegion;
+      } else {
+        delete process.env.AWS_REGION;
+      }
+    });
+
+    it('should use default region in ECS logs when AWS_REGION not set', () => {
+      const originalRegion = process.env.AWS_REGION;
+      delete process.env.AWS_REGION;
+
+      const appNoRegion = Testing.app();
+      const stackNoRegion = new TapStack(appNoRegion, 'test-stack-no-env-region', {
+        environmentSuffix: testEnvironmentSuffix,
+      });
+      const synthesizedNoRegion = Testing.synth(stackNoRegion);
+      const resourcesNoRegion = JSON.parse(synthesizedNoRegion);
+
+      const taskDefs = resourcesNoRegion.resource?.aws_ecs_task_definition || {};
+      const taskDef = taskDefs[Object.keys(taskDefs)[0]];
+      const containerDefs = JSON.parse(taskDef.container_definitions);
+      const logConfig = containerDefs[0].logConfiguration.options;
+
+      expect(logConfig['awslogs-region']).toBe('us-west-2');
+
+      // Restore original
+      if (originalRegion) {
+        process.env.AWS_REGION = originalRegion;
+      }
+    });
+
+    it('should use AWS_REGION environment variable in RDS rotation Lambda when set', () => {
+      const originalRegion = process.env.AWS_REGION;
+      process.env.AWS_REGION = 'ap-southeast-1';
+
+      const appWithRegion = Testing.app();
+      const stackWithRegion = new TapStack(appWithRegion, 'test-stack-rds-env-region', {
+        environmentSuffix: testEnvironmentSuffix,
+      });
+      const synthesizedWithRegion = Testing.synth(stackWithRegion);
+      const resourcesWithRegion = JSON.parse(synthesizedWithRegion);
+
+      const lambdas = resourcesWithRegion.resource?.aws_lambda_function || {};
+      const rotationLambda = Object.values(lambdas).find((lambda: any) =>
+        lambda.function_name?.includes('rotation')
+      );
+
+      expect(rotationLambda).toBeDefined();
+      const lambdaEnv = (rotationLambda as any).environment?.variables;
+      expect(lambdaEnv?.SECRETS_MANAGER_ENDPOINT).toContain('ap-southeast-1');
+
+      // Restore original
+      if (originalRegion) {
+        process.env.AWS_REGION = originalRegion;
+      } else {
+        delete process.env.AWS_REGION;
+      }
+    });
+
+    it('should use default region in RDS rotation Lambda when AWS_REGION not set', () => {
+      const originalRegion = process.env.AWS_REGION;
+      delete process.env.AWS_REGION;
+
+      const appNoRegion = Testing.app();
+      const stackNoRegion = new TapStack(appNoRegion, 'test-stack-rds-no-env-region', {
+        environmentSuffix: testEnvironmentSuffix,
+      });
+      const synthesizedNoRegion = Testing.synth(stackNoRegion);
+      const resourcesNoRegion = JSON.parse(synthesizedNoRegion);
+
+      const lambdas = resourcesNoRegion.resource?.aws_lambda_function || {};
+      const rotationLambda = Object.values(lambdas).find((lambda: any) =>
+        lambda.function_name?.includes('rotation')
+      );
+
+      expect(rotationLambda).toBeDefined();
+      const lambdaEnv = (rotationLambda as any).environment?.variables;
+      expect(lambdaEnv?.SECRETS_MANAGER_ENDPOINT).toContain('us-west-2');
+
+      // Restore original
+      if (originalRegion) {
+        process.env.AWS_REGION = originalRegion;
+      }
     });
   });
 });
