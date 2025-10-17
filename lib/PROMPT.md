@@ -2,7 +2,7 @@ I want to design a fully serverless e-commerce application using the AWS CDK in 
 
 At the heart of this setup, I’ll have an **API Gateway** that exposes several HTTP endpoints to handle product CRUD operations. Each of these requests should be processed by an **AWS Lambda** function written in Python. The Lambda functions will handle the logic for creating, reading, updating, and deleting products, while logging important events and errors to **CloudWatch Logs** for observability.
 
-Product data will be stored in a **DynamoDB** table, which should have a clearly defined primary key for fast read and write operations. Product images will live in an **S3 bucket**, and the application should generate public-access links so that images can be displayed on the front end — though the bucket itself should remain secure and non-public.
+Product data will be stored in a **DynamoDB** table, which should have a clearly defined primary key for fast read and write operations.
 
 All data, whether stored or transmitted, must be encrypted. IAM roles and policies should be crafted carefully to ensure the principle of least privilege is applied across all services. To make the system more robust, I’ll integrate **SNS (Simple Notification Service)** to send alerts whenever product inventory levels change — this will help notify relevant systems or users automatically.
 
