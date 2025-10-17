@@ -126,7 +126,8 @@ export class TapStack extends cdk.Stack {
       },
       memorySize: 3008, // Maximum memory for better performance
       timeout: cdk.Duration.seconds(300),
-      reservedConcurrentExecutions: 1000, // Handle high throughput
+      // Note: Removed reservedConcurrentExecutions to use account-level unreserved capacity
+      // This allows Lambda to scale automatically while respecting account limits
       deadLetterQueue: dlq,
       logRetention: logs.RetentionDays.ONE_MONTH,
       tracing: lambda.Tracing.ACTIVE,
