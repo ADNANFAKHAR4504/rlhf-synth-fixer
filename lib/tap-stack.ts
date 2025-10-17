@@ -2,10 +2,12 @@
  * tap-stack.ts
  * 
  * Production-grade infrastructure for fintech trading analytics platform.
+ * Includes auto-generated secure database password.
  */
 
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as random from '@pulumi/random';
 import { ResourceOptions } from '@pulumi/pulumi';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -55,6 +57,7 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly auroraCluster: aws.rds.Cluster;
   public readonly auroraWriterInstance: aws.rds.ClusterInstance;
   public readonly auroraReaderInstance: aws.rds.ClusterInstance;
+  public readonly dbSecret: aws.secretsmanager.Secret;
   
   // ECS Services
   public readonly apiService: aws.ecs.Service;
@@ -122,6 +125,7 @@ export class TapStack extends pulumi.ComponentResource {
     this.auroraCluster = databaseResources.auroraCluster;
     this.auroraWriterInstance = databaseResources.auroraWriterInstance;
     this.auroraReaderInstance = databaseResources.auroraReaderInstance;
+    this.dbSecret = databaseResources.dbSecret;
 
     // === PHASE 4: IAM ROLES (NOW AFTER DATABASE) ===
     const iamResources = this.createIAMRoles();
@@ -180,6 +184,7 @@ export class TapStack extends pulumi.ComponentResource {
       albDns: this.alb.dnsName,
       ecsClusterName: this.ecsCluster.name,
       auroraEndpoint: this.auroraCluster.endpoint,
+      dbSecretArn: this.dbSecret.arn,
     });
   }
 
@@ -372,14 +377,42 @@ export class TapStack extends pulumi.ComponentResource {
       tags: { ...this.defaultTags, Name: `tap-aurora-params` },
     }, { parent: this });
 
-    const dbPassword = this.config.requireSecret('dbPassword');
+    // Generate a secure random password automatically
+    const dbPassword = new random.RandomPassword(`tap-db-password-${this.environmentSuffix}`, {
+      length: 32,
+      special: true,
+      overrideSpecial: '!#$%&*()-_=+[]{}<>:?',
+      minLower: 1,
+      minUpper: 1,
+      minNumeric: 1,
+      minSpecial: 1,
+    }, { parent: this });
+
+    // Store the password in AWS Secrets Manager for secure access
+    const dbSecret = new aws.secretsmanager.Secret(`tap-db-secret-${this.environmentSuffix}`, {
+      name: `tap-aurora-password-${this.environmentSuffix}`,
+      description: 'Aurora PostgreSQL master password',
+      tags: { ...this.defaultTags, Name: `tap-db-secret` },
+    }, { parent: this });
+
+    new aws.secretsmanager.SecretVersion(`tap-db-secret-version-${this.environmentSuffix}`, {
+      secretId: dbSecret.id,
+      secretString: pulumi.jsonStringify({
+        username: 'dbadmin',
+        password: dbPassword.result,
+        engine: 'postgres',
+        host: this.auroraCluster?.endpoint || '',
+        port: 5432,
+        dbname: 'tradinganalytics',
+      }),
+    }, { parent: this });
     
     const auroraCluster = new aws.rds.Cluster(`tap-aurora-cluster-${this.environmentSuffix}`, {
       engine: 'aurora-postgresql',
       engineVersion: '14.6',
       databaseName: 'tradinganalytics',
       masterUsername: 'dbadmin',
-      masterPassword: dbPassword,
+      masterPassword: dbPassword.result,
       dbSubnetGroupName: auroraSubnetGroup.name,
       dbClusterParameterGroupName: auroraParameterGroup.name,
       vpcSecurityGroupIds: [this.rdsSecurityGroup.id],
@@ -416,7 +449,7 @@ export class TapStack extends pulumi.ComponentResource {
       tags: { ...this.defaultTags, Name: `tap-aurora-reader`, Role: 'reader' },
     }, { parent: this });
 
-    return { auroraSubnetGroup, auroraParameterGroup, auroraCluster, auroraWriterInstance, auroraReaderInstance };
+    return { auroraSubnetGroup, auroraParameterGroup, auroraCluster, auroraWriterInstance, auroraReaderInstance, dbSecret };
   }
 
   private createIAMRoles() {
@@ -468,13 +501,21 @@ export class TapStack extends pulumi.ComponentResource {
 
     new aws.iam.RolePolicy(`tap-task-app-policy-${this.environmentSuffix}`, {
       role: ecsTaskRole.id,
-      policy: this.auroraCluster.arn.apply(clusterArn => JSON.stringify({
+      policy: pulumi.all([this.auroraCluster.arn, this.dbSecret.arn]).apply(([clusterArn, secretArn]) => JSON.stringify({
         Version: '2012-10-17',
         Statement: [
           {
             Effect: 'Allow',
             Action: ['rds-db:connect'],
             Resource: [`${clusterArn}:dbuser/*`],
+          },
+          {
+            Effect: 'Allow',
+            Action: [
+              'secretsmanager:GetSecretValue',
+              'secretsmanager:DescribeSecret'
+            ],
+            Resource: [secretArn],
           },
           {
             Effect: 'Allow',
@@ -797,8 +838,8 @@ export class TapStack extends pulumi.ComponentResource {
       memory: '2048',
       executionRoleArn: this.ecsTaskExecutionRole.arn,
       taskRoleArn: this.ecsTaskRole.arn,
-      containerDefinitions: pulumi.all([this.ecrApiRepository.repositoryUrl, this.auroraCluster.endpoint, apiLogGroup.name])
-        .apply(([repoUrl, dbEndpoint, logGroupName]) => JSON.stringify([{
+      containerDefinitions: pulumi.all([this.ecrApiRepository.repositoryUrl, this.auroraCluster.endpoint, apiLogGroup.name, this.dbSecret.arn])
+        .apply(([repoUrl, dbEndpoint, logGroupName, secretArn]) => JSON.stringify([{
           name: 'api',
           image: `${repoUrl}:latest`,
           essential: true,
@@ -809,6 +850,7 @@ export class TapStack extends pulumi.ComponentResource {
             { name: 'DB_PORT', value: '5432' },
             { name: 'DB_NAME', value: 'tradinganalytics' },
             { name: 'DB_USER', value: 'dbadmin' },
+            { name: 'DB_SECRET_ARN', value: secretArn },
             { name: 'USE_IAM_AUTH', value: 'true' },
             { name: 'CIRCUIT_BREAKER_TIMEOUT', value: '30000' },
             { name: 'CIRCUIT_BREAKER_MAX_RETRIES', value: '3' },
@@ -1056,6 +1098,7 @@ export class TapStack extends pulumi.ComponentResource {
       auroraClusterReaderEndpoint: this.auroraCluster.readerEndpoint,
       auroraClusterArn: this.auroraCluster.arn,
       auroraClusterId: this.auroraCluster.id,
+      dbSecretArn: this.dbSecret.arn,
       ecrApiRepositoryUrl: this.ecrApiRepository.repositoryUrl,
       ecrFrontendRepositoryUrl: this.ecrFrontendRepository.repositoryUrl,
       apiLogGroupName: this.apiLogGroup.name,
