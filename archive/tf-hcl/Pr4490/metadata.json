@@ -1,0 +1,39 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350209",
+  "team": "4",
+  "startedAt": "2025-10-15T08:36:53.612Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code",
+    "Multi-Account Security Infrastructure",
+    "Compliance Automation",
+    "Infrastructure Security Best Practices"
+  ],
+  "aws_services": "S3 Bucket, CloudTrail, IAM, CloudWatch, RDS, VPC, AWS Config, GuardDuty, Shield Advanced, Secrets Manager, KMS, Lambda, EventBridge",
+  "testDependencies": {
+    "jest": "^29.0.0",
+    "@types/jest": "^29.0.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "ts-jest": "^29.0.0",
+    "@aws-sdk/client-cloudformation": "^3.883.0",
+    "@aws-sdk/client-s3": "^3.855.0",
+    "@aws-sdk/client-rds": "^3.856.0",
+    "@aws-sdk/client-ec2": "^3.846.0",
+    "@aws-sdk/client-secrets-manager": "^3.609.0",
+    "@aws-sdk/client-guardduty": "^3.856.0",
+    "@aws-sdk/client-config-service": "^3.856.0"
+  },
+  "training_quality": 9,
+  "background": "Design and implement a production-grade, secure AWS infrastructure using Terraform for a multi-account environment. The solution includes comprehensive security services: AWS Secrets Manager for credential management with KMS encryption, AWS Config for compliance tracking, GuardDuty for threat detection, Shield Advanced for DDoS protection, multi-region CloudTrail for audit logging, VPC Flow Logs for network monitoring, and automated security group change tracking using Lambda and EventBridge. All resources use customer-managed KMS keys with automatic rotation, encrypted S3 buckets for logs, IAM roles with MFA enforcement, and follow security best practices. The implementation is delivered as a single consolidated Terraform file with 160 comprehensive tests (141 unit + 19 integration) achieving 100% pass rate.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

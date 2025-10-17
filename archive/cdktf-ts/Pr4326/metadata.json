@@ -1,0 +1,35 @@
+{
+  "task_id": "2857171312",
+  "platform": "cdktf",
+  "language": "ts",
+  "subtask": "Failure Recovery and High Availability",
+  "complexity": "medium",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-10-14T05:21:36+05:30",
+  "po_id": "2857171312",
+  "background": "MedTech Solutions needs a HIPAA-compliant infrastructure to handle patient record processing. The system must securely process sensitive healthcare data, cache frequently accessed records, and maintain strict audit logging for compliance.",
+  "subject_labels": [
+    "Failure Recovery Automation",
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS Aurora",
+    "ElastiCache",
+    "KMS",
+    "Secrets Manager",
+    "Lambda",
+    "API Gateway",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

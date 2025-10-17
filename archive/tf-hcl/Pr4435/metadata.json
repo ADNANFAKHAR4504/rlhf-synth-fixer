@@ -1,0 +1,30 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "383273",
+  "team": "2",
+  "startedAt": "2025-10-14T16:10:21.542Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "S3",
+    "Ec2",
+    "Cloudtrail",
+    "RDS",
+    "Lambda",
+    "APIGateway",
+    "WAF"
+  ],
+  "training_quality": 9,
+  "background": "Security configuration as code ensures that policies and controls are versioned, reviewed, and consistently applied across all environments",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "ayushj1-turing",
+  "dockerS3Location": ""
+}
