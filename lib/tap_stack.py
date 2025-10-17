@@ -75,9 +75,6 @@ class TapStack(cdk.Stack):
           scope: Construct,
           construct_id: str, props: Optional[TapStackProps] = None, **kwargs):
     
-    # Set region to us-west-1 as specified in model response
-    if 'env' not in kwargs:
-        kwargs['env'] = {'region': 'us-west-1'}
     
     super().__init__(scope, construct_id, **kwargs)
 
