@@ -496,7 +496,6 @@ Resources:
   BackupRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'backup-role-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -507,6 +506,9 @@ Resources:
       ManagedPolicyArns:
         - 'arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup'
         - 'arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores'
+      Tags:
+        - Key: Name
+          Value: !Sub 'backup-role-${EnvironmentSuffix}'
 
   BackupSelection:
     Type: AWS::Backup::BackupSelection
@@ -541,7 +543,6 @@ Resources:
   ECSTaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'ecs-task-execution-role-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -560,12 +561,14 @@ Resources:
                 Action:
                   - 'secretsmanager:GetSecretValue'
                 Resource: !Ref DatabaseSecret
+      Tags:
+        - Key: Name
+          Value: !Sub 'ecs-task-execution-role-${EnvironmentSuffix}'
 
   # ECS Task Role
   ECSTaskRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'ecs-task-role-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -592,6 +595,9 @@ Resources:
                 Action:
                   - 'secretsmanager:GetSecretValue'
                 Resource: !Ref DatabaseSecret
+      Tags:
+        - Key: Name
+          Value: !Sub 'ecs-task-role-${EnvironmentSuffix}'
 
   # CloudWatch Log Group
   ECSLogGroup:
