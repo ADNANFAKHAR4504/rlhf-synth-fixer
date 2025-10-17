@@ -23,5 +23,6 @@
     "iam"
   ],
   "region": "ap-southeast-1",
-  "training_quality": 9
+  "training_quality": 9,
+  "turn_type": "single"
 }
