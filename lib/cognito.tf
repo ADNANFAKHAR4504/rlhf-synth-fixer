@@ -120,7 +120,8 @@ resource "aws_cognito_user_pool_client" "mobile_app" {
 }
 
 # Cognito User Pool Domain (optional - for hosted UI)
+# Domain must be globally unique across all AWS accounts
 resource "aws_cognito_user_pool_domain" "main" {
-  domain       = "${var.environment_suffix}-auth"
+  domain       = "${var.environment_suffix}-auth-${data.aws_caller_identity.current.account_id}"
   user_pool_id = aws_cognito_user_pool.main.id
 }
