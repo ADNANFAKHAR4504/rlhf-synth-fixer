@@ -74,18 +74,6 @@ The template exports 11 outputs for integration and testing:
 - KMS key ID and ARN
 - CloudTrail name
 
-## Validation Results
-
-- CloudFormation template validation: PASSED
-- Unit tests: 46/46 PASSED
-- JSON syntax: VALID
-- Resource dependencies: CORRECT
-- IAM capabilities required: CAPABILITY_NAMED_IAM
-
-## Deployment Note
-
-Deployment requires AWS account with sufficient IAM role quota. The template creates 2 new IAM roles (CloudTrailRole, LambdaExecutionRole). If IAM role limit (1000) is reached, cleanup of unused roles or quota increase is required.
-
 ## CloudFormation Template
 
 ```json
