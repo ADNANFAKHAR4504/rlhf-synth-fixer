@@ -48,13 +48,13 @@ const template = yaml.load(templateContent, { schema: cfnSchema }) as any;
 
 // Mock AWS SDK responses for testing infrastructure outputs
 const mockOutputs = {
-  APIEndpoint: 'https://abc123.execute-api.us-east-1.amazonaws.com/prod/patients',
-  RDSEndpoint: 'patient-db-dev.c123456.us-east-1.rds.amazonaws.com',
-  LambdaFunctionArn: 'arn:aws:lambda:us-east-1:123456789012:function:patient-api-function-dev',
+  APIEndpoint: 'https://abc123.execute-api.ap-southeast-1.amazonaws.com/prod/patients',
+  RDSEndpoint: 'patient-db-dev.c123456.ap-southeast-1.rds.amazonaws.com',
+  LambdaFunctionArn: 'arn:aws:lambda:ap-southeast-1:123456789012:function:patient-api-function-dev',
   RDSSecurityGroupId: 'sg-12345678',
   LambdaSecurityGroupId: 'sg-87654321',
   VPCId: 'vpc-12345678',
-  DBSecretArn: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:patient-db-password-dev'
+  DBSecretArn: 'arn:aws:secretsmanager:ap-southeast-1:123456789012:secret:patient-db-password-dev'
 };
 
 describe("CloudFormation Integration Tests - Infrastructure Deployment", () => {
