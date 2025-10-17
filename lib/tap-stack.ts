@@ -117,7 +117,7 @@ export class TapStack extends TerraformStack {
       projectName: id,
       environment: environmentSuffix,
       tags: commonTags,
-      bucketName: `${id.toLowerCase()}-${environmentSuffix}-public-assets`, // Convert to lowercase
+      bucketName: `${id.toLowerCase()}-${environmentSuffix}-pubblic-assets`, // Convert to lowercase
       encryption: 'SSE-S3',
       versioning: true,
     });
@@ -126,7 +126,7 @@ export class TapStack extends TerraformStack {
       projectName: id,
       environment: environmentSuffix,
       tags: commonTags,
-      bucketName: `${id.toLowerCase()}-${environmentSuffix}-private-data`, // Convert to lowercase
+      bucketName: `${id.toLowerCase()}-${environmentSuffix}-priivate-data`, // Convert to lowercase
       encryption: 'SSE-KMS',
       kmsKeyArn: kmsModule.key.arn,
       versioning: true,
@@ -210,7 +210,7 @@ export class TapStack extends TerraformStack {
 
     // Create EC2 instance role
     const ec2Role = iamModule.createRole({
-      roleName: `${id}-${environmentSuffix}-ec2-role`,
+      roleName: `${id}-${environmentSuffix}-ecc2-role`,
       assumeRolePolicy: {
         Version: '2012-10-17',
         Statement: [
