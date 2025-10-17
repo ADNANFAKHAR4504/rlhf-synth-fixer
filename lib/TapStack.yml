@@ -1,64 +1,4 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'TAP Stack - Task Assignment Platform CloudFormation Template'
-
-Metadata:
-  AWS::CloudFormation::Interface:
-    ParameterGroups:
-      - Label:
-          default: 'Environment Configuration'
-        Parameters:
-          - EnvironmentSuffix
-
-Parameters:
-  EnvironmentSuffix:
-    Type: String
-    Default: 'dev'
-    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
-    AllowedPattern: '^[a-zA-Z0-9]+$'
-    ConstraintDescription: 'Must contain only alphanumeric characters'
-
-Resources:
-  TurnAroundPromptTable:
-    Type: AWS::DynamoDB::Table
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
-    Properties:
-      TableName: !Sub 'TurnAroundPromptTable${EnvironmentSuffix}'
-      AttributeDefinitions:
-        - AttributeName: 'id'
-          AttributeType: 'S'
-      KeySchema:
-        - AttributeName: 'id'
-          KeyType: 'HASH'
-      BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: false
-      # Tags will be applied at stack level during deployment
-
-Outputs:
-  TurnAroundPromptTableName:
-    Description: 'Name of the DynamoDB table'
-    Value: !Ref TurnAroundPromptTable
-    Export:
-      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableName'
-
-  TurnAroundPromptTableArn:
-    Description: 'ARN of the DynamoDB table'
-    Value: !GetAtt TurnAroundPromptTable.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableArn'
-
-  StackName:
-    Description: 'Name of this CloudFormation stack'
-    Value: !Ref AWS::StackName
-    Export:
-      Name: !Sub '${AWS::StackName}-StackName'
-
-  EnvironmentSuffix:
-    Description: 'Environment suffix used for this deployment'
-    Value: !Ref EnvironmentSuffix
-    Export:
-      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
-AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production Infrastructure - Highly Available and Secure Environment'
 
 # ====================
@@ -117,7 +57,7 @@ Parameters:
   DomainName:
     Type: String
     Description: Domain name for Route 53
-    Default: 'example.com'
+    Default: 'abcd.com'
 
 # ====================
 # MAPPINGS
@@ -736,7 +676,7 @@ Resources:
       DBInstanceIdentifier: production-database
       DBName: !Ref DBName
       Engine: mysql
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.0.43'
       DBInstanceClass: !Ref DBInstanceClass
       AllocatedStorage: 20
       StorageType: gp3
@@ -993,20 +933,21 @@ Resources:
     Type: AWS::Route53::HostedZone
     Properties:
       Name: !Ref DomainName
-      Tags:
+      HostedZoneTags:
         - Key: Environment
           Value: Production
 
   HealthCheck:
     Type: AWS::Route53::HealthCheck
     Properties:
-      Type: HTTPS
-      ResourcePath: /
-      FullyQualifiedDomainName: !GetAtt CloudFrontDistribution.DomainName
-      Port: 443
-      RequestInterval: 30
-      FailureThreshold: 3
-      Tags:
+      HealthCheckConfig:
+        Type: HTTPS
+        ResourcePath: /
+        FullyQualifiedDomainName: !GetAtt CloudFrontDistribution.DomainName
+        Port: 443
+        RequestInterval: 30
+        FailureThreshold: 3
+      HealthCheckTags:
         - Key: Environment
           Value: Production
 
@@ -1109,7 +1050,7 @@ Resources:
     Type: AWS::Config::ConfigurationRecorder
     Properties:
       Name: ProductionConfigRecorder
-      RoleArn: !GetAtt ConfigRole.Arn
+      RoleARN: !GetAtt ConfigRole.Arn
       RecordingGroup:
         AllSupported: true
 
