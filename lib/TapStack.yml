@@ -557,13 +557,7 @@ Resources:
   NovaDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub
-        - 'nova-clinical-${AWS::AccountId}-${AWS::Region}-data-bucket-${Suffix}'
-        - Suffix:
-            !Select [
-              0,
-              !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
-            ]
+      BucketName: !Sub 'nova-clinical-${AWS::StackName}-data-bucket'
       OwnershipControls:
         Rules:
           - ObjectOwnership: BucketOwnerPreferred
@@ -605,13 +599,7 @@ Resources:
   NovaLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub
-        - 'nova-clinical-${AWS::AccountId}-${AWS::Region}-logs-bucket-${Suffix}'
-        - Suffix:
-            !Select [
-              0,
-              !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
-            ]
+      BucketName: !Sub 'nova-clinical-${AWS::StackName}-logs-bucket'
       OwnershipControls:
         Rules:
           - ObjectOwnership: BucketOwnerPreferred
@@ -1193,7 +1181,7 @@ Resources:
     Type: AWS::CloudFront::OriginAccessControl
     Properties:
       OriginAccessControlConfig:
-        Name: !Sub '${ProjectName}-${Environment}-oac-${AWS::StackName}-${AWS::AccountId}'
+        Name: !Sub '${ProjectName}-${Environment}-oac-${AWS::StackName}-${AWS::StackName}'
         OriginAccessControlOriginType: s3
         SigningBehavior: always
         SigningProtocol: sigv4
