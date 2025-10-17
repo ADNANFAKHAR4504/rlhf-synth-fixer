@@ -1,6 +1,7 @@
 # main.tf
 
-# DynamoDB Global Table
+# DynamoDB Global Table v2 (2019.11.21)
+# This version supports replicas configured directly in the table
 resource "aws_dynamodb_table" "transactions" {
   provider = aws.primary
 
@@ -33,73 +34,17 @@ resource "aws_dynamodb_table" "transactions" {
     projection_type = "ALL"
   }
 
-  server_side_encryption {
-    enabled = true
-    # Using AWS-managed keys for Global Table compatibility
-    # Customer-managed KMS keys not supported with Global Table v1 (2017.11.29)
-  }
-
-  point_in_time_recovery {
-    enabled = true
-  }
-
-  tags = var.common_tags
-}
-
-# DynamoDB Global Table configuration
-resource "aws_dynamodb_global_table" "transactions" {
-  depends_on = [
-    aws_dynamodb_table.transactions,
-    aws_dynamodb_table.transactions_secondary
-  ]
-
-  name = "${var.project_name}-transactions"
-
-  replica {
-    region_name = var.primary_region
-  }
-
+  # Global Table v2 - Configure replica in secondary region
   replica {
     region_name = var.secondary_region
-  }
-}
-
-# DynamoDB table in secondary region
-resource "aws_dynamodb_table" "transactions_secondary" {
-  provider = aws.secondary
-
-  name             = "${var.project_name}-transactions"
-  billing_mode     = "PAY_PER_REQUEST"
-  hash_key         = "transactionId"
-  range_key        = "timestamp"
-  stream_enabled   = true
-  stream_view_type = "NEW_AND_OLD_IMAGES"
-
-  attribute {
-    name = "transactionId"
-    type = "S"
-  }
-
-  attribute {
-    name = "timestamp"
-    type = "N"
-  }
-
-  attribute {
-    name = "userId"
-    type = "S"
-  }
-
-  global_secondary_index {
-    name            = "userId-timestamp-index"
-    hash_key        = "userId"
-    range_key       = "timestamp"
-    projection_type = "ALL"
+    
+    point_in_time_recovery = true
   }
 
   server_side_encryption {
     enabled = true
-    # Using AWS-managed keys for Global Table compatibility
+    # Using AWS-managed encryption for simplicity
+    # Can use customer-managed KMS keys with Global Table v2 if needed
   }
 
   point_in_time_recovery {
@@ -348,7 +293,7 @@ resource "aws_lambda_function" "transaction_secondary" {
 
   environment {
     variables = {
-      DYNAMODB_TABLE = aws_dynamodb_table.transactions_secondary.name
+      DYNAMODB_TABLE = aws_dynamodb_table.transactions.name
       REGION         = var.secondary_region
     }
   }

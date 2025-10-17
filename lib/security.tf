@@ -308,9 +308,10 @@ data "aws_availability_zones" "available" {
 # }
 
 # S3 bucket for WAF logs
+# Bucket name must start with 'aws-waf-logs-' for WAF v2 logging
 resource "aws_s3_bucket" "waf_logs" {
   provider = aws.global
-  bucket   = "${var.project_name}-waf-logs-${data.aws_caller_identity.current.account_id}"
+  bucket   = "aws-waf-logs-${var.project_name}-${data.aws_caller_identity.current.account_id}"
 
   tags = var.common_tags
 }
