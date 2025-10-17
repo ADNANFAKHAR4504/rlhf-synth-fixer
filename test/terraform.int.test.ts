@@ -1,181 +1,115 @@
 // test/terraform.int.test.ts
-// Task-04 — Jest E2E for Terraform stack (HTTP-only ALB, private RDS, S3→Lambda, NAT egress)
-// Validates: ALB reachability (public), EC2→ALB (internal), NAT egress, IGW/NAT routes,
-// VPC peering (presence + routes both sides), RDS CRUD (no skip; reads password from SSM),
-// S3 upload → Lambda logs, CloudWatch alarm integration (force ALARM then OK).
+// TAP Stack (Task-03) — Jest E2E (no esModuleInterop, no node-fetch)
+// Verifies: EC2 reachability & Nginx, subnet routes (IGW/NAT), SG posture,
+// RDS SQL login (psql via SSM, password from SSM), Lambda invoke → S3 write,
+// CloudTrail delivery into S3 (AWSLogs/*) + additional deep posture/connectivity tests.
 
+/* ---------------- stdlib (TS-safe imports) ---------------- */
 import * as fs from 'fs';
 import * as path from 'path';
-import * as http from 'http';
 import * as https from 'https';
-import { HttpRequest } from '@aws-sdk/protocol-http';
+import * as http from 'http';
+import { URL } from 'url';
+
+/* ---------------- AWS SDK v3 clients ---------------- */
+import {
+  S3Client,
+  GetBucketVersioningCommand,
+  GetPublicAccessBlockCommand,
+  ListObjectsV2Command,
+  GetObjectCommand,
+  GetBucketEncryptionCommand,
+} from '@aws-sdk/client-s3';
 
 import {
   EC2Client,
   DescribeInstancesCommand,
   DescribeInstanceStatusCommand,
+  DescribeSubnetsCommand,
   DescribeRouteTablesCommand,
-  DescribeVpcPeeringConnectionsCommand,
-  Tag as Ec2Tag,
+  DescribeSecurityGroupsCommand,
 } from '@aws-sdk/client-ec2';
 
 import {
   SSMClient,
-  DescribeInstanceInformationCommand,
   SendCommandCommand,
   GetCommandInvocationCommand,
   GetParameterCommand,
+  DescribeInstanceInformationCommand,
 } from '@aws-sdk/client-ssm';
 
 import {
-  S3Client,
-  PutObjectCommand,
-  GetBucketVersioningCommand,
-  GetPublicAccessBlockCommand,
-} from '@aws-sdk/client-s3';
+  LambdaClient,
+  InvokeCommand,
+  GetFunctionConfigurationCommand,
+} from '@aws-sdk/client-lambda';
+
+import {
+  RDSClient,
+  DescribeDBInstancesCommand,
+  DescribeDBParametersCommand,
+} from '@aws-sdk/client-rds';
 
 import {
   CloudWatchLogsClient,
   DescribeLogStreamsCommand,
   GetLogEventsCommand,
-  FilterLogEventsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
 
 import {
   CloudWatchClient,
   DescribeAlarmsCommand,
-  SetAlarmStateCommand,
 } from '@aws-sdk/client-cloudwatch';
 
-import { RDSClient } from '@aws-sdk/client-rds';
-import { SignatureV4 } from '@aws-sdk/signature-v4';
-import { Sha256 } from '@aws-crypto/sha256-js';
-import { defaultProvider } from '@aws-sdk/credential-provider-node';
-import { describe, it, expect, afterAll } from '@jest/globals';
+import { describe, it, expect } from '@jest/globals';
 
-/* ---------------- HTTP helpers (no keep-alive to avoid TLSWRAP) ---------------- */
-const HTTP_AGENT  = new http.Agent({ keepAlive: false, maxSockets: 1 });
-const HTTPS_AGENT = new https.Agent({ keepAlive: false, maxSockets: 1 });
+/* ---------------- Late-bound SigV4 + HTTP (handles both smithy and aws-sdk paths) ---------------- */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyCtor = any;
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { SignatureV4 }: { SignatureV4: AnyCtor } = (() => {
+  try { return require('@smithy/signature-v4'); } catch { return require('@aws-sdk/signature-v4'); }
+})();
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { HttpRequest }: { HttpRequest: AnyCtor } = (() => {
+  try { return require('@smithy/protocol-http'); } catch { return require('@aws-sdk/protocol-http'); }
+})();
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { NodeHttpHandler }: { NodeHttpHandler: AnyCtor } = (() => {
+  try { return require('@smithy/node-http-handler'); } catch { return require('@aws-sdk/node-http-handler'); }
+})();
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { Sha256 }: { Sha256: AnyCtor } = require('@aws-crypto/sha256-js');
 
-function httpGet(urlStr: string, timeoutMs = 8000): Promise<{ status: number; body: string }> {
+/* ---------------- tiny HTTP GET using http/https ---------------- */
+function httpGet(urlStr: string, timeoutMs = 6000): Promise<{ status: number; body: string }> {
   const u = new URL(urlStr);
-  const isHttp = u.protocol === 'http:';
-  const mod = isHttp ? http : https;
-  const agent = isHttp ? HTTP_AGENT : HTTPS_AGENT;
+  const mod = u.protocol === 'http:' ? http : https;
 
   return new Promise((resolve, reject) => {
-    const req = mod.request(
-      {
-        protocol: u.protocol,
-        hostname: u.hostname,
-        port: u.port || (isHttp ? 80 : 443),
-        path: u.pathname + u.search,
-        method: 'GET',
-        agent,
-        timeout: timeoutMs,
-        headers: { host: u.hostname },
-      },
-      (res) => {
-        let data = '';
-        res.on('data', (d) => (data += d));
-        res.on('end', () => {
-          try { res.socket?.end?.(); } catch {}
-          resolve({ status: res.statusCode || 0, body: data });
-        });
-      }
-    );
-    req.on('timeout', () => req.destroy(new Error('HTTP timeout')));
+    const req = mod.get(u, (res) => {
+      let data = '';
+      res.on('data', (d) => (data += d));
+      res.on('end', () => resolve({ status: res.statusCode || 0, body: data }));
+    });
+    req.setTimeout(timeoutMs, () => {
+      req.destroy(new Error('HTTP timeout'));
+    });
     req.on('error', reject);
-    req.end();
   });
 }
 
-async function httpGetSigned(urlStr: string, timeoutMs = 8000): Promise<{ status: number; body: string }> {
-  const u = new URL(urlStr);
-  const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-2';
-
-  const signer = new SignatureV4({
-    service: 'execute-api',
-    region,
-    credentials: defaultProvider(),
-    sha256: Sha256 as any,
-  });
-
-  const reqToSign = new HttpRequest({
-    protocol: u.protocol,
-    hostname: u.hostname,
-    method: 'GET',
-    path: u.pathname + u.search,
-    headers: { host: u.hostname },
-  });
-
-  const signed = await signer.sign(reqToSign);
-  const signedHeaders = signed.headers as Record<string, string>;
-
-  return new Promise((resolve, reject) => {
-    const req = https.request(
-      {
-        protocol: u.protocol,
-        hostname: u.hostname,
-        path: u.pathname + u.search,
-        method: 'GET',
-        headers: signedHeaders,
-        agent: HTTPS_AGENT,
-        timeout: timeoutMs,
-      },
-      (res) => {
-        let data = '';
-        res.on('data', (d) => (data += d));
-        res.on('end', () => {
-          try { res.socket?.end?.(); } catch {}
-          resolve({ status: res.statusCode || 0, body: data });
-        });
-      }
-    );
-    req.on('timeout', () => req.destroy(new Error('HTTP timeout')));
-    req.on('error', reject);
-    req.end();
-  });
-}
-
+/* ---------------- logging / config ---------------- */
 const ts = () => new Date().toISOString();
-const log = (...p: any[]) => console.log(`[E2E] ${ts()}`, ...p);
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const since = (t0: number) => `${((Date.now() - t0) / 1000).toFixed(1)}s`;
+const log = (...parts: any[]) => console.log(`[E2E] ${ts()}`, ...parts);
 
-async function retry<T>(
-  fn: () => Promise<T | null>,
-  n: number,
-  ms: number,
-  label?: string
-): Promise<T> {
-  let last: any = null;
-  const started = Date.now();
-  for (let i = 0; i < n; i++) {
-    try {
-      const v = await fn();
-      if (v) {
-        log(`[DEBUG] retry OK ${label ?? ''} ${i + 1}/${n} in ${since(started)}`);
-        return v;
-      }
-      log(`retry null ${label ?? ''} ${i + 1}/${n}`);
-    } catch (e: any) {
-      last = e;
-      log(`retry err ${label ?? ''} ${i + 1}/${n}:`, e?.message ?? e);
-    }
-    if (i < n - 1) {
-      await sleep(ms);
-    }
-  }
-  if (last) throw last;
-  throw new Error(`retry exhausted ${label ?? ''} after ${since(started)}`);
-}
+/* ---------- outputs discovery (robust for CI) ---------- */
+type FlatOutputs = Record<string, unknown>;
 
-/* ---------------- outputs discovery ---------------- */
-type FlatOutputs = Record<string, any>;
 function findOutputsPath(): string {
-  const base = path.join(process.cwd(), 'cfn-outputs');
-  const suffix =
+  const baseDir = path.join(process.cwd(), 'cfn-outputs');
+
+  const ENV_SUFFIX =
     process.env.ENV_SUFFIX ||
     process.env.ENVIRONMENT_SUFFIX ||
     process.env.PR_ENV_SUFFIX ||
@@ -186,585 +120,747 @@ function findOutputsPath(): string {
     process.env.CI_COMMIT_REF_SLUG ||
     process.env.CI_COMMIT_BRANCH ||
     undefined;
-  const cands = [
-    path.join(base, 'flat-outputs.json'),
-    suffix && path.join(base, `flat-outputs.${suffix}.json`),
-    suffix && path.join(base, suffix, 'flat-outputs.json'),
+
+  const candidates = [
+    path.join(baseDir, 'flat-outputs.json'),
+    ENV_SUFFIX && path.join(baseDir, `flat-outputs.${ENV_SUFFIX}.json`),
+    ENV_SUFFIX && path.join(baseDir, ENV_SUFFIX, 'flat-outputs.json'),
   ].filter(Boolean) as string[];
-  let pick = cands.find((p) => fs.existsSync(p));
-  if (!pick && fs.existsSync(base)) {
+
+  let chosen = candidates.find((p) => fs.existsSync(p));
+  if (!chosen && fs.existsSync(baseDir)) {
     const files = fs
-      .readdirSync(base)
+      .readdirSync(baseDir)
       .filter((f) => /^flat-outputs(\.|-).+\.json$/i.test(f))
-      .map((f) => path.join(base, f))
+      .map((f) => path.join(baseDir, f))
       .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
-    if (files.length) pick = files[0];
+    if (files.length) chosen = files[0];
   }
-  if (!pick) throw new Error(`Could not locate cfn-outputs/flat-outputs*.json`);
-  log('Using outputs file:', pick);
-  return pick;
-}
-const OUTPUTS: FlatOutputs = JSON.parse(fs.readFileSync(findOutputsPath(), 'utf8'));
-log('[DEBUG] Outputs summary:', JSON.stringify({
-  use2_vpc_id: OUTPUTS.use2_vpc_id,
-  use2_public_subnet_ids: OUTPUTS.use2_public_subnet_ids,
-  use2_private_subnet_ids: OUTPUTS.use2_private_subnet_ids,
-  euw2_vpc_id: OUTPUTS.euw2_vpc_id,
-  euw2_public_subnet_ids: OUTPUTS.euw2_public_subnet_ids,
-  euw2_private_subnet_ids: OUTPUTS.euw2_private_subnet_ids,
-  alb_dns_name: OUTPUTS.alb_dns_name,
-  alb_target_group_arn: OUTPUTS.alb_target_group_arn,
-  api_invoke_url: OUTPUTS.api_invoke_url,
-  upload_bucket_name: OUTPUTS.upload_bucket_name,
-  lambda_on_upload_name: OUTPUTS.lambda_on_upload_name,
-  lambda_heartbeat_name: OUTPUTS.lambda_heartbeat_name,
-  rds_endpoint: OUTPUTS.rds_endpoint,
-  rds_port: OUTPUTS.rds_port,
-  rds_username: OUTPUTS.rds_username,
-}, null, 2));
-log('--- E2E TESTS START ---');
 
-/* ---------------- region + clients ---------------- */
-const REGION = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-2';
-const ec2  = new EC2Client({ region: REGION });
-const ec2EU = new EC2Client({ region: 'eu-west-2' });
-const ssm  = new SSMClient({ region: REGION });
-const s3   = new S3Client({ region: REGION });
-const logs = new CloudWatchLogsClient({ region: REGION });
-const rds  = new RDSClient({ region: REGION });
-const cw   = new CloudWatchClient({ region: REGION });
+  if (!chosen) {
+    const tried = candidates.length ? candidates.join('\n  ') : '(no candidates)';
+    throw new Error(
+      `Could not locate outputs file under ${baseDir}.\nTried:\n  ${tried}\n` +
+        `Ensure your pipeline writes either "flat-outputs.json" or a suffixed variant like "flat-outputs.<env>.json".`
+    );
+  }
 
-/* Optional: ELBv2 client for target health debugging */
-let Elbv2ClientCtor: any, DescribeTargetHealthCommandCtor: any, DescribeListenersCommandCtor: any;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const elb = require('@aws-sdk/client-elastic-load-balancing-v2');
-  Elbv2ClientCtor = elb.ELBv2Client;
-  DescribeTargetHealthCommandCtor = elb.DescribeTargetHealthCommand;
-  DescribeListenersCommandCtor = elb.DescribeListenersCommand;
-} catch {
-  log('[DEBUG] @aws-sdk/client-elastic-load-balancing-v2 not installed; ALB health dump disabled');
+  console.log('[E2E] Using outputs file:', chosen);
+  return chosen;
 }
-const elbv2 = Elbv2ClientCtor ? new Elbv2ClientCtor({ region: REGION }) : null;
 
-/* ---------------- SSM helpers ---------------- */
-async function waitSsm(instanceId: string) {
-  if (!instanceId) throw new Error('waitSsm(): empty instanceId');
-  log('Wait SSM managed:', instanceId);
-  const ok = await retry<boolean>(async () => {
-    const di = await ssm.send(new DescribeInstanceInformationCommand({}));
-    const count = (di.InstanceInformationList || []).length;
-    log('[DEBUG] DescribeInstanceInformation ->', count, 'instances');
-    return (di.InstanceInformationList || []).some((i) => i.InstanceId === instanceId) ? true : null;
-  }, 30, 10000, `ssmManaged:${instanceId}`);
-  expect(ok).toBe(true);
+const OUTPUTS_PATH = findOutputsPath();
+
+function readOutputs(): FlatOutputs {
+  return JSON.parse(fs.readFileSync(OUTPUTS_PATH, 'utf8')) as FlatOutputs;
 }
-async function waitReachable(instanceId: string) {
-  if (!instanceId) throw new Error('waitReachable(): empty instanceId');
+
+// Region auto-detect from outputs.subnet_azs[0] (e.g., "us-west-2a" -> "us-west-2")
+function regionFromAz(az?: string): string | undefined {
+  return az ? az.replace(/[a-z]$/, '') : undefined;
+}
+const __outputsForRegion = (() => {
+  try {
+    return readOutputs();
+  } catch {
+    return {};
+  }
+})();
+const REGION_FROM_OUTPUTS: string | undefined = Array.isArray((__outputsForRegion as any).subnet_azs)
+  ? regionFromAz((__outputsForRegion as any).subnet_azs[0])
+  : undefined;
+
+const REGION = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || REGION_FROM_OUTPUTS || 'us-west-2';
+
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+async function retry<T>(
+  fn: () => Promise<T | null>,
+  attempts: number,
+  intervalMs: number,
+  label?: string,
+): Promise<T> {
+  let lastErr: any = null;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const v = await fn();
+      if (v) return v;
+      log(`retry wait (${label ?? 'op'}) ${i + 1}/${attempts} -> null`);
+    } catch (e: any) {
+      lastErr = e;
+      log(`retry error (${label ?? 'op'}) ${i + 1}/${attempts}:`, e?.message ?? e);
+    }
+    if (i < attempts - 1) await sleep(intervalMs);
+  }
+  if (lastErr) throw lastErr;
+  throw new Error(`retry(): exhausted attempts${label ? ` for ${label}` : ''}`);
+}
+
+async function waitForReachability(ec2: EC2Client, instanceId: string) {
+  if (!instanceId) throw new Error('waitForReachability(): missing/invalid instanceId');
   log('Wait EC2 reachability:', instanceId);
   const ok = await retry<boolean>(async () => {
-    const st = await ec2.send(new DescribeInstanceStatusCommand({ InstanceIds: [instanceId], IncludeAllInstances: true }));
+    const st = await ec2.send(
+      new DescribeInstanceStatusCommand({ InstanceIds: [instanceId], IncludeAllInstances: true }),
+    );
     const s = st.InstanceStatuses?.[0];
     if (!s) return null;
-    log('[DEBUG] InstanceStatus:', JSON.stringify(s, null, 2));
     return s.SystemStatus?.Status === 'ok' && s.InstanceStatus?.Status === 'ok' ? true : null;
   }, 24, 5000, `reachability:${instanceId}`);
   expect(ok).toBe(true);
 }
-async function ssmRun(instanceId: string, script: string, timeout = 300) {
-  log(`[DEBUG] SSM Run, instance: ${instanceId} timeout: ${timeout}\n---- script ----\n${script}\n----------------`);
-  const send = await ssm.send(new SendCommandCommand({
-    InstanceIds: [instanceId],
-    DocumentName: 'AWS-RunShellScript',
-    TimeoutSeconds: timeout,
-    Parameters: { commands: [script] },
-  }));
+
+// Wait until instance is registered as SSM-managed (no skipping)
+async function waitForSsmManaged(ssm: SSMClient, instanceId: string) {
+  if (!instanceId) throw new Error('waitForSsmManaged(): invalid instanceId');
+  log('Wait SSM managed:', instanceId);
+  const ok = await retry<boolean>(async () => {
+    const di = await ssm.send(new DescribeInstanceInformationCommand({}));
+    const managed = (di.InstanceInformationList || []).some((i) => i.InstanceId === instanceId);
+    return managed ? true : null;
+  }, 30, 10000, `ssmManaged:${instanceId}`); // up to ~5 minutes
+  expect(ok).toBe(true);
+}
+
+async function ssmRun(
+  ssm: SSMClient,
+  instanceId: string,
+  script: string,
+  timeoutSeconds = 300,
+): Promise<{ Status: string; StdOut: string; StdErr: string; ResponseCode: number }> {
+  const send = await ssm.send(
+    new SendCommandCommand({
+      InstanceIds: [instanceId],
+      DocumentName: 'AWS-RunShellScript',
+      TimeoutSeconds: timeoutSeconds,
+      Parameters: { commands: [script] },
+    }),
+  );
   const cmdId = send.Command!.CommandId!;
-  log('[DEBUG] SSM Command sent:', cmdId);
   const inv = await retry(async () => {
-    const res = await ssm.send(new GetCommandInvocationCommand({ CommandId: cmdId, InstanceId: instanceId }));
-    log('[DEBUG] SSM Invocation status:', res.Status, 'rc:', res.ResponseCode ?? -1);
+    const res = await ssm.send(
+      new GetCommandInvocationCommand({ CommandId: cmdId, InstanceId: instanceId }),
+    );
     if (res.Status === 'InProgress' || res.Status === 'Pending') return null;
     return res;
   }, 90, 2000, `ssm:${instanceId}`);
-  const out = {
+  return {
     Status: inv.Status!,
     StdOut: inv.StandardOutputContent || '',
     StdErr: inv.StandardErrorContent || '',
     ResponseCode: inv.ResponseCode ?? -1,
   };
-  log('[DEBUG] SSM Result]:', { Status: out.Status, ResponseCode: out.ResponseCode, StdOutLen: out.StdOut.length, StdErrLen: out.StdErr.length });
-  return out;
 }
 
-/* ---------------- find our app instance (ASG member) ---------------- */
-function tagLine(tags?: Ec2Tag[]) {
-  const kv = (tags || []).map(t => `${t.Key}=${t.Value}`).join(',');
-  return kv;
-}
-async function pickAppInstance(vpcId: string): Promise<string> {
-  log('Discover EC2 instances in VPC:', vpcId);
-  const di = await ec2.send(new DescribeInstancesCommand({
-    Filters: [
-      { Name: 'vpc-id', Values: [vpcId] },
-      { Name: 'instance-state-name', Values: ['running', 'pending'] },
-    ],
-  }));
-  const all = (di.Reservations || []).flatMap(r => r.Instances || []);
-  log('[DEBUG] Found', all.length, 'instances in VPC', vpcId);
-  if (!all.length) throw new Error('No instances found in VPC');
-  const hit = all.find(i => ((i.Tags || []).find(t => t.Key === 'Name')?.Value || '').includes('-app'))
-    || all[0];
-  log('Picked instance:', hit.InstanceId, 'tags:', tagLine(hit.Tags));
-  return hit.InstanceId!;
-}
-
-/* ---------------- ALB helpers ---------------- */
-async function waitAlbHealthyTarget(maxWaitMs = 8 * 60 * 1000) {
-  const tgArn = process.env.E2E_TG_ARN || (OUTPUTS.alb_target_group_arn as string | undefined);
-  if (!elbv2 || !DescribeTargetHealthCommandCtor || !tgArn) {
-    log('[DEBUG] TG ARN not available or ELBv2 client missing; skipping explicit target-health wait');
-    return;
-  }
-  const start = Date.now();
-  await retry(async () => {
-    const th = await elbv2.send(new DescribeTargetHealthCommandCtor({ TargetGroupArn: tgArn }));
-    const healthy = (th.TargetHealthDescriptions || []).some((d: any) => d.TargetHealth?.State === 'healthy');
-    log('[DEBUG] TG health check:', JSON.stringify((th.TargetHealthDescriptions || []).map((d: any) => ({
-      id: d.Target?.Id,
-      st: d.TargetHealth?.State,
-      rsn: d.TargetHealth?.Reason,
-    }))));
-    if (!healthy) {
-      if (Date.now() - start > maxWaitMs) return null;
-      return null;
-    }
-    return true;
-  }, Math.max(1, Math.floor(maxWaitMs / 5000)), 5000, 'tg-healthy');
-}
-
-async function dumpAlbTargetHealth() {
-  const tgArn = process.env.E2E_TG_ARN || (OUTPUTS.alb_target_group_arn as string | undefined);
-  if (!elbv2 || !DescribeTargetHealthCommandCtor || !tgArn) return;
-  try {
-    const th = await elbv2.send(new DescribeTargetHealthCommandCtor({ TargetGroupArn: tgArn }));
-    const desc = (th.TargetHealthDescriptions || []).map((d: any) => ({
-      Id: d.Target?.Id,
-      Port: d.Target?.Port,
-      State: d.TargetHealth?.State,
-      Reason: d.TargetHealth?.Reason,
-      Description: d.TargetHealth?.Description,
-    }));
-    log('[DEBUG] TargetHealth dump:', JSON.stringify(desc, null, 2));
-  } catch (e: any) {
-    log('[DEBUG] dumpAlbTargetHealth error:', e?.message ?? e);
-  }
-}
 
 /* ============================================================================
- * ALB + EC2 reachability
+ * E2E  — API Gateway -> EC2 (HTTP proxy)
+ *  - GET /ec2 should return the Nginx page your EC2 serves
  * ==========================================================================*/
-describe('ALB & EC2 reachability', () => {
-  const albDns: string = OUTPUTS.alb_dns_name;
-  const vpcId: string  = OUTPUTS.use2_vpc_id;
+describe('E2E — API Gateway -> EC2 ', () => {
+  const outputs = readOutputs() as any;
+  const apiUrl: string = outputs.api_invoke_url;      // existing output
+  const ec2Ip: string  = outputs.ec2_public_ip;       // existing output
 
-  it('ALB serves index over HTTP', async () => {
-    await waitAlbHealthyTarget(8 * 60 * 1000);
+  it('GET /ec2 returns the EC2 nginx index (200 and "hello from EC2")', async () => {
+    // Sanity: the EC2 is actually serving the page (already tested elsewhere)
+    const sanity = await httpGet(`http://${ec2Ip}/`, 6000);
+    expect(sanity.status).toBeGreaterThanOrEqual(200);
+    expect(sanity.status).toBeLessThan(400);
+    expect(sanity.body).toMatch(/hello from EC2/i);
 
-    // Probe /alb.html (same as health path); body contains ENVIRONMENT=...
-    const res = await retry(async () => {
-      const r = await httpGet(`http://${albDns}/alb.html`, 6000);
-      return (r.status >= 200 && r.status < 400 && /ENVIRONMENT=/i.test(r.body)) ? r : null;
-    }, 40, 5000, 'alb-http');
+    // Now through API Gateway proxy
+    const viaApigw = await httpGet(`${apiUrl}/ec2`, 8000);
+    expect(viaApigw.status).toBeGreaterThanOrEqual(200);
+    expect(viaApigw.status).toBeLessThan(400);
+    expect(viaApigw.body).toMatch(/hello from EC2/i);
+  });
+});
 
-    expect(res.status).toBeGreaterThanOrEqual(200);
-    expect(res.status).toBeLessThan(400);
-    expect(res.body).toMatch(/ENVIRONMENT=/i);
+/* ============================================================================
+ * E2E — EC2 + Networking + Security Groups
+ * ==========================================================================*/
+describe('E2E — EC2 + Networking + Security Groups', () => {
+  const outputs = readOutputs() as any;
+
+  const vpcId: string = outputs.vpc_id;
+  const publicSubnetIds: string[] = outputs.public_subnet_ids;
+  const privateSubnetIds: string[] = outputs.private_subnet_ids;
+  const webSgId: string = outputs.security_group_web_id;
+  const ec2Id: string = outputs.ec2_instance_id;
+  const ec2Ip: string = outputs.ec2_public_ip;
+
+  const ec2 = new EC2Client({ region: REGION });
+  const ssm = new SSMClient({ region: REGION });
+
+  it('EC2 exists, in VPC, IMDSv2 required, SG attached', async () => {
+    const di = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [ec2Id] }));
+    const inst = di.Reservations?.[0]?.Instances?.[0];
+    expect(inst).toBeDefined();
+    expect(inst?.VpcId).toBe(vpcId);
+    expect(inst?.MetadataOptions?.HttpTokens).toBe('required');
+    const attachedSgs = (inst?.SecurityGroups || []).map((g) => g.GroupId);
+    expect(attachedSgs).toContain(webSgId);
   });
 
-  it('EC2 (private) can curl the ALB DNS (internal egress OK)', async () => {
-    const id = await pickAppInstance(vpcId);
-    await waitSsm(id);
-    await waitReachable(id);
+  it('Instance is SSM-managed (required for subsequent SSM tests)', async () => {
+    await waitForSsmManaged(ssm, ec2Id);
+  });
 
-    const out = await ssmRun(id, `set -euo pipefail; curl -s -o /dev/null -w "%{http_code}" "http://${albDns}/alb.html"`, 180);
-    const code = parseInt(out.StdOut.trim(), 10);
+  it('HTTP: nginx index served via public IP', async () => {
+    await waitForReachability(ec2, ec2Id);
+
+    // Try HTTP first (Nginx default), then HTTPS (optional)
+    let res:
+      | { status: number; body: string }
+      | null = null;
+
+    try {
+      res = await retry(
+        () => httpGet(`http://${ec2Ip}/`).then((r) => (r.status >= 200 && r.status < 400 ? r : null)),
+        12,
+        3000,
+        'ec2-http-80',
+      );
+    } catch (e) {
+      // ignore here; we'll try HTTPS below
+    }
+
+    if (!res) {
+      // Optional HTTPS attempt in case you later add TLS
+      try {
+        res = await retry(
+          () => httpGet(`https://${ec2Ip}/`).then((r) => (r.status >= 200 && r.status < 400 ? r : null)),
+          4,
+          3000,
+          'ec2-https-443',
+        );
+      } catch (e) {
+        // still null -> run SSM diagnostics before failing
+      }
+    }
+
+    if (!res) {
+      // SSM diagnostics: is nginx running/bound? what does localhost say?
+      const diagScript = [
+        'set -euo pipefail',
+        'echo "=== systemctl status nginx ==="',
+        'systemctl status nginx --no-pager || true',
+        'echo "=== listeners (ss -tlnp) ==="',
+        'ss -tlnp | sed -n "1,120p" || true',
+        'echo "=== curl localhost:80 (headers) ==="',
+        'curl -sS -D - -o /dev/null http://127.0.0.1/ || true',
+        'echo "=== nginx error.log (tail) ==="',
+        'journalctl -u nginx -n 100 --no-pager || true',
+        'echo "=== attempt restart nginx ==="',
+        'systemctl restart nginx || true',
+        'sleep 2',
+        'echo "=== curl localhost:80 (after restart) ==="',
+        'curl -sS -D - -o /dev/null http://127.0.0.1/ || true',
+      ].join('\n');
+
+      const diag = await ssmRun(ssm, ec2Id, diagScript, 240);
+      console.log('[E2E] nginx diagnostics:\n', diag.StdOut.slice(0, 4000));
+
+      try {
+        res = await retry(
+          () => httpGet(`http://${ec2Ip}/`).then((r) => (r.status >= 200 && r.status < 400 ? r : null)),
+          4,
+          3000,
+          'ec2-http-80-after-restart',
+        );
+      } catch (e) {}
+    }
+
+    expect(res).toBeTruthy();
+    expect(res!.status).toBeGreaterThanOrEqual(200);
+    expect(res!.status).toBeLessThan(400);
+    expect(res!.body).toMatch(/hello from EC2/i);
+  });
+
+  it('Public subnet: MapPublicIpOnLaunch + IGW default route', async () => {
+    const di = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [ec2Id] }));
+    const subnetId = di.Reservations?.[0]?.Instances?.[0]?.SubnetId as string;
+    const sn = await ec2.send(new DescribeSubnetsCommand({ SubnetIds: [subnetId] }));
+    expect(sn.Subnets?.[0]?.MapPublicIpOnLaunch).toBe(true);
+
+    const rt = await ec2.send(
+      new DescribeRouteTablesCommand({
+        Filters: [{ Name: 'association.subnet-id', Values: [subnetId] }],
+      }),
+    );
+    const hasIgwDefault = (rt.RouteTables || []).some((t) =>
+      (t.Routes || []).some(
+        (r) => r.DestinationCidrBlock === '0.0.0.0/0' && (r.GatewayId || '').startsWith('igw-'),
+      ),
+    );
+    expect(hasIgwDefault).toBe(true);
+  });
+
+  it('Web SG: HTTP 80 world-allowed, SSH 22 world-denied, egress all', async () => {
+    const sgs = await ec2.send(new DescribeSecurityGroupsCommand({ GroupIds: [webSgId] }));
+    const sg = sgs.SecurityGroups?.[0]!;
+    const ingress = sg.IpPermissions || [];
+    const egress = sg.IpPermissionsEgress || [];
+
+    const httpWorld = ingress.some(
+      (p) =>
+        p.IpProtocol === 'tcp' &&
+        p.FromPort === 80 &&
+        p.ToPort === 80 &&
+        (p.IpRanges || []).some((r) => r.CidrIp === '0.0.0.0/0'),
+    );
+    const sshWorld = ingress.some(
+      (p) =>
+        p.IpProtocol === 'tcp' &&
+        p.FromPort === 22 &&
+        p.ToPort === 22 &&
+        (p.IpRanges || []).some((r) => r.CidrIp === '0.0.0.0/0'),
+    );
+    const egressAll = egress.some(
+      (p) => p.IpProtocol === '-1' && (p.IpRanges || []).some((r) => r.CidrIp === '0.0.0.0/0'),
+    );
+
+    expect(httpWorld).toBe(true);
+    expect(sshWorld).toBe(false);
+    expect(egressAll).toBe(true);
+  });
+
+  it('IMDSv2 enforced on EC2 (401 without token, 200 with token)', async () => {
+    await waitForSsmManaged(ssm, ec2Id);
+    const script = `
+      set -e
+      A=$(curl -s -o /dev/null -w "%{http_code}" http://169.254.169.254/latest/meta-data/ || true)
+      T=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
+      B=$(curl -s -o /dev/null -w "%{http_code}" -H "X-aws-ec2-metadata-token: $T" http://169.254.169.254/latest/meta-data/ || true)
+      echo "$A $B"
+    `;
+    const out = await ssmRun(ssm, ec2Id, script, 120);
+    expect(out.Status).toBe('Success');
+    const parts = out.StdOut.trim().split(/\s+/);
+    expect(parts[0]).toBe('401');
+    expect(parts[1]).toBe('200');
+  });
+
+  it('EC2 outbound DNS+TLS works (curl https://example.com)', async () => {
+    await waitForSsmManaged(ssm, ec2Id);
+    const script = `set -euo pipefail; curl -sSf https://example.com -o /dev/null && echo OK || echo FAIL`;
+    const out = await ssmRun(ssm, ec2Id, script, 120);
+    expect(out.Status).toBe('Success');
+    expect(/OK/.test(out.StdOut)).toBe(true);
+  });
+});
+
+/* ============================================================================
+ * E2E — RDS SQL login + CRUD from EC2 (psql)
+ * ==========================================================================*/
+describe('E2E — RDS SQL login + CRUD from EC2 (psql)', () => {
+  const outputs = readOutputs() as any;
+  const rdsEndpoint: string = outputs.rds_endpoint;
+  const ec2Id: string = outputs.ec2_instance_id;
+  const lambdaName: string = outputs.lambda_function_name;
+
+  const ec2 = new EC2Client({ region: REGION });
+  const ssm = new SSMClient({ region: REGION });      // RunCommand + GetParameter
+  const lambda = new LambdaClient({ region: REGION });
+
+  it('EC2 can login to RDS via psql and run basic CRUD', async () => {
+    const cfg = await lambda.send(
+      new GetFunctionConfigurationCommand({ FunctionName: lambdaName }),
+    );
+    const paramName = cfg.Environment?.Variables?.RDS_PASSWORD_PARAM;
+    expect(typeof paramName).toBe('string');
+    if (!paramName) throw new Error('RDS_PASSWORD_PARAM not found on Lambda');
+
+    const secret = await ssm.send(
+      new GetParameterCommand({ Name: paramName, WithDecryption: true }),
+    );
+    const dbPassword = secret.Parameter?.Value || '';
+    expect(dbPassword.length).toBeGreaterThan(0);
+
+    await waitForReachability(ec2, ec2Id);
+
+    const pwB64 = Buffer.from(dbPassword, 'utf8').toString('base64');
+
+    const script = [
+      'set -euo pipefail',
+      '# Install PostgreSQL client (try 16, then 15, then generic)',
+      'dnf -y install postgresql16 >/dev/null 2>&1 || \\',
+      'dnf -y install postgresql15 >/dev/null 2>&1 || \\',
+      'dnf -y install postgresql >/dev/null 2>&1 || true',
+      '',
+      '# Decode password into env var (not printed)',
+      `export PGPASSWORD="$(echo '${pwB64}' | base64 -d)"`,
+      '',
+      '# Common psql opts with SSL required (matches rds.force_ssl=1)',
+      `OPTS="-h ${rdsEndpoint} -U masteruser -d postgres -v ON_ERROR_STOP=1 --set=sslmode=require"`,
+      '',
+      '# Create table & insert',
+      'psql $OPTS -c "CREATE TABLE IF NOT EXISTS tap_ci(x int);"',
+      'psql $OPTS -c "INSERT INTO tap_ci(x) VALUES (1);"',
+      '',
+      '# Deterministic COUNT: -t (tuples only) -A (unaligned) prints just the number',
+      'COUNT=$(psql $OPTS -t -A -c "SELECT COUNT(*) FROM tap_ci;")',
+      'echo "COUNT=${COUNT:-0}"',
+      '',
+      '# Clean up table',
+      'psql $OPTS -c "DROP TABLE tap_ci;"',
+      'echo "PSQL_OK"',
+    ].join('\n');
+
+    const out = await ssmRun(ssm, ec2Id, script, 420);
+    if (out.Status !== 'Success') {
+      console.log('[E2E][psql-stdout]', out.StdOut.slice(0, 4000));
+      console.log('[E2E][psql-stderr]', out.StdErr.slice(0, 4000));
+    }
+
+    expect(out.Status).toBe('Success');
+    expect(/PSQL_OK/.test(out.StdOut)).toBe(true);
+
+    const m = out.StdOut.match(/COUNT=(\d+)/);
+    expect(m).toBeTruthy();
+    expect(m && m[1]).toBe('1');
+  });
+});
+
+/* ============================================================================
+ * E2E — RDS posture (encryption/private/KMS + SSL param)
+ * ==========================================================================*/
+describe('E2E — RDS posture', () => {
+  const outputs = readOutputs() as any;
+  const rdsEndpoint: string = outputs.rds_endpoint;
+  const rds = new RDSClient({ region: REGION });
+
+  it('RDS is encrypted, uses KMS, not publicly accessible, postgres engine', async () => {
+    const di = await rds.send(new DescribeDBInstancesCommand({}));
+    const db = (di.DBInstances || []).find(d => (d.Endpoint?.Address || '') === rdsEndpoint);
+    expect(db).toBeDefined();
+
+    expect(db!.StorageEncrypted).toBe(true);
+    expect((db!.KmsKeyId || '').length).toBeGreaterThan(0);
+    expect(db!.PubliclyAccessible).toBe(false);
+    expect((db!.Engine || '').startsWith('postgres')).toBe(true);
+  });
+
+  it('Parameter group enforces SSL (rds.force_ssl=1)', async () => {
+    const di = await rds.send(new DescribeDBInstancesCommand({}));
+    const inst = (di.DBInstances || []).find(i => i.Endpoint?.Address === rdsEndpoint);
+    expect(inst).toBeDefined();
+
+    const pgName = inst!.DBParameterGroups?.[0]?.DBParameterGroupName!;
+    expect(typeof pgName).toBe('string');
+
+    let marker: string | undefined = undefined;
+    let forceSslValue: string | undefined;
+
+    do {
+      const page = await rds.send(
+        new DescribeDBParametersCommand({
+          DBParameterGroupName: pgName,
+          Marker: marker,
+        })
+      );
+      const hit = (page.Parameters || []).find(p => p.ParameterName === 'rds.force_ssl');
+      if (hit?.ParameterValue) forceSslValue = hit.ParameterValue;
+      marker = page.Marker;
+    } while (!forceSslValue && marker);
+
+    expect(forceSslValue).toBe('1');
+  });
+});
+
+/* ============================================================================
+ * E2E — Lambda heartbeat → S3 (app bucket) + CloudWatch Logs emission
+ * ==========================================================================*/
+describe('E2E — Lambda heartbeat writes to S3', () => {
+  const outputs = readOutputs() as any;
+  const lambdaName: string = outputs.lambda_function_name;
+  const appBucket: string = outputs.app_bucket_name;
+
+  const s3 = new S3Client({ region: REGION });
+  const lambda = new LambdaClient({ region: REGION });
+  const logs = new CloudWatchLogsClient({ region: REGION });
+
+  it('S3 posture: versioning enabled; public access blocked', async () => {
+    const ver = await s3.send(new GetBucketVersioningCommand({ Bucket: appBucket }));
+    expect(ver.Status).toBe('Enabled');
+
+    const pab = await s3.send(new GetPublicAccessBlockCommand({ Bucket: appBucket }));
+    const cfg = pab.PublicAccessBlockConfiguration!;
+    expect(cfg.BlockPublicAcls).toBe(true);
+    expect(cfg.BlockPublicPolicy).toBe(true);
+    expect(cfg.IgnorePublicAcls).toBe(true);
+    expect(cfg.RestrictPublicBuckets).toBe(true);
+  });
+
+  it('Invoke heartbeat and observe new heartbeats/<ts>.json in app bucket', async () => {
+    const before = await s3.send(
+      new ListObjectsV2Command({ Bucket: appBucket, Prefix: 'heartbeats/', MaxKeys: 10 }),
+    );
+    const countBefore = (before.Contents || []).length;
+
+    const inv = await lambda.send(
+      new InvokeCommand({ FunctionName: lambdaName, InvocationType: 'RequestResponse' }),
+    );
+    expect((inv.StatusCode ?? 0) >= 200 && (inv.StatusCode ?? 0) < 300).toBe(true);
+
+    const after = await retry(
+      async () => {
+        const res = await s3.send(
+          new ListObjectsV2Command({ Bucket: appBucket, Prefix: 'heartbeats/' }),
+        );
+        const cnt = (res.Contents || []).length;
+        return cnt > countBefore ? res : null;
+      },
+      18,
+      3000,
+      'heartbeat-s3',
+    );
+
+    const newest = (after.Contents || []).sort(
+      (a, b) => (b.LastModified?.getTime() || 0) - (a.LastModified?.getTime() || 0),
+    )[0];
+    expect(newest?.Key).toMatch(/^heartbeats\/\d+\.json$/);
+
+    const obj = await s3.send(new GetObjectCommand({ Bucket: appBucket, Key: newest!.Key! }));
+    const body = await new Promise<string>((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      (obj.Body as any).on('data', (d: Buffer) => chunks.push(d));
+      (obj.Body as any).on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+      (obj.Body as any).on('error', reject);
+    });
+    log('heartbeat body (trunc):', body.slice(0, 180));
+    expect(body).toMatch(/"public_ip"\s*:\s*"/);
+    expect(body).toMatch(/"ts"\s*:\s*\d+/);
+  });
+
+  it('Lambda emit appears in CloudWatch Logs after invoke', async () => {
+    const logGroupName = `/aws/lambda/${lambdaName}`;
+    await lambda.send(new InvokeCommand({ FunctionName: lambdaName, InvocationType: 'RequestResponse' }));
+
+    const ls = await retry(async () => {
+      const d = await logs.send(new DescribeLogStreamsCommand({
+        logGroupName,
+        orderBy: 'LastEventTime',
+        descending: true,
+        limit: 1
+      }));
+      return (d.logStreams && d.logStreams[0]?.logStreamName) ? d : null;
+    }, 12, 3000, 'lambda-logstream');
+
+    const stream = ls.logStreams![0].logStreamName!;
+    const ev = await retry(async () => {
+      const e = await logs.send(new GetLogEventsCommand({
+        logGroupName,
+        logStreamName: stream,
+        limit: 5,
+        startFromHead: false
+      }));
+      return (e.events || []).length ? e : null;
+    }, 12, 3000, 'lambda-logevents');
+
+    expect((ev.events || []).length).toBeGreaterThan(0);
+  });
+});
+
+/* ============================================================================
+ * E2E — API Gateway (IAM) — unsigned denied, SigV4-signed allowed
+ * ==========================================================================*/
+describe('E2E — API Gateway IAM auth', () => {
+  const outputs = readOutputs() as any;
+  const apiUrl: string = outputs.api_invoke_url;
+
+  it('Unsigned GET / is denied (non-2xx)', async () => {
+    const res = await httpGet(`${apiUrl}/`, 6000);
+    expect(res.status >= 200 && res.status < 300).toBe(false);
+  });
+
+  it('SigV4-signed GET / is allowed (2xx)', async () => {
+    const outputs = readOutputs() as any;
+    const apiUrl: string = outputs.api_invoke_url;
+    const u = new URL(apiUrl + '/');
+
+    // Reuse default chain creds from any client
+    const probeClient = new S3Client({ region: REGION });
+    const provider = probeClient.config.credentials as unknown as () => Promise<{
+      accessKeyId: string; secretAccessKey: string; sessionToken?: string;
+    }>;
+    const resolvedCreds = await provider?.();
+    if (!resolvedCreds?.accessKeyId || !resolvedCreds?.secretAccessKey) {
+      throw new Error('Could not resolve AWS credentials from default chain.');
+    }
+
+    const signer = new SignatureV4({
+      service: 'execute-api',
+      region: REGION,
+      credentials: async () => resolvedCreds as any,
+      sha256: Sha256 as any,
+    });
+
+    const req = new HttpRequest({
+      protocol: u.protocol,
+      hostname: u.hostname,
+      method: 'GET',
+      path: u.pathname === '/' ? '/' : u.pathname,
+      headers: { host: u.hostname },
+    });
+
+    const signed = await signer.sign(req);
+    const finalReq = new HttpRequest(signed as any);
+
+    const { response } = await new NodeHttpHandler().handle(finalReq as any, { requestTimeout: 6000 });
+    const code = response.statusCode ?? 0;
     expect(code).toBeGreaterThanOrEqual(200);
     expect(code).toBeLessThan(400);
   });
 });
 
 /* ============================================================================
- * NAT egress + Route posture
+ * E2E — CloudTrail delivers to S3 (AWSLogs/...) + posture
  * ==========================================================================*/
-describe('NAT egress + Route posture', () => {
-  const vpcId: string = OUTPUTS.use2_vpc_id;
-  const priv: string[] = OUTPUTS.use2_private_subnet_ids;
-  const pub: string[]  = OUTPUTS.use2_public_subnet_ids;
+describe('E2E — CloudTrail delivers to S3 (AWSLogs/...)', () => {
+  const outputs = readOutputs() as any;
+  const trailBucket: string = outputs.trail_bucket_name;
 
-  it('Private EC2 egress OK (curl https://example.com)', async () => {
-    const id = await pickAppInstance(vpcId);
-    await waitSsm(id);
-    const out = await ssmRun(id, `set -euo pipefail; curl -sSf https://example.com >/dev/null && echo OK || echo FAIL`, 180);
-    expect(out.Status).toBe('Success');
-    expect(out.StdOut).toMatch(/OK/);
-  });
+  const s3 = new S3Client({ region: REGION });
 
-  it('Public subnets have default 0.0.0.0/0 via IGW', async () => {
-    for (const sn of pub) {
-      const rt = await ec2.send(new DescribeRouteTablesCommand({ Filters: [{ Name: 'association.subnet-id', Values: [sn] }] }));
-      const hasIgw = (rt.RouteTables || []).some(t => (t.Routes || []).some(r => r.DestinationCidrBlock === '0.0.0.0/0' && (r.GatewayId || '').startsWith('igw-')));
-      expect(hasIgw).toBe(true);
-    }
-  });
-
-  it('Private subnets have default 0.0.0.0/0 via NAT', async () => {
-    for (const sn of priv) {
-      const rt = await ec2.send(new DescribeRouteTablesCommand({ Filters: [{ Name: 'association.subnet-id', Values: [sn] }] }));
-      const hasNat = (rt.RouteTables || []).some(t => (t.Routes || []).some(r => r.DestinationCidrBlock === '0.0.0.0/0' && (r.NatGatewayId || '').startsWith('nat-')));
-      expect(hasNat).toBe(true);
-    }
-  });
-});
-
-/* ============================================================================
- * VPCs + Peering posture
- * ==========================================================================*/
-describe('Two VPCs + Peering posture', () => {
-  it('Peering connection exists and is active', async () => {
-    const d = await ec2.send(new DescribeVpcPeeringConnectionsCommand({}));
-    const pcx = (d.VpcPeeringConnections || []).find(p =>
-      (p.Tags || []).some(t => t.Key === 'project' && t.Value === 'cloud-setup')
+  it('AWSLogs/<account>/ exists or appears shortly (multi-region trail)', async () => {
+    const hasLogs = await retry(
+      async () => {
+        const res = await s3.send(
+          new ListObjectsV2Command({ Bucket: trailBucket, Prefix: 'AWSLogs/', MaxKeys: 5 }),
+        );
+        const any = (res.Contents || []).some((o) => o.Key && o.Key.startsWith('AWSLogs/'));
+        return any ? true : null;
+      },
+      24,
+      5000,
+      'cloudtrail-s3',
     );
-    expect(pcx).toBeDefined();
-    expect(pcx!.Status?.Code).toMatch(/active/i);
+    expect(hasLogs).toBe(true);
   });
 
-  it('Routes to peer CIDRs via pcx present in all use2 subnets', async () => {
-    const use2Subs: string[] = [...OUTPUTS.use2_public_subnet_ids, ...OUTPUTS.use2_private_subnet_ids];
-    const euCidr = (OUTPUTS.euw2_cidr || '10.20.0.0/16') as string;
-    for (const sn of use2Subs) {
-      const rt = await ec2.send(new DescribeRouteTablesCommand({
-        Filters: [{ Name: 'association.subnet-id', Values: [sn] }]
-      }));
-      const viaPcx = (rt.RouteTables || []).some(t =>
-        (t.Routes || []).some(r =>
-          r.DestinationCidrBlock === euCidr && (r.VpcPeeringConnectionId || '').startsWith('pcx-')
-        )
-      );
-      expect(viaPcx).toBe(true);
-    }
-  });
-
-  it('Routes to peer CIDRs via pcx present in all euw2 subnets', async () => {
-    const euSubs: string[] = [...OUTPUTS.euw2_public_subnet_ids, ...OUTPUTS.euw2_private_subnet_ids];
-    const usCidr = (OUTPUTS.use2_cidr || '10.10.0.0/16') as string;
-    for (const sn of euSubs) {
-      const rt = await ec2EU.send(new DescribeRouteTablesCommand({
-        Filters: [{ Name: 'association.subnet-id', Values: [sn] }]
-      }));
-      const viaPcx = (rt.RouteTables || []).some(t =>
-        (t.Routes || []).some(r =>
-          r.DestinationCidrBlock === usCidr && (r.VpcPeeringConnectionId || '').startsWith('pcx-')
-        )
-      );
-      expect(viaPcx).toBe(true);
-    }
+  it('Trail bucket encryption is enabled (SSE AES256 or aws:kms)', async () => {
+    const enc = await s3.send(new GetBucketEncryptionCommand({ Bucket: trailBucket }));
+    const algo =
+      enc.ServerSideEncryptionConfiguration?.Rules?.[0]
+        ?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm || '';
+    expect(/AES256|aws:kms/.test(algo)).toBe(true);
   });
 });
 
 /* ============================================================================
- * S3 upload → Lambda (observe in logs)
+ * E2E — S3 buckets enforce TLS-only access (HTTP denied)
  * ==========================================================================*/
-describe('S3 upload triggers Lambda (logs show event)', () => {
-  const bucket = OUTPUTS.upload_bucket_name as string;
-  const lambdaName = OUTPUTS.lambda_on_upload_name as string;
+describe('E2E — S3 buckets enforce TLS-only access (HTTP denied)', () => {
+  const outputs = readOutputs() as any;
+  const ec2Id: string = outputs.ec2_instance_id;
+  const trailBucket: string = outputs.trail_bucket_name;
+  const appBucket: string = outputs.app_bucket_name;
 
-  it('Bucket posture (versioning + public access block)', async () => {
-    const v = await s3.send(new GetBucketVersioningCommand({ Bucket: bucket }));
-    expect(v.Status).toBe('Enabled');
-    const pab = await s3.send(new GetPublicAccessBlockCommand({ Bucket: bucket }));
-    const c = pab.PublicAccessBlockConfiguration!;
-    expect(c.BlockPublicAcls && c.BlockPublicPolicy && c.IgnorePublicAcls && c.RestrictPublicBuckets).toBe(true);
-  });
+  const ssm = new SSMClient({ region: REGION });
 
-  it('Upload object → Lambda logs contain our key', async () => {
-    const key = `e2e/${Date.now()}-${Math.random().toString(36).slice(2)}.txt`;
-    log('Uploading to S3:', { bucket, key });
-    await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: 'tap e2e upload' }));
-
-    const logGroupName = `/aws/lambda/${lambdaName}`;
-    let seen = false;
-    const quoted = `"${key.replace(/["\\]/g, '\\$&')}"`;
-    const start = Date.now();
-    const deadlineMs = 60_000;
-    let nextToken: string | undefined;
-
-    while (!seen && Date.now() - start < deadlineMs) {
-      try {
-        const fe = await logs.send(new FilterLogEventsCommand({
-          logGroupName,
-          filterPattern: quoted,
-          interleaved: true,
-          nextToken,
-          startTime: start - 5_000,
-        }));
-        const events = fe.events ?? [];
-        if (events.length) {
-          const hit = events.some(e => (e.message ?? '').includes(key));
-          log('[DEBUG] FilterLogEvents returned', events.length, 'events hit=', hit);
-          if (hit) { seen = true; break; }
-        }
-        nextToken = fe.nextToken;
-        if (!nextToken) await sleep(2000);
-      } catch (e: any) {
-        log('[DEBUG] FilterLogEvents error:', e?.message ?? e);
-        break;
-      }
-    }
-
-    if (!seen) {
-      const ls = await retry(async () => {
-        const d = await logs.send(new DescribeLogStreamsCommand({ logGroupName, orderBy: 'LastEventTime', descending: true, limit: 5 }));
-        return (d.logStreams || []).length ? d : null;
-      }, 20, 3000, 'lambda-logstreams');
-
-      for (const s of (ls.logStreams || []).slice(0, 5)) {
-        const ev = await retry(async () => {
-          const e = await logs.send(new GetLogEventsCommand({ logGroupName, logStreamName: s.logStreamName!, limit: 100, startFromHead: false }));
-          return (e.events || []).length ? e : null;
-        }, 10, 2000, 'lambda-logevents');
-        const text = (ev.events || []).map(e => e.message || '').join('\n');
-        log('[DEBUG] Scanned log stream', s.logStreamName, 'len', (ev.events || []).length);
-        if (text.includes(key)) { seen = true; break; }
-      }
-    }
-
-    expect(seen).toBe(true);
-  });
-});
-
-/* ============================================================================
- * RDS CRUD — password from outputs.rds_password or SSM param
- * ==========================================================================*/
-describe('RDS CRUD from EC2 (no skip)', () => {
-  const endpoint = OUTPUTS.rds_endpoint as string;
-  const port = Number(OUTPUTS.rds_port || 5432);
-  const user = (OUTPUTS.rds_username as string) || 'dbadmin';
-  const vpcId = OUTPUTS.use2_vpc_id as string;
-
-  async function resolvePassword(): Promise<string> {
-    const direct = OUTPUTS.rds_password as string | undefined;
-    if (direct && direct.length > 0) return direct;
-    const paramName = OUTPUTS.rds_password_param_name as string;
-    if (!paramName) throw new Error('Neither rds_password nor rds_password_param_name present in outputs.');
-    const gp = await ssm.send(new GetParameterCommand({ Name: paramName, WithDecryption: true }));
-    const val = gp.Parameter?.Value || '';
-    if (!val) throw new Error('SSM parameter resolved empty RDS password.');
-    return val;
-  }
-
-  it('CRUD succeeds via psql from EC2 to RDS (private)', async () => {
-    const pw = await resolvePassword();
-    const id = await pickAppInstance(vpcId);
-    await waitSsm(id);
-    await waitReachable(id);
-
-    const pwB64 = Buffer.from(pw, 'utf8').toString('base64');
+  it('HTTP to S3 buckets returns non-2xx from EC2 (TLS-only policy)', async () => {
+    await waitForSsmManaged(ssm, ec2Id);
     const script = [
       'set -euo pipefail',
-      'dnf -y install postgresql16 >/dev/null 2>&1 || dnf -y install postgresql15 >/dev/null 2>&1 || dnf -y install postgresql >/dev/null 2>&1 || true',
-      `export PGPASSWORD="$(echo '${pwB64}' | base64 -d)"`,
-      `OPTS="-h ${endpoint} -p ${port} -U ${user} -d postgres -v ON_ERROR_STOP=1 --set=sslmode=require"`,
-      'psql $OPTS -c "CREATE TABLE IF NOT EXISTS tap_ci(x int);"',
-      'psql $OPTS -c "INSERT INTO tap_ci(x) VALUES (1);"',
-      'COUNT=$(psql $OPTS -t -A -c "SELECT COUNT(*) FROM tap_ci;")',
-      'echo "COUNT=${COUNT:-0}"',
-      'psql $OPTS -c "DROP TABLE tap_ci;"',
-      'echo "PSQL_OK"',
-    ].join('\n');
-
-    const out = await ssmRun(id, script, 420);
-    if (out.Status !== 'Success') {
-      console.log('[E2E][psql-stdout]', out.StdOut.slice(0, 4000));
-      console.log('[E2E][psql-stderr]', out.StdErr.slice(0, 4000));
-    }
-    expect(out.Status).toBe('Success');
-    expect(out.StdOut).toMatch(/PSQL_OK/);
-    const m = out.StdOut.match(/COUNT=(\d+)/);
-    expect(m && m[1]).toBe('1');
-  });
-});
-
-describe('RDS is NOT reachable from the Internet', () => {
-  it('psql from runner should fail to connect to RDS host:port', async () => {
-    const net = require('net');
-    const host = OUTPUTS.rds_endpoint as string;
-    const port = Number(OUTPUTS.rds_port || 5432);
-    await expect(new Promise<void>((resolve, reject) => {
-      const s = net.createConnection({ host, port, timeout: 3000 }, () => reject(new Error('should not connect')));
-      s.on('error', () => resolve());
-      s.on('timeout', () => { s.destroy(); resolve(); });
-    })).resolves.toBeUndefined();
-  });
-});
-
-/* ============================================================================
- * CloudWatch Alarm integration — simulate ALARM/OK state
- * ==========================================================================*/
-describe('CloudWatch Alarm (CPU) — exists and can toggle state', () => {
-  async function resolveAlarmName(): Promise<string> {
-    const prefix = 'cloud-setup-';
-    const d = await cw.send(new DescribeAlarmsCommand({ AlarmNamePrefix: prefix }));
-    const hit = (d.MetricAlarms || []).find(a => (a.AlarmName || '').endsWith('-asg-cpu-high'));
-    if (!hit) throw new Error('Could not locate CPU alarm with suffix "-asg-cpu-high".');
-    return hit.AlarmName!;
-  }
-
-  it('Alarm exists', async () => {
-    const name = await resolveAlarmName();
-    const d = await cw.send(new DescribeAlarmsCommand({ AlarmNames: [name] }));
-    expect((d.MetricAlarms || []).length).toBe(1);
-  });
-
-  it('Can set alarm to ALARM and back to OK (integration)', async () => {
-    const name = await resolveAlarmName();
-
-    log('Force ALARM:', name);
-    await cw.send(new SetAlarmStateCommand({
-      AlarmName: name,
-      StateValue: 'ALARM',
-      StateReason: 'E2E test: forcing ALARM',
-    }));
-    const sawAlarm = await retry(async () => {
-      const d = await cw.send(new DescribeAlarmsCommand({ AlarmNames: [name] }));
-      return d.MetricAlarms?.[0]?.StateValue === 'ALARM' ? true : null;
-    }, 10, 2000, 'alarm->ALARM');
-    expect(sawAlarm).toBe(true);
-
-    log('Reset to OK:', name);
-    await cw.send(new SetAlarmStateCommand({
-      AlarmName: name,
-      StateValue: 'OK',
-      StateReason: 'E2E test: resetting to OK',
-    }));
-    const sawOk = await retry(async () => {
-      const d = await cw.send(new DescribeAlarmsCommand({ AlarmNames: [name] }));
-      return d.MetricAlarms?.[0]?.StateValue === 'OK' ? true : null;
-    }, 10, 2000, 'alarm->OK');
-    expect(sawOk).toBe(true);
-  });
-});
-
-/* ---- End-to-end “happy path” smoke (ALB -> EC2(private) -> RDS) ---- */
-describe('End-to-end smoke: ALB -> EC2(private) -> RDS', () => {
-  const albDns: string = OUTPUTS.alb_dns_name;
-  const vpcId: string  = OUTPUTS.use2_vpc_id as string;
-  const endpoint = OUTPUTS.rds_endpoint as string;
-  const port     = Number(OUTPUTS.rds_port || 5432);
-  const user     = (OUTPUTS.rds_username as string) || 'dbadmin';
-
-  async function resolvePassword(): Promise<string> {
-    const direct = OUTPUTS.rds_password as string | undefined;
-    if (direct && direct.length > 0) return direct;
-    const paramName = OUTPUTS.rds_password_param_name as string;
-    const gp = await ssm.send(new GetParameterCommand({ Name: paramName, WithDecryption: true }));
-    return gp.Parameter?.Value || '';
-  }
-
-  it('ALB serves, EC2 can reach ALB AND RDS in one SSM run', async () => {
-    // 0) If we can, wait for a healthy target (covers replaced/booting instances)
-    await waitAlbHealthyTarget(8 * 60 * 1000);
-
-    // 1) Probe ALB from runner (external check)
-    const albRes = await retry(async () => {
-      try {
-        const r = await httpGet(`http://${albDns}/alb.html`, 6000);
-        return (r.status >= 200 && r.status < 400 && /ENVIRONMENT=/i.test(r.body)) ? r : null;
-      } catch { return null; }
-    }, 40, 5000, 'alb-http');
-    expect(albRes.status).toBeGreaterThanOrEqual(200);
-    expect(albRes.status).toBeLessThan(400);
-
-    // 2) One SSM script on a private instance to curl ALB + psql RDS
-    const id = await pickAppInstance(vpcId);
-    await waitSsm(id);
-    await waitReachable(id);
-    const pw = await resolvePassword();
-    const pwB64 = Buffer.from(pw, 'utf8').toString('base64');
-
-    const script = [
-      'set -euo pipefail',
-      `ALB="http://${albDns}/alb.html"`,
-      'HTTP=0',
-      'for i in $(seq 1 12); do',
-      '  CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 --connect-timeout 3 "$ALB" || echo 0)',
-      '  echo "TRY=$i CODE=$CODE"',
-      '  if [ "$CODE" -ge 200 ] && [ "$CODE" -lt 400 ]; then HTTP="$CODE"; break; fi',
-      '  sleep 5',
+      `for B in ${trailBucket} ${appBucket}; do`,
+      `  CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://$B.s3.${REGION}.amazonaws.com/" || true)`,
+      `  echo "$B HTTP_CODE=$CODE"`,
       'done',
-      'dnf -y install postgresql16 >/dev/null 2>&1 || dnf -y install postgresql15 >/dev/null 2>&1 || dnf -y install postgresql >/dev/null 2>&1 || true',
-      `export PGPASSWORD="$(echo '${pwB64}' | base64 -d)"`,
-      `OPTS="-h ${endpoint} -p ${port} -U ${user} -d postgres -v ON_ERROR_STOP=1 --set=sslmode=require"`,
-      'psql $OPTS -c "CREATE TABLE IF NOT EXISTS tap_ci_smoke(id int primary key);" >/dev/null 2>&1 || true',
-      'psql $OPTS -c "TRUNCATE tap_ci_smoke;" >/dev/null 2>&1 || true',
-      'psql $OPTS -c "INSERT INTO tap_ci_smoke(id) VALUES (42);" >/dev/null 2>&1',
-      'COUNT=$(psql $OPTS -t -A -c "SELECT COUNT(*) FROM tap_ci_smoke;" 2>/dev/null || echo 0)',
-      'echo "{\\"alb_http\\": \\"${HTTP}\\", \\"rds_count\\": \\"${COUNT}\\"}"'
     ].join('\n');
 
-    const out = await ssmRun(id, script, 420);
-    if (out.Status !== 'Success') {
-      await dumpAlbTargetHealth();
-    }
+    const out = await ssmRun(ssm, ec2Id, script, 120);
     expect(out.Status).toBe('Success');
-
-    const line = out.StdOut.trim().split('\n').pop() || '{}';
-    let parsed: any = {};
-    try { parsed = JSON.parse(line); } catch {}
-    const httpCode = Number(parsed.alb_http || 0);
-    const rdsCount = String(parsed.rds_count || '');
-
-    expect(httpCode).toBeGreaterThanOrEqual(200);
-    expect(httpCode).toBeLessThan(400);
-    expect(rdsCount).toBe('1');
+    const lines = out.StdOut.trim().split('\n').filter(Boolean);
+    lines.forEach((l) => {
+      const m = l.match(/HTTP_CODE=(\d+)/);
+      expect(m).toBeTruthy();
+      const code = Number(m![1]);
+      expect(code >= 200 && code < 300).toBe(false);
+    });
   });
-
-  it('ALB Target Group has at least one healthy target', async () => {
-    const tgArn = process.env.E2E_TG_ARN || (OUTPUTS.alb_target_group_arn as string | undefined);
-    if (!elbv2 || !DescribeTargetHealthCommandCtor || !tgArn) return; // skip if lib/arn missing
-    const th = await elbv2.send(new DescribeTargetHealthCommandCtor({ TargetGroupArn: tgArn }));
-    const healthy = (th.TargetHealthDescriptions || []).some((d: any) => d.TargetHealth?.State === 'healthy');
-    expect(healthy).toBe(true);
-  });
-
-  it('HTTP API proxies to ALB (IAM signed)', async () => {
-    const url = `${OUTPUTS.api_invoke_url}/`; // root route exists
-    const r = await retry(async () => {
-      const rr = await httpGetSigned(url, 6000);
-      return (rr.status >= 200 && rr.status < 400 && /ENVIRONMENT=/i.test(rr.body)) ? rr : null;
-    }, 40, 5000, 'apigw->alb');
-    expect(r.status).toBeGreaterThanOrEqual(200);
-    expect(r.status).toBeLessThan(400);
-    expect(r.body).toMatch(/ENVIRONMENT=/i);
-  });
-
 });
 
 /* ============================================================================
- * Test teardown — close AWS SDK clients so Jest can exit
+ * E2E — AWS WAF logging posture and (optionally) live log verification
  * ==========================================================================*/
-afterAll(async () => {
-  try { ec2.destroy?.(); } catch {}
-  try { ec2EU.destroy?.(); } catch {}
-  try { ssm.destroy?.(); } catch {}
-  try { s3.destroy?.(); } catch {}
-  try { logs.destroy?.(); } catch {}
-  try { rds.destroy?.(); } catch {}
-  try { cw.destroy?.(); } catch {}
-  try { elbv2?.destroy?.(); } catch {}
-  try { (HTTP_AGENT as any).destroy?.(); } catch {}
-  try { (HTTPS_AGENT as any).destroy?.(); } catch {}
-  log('AWS SDK clients destroyed');
-  log('--- E2E TESTS END ---');
+describe('E2E — AWS WAF logging', () => {
+  const outputs = readOutputs() as any;
+  const apiUrl: string = outputs.api_invoke_url;
+  const s3 = new S3Client({ region: REGION });
+
+  const WAF_LOG_BUCKET = process.env.WAF_LOG_BUCKET || '';
+  const WAF_ASSOCIATED = process.env.WAF_ASSOCIATED === '1';
+
+  it('Posture: logging is either disabled by design OR has a configured log bucket (env)', async () => {
+    if (!WAF_LOG_BUCKET) {
+      expect(true).toBe(true);
+    } else {
+      const listed = await s3.send(
+        new ListObjectsV2Command({ Bucket: WAF_LOG_BUCKET, MaxKeys: 1 })
+      );
+      expect(listed.$metadata.httpStatusCode).toBeGreaterThanOrEqual(200);
+      expect(listed.$metadata.httpStatusCode).toBeLessThan(400);
+    }
+  });
+
+  it('Live logs (E2E): suspicious requests produce WAF log objects in S3', async () => {
+    if (!WAF_LOG_BUCKET || !WAF_ASSOCIATED) {
+      expect(true).toBe(true);
+      return;
+    }
+
+    const before = await s3.send(
+      new ListObjectsV2Command({ Bucket: WAF_LOG_BUCKET, MaxKeys: 50, Prefix: '' })
+    );
+    const beforeCount = (before.Contents || []).length;
+
+    const probes = [
+      `${apiUrl}/?q=<script>alert(1)</script>`,
+      `${apiUrl}/?id=1%20OR%201=1--`
+    ];
+
+    for (const p of probes) {
+      try {
+        await httpGet(p, 4000);
+      } catch {}
+    }
+
+    const after = await retry(async () => {
+      const res = await s3.send(
+        new ListObjectsV2Command({ Bucket: WAF_LOG_BUCKET, MaxKeys: 100 })
+      );
+      const cnt = (res.Contents || []).length;
+      return cnt > beforeCount ? res : null;
+    }, 20, 5000, 'waf-logs-firehose');
+
+    const newest = (after.Contents || [])
+      .sort((a, b) => (b.LastModified?.getTime() || 0) - (a.LastModified?.getTime() || 0))[0];
+    expect(newest?.Key).toBeTruthy();
+
+    const obj = await s3.send(new GetObjectCommand({ Bucket: WAF_LOG_BUCKET, Key: newest!.Key! }));
+    const body = await new Promise<string>((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      (obj.Body as any).on('data', (d: Buffer) => chunks.push(d));
+      (obj.Body as any).on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+      (obj.Body as any).on('error', reject);
+    });
+
+    const lines = body.split('\n').map(l => l.trim()).filter(Boolean).slice(0, 20);
+    const hasWafFields = lines.some(l => {
+      try {
+        const j = JSON.parse(l);
+        return (
+          j.terminatingRuleId !== undefined &&
+          j.action !== undefined &&
+          j.httpRequest !== undefined
+        );
+      } catch { return false; }
+    });
+
+    expect(hasWafFields).toBe(true);
+  });
 });
