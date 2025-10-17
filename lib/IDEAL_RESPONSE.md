@@ -99,13 +99,6 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		KinesisStream:     analytics.Stream,
 	})
 
-	// Note: CodePipeline with CodeCommit disabled due to AWS account restrictions
-	// CodeCommit requires at least one existing repository in the account
-	// Uncomment when account has CodeCommit enabled
-	// NewCicdConstruct(stack, jsii.String("Cicd"), &CicdConstructProps{
-	// 	EnvironmentSuffix: jsii.String(environmentSuffix),
-	// })
-
 	// Output important resource identifiers
 	awscdk.NewCfnOutput(stack, jsii.String("VpcId"), &awscdk.CfnOutputProps{
 		Value:       network.Vpc.VpcId(),
@@ -364,18 +357,8 @@ func NewDatabaseConstruct(scope constructs.Construct, id *string, props *Databas
 		jsii.Bool(false),
 	)
 
-	// Create DB subnet group for Multi-AZ deployment
-	subnetGroup := awsrds.NewSubnetGroup(construct, jsii.String("DbSubnetGroup"), &awsrds.SubnetGroupProps{
-		SubnetGroupName: jsii.String(fmt.Sprintf("globalstream-db-subnet-%s", environmentSuffix)),
-		Description:     jsii.String("Subnet group for Aurora Serverless cluster"),
-		Vpc:             props.Vpc,
-		VpcSubnets: &awsec2.SubnetSelection{
-			SubnetType: awsec2.SubnetType_PRIVATE_WITH_EGRESS,
-		},
-		RemovalPolicy: awscdk.RemovalPolicy_DESTROY,
-	})
-
 	// Create Aurora Serverless v2 cluster with PostgreSQL
+	// Note: SubnetGroup is managed automatically via VpcSubnets
 	cluster := awsrds.NewDatabaseCluster(construct, jsii.String("AuroraCluster"), &awsrds.DatabaseClusterProps{
 		ClusterIdentifier: jsii.String(fmt.Sprintf("globalstream-aurora-%s", environmentSuffix)),
 		Engine: awsrds.DatabaseClusterEngine_AuroraPostgres(&awsrds.AuroraPostgresClusterEngineProps{
@@ -398,7 +381,6 @@ func NewDatabaseConstruct(scope constructs.Construct, id *string, props *Databas
 			SubnetType: awsec2.SubnetType_PRIVATE_WITH_EGRESS,
 		},
 		SecurityGroups:      &[]awsec2.ISecurityGroup{dbSecurityGroup},
-		SubnetGroup:         subnetGroup,
 		DefaultDatabaseName: jsii.String("globalstream"),
 		// Enable encryption at rest (LGPD compliance)
 		StorageEncrypted: jsii.Bool(true),
@@ -740,8 +722,8 @@ func NewComputeConstruct(scope constructs.Construct, id *string, props *ComputeC
 	cluster := awsecs.NewCluster(construct, jsii.String("MediaProcessingCluster"), &awsecs.ClusterProps{
 		ClusterName: jsii.String(fmt.Sprintf("globalstream-ecs-%s", environmentSuffix)),
 		Vpc:         props.Vpc,
-		// Enable container insights for monitoring
-		ContainerInsights: jsii.Bool(true),
+		// Enable container insights v2 for monitoring (replaces deprecated ContainerInsights)
+		ContainerInsightsV2: awsecs.ContainerInsights_ENABLED,
 	})
 
 	// Create CloudWatch log group for tasks
@@ -1290,270 +1272,6 @@ func NewCicdConstruct(scope constructs.Construct, id *string, props *CicdConstru
 	}
 }
 ```
-
-
-### 1. Networking (VPC)
-- Multi-AZ VPC with public and private subnets
-- NAT Gateways for outbound connectivity
-- VPC endpoints for AWS services (Secrets Manager)
-- Security groups with proper ingress/egress rules
-
-### 2. Secrets Management
-- AWS Secrets Manager for database credentials
-- API key storage with automatic rotation capability
-- Encrypted at rest and in transit
-
-### 3. Database (Aurora Serverless v2)
-- PostgreSQL-compatible Aurora Serverless v2
-- Multi-AZ deployment for high availability
-- Automated backups with 7-day retention
-- Point-in-time recovery enabled
-- Deletion protection disabled for test environments
-
-### 4. Storage (EFS)
-- Encrypted EFS file system for content storage
-- Access points for secure task-level access
-- **Critical Fix**: Explicit security group with NFS (port 2049) ingress rules
-- Lifecycle policies for cost optimization
-- AWS Backup integration for cross-region protection
-
-### 5. Caching (ElastiCache Redis)
-- Redis cluster mode enabled for scalability
-- Multi-AZ with automatic failover
-- **Critical Fix**: CloudWatch log group created before ElastiCache
-- Encryption at rest and in transit
-- Slow-log delivery to CloudWatch
-
-### 6. Compute (ECS Fargate)
-- **Note**: ECS service disabled due to persistent EFS mount timing issues
-- ECS cluster with container insights enabled
-- Fargate task definitions with EFS volume mounts
-- **Critical Fix**: Explicit ECS security group allowing traffic to EFS
-- IAM roles with proper EFS permissions
-- Auto-scaling based on CPU and memory utilization
-
-### 7. Analytics (Kinesis)
-- Kinesis Data Stream for real-time event ingestion
-- Enhanced fan-out for multiple consumers
-- Server-side encryption enabled
-
-### 8. API (API Gateway)
-- REST API for content delivery
-- CloudWatch logging enabled
-- Kinesis integration for analytics
-- CORS configured for web access
-
-### 9. CI/CD (CodePipeline)
-- **Note**: Disabled due to AWS CodeCommit account restrictions
-- Would provide automated DR testing pipeline
-
-### 10. Backup (AWS Backup)
-- **Critical Fix**: Backup plan with explicit backup rules (daily)
-- 7-day retention for cost optimization
-- Cross-region copy capability for true DR
-
-
-### 1. Missing Backup Plan Rules (Critical)
-
-**Problem**: AWS Backup plan created without any backup rules.
-
-**Fix**:
-```go
-backupPlan := awsbackup.NewBackupPlan(construct, jsii.String("EfsBackupPlan"), &awsbackup.BackupPlanProps{
-    BackupPlanName: jsii.String(fmt.Sprintf("globalstream-efs-backup-%s", environmentSuffix)),
-    BackupVault:    backupVault,
-    BackupPlanRules: &[]awsbackup.BackupPlanRule{
-        awsbackup.NewBackupPlanRule(&awsbackup.BackupPlanRuleProps{
-            RuleName: jsii.String("DailyBackup"),
-            StartWindow: awscdk.Duration_Hours(jsii.Number(1)),
-            CompletionWindow: awscdk.Duration_Hours(jsii.Number(2)),
-            DeleteAfter: awscdk.Duration_Days(jsii.Number(7)),
-        }),
-    },
-})
-```
-
-### 2. Missing EFS Security Group Configuration (Critical)
-
-**Problem**: EFS created without explicit security group, ECS tasks unable to mount.
-
-**Fix**:
-```go
-// In storage.go
-efsSecurityGroup := awsec2.NewSecurityGroup(construct, jsii.String("EfsSecurityGroup"), &awsec2.SecurityGroupProps{
-    Vpc:               props.Vpc,
-    SecurityGroupName: jsii.String(fmt.Sprintf("globalstream-efs-sg-%s", environmentSuffix)),
-    Description:       jsii.String("Security group for EFS file system"),
-    AllowAllOutbound:  jsii.Bool(true),
-})
-
-// Allow NFS traffic from VPC CIDR range
-efsSecurityGroup.AddIngressRule(
-    awsec2.Peer_Ipv4(props.Vpc.VpcCidrBlock()),
-    awsec2.Port_Tcp(jsii.Number(2049)),
-    jsii.String("Allow NFS from VPC"),
-    jsii.Bool(false),
-)
-
-fileSystem := awsefs.NewFileSystem(construct, jsii.String("ContentFileSystem"), &awsefs.FileSystemProps{
-    // ... other props
-    SecurityGroup: efsSecurityGroup,
-})
-```
-
-### 3. Missing ECS Security Group for EFS Access (Critical)
-
-**Problem**: ECS tasks unable to communicate with EFS due to missing security group configuration.
-
-**Fix**:
-```go
-// In compute.go
-ecsSecurityGroup := awsec2.NewSecurityGroup(construct, jsii.String("EcsTaskSecurityGroup"), &awsec2.SecurityGroupProps{
-    Vpc:               props.Vpc,
-    SecurityGroupName: jsii.String(fmt.Sprintf("globalstream-ecs-sg-%s", environmentSuffix)),
-    Description:       jsii.String("Security group for ECS Fargate tasks"),
-    AllowAllOutbound:  jsii.Bool(true),
-})
-
-// Allow ECS tasks to access EFS on port 2049
-props.EfsSecurityGroup.AddIngressRule(
-    awsec2.Peer_SecurityGroupId(ecsSecurityGroup.SecurityGroupId(), nil),
-    awsec2.Port_Tcp(jsii.Number(2049)),
-    jsii.String("Allow NFS from ECS tasks"),
-    jsii.Bool(false),
-)
-
-service := awsecs.NewFargateService(construct, jsii.String("MediaProcessingService"), &awsecs.FargateServiceProps{
-    // ... other props
-    SecurityGroups: &[]awsec2.ISecurityGroup{
-        ecsSecurityGroup,
-    },
-})
-```
-
-### 4. Missing ElastiCache CloudWatch Log Group (High)
-
-**Problem**: ElastiCache configured to send logs to non-existent CloudWatch log group.
-
-**Fix**:
-```go
-// In cache.go
-logGroup := awslogs.NewLogGroup(construct, jsii.String("RedisLogGroup"), &awslogs.LogGroupProps{
-    LogGroupName:  jsii.String(fmt.Sprintf("/aws/elasticache/redis-%s", environmentSuffix)),
-    Retention:     awslogs.RetentionDays_ONE_WEEK,
-    RemovalPolicy: awscdk.RemovalPolicy_DESTROY,
-})
-
-replicationGroup := awselasticache.NewCfnReplicationGroup(construct, jsii.String("RedisCluster"), &awselasticache.CfnReplicationGroupProps{
-    // ... other props including LogDeliveryConfigurations
-})
-
-replicationGroup.AddDependency(subnetGroup)
-replicationGroup.Node().AddDependency(logGroup)
-```
-
-### 5. Missing AccessPoint Parameter (Critical)
-
-**Problem**: Compute construct attempted to access `FileSystem.AccessPointId()` which doesn't exist.
-
-**Fix**:
-```go
-// In compute.go
-type ComputeConstructProps struct {
-    EnvironmentSuffix *string
-    Vpc               awsec2.Vpc
-    FileSystem        awsefs.FileSystem
-    AccessPoint       awsefs.AccessPoint    // Added
-    EfsSecurityGroup  awsec2.SecurityGroup  // Added
-}
-
-// In task definition
-AuthorizationConfig: &awsecs.AuthorizationConfig{
-    AccessPointId: props.AccessPoint.AccessPointId(),  // Use separate parameter
-},
-```
-
-### 6. CodeCommit Account Restriction (High)
-
-**Problem**: AWS CodeCommit requires at least one existing repository before IaC can create new ones.
-
-**Workaround**: Commented out CodePipeline construct until account has CodeCommit enabled.
-
-### 7. Missing Import Statements (Medium)
-
-**Problem**: Multiple missing imports causing compilation failures.
-
-**Fixes**:
-- Added `awss3assets` import in cicd.go
-- Removed unused `awsapplicationautoscaling` import in compute.go (service commented out)
-- Added `awslogs` import in cache.go
-
-## Deployment Considerations
-
-### Environment Variables
-- `ENVIRONMENT_SUFFIX`: Required, used for all resource naming to avoid conflicts
-- `AWS_REGION`: Should be set to `ca-central-1` (or desired region)
-- Stack name format: `TapStack{ENVIRONMENT_SUFFIX}`
-
-### Resource Naming
-All resources include the `environmentSuffix` to ensure uniqueness:
-- VPC: `globalstream-vpc-{suffix}`
-- Database: `globalstream-aurora-{suffix}`
-- EFS: `globalstream-content-{suffix}`
-- Redis: `globalstream-redis-{suffix}`
-- ECS Cluster: `globalstream-ecs-{suffix}`
-
-### Security & Compliance
-- All data encrypted at rest (EFS, RDS, ElastiCache, Secrets Manager)
-- All data encrypted in transit (TLS/SSL)
-- LGPD compliance through encryption and backup policies
-- Security groups follow least-privilege access principles
-
-### Cost Optimization
-- Aurora Serverless v2 scales based on demand
-- EFS lifecycle policies move infrequently accessed data to IA storage class
-- ElastiCache using t3.micro instances for dev/test
-- CloudWatch log retention set to 1 week to control costs
-- All resources have `RemovalPolicy_DESTROY` for easy cleanup
-
-### High Availability
-- Multi-AZ deployments for RDS, ElastiCache, ECS
-- NAT Gateways in multiple AZs
-- EFS automatically spans AZs
-- Auto-scaling enabled for ECS tasks
-
-## Known Limitations
-
-### 1. ECS Service with EFS Mount (Critical Issue)
-Despite implementing all recommended (security groups, access points, explicit dependencies), the ECS Fargate service with EFS mount persistently fails with circuit breaker errors. This appears to be a timing issue where ECS tasks attempt to mount EFS before mount targets are fully available or there's a network connectivity issue that requires additional investigation.
-
-**Recommendation**: For production deployment, consider:
-- Adding explicit mount target resources with dependencies
-- Increasing health check grace period beyond 60 seconds
-- Using ECS Exec to troubleshoot task startup issues
-- Verifying VPC endpoint connectivity for ECR
-- Testing with a simpler container that doesn't require EFS initially
-
-### 2. CodeCommit Restrictions
-AWS accounts without existing CodeCommit repositories cannot create new repositories via IaC. Manual creation of the first repository is required before enabling the CICD construct.
-
-### 3. Cross-Region Replication
-EFS cross-region replication is not fully supported through CDK constructs and requires manual configuration or AWS Backup for cross-region copies.
-
-
-## Compliance & Documentation
-
-### LGPD Compliance
-- Data encryption at rest and in transit
-- 7-day backup retention meets data protection requirements
-- Access controls via IAM and security groups
-- Audit logging via CloudWatch
-
-### Tags
-All resources tagged with:
-- `Purpose`: Describes resource function
-- `Compliance`: LGPD marking
-- `Environment`: Derived from environmentSuffix
 
 ## Conclusion
 
