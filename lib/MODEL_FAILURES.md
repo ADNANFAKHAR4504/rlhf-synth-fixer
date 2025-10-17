@@ -98,3 +98,14 @@ Error: Process completed with exit code 1.
                 │ 
                 ╵
 TapStackpr4595  ::error::Terraform exited with code 1.
+
+TapStackpr4595  ╷
+                │ Error: putting IAM Role (TapStackpr4595-pr4595-ec2-role) Policy (ec2-policy): operation error IAM: PutRolePolicy, https response error StatusCode: 400, RequestID: 48870015-9c29-4a49-848e-580d780f910b, MalformedPolicyDocument: Policy statement must contain resources.
+                │ 
+                │   with aws_iam_role_policy.iam_TapStackpr4595-pr4595-ec2-role-ec2-policy_67C3641D (iam/TapStackpr4595-pr4595-ec2-role-ec2-policy),
+                │   on cdk.tf.json line 276, in resource.aws_iam_role_policy.iam_TapStackpr4595-pr4595-ec2-role-ec2-policy_67C3641D (iam/TapStackpr4595-pr4595-ec2-role-ec2-policy):
+                │  276:       }
+                │ 
+                ╵
+TapStackpr4595  ::error::Terraform exited with code 1.
+Invoking Terraform CLI failed with exit code 1

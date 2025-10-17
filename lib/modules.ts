@@ -419,56 +419,71 @@ export class IAMConstruct extends Construct {
     bucketArns: string[],
     secretArns: string[]
   ): any {
+    const statements: any[] = [];
+
+    // S3 Access - only add if bucketArns is not empty
+    if (bucketArns.length > 0) {
+      statements.push({
+        Sid: 'S3Access',
+        Effect: 'Allow',
+        Action: ['s3:GetObject', 's3:PutObject', 's3:ListBucket'],
+        Resource: bucketArns.flatMap(arn => [arn, `${arn}/*`]),
+      });
+    }
+
+    // Secrets Manager Access - only add if secretArns is not empty
+    if (secretArns.length > 0) {
+      statements.push({
+        Sid: 'SecretsManagerAccess',
+        Effect: 'Allow',
+        Action: [
+          'secretsmanager:GetSecretValue',
+          'secretsmanager:DescribeSecret',
+        ],
+        Resource: secretArns,
+      });
+    }
+
+    // Always include CloudWatch Logs
+    statements.push({
+      Sid: 'CloudWatchLogs',
+      Effect: 'Allow',
+      Action: [
+        'logs:CreateLogGroup',
+        'logs:CreateLogStream',
+        'logs:PutLogEvents',
+        'logs:DescribeLogStreams',
+      ],
+      Resource: 'arn:aws:logs:*:*:log-group:/aws/ec2/*',
+    });
+
+    // Always include SSM Access
+    statements.push({
+      Sid: 'SSMAccess',
+      Effect: 'Allow',
+      Action: [
+        'ssm:GetParameter',
+        'ssm:GetParameters',
+        'ssm:GetParametersByPath',
+      ],
+      Resource: 'arn:aws:ssm:*:*:parameter/*',
+    });
+
+    // Always include CloudWatch Metrics
+    statements.push({
+      Sid: 'CloudWatchMetrics',
+      Effect: 'Allow',
+      Action: [
+        'cloudwatch:PutMetricData',
+        'cloudwatch:GetMetricStatistics',
+        'cloudwatch:ListMetrics',
+      ],
+      Resource: '*',
+    });
+
     return {
       Version: '2012-10-17',
-      Statement: [
-        {
-          Sid: 'S3Access',
-          Effect: 'Allow',
-          Action: ['s3:GetObject', 's3:PutObject', 's3:ListBucket'],
-          Resource: bucketArns.flatMap(arn => [arn, `${arn}/*`]),
-        },
-        {
-          Sid: 'SecretsManagerAccess',
-          Effect: 'Allow',
-          Action: [
-            'secretsmanager:GetSecretValue',
-            'secretsmanager:DescribeSecret',
-          ],
-          Resource: secretArns,
-        },
-        {
-          Sid: 'CloudWatchLogs',
-          Effect: 'Allow',
-          Action: [
-            'logs:CreateLogGroup',
-            'logs:CreateLogStream',
-            'logs:PutLogEvents',
-            'logs:DescribeLogStreams',
-          ],
-          Resource: 'arn:aws:logs:*:*:log-group:/aws/ec2/*',
-        },
-        {
-          Sid: 'SSMAccess',
-          Effect: 'Allow',
-          Action: [
-            'ssm:GetParameter',
-            'ssm:GetParameters',
-            'ssm:GetParametersByPath',
-          ],
-          Resource: 'arn:aws:ssm:*:*:parameter/*',
-        },
-        {
-          Sid: 'CloudWatchMetrics',
-          Effect: 'Allow',
-          Action: [
-            'cloudwatch:PutMetricData',
-            'cloudwatch:GetMetricStatistics',
-            'cloudwatch:ListMetrics',
-          ],
-          Resource: '*',
-        },
-      ],
+      Statement: statements,
     };
   }
 }
