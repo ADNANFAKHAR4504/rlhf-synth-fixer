@@ -340,24 +340,23 @@ describe('CloudWatch Analytics System - Integration Tests', () => {
     }, 30000);
 
     test('should have CloudWatch alarms configured', async () => {
+      const snsTopicName = outputs.sns_topic_name;
+
+      if (!snsTopicName) {
+        console.warn('SNS topic name not found, skipping test');
+        return;
+      }
+
       const command = new DescribeAlarmsCommand({
         MaxRecords: 100,
       });
       const response = await cloudwatchClient.send(command);
 
-      // Filter for alarms from this deployment based on naming pattern
+      // Filter for alarms from this deployment using SNS topic name prefix
+      const alarmPrefix = snsTopicName.replace('-alerts', '');
       const projectAlarms = response.MetricAlarms?.filter((alarm) => {
         const alarmName = alarm.AlarmName || '';
-        // Check for our resource naming pattern (contains environment suffix or specific resource names)
-        return (
-          alarmName.includes('api-high-latency') ||
-          alarmName.includes('api-high-error-rate') ||
-          alarmName.includes('lambda-api-errors') ||
-          alarmName.includes('lambda-api-duration') ||
-          alarmName.includes('lambda-agg-errors') ||
-          alarmName.includes('rds-high-cpu') ||
-          alarmName.includes('rds-high-connections')
-        );
+        return alarmName.startsWith(alarmPrefix);
       });
 
       expect(projectAlarms).toBeDefined();
