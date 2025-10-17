@@ -40,12 +40,14 @@ variable "master_api_key" {
   description = "Master API key for authentication"
   type        = string
   sensitive   = true
+  default     = "change-me-in-production-master-key-12345"
 }
 
 variable "jwt_secret" {
   description = "JWT secret for token signing"
   type        = string
   sensitive   = true
+  default     = "change-me-in-production-jwt-secret-67890"
 }
 
 variable "allowed_origins" {
@@ -63,6 +65,7 @@ variable "transaction_rate_limit" {
 variable "alarm_email" {
   description = "Email for CloudWatch alarm notifications"
   type        = string
+  default     = "alerts@example.com"
 }
 
 variable "common_tags" {
