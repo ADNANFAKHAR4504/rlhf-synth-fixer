@@ -1070,6 +1070,7 @@ class ComputeStack(pulumi.ComponentResource):
             tags={**tags, 'Name': f'lambda-exec-role-{environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
+        
         # Lambda function for primary region
         self.primary_lambda = aws.lambda_.Function(
             f"primary-app-lambda-{environment_suffix}",
