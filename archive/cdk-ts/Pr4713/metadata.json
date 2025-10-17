@@ -1,0 +1,29 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349793",
+  "team": "3",
+  "startedAt": "2025-10-17T10:06:22.879Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "SQS",
+    "SNS",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 8,
+  "background": "Serverless infrastructure with S3-triggered Lambda function, dead letter queue, CloudWatch monitoring and alarms, implementing secure event-driven processing with encryption and least-privilege IAM",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-creator",
+  "dockerS3Location": ""
+}

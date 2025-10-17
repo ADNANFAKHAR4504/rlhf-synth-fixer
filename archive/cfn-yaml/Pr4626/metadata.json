@@ -1,0 +1,41 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349058",
+  "team": "3",
+  "startedAt": "2025-10-16T15:56:56.642Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "Public Subnet",
+    "Private Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Elastic IP",
+    "Route Table",
+    "Route",
+    "Security Group",
+    "Application Load Balancer",
+    "HTTPS Listener",
+    "Target Group",
+    "S3 Bucket (Application)",
+    "S3 Bucket (Logs)",
+    "S3 Bucket Policy",
+    "IAM Role (EC2)",
+    "IAM Policy",
+    "CloudTrail Trail"
+  ],
+  "training_quality": 9,
+  "training_quality_justification": "The generated template applies least-privilege IAM limited to a single S3 bucket with ≤6 inline statements, enforces HTTPS on the ALB (with parameterized ACM ARN and conditional listeners), restricts SG ingress to required ports, enables versioning and encryption with public access blocked on all buckets, configures centralized logging (S3 server access + ALB + CloudTrail), and follows consistent <project>-<resource>-<environment> naming and tagging. Parameters have safe defaults, the stack is self-contained, and the design passes standard cfn-lint checks without external dependencies beyond the ACM certificate.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
+}

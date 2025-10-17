@@ -1,0 +1,31 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "348982",
+  "team": "5",
+  "startedAt": "2025-10-15T18:01:13.004Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "CloudWatch",
+    "API Gateway",
+    "Lambda",
+    "RDS",
+    "SNS",
+    "DynamoDB",
+    "EventBridge",
+    "IAM"
+  ],
+  "training_quality": 9,
+  "background": "Deploy an advanced CloudWatch analytics system for monitoring multi-service infrastructure handling 100,000 daily interactions across APIs and databases. The system provides custom dashboards, proactive alerts, and automated metric aggregation using CloudWatch Dashboards for API Gateway, Lambda, and RDS metrics, CloudWatch Alarms for latency and errors, SNS for alerts, DynamoDB for logs, EventBridge for scheduling, and IAM for secure access.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "devang-devops",
+  "dockerS3Location": ""
+}
