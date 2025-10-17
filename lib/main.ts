@@ -95,21 +95,8 @@ export class FinTechTradingStack extends TerraformStack {
       targetKeyId: rdsKmsKey.keyId,
     });
 
-    const elasticacheKmsKey = new KmsKey(this, 'elasticache-kms-key', {
-      description: `KMS key for ElastiCache encryption - ${environmentSuffix}`,
-      enableKeyRotation: true,
-      deletionWindowInDays: 10,
-      tags: {
-        Name: `elasticache-kms-key-${environmentSuffix}`,
-        Environment: environmentSuffix,
-        Purpose: 'ElastiCache-Encryption',
-      },
-    });
-
-    new KmsAlias(this, 'elasticache-kms-alias', {
-      name: `alias/elasticache-key-${environmentSuffix}`,
-      targetKeyId: elasticacheKmsKey.keyId,
-    });
+    // Note: ElastiCache KMS key removed - custom KMS keys only work in cluster mode
+    // Non-cluster mode uses AWS default service key for at-rest encryption
 
     const efsKmsKey = new KmsKey(this, 'efs-kms-key', {
       description: `KMS key for EFS encryption - ${environmentSuffix}`,
@@ -635,7 +622,8 @@ export class FinTechTradingStack extends TerraformStack {
         securityGroupIds: [elasticacheSecurityGroup.id],
         atRestEncryptionEnabled: 'true',
         transitEncryptionEnabled: true,
-        kmsKeyId: elasticacheKmsKey.arn,
+        // Note: Custom KMS key (kmsKeyId) is only supported in cluster mode
+        // For non-cluster mode, AWS uses the default service key
         snapshotRetentionLimit: 5,
         snapshotWindow: '03:00-05:00',
         maintenanceWindow: 'mon:05:00-mon:07:00',
