@@ -1,4 +1,25 @@
-# Provider.tf
+# Payment Processing API Gateway - IDEAL Infrastructure Response
+
+## Infrastructure Overview
+This Terraform configuration creates a secure, compliant payment processing API Gateway with Lambda integration, featuring comprehensive authentication, throttling, logging, and CORS support for a fintech startup's mobile application.
+
+## Architecture Components
+
+### Core Infrastructure
+- **AWS API Gateway REST API** - Regional endpoint for payment processing
+- **AWS Lambda Function** - Payment processor with Python 3.11 runtime  
+- **CloudWatch Logs** - Comprehensive logging with 7-day retention
+- **IAM Roles** - Least privilege security model
+
+### Security Features
+- **API Key Authentication** - Required for all payment requests
+- **Usage Plan** - 100 req/sec throttle, 200 burst limit, 10K daily quota
+- **Regional Endpoints** - Geographically optimized traffic routing
+- **CORS Configuration** - Secure cross-origin resource sharing
+
+## Complete Terraform Configuration
+
+### Provider Configuration (provider.tf)
 ```hcl
 # ========================================
 # Terraform Configuration

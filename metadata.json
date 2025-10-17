@@ -7,8 +7,10 @@
   "team": "5",
   "startedAt": "2025-10-17T06:14:37.958Z",
   "subtask": "Provisioning of Infrastructure Environments",
+  "background": "Payment Processing API Gateway Infrastructure",
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "[API Gateway, Lambda, CloudWatch Logs, IAM]"
+  "aws_services": ["API Gateway", "Lambda", "CloudWatch Logs", "IAM"],
+  "training_quality": 9
 }
