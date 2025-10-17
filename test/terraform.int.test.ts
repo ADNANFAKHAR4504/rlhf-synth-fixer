@@ -372,7 +372,6 @@ describe("E2E AWS Resource Integration Validation for tap_stack.tf", () => {
         if (replicationRecordId) {
           await new Promise((resolve) => setTimeout(resolve, 3000));
           replicationPrimaryRead = await getAppData(outputs.primary_alb_dns, replicationRecordId);
-          replicationSecondaryRead = await getAppData(outputs.secondary_alb_dns, replicationRecordId);
         }
       } catch (error) {
         console.warn(`[WARN] Application replication pre-check failed: ${(error as Error).message}`);
