@@ -106,6 +106,7 @@ export class NetworkingConstruct extends Construct {
         Name: `payment-nat-eip-${environmentSuffix}`,
         Environment: environmentSuffix,
       },
+      dependsOn: [igw],
     });
 
     const natGateway = new NatGateway(this, 'nat-gateway', {
@@ -115,7 +116,7 @@ export class NetworkingConstruct extends Construct {
         Name: `payment-nat-${environmentSuffix}`,
         Environment: environmentSuffix,
       },
-      dependsOn: [natEip, igw],
+      dependsOn: [natEip, igw, this.publicSubnets[0]],
     });
 
     // Create private subnets in 2 AZs

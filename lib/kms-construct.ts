@@ -1,6 +1,6 @@
-import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
-import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
+import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
+import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 import { Construct } from 'constructs';
 
 export interface KmsConstructProps {
@@ -58,11 +58,17 @@ export class KmsConstruct extends Construct {
         Environment: environmentSuffix,
         Purpose: 'RDS Encryption',
       },
+      lifecycle: {
+        createBeforeDestroy: true,
+      },
     });
 
     new KmsAlias(this, 'rds-kms-alias', {
       name: `alias/payment-rds-${environmentSuffix}`,
       targetKeyId: this.rdsKey.keyId,
+      lifecycle: {
+        createBeforeDestroy: true,
+      },
     });
 
     // KMS Key for Secrets Manager
@@ -103,11 +109,17 @@ export class KmsConstruct extends Construct {
         Environment: environmentSuffix,
         Purpose: 'Secrets Manager Encryption',
       },
+      lifecycle: {
+        createBeforeDestroy: true,
+      },
     });
 
     new KmsAlias(this, 'secrets-kms-alias', {
       name: `alias/payment-secrets-${environmentSuffix}`,
       targetKeyId: this.secretsManagerKey.keyId,
+      lifecycle: {
+        createBeforeDestroy: true,
+      },
     });
 
     // KMS Key for ElastiCache
@@ -148,11 +160,17 @@ export class KmsConstruct extends Construct {
         Environment: environmentSuffix,
         Purpose: 'ElastiCache Encryption',
       },
+      lifecycle: {
+        createBeforeDestroy: true,
+      },
     });
 
     new KmsAlias(this, 'elasticache-kms-alias', {
       name: `alias/payment-elasticache-${environmentSuffix}`,
       targetKeyId: this.elasticacheKey.keyId,
+      lifecycle: {
+        createBeforeDestroy: true,
+      },
     });
   }
 }

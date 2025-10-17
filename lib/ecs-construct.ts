@@ -151,6 +151,7 @@ export class EcsConstruct extends Construct {
           portMappings: [
             {
               containerPort: 80,
+              hostPort: 80,
               protocol: 'tcp',
             },
           ],
@@ -178,6 +179,9 @@ export class EcsConstruct extends Construct {
               'awslogs-stream-prefix': 'ecs',
             },
           },
+          mountPoints: [],
+          volumesFrom: [],
+          systemControls: [],
         },
       ]),
       tags: {

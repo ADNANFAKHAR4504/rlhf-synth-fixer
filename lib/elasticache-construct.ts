@@ -2,9 +2,9 @@ import { ElasticacheReplicationGroup } from '@cdktf/provider-aws/lib/elasticache
 import { ElasticacheSubnetGroup } from '@cdktf/provider-aws/lib/elasticache-subnet-group';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
-import { Construct } from 'constructs';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { Construct } from 'constructs';
 
 export interface ElastiCacheConstructProps {
   environmentSuffix: string;
@@ -94,6 +94,9 @@ export class ElastiCacheConstruct extends Construct {
           Name: `payment-cache-${environmentSuffix}`,
           Environment: environmentSuffix,
           Compliance: 'PCI-DSS',
+        },
+        lifecycle: {
+          ignoreChanges: ['kms_key_id'],
         },
       }
     );

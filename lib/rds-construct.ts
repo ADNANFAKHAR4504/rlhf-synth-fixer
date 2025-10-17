@@ -1,18 +1,18 @@
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
-import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
-import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
-import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
-import { SecretsmanagerSecretRotation } from '@cdktf/provider-aws/lib/secretsmanager-secret-rotation';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
 import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
 import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
-import { Construct } from 'constructs';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
+import { SecretsmanagerSecretRotation } from '@cdktf/provider-aws/lib/secretsmanager-secret-rotation';
+import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Fn } from 'cdktf';
+import { Construct } from 'constructs';
 import * as path from 'path';
 
 export interface RdsConstructProps {
@@ -96,6 +96,9 @@ export class RdsConstruct extends Construct {
         Name: `payment-db-credentials-${environmentSuffix}`,
         Environment: environmentSuffix,
       },
+      lifecycle: {
+        ignoreChanges: ['kms_key_id'],
+      },
     });
 
     // Store initial credentials in secret
@@ -139,6 +142,7 @@ export class RdsConstruct extends Construct {
         Environment: environmentSuffix,
         Compliance: 'PCI-DSS',
       },
+      dependsOn: [dbSubnetGroup, this.dbSecurityGroup],
     });
 
     // Create IAM role for Lambda rotation function
