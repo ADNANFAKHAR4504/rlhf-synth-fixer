@@ -134,7 +134,8 @@ export class TapStack extends TerraformStack {
 
     new TerraformOutput(this, 'state-lock-table-name', {
       value: `terraform-state-lock-${environmentSuffix}`,
-      description: 'DynamoDB table name for Terraform state locking (must be created externally)',
+      description:
+        'DynamoDB table name for Terraform state locking (must be created externally)',
     });
   }
 }
