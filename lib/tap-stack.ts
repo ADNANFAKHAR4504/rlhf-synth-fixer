@@ -240,7 +240,7 @@ export class TapStack extends TerraformStack {
       this,
       'ec2-instance-profile',
       {
-        name: `${id}-${environmentSuffix}-instance-profile`,
+        name: `${id}-${environmentSuffix}-instannce-profile`,
         role: ec2Role.name,
       }
     );
