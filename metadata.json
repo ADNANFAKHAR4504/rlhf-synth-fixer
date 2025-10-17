@@ -7,11 +7,10 @@
   "startedAt": "2025-10-14T04:07:56+05:30",
   "subtask": "Application Deployment",
   "subject_labels": [
-    "aws",
-    "healthcare",
-    "hipaa",
-    "data-pipeline",
-    "security"
+    "CI/CD Pipeline",
+    "Cloud Environment Setup",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
   ],
   "po_id": "2698188040",
   "aws_services": [
