@@ -415,6 +415,8 @@ Resources:
   # S3 Buckets
   NovaAppDataBucket:
     Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
@@ -439,6 +441,8 @@ Resources:
 
   NovaPatientDocumentsBucket:
     Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub 'nova-prod-patient-documents-${AWS::AccountId}'
       BucketEncryption:
@@ -471,6 +475,8 @@ Resources:
   # S3 Bucket for CloudTrail logs
   NovaCloudTrailBucket:
     Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub 'nova-prod-audit-logs-${AWS::AccountId}'
       BucketEncryption:
@@ -535,6 +541,7 @@ Resources:
             Condition:
               StringEquals:
                 's3:x-amz-acl': 'bucket-owner-full-control'
+
 
   # IAM Role for EC2 instances with minimal permissions
   NovaEC2Role:
