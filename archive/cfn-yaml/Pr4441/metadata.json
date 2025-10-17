@@ -1,0 +1,31 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "410119",
+  "team": "4",
+  "startedAt": "2025-10-14T17:47:49.441Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "training_quality": 9,
+  "background": "A media company needs to process approximately 1,000 image uploads daily, automatically generating thumbnails. The system should be serverless, cost-efficient, and easy to maintain while providing clear metrics and monitoring for operational visibility. The solution implements an S3-triggered Lambda function that processes uploaded images, generates thumbnails using Python Pillow library, stores metadata in DynamoDB, and provides comprehensive CloudWatch monitoring.",
+  "aws_services": [
+    "Amazon S3",
+    "AWS Lambda",
+    "Amazon DynamoDB",
+    "Amazon CloudWatch",
+    "AWS IAM"
+  ],
+  "code_review_completed": true,
+  "code_review_date": "2025-10-16T14:13:49.000Z",
+  "code_review_status": "PASSED_WITH_FIXES",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rahulpatil118",
+  "dockerS3Location": ""
+}

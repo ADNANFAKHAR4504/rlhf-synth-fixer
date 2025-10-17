@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "10293847",
+  "team": "1",
+  "startedAt": "2025-10-02T19:14:42.601Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "training_quality": "high",
+  "aws_services": [
+    "EC2",
+    "AutoScaling",
+    "ApplicationLoadBalancer",
+    "VPC",
+    "S3",
+    "CloudWatch",
+    "IAM",
+    "SecurityGroups"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
+}

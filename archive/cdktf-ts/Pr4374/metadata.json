@@ -1,0 +1,38 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349562",
+  "team": "6",
+  "startedAt": "2025-10-14T09:18:37.961Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnets",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Tables",
+    "Application Load Balancer",
+    "Auto Scaling Group",
+    "EC2",
+    "RDS",
+    "IAM",
+    "Security Groups",
+    "SSM Parameter Store",
+    "CloudWatch Alarms",
+    "CloudWatch Logs",
+    "SNS"
+  ],
+  "training_quality": 9,
+  "training_quality_justification": "Excellent training value with 10 critical fixes covering CDKTF-specific patterns (token handling, module imports), AWS API constraints (RDS password validation, engine versions), deprecated resource configurations (S3 bucket properties), and infrastructure best practices (state management, security group patterns). All requirements from PROMPT fully implemented. Complex multi-service integration (VPC, RDS Multi-AZ, ALB, ASG, CloudWatch, IAM) with proper security configuration. Significant model knowledge gaps identified in CDKTF framework usage and AWS service-specific constraints. Real-world deployment blockers resolved.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sanket-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,36 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "B996AE",
+  "team": "1",
+  "startedAt": "2025-10-12T20:21:57.050Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "DynamoDB",
+    "Lambda",
+    "API Gateway",
+    "S3",
+    "SQS",
+    "SNS",
+    "Step Functions",
+    "EventBridge",
+    "Secrets Manager",
+    "SES",
+    "Kendra",
+    "CloudWatch",
+    "IAM",
+    "X-Ray"
+  ],
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "okorie-turing",
+  "dockerS3Location": ""
+}
