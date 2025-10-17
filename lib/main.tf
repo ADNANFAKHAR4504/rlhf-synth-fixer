@@ -11,7 +11,7 @@ data "aws_caller_identity" "current" {}
 variable "region" {
   description = "AWS region for deployment"
   type        = string
-  default     = "us-east-1"
+  default     = "eu-west-1"
 }
 
 variable "log_retention_days" {

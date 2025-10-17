@@ -73,7 +73,7 @@ describe('Payment API Gateway - Integration Tests (Live)', () => {
       logGroupName = outputs.cloudwatch_log_group_name;
       lambdaFunctionName = outputs.lambda_function_name;
       lambdaFunctionArn = outputs.lambda_function_arn;
-      region = process.env.AWS_REGION || 'us-east-1';
+      region = process.env.AWS_REGION || 'eu-west-1';
       
       // Initialize AWS SDK clients
       apiGatewayClient = new APIGatewayClient({ region });
