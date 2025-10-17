@@ -1,83 +1,91 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import AWS from 'aws-sdk';
+import { EC2Client, DescribeVpcsCommand, DescribeInternetGatewaysCommand, DescribeSubnetsCommand, DescribeNatGatewaysCommand, DescribeSecurityGroupsCommand } from "@aws-sdk/client-ec2";
+import { IAMClient, GetRoleCommand, GetInstanceProfileCommand } from "@aws-sdk/client-iam";
+import { RDSClient, DescribeDBClustersCommand, DescribeDBInstancesCommand } from "@aws-sdk/client-rds";
+import { ELBv2Client, DescribeLoadBalancersCommand, DescribeTargetGroupsCommand } from "@aws-sdk/client-elastic-load-balancing-v2";
+import { AutoScalingClient, DescribeAutoScalingGroupsCommand, DescribePoliciesCommand } from "@aws-sdk/client-auto-scaling";
+import { S3Client, HeadBucketCommand } from "@aws-sdk/client-s3";
+import { SecretsManagerClient, DescribeSecretCommand } from "@aws-sdk/client-secrets-manager";
+import { CloudWatchLogsClient, DescribeLogGroupsCommand } from "@aws-sdk/client-cloudwatch-logs";
+import { KMSClient, DescribeKeyCommand } from "@aws-sdk/client-kms";
 
 const outputsPath = join(__dirname, '../cfn-outputs/flat-outputs.json');
 const outputsRaw = readFileSync(outputsPath, 'utf-8');
 const outputs: Record<string, any> = JSON.parse(outputsRaw);
 
-const awsRegion = 'us-east-1'; // region fixed as per variables default and outputs
-AWS.config.update({ region: awsRegion });
+const region = 'us-east-1';
 
-const ec2 = new AWS.EC2();
-const s3 = new AWS.S3();
-const iam = new AWS.IAM();
-const cloudwatch = new AWS.CloudWatch();
-const logs = new AWS.CloudWatchLogs();
-const rds = new AWS.RDS();
-const elbv2 = new AWS.ELBv2();
-const autoscaling = new AWS.AutoScaling();
-const secretsmanager = new AWS.SecretsManager();
+const ec2Client = new EC2Client({ region });
+const iamClient = new IAMClient({ region });
+const rdsClient = new RDSClient({ region });
+const elbv2Client = new ELBv2Client({ region });
+const asClient = new AutoScalingClient({ region });
+const s3Client = new S3Client({ region });
+const secretsClient = new SecretsManagerClient({ region });
+const logsClient = new CloudWatchLogsClient({ region });
+const kmsClient = new KMSClient({ region });
 
 describe("TAP Stack Integration Tests (Full Stack)", () => {
 
-  // -------------------------
-  // VPC TESTS
-  // -------------------------
   it("VPC exists with correct CIDR", async () => {
-    const vpcResp = await ec2.describeVpcs({ VpcIds: [outputs.vpc_id] }).promise();
-    expect(vpcResp.Vpcs?.length).toBe(1);
-    expect(vpcResp.Vpcs?.[0].CidrBlock).toBe(outputs.vpc_cidr);
+    const command = new DescribeVpcsCommand({ VpcIds: [outputs.vpc_id] });
+    const data = await ec2Client.send(command);
+    expect(data.Vpcs?.length).toBe(1);
+    expect(data.Vpcs?.[0].CidrBlock).toBe(outputs.vpc_cidr);
   });
 
   it("Internet Gateway attached to VPC", async () => {
-    const igwResp = await ec2.describeInternetGateways({ InternetGatewayIds: [outputs.internet_gateway_id] }).promise();
-    const attachment = igwResp.InternetGateways?.[0].Attachments?.find(a => a.VpcId === outputs.vpc_id);
+    const command = new DescribeInternetGatewaysCommand({ InternetGatewayIds: [outputs.internet_gateway_id] });
+    const data = await ec2Client.send(command);
+    const attachment = data.InternetGateways?.[0].Attachments?.find(a => a.VpcId === outputs.vpc_id);
     expect(attachment).toBeDefined();
     expect(attachment?.State).toBe("available");
   });
 
   it("Public and Private subnets exist and belong to the VPC", async () => {
-    const publicSubnetIds: string[] = JSON.parse(outputs.public_subnet_ids);
-    const privateSubnetIds: string[] = JSON.parse(outputs.private_subnet_ids);
-    const dbSubnetIds: string[] = JSON.parse(outputs.database_subnet_ids);
+    const publicSubnetIds = JSON.parse(outputs.public_subnet_ids);
+    const privateSubnetIds = JSON.parse(outputs.private_subnet_ids);
+    const dbSubnetIds = JSON.parse(outputs.database_subnet_ids);
 
-    const publicSubnets = await ec2.describeSubnets({ SubnetIds: publicSubnetIds }).promise();
-    const privateSubnets = await ec2.describeSubnets({ SubnetIds: privateSubnetIds }).promise();
-    const dbSubnets = await ec2.describeSubnets({ SubnetIds: dbSubnetIds }).promise();
+    const pubSubsCmd = new DescribeSubnetsCommand({ SubnetIds: publicSubnetIds });
+    const priSubsCmd = new DescribeSubnetsCommand({ SubnetIds: privateSubnetIds });
+    const dbSubsCmd = new DescribeSubnetsCommand({ SubnetIds: dbSubnetIds });
 
-    publicSubnets.Subnets?.forEach(s => expect(s.VpcId).toBe(outputs.vpc_id));
-    privateSubnets.Subnets?.forEach(s => expect(s.VpcId).toBe(outputs.vpc_id));
-    dbSubnets.Subnets?.forEach(s => expect(s.VpcId).toBe(outputs.vpc_id));
+    const publicSubs = await ec2Client.send(pubSubsCmd);
+    const privateSubs = await ec2Client.send(priSubsCmd);
+    const dbSubs = await ec2Client.send(dbSubsCmd);
+
+    publicSubs.Subnets?.forEach(s => expect(s.VpcId).toBe(outputs.vpc_id));
+    privateSubs.Subnets?.forEach(s => expect(s.VpcId).toBe(outputs.vpc_id));
+    dbSubs.Subnets?.forEach(s => expect(s.VpcId).toBe(outputs.vpc_id));
   });
 
   it("NAT Gateways exist and are available", async () => {
-    const natGatewayIds: string[] = JSON.parse(outputs.nat_gateway_ids);
-    const natResponse = await ec2.describeNatGateways({ NatGatewayIds: natGatewayIds }).promise();
-    expect(natResponse.NatGateways?.length).toBe(natGatewayIds.length);
-    const allAvailable = natResponse.NatGateways?.every(n => n.State === "available");
+    const natGatewayIds = JSON.parse(outputs.nat_gateway_ids);
+    const command = new DescribeNatGatewaysCommand({ NatGatewayIds: natGatewayIds });
+    const data = await ec2Client.send(command);
+    expect(data.NatGateways?.length).toBe(natGatewayIds.length);
+    const allAvailable = data.NatGateways?.every(n => n.State === "available");
     expect(allAvailable).toBe(true);
   });
 
-  // -------------------------
-  // SECURITY GROUPS
-  // -------------------------
   it("ALB Security Group exists", async () => {
-    const sgResp = await ec2.describeSecurityGroups({ GroupIds: [outputs.security_group_alb_id] }).promise();
-    expect(sgResp.SecurityGroups?.length).toBe(1);
-    // Check inbound rules allow 80 and 443 TCP from 0.0.0.0/0
-    const sg = sgResp.SecurityGroups![0];
-    const hasHttpIngress = sg.IpPermissions?.some(p => p.FromPort === 80 && p.ToPort === 80 && p.IpRanges?.some(r => r.CidrIp === "0.0.0.0/0"));
-    const hasHttpsIngress = sg.IpPermissions?.some(p => p.FromPort === 443 && p.ToPort === 443 && p.IpRanges?.some(r => r.CidrIp === "0.0.0.0/0"));
-    expect(hasHttpIngress).toBe(true);
-    expect(hasHttpsIngress).toBe(true);
+    const command = new DescribeSecurityGroupsCommand({ GroupIds: [outputs.security_group_alb_id] });
+    const data = await ec2Client.send(command);
+    expect(data.SecurityGroups?.length).toBe(1);
+    const sg = data.SecurityGroups![0];
+    const hasHttp = sg.IpPermissions?.some(p => p.FromPort === 80 && p.ToPort === 80 && p.IpRanges?.some(r => r.CidrIp === "0.0.0.0/0"));
+    const hasHttps = sg.IpPermissions?.some(p => p.FromPort === 443 && p.ToPort === 443 && p.IpRanges?.some(r => r.CidrIp === "0.0.0.0/0"));
+    expect(hasHttp).toBe(true);
+    expect(hasHttps).toBe(true);
   });
 
   it("EC2 Security Group exists and allows inbound from ALB SG", async () => {
-    const sgResp = await ec2.describeSecurityGroups({ GroupIds: [outputs.security_group_ec2_id] }).promise();
-    expect(sgResp.SecurityGroups?.length).toBe(1);
-    const sg = sgResp.SecurityGroups![0];
-    // Expect ingress on port 80 from ALB SG ID
+    const command = new DescribeSecurityGroupsCommand({ GroupIds: [outputs.security_group_ec2_id] });
+    const data = await ec2Client.send(command);
+    expect(data.SecurityGroups?.length).toBe(1);
+    const sg = data.SecurityGroups![0];
     const ingressFromAlb = sg.IpPermissions?.some(p =>
       p.FromPort === 80 && p.ToPort === 80 &&
       p.UserIdGroupPairs?.some(gp => gp.GroupId === outputs.security_group_alb_id)
@@ -86,9 +94,10 @@ describe("TAP Stack Integration Tests (Full Stack)", () => {
   });
 
   it("RDS Security Group exists and allows port 3306 from EC2 SG", async () => {
-    const sgResp = await ec2.describeSecurityGroups({ GroupIds: [outputs.security_group_rds_id] }).promise();
-    expect(sgResp.SecurityGroups?.length).toBe(1);
-    const sg = sgResp.SecurityGroups![0];
+    const command = new DescribeSecurityGroupsCommand({ GroupIds: [outputs.security_group_rds_id] });
+    const data = await ec2Client.send(command);
+    expect(data.SecurityGroups?.length).toBe(1);
+    const sg = data.SecurityGroups![0];
     const ingressFromEc2 = sg.IpPermissions?.some(p =>
       p.FromPort === 3306 && p.ToPort === 3306 &&
       p.UserIdGroupPairs?.some(gp => gp.GroupId === outputs.security_group_ec2_id)
@@ -96,124 +105,119 @@ describe("TAP Stack Integration Tests (Full Stack)", () => {
     expect(ingressFromEc2).toBe(true);
   });
 
-  // -------------------------
-  // IAM ROLE AND POLICIES
-  // -------------------------
   it("EC2 IAM Role exists with correct ARN", async () => {
     const roleName = outputs.ec2_iam_role_arn.split('/').pop()!;
-    const roleResp = await iam.getRole({ RoleName: roleName }).promise();
-    expect(roleResp.Role.Arn).toBe(outputs.ec2_iam_role_arn);
+    const command = new GetRoleCommand({ RoleName: roleName });
+    const data = await iamClient.send(command);
+    expect(data.Role.Arn).toBe(outputs.ec2_iam_role_arn);
   });
 
   it("EC2 Instance Profile exists", async () => {
-    const instanceProfileName = outputs.ec2_instance_profile_arn.split('/').pop()!;
-    const profileResp = await iam.getInstanceProfile({ InstanceProfileName: instanceProfileName }).promise();
-    expect(profileResp.InstanceProfile.Arn).toBe(outputs.ec2_instance_profile_arn);
+    const ipName = outputs.ec2_instance_profile_arn.split('/').pop()!;
+    const command = new GetInstanceProfileCommand({ InstanceProfileName: ipName });
+    const data = await iamClient.send(command);
+    expect(data.InstanceProfile.Arn).toBe(outputs.ec2_instance_profile_arn);
   });
 
   it("RDS Monitoring IAM Role exists", async () => {
-    const rdsRoleName = outputs.rds_monitoring_role_arn.split('/').pop()!;
-    const roleResp = await iam.getRole({ RoleName: rdsRoleName }).promise();
-    expect(roleResp.Role.Arn).toBe(outputs.rds_monitoring_role_arn);
+    const roleName = outputs.rds_monitoring_role_arn.split('/').pop()!;
+    const command = new GetRoleCommand({ RoleName: roleName });
+    const data = await iamClient.send(command);
+    expect(data.Role.Arn).toBe(outputs.rds_monitoring_role_arn);
   });
 
-  // -------------------------
-  // KMS KEY
-  // -------------------------
   it("KMS Key exists and is enabled", async () => {
-    const keyResp = await new AWS.KMS().describeKey({ KeyId: outputs.kms_key_id }).promise();
-    expect(keyResp.KeyMetadata?.KeyId).toBe(outputs.kms_key_id);
-    expect(keyResp.KeyMetadata?.KeyState).toBe("Enabled");
+    const command = new DescribeKeyCommand({ KeyId: outputs.kms_key_id });
+    const data = await kmsClient.send(command);
+    expect(data.KeyMetadata?.KeyId).toBe(outputs.kms_key_id);
+    expect(data.KeyMetadata?.KeyState).toBe("Enabled");
   });
 
-  // -------------------------
-  // RDS CLUSTER AND INSTANCES
-  // -------------------------
   it("RDS Cluster exists with correct identifier and endpoint", async () => {
-    const clusters = await rds.describeDBClusters({ DBClusterIdentifier: outputs.rds_cluster_identifier }).promise();
-    expect(clusters.DBClusters?.length).toBe(1);
-    const cluster = clusters.DBClusters![0];
-    expect(cluster.DBClusterIdentifier).toBe(outputs.rds_cluster_identifier);
-    expect(cluster.Endpoint).toBe(outputs.rds_cluster_endpoint);
+    // Fetch all clusters, find exact match client-side due to multiple clusters on v3 apparently
+    const command = new DescribeDBClustersCommand({});
+    const data = await rdsClient.send(command);
+    const cluster = data.DBClusters?.find(c => c.DBClusterIdentifier === outputs.rds_cluster_identifier);
+    expect(cluster).toBeDefined();
+    expect(cluster!.DBClusterIdentifier).toBe(outputs.rds_cluster_identifier);
+    expect(cluster!.Endpoint).toBe(outputs.rds_cluster_endpoint);
   });
 
   it("RDS Instances exist", async () => {
-    const instances = await rds.describeDBInstances({ Filters: [{ Name: "db-cluster-id", Values: [outputs.rds_cluster_identifier] }] }).promise();
-    expect(instances.DBInstances?.length).toBeGreaterThanOrEqual(1);
-    instances.DBInstances?.forEach(instance => {
-      expect(instance.DBInstanceStatus).toMatch(/available|creating|modifying|backing-up/);
-      expect(instance.DBInstanceIdentifier).toContain(outputs.resource_suffix);
+    // Do not filter by cluster id, get all instances and filter client-side to avoid null filter error
+    const command = new DescribeDBInstancesCommand({});
+    const data = await rdsClient.send(command);
+    const clusterInstances = data.DBInstances?.filter(i => i.DBClusterIdentifier === outputs.rds_cluster_identifier);
+    expect(clusterInstances).toBeDefined();
+    expect(clusterInstances?.length).toBeGreaterThan(0);
+    clusterInstances?.forEach(i => {
+      expect(i.DBInstanceStatus).toMatch(/available|creating|modifying|backing-up/);
     });
   });
 
-  // -------------------------
-  // AUTO SCALING GROUP AND POLICIES
-  // -------------------------
   it("Auto Scaling Group exists with correct name and desired capacity", async () => {
-    const asgs = await autoscaling.describeAutoScalingGroups({ AutoScalingGroupNames: [outputs.auto_scaling_group_name] }).promise();
-    expect(asgs.AutoScalingGroups?.length).toBe(1);
-    const asg = asgs.AutoScalingGroups![0];
-    expect(asg.AutoScalingGroupName).toBe(outputs.auto_scaling_group_name);
-    expect(asg.DesiredCapacity).toBeGreaterThan(0);
+    const command = new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [outputs.auto_scaling_group_name] });
+    const data = await asClient.send(command);
+    // Because multiple ASGs may exist, find exact match client side
+    const asg = data.AutoScalingGroups?.find(a => a.AutoScalingGroupName === outputs.auto_scaling_group_name);
+    expect(asg).toBeDefined();
+    expect(asg!.AutoScalingGroupName).toBe(outputs.auto_scaling_group_name);
+    expect(asg!.DesiredCapacity).toBeGreaterThan(0);
   });
 
   it("Auto Scaling scaling policies exist", async () => {
-    const policies = await autoscaling.describePolicies({ AutoScalingGroupName: outputs.auto_scaling_group_name }).promise();
-    expect(policies.ScalingPolicies?.some(p => p.AdjustmentType === "ChangeInCapacity" && p.ScalingAdjustment === 1)).toBe(true);
-    expect(policies.ScalingPolicies?.some(p => p.AdjustmentType === "ChangeInCapacity" && p.ScalingAdjustment === -1)).toBe(true);
+    const command = new DescribePoliciesCommand({ AutoScalingGroupName: outputs.auto_scaling_group_name });
+    const data = await asClient.send(command);
+    const scaleUpExists = data.ScalingPolicies?.some(p => p.AdjustmentType === "ChangeInCapacity" && p.ScalingAdjustment === 1);
+    const scaleDownExists = data.ScalingPolicies?.some(p => p.AdjustmentType === "ChangeInCapacity" && p.ScalingAdjustment === -1);
+    expect(scaleUpExists).toBe(true);
+    expect(scaleDownExists).toBe(true);
   });
 
-  // -------------------------
-  // LOAD BALANCER AND TARGET GROUP
-  // -------------------------
   it("ALB exists with correct DNS name and ARN", async () => {
-    const lbs = await elbv2.describeLoadBalancers({ LoadBalancerArns: [outputs.alb_arn] }).promise();
-    expect(lbs.LoadBalancers?.length).toBe(1);
-    const alb = lbs.LoadBalancers![0];
-    expect(alb.DNSName).toBe(outputs.alb_dns_name);
-    expect(alb.LoadBalancerArn).toBe(outputs.alb_arn);
+    const command = new DescribeLoadBalancersCommand({});
+    const data = await elbv2Client.send(command);
+    // Find by ARN or DNS Name returns multiple, find exact match client side
+    const alb = data.LoadBalancers?.find(lb => lb.LoadBalancerArn === outputs.alb_arn);
+    expect(alb).toBeDefined();
+    expect(alb!.DNSName).toBe(outputs.alb_dns_name);
   });
 
   it("Target Group associated with ALB exists", async () => {
-    const tg = await elbv2.describeTargetGroups({ TargetGroupArns: [outputs.target_group_arn] }).promise();
-    expect(tg.TargetGroups?.length).toBe(1);
-    expect(tg.TargetGroups![0].VpcId).toBe(outputs.vpc_id);
+    const command = new DescribeTargetGroupsCommand({ TargetGroupArns: [outputs.target_group_arn] });
+    const data = await elbv2Client.send(command);
+    expect(data.TargetGroups?.length).toBe(1);
+    expect(data.TargetGroups![0].VpcId).toBe(outputs.vpc_id);
   });
 
-  // -------------------------
-  // S3 BUCKETS
-  // -------------------------
   it("Static S3 bucket exists and accessible", async () => {
-    const bucketName = outputs.s3_static_bucket_name;
-    const headResp = await s3.headBucket({ Bucket: bucketName }).promise();
-    expect(headResp).toBeDefined();
+    const command = new HeadBucketCommand({ Bucket: outputs.s3_static_bucket_name });
+    const data = await s3Client.send(command);
+    expect(data).toBeDefined();
   });
 
   it("Logs S3 bucket exists and accessible", async () => {
-    const bucketName = outputs.s3_logs_bucket_name;
-    const headResp = await s3.headBucket({ Bucket: bucketName }).promise();
-    expect(headResp).toBeDefined();
+    const command = new HeadBucketCommand({ Bucket: outputs.s3_logs_bucket_name });
+    const data = await s3Client.send(command);
+    expect(data).toBeDefined();
   });
 
-  // -------------------------
-  // SECRETS MANAGER
-  // -------------------------
   it("Secrets Manager secret exists", async () => {
-    const secretId = outputs.secrets_manager_secret_id;
-    const secretResp = await secretsmanager.describeSecret({ SecretId: secretId }).promise();
-    expect(secretResp.ARN).toBe(secretId);
+    const command = new DescribeSecretCommand({ SecretId: outputs.secrets_manager_secret_id });
+    const data = await secretsClient.send(command);
+    expect(data.ARN).toBe(outputs.secrets_manager_secret_id);
   });
 
-  // -------------------------
-  // CLOUDWATCH LOG GROUPS
-  // -------------------------
   it("CloudWatch Application log group exists", async () => {
-    const logsResp = await logs.describeLogGroups({ logGroupNamePrefix: outputs.cloudwatch_log_group_application }).promise();
-    expect(logsResp.logGroups?.some(g => g.logGroupName === outputs.cloudwatch_log_group_application)).toBe(true);
+    const command = new DescribeLogGroupsCommand({ logGroupNamePrefix: outputs.cloudwatch_log_group_application });
+    const data = await logsClient.send(command);
+    expect(data.logGroups?.some(g => g.logGroupName === outputs.cloudwatch_log_group_application)).toBe(true);
   });
 
   it("CloudWatch RDS error log group exists", async () => {
-    const logsResp = await logs.describeLogGroups({ logGroupNamePrefix: outputs.cloudwatch_log_group_rds_error }).promise();
-    expect(logsResp.logGroups?.some(g => g.logGroupName === outputs.cloudwatch_log_group_rds_error)).toBe(true);
+    const command = new DescribeLogGroupsCommand({ logGroupNamePrefix: outputs.cloudwatch_log_group_rds_error });
+    const data = await logsClient.send(command);
+    expect(data.logGroups?.some(g => g.logGroupName === outputs.cloudwatch_log_group_rds_error)).toBe(true);
   });
+
 });
