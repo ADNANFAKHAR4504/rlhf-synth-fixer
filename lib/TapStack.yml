@@ -1176,7 +1176,7 @@ Resources:
       CidrIp: 0.0.0.0/0
       Description: 'Restricted outbound traffic to allowed IP ranges'
 
-  # 9. NovaCloudFront Distribution with NovaShield Advanced Protection
+  # 9. NovaCloudFront Distribution
   NovaCloudFrontOAC:
     Type: AWS::CloudFront::OriginAccessControl
     Properties:
@@ -1245,22 +1245,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${Environment}-web-acl'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: team
-          Value: '2'
-        - Key: iac-rlhf-amazon
-          Value: 'true'
-
-  # AWS NovaShield Advanced Protection
-  NovaShield:
-    Type: AWS::Shield::Protection
-    Properties:
-      Name: !Sub '${ProjectName}-${Environment}-shield-protection'
-      ResourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${NovaCloudFront}'
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-shield-protection'
         - Key: Environment
           Value: !Ref Environment
         - Key: team
@@ -1458,12 +1442,6 @@ Outputs:
     Value: !Ref NovaMFAPolicy
     Export:
       Name: !Sub '${ProjectName}-${Environment}-mfa-policy-arn'
-
-  NovaShieldId:
-    Description: 'Nova Shield protection ID'
-    Value: !Ref NovaShield
-    Export:
-      Name: !Sub '${ProjectName}-${Environment}-shield-protection-id'
 
   NovaLaunchTemplateId:
     Description: 'Nova Launch Template ID'
