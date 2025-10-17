@@ -24,7 +24,7 @@ To support our real-time analytics dashboard, enable a **Kinesis Data Stream** o
 
 ## 4. Configuration and Observability
 
-Both Lambda functions must use the Node.js 18.x runtime with 512MB of memory and a 30-second timeout. The best practice in CDK is to use the `NodejsFunction` construct which handles bundling automatically. Their configurations, like the table and bucket names, should be passed in as environment variables.
+Both Lambda functions must use the Node.js runtime with 512MB of memory and a 30-second timeout. The best practice in CDK is to use the `NodejsFunction` construct which handles bundling automatically. Their configurations, like the table and bucket names, should be passed in as environment variables.
 
 For monitoring, create a CloudWatch alarm that triggers if the `transformation-lambda`'s error rate exceeds 1% over a 5-minute period. All Lambda logs must go to custom log groups with a 7-day retention period.
 

@@ -1,7 +1,7 @@
-import { S3Event } from 'aws-lambda';
-import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { S3Event } from 'aws-lambda';
 
 const s3Client = new S3Client({ region: 'us-east-1' });
 const ddbClient = new DynamoDBClient({ region: 'us-east-1' });
@@ -28,7 +28,9 @@ export const handler = async (event: S3Event): Promise<void> => {
       if (!response.Body) {
         throw new Error('Empty response body from S3');
       }
-      const bodyContents = await streamToString(response.Body as NodeJS.ReadableStream);
+      const bodyContents = await streamToString(
+        response.Body as NodeJS.ReadableStream
+      );
       const sensorData = JSON.parse(bodyContents);
 
       // Transform the data
