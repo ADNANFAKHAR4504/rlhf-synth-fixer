@@ -23,6 +23,7 @@ import {
   DescribeNatGatewaysCommand,
   DescribeRouteTablesCommand,
   DescribeSecurityGroupsCommand,
+  DescribeRegionsCommand, // ⬅ added
 } from "@aws-sdk/client-ec2";
 
 import {
@@ -53,6 +54,7 @@ import {
   CloudTrailClient,
   DescribeTrailsCommand,
   GetTrailStatusCommand,
+  Trail,
 } from "@aws-sdk/client-cloudtrail";
 
 /* ---------------------------- Setup / Helpers --------------------------- */
@@ -115,15 +117,21 @@ function deduceRegion(): string {
 }
 const region = deduceRegion();
 
-// AWS clients
+// AWS clients (region tied to the ALB & most deployed resources)
 const ec2 = new EC2Client({ region });
 const s3 = new S3Client({ region });
 const elbv2 = new ElasticLoadBalancingV2Client({ region });
 const iam = new IAMClient({ region });
-const ct = new CloudTrailClient({ region });
 
-// retry helper with incremental backoff
-async function retry<T>(fn: () => Promise<T>, attempts = 4, baseDelayMs = 900): Promise<T> {
+// NOTE: CloudTrail is special — the *trail home region* can differ from ALB’s region.
+// We'll create region-scoped CloudTrail clients on demand using helpers below.
+
+/** retry helper with incremental backoff */
+async function retry<T>(
+  fn: () => Promise<T>,
+  attempts = 4,
+  baseDelayMs = 900
+): Promise<T> {
   let lastErr: any = null;
   for (let i = 0; i < attempts; i++) {
     try {
@@ -157,6 +165,117 @@ function isArn(v?: string) {
   return typeof v === "string" && v.startsWith("arn:");
 }
 
+/* -------------------- CloudTrail Discovery Utilities -------------------- */
+
+/** Cache discovered trail so we only search once */
+let cachedTrail:
+  | { trail: Trail; homeRegion: string; idForStatus: string }
+  | null = null;
+
+/**
+ * Normalize an output value that may be a trail Name or ARN to easy comparisons.
+ */
+function trailMatchesOutput(t: Trail, needle: string): boolean {
+  const name = t.Name || "";
+  const arn = t.TrailARN || "";
+  if (!needle) return false;
+  if (needle === name || needle === arn) return true;
+  // If output provided "name", match ARN suffix ":trail/<name>"
+  if (name && arn.endsWith(`:trail/${name}`) && needle === name) return true;
+  // If output provided ARN but DescribeTrails returns only name, handled by equality above.
+  return false;
+}
+
+/**
+ * Find a CloudTrail trail across enabled regions.
+ * Returns the matched trail, its home region, and the identifier to use in GetTrailStatus (ARN preferred).
+ */
+async function findCloudTrail(
+  outputNameOrArn: string
+): Promise<{ trail: Trail; homeRegion: string; idForStatus: string }> {
+  if (cachedTrail) return cachedTrail;
+
+  // Start with the current region (often where most resources live),
+  // but enumerate all enabled regions to be safe for multi-region trails.
+  const regionsResp = await retry(() =>
+    ec2.send(new DescribeRegionsCommand({}))
+  );
+  const regionNames = (regionsResp.Regions || [])
+    .map((r) => r.RegionName)
+    .filter(Boolean) as string[];
+
+  // Deduplicate and put our derived region first for speed
+  const searchOrder = Array.from(new Set([region, ...regionNames]));
+
+  for (const r of searchOrder) {
+    const localCt = new CloudTrailClient({ region: r });
+    // 1) Try filtered describe first (fast path if output is exact Name/ARN for this region)
+    try {
+      const d1 = await localCt.send(
+        new DescribeTrailsCommand({ trailNameList: [outputNameOrArn] })
+      );
+      const list1 = d1.trailList || [];
+      const match1 = list1.find((t) => trailMatchesOutput(t, outputNameOrArn));
+      if (match1) {
+        const id = match1.TrailARN || match1.Name || outputNameOrArn;
+        const home = (match1 as any).HomeRegion || r;
+        cachedTrail = { trail: match1, homeRegion: home, idForStatus: id };
+        return cachedTrail;
+      }
+    } catch {
+      // ignore and try wide scan
+    }
+
+    // 2) Try wide scan in region (includeShadowTrails so an org/multi-region trail shows up)
+    try {
+      const d2 = await localCt.send(
+        new DescribeTrailsCommand({ includeShadowTrails: true })
+      );
+      const list2 = d2.trailList || [];
+      const match2 =
+        list2.find((t) => trailMatchesOutput(t, outputNameOrArn)) ||
+        list2.find((t) => {
+          // also allow matching by suffix if output provided a short name
+          const name = t.Name || "";
+          return (
+            name &&
+            (outputNameOrArn === name ||
+              outputNameOrArn.endsWith(`:trail/${name}`))
+          );
+        });
+      if (match2) {
+        const id = match2.TrailARN || match2.Name || outputNameOrArn;
+        const home = (match2 as any).HomeRegion || r;
+        cachedTrail = { trail: match2, homeRegion: home, idForStatus: id };
+        return cachedTrail;
+      }
+    } catch {
+      // ignore and continue scanning other regions
+    }
+  }
+
+  throw new Error(
+    `CloudTrail trail "${outputNameOrArn}" not found in any enabled region`
+  );
+}
+
+/**
+ * GetTrailStatus must be called in the trail's **home region**, and works best with the ARN.
+ */
+async function getTrailStatusInHomeRegion(
+  outputNameOrArn: string
+): Promise<{ isLoggingType: string; isLogging: boolean | undefined }> {
+  const { homeRegion, idForStatus } = await findCloudTrail(outputNameOrArn);
+  const homeClient = new CloudTrailClient({ region: homeRegion });
+  const status = await retry(() =>
+    homeClient.send(new GetTrailStatusCommand({ Name: idForStatus }))
+  );
+  return {
+    isLoggingType: typeof status.IsLogging,
+    isLogging: status.IsLogging,
+  };
+}
+
 /* ------------------------------ Tests ---------------------------------- */
 
 describe("TapStack — Live Integration Tests", () => {
@@ -175,7 +294,7 @@ describe("TapStack — Live Integration Tests", () => {
   const LogsBucketArn = requireOutput("LogsBucketArn");
   const AppEc2RoleName = requireOutput("AppEc2RoleName");
   const AppEc2RoleArn = requireOutput("AppEc2RoleArn");
-  const CloudTrailName = requireOutput("CloudTrailName");
+  const CloudTrailName = requireOutput("CloudTrailName"); // may be Name or ARN
 
   /* 1 */
   it("Outputs: IDs/ARNs/DNS look structurally valid", () => {
@@ -385,18 +504,24 @@ describe("TapStack — Live Integration Tests", () => {
   });
 
   /* 16 */
-  it("CloudTrail: trail exists by name, is multi-region, and logging status returns a boolean", async () => {
-    const trails = await retry(() => ct.send(new DescribeTrailsCommand({ trailNameList: [CloudTrailName] })));
-    expect((trails.trailList || []).length).toBeGreaterThanOrEqual(1);
-    const trail = trails.trailList![0];
-    expect(trail.Name).toBe(CloudTrailName);
+  it("CloudTrail: trail exists by name/ARN, is multi-region if configured, and logging status returns a boolean", async () => {
+    const { trail, homeRegion } = await findCloudTrail(CloudTrailName);
+    // Basic identity checks
+    if (isArn(CloudTrailName)) {
+      expect(trail.TrailARN).toBe(CloudTrailName);
+    } else {
+      expect(trail.Name).toBe(CloudTrailName);
+    }
+    // Multi-region assertion (best-effort)
     if (typeof trail.IsMultiRegionTrail === "boolean") {
       expect(trail.IsMultiRegionTrail).toBe(true);
     } else {
       expect(true).toBe(true);
     }
-    const status = await retry(() => ct.send(new GetTrailStatusCommand({ Name: CloudTrailName })));
-    expect(typeof status.IsLogging).toBe("boolean");
+    // Logging status should be readable from home region
+    const status = await getTrailStatusInHomeRegion(CloudTrailName);
+    expect(status.isLoggingType).toBe("boolean");
+    // Don't force true/false — some stacks intentionally keep logging off in test accounts
   });
 
   /* 17 */
@@ -510,8 +635,8 @@ describe("TapStack — Live Integration Tests", () => {
 
   /* 23 */
   it("CloudTrail: status IsLogging true or false is returned rapidly after DescribeTrails", async () => {
-    const status = await retry(() => ct.send(new GetTrailStatusCommand({ Name: CloudTrailName })));
-    expect(typeof status.IsLogging).toBe("boolean");
+    const status = await getTrailStatusInHomeRegion(CloudTrailName);
+    expect(status.isLoggingType).toBe("boolean");
   });
 
   /* 24 */
