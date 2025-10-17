@@ -308,32 +308,8 @@ class TapStack(Stack):
                 'DB_PASSWORD': ecs.Secret.from_secrets_manager(db_secret, 'password'),
                 'DB_USERNAME': ecs.Secret.from_secrets_manager(db_secret, 'username'),
             },
-            # Health check temporarily disabled - enable when using production container
-            # health_check=ecs.HealthCheck(
-            #     command=['CMD-SHELL', 'curl -f http://localhost:80/ || exit 1'],
-            #     interval=Duration.seconds(30),
-            #     timeout=Duration.seconds(5),
-            #     retries=3,
-            #     start_period=Duration.seconds(60),
-            # ),
+
         )
-
-        # EFS volume temporarily disabled for initial deployment
-        # Uncomment when ready to use EFS with a compatible container image
-        # task_definition.add_volume(
-        #     name='efs-storage',
-        #     efs_volume_configuration=ecs.EfsVolumeConfiguration(
-        #         file_system_id=file_system.file_system_id,
-        #     ),
-        # )
-
-        # container.add_mount_points(
-        #     ecs.MountPoint(
-        #         container_path='/mnt/efs',
-        #         source_volume='efs-storage',
-        #         read_only=False,
-        #     )
-        # )
 
         # Create Fargate service with circuit breaker (no health check grace period without ALB)
         fargate_service = ecs.FargateService(
@@ -347,9 +323,6 @@ class TapStack(Stack):
             circuit_breaker=ecs.DeploymentCircuitBreaker(rollback=True),
             # health_check_grace_period only valid when using load balancer
         )
-        
-        # Add dependency on EFS mount targets to ensure they're ready (when EFS is enabled)
-        # fargate_service.node.add_dependency(file_system)
 
         # Create CloudWatch log group for API Gateway
         api_log_group = logs.LogGroup(
