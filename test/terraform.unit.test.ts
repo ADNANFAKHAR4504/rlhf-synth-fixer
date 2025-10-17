@@ -111,9 +111,9 @@ describe("tap_stack.tf — static unit checks (no AWS calls)", () => {
         ["cost_center", "cc-0001"],
         ["domain_name", ""],
         ["hosted_zone_id", ""],
-        ["alb_cert_arn_use1", ""],
-        ["cloudfront_cert_arn_use1", ""],
-        ["use1_cidr", "10.10.0.0/16"],
+        ["alb_cert_arn_use2", ""],
+        ["cloudfront_cert_arn_use2", ""],
+        ["use2_cidr", "10.10.0.0/16"],
         ["euw2_cidr", "10.20.0.0/16"],
         ["web_instance_type", "t3.micro"],
         ["rds_engine", "postgres"],
@@ -149,9 +149,9 @@ describe("tap_stack.tf — static unit checks (no AWS calls)", () => {
 
   describe("Data sources", () => {
     it("AZs & AL2023 AMIs via SSM in both regions + caller identity", () => {
-      expect(!!getBlock(tf, "data", "aws_availability_zones", "use1")).toBe(true);
+      expect(!!getBlock(tf, "data", "aws_availability_zones", "use2")).toBe(true);
       expect(!!getBlock(tf, "data", "aws_availability_zones", "euw2")).toBe(true);
-      expect(!!getBlock(tf, "data", "aws_ssm_parameter", "al2023_ami_use1")).toBe(true);
+      expect(!!getBlock(tf, "data", "aws_ssm_parameter", "al2023_ami_use2")).toBe(true);
       expect(!!getBlock(tf, "data", "aws_ssm_parameter", "al2023_ami_euw2")).toBe(true);
       expect(!!getBlock(tf, "data", "aws_caller_identity", "current")).toBe(true);
       expect(!!getBlock(tf, "data", "aws_caller_identity", "current_euw2")).toBe(true);
@@ -165,28 +165,28 @@ describe("tap_stack.tf — static unit checks (no AWS calls)", () => {
   });
 
   describe("KMS", () => {
-    it("CMKs + aliases in use1 & euw2; separate logs CMK in use1 with policy", () => {
-      expectMatch(getBlock(tf, "resource", "aws_kms_key", "use1"), /enable_key_rotation\s*=\s*true/);
-      expectMatch(getBlock(tf, "resource", "aws_kms_alias", "use1"), /target_key_id\s*=\s*aws_kms_key\.use1\.key_id/);
+    it("CMKs + aliases in use2 & euw2; separate logs CMK in use2 with policy", () => {
+      expectMatch(getBlock(tf, "resource", "aws_kms_key", "use2"), /enable_key_rotation\s*=\s*true/);
+      expectMatch(getBlock(tf, "resource", "aws_kms_alias", "use2"), /target_key_id\s*=\s*aws_kms_key\.use2\.key_id/);
       expectMatch(getBlock(tf, "resource", "aws_kms_key", "euw2"), /enable_key_rotation\s*=\s*true/);
       expectMatch(getBlock(tf, "resource", "aws_kms_alias", "euw2"), /target_key_id\s*=\s*aws_kms_key\.euw2\.key_id/);
-      const logsPol = getBlock(tf, "data", "aws_iam_policy_document", "use1_logs_key");
-      const logsK = getBlock(tf, "resource", "aws_kms_key", "use1_logs");
+      const logsPol = getBlock(tf, "data", "aws_iam_policy_document", "use2_logs_key");
+      const logsK = getBlock(tf, "resource", "aws_kms_key", "use2_logs");
       expect(logsPol).toBeTruthy();
-      expectMatch(logsK, /policy\s*=\s*data\.aws_iam_policy_document\.use1_logs_key\.json/);
+      expectMatch(logsK, /policy\s*=\s*data\.aws_iam_policy_document\.use2_logs_key\.json/);
     });
   });
 
   describe("Networking — VPCs, IGW, Subnets, NAT, RTs (both regions)", () => {
-    it("VPC + IGW for use1 & euw2", () => {
-      expect(!!getBlock(tf, "resource", "aws_vpc", "use1")).toBe(true);
-      expect(!!getBlock(tf, "resource", "aws_internet_gateway", "use1")).toBe(true);
+    it("VPC + IGW for use2 & euw2", () => {
+      expect(!!getBlock(tf, "resource", "aws_vpc", "use2")).toBe(true);
+      expect(!!getBlock(tf, "resource", "aws_internet_gateway", "use2")).toBe(true);
       expect(!!getBlock(tf, "resource", "aws_vpc", "euw2")).toBe(true);
       expect(!!getBlock(tf, "resource", "aws_internet_gateway", "euw2")).toBe(true);
     });
 
     it("public & private subnets in both AZs for each region (publics mapPublicIpOnLaunch=true)", () => {
-      for (const p of ["use1", "euw2"] as const) {
+      for (const p of ["use2", "euw2"] as const) {
         const pubA = getBlock(tf, "resource", "aws_subnet", `${p}_public_a`);
         const pubB = getBlock(tf, "resource", "aws_subnet", `${p}_public_b`);
         const priA = getBlock(tf, "resource", "aws_subnet", `${p}_private_a`);
@@ -198,16 +198,16 @@ describe("tap_stack.tf — static unit checks (no AWS calls)", () => {
     });
 
     it("NAT EIP + NAT GW in both regions", () => {
-      expect(!!getBlock(tf, "resource", "aws_eip", "use1_nat")).toBe(true);
-      expect(!!getBlock(tf, "resource", "aws_nat_gateway", "use1")).toBe(true);
+      expect(!!getBlock(tf, "resource", "aws_eip", "use2_nat")).toBe(true);
+      expect(!!getBlock(tf, "resource", "aws_nat_gateway", "use2")).toBe(true);
       expect(!!getBlock(tf, "resource", "aws_eip", "euw2_nat")).toBe(true);
       expect(!!getBlock(tf, "resource", "aws_nat_gateway", "euw2")).toBe(true);
     });
 
     it("Route tables + 0.0.0.0/0 routes via IGW (public) and NAT (private)", () => {
-      expectMatch(getBlock(tf, "resource", "aws_route", "use1_public_igw"), /0\.0\.0\.0\/0/);
-      expectMatch(getBlock(tf, "resource", "aws_route", "use1_private_a_nat"), /0\.0\.0\.0\/0/);
-      expectMatch(getBlock(tf, "resource", "aws_route", "use1_private_b_nat"), /0\.0\.0\.0\/0/);
+      expectMatch(getBlock(tf, "resource", "aws_route", "use2_public_igw"), /0\.0\.0\.0\/0/);
+      expectMatch(getBlock(tf, "resource", "aws_route", "use2_private_a_nat"), /0\.0\.0\.0\/0/);
+      expectMatch(getBlock(tf, "resource", "aws_route", "use2_private_b_nat"), /0\.0\.0\.0\/0/);
       expectMatch(getBlock(tf, "resource", "aws_route", "euw2_public_a_igw"), /0\.0\.0\.0\/0/);
       expectMatch(getBlock(tf, "resource", "aws_route", "euw2_public_b_igw"), /0\.0\.0\.0\/0/);
       expectMatch(getBlock(tf, "resource", "aws_route", "euw2_private_a_nat"), /0\.0\.0\.0\/0/);
@@ -217,32 +217,32 @@ describe("tap_stack.tf — static unit checks (no AWS calls)", () => {
 
   describe("VPC Peering + routes", () => {
     it("PCX request, accepter, and bidirectional routes exist", () => {
-      expect(!!getBlock(tf, "resource", "aws_vpc_peering_connection", "use1_to_euw2")).toBe(true);
+      expect(!!getBlock(tf, "resource", "aws_vpc_peering_connection", "use2_to_euw2")).toBe(true);
       expect(!!getBlock(tf, "resource", "aws_vpc_peering_connection_accepter", "euw2_accept")).toBe(true);
-      expect(!!getBlock(tf, "resource", "aws_route", "use1_public_to_euw2_pcx")).toBe(true);
-      expect(!!getBlock(tf, "resource", "aws_route", "use1_private_a_to_euw2_pcx")).toBe(true);
-      expect(!!getBlock(tf, "resource", "aws_route", "use1_private_b_to_euw2_pcx")).toBe(true);
-      expect(!!getBlock(tf, "resource", "aws_route", "euw2_public_a_to_use1_pcx")).toBe(true);
-      expect(!!getBlock(tf, "resource", "aws_route", "euw2_public_b_to_use1_pcx")).toBe(true);
-      expect(!!getBlock(tf, "resource", "aws_route", "euw2_private_a_to_use1_pcx")).toBe(true);
-      expect(!!getBlock(tf, "resource", "aws_route", "euw2_private_b_to_use1_pcx")).toBe(true);
+      expect(!!getBlock(tf, "resource", "aws_route", "use2_public_to_euw2_pcx")).toBe(true);
+      expect(!!getBlock(tf, "resource", "aws_route", "use2_private_a_to_euw2_pcx")).toBe(true);
+      expect(!!getBlock(tf, "resource", "aws_route", "use2_private_b_to_euw2_pcx")).toBe(true);
+      expect(!!getBlock(tf, "resource", "aws_route", "euw2_public_a_to_use2_pcx")).toBe(true);
+      expect(!!getBlock(tf, "resource", "aws_route", "euw2_public_b_to_use2_pcx")).toBe(true);
+      expect(!!getBlock(tf, "resource", "aws_route", "euw2_private_a_to_use2_pcx")).toBe(true);
+      expect(!!getBlock(tf, "resource", "aws_route", "euw2_private_b_to_use2_pcx")).toBe(true);
       expect(!!getBlock(tf, "resource", "aws_route_table", "euw2_main")).toBe(true);
-      expect(!!getBlock(tf, "resource", "aws_route", "euw2_main_to_use1_pcx")).toBe(true);
+      expect(!!getBlock(tf, "resource", "aws_route", "euw2_main_to_use2_pcx")).toBe(true);
     });
   });
 
   describe("Security Groups posture", () => {
     it("ALB 80 ingress; app allows 80 from ALB; RDS allows 5432 from app; web allows 80 from world", () => {
-      const alb80 = getBlock(tf, "resource", "aws_vpc_security_group_ingress_rule", "use1_alb_http_80");
+      const alb80 = getBlock(tf, "resource", "aws_vpc_security_group_ingress_rule", "use2_alb_http_80");
       expectMatch(alb80, /from_port\s*=\s*80[\s\S]*to_port\s*=\s*80/);
 
-      const appFromAlb = getBlock(tf, "resource", "aws_vpc_security_group_ingress_rule", "use1_app_http_from_alb");
-      expectMatch(appFromAlb, /referenced_security_group_id\s*=\s*aws_security_group\.use1_alb_https\.id/);
+      const appFromAlb = getBlock(tf, "resource", "aws_vpc_security_group_ingress_rule", "use2_app_http_from_alb");
+      expectMatch(appFromAlb, /referenced_security_group_id\s*=\s*aws_security_group\.use2_alb_https\.id/);
 
-      const rds5432 = getBlock(tf, "resource", "aws_vpc_security_group_ingress_rule", "use1_rds_5432_from_app");
+      const rds5432 = getBlock(tf, "resource", "aws_vpc_security_group_ingress_rule", "use2_rds_5432_from_app");
       expectMatch(rds5432, /from_port\s*=\s*5432[\s\S]*to_port\s*=\s*5432/);
 
-      const web80 = getBlock(tf, "resource", "aws_vpc_security_group_ingress_rule", "use1_web_http_world");
+      const web80 = getBlock(tf, "resource", "aws_vpc_security_group_ingress_rule", "use2_web_http_world");
       expectMatch(web80, /cidr_ipv4\s*=\s*"0\.0\.0\.0\/0"[\s\S]*from_port\s*=\s*80/);
     });
   });
@@ -260,16 +260,16 @@ describe("tap_stack.tf — static unit checks (no AWS calls)", () => {
 
   describe("CloudWatch Logs (us-east-2) with KMS", () => {
     it("log group is KMS-encrypted", () => {
-      const lg = getBlock(tf, "resource", "aws_cloudwatch_log_group", "use1_app");
-      expectMatch(lg, /kms_key_id\s*=\s*aws_kms_key\.use1_logs\.arn/);
+      const lg = getBlock(tf, "resource", "aws_cloudwatch_log_group", "use2_app");
+      expectMatch(lg, /kms_key_id\s*=\s*aws_kms_key\.use2_logs\.arn/);
     });
   });
 
   describe("SSM interface endpoints (reliability)", () => {
-    it("VPC endpoints for ssm, ssmmessages, ec2messages in use1", () => {
-      expect(!!getBlock(tf, "resource", "aws_vpc_endpoint", "use1_ssm")).toBe(true);
-      expect(!!getBlock(tf, "resource", "aws_vpc_endpoint", "use1_ssmmessages")).toBe(true);
-      expect(!!getBlock(tf, "resource", "aws_vpc_endpoint", "use1_ec2messages")).toBe(true);
+    it("VPC endpoints for ssm, ssmmessages, ec2messages in use2", () => {
+      expect(!!getBlock(tf, "resource", "aws_vpc_endpoint", "use2_ssm")).toBe(true);
+      expect(!!getBlock(tf, "resource", "aws_vpc_endpoint", "use2_ssmmessages")).toBe(true);
+      expect(!!getBlock(tf, "resource", "aws_vpc_endpoint", "use2_ec2messages")).toBe(true);
     });
   });
 
@@ -283,20 +283,20 @@ describe("tap_stack.tf — static unit checks (no AWS calls)", () => {
       expect(api && integ && r1 && r2 && stg).toBeTruthy();
       expectMatch(r1, /authorization_type\s*=\s*"AWS_IAM"/);
       expectMatch(r2, /authorization_type\s*=\s*"AWS_IAM"/);
-      expectMatch(integ, /integration_uri\s*=\s*"http:\/\/\$\{aws_lb\.use1\.dns_name\}"/);
+      expectMatch(integ, /integration_uri\s*=\s*"http:\/\/\$\{aws_lb\.use2\.dns_name\}"/);
     });
   });
 
   describe("RDS — Postgres, KMS, private, password in SSM", () => {
     it("db subnet group, random_password, SSM SecureString with KMS, encrypted non-public DB", () => {
-      expect(!!getBlock(tf, "resource", "aws_db_subnet_group", "use1")).toBe(true);
+      expect(!!getBlock(tf, "resource", "aws_db_subnet_group", "use2")).toBe(true);
       expect(!!getBlock(tf, "resource", "random_password", "rds_master")).toBe(true);
       const ssm = getBlock(tf, "resource", "aws_ssm_parameter", "rds_password");
-      expectMatch(ssm, /type\s*=\s*"SecureString"[\s\S]*key_id\s*=\s*aws_kms_key\.use1\.arn/);
-      const db = getBlock(tf, "resource", "aws_db_instance", "use1");
+      expectMatch(ssm, /type\s*=\s*"SecureString"[\s\S]*key_id\s*=\s*aws_kms_key\.use2\.arn/);
+      const db = getBlock(tf, "resource", "aws_db_instance", "use2");
       expectMatch(db, /publicly_accessible\s*=\s*false/);
       expectMatch(db, /storage_encrypted\s*=\s*true/);
-      expectMatch(db, /kms_key_id\s*=\s*aws_kms_key\.use1\.arn/);
+      expectMatch(db, /kms_key_id\s*=\s*aws_kms_key\.use2\.arn/);
     });
   });
 
@@ -309,7 +309,7 @@ describe("tap_stack.tf — static unit checks (no AWS calls)", () => {
       const polDoc = getBlock(tf, "data", "aws_iam_policy_document", "uploads_policy");
       const bp = getBlock(tf, "resource", "aws_s3_bucket_policy", "uploads");
       expect(b && v && sse && pab && polDoc && bp).toBeTruthy();
-      expectMatch(sse, /sse_algorithm\s*=\s*"aws:kms"[\s\S]*kms_master_key_id\s*=\s*aws_kms_key\.use1\.arn/);
+      expectMatch(sse, /sse_algorithm\s*=\s*"aws:kms"[\s\S]*kms_master_key_id\s*=\s*aws_kms_key\.use2\.arn/);
       expectMatch(polDoc, /DenyInsecureTransport/);
       expectMatch(bp, /policy\s*=\s*data\.aws_iam_policy_document\.uploads_policy\.json/);
       // PAB posture (all true)
@@ -347,7 +347,7 @@ describe("tap_stack.tf — static unit checks (no AWS calls)", () => {
   describe("CloudFront", () => {
     it("distribution exists with ALB origin (http-only origin policy, default cert)", () => {
       const cf = getBlock(tf, "resource", "aws_cloudfront_distribution", "cdn");
-      expectMatch(cf, /origin\s*\{[\s\S]*domain_name\s*=\s*aws_lb\.use1\.dns_name/);
+      expectMatch(cf, /origin\s*\{[\s\S]*domain_name\s*=\s*aws_lb\.use2\.dns_name/);
       expectMatch(cf, /origin_protocol_policy\s*=\s*"http-only"/);
       expectMatch(cf, /cloudfront_default_certificate\s*=\s*true/);
     });
@@ -358,7 +358,7 @@ describe("tap_stack.tf — static unit checks (no AWS calls)", () => {
       const r = getBlock(tf, "resource", "aws_route53_record", "app_alias_alb");
       expect(r).toBeTruthy();
       expect(/count\s*=\s*\(var\.domain_name/.test(r || "")).toBe(true);
-      expectMatch(r, /alias\s*\{[\s\S]*zone_id\s*=\s*aws_lb\.use1\.zone_id/);
+      expectMatch(r, /alias\s*\{[\s\S]*zone_id\s*=\s*aws_lb\.use2\.zone_id/);
     });
   });
 
@@ -385,19 +385,19 @@ describe("tap_stack.tf — static unit checks (no AWS calls)", () => {
 
   describe("CloudWatch Alarms + SNS", () => {
     it("SNS topic and ASG CPU>70% alarm exist and wired", () => {
-      expect(!!getBlock(tf, "resource", "aws_sns_topic", "use1_alarms")).toBe(true);
-      const alarm = getBlock(tf, "resource", "aws_cloudwatch_metric_alarm", "use1_asg_cpu_high");
-      expectMatch(alarm, /alarm_actions\s*=\s*\[\s*aws_sns_topic\.use1_alarms\.arn\s*\]/);
+      expect(!!getBlock(tf, "resource", "aws_sns_topic", "use2_alarms")).toBe(true);
+      const alarm = getBlock(tf, "resource", "aws_cloudwatch_metric_alarm", "use2_asg_cpu_high");
+      expectMatch(alarm, /alarm_actions\s*=\s*\[\s*aws_sns_topic\.use2_alarms\.arn\s*\]/);
     });
   });
 
   describe("Outputs", () => {
     it("exports all required outputs (single test)", () => {
       const outputs = [
-        "use1_vpc_id","euw2_vpc_id",
-        "use1_public_subnet_ids","use1_private_subnet_ids",
+        "use2_vpc_id","euw2_vpc_id",
+        "use2_public_subnet_ids","use2_private_subnet_ids",
         "euw2_public_subnet_ids","euw2_private_subnet_ids",
-        "use1_kms_key_arn","euw2_kms_key_arn",
+        "use2_kms_key_arn","euw2_kms_key_arn",
         "upload_bucket_name",
         "lambda_on_upload_name","lambda_on_upload_arn","lambda_heartbeat_name",
         "alb_arn","alb_dns_name",
@@ -405,8 +405,8 @@ describe("tap_stack.tf — static unit checks (no AWS calls)", () => {
         "rds_endpoint","rds_port",
         "app_role_name","app_role_arn",
         "sns_alarms_topic_arn",
-        "cw_log_group_use1",
-        "use1_cidr","euw2_cidr",
+        "cw_log_group_use2",
+        "use2_cidr","euw2_cidr",
         "web_sg_id","ec2_instance_id","ec2_public_ip",
         "cloudtrail_bucket_name"
       ];
@@ -463,20 +463,20 @@ test("Unit requirements coverage summary (>=95%)", () => {
                /["']?CostCenter["']?\s*=\s*var\.cost_center/.test(bt);
       })(),
     ],
-    ["VPCs+IGWs both regions", has("resource","aws_vpc","use1") && has("resource","aws_vpc","euw2") && has("resource","aws_internet_gateway","use1") && has("resource","aws_internet_gateway","euw2")],
-    ["Subnets 2+2 both regions", ["use1_public_a","use1_public_b","use1_private_a","use1_private_b","euw2_public_a","euw2_public_b","euw2_private_a","euw2_private_b"].every(n=>has("resource","aws_subnet",n))],
-    ["NAT both regions", has("resource","aws_nat_gateway","use1") && has("resource","aws_nat_gateway","euw2")],
-    ["PCX req+accept", has("resource","aws_vpc_peering_connection","use1_to_euw2") && has("resource","aws_vpc_peering_connection_accepter","euw2_accept")],
-    ["PCX routes both ways", ["use1_public_to_euw2_pcx","use1_private_a_to_euw2_pcx","use1_private_b_to_euw2_pcx","euw2_public_a_to_use1_pcx","euw2_public_b_to_use1_pcx","euw2_private_a_to_use1_pcx","euw2_private_b_to_use1_pcx","euw2_main_to_use1_pcx"].every(n=>has("resource","aws_route",n))],
-    ["ALB SG + 80 ingress", has("resource","aws_security_group","use1_alb_https") && has("resource","aws_vpc_security_group_ingress_rule","use1_alb_http_80")],
-    ["App SG from ALB", has("resource","aws_security_group","use1_app") && has("resource","aws_vpc_security_group_ingress_rule","use1_app_http_from_alb")],
-    ["RDS SG 5432 from app", has("resource","aws_security_group","use1_rds") && has("resource","aws_vpc_security_group_ingress_rule","use1_rds_5432_from_app")],
-    ["Web SG world 80", has("resource","aws_security_group","use1_web") && has("resource","aws_vpc_security_group_ingress_rule","use1_web_http_world")],
-    ["EC2 public AL2023 IMDSv2", has("resource","aws_instance","use1_web") && /http_tokens\s*=\s*"required"/.test(c) && /data\.aws_ssm_parameter\.al2023_ami_use1\.value/.test(c)],
-    ["ASG + LT + TG + Listener", ["aws_launch_template use1_app","aws_autoscaling_group use1_app","aws_lb use1","aws_lb_target_group use1","aws_lb_listener use1_http"].every(sig=>{const [t,n]=sig.split(" ");return has("resource",t as any,n);})],
-    ["SSM VPC endpoints (3)", ["use1_ssm","use1_ssmmessages","use1_ec2messages"].every(n=>has("resource","aws_vpc_endpoint",n))],
+    ["VPCs+IGWs both regions", has("resource","aws_vpc","use2") && has("resource","aws_vpc","euw2") && has("resource","aws_internet_gateway","use2") && has("resource","aws_internet_gateway","euw2")],
+    ["Subnets 2+2 both regions", ["use2_public_a","use2_public_b","use2_private_a","use2_private_b","euw2_public_a","euw2_public_b","euw2_private_a","euw2_private_b"].every(n=>has("resource","aws_subnet",n))],
+    ["NAT both regions", has("resource","aws_nat_gateway","use2") && has("resource","aws_nat_gateway","euw2")],
+    ["PCX req+accept", has("resource","aws_vpc_peering_connection","use2_to_euw2") && has("resource","aws_vpc_peering_connection_accepter","euw2_accept")],
+    ["PCX routes both ways", ["use2_public_to_euw2_pcx","use2_private_a_to_euw2_pcx","use2_private_b_to_euw2_pcx","euw2_public_a_to_use2_pcx","euw2_public_b_to_use2_pcx","euw2_private_a_to_use2_pcx","euw2_private_b_to_use2_pcx","euw2_main_to_use2_pcx"].every(n=>has("resource","aws_route",n))],
+    ["ALB SG + 80 ingress", has("resource","aws_security_group","use2_alb_https") && has("resource","aws_vpc_security_group_ingress_rule","use2_alb_http_80")],
+    ["App SG from ALB", has("resource","aws_security_group","use2_app") && has("resource","aws_vpc_security_group_ingress_rule","use2_app_http_from_alb")],
+    ["RDS SG 5432 from app", has("resource","aws_security_group","use2_rds") && has("resource","aws_vpc_security_group_ingress_rule","use2_rds_5432_from_app")],
+    ["Web SG world 80", has("resource","aws_security_group","use2_web") && has("resource","aws_vpc_security_group_ingress_rule","use2_web_http_world")],
+    ["EC2 public AL2023 IMDSv2", has("resource","aws_instance","use2_web") && /http_tokens\s*=\s*"required"/.test(c) && /data\.aws_ssm_parameter\.al2023_ami_use2\.value/.test(c)],
+    ["ASG + LT + TG + Listener", ["aws_launch_template use2_app","aws_autoscaling_group use2_app","aws_lb use2","aws_lb_target_group use2","aws_lb_listener use2_http"].every(sig=>{const [t,n]=sig.split(" ");return has("resource",t as any,n);})],
+    ["SSM VPC endpoints (3)", ["use2_ssm","use2_ssmmessages","use2_ec2messages"].every(n=>has("resource","aws_vpc_endpoint",n))],
     ["HTTP API → ALB (IAM)", has("resource","aws_apigatewayv2_api","http_api") && has("resource","aws_apigatewayv2_integration","alb_proxy") && has("resource","aws_apigatewayv2_route","root_get") && has("resource","aws_apigatewayv2_route","ec2_get") && has("resource","aws_apigatewayv2_stage","default")],
-    ["RDS enc+private + SSM pwd", has("resource","aws_db_subnet_group","use1") && has("resource","random_password","rds_master") && has("resource","aws_ssm_parameter","rds_password") && has("resource","aws_db_instance","use1")],
+    ["RDS enc+private + SSM pwd", has("resource","aws_db_subnet_group","use2") && has("resource","random_password","rds_master") && has("resource","aws_ssm_parameter","rds_password") && has("resource","aws_db_instance","use2")],
     ["S3 uploads: versioning+SSE-KMS+PAB+TLS-only",
       [
         "aws_s3_bucket uploads",
@@ -490,14 +490,14 @@ test("Unit requirements coverage summary (>=95%)", () => {
     ["Lambdas + trigger + KMS grant + warm-ups", has("data","archive_file","lambda_zip") && has("resource","aws_lambda_function","on_upload") && has("data","archive_file","heartbeat_zip") && has("resource","aws_lambda_function","heartbeat") && has("resource","aws_lambda_permission","allow_s3_invoke") && has("resource","aws_s3_bucket_notification","uploads") && has("resource","aws_kms_grant","lambda_upload_kms") && has("data","aws_lambda_invocation","on_upload_warm") && has("data","aws_lambda_invocation","heartbeat_warm")],
     ["CloudFront & Route53 alias", has("resource","aws_cloudfront_distribution","cdn") && has("resource","aws_route53_record","app_alias_alb")],
     ["CloudTrail multi-region + bucket policy", has("resource","aws_cloudtrail","main") && has("resource","aws_s3_bucket_policy","cloudtrail")],
-    ["SNS + ASG CPU alarm", has("resource","aws_sns_topic","use1_alarms") && has("resource","aws_cloudwatch_metric_alarm","use1_asg_cpu_high")],
+    ["SNS + ASG CPU alarm", has("resource","aws_sns_topic","use2_alarms") && has("resource","aws_cloudwatch_metric_alarm","use2_asg_cpu_high")],
     [
       "All required outputs present",
       [
-        "use1_vpc_id","euw2_vpc_id",
-        "use1_public_subnet_ids","use1_private_subnet_ids",
+        "use2_vpc_id","euw2_vpc_id",
+        "use2_public_subnet_ids","use2_private_subnet_ids",
         "euw2_public_subnet_ids","euw2_private_subnet_ids",
-        "use1_kms_key_arn","euw2_kms_key_arn",
+        "use2_kms_key_arn","euw2_kms_key_arn",
         "upload_bucket_name",
         "lambda_on_upload_name","lambda_on_upload_arn","lambda_heartbeat_name",
         "alb_arn","alb_dns_name",
@@ -505,8 +505,8 @@ test("Unit requirements coverage summary (>=95%)", () => {
         "rds_endpoint","rds_port",
         "app_role_name","app_role_arn",
         "sns_alarms_topic_arn",
-        "cw_log_group_use1",
-        "use1_cidr","euw2_cidr",
+        "cw_log_group_use2",
+        "use2_cidr","euw2_cidr",
         "web_sg_id","ec2_instance_id","ec2_public_ip",
         "cloudtrail_bucket_name"
       ].every(o => new RegExp(String.raw`\boutput\s+"${o}"\s*\{`).test(c))
