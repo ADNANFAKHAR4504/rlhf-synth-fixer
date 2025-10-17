@@ -192,10 +192,10 @@ describe('Terraform Infrastructure - Unit Tests', () => {
       expect(content).toMatch(/billing_mode\s*=\s*"PAY_PER_REQUEST"/);
     });
 
-    test('replicas configured for Global Tables', () => {
+    test('does not use deprecated replica block', () => {
       const content = readFile('dynamodb.tf');
-      expect(content).toMatch(/replica\s*{/);
-      expect(content).toMatch(/region_name\s*=\s*var\.secondary_region/);
+      // Replica block is deprecated - should use aws_dynamodb_table_replica resource instead
+      expect(content).not.toMatch(/replica\s*{/);
     });
 
     test('point-in-time recovery is enabled', () => {
