@@ -90,6 +90,7 @@ Deliver a single, production-ready **CloudFormation template in JSON** named **`
 * Resource names follow the `<project>-<resource>-<environment>` convention end-to-end.
 
 ```yaml
+
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   TapStack.yml — Brand-new, secure AWS environment with VPC, ALB (conditional HTTPS), tightly-scoped S3 access for an EC2 role,
