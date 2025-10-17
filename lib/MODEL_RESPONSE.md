@@ -411,6 +411,11 @@ output "cloudwatch_log_group_name" {
   description = "Name of the CloudWatch log group for API Gateway logs"
   value       = aws_cloudwatch_log_group.api_gateway_logs.name
 }
+
+output "region" {
+  description = "AWS region where resources are deployed"
+  value       = data.aws_region.current.name
+}
 ```
 
 ## Key Features Implemented:

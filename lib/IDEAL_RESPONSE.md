@@ -460,4 +460,9 @@ output "lambda_function_arn" {
   value       = aws_lambda_function.payment_processor.arn
 }
 
+output "region" {
+  description = "AWS region where resources are deployed"
+  value       = data.aws_region.current.name
+}
+
 ```

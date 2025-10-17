@@ -11,7 +11,7 @@ data "aws_caller_identity" "current" {}
 variable "region" {
   description = "AWS region for deployment"
   type        = string
-  default     = "eu-west-1"
+  default     = "us-east-1"
 }
 
 variable "log_retention_days" {
@@ -429,4 +429,9 @@ output "lambda_function_name" {
 output "lambda_function_arn" {
   description = "ARN of the Lambda function"
   value       = aws_lambda_function.payment_processor.arn
+}
+
+output "region" {
+  description = "AWS region where resources are deployed"
+  value       = data.aws_region.current.name
 }
