@@ -658,7 +658,7 @@ Resources:
           Value: !Ref CostCenter
         - Key: rlhf-iac-amazon
           Value: 'true'
-          
+
   ### IAM ROLES ###
   EC2InstanceRole:
     Type: AWS::IAM::Role
@@ -884,7 +884,7 @@ Resources:
       DefaultAction:
         Allow: {}
       Rules:
-        - Name: RateLimitRule
+        - Name: !Sub '${AWS::StackName}-RateLimitRule'
           Priority: 1
           Statement:
             RateBasedStatement:
@@ -895,8 +895,8 @@ Resources:
           VisibilityConfig:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
-            MetricName: RateLimitRule
-        - Name: SQLInjectionRule
+            MetricName: !Sub '${AWS::StackName}-RateLimitRule'
+        - Name: !Sub '${AWS::StackName}-SQLInjectionRule'
           Priority: 2
           Statement:
             SqliMatchStatement:
@@ -912,8 +912,8 @@ Resources:
           VisibilityConfig:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
-            MetricName: SQLInjectionRule
-        - Name: XSSRule
+            MetricName: !Sub '${AWS::StackName}-SQLInjectionRule'
+        - Name: !Sub '${AWS::StackName}-XSSRule'
           Priority: 3
           Statement:
             XssMatchStatement:
@@ -929,7 +929,7 @@ Resources:
           VisibilityConfig:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
-            MetricName: XSSRule
+            MetricName: !Sub '${AWS::StackName}-XSSRule'
       VisibilityConfig:
         SampledRequestsEnabled: true
         CloudWatchMetricsEnabled: true
