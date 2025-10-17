@@ -792,6 +792,9 @@
             "VideoUploadEventRule",
             "Arn"
           ]
+        },
+        "SourceAccount": {
+          "Ref": "AWS::AccountId"
         }
       }
     },
