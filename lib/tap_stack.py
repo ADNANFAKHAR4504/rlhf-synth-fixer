@@ -263,20 +263,20 @@ class TapStack(pulumi.ComponentResource):
             }))
         )
 
-        inventory_configuration = aws.s3.BucketInventory("main-bucket-inventory",
+        inventory_configuration = aws.s3.Inventory("main-bucket-inventory",
             bucket=main_bucket.id,
             name="daily-inventory",
             included_object_versions="Current",
-            schedule=aws.s3.BucketInventoryScheduleArgs(
+            schedule=aws.s3.InventoryScheduleArgs(
                 frequency="Daily"
             ),
-            destination=aws.s3.BucketInventoryDestinationArgs(
-                bucket=aws.s3.BucketInventoryDestinationBucketArgs(
+            destination=aws.s3.InventoryDestinationArgs(
+                bucket=aws.s3.InventoryDestinationBucketArgs(
                     bucket_arn=inventory_bucket.arn,
                     format="CSV",
                     prefix="inventory/",
-                    encryption=aws.s3.BucketInventoryDestinationBucketEncryptionArgs(
-                        sse_s3=aws.s3.BucketInventoryDestinationBucketEncryptionSseS3Args(
+                    encryption=aws.s3.InventoryDestinationBucketEncryptionArgs(
+                        sse_s3=aws.s3.InventoryDestinationBucketEncryptionSseS3Args(
                             # Server-side encryption with S3-managed keys
                         )
                     )
