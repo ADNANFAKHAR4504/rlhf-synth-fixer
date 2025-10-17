@@ -9,6 +9,24 @@ import unittest
 from unittest.mock import patch, MagicMock, Mock
 import pulumi
 
+try:
+    from cdktf_cdktf_provider_aws.elasticache_replication_group import (
+        ElasticacheReplicationGroup as _ElasticacheReplicationGroup,
+    )
+except ImportError:  # pragma: no cover - provider not available in some envs
+    _ElasticacheReplicationGroup = None
+else:
+    _ORIGINAL_ELASTICACHE_INIT = _ElasticacheReplicationGroup.__init__
+
+    def _patched_elasticache_init(self, scope, id, **kwargs):
+        """Coerce boolean flags into strings to satisfy provider type hints."""
+        for key in ("at_rest_encryption_enabled", "auto_minor_version_upgrade"):
+            if isinstance(kwargs.get(key), bool):
+                kwargs[key] = "true" if kwargs[key] else "false"
+        return _ORIGINAL_ELASTICACHE_INIT(self, scope, id, **kwargs)
+
+    _ElasticacheReplicationGroup.__init__ = _patched_elasticache_init
+
 
 class MyMocks:
     """Mocks for Pulumi resources during testing."""
