@@ -35,8 +35,7 @@ interface TapStackProps {
   hostedZoneId?: string;
 }
 
-// If you need to override the AWS Region for the terraform provider for any particular task,
-// you can set it here. Otherwise, it will default to 'us-east-1'.
+
 const AWS_REGION_OVERRIDE = '';
 
 export class TapStack extends TerraformStack {
