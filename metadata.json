@@ -18,7 +18,7 @@
     "CloudWatch Logs (VPC Flow Logs)",
     "VPC Flow Logs"
   ],
-  "training_quality": 9,
+  "training_quality": 8,
   "background": "This project implements a production-ready AWS network infrastructure using Terraform. The solution creates a secure, highly available, multi-AZ VPC with public and private subnets, NAT Gateways, Internet Gateway, security groups, IAM roles, VPC Flow Logs, CloudWatch monitoring, and VPN Gateway. The infrastructure emphasizes security best practices including network segmentation, least-privilege access, comprehensive monitoring, and zero hardcoded credentials. All 135 automated tests (107 unit + 28 integration) pass successfully, validating the infrastructure's correctness and compliance with AWS best practices.",
   "testDependencies": {
     "jest": "^29.7.0",
