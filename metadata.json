@@ -10,7 +10,6 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "background": "MarketGrid multi-vendor e-commerce marketplace webhook processing infrastructure",
   "aws_services": [
     "API Gateway",
     "Lambda",
@@ -28,6 +27,5 @@
     "Route53",
     "Certificate Manager",
     "IAM"
-  ],
-  "training_quality": 9
+  ]
 }
