@@ -11,7 +11,7 @@ data "aws_caller_identity" "current" {}
 variable "region" {
   description = "AWS region for deployment"
   type        = string
-  default     = "eu-west-1"
+  default     = "us-east-1"
 }
 
 variable "log_retention_days" {
@@ -198,7 +198,9 @@ resource "aws_api_gateway_integration_response" "process_payment_post_200" {
   status_code = aws_api_gateway_method_response.process_payment_post_200.status_code
   
   response_parameters = {
-    "method.response.header.Access-Control-Allow-Origin" = "'${local.cors_origin}'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'${local.cors_origin}'"
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+    "method.response.header.Access-Control-Allow-Methods" = "'POST,OPTIONS'"
   }
   
   depends_on = [
