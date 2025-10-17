@@ -112,7 +112,7 @@ export class TapStack extends TerraformStack {
     new DbInstance(this, 'postgres-db', {
       identifier: `rds-db-${randomSuffix}`,
       engine: 'postgres',
-  engineVersion: '15.13',
+      engineVersion: '15.13',
       instanceClass: 'db.t3.micro',
       allocatedStorage: 20,
       dbName: 'webapp',
