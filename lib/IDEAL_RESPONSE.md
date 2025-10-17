@@ -1,6 +1,6 @@
 ```hcl
 
-# tap_stack.tf - Complete Infrastructure Stack Configuration
+# tap_stack.tf
 
 # ==========================================
 # VARIABLES

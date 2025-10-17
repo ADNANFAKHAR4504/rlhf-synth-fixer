@@ -14,7 +14,7 @@
 
 
 ```hcl
-# tap_stack.tf - Complete Infrastructure Stack Configuration
+# tap_stack.tf
 
 # ==========================================
 # VARIABLES
@@ -704,8 +704,6 @@ def handler(event, context):
     filename = "index.py"
   }
 }
-
-# Lambda Permission for S3 to invoke
 resource "aws_lambda_permission" "allow_s3" {
   statement_id  = "AllowExecutionFromS3"
   action        = "lambda:InvokeFunction"
@@ -714,11 +712,6 @@ resource "aws_lambda_permission" "allow_s3" {
   source_arn    = aws_s3_bucket.main.arn
 }
 
-# ==========================================
-# API GATEWAY
-# ==========================================
-
-# CloudWatch Log Group for API Gateway
 resource "aws_cloudwatch_log_group" "api_gateway" {
   name              = "/aws/apigateway/${local.api_gateway_name}"
   retention_in_days = 7
@@ -726,7 +719,6 @@ resource "aws_cloudwatch_log_group" "api_gateway" {
   tags = local.common_tags
 }
 
-# API Gateway REST API
 resource "aws_api_gateway_rest_api" "main" {
   name        = local.api_gateway_name
   description = "API Gateway for ${local.name_prefix}"
@@ -738,22 +730,18 @@ resource "aws_api_gateway_rest_api" "main" {
   tags = local.common_tags
 }
 
-# API Gateway Resource
 resource "aws_api_gateway_resource" "main" {
   rest_api_id = aws_api_gateway_rest_api.main.id
   parent_id   = aws_api_gateway_rest_api.main.root_resource_id
   path_part   = "process"
 }
 
-# API Gateway Method
 resource "aws_api_gateway_method" "main" {
   rest_api_id   = aws_api_gateway_rest_api.main.id
   resource_id   = aws_api_gateway_resource.main.id
   http_method   = "POST"
   authorization = "NONE"
 }
-
-# API Gateway Integration
 resource "aws_api_gateway_integration" "lambda" {
   rest_api_id = aws_api_gateway_rest_api.main.id
   resource_id = aws_api_gateway_resource.main.id
@@ -764,7 +752,6 @@ resource "aws_api_gateway_integration" "lambda" {
   uri                     = aws_lambda_function.processor.invoke_arn
 }
 
-# API Gateway Deployment
 resource "aws_api_gateway_deployment" "main" {
   depends_on = [
     aws_api_gateway_integration.lambda
@@ -785,7 +772,6 @@ resource "aws_api_gateway_deployment" "main" {
   }
 }
 
-# API Gateway Stage with Logging
 resource "aws_api_gateway_stage" "main" {
   deployment_id = aws_api_gateway_deployment.main.id
   rest_api_id   = aws_api_gateway_rest_api.main.id
@@ -936,23 +922,6 @@ output "lambda_security_group_id" {
   description = "Security group ID for Lambda function"
   value       = aws_security_group.lambda.id
 }
-
-# API Gateway Outputs
-output "api_gateway_id" {
-  description = "ID of the API Gateway REST API"
-  value       = aws_api_gateway_rest_api.main.id
-}
-
-output "api_gateway_invoke_url" {
-  description = "Invoke URL for the API Gateway"
-  value       = aws_api_gateway_stage.main.invoke_url
-}
-
-output "api_gateway_stage_name" {
-  description = "Stage name of the API Gateway deployment"
-  value       = aws_api_gateway_stage.main.stage_name
-}
-
 # CloudWatch Alarm Outputs
 output "cloudwatch_alarm_cpu_name" {
   description = "Name of the CPU utilization alarm"
@@ -975,64 +944,33 @@ output "lambda_log_group_name" {
   value       = aws_cloudwatch_log_group.lambda.name
 }
 
-output "api_gateway_log_group_name" {
-  description = "CloudWatch log group name for API Gateway"
-  value       = aws_cloudwatch_log_group.api_gateway.name
-}
-
-# Route Table Outputs
-output "public_route_table_id" {
-  description = "ID of the public route table"
-  value       = aws_route_table.public.id
-}
-
-output "private_route_table_ids" {
-  description = "IDs of the private route tables"
-  value       = aws_route_table.private[*].id
-}
-
-# Additional Infrastructure Information
-output "availability_zones_used" {
-  description = "Availability zones used for deployment"
-  value       = slice(data.aws_availability_zones.available.names, 0, 2)
-}
-
-output "resource_suffix" {
-  description = "Random suffix used for resource naming"
-  value       = local.random_suffix
-}
-
-output "environment_tag" {
-  description = "Environment tag applied to all resources"
-  value       = var.environment
-}
 ```
 
 Key Features of the Configuration:
 
 Security Best Practices Implemented:
-1. **Least Privilege IAM Roles**: Each service has minimal required permissions
-2. **Encrypted Storage**: S3 bucket and EC2 root volume encryption enabled
-3. **Network Isolation**: Private subnets for compute resources
-4. **Restricted SSH Access**: Only from specified IP range (203.0.113.0/24)
-5. **S3 Public Access Blocked**: Prevents accidental public exposure
-6. **VPC Flow Logs Ready**: Infrastructure supports flow log implementation
-7. **IMDSv2 Enforced**: EC2 metadata service v2 for better security
+Least Privilege IAM Roles**: Each service has minimal required permissions
+Encrypted Storage**: S3 bucket and EC2 root volume encryption enabled
+Network Isolation**: Private subnets for compute resources
+Restricted SSH Access**: Only from specified IP range (203.0.113.0/24)
+S3 Public Access Blocked**: Prevents accidental public exposure
+VPC Flow Logs Ready**: Infrastructure supports flow log implementation
+IMDSv2 Enforced**: EC2 metadata service v2 for better security
 
 High Availability Features:
-1. **Multi-AZ Deployment**: Resources spread across 2 availability zones
-2. **Redundant NAT Gateways**: One per AZ for fault tolerance
-3. **Auto-failover Ready**: Infrastructure supports automatic failover
+Multi-AZ Deployment**: Resources spread across 2 availability zones
+Redundant NAT Gateways**: One per AZ for fault tolerance
+Auto-failover Ready**: Infrastructure supports automatic failover
 
 Monitoring and Logging:
-1. **CloudWatch Alarms**: CPU and network metrics monitoring for EC2
-2. **API Gateway Logging**: Full request/response logging enabled
-3. **Lambda Logging**: Automatic CloudWatch integration
-4. **Retention Policies**: 7-day retention for cost optimization
+CloudWatch Alarms**: CPU and network metrics monitoring for EC2
+API Gateway Logging**: Full request/response logging enabled
+Lambda Logging**: Automatic CloudWatch integration
+Retention Policies**: 7-day retention for cost optimization
 
 Infrastructure Features:
-1. **Random Suffix**: 4-character lowercase suffix prevents naming conflicts
-2. **Consistent Naming**: All resources follow the pattern `tap-stack-{resource}-{suffix}`
-3. **Comprehensive Tagging**: All resources tagged with Environment:prd
-4. **Base64 User Data**: EC2 user data properly encoded
-5. **Inline Lambda Code**: No external zip file dependencies
+Random Suffix**: 4-character lowercase suffix prevents naming conflicts
+Consistent Naming**: All resources follow the pattern `tap-stack-{resource}-{suffix}`
+Comprehensive Tagging**: All resources tagged with Environment:prd
+Base64 User Data**: EC2 user data properly encoded
+Inline Lambda Code**: No external zip file dependencies
