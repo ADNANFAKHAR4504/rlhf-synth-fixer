@@ -48,6 +48,7 @@ env:
   # Go caching optimization
   GOCACHE: ${{ github.workspace }}/.cache/go-build
   GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
+  IAC_ANALYSIS_SUBTASK: 'IaC Program Optimization'
 
 jobs:
   detect-metadata:
@@ -58,6 +59,7 @@ jobs:
       platform: ${{ steps.metadata.outputs.platform }}
       language: ${{ steps.metadata.outputs.language }}
       po_id: ${{ steps.metadata.outputs.po_id }}
+      subtask: ${{ steps.metadata.outputs.subtask }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -111,7 +113,7 @@ jobs:
     name: Synth
     runs-on: ubuntu-24.04
     needs: [detect-metadata, build]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch' && needs.detect-metadata.outputs.subtask != 'IaC Program Optimization' }}
     environment: dev
     permissions:
       contents: read
@@ -240,12 +242,155 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ env.AWS_REGION || 'us-east-1' }}
+  analysis:
+    name: Analysis
+    runs-on: ubuntu-24.04
+    needs: detect-metadata
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.subtask == 'IaC Program Optimization' }}
+    environment: dev
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          ref: ${{ github.head_ref }}
 
+      - name: Setup Python (Moto server)
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pipenv
+          pipenv install --dev --system
+          sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Start Moto server using Docker
+        run: |
+          echo "Starting Moto server with Docker..."
+          docker run --rm -d -p 5000:5000 --name moto-server motoserver/moto:latest
+          
+          # Wait for server to be ready
+          echo "Waiting for Moto server to start..."
+          for i in {1..30}; do
+            if curl -s http://127.0.0.1:5000/ >/dev/null 2>&1; then
+              echo "✅ Moto server is ready (attempt $i)"
+              break
+            else
+              echo "⏳ Waiting for Moto server... (attempt $i/30)"
+              sleep 1
+            fi
+          done
+          
+          # Verify server is actually running
+          if ! curl -s http://127.0.0.1:5000/ >/dev/null 2>&1; then
+            echo "❌ Moto server failed to start!"
+            echo "Docker container logs:"
+            docker logs moto-server || echo "No container logs found"
+            echo "Docker container status:"
+            docker ps -a --filter name=moto-server || echo "No container found"
+            exit 1
+          fi
+          
+          echo "AWS_ENDPOINT_URL=http://127.0.0.1:5000" >> $GITHUB_ENV
+          echo "✅ Moto server started successfully using Docker"
+
+      - name: Check for analysis script
+        id: check-script
+        run: |
+          if [ -f "lib/analyse.py" ]; then
+            echo "script=lib/analyse.py" >> $GITHUB_OUTPUT
+            echo "type=python" >> $GITHUB_OUTPUT
+          elif [ -f "lib/analyse.sh" ]; then
+            echo "script=lib/analyse.sh" >> $GITHUB_OUTPUT
+            echo "type=shell" >> $GITHUB_OUTPUT
+          else
+            echo "No analysis script found (lib/analyse.py or lib/analyse.sh)"
+            exit 1
+          fi
+
+      - name: Run tests
+        run: |
+          echo "Verifying Moto server is still running..."
+          if ! curl -s http://127.0.0.1:5000/ >/dev/null 2>&1; then
+            echo "❌ Moto server is not responding before tests!"
+            echo "Docker container logs:"
+            docker logs moto-server || echo "No container logs found"
+            echo "Docker container status:"
+            docker ps -a --filter name=moto-server || echo "No container found"
+            exit 1
+          fi
+          echo "✅ Moto server is responsive"
+          
+          echo "Running analysis tests..."
+          python -m pytest test/test-analysis-*.py -v --tb=short --no-cov
+        env:
+          AWS_ENDPOINT_URL: http://127.0.0.1:5000
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_DEFAULT_REGION: us-east-1
+  
+      - name: Run analysis script
+        run: |
+          SCRIPT_PATH="${{ steps.check-script.outputs.script }}"
+          
+          echo "Running analysis script: $SCRIPT_PATH"
+          
+          if [ "${{ steps.check-script.outputs.type }}" = "python" ]; then
+            python "$SCRIPT_PATH" 2>&1 | tee "lib/analysis-results.txt"
+          else
+            chmod +x "$SCRIPT_PATH"
+            bash "$SCRIPT_PATH" 2>&1 | tee "lib/analysis-results.txt"
+          fi
+          
+          echo "Analysis completed. Output saved to lib/analysis-results.txt"
+        env:
+          AWS_ENDPOINT_URL: http://127.0.0.1:5000
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_DEFAULT_REGION: us-east-1
+
+      - name: Commit analysis results
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+          
+          # Add analysis output files
+          git add lib/analysis-results.txt
+          
+          # Check if there are changes to commit
+          if git diff --cached --quiet; then
+            echo "No analysis output changes to commit"
+          else
+            git commit -m "Add analysis results for IaC Program Optimization task [skip-jobs]"
+            git push origin HEAD:refs/heads/${{ github.head_ref }}
+            echo "Analysis results committed to PR branch"
+          fi
+
+      - name: Upload analysis results as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: analysis-results
+          path: lib/analysis-results.txt
+          if-no-files-found: warn
+
+      - name: Stop Moto server
+        if: always()
+        run: |
+          echo "Stopping Moto server Docker container..."
+          docker stop moto-server || echo "Container already stopped or not found"
+          echo "✅ Moto server stopped"
   deploy:
     name: Deploy
     runs-on: ubuntu-24.04
     needs: [detect-metadata, synth]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.subtask != 'IaC Program Optimization'}}
     environment: dev
 
     steps:
@@ -309,7 +454,7 @@ jobs:
     name: Lint
     runs-on: ubuntu-24.04
     needs: [detect-metadata, build]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.subtask != 'IaC Program Optimization'}}
     environment: qa
     outputs:
       platform: ${{ needs.detect-metadata.outputs.platform }}
@@ -336,7 +481,7 @@ jobs:
     name: Unit Testing
     runs-on: ubuntu-24.04
     needs: [detect-metadata, lint]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.subtask != 'IaC Program Optimization' }}
     environment: qa
 
     steps:
@@ -429,7 +574,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [detect-metadata, lint, unit-tests, deploy]
     environment: qa
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.subtask != 'IaC Program Optimization'}}
 
     steps:
       - name: Checkout code
@@ -483,6 +628,7 @@ jobs:
 
       - name: Check for required documentation files
         id: docs-check
+        if: ${{ needs.detect-metadata.outputs.subtask != env.IAC_ANALYSIS_CATEGORY }}
         run: |
           if [ ! -f "lib/PROMPT.md" ]; then
             echo "❌ lib/PROMPT.md not found, exiting with failure"
@@ -503,8 +649,17 @@ jobs:
             echo "❌ lib/MODEL_FAILURES.md not found, exiting with failure"
             exit 1
           fi
+      
+      - name: Verify analysis script exists when Analysis/Monitoring
+        if: ${{ needs.detect-metadata.outputs.subtask == env.IAC_ANALYSIS_CATEGORY }}
+        run: |
+          if [ ! -f "lib/analyze.py" ] && [ ! -f "lib/analyse.sh" ]; then
+            echo "❌ Expected lib/analyze.py or lib/analyse.sh for IaC Program Optimization task"
+            exit 1
+          fi
 
       - name: Run Claude PR Review Action
+        if: ${{ needs.detect-metadata.outputs.subtask != env.IAC_ANALYSIS_CATEGORY }}
         uses: anthropics/claude-code-action@beta
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -547,6 +702,7 @@ jobs:
             Once the above is done Follow instructions in .claude/agents/iac-code-reviewer.md
 
       - name: Upload updated metadata.json
+        if: ${{ needs.detect-metadata.outputs.subtask != env.IAC_ANALYSIS_CATEGORY }}
         uses: actions/upload-artifact@v4
         with:
           name: updated-metadata
