@@ -973,7 +973,7 @@ Resources:
         - !Ref NovaDatabaseSecurityGroup
       PubliclyAccessible: false
       BackupRetentionPeriod: 35
-      MultiAZ: true
+      MultiAZ: false
       DeletionProtection: false
       EnablePerformanceInsights: true
       PerformanceInsightsRetentionPeriod: 731
@@ -1257,7 +1257,7 @@ Resources:
     Type: AWS::Shield::Protection
     Properties:
       Name: !Sub '${ProjectName}-${Environment}-shield-protection'
-      ResourceArn: !GetAtt NovaCloudFront.DomainName
+      ResourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${NovaCloudFront}'
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${Environment}-shield-protection'
