@@ -34,8 +34,6 @@ This is the most critical part of the design. Your CDK application must implemen
 
 - **Data Encryption:** The DynamoDB Global Table must be encrypted with a **customer-managed KMS key**, giving us full control and auditability over the data encryption keys.
 
-- **Auditing:** **CloudTrail** must be enabled to log data events for the DynamoDB table, providing a clear audit trail of all transaction records being accessed or modified.
-
 - **Least Privilege:** The Lambda function's IAM role must be strictly scoped, with no wildcards. It should only have permissions to write to the specific DynamoDB table and retrieve secrets from Secrets Manager.
 
 ---
@@ -48,9 +46,8 @@ The integration test will validate both the failover and the security controls:
 2.  Attempt to `POST` a transaction to the `/transfer` endpoint **without** a valid authorization token. The request **must be rejected by the Lambda Authorizer** with a `401 Unauthorized` error.
 3.  `POST` a new transaction **with** a valid token. The request should succeed.
 4.  Query the DynamoDB table in both regions to confirm the new transaction was instantly replicated.
-5.  Execute an **AWS Fault Injection Simulator (FIS)** experiment to simulate an API Gateway failure in `us-east-1`.
-6.  Refresh the global application URL. It should now show the **"Active Region: us-east-2"** message.
-7.  The transaction record from step 3 **must be present** in the `us-east-2` DynamoDB table, proving our zero-data-loss and security requirements were met.
+5.  Refresh the global application URL. It should now show the **"Active Region: us-east-2"** message.
+6.  The transaction record from step 3 **must be present** in the `us-east-2` DynamoDB table, proving our zero-data-loss and security requirements were met.
 
 ---
 

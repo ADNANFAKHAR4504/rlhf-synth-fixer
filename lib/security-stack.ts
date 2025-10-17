@@ -3,7 +3,6 @@ import { Construct } from 'constructs';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 
 export interface SecurityStackProps extends cdk.StackProps {
-  cloudfrontDistributionArn: string;
   environmentSuffix: string;
 }
 
@@ -82,17 +81,10 @@ export class SecurityStack extends cdk.Stack {
       }
     );
 
-    // Associate WAF Web ACL with CloudFront distribution
-    new wafv2.CfnWebACLAssociation(
-      this,
-      `WebAclAssociation-${props.environmentSuffix}`,
-      {
-        resourceArn: props.cloudfrontDistributionArn,
-        webAclArn: this.webAcl.attrArn,
-      }
-    );
+    // Note: WebACL is associated with CloudFront distribution during distribution creation
+    // See GlobalStack where webAclId is set on the Distribution
 
-    // Output values
+    // Output values for integration testing
     new cdk.CfnOutput(this, 'WebAclArn', {
       value: this.webAcl.attrArn,
       description: 'ARN of the WAF Web ACL',
@@ -103,6 +95,29 @@ export class SecurityStack extends cdk.Stack {
       value: this.webAcl.attrId,
       description: 'ID of the WAF Web ACL',
       exportName: `WebAclId-${props.environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'WebAclName', {
+      value: `payments-gateway-web-acl-${props.environmentSuffix}`,
+      description: 'Name of the WAF Web ACL',
+      exportName: `WebAclName-${props.environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'WebAclScope', {
+      value: 'CLOUDFRONT',
+      description: 'Scope of the WAF Web ACL',
+      exportName: `WebAclScope-${props.environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'RateLimitRule', {
+      value: '2000 requests per 5 minutes per IP',
+      description: 'Rate limit configuration',
+    });
+
+    new cdk.CfnOutput(this, 'ManagedRules', {
+      value:
+        'AWSManagedRulesCommonRuleSet, AWSManagedRulesAmazonIpReputationList',
+      description: 'Enabled AWS Managed Rules',
     });
   }
 }

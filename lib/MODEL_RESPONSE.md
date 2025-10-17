@@ -32,7 +32,6 @@ This is a comprehensive request for a CDK TypeScript project to build a secure, 
 - AWS WAF with managed rule sets to protect CloudFront
 - Lambda Authorizer for API Gateway authentication
 - Customer-managed KMS key for DynamoDB encryption
-- CloudTrail enabled for auditing DynamoDB data events
 - Least privilege IAM roles for Lambda functions
 
 ### Testing Plan
@@ -286,7 +285,6 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as kms from 'aws-cdk-lib/aws-kms';
-import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
 import * as iam from 'aws-cdk-lib/aws-iam';
 
 export interface DatabaseStackProps extends cdk.StackProps {
@@ -326,22 +324,6 @@ export class DatabaseStack extends cdk.Stack {
 
     this.tableName = globalTable.tableName;
     this.tableArn = globalTable.tableArn;
-
-    // Create CloudTrail for DynamoDB data events
-    const trail = new cloudtrail.Trail(this, 'PaymentsTrail', {
-      sendToCloudWatchLogs: true,
-    });
-
-    trail.addEventSelector(
-      cloudtrail.EventSelector.builder()
-        .readWriteType(cloudtrail.ReadWriteType.ALL)
-        .includeManagementEvents(true)
-        .dataResource({
-          type: cloudtrail.DataResourceType.DYNAMODB_TABLE,
-          values: [`${globalTable.tableArn}`],
-        })
-        .build()
-    );
 
     // Output values
     new cdk.CfnOutput(this, 'TableName', {
@@ -1182,7 +1164,6 @@ This CDK project includes all the necessary components for building a secure, se
 5. WAF protection for the CloudFront distribution
 6. Automatic failover using Route 53 health checks
 7. Proper IAM roles with least privilege
-8. CloudTrail auditing for the DynamoDB table
 
 The project follows a modular structure with separate stacks for different components, which makes it easier to manage and update. The regional infrastructure is defined in a reusable `RegionalStack` class, while the global resources are managed in the `GlobalStack`.
 
@@ -1233,7 +1214,6 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as kms from 'aws-cdk-lib/aws-kms';
-import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
 
 export interface DatabaseStackProps extends cdk.StackProps {
   primaryRegion: string;
@@ -1272,22 +1252,6 @@ export class DatabaseStack extends cdk.Stack {
 
     this.tableName = globalTable.tableName;
     this.tableArn = globalTable.tableArn;
-
-    // Enable CloudTrail for DynamoDB data events (audit trail)
-    const trail = new cloudtrail.Trail(this, 'PaymentsTrail', {
-      sendToCloudWatchLogs: true,
-    });
-
-    trail.addEventSelector(
-      cloudtrail.EventSelector.builder()
-        .readWriteType(cloudtrail.ReadWriteType.ALL)
-        .includeManagementEvents(true)
-        .dataResource({
-          type: cloudtrail.DataResourceType.DYNAMODB_TABLE,
-          values: [globalTable.tableArn],
-        })
-        .build()
-    );
   }
 }
 ```

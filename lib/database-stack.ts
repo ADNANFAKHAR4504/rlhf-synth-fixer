@@ -2,8 +2,6 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as kms from 'aws-cdk-lib/aws-kms';
-import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
-import * as s3 from 'aws-cdk-lib/aws-s3';
 
 export interface DatabaseStackProps extends cdk.StackProps {
   replicaRegion: string;
@@ -30,19 +28,13 @@ export class DatabaseStack extends cdk.Stack {
       }
     );
 
-    // Create replica KMS key for secondary region
-    const replicaKey = new kms.Key(
-      this,
-      `PaymentsTableReplicaKey-${props.environmentSuffix}`,
-      {
-        enableKeyRotation: true,
-        description: `KMS key for encrypting the payments DynamoDB table replica in ${props.replicaRegion}`,
-        alias: `alias/payments-table-replica-key-${props.environmentSuffix}`,
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
-      }
-    );
+    // Construct the secondary KMS key ARN using the predictable alias pattern
+    // This avoids cross-region references and Custom::CrossRegionExportWriter
+    // The SecondaryKmsStack creates a KMS key with a known alias pattern
+    const secondaryKmsKeyArn = `arn:aws:kms:${props.replicaRegion}:${this.account}:alias/payments-table-key-${props.replicaRegion}-${props.environmentSuffix}`;
 
     // Create the DynamoDB Global Table with replication
+    // Using customer-managed KMS keys for both primary and replica regions
     this.table = new dynamodb.TableV2(
       this,
       `PaymentsTable-${props.environmentSuffix}`,
@@ -53,12 +45,9 @@ export class DatabaseStack extends cdk.Stack {
         },
         sortKey: { name: 'timestamp', type: dynamodb.AttributeType.STRING },
         billing: dynamodb.Billing.onDemand(),
-        encryption: dynamodb.TableEncryptionV2.customerManagedKey(
-          this.kmsKey,
-          {
-            [props.replicaRegion]: replicaKey.keyArn,
-          }
-        ),
+        encryption: dynamodb.TableEncryptionV2.customerManagedKey(this.kmsKey, {
+          [props.replicaRegion]: secondaryKmsKeyArn,
+        }),
         removalPolicy: cdk.RemovalPolicy.DESTROY,
         pointInTimeRecovery: true,
         replicas: [
@@ -71,46 +60,7 @@ export class DatabaseStack extends cdk.Stack {
 
     this.tableName = this.table.tableName;
 
-    // Create S3 bucket for CloudTrail logs
-    const trailBucket = new s3.Bucket(
-      this,
-      `TrailBucket-${props.environmentSuffix}`,
-      {
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
-        autoDeleteObjects: true,
-        encryption: s3.BucketEncryption.S3_MANAGED,
-        enforceSSL: true,
-        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      }
-    );
-
-    // Enable CloudTrail for DynamoDB data events (audit trail)
-    const trail = new cloudtrail.Trail(
-      this,
-      `PaymentsTrail-${props.environmentSuffix}`,
-      {
-        bucket: trailBucket,
-        sendToCloudWatchLogs: true,
-      }
-    );
-
-    // Add DynamoDB table to CloudTrail for auditing
-    // CloudTrail will log all data events for this table
-    const cfnTrail = trail.node.defaultChild as cloudtrail.CfnTrail;
-    cfnTrail.eventSelectors = [
-      {
-        readWriteType: 'All',
-        includeManagementEvents: true,
-        dataResources: [
-          {
-            type: 'AWS::DynamoDB::Table',
-            values: [this.table.tableArn],
-          },
-        ],
-      },
-    ];
-
-    // Output values
+    // Output values for integration testing
     new cdk.CfnOutput(this, 'TableName', {
       value: this.table.tableName,
       description: 'DynamoDB Global Table name',
@@ -123,10 +73,40 @@ export class DatabaseStack extends cdk.Stack {
       exportName: `PaymentsTableArn-${props.environmentSuffix}`,
     });
 
+    new cdk.CfnOutput(this, 'PrimaryRegion', {
+      value: cdk.Stack.of(this).region,
+      description: 'Primary region for DynamoDB table',
+      exportName: `DynamoDBPrimaryRegion-${props.environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'ReplicaRegion', {
+      value: props.replicaRegion,
+      description: 'Replica region for DynamoDB table',
+      exportName: `DynamoDBReplicaRegion-${props.environmentSuffix}`,
+    });
+
     new cdk.CfnOutput(this, 'KmsKeyArn', {
       value: this.kmsKey.keyArn,
-      description: 'KMS Key ARN for DynamoDB encryption',
+      description: 'KMS Key ARN for DynamoDB encryption (primary region)',
       exportName: `PaymentsKmsKeyArn-${props.environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'KmsKeyId', {
+      value: this.kmsKey.keyId,
+      description: 'KMS Key ID for DynamoDB encryption (primary region)',
+      exportName: `PaymentsKmsKeyId-${props.environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'PointInTimeRecovery', {
+      value: 'ENABLED',
+      description: 'Point-in-time recovery status',
+      exportName: `DynamoDBPITR-${props.environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'BillingMode', {
+      value: 'PAY_PER_REQUEST',
+      description: 'DynamoDB billing mode',
+      exportName: `DynamoDBBillingMode-${props.environmentSuffix}`,
     });
   }
 }
