@@ -1,13 +1,14 @@
 import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
-import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as logs from 'aws-cdk-lib/aws-logs';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as targets from 'aws-cdk-lib/aws-elasticloadbalancingv2-targets';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import { Construct } from 'constructs';
 
 export interface RegionalStackProps extends cdk.StackProps {
   tableName: string;
@@ -22,6 +23,7 @@ export class RegionalStack extends cdk.Stack {
   public readonly apiEndpoint: string;
   public readonly healthCheckPath: string = '/health';
   public readonly websiteBucket: s3.Bucket;
+  public readonly oai: cloudfront.OriginAccessIdentity;
 
   constructor(scope: Construct, id: string, props: RegionalStackProps) {
     super(scope, id, props);
@@ -62,7 +64,6 @@ export class RegionalStack extends cdk.Stack {
 
     // Create the S3 bucket for static website
     // Need explicit bucket name for cross-region access
-    // CloudFront OAI permissions will be granted by GlobalStack via bucket.grantRead(oai)
     this.websiteBucket = new s3.Bucket(
       this,
       `WebsiteBucket-${props.environmentSuffix}`,
@@ -76,6 +77,19 @@ export class RegionalStack extends cdk.Stack {
         enforceSSL: true,
       }
     );
+
+    // Create CloudFront Origin Access Identity for this bucket
+    this.oai = new cloudfront.OriginAccessIdentity(
+      this,
+      `WebsiteBucketOAI-${props.environmentSuffix}`,
+      {
+        comment: `OAI for ${this.websiteBucket.bucketName}`,
+      }
+    );
+
+    // Grant CloudFront OAI read access to the bucket
+    // Use grantRead to merge with existing bucket policy (auto-delete policy)
+    this.websiteBucket.grantRead(this.oai);
 
     // Create the Lambda Authorizer
     const authorizerLambda = new lambda.Function(
@@ -284,7 +298,60 @@ export class RegionalStack extends cdk.Stack {
       }
     );
 
-    // Add health check endpoint (no authorization required)
+    // Create /api resource for CloudFront integration (no path rewriting needed)
+    const apiResource = this.apiGateway.root.addResource('api');
+
+    // Add /api/health endpoint (no authorization required)
+    const apiHealthResource = apiResource.addResource('health');
+    apiHealthResource.addMethod(
+      'GET',
+      new apigateway.MockIntegration({
+        integrationResponses: [
+          {
+            statusCode: '200',
+            responseTemplates: {
+              'application/json': JSON.stringify({
+                status: 'healthy',
+                region: props.region,
+              }),
+            },
+          },
+        ],
+        requestTemplates: {
+          'application/json': '{ "statusCode": 200 }',
+        },
+      }),
+      {
+        methodResponses: [
+          {
+            statusCode: '200',
+            responseModels: {
+              'application/json': apigateway.Model.EMPTY_MODEL,
+            },
+          },
+        ],
+      }
+    );
+
+    // Use HTTP integration with VPC Link for private communication
+    const transferIntegration = new apigateway.Integration({
+      type: apigateway.IntegrationType.HTTP_PROXY,
+      integrationHttpMethod: 'ANY',
+      uri: `http://${nlb.loadBalancerDnsName}/`,
+      options: {
+        connectionType: apigateway.ConnectionType.VPC_LINK,
+        vpcLink: vpcLink,
+      },
+    });
+
+    // Add /api/transfer endpoint with Lambda Authorizer
+    const apiTransferResource = apiResource.addResource('transfer');
+    apiTransferResource.addMethod('POST', transferIntegration, {
+      authorizer: authorizer,
+      authorizationType: apigateway.AuthorizationType.CUSTOM,
+    });
+
+    // Also keep the original /health and /transfer endpoints for direct access
     const healthResource = this.apiGateway.root.addResource('health');
     healthResource.addMethod(
       'GET',
@@ -316,20 +383,7 @@ export class RegionalStack extends cdk.Stack {
       }
     );
 
-    // Add transfer endpoint with Lambda Authorizer using VPC Link
     const transferResource = this.apiGateway.root.addResource('transfer');
-
-    // Use HTTP integration with VPC Link for private communication
-    const transferIntegration = new apigateway.Integration({
-      type: apigateway.IntegrationType.HTTP_PROXY,
-      integrationHttpMethod: 'ANY',
-      uri: `http://${nlb.loadBalancerDnsName}/`,
-      options: {
-        connectionType: apigateway.ConnectionType.VPC_LINK,
-        vpcLink: vpcLink,
-      },
-    });
-
     transferResource.addMethod('POST', transferIntegration, {
       authorizer: authorizer,
       authorizationType: apigateway.AuthorizationType.CUSTOM,
@@ -456,6 +510,18 @@ export class RegionalStack extends cdk.Stack {
       value: props.kmsKeyArn,
       description: 'KMS Key ARN for encryption',
       exportName: `KMSKeyArn-${props.region}-${props.environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'OAIId', {
+      value: this.oai.originAccessIdentityId,
+      description: 'CloudFront Origin Access Identity ID',
+      exportName: `OAIId-${props.region}-${props.environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'OAICanonicalUserId', {
+      value: this.oai.cloudFrontOriginAccessIdentityS3CanonicalUserId,
+      description: 'CloudFront OAI S3 Canonical User ID',
+      exportName: `OAICanonicalUserId-${props.region}-${props.environmentSuffix}`,
     });
   }
 }

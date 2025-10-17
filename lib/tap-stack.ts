@@ -108,7 +108,7 @@ export class TapStack extends cdk.Stack {
 
     // Create the global stack with WAF WebACL and automatic failover
     // Note: GlobalStack needs crossRegionReferences because it references API endpoints from both regions
-    // GlobalStack will create CfnBucketPolicy to grant CloudFront OAI read permissions
+    // OAIs are created in Regional stacks which also manage bucket policies to avoid conflicts
     const globalStack = new GlobalStack(
       scope,
       `GlobalStack-${environmentSuffix}`,
@@ -120,6 +120,8 @@ export class TapStack extends cdk.Stack {
         primaryHealthCheckPath: primaryRegionalStack.healthCheckPath,
         primaryBucketName: primaryRegionalStack.websiteBucket.bucketName,
         secondaryBucketName: secondaryRegionalStack.websiteBucket.bucketName,
+        primaryOaiId: primaryRegionalStack.oai.originAccessIdentityId,
+        secondaryOaiId: secondaryRegionalStack.oai.originAccessIdentityId,
         webAclArn: securityStack.webAcl.attrArn,
         environmentSuffix,
         env: {

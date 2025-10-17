@@ -16,6 +16,8 @@ export interface GlobalStackProps extends cdk.StackProps {
   primaryHealthCheckPath: string;
   primaryBucketName: string;
   secondaryBucketName: string;
+  primaryOaiId: string;
+  secondaryOaiId: string;
   webAclArn: string;
   environmentSuffix: string;
   // Optional: Provide existing hosted zone name if available
@@ -97,104 +99,21 @@ export class GlobalStack extends cdk.Stack {
       props.secondaryBucketName
     );
 
-    // Create CloudFront origin access identity for primary bucket
-    const primaryOai = new cloudfront.OriginAccessIdentity(
-      this,
-      `PrimaryOAI-${props.environmentSuffix}`,
-      {
-        comment: `OAI for primary bucket ${props.primaryBucketName}`,
-      }
-    );
+    // Import CloudFront OAIs from Regional stacks
+    // Regional stacks create the OAIs and manage bucket policies to avoid conflicts
+    const primaryOai =
+      cloudfront.OriginAccessIdentity.fromOriginAccessIdentityId(
+        this,
+        `PrimaryOAI-${props.environmentSuffix}`,
+        props.primaryOaiId
+      );
 
-    // Create CloudFront origin access identity for secondary bucket
-    const secondaryOai = new cloudfront.OriginAccessIdentity(
-      this,
-      `SecondaryOAI-${props.environmentSuffix}`,
-      {
-        comment: `OAI for secondary bucket ${props.secondaryBucketName}`,
-      }
-    );
-
-    // Grant read permissions via bucket policy using CfnBucketPolicy
-    // This adds the CloudFront OAI canonical user to the bucket policy
-    // Note: This will merge with existing bucket policies (e.g., SSL enforcement, auto-delete)
-    new s3.CfnBucketPolicy(
-      this,
-      `PrimaryBucketPolicy-${props.environmentSuffix}`,
-      {
-        bucket: props.primaryBucketName,
-        policyDocument: {
-          Statement: [
-            // SSL enforcement - deny non-HTTPS requests
-            {
-              Sid: 'DenyInsecureTransport',
-              Effect: 'Deny',
-              Principal: { AWS: '*' },
-              Action: 's3:*',
-              Resource: [
-                `arn:aws:s3:::${props.primaryBucketName}`,
-                `arn:aws:s3:::${props.primaryBucketName}/*`,
-              ],
-              Condition: {
-                Bool: {
-                  'aws:SecureTransport': 'false',
-                },
-              },
-            },
-            // CloudFront OAI access
-            {
-              Sid: 'AllowCloudFrontOAIAccess',
-              Effect: 'Allow',
-              Principal: {
-                CanonicalUser:
-                  primaryOai.cloudFrontOriginAccessIdentityS3CanonicalUserId,
-              },
-              Action: 's3:GetObject',
-              Resource: `arn:aws:s3:::${props.primaryBucketName}/*`,
-            },
-          ],
-        },
-      }
-    );
-
-    new s3.CfnBucketPolicy(
-      this,
-      `SecondaryBucketPolicy-${props.environmentSuffix}`,
-      {
-        bucket: props.secondaryBucketName,
-        policyDocument: {
-          Statement: [
-            // SSL enforcement - deny non-HTTPS requests
-            {
-              Sid: 'DenyInsecureTransport',
-              Effect: 'Deny',
-              Principal: { AWS: '*' },
-              Action: 's3:*',
-              Resource: [
-                `arn:aws:s3:::${props.secondaryBucketName}`,
-                `arn:aws:s3:::${props.secondaryBucketName}/*`,
-              ],
-              Condition: {
-                Bool: {
-                  'aws:SecureTransport': 'false',
-                },
-              },
-            },
-            // CloudFront OAI access
-            {
-              Sid: 'AllowCloudFrontOAIAccess',
-              Effect: 'Allow',
-              Principal: {
-                CanonicalUser:
-                  secondaryOai.cloudFrontOriginAccessIdentityS3CanonicalUserId,
-              },
-              Action: 's3:GetObject',
-              Resource: `arn:aws:s3:::${props.secondaryBucketName}/*`,
-            },
-          ],
-        },
-      }
-    );
+    const secondaryOai =
+      cloudfront.OriginAccessIdentity.fromOriginAccessIdentityId(
+        this,
+        `SecondaryOAI-${props.environmentSuffix}`,
+        props.secondaryOaiId
+      );
 
     // Create S3 origins for automatic failover
     const primaryS3Origin = new origins.S3Origin(primaryBucket, {
@@ -292,8 +211,6 @@ export class GlobalStack extends cdk.Stack {
     );
 
     // CloudFront API origin using direct API Gateway endpoints
-    // For production, use Route 53 DNS failover: api.${zoneName}
-    // For testing without domain registration, use direct API Gateway endpoint
     // Extract the domain from the primary API endpoint (format: https://xxx.execute-api.region.amazonaws.com/prod/)
     const primaryApiOriginDomain = cdk.Fn.select(
       0,
@@ -303,27 +220,12 @@ export class GlobalStack extends cdk.Stack {
       )
     );
 
-    // CloudFront Function to rewrite /api/* paths to /prod/*
-    // This strips the /api prefix and adds /prod for API Gateway
-    const apiRewriteFunction = new cloudfront.Function(
-      this,
-      `ApiRewriteFunction-${props.environmentSuffix}`,
-      {
-        code: cloudfront.FunctionCode.fromInline(`
-function handler(event) {
-  var request = event.request;
-  // Strip /api prefix and add /prod prefix
-  // Example: /api/health -> /prod/health
-  request.uri = request.uri.replace(/^\\/api/, '/prod');
-  return request;
-}
-        `),
-        comment: 'Rewrites /api/* to /prod/* for API Gateway',
-      }
-    );
-
+    // Create API Gateway origin with /prod origin path
+    // CloudFront /api/* paths will be forwarded to API Gateway as /prod/api/*
+    // API Gateway now has /api/health and /api/transfer routes
     const apiOrigin = new origins.HttpOrigin(primaryApiOriginDomain, {
       protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
+      originPath: '/prod',
     });
 
     // Create CloudFront distribution
@@ -342,17 +244,11 @@ function handler(event) {
         },
         additionalBehaviors: {
           '/api/*': {
-            origin: apiOrigin, // Uses primary API Gateway endpoint directly
+            origin: apiOrigin, // Uses primary API Gateway with /prod origin path
             viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
             allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
             cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
             originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
-            functionAssociations: [
-              {
-                function: apiRewriteFunction,
-                eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
-              },
-            ],
           },
         },
         defaultRootObject: 'index.html',
