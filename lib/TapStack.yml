@@ -658,9 +658,7 @@ Resources:
           Value: !Ref CostCenter
         - Key: rlhf-iac-amazon
           Value: 'true'
-        - Key: rlhf-iac-amazon
-          Value: 'true'
-
+          
   ### IAM ROLES ###
   EC2InstanceRole:
     Type: AWS::IAM::Role
