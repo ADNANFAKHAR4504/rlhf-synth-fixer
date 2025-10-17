@@ -1,0 +1,14 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350014",
+  "team": "6",
+  "startedAt": "2025-10-17T09:14:25.474Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": "VPC, EC2 (Internet Gateway, NAT Gateway, EIP, Subnets, Route Tables, Security Groups, Launch Template), S3, Lambda, IAM (Roles, Instance Profile, Groups), Secrets Manager, KMS, RDS (MySQL Multi-AZ), Application Load Balancer, Auto Scaling, CloudWatch (Alarms, Logs), SSM Parameter Store"
+}
