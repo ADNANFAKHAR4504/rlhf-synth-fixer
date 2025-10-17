@@ -23,7 +23,7 @@ from cdktf_cdktf_provider_aws.iam_role import IamRole
 from cdktf_cdktf_provider_aws.iam_role_policy import IamRolePolicy
 from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
 from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
-from cdktf_cdktf_provider_aws.efs_file_system import EfsFileSystem
+from cdktf_cdktf_provider_aws.efs_file_system import EfsFileSystem, EfsFileSystemLifecyclePolicy
 from cdktf_cdktf_provider_aws.efs_mount_target import EfsMountTarget
 from cdktf_cdktf_provider_aws.elasticache_subnet_group import ElasticacheSubnetGroup
 from cdktf_cdktf_provider_aws.elasticache_replication_group import ElasticacheReplicationGroup
@@ -342,18 +342,23 @@ class TapStack(TerraformStack):
     def _create_efs(self):
         """Create EFS file system for shared content storage"""
 
-        self.efs = EfsFileSystem(self, f"efs-{self.environment_suffix}",
+        self.efs = EfsFileSystem(
+            self, f"efs-{self.environment_suffix}",
             encrypted=True,
-            kms_key_id=self.efs_kms_key.arn,
+            kms_key_id=self.efs_kms_key.arn,          # ARN is fine here
             performance_mode="generalPurpose",
             throughput_mode="bursting",
-            lifecycle_policy=[{
-                "transition_to_ia": "AFTER_30_DAYS"
-            }],
+            lifecycle_policy=[
+                EfsFileSystemLifecyclePolicy(
+                    transition_to_ia="AFTER_30_DAYS",
+                    # Optionally also:
+                    # transition_to_archive="AFTER_60_DAYS",
+                )
+            ],
             tags={
-                **self.common_tags,
-                "Name": f"lms-efs-{self.environment_suffix}"
-            }
+                **{k: v for k, v in self.common_tags.items() if k.lower() != "name"},
+                "Name": f"lms-efs-{self.environment_suffix}",
+            },
         )
 
         # Create mount targets in each private subnet
@@ -469,11 +474,7 @@ class TapStack(TerraformStack):
                     },
                     "Action": "sts:AssumeRole"
                 }]
-            }),
-            tags={
-                **self.common_tags,
-                "Name": f"lms-ecs-task-role-{self.environment_suffix}"
-            }
+            })
         )
 
         # Task role policy for EFS and other AWS services
