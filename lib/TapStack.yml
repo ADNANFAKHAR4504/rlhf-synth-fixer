@@ -35,7 +35,6 @@ Parameters:
     Type: String
     Default: ''
     Description: 'Domain name for ACM certificate (e.g., example.com) - leave empty to skip ACM/Route53 setup'
-    AllowedPattern: '^(\*\.)?(((?!-)[A-Za-z0-9-]{0,62}[A-Za-z0-9])\.)+((?!-)[A-Za-z0-9-]{1,62}[A-Za-z0-9])|^$'
   
   Owner:
     Type: String
@@ -74,6 +73,9 @@ Mappings:
     PrivateSubnet2:
       CIDR: '10.0.11.0/24'
 
+Conditions:
+  HasDomainName: !Not [!Equals [!Ref DomainName, '']]
+
 Resources:
   ### KMS KEYS ###
   S3KmsKey:
@@ -109,6 +111,30 @@ Resources:
               - 'kms:CreateGrant'
               - 'kms:DescribeKey'
             Resource: '*'
+          - Sid: Allow EC2 Service for EBS encryption
+            Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:CreateGrant'
+              - 'kms:DescribeKey'
+            Resource: '*'
+          - Sid: Allow Auto Scaling service
+            Effect: Allow
+            Principal:
+              Service: autoscaling.amazonaws.com
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:CreateGrant'
+              - 'kms:DescribeKey'
+            Resource: '*'
       Tags:
         - Key: Owner
           Value: !Ref Owner
@@ -118,6 +144,8 @@ Resources:
           Value: !Ref CostCenter
         - Key: Environment
           Value: !Ref Environment
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   S3KmsKeyAlias:
     Type: AWS::KMS::Alias
@@ -143,6 +171,8 @@ Resources:
           Value: !Ref CostCenter
         - Key: Environment
           Value: !Ref Environment
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -154,6 +184,8 @@ Resources:
           Value: !Ref Owner
         - Key: Project
           Value: !Ref Project
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -175,6 +207,8 @@ Resources:
           Value: !Ref Owner
         - Key: Project
           Value: !Ref Project
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -190,6 +224,8 @@ Resources:
           Value: !Ref Owner
         - Key: Project
           Value: !Ref Project
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -204,6 +240,8 @@ Resources:
           Value: !Ref Owner
         - Key: Project
           Value: !Ref Project
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -218,6 +256,8 @@ Resources:
           Value: !Ref Owner
         - Key: Project
           Value: !Ref Project
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   NatGateway1EIP:
     Type: AWS::EC2::EIP
@@ -229,6 +269,8 @@ Resources:
           Value: !Sub '${AWS::StackName}-nat-eip-1'
         - Key: Owner
           Value: !Ref Owner
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   NatGateway2EIP:
     Type: AWS::EC2::EIP
@@ -240,6 +282,8 @@ Resources:
           Value: !Sub '${AWS::StackName}-nat-eip-2'
         - Key: Owner
           Value: !Ref Owner
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   NatGateway1:
     Type: AWS::EC2::NatGateway
@@ -251,6 +295,8 @@ Resources:
           Value: !Sub '${AWS::StackName}-nat-1'
         - Key: Owner
           Value: !Ref Owner
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   NatGateway2:
     Type: AWS::EC2::NatGateway
@@ -262,6 +308,8 @@ Resources:
           Value: !Sub '${AWS::StackName}-nat-2'
         - Key: Owner
           Value: !Ref Owner
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -272,6 +320,8 @@ Resources:
           Value: !Sub '${AWS::StackName}-public-rt'
         - Key: Owner
           Value: !Ref Owner
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   PrivateRouteTable1:
     Type: AWS::EC2::RouteTable
@@ -282,6 +332,8 @@ Resources:
           Value: !Sub '${AWS::StackName}-private-rt-1'
         - Key: Owner
           Value: !Ref Owner
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   PrivateRouteTable2:
     Type: AWS::EC2::RouteTable
@@ -292,6 +344,8 @@ Resources:
           Value: !Sub '${AWS::StackName}-private-rt-2'
         - Key: Owner
           Value: !Ref Owner
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -361,6 +415,8 @@ Resources:
           Value: !Ref Owner
         - Key: Project
           Value: !Ref Project
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -383,6 +439,8 @@ Resources:
           Value: !Ref Owner
         - Key: Project
           Value: !Ref Project
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -401,12 +459,13 @@ Resources:
           Value: !Ref Owner
         - Key: Project
           Value: !Ref Project
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   ### DATA PROTECTION - S3 BUCKETS ###
   CloudTrailBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-cloudtrail-logs-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -436,6 +495,8 @@ Resources:
           Value: !Ref Project
         - Key: CostCenter
           Value: !Ref CostCenter
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   CloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -473,10 +534,6 @@ Resources:
       EventSelectors:
         - ReadWriteType: All
           IncludeManagementEvents: true
-          DataResources:
-            - Type: AWS::S3::Object
-              Values: 
-                - 'arn:aws:s3:::*/+/*'
       CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt CloudTrailLogRole.Arn
       Tags:
@@ -484,6 +541,8 @@ Resources:
           Value: !Ref Owner
         - Key: Project
           Value: !Ref Project
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
@@ -517,6 +576,8 @@ Resources:
           Value: !Ref Owner
         - Key: Project
           Value: !Ref Project
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   ### SECRETS MANAGER ###
   DbMasterSecret:
@@ -538,6 +599,8 @@ Resources:
           Value: !Ref Owner
         - Key: Project
           Value: !Ref Project
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   SecretRDSInstanceAttachment:
     Type: AWS::SecretsManager::SecretTargetAttachment
@@ -559,6 +622,8 @@ Resources:
           Value: !Ref Owner
         - Key: Project
           Value: !Ref Project
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   RDSInstance:
     Type: AWS::RDS::DBInstance
@@ -591,6 +656,10 @@ Resources:
           Value: !Ref Project
         - Key: CostCenter
           Value: !Ref CostCenter
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   ### IAM ROLES ###
   EC2InstanceRole:
@@ -622,6 +691,8 @@ Resources:
           Value: !Ref Owner
         - Key: Project
           Value: !Ref Project
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -672,12 +743,16 @@ Resources:
                 Value: !Ref Project
               - Key: CostCenter
                 Value: !Ref CostCenter
+              - Key: rlhf-iac-amazon
+                Value: 'true'
           - ResourceType: volume
             Tags:
               - Key: Name
                 Value: !Sub '${AWS::StackName}-volume'
               - Key: Owner
                 Value: !Ref Owner
+              - Key: rlhf-iac-amazon
+                Value: 'true'
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -689,9 +764,9 @@ Resources:
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
-      MinSize: 2
-      MaxSize: 6
-      DesiredCapacity: 2
+      MinSize: 1
+      MaxSize: 2
+      DesiredCapacity: 1
       HealthCheckType: ELB
       HealthCheckGracePeriod: 300
       TargetGroupARNs:
@@ -706,10 +781,14 @@ Resources:
         - Key: Project
           Value: !Ref Project
           PropagateAtLaunch: true
+        - Key: rlhf-iac-amazon
+          Value: 'true'
+          PropagateAtLaunch: true
 
   ### APPLICATION LOAD BALANCER ###
   ACMCertificate:
     Type: AWS::CertificateManager::Certificate
+    Condition: HasDomainName
     Properties:
       DomainName: !Ref DomainName
       ValidationMethod: DNS
@@ -721,9 +800,12 @@ Resources:
           Value: !Ref Owner
         - Key: Project
           Value: !Ref Project
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: AttachGateway
     Properties:
       Name: !Sub '${AWS::StackName}-alb'
       Type: application
@@ -740,6 +822,8 @@ Resources:
           Value: !Ref Project
         - Key: CostCenter
           Value: !Ref CostCenter
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -761,9 +845,12 @@ Resources:
           Value: !Ref Owner
         - Key: Project
           Value: !Ref Project
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   HTTPSListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HasDomainName
     Properties:
       DefaultActions:
         - Type: forward
@@ -778,11 +865,15 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
-        - Type: redirect
-          RedirectConfig:
-            Protocol: HTTPS
-            Port: 443
-            StatusCode: HTTP_301
+        - !If
+          - HasDomainName
+          - Type: redirect
+            RedirectConfig:
+              Protocol: HTTPS
+              Port: 443
+              StatusCode: HTTP_301
+          - Type: forward
+            TargetGroupArn: !Ref TargetGroup
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 80
       Protocol: HTTP
@@ -851,6 +942,8 @@ Resources:
           Value: !Ref Owner
         - Key: Project
           Value: !Ref Project
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   WAFAssociation:
     Type: AWS::WAFv2::WebACLAssociation
@@ -870,7 +963,6 @@ Resources:
   ConfigBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-config-logs-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -888,6 +980,8 @@ Resources:
           Value: !Ref Owner
         - Key: Project
           Value: !Ref Project
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   ConfigBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -934,10 +1028,12 @@ Resources:
               Service: config.amazonaws.com
             Action: 'sts:AssumeRole'
       ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/service-role/ConfigRole'
+        - 'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole'
       Tags:
         - Key: Owner
           Value: !Ref Owner
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   S3BucketPublicReadProhibited:
     Type: AWS::Config::ConfigRule
@@ -945,7 +1041,7 @@ Resources:
       - ConfigRecorder
       - ConfigDeliveryChannel
     Properties:
-      ConfigRuleName: s3-bucket-public-read-prohibited
+      ConfigRuleName: !Sub '${AWS::StackName}-s3-bucket-public-read-prohibited'
       Description: 'Checks that S3 buckets do not allow public read access'
       Source:
         Owner: AWS
@@ -957,7 +1053,7 @@ Resources:
       - ConfigRecorder
       - ConfigDeliveryChannel
     Properties:
-      ConfigRuleName: encrypted-volumes
+      ConfigRuleName: !Sub '${AWS::StackName}-encrypted-volumes'
       Description: 'Checks whether EBS volumes are encrypted'
       Source:
         Owner: AWS
