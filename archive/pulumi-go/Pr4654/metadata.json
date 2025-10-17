@@ -1,0 +1,36 @@
+{
+  "platform": "pulumi",
+  "language": "go",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-10-17T04:55:00Z",
+  "subtask": "Application Deployment",
+  "background": "MedTech Solutions needs to process real-time patient monitoring data from 50+ clinics. The data includes vital signs, medication schedules, and patient alerts that need to be processed, stored, and made available to healthcare providers in real-time while maintaining HIPAA compliance.",
+  "po_id": "4615420213",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "KMS",
+    "VPC",
+    "EC2",
+    "Kinesis",
+    "RDS",
+    "ElastiCache",
+    "EFS",
+    "ECS",
+    "IAM",
+    "API Gateway",
+    "CloudWatch"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

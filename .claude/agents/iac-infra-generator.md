@@ -28,13 +28,21 @@ pwd  # Must end with: /worktree/synth-{task_id}
 
 ### PHASE 0: Pre-Generation Validation (CRITICAL - DO THIS FIRST)
 
+**FIRST: Verify you are in the worktree directory**
+```bash
+pwd  # MUST output path ending with: /worktree/synth-{task_id}
+```
+If not in worktree, STOP immediately and report error.
+
 **Goal**: Ensure task setup matches CLI tool expectations before any code generation.
+
+**ALL file operations below are relative to the current worktree directory.**
 
 **Validation Checklist**:
 
 1. **Verify metadata.json completeness**:
    ```
-   Read metadata.json and confirm ALL required fields exist:
+   Read ./metadata.json (in current worktree directory) and confirm ALL required fields exist:
    ✓ platform (must be: cdk, cdktf, cfn, tf, or pulumi)
    ✓ language (must match platform: ts/js/py/java/go for cdk, hcl for tf, yaml/json for cfn, etc.)
    ✓ complexity (must be: medium, hard, or expert)
@@ -85,7 +93,7 @@ pwd  # Must end with: /worktree/synth-{task_id}
 
 4. **Check lib/AWS_REGION file**:
    ```
-   If lib/AWS_REGION exists:
+   If ./lib/AWS_REGION exists in current worktree:
    - Read the region value
    - Confirm it's a valid AWS region format (e.g., us-east-1)
    - Use this region in PROMPT.md
@@ -116,6 +124,9 @@ pwd  # Must end with: /worktree/synth-{task_id}
 ---
 
 ### PHASE 2: Generate Requirements (lib/PROMPT.md)
+
+**Working Directory**: You are in `worktree/synth-{task_id}/`
+**Target File**: Create `./lib/PROMPT.md` in current worktree directory
 
 **Goal**: Create a human-like, conversational prompt that follows CLI tool patterns.
 
@@ -225,13 +236,16 @@ pwd  # Must end with: /worktree/synth-{task_id}
 
 ### PHASE 2.5: Validate Generated PROMPT.md (CRITICAL CHECKPOINT)
 
+**Working Directory**: You are in `worktree/synth-{task_id}/`
+**Validating File**: `./lib/PROMPT.md` in current worktree directory
+
 **Before proceeding to MODEL_RESPONSE generation, validate PROMPT.md**:
 
 **Validation Checklist**:
 
 1. **Style Validation**:
    ```
-   Read lib/PROMPT.md and check:
+   Read ./lib/PROMPT.md (in current worktree) and check:
    
    ❌ FAIL if it contains:
    - "ROLE:" or "CONTEXT:" or "CONSTRAINTS:" headers
@@ -322,7 +336,7 @@ pwd  # Must end with: /worktree/synth-{task_id}
 If validation fails critically (wrong platform, missing bold statement, no environmentSuffix):
 - DO NOT proceed to MODEL_RESPONSE generation
 - Report: "PROMPT.md validation FAILED - regenerating with corrections"
-- Regenerate lib/PROMPT.md following the pattern requirements above
+- Regenerate ./lib/PROMPT.md (in current worktree) following the pattern requirements above
 - Re-validate until it passes
 
 If validation passes or has only warnings:
@@ -360,7 +374,13 @@ If validation passes or has only warnings:
 
 ### PHASE 4: Generate Solution (MODEL_RESPONSE.md)
 
+**Working Directory**: You are in `worktree/synth-{task_id}/`
+**Input**: Read from `./lib/PROMPT.md` in current worktree
+**Output**: Create `./lib/MODEL_RESPONSE.md` in current worktree
+**Extract Code To**: `./lib/` directory in current worktree
+
 1. **Use lib/PROMPT.md to get LLM response**:
+   - Read ./lib/PROMPT.md from current worktree directory
    - Send PROMPT.md to an LLM to generate infrastructure code
    - The LLM should return complete implementation code
 
@@ -390,6 +410,7 @@ If validation passes or has only warnings:
    ```
 
 3. **Create lib/MODEL_RESPONSE.md**:
+   - Write to ./lib/MODEL_RESPONSE.md in current worktree directory
    - One code block per file
    - Each block must be copy-paste ready
    - Minimize explanatory text, focus on clean code
@@ -410,10 +431,11 @@ If validation passes or has only warnings:
      ```
 
 4. **Extract code to /lib folder**:
-   - Check existing code structure first
-   - Respect entry points (bin/tap.ts for CDK, Pulumi.yaml for Pulumi, etc.)
-   - Don't modify /bin folder unless necessary
-   - Use existing file structure in /lib
+   - Extract to ./lib/ directory in current worktree
+   - Check existing code structure in ./lib/ first
+   - Respect entry points (./bin/tap.ts for CDK, ./Pulumi.yaml for Pulumi, etc.)
+   - Don't modify ./bin/ folder unless necessary
+   - Use existing file structure in ./lib/
    - Entry points like tap-stack or TapStack should be reused
 
 5. **Important Constraints**:
@@ -429,7 +451,10 @@ If validation passes or has only warnings:
 
 ## Agent-Specific Reporting
 
+**REMINDER**: All operations are in `worktree/synth-{task_id}/` directory.
+
 Report clearly at each phase:
+- 📍 "Working Directory: $(pwd)"
 - ✅ "Phase 0: Pre-generation validation PASSED - metadata.json complete"
 - 📋 "Phase 1: Configuration extracted - Platform: {PLATFORM}, Language: {LANGUAGE}, Region: {REGION}"
 - 📝 "Phase 2: Generating lib/PROMPT.md with human conversational style"
