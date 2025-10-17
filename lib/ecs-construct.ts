@@ -264,6 +264,7 @@ export class EcsConstruct extends Construct {
         Name: `payment-alb-${environmentSuffix}`,
         Environment: environmentSuffix,
       },
+      dependsOn: [...publicSubnets, albSecurityGroup],
     });
 
     // Create Target Group

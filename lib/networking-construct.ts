@@ -1,12 +1,12 @@
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
+import { Eip } from '@cdktf/provider-aws/lib/eip';
 import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
+import { Route } from '@cdktf/provider-aws/lib/route';
 import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
 import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
-import { Route } from '@cdktf/provider-aws/lib/route';
-import { Eip } from '@cdktf/provider-aws/lib/eip';
-import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
-import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Construct } from 'constructs';
 
 export interface NetworkingConstructProps {
@@ -70,6 +70,7 @@ export class NetworkingConstruct extends Construct {
           Environment: environmentSuffix,
           Type: 'Public',
         },
+        dependsOn: [this.vpc],
       });
       this.publicSubnets.push(subnet);
     });
@@ -114,6 +115,7 @@ export class NetworkingConstruct extends Construct {
         Name: `payment-nat-${environmentSuffix}`,
         Environment: environmentSuffix,
       },
+      dependsOn: [natEip, igw],
     });
 
     // Create private subnets in 2 AZs
@@ -131,6 +133,7 @@ export class NetworkingConstruct extends Construct {
           Environment: environmentSuffix,
           Type: 'Private',
         },
+        dependsOn: [this.vpc],
       });
       this.privateSubnets.push(subnet);
     });
