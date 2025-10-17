@@ -874,7 +874,7 @@ Resources:
   WAFWebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
-      Name: ProductionWebACL
+      Name: !Sub '${AWS::StackName}-web-acl'
       Scope: REGIONAL
       DefaultAction:
         Allow: {}
@@ -918,7 +918,7 @@ Resources:
       VisibilityConfig:
         SampledRequestsEnabled: true
         CloudWatchMetricsEnabled: true
-        MetricName: ProductionWebACL
+        MetricName: !Sub '${AWS::StackName}-web-acl'
       Tags:
         - Key: Environment
           Value: Production
