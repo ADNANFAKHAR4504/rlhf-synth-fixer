@@ -58,7 +58,7 @@ Create a secure multi-tier data processing pipeline using **AWS CDK with Go** fo
 - **IAM roles** following least privilege principles
 - Resource names must include a **string suffix** for uniqueness
 - Follow naming convention: `healthcare-resource-type-suffix`
-- Deploy to **sa-east-1** region
+- Deploy to **eu-south-1** region
 
 ### Constraints
 
