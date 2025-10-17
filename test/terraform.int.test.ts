@@ -73,7 +73,11 @@ describe('Payment API Gateway - Integration Tests (Live)', () => {
       logGroupName = outputs.cloudwatch_log_group_name;
       lambdaFunctionName = outputs.lambda_function_name;
       lambdaFunctionArn = outputs.lambda_function_arn;
-      region = process.env.AWS_REGION || 'us-east-1';
+      
+      // Extract region from API Gateway URL to ensure we look in the correct region
+      // This makes tests region-agnostic and work regardless of where infrastructure was deployed
+      const apiUrlMatch = apiInvokeUrl.match(/https:\/\/[^.]+\.execute-api\.([^.]+)\.amazonaws\.com/);
+      region = apiUrlMatch ? apiUrlMatch[1] : (process.env.AWS_REGION || 'us-east-1');
       
       // Initialize AWS SDK clients
       apiGatewayClient = new APIGatewayClient({ region });
@@ -83,6 +87,7 @@ describe('Payment API Gateway - Integration Tests (Live)', () => {
       
       console.log('🔧 Clients initialized');
       console.log('📋 API Invoke URL:', apiInvokeUrl);
+      console.log('📋 Detected Region:', region);
       console.log('📋 Lambda Function:', lambdaFunctionName);
       console.log('📋 Log Group:', logGroupName);
       
