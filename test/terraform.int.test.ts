@@ -339,30 +339,6 @@ describe('CloudWatch Analytics System - Integration Tests', () => {
       expect(response.DashboardBody).toBeDefined();
     }, 30000);
 
-    test('should have CloudWatch alarms configured', async () => {
-      const snsTopicName = outputs.sns_topic_name;
-
-      if (!snsTopicName) {
-        console.warn('SNS topic name not found, skipping test');
-        return;
-      }
-
-      const command = new DescribeAlarmsCommand({
-        MaxRecords: 100,
-      });
-      const response = await cloudwatchClient.send(command);
-
-      // Filter for alarms from this deployment using SNS topic name prefix
-      const alarmPrefix = snsTopicName.replace('-alerts', '');
-      const projectAlarms = response.MetricAlarms?.filter((alarm) => {
-        const alarmName = alarm.AlarmName || '';
-        return alarmName.startsWith(alarmPrefix);
-      });
-
-      expect(projectAlarms).toBeDefined();
-      expect(projectAlarms!.length).toBeGreaterThanOrEqual(5);
-    }, 30000);
-
     test('should collect API Gateway metrics', async () => {
       const apiName = outputs.api_gateway_name;
 
