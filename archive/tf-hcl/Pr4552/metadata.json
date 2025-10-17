@@ -11,6 +11,20 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": ["EC2", "EBS", "VPC", "DLM", "SNS", "CloudWatch", "IAM"],
-  "training_quality": 9
+  "aws_services": [
+    "EC2",
+    "EBS",
+    "VPC",
+    "DLM",
+    "SNS",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
 }
