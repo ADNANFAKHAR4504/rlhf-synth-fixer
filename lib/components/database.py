@@ -104,17 +104,30 @@ class DatabaseStack:
         instance_count = 1 if self.environment == "dev" else 2
         
         for i in range(instance_count):
+            # Build instance configuration based on environment
+            instance_args = {
+                "cluster_identifier": self.cluster.id,
+                "instance_class": "db.serverless",
+                "engine": "aurora-postgresql",
+                "db_parameter_group_name": self.db_parameter_group.name,
+                "tags": {"Name": f"{name}-aurora-instance-{i+1}"}
+            }
+            
+            # Add performance insights and monitoring only for non-dev environments
+            if self.environment != "dev":
+                instance_args["performance_insights_enabled"] = True
+                instance_args["performance_insights_retention_period"] = 7
+                instance_args["monitoring_interval"] = 60
+                instance_args["monitoring_role_arn"] = self._create_monitoring_role().arn
+            else:
+                instance_args["performance_insights_enabled"] = False
+                # Don't set performance_insights_retention_period when disabled
+                instance_args["monitoring_interval"] = 0
+                # Don't set monitoring_role_arn when monitoring_interval is 0
+            
             instance = aws.rds.ClusterInstance(
                 f"{name}-aurora-instance-{i+1}",
-                cluster_identifier=self.cluster.id,
-                instance_class="db.serverless",
-                engine="aurora-postgresql",
-                db_parameter_group_name=self.db_parameter_group.name,
-                performance_insights_enabled=True if self.environment != "dev" else False,
-                performance_insights_retention_period=7 if self.environment != "dev" else 0,
-                monitoring_interval=60 if self.environment != "dev" else 0,
-                monitoring_role_arn=self._create_monitoring_role().arn if self.environment != "dev" else None,
-                tags={"Name": f"{name}-aurora-instance-{i+1}"}
+                **instance_args
             )
             self.instances.append(instance)
         
