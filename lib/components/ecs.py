@@ -252,13 +252,11 @@ class EcsStack:
             task_definition=task_definition.arn,
             desired_count=self.desired_count,
             launch_type="FARGATE",
-            deployment_configuration=aws.ecs.ServiceDeploymentConfigurationArgs(
-                maximum_percent=200,
-                minimum_healthy_percent=100,
-                deployment_circuit_breaker=aws.ecs.ServiceDeploymentCircuitBreakerArgs(
-                    enable=True,
-                    rollback=True
-                )
+            deployment_maximum_percent=200,
+            deployment_minimum_healthy_percent=100,
+            deployment_circuit_breaker=aws.ecs.ServiceDeploymentCircuitBreakerArgs(
+                enable=True,
+                rollback=True
             ),
             network_configuration=aws.ecs.ServiceNetworkConfigurationArgs(
                 assign_public_ip=False,
