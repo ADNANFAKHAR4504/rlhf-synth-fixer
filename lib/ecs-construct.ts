@@ -1,18 +1,18 @@
+import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { EcsCluster } from '@cdktf/provider-aws/lib/ecs-cluster';
-import { EcsTaskDefinition } from '@cdktf/provider-aws/lib/ecs-task-definition';
 import { EcsService } from '@cdktf/provider-aws/lib/ecs-service';
+import { EcsTaskDefinition } from '@cdktf/provider-aws/lib/ecs-task-definition';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { Lb } from '@cdktf/provider-aws/lib/lb';
+import { LbListener } from '@cdktf/provider-aws/lib/lb-listener';
+import { LbTargetGroup } from '@cdktf/provider-aws/lib/lb-target-group';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
-import { Lb } from '@cdktf/provider-aws/lib/lb';
-import { LbTargetGroup } from '@cdktf/provider-aws/lib/lb-target-group';
-import { LbListener } from '@cdktf/provider-aws/lib/lb-listener';
-import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
-import { Construct } from 'constructs';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { Construct } from 'constructs';
 
 export interface EcsConstructProps {
   environmentSuffix: string;
@@ -324,7 +324,7 @@ export class EcsConstruct extends Construct {
         Name: `payment-service-${environmentSuffix}`,
         Environment: environmentSuffix,
       },
-      dependsOn: [this.loadBalancer],
+      dependsOn: [this.loadBalancer, targetGroup, ecsSecurityGroup],
     });
   }
 }
