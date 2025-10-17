@@ -1,29 +1,53 @@
-import { EC2Client, DescribeVpcsCommand, DescribeInternetGatewaysCommand, DescribeSubnetsCommand, DescribeNatGatewaysCommand, DescribeSecurityGroupsCommand } from "@aws-sdk/client-ec2";
+import { readFileSync } from 'fs';
+import { join } from 'path';
+
+import {
+  EC2Client,
+  DescribeVpcsCommand,
+  DescribeInternetGatewaysCommand,
+  DescribeSubnetsCommand,
+  DescribeNatGatewaysCommand,
+  DescribeSecurityGroupsCommand,
+} from "@aws-sdk/client-ec2";
+
 import { IAMClient, GetRoleCommand, GetInstanceProfileCommand } from "@aws-sdk/client-iam";
+
 import { RDSClient, DescribeDBClustersCommand, DescribeDBInstancesCommand } from "@aws-sdk/client-rds";
-import { ElasticLoadBalancingV2Client, DescribeLoadBalancersCommand, DescribeTargetGroupsCommand } from "@aws-sdk/client-elastic-load-balancing-v2"; // Corrected import
+
+import {
+  ElasticLoadBalancingV2Client,
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+} from "@aws-sdk/client-elastic-load-balancing-v2";
+
 import { AutoScalingClient, DescribeAutoScalingGroupsCommand, DescribePoliciesCommand } from "@aws-sdk/client-auto-scaling";
+
 import { S3Client, HeadBucketCommand } from "@aws-sdk/client-s3";
+
 import { SecretsManagerClient, DescribeSecretCommand } from "@aws-sdk/client-secrets-manager";
+
 import { CloudWatchLogsClient, DescribeLogGroupsCommand } from "@aws-sdk/client-cloudwatch-logs";
+
 import { KMSClient, DescribeKeyCommand } from "@aws-sdk/client-kms";
 
-const elbv2Client = new ElasticLoadBalancingV2Client({ region });
 
 const outputsPath = join(__dirname, '../cfn-outputs/flat-outputs.json');
 const outputsRaw = readFileSync(outputsPath, 'utf-8');
 const outputs: Record<string, any> = JSON.parse(outputsRaw);
 
-const region = 'us-east-1';
+// Use region from outputs or fallback to default
+const region = outputs.region || 'us-east-1';
 
 const ec2Client = new EC2Client({ region });
 const iamClient = new IAMClient({ region });
 const rdsClient = new RDSClient({ region });
+const elbv2Client = new ElasticLoadBalancingV2Client({ region });
 const asClient = new AutoScalingClient({ region });
 const s3Client = new S3Client({ region });
 const secretsClient = new SecretsManagerClient({ region });
 const logsClient = new CloudWatchLogsClient({ region });
 const kmsClient = new KMSClient({ region });
+
 
 describe("TAP Stack Integration Tests (Full Stack)", () => {
 
@@ -133,7 +157,6 @@ describe("TAP Stack Integration Tests (Full Stack)", () => {
   });
 
   it("RDS Cluster exists with correct identifier and endpoint", async () => {
-    // Fetch all clusters, find exact match client-side due to multiple clusters on v3 apparently
     const command = new DescribeDBClustersCommand({});
     const data = await rdsClient.send(command);
     const cluster = data.DBClusters?.find(c => c.DBClusterIdentifier === outputs.rds_cluster_identifier);
@@ -143,7 +166,6 @@ describe("TAP Stack Integration Tests (Full Stack)", () => {
   });
 
   it("RDS Instances exist", async () => {
-    // Do not filter by cluster id, get all instances and filter client-side to avoid null filter error
     const command = new DescribeDBInstancesCommand({});
     const data = await rdsClient.send(command);
     const clusterInstances = data.DBInstances?.filter(i => i.DBClusterIdentifier === outputs.rds_cluster_identifier);
@@ -157,7 +179,6 @@ describe("TAP Stack Integration Tests (Full Stack)", () => {
   it("Auto Scaling Group exists with correct name and desired capacity", async () => {
     const command = new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [outputs.auto_scaling_group_name] });
     const data = await asClient.send(command);
-    // Because multiple ASGs may exist, find exact match client side
     const asg = data.AutoScalingGroups?.find(a => a.AutoScalingGroupName === outputs.auto_scaling_group_name);
     expect(asg).toBeDefined();
     expect(asg!.AutoScalingGroupName).toBe(outputs.auto_scaling_group_name);
@@ -176,7 +197,6 @@ describe("TAP Stack Integration Tests (Full Stack)", () => {
   it("ALB exists with correct DNS name and ARN", async () => {
     const command = new DescribeLoadBalancersCommand({});
     const data = await elbv2Client.send(command);
-    // Find by ARN or DNS Name returns multiple, find exact match client side
     const alb = data.LoadBalancers?.find(lb => lb.LoadBalancerArn === outputs.alb_arn);
     expect(alb).toBeDefined();
     expect(alb!.DNSName).toBe(outputs.alb_dns_name);

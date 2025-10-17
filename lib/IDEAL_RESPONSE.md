@@ -1279,6 +1279,11 @@ output "resource_suffix" {
   value       = local.random_suffix
 }
 
+output "region" {
+  description = "aws region"
+  value       = var.region
+}
+
 ```
 
 ```

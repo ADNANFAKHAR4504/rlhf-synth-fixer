@@ -1276,3 +1276,8 @@ output "resource_suffix" {
   description = "Random suffix used for resource naming"
   value       = local.random_suffix
 }
+
+output "region" {
+  description = "aws region"
+  value       = var.region
+}
