@@ -1,10 +1,9 @@
 {
-  "TapStackdev": {
-    "WebSocketApiUrl": "wss://03h9lq9axh.execute-api.us-east-1.amazonaws.com/dev",
-    "NotificationQueueUrl": "https://sqs.us-east-1.amazonaws.com/342597974367/shipment-notifications-dev",
-    "ShipmentTrackingApiEndpoint25635AAF": "https://mgw2p2brz9.execute-api.us-east-1.amazonaws.com/dev/",
-    "ShipmentsTableName": "shipments-dev",
-    "NotificationTopicArn": "arn:aws:sns:us-east-1:342597974367:shipment-notifications-dev",
-    "RestApiUrl": "https://mgw2p2brz9.execute-api.us-east-1.amazonaws.com/dev/"
+  "TapStacksynth4360780393": {
+    "ProcessorFunctionArn": "arn:aws:lambda:us-east-1:342597974367:function:student-performance-processor-synth4360780393",
+    "DatabaseSecretArn": "arn:aws:secretsmanager:us-east-1:342597974367:secret:DBSecretsynth43607803933D3F-tP0QoUR2HJdQ-nUDDjV",
+    "KinesisStreamArn": "arn:aws:kinesis:us-east-1:342597974367:stream/student-performance-stream-synth4360780393",
+    "KinesisStreamName": "student-performance-stream-synth4360780393",
+    "DatabaseEndpoint": "tapstacksynth4360780393-studentperformancedbsynth4-tca78fjtb1n2.covy6ema0nuv.us-east-1.rds.amazonaws.com"
   }
 }
