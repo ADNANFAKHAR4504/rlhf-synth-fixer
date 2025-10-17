@@ -188,6 +188,7 @@ def create_response(status_code: int, body: Any, error: bool = False) -> Dict[st
             "Content-Type": "application/json",
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Headers": "Content-Type,Authorization,X-Api-Key",
+            "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
         },
         "body": json.dumps({
             "success": not error,
@@ -204,7 +205,9 @@ def validate_api_key(headers: Dict[str, str]) -> bool:
     if not API_KEY:
         return True  # Skip validation if no API key is configured
     
-    provided_key = headers.get("x-api-key", "")
+    # Handle case-insensitive header lookup
+    headers_lower = {k.lower(): v for k, v in headers.items()}
+    provided_key = headers_lower.get("x-api-key", "")
     return provided_key == API_KEY
 
 
@@ -346,8 +349,14 @@ def delete_item(item_id: str) -> Dict[str, Any]:
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     \"\"\"Main Lambda handler function\"\"\"
     try:
-        # Log the incoming event
-        logger.info(f"Received event: {json.dumps(event)}")
+        # Log the incoming event (but don't log sensitive headers)
+        safe_event = {k: v for k, v in event.items() if k != 'headers'}
+        logger.info(f"Received event: {json.dumps(safe_event)}")
+        
+        # Handle CORS preflight requests
+        http_method = event.get("requestContext", {}).get("http", {}).get("method", "")
+        if http_method == "OPTIONS":
+            return create_response(200, {"message": "CORS preflight successful"})
         
         # Check if table is configured
         if not table:
@@ -355,10 +364,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             return create_response(500, {"message": "Database not configured"}, error=True)
         
         # Extract request details
-        http_method = event.get("requestContext", {}).get("http", {}).get("method", "")
         path = event.get("requestContext", {}).get("http", {}).get("path", "")
         headers = event.get("headers", {})
-        path_params = event.get("pathParameters", {})
+        path_params = event.get("pathParameters", {}) or {}
         
         # Validate API key
         if not validate_api_key(headers):

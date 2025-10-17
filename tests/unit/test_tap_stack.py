@@ -13,41 +13,127 @@ from lib.tap_stack import TapStack, TapStackProps
 
 @mark.describe("TapStack")
 class TestTapStack(unittest.TestCase):
-  """Test cases for the TapStack CDK stack"""
+  """Unit tests for the TapStack CDK stack"""
 
   def setUp(self):
     """Set up a fresh CDK app for each test"""
     self.app = cdk.App()
 
-  @mark.it("creates an S3 bucket with the correct environment suffix")
-  def test_creates_s3_bucket_with_env_suffix(self):
+  @mark.it("creates a DynamoDB table with the correct configuration")
+  def test_dynamodb_table_configuration(self):
     # ARRANGE
-    env_suffix = "testenv"
-    stack = TapStack(self.app, "TapStackTest",
-                     TapStackProps(environment_suffix=env_suffix))
+    stack = TapStack(self.app, "TapStackTest", TapStackProps(environment_suffix="testenv"))
     template = Template.from_stack(stack)
 
     # ASSERT
-    template.resource_count_is("AWS::S3::Bucket", 1)
-    template.has_resource_properties("AWS::S3::Bucket", {
-        "BucketName": f"tap-bucket-{env_suffix}"
+    template.resource_count_is("AWS::DynamoDB::Table", 1)
+    template.has_resource_properties("AWS::DynamoDB::Table", {
+        "TableName": "tap-api-data-testenv",
+        "BillingMode": "PAY_PER_REQUEST",
+        "SSESpecification": {"SSEEnabled": True},
+        "PointInTimeRecoverySpecification": {"PointInTimeRecoveryEnabled": True},
+        "KeySchema": [
+            {"AttributeName": "id", "KeyType": "HASH"},
+            {"AttributeName": "createdAt", "KeyType": "RANGE"}
+        ],
     })
 
-  @mark.it("defaults environment suffix to 'dev' if not provided")
-  def test_defaults_env_suffix_to_dev(self):
+  @mark.it("creates a Lambda function with the correct configuration")
+  def test_lambda_function_configuration(self):
     # ARRANGE
-    stack = TapStack(self.app, "TapStackTestDefault")
+    stack = TapStack(self.app, "TapStackTest", TapStackProps(environment_suffix="testenv"))
     template = Template.from_stack(stack)
 
     # ASSERT
-    template.resource_count_is("AWS::S3::Bucket", 1)
-    template.has_resource_properties("AWS::S3::Bucket", {
-        "BucketName": "tap-bucket-dev"
+    template.resource_count_is("AWS::Lambda::Function", 1)
+    template.has_resource_properties("AWS::Lambda::Function", {
+        "FunctionName": "tap-api-handler-testenv",
+        "Runtime": "python3.11",
+        "Handler": "index.lambda_handler",
+        "Timeout": 30,
+        "MemorySize": 256,
     })
 
-  @mark.it("Write Unit Tests")
-  def test_write_unit_tests(self):
+  @mark.it("creates an API Gateway HTTP API with CORS configuration")
+  def test_http_api_with_cors(self):
     # ARRANGE
-    self.fail(
-        "Unit test for TapStack should be implemented here."
-    )
+    stack = TapStack(self.app, "TapStackTest", TapStackProps(environment_suffix="testenv"))
+    template = Template.from_stack(stack)
+
+    # ASSERT
+    template.resource_count_is("AWS::ApiGatewayV2::Api", 1)
+    template.has_resource_properties("AWS::ApiGatewayV2::Api", {
+        "Name": "tap-api-testenv",
+        "ProtocolType": "HTTP",
+        "CorsConfiguration": {
+            "AllowOrigins": ["*"],
+            "AllowMethods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "AllowHeaders": ["Content-Type", "Authorization", "X-Api-Key"],
+            "MaxAge": 3600
+        }
+    })
+
+  @mark.it("creates CloudWatch log groups for API Gateway and Lambda")
+  def test_cloudwatch_log_groups(self):
+    # ARRANGE
+    stack = TapStack(self.app, "TapStackTest", TapStackProps(environment_suffix="testenv"))
+    template = Template.from_stack(stack)
+
+    # ASSERT
+    template.resource_count_is("AWS::Logs::LogGroup", 2)
+    template.has_resource_properties("AWS::Logs::LogGroup", {
+        "LogGroupName": "/aws/apigateway/tap-api-testenv",
+        "RetentionInDays": 5
+    })
+    template.has_resource_properties("AWS::Logs::LogGroup", {
+        "LogGroupName": "/aws/lambda/tap-api-handler-testenv",
+        "RetentionInDays": 5
+    })
+
+  @mark.it("creates IAM role for Lambda with least privilege")
+  def test_lambda_iam_role(self):
+    # ARRANGE
+    stack = TapStack(self.app, "TapStackTest", TapStackProps(environment_suffix="testenv"))
+    template = Template.from_stack(stack)
+
+    # ASSERT
+    template.resource_count_is("AWS::IAM::Role", 1)
+    template.has_resource_properties("AWS::IAM::Role", {
+        "AssumeRolePolicyDocument": {
+            "Statement": [
+                {
+                    "Action": "sts:AssumeRole",
+                    "Effect": "Allow",
+                    "Principal": {"Service": "lambda.amazonaws.com"}
+                }
+            ],
+            "Version": "2012-10-17"
+        },
+    })
+
+  @mark.it("creates API Gateway routes for Lambda integration")
+  def test_api_gateway_routes(self):
+    # ARRANGE
+    stack = TapStack(self.app, "TapStackTest", TapStackProps(environment_suffix="testenv"))
+    template = Template.from_stack(stack)
+
+    # ASSERT
+    template.resource_count_is("AWS::ApiGatewayV2::Route", 5)
+    template.has_resource_properties("AWS::ApiGatewayV2::Route", {
+        "RouteKey": "GET /items"
+    })
+    template.has_resource_properties("AWS::ApiGatewayV2::Route", {
+        "RouteKey": "POST /items"
+    })
+    template.has_resource_properties("AWS::ApiGatewayV2::Route", {
+        "RouteKey": "GET /items/{id}"
+    })
+    template.has_resource_properties("AWS::ApiGatewayV2::Route", {
+        "RouteKey": "PUT /items/{id}"
+    })
+    template.has_resource_properties("AWS::ApiGatewayV2::Route", {
+        "RouteKey": "DELETE /items/{id}"
+    })
+
+if __name__ == "__main__":
+    unittest.main()
