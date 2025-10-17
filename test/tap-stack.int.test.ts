@@ -419,12 +419,6 @@ describe('Cloud Environment Setup Integration Tests', () => {
 
         const result = await waitForCommand(command.Command!.CommandId!, instanceId, 120000);
 
-        if (result.Status === 'Failed') {
-          console.error('RDS Connection Test Failed');
-          console.error('StandardOutput:', result.StandardOutputContent);
-          console.error('StandardError:', result.StandardErrorContent);
-        }
-
         expect(result.Status).toBe('Success');
         expect(result.StandardOutputContent).toContain('connection_test');
       } catch (error: any) {
@@ -550,12 +544,6 @@ describe('Cloud Environment Setup Integration Tests', () => {
         }));
 
         const result = await waitForCommand(command.Command!.CommandId!, instanceId, 180000);
-
-        if (result.Status === 'Failed') {
-          console.error('E2E Database Test Failed');
-          console.error('StandardOutput:', result.StandardOutputContent);
-          console.error('StandardError:', result.StandardErrorContent);
-        }
 
         expect(result.Status).toBe('Success');
         expect(result.StandardOutputContent).toContain('E2E integration test successful');
