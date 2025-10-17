@@ -15,4 +15,5 @@ Create a single Terraform configuration file named tap_stack.tf containing all v
 14. S3 access logging, VPC flow logs and KMS encryption for S3 is not required as per the task requirement.
 15. Only 2 AZs are required and 3 AZs are not required.
 16. AWS WAF , Secret Manager and KMS key is not required as per the task requirement.
-17. Monitoring and observability is not required as per the task requirement as such. 
+17. Monitoring and observability is not required as per the task requirement as such.
+18. VPC Endpoints and cost opitimisation is not required as per task requirement. 

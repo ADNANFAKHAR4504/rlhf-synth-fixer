@@ -48,6 +48,14 @@ The correct argument is filename or source_code_hash (for zipped code), or handl
 
 Fix-
 We can only use inline code via filename and local file, or embed code using local_file data source.
+
+Ref- https://docs.aws.amazon.com/IAM/latest/APIReference/API_CreateRole.html?utm_source=chatgpt.com
+
+AWS CloudFormation IAM::Role RoleName property
+The AWS CloudFormation documentation for AWS::IAM::Role confirms the same constraints for RoleName:
+
+Role names are up to 64 characters. Valid characters are uppercase, lowercase, digits, no spaces, plus _+=,.@-. Role names are not distinguished by case.
+
 ```
 ╷
 │ Error: Unsupported argument
