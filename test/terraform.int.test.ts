@@ -8,7 +8,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as http from 'http';
 import * as https from 'https';
-// ✅ FIX: use Smithy package instead of deprecated @aws-sdk/protocol-http
+// ✅ FIX: use Smithy packages instead of deprecated @aws-sdk internals
 import { HttpRequest } from '@smithy/protocol-http';
 
 import {
@@ -49,7 +49,6 @@ import {
 } from '@aws-sdk/client-cloudwatch';
 
 import { RDSClient } from '@aws-sdk/client-rds';
-// ✅ FIX: use Smithy signer package
 import { SignatureV4 } from '@smithy/signature-v4';
 import { Sha256 } from '@aws-crypto/sha256-js';
 import { defaultProvider } from '@aws-sdk/credential-provider-node';
@@ -165,9 +164,7 @@ async function retry<T>(
       last = e;
       log(`retry err ${label ?? ''} ${i + 1}/${n}:`, e?.message ?? e);
     }
-    if (i < n - 1) {
-      await sleep(ms);
-    }
+    if (i < n - 1) await sleep(ms);
   }
   if (last) throw last;
   throw new Error(`retry exhausted ${label ?? ''} after ${since(started)}`);
@@ -363,6 +360,24 @@ async function dumpAlbTargetHealth() {
   }
 }
 
+/* ---------------- Route-table helpers (handle main table fallback) ---------------- */
+async function routesForSubnetOrMain(subnetId: string, vpcId: string, client: EC2Client) {
+  const bySubnet = await client.send(new DescribeRouteTablesCommand({
+    Filters: [{ Name: 'association.subnet-id', Values: [subnetId] }],
+  }));
+  let tables = bySubnet.RouteTables || [];
+  if (!tables.length) {
+    const main = await client.send(new DescribeRouteTablesCommand({
+      Filters: [
+        { Name: 'vpc-id', Values: [vpcId] },
+        { Name: 'association.main', Values: ['true'] },
+      ],
+    }));
+    tables = main.RouteTables || [];
+  }
+  return tables.flatMap(t => t.Routes || []);
+}
+
 /* ============================================================================
  * ALB + EC2 reachability
  * ==========================================================================*/
@@ -414,16 +429,28 @@ describe('NAT egress + Route posture', () => {
 
   it('Public subnets have default 0.0.0.0/0 via IGW', async () => {
     for (const sn of pub) {
-      const rt = await ec2.send(new DescribeRouteTablesCommand({ Filters: [{ Name: 'association.subnet-id', Values: [sn] }] }));
-      const hasIgw = (rt.RouteTables || []).some(t => (t.Routes || []).some(r => r.DestinationCidrBlock === '0.0.0.0/0' && (r.GatewayId || '').startsWith('igw-')));
+      const routes = await routesForSubnetOrMain(sn, vpcId, ec2);
+      const hasIgw =
+        routes.some(r =>
+          (r.DestinationCidrBlock === '0.0.0.0/0') &&
+          typeof r.GatewayId === 'string' &&
+          r.GatewayId.startsWith('igw-')
+        );
       expect(hasIgw).toBe(true);
     }
   });
 
   it('Private subnets have default 0.0.0.0/0 via NAT', async () => {
     for (const sn of priv) {
-      const rt = await ec2.send(new DescribeRouteTablesCommand({ Filters: [{ Name: 'association.subnet-id', Values: [sn] }] }));
-      const hasNat = (rt.RouteTables || []).some(t => (t.Routes || []).some(r => r.DestinationCidrBlock === '0.0.0.0/0' && (r.NatGatewayId || '').startsWith('nat-')));
+      const routes = await routesForSubnetOrMain(sn, vpcId, ec2);
+      const hasNat =
+        routes.some(r =>
+          (r.DestinationCidrBlock === '0.0.0.0/0') &&
+          (
+            (typeof r.NatGatewayId === 'string' && r.NatGatewayId.startsWith('nat-')) ||
+            (typeof r.InstanceId === 'string' && r.InstanceId.startsWith('i-')) // NAT instance fallback
+          )
+        );
       expect(hasNat).toBe(true);
     }
   });
@@ -446,13 +473,11 @@ describe('Two VPCs + Peering posture', () => {
     const use2Subs: string[] = [...OUTPUTS.use2_public_subnet_ids, ...OUTPUTS.use2_private_subnet_ids];
     const euCidr = (OUTPUTS.euw2_cidr || '10.20.0.0/16') as string;
     for (const sn of use2Subs) {
-      const rt = await ec2.send(new DescribeRouteTablesCommand({
-        Filters: [{ Name: 'association.subnet-id', Values: [sn] }]
-      }));
-      const viaPcx = (rt.RouteTables || []).some(t =>
-        (t.Routes || []).some(r =>
-          r.DestinationCidrBlock === euCidr && (r.VpcPeeringConnectionId || '').startsWith('pcx-')
-        )
+      const routes = await routesForSubnetOrMain(sn, OUTPUTS.use2_vpc_id, ec2);
+      const viaPcx = routes.some(r =>
+        (r.DestinationCidrBlock === euCidr) &&
+        typeof r.VpcPeeringConnectionId === 'string' &&
+        r.VpcPeeringConnectionId.startsWith('pcx-')
       );
       expect(viaPcx).toBe(true);
     }
@@ -462,13 +487,11 @@ describe('Two VPCs + Peering posture', () => {
     const euSubs: string[] = [...OUTPUTS.euw2_public_subnet_ids, ...OUTPUTS.euw2_private_subnet_ids];
     const usCidr = (OUTPUTS.use2_cidr || '10.10.0.0/16') as string;
     for (const sn of euSubs) {
-      const rt = await ec2EU.send(new DescribeRouteTablesCommand({
-        Filters: [{ Name: 'association.subnet-id', Values: [sn] }]
-      }));
-      const viaPcx = (rt.RouteTables || []).some(t =>
-        (t.Routes || []).some(r =>
-          r.DestinationCidrBlock === usCidr && (r.VpcPeeringConnectionId || '').startsWith('pcx-')
-        )
+      const routes = await routesForSubnetOrMain(sn, OUTPUTS.euw2_vpc_id, ec2EU);
+      const viaPcx = routes.some(r =>
+        (r.DestinationCidrBlock === usCidr) &&
+        typeof r.VpcPeeringConnectionId === 'string' &&
+        r.VpcPeeringConnectionId.startsWith('pcx-')
       );
       expect(viaPcx).toBe(true);
     }
