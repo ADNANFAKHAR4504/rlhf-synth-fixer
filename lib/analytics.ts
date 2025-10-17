@@ -92,7 +92,20 @@ export class AnalyticsStack extends cdk.Stack {
     // 3. Data Storage & Analytics (created before Lambda to pass as env var)
     // ----------------------------------------
 
-    // DynamoDB table
+    // Kinesis stream for DynamoDB changes
+    const kinesisStream = new kinesis.Stream(
+      this,
+      `SensorDataStream-${environmentSuffix}`,
+      {
+        streamName: `sensor-data-stream-${environmentSuffix}`,
+        encryption: kinesis.StreamEncryption.KMS,
+        encryptionKey: kmsKey,
+        shardCount: 1,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }
+    );
+
+    // DynamoDB table with Kinesis Data Streams integration
     const sensorDataTable = new dynamodb.Table(
       this,
       `SensorDataTable-${environmentSuffix}`,
@@ -103,23 +116,9 @@ export class AnalyticsStack extends cdk.Stack {
         billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
         timeToLiveAttribute: 'expirationTime',
         removalPolicy: cdk.RemovalPolicy.DESTROY,
+        kinesisStream: kinesisStream,
       }
     );
-
-    // Kinesis stream for DynamoDB changes
-    const kinesisStream = new kinesis.Stream(
-      this,
-      `SensorDataStream-${environmentSuffix}`,
-      {
-        streamName: `sensor-data-stream-${environmentSuffix}`,
-        shardCount: 1,
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
-      }
-    );
-
-    // Enable DynamoDB Streams - Kinesis integration is done via stream specification
-    // Note: The Kinesis integration would typically be done at the application level
-    // consuming the DynamoDB stream and pushing to Kinesis, or we can enable stream on table
 
     // Validation Lambda function
     const validationLambda = new nodejs.NodejsFunction(

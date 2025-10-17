@@ -10,5 +10,17 @@
   "subject_labels": [
     "Serverless Infrastructure (Functions as Code)"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC"
+  "background": "Smart agriculture platform data pipeline for IoT sensor telemetry processing",
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "S3",
+    "DynamoDB",
+    "Kinesis",
+    "SQS",
+    "KMS",
+    "CloudWatch",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 8
 }

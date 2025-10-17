@@ -25,6 +25,8 @@ import {
 import {
   KinesisClient,
   DescribeStreamCommand,
+  GetShardIteratorCommand,
+  GetRecordsCommand,
 } from '@aws-sdk/client-kinesis';
 import {
   SQSClient,
@@ -573,6 +575,144 @@ describe('Smart Agriculture Platform - Integration Tests', () => {
       // Under normal conditions, DLQ should be empty
       expect(messages.Messages || []).toHaveLength(0);
     });
+
+    test('DynamoDB changes should stream to Kinesis Data Stream', async () => {
+      const testDeviceId = `kinesis-test-${Date.now()}`;
+      const testTimestamp = new Date().toISOString();
+
+      try {
+        // Step 1: Send data through the complete pipeline
+        const apiKeyResponse = await apiGatewayClient.send(
+          new GetApiKeyCommand({ apiKey: outputs.ApiKeyId, includeValue: true })
+        );
+
+        const sensorData = {
+          deviceId: testDeviceId,
+          timestamp: testTimestamp,
+          moisture: 62.3,
+          pH: 7.1,
+        };
+
+        const apiUrl = `${outputs.ApiEndpoint}sensor`;
+        console.log('Sending data to trigger DynamoDB-Kinesis flow...');
+
+        await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKeyResponse.value!,
+          },
+          body: JSON.stringify(sensorData),
+        });
+
+        // Step 2: Wait for data to appear in DynamoDB
+        console.log('Waiting for data to appear in DynamoDB...');
+        const dynamoDataExists = await waitFor(async () => {
+          try {
+            const scanResult = await dynamoDbClient.send(
+              new ScanCommand({
+                TableName: outputs.SensorDataTableName,
+                FilterExpression: 'deviceId = :deviceId',
+                ExpressionAttributeValues: {
+                  ':deviceId': { S: testDeviceId },
+                },
+              })
+            );
+            return (scanResult.Items?.length || 0) > 0;
+          } catch {
+            return false;
+          }
+        }, 60000);
+
+        expect(dynamoDataExists).toBe(true);
+        console.log('Data found in DynamoDB');
+
+        // Step 3: Get Kinesis stream shard information
+        const streamDescription = await kinesisClient.send(
+          new DescribeStreamCommand({ StreamName: outputs.KinesisStreamName })
+        );
+
+        const shardId = streamDescription.StreamDescription?.Shards?.[0]?.ShardId;
+        expect(shardId).toBeDefined();
+
+        // Step 4: Get shard iterator
+        const shardIteratorResponse = await kinesisClient.send(
+          new GetShardIteratorCommand({
+            StreamName: outputs.KinesisStreamName,
+            ShardId: shardId!,
+            ShardIteratorType: 'TRIM_HORIZON',
+          })
+        );
+
+        let shardIterator = shardIteratorResponse.ShardIterator;
+        expect(shardIterator).toBeDefined();
+
+        // Step 5: Read records from Kinesis stream
+        console.log('Reading records from Kinesis stream...');
+        let recordFound = false;
+        let attempts = 0;
+        const maxAttempts = 10;
+
+        while (!recordFound && attempts < maxAttempts && shardIterator) {
+          const recordsResponse = await kinesisClient.send(
+            new GetRecordsCommand({
+              ShardIterator: shardIterator,
+              Limit: 100,
+            })
+          );
+
+          if (recordsResponse.Records && recordsResponse.Records.length > 0) {
+            console.log(
+              `Found ${recordsResponse.Records.length} records in Kinesis`
+            );
+
+            for (const record of recordsResponse.Records) {
+              if (record.Data) {
+                const recordData = Buffer.from(record.Data).toString('utf-8');
+                const parsedRecord = JSON.parse(recordData);
+
+                // Check if this is a DynamoDB stream record
+                if (parsedRecord.dynamodb && parsedRecord.eventName) {
+                  const newImage = parsedRecord.dynamodb.NewImage;
+                  if (
+                    newImage?.deviceId?.S === testDeviceId &&
+                    newImage?.timestamp?.S === testTimestamp
+                  ) {
+                    console.log('Found matching record in Kinesis stream!');
+                    recordFound = true;
+
+                    // Validate the data content
+                    expect(newImage.deviceId.S).toBe(testDeviceId);
+                    expect(newImage.timestamp.S).toBe(testTimestamp);
+                    expect(parseFloat(newImage.moisture.N)).toBeCloseTo(62.3, 1);
+                    expect(parseFloat(newImage.pH.N)).toBeCloseTo(7.1, 1);
+                    expect(newImage.expirationTime.N).toBeDefined();
+                    expect(parsedRecord.eventName).toBe('INSERT');
+
+                    break;
+                  }
+                }
+              }
+            }
+          }
+
+          // Get next shard iterator for next batch
+          shardIterator = recordsResponse.NextShardIterator;
+          attempts++;
+
+          if (!recordFound && shardIterator) {
+            // Wait a bit before next attempt
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+          }
+        }
+
+        expect(recordFound).toBe(true);
+        console.log('DynamoDB-Kinesis integration validated successfully!');
+      } finally {
+        // Cleanup test data
+        await cleanupTestData(testDeviceId);
+      }
+    }, 120000);
   });
 
   describe('Security and Compliance', () => {
