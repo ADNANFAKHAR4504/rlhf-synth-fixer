@@ -968,8 +968,8 @@ Resources:
           DataResources:
             - Type: 'AWS::S3::Object'
               Values:
-                - !Sub '${NovaAppDataBucket}/*'
-                - !Sub '${NovaPatientDocumentsBucket}/*'
+                - !Sub 'arn:aws:s3:::${NovaAppDataBucket}/*'
+                - !Sub 'arn:aws:s3:::${NovaPatientDocumentsBucket}/*'
       InsightSelectors:
         - InsightType: ApiCallRateInsight
       Tags:
