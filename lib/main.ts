@@ -371,6 +371,33 @@ export class FinTechTradingStack extends TerraformStack {
       },
     });
 
+    // IAM Role for RDS Enhanced Monitoring
+    const rdsMonitoringRole = new IamRole(this, 'rds-monitoring-role', {
+      name: `rds-monitoring-role-${environmentSuffix}`,
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: {
+              Service: 'monitoring.rds.amazonaws.com',
+            },
+            Action: 'sts:AssumeRole',
+          },
+        ],
+      }),
+      tags: {
+        Name: `rds-monitoring-role-${environmentSuffix}`,
+        Environment: environmentSuffix,
+      },
+    });
+
+    new IamRolePolicyAttachment(this, 'rds-monitoring-policy', {
+      role: rdsMonitoringRole.name,
+      policyArn:
+        'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole',
+    });
+
     // Secrets Manager - Database Credentials
     const dbSecret = new SecretsmanagerSecret(this, 'db-secret', {
       name: `trading-db-credentials-${environmentSuffix}`,
@@ -536,7 +563,7 @@ export class FinTechTradingStack extends TerraformStack {
       performanceInsightsKmsKeyId: rdsKmsKey.arn,
       performanceInsightsRetentionPeriod: 7,
       monitoringInterval: 60,
-      monitoringRoleArn: `arn:aws:iam::${'${' + 'data.aws_caller_identity.current.account_id' + '}'}:role/rds-monitoring-role`,
+      monitoringRoleArn: rdsMonitoringRole.arn,
       tags: {
         Name: `trading-aurora-instance-1-${environmentSuffix}`,
         Environment: environmentSuffix,
@@ -554,7 +581,7 @@ export class FinTechTradingStack extends TerraformStack {
       performanceInsightsKmsKeyId: rdsKmsKey.arn,
       performanceInsightsRetentionPeriod: 7,
       monitoringInterval: 60,
-      monitoringRoleArn: `arn:aws:iam::${'${' + 'data.aws_caller_identity.current.account_id' + '}'}:role/rds-monitoring-role`,
+      monitoringRoleArn: rdsMonitoringRole.arn,
       tags: {
         Name: `trading-aurora-instance-2-${environmentSuffix}`,
         Environment: environmentSuffix,
