@@ -40,8 +40,35 @@ def load_outputs() -> Dict[str, Any]:
 # Load outputs once for all tests
 try:
     OUTPUTS = load_outputs()
-except FileNotFoundError:
+    print(f"✅ Loaded outputs with {len(OUTPUTS)} keys")
+    print(f"📋 Output keys: {list(OUTPUTS.keys())}")
+except FileNotFoundError as e:
+    print(f"⚠️  Could not find outputs file: {e}")
     OUTPUTS = {}
+
+# Check if we have all required outputs
+REQUIRED_OUTPUTS = [
+    'vpc_id',
+    'kinesis_stream_name',
+    'kinesis_stream_arn',
+    'aurora_cluster_id',
+    'aurora_cluster_endpoint',
+    'redis_cluster_id',
+    'redis_primary_endpoint',
+    'secrets_manager_secret_arn',
+    'kinesis_kms_key_id',
+    'rds_kms_key_id',
+    'secrets_kms_key_id',
+    'rds_security_group_id',
+    'elasticache_security_group_id'
+]
+
+MISSING_OUTPUTS = [output for output in REQUIRED_OUTPUTS if output not in OUTPUTS]
+HAS_ALL_OUTPUTS = len(MISSING_OUTPUTS) == 0
+
+if MISSING_OUTPUTS:
+    print(f"⚠️  Missing required outputs: {', '.join(MISSING_OUTPUTS)}")
+    print("⚠️  Integration tests will be skipped if infrastructure is not deployed.")
 
 
 @pytest.fixture(scope='module')
@@ -84,6 +111,10 @@ def secretsmanager_client(aws_region):
 def kms_client(aws_region):
     """Create KMS client."""
     return boto3.client('kms', region_name=aws_region)
+
+
+# Pytest marker to skip all tests if outputs are not available
+pytestmark = pytest.mark.skipif(not HAS_ALL_OUTPUTS, reason="Infrastructure not deployed or outputs not available")
 
 
 class TestVPCAndNetworking:
