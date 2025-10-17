@@ -1,0 +1,10 @@
+{
+  "name": "tap-stack",
+  "version": "1.0.0",
+  "description": "Video processing pipeline infrastructure",
+  "scripts": {
+    "cdk:synth": "pipenv run cdk synth --context environmentSuffix=${ENVIRONMENT_SUFFIX:-dev}",
+    "cdk:deploy": "pipenv run cdk deploy --require-approval never --context environmentSuffix=${ENVIRONMENT_SUFFIX:-dev}",
+    "cdk:destroy": "pipenv run cdk destroy --force --context environmentSuffix=${ENVIRONMENT_SUFFIX:-dev}"
+  }
+}
