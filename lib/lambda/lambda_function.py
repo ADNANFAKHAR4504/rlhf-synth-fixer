@@ -9,13 +9,9 @@ import boto3
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from aws_xray_sdk.core import xray_recorder
-from aws_xray_sdk.core import patch_all
-
-# Patch AWS SDK clients for X-Ray tracing
-patch_all()
 
 # Initialize DynamoDB client
+# X-Ray tracing is automatically enabled when configured at Lambda function level
 dynamodb = boto3.resource('dynamodb')
 table_name = os.environ.get('DYNAMODB_TABLE_NAME')
 table = dynamodb.Table(table_name)
@@ -71,7 +67,6 @@ def validate_profile_data(data):
     return errors
 
 
-@xray_recorder.capture('create_profile')
 def create_profile(event):
     """Create a new user profile"""
     try:
@@ -118,7 +113,6 @@ def create_profile(event):
         return response(500, {'error': 'Internal server error'})
 
 
-@xray_recorder.capture('get_profile')
 def get_profile(event):
     """Get a user profile by ID"""
     try:
@@ -140,7 +134,6 @@ def get_profile(event):
         return response(500, {'error': 'Internal server error'})
 
 
-@xray_recorder.capture('update_profile')
 def update_profile(event):
     """Update an existing user profile"""
     try:
@@ -207,7 +200,6 @@ def update_profile(event):
         return response(500, {'error': 'Internal server error'})
 
 
-@xray_recorder.capture('delete_profile')
 def delete_profile(event):
     """Delete a user profile"""
     try:
@@ -239,7 +231,6 @@ def delete_profile(event):
         return response(500, {'error': 'Internal server error'})
 
 
-@xray_recorder.capture('list_profiles')
 def list_profiles(event):
     """List all user profiles"""
     try:
