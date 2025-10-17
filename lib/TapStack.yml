@@ -557,7 +557,7 @@ Resources:
   NovaDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'nova-clinical-${AWS::StackName}-data-bucket'
+      BucketName: !Sub 'nova-clinical-${AWS::AccountId}-data-bucket'
       OwnershipControls:
         Rules:
           - ObjectOwnership: BucketOwnerPreferred
@@ -599,7 +599,7 @@ Resources:
   NovaLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'nova-clinical-${AWS::StackName}-logs-bucket'
+      BucketName: !Sub 'nova-clinical-${AWS::AccountId}-logs-bucket'
       OwnershipControls:
         Rules:
           - ObjectOwnership: BucketOwnerPreferred
