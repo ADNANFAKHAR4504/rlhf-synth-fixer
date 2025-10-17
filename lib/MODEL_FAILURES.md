@@ -2,20 +2,20 @@
 
 ## Summary
 
-The model response did **not** produce any Pulumi Go code. Instead, it returned a prose ticket describing the desired solution. Because the assignment required actual infrastructure code, the response failed before deployment even started. Beyond the missing code, the narrative omitted several critical implementation details that are present in the working solution.
+- The assistant returned a longform ticket instead of Pulumi Go code, so there is nothing to compile, test, or deploy.
+- The prose reiterates high-level requirements but never instantiates resources, leaving every integration point (network, IAM, secrets, logging) unimplemented.
 
-## Key issues
+## Key gaps
 
 | Area | MODEL_RESPONSE | IDEAL_RESPONSE | Impact |
 |------|----------------|----------------|--------|
-| Deliverable format | A written recap of requirements; no Pulumi program, no Go module, no tests. | Complete Pulumi Go stack creating VPC, KMS, RDS, ECS, API Gateway, IAM roles, secrets, logging, and outputs. | **Critical** – nothing deploys; CI immediately fails. |
-| KMS policy | Mentions customer-managed keys but provides no policy or service principal guidance. | Implements a concrete policy that grants CloudWatch Logs, Secrets Manager, Kinesis, and RDS the rights they need, including region-aware log principals. | **High** – without policy the key cannot encrypt logs or secrets. |
-| Networking & security | Describes desired network structure in prose but omits concrete CIDRs, AZ handling, security groups, or NAT configuration. | Builds the VPC, discovers AZs dynamically, creates public/private subnets, attaches route tables, and enforces least-privilege security groups for ECS→RDS. | **High** – infrastructure layout and access controls are undefined in the model reply. |
-| Observability & outputs | No instructions for log groups, API Gateway logging, or stack outputs. | Provisions KMS-encrypted CloudWatch log groups, registers the API Gateway account, and exports every identifier used by integration tests. | **Medium** – lack of logs/outputs blocks auditability and downstream automation. |
+| Deliverable | Narrative description of a desired architecture; zero Go source files or Pulumi program. | Full Go module with `main` plus helper functions that Pulumi can execute (`tap_stack.go`, `helpers.go`). | **Critical** – pipeline cannot be deployed or even linted; CI fails immediately. |
+| Credential handling | Advises storing secrets in Secrets Manager and rotating passwords, but provides no mechanism to create or populate the secret. | Generates credentials (`generateDBUsername`, `generateDBPassword`), persists them via `secretsmanager.NewSecret` and `NewSecretVersion`, and wires the secret ARN into ECS. | **High** – without generated secrets the application has no database credentials at runtime. |
+| Networking & security controls | Lists desired CIDRs and least-privilege principles, yet omits any actual VPC, subnet, route table, or security group definitions. | Provisions the full network stack, dynamically discovers AZs, creates public/private subnets, configures NAT, and enforces SG relationships for API Gateway → ECS → RDS. | **High** – no concrete infrastructure exists to satisfy the stated security goals. |
+| Observability & outputs | Mentions logging and monitoring requirements abstractly. | Builds KMS-encrypted CloudWatch log groups, enables API Gateway stage logging, and exports all resource identifiers needed downstream. | **Medium** – without these constructs, audit trails and integration tests both fail. |
 
 ## Training takeaways
 
-1. When the prompt asks for Pulumi Go code, the assistant must generate a compilable Go module, not a summary of requirements.
-2. Security-sensitive resources (KMS, Secrets Manager, API Gateway logging) need explicit policies and wiring, not just a mention that “encryption is required.”
-3. Integration test compatibility depends on exposing concrete outputs and matching resource names; the model response ignored this, whereas the implementation exports everything the tests expect.
-4. For infrastructure tasks, prose-only answers are treated as failures even if the intent is technically accurate. Always deliver runnable code accompanied by tests when requested.
+1. When asked for Pulumi Go, emit compilable Go code with `pulumi.Run`, not just a narrative summary.
+2. Security guidance must translate into concrete IAM policies, secrets, and resource wiring; describing intent is insufficient.
+3. Integration and compliance checks depend on exported outputs and logging resources—omit them and the stack fails validation.

@@ -11,7 +11,7 @@
   "po_id": "2237444138",
   "aws_services": ["VPC", "EC2", "API Gateway", "ECS", "RDS", "Secrets Manager", "Kinesis", "KMS", "CloudWatch", "IAM"],
   "region": "us-east-1",
-  "training_quality": 7,
+  "training_quality": 8,
   "qa_status": "not_run",
   "qa_completed_phases": ["validation", "synthesis"],
   "qa_blocked_phases": ["deployment", "integration_tests"],
