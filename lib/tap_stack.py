@@ -90,12 +90,7 @@ class TapStack(pulumi.ComponentResource):
                             "kms:CreateGrant",
                             "kms:DescribeKey"
                         ],
-                        "Resource": "*",
-                        "Condition": {
-                            "ArnLike": {
-                                "kms:EncryptionContext:aws:logs:arn": f"arn:aws:logs:{region.name}:{current.account_id}:log-group:*"
-                            }
-                        }
+                        "Resource": "*"
                     },
                     {
                         "Sid": "Allow ECS and RDS",
