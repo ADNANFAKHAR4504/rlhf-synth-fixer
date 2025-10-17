@@ -1,0 +1,39 @@
+{
+  "platform": "pulumi",
+  "language": "js",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-10-14T04:07:56+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Cloud Environment Setup",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "po_id": "2698188040",
+  "aws_services": [
+    "KMS",
+    "CloudWatch Logs",
+    "VPC",
+    "EC2 Subnets",
+    "EC2 Security Groups",
+    "RDS PostgreSQL",
+    "RDS Parameter Group",
+    "RDS Subnet Group",
+    "Kinesis Data Streams",
+    "IAM Roles",
+    "IAM Policies",
+    "CloudWatch Alarms"
+  ],
+  "region": "ap-southeast-1",
+  "training_quality": 10,
+  "background": "Infrastructure task for Pulumi",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
