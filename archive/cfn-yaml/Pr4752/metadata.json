@@ -1,0 +1,22 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "4948134385",
+  "team": "synth",
+  "startedAt": "2025-10-17T22:07:58+05:30",
+  "subtask": "Application Deployment",
+  "background": "A university in Germany needs to deploy their custom learning management system (LMS) while ensuring GDPR compliance and data protection. The system needs to handle concurrent access from thousands of students while maintaining performance and data security.",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": "VPC, EC2, Subnets, Security Groups, NAT Gateway, Internet Gateway, EIP, ECS Fargate, RDS Aurora PostgreSQL, ElastiCache Redis, KMS, Secrets Manager, EFS, IAM, CloudWatch Logs",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
