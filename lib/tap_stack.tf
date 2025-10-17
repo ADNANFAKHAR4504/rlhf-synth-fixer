@@ -2,6 +2,12 @@
 # VARIABLES
 # ==========================================
 
+variable "app_name" {
+  description = "Application name"
+  type        = string
+  default     = "iac-232"
+}
+
 variable "primary_region" {
   description = "AWS region for primary deployment"
   type        = string
@@ -11,7 +17,7 @@ variable "primary_region" {
 variable "secondary_region" {
   description = "AWS region for secondary deployment"
   type        = string
-  default     = "us-west-2"
+  default     = "us-east-2"
 }
 
 variable "vpc_cidr_blocks" {
@@ -29,7 +35,7 @@ variable "vpc_cidr_blocks" {
 variable "database_instance_class" {
   description = "Aurora instance type"
   type        = string
-  default     = "db.r6g.xlarge"
+  default     = "db.r5.large"
 }
 
 variable "backup_retention_period" {
@@ -58,13 +64,13 @@ variable "kms_deletion_window" {
 variable "route53_domain" {
   description = "Domain name for DNS configuration"
   type        = string
-  default     = "trading-platform.example.com"
+  default     = "iac232-financial-project.com"
 }
 
 variable "ec2_instances_per_region" {
   description = "Number of EC2 instances per region"
   type        = number
-  default     = 3
+  default     = 1
 }
 
 variable "state_bucket" {
@@ -97,15 +103,14 @@ variable "state_lock_table" {
 
 locals {
   # Resource naming conventions
-  resource_prefix = "${var.environment}-trading"
+  resource_prefix = "${var.environment}-iac56232"
   
   # Common tags
   common_tags = {
     Environment     = var.environment
-    Application     = "trading-platform"
-    DataClass       = "highly-confidential"
     ComplianceScope = "financial-services"
-    DREnabled       = "true"
+    iac-rlhf-amazon = "true"
+    team = 2
   }
   
   # Network configuration
@@ -147,6 +152,13 @@ locals {
   health_check_timeout  = 5
   health_threshold     = 2
   unhealthy_threshold  = 2
+
+  # Application bootstrap artifacts
+  app_user_data_template = "${path.module}/runtime/app_user_data.sh.tmpl"
+  app_source             = file("${path.module}/runtime/example_app.py")
+  log_group_name         = "/aws/example-app/${local.resource_prefix}"
+
+
 }
 
 # ==========================================
@@ -707,7 +719,8 @@ resource "aws_security_group" "lambda_secondary" {
 
 resource "random_password" "db_password" {
   length  = 32
-  special = true
+  special          = true
+  override_special = "!#$&*()-_=+"
 }
 
 resource "aws_secretsmanager_secret" "db_credentials" {
@@ -765,10 +778,7 @@ resource "aws_rds_global_cluster" "main" {
   engine_version           = "8.0.mysql_aurora.3.04.0"
   database_name            = local.db_name
   storage_encrypted        = true
-  deletion_protection      = var.environment == "prod"
-  
-  # Support automatic failover
-  force_destroy = var.environment != "prod"
+  deletion_protection      = false
 }
 
 resource "aws_rds_cluster" "primary" {
@@ -788,9 +798,9 @@ resource "aws_rds_cluster" "primary" {
   enabled_cloudwatch_logs_exports = ["audit", "error", "general", "slowquery"]
   storage_encrypted              = true
   kms_key_id                     = aws_kms_key.primary.arn
-  deletion_protection            = var.environment == "prod"
-  skip_final_snapshot            = var.environment != "prod"
-  final_snapshot_identifier      = var.environment == "prod" ? "${local.db_cluster_identifier}-final-${formatdate("YYYY-MM-DD-hhmm", timestamp())}" : null
+  deletion_protection            = false
+  skip_final_snapshot            = true
+  final_snapshot_identifier      = "${local.db_cluster_identifier}-final-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
   
   tags = merge(local.common_tags, {
     Name   = "${local.resource_prefix}-aurora-primary"
@@ -816,7 +826,7 @@ resource "aws_rds_cluster_instance" "primary" {
 
 resource "aws_rds_cluster" "secondary" {
   provider                        = aws.secondary
-  cluster_identifier              = "${local.db_cluster_identifier}-secondary"
+  cluster_identifier              = "${local.db_cluster_identifier}-secondary-v4"
   engine                          = aws_rds_global_cluster.main.engine
   engine_version                  = aws_rds_global_cluster.main.engine_version
   engine_mode                     = "provisioned"
@@ -829,8 +839,9 @@ resource "aws_rds_cluster" "secondary" {
   enabled_cloudwatch_logs_exports = ["audit", "error", "general", "slowquery"]
   storage_encrypted              = true
   kms_key_id                     = aws_kms_key.secondary.arn
-  deletion_protection            = var.environment == "prod"
-  skip_final_snapshot            = var.environment != "prod"
+  deletion_protection            = false
+  skip_final_snapshot            = true
+  final_snapshot_identifier      = "${local.db_cluster_identifier}-final3-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
   
   depends_on = [
     aws_rds_cluster_instance.primary
@@ -852,7 +863,7 @@ resource "aws_rds_cluster_instance" "secondary" {
   engine_version              = aws_rds_cluster.secondary.engine_version
   performance_insights_enabled = true
   monitoring_interval         = local.enable_detailed_monitoring ? 60 : 0
-  monitoring_role_arn         = local.enable_detailed_monitoring ? aws_iam_role.rds_monitoring_secondary.arn : null
+  monitoring_role_arn         = local.enable_detailed_monitoring ? aws_iam_role.rds_monitoring.arn : null
   
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-aurora-instance-secondary-${count.index + 1}"
@@ -870,7 +881,7 @@ resource "aws_lb" "primary" {
   security_groups    = [aws_security_group.alb_primary.id]
   subnets           = aws_subnet.primary_public[*].id
   
-  enable_deletion_protection = var.environment == "prod"
+  enable_deletion_protection = false
   enable_http2              = true
   enable_cross_zone_load_balancing = true
   
@@ -887,7 +898,7 @@ resource "aws_lb" "secondary" {
   security_groups    = [aws_security_group.alb_secondary.id]
   subnets           = aws_subnet.secondary_public[*].id
   
-  enable_deletion_protection = var.environment == "prod"
+  enable_deletion_protection = false
   enable_http2              = true
   enable_cross_zone_load_balancing = true
   
@@ -1006,41 +1017,130 @@ resource "aws_iam_role_policy_attachment" "ec2_ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+resource "aws_iam_role_policy" "ec2_app" {
+  name = "${local.resource_prefix}-ec2-app"
+  role = aws_iam_role.ec2.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:DescribeSecret",
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = [
+          aws_secretsmanager_secret.db_credentials.arn,
+          format(
+            "arn:aws:secretsmanager:%s:%s:secret:%s-*",
+            var.secondary_region,
+            data.aws_caller_identity.current.account_id,
+            aws_secretsmanager_secret.db_credentials.name
+          )
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt"
+        ]
+        Resource = [
+          aws_kms_key.primary.arn,
+          aws_kms_key.secondary.arn
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:DescribeLogStreams",
+          "logs:PutLogEvents",
+          "logs:PutRetentionPolicy"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 resource "aws_iam_instance_profile" "ec2" {
   name = "${local.resource_prefix}-ec2-profile"
   role = aws_iam_role.ec2.name
 }
 
-resource "aws_iam_role" "ec2_secondary" {
+resource "aws_iam_role_policy" "ec2_app_secondary" {
   provider = aws.secondary
-  name     = "${local.resource_prefix}-ec2-role"
-  
-  assume_role_policy = jsonencode({
+  name     = "${local.resource_prefix}-ec2-app"
+  role     = aws_iam_role.ec2.id
+
+  policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Action = "sts:AssumeRole"
         Effect = "Allow"
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        }
+        Action = [
+          "secretsmanager:DescribeSecret",
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = [
+          aws_secretsmanager_secret.db_credentials.arn,
+          format(
+            "arn:aws:secretsmanager:%s:%s:secret:%s-*",
+            var.secondary_region,
+            data.aws_caller_identity.current.account_id,
+            aws_secretsmanager_secret.db_credentials.name
+          )
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt"
+        ]
+        Resource = [
+          aws_kms_key.primary.arn,
+          aws_kms_key.secondary.arn
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:DescribeLogStreams",
+          "logs:PutLogEvents",
+          "logs:PutRetentionPolicy"
+        ]
+        Resource = "*"
       }
     ]
   })
-  
-  tags = local.common_tags
-}
-
-resource "aws_iam_role_policy_attachment" "ec2_ssm_secondary" {
-  provider   = aws.secondary
-  role       = aws_iam_role.ec2_secondary.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
 resource "aws_iam_instance_profile" "ec2_secondary" {
   provider = aws.secondary
-  name     = "${local.resource_prefix}-ec2-profile"
-  role     = aws_iam_role.ec2_secondary.name
+  name     = "${local.resource_prefix}-ec2-profile2"
+  role     = aws_iam_role.ec2.name
+}
+
+resource "aws_cloudwatch_log_group" "ec2" {
+  name              = local.log_group_name
+  retention_in_days = 30
+  tags              = local.common_tags
+}
+
+resource "aws_cloudwatch_log_group" "ec2_secondary" {
+  provider         = aws.secondary
+  name              = local.log_group_name
+  retention_in_days = 30
+  tags              = local.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "ec2_cwagent" {
+  role       = aws_iam_role.ec2.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
 }
 
 resource "aws_instance" "primary" {
@@ -1051,16 +1151,16 @@ resource "aws_instance" "primary" {
   vpc_security_group_ids = [aws_security_group.ec2_primary.id]
   iam_instance_profile   = aws_iam_instance_profile.ec2.name
   
-  user_data = base64encode(<<-EOF
-    #!/bin/bash
-    yum update -y
-    yum install -y httpd
-    systemctl start httpd
-    systemctl enable httpd
-    echo "<h1>Trading Platform - Primary Region - Instance ${count.index + 1}</h1>" > /var/www/html/index.html
-    echo "OK" > /var/www/html/health
-  EOF
-  )
+  user_data = templatefile(local.app_user_data_template, {
+    app_source    = local.app_source
+    region        = var.primary_region
+    db_write_host = aws_rds_cluster.primary.endpoint
+    db_read_host  = aws_rds_cluster.primary.reader_endpoint
+    db_secret_arn = aws_secretsmanager_secret.db_credentials.arn
+    log_group     = local.log_group_name
+    app_port      = 80
+  })
+  user_data_replace_on_change = true
   
   root_block_device {
     encrypted = true
@@ -1070,6 +1170,11 @@ resource "aws_instance" "primary" {
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-ec2-primary-${count.index + 1}"
   })
+
+  depends_on = [
+    aws_nat_gateway.primary,
+    aws_route_table_association.primary_private,
+  ]
 }
 
 resource "aws_instance" "secondary" {
@@ -1081,16 +1186,21 @@ resource "aws_instance" "secondary" {
   vpc_security_group_ids = [aws_security_group.ec2_secondary.id]
   iam_instance_profile   = aws_iam_instance_profile.ec2_secondary.name
   
-  user_data = base64encode(<<-EOF
-    #!/bin/bash
-    yum update -y
-    yum install -y httpd
-    systemctl start httpd
-    systemctl enable httpd
-    echo "<h1>Trading Platform - Secondary Region - Instance ${count.index + 1}</h1>" > /var/www/html/index.html
-    echo "OK" > /var/www/html/health
-  EOF
-  )
+  user_data = templatefile(local.app_user_data_template, {
+    app_source    = local.app_source
+    region        = var.secondary_region
+    db_write_host = aws_rds_cluster.secondary.endpoint
+    db_read_host  = aws_rds_cluster.secondary.reader_endpoint
+    db_secret_arn = format(
+      "arn:aws:secretsmanager:%s:%s:secret:%s",
+      var.secondary_region,
+      data.aws_caller_identity.current.account_id,
+      aws_secretsmanager_secret.db_credentials.name
+    )
+    log_group = local.log_group_name
+    app_port  = 80
+  })
+  user_data_replace_on_change = true
   
   root_block_device {
     encrypted = true
@@ -1287,11 +1397,18 @@ resource "aws_iam_role_policy_attachment" "lambda_vpc_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }
 
+data "archive_file" "failover_lambda" {
+  type        = "zip"
+  source_file = "${path.module}/runtime/failover_lambda.py"
+  output_path = "${path.module}/failover_lambda.zip"
+}
+
 resource "aws_lambda_function" "failover" {
-  filename         = "failover_lambda.zip"
+  filename         = data.archive_file.failover_lambda.output_path
+  source_code_hash = data.archive_file.failover_lambda.output_base64sha256
   function_name    = "${local.resource_prefix}-failover-orchestrator"
   role            = aws_iam_role.lambda_failover.arn
-  handler         = "index.handler"
+  handler         = "failover_lambda.handler"
   runtime         = local.lambda_runtime
   timeout         = local.lambda_timeout
   memory_size     = 512
@@ -1317,121 +1434,8 @@ resource "aws_lambda_function" "failover" {
   })
   
   depends_on = [
-    aws_iam_role_policy_attachment.lambda_vpc_execution,
-    null_resource.lambda_zip
+    aws_iam_role_policy_attachment.lambda_vpc_execution
   ]
-}
-
-# Create Lambda deployment package
-resource "null_resource" "lambda_zip" {
-  triggers = {
-    always_run = timestamp()
-  }
-  
-  provisioner "local-exec" {
-    command = <<EOF
-cat > index.py <<'LAMBDA'
-import json
-import boto3
-import os
-import time
-from datetime import datetime
-
-def handler(event, context):
-    """
-    Orchestrate failover to secondary region
-    """
-    print(f"Failover event received: {json.dumps(event)}")
-    
-    global_cluster_id = os.environ['GLOBAL_CLUSTER_ID']
-    primary_region = os.environ['PRIMARY_REGION']
-    secondary_region = os.environ['SECONDARY_REGION']
-    hosted_zone_id = os.environ['HOSTED_ZONE_ID']
-    domain_name = os.environ['DOMAIN_NAME']
-    
-    # Initialize clients
-    rds_primary = boto3.client('rds', region_name=primary_region)
-    rds_secondary = boto3.client('rds', region_name=secondary_region)
-    route53 = boto3.client('route53')
-    
-    try:
-        # Step 1: Initiate Aurora Global Database failover
-        print(f"Initiating failover of global cluster {global_cluster_id} to {secondary_region}")
-        
-        response = rds_primary.failover_global_cluster(
-            GlobalClusterIdentifier=global_cluster_id,
-            TargetDbClusterIdentifier=f"{global_cluster_id}-secondary"
-        )
-        
-        print(f"Failover initiated: {response}")
-        
-        # Step 2: Wait for failover to complete (monitoring for up to 30 seconds)
-        start_time = time.time()
-        timeout = 25  # Leave 5 seconds buffer
-        
-        while time.time() - start_time < timeout:
-            try:
-                global_cluster = rds_primary.describe_global_clusters(
-                    GlobalClusterIdentifier=global_cluster_id
-                )['GlobalClusters'][0]
-                
-                # Check if secondary is now primary
-                for member in global_cluster['GlobalClusterMembers']:
-                    if secondary_region in member['DBClusterArn'] and member['IsWriter']:
-                        print(f"Failover complete - {secondary_region} is now primary")
-                        break
-                else:
-                    time.sleep(2)
-                    continue
-                break
-            except Exception as e:
-                print(f"Error checking failover status: {e}")
-                time.sleep(2)
-        
-        # Step 3: Update Route53 records (already handled by health checks, but we can force update)
-        print("Updating Route53 DNS records")
-        
-        # Force traffic to secondary by updating weighted routing
-        change_batch = {
-            'Changes': [{
-                'Action': 'UPSERT',
-                'ResourceRecordSet': {
-                    'Name': f'db.{domain_name}',
-                    'Type': 'CNAME',
-                    'TTL': 60,
-                    'ResourceRecords': [{'Value': f"{global_cluster_id}-secondary.cluster-ro-{secondary_region}.rds.amazonaws.com"}]
-                }
-            }]
-        }
-        
-        route53.change_resource_record_sets(
-            HostedZoneId=hosted_zone_id,
-            ChangeBatch=change_batch
-        )
-        
-        return {
-            'statusCode': 200,
-            'body': json.dumps({
-                'message': 'Failover completed successfully',
-                'new_primary': secondary_region,
-                'timestamp': datetime.utcnow().isoformat()
-            })
-        }
-        
-    except Exception as e:
-        print(f"Failover failed: {str(e)}")
-        return {
-            'statusCode': 500,
-            'body': json.dumps({
-                'message': f'Failover failed: {str(e)}',
-                'timestamp': datetime.utcnow().isoformat()
-            })
-        }
-LAMBDA
-zip -j failover_lambda.zip index.py
-rm index.py
-EOF
-  }
 }
 
 # ==========================================
@@ -1447,26 +1451,7 @@ resource "aws_cloudwatch_event_rule" "health_check_failure" {
     detail-type = ["Route 53 Health Check State Change"]
     detail = {
       configurationId = [aws_route53_health_check.primary.id]
-      newState        = ["ALARM"]
-    }
-  })
-  
-  tags = local.common_tags
-}
-
-resource "aws_cloudwatch_event_rule" "rds_failure" {
-  name        = "${local.resource_prefix}-rds-failure"
-  description = "Trigger failover on RDS failure"
-  
-  event_pattern = jsonencode({
-    source      = ["aws.rds"]
-    detail-type = ["RDS DB Cluster Event"]
-    detail = {
-      SourceType = ["db-cluster"]
-      EventCategories = ["failure"]
-      SourceArn = [{
-        "prefix" : aws_rds_cluster.primary.arn
-      }]
+      newState        = ["UNHEALTHY"]
     }
   })
   
@@ -1479,26 +1464,12 @@ resource "aws_cloudwatch_event_target" "health_lambda" {
   arn       = aws_lambda_function.failover.arn
 }
 
-resource "aws_cloudwatch_event_target" "rds_lambda" {
-  rule      = aws_cloudwatch_event_rule.rds_failure.name
-  target_id = "FailoverLambda"
-  arn       = aws_lambda_function.failover.arn
-}
-
 resource "aws_lambda_permission" "allow_eventbridge_health" {
   statement_id  = "AllowExecutionFromEventBridgeHealth"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.failover.function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.health_check_failure.arn
-}
-
-resource "aws_lambda_permission" "allow_eventbridge_rds" {
-  statement_id  = "AllowExecutionFromEventBridgeRDS"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.failover.function_name
-  principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.rds_failure.arn
 }
 
 # ==========================================
@@ -1529,143 +1500,39 @@ resource "aws_iam_role_policy_attachment" "rds_monitoring" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
 }
 
-resource "aws_iam_role" "rds_monitoring_secondary" {
-  provider = aws.secondary
-  name     = "${local.resource_prefix}-rds-monitoring"
-  
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "monitoring.rds.amazonaws.com"
-        }
-      }
-    ]
-  })
-  
-  tags = local.common_tags
-}
-
-resource "aws_iam_role_policy_attachment" "rds_monitoring_secondary" {
-  provider   = aws.secondary
-  role       = aws_iam_role.rds_monitoring_secondary.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
-}
-
 # ==========================================
 # OUTPUTS
 # ==========================================
 
-output "vpc_ids" {
-  description = "VPC IDs for both regions"
-  value = {
-    primary   = aws_vpc.primary.id
-    secondary = aws_vpc.secondary.id
-  }
-}
-
-output "alb_endpoints" {
-  description = "ALB DNS endpoints"
-  value = {
-    primary   = aws_lb.primary.dns_name
-    secondary = aws_lb.secondary.dns_name
-  }
-}
-
-output "alb_arns" {
-  description = "ALB ARNs"
-  value = {
-    primary   = aws_lb.primary.arn
-    secondary = aws_lb.secondary.arn
-  }
-}
-
-output "aurora_global_cluster_id" {
-  description = "Aurora Global Cluster identifier"
-  value       = aws_rds_global_cluster.main.id
-}
-
-output "aurora_endpoints" {
-  description = "Aurora cluster endpoints"
-  value = {
-    global_writer = aws_rds_global_cluster.main.endpoint
-    primary = {
-      writer = aws_rds_cluster.primary.endpoint
-      reader = aws_rds_cluster.primary.reader_endpoint
-    }
-    secondary = {
-      writer = aws_rds_cluster.secondary.endpoint
-      reader = aws_rds_cluster.secondary.reader_endpoint
-    }
-  }
-}
-
-output "route53_zone_id" {
-  description = "Route53 hosted zone ID"
-  value       = aws_route53_zone.main.zone_id
-}
-
-output "route53_nameservers" {
-  description = "Route53 name servers"
-  value       = aws_route53_zone.main.name_servers
-}
-
-output "application_url" {
-  description = "Application URL with failover"
-  value       = "https://app.${var.route53_domain}"
-}
-
-output "lambda_function_arn" {
-  description = "Failover Lambda function ARN"
-  value       = aws_lambda_function.failover.arn
-}
-
-output "kms_key_ids" {
-  description = "KMS key IDs"
-  value = {
-    primary   = aws_kms_key.primary.id
-    secondary = aws_kms_key.secondary.id
-  }
-}
-
-output "secrets_manager_secret_arn" {
-  description = "Secrets Manager secret ARN"
-  value       = aws_secretsmanager_secret.db_credentials.arn
-}
-
-output "ec2_instance_ids" {
-  description = "EC2 instance IDs"
-  value = {
-    primary   = aws_instance.primary[*].id
-    secondary = aws_instance.secondary[*].id
-  }
-}
-
-output "security_group_ids" {
-  description = "Security group IDs"
-  value = {
-    primary = {
-      alb    = aws_security_group.alb_primary.id
-      ec2    = aws_security_group.ec2_primary.id
-      rds    = aws_security_group.rds_primary.id
-      lambda = aws_security_group.lambda_primary.id
-    }
-    secondary = {
-      alb    = aws_security_group.alb_secondary.id
-      ec2    = aws_security_group.ec2_secondary.id
-      rds    = aws_security_group.rds_secondary.id
-      lambda = aws_security_group.lambda_secondary.id
-    }
-  }
-}
-
-output "eventbridge_rule_arns" {
-  description = "EventBridge rule ARNs"
-  value = {
-    health_check = aws_cloudwatch_event_rule.health_check_failure.arn
-    rds_failure  = aws_cloudwatch_event_rule.rds_failure.arn
-  }
-}
+output "primary_vpc_id" { value = aws_vpc.primary.id }
+output "secondary_vpc_id" { value = aws_vpc.secondary.id }
+output "primary_alb_dns" { value = aws_lb.primary.dns_name }
+output "secondary_alb_dns" { value = aws_lb.secondary.dns_name }
+output "primary_alb_arn" { value = aws_lb.primary.arn }
+output "secondary_alb_arn" { value = aws_lb.secondary.arn }
+output "aurora_global_cluster_id" { value = aws_rds_global_cluster.main.id }
+output "aurora_global_writer_endpoint" { value = aws_rds_global_cluster.main.endpoint }
+output "aurora_primary_writer_endpoint" { value = aws_rds_cluster.primary.endpoint }
+output "aurora_primary_reader_endpoint" { value = aws_rds_cluster.primary.reader_endpoint }
+output "aurora_secondary_writer_endpoint" { value = aws_rds_cluster.secondary.endpoint }
+output "aurora_secondary_reader_endpoint" { value = aws_rds_cluster.secondary.reader_endpoint }
+output "route53_zone_id" { value = aws_route53_zone.main.zone_id }
+output "route53_nameservers" { value = aws_route53_zone.main.name_servers }
+output "application_url" { value = "https://app.${var.route53_domain}" }
+output "lambda_function_arn" { value = aws_lambda_function.failover.arn }
+output "primary_kms_key_id" { value = aws_kms_key.primary.id }
+output "secondary_kms_key_id" { value = aws_kms_key.secondary.id }
+output "secrets_manager_secret_arn" { value = aws_secretsmanager_secret.db_credentials.arn }
+output "primary_ec2_instance_ids" { value = aws_instance.primary[*].id }
+output "secondary_ec2_instance_ids" { value = aws_instance.secondary[*].id }
+output "primary_alb_security_group_id" { value = aws_security_group.alb_primary.id }
+output "primary_ec2_security_group_id" { value = aws_security_group.ec2_primary.id }
+output "primary_rds_security_group_id" { value = aws_security_group.rds_primary.id }
+output "primary_lambda_security_group_id" { value = aws_security_group.lambda_primary.id }
+output "secondary_alb_security_group_id" { value = aws_security_group.alb_secondary.id }
+output "secondary_ec2_security_group_id" { value = aws_security_group.ec2_secondary.id }
+output "secondary_rds_security_group_id" { value = aws_security_group.rds_secondary.id }
+output "secondary_lambda_security_group_id" { value = aws_security_group.lambda_secondary.id }
+output "eventbridge_health_rule_arn" { value = aws_cloudwatch_event_rule.health_check_failure.arn }
+output "primary_region" { value = var.primary_region }
+output "secondary_region" { value = var.secondary_region }

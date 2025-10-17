@@ -1,7 +1,7 @@
 You are a Senior Cloud Engineer with expertise in AWS.
 
 # Global
-- Primary region: `us-east-1`; Secondary region: `us-west-2`.
+- Primary region: `us-east-1`; Secondary region: `us-east-2`.
 - Business context: financial-services trading platform processing millions of transactions daily; **strict data consistency**, **minimal downtime**.
 - DR objective: **automatic failover to secondary within 30 seconds** of primary-region failure detection, driven by health checks and DNS updates.
 - Variables (must be declared and parameterized):
@@ -19,7 +19,7 @@ You are a Senior Cloud Engineer with expertise in AWS.
 - Ensure routing and security constructs support cross-region DR architecture (no assumptions beyond CIDR inputs).
 
 # Aurora Global Database
-- Use **Aurora Global Database** spanning `us-east-1` (primary) and `us-west-2` (secondary).
+- Use **Aurora Global Database** spanning `us-east-1` (primary) and `us-east-2` (secondary).
 - Configure instance class via `database_instance_class`.
 - Set automated backups with `backup_retention_period`.
 - Configure global database topology to support **automatic failover** to the secondary region aligned with the **≤30s** failover objective (triggered by external health events/DNS).

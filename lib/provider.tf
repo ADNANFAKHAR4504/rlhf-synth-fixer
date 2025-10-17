@@ -10,14 +10,13 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.5"
     }
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.4"
+    }
   }
   
   backend "s3" {
-    bucket         = var.state_bucket
-    key            = "${var.environment}/${var.state_key}"
-    region         = var.state_region
-    encrypt        = true
-    dynamodb_table = var.state_lock_table
   }
 }
 
@@ -29,7 +28,7 @@ provider "aws" {
     tags = {
       Environment = var.environment
       ManagedBy   = "Terraform"
-      Project     = "trading-platform"
+      Project     = var.app_name
     }
   }
 }
@@ -43,7 +42,7 @@ provider "aws" {
     tags = {
       Environment = var.environment
       ManagedBy   = "Terraform"
-      Project     = "iac232-trading"
+      Project     = var.app_name
     }
   }
 }

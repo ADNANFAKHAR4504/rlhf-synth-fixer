@@ -4,7 +4,7 @@
 This is a comprehensive AWS multi-region disaster recovery setup for a financial services trading platform. Let me break down the requirements:
 
 1. **Global Setup**:
-   - Primary: us-east-1, Secondary: us-west-2
+   - Primary: us-east-1, Secondary: us-east-1
    - Financial services platform with strict data consistency
    - Automatic failover within 30 seconds
    - Variables to be parameterized
@@ -99,7 +99,7 @@ variable "primary_region" {
 variable "secondary_region" {
   description = "AWS region for secondary deployment"
   type        = string
-  default     = "us-west-2"
+  default     = "us-east-1"
 }
 
 variable "vpc_cidr_blocks" {
@@ -1762,7 +1762,7 @@ output "eventbridge_rule_arns" {
 ## Key Features Implemented
 
 ### 1. **Multi-Region Architecture**
-- Primary region (us-east-1) and secondary region (us-west-2) with complete infrastructure duplication
+- Primary region (us-east-1) and secondary region (us-east-1) with complete infrastructure duplication
 - VPCs with public, private, and database subnets across 3 AZs in each region
 - Cross-region replication for Aurora Global Database and Secrets Manager
 
