@@ -49,7 +49,8 @@ import {
 } from '@aws-sdk/client-cloudwatch';
 
 import { RDSClient } from '@aws-sdk/client-rds';
-import { SignatureV4 } from '@aws-sdk/signature-v4';
+// ✅ FIX: use Smithy signer package
+import { SignatureV4 } from '@smithy/signature-v4';
 import { Sha256 } from '@aws-crypto/sha256-js';
 import { defaultProvider } from '@aws-sdk/credential-provider-node';
 import { describe, it, expect, afterAll } from '@jest/globals';
