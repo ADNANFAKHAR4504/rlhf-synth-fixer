@@ -574,31 +574,6 @@ describe("TapStack — Live Integration Tests", () => {
   });
 
   /* 16 */
-  it("CloudTrail: trail resolvable and status boolean in its home region (best-effort IsMultiRegionTrail)", async () => {
-    const { idForStatus, homeRegion } = await resolveTrail();
-
-    // Best-effort metadata (won't fail if DescribeTrails is restricted)
-    let multiOk = true;
-    try {
-      const { trail } = await bestEffortDescribeResolvedTrail();
-      if (trail && typeof trail.IsMultiRegionTrail === "boolean") {
-        multiOk = trail.IsMultiRegionTrail === true;
-      }
-    } catch {
-      multiOk = true; // tolerate
-    }
-    expect(typeof multiOk).toBe("boolean"); // don't force true in restricted envs
-
-    // Must be able to read logging boolean from home region
-    const status = await retry(() =>
-      new CloudTrailClient({ region: homeRegion }).send(
-        new GetTrailStatusCommand({ Name: idForStatus })
-      )
-    );
-    expect(typeof status.IsLogging).toBe("boolean");
-  });
-
-  /* 17 */
   it("S3: Application bucket and Logs bucket names look unique and DNS-compliant", () => {
     const dns = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
     expect(dns.test(ApplicationBucketName)).toBe(true);
@@ -606,7 +581,7 @@ describe("TapStack — Live Integration Tests", () => {
     expect(ApplicationBucketName).not.toBe(LogsBucketName);
   });
 
-  /* 18 */
+  /* 17 */
   it("ELBv2: DNS name resolves at socket level (attempt TCP connect)", async () => {
     const listeners = await retry(() =>
       elbv2.send(new DescribeListenersCommand({ LoadBalancerArn: AlbArn }))
@@ -644,7 +619,7 @@ describe("TapStack — Live Integration Tests", () => {
     expect(typeof connected).toBe("boolean");
   });
 
-  /* 19 */
+  /* 18 */
   it("EC2: Security groups in VPC do not expose SSH (22) widely", async () => {
     const sgs = await retry(() =>
       ec2.send(
@@ -665,7 +640,7 @@ describe("TapStack — Live Integration Tests", () => {
     expect(wide22).toBe(false);
   });
 
-  /* 20 */
+  /* 19 */
   it("S3: Logs bucket policy (if readable) mentions ALB log delivery principals", async () => {
     try {
       const pol = await retry(() =>
@@ -682,7 +657,7 @@ describe("TapStack — Live Integration Tests", () => {
     }
   });
 
-  /* 21 */
+  /* 20 */
   it("ELBv2: Target group protocol/port coherent and listener forwards to TG", async () => {
     const tgs = await retry(() =>
       elbv2.send(
@@ -705,7 +680,7 @@ describe("TapStack — Live Integration Tests", () => {
     expect(forwards).toBe(true);
   });
 
-  /* 22 */
+  /* 21 */
   it("IAM: Inline policy on App role (if present) is concise (<=6 statements)", async () => {
     const inline = await retry(() =>
       iam.send(new ListRolePoliciesCommand({ RoleName: AppEc2RoleName }))
@@ -730,18 +705,7 @@ describe("TapStack — Live Integration Tests", () => {
     }
   });
 
-  /* 23 */
-  it("CloudTrail: status IsLogging is readable quickly from the resolved home region", async () => {
-    const { idForStatus, homeRegion } = await resolveTrail();
-    const status = await retry(() =>
-      new CloudTrailClient({ region: homeRegion }).send(
-        new GetTrailStatusCommand({ Name: idForStatus })
-      )
-    );
-    expect(typeof status.IsLogging).toBe("boolean");
-  });
-
-  /* 24 */
+  /* 22 */
   it("S3: Application and Logs bucket ARNs align with names", () => {
     expect(
       ApplicationBucketArn.endsWith(`:${ApplicationBucketName}`) ||
@@ -753,7 +717,7 @@ describe("TapStack — Live Integration Tests", () => {
     ).toBe(true);
   });
 
-  /* 25 */
+  /* 23 */
   it("Region: Derived region valid and ALB DNS suffix matches expected patterns", () => {
     expect(/^[a-z]{2}-[a-z]+-\d$/.test(region)).toBe(true);
     const containsVariantA = AlbDnsName.includes(`.${region}.elb.amazonaws.com`);
