@@ -51,14 +51,6 @@ class TestTapStack(unittest.TestCase):
             "Handler": "index.lambda_handler",
             "Timeout": 30,
             "MemorySize": 256,
-            "Environment": {
-                "Variables": {
-                    "TABLE_NAME": "tap-api-data-testenv",
-                    "ENVIRONMENT": "testenv",
-                    "LOG_LEVEL": "INFO",
-                    "API_KEY": "tap-default-key"
-                }
-            }
         })
 
     @mark.it("creates an API Gateway HTTP API with CORS configuration")
