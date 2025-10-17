@@ -14,7 +14,7 @@ import { Construct } from 'constructs';
 
 interface TapStackConfig {
   env: {
-  region: string; // updated region type
+    region: string; // updated region type
   };
 }
 
@@ -22,7 +22,7 @@ export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, config: TapStackConfig) {
     super(scope, id);
 
-  const region = config.env.region || 'us-west-2';
+    const region = config.env.region || 'us-east-1';
     const randomSuffix = Fn.substr(Fn.uuid(), 0, 8);
 
     // AWS Provider
