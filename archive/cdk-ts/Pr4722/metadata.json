@@ -29,5 +29,11 @@
     "Route53",
     "Certificate Manager",
     "IAM"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
 }
