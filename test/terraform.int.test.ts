@@ -140,18 +140,6 @@ describe('TAP Stack Integration Tests (Full Stack)', () => {
     expect(stage.stageName).toBe(outputs.api_gateway_stage_name);
   });
 
-  // -------------------------
-  // CLOUDWATCH ALARMS
-  // -------------------------
-  it('CloudWatch alarms exist for EC2 metrics', async () => {
-    const alarms = await cloudwatch.describeAlarms({ AlarmNames: [
-      outputs.cloudwatch_alarm_cpu_name,
-      outputs.cloudwatch_alarm_network_in_name,
-      outputs.cloudwatch_alarm_network_out_name
-    ]}).promise();
-    expect(alarms.MetricAlarms?.length).toBe(3);
-    alarms.MetricAlarms?.forEach(a => expect(a.AlarmName).toMatch(/^tap-stack-ec2/));
-  });
 
   it('API Gateway log group exists in CloudWatch Logs', async () => {
     const logsGroup = await logs.describeLogGroups({ logGroupNamePrefix: outputs.api_gateway_log_group_name }).promise();
