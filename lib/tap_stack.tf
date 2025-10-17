@@ -5,7 +5,7 @@
 # # IMPORTANT CONVENTIONS FOR THIS FILE
 # # - Do NOT add any `provider` or backend blocks; CI injects them.
 # # - Always pin resources/data sources to aliased providers:
-# #     * us-east-1  →  provider = aws.use1
+# #     * us-east-2  →  provider = aws.use2
 # #     * eu-west-2  →  provider = aws.euw2
 # # - Prefer explicit dependencies through references; avoid arbitrary depends_on.
 # # - Keep resources destroyable; no lifecycle.prevent_destroy.
@@ -45,26 +45,26 @@
 #   default     = ""
 # }
 
-# variable "alb_cert_arn_use1" {
-#   description = "ACM certificate ARN in us-east-1 for the ALB HTTPS listener."
+# variable "alb_cert_arn_use2" {
+#   description = "ACM certificate ARN in us-east-2 for the ALB HTTPS listener."
 #   type        = string
 #   default     = ""
 # }
 
-# variable "cloudfront_cert_arn_use1" {
-#   description = "ACM certificate ARN in us-east-1 for CloudFront distribution."
+# variable "cloudfront_cert_arn_use2" {
+#   description = "ACM certificate ARN in us-east-2 for CloudFront distribution."
 #   type        = string
 #   default     = ""
 # }
 
-# variable "use1_cidr" {
-#   description = "VPC CIDR for us-east-1 (must not overlap with eu-west-2)."
+# variable "use2_cidr" {
+#   description = "VPC CIDR for us-east-2 (must not overlap with eu-west-2)."
 #   type        = string
 #   default     = "10.10.0.0/16"
 # }
 
 # variable "euw2_cidr" {
-#   description = "VPC CIDR for eu-west-2 (must not overlap with us-east-1)."
+#   description = "VPC CIDR for eu-west-2 (must not overlap with us-east-2)."
 #   type        = string
 #   default     = "10.20.0.0/16"
 # }
@@ -124,15 +124,15 @@
 #   }
 
 #   name = {
-#     use1 = "cloud-setup-${var.env}-use1"
+#     use2 = "cloud-setup-${var.env}-use2"
 #     euw2 = "cloud-setup-${var.env}-euw2"
 #   }
 
-#   use1_subnets = {
-#     public_a  = cidrsubnet(var.use1_cidr, 4, 0)
-#     public_b  = cidrsubnet(var.use1_cidr, 4, 1)
-#     private_a = cidrsubnet(var.use1_cidr, 4, 2)
-#     private_b = cidrsubnet(var.use1_cidr, 4, 3)
+#   use2_subnets = {
+#     public_a  = cidrsubnet(var.use2_cidr, 4, 0)
+#     public_b  = cidrsubnet(var.use2_cidr, 4, 1)
+#     private_a = cidrsubnet(var.use2_cidr, 4, 2)
+#     private_b = cidrsubnet(var.use2_cidr, 4, 3)
 #   }
 
 #   euw2_subnets = {
@@ -147,8 +147,8 @@
 # # DATA SOURCES (PER REGION)
 # #############################################
 
-# data "aws_availability_zones" "use1" {
-#   provider = aws.use1
+# data "aws_availability_zones" "use2" {
+#   provider = aws.use2
 #   state    = "available"
 # }
 
@@ -157,8 +157,8 @@
 #   state    = "available"
 # }
 
-# data "aws_ssm_parameter" "al2023_ami_use1" {
-#   provider = aws.use1
+# data "aws_ssm_parameter" "al2023_ami_use2" {
+#   provider = aws.use2
 #   name     = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64"
 # }
 
@@ -169,13 +169,13 @@
 
 # data "aws_route53_zone" "zone" {
 #   count        = (var.domain_name != "" && var.hosted_zone_id != "") ? 1 : 0
-#   provider     = aws.use1
+#   provider     = aws.use2
 #   zone_id      = var.hosted_zone_id
 #   private_zone = false
 # }
 
 # data "aws_caller_identity" "current" {
-#   provider = aws.use1
+#   provider = aws.use2
 # }
 
 # data "aws_caller_identity" "current_euw2" {
@@ -186,18 +186,18 @@
 # # KMS — ONE CMK PER REGION (GENERAL PURPOSE)
 # #############################################
 
-# resource "aws_kms_key" "use1" {
-#   provider                = aws.use1
-#   description             = "CMK for ${local.name.use1} encryption"
+# resource "aws_kms_key" "use2" {
+#   provider                = aws.use2
+#   description             = "CMK for ${local.name.use2} encryption"
 #   enable_key_rotation     = true
 #   deletion_window_in_days = 7
 #   tags                    = local.base_tags
 # }
 
-# resource "aws_kms_alias" "use1" {
-#   provider      = aws.use1
-#   name          = "alias/${local.name.use1}"
-#   target_key_id = aws_kms_key.use1.key_id
+# resource "aws_kms_alias" "use2" {
+#   provider      = aws.use2
+#   name          = "alias/${local.name.use2}"
+#   target_key_id = aws_kms_key.use2.key_id
 # }
 
 # resource "aws_kms_key" "euw2" {
@@ -214,7 +214,7 @@
 #   target_key_id = aws_kms_key.euw2.key_id
 # }
 
-# data "aws_iam_policy_document" "use1_logs_key" {
+# data "aws_iam_policy_document" "use2_logs_key" {
 #   statement {
 #     sid    = "EnableRootAccountAdmin"
 #     effect = "Allow"
@@ -231,7 +231,7 @@
 #     effect = "Allow"
 #     principals {
 #       type        = "Service"
-#       identifiers = ["logs.us-east-1.amazonaws.com"]
+#       identifiers = ["logs.us-east-2.amazonaws.com"]
 #     }
 #     actions = [
 #       "kms:Encrypt",
@@ -246,152 +246,152 @@
 #       test     = "ArnLike"
 #       variable = "kms:EncryptionContext:aws:logs:arn"
 #       values = [
-#         "arn:aws:logs:us-east-1:${data.aws_caller_identity.current.account_id}:log-group:/cloud-setup/${var.env}/*"
+#         "arn:aws:logs:us-east-2:${data.aws_caller_identity.current.account_id}:log-group:/cloud-setup/${var.env}/*"
 #       ]
 #     }
 #   }
 # }
 
-# resource "aws_kms_key" "use1_logs" {
-#   provider            = aws.use1
-#   description         = "KMS CMK for CloudWatch Logs (cloud-setup ${var.env}, us-east-1)"
+# resource "aws_kms_key" "use2_logs" {
+#   provider            = aws.use2
+#   description         = "KMS CMK for CloudWatch Logs (cloud-setup ${var.env}, us-east-2)"
 #   enable_key_rotation = true
-#   policy              = data.aws_iam_policy_document.use1_logs_key.json
-#   tags                = merge(local.base_tags, { Name = "${local.name.use1}-logs-kms" })
+#   policy              = data.aws_iam_policy_document.use2_logs_key.json
+#   tags                = merge(local.base_tags, { Name = "${local.name.use2}-logs-kms" })
 # }
 
-# resource "aws_kms_alias" "use1_logs" {
-#   provider      = aws.use1
+# resource "aws_kms_alias" "use2_logs" {
+#   provider      = aws.use2
 #   name          = "alias/cloud-setup/${var.env}/logs"
-#   target_key_id = aws_kms_key.use1_logs.key_id
+#   target_key_id = aws_kms_key.use2_logs.key_id
 # }
 
 # #############################################
 # # NETWORK — VPCs, IGW, NAT, ROUTES (BOTH REGIONS)
 # #############################################
 
-# resource "aws_vpc" "use1" {
-#   provider             = aws.use1
-#   cidr_block           = var.use1_cidr
+# resource "aws_vpc" "use2" {
+#   provider             = aws.use2
+#   cidr_block           = var.use2_cidr
 #   enable_dns_support   = true
 #   enable_dns_hostnames = true
-#   tags                 = merge(local.base_tags, { Name = "${local.name.use1}-vpc" })
+#   tags                 = merge(local.base_tags, { Name = "${local.name.use2}-vpc" })
 # }
 
-# resource "aws_internet_gateway" "use1" {
-#   provider = aws.use1
-#   vpc_id   = aws_vpc.use1.id
-#   tags     = merge(local.base_tags, { Name = "${local.name.use1}-igw" })
+# resource "aws_internet_gateway" "use2" {
+#   provider = aws.use2
+#   vpc_id   = aws_vpc.use2.id
+#   tags     = merge(local.base_tags, { Name = "${local.name.use2}-igw" })
 # }
 
-# resource "aws_subnet" "use1_public_a" {
-#   provider                = aws.use1
-#   vpc_id                  = aws_vpc.use1.id
-#   cidr_block              = local.use1_subnets.public_a
-#   availability_zone       = data.aws_availability_zones.use1.names[0]
+# resource "aws_subnet" "use2_public_a" {
+#   provider                = aws.use2
+#   vpc_id                  = aws_vpc.use2.id
+#   cidr_block              = local.use2_subnets.public_a
+#   availability_zone       = data.aws_availability_zones.use2.names[0]
 #   map_public_ip_on_launch = true
-#   tags                    = merge(local.base_tags, { Name = "${local.name.use1}-public-a", Tier = "public" })
+#   tags                    = merge(local.base_tags, { Name = "${local.name.use2}-public-a", Tier = "public" })
 # }
 
-# resource "aws_subnet" "use1_public_b" {
-#   provider                = aws.use1
-#   vpc_id                  = aws_vpc.use1.id
-#   cidr_block              = local.use1_subnets.public_b
-#   availability_zone       = data.aws_availability_zones.use1.names[1]
+# resource "aws_subnet" "use2_public_b" {
+#   provider                = aws.use2
+#   vpc_id                  = aws_vpc.use2.id
+#   cidr_block              = local.use2_subnets.public_b
+#   availability_zone       = data.aws_availability_zones.use2.names[1]
 #   map_public_ip_on_launch = true
-#   tags                    = merge(local.base_tags, { Name = "${local.name.use1}-public-b", Tier = "public" })
+#   tags                    = merge(local.base_tags, { Name = "${local.name.use2}-public-b", Tier = "public" })
 # }
 
-# resource "aws_subnet" "use1_private_a" {
-#   provider          = aws.use1
-#   vpc_id            = aws_vpc.use1.id
-#   cidr_block        = local.use1_subnets.private_a
-#   availability_zone = data.aws_availability_zones.use1.names[0]
-#   tags              = merge(local.base_tags, { Name = "${local.name.use1}-private-a", Tier = "private" })
+# resource "aws_subnet" "use2_private_a" {
+#   provider          = aws.use2
+#   vpc_id            = aws_vpc.use2.id
+#   cidr_block        = local.use2_subnets.private_a
+#   availability_zone = data.aws_availability_zones.use2.names[0]
+#   tags              = merge(local.base_tags, { Name = "${local.name.use2}-private-a", Tier = "private" })
 # }
 
-# resource "aws_subnet" "use1_private_b" {
-#   provider          = aws.use1
-#   vpc_id            = aws_vpc.use1.id
-#   cidr_block        = local.use1_subnets.private_b
-#   availability_zone = data.aws_availability_zones.use1.names[1]
-#   tags              = merge(local.base_tags, { Name = "${local.name.use1}-private-b", Tier = "private" })
+# resource "aws_subnet" "use2_private_b" {
+#   provider          = aws.use2
+#   vpc_id            = aws_vpc.use2.id
+#   cidr_block        = local.use2_subnets.private_b
+#   availability_zone = data.aws_availability_zones.use2.names[1]
+#   tags              = merge(local.base_tags, { Name = "${local.name.use2}-private-b", Tier = "private" })
 # }
 
-# resource "aws_eip" "use1_nat" {
-#   provider = aws.use1
+# resource "aws_eip" "use2_nat" {
+#   provider = aws.use2
 #   domain   = "vpc"
-#   tags     = merge(local.base_tags, { Name = "${local.name.use1}-nat-eip" })
+#   tags     = merge(local.base_tags, { Name = "${local.name.use2}-nat-eip" })
 # }
 
-# resource "aws_nat_gateway" "use1" {
-#   provider      = aws.use1
-#   allocation_id = aws_eip.use1_nat.id
-#   subnet_id     = aws_subnet.use1_public_a.id
-#   tags          = merge(local.base_tags, { Name = "${local.name.use1}-nat" })
+# resource "aws_nat_gateway" "use2" {
+#   provider      = aws.use2
+#   allocation_id = aws_eip.use2_nat.id
+#   subnet_id     = aws_subnet.use2_public_a.id
+#   tags          = merge(local.base_tags, { Name = "${local.name.use2}-nat" })
 # }
 
-# resource "aws_route_table" "use1_public" {
-#   provider = aws.use1
-#   vpc_id   = aws_vpc.use1.id
-#   tags     = merge(local.base_tags, { Name = "${local.name.use1}-rt-public" })
+# resource "aws_route_table" "use2_public" {
+#   provider = aws.use2
+#   vpc_id   = aws_vpc.use2.id
+#   tags     = merge(local.base_tags, { Name = "${local.name.use2}-rt-public" })
 # }
 
-# resource "aws_route" "use1_public_igw" {
-#   provider               = aws.use1
-#   route_table_id         = aws_route_table.use1_public.id
+# resource "aws_route" "use2_public_igw" {
+#   provider               = aws.use2
+#   route_table_id         = aws_route_table.use2_public.id
 #   destination_cidr_block = "0.0.0.0/0"
-#   gateway_id             = aws_internet_gateway.use1.id
+#   gateway_id             = aws_internet_gateway.use2.id
 # }
 
-# resource "aws_route_table_association" "use1_public_a" {
-#   provider       = aws.use1
-#   subnet_id      = aws_subnet.use1_public_a.id
-#   route_table_id = aws_route_table.use1_public.id
+# resource "aws_route_table_association" "use2_public_a" {
+#   provider       = aws.use2
+#   subnet_id      = aws_subnet.use2_public_a.id
+#   route_table_id = aws_route_table.use2_public.id
 # }
 
-# resource "aws_route_table_association" "use1_public_b" {
-#   provider       = aws.use1
-#   subnet_id      = aws_subnet.use1_public_b.id
-#   route_table_id = aws_route_table.use1_public.id
+# resource "aws_route_table_association" "use2_public_b" {
+#   provider       = aws.use2
+#   subnet_id      = aws_subnet.use2_public_b.id
+#   route_table_id = aws_route_table.use2_public.id
 # }
 
-# resource "aws_route_table" "use1_private_a" {
-#   provider = aws.use1
-#   vpc_id   = aws_vpc.use1.id
-#   tags     = merge(local.base_tags, { Name = "${local.name.use1}-rt-private-a" })
+# resource "aws_route_table" "use2_private_a" {
+#   provider = aws.use2
+#   vpc_id   = aws_vpc.use2.id
+#   tags     = merge(local.base_tags, { Name = "${local.name.use2}-rt-private-a" })
 # }
 
-# resource "aws_route" "use1_private_a_nat" {
-#   provider               = aws.use1
-#   route_table_id         = aws_route_table.use1_private_a.id
+# resource "aws_route" "use2_private_a_nat" {
+#   provider               = aws.use2
+#   route_table_id         = aws_route_table.use2_private_a.id
 #   destination_cidr_block = "0.0.0.0/0"
-#   nat_gateway_id         = aws_nat_gateway.use1.id
+#   nat_gateway_id         = aws_nat_gateway.use2.id
 # }
 
-# resource "aws_route_table_association" "use1_private_a" {
-#   provider       = aws.use1
-#   subnet_id      = aws_subnet.use1_private_a.id
-#   route_table_id = aws_route_table.use1_private_a.id
+# resource "aws_route_table_association" "use2_private_a" {
+#   provider       = aws.use2
+#   subnet_id      = aws_subnet.use2_private_a.id
+#   route_table_id = aws_route_table.use2_private_a.id
 # }
 
-# resource "aws_route_table" "use1_private_b" {
-#   provider = aws.use1
-#   vpc_id   = aws_vpc.use1.id
-#   tags     = merge(local.base_tags, { Name = "${local.name.use1}-rt-private-b" })
+# resource "aws_route_table" "use2_private_b" {
+#   provider = aws.use2
+#   vpc_id   = aws_vpc.use2.id
+#   tags     = merge(local.base_tags, { Name = "${local.name.use2}-rt-private-b" })
 # }
 
-# resource "aws_route" "use1_private_b_nat" {
-#   provider               = aws.use1
-#   route_table_id         = aws_route_table.use1_private_b.id
+# resource "aws_route" "use2_private_b_nat" {
+#   provider               = aws.use2
+#   route_table_id         = aws_route_table.use2_private_b.id
 #   destination_cidr_block = "0.0.0.0/0"
-#   nat_gateway_id         = aws_nat_gateway.use1.id
+#   nat_gateway_id         = aws_nat_gateway.use2.id
 # }
 
-# resource "aws_route_table_association" "use1_private_b" {
-#   provider       = aws.use1
-#   subnet_id      = aws_subnet.use1_private_b.id
-#   route_table_id = aws_route_table.use1_private_b.id
+# resource "aws_route_table_association" "use2_private_b" {
+#   provider       = aws.use2
+#   subnet_id      = aws_subnet.use2_private_b.id
+#   route_table_id = aws_route_table.use2_private_b.id
 # }
 
 # resource "aws_vpc" "euw2" {
@@ -550,91 +550,91 @@
 # }
 
 # # Ensure the main RT also has a pcx route to the peer CIDR
-# resource "aws_route" "euw2_main_to_use1_pcx" {
+# resource "aws_route" "euw2_main_to_use2_pcx" {
 #   provider                  = aws.euw2
 #   route_table_id            = aws_route_table.euw2_main.id
-#   destination_cidr_block    = var.use1_cidr
-#   vpc_peering_connection_id = aws_vpc_peering_connection.use1_to_euw2.id
+#   destination_cidr_block    = var.use2_cidr
+#   vpc_peering_connection_id = aws_vpc_peering_connection.use2_to_euw2.id
 #   depends_on                = [aws_vpc_peering_connection_accepter.euw2_accept]
 # }
 
 # #############################################
-# # VPC PEERING: us-east-1 <-> eu-west-2
+# # VPC PEERING: us-east-2 <-> eu-west-2
 # #############################################
 
-# resource "aws_vpc_peering_connection" "use1_to_euw2" {
-#   provider    = aws.use1
-#   vpc_id      = aws_vpc.use1.id
+# resource "aws_vpc_peering_connection" "use2_to_euw2" {
+#   provider    = aws.use2
+#   vpc_id      = aws_vpc.use2.id
 #   peer_vpc_id = aws_vpc.euw2.id
 #   peer_region = "eu-west-2"
-#   tags        = merge(local.base_tags, { Name = "${local.name.use1}-to-${local.name.euw2}-pcx" })
+#   tags        = merge(local.base_tags, { Name = "${local.name.use2}-to-${local.name.euw2}-pcx" })
 # }
 
 # data "aws_vpc_peering_connection" "pcx_in_euw2" {
 #   provider = aws.euw2
-#   id       = aws_vpc_peering_connection.use1_to_euw2.id
+#   id       = aws_vpc_peering_connection.use2_to_euw2.id
 # }
 
 # resource "aws_vpc_peering_connection_accepter" "euw2_accept" {
 #   provider                  = aws.euw2
-#   vpc_peering_connection_id = aws_vpc_peering_connection.use1_to_euw2.id
+#   vpc_peering_connection_id = aws_vpc_peering_connection.use2_to_euw2.id
 #   auto_accept               = true
-#   tags                      = merge(local.base_tags, { Name = "${local.name.use1}-to-${local.name.euw2}-pcx-accept" })
+#   tags                      = merge(local.base_tags, { Name = "${local.name.use2}-to-${local.name.euw2}-pcx-accept" })
 # }
 
-# resource "aws_route" "use1_public_to_euw2_pcx" {
-#   provider                  = aws.use1
-#   route_table_id            = aws_route_table.use1_public.id
+# resource "aws_route" "use2_public_to_euw2_pcx" {
+#   provider                  = aws.use2
+#   route_table_id            = aws_route_table.use2_public.id
 #   destination_cidr_block    = var.euw2_cidr
-#   vpc_peering_connection_id = aws_vpc_peering_connection.use1_to_euw2.id
+#   vpc_peering_connection_id = aws_vpc_peering_connection.use2_to_euw2.id
 #   depends_on                = [aws_vpc_peering_connection_accepter.euw2_accept]
 # }
 
-# resource "aws_route" "use1_private_a_to_euw2_pcx" {
-#   provider                  = aws.use1
-#   route_table_id            = aws_route_table.use1_private_a.id
+# resource "aws_route" "use2_private_a_to_euw2_pcx" {
+#   provider                  = aws.use2
+#   route_table_id            = aws_route_table.use2_private_a.id
 #   destination_cidr_block    = var.euw2_cidr
-#   vpc_peering_connection_id = aws_vpc_peering_connection.use1_to_euw2.id
+#   vpc_peering_connection_id = aws_vpc_peering_connection.use2_to_euw2.id
 #   depends_on                = [aws_vpc_peering_connection_accepter.euw2_accept]
 # }
 
-# resource "aws_route" "use1_private_b_to_euw2_pcx" {
-#   provider                  = aws.use1
-#   route_table_id            = aws_route_table.use1_private_b.id
+# resource "aws_route" "use2_private_b_to_euw2_pcx" {
+#   provider                  = aws.use2
+#   route_table_id            = aws_route_table.use2_private_b.id
 #   destination_cidr_block    = var.euw2_cidr
-#   vpc_peering_connection_id = aws_vpc_peering_connection.use1_to_euw2.id
+#   vpc_peering_connection_id = aws_vpc_peering_connection.use2_to_euw2.id
 #   depends_on                = [aws_vpc_peering_connection_accepter.euw2_accept]
 # }
 
-# # euw2 → USE1 PCX routes: now per EU public subnet + private subnets
-# resource "aws_route" "euw2_public_a_to_use1_pcx" {
+# # euw2 → use2 PCX routes: now per EU public subnet + private subnets
+# resource "aws_route" "euw2_public_a_to_use2_pcx" {
 #   provider                  = aws.euw2
 #   route_table_id            = aws_route_table.euw2_public_a.id
-#   destination_cidr_block    = var.use1_cidr
+#   destination_cidr_block    = var.use2_cidr
 #   vpc_peering_connection_id = data.aws_vpc_peering_connection.pcx_in_euw2.id
 #   depends_on                = [aws_vpc_peering_connection_accepter.euw2_accept]
 # }
 
-# resource "aws_route" "euw2_public_b_to_use1_pcx" {
+# resource "aws_route" "euw2_public_b_to_use2_pcx" {
 #   provider                  = aws.euw2
 #   route_table_id            = aws_route_table.euw2_public_b.id
-#   destination_cidr_block    = var.use1_cidr
-#   vpc_peering_connection_id = aws_vpc_peering_connection.use1_to_euw2.id
+#   destination_cidr_block    = var.use2_cidr
+#   vpc_peering_connection_id = aws_vpc_peering_connection.use2_to_euw2.id
 #   depends_on                = [aws_vpc_peering_connection_accepter.euw2_accept]
 # }
 
-# resource "aws_route" "euw2_private_a_to_use1_pcx" {
+# resource "aws_route" "euw2_private_a_to_use2_pcx" {
 #   provider                  = aws.euw2
 #   route_table_id            = aws_route_table.euw2_private_a.id
-#   destination_cidr_block    = var.use1_cidr
+#   destination_cidr_block    = var.use2_cidr
 #   vpc_peering_connection_id = data.aws_vpc_peering_connection.pcx_in_euw2.id
 #   depends_on                = [aws_vpc_peering_connection_accepter.euw2_accept]
 # }
 
-# resource "aws_route" "euw2_private_b_to_use1_pcx" {
+# resource "aws_route" "euw2_private_b_to_use2_pcx" {
 #   provider                  = aws.euw2
 #   route_table_id            = aws_route_table.euw2_private_b.id
-#   destination_cidr_block    = var.use1_cidr
+#   destination_cidr_block    = var.use2_cidr
 #   vpc_peering_connection_id = data.aws_vpc_peering_connection.pcx_in_euw2.id
 #   depends_on                = [aws_vpc_peering_connection_accepter.euw2_accept]
 # }
@@ -643,17 +643,17 @@
 # # SECURITY GROUPS
 # #############################################
 
-# resource "aws_security_group" "use1_alb_https" {
-#   provider    = aws.use1
-#   name        = "${local.name.use1}-alb-https"
+# resource "aws_security_group" "use2_alb_https" {
+#   provider    = aws.use2
+#   name        = "${local.name.use2}-alb-https"
 #   description = "ALB security group allowing inbound 443 only (temporarily HTTP in tests)."
-#   vpc_id      = aws_vpc.use1.id
-#   tags        = merge(local.base_tags, { Name = "${local.name.use1}-alb-https" })
+#   vpc_id      = aws_vpc.use2.id
+#   tags        = merge(local.base_tags, { Name = "${local.name.use2}-alb-https" })
 # }
 
-# resource "aws_vpc_security_group_ingress_rule" "use1_alb_http_80" {
-#   provider          = aws.use1
-#   security_group_id = aws_security_group.use1_alb_https.id
+# resource "aws_vpc_security_group_ingress_rule" "use2_alb_http_80" {
+#   provider          = aws.use2
+#   security_group_id = aws_security_group.use2_alb_https.id
 #   description       = "TEMP: Allow HTTP from anywhere (no ACM yet)."
 #   cidr_ipv4         = "0.0.0.0/0"
 #   from_port         = 80
@@ -661,78 +661,78 @@
 #   ip_protocol       = "tcp"
 # }
 
-# resource "aws_vpc_security_group_egress_rule" "use1_alb_all_egress" {
-#   provider          = aws.use1
-#   security_group_id = aws_security_group.use1_alb_https.id
+# resource "aws_vpc_security_group_egress_rule" "use2_alb_all_egress" {
+#   provider          = aws.use2
+#   security_group_id = aws_security_group.use2_alb_https.id
 #   cidr_ipv4         = "0.0.0.0/0"
 #   ip_protocol       = "-1"
 #   description       = "Allow all egress."
 # }
 
-# resource "aws_security_group" "use1_app" {
-#   provider    = aws.use1
-#   name        = "${local.name.use1}-app"
+# resource "aws_security_group" "use2_app" {
+#   provider    = aws.use2
+#   name        = "${local.name.use2}-app"
 #   description = "App instances in private subnets; allow 80/tcp from ALB only."
-#   vpc_id      = aws_vpc.use1.id
-#   tags        = merge(local.base_tags, { Name = "${local.name.use1}-app" })
+#   vpc_id      = aws_vpc.use2.id
+#   tags        = merge(local.base_tags, { Name = "${local.name.use2}-app" })
 # }
 
-# resource "aws_vpc_security_group_ingress_rule" "use1_app_http_from_alb" {
-#   provider                     = aws.use1
-#   security_group_id            = aws_security_group.use1_app.id
-#   referenced_security_group_id = aws_security_group.use1_alb_https.id
+# resource "aws_vpc_security_group_ingress_rule" "use2_app_http_from_alb" {
+#   provider                     = aws.use2
+#   security_group_id            = aws_security_group.use2_app.id
+#   referenced_security_group_id = aws_security_group.use2_alb_https.id
 #   from_port                    = 80
 #   to_port                      = 80
 #   ip_protocol                  = "tcp"
 #   description                  = "Allow HTTP from ALB to instances."
 # }
 
-# resource "aws_vpc_security_group_egress_rule" "use1_app_all_egress" {
-#   provider          = aws.use1
-#   security_group_id = aws_security_group.use1_app.id
+# resource "aws_vpc_security_group_egress_rule" "use2_app_all_egress" {
+#   provider          = aws.use2
+#   security_group_id = aws_security_group.use2_app.id
 #   cidr_ipv4         = "0.0.0.0/0"
 #   ip_protocol       = "-1"
 #   description       = "Allow all egress."
 # }
 
-# resource "aws_security_group" "use1_rds" {
-#   provider    = aws.use1
-#   name        = "${local.name.use1}-rds"
+# resource "aws_security_group" "use2_rds" {
+#   provider    = aws.use2
+#   name        = "${local.name.use2}-rds"
 #   description = "RDS in private subnets; allow 5432 from app instances only."
-#   vpc_id      = aws_vpc.use1.id
-#   tags        = merge(local.base_tags, { Name = "${local.name.use1}-rds" })
+#   vpc_id      = aws_vpc.use2.id
+#   tags        = merge(local.base_tags, { Name = "${local.name.use2}-rds" })
 # }
 
-# resource "aws_vpc_security_group_ingress_rule" "use1_rds_5432_from_app" {
-#   provider                     = aws.use1
-#   security_group_id            = aws_security_group.use1_rds.id
-#   referenced_security_group_id = aws_security_group.use1_app.id
+# resource "aws_vpc_security_group_ingress_rule" "use2_rds_5432_from_app" {
+#   provider                     = aws.use2
+#   security_group_id            = aws_security_group.use2_rds.id
+#   referenced_security_group_id = aws_security_group.use2_app.id
 #   from_port                    = 5432
 #   to_port                      = 5432
 #   ip_protocol                  = "tcp"
 #   description                  = "Allow Postgres from app instances."
 # }
 
-# resource "aws_vpc_security_group_egress_rule" "use1_rds_all_egress" {
-#   provider          = aws.use1
-#   security_group_id = aws_security_group.use1_rds.id
+# resource "aws_vpc_security_group_egress_rule" "use2_rds_all_egress" {
+#   provider          = aws.use2
+#   security_group_id = aws_security_group.use2_rds.id
 #   cidr_ipv4         = "0.0.0.0/0"
 #   ip_protocol       = "-1"
 #   description       = "Allow all egress."
 # }
 
 # # World-HTTP web SG for public EC2 used by tests
-# resource "aws_security_group" "use1_web" {
-#   provider    = aws.use1
-#   name        = "${local.name.use1}-web"
+# resource "aws_security_group" "use2_web" {
+#   provider    = aws.use2
+#   name        = "${local.name.use2}-web"
 #   description = "World-HTTP web SG for public EC2 (no SSH)."
-#   vpc_id      = aws_vpc.use1.id
-#   tags        = merge(local.base_tags, { Name = "${local.name.use1}-web" })
+#   vpc_id      = aws_vpc.use2.id
+#   tags        = merge(local.base_tags, { Name = "${local.name.use2}-web" })
 # }
 
-# resource "aws_vpc_security_group_ingress_rule" "use1_web_http_world" {
-#   provider          = aws.use1
-#   security_group_id = aws_security_group.use1_web.id
+# resource "aws_vpc_security_group_ingress_rule" "use2_web_http_world" {
+#   provider          = aws.use2
+#   security_group_id = aws_security_group.use2_web.id
 #   cidr_ipv4         = "0.0.0.0/0"
 #   from_port         = 80
 #   to_port           = 80
@@ -740,9 +740,9 @@
 #   description       = "Allow HTTP 80 from the world."
 # }
 
-# resource "aws_vpc_security_group_egress_rule" "use1_web_all_egress" {
-#   provider          = aws.use1
-#   security_group_id = aws_security_group.use1_web.id
+# resource "aws_vpc_security_group_egress_rule" "use2_web_all_egress" {
+#   provider          = aws.use2
+#   security_group_id = aws_security_group.use2_web.id
 #   cidr_ipv4         = "0.0.0.0/0"
 #   ip_protocol       = "-1"
 #   description       = "Allow all egress."
@@ -790,14 +790,14 @@
 # }
 
 # #############################################
-# # CLOUDWATCH LOGS (CENTRALIZED LOGGING) — us-east-1
+# # CLOUDWATCH LOGS (CENTRALIZED LOGGING) — us-east-2
 # #############################################
 
-# resource "aws_cloudwatch_log_group" "use1_app" {
-#   provider          = aws.use1
+# resource "aws_cloudwatch_log_group" "use2_app" {
+#   provider          = aws.use2
 #   name              = "/cloud-setup/${var.env}/app"
 #   retention_in_days = 14
-#   kms_key_id        = aws_kms_key.use1_logs.arn
+#   kms_key_id        = aws_kms_key.use2_logs.arn
 #   tags              = local.base_tags
 # }
 
@@ -812,7 +812,7 @@
 #     "cloud-setup-${var.env}-${data.aws_caller_identity.current.account_id}-uploads"
 #   )
 
-#     user_data_use1 = templatefile("${path.module}/user_data/web.sh", {
+#     user_data_use2 = templatefile("${path.module}/user_data/web.sh", {
 #     # lowercase keys (if referenced)
 #     environment = var.env
 #     log_level   = "info"
@@ -825,15 +825,15 @@
 #   })
 # }
 
-# resource "aws_instance" "use1_web" {
-#   provider                    = aws.use1
-#   ami                         = data.aws_ssm_parameter.al2023_ami_use1.value
+# resource "aws_instance" "use2_web" {
+#   provider                    = aws.use2
+#   ami                         = data.aws_ssm_parameter.al2023_ami_use2.value
 #   instance_type               = var.web_instance_type
-#   subnet_id                   = aws_subnet.use1_public_a.id
-#   vpc_security_group_ids      = [aws_security_group.use1_web.id]
+#   subnet_id                   = aws_subnet.use2_public_a.id
+#   vpc_security_group_ids      = [aws_security_group.use2_web.id]
 #   associate_public_ip_address = true
 #   iam_instance_profile        = aws_iam_instance_profile.app_profile.name
-#   user_data                   = local.user_data_use1
+#   user_data                   = local.user_data_use2
 
 #   metadata_options {
 #     http_tokens = "required"
@@ -841,17 +841,17 @@
 
 #   monitoring = true
 
-#   tags = merge(local.base_tags, { Name = "${local.name.use1}-web-ec2" })
+#   tags = merge(local.base_tags, { Name = "${local.name.use2}-web-ec2" })
 # }
 
 # ############################################
 # #ASG + ALB (PRIVATE APP TIER) — kept for posture tests
 # ############################################
 
-# resource "aws_launch_template" "use1_app" {
-#   provider               = aws.use1
-#   name_prefix            = "${local.name.use1}-lt-"
-#   image_id               = data.aws_ssm_parameter.al2023_ami_use1.value
+# resource "aws_launch_template" "use2_app" {
+#   provider               = aws.use2
+#   name_prefix            = "${local.name.use2}-lt-"
+#   image_id               = data.aws_ssm_parameter.al2023_ami_use2.value
 #   instance_type          = var.web_instance_type
 #   update_default_version = true
 
@@ -868,14 +868,14 @@
 #   }
 
 #   vpc_security_group_ids = [
-#     aws_security_group.use1_app.id
+#     aws_security_group.use2_app.id
 #   ]
 
-#   user_data = base64encode(local.user_data_use1)
+#   user_data = base64encode(local.user_data_use2)
 
 #   tag_specifications {
 #     resource_type = "instance"
-#     tags          = merge(local.base_tags, { Name = "${local.name.use1}-app" })
+#     tags          = merge(local.base_tags, { Name = "${local.name.use2}-app" })
 #   }
 
 #   tag_specifications {
@@ -886,26 +886,26 @@
 #   tags = local.base_tags
 # }
 
-# resource "aws_autoscaling_group" "use1_app" {
-#   provider                  = aws.use1
-#   name                      = "${local.name.use1}-asg"
+# resource "aws_autoscaling_group" "use2_app" {
+#   provider                  = aws.use2
+#   name                      = "${local.name.use2}-asg"
 #   max_size                  = 2
 #   min_size                  = 1
 #   desired_capacity          = 1
 #   health_check_type         = "ELB"
 #   health_check_grace_period = 300
-#   vpc_zone_identifier       = [aws_subnet.use1_private_a.id, aws_subnet.use1_private_b.id]
+#   vpc_zone_identifier       = [aws_subnet.use2_private_a.id, aws_subnet.use2_private_b.id]
 #   capacity_rebalance        = true
 #   wait_for_capacity_timeout = "10m"
 
 #   launch_template {
-#     id      = aws_launch_template.use1_app.id
+#     id      = aws_launch_template.use2_app.id
 #     version = "$Latest"
 #   }
 
 #   tag {
 #     key                 = "Name"
-#     value               = "${local.name.use1}-app"
+#     value               = "${local.name.use2}-app"
 #     propagate_at_launch = true
 #   }
 
@@ -915,89 +915,89 @@
 # }
 
 # #############################################
-# # SSM RELIABILITY — VPC INTERFACE ENDPOINTS (us-east-1)
+# # SSM RELIABILITY — VPC INTERFACE ENDPOINTS (us-east-2)
 # #############################################
 
-# resource "aws_security_group" "use1_vpce_tls" {
-#   provider    = aws.use1
-#   name        = "${local.name.use1}-vpce-tls"
+# resource "aws_security_group" "use2_vpce_tls" {
+#   provider    = aws.use2
+#   name        = "${local.name.use2}-vpce-tls"
 #   description = "TLS 443 from VPC to Interface Endpoints"
-#   vpc_id      = aws_vpc.use1.id
-#   tags        = merge(local.base_tags, { Name = "${local.name.use1}-vpce-tls" })
+#   vpc_id      = aws_vpc.use2.id
+#   tags        = merge(local.base_tags, { Name = "${local.name.use2}-vpce-tls" })
 # }
 
-# resource "aws_vpc_security_group_ingress_rule" "use1_vpce_tls_ingress" {
-#   provider          = aws.use1
-#   security_group_id = aws_security_group.use1_vpce_tls.id
-#   cidr_ipv4         = var.use1_cidr
+# resource "aws_vpc_security_group_ingress_rule" "use2_vpce_tls_ingress" {
+#   provider          = aws.use2
+#   security_group_id = aws_security_group.use2_vpce_tls.id
+#   cidr_ipv4         = var.use2_cidr
 #   from_port         = 443
 #   to_port           = 443
 #   ip_protocol       = "tcp"
 #   description       = "Allow TLS from VPC to endpoints"
 # }
 
-# resource "aws_vpc_security_group_egress_rule" "use1_vpce_tls_egress" {
-#   provider          = aws.use1
-#   security_group_id = aws_security_group.use1_vpce_tls.id
+# resource "aws_vpc_security_group_egress_rule" "use2_vpce_tls_egress" {
+#   provider          = aws.use2
+#   security_group_id = aws_security_group.use2_vpce_tls.id
 #   cidr_ipv4         = "0.0.0.0/0"
 #   ip_protocol       = "-1"
 #   description       = "Egress for endpoints"
 # }
 
-# resource "aws_vpc_endpoint" "use1_ssm" {
-#   provider            = aws.use1
-#   vpc_id              = aws_vpc.use1.id
-#   service_name        = "com.amazonaws.us-east-1.ssm"
+# resource "aws_vpc_endpoint" "use2_ssm" {
+#   provider            = aws.use2
+#   vpc_id              = aws_vpc.use2.id
+#   service_name        = "com.amazonaws.us-east-2.ssm"
 #   vpc_endpoint_type   = "Interface"
-#   subnet_ids          = [aws_subnet.use1_private_a.id, aws_subnet.use1_private_b.id]
-#   security_group_ids  = [aws_security_group.use1_vpce_tls.id]
+#   subnet_ids          = [aws_subnet.use2_private_a.id, aws_subnet.use2_private_b.id]
+#   security_group_ids  = [aws_security_group.use2_vpce_tls.id]
 #   private_dns_enabled = true
-#   tags                = merge(local.base_tags, { Name = "${local.name.use1}-vpce-ssm" })
+#   tags                = merge(local.base_tags, { Name = "${local.name.use2}-vpce-ssm" })
 # }
 
-# resource "aws_vpc_endpoint" "use1_ssmmessages" {
-#   provider            = aws.use1
-#   vpc_id              = aws_vpc.use1.id
-#   service_name        = "com.amazonaws.us-east-1.ssmmessages"
+# resource "aws_vpc_endpoint" "use2_ssmmessages" {
+#   provider            = aws.use2
+#   vpc_id              = aws_vpc.use2.id
+#   service_name        = "com.amazonaws.us-east-2.ssmmessages"
 #   vpc_endpoint_type   = "Interface"
-#   subnet_ids          = [aws_subnet.use1_private_a.id, aws_subnet.use1_private_b.id]
-#   security_group_ids  = [aws_security_group.use1_vpce_tls.id]
+#   subnet_ids          = [aws_subnet.use2_private_a.id, aws_subnet.use2_private_b.id]
+#   security_group_ids  = [aws_security_group.use2_vpce_tls.id]
 #   private_dns_enabled = true
-#   tags                = merge(local.base_tags, { Name = "${local.name.use1}-vpce-ssmmessages" })
+#   tags                = merge(local.base_tags, { Name = "${local.name.use2}-vpce-ssmmessages" })
 # }
 
-# resource "aws_vpc_endpoint" "use1_ec2messages" {
-#   provider            = aws.use1
-#   vpc_id              = aws_vpc.use1.id
-#   service_name        = "com.amazonaws.us-east-1.ec2messages"
+# resource "aws_vpc_endpoint" "use2_ec2messages" {
+#   provider            = aws.use2
+#   vpc_id              = aws_vpc.use2.id
+#   service_name        = "com.amazonaws.us-east-2.ec2messages"
 #   vpc_endpoint_type   = "Interface"
-#   subnet_ids          = [aws_subnet.use1_private_a.id, aws_subnet.use1_private_b.id]
-#   security_group_ids  = [aws_security_group.use1_vpce_tls.id]
+#   subnet_ids          = [aws_subnet.use2_private_a.id, aws_subnet.use2_private_b.id]
+#   security_group_ids  = [aws_security_group.use2_vpce_tls.id]
 #   private_dns_enabled = true
-#   tags                = merge(local.base_tags, { Name = "${local.name.use1}-vpce-ec2messages" })
+#   tags                = merge(local.base_tags, { Name = "${local.name.use2}-vpce-ec2messages" })
 # }
 
 # #############################################
 # # ALB — TEMPORARY HTTP FRONTEND
 # #############################################
 
-# resource "aws_lb" "use1" {
-#   provider                   = aws.use1
-#   name                       = "${local.name.use1}-alb"
+# resource "aws_lb" "use2" {
+#   provider                   = aws.use2
+#   name                       = "${local.name.use2}-alb"
 #   load_balancer_type         = "application"
-#   security_groups            = [aws_security_group.use1_alb_https.id]
-#   subnets                    = [aws_subnet.use1_public_a.id, aws_subnet.use1_public_b.id]
+#   security_groups            = [aws_security_group.use2_alb_https.id]
+#   subnets                    = [aws_subnet.use2_public_a.id, aws_subnet.use2_public_b.id]
 #   idle_timeout               = 60
 #   enable_deletion_protection = false
-#   tags                       = merge(local.base_tags, { Name = "${local.name.use1}-alb" })
+#   tags                       = merge(local.base_tags, { Name = "${local.name.use2}-alb" })
 # }
 
-# resource "aws_lb_target_group" "use1" {
-#   provider    = aws.use1
-#   name        = "${local.name.use1}-tg"
+# resource "aws_lb_target_group" "use2" {
+#   provider    = aws.use2
+#   name        = "${local.name.use2}-tg"
 #   port        = 80
 #   protocol    = "HTTP"
-#   vpc_id      = aws_vpc.use1.id
+#   vpc_id      = aws_vpc.use2.id
 #   target_type = "instance"
 
 #   health_check {
@@ -1014,21 +1014,21 @@
 #   tags = local.base_tags
 # }
 
-# resource "aws_autoscaling_attachment" "use1_asg_tg" {
-#   provider               = aws.use1
-#   autoscaling_group_name = aws_autoscaling_group.use1_app.name
-#   lb_target_group_arn    = aws_lb_target_group.use1.arn
+# resource "aws_autoscaling_attachment" "use2_asg_tg" {
+#   provider               = aws.use2
+#   autoscaling_group_name = aws_autoscaling_group.use2_app.name
+#   lb_target_group_arn    = aws_lb_target_group.use2.arn
 # }
 
-# resource "aws_lb_listener" "use1_http" {
-#   provider          = aws.use1
-#   load_balancer_arn = aws_lb.use1.arn
+# resource "aws_lb_listener" "use2_http" {
+#   provider          = aws.use2
+#   load_balancer_arn = aws_lb.use2.arn
 #   port              = 80
 #   protocol          = "HTTP"
 
 #   default_action {
 #     type             = "forward"
-#     target_group_arn = aws_lb_target_group.use1.arn
+#     target_group_arn = aws_lb_target_group.use2.arn
 #   }
 # }
 
@@ -1037,23 +1037,23 @@
 # #############################################
 
 # resource "aws_apigatewayv2_api" "http_api" {
-#   provider      = aws.use1
+#   provider      = aws.use2
 #   name          = "cloud-setup-${var.env}-httpapi"
 #   protocol_type = "HTTP"
 # }
 
 # resource "aws_apigatewayv2_integration" "alb_proxy" {
-#   provider               = aws.use1
+#   provider               = aws.use2
 #   api_id                 = aws_apigatewayv2_api.http_api.id
 #   integration_type       = "HTTP_PROXY"
 #   integration_method     = "GET"
-#   integration_uri        = "http://${aws_lb.use1.dns_name}"
+#   integration_uri        = "http://${aws_lb.use2.dns_name}"
 #   payload_format_version = "1.0"
 #   timeout_milliseconds   = 10000
 # }
 
 # resource "aws_apigatewayv2_route" "root_get" {
-#   provider           = aws.use1
+#   provider           = aws.use2
 #   api_id             = aws_apigatewayv2_api.http_api.id
 #   route_key          = "GET /"
 #   authorization_type = "AWS_IAM"
@@ -1061,7 +1061,7 @@
 # }
 
 # resource "aws_apigatewayv2_route" "ec2_get" {
-#   provider           = aws.use1
+#   provider           = aws.use2
 #   api_id             = aws_apigatewayv2_api.http_api.id
 #   route_key          = "GET /ec2"
 #   authorization_type = "AWS_IAM"
@@ -1069,7 +1069,7 @@
 # }
 
 # resource "aws_apigatewayv2_stage" "default" {
-#   provider    = aws.use1
+#   provider    = aws.use2
 #   api_id      = aws_apigatewayv2_api.http_api.id
 #   name        = "$default"
 #   auto_deploy = true
@@ -1080,11 +1080,11 @@
 # # RDS — POSTGRES IN PRIVATE SUBNETS, SSE-KMS
 # #############################################
 
-# resource "aws_db_subnet_group" "use1" {
-#   provider   = aws.use1
-#   name       = "${local.name.use1}-db-subnets"
-#   subnet_ids = [aws_subnet.use1_private_a.id, aws_subnet.use1_private_b.id]
-#   tags       = merge(local.base_tags, { Name = "${local.name.use1}-db-subnets" })
+# resource "aws_db_subnet_group" "use2" {
+#   provider   = aws.use2
+#   name       = "${local.name.use2}-db-subnets"
+#   subnet_ids = [aws_subnet.use2_private_a.id, aws_subnet.use2_private_b.id]
+#   tags       = merge(local.base_tags, { Name = "${local.name.use2}-db-subnets" })
 # }
 
 # resource "random_password" "rds_master" {
@@ -1093,12 +1093,12 @@
 # }
 
 # resource "aws_ssm_parameter" "rds_password" {
-#   provider = aws.use1
+#   provider = aws.use2
 #   name     = "/cloud-setup/${var.env}/rds/master_password"
 #   type     = "SecureString"
-#   key_id   = aws_kms_key.use1.arn
+#   key_id   = aws_kms_key.use2.arn
 #   value    = random_password.rds_master.result
-#   tags     = merge(local.base_tags, { Name = "${local.name.use1}-rds-password" })
+#   tags     = merge(local.base_tags, { Name = "${local.name.use2}-rds-password" })
 # }
 
 # output "rds_password_param_name" {
@@ -1112,29 +1112,29 @@
 # }
 
 # data "aws_rds_engine_version" "pg" {
-#   provider           = aws.use1
+#   provider           = aws.use2
 #   engine             = "postgres"
 #   preferred_versions = ["16.4", "16.3", "16.2", "15.6", "15.5", "16"]
 # }
 
-# resource "aws_db_instance" "use1" {
-#   provider               = aws.use1
+# resource "aws_db_instance" "use2" {
+#   provider               = aws.use2
 #   identifier             = "cloud-setup-${var.env}-db"
 #   engine                 = var.rds_engine
 #   engine_version         = data.aws_rds_engine_version.pg.version
 #   instance_class         = var.rds_instance_class
 #   allocated_storage      = var.rds_allocated_storage
 #   storage_encrypted      = true
-#   kms_key_id             = aws_kms_key.use1.arn
+#   kms_key_id             = aws_kms_key.use2.arn
 #   username               = "dbadmin"
 #   password               = random_password.rds_master.result
-#   db_subnet_group_name   = aws_db_subnet_group.use1.name
-#   vpc_security_group_ids = [aws_security_group.use1_rds.id]
+#   db_subnet_group_name   = aws_db_subnet_group.use2.name
+#   vpc_security_group_ids = [aws_security_group.use2_rds.id]
 #   publicly_accessible    = false
 #   skip_final_snapshot    = true
 #   apply_immediately      = true
 
-#   tags = merge(local.base_tags, { Name = "${local.name.use1}-db" })
+#   tags = merge(local.base_tags, { Name = "${local.name.use2}-db" })
 # }
 
 # #############################################
@@ -1142,14 +1142,14 @@
 # #############################################
 
 # resource "aws_s3_bucket" "uploads" {
-#   provider = aws.use1
+#   provider = aws.use2
 #   bucket   = local.uploads_bucket_name
 #   force_destroy = true
-#   tags     = merge(local.base_tags, { Name = "${local.name.use1}-uploads" })
+#   tags     = merge(local.base_tags, { Name = "${local.name.use2}-uploads" })
 # }
 
 # resource "aws_s3_bucket_versioning" "uploads" {
-#   provider = aws.use1
+#   provider = aws.use2
 #   bucket   = aws_s3_bucket.uploads.id
 #   versioning_configuration {
 #     status = "Enabled"
@@ -1157,18 +1157,18 @@
 # }
 
 # resource "aws_s3_bucket_server_side_encryption_configuration" "uploads" {
-#   provider = aws.use1
+#   provider = aws.use2
 #   bucket   = aws_s3_bucket.uploads.id
 #   rule {
 #     apply_server_side_encryption_by_default {
 #       sse_algorithm     = "aws:kms"
-#       kms_master_key_id = aws_kms_key.use1.arn
+#       kms_master_key_id = aws_kms_key.use2.arn
 #     }
 #   }
 # }
 
 # resource "aws_s3_bucket_public_access_block" "uploads" {
-#   provider                = aws.use1
+#   provider                = aws.use2
 #   bucket                  = aws_s3_bucket.uploads.id
 #   block_public_acls       = true
 #   block_public_policy     = true
@@ -1197,7 +1197,7 @@
 #         Sid: "KmsForS3",
 #         Effect: "Allow",
 #         Action: ["kms:Encrypt","kms:Decrypt","kms:ReEncrypt*","kms:GenerateDataKey*","kms:DescribeKey"],
-#         Resource: aws_kms_key.use1.arn
+#         Resource: aws_kms_key.use2.arn
 #       }
 #     ]
 #   })
@@ -1251,7 +1251,7 @@
 
 
 # resource "aws_s3_bucket_policy" "uploads" {
-#   provider = aws.use1
+#   provider = aws.use2
 #   bucket   = aws_s3_bucket.uploads.id
 #   policy   = data.aws_iam_policy_document.uploads_policy.json
 # }
@@ -1322,7 +1322,7 @@
 #       "kms:GenerateDataKeyWithoutPlaintext",
 #       "kms:DescribeKey"
 #     ]
-#     resources = [aws_kms_key.use1.arn]
+#     resources = [aws_kms_key.use2.arn]
 #   }
 # }
 
@@ -1343,7 +1343,7 @@
 #   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 # }
 # resource "aws_lambda_function" "on_upload" {
-#   provider         = aws.use1
+#   provider         = aws.use2
 #   function_name    = "cloud-setup-${var.env}-on-upload"
 #   role             = aws_iam_role.lambda_role.arn
 #   runtime          = "python3.12"
@@ -1355,7 +1355,7 @@
 
 # # keep as-is but add depends_on
 # data "aws_lambda_invocation" "on_upload_warm" {
-#   provider      = aws.use1
+#   provider      = aws.use2
 #   function_name = aws_lambda_function.on_upload.function_name
 #   input         = jsonencode({ "ping" = true })
 #   depends_on    = [
@@ -1367,7 +1367,7 @@
 
 
 # resource "aws_lambda_permission" "allow_s3_invoke" {
-#   provider      = aws.use1
+#   provider      = aws.use2
 #   statement_id  = "AllowS3Invoke"
 #   action        = "lambda:InvokeFunction"
 #   function_name = aws_lambda_function.on_upload.function_name
@@ -1376,7 +1376,7 @@
 # }
 
 # resource "aws_s3_bucket_notification" "uploads" {
-#   provider = aws.use1
+#   provider = aws.use2
 #   bucket   = aws_s3_bucket.uploads.id
 
 #   lambda_function {
@@ -1413,7 +1413,7 @@
 # }
 
 # resource "aws_lambda_function" "heartbeat" {
-#   provider         = aws.use1
+#   provider         = aws.use2
 #   function_name    = "cloud-setup-${var.env}-heartbeat"
 #   role             = aws_iam_role.lambda_role.arn
 #   runtime          = "python3.12"
@@ -1432,9 +1432,9 @@
 
 # # Explicit KMS grant to Lambda role for the uploads CMK
 # resource "aws_kms_grant" "lambda_upload_kms" {
-#   provider          = aws.use1
+#   provider          = aws.use2
 #   name              = "cloud-setup-${var.env}-lambda-kms-grant"
-#   key_id            = aws_kms_key.use1.key_id
+#   key_id            = aws_kms_key.use2.key_id
 #   grantee_principal = aws_iam_role.lambda_role.arn
 
 #   operations = [
@@ -1458,7 +1458,7 @@
 # }
 
 # data "aws_lambda_invocation" "heartbeat_warm" {
-#   provider      = aws.use1
+#   provider      = aws.use2
 #   function_name = aws_lambda_function.heartbeat.function_name
 #   input         = jsonencode({ warm = true })
 #   depends_on    = [time_sleep.iam_propagation, aws_s3_bucket_policy.uploads]
@@ -1471,11 +1471,11 @@
 # resource "aws_cloudfront_distribution" "cdn" {
 #   enabled             = true
 #   is_ipv6_enabled     = true
-#   comment             = "CloudFront for ${local.name.use1}"
+#   comment             = "CloudFront for ${local.name.use2}"
 #   default_root_object = "index.html"
 
 #   origin {
-#     domain_name = aws_lb.use1.dns_name
+#     domain_name = aws_lb.use2.dns_name
 #     origin_id   = "alb-origin"
 
 #     custom_origin_config {
@@ -1526,8 +1526,8 @@
 #   type    = "A"
 
 #   alias {
-#     name                   = aws_lb.use1.dns_name
-#     zone_id                = aws_lb.use1.zone_id
+#     name                   = aws_lb.use2.dns_name
+#     zone_id                = aws_lb.use2.zone_id
 #     evaluate_target_health = false
 #   }
 # }
@@ -1537,14 +1537,14 @@
 # #############################################
 
 # resource "aws_s3_bucket" "cloudtrail" {
-#   provider = aws.use1
+#   provider = aws.use2
 #   bucket   = "cloud-setup-${var.env}-${data.aws_caller_identity.current.account_id}-trail"
 #   force_destroy = true
-#   tags     = merge(local.base_tags, { Name = "${local.name.use1}-trail" })
+#   tags     = merge(local.base_tags, { Name = "${local.name.use2}-trail" })
 # }
 
 # resource "aws_s3_bucket_versioning" "cloudtrail" {
-#   provider = aws.use1
+#   provider = aws.use2
 #   bucket   = aws_s3_bucket.cloudtrail.id
 #   versioning_configuration {
 #     status = "Enabled"
@@ -1552,7 +1552,7 @@
 # }
 
 # resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
-#   provider = aws.use1
+#   provider = aws.use2
 #   bucket   = aws_s3_bucket.cloudtrail.id
 #   rule {
 #     apply_server_side_encryption_by_default {
@@ -1562,7 +1562,7 @@
 # }
 
 # resource "aws_s3_bucket_public_access_block" "cloudtrail" {
-#   provider                = aws.use1
+#   provider                = aws.use2
 #   bucket                  = aws_s3_bucket.cloudtrail.id
 #   block_public_acls       = true
 #   block_public_policy     = true
@@ -1623,13 +1623,13 @@
 # }
 
 # resource "aws_s3_bucket_policy" "cloudtrail" {
-#   provider = aws.use1
+#   provider = aws.use2
 #   bucket   = aws_s3_bucket.cloudtrail.id
 #   policy   = data.aws_iam_policy_document.cloudtrail_tls_only.json
 # }
 
 # resource "aws_cloudtrail" "main" {
-#   provider                      = aws.use1
+#   provider                      = aws.use2
 #   name                          = "cloud-setup-${var.env}-trail"
 #   s3_bucket_name                = aws_s3_bucket.cloudtrail.bucket
 #   is_multi_region_trail         = true
@@ -1648,14 +1648,14 @@
 # # CLOUDWATCH ALARMS (EC2 CPU > 70%) + SNS
 # #############################################
 
-# resource "aws_sns_topic" "use1_alarms" {
-#   provider = aws.use1
+# resource "aws_sns_topic" "use2_alarms" {
+#   provider = aws.use2
 #   name     = "cloud-setup-${var.env}-alarms"
 #   tags     = local.base_tags
 # }
 
-# resource "aws_cloudwatch_metric_alarm" "use1_asg_cpu_high" {
-#   provider                  = aws.use1
+# resource "aws_cloudwatch_metric_alarm" "use2_asg_cpu_high" {
+#   provider                  = aws.use2
 #   alarm_name                = "cloud-setup-${var.env}-asg-cpu-high"
 #   comparison_operator       = "GreaterThanThreshold"
 #   evaluation_periods        = 2
@@ -1666,19 +1666,19 @@
 #   threshold                 = 70
 #   treat_missing_data        = "notBreaching"
 #   alarm_description         = "Average CPU over 70% for 10 minutes."
-#   alarm_actions             = [aws_sns_topic.use1_alarms.arn]
-#   ok_actions                = [aws_sns_topic.use1_alarms.arn]
+#   alarm_actions             = [aws_sns_topic.use2_alarms.arn]
+#   ok_actions                = [aws_sns_topic.use2_alarms.arn]
 #   insufficient_data_actions = []
 
 #   dimensions = {
-#     AutoScalingGroupName = aws_autoscaling_group.use1_app.name
+#     AutoScalingGroupName = aws_autoscaling_group.use2_app.name
 #   }
 
 #   tags = local.base_tags
 # }
 
 # resource "aws_s3_bucket_ownership_controls" "uploads" {
-#   provider = aws.use1
+#   provider = aws.use2
 #   bucket   = aws_s3_bucket.uploads.id
 #   rule {
 #     object_ownership = "BucketOwnerEnforced"
@@ -1689,9 +1689,9 @@
 # # OUTPUTS — USED BY INTEGRATION TESTS
 # #############################################
 
-# output "use1_vpc_id" {
-#   value       = aws_vpc.use1.id
-#   description = "VPC ID in us-east-1."
+# output "use2_vpc_id" {
+#   value       = aws_vpc.use2.id
+#   description = "VPC ID in us-east-2."
 # }
 
 # output "euw2_vpc_id" {
@@ -1699,14 +1699,14 @@
 #   description = "VPC ID in eu-west-2."
 # }
 
-# output "use1_public_subnet_ids" {
-#   value       = [aws_subnet.use1_public_a.id, aws_subnet.use1_public_b.id]
-#   description = "Public subnet IDs in us-east-1."
+# output "use2_public_subnet_ids" {
+#   value       = [aws_subnet.use2_public_a.id, aws_subnet.use2_public_b.id]
+#   description = "Public subnet IDs in us-east-2."
 # }
 
-# output "use1_private_subnet_ids" {
-#   value       = [aws_subnet.use1_private_a.id, aws_subnet.use1_private_b.id]
-#   description = "Private subnet IDs in us-east-1."
+# output "use2_private_subnet_ids" {
+#   value       = [aws_subnet.use2_private_a.id, aws_subnet.use2_private_b.id]
+#   description = "Private subnet IDs in us-east-2."
 # }
 
 # output "euw2_public_subnet_ids" {
@@ -1719,9 +1719,9 @@
 #   description = "Private subnet IDs in eu-west-2."
 # }
 
-# output "use1_kms_key_arn" {
-#   value       = aws_kms_key.use1.arn
-#   description = "KMS CMK ARN in us-east-1."
+# output "use2_kms_key_arn" {
+#   value       = aws_kms_key.use2.arn
+#   description = "KMS CMK ARN in us-east-2."
 # }
 
 # output "euw2_kms_key_arn" {
@@ -1750,13 +1750,13 @@
 # }
 
 # output "alb_arn" {
-#   value       = aws_lb.use1.arn
-#   description = "ALB ARN in us-east-1."
+#   value       = aws_lb.use2.arn
+#   description = "ALB ARN in us-east-2."
 # }
 
 # output "alb_dns_name" {
-#   value       = aws_lb.use1.dns_name
-#   description = "ALB DNS name in us-east-1."
+#   value       = aws_lb.use2.dns_name
+#   description = "ALB DNS name in us-east-2."
 # }
 
 # output "api_invoke_url" {
@@ -1770,12 +1770,12 @@
 # }
 
 # output "rds_endpoint" {
-#   value       = aws_db_instance.use1.address
+#   value       = aws_db_instance.use2.address
 #   description = "RDS endpoint address."
 # }
 
 # output "rds_port" {
-#   value       = aws_db_instance.use1.port
+#   value       = aws_db_instance.use2.port
 #   description = "RDS port."
 # }
 
@@ -1790,18 +1790,18 @@
 # }
 
 # output "sns_alarms_topic_arn" {
-#   value       = aws_sns_topic.use1_alarms.arn
+#   value       = aws_sns_topic.use2_alarms.arn
 #   description = "SNS topic ARN for alarms."
 # }
 
-# output "cw_log_group_use1" {
-#   value       = aws_cloudwatch_log_group.use1_app.name
-#   description = "CloudWatch Log Group for app logs (us-east-1)."
+# output "cw_log_group_use2" {
+#   value       = aws_cloudwatch_log_group.use2_app.name
+#   description = "CloudWatch Log Group for app logs (us-east-2)."
 # }
 
-# output "use1_cidr" {
-#   value       = var.use1_cidr
-#   description = "CIDR for the us-east-1 VPC."
+# output "use2_cidr" {
+#   value       = var.use2_cidr
+#   description = "CIDR for the us-east-2 VPC."
 # }
 
 # output "euw2_cidr" {
@@ -1810,17 +1810,17 @@
 # }
 
 # output "web_sg_id" {
-#   value       = aws_security_group.use1_web.id
+#   value       = aws_security_group.use2_web.id
 #   description = "Security Group ID used by the public web EC2 instances."
 # }
 
 # output "ec2_instance_id" {
-#   value       = aws_instance.use1_web.id
+#   value       = aws_instance.use2_web.id
 #   description = "Public EC2 instance ID used by tests."
 # }
 
 # output "ec2_public_ip" {
-#   value       = aws_instance.use1_web.public_ip
+#   value       = aws_instance.use2_web.public_ip
 #   description = "Public EC2 instance IP used by tests."
 # }
 
@@ -1830,6 +1830,6 @@
 # }
 
 # output "alb_target_group_arn" {
-#   value       = aws_lb_target_group.use1.arn
+#   value       = aws_lb_target_group.use2.arn
 #   description = "ALB target group ARN for health checks."
 # }

@@ -2,14 +2,14 @@
 
 ## What We're Building
 
-We're setting up a robust multi-region AWS infrastructure to support our customers in North America and Europe. The goal is to use a single Terraform file (`tap_stack.tf`) to provision everything we need in both `us-east-1` and `eu-west-2`.
+We're setting up a robust multi-region AWS infrastructure to support our customers in North America and Europe. The goal is to use a single Terraform file (`tap_stack.tf`) to provision everything we need in both `us-east-2` and `eu-west-2`.
 
-The CI system takes care of provider setup, so you don't need to add provider or backend blocks. Just use the aliased providers: `aws.use1` for us-east-1 and `aws.euw2` for eu-west-2.
+The CI system takes care of provider setup, so you don't need to add provider or backend blocks. Just use the aliased providers: `aws.use2` for us-east-2 and `aws.euw2` for eu-west-2.
 
 ## Regional Setup
 
 We're targeting two regions with separate VPCs:
-- **us-east-1** and **eu-west-2**
+- **us-east-2** and **eu-west-2**
 - Each VPC gets its own CIDR block (`10.10.0.0/16` for US, `10.20.0.0/16` for EU)
 - Each VPC should have public and private subnets, ideally spread across two AZs for better availability
 - Public subnets use an Internet Gateway, private subnets use a NAT Gateway for outbound internet access
@@ -59,12 +59,12 @@ Here's the checklist for the infrastructure:
 ## Implementation Guidelines
 
 **File Structure**
-Put everything in a single `tap_stack.tf` file. No modules, no extra Terraform files. The CI system handles providers, so just use `provider = aws.use1` or `provider = aws.euw2` on resources.
+Put everything in a single `tap_stack.tf` file. No modules, no extra Terraform files. The CI system handles providers, so just use `provider = aws.use2` or `provider = aws.euw2` on resources.
 
 **Variables to Include**
 Set up variables for things that might change:
 - Environment info: `env` (default: dev), `owner`, `cost_center`
-- Network ranges: `use1_cidr`, `euw2_cidr`, subnet CIDR maps
+- Network ranges: `use2_cidr`, `euw2_cidr`, subnet CIDR maps
 - Instance settings: `web_instance_type` (use SSM Session Manager instead of key pairs)
 - RDS config: engine version, instance class, storage size
 - S3 bucket details for Lambda trigger
@@ -76,7 +76,7 @@ Set up variables for things that might change:
 - Least-privilege IAM policies
 
 **Naming Convention**
-Keep it consistent: `cloud-setup-${var.env}-use1-vpc`, `cloud-setup-${var.env}-euw2-vpc`, etc.
+Keep it consistent: `cloud-setup-${var.env}-use2-vpc`, `cloud-setup-${var.env}-euw2-vpc`, etc.
 Subnet names should show region, AZ, and type like `public-a` or `private-b`.
 
 **Outputs Needed**

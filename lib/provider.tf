@@ -19,8 +19,8 @@ terraform {
 #   region = var.aws_region
 # }
 provider "aws" {
-  alias  = "use1"
-  region = "us-east-1"
+  alias  = "use2"
+  region = "us-east-2"
 }
 
 # eu-west-1 alias used by resources: provider = aws.euw1
