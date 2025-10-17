@@ -47,8 +47,8 @@ resource "aws_cognito_user_pool" "main" {
     }
   }
 
-  # MFA configuration (optional)
-  mfa_configuration = "OPTIONAL"
+  # MFA configuration disabled (no SMS/TOTP configured)
+  mfa_configuration = "OFF"
 
   # Account recovery
   account_recovery_setting {
