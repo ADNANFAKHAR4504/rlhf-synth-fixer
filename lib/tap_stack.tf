@@ -684,6 +684,7 @@ resource "aws_vpc_security_group_egress_rule" "use2_app_all_egress" {
   ip_protocol       = "-1"
   description       = "Allow all egress."
 }
+
 resource "aws_security_group" "use2_rds" {
   provider    = aws.use2
   name        = "${local.name.use2}-rds"
@@ -691,6 +692,7 @@ resource "aws_security_group" "use2_rds" {
   vpc_id      = aws_vpc.use2.id
   tags        = merge(local.base_tags, { Name = "${local.name.use2}-rds" })
 }
+
 
 resource "aws_vpc_security_group_ingress_rule" "use2_rds_5432_from_app" {
   provider                     = aws.use2
