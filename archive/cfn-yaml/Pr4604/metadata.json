@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350072",
+  "team": "3",
+  "startedAt": "2025-10-16T12:27:29.418Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "vpc",
+    "ec2",
+    "s3",
+    "rds",
+    "kms",
+    "cloudwatch",
+    "cloudtrail",
+    "elb",
+    "waf",
+    "cloudfront",
+    "iam",
+    "secretsmanager",
+    "autoscaling",
+    "config"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "misra-s-turing",
+  "dockerS3Location": ""
+}
