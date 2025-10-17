@@ -18,6 +18,7 @@ import {
   DescribeRouteTablesCommand,
   DescribeVpcPeeringConnectionsCommand,
   Tag as Ec2Tag,
+  RouteTable as Ec2RouteTable,
 } from '@aws-sdk/client-ec2';
 
 import {
@@ -360,22 +361,27 @@ async function dumpAlbTargetHealth() {
   }
 }
 
-/* ---------------- Route-table helpers (handle main table fallback) ---------------- */
+/* ---------------- Route-table helpers (robust association resolution) ---------------- */
 async function routesForSubnetOrMain(subnetId: string, vpcId: string, client: EC2Client) {
-  const bySubnet = await client.send(new DescribeRouteTablesCommand({
-    Filters: [{ Name: 'association.subnet-id', Values: [subnetId] }],
-  }));
-  let tables = bySubnet.RouteTables || [];
-  if (!tables.length) {
-    const main = await client.send(new DescribeRouteTablesCommand({
-      Filters: [
-        { Name: 'vpc-id', Values: [vpcId] },
-        { Name: 'association.main', Values: ['true'] },
-      ],
-    }));
-    tables = main.RouteTables || [];
-  }
-  return tables.flatMap(t => t.Routes || []);
+  // Pull all route tables in the VPC once and resolve association locally.
+  const all: Ec2RouteTable[] =
+    (await client.send(new DescribeRouteTablesCommand({ Filters: [{ Name: 'vpc-id', Values: [vpcId] }] })))
+      .RouteTables ?? [];
+
+  // 1) Prefer the table explicitly associated to this subnet
+  const assoc = all.find(rt =>
+    (rt.Associations || []).some(a => a.SubnetId === subnetId)
+  );
+  if (assoc) return (assoc.Routes || []);
+
+  // 2) Fallback to the main table for the VPC
+  const main = all.find(rt =>
+    (rt.Associations || []).some(a => a.Main)
+  );
+  if (main) return (main.Routes || []);
+
+  // 3) Last resort: empty
+  return [];
 }
 
 /* ============================================================================
@@ -388,7 +394,6 @@ describe('ALB & EC2 reachability', () => {
   it('ALB serves index over HTTP', async () => {
     await waitAlbHealthyTarget(8 * 60 * 1000);
 
-    // Probe /alb.html (same as health path); body contains ENVIRONMENT=...
     const res = await retry(async () => {
       const r = await httpGet(`http://${albDns}/alb.html`, 6000);
       return (r.status >= 200 && r.status < 400 && /ENVIRONMENT=/i.test(r.body)) ? r : null;
@@ -698,10 +703,8 @@ describe('End-to-end smoke: ALB -> EC2(private) -> RDS', () => {
   }
 
   it('ALB serves, EC2 can reach ALB AND RDS in one SSM run', async () => {
-    // 0) If we can, wait for a healthy target (covers replaced/booting instances)
     await waitAlbHealthyTarget(8 * 60 * 1000);
 
-    // 1) Probe ALB from runner (external check)
     const albRes = await retry(async () => {
       try {
         const r = await httpGet(`http://${albDns}/alb.html`, 6000);
@@ -711,7 +714,6 @@ describe('End-to-end smoke: ALB -> EC2(private) -> RDS', () => {
     expect(albRes.status).toBeGreaterThanOrEqual(200);
     expect(albRes.status).toBeLessThan(400);
 
-    // 2) One SSM script on a private instance to curl ALB + psql RDS
     const id = await pickAppInstance(vpcId);
     await waitSsm(id);
     await waitReachable(id);
@@ -757,14 +759,14 @@ describe('End-to-end smoke: ALB -> EC2(private) -> RDS', () => {
 
   it('ALB Target Group has at least one healthy target', async () => {
     const tgArn = process.env.E2E_TG_ARN || (OUTPUTS.alb_target_group_arn as string | undefined);
-    if (!elbv2 || !DescribeTargetHealthCommandCtor || !tgArn) return; // skip if lib/arn missing
+    if (!elbv2 || !DescribeTargetHealthCommandCtor || !tgArn) return;
     const th = await elbv2.send(new DescribeTargetHealthCommandCtor({ TargetGroupArn: tgArn }));
     const healthy = (th.TargetHealthDescriptions || []).some((d: any) => d.TargetHealth?.State === 'healthy');
     expect(healthy).toBe(true);
   });
 
   it('HTTP API proxies to ALB (IAM signed)', async () => {
-    const url = `${OUTPUTS.api_invoke_url}/`; // root route exists
+    const url = `${OUTPUTS.api_invoke_url}/`;
     const r = await retry(async () => {
       const rr = await httpGetSigned(url, 6000);
       return (rr.status >= 200 && rr.status < 400 && /ENVIRONMENT=/i.test(rr.body)) ? rr : null;
