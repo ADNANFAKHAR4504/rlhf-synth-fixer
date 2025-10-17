@@ -416,17 +416,6 @@ public class MainTest {
         }
 
         @Test
-        @DisplayName("Should create SAM application")
-        public void testSamApplicationDeployment() {
-            TapStack stack = new TapStack(app, "TestStack", TapStackProps.builder()
-                    .environmentSuffix("test")
-                    .build());
-
-            Template template = Template.fromStack(stack.getServerlessStack());
-            template.resourceCountIs("AWS::Serverless::Application", 1);
-        }
-
-        @Test
         @DisplayName("Should expose all resource getters")
         public void testServerlessStackGetters() {
             TapStack stack = new TapStack(app, "TestStack", TapStackProps.builder()

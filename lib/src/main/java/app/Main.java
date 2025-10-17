@@ -39,7 +39,6 @@ import software.amazon.awscdk.services.logs.RetentionDays;
 import software.amazon.awscdk.services.s3.BlockPublicAccess;
 import software.amazon.awscdk.services.s3.Bucket;
 import software.amazon.awscdk.services.s3.BucketEncryption;
-import software.amazon.awscdk.services.sam.CfnApplication;
 import software.amazon.awscdk.services.sns.Topic;
 import software.constructs.Construct;
 
@@ -158,8 +157,8 @@ class ServerlessStack extends Stack {
         // Create API Gateway
         this.apiGateway = createApiGateway(environmentSuffix, corsAllowedDomains);
 
-        // Deploy functions using SAM
-        deploySamApplication(environmentSuffix);
+        // Note: Lambda functions are deployed directly via CDK above
+        // SAM deployment is not needed as functions are already created
 
         // Setup monitoring and alerts
         setupMonitoring();
@@ -357,22 +356,6 @@ class ServerlessStack extends Stack {
             new software.amazon.awscdk.services.apigateway.LambdaIntegration(notificationFunction));
 
         return api;
-    }
-
-    private void deploySamApplication(final String environmentSuffix) {
-        // Deploy Lambda functions using AWS SAM
-        CfnApplication.Builder.create(this, "ServerlessSamApp")
-                .location(CfnApplication.ApplicationLocationProperty.builder()
-                        .applicationId("arn:aws:serverlessrepo:us-east-1:123456789012:applications/my-serverless-app")
-                        .semanticVersion("1.0.0")
-                        .build())
-                .parameters(Map.of(
-                    "Environment", 
-                    environmentSuffix,
-                    "BucketName", 
-                    staticAssetsBucket.getBucketName()
-                ))
-                .build();
     }
 
     private void setupMonitoring() {
