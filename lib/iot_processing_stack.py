@@ -317,7 +317,7 @@ class IotProcessingStack(Construct):
                         "Action": [
                             "secretsmanager:GetSecretValue"
                         ],
-                        "Resource": api_secret.arn
+                        "Resource": f"arn:aws:secretsmanager:{aws_region}:{current.account_id}:secret:{api_secret_name}*"
                     },
                     {
                         "Effect": "Allow",
