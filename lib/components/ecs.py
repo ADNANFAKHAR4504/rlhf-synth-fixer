@@ -252,24 +252,24 @@ class EcsStack:
             task_definition=task_definition.arn,
             desired_count=self.desired_count,
             launch_type="FARGATE",
-            deployment_configuration={
-                "maximum_percent": 200,
-                "minimum_healthy_percent": 100,
-                "deployment_circuit_breaker": {
-                    "enable": True,
-                    "rollback": True
-                }
-            },
-            network_configuration={
-                "assign_public_ip": False,
-                "subnets": [subnet.id for subnet in subnets],
-                "security_groups": [security_group.id]
-            },
-            load_balancers=[{
-                "target_group_arn": target_group.arn,
-                "container_name": f"{self.name}-{deployment_type}",
-                "container_port": self.container_port
-            }],
+            deployment_configuration=aws.ecs.ServiceDeploymentConfigurationArgs(
+                maximum_percent=200,
+                minimum_healthy_percent=100,
+                deployment_circuit_breaker=aws.ecs.ServiceDeploymentCircuitBreakerArgs(
+                    enable=True,
+                    rollback=True
+                )
+            ),
+            network_configuration=aws.ecs.ServiceNetworkConfigurationArgs(
+                assign_public_ip=False,
+                subnets=[subnet.id for subnet in subnets],
+                security_groups=[security_group.id]
+            ),
+            load_balancers=[aws.ecs.ServiceLoadBalancerArgs(
+                target_group_arn=target_group.arn,
+                container_name=f"{self.name}-{deployment_type}",
+                container_port=self.container_port
+            )],
             health_check_grace_period_seconds=60,
             enable_ecs_managed_tags=True,
             propagate_tags="SERVICE",
