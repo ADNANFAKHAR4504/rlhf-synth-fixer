@@ -299,7 +299,7 @@ class TapStack(pulumi.ComponentResource):
 
         # Alarm for storage cost spike
         storage_cost_alarm = aws.cloudwatch.MetricAlarm("storage-cost-spike-alarm",
-            alarm_name=f"{project_name}-s3-cost-spike",
+            name=f"{project_name}-s3-cost-spike",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=2,
             metric_name="BucketSizeBytes",
@@ -318,7 +318,7 @@ class TapStack(pulumi.ComponentResource):
 
         # Alarm for unusual access patterns
         access_pattern_alarm = aws.cloudwatch.MetricAlarm("access-pattern-alarm",
-            alarm_name=f"{project_name}-unusual-access",
+            name=f"{project_name}-unusual-access",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=1,
             metric_name="NumberOfObjects",
