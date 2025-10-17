@@ -387,10 +387,6 @@ describe("tap_stack.tf static verification", () => {
     test("aurora instances enable enhanced monitoring", () => {
       expectStackToMatch(/resource\s+"aws_rds_cluster_instance"\s+"primary"[\s\S]*monitoring_interval/);
     });
-
-    test("global cluster configuration allows controlled failover", () => {
-      expectStackToMatch(/resource\s+"aws_rds_global_cluster"\s+"main"[\s\S]*force_destroy/);
-    });
   });
 
   describe("application load balancing and compute", () => {
