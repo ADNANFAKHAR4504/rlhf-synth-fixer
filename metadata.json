@@ -1,0 +1,26 @@
+{
+  "platform": "cloudformation",
+  "language": "json",
+  "complexity": "medium",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-10-17T06:44:00+05:30",
+  "subtask": "Application Deployment",
+  "background": "Infrastructure task for CloudFormation",
+  "subject_labels": [],
+  "po_id": "4660942654",
+  "aws_services": [
+    "S3",
+    "MediaConvert",
+    "Lambda",
+    "Step Functions",
+    "DynamoDB",
+    "SQS",
+    "SNS",
+    "EventBridge",
+    "CloudWatch",
+    "IAM"
+  ],
+  "region": "ap-southeast-1",
+  "training_quality": 9
+}
