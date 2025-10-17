@@ -24,138 +24,138 @@ from constructs import Construct
 
 
 class TapStackProps(cdk.StackProps):
-  """
-  TapStackProps defines the properties for the TapStack CDK stack.
+    """
+    TapStackProps defines the properties for the TapStack CDK stack.
 
-  Args:
-    environment_suffix (Optional[str]): An optional suffix to identify the 
-    deployment environment (e.g., 'dev', 'prod').
-    **kwargs: Additional keyword arguments passed to the base cdk.StackProps.
+    Args:
+        environment_suffix (Optional[str]): An optional suffix to identify the 
+        deployment environment (e.g., 'dev', 'prod').
+        **kwargs: Additional keyword arguments passed to the base cdk.StackProps.
 
-  Attributes:
-    environment_suffix (Optional[str]): Stores the environment suffix for the stack.
-  """
+    Attributes:
+        environment_suffix (Optional[str]): Stores the environment suffix for the stack.
+    """
 
-  def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
-    super().__init__(**kwargs)
-    self.environment_suffix = environment_suffix
+    def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        self.environment_suffix = environment_suffix
 
 
 class TapStack(cdk.Stack):
-  """
-  Represents the main CDK stack for the Tap project.
+    """
+    Represents the main CDK stack for the Tap project.
 
-  This stack is responsible for orchestrating the instantiation of other resource-specific stacks.
-  It determines the environment suffix from the provided properties, 
-    CDK context, or defaults to 'dev'.
-  Note:
-    - Creates serverless API infrastructure with API Gateway, Lambda, and DynamoDB.
-    - Follows production-ready security and monitoring best practices.
+    This stack is responsible for orchestrating the instantiation of other resource-specific stacks.
+    It determines the environment suffix from the provided properties, 
+        CDK context, or defaults to 'dev'.
+    Note:
+        - Creates serverless API infrastructure with API Gateway, Lambda, and DynamoDB.
+        - Follows production-ready security and monitoring best practices.
 
-  Args:
-    scope (Construct): The parent construct.
-    construct_id (str): The unique identifier for this stack.
-    props (Optional[TapStackProps]): Optional properties for configuring the 
-      stack, including environment suffix.
-    **kwargs: Additional keyword arguments passed to the CDK Stack.
+    Args:
+        scope (Construct): The parent construct.
+        construct_id (str): The unique identifier for this stack.
+        props (Optional[TapStackProps]): Optional properties for configuring the 
+            stack, including environment suffix.
+        **kwargs: Additional keyword arguments passed to the CDK Stack.
 
-  Attributes:
-    environment_suffix (str): The environment suffix used for resource naming and configuration.
-  """
+    Attributes:
+        environment_suffix (str): The environment suffix used for resource naming and configuration.
+    """
 
-  def __init__(
-          self,
-          scope: Construct,
-          construct_id: str, props: Optional[TapStackProps] = None, **kwargs):
-    super().__init__(scope, construct_id, **kwargs)
+    def __init__(
+            self,
+            scope: Construct,
+            construct_id: str, props: Optional[TapStackProps] = None, **kwargs):
+        super().__init__(scope, construct_id, **kwargs)
 
-    # Get environment suffix from props, context, or use 'dev' as default
-    environment_suffix = (
-        props.environment_suffix if props else None
-    ) or self.node.try_get_context('environmentSuffix') or 'dev'
+        # Get environment suffix from props, context, or use 'dev' as default
+        environment_suffix = (
+            props.environment_suffix if props else None
+        ) or self.node.try_get_context('environmentSuffix') or 'dev'
 
-    # Create CloudWatch Log Groups
-    api_log_group = logs.LogGroup(
-        self,
-        "ApiLogGroup",
-        log_group_name=f"/aws/apigateway/tap-api-{environment_suffix}",
-        retention=logs.RetentionDays.FIVE_DAYS,
-        removal_policy=RemovalPolicy.DESTROY,
-    )
-    
-    lambda_log_group = logs.LogGroup(
-        self,
-        "LambdaLogGroup",
-        log_group_name=f"/aws/lambda/tap-api-handler-{environment_suffix}",
-        retention=logs.RetentionDays.FIVE_DAYS,
-        removal_policy=RemovalPolicy.DESTROY,
-    )
+        # Create CloudWatch Log Groups
+        api_log_group = logs.LogGroup(
+            self,
+            "ApiLogGroup",
+            log_group_name=f"/aws/apigateway/tap-api-{environment_suffix}",
+            retention=logs.RetentionDays.FIVE_DAYS,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+        
+        lambda_log_group = logs.LogGroup(
+            self,
+            "LambdaLogGroup",
+            log_group_name=f"/aws/lambda/tap-api-handler-{environment_suffix}",
+            retention=logs.RetentionDays.FIVE_DAYS,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
 
-    # Create DynamoDB table with encryption
-    table = dynamodb.Table(
-        self,
-        "DataTable",
-        table_name=f"tap-api-data-{environment_suffix}",
-        partition_key=dynamodb.Attribute(
-            name="id",
-            type=dynamodb.AttributeType.STRING
-        ),
-        sort_key=dynamodb.Attribute(
-            name="createdAt",
-            type=dynamodb.AttributeType.STRING
-        ),
-        billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
-        encryption=dynamodb.TableEncryption.AWS_MANAGED,
-        point_in_time_recovery=True,
-        removal_policy=RemovalPolicy.DESTROY,
-    )
+        # Create DynamoDB table with encryption
+        table = dynamodb.Table(
+            self,
+            "DataTable",
+            table_name=f"tap-api-data-{environment_suffix}",
+            partition_key=dynamodb.Attribute(
+                name="id",
+                type=dynamodb.AttributeType.STRING
+            ),
+            sort_key=dynamodb.Attribute(
+                name="createdAt",
+                type=dynamodb.AttributeType.STRING
+            ),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            encryption=dynamodb.TableEncryption.AWS_MANAGED,
+            point_in_time_recovery=True,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
 
-    # Create IAM role for Lambda with least privilege
-    lambda_role = iam.Role(
-        self,
-        "LambdaRole",
-        assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
-        description="Role for TAP API Lambda function",
-        managed_policies=[
-            iam.ManagedPolicy.from_aws_managed_policy_name(
-                "service-role/AWSLambdaBasicExecutionRole"
+        # Create IAM role for Lambda with least privilege
+        lambda_role = iam.Role(
+            self,
+            "LambdaRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            description="Role for TAP API Lambda function",
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AWSLambdaBasicExecutionRole"
+                )
+            ],
+        )
+        
+        # Add specific DynamoDB permissions
+        lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:DeleteItem",
+                ],
+                resources=[
+                    table.table_arn,
+                    f"{table.table_arn}/index/*"
+                ],
             )
-        ],
-    )
-    
-    # Add specific DynamoDB permissions
-    lambda_role.add_to_policy(
-        iam.PolicyStatement(
-            effect=iam.Effect.ALLOW,
-            actions=[
-                "dynamodb:GetItem",
-                "dynamodb:PutItem",
-                "dynamodb:Query",
-                "dynamodb:Scan",
-                "dynamodb:UpdateItem",
-                "dynamodb:DeleteItem",
-            ],
-            resources=[
-                table.table_arn,
-                f"{table.table_arn}/index/*"
-            ],
         )
-    )
-    
-    # Add CloudWatch Logs permissions
-    lambda_role.add_to_policy(
-        iam.PolicyStatement(
-            effect=iam.Effect.ALLOW,
-            actions=[
-                "logs:CreateLogStream",
-                "logs:PutLogEvents",
-            ],
-            resources=[lambda_log_group.log_group_arn],
+        
+        # Add CloudWatch Logs permissions
+        lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                ],
+                resources=[lambda_log_group.log_group_arn],
+            )
         )
-    )
 
-    # Lambda function code inline (as requested)
-    lambda_code = """
+        # Lambda function code inline (as requested)
+        lambda_code = """
 import json
 import os
 import boto3
@@ -408,116 +408,118 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         return create_response(500, {"message": "Internal server error"}, error=True)
 """
 
-    # Create Lambda function with inline code
-    lambda_function = lambda_.Function(
-        self,
-        "ApiHandler",
-        function_name=f"tap-api-handler-{environment_suffix}",
-        runtime=lambda_.Runtime.PYTHON_3_11,
-        handler="index.lambda_handler",
-        code=lambda_.Code.from_inline(lambda_code),
-        role=lambda_role,
-        timeout=Duration.seconds(30),
-        memory_size=256,
-        environment={
-            "TABLE_NAME": table.table_name,
-            "ENVIRONMENT": environment_suffix,
-            "LOG_LEVEL": os.environ.get("LOG_LEVEL", "INFO"),
-            "API_KEY": os.environ.get("API_KEY", "tap-default-key"),
-        },
-        tracing=lambda_.Tracing.ACTIVE,
-        retry_attempts=2,
-        log_group=lambda_log_group,
-    )
+        # Create Lambda function with inline code
+        lambda_function = lambda_.Function(
+            self,
+            "ApiHandler",
+            function_name=f"tap-api-handler-{environment_suffix}",
+            runtime=lambda_.Runtime.PYTHON_3_11,
+            handler="index.lambda_handler",
+            code=lambda_.Code.from_inline(lambda_code),
+            role=lambda_role,
+            timeout=Duration.seconds(30),
+            memory_size=256,
+            environment={
+                "TABLE_NAME": table.table_name,
+                "ENVIRONMENT": environment_suffix,
+                "LOG_LEVEL": os.environ.get("LOG_LEVEL", "INFO"),
+                "API_KEY": os.environ.get("API_KEY", "tap-default-key"),
+            },
+            tracing=lambda_.Tracing.ACTIVE,
+            retry_attempts=2,
+            log_group=lambda_log_group,
+        )
 
-    # Grant table permissions to Lambda
-    table.grant_read_write_data(lambda_function)
+        # Grant table permissions to Lambda
+        table.grant_read_write_data(lambda_function)
 
-    # Create HTTP API with CORS
-    http_api = apigatewayv2.HttpApi(
-        self,
-        "HttpApi",
-        api_name=f"tap-api-{environment_suffix}",
-        cors_preflight=apigatewayv2.CorsPreflightOptions(
-            allow_origins=["*"],
-            allow_methods=[
-                apigatewayv2.CorsHttpMethod.GET,
-                apigatewayv2.CorsHttpMethod.POST,
-                apigatewayv2.CorsHttpMethod.PUT,
-                apigatewayv2.CorsHttpMethod.DELETE,
-                apigatewayv2.CorsHttpMethod.OPTIONS,
+        # Create HTTP API with CORS
+        http_api = apigatewayv2.HttpApi(
+            self,
+            "HttpApi",
+            api_name=f"tap-api-{environment_suffix}",
+            cors_preflight=apigatewayv2.CorsPreflightOptions(
+                allow_origins=["*"],
+                allow_methods=[
+                    apigatewayv2.CorsHttpMethod.GET,
+                    apigatewayv2.CorsHttpMethod.POST,
+                    apigatewayv2.CorsHttpMethod.PUT,
+                    apigatewayv2.CorsHttpMethod.DELETE,
+                    apigatewayv2.CorsHttpMethod.OPTIONS,
+                ],
+                allow_headers=["Content-Type", "Authorization", "X-Api-Key"],
+                max_age=Duration.hours(1),
+            ),
+            disable_execute_api_endpoint=False,
+        )
+
+        # Create Lambda integration
+        lambda_integration = integrations.HttpLambdaIntegration(
+            "LambdaIntegration",
+            handler=lambda_function,
+            payload_format_version=apigatewayv2.PayloadFormatVersion.VERSION_2_0,
+        )
+
+        # Add routes
+        http_api.add_routes(
+            path="/items",
+            methods=[apigatewayv2.HttpMethod.GET, apigatewayv2.HttpMethod.POST],
+            integration=lambda_integration,
+        )
+
+        http_api.add_routes(
+            path="/items/{id}",
+            methods=[
+                apigatewayv2.HttpMethod.GET,
+                apigatewayv2.HttpMethod.PUT,
+                apigatewayv2.HttpMethod.DELETE,
             ],
-            allow_headers=["Content-Type", "Authorization", "X-Api-Key"],
-            max_age=Duration.hours(1),
-        ),
-        disable_execute_api_endpoint=False,
-    )
+            integration=lambda_integration,
+        )
 
-    # Create Lambda integration
-    lambda_integration = integrations.HttpLambdaIntegration(
-        "LambdaIntegration",
-        handler=lambda_function,
-        payload_format_version=apigatewayv2.PayloadFormatVersion.VERSION_2_0,
-    )
+        # Configure API Gateway logging
+        cfn_stage = http_api.default_stage.node.default_child
+        cfn_stage.access_log_settings = apigatewayv2.CfnStage.AccessLogSettingsProperty(
+            destination_arn=api_log_group.log_group_arn,
+            format='$context.requestId $context.requestTime "$context.routeKey" '
+                   '$context.status $context.responseLength $context.error.message '
+                   '$context.error.messageString'
+        )
 
-    # Add routes
-    http_api.add_routes(
-        path="/items",
-        methods=[apigatewayv2.HttpMethod.GET, apigatewayv2.HttpMethod.POST],
-        integration=lambda_integration,
-    )
+        # Grant API Gateway permission to write to CloudWatch Logs
+        api_log_group.grant_write(iam.ServicePrincipal("apigateway.amazonaws.com"))
 
-    http_api.add_routes(
-        path="/items/{id}",
-        methods=[
-            apigatewayv2.HttpMethod.GET,
-            apigatewayv2.HttpMethod.PUT,
-            apigatewayv2.HttpMethod.DELETE,
-        ],
-        integration=lambda_integration,
-    )
+        # Store important attributes for access by other constructs
+        self.table = table
+        self.lambda_function = lambda_function
+        self.http_api = http_api
+        self.environment_suffix = environment_suffix
 
-    # Configure API Gateway logging
-    cfn_stage = http_api.default_stage.node.default_child
-    cfn_stage.access_log_settings = apigatewayv2.CfnStage.AccessLogSettingsProperty(
-        destination_arn=api_log_group.log_group_arn,
-        format='$context.requestId $context.requestTime "$context.routeKey" $context.status $context.responseLength $context.error.message $context.error.messageString'
-    )
+        # Outputs
+        CfnOutput(
+            self,
+            "ApiEndpoint",
+            value=http_api.url,
+            description="HTTP API Gateway endpoint URL",
+        )
 
-    # Grant API Gateway permission to write to CloudWatch Logs
-    api_log_group.grant_write(iam.ServicePrincipal("apigateway.amazonaws.com"))
+        CfnOutput(
+            self,
+            "TableName",
+            value=table.table_name,
+            description="DynamoDB table name",
+        )
 
-    # Store important attributes for access by other constructs
-    self.table = table
-    self.lambda_function = lambda_function
-    self.http_api = http_api
-    self.environment_suffix = environment_suffix
+        CfnOutput(
+            self,
+            "LambdaFunctionName",
+            value=lambda_function.function_name,
+            description="Lambda function name",
+        )
 
-    # Outputs
-    CfnOutput(
-        self,
-        "ApiEndpoint",
-        value=http_api.url,
-        description="HTTP API Gateway endpoint URL",
-    )
-
-    CfnOutput(
-        self,
-        "TableName",
-        value=table.table_name,
-        description="DynamoDB table name",
-    )
-
-    CfnOutput(
-        self,
-        "LambdaFunctionName",
-        value=lambda_function.function_name,
-        description="Lambda function name",
-    )
-
-    CfnOutput(
-        self,
-        "ApiLogGroupName",
-        value=api_log_group.log_group_name,
-        description="API Gateway CloudWatch Log Group",
-    )
+        CfnOutput(
+            self,
+            "ApiLogGroupName",
+            value=api_log_group.log_group_name,
+            description="API Gateway CloudWatch Log Group",
+        )
