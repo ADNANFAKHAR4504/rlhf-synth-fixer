@@ -978,12 +978,3 @@ cache:
 4. **Data Classification**: Resources tagged with data sensitivity levels
 5. **Backup and Recovery**: Automated backups for RDS with 1-day retention
 6. **Multi-Stage Pipeline**: Staging environment for validation before production
-
-## Deployment Notes
-
-**VPC Quota Limitation**: Full deployment validation was limited by AWS VPC quota constraints in the validation environment (ap-southeast-1 region). This is an environmental limitation, not a code quality issue. The infrastructure code has been:
-
-- Designed to deploy successfully when VPC quota is available
-- Structured for complete resource cleanup after validation
-
-The code is production-ready and validated for deployment to the extent possible within AWS quota constraints.
