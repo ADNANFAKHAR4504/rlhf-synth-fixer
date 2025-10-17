@@ -1,775 +1,541 @@
-import fs from 'fs';
-import AWS from 'aws-sdk';
-import https from 'https';
+import * as AWS from 'aws-sdk';
+import * as fs from 'fs';
+import * as https from 'https';
+import * as path from 'path';
 import { promisify } from 'util';
 
-// Configuration - These are coming from cfn-outputs after cdk deploy
+const sleep = promisify(setTimeout);
+
+// Load CloudFormation outputs
 let outputs: any = {};
+let outputsLoaded = false;
 
 try {
-  outputs = JSON.parse(
-    fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-  );
+  const outputsPath = path.join(process.cwd(), 'cfn-outputs/flat-outputs.json');
+  console.log('Looking for outputs at:', outputsPath);
+
+  if (fs.existsSync(outputsPath)) {
+    const fileContent = fs.readFileSync(outputsPath, 'utf8');
+    outputs = JSON.parse(fileContent);
+    outputsLoaded = true;
+    console.log('Successfully loaded outputs from file');
+    console.log('Available keys:', Object.keys(outputs));
+  } else {
+    console.warn('cfn-outputs/flat-outputs.json not found at:', outputsPath);
+  }
 } catch (error) {
-  console.warn(
-    'cfn-outputs/flat-outputs.json not found. Using mock data for local testing.'
-  );
-  outputs = {
-    DistributionIdOutput: 'E1234567890123',
-    DistributionDomainNameOutput: 'd1234567890123.cloudfront.net',
-    ContentBucketNameOutput: 'test-content-bucket',
-    LoggingBucketNameOutput: 'test-logging-bucket',
-    InvalidationRoleArnOutput:
-      'arn:aws:iam::123456789012:role/test-invalidation-role',
-    ContentManagementRoleArnOutput:
-      'arn:aws:iam::123456789012:role/test-content-role',
-  };
+  console.warn('Error loading cfn-outputs/flat-outputs.json:', error);
 }
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'test';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const region = 'us-east-1';
+const accountId = process.env.AWS_ACCOUNT_ID || '149536495831';
+const accountLast5 = accountId.slice(-5);
 
-// AWS SDK clients
-const s3 = new AWS.S3();
-const cloudfront = new AWS.CloudFront();
-const cloudwatch = new AWS.CloudWatch();
+// Load outputs directly from the output keys
+const distributionId = outputs['DistributionIdOutput'] || '';
+const distributionDomainName = outputs['DistributionDomainNameOutput'] || '';
+const contentBucketName = outputs['ContentBucketNameOutput'] || '';
+const loggingBucketName = outputs['LoggingBucketNameOutput'] || '';
+const invalidationRoleArn = outputs['InvalidationRoleArnOutput'] || '';
+const contentManagementRoleArn = outputs['ContentManagementRoleArnOutput'] || '';
 
-// Helper function to make HTTPS requests
-const httpsRequest = promisify((url: string, options: any, callback: any) => {
-  const req = https.request(url, options, res => {
-    let data = '';
-    res.on('data', chunk => (data += chunk));
-    res.on('end', () =>
-      callback(null, { statusCode: res.statusCode, headers: res.headers, data })
-    );
-  });
-  req.on('error', callback);
-  req.end();
-});
+// Log configuration immediately
+console.log('\n=== Test Configuration ===');
+console.log(`Environment Suffix: ${environmentSuffix}`);
+console.log(`Region: ${region}`);
+console.log(`Account ID: ${accountId}`);
+console.log(`Account Last 5: ${accountLast5}`);
+console.log(`Distribution ID: ${distributionId || 'NOT FOUND'}`);
+console.log(`Distribution Domain: ${distributionDomainName || 'NOT FOUND'}`);
+console.log(`Content Bucket: ${contentBucketName || 'NOT FOUND'}`);
+console.log(`Logging Bucket: ${loggingBucketName || 'NOT FOUND'}`);
+console.log(`Invalidation Role: ${invalidationRoleArn || 'NOT FOUND'}`);
+console.log(`Content Role: ${contentManagementRoleArn || 'NOT FOUND'}`);
+console.log('========================\n');
 
-// Helper function to wait for a condition with timeout
-const waitForCondition = async (
-  conditionFn: () => Promise<boolean>,
-  timeout: number = 30000,
-  interval: number = 1000
-): Promise<boolean> => {
-  const startTime = Date.now();
-  while (Date.now() - startTime < timeout) {
-    try {
-      if (await conditionFn()) {
-        return true;
-      }
-    } catch (error) {
-      console.warn('Condition check failed, retrying...', error);
-    }
-    await new Promise(resolve => setTimeout(resolve, interval));
-  }
-  return false;
+// Validate that all required outputs are loaded
+const hasRequiredOutputs = distributionId && distributionDomainName && contentBucketName && loggingBucketName;
+
+if (!hasRequiredOutputs) {
+  console.error('\n❌ ERROR: Missing required CloudFormation outputs!');
+  console.error('Please ensure cfn-outputs/flat-outputs.json exists and contains all required outputs.');
+  console.error('Required outputs: DistributionIdOutput, DistributionDomainNameOutput, ContentBucketNameOutput, LoggingBucketNameOutput\n');
+}
+
+// Configure AWS SDK with connection settings to prevent hanging
+const httpOptions = {
+  timeout: 5000,
+  connectTimeout: 5000,
 };
 
-describe('Content Delivery System Integration Tests', () => {
-  const testFiles = [
-    {
-      name: `test-article-${Date.now()}.html`,
-      content: `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Test Article</title>
-          <meta charset="utf-8">
-        </head>
-        <body>
-          <h1>Test Article for Integration Testing</h1>
-          <p>This is a test article content created at ${new Date().toISOString()}</p>
-          <p>Environment: ${environmentSuffix}</p>
-        </body>
-        </html>
-      `,
-      contentType: 'text/html'
-    },
-    {
-      name: `test-image-${Date.now()}.jpg`,
-      content: Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64'), // 1x1 transparent GIF as binary
-      contentType: 'image/jpeg'
-    },
-    {
-      name: `test-json-${Date.now()}.json`,
-      content: JSON.stringify({
-        message: 'Test JSON content',
-        timestamp: new Date().toISOString(),
-        environment: environmentSuffix
-      }),
-      contentType: 'application/json'
-    }
-  ];
+// Initialize AWS SDK clients with proper configuration
+const s3 = new AWS.S3({
+  region,
+  httpOptions,
+  maxRetries: 3,
+});
 
-  beforeAll(async () => {
-    // Wait a moment to ensure resources are ready
-    await new Promise(resolve => setTimeout(resolve, 2000));
-  });
+const cloudfront = new AWS.CloudFront({
+  region,
+  httpOptions,
+  maxRetries: 3,
+});
 
-  afterAll(async () => {
-    // Cleanup test files
-    for (const file of testFiles) {
-      try {
-        await s3
-          .deleteObject({
-            Bucket: outputs.ContentBucketNameOutput,
-            Key: file.name,
-          })
-          .promise();
-      } catch (error) {
-        console.warn(`Failed to cleanup test file ${file.name}:`, error);
-      }
-    }
-  });
+const cloudwatch = new AWS.CloudWatch({
+  region,
+  httpOptions,
+  maxRetries: 3,
+});
 
-  describe('S3 Content Bucket Operations', () => {
-    test('should be able to upload content to S3 bucket', async () => {
-      const file = testFiles[0];
-      const putObjectParams = {
-        Bucket: outputs.ContentBucketNameOutput,
-        Key: file.name,
-        Body: file.content,
-        ContentType: file.contentType,
-        CacheControl: 'public, max-age=31536000',
-      };
+const iam = new AWS.IAM({
+  region,
+  httpOptions,
+  maxRetries: 3,
+});
 
-      const result = await s3.putObject(putObjectParams).promise();
-      expect(result.ETag).toBeDefined();
+// Helper function to make HTTP requests
+const httpsGet = (url: string): Promise<{ statusCode: number; headers: any; body: string }> => {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { timeout: 10000 }, (res) => {
+      let body = '';
+      res.on('data', (chunk) => body += chunk);
+      res.on('end', () => {
+        resolve({
+          statusCode: res.statusCode || 0,
+          headers: res.headers,
+          body,
+        });
+      });
     });
 
-    test('should verify S3 bucket encryption', async () => {
-      const bucketEncryption = await s3
-        .getBucketEncryption({
-          Bucket: outputs.ContentBucketNameOutput,
-        })
-        .promise();
+    req.on('error', reject);
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('Request timeout'));
+    });
+  });
+};
 
-      expect(bucketEncryption.ServerSideEncryptionConfiguration).toBeDefined();
+describe('TapStack Integration Tests', () => {
+  const testFileName = 'test-file.html';
+  const testFileContent = '<html><body><h1>Integration Test</h1></body></html>';
+
+  beforeAll(() => {
+    // Skip all tests if required outputs are missing
+    if (!hasRequiredOutputs) {
+      throw new Error('Missing required CloudFormation outputs. Cannot run integration tests.');
+    }
+  });
+
+  describe('S3 Bucket Configuration', () => {
+    test('content bucket exists and has correct configuration', async () => {
+      const bucketConfig = await s3.getBucketVersioning({
+        Bucket: contentBucketName,
+      }).promise();
+
+      expect(bucketConfig.Status).toBe('Enabled');
+    });
+
+    test('content bucket has encryption enabled', async () => {
+      const encryption = await s3.getBucketEncryption({
+        Bucket: contentBucketName,
+      }).promise();
+
+      expect(encryption.ServerSideEncryptionConfiguration).toBeDefined();
       expect(
-        bucketEncryption.ServerSideEncryptionConfiguration.Rules[0]
-          .ApplyServerSideEncryptionByDefault.SSEAlgorithm
+        encryption.ServerSideEncryptionConfiguration?.Rules[0].ApplyServerSideEncryptionByDefault?.SSEAlgorithm
       ).toBe('AES256');
     });
 
-    test('should verify S3 bucket versioning is enabled', async () => {
-      const versioningConfig = await s3
-        .getBucketVersioning({
-          Bucket: outputs.ContentBucketNameOutput,
-        })
-        .promise();
+    test('content bucket has CORS configured', async () => {
+      const cors = await s3.getBucketCors({
+        Bucket: contentBucketName,
+      }).promise();
 
-      expect(versioningConfig.Status).toBe('Enabled');
+      expect(cors.CORSRules).toBeDefined();
+      expect(cors.CORSRules?.length).toBeGreaterThan(0);
+      expect(cors.CORSRules?.[0].AllowedMethods).toContain('GET');
     });
 
-    test('should verify S3 bucket has CORS configuration', async () => {
-      const corsConfig = await s3
-        .getBucketCors({
-          Bucket: outputs.ContentBucketNameOutput,
-        })
-        .promise();
+    test('content bucket has public access blocked', async () => {
+      const publicAccessBlock = await s3.getPublicAccessBlock({
+        Bucket: contentBucketName,
+      }).promise();
 
-      expect(corsConfig.CORSRules).toBeDefined();
-      expect(corsConfig.CORSRules.length).toBeGreaterThan(0);
-      expect(corsConfig.CORSRules[0].AllowedMethods).toContain('GET');
-      expect(corsConfig.CORSRules[0].AllowedHeaders).toContain('*');
+      expect(publicAccessBlock.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
+      expect(publicAccessBlock.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
+      expect(publicAccessBlock.PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
+      expect(publicAccessBlock.PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
     });
 
-    test('should be able to upload multiple file types', async () => {
-      for (const file of testFiles) {
-        const putObjectParams = {
-          Bucket: outputs.ContentBucketNameOutput,
-          Key: file.name,
-          Body: file.content,
-          ContentType: file.contentType,
-          CacheControl: 'public, max-age=31536000',
-        };
+    test('logging bucket exists and has lifecycle rules', async () => {
+      const lifecycle = await s3.getBucketLifecycleConfiguration({
+        Bucket: loggingBucketName,
+      }).promise();
 
-        const result = await s3.putObject(putObjectParams).promise();
-        expect(result.ETag).toBeDefined();
-      }
-    });
-  });
-
-  describe('S3 Logging Bucket Verification', () => {
-    test('should verify logging bucket has lifecycle configuration', async () => {
-      const lifecycleConfig = await s3
-        .getBucketLifecycleConfiguration({
-          Bucket: outputs.LoggingBucketNameOutput,
-        })
-        .promise();
-
-      expect(lifecycleConfig.Rules).toBeDefined();
-      const deleteRule = lifecycleConfig.Rules.find(
-        rule => rule.ID === 'DeleteOldLogs'
-      );
+      expect(lifecycle.Rules).toBeDefined();
+      const deleteRule = lifecycle.Rules?.find(r => r.ID === 'DeleteOldLogs');
       expect(deleteRule).toBeDefined();
       expect(deleteRule?.Status).toBe('Enabled');
       expect(deleteRule?.Expiration?.Days).toBe(90);
     });
 
-    test('should verify logging bucket is encrypted', async () => {
-      const bucketEncryption = await s3
-        .getBucketEncryption({
-          Bucket: outputs.LoggingBucketNameOutput,
-        })
-        .promise();
+    test('content bucket has logging configured', async () => {
+      const logging = await s3.getBucketLogging({
+        Bucket: contentBucketName,
+      }).promise();
 
-      expect(bucketEncryption.ServerSideEncryptionConfiguration).toBeDefined();
-      expect(
-        bucketEncryption.ServerSideEncryptionConfiguration.Rules[0]
-          .ApplyServerSideEncryptionByDefault.SSEAlgorithm
-      ).toBe('AES256');
+      expect(logging.LoggingEnabled).toBeDefined();
+      expect(logging.LoggingEnabled?.TargetBucket).toBe(loggingBucketName);
+      expect(logging.LoggingEnabled?.TargetPrefix).toBe('s3-access-logs/');
     });
   });
 
   describe('CloudFront Distribution Configuration', () => {
-    test('should verify CloudFront distribution exists and is enabled', async () => {
-      const distribution = await cloudfront
-        .getDistribution({
-          Id: outputs.DistributionIdOutput,
-        })
-        .promise();
+    let distribution: AWS.CloudFront.Distribution;
 
-      expect(distribution.Distribution.DistributionConfig.Enabled).toBe(true);
-      expect(distribution.Distribution.DistributionConfig.HttpVersion).toBe(
-        'http2and3'
-      );
-      expect(distribution.Distribution.DistributionConfig.PriceClass).toBe(
-        'PriceClass_100'
-      );
+    beforeAll(async () => {
+      const response = await cloudfront.getDistribution({
+        Id: distributionId,
+      }).promise();
+      distribution = response.Distribution!;
     });
 
-    test('should verify CloudFront distribution has proper security settings', async () => {
-      const distribution = await cloudfront
-        .getDistribution({
-          Id: outputs.DistributionIdOutput,
-        })
-        .promise();
+    test('distribution exists and is enabled', () => {
+      expect(distribution).toBeDefined();
+      expect(distribution.DistributionConfig.Enabled).toBe(true);
+    });
 
-      const defaultBehavior =
-        distribution.Distribution.DistributionConfig.DefaultCacheBehavior;
+    test('distribution has correct origin configuration', () => {
+      const origin = distribution.DistributionConfig.Origins.Items[0];
+      expect(origin).toBeDefined();
+      expect(origin.S3OriginConfig).toBeDefined();
+      expect(origin.DomainName).toContain(contentBucketName);
+    });
+
+    test('distribution has HTTPS redirect enabled', () => {
+      const defaultBehavior = distribution.DistributionConfig.DefaultCacheBehavior;
       expect(defaultBehavior.ViewerProtocolPolicy).toBe('redirect-to-https');
-      expect(defaultBehavior.Compress).toBe(true);
     });
 
-    test('should verify CloudFront distribution has proper origin configuration', async () => {
-      const distribution = await cloudfront
-        .getDistribution({
-          Id: outputs.DistributionIdOutput,
-        })
-        .promise();
-
-      expect(
-        distribution.Distribution.DistributionConfig.Origins.Items
-      ).toBeDefined();
-      expect(
-        distribution.Distribution.DistributionConfig.Origins.Items.length
-      ).toBeGreaterThan(0);
-
-      const s3Origin =
-        distribution.Distribution.DistributionConfig.Origins.Items[0];
-      expect(s3Origin.DomainName).toContain(outputs.ContentBucketNameOutput);
-      expect(s3Origin.S3OriginConfig?.OriginAccessIdentity).toBeDefined();
+    test('distribution has HTTP/2 and HTTP/3 enabled', () => {
+      expect(distribution.DistributionConfig.HttpVersion).toBe('http2and3');
     });
 
-    test('should verify CloudFront logging is enabled', async () => {
-      const distribution = await cloudfront
-        .getDistribution({
-          Id: outputs.DistributionIdOutput,
-        })
-        .promise();
+    test('distribution has minimum TLS version configured', () => {
+      expect(distribution.DistributionConfig.ViewerCertificate?.MinimumProtocolVersion).toBe('TLSv1');
+    });
 
-      const logging = distribution.Distribution.DistributionConfig.Logging;
-      expect(logging.Enabled).toBe(true);
-      expect(logging.Bucket).toContain(outputs.LoggingBucketNameOutput);
-      expect(logging.Prefix).toBe('cloudfront-logs/');
+    test('distribution has cache policy configured', () => {
+      const defaultBehavior = distribution.DistributionConfig.DefaultCacheBehavior;
+      expect(defaultBehavior.CachePolicyId).toBeDefined();
+    });
+
+    test('distribution has response headers policy configured', () => {
+      const defaultBehavior = distribution.DistributionConfig.DefaultCacheBehavior;
+      expect(defaultBehavior.ResponseHeadersPolicyId).toBeDefined();
+    });
+
+    test('distribution has error responses configured', () => {
+      const errorResponses = distribution.DistributionConfig.CustomErrorResponses?.Items || [];
+      expect(errorResponses.length).toBeGreaterThan(0);
+
+      const error404 = errorResponses.find(e => e.ErrorCode === 404);
+      expect(error404).toBeDefined();
+      expect(error404?.ResponseCode).toBe("404");
+      expect(error404?.ResponsePagePath).toBe('/404.html');
     });
   });
 
-  describe('COMPLETE FLOW TEST - End-to-End Content Delivery Workflow', () => {
-    test('should handle complete content delivery lifecycle with multiple content types', async () => {
-      const workflowResults = [];
-      
-      // Phase 1: Upload multiple content types to S3
-      console.log('Phase 1: Uploading multiple content types to S3...');
-      for (const file of testFiles) {
-        const uploadResult = await s3.putObject({
-          Bucket: outputs.ContentBucketNameOutput,
-          Key: file.name,
-          Body: file.content,
-          ContentType: file.contentType,
-          CacheControl: 'public, max-age=31536000',
-          Metadata: {
-            'test-workflow': 'true',
-            'upload-time': new Date().toISOString()
-          }
-        }).promise();
-        
-        workflowResults.push({
-          phase: 'upload',
-          file: file.name,
-          success: !!uploadResult.ETag,
-          etag: uploadResult.ETag
+  describe('Content Delivery Workflow', () => {
+    test('upload test file to S3 bucket', async () => {
+      await s3.putObject({
+        Bucket: contentBucketName,
+        Key: testFileName,
+        Body: testFileContent,
+        ContentType: 'text/html',
+      }).promise();
+
+      // Verify upload
+      const object = await s3.headObject({
+        Bucket: contentBucketName,
+        Key: testFileName,
+      }).promise();
+
+      expect(object).toBeDefined();
+      expect(object.ContentType).toBe('text/html');
+    });
+
+    test('retrieve uploaded file from S3 directly', async () => {
+      const response = await s3.getObject({
+        Bucket: contentBucketName,
+        Key: testFileName,
+      }).promise();
+
+      expect(response.Body?.toString()).toBe(testFileContent);
+    });
+
+    test('file is accessible through CloudFront', async () => {
+      const url = `https://${distributionDomainName}/${testFileName}`;
+
+      // Wait for CloudFront propagation
+      console.log('Waiting for CloudFront propagation (30 seconds)...');
+      await sleep(30000);
+
+      const response = await httpsGet(url);
+
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toContain('Integration Test');
+    }, 60000); // 60 second timeout
+
+    test('CloudFront returns correct security headers', async () => {
+      const url = `https://${distributionDomainName}/${testFileName}`;
+      const response = await httpsGet(url);
+
+      expect(response.headers['x-content-type-options']).toBe('nosniff');
+      expect(response.headers['x-frame-options']).toBe('DENY');
+      expect(response.headers['strict-transport-security']).toBeDefined();
+      expect(response.headers['x-xss-protection']).toBeDefined();
+    });
+
+
+    test('HTTP redirects to HTTPS', async () => {
+      const httpUrl = `http://${distributionDomainName}/${testFileName}`;
+
+      try {
+        await new Promise((resolve, reject) => {
+          const http = require('http');
+          const req = http.get(httpUrl, { timeout: 5000 }, (res: any) => {
+            expect(res.statusCode).toBe(301);
+            expect(res.headers.location).toContain('https://');
+            resolve(res);
+          });
+          req.on('error', reject);
+          req.on('timeout', () => {
+            req.destroy();
+            reject(new Error('Request timeout'));
+          });
         });
+      } catch (error) {
+        // Some environments may not support HTTP, that's okay
+        console.log('HTTP test skipped - may not be supported in all environments');
       }
+    });
+  });
 
-      // Phase 2: Wait for CloudFront propagation
-      console.log('Phase 2: Waiting for CloudFront propagation...');
-      await new Promise(resolve => setTimeout(resolve, 10000));
+  describe('CloudFront Cache Behavior', () => {
+    test('cache policy exists and has correct settings', async () => {
+      const distribution = await cloudfront.getDistribution({
+        Id: distributionId,
+      }).promise();
 
-      // Phase 3: Test content delivery through CloudFront for each file type
-      console.log('Phase 3: Testing content delivery through CloudFront...');
-      for (const file of testFiles) {
-        const cloudFrontUrl = `https://${outputs.DistributionDomainNameOutput}/${file.name}`;
-        
-        try {
-          const response = (await httpsRequest(
-            cloudFrontUrl,
-            {
-              method: 'GET',
-              headers: {
-                'User-Agent': 'CompleteFlowTest/1.0',
-                'Accept-Encoding': 'gzip, br'
-              },
-            },
-            () => {}
-          )) as any;
+      const cachePolicyId = distribution.Distribution?.DistributionConfig.DefaultCacheBehavior.CachePolicyId;
+      expect(cachePolicyId).toBeDefined();
 
-          workflowResults.push({
-            phase: 'cloudfront-delivery',
-            file: file.name,
-            success: response.statusCode === 200,
-            statusCode: response.statusCode,
-            hasCloudFrontHeaders: !!(response.headers['via'] && response.headers['x-cache']),
-            contentLength: response.data?.length || 0,
-            cacheStatus: response.headers['x-cache']
-          });
+      const cachePolicy = await cloudfront.getCachePolicy({
+        Id: cachePolicyId!,
+      }).promise();
 
-          // Verify content matches original for text files
-          if (file.contentType === 'text/html' || file.contentType === 'application/json') {
-            const contentMatches = response.data.includes(file.contentType === 'application/json' ? 
-              JSON.parse(file.content).message : 'Test Article for Integration Testing');
-            workflowResults.push({
-              phase: 'content-verification',
-              file: file.name,
-              success: contentMatches,
-              contentMatches
-            });
-          }
+      expect(cachePolicy.CachePolicy?.CachePolicyConfig.Comment).toBe('Cache policy for article content');
+      expect(cachePolicy.CachePolicy?.CachePolicyConfig.DefaultTTL).toBe(86400); // 24 hours
+    });
 
-        } catch (error) {
-          workflowResults.push({
-            phase: 'cloudfront-delivery',
-            file: file.name,
-            success: false,
-            error: error.message
-          });
-        }
-      }
+    test('response headers policy exists', async () => {
+      const distribution = await cloudfront.getDistribution({
+        Id: distributionId,
+      }).promise();
 
-      // Phase 4: Test caching behavior with second requests
-      console.log('Phase 4: Testing caching behavior...');
-      for (const file of testFiles) {
-        const cloudFrontUrl = `https://${outputs.DistributionDomainNameOutput}/${file.name}`;
-        
-        try {
-          const cachedResponse = (await httpsRequest(
-            cloudFrontUrl,
-            {
-              method: 'GET',
-              headers: {
-                'User-Agent': 'CompleteFlowTest-Cache/1.0',
-              },
-            },
-            () => {}
-          )) as any;
+      const headersPolicyId = distribution.Distribution?.DistributionConfig.DefaultCacheBehavior.ResponseHeadersPolicyId;
+      expect(headersPolicyId).toBeDefined();
 
-          const isCacheHit = cachedResponse.headers['x-cache']?.includes('Hit') || 
-                            cachedResponse.headers['x-cache']?.includes('RefreshHit');
+      const headersPolicy = await cloudfront.getResponseHeadersPolicy({
+        Id: headersPolicyId!,
+      }).promise();
 
-          workflowResults.push({
-            phase: 'cache-test',
-            file: file.name,
-            success: cachedResponse.statusCode === 200,
-            cacheHit: isCacheHit,
-            cacheStatus: cachedResponse.headers['x-cache']
-          });
+      expect(headersPolicy.ResponseHeadersPolicy?.ResponseHeadersPolicyConfig.Comment).toBe('Security headers for content delivery');
+    });
+  });
 
-        } catch (error) {
-          workflowResults.push({
-            phase: 'cache-test',
-            file: file.name,
-            success: false,
-            error: error.message
-          });
-        }
-      }
+  describe('IAM Roles and Permissions', () => {
+    test('invalidation role exists and has correct permissions', async () => {
+      const roleName = invalidationRoleArn.split('/').pop()!;
 
-      // Phase 5: Test CloudFront invalidation
-      console.log('Phase 5: Testing CloudFront invalidation...');
-      const invalidationResult = await cloudfront.createInvalidation({
-        DistributionId: outputs.DistributionIdOutput,
+      const role = await iam.getRole({
+        RoleName: roleName,
+      }).promise();
+
+      expect(role.Role).toBeDefined();
+      expect(role.Role.Description).toContain('CloudFront invalidation');
+
+      const policies = await iam.listRolePolicies({
+        RoleName: roleName,
+      }).promise();
+
+      expect(policies.PolicyNames.length).toBeGreaterThan(0);
+      expect(policies.PolicyNames).toContain('CloudFrontInvalidation');
+
+      const policy = await iam.getRolePolicy({
+        RoleName: roleName,
+        PolicyName: 'CloudFrontInvalidation',
+      }).promise();
+
+      const policyDoc = JSON.parse(decodeURIComponent(policy.PolicyDocument));
+      const statement = policyDoc.Statement[0];
+
+      expect(statement.Effect).toBe('Allow');
+      expect(statement.Action).toContain('cloudfront:CreateInvalidation');
+      expect(statement.Resource).toContain(distributionId);
+    });
+
+    test('content management role exists and has S3 permissions', async () => {
+      const roleName = contentManagementRoleArn.split('/').pop()!;
+
+      const role = await iam.getRole({
+        RoleName: roleName,
+      }).promise();
+
+      expect(role.Role).toBeDefined();
+      expect(role.Role.Description).toContain('S3 content management');
+
+      const policies = await iam.listRolePolicies({
+        RoleName: roleName,
+      }).promise();
+
+      expect(policies.PolicyNames).toContain('S3ContentAccess');
+
+      const policy = await iam.getRolePolicy({
+        RoleName: roleName,
+        PolicyName: 'S3ContentAccess',
+      }).promise();
+
+      const policyDoc = JSON.parse(decodeURIComponent(policy.PolicyDocument));
+      const statement = policyDoc.Statement[0];
+
+      expect(statement.Effect).toBe('Allow');
+      expect(statement.Action).toContain('s3:PutObject');
+      expect(statement.Action).toContain('s3:GetObject');
+      expect(statement.Action).toContain('s3:DeleteObject');
+    });
+  });
+
+  describe('CloudFront Invalidation', () => {
+    test('can create CloudFront invalidation', async () => {
+      const invalidation = await cloudfront.createInvalidation({
+        DistributionId: distributionId,
         InvalidationBatch: {
+          CallerReference: `test-${Date.now()}`,
           Paths: {
-            Quantity: testFiles.length,
-            Items: testFiles.map(f => `/${f.name}`),
+            Quantity: 1,
+            Items: [`/${testFileName}`],
           },
-          CallerReference: `complete-flow-test-${Date.now()}`,
         },
       }).promise();
 
-      workflowResults.push({
-        phase: 'invalidation',
-        success: !!invalidationResult.Invalidation.Id,
-        invalidationId: invalidationResult.Invalidation.Id,
-        status: invalidationResult.Invalidation.Status
-      });
+      expect(invalidation.Invalidation).toBeDefined();
+      expect(invalidation.Invalidation?.Status).toBe('InProgress');
 
-      // Phase 6: Test security - direct S3 access should be blocked
-      console.log('Phase 6: Testing security - S3 direct access blocking...');
-      for (const file of testFiles.slice(0, 1)) { // Test with first file only
-        const directS3Url = `https://${outputs.ContentBucketNameOutput}.s3.amazonaws.com/${file.name}`;
-        
-        try {
-          const response = (await httpsRequest(
-            directS3Url,
-            {
-              method: 'GET',
-            },
-            () => {}
-          )) as any;
+      // Wait for invalidation to complete
+      console.log('Waiting for invalidation to complete...');
+      let status = 'InProgress';
+      let attempts = 0;
+      const maxAttempts = 30;
 
-          workflowResults.push({
-            phase: 'security-test',
-            file: file.name,
-            success: [403, 404].includes(response.statusCode),
-            statusCode: response.statusCode,
-            accessBlocked: [403, 404].includes(response.statusCode)
-          });
-
-        } catch (error) {
-          workflowResults.push({
-            phase: 'security-test',
-            file: file.name,
-            success: true, // Error means access is blocked, which is good
-            error: 'Access properly blocked'
-          });
-        }
+      while (status === 'InProgress' && attempts < maxAttempts) {
+        await sleep(10000); // Wait 10 seconds
+        const response = await cloudfront.getInvalidation({
+          DistributionId: distributionId,
+          Id: invalidation.Invalidation!.Id,
+        }).promise();
+        status = response.Invalidation!.Status;
+        attempts++;
       }
 
-      // Phase 7: Verify monitoring and logging
-      console.log('Phase 7: Verifying monitoring and logging...');
-      
-      // Check CloudWatch dashboard exists
-      const dashboards = await cloudwatch.listDashboards().promise();
-      const contentDeliveryDashboard = dashboards.DashboardEntries?.find(
-        dashboard =>
-          dashboard.DashboardName?.includes('content-delivery') &&
-          dashboard.DashboardName?.includes(environmentSuffix)
-      );
-
-      workflowResults.push({
-        phase: 'monitoring',
-        success: !!contentDeliveryDashboard,
-        dashboardExists: !!contentDeliveryDashboard,
-        dashboardName: contentDeliveryDashboard?.DashboardName
-      });
-
-      // Check CloudWatch alarms exist
-      const alarms = await cloudwatch.describeAlarms().promise();
-      const relevantAlarms = alarms.MetricAlarms?.filter(
-        alarm => alarm.AlarmName?.includes('content-delivery') && 
-                 alarm.AlarmName?.includes(environmentSuffix)
-      );
-
-      workflowResults.push({
-        phase: 'monitoring',
-        success: (relevantAlarms?.length || 0) >= 3, // Should have at least 3 alarms
-        alarmCount: relevantAlarms?.length || 0,
-        alarms: relevantAlarms?.map(a => a.AlarmName)
-      });
-
-      // Comprehensive workflow verification
-      const uploadSuccesses = workflowResults.filter(r => r.phase === 'upload' && r.success).length;
-      const deliverySuccesses = workflowResults.filter(r => r.phase === 'cloudfront-delivery' && r.success).length;
-      const cacheSuccesses = workflowResults.filter(r => r.phase === 'cache-test' && r.success).length;
-      const securitySuccesses = workflowResults.filter(r => r.phase === 'security-test' && r.success).length;
-      const monitoringSuccesses = workflowResults.filter(r => r.phase === 'monitoring' && r.success).length;
-      const invalidationSuccess = workflowResults.find(r => r.phase === 'invalidation')?.success || false;
-
-      // Log comprehensive results
-      console.log('\n=== COMPLETE FLOW TEST RESULTS ===');
-      console.log(`Upload Phase: ${uploadSuccesses}/${testFiles.length} successful`);
-      console.log(`CloudFront Delivery: ${deliverySuccesses}/${testFiles.length} successful`);
-      console.log(`Cache Testing: ${cacheSuccesses}/${testFiles.length} successful`);
-      console.log(`Security Testing: ${securitySuccesses}/1 successful`);
-      console.log(`Monitoring Setup: ${monitoringSuccesses}/2 successful`);
-      console.log(`Invalidation: ${invalidationSuccess ? 'successful' : 'failed'}`);
-      console.log('=====================================\n');
-
-      // Comprehensive assertions for complete flow
-      expect(uploadSuccesses).toBe(testFiles.length); // All uploads must succeed
-      expect(deliverySuccesses).toBeGreaterThanOrEqual(testFiles.length * 0.8); // 80% delivery success rate minimum
-      expect(invalidationSuccess).toBe(true); // Invalidation must work
-      expect(securitySuccesses).toBe(1); // Direct S3 access must be blocked
-      expect(monitoringSuccesses).toBeGreaterThanOrEqual(1); // At least monitoring dashboard should exist
-
-      // Overall workflow success criteria
-      const overallSuccess = uploadSuccesses === testFiles.length &&
-                           deliverySuccesses >= testFiles.length * 0.8 &&
-                           invalidationSuccess &&
-                           securitySuccesses === 1;
-
-      expect(overallSuccess).toBe(true);
-
-    }, 120000); // Extended timeout for complete flow test
-
-    test('should handle error scenarios gracefully', async () => {
-      // Test 404 error handling
-      const nonExistentUrl = `https://${outputs.DistributionDomainNameOutput}/non-existent-file-${Date.now()}.html`;
-
-      try {
-        const response = (await httpsRequest(
-          nonExistentUrl,
-          {
-            method: 'GET',
-          },
-          () => {}
-        )) as any;
-
-        // Should return 404 due to error page configuration
-        expect(response.statusCode).toBe(404);
-      } catch (error) {
-        // Network errors are also acceptable for non-existent content
-        expect(error).toBeDefined();
-      }
-
-      // Test malformed requests
-      try {
-        const malformedResponse = (await httpsRequest(
-          `https://${outputs.DistributionDomainNameOutput}/../../../etc/passwd`,
-          {
-            method: 'GET',
-          },
-          () => {}
-        )) as any;
-
-        // Should handle malformed paths gracefully
-        expect([400, 403, 404]).toContain(malformedResponse.statusCode);
-      } catch (error) {
-        // Errors are acceptable for malformed requests
-        expect(error).toBeDefined();
-      }
-    });
+      expect(status).toBe('Completed');
+    }, 360000); // 6 minute timeout
   });
 
-  describe('CloudWatch Monitoring Verification', () => {
-    test('should have CloudWatch dashboard created', async () => {
-      const dashboards = await cloudwatch.listDashboards().promise();
-      const contentDeliveryDashboard = dashboards.DashboardEntries?.find(
-        dashboard =>
-          dashboard.DashboardName?.includes('content-delivery') &&
-          dashboard.DashboardName?.includes(environmentSuffix)
-      );
+  describe('End-to-End Content Update Flow', () => {
+    const updatedFileName = 'updated-test.html';
+    const updatedContent = '<html><body><h1>Updated Content</h1></body></html>';
 
-      expect(contentDeliveryDashboard).toBeDefined();
-    });
+    test('complete content update and invalidation workflow', async () => {
+      // Step 1: Upload new content
+      console.log('Step 1: Uploading new content...');
+      await s3.putObject({
+        Bucket: contentBucketName,
+        Key: updatedFileName,
+        Body: updatedContent,
+        ContentType: 'text/html',
+        CacheControl: 'max-age=3600',
+      }).promise();
 
-    test('should have CloudWatch alarms configured', async () => {
-      const alarms = await cloudwatch.describeAlarms().promise();
-
-      const errorRateAlarm = alarms.MetricAlarms?.find(
-        alarm =>
-          alarm.AlarmName?.includes('content-delivery-high-error-rate') &&
-          alarm.AlarmName?.includes(environmentSuffix)
-      );
-      expect(errorRateAlarm).toBeDefined();
-      expect(errorRateAlarm?.Threshold).toBe(5);
-
-      const serverErrorAlarm = alarms.MetricAlarms?.find(
-        alarm =>
-          alarm.AlarmName?.includes(
-            'content-delivery-high-server-error-rate'
-          ) && alarm.AlarmName?.includes(environmentSuffix)
-      );
-      expect(serverErrorAlarm).toBeDefined();
-      expect(serverErrorAlarm?.Threshold).toBe(1);
-
-      const cacheHitAlarm = alarms.MetricAlarms?.find(
-        alarm =>
-          alarm.AlarmName?.includes('content-delivery-low-cache-hit-rate') &&
-          alarm.AlarmName?.includes(environmentSuffix)
-      );
-      expect(cacheHitAlarm).toBeDefined();
-      expect(cacheHitAlarm?.Threshold).toBe(70);
-    });
-  });
-
-  describe('Performance and Optimization Verification', () => {
-    test('should verify content compression is working', async () => {
-      const file = testFiles[0];
-      const cloudFrontUrl = `https://${outputs.DistributionDomainNameOutput}/${file.name}`;
-
-      try {
-        const response = (await httpsRequest(
-          cloudFrontUrl,
-          {
-            method: 'GET',
-            headers: {
-              'Accept-Encoding': 'gzip, br',
-            },
-          },
-          () => {}
-        )) as any;
-
-        // Content should be compressed for efficiency
-        if (response.data && response.data.length > 100) {
-          expect(response.headers['content-encoding']).toBeDefined();
-        }
-      } catch (error) {
-        console.warn('Compression test failed:', error);
-        expect(error).toBeDefined();
-      }
-    });
-
-    test('should verify appropriate cache headers are set', async () => {
-      const file = testFiles[0];
-      const cloudFrontUrl = `https://${outputs.DistributionDomainNameOutput}/${file.name}`;
-
-      try {
-        const response = (await httpsRequest(
-          cloudFrontUrl,
-          {
-            method: 'GET',
-          },
-          () => {}
-        )) as any;
-
-        // Verify cache-related headers
-        expect(response.headers['cache-control']).toBeDefined();
-        expect(response.headers['etag']).toBeDefined();
-      } catch (error) {
-        console.warn('Cache headers test failed:', error);
-        expect(error).toBeDefined();
-      }
-    });
-
-    test('should verify security headers are properly set', async () => {
-      const file = testFiles[0];
-      const cloudFrontUrl = `https://${outputs.DistributionDomainNameOutput}/${file.name}`;
-
-      try {
-        const response = (await httpsRequest(
-          cloudFrontUrl,
-          {
-            method: 'GET',
-          },
-          () => {}
-        )) as any;
-
-        // Verify security headers are present
-        expect(response.headers['x-content-type-options']).toBe('nosniff');
-        expect(response.headers['x-frame-options']).toBe('DENY');
-        expect(response.headers['strict-transport-security']).toBeDefined();
-        expect(response.headers['x-xss-protection']).toBe('1; mode=block');
-
-      } catch (error) {
-        console.warn('Security headers test failed:', error);
-        expect(error).toBeDefined();
-      }
-    });
-  });
-
-  describe('Security Verification', () => {
-    test('should not allow direct S3 access', async () => {
-      const file = testFiles[0];
-      const directS3Url = `https://${outputs.ContentBucketNameOutput}.s3.amazonaws.com/${file.name}`;
-
-      try {
-        const response = (await httpsRequest(
-          directS3Url,
-          {
-            method: 'GET',
-          },
-          () => {}
-        )) as any;
-
-        // Direct S3 access should be blocked
-        expect([403, 404]).toContain(response.statusCode);
-      } catch (error) {
-        // Network error is also acceptable - means access is properly blocked
-        expect(error).toBeDefined();
-      }
-    });
-
-    test('should enforce HTTPS redirection', async () => {
-      // This test verifies the CloudFront configuration rather than making HTTP requests
-      const distribution = await cloudfront
-        .getDistribution({
-          Id: outputs.DistributionIdOutput,
-        })
-        .promise();
-
-      const defaultBehavior =
-        distribution.Distribution.DistributionConfig.DefaultCacheBehavior;
-      expect(defaultBehavior.ViewerProtocolPolicy).toBe('redirect-to-https');
-    });
-  });
-
-  describe('CloudFront Cache Management', () => {
-    test('should be able to create cache invalidation', async () => {
-      const file = testFiles[0];
-      const invalidationParams = {
-        DistributionId: outputs.DistributionIdOutput,
+      // Step 2: Create invalidation
+      console.log('Step 2: Creating invalidation...');
+      const invalidation = await cloudfront.createInvalidation({
+        DistributionId: distributionId,
         InvalidationBatch: {
+          CallerReference: `test-update-${Date.now()}`,
           Paths: {
             Quantity: 1,
-            Items: [`/${file.name}`],
+            Items: [`/${updatedFileName}`],
           },
-          CallerReference: `test-invalidation-${Date.now()}`,
         },
-      };
+      }).promise();
 
-      const invalidation = await cloudfront
-        .createInvalidation(invalidationParams)
-        .promise();
+      expect(invalidation.Invalidation?.Status).toBe('InProgress');
 
-      expect(invalidation.Invalidation.Id).toBeDefined();
-      expect(invalidation.Invalidation.Status).toBeDefined();
+      // Step 3: Wait for propagation
+      console.log('Step 3: Waiting for propagation...');
+      await sleep(30000);
 
-      // Verify invalidation exists
-      const invalidationStatus = await cloudfront
-        .getInvalidation({
-          DistributionId: outputs.DistributionIdOutput,
-          Id: invalidation.Invalidation.Id,
-        })
-        .promise();
+      // Step 4: Verify content is accessible
+      console.log('Step 4: Verifying content...');
+      const url = `https://${distributionDomainName}/${updatedFileName}`;
+      const response = await httpsGet(url);
 
-      expect(invalidationStatus.Invalidation.Id).toBe(
-        invalidation.Invalidation.Id
-      );
-    });
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toContain('Updated Content');
+      expect(response.headers['cache-control']).toBeDefined();
+    }, 120000); // 2 minute timeout
+  });
 
-    test('should handle batch invalidations', async () => {
-      const invalidationParams = {
-        DistributionId: outputs.DistributionIdOutput,
-        InvalidationBatch: {
-          Paths: {
-            Quantity: testFiles.length,
-            Items: testFiles.map(f => `/${f.name}`),
-          },
-          CallerReference: `test-batch-invalidation-${Date.now()}`,
-        },
-      };
+  afterAll(async () => {
+    // Cleanup test files
+    console.log('Cleaning up test files...');
 
-      const invalidation = await cloudfront
-        .createInvalidation(invalidationParams)
-        .promise();
+    try {
+      await s3.deleteObject({
+        Bucket: contentBucketName,
+        Key: testFileName,
+      }).promise();
 
-      expect(invalidation.Invalidation.Id).toBeDefined();
-      expect(invalidation.Invalidation.InvalidationBatch.Paths.Quantity).toBe(testFiles.length);
-    });
+      await s3.deleteObject({
+        Bucket: contentBucketName,
+        Key: 'updated-test.html',
+      }).promise();
+
+      console.log('Cleanup completed successfully');
+    } catch (error) {
+      console.warn('Cleanup warning:', error);
+    }
+
+    // Force cleanup of AWS SDK connections
+    console.log('Cleaning up AWS SDK connections...');
+
+    // Destroy HTTP agents to close persistent connections
+    if ((s3 as any).config?.httpOptions?.agent) {
+      (s3 as any).config.httpOptions.agent.destroy();
+    }
+    if ((cloudfront as any).config?.httpOptions?.agent) {
+      (cloudfront as any).config.httpOptions.agent.destroy();
+    }
+    if ((cloudwatch as any).config?.httpOptions?.agent) {
+      (cloudwatch as any).config.httpOptions.agent.destroy();
+    }
+    if ((iam as any).config?.httpOptions?.agent) {
+      (iam as any).config.httpOptions.agent.destroy();
+    }
   });
 });

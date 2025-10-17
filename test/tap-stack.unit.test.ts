@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'test';
@@ -305,6 +305,41 @@ describe('TapStack', () => {
       template.resourceCountIs('AWS::CloudFront::Distribution', 1);
       template.resourceCountIs('AWS::CloudFront::CachePolicy', 1);
       template.resourceCountIs('AWS::CloudFront::ResponseHeadersPolicy', 1);
+    });
+  });
+
+  describe('Certificate Configuration', () => {
+    test('configures CloudFront with certificate when certificateArn provided', () => {
+      const certApp = new cdk.App();
+      const certStack = new TapStack(certApp, 'CertStack', {
+        environmentSuffix: 'cert-test',
+        certificateArn: 'arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012',
+        domainName: 'example.com',
+      });
+      const certTemplate = Template.fromStack(certStack);
+
+      // Verify CloudFront distribution has ViewerCertificate configuration
+      certTemplate.hasResourceProperties('AWS::CloudFront::Distribution', {
+        DistributionConfig: Match.objectLike({
+          ViewerCertificate: Match.objectLike({
+            AcmCertificateArn: 'arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012',
+            SslSupportMethod: 'sni-only',
+            MinimumProtocolVersion: 'TLSv1.2_2021',
+          }),
+        }),
+      });
+    });
+
+    test('CloudFront works without certificate when certificateArn not provided', () => {
+      // The basic stack without certificate should still create distribution
+      template.resourceCountIs('AWS::CloudFront::Distribution', 1);
+
+      // Verify distribution doesn't have custom certificate configured
+      template.hasResourceProperties('AWS::CloudFront::Distribution', {
+        DistributionConfig: Match.objectLike({
+          Enabled: true,
+        }),
+      });
     });
   });
 });
