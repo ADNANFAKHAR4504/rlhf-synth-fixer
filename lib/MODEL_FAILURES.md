@@ -1,4 +1,4 @@
-1. Generated response by the model had failures related to the security group naming conventions, it used the sg with naming starrting from sg- which is not allowed as per AWS rules.
+1. Generated response by the model had failures related to the security group naming conventions, it used the sg with naming starrting from sg- which is not allowed as per AWS rules. As per AWS rules any security group name should not start with sg- as its reserved for AWS.
 
 ```
 ╷
@@ -21,7 +21,7 @@ Error: Terraform exited with code 1.
 All deployment attempts failed. Check for state lock issues.
 ```
 
-2. Deployment also failed because of the IAM role worng naming convention.
+2. Deployment also failed because of the IAM role worng naming convention. The model used the wrong naming convetion for IAM role with capital letters and special characters which is not allowed as per AWS naming convention guidelines.
 
 ```
 ╷
