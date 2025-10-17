@@ -63,7 +63,7 @@ class TapStack(pulumi.ComponentResource):
         config = Config()
         project_name = pulumi.get_project()
         stack_name = pulumi.get_stack()
-        region = aws.get_region().name
+        region = aws.get_region().region
 
         # Cost allocation tags
         base_tags = {
@@ -97,15 +97,15 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # Create S3 bucket for CloudWatch logs
-        logs_bucket = aws.s3.BucketV2("cloudwatch-logs-bucket",
+        logs_bucket = aws.s3.Bucket("cloudwatch-logs-bucket",
             bucket=f"{project_name}-logs-{stack_name}",
             tags={**base_tags, "Purpose": "Logging"}
         )
 
         # Enable versioning for logs bucket
-        logs_bucket_versioning = aws.s3.BucketVersioningV2("logs-bucket-versioning",
+        logs_bucket_versioning = aws.s3.BucketVersioning("logs-bucket-versioning",
             bucket=logs_bucket.id,
-            versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
+            versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
                 status="Enabled"
             )
         )
@@ -123,7 +123,7 @@ class TapStack(pulumi.ComponentResource):
         # 1. Main S3 Bucket with Cost Optimization
         # ====================
 
-        main_bucket = aws.s3.BucketV2("main-storage-bucket",
+        main_bucket = aws.s3.Bucket("main-storage-bucket",
             bucket=f"{project_name}-main-{stack_name}",
             tags={
                 **base_tags,
@@ -134,9 +134,9 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # Enable versioning for compliance
-        bucket_versioning = aws.s3.BucketVersioningV2("main-bucket-versioning",
+        bucket_versioning = aws.s3.BucketVersioning("main-bucket-versioning",
             bucket=main_bucket.id,
-            versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
+            versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
                 status="Enabled",
                 mfa_delete="Disabled"
             )
@@ -150,20 +150,15 @@ class TapStack(pulumi.ComponentResource):
             bucket=main_bucket.id,
             name="OptimizeAllObjects",
             tierings=[
-                # Archive instant access tier after 90 days of no access
-                aws.s3.BucketIntelligentTieringConfigurationTieringArgs(
-                    access_tier="ARCHIVE_INSTANT_ACCESS",
-                    days=90
-                ),
-                # Flexible retrieval tier after 180 days
+                # Archive Access tier after 90 days of no access
                 aws.s3.BucketIntelligentTieringConfigurationTieringArgs(
                     access_tier="ARCHIVE_ACCESS",
-                    days=180
+                    days=90
                 ),
-                # Deep archive tier after 365 days
+                # Deep archive tier after 180 days
                 aws.s3.BucketIntelligentTieringConfigurationTieringArgs(
                     access_tier="DEEP_ARCHIVE_ACCESS",
-                    days=365
+                    days=180
                 )
             ],
             # Apply to all objects
@@ -174,64 +169,64 @@ class TapStack(pulumi.ComponentResource):
         # 3. Lifecycle Rules for Compliance Data
         # ====================
 
-        lifecycle_configuration = aws.s3.BucketLifecycleConfigurationV2("lifecycle-rules",
+        lifecycle_configuration = aws.s3.BucketLifecycleConfiguration("lifecycle-rules",
             bucket=main_bucket.id,
             rules=[
                 # Rule for compliance data
-                aws.s3.BucketLifecycleConfigurationV2RuleArgs(
+                aws.s3.BucketLifecycleConfigurationRuleArgs(
                     id="compliance-data-archival",
                     status="Enabled",
-                    filter=aws.s3.BucketLifecycleConfigurationV2RuleFilterArgs(
+                    filter=aws.s3.BucketLifecycleConfigurationRuleFilterArgs(
                         prefix="compliance/",
-                        tag=aws.s3.BucketLifecycleConfigurationV2RuleFilterTagArgs(
+                        tag=aws.s3.BucketLifecycleConfigurationRuleFilterTagArgs(
                             key="DataType",
                             value="Compliance"
                         )
                     ),
                     transitions=[
                         # Move to Intelligent Tiering first (for newer data)
-                        aws.s3.BucketLifecycleConfigurationV2RuleTransitionArgs(
+                        aws.s3.BucketLifecycleConfigurationRuleTransitionArgs(
                             days=30,
                             storage_class="INTELLIGENT_TIERING"
                         ),
                         # Then to Glacier after 90 days
-                        aws.s3.BucketLifecycleConfigurationV2RuleTransitionArgs(
+                        aws.s3.BucketLifecycleConfigurationRuleTransitionArgs(
                             days=90,
                             storage_class="GLACIER"
                         ),
                         # Finally to Deep Archive after 365 days
-                        aws.s3.BucketLifecycleConfigurationV2RuleTransitionArgs(
+                        aws.s3.BucketLifecycleConfigurationRuleTransitionArgs(
                             days=365,
                             storage_class="DEEP_ARCHIVE"
                         )
                     ],
                     # Delete non-current versions after 7 years (compliance requirement)
                     noncurrent_version_transitions=[
-                        aws.s3.BucketLifecycleConfigurationV2RuleNoncurrentVersionTransitionArgs(
+                        aws.s3.BucketLifecycleConfigurationRuleNoncurrentVersionTransitionArgs(
                             storage_class="DEEP_ARCHIVE",
                             noncurrent_days=30
                         )
                     ],
-                    noncurrent_version_expiration=aws.s3.BucketLifecycleConfigurationV2RuleNoncurrentVersionExpirationArgs(
+                    noncurrent_version_expiration=aws.s3.BucketLifecycleConfigurationRuleNoncurrentVersionExpirationArgs(
                         noncurrent_days=2555  # 7 years
                     )
                 ),
                 # Rule for general data optimization
-                aws.s3.BucketLifecycleConfigurationV2RuleArgs(
+                aws.s3.BucketLifecycleConfigurationRuleArgs(
                     id="general-data-optimization",
                     status="Enabled",
-                    filter=aws.s3.BucketLifecycleConfigurationV2RuleFilterArgs(
+                    filter=aws.s3.BucketLifecycleConfigurationRuleFilterArgs(
                         prefix=""  # Apply to all objects not caught by other rules
                     ),
                     transitions=[
                         # Move everything to Intelligent Tiering after 7 days
-                        aws.s3.BucketLifecycleConfigurationV2RuleTransitionArgs(
+                        aws.s3.BucketLifecycleConfigurationRuleTransitionArgs(
                             days=7,
                             storage_class="INTELLIGENT_TIERING"
                         )
                     ],
                     # Clean up incomplete multipart uploads
-                    abort_incomplete_multipart_upload=aws.s3.BucketLifecycleConfigurationV2RuleAbortIncompleteMultipartUploadArgs(
+                    abort_incomplete_multipart_upload=aws.s3.BucketLifecycleConfigurationRuleAbortIncompleteMultipartUploadArgs(
                         days_after_initiation=7
                     )
                 )
@@ -242,7 +237,7 @@ class TapStack(pulumi.ComponentResource):
         # 4. S3 Inventory Configuration
         # ====================
 
-        inventory_bucket = aws.s3.BucketV2("inventory-bucket",
+        inventory_bucket = aws.s3.Bucket("inventory-bucket",
             bucket=f"{project_name}-inventory-{stack_name}",
             tags={**base_tags, "Purpose": "Inventory"}
         )
@@ -604,30 +599,30 @@ def lambda_handler(event, context):
             region="us-west-2"  # Different region for replication
         )
 
-        replica_bucket = aws.s3.BucketV2("replica-bucket",
+        replica_bucket = aws.s3.Bucket("replica-bucket",
             bucket=f"{project_name}-replica-{stack_name}",
             tags={**base_tags, "Purpose": "DisasterRecovery"},
             opts=pulumi.ResourceOptions(provider=replica_provider)
         )
 
-        replica_versioning = aws.s3.BucketVersioningV2("replica-versioning",
+        replica_versioning = aws.s3.BucketVersioning("replica-versioning",
             bucket=replica_bucket.id,
-            versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
+            versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
                 status="Enabled"
             ),
             opts=pulumi.ResourceOptions(provider=replica_provider)
         )
 
         # Lifecycle rule for replica to optimize costs
-        replica_lifecycle = aws.s3.BucketLifecycleConfigurationV2("replica-lifecycle",
+        replica_lifecycle = aws.s3.BucketLifecycleConfiguration("replica-lifecycle",
             bucket=replica_bucket.id,
             rules=[
-                aws.s3.BucketLifecycleConfigurationV2RuleArgs(
+                aws.s3.BucketLifecycleConfigurationRuleArgs(
                     id="optimize-replica-storage",
                     status="Enabled",
                     transitions=[
                         # Move to Glacier immediately for DR purposes
-                        aws.s3.BucketLifecycleConfigurationV2RuleTransitionArgs(
+                        aws.s3.BucketLifecycleConfigurationRuleTransitionArgs(
                             days=1,
                             storage_class="GLACIER"
                         )
