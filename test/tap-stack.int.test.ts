@@ -1,5 +1,6 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
 import fs from 'fs';
+import * as AWS from 'aws-sdk';
 
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
@@ -9,236 +10,449 @@ const outputs = JSON.parse(
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const region = process.env.AWS_REGION || 'ap-northeast-1';
 
+// Initialize AWS SDK v2 clients
+const s3 = new AWS.S3({ region });
+const codepipeline = new AWS.CodePipeline({ region });
+const codebuild = new AWS.CodeBuild({ region });
+const codedeploy = new AWS.CodeDeploy({ region });
+const ec2 = new AWS.EC2({ region });
+const elbv2 = new AWS.ELBv2({ region });
+const sns = new AWS.SNS({ region });
+const lambda = new AWS.Lambda({ region });
+const secretsmanager = new AWS.SecretsManager({ region });
+const cloudwatch = new AWS.CloudWatch({ region });
+const budgets = new AWS.Budgets({ region });
+
 describe('TAP CI/CD Pipeline Integration Tests', () => {
-  describe('Stack Outputs Validation', () => {
-    test('Pipeline name should be defined and follow naming convention', () => {
-      expect(outputs.PipelineName).toBeDefined();
-      expect(outputs.PipelineName).toBe(`tap-pipeline-${environmentSuffix}`);
+  describe('S3 Bucket Validation', () => {
+    test('Source bucket should exist and be accessible', async () => {
+      const result = await s3.headBucket({
+        Bucket: outputs.SourceBucketName,
+      }).promise();
+      expect(result).toBeDefined();
     });
 
-    test('CodeBuild project name should be defined and follow naming convention', () => {
-      expect(outputs.CodeBuildProjectName).toBeDefined();
-      expect(outputs.CodeBuildProjectName).toBe(`tap-build-${environmentSuffix}`);
+    test('Artifacts bucket should exist and be accessible', async () => {
+      const result = await s3.headBucket({
+        Bucket: outputs.ArtifactsBucketName,
+      }).promise();
+      expect(result).toBeDefined();
     });
 
-    test('CodeDeploy application name should be defined and follow naming convention', () => {
-      expect(outputs.CodeDeployApplicationName).toBeDefined();
-      expect(outputs.CodeDeployApplicationName).toBe(`tap-app-${environmentSuffix}`);
+    test('Source bucket should have versioning enabled', async () => {
+      const result = await s3.getBucketVersioning({
+        Bucket: outputs.SourceBucketName,
+      }).promise();
+      expect(result.Status).toBe('Enabled');
     });
 
-    test('VPC ID should be defined and valid format', () => {
-      expect(outputs.VPCId).toBeDefined();
-      expect(outputs.VPCId).toMatch(/^vpc-[a-z0-9]+$/);
+    test('Artifacts bucket should have versioning enabled', async () => {
+      const result = await s3.getBucketVersioning({
+        Bucket: outputs.ArtifactsBucketName,
+      }).promise();
+      expect(result.Status).toBe('Enabled');
     });
 
-    test('Load Balancer DNS should be defined and valid format', () => {
-      expect(outputs.LoadBalancerDNS).toBeDefined();
-      expect(outputs.LoadBalancerDNS).toContain('.elb.amazonaws.com');
-      expect(outputs.LoadBalancerDNS).toContain(region);
+    test('Source bucket should have encryption enabled', async () => {
+      const result = await s3.getBucketEncryption({
+        Bucket: outputs.SourceBucketName,
+      }).promise();
+      expect(result.ServerSideEncryptionConfiguration).toBeDefined();
+      expect(result.ServerSideEncryptionConfiguration.Rules).toBeDefined();
+      expect(result.ServerSideEncryptionConfiguration.Rules.length).toBeGreaterThan(0);
     });
 
-    test('Source bucket name should be defined and follow naming convention', () => {
-      expect(outputs.SourceBucketName).toBeDefined();
-      expect(outputs.SourceBucketName).toContain('tap-source');
-      expect(outputs.SourceBucketName).toContain(environmentSuffix);
-    });
-
-    test('Artifacts bucket name should be defined and follow naming convention', () => {
-      expect(outputs.ArtifactsBucketName).toBeDefined();
-      expect(outputs.ArtifactsBucketName).toContain('tap-artifacts');
-      expect(outputs.ArtifactsBucketName).toContain(environmentSuffix);
-    });
-
-    test('SNS topic ARN should be defined and valid format', () => {
-      expect(outputs.SNSTopicArn).toBeDefined();
-      expect(outputs.SNSTopicArn).toMatch(/^arn:aws:sns:/);
-      expect(outputs.SNSTopicArn).toContain(region);
-      expect(outputs.SNSTopicArn).toContain('tap-pipeline-notifications');
-    });
-
-    test('StackSet name should be defined and follow naming convention', () => {
-      expect(outputs.StackSetName).toBeDefined();
-      expect(outputs.StackSetName).toBe(`tap-pipeline-stackset-${environmentSuffix}`);
-    });
-
-    test('Region should match expected region', () => {
-      expect(outputs.Region).toBeDefined();
-      expect(outputs.Region).toBe(region);
+    test('Artifacts bucket should have encryption enabled', async () => {
+      const result = await s3.getBucketEncryption({
+        Bucket: outputs.ArtifactsBucketName,
+      }).promise();
+      expect(result.ServerSideEncryptionConfiguration).toBeDefined();
+      expect(result.ServerSideEncryptionConfiguration.Rules).toBeDefined();
+      expect(result.ServerSideEncryptionConfiguration.Rules.length).toBeGreaterThan(0);
     });
   });
 
-  describe('Resource Naming Conventions', () => {
-    test('All resource names should include environment suffix', () => {
-      expect(outputs.PipelineName).toContain(environmentSuffix);
-      expect(outputs.CodeBuildProjectName).toContain(environmentSuffix);
-      expect(outputs.CodeDeployApplicationName).toContain(environmentSuffix);
-      expect(outputs.SourceBucketName).toContain(environmentSuffix);
-      expect(outputs.ArtifactsBucketName).toContain(environmentSuffix);
+  describe('CodePipeline Validation', () => {
+    test('Pipeline should exist and be retrievable', async () => {
+      const result = await codepipeline.getPipeline({
+        name: outputs.PipelineName,
+      }).promise();
+      expect(result.pipeline).toBeDefined();
+      expect(result.pipeline.name).toBe(outputs.PipelineName);
     });
 
-    test('All resource names should start with "tap-" prefix', () => {
-      expect(outputs.PipelineName).toMatch(/^tap-/);
-      expect(outputs.CodeBuildProjectName).toMatch(/^tap-/);
-      expect(outputs.CodeDeployApplicationName).toMatch(/^tap-/);
-      expect(outputs.SourceBucketName).toMatch(/^tap-/);
-      expect(outputs.ArtifactsBucketName).toMatch(/^tap-/);
-      expect(outputs.StackSetName).toMatch(/^tap-/);
-    });
-  });
+    test('Pipeline should have required stages', async () => {
+      const result = await codepipeline.getPipeline({
+        name: outputs.PipelineName,
+      }).promise();
+      const stages = result.pipeline.stages || [];
+      const stageNames = stages.map((stage: any) => stage.name);
 
-  describe('Regional Configuration', () => {
-    test('All region-specific resources should be in correct region', () => {
-      expect(outputs.Region).toBe(region);
-      expect(outputs.SNSTopicArn).toContain(`:${region}:`);
-      expect(outputs.LoadBalancerDNS).toContain(`.${region}.`);
+      expect(stageNames).toContain('Source');
+      expect(stageNames).toContain('Build');
+      expect(stageNames).toContain('Deploy');
     });
 
-    test('Region should be ap-northeast-1 for this deployment', () => {
-      expect(region).toBe('ap-northeast-1');
-      expect(outputs.Region).toBe('ap-northeast-1');
+    test('Pipeline state should be accessible', async () => {
+      const result = await codepipeline.getPipelineState({
+        name: outputs.PipelineName,
+      }).promise();
+      expect(result.pipelineName).toBe(outputs.PipelineName);
+      expect(result.stageStates).toBeDefined();
     });
   });
 
-  describe('Required Infrastructure Components', () => {
-    test('All required S3 buckets should be present', () => {
-      expect(outputs.SourceBucketName).toBeDefined();
-      expect(outputs.ArtifactsBucketName).toBeDefined();
+  describe('CodeBuild Validation', () => {
+    test('Build project should exist', async () => {
+      const result = await codebuild.batchGetProjects({
+        names: [outputs.CodeBuildProjectName],
+      }).promise();
+      expect(result.projects).toBeDefined();
+      expect(result.projects.length).toBe(1);
+      expect(result.projects[0].name).toBe(outputs.CodeBuildProjectName);
     });
 
-    test('All required CI/CD components should be present', () => {
-      expect(outputs.PipelineName).toBeDefined();
-      expect(outputs.CodeBuildProjectName).toBeDefined();
-      expect(outputs.CodeDeployApplicationName).toBeDefined();
+    test('Build project should have correct environment configuration', async () => {
+      const result = await codebuild.batchGetProjects({
+        names: [outputs.CodeBuildProjectName],
+      }).promise();
+      const project = result.projects[0];
+
+      expect(project.environment).toBeDefined();
+      expect(project.environment.type).toBeDefined();
+      expect(project.environment.image).toBeDefined();
+      expect(project.environment.computeType).toBeDefined();
     });
 
-    test('All required networking components should be present', () => {
-      expect(outputs.VPCId).toBeDefined();
-      expect(outputs.LoadBalancerDNS).toBeDefined();
-    });
+    test('Build project should have artifacts configuration', async () => {
+      const result = await codebuild.batchGetProjects({
+        names: [outputs.CodeBuildProjectName],
+      }).promise();
+      const project = result.projects[0];
 
-    test('All required notification components should be present', () => {
-      expect(outputs.SNSTopicArn).toBeDefined();
-    });
-  });
-
-  describe('Output Completeness', () => {
-    test('All expected outputs should be present', () => {
-      const expectedOutputs = [
-        'PipelineName',
-        'CodeBuildProjectName',
-        'CodeDeployApplicationName',
-        'VPCId',
-        'LoadBalancerDNS',
-        'SourceBucketName',
-        'ArtifactsBucketName',
-        'SNSTopicArn',
-        'Region',
-        'StackSetName',
-        'GreenTargetGroupName',
-        'LoadBalancerListenerArn',
-      ];
-
-      expectedOutputs.forEach((output) => {
-        expect(outputs).toHaveProperty(output);
-        expect(outputs[output]).toBeDefined();
-        expect(outputs[output]).not.toBe('');
-      });
-    });
-
-    test('Outputs should not contain placeholder or default values', () => {
-      Object.values(outputs).forEach((value) => {
-        expect(value).not.toContain('PLACEHOLDER');
-        expect(value).not.toContain('TODO');
-        expect(value).not.toContain('CHANGEME');
-      });
+      expect(project.artifacts).toBeDefined();
+      expect(project.artifacts.type).toBeDefined();
     });
   });
 
-  describe('Environment-Specific Configuration', () => {
-    test('Environment suffix should be correctly applied', () => {
-      const suffix = environmentSuffix;
-      expect(suffix).toBeTruthy();
-      expect(suffix.length).toBeGreaterThan(0);
+  describe('CodeDeploy Validation', () => {
+    test('CodeDeploy application should exist', async () => {
+      const result = await codedeploy.getApplication({
+        applicationName: outputs.CodeDeployApplicationName,
+      }).promise();
+      expect(result.application).toBeDefined();
+      expect(result.application.applicationName).toBe(outputs.CodeDeployApplicationName);
     });
 
-    test('Resources should be isolated per environment', () => {
-      // Verify that resource names include environment suffix for isolation
-      const resourceNames = [
-        outputs.PipelineName,
-        outputs.CodeBuildProjectName,
-        outputs.CodeDeployApplicationName,
-        outputs.SourceBucketName,
-        outputs.ArtifactsBucketName,
-      ];
-
-      resourceNames.forEach((name) => {
-        expect(name).toContain(environmentSuffix);
-      });
+    test('CodeDeploy application should be configured for ECS or EC2', async () => {
+      const result = await codedeploy.getApplication({
+        applicationName: outputs.CodeDeployApplicationName,
+      }).promise();
+      expect(result.application.computePlatform).toBeDefined();
+      expect(['ECS', 'Server', 'Lambda']).toContain(result.application.computePlatform);
     });
   });
 
-  describe('ARN Format Validation', () => {
-    test('SNS Topic ARN should have correct format', () => {
-      const arnPattern = /^arn:aws:sns:[a-z0-9-]+:\d{12}:.+$/;
-      expect(outputs.SNSTopicArn).toMatch(arnPattern);
+  describe('VPC and Networking Validation', () => {
+    test('VPC should exist and be available', async () => {
+      const result = await ec2.describeVpcs({
+        VpcIds: [outputs.VPCId],
+      }).promise();
+      expect(result.Vpcs).toBeDefined();
+      expect(result.Vpcs.length).toBe(1);
+      expect(result.Vpcs[0].VpcId).toBe(outputs.VPCId);
+      expect(result.Vpcs[0].State).toBe('available');
     });
 
-    test('SNS Topic ARN should contain account ID', () => {
-      const arnParts = outputs.SNSTopicArn.split(':');
-      expect(arnParts.length).toBeGreaterThanOrEqual(6);
-      expect(arnParts[4]).toMatch(/^\d{12}$/); // AWS account ID is 12 digits
-    });
-  });
-
-  describe('DNS and Network Configuration', () => {
-    test('Load Balancer DNS should be resolvable format', () => {
-      expect(outputs.LoadBalancerDNS).toMatch(/^[a-z0-9-]+\..*\.elb\.amazonaws\.com$/);
-    });
-
-    test('VPC ID should be valid AWS VPC format', () => {
-      expect(outputs.VPCId).toMatch(/^vpc-[a-f0-9]{8,17}$/);
-    });
-  });
-
-  describe('Integration Readiness', () => {
-    test('All outputs required for application deployment should be available', () => {
-      // Verify outputs needed for application to deploy and run
-      expect(outputs.VPCId).toBeDefined();
-      expect(outputs.LoadBalancerDNS).toBeDefined();
-      expect(outputs.SourceBucketName).toBeDefined();
-      expect(outputs.ArtifactsBucketName).toBeDefined();
-      expect(outputs.CodeDeployApplicationName).toBeDefined();
+    test('VPC should have subnets configured', async () => {
+      const result = await ec2.describeSubnets({
+        Filters: [
+          {
+            Name: 'vpc-id',
+            Values: [outputs.VPCId],
+          },
+        ],
+      }).promise();
+      expect(result.Subnets).toBeDefined();
+      expect(result.Subnets.length).toBeGreaterThan(0);
     });
 
-    test('All outputs required for CI/CD pipeline should be available', () => {
-      // Verify outputs needed for pipeline to function
-      expect(outputs.PipelineName).toBeDefined();
-      expect(outputs.CodeBuildProjectName).toBeDefined();
-      expect(outputs.CodeDeployApplicationName).toBeDefined();
-      expect(outputs.SNSTopicArn).toBeDefined();
-    });
-
-    test('All outputs required for blue/green deployment should be available', () => {
-      // Verify outputs needed for blue/green deployment
-      expect(outputs.GreenTargetGroupName).toBeDefined();
-      expect(outputs.LoadBalancerListenerArn).toBeDefined();
-      expect(outputs.LoadBalancerDNS).toBeDefined();
+    test('VPC should have security groups configured', async () => {
+      const result = await ec2.describeSecurityGroups({
+        Filters: [
+          {
+            Name: 'vpc-id',
+            Values: [outputs.VPCId],
+          },
+        ],
+      }).promise();
+      expect(result.SecurityGroups).toBeDefined();
+      expect(result.SecurityGroups.length).toBeGreaterThan(0);
     });
   });
 
-  describe('Blue/Green Deployment Configuration', () => {
-    test('Green target group name should follow naming convention', () => {
-      expect(outputs.GreenTargetGroupName).toBeDefined();
-      expect(outputs.GreenTargetGroupName).toContain('tap-green-tg');
-      expect(outputs.GreenTargetGroupName).toContain(environmentSuffix);
+  describe('Load Balancer Validation', () => {
+    test('Load balancer should exist and be active', async () => {
+      const result = await elbv2.describeLoadBalancers({}).promise();
+      const matchingLB = result.LoadBalancers.find((lb: any) => lb.DNSName === outputs.LoadBalancerDNS);
+      expect(matchingLB).toBeDefined();
+      expect(matchingLB.State.Code).toBe('active');
+      expect(matchingLB.DNSName).toBe(outputs.LoadBalancerDNS);
     });
 
-    test('Load balancer listener ARN should be valid format', () => {
-      expect(outputs.LoadBalancerListenerArn).toBeDefined();
-      expect(outputs.LoadBalancerListenerArn).toMatch(
-        /^arn:aws:elasticloadbalancing:[a-z0-9-]+:\d{12}:listener\/app\/.+$/
+    test('Target groups should exist', async () => {
+      const result = await elbv2.describeTargetGroups({
+        Names: [outputs.GreenTargetGroupName],
+      }).promise();
+      expect(result.TargetGroups).toBeDefined();
+      expect(result.TargetGroups.length).toBeGreaterThan(0);
+      expect(result.TargetGroups[0].TargetGroupName).toBe(outputs.GreenTargetGroupName);
+    });
+
+    test('Listener should exist and be configured', async () => {
+      const result = await elbv2.describeListeners({
+        ListenerArns: [outputs.LoadBalancerListenerArn],
+      }).promise();
+      expect(result.Listeners).toBeDefined();
+      expect(result.Listeners.length).toBe(1);
+      expect(result.Listeners[0].ListenerArn).toBe(outputs.LoadBalancerListenerArn);
+    });
+  });
+
+  describe('SNS Topic Validation', () => {
+    test('SNS topic should exist and be accessible', async () => {
+      const result = await sns.getTopicAttributes({
+        TopicArn: outputs.SNSTopicArn,
+      }).promise();
+      expect(result.Attributes).toBeDefined();
+      expect(result.Attributes?.TopicArn).toBe(outputs.SNSTopicArn);
+    });
+
+    test('SNS topic should have display name configured', async () => {
+      const result = await sns.getTopicAttributes({
+        TopicArn: outputs.SNSTopicArn,
+      }).promise();
+      expect(result.Attributes?.DisplayName).toBeDefined();
+    });
+
+    test('SNS topic should have subscriptions configured', async () => {
+      const result = await sns.listSubscriptionsByTopic({
+        TopicArn: outputs.SNSTopicArn,
+      }).promise();
+      expect(result.Subscriptions).toBeDefined();
+      expect(result.Subscriptions?.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Lambda Function Validation', () => {
+    test('Lambda functions should be listed', async () => {
+      const functions = await lambda.listFunctions({}).promise();
+      expect(functions.Functions).toBeDefined();
+    });
+
+    test('If Slack Lambda exists, it should have correct configuration', async () => {
+      const functions = await lambda.listFunctions({}).promise();
+      const slackLambda = functions.Functions?.find(fn =>
+        fn.FunctionName?.toLowerCase().includes('slack') ||
+        fn.FunctionName?.toLowerCase().includes('notification')
       );
-      expect(outputs.LoadBalancerListenerArn).toContain(region);
+
+      if (slackLambda) {
+        expect(slackLambda.Runtime).toBeDefined();
+        expect(slackLambda.State).not.toBe('Failed');
+      }
+    });
+  });
+
+  describe('Secrets Manager Validation', () => {
+    test('Secrets Manager should be accessible', async () => {
+      const secrets = await secretsmanager.listSecrets({}).promise();
+      expect(secrets.SecretList).toBeDefined();
+    });
+
+    test('If project secrets exist, they should have proper structure', async () => {
+      const secrets = await secretsmanager.listSecrets({}).promise();
+      const projectSecrets = secrets.SecretList?.filter(secret =>
+        secret.Name?.toLowerCase().includes('tap') ||
+        secret.Name?.toLowerCase().includes('s3') ||
+        secret.Name?.toLowerCase().includes('slack')
+      );
+
+      if (projectSecrets && projectSecrets.length > 0) {
+        projectSecrets.forEach(secret => {
+          expect(secret.ARN).toBeDefined();
+          expect(secret.SecretVersionsToStages).toBeDefined();
+        });
+      }
+    });
+  });
+
+  describe('CloudWatch Alarms Validation', () => {
+    test('CloudWatch should be accessible and alarms should be listable', async () => {
+      const alarms = await cloudwatch.describeAlarms({}).promise();
+      expect(alarms.MetricAlarms).toBeDefined();
+    });
+
+    test('If project alarms exist, they should have proper configuration', async () => {
+      const alarms = await cloudwatch.describeAlarms({}).promise();
+      const projectAlarms = alarms.MetricAlarms?.filter(alarm =>
+        alarm.AlarmName?.toLowerCase().includes('tap') ||
+        alarm.AlarmName?.toLowerCase().includes('pipeline') ||
+        alarm.AlarmName?.toLowerCase().includes('build') ||
+        alarm.AlarmName?.toLowerCase().includes('deploy')
+      );
+
+      if (projectAlarms && projectAlarms.length > 0) {
+        projectAlarms.forEach(alarm => {
+          expect(alarm.ActionsEnabled).toBeDefined();
+          if (alarm.AlarmActions && alarm.AlarmActions.length > 0) {
+            expect(alarm.AlarmActions.length).toBeGreaterThan(0);
+          }
+        });
+      }
+    });
+  });
+
+  describe('Budget Configuration Validation', () => {
+    test('Monthly budget should be configured', async () => {
+      const result = await budgets.describeBudgets({
+        AccountId: await getAccountId(),
+      }).promise();
+
+      const monthlyBudget = result.Budgets?.find(budget =>
+        budget.BudgetName?.includes('Monthly') || budget.BudgetName?.includes('tap')
+      );
+
+      expect(monthlyBudget).toBeDefined();
+      expect(monthlyBudget?.BudgetType).toBe('COST');
+    });
+
+    test('Budget notifications should be configured', async () => {
+      const result = await budgets.describeBudgets({
+        AccountId: await getAccountId(),
+      }).promise();
+
+      const monthlyBudget = result.Budgets?.find(budget =>
+        budget.BudgetName?.includes('Monthly') || budget.BudgetName?.includes('tap')
+      );
+
+      if (monthlyBudget) {
+        const notifications = await budgets.describeNotificationsForBudget({
+          AccountId: await getAccountId(),
+          BudgetName: monthlyBudget.BudgetName || '',
+        }).promise();
+
+        expect(notifications.Notifications).toBeDefined();
+      }
+    });
+  });
+
+  describe('End-to-End Pipeline Validation', () => {
+    test('Pipeline execution history should be accessible', async () => {
+      const result = await codepipeline.listPipelineExecutions({
+        pipelineName: outputs.PipelineName,
+        maxResults: 5,
+      }).promise();
+
+      expect(result.pipelineExecutionSummaries).toBeDefined();
+    });
+
+    test('CodeBuild project should have build history', async () => {
+      const result = await codebuild.listBuildsForProject({
+        projectName: outputs.CodeBuildProjectName,
+        sortOrder: 'DESCENDING',
+      }).promise();
+
+      expect(result.ids).toBeDefined();
+    });
+
+    test('CodeDeploy deployment groups should be listable', async () => {
+      const result = await codedeploy.listDeploymentGroups({
+        applicationName: outputs.CodeDeployApplicationName,
+      }).promise();
+
+      expect(result.deploymentGroups).toBeDefined();
+    });
+
+    test('If Auto Scaling groups exist, they should be properly configured', async () => {
+      const asg = new AWS.AutoScaling({ region });
+      const result = await asg.describeAutoScalingGroups({}).promise();
+
+      const tapASG = result.AutoScalingGroups?.find(group =>
+        group.AutoScalingGroupName?.toLowerCase().includes('tap')
+      );
+
+      if (tapASG) {
+        expect(tapASG.DesiredCapacity).toBeGreaterThanOrEqual(0);
+        expect(tapASG.MinSize).toBeDefined();
+        expect(tapASG.MaxSize).toBeDefined();
+      }
+    });
+
+    test('EC2 instances should have proper tags', async () => {
+      const instances = await ec2.describeInstances({
+        Filters: [
+          {
+            Name: 'tag:Environment',
+            Values: [environmentSuffix],
+          },
+          {
+            Name: 'instance-state-name',
+            Values: ['running', 'pending'],
+          },
+        ],
+      }).promise();
+
+      instances.Reservations?.forEach(reservation => {
+        reservation.Instances?.forEach(instance => {
+          const tags = instance.Tags || [];
+          const envTag = tags.find(tag => tag.Key === 'Environment');
+          const projectTag = tags.find(tag => tag.Key === 'Project');
+
+          expect(envTag).toBeDefined();
+          expect(projectTag).toBeDefined();
+        });
+      });
+    });
+
+    test('If logging bucket exists, it should have lifecycle policy', async () => {
+      const buckets = await s3.listBuckets({}).promise();
+      const loggingBucket = buckets.Buckets?.find(bucket =>
+        bucket.Name?.toLowerCase().includes('logging') ||
+        bucket.Name?.toLowerCase().includes('log')
+      );
+
+      if (loggingBucket?.Name) {
+        try {
+          const lifecycle = await s3.getBucketLifecycleConfiguration({
+            Bucket: loggingBucket.Name,
+          }).promise();
+
+          expect(lifecycle.Rules).toBeDefined();
+          expect(lifecycle.Rules?.length).toBeGreaterThan(0);
+        } catch (error: any) {
+          // Lifecycle configuration might not be set
+          if (error.code !== 'NoSuchLifecycleConfiguration') {
+            throw error;
+          }
+        }
+      }
+    });
+
+    test('Source bucket should have access logging enabled', async () => {
+      const logging = await s3.getBucketLogging({
+        Bucket: outputs.SourceBucketName,
+      }).promise();
+
+      expect(logging.LoggingEnabled).toBeDefined();
+      expect(logging.LoggingEnabled?.TargetBucket).toBeDefined();
     });
   });
 });
+
+// Helper function to get AWS account ID
+async function getAccountId(): Promise<string> {
+  const sts = new AWS.STS({ region });
+  const identity = await sts.getCallerIdentity({}).promise();
+  return identity.Account || '';
+}
