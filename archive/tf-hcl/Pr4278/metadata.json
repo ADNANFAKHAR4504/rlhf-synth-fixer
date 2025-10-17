@@ -1,0 +1,35 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "4266",
+  "team": "5",
+  "startedAt": "2025-10-13T16:58:12.218Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Multi-Account VPC Peering",
+    "Security and Compliance"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2 (VPC Peering, Security Groups, Subnets, IGW, NAT Gateway)",
+    "KMS",
+    "CloudWatch (Logs, Metrics, Alarms)",
+    "S3",
+    "CloudTrail",
+    "SNS",
+    "Lambda",
+    "EventBridge",
+    "IAM",
+    "VPC Flow Logs"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raaj1021",
+  "dockerS3Location": ""
+}

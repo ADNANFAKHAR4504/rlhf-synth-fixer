@@ -1,0 +1,29 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "CLO_YML_MED_DYNAMO_API_3q8r5s_6f7g1h4nGH",
+  "team": "5",
+  "startedAt": "2025-10-15T15:16:22.501Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "background": "Serverless fitness workout logging API with 2,000 daily requests",
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "IAM",
+    "CloudWatch",
+    "Systems Manager"
+  ],
+  "training_quality": 6,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
+}

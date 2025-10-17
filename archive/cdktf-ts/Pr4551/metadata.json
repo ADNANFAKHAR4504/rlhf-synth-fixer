@@ -1,0 +1,22 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349450",
+  "team": "3",
+  "startedAt": "2025-10-15T17:25:09.725Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "VPC, S3, IAM, RDS, EC2, CloudFront, KMS, SNS",
+  "training_quality": 9,
+  "background": "Provisioning of Infrastructure Environments",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tushar-turing8",
+  "dockerS3Location": ""
+}
