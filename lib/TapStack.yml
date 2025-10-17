@@ -62,10 +62,7 @@ Parameters:
 # ====================
 # MAPPINGS
 # ====================
-Mappings:
-  RegionMap:
-    us-east-1:
-      AMI: ami-0c02fb55731490381  # Amazon Linux 2 AMI
+
 
 # ====================
 # RESOURCES
@@ -607,7 +604,7 @@ Resources:
     Properties:
       LaunchTemplateName: ProductionLaunchTemplate
       LaunchTemplateData:
-        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
         InstanceType: !Ref InstanceType
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
