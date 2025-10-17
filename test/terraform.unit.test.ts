@@ -149,10 +149,10 @@ describe("Terraform Infrastructure - tap_stack.tf", () => {
       expect(vpcBlock![0]).toMatch(/enable_dns_support\s*=\s*true/);
     });
 
-    test("VPC is named 'prod-VPC'", () => {
+    test("VPC is named 'prod-VPC' with environment suffix", () => {
       const vpcBlock = content.match(/resource\s+"aws_vpc"\s+"prod_vpc"\s*{[\s\S]*?^}/m);
       expect(vpcBlock).toBeTruthy();
-      expect(vpcBlock![0]).toMatch(/Name\s*=\s*"prod-VPC"/);
+      expect(vpcBlock![0]).toMatch(/Name\s*=\s*"prod-VPC-\$\{var\.environment_suffix\}"/);
     });
   });
 
@@ -170,10 +170,10 @@ describe("Terraform Infrastructure - tap_stack.tf", () => {
       expect(igwBlock![0]).toMatch(/vpc_id\s*=\s*aws_vpc\.prod_vpc\.id/);
     });
 
-    test("IGW is named 'prod-IGW'", () => {
+    test("IGW is named 'prod-IGW' with environment suffix", () => {
       const igwBlock = content.match(/resource\s+"aws_internet_gateway"\s+"prod_igw"\s*{[\s\S]*?^}/m);
       expect(igwBlock).toBeTruthy();
-      expect(igwBlock![0]).toMatch(/Name\s*=\s*"prod-IGW"/);
+      expect(igwBlock![0]).toMatch(/Name\s*=\s*"prod-IGW-\$\{var\.environment_suffix\}"/);
     });
   });
 
