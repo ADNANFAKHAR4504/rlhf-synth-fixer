@@ -57,6 +57,9 @@ class TapStack(TerraformStack):
             "managed_by": "cdktf"
         }
 
+        unique_token = Fn.substr(Fn.uuid(), 0, 8)
+        self.unique_suffix = f"{environment_suffix}-{unique_token}"
+
         # Merge default tags if provided
         if default_tags and "tags" in default_tags:
             self.common_tags.update(default_tags["tags"])
@@ -98,27 +101,31 @@ class TapStack(TerraformStack):
         # Create outputs
         self._create_outputs()
 
+    def _id(self, base: str) -> str:
+        return f"{base}-{self.unique_suffix}"
+
+    def _tags(self, base: str, extra: dict | None = None) -> dict:
+        tags = {k: v for k, v in self.common_tags.items() if k.lower() != "name"}
+        tags["Name"] = self._id(base)
+        if extra:
+            tags.update(extra)
+        return tags
+
     def _create_vpc(self):
         """Create VPC with public and private subnets across multiple AZs"""
 
         # VPC
-        self.vpc = Vpc(self, f"vpc-{self.environment_suffix}",
+        self.vpc = Vpc(self, self._id("vpc"),
             cidr_block="10.0.0.0/16",
             enable_dns_hostnames=True,
             enable_dns_support=True,
-            tags={
-                **self.common_tags,
-                "Name": f"lms-vpc-{self.environment_suffix}"
-            }
+            tags=self._tags("lms-vpc")
         )
 
         # Internet Gateway
-        self.igw = InternetGateway(self, f"igw-{self.environment_suffix}",
+        self.igw = InternetGateway(self, self._id("igw"),
             vpc_id=self.vpc.id,
-            tags={
-                **self.common_tags,
-                "Name": f"lms-igw-{self.environment_suffix}"
-            }
+            tags=self._tags("lms-igw")
         )
 
         # Public and Private Subnets (2 AZs for HA)
@@ -127,87 +134,67 @@ class TapStack(TerraformStack):
 
         for i in range(2):
             # Public subnet
-            public_subnet = Subnet(self, f"public-subnet-{i}-{self.environment_suffix}",
+            public_subnet = Subnet(self, self._id(f"public-subnet-{i}"),
                 vpc_id=self.vpc.id,
                 cidr_block=f"10.0.{i}.0/24",
                 availability_zone=Fn.element(self.azs.names, i),
                 map_public_ip_on_launch=True,
-                tags={
-                    **self.common_tags,
-                    "Name": f"lms-public-subnet-{i}-{self.environment_suffix}",
-                    "Type": "public"
-                }
+                tags=self._tags(f"lms-public-subnet-{i}", {"Type": "public"})
             )
             self.public_subnets.append(public_subnet)
 
             # Private subnet
-            private_subnet = Subnet(self, f"private-subnet-{i}-{self.environment_suffix}",
+            private_subnet = Subnet(self, self._id(f"private-subnet-{i}"),
                 vpc_id=self.vpc.id,
                 cidr_block=f"10.0.{10+i}.0/24",
                 availability_zone=Fn.element(self.azs.names, i),
-                tags={
-                    **self.common_tags,
-                    "Name": f"lms-private-subnet-{i}-{self.environment_suffix}",
-                    "Type": "private"
-                }
+                tags=self._tags(f"lms-private-subnet-{i}", {"Type": "private"})
             )
             self.private_subnets.append(private_subnet)
 
         # Public route table
-        self.public_rt = RouteTable(self, f"public-rt-{self.environment_suffix}",
+        self.public_rt = RouteTable(self, self._id("public-rt"),
             vpc_id=self.vpc.id,
             route=[RouteTableRoute(
                 cidr_block="0.0.0.0/0",
                 gateway_id=self.igw.id
             )],
-            tags={
-                **self.common_tags,
-                "Name": f"lms-public-rt-{self.environment_suffix}"
-            }
+            tags=self._tags("lms-public-rt")
         )
 
         # Associate public subnets with public route table
         for i, subnet in enumerate(self.public_subnets):
-            RouteTableAssociation(self, f"public-rta-{i}-{self.environment_suffix}",
+            RouteTableAssociation(self, self._id(f"public-rta-{i}"),
                 subnet_id=subnet.id,
                 route_table_id=self.public_rt.id
             )
 
         # Create Elastic IP for NAT Gateway
-        self.eip = Eip(self, f"nat-eip-{self.environment_suffix}",
+        self.eip = Eip(self, self._id("nat-eip"),
             domain="vpc",
-            tags={
-                **self.common_tags,
-                "Name": f"lms-nat-eip-{self.environment_suffix}"
-            }
+            tags=self._tags("lms-nat-eip")
         )
 
         # Create NAT Gateway in the first public subnet
-        self.nat_gateway = NatGateway(self, f"nat-gateway-{self.environment_suffix}",
+        self.nat_gateway = NatGateway(self, self._id("nat-gateway"),
             allocation_id=self.eip.id,
             subnet_id=self.public_subnets[0].id,
-            tags={
-                **self.common_tags,
-                "Name": f"lms-nat-gateway-{self.environment_suffix}"
-            }
+            tags=self._tags("lms-nat-gateway")
         )
 
         # Private route table with route to NAT Gateway
-        self.private_rt = RouteTable(self, f"private-rt-{self.environment_suffix}",
+        self.private_rt = RouteTable(self, self._id("private-rt"),
             vpc_id=self.vpc.id,
             route=[RouteTableRoute(
                 cidr_block="0.0.0.0/0",
                 nat_gateway_id=self.nat_gateway.id
             )],
-            tags={
-                **self.common_tags,
-                "Name": f"lms-private-rt-{self.environment_suffix}"
-            }
+            tags=self._tags("lms-private-rt")
         )
 
         # Associate private subnets with private route table
         for i, subnet in enumerate(self.private_subnets):
-            RouteTableAssociation(self, f"private-rta-{i}-{self.environment_suffix}",
+            RouteTableAssociation(self, self._id(f"private-rta-{i}"),
                 subnet_id=subnet.id,
                 route_table_id=self.private_rt.id
             )
@@ -216,32 +203,26 @@ class TapStack(TerraformStack):
         """Create KMS keys for encryption"""
 
         # KMS key for EFS
-        self.efs_kms_key = KmsKey(self, f"efs-kms-{self.environment_suffix}",
-            description=f"KMS key for EFS encryption - {self.environment_suffix}",
+        self.efs_kms_key = KmsKey(self, self._id("efs-kms"),
+            description=f"KMS key for EFS encryption - {self.unique_suffix}",
             enable_key_rotation=True,
-            tags={
-                **self.common_tags,
-                "Name": f"lms-efs-kms-{self.environment_suffix}"
-            }
+            tags=self._tags("lms-efs-kms")
         )
 
-        KmsAlias(self, f"efs-kms-alias-{self.environment_suffix}",
-            name=f"alias/lms-efs-{self.environment_suffix}",
+        KmsAlias(self, self._id("efs-kms-alias"),
+            name=f"alias/{self._id('lms-efs')}",
             target_key_id=self.efs_kms_key.key_id
         )
 
         # KMS key for ElastiCache
-        self.elasticache_kms_key = KmsKey(self, f"elasticache-kms-{self.environment_suffix}",
-            description=f"KMS key for ElastiCache encryption - {self.environment_suffix}",
+        self.elasticache_kms_key = KmsKey(self, self._id("elasticache-kms"),
+            description=f"KMS key for ElastiCache encryption - {self.unique_suffix}",
             enable_key_rotation=True,
-            tags={
-                **self.common_tags,
-                "Name": f"lms-elasticache-kms-{self.environment_suffix}"
-            }
+            tags=self._tags("lms-elasticache-kms")
         )
 
-        KmsAlias(self, f"elasticache-kms-alias-{self.environment_suffix}",
-            name=f"alias/lms-elasticache-{self.environment_suffix}",
+        KmsAlias(self, self._id("elasticache-kms-alias"),
+            name=f"alias/{self._id('lms-elasticache')}",
             target_key_id=self.elasticache_kms_key.key_id
         )
 
@@ -249,7 +230,7 @@ class TapStack(TerraformStack):
         """Create security groups for ECS, EFS, and ElastiCache"""
 
         # ECS Tasks Security Group
-        self.ecs_sg = SecurityGroup(self, f"ecs-sg-{self.environment_suffix}",
+        self.ecs_sg = SecurityGroup(self, self._id("ecs-sg"),
             vpc_id=self.vpc.id,
             description="Security group for ECS tasks",
             ingress=[
@@ -277,14 +258,11 @@ class TapStack(TerraformStack):
                     description="Allow all outbound"
                 )
             ],
-            tags={
-                **self.common_tags,
-                "Name": f"lms-ecs-sg-{self.environment_suffix}"
-            }
+            tags=self._tags("lms-ecs-sg")
         )
 
         # EFS Security Group
-        self.efs_sg = SecurityGroup(self, f"efs-sg-{self.environment_suffix}",
+        self.efs_sg = SecurityGroup(self, self._id("efs-sg"),
             vpc_id=self.vpc.id,
             description="Security group for EFS",
             ingress=[
@@ -305,14 +283,11 @@ class TapStack(TerraformStack):
                     description="Allow all outbound"
                 )
             ],
-            tags={
-                **self.common_tags,
-                "Name": f"lms-efs-sg-{self.environment_suffix}"
-            }
+            tags=self._tags("lms-efs-sg")
         )
 
         # ElastiCache Security Group
-        self.elasticache_sg = SecurityGroup(self, f"elasticache-sg-{self.environment_suffix}",
+        self.elasticache_sg = SecurityGroup(self, self._id("elasticache-sg"),
             vpc_id=self.vpc.id,
             description="Security group for ElastiCache Redis",
             ingress=[
@@ -333,17 +308,14 @@ class TapStack(TerraformStack):
                     description="Allow all outbound"
                 )
             ],
-            tags={
-                **self.common_tags,
-                "Name": f"lms-elasticache-sg-{self.environment_suffix}"
-            }
+            tags=self._tags("lms-elasticache-sg")
         )
 
     def _create_efs(self):
         """Create EFS file system for shared content storage"""
 
         self.efs = EfsFileSystem(
-            self, f"efs-{self.environment_suffix}",
+            self, self._id("efs"),
             encrypted=True,
             kms_key_id=self.efs_kms_key.arn,          # ARN is fine here
             performance_mode="generalPurpose",
@@ -355,16 +327,13 @@ class TapStack(TerraformStack):
                     # transition_to_archive="AFTER_60_DAYS",
                 )
             ],
-            tags={
-                **{k: v for k, v in self.common_tags.items() if k.lower() != "name"},
-                "Name": f"lms-efs-{self.environment_suffix}",
-            },
+            tags=self._tags("lms-efs"),
         )
 
         # Create mount targets in each private subnet
         self.efs_mount_targets = []
         for i, subnet in enumerate(self.private_subnets):
-            mount_target = EfsMountTarget(self, f"efs-mt-{i}-{self.environment_suffix}",
+            mount_target = EfsMountTarget(self, self._id(f"efs-mt-{i}"),
                 file_system_id=self.efs.id,
                 subnet_id=subnet.id,
                 security_groups=[self.efs_sg.id]
@@ -376,20 +345,17 @@ class TapStack(TerraformStack):
 
         # Subnet group for ElastiCache
         self.elasticache_subnet_group = ElasticacheSubnetGroup(
-            self, f"elasticache-subnet-group-{self.environment_suffix}",
-            name=f"lms-redis-subnet-group-{self.environment_suffix}",
+            self, self._id("elasticache-subnet-group"),
+            name=self._id("lms-redis-subnet-group"),
             description="Subnet group for LMS Redis cluster",
             subnet_ids=[subnet.id for subnet in self.private_subnets],
-            tags={
-                **self.common_tags,
-                "Name": f"lms-redis-subnet-group-{self.environment_suffix}"
-            }
+            tags=self._tags("lms-redis-subnet-group")
         )
 
         # ElastiCache Redis replication group
         self.elasticache = ElasticacheReplicationGroup(
-            self, f"elasticache-{self.environment_suffix}",
-            replication_group_id=f"lms-redis-{self.environment_suffix}",
+            self, self._id("elasticache"),
+            replication_group_id=self._id("lms-redis"),
             description="Redis cluster for LMS session management",
             engine="redis",
             engine_version="7.0",
@@ -408,18 +374,15 @@ class TapStack(TerraformStack):
             snapshot_window="03:00-05:00",
             maintenance_window="mon:05:00-mon:07:00",
             auto_minor_version_upgrade="true",
-            tags={
-                **self.common_tags,
-                "Name": f"lms-redis-{self.environment_suffix}"
-            }
+            tags=self._tags("lms-redis")
         )
 
     def _create_iam_roles(self):
         """Create IAM roles for ECS tasks"""
 
         # ECS Task Execution Role
-        self.task_execution_role = IamRole(self, f"ecs-task-exec-role-{self.environment_suffix}",
-            name=f"lms-ecs-task-exec-role-{self.environment_suffix}",
+        self.task_execution_role = IamRole(self, self._id("ecs-task-exec-role"),
+            name=self._id("lms-ecs-task-exec-role"),
             assume_role_policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [{
@@ -433,15 +396,15 @@ class TapStack(TerraformStack):
         )
 
         # Attach AWS managed policy for ECS task execution
-        IamRolePolicyAttachment(self, f"ecs-task-exec-policy-{self.environment_suffix}",
+        IamRolePolicyAttachment(self, self._id("ecs-task-exec-policy"),
             role=self.task_execution_role.name,
             policy_arn="arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
         )
 
         # Custom policy for Secrets Manager access
-        IamRolePolicy(self, f"ecs-secrets-policy-{self.environment_suffix}",
+        IamRolePolicy(self, self._id("ecs-secrets-policy"),
             role=self.task_execution_role.id,
-            name=f"lms-secrets-policy-{self.environment_suffix}",
+            name=self._id("lms-secrets-policy"),
             policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [{
@@ -463,8 +426,8 @@ class TapStack(TerraformStack):
         )
 
         # ECS Task Role
-        self.task_role = IamRole(self, f"ecs-task-role-{self.environment_suffix}",
-            name=f"lms-ecs-task-role-{self.environment_suffix}",
+        self.task_role = IamRole(self, self._id("ecs-task-role"),
+            name=self._id("lms-ecs-task-role"),
             assume_role_policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [{
@@ -478,9 +441,9 @@ class TapStack(TerraformStack):
         )
 
         # Task role policy for EFS and other AWS services
-        IamRolePolicy(self, f"ecs-task-policy-{self.environment_suffix}",
+        IamRolePolicy(self, self._id("ecs-task-policy"),
             role=self.task_role.id,
-            name=f"lms-task-policy-{self.environment_suffix}",
+            name=self._id("lms-task-policy"),
             policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [{
@@ -505,29 +468,23 @@ class TapStack(TerraformStack):
     def _create_cloudwatch_logs(self):
         """Create CloudWatch log group for ECS container logs"""
 
-        self.log_group = CloudwatchLogGroup(self, f"ecs-log-group-{self.environment_suffix}",
-            name=f"/ecs/lms-{self.environment_suffix}",
+        self.log_group = CloudwatchLogGroup(self, self._id("ecs-log-group"),
+            name=f"/ecs/{self._id('lms')}",
             retention_in_days=7,
-            tags={
-                **self.common_tags,
-                "Name": f"lms-ecs-logs-{self.environment_suffix}"
-            }
+            tags=self._tags("lms-ecs-logs")
         )
 
     def _create_ecs(self):
         """Create ECS cluster, task definition, and service"""
 
         # ECS Cluster
-        self.ecs_cluster = EcsCluster(self, f"ecs-cluster-{self.environment_suffix}",
-            name=f"lms-cluster-{self.environment_suffix}",
+        self.ecs_cluster = EcsCluster(self, self._id("ecs-cluster"),
+            name=self._id("lms-cluster"),
             setting=[{
                 "name": "containerInsights",
                 "value": "enabled"
             }],
-            tags={
-                **self.common_tags,
-                "Name": f"lms-cluster-{self.environment_suffix}"
-            }
+            tags=self._tags("lms-cluster")
         )
 
         # Task definition
@@ -567,8 +524,8 @@ class TapStack(TerraformStack):
             }]
         }]
 
-        self.task_definition = EcsTaskDefinition(self, f"ecs-task-def-{self.environment_suffix}",
-            family=f"lms-task-{self.environment_suffix}",
+        self.task_definition = EcsTaskDefinition(self, self._id("ecs-task-def"),
+            family=self._id("lms-task"),
             requires_compatibilities=["FARGATE"],
             network_mode="awsvpc",
             cpu="512",
@@ -586,15 +543,12 @@ class TapStack(TerraformStack):
                     }
                 }
             }],
-            tags={
-                **self.common_tags,
-                "Name": f"lms-task-{self.environment_suffix}"
-            }
+            tags=self._tags("lms-task")
         )
 
         # ECS Service
-        self.ecs_service = EcsService(self, f"ecs-service-{self.environment_suffix}",
-            name=f"lms-service-{self.environment_suffix}",
+        self.ecs_service = EcsService(self, self._id("ecs-service"),
+            name=self._id("lms-service"),
             cluster=self.ecs_cluster.id,
             task_definition=self.task_definition.arn,
             desired_count=2,
@@ -606,10 +560,7 @@ class TapStack(TerraformStack):
                 assign_public_ip=False
             ),
             enable_execute_command=True,
-            tags={
-                **self.common_tags,
-                "Name": f"lms-service-{self.environment_suffix}"
-            },
+            tags=self._tags("lms-service"),
             depends_on=[self.efs_mount_targets[0], self.efs_mount_targets[1]]
         )
 
