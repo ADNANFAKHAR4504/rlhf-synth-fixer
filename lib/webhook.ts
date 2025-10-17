@@ -17,7 +17,10 @@ import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as targets from 'aws-cdk-lib/aws-route53-targets';
-import { SqsEventSource, DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
+import {
+  SqsEventSource,
+  DynamoEventSource,
+} from 'aws-cdk-lib/aws-lambda-event-sources';
 
 export interface WebhookStackProps extends cdk.StackProps {
   stageName: string;
@@ -195,6 +198,14 @@ export class WebhookStack extends cdk.Stack {
     // Grant DynamoDB permissions
     transactionsTable.grantReadWriteData(webhookProcessingLambda);
 
+    // Grant CloudWatch Metrics permissions
+    webhookProcessingLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['cloudwatch:PutMetricData'],
+        resources: ['*'],
+      })
+    );
+
     // Configure SQS as event source (FIFO queues don't support maxBatchingWindow)
     webhookProcessingLambda.addEventSource(
       new SqsEventSource(webhookQueue, {
@@ -210,7 +221,7 @@ export class WebhookStack extends cdk.Stack {
       provisionedConcurrentExecutions: 10,
     });
 
-    // Create scalable target
+    // Create scalable target - must wait for alias to be created
     const scalableTarget = new appscaling.ScalableTarget(
       this,
       'WebhookProcessingScaling',
@@ -219,9 +230,12 @@ export class WebhookStack extends cdk.Stack {
         resourceId: `function:${webhookProcessingLambda.functionName}:${provisionedAlias.aliasName}`,
         minCapacity: 10,
         maxCapacity: 500,
-        scalableDimension: 'lambda:function:ProvisionedConcurrentExecutions',
+        scalableDimension: 'lambda:function:ProvisionedConcurrency',
       }
     );
+
+    // Ensure scalable target waits for alias to be created
+    scalableTarget.node.addDependency(provisionedAlias);
 
     // Add scaling policy
     scalableTarget.scaleToTrackMetric('ConcurrencyUtilizationScaling', {
@@ -281,7 +295,8 @@ export class WebhookStack extends cdk.Stack {
     webhookArchiveLambda.grantInvoke(pipeRole);
     vendorNotificationTopic.grantPublish(pipeRole);
 
-    // Create the EventBridge Pipe - target is Lambda, then publish to SNS as enrichment
+    // Create the EventBridge Pipe - target is Lambda
+    // Note: DLQ removed as EventBridge Pipes don't support FIFO queues as DLQ
     new pipes.CfnPipe(this, 'DynamoDbStreamPipe', {
       name: `MarketGrid-${stageName}-DynamoStream-${envSuffix}`,
       roleArn: pipeRole.roleArn,
@@ -291,9 +306,6 @@ export class WebhookStack extends cdk.Stack {
           startingPosition: 'LATEST',
           batchSize: 10,
           maximumBatchingWindowInSeconds: 5,
-          deadLetterConfig: {
-            arn: webhookDlq.queueArn,
-          },
           onPartialBatchItemFailure: 'AUTOMATIC_BISECT',
         },
         filterCriteria: {
@@ -456,7 +468,7 @@ export class WebhookStack extends cdk.Stack {
     createIntegration(stripeResource, 'stripe');
     createIntegration(paypalResource, 'paypal');
 
-    // 13. AWS WAF
+    // 13. AWS WAF with Enhanced Security Rules
     const wafAcl = new wafv2.CfnWebACL(this, 'WebhookApiWaf', {
       defaultAction: { allow: {} },
       scope: 'REGIONAL',
@@ -466,6 +478,7 @@ export class WebhookStack extends cdk.Stack {
         sampledRequestsEnabled: true,
       },
       rules: [
+        // Rule 0: AWS Managed Rules - Common Rule Set (OWASP Top 10)
         {
           name: 'AWSManagedRulesCommonRuleSet',
           priority: 0,
@@ -482,6 +495,7 @@ export class WebhookStack extends cdk.Stack {
             sampledRequestsEnabled: true,
           },
         },
+        // Rule 1: Rate Limiting - 10,000 requests per 5 minutes per IP
         {
           name: 'RateLimitRule',
           priority: 1,
@@ -498,14 +512,179 @@ export class WebhookStack extends cdk.Stack {
             sampledRequestsEnabled: true,
           },
         },
+        // Rule 2: SQL Injection Protection
+        {
+          name: 'AWSManagedRulesSQLiRuleSet',
+          priority: 2,
+          statement: {
+            managedRuleGroupStatement: {
+              vendorName: 'AWS',
+              name: 'AWSManagedRulesSQLiRuleSet',
+            },
+          },
+          overrideAction: { none: {} },
+          visibilityConfig: {
+            cloudWatchMetricsEnabled: true,
+            metricName: `MarketGrid-${stageName}-SQLi-${envSuffix}`,
+            sampledRequestsEnabled: true,
+          },
+        },
+        // Rule 3: Known Bad Inputs Protection
+        {
+          name: 'AWSManagedRulesKnownBadInputsRuleSet',
+          priority: 3,
+          statement: {
+            managedRuleGroupStatement: {
+              vendorName: 'AWS',
+              name: 'AWSManagedRulesKnownBadInputsRuleSet',
+            },
+          },
+          overrideAction: { none: {} },
+          visibilityConfig: {
+            cloudWatchMetricsEnabled: true,
+            metricName: `MarketGrid-${stageName}-BadInputs-${envSuffix}`,
+            sampledRequestsEnabled: true,
+          },
+        },
+        // Rule 4: Amazon IP Reputation List
+        {
+          name: 'AWSManagedRulesAmazonIpReputationList',
+          priority: 4,
+          statement: {
+            managedRuleGroupStatement: {
+              vendorName: 'AWS',
+              name: 'AWSManagedRulesAmazonIpReputationList',
+            },
+          },
+          overrideAction: { none: {} },
+          visibilityConfig: {
+            cloudWatchMetricsEnabled: true,
+            metricName: `MarketGrid-${stageName}-IpReputation-${envSuffix}`,
+            sampledRequestsEnabled: true,
+          },
+        },
+        // Rule 5: Anonymous IP List (Blocks VPNs, proxies, Tor)
+        {
+          name: 'AWSManagedRulesAnonymousIpList',
+          priority: 5,
+          statement: {
+            managedRuleGroupStatement: {
+              vendorName: 'AWS',
+              name: 'AWSManagedRulesAnonymousIpList',
+            },
+          },
+          overrideAction: { none: {} },
+          visibilityConfig: {
+            cloudWatchMetricsEnabled: true,
+            metricName: `MarketGrid-${stageName}-AnonymousIp-${envSuffix}`,
+            sampledRequestsEnabled: true,
+          },
+        },
+        // Rule 6: Block Requests with Oversized Body (> 8KB for webhooks)
+        {
+          name: 'BlockOversizedRequests',
+          priority: 6,
+          action: { block: {} },
+          statement: {
+            sizeConstraintStatement: {
+              fieldToMatch: { body: {} },
+              comparisonOperator: 'GT',
+              size: 8192, // 8KB limit for webhook payloads
+              textTransformations: [
+                {
+                  priority: 0,
+                  type: 'NONE',
+                },
+              ],
+            },
+          },
+          visibilityConfig: {
+            cloudWatchMetricsEnabled: true,
+            metricName: `MarketGrid-${stageName}-OversizedBody-${envSuffix}`,
+            sampledRequestsEnabled: true,
+          },
+        },
+        // Rule 7: Block requests with suspicious User-Agent strings
+        {
+          name: 'BlockSuspiciousUserAgents',
+          priority: 7,
+          action: { block: {} },
+          statement: {
+            orStatement: {
+              statements: [
+                {
+                  byteMatchStatement: {
+                    fieldToMatch: {
+                      singleHeader: { name: 'user-agent' },
+                    },
+                    positionalConstraint: 'CONTAINS',
+                    searchString: 'nikto',
+                    textTransformations: [
+                      {
+                        priority: 0,
+                        type: 'LOWERCASE',
+                      },
+                    ],
+                  },
+                },
+                {
+                  byteMatchStatement: {
+                    fieldToMatch: {
+                      singleHeader: { name: 'user-agent' },
+                    },
+                    positionalConstraint: 'CONTAINS',
+                    searchString: 'sqlmap',
+                    textTransformations: [
+                      {
+                        priority: 0,
+                        type: 'LOWERCASE',
+                      },
+                    ],
+                  },
+                },
+                {
+                  byteMatchStatement: {
+                    fieldToMatch: {
+                      singleHeader: { name: 'user-agent' },
+                    },
+                    positionalConstraint: 'CONTAINS',
+                    searchString: 'nmap',
+                    textTransformations: [
+                      {
+                        priority: 0,
+                        type: 'LOWERCASE',
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+          visibilityConfig: {
+            cloudWatchMetricsEnabled: true,
+            metricName: `MarketGrid-${stageName}-SuspiciousUA-${envSuffix}`,
+            sampledRequestsEnabled: true,
+          },
+        },
       ],
     });
 
-    // Associate WAF with API Gateway
-    new wafv2.CfnWebACLAssociation(this, 'WafApiAssociation', {
-      resourceArn: `arn:aws:apigateway:${this.region}::/restapis/${api.restApiId}/stages/${stageName}`,
-      webAclArn: wafAcl.attrArn,
-    });
+    // Associate WAF with API Gateway - add dependency on deployment stage
+    const wafAssociation = new wafv2.CfnWebACLAssociation(
+      this,
+      'WafApiAssociation',
+      {
+        resourceArn: `arn:aws:apigateway:${this.region}::/restapis/${api.restApiId}/stages/${stageName}`,
+        webAclArn: wafAcl.attrArn,
+      }
+    );
+
+    // Ensure WAF association waits for API Gateway deployment to complete
+    if (api.deploymentStage.node.defaultChild) {
+      wafAssociation.addDependency(
+        api.deploymentStage.node.defaultChild as cdk.CfnResource
+      );
+    }
 
     // 14. Custom domain (optional)
     if (props.domainName && props.hostedZoneId && props.certificateArn) {
@@ -600,20 +779,227 @@ export class WebhookStack extends cdk.Stack {
       })
     );
 
-    // Outputs
+    // Outputs for Integration Testing
+
+    // API Gateway Outputs
     new cdk.CfnOutput(this, 'ApiEndpoint', {
       value: api.url,
-      description: 'Webhook API Gateway endpoint',
+      description: 'Webhook API Gateway endpoint URL',
+      exportName: `MarketGrid-ApiEndpoint-${envSuffix}`,
     });
 
+    new cdk.CfnOutput(this, 'ApiGatewayId', {
+      value: api.restApiId,
+      description: 'API Gateway REST API ID',
+      exportName: `MarketGrid-ApiGatewayId-${envSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'ApiGatewayStageName', {
+      value: stageName,
+      description: 'API Gateway stage name',
+      exportName: `MarketGrid-ApiStageName-${envSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'StripeWebhookUrl', {
+      value: `${api.url}webhook/stripe`,
+      description: 'Stripe webhook endpoint URL',
+      exportName: `MarketGrid-StripeWebhookUrl-${envSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'PaypalWebhookUrl', {
+      value: `${api.url}webhook/paypal`,
+      description: 'PayPal webhook endpoint URL',
+      exportName: `MarketGrid-PaypalWebhookUrl-${envSuffix}`,
+    });
+
+    // Lambda Outputs
+    new cdk.CfnOutput(this, 'AuthorizerLambdaArn', {
+      value: authorizerLambda.functionArn,
+      description: 'Lambda Authorizer function ARN',
+      exportName: `MarketGrid-AuthorizerLambdaArn-${envSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'AuthorizerLambdaName', {
+      value: authorizerLambda.functionName,
+      description: 'Lambda Authorizer function name',
+      exportName: `MarketGrid-AuthorizerLambdaName-${envSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'WebhookProcessingLambdaArn', {
+      value: webhookProcessingLambda.functionArn,
+      description: 'Webhook Processing Lambda function ARN',
+      exportName: `MarketGrid-WebhookProcessingLambdaArn-${envSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'WebhookProcessingLambdaName', {
+      value: webhookProcessingLambda.functionName,
+      description: 'Webhook Processing Lambda function name',
+      exportName: `MarketGrid-WebhookProcessingLambdaName-${envSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'WebhookArchiveLambdaArn', {
+      value: webhookArchiveLambda.functionArn,
+      description: 'Webhook Archive Lambda function ARN',
+      exportName: `MarketGrid-WebhookArchiveLambdaArn-${envSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'WebhookArchiveLambdaName', {
+      value: webhookArchiveLambda.functionName,
+      description: 'Webhook Archive Lambda function name',
+      exportName: `MarketGrid-WebhookArchiveLambdaName-${envSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'VendorNotificationLambdaArn', {
+      value: vendorNotificationLambda.functionArn,
+      description: 'Vendor Notification Lambda function ARN',
+      exportName: `MarketGrid-VendorNotificationLambdaArn-${envSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'VendorNotificationLambdaName', {
+      value: vendorNotificationLambda.functionName,
+      description: 'Vendor Notification Lambda function name',
+      exportName: `MarketGrid-VendorNotificationLambdaName-${envSuffix}`,
+    });
+
+    // SQS Queue Outputs
+    new cdk.CfnOutput(this, 'WebhookQueueUrl', {
+      value: webhookQueue.queueUrl,
+      description: 'Main webhook SQS FIFO queue URL',
+      exportName: `MarketGrid-WebhookQueueUrl-${envSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'WebhookQueueArn', {
+      value: webhookQueue.queueArn,
+      description: 'Main webhook SQS FIFO queue ARN',
+      exportName: `MarketGrid-WebhookQueueArn-${envSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'WebhookQueueName', {
+      value: webhookQueue.queueName,
+      description: 'Main webhook SQS FIFO queue name',
+      exportName: `MarketGrid-WebhookQueueName-${envSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'WebhookDlqUrl', {
+      value: webhookDlq.queueUrl,
+      description: 'Webhook DLQ SQS FIFO queue URL',
+      exportName: `MarketGrid-WebhookDlqUrl-${envSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'WebhookDlqArn', {
+      value: webhookDlq.queueArn,
+      description: 'Webhook DLQ SQS FIFO queue ARN',
+      exportName: `MarketGrid-WebhookDlqArn-${envSuffix}`,
+    });
+
+    // DynamoDB Outputs
     new cdk.CfnOutput(this, 'TransactionsTableName', {
       value: transactionsTable.tableName,
       description: 'DynamoDB transactions table name',
+      exportName: `MarketGrid-TransactionsTableName-${envSuffix}`,
     });
 
+    new cdk.CfnOutput(this, 'TransactionsTableArn', {
+      value: transactionsTable.tableArn,
+      description: 'DynamoDB transactions table ARN',
+      exportName: `MarketGrid-TransactionsTableArn-${envSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'TransactionsTableStreamArn', {
+      value: transactionsTable.tableStreamArn!,
+      description: 'DynamoDB transactions table stream ARN',
+      exportName: `MarketGrid-TransactionsTableStreamArn-${envSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'VendorIndexName', {
+      value: 'VendorIndex',
+      description: 'DynamoDB GSI name for vendor queries',
+      exportName: `MarketGrid-VendorIndexName-${envSuffix}`,
+    });
+
+    // S3 Outputs
+    new cdk.CfnOutput(this, 'WebhookArchiveBucketName', {
+      value: webhookArchiveBucket.bucketName,
+      description: 'S3 bucket name for webhook archival',
+      exportName: `MarketGrid-WebhookArchiveBucketName-${envSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'WebhookArchiveBucketArn', {
+      value: webhookArchiveBucket.bucketArn,
+      description: 'S3 bucket ARN for webhook archival',
+      exportName: `MarketGrid-WebhookArchiveBucketArn-${envSuffix}`,
+    });
+
+    // SNS Outputs
     new cdk.CfnOutput(this, 'VendorNotificationTopicArn', {
       value: vendorNotificationTopic.topicArn,
       description: 'SNS topic ARN for vendor notifications',
+      exportName: `MarketGrid-VendorNotificationTopicArn-${envSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'VendorNotificationTopicName', {
+      value: vendorNotificationTopic.topicName,
+      description: 'SNS topic name for vendor notifications',
+      exportName: `MarketGrid-VendorNotificationTopicName-${envSuffix}`,
+    });
+
+    // KMS Outputs
+    new cdk.CfnOutput(this, 'EncryptionKeyId', {
+      value: encryptionKey.keyId,
+      description: 'KMS key ID for encryption',
+      exportName: `MarketGrid-EncryptionKeyId-${envSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'EncryptionKeyArn', {
+      value: encryptionKey.keyArn,
+      description: 'KMS key ARN for encryption',
+      exportName: `MarketGrid-EncryptionKeyArn-${envSuffix}`,
+    });
+
+    // SSM Parameter Outputs
+    new cdk.CfnOutput(this, 'ApiKeyParameterPrefix', {
+      value: `/marketgrid/${stageName}/${envSuffix}/api-keys/`,
+      description: 'SSM Parameter Store prefix for API keys',
+      exportName: `MarketGrid-ApiKeyParameterPrefix-${envSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'StripeApiKeyParameter', {
+      value: `/marketgrid/${stageName}/${envSuffix}/api-keys/stripe`,
+      description: 'SSM Parameter name for Stripe API key',
+      exportName: `MarketGrid-StripeApiKeyParameter-${envSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'PaypalApiKeyParameter', {
+      value: `/marketgrid/${stageName}/${envSuffix}/api-keys/paypal`,
+      description: 'SSM Parameter name for PayPal API key',
+      exportName: `MarketGrid-PaypalApiKeyParameter-${envSuffix}`,
+    });
+
+    // WAF Outputs
+    new cdk.CfnOutput(this, 'WafWebAclArn', {
+      value: wafAcl.attrArn,
+      description: 'WAF WebACL ARN protecting the API Gateway',
+      exportName: `MarketGrid-WafWebAclArn-${envSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'WafWebAclId', {
+      value: wafAcl.attrId,
+      description: 'WAF WebACL ID',
+      exportName: `MarketGrid-WafWebAclId-${envSuffix}`,
+    });
+
+    // CloudWatch Outputs
+    new cdk.CfnOutput(this, 'CloudWatchDashboardName', {
+      value: dashboard.dashboardName,
+      description: 'CloudWatch Dashboard name',
+      exportName: `MarketGrid-CloudWatchDashboardName-${envSuffix}`,
+    });
+
+    // Region Output
+    new cdk.CfnOutput(this, 'DeploymentRegion', {
+      value: this.region,
+      description: 'AWS region where resources are deployed',
+      exportName: `MarketGrid-DeploymentRegion-${envSuffix}`,
     });
   }
 }

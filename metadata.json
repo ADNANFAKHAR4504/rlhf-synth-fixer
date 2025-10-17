@@ -1,0 +1,33 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "356252",
+  "team": "2",
+  "startedAt": "2025-10-17T11:21:18.597Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "background": "MarketGrid multi-vendor e-commerce marketplace webhook processing infrastructure",
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "SQS",
+    "DynamoDB",
+    "S3",
+    "SNS",
+    "EventBridge Pipes",
+    "WAF",
+    "KMS",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "SSM Parameter Store",
+    "Application Auto Scaling",
+    "Route53",
+    "Certificate Manager",
+    "IAM"
+  ],
+  "training_quality": 9
+}
