@@ -1,7 +1,17 @@
-1. Critical Failure: Generated response by the model had failures related to the security group naming conventions, it used the sg with naming starrting from sg- which is not allowed as per AWS rules. As per AWS rules any security group name should not start with sg- as its reserved for AWS.
-AWS document reference - https://paladincloud.io/aws-security-risks/aws-security-group-naming-convention/
+1. Critical Failure — Security Group Naming Convention
+Root Cause
+
+Terraform security group resources in your tap_stack.tf used a name starting with "sg-"
+This is invalid because AWS reserves the "sg-" prefix for its own internally generated Security Group IDs (e.g., sg-0ff7dfda60377d2bc).
+When you use a name starting with sg-, AWS interprets it as an internal SG ID format, causing a validation failure during creation.
+
+AWS Reference
+
+As per AWS rules, security group names cannot start with sg- because it conflicts with system-generated identifiers.
+
+Ref: https://paladincloud.io/aws-security-risks/aws-security-group-naming-convention/
+
 ```
-╷
 │ Error: invalid value for name (cannot begin with sg-)
 │ 
 │   with aws_security_group.web,
@@ -20,9 +30,24 @@ AWS document reference - https://paladincloud.io/aws-security-risks/aws-security
 Error: Terraform exited with code 1.
 All deployment attempts failed. Check for state lock issues.
 ```
+2. High-Level Failure — IAM Role + Lambda Inline Code Issue
+Root Cause 1 – IAM Role Naming
 
-2. High Level Failure: Deployment also failed because of the IAM role worng naming convention. The model used the wrong naming convetion for IAM role with capital letters and special characters which is not allowed as per AWS naming convention guidelines.
-AWS Document reference- https://paladincloud.io/aws-security-risks/aws-security-group-naming-convention/
+AWS IAM role names cannot include uppercase letters or special characters, and must comply with:
+
+Allowed characters: [a-zA-Z0-9+=,.@_-]
+
+Typically lowercase or PascalCase, but some IaC policies (like PaladinCloud or enterprise rules) enforce lowercase-only names.
+
+You mentioned the model-generated role used capital letters and special characters, which violates internal or organizational compliance rules.
+
+Root Cause 2 – Lambda Inline Code Argument
+
+Terraform’s AWS provider does not support inline_code for aws_lambda_function.
+The correct argument is filename or source_code_hash (for zipped code), or handler and runtime if using an uploaded package.
+
+Fix-
+We can only use inline code via filename and local file, or embed code using local_file data source.
 ```
 ╷
 │ Error: Unsupported argument
