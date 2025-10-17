@@ -31,6 +31,7 @@ from cdktf_cdktf_provider_aws.data_aws_availability_zones import DataAwsAvailabi
 from cdktf_cdktf_provider_aws.data_aws_secretsmanager_secret import DataAwsSecretsmanagerSecret
 from cdktf_cdktf_provider_aws.data_aws_secretsmanager_secret_version import DataAwsSecretsmanagerSecretVersion
 import json
+import uuid
 
 
 class TapStack(TerraformStack):
@@ -57,7 +58,7 @@ class TapStack(TerraformStack):
             "managed_by": "cdktf"
         }
 
-        unique_token = Fn.substr(Fn.uuid(), 0, 8)
+        unique_token = uuid.uuid4().hex[:8]
         self.unique_suffix = f"{environment_suffix}-{unique_token}"
 
         # Merge default tags if provided
