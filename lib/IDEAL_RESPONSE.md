@@ -1,17 +1,56 @@
 # Manufacturing IoT Sensor Data Processing System - CDKTF Python Implementation
 
-This implementation provides a production-ready real-time IoT sensor data processing system using CDKTF with Python, deployed in the eu-west-2 region.
+This implementation provides a production-ready real-time IoT sensor data processing system using CDKTF with Python, deployed in the eu-west-2 region for a European manufacturing company.
 
 ## Architecture Overview
 
-The infrastructure creates a complete IoT data pipeline with:
-- VPC with public and private subnets across 2 Availability Zones
-- Kinesis Data Stream for real-time sensor data ingestion with KMS encryption
-- ECS Fargate cluster for containerized data processing
-- ElastiCache Redis cluster mode for caching and temporary storage
-- RDS PostgreSQL Multi-AZ for permanent data storage with encryption
-- Secrets Manager for database credential management
-- Comprehensive IAM roles, security groups, and CloudWatch logging
+The infrastructure creates a complete IoT data pipeline designed to handle continuous sensor data from hundreds of devices across manufacturing facilities. The system processes temperature, pressure, and equipment status data in real-time while maintaining compliance with strict manufacturing standards.
+
+### Key Components
+
+1. **Network Foundation**
+   - VPC spanning 2 Availability Zones for high availability
+   - Public subnets for ECS tasks with internet connectivity
+   - Private subnets for databases and caches
+   - Internet Gateway for public subnet routing
+
+2. **Real-Time Data Ingestion**
+   - Kinesis Data Streams with 2 shards for parallel processing
+   - KMS encryption for data security
+   - 24-hour retention period for data replay capability
+
+3. **Containerized Processing**
+   - ECS Fargate cluster for serverless container orchestration
+   - Task definitions with 256 CPU units and 512 MB memory
+   - 2 tasks running across availability zones
+   - CloudWatch logging for monitoring and debugging
+
+4. **Caching Layer**
+   - ElastiCache Redis cluster mode for temporary storage
+   - Multi-AZ deployment with automatic failover
+   - Encryption at rest and in transit
+   - Located in private subnets for security
+
+5. **Permanent Storage**
+   - RDS PostgreSQL Multi-AZ for compliance data storage
+   - Storage encryption enabled
+   - 7-day backup retention
+   - CloudWatch logs for PostgreSQL monitoring
+
+6. **Security & Access Management**
+   - Secrets Manager for database credential management
+   - IAM roles with least-privilege policies for ECS tasks
+   - Security groups restricting database access to ECS tasks only
+   - No hardcoded credentials
+
+## Business Context
+
+The manufacturing company requires this infrastructure to:
+- Process sensor data in real-time for anomaly detection
+- Store all data securely for compliance audits
+- Meet EU data residency requirements (eu-west-2 region)
+- Scale with growing sensor network
+- Maintain high availability for critical operations
 
 ## File: lib/tap_stack.py
 
@@ -643,62 +682,85 @@ class TapStack(TerraformStack):
         )
 ```
 
-## Key Implementation Highlights
+## Infrastructure Details
 
-### 1. Platform & Language Compliance
-- Uses CDKTF Python with proper imports from `cdktf_cdktf_provider_aws`
-- S3 backend configured for Terraform state with encryption
-- Correct usage of Terraform functions (`Fn.element`, `Fn.jsonencode`)
-- Region set to **eu-west-2** as required
+### Network Architecture
 
-### 2. Critical ElastiCache Fix
-**Issue**: Cluster mode requires automatic failover to be enabled
-**Solution**: Added `automatic_failover_enabled=True` parameter to ElasticacheReplicationGroup configuration with cluster mode settings (`num_node_groups=1`, `replicas_per_node_group=1`)
+The VPC spans two Availability Zones with a CIDR block of 10.0.0.0/16. Public subnets (10.0.1.0/24 and 10.0.2.0/24) host the ECS Fargate tasks with direct internet connectivity via an Internet Gateway. Private subnets (10.0.11.0/24 and 10.0.12.0/24) isolate the Redis cache and PostgreSQL database from direct internet access.
 
-### 3. RDS PostgreSQL Version
-**Issue**: PostgreSQL 15.4 not available in eu-west-2
-**Solution**: Updated to engine version **15.14** which is available in the region
+### Data Flow
 
-### 4. Security Implementation
-- Kinesis encrypted with KMS (`alias/aws/kinesis`)
-- RDS encrypted at rest with Multi-AZ deployment
-- Secrets Manager for database credentials
-- Least-privilege IAM policies for ECS tasks
-- Security groups with minimal required access
-- No public database access (private subnets only)
+Sensor data flows into Kinesis Data Streams where it's encrypted using KMS. ECS Fargate tasks consume data from Kinesis, process it, and use Redis for temporary caching of frequently accessed values. Processed data is stored in the PostgreSQL database for long-term compliance storage. All components communicate through secure, encrypted channels.
 
-### 5. High Availability
-- VPC spans 2 Availability Zones
-- RDS Multi-AZ deployment enabled
-- Redis cluster mode with automatic failover
-- ECS service with 2 tasks across AZs
+### Security Implementation
 
-### 6. Resource Naming
-All resources include `environment_suffix` for uniqueness:
+The infrastructure implements defense-in-depth security:
+- Network isolation with public/private subnet separation
+- Security groups restricting database access to only ECS tasks
+- KMS encryption for Kinesis streams
+- Storage encryption for RDS
+- Secrets Manager for credential management (no hardcoded passwords)
+- IAM roles with least-privilege policies
+
+### Resource Naming Convention
+
+All resources follow the pattern `resource-type-{environment_suffix}` for uniqueness:
 - VPC: `iot-vpc-{environment_suffix}`
-- Kinesis: `sensor-data-stream-{environment_suffix}`
+- Kinesis Stream: `sensor-data-stream-{environment_suffix}`
 - ECS Cluster: `iot-processing-cluster-{environment_suffix}`
-- RDS: `iot-postgres-{environment_suffix}`
 - Redis: `iot-redis-{environment_suffix}`
+- RDS: `iot-postgres-{environment_suffix}`
+- Secrets: `iot-db-credentials-{environment_suffix}`
 
-### 7. Destroyability
-- `skip_final_snapshot=True` for RDS
-- `deletion_protection=False` for RDS
-- No Retain policies on any resources
-- All resources can be cleanly deleted
+### High Availability Configuration
 
-## Production Readiness
+The system is designed for high availability:
+- Multi-AZ VPC spanning 2 Availability Zones
+- RDS Multi-AZ deployment with synchronous replication
+- ElastiCache cluster mode with automatic failover
+- ECS service running 2 tasks across different AZs
+- Kinesis with 2 shards for parallel processing
 
-This implementation is production-ready with:
-1. Complete security best practices implementation
-2. Comprehensive monitoring and logging via CloudWatch
-3. Proper secrets management with AWS Secrets Manager
-4. Appropriate instance sizes for cost optimization
-5. AWS Well-Architected Framework principles
+### Monitoring and Logging
 
-For enhanced production deployment, consider:
-- Implement Lambda rotation function for Secrets Manager (30-day cycle)
-- Add NAT Gateway for private subnet egress
-- Implement ECS auto-scaling policies based on metrics
-- Add CloudWatch alarms for critical metrics
-- Replace nginx placeholder with actual IoT processing application
+CloudWatch provides comprehensive observability:
+- ECS task logs streamed to CloudWatch log group
+- RDS PostgreSQL logs exported to CloudWatch
+- 7-day log retention for troubleshooting
+- All logs centralized in `/aws/iot-processing-{environment_suffix}`
+
+### Data Retention and Compliance
+
+The infrastructure supports manufacturing compliance requirements:
+- Kinesis 24-hour retention for data replay
+- RDS 7-day automated backups
+- PostgreSQL for permanent audit trail storage
+- All data encrypted at rest and in transit
+- EU region deployment (eu-west-2) for data residency
+
+### Scalability Considerations
+
+The architecture supports growth:
+- Kinesis shards can be increased for higher throughput
+- ECS tasks auto-scale based on Kinesis iterator age
+- Redis cluster mode supports adding more node groups
+- RDS storage auto-scaling enabled (gp3)
+
+### Cost Optimization
+
+Resource sizing balances cost and performance:
+- t3.micro instances for cache and database (suitable for moderate workloads)
+- Fargate Spot pricing potential for non-critical processing
+- 7-day log retention to manage storage costs
+- Serverless ECS Fargate eliminates idle compute costs
+
+## Deployment Configuration
+
+The stack accepts configuration parameters:
+- `environment_suffix`: Unique identifier for resources (default: 'dev')
+- `aws_region`: Deployment region (default: 'eu-west-2')
+- `state_bucket`: S3 bucket for Terraform state
+- `state_bucket_region`: Region for state bucket (default: 'us-east-1')
+- `default_tags`: Common tags applied to all resources
+
+All resources can be cleanly destroyed with `skip_final_snapshot=True` and `deletion_protection=False` on the RDS instance.
