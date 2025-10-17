@@ -82,8 +82,12 @@ class EcsStack:
         )
         
         # Target Groups for Blue and Green deployments
+        # Use shorter names to avoid AWS 32-character limit
+        # Extract abbreviated name (take first 15 chars to leave room for suffix and random chars)
+        short_name = name[:15] if len(name) > 15 else name
+        
         self.blue_target_group = aws.lb.TargetGroup(
-            f"{name}-blue-tg",
+            f"{short_name}-blue",
             port=self.container_port,
             protocol="HTTP",
             vpc_id=self.vpc_id,
@@ -107,7 +111,7 @@ class EcsStack:
         )
         
         self.green_target_group = aws.lb.TargetGroup(
-            f"{name}-green-tg",
+            f"{short_name}-green",
             port=self.container_port,
             protocol="HTTP",
             vpc_id=self.vpc_id,
