@@ -646,8 +646,6 @@ class IotProcessingStack(Construct):
             value=api_secret_name,
             description="Name of the existing API credentials secret"
         )
-            description="Name of the API credentials secret"
-        )
 
         TerraformOutput(
             self,
