@@ -695,10 +695,10 @@ describe('TapStack CloudFormation Template - Comprehensive Cloud Environment', (
   });
 
   describe('WAF WebACL Configuration', () => {
-    test('should create WAF WebACL with CloudFront scope', () => {
+    test('should create WAF WebACL with Regional scope', () => {
       const webACL = template.Resources.WebACL;
       expect(webACL.Type).toBe('AWS::WAFv2::WebACL');
-      expect(webACL.Properties.Scope).toBe('CLOUDFRONT');
+      expect(webACL.Properties.Scope).toBe('REGIONAL');
       expect(webACL.Properties.DefaultAction.Allow).toEqual({});
     });
 
@@ -766,11 +766,9 @@ describe('TapStack CloudFormation Template - Comprehensive Cloud Environment', (
       expect(viewerCert.MinimumProtocolVersion).toBe('TLSv1.2_2021');
     });
 
-    test('should create CloudFront distribution with WAF WebACL attached', () => {
+    test('should create CloudFront distribution without WAF WebACL', () => {
       const cf = template.Resources.CloudFrontDistribution;
-      expect(cf.Properties.DistributionConfig.WebACLId).toEqual({
-        'Fn::GetAtt': ['WebACL', 'Arn']
-      });
+      expect(cf.Properties.DistributionConfig.WebACLId).toBeUndefined();
     });
 
     test('should create CloudFront distribution enabled with default root object', () => {
@@ -779,14 +777,11 @@ describe('TapStack CloudFormation Template - Comprehensive Cloud Environment', (
       expect(cf.Properties.DistributionConfig.DefaultRootObject).toBe('index.html');
     });
 
-    test('should create CloudFront distribution with implicit dependencies via Ref/GetAtt', () => {
+    test('should create CloudFront distribution with implicit dependencies via Ref', () => {
       const cf = template.Resources.CloudFrontDistribution;
-      // Dependencies are implicit through Ref and GetAtt, no explicit DependsOn needed
+      // Dependencies are implicit through Ref, no explicit DependsOn needed
       expect(cf.Properties.DistributionConfig.ViewerCertificate.AcmCertificateArn).toEqual({
         Ref: 'Certificate'
-      });
-      expect(cf.Properties.DistributionConfig.WebACLId).toEqual({
-        'Fn::GetAtt': ['WebACL', 'Arn']
       });
     });
   });

@@ -688,7 +688,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
                   'cat > /tmp/test-data.json << "DATA"',
                   '{',
                   '  "test_name": "E2E Storage Workflow",',
-                  '  "timestamp": "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'",',
+                  '  "timestamp": "$(date -u +\\"%Y-%m-%dT%H:%M:%SZ\\")",',
                   '  "status": "success"',
                   '}',
                   'DATA',

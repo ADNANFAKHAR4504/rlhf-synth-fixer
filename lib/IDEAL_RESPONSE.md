@@ -179,7 +179,7 @@ The architecture achieves high availability through multiple mechanisms. Two NAT
     },
     "DomainName": {
       "Type": "String",
-      "Default": "example.com",
+      "Default": "test-domain.com",
       "Description": "Domain name for CloudFront distribution and Route 53"
     }
   },
@@ -1336,7 +1336,7 @@ The architecture achieves high availability through multiple mechanisms. Two NAT
         "Name": {
           "Fn::Sub": "WebACL-${EnvironmentSuffix}"
         },
-        "Scope": "CLOUDFRONT",
+        "Scope": "REGIONAL",
         "DefaultAction": {
           "Allow": {}
         },
@@ -1453,12 +1453,6 @@ The architecture achieves high availability through multiple mechanisms. Two NAT
             },
             "SslSupportMethod": "sni-only",
             "MinimumProtocolVersion": "TLSv1.2_2021"
-          },
-          "WebACLId": {
-            "Fn::GetAtt": [
-              "WebACL",
-              "Arn"
-            ]
           }
         },
         "Tags": [
@@ -2010,7 +2004,7 @@ AWS Backup provides centralized backup management across AWS services using a si
 
 ### Route 53 Alias Records
 
-The Route 53 A record uses alias functionality to route traffic to the CloudFront distribution rather than a standard CNAME record. Alias records provide several advantages: they work at the zone apex (naked domain like example.com), don't incur Route 53 query charges, and provide automatic health checking. The alias points to CloudFront's hosted zone ID (Z2FDTNDATAQYW2, consistent across all CloudFront distributions globally) and the distribution's domain name. Route 53 automatically resolves the alias to current CloudFront IP addresses without manual DNS updates.
+The Route 53 A record uses alias functionality to route traffic to the CloudFront distribution rather than a standard CNAME record. Alias records provide several advantages: they work at the zone apex (naked domain like test-domain.com), don't incur Route 53 query charges, and provide automatic health checking. The alias points to CloudFront's hosted zone ID (Z2FDTNDATAQYW2, consistent across all CloudFront distributions globally) and the distribution's domain name. Route 53 automatically resolves the alias to current CloudFront IP addresses without manual DNS updates.
 
 ### ACM Certificate with DNS Validation
 

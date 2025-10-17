@@ -134,7 +134,7 @@
     },
     "DomainName": {
       "Type": "String",
-      "Default": "example.com",
+      "Default": "test-domain.com",
       "Description": "Domain name for CloudFront distribution and Route 53"
     }
   },
@@ -1295,7 +1295,7 @@
         "Name": {
           "Fn::Sub": "WebACL-${EnvironmentSuffix}"
         },
-        "Scope": "CLOUDFRONT",
+        "Scope": "REGIONAL",
         "DefaultAction": {
           "Allow": {}
         },
@@ -1408,12 +1408,6 @@
             },
             "SslSupportMethod": "sni-only",
             "MinimumProtocolVersion": "TLSv1.2_2021"
-          },
-          "WebACLId": {
-            "Fn::GetAtt": [
-              "WebACL",
-              "Arn"
-            ]
           }
         },
         "Tags": [
