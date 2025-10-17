@@ -241,6 +241,7 @@ export class DatabaseModule extends Construct {
       }
     );
 
+    // RDS Instance
     this.rdsInstance = new aws.dbInstance.DbInstance(this, 'rds', {
       identifier: `${config.projectName}-${config.environment}-db`,
       engine: 'postgres',
@@ -1030,6 +1031,7 @@ export class MonitoringModule extends Construct {
     );
   }
 }
+
 ```
 
 ## taps-stack.ts
@@ -1072,8 +1074,6 @@ interface TapStackProps {
   hostedZoneId?: string;
 }
 
-// If you need to override the AWS Region for the terraform provider for any particular task,
-// you can set it here. Otherwise, it will default to 'us-east-1'.
 const AWS_REGION_OVERRIDE = '';
 
 export class TapStack extends TerraformStack {
@@ -1292,6 +1292,7 @@ export class TapStack extends TerraformStack {
     });
   }
 }
+
 
 ```
 
