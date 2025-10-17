@@ -1,6 +1,10 @@
 import json
 import os
 import unittest
+import base64
+import time
+import requests
+from datetime import datetime
 
 import boto3
 from botocore.exceptions import ClientError
@@ -34,6 +38,16 @@ class TestTapStackIntegration(unittest.TestCase):
         self.kms_client = boto3.client("kms")
         self.dynamodb_client = boto3.client("dynamodb")
         self.logs_client = boto3.client("logs")
+        
+        # Get required outputs for E2E testing
+        self.api_endpoint = flat_outputs.get("ApiGatewayUrl")
+        self.bucket_name = flat_outputs.get("S3BucketName")
+        self.table_name = flat_outputs.get("DynamoDBTableName")
+        
+        # Validate required outputs are present
+        self.assertIsNotNone(self.api_endpoint, "API Gateway endpoint is missing in flat-outputs.json")
+        self.assertIsNotNone(self.bucket_name, "S3 bucket name is missing in flat-outputs.json")
+        self.assertIsNotNone(self.table_name, "DynamoDB table name is missing in flat-outputs.json")
 
     @mark.it("Validates the Lambda function")
     def test_lambda_function(self):
@@ -103,3 +117,189 @@ class TestTapStackIntegration(unittest.TestCase):
             self.assertEqual(log_group["logGroupName"], log_group_name)
         except ClientError as e:
             self.fail(f"Failed to validate CloudWatch Log Group: {str(e)}")
+
+    @mark.it("End-to-end file upload test")
+    def test_end_to_end_file_upload(self):
+        """Test complete file upload flow from API Gateway to S3 and DynamoDB"""
+        
+        # Generate unique test data
+        test_timestamp = datetime.now().isoformat()
+        test_product_id = f"test-product-{int(time.time())}"
+        test_product_name = f"Test Product {test_timestamp}"
+        test_price = 99.99
+        
+        # Create test file content
+        test_file_content = f"Test file content for product {test_product_id}\nTimestamp: {test_timestamp}"
+        test_file_content_b64 = base64.b64encode(test_file_content.encode('utf-8')).decode('utf-8')
+        test_file_name = f"test-file-{test_timestamp}.txt"
+        
+        # Prepare API request payload
+        payload = {
+            "productId": test_product_id,
+            "productName": test_product_name,
+            "price": test_price,
+            "fileContent": test_file_content_b64,
+            "fileName": test_file_name
+        }
+        
+        # Make API request
+        try:
+            response = requests.post(
+                self.api_endpoint,
+                json=payload,
+                headers={'Content-Type': 'application/json'},
+                timeout=30
+            )
+            
+            # Validate API response
+            self.assertEqual(response.status_code, 200, 
+                           f"API request failed with status {response.status_code}: {response.text}")
+            
+            response_data = response.json()
+            self.assertIn('message', response_data)
+            self.assertEqual(response_data['message'], 'File uploaded successfully')
+            self.assertEqual(response_data['productId'], test_product_id)
+            self.assertIn('s3Key', response_data)
+            self.assertIn('fileSize', response_data)
+            
+            s3_key = response_data['s3Key']
+            expected_s3_key = f"uploads/{test_product_id}/{test_file_name}"
+            self.assertEqual(s3_key, expected_s3_key)
+            
+        except requests.exceptions.RequestException as e:
+            self.fail(f"API request failed: {str(e)}")
+        
+        # Wait a moment for eventual consistency
+        time.sleep(2)
+        
+        # Verify file was uploaded to S3
+        try:
+            s3_response = self.s3_client.get_object(Bucket=self.bucket_name, Key=s3_key)
+            uploaded_content = s3_response['Body'].read().decode('utf-8')
+            self.assertEqual(uploaded_content, test_file_content, "S3 file content doesn't match")
+            
+            # Verify S3 object metadata
+            s3_metadata = self.s3_client.head_object(Bucket=self.bucket_name, Key=s3_key)
+            self.assertIn('ServerSideEncryption', s3_metadata)
+            self.assertEqual(s3_metadata['ServerSideEncryption'], 'aws:kms')
+            
+        except ClientError as e:
+            self.fail(f"Failed to verify S3 upload: {str(e)}")
+        
+        # Verify metadata was stored in DynamoDB
+        try:
+            dynamodb_response = self.dynamodb_client.get_item(
+                TableName=self.table_name,
+                Key={
+                    'productId': {'S': test_product_id},
+                    'productName': {'S': test_product_name}
+                }
+            )
+            
+            self.assertIn('Item', dynamodb_response, "DynamoDB item not found")
+            item = dynamodb_response['Item']
+            
+            # Verify all expected fields are present
+            self.assertEqual(item['productId']['S'], test_product_id)
+            self.assertEqual(item['productName']['S'], test_product_name)
+            self.assertEqual(float(item['price']['N']), test_price)
+            self.assertEqual(item['fileName']['S'], test_file_name)
+            self.assertEqual(item['s3Key']['S'], s3_key)
+            self.assertIn('uploadTimestamp', item)
+            self.assertIn('fileSize', item)
+            self.assertEqual(int(item['fileSize']['N']), len(test_file_content.encode('utf-8')))
+            
+        except ClientError as e:
+            self.fail(f"Failed to verify DynamoDB storage: {str(e)}")
+        
+        # Clean up test data
+        try:
+            # Delete S3 object
+            self.s3_client.delete_object(Bucket=self.bucket_name, Key=s3_key)
+            
+            # Delete DynamoDB item
+            self.dynamodb_client.delete_item(
+                TableName=self.table_name,
+                Key={
+                    'productId': {'S': test_product_id},
+                    'productName': {'S': test_product_name}
+                }
+            )
+            
+        except ClientError as e:
+            # Log cleanup errors but don't fail the test
+            print(f"Warning: Failed to clean up test data: {str(e)}")
+
+    @mark.it("End-to-end error handling test")
+    def test_end_to_end_error_handling(self):
+        """Test error handling in the complete file upload flow"""
+        
+        # Test missing required field
+        invalid_payload = {
+            "productId": "test-product-invalid",
+            "productName": "Test Product",
+            # Missing price and fileContent
+        }
+        
+        try:
+            response = requests.post(
+                self.api_endpoint,
+                json=invalid_payload,
+                headers={'Content-Type': 'application/json'},
+                timeout=30
+            )
+            
+            # Should return 400 Bad Request
+            self.assertEqual(response.status_code, 400, 
+                           f"Expected 400 for invalid payload, got {response.status_code}")
+            
+            response_data = response.json()
+            self.assertIn('error', response_data)
+            self.assertIn('code', response_data)
+            
+        except requests.exceptions.RequestException as e:
+            self.fail(f"API request failed: {str(e)}")
+        
+        # Test invalid price
+        invalid_price_payload = {
+            "productId": "test-product-invalid-price",
+            "productName": "Test Product",
+            "price": -10.0,  # Negative price should be invalid
+            "fileContent": base64.b64encode(b"test content").decode('utf-8')
+        }
+        
+        try:
+            response = requests.post(
+                self.api_endpoint,
+                json=invalid_price_payload,
+                headers={'Content-Type': 'application/json'},
+                timeout=30
+            )
+            
+            # Should return 400 Bad Request
+            self.assertEqual(response.status_code, 400, 
+                           f"Expected 400 for negative price, got {response.status_code}")
+            
+            response_data = response.json()
+            self.assertIn('error', response_data)
+            self.assertIn('code', response_data)
+            self.assertEqual(response_data['code'], 'INVALID_PRICE')
+            
+        except requests.exceptions.RequestException as e:
+            self.fail(f"API request failed: {str(e)}")
+        
+        # Test invalid JSON
+        try:
+            response = requests.post(
+                self.api_endpoint,
+                data="invalid json",
+                headers={'Content-Type': 'application/json'},
+                timeout=30
+            )
+            
+            # Should return 400 Bad Request
+            self.assertEqual(response.status_code, 400, 
+                           f"Expected 400 for invalid JSON, got {response.status_code}")
+            
+        except requests.exceptions.RequestException as e:
+            self.fail(f"API request failed: {str(e)}")
