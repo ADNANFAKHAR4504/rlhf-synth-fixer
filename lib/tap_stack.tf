@@ -1,15 +1,4 @@
-#############################################
-# tap_stack.tf — Task-04 (Single File)
-# Multi-Region AWS Infrastructure with strong defaults
-#
-# IMPORTANT CONVENTIONS FOR THIS FILE
-# - Do NOT add any `provider` or backend blocks; CI injects them.
-# - Always pin resources/data sources to aliased providers:
-#     * us-east-2  →  provider = aws.use2
-#     * eu-west-2  →  provider = aws.euw2
-# - Prefer explicit dependencies through references; avoid arbitrary depends_on.
-# - Keep resources destroyable; no lifecycle.prevent_destroy.
-#############################################
+# tap_stack.tf 
 
 #############################################
 # VARIABLES
@@ -121,6 +110,7 @@ locals {
     Environment = var.env
     Owner       = var.owner
     CostCenter  = var.cost_center
+    do-not-nuke = "true"
   }
 
   name = {
@@ -694,7 +684,6 @@ resource "aws_vpc_security_group_egress_rule" "use2_app_all_egress" {
   ip_protocol       = "-1"
   description       = "Allow all egress."
 }
-
 resource "aws_security_group" "use2_rds" {
   provider    = aws.use2
   name        = "${local.name.use2}-rds"

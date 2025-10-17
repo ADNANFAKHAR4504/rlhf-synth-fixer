@@ -8,7 +8,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as http from 'http';
 import * as https from 'https';
-// ✅ FIX: use Smithy packages instead of deprecated @aws-sdk internals
+// FIX: use Smithy packages instead of deprecated @aws-sdk internals
 import { HttpRequest } from '@smithy/protocol-http';
 
 import {
