@@ -121,10 +121,10 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
       this.node.tryGetContext('rdsSubnetGroupName');
     const importedSubnetGroup = importedSubnetGroupName
       ? rds.SubnetGroup.fromSubnetGroupName(
-        this,
-        'ImportedRdsSubnetGroup',
-        String(importedSubnetGroupName)
-      )
+          this,
+          'ImportedRdsSubnetGroup',
+          String(importedSubnetGroupName)
+        )
       : undefined;
 
     const rdsInstance = new rds.DatabaseInstance(this, 'PostgresDatabase', {
@@ -519,10 +519,27 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
         account: cdk.Aws.ACCOUNT_ID,
       });
 
-      new wafv2.CfnWebACLAssociation(this, 'WebAclAssociation', {
-        resourceArn: cloudFrontArn,
-        webAclArn: webAcl.attrArn,
-      });
+      const webAclAssociation = new wafv2.CfnWebACLAssociation(
+        this,
+        'WebAclAssociation',
+        {
+          resourceArn: cloudFrontArn,
+          webAclArn: webAcl.attrArn,
+        }
+      );
+
+      // Ensure CloudFormation creates the distribution before attempting the
+      // WebACL association. The CDK sometimes renders the association without
+      // an explicit dependency which can cause WAF to receive an ARN that
+      // isn't yet usable. Add explicit dependencies on the distribution's
+      // low-level resource and the WebACL itself.
+      const cfResource = distribution.node.defaultChild as
+        | cdk.CfnResource
+        | undefined;
+      if (cfResource) {
+        webAclAssociation.node.addDependency(cfResource as cdk.CfnResource);
+      }
+      webAclAssociation.node.addDependency(webAcl);
     } else {
       // Emit an explicit output so reviewers/operators can see the WAF was
       // intentionally skipped for this region during deploy/synth.
