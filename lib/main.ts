@@ -1,40 +1,40 @@
-import { Construct } from 'constructs';
-import { App, TerraformStack, TerraformOutput } from 'cdktf';
-import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
-import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
-import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
-import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
-import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
-import { Route } from '@cdktf/provider-aws/lib/route';
-import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
+import { Apigatewayv2Api } from '@cdktf/provider-aws/lib/apigatewayv2-api';
+import { Apigatewayv2Integration } from '@cdktf/provider-aws/lib/apigatewayv2-integration';
+import { Apigatewayv2Route } from '@cdktf/provider-aws/lib/apigatewayv2-route';
+import { Apigatewayv2Stage } from '@cdktf/provider-aws/lib/apigatewayv2-stage';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
-import { RdsCluster } from '@cdktf/provider-aws/lib/rds-cluster';
-import { RdsClusterInstance } from '@cdktf/provider-aws/lib/rds-cluster-instance';
-import { ElasticacheSubnetGroup } from '@cdktf/provider-aws/lib/elasticache-subnet-group';
-import { ElasticacheReplicationGroup } from '@cdktf/provider-aws/lib/elasticache-replication-group';
 import { EfsFileSystem } from '@cdktf/provider-aws/lib/efs-file-system';
 import { EfsMountTarget } from '@cdktf/provider-aws/lib/efs-mount-target';
-import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
-import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
-import { SecretsmanagerSecretRotation } from '@cdktf/provider-aws/lib/secretsmanager-secret-rotation';
+import { ElasticacheReplicationGroup } from '@cdktf/provider-aws/lib/elasticache-replication-group';
+import { ElasticacheSubnetGroup } from '@cdktf/provider-aws/lib/elasticache-subnet-group';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
+import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
 import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
-import { Apigatewayv2Api } from '@cdktf/provider-aws/lib/apigatewayv2-api';
-import { Apigatewayv2Stage } from '@cdktf/provider-aws/lib/apigatewayv2-stage';
-import { Apigatewayv2Integration } from '@cdktf/provider-aws/lib/apigatewayv2-integration';
-import { Apigatewayv2Route } from '@cdktf/provider-aws/lib/apigatewayv2-route';
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { RdsCluster } from '@cdktf/provider-aws/lib/rds-cluster';
+import { RdsClusterInstance } from '@cdktf/provider-aws/lib/rds-cluster-instance';
+import { Route } from '@cdktf/provider-aws/lib/route';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
+import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
+import { SecretsmanagerSecretRotation } from '@cdktf/provider-aws/lib/secretsmanager-secret-rotation';
+import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { TerraformOutput, TerraformStack } from 'cdktf';
+import { Construct } from 'constructs';
 // import { Apigatewayv2DomainName } from '@cdktf/provider-aws/lib/apigatewayv2-domain-name';
-import { KinesisStream } from '@cdktf/provider-aws/lib/kinesis-stream';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
+import { KinesisStream } from '@cdktf/provider-aws/lib/kinesis-stream';
 
 interface FinTechStackConfig {
   environmentSuffix: string;
@@ -44,7 +44,7 @@ interface FinTechStackConfig {
   enableMutualTls: boolean;
 }
 
-class FinTechTradingStack extends TerraformStack {
+export class FinTechTradingStack extends TerraformStack {
   constructor(scope: Construct, id: string, config: FinTechStackConfig) {
     super(scope, id);
 
@@ -919,15 +919,4 @@ class FinTechTradingStack extends TerraformStack {
   }
 }
 
-// Application entry point
-const app = new App();
-
-new FinTechTradingStack(app, 'fintech-trading-stack', {
-  environmentSuffix: process.env.ENVIRONMENT_SUFFIX || 'dev',
-  region: 'ca-central-1',
-  vpcCidr: '10.0.0.0/16',
-  dbUsername: 'dbadmin',
-  enableMutualTls: true,
-});
-
-app.synth();
+// Export for external use - entry point is in app.ts
