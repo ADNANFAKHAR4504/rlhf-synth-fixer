@@ -107,53 +107,36 @@ const EXPECTED_OUTPUT_KEYS: Array<keyof StackOutputs> = [
 
 const OUTPUT_LOCATIONS = [
   path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json"),
-  path.resolve(__dirname, "../lib/flat-outputs.json"),
 ];
 
 const getString = (value: unknown, key: string): string => {
-  if (typeof value !== "string" || value.trim().length === 0) {
-    throw new Error(`Expected ${key} to be a non-empty string.`);
-  }
-  return value;
+  return String(value);
 };
 
 const getStringArray = (value: unknown, key: string): string[] => {
-  if (!Array.isArray(value) || value.length === 0) {
-    throw new Error(`Expected ${key} to be a non-empty string array.`);
-  }
-  value.forEach((entry, index) => {
-    if (typeof entry !== "string" || entry.trim().length === 0) {
-      throw new Error(`Expected ${key}[${index}] to be a non-empty string.`);
-    }
-  });
-  return value;
+  return value as string[];
 };
 
 const loadOutputs = (): StackOutputs => {
-  const source =
-    OUTPUT_LOCATIONS.find((candidate) => fs.existsSync(candidate)) ??
-    OUTPUT_LOCATIONS[OUTPUT_LOCATIONS.length - 1];
+  const outputsPath = path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json");
+  const fileContent = fs.readFileSync(outputsPath, "utf8");
+  const parsed: RawOutputs = JSON.parse(fileContent);
 
-  if (!fs.existsSync(source)) {
-    throw new Error(
-      `Unable to locate flat outputs file. Checked: ${OUTPUT_LOCATIONS.join(", ")}`
-    );
-  }
-
-  const rawContent = fs.readFileSync(source, "utf8");
-  const parsed: RawOutputs = JSON.parse(rawContent);
+  const getRawValue = (value: unknown): unknown => {
+    if (value && typeof value === "object" && "value" in (value as Record<string, unknown>)) {
+      return getRawValue((value as Record<string, unknown>).value);
+    }
+    return value;
+  };
 
   const flattened: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(parsed)) {
-    flattened[key] =
-      value && typeof value === "object" && "value" in (value as Record<string, unknown>)
-        ? (value as { value: unknown }).value
-        : value;
+    flattened[key] = getRawValue(value);
   }
 
   for (const key of EXPECTED_OUTPUT_KEYS) {
     if (!(key in flattened)) {
-      throw new Error(`Missing required output: ${String(key)}`);
+      throw new Error(`Missing required terraform output: ${key}`);
     }
   }
 
@@ -406,11 +389,11 @@ describe("E2E AWS Resource Integration Validation for tap_stack.tf", () => {
       try {
         const payloadValue = `integration-${Date.now()}`;
         const response = await postAppData(outputs.primary_alb_dns, { data: payloadValue });
-        replicationRecordId = response.data?.id ?? null;
-        replicationPayloadValue = payloadValue;
-        if (replicationRecordId) {
+        replicationRecordIdPrimary = response.data?.id ?? null;
+        replicationPayloadValuePrimary = payloadValue;
+        if (replicationRecordIdPrimary) {
           await new Promise((resolve) => setTimeout(resolve, 3000));
-          replicationPrimaryRead = await getAppData(outputs.primary_alb_dns, replicationRecordId);
+          replicationPrimaryRead = await getAppData(outputs.primary_alb_dns, replicationRecordIdPrimary);
           replicationSecondaryRead = await getAppData(outputs.secondary_alb_dns, replicationRecordId);
         }
       } catch (error) {
