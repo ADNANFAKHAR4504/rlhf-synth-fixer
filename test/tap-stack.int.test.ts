@@ -80,7 +80,7 @@ import {
 import axios from 'axios';
 
 // Configuration - These are coming from deployment-outputs after deployment
-const outputFilePath = path.join(__dirname, '..', 'deployment-outputs', 'outputs.json');
+const outputFilePath = path.join(__dirname, '..', 'cfn-outputs', 'outputs.json');
 const outputs = fs.existsSync(outputFilePath) 
   ? JSON.parse(fs.readFileSync(outputFilePath, 'utf-8'))
   : {};
@@ -102,17 +102,17 @@ const iamClient = new IAMClient({ region: awsRegion });
 const autoScalingClient = new ApplicationAutoScalingClient({ region: awsRegion });
 
 // Extract outputs with defaults
-const vpcId = outputs["vpc-id"] || "vpc-0c745bfc83171b0a7";
-const vpcCidr = outputs["vpc-cidr"] || "10.0.0.0/16";
-const albDnsName = outputs["alb-dns-name"] || "myapp-pr4337-alb-1448593160.us-east-1.elb.amazonaws.com";
-const albUrl = outputs["alb-url"] || "http://myapp-pr4337-alb-1448593160.us-east-1.elb.amazonaws.com";
-const ecsClusterName = outputs["ecs-cluster-name"] || "myapp-pr4337-cluster";
-const ecsServiceName = outputs["ecs-service-name"] || "myapp-pr4337-service";
-const taskDefinitionArn = outputs["task-definition-arn"] || "arn:aws:ecs:us-east-1:***:task-definition/myapp-pr4337:1";
+const vpcId = outputs["vpc-id"];
+const vpcCidr = outputs["vpc-cidr"];
+const albDnsName = outputs["alb-dns-name"];
+const albUrl = outputs["alb-url"];
+const ecsClusterName = outputs["ecs-cluster-name"];
+const ecsServiceName = outputs["ecs-service-name"];
+const taskDefinitionArn = outputs["task-definition-arn"];
 const rdsEndpoint = outputs["rds-endpoint"];
-const dbSecretArn = outputs["db-secret-arn"] || "arn:aws:secretsmanager:us-east-1:***:secret:myapp-pr4337-db-credentials-BD0AiU";
-const staticAssetsBucket = outputs["static-assets-bucket"] || "myapp-pr4337-static-assets";
-const logGroupName = outputs["log-group-name"] || "/aws/ecs/myapp-pr4337";
+const dbSecretArn = outputs["db-secret-arn"];
+const staticAssetsBucket = outputs["static-assets-bucket"];
+const logGroupName = outputs["log-group-name"];
 let albArn: string;
 
 // Helper function to wait for ECS task to reach desired state
