@@ -104,9 +104,13 @@ export class TapStack extends cdk.Stack {
     // ========================================
     // CloudFront Origin Access Identity
     // ========================================
-    const originAccessIdentity = new cloudfront.OriginAccessIdentity(this, 'OAI', {
-      comment: `OAI for content delivery ${environmentSuffix}`,
-    });
+    const originAccessIdentity = new cloudfront.OriginAccessIdentity(
+      this,
+      'OAI',
+      {
+        comment: `OAI for content delivery ${environmentSuffix}`,
+      }
+    );
 
     // Grant CloudFront read access to content bucket
     contentBucket.grantRead(originAccessIdentity);
@@ -121,7 +125,11 @@ export class TapStack extends cdk.Stack {
       minTtl: cdk.Duration.minutes(1),
       maxTtl: cdk.Duration.days(365),
       cookieBehavior: cloudfront.CacheCookieBehavior.none(),
-      headerBehavior: cloudfront.CacheHeaderBehavior.allowList('Origin', 'Access-Control-Request-Method', 'Access-Control-Request-Headers'),
+      headerBehavior: cloudfront.CacheHeaderBehavior.allowList(
+        'Origin',
+        'Access-Control-Request-Method',
+        'Access-Control-Request-Headers'
+      ),
       queryStringBehavior: cloudfront.CacheQueryStringBehavior.none(),
       enableAcceptEncodingGzip: true,
       enableAcceptEncodingBrotli: true,
@@ -130,28 +138,39 @@ export class TapStack extends cdk.Stack {
     // ========================================
     // CloudFront Response Headers Policy
     // ========================================
-    const responseHeadersPolicy = new cloudfront.ResponseHeadersPolicy(this, 'ResponseHeadersPolicy', {
-      responseHeadersPolicyName: `content-headers-policy-${region}-${accountLast5}-${environmentSuffix}`,
-      comment: 'Security headers for content delivery',
-      securityHeadersBehavior: {
-        contentTypeOptions: { override: true },
-        frameOptions: { frameOption: cloudfront.HeadersFrameOption.DENY, override: true },
-        referrerPolicy: { referrerPolicy: cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN, override: true },
-        strictTransportSecurity: {
-          accessControlMaxAge: cdk.Duration.seconds(31536000),
-          includeSubdomains: true,
-          override: true,
+    const responseHeadersPolicy = new cloudfront.ResponseHeadersPolicy(
+      this,
+      'ResponseHeadersPolicy',
+      {
+        responseHeadersPolicyName: `content-headers-policy-${region}-${accountLast5}-${environmentSuffix}`,
+        comment: 'Security headers for content delivery',
+        securityHeadersBehavior: {
+          contentTypeOptions: { override: true },
+          frameOptions: {
+            frameOption: cloudfront.HeadersFrameOption.DENY,
+            override: true,
+          },
+          referrerPolicy: {
+            referrerPolicy:
+              cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN,
+            override: true,
+          },
+          strictTransportSecurity: {
+            accessControlMaxAge: cdk.Duration.seconds(31536000),
+            includeSubdomains: true,
+            override: true,
+          },
+          xssProtection: { protection: true, modeBlock: true, override: true },
         },
-        xssProtection: { protection: true, modeBlock: true, override: true },
-      },
-      corsBehavior: {
-        accessControlAllowOrigins: ['*'],
-        accessControlAllowHeaders: ['*'],
-        accessControlAllowMethods: ['GET', 'HEAD', 'OPTIONS'],
-        accessControlAllowCredentials: false,
-        originOverride: true,
-      },
-    });
+        corsBehavior: {
+          accessControlAllowOrigins: ['*'],
+          accessControlAllowHeaders: ['*'],
+          accessControlAllowMethods: ['GET', 'HEAD', 'OPTIONS'],
+          accessControlAllowCredentials: false,
+          originOverride: true,
+        },
+      }
+    );
 
     // ========================================
     // ACM Certificate (if provided)
@@ -216,21 +235,29 @@ export class TapStack extends cdk.Stack {
     // Route 53 DNS Record (if hosted zone provided)
     // ========================================
     if (domainName && hostedZoneId && hostedZoneName) {
-      const hostedZone = route53.HostedZone.fromHostedZoneAttributes(this, 'HostedZone', {
-        hostedZoneId: hostedZoneId,
-        zoneName: hostedZoneName,
-      });
+      const hostedZone = route53.HostedZone.fromHostedZoneAttributes(
+        this,
+        'HostedZone',
+        {
+          hostedZoneId: hostedZoneId,
+          zoneName: hostedZoneName,
+        }
+      );
 
       new route53.ARecord(this, 'AliasRecord', {
         zone: hostedZone,
         recordName: domainName,
-        target: route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(distribution)),
+        target: route53.RecordTarget.fromAlias(
+          new targets.CloudFrontTarget(distribution)
+        ),
       });
 
       new route53.AaaaRecord(this, 'AliasRecordIPv6', {
         zone: hostedZone,
         recordName: domainName,
-        target: route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(distribution)),
+        target: route53.RecordTarget.fromAlias(
+          new targets.CloudFrontTarget(distribution)
+        ),
       });
     }
 
