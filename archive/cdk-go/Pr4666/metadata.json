@@ -1,0 +1,34 @@
+{
+  "platform": "cdk",
+  "language": "go",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-10-17T06:43:55.775386+05:30",
+  "po_id": "4755663588",
+  "subtask": "Application Deployment",
+  "background": "Infrastructure task for CDK",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Cloud Environment Setup",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "KMS",
+    "VPC",
+    "EC2",
+    "CloudTrail",
+    "CloudWatch Logs",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
