@@ -1220,7 +1220,6 @@ Resources:
         Enabled: true
         HttpVersion: http2
         PriceClass: PriceClass_100
-        WebACLId: !GetAtt NovaWebACL.Arn
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${Environment}-cloudfront'
@@ -1235,7 +1234,7 @@ Resources:
   NovaWebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
-      Scope: CLOUDFRONT
+      Scope: REGIONAL
       DefaultAction:
         Allow: {}
       Rules:
