@@ -3,11 +3,9 @@
 package lib_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"testing"
@@ -15,49 +13,158 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/apigateway"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	cfntypes "github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/aws/aws-sdk-go-v2/service/lambda"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/aws-sdk-go-v2/service/ecs"
+	"github.com/aws/aws-sdk-go-v2/service/efs"
+	"github.com/aws/aws-sdk-go-v2/service/elasticache"
+	"github.com/aws/aws-sdk-go-v2/service/kinesis"
+	kinesistypes "github.com/aws/aws-sdk-go-v2/service/kinesis/types"
+	"github.com/aws/aws-sdk-go-v2/service/rds"
+	rdstypes "github.com/aws/aws-sdk-go-v2/service/rds/types"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
+	smtypes "github.com/aws/aws-sdk-go-v2/service/secretsmanager/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // StackOutputs represents the expected outputs from the CDK stack
 type StackOutputs struct {
-	ApiEndpoint             string `json:"ApiEndpoint"`
-	TableName               string `json:"TableName"`
-	CreateScoreFunctionName string `json:"CreateScoreFunctionName"`
-	GetScoreFunctionName    string `json:"GetScoreFunctionName"`
-	UpdateScoreFunctionName string `json:"UpdateScoreFunctionName"`
-	DeleteScoreFunctionName string `json:"DeleteScoreFunctionName"`
-	EnvironmentSuffix       string `json:"EnvironmentSuffix"`
+	ApiEndpoint                           string `json:"ApiEndpoint"`
+	TableName                             string `json:"TableName"`
+	CreateScoreFunctionName               string `json:"CreateScoreFunctionName"`
+	GetScoreFunctionName                  string `json:"GetScoreFunctionName"`
+	UpdateScoreFunctionName               string `json:"UpdateScoreFunctionName"`
+	DeleteScoreFunctionName               string `json:"DeleteScoreFunctionName"`
+	EnvironmentSuffix                     string `json:"EnvironmentSuffix"`
+	ApiGatewayUrl                         string `json:"ApiGatewayUrl"`
+	DatabaseClusterEndpoint               string `json:"DatabaseClusterEndpoint"`
+	VpcId                                 string `json:"VpcId"`
+	ApiContentDeliveryApiEndpoint2DB35E17 string `json:"ApiContentDeliveryApiEndpoint2DB35E17"`
+	KinesisStreamName                     string `json:"KinesisStreamName"`
 }
 
 // loadStackOutputs loads stack outputs from cdk-outputs.json
 func loadStackOutputs(t *testing.T) StackOutputs {
-	// Read the cdk-outputs.json file
-	data, err := os.ReadFile("cdk-outputs.json")
-	require.NoError(t, err, "Failed to read cdk-outputs.json")
+	// Try several likely file locations (CI may place outputs differently)
+	candidatePaths := []string{"cdk-outputs.json", "cfn-outputs/flat-outputs.json", "./cfn-outputs/flat-outputs.json", "../cfn-outputs/flat-outputs.json", "../../cfn-outputs/flat-outputs.json"}
 
-	// Parse the JSON
-	var outputs map[string]StackOutputs
-	err = json.Unmarshal(data, &outputs)
-	require.NoError(t, err, "Failed to parse cdk-outputs.json")
-
-	// Get the stack outputs - try "TapStackdev" or first available stack
-	stackOutputs, ok := outputs["TapStackdev"]
-	if !ok {
-		// If TapStackdev doesn't exist, try to get the first stack
-		for _, v := range outputs {
-			stackOutputs = v
+	var data []byte
+	var err error
+	var usedPath string
+	for _, p := range candidatePaths {
+		data, err = os.ReadFile(p)
+		if err == nil {
+			usedPath = p
 			break
 		}
 	}
+	require.NoError(t, err, "Failed to read outputs file from any known location")
+	t.Logf("Loaded outputs from %s", usedPath)
 
-	return stackOutputs
+	// 1) Try CloudFormation-style outputs: map[string][]{OutputKey,OutputValue}
+	var cfnOutputs map[string][]struct {
+		OutputKey   string `json:"OutputKey"`
+		OutputValue string `json:"OutputValue"`
+	}
+	if err := json.Unmarshal(data, &cfnOutputs); err == nil && len(cfnOutputs) > 0 {
+		// pick the first non-empty outputs list
+		for stackName, outputs := range cfnOutputs {
+			if len(outputs) == 0 {
+				continue
+			}
+			t.Logf("Using cloudformation outputs from %s", stackName)
+			so := StackOutputs{}
+			for _, o := range outputs {
+				switch o.OutputKey {
+				case "ApiGatewayUrl":
+					so.ApiGatewayUrl = o.OutputValue
+				case "DatabaseClusterEndpoint":
+					so.DatabaseClusterEndpoint = o.OutputValue
+				case "VpcId":
+					so.VpcId = o.OutputValue
+				case "KinesisStreamName":
+					so.KinesisStreamName = o.OutputValue
+				case "ApiContentDeliveryApiEndpoint2DB35E17":
+					so.ApiContentDeliveryApiEndpoint2DB35E17 = o.OutputValue
+				case "ApiEndpoint":
+					so.ApiEndpoint = o.OutputValue
+				case "TableName":
+					so.TableName = o.OutputValue
+				case "CreateScoreFunctionName":
+					so.CreateScoreFunctionName = o.OutputValue
+				case "GetScoreFunctionName":
+					so.GetScoreFunctionName = o.OutputValue
+				case "UpdateScoreFunctionName":
+					so.UpdateScoreFunctionName = o.OutputValue
+				case "DeleteScoreFunctionName":
+					so.DeleteScoreFunctionName = o.OutputValue
+				case "EnvironmentSuffix":
+					so.EnvironmentSuffix = o.OutputValue
+				}
+			}
+			return so
+		}
+	}
+
+	// 2) Try flat map[string]string (flat outputs file)
+	var flat map[string]string
+	if err := json.Unmarshal(data, &flat); err == nil && len(flat) > 0 {
+		so := StackOutputs{}
+		if v, ok := flat["ApiGatewayUrl"]; ok {
+			so.ApiGatewayUrl = v
+		}
+		if v, ok := flat["DatabaseClusterEndpoint"]; ok {
+			so.DatabaseClusterEndpoint = v
+		}
+		if v, ok := flat["VpcId"]; ok {
+			so.VpcId = v
+		}
+		if v, ok := flat["KinesisStreamName"]; ok {
+			so.KinesisStreamName = v
+		}
+		if v, ok := flat["ApiContentDeliveryApiEndpoint2DB35E17"]; ok {
+			so.ApiContentDeliveryApiEndpoint2DB35E17 = v
+		}
+		if v, ok := flat["ApiEndpoint"]; ok {
+			so.ApiEndpoint = v
+		}
+		if v, ok := flat["TableName"]; ok {
+			so.TableName = v
+		}
+		if v, ok := flat["CreateScoreFunctionName"]; ok {
+			so.CreateScoreFunctionName = v
+		}
+		if v, ok := flat["GetScoreFunctionName"]; ok {
+			so.GetScoreFunctionName = v
+		}
+		if v, ok := flat["UpdateScoreFunctionName"]; ok {
+			so.UpdateScoreFunctionName = v
+		}
+		if v, ok := flat["DeleteScoreFunctionName"]; ok {
+			so.DeleteScoreFunctionName = v
+		}
+		if v, ok := flat["EnvironmentSuffix"]; ok {
+			so.EnvironmentSuffix = v
+		}
+		return so
+	}
+
+	// 3) Fallback: try the older map[string]StackOutputs format
+	var outputs map[string]StackOutputs
+	err = json.Unmarshal(data, &outputs)
+	require.NoError(t, err, "Failed to parse outputs JSON in any supported format")
+	// prefer TapStackdev or first entry
+	if so, ok := outputs["TapStackdev"]; ok {
+		return so
+	}
+	for _, v := range outputs {
+		return v
+	}
+	// should not reach here
+	return StackOutputs{}
 }
 
 // getAWSConfig returns AWS SDK configuration
