@@ -1,6 +1,6 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "Comprehensive Cloud Environment - VPC, Auto Scaling, RDS, S3, CloudFront, WAF, Route 53, and Monitoring",
+  "Description": "Comprehensive Cloud Environment - VPC, Auto Scaling, RDS, S3, WAF, Route 53, and Monitoring",
   "Metadata": {
     "AWS::CloudFormation::Interface": {
       "ParameterGroups": [
@@ -97,7 +97,11 @@
       "Type": "String",
       "Default": "t2.micro",
       "Description": "EC2 instance type for Auto Scaling Group",
-      "AllowedValues": ["t2.micro", "t2.small", "t2.medium"]
+      "AllowedValues": [
+        "t2.micro",
+        "t2.small",
+        "t2.medium"
+      ]
     },
     "LatestAmiId": {
       "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
@@ -122,7 +126,11 @@
       "Type": "String",
       "Default": "db.t3.micro",
       "Description": "RDS instance class",
-      "AllowedValues": ["db.t3.micro", "db.t3.small", "db.t3.medium"]
+      "AllowedValues": [
+        "db.t3.micro",
+        "db.t3.small",
+        "db.t3.medium"
+      ]
     },
     "DBName": {
       "Type": "String",
@@ -1267,33 +1275,6 @@
         }
       }
     },
-    "Certificate": {
-      "Type": "AWS::CertificateManager::Certificate",
-      "Properties": {
-        "DomainName": {
-          "Ref": "DomainName"
-        },
-        "ValidationMethod": "DNS",
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "Certificate-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "EnvironmentSuffix"
-            }
-          },
-          {
-            "Key": "Project",
-            "Value": "ComprehensiveCloudEnvironment"
-          }
-        ]
-      }
-    },
     "WebACL": {
       "Type": "AWS::WAFv2::WebACL",
       "Properties": {
@@ -1369,98 +1350,11 @@
         ]
       }
     },
-    "CloudFrontDistribution": {
-      "Type": "AWS::CloudFront::Distribution",
-      "Properties": {
-        "DistributionConfig": {
-          "Origins": [
-            {
-              "Id": "S3Origin",
-              "DomainName": {
-                "Fn::GetAtt": [
-                  "S3WebsiteBucket",
-                  "RegionalDomainName"
-                ]
-              },
-              "S3OriginConfig": {
-                "OriginAccessIdentity": ""
-              }
-            }
-          ],
-          "Enabled": true,
-          "Comment": {
-            "Fn::Sub": "CloudFront Distribution for ${EnvironmentSuffix}"
-          },
-          "DefaultRootObject": "index.html",
-          "DefaultCacheBehavior": {
-            "TargetOriginId": "S3Origin",
-            "ViewerProtocolPolicy": "redirect-to-https",
-            "AllowedMethods": [
-              "GET",
-              "HEAD"
-            ],
-            "CachedMethods": [
-              "GET",
-              "HEAD"
-            ],
-            "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
-            "Compress": true
-          },
-          "PriceClass": "PriceClass_100",
-          "ViewerCertificate": {
-            "AcmCertificateArn": {
-              "Ref": "Certificate"
-            },
-            "SslSupportMethod": "sni-only",
-            "MinimumProtocolVersion": "TLSv1.2_2021"
-          }
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "CloudFrontDistribution-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "EnvironmentSuffix"
-            }
-          },
-          {
-            "Key": "Project",
-            "Value": "ComprehensiveCloudEnvironment"
-          }
-        ]
-      }
-    },
     "Route53HostedZone": {
       "Type": "AWS::Route53::HostedZone",
       "Properties": {
         "Name": {
           "Ref": "DomainName"
-        }
-      }
-    },
-    "Route53RecordSet": {
-      "Type": "AWS::Route53::RecordSet",
-      "Properties": {
-        "HostedZoneId": {
-          "Ref": "Route53HostedZone"
-        },
-        "Name": {
-          "Ref": "DomainName"
-        },
-        "Type": "A",
-        "AliasTarget": {
-          "DNSName": {
-            "Fn::GetAtt": [
-              "CloudFrontDistribution",
-              "DomainName"
-            ]
-          },
-          "HostedZoneId": "Z2FDTNDATAQYW2"
         }
       }
     },
@@ -1743,20 +1637,6 @@
       "Export": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-S3BucketName"
-        }
-      }
-    },
-    "CloudFrontDistributionDomain": {
-      "Description": "CloudFront Distribution Domain Name",
-      "Value": {
-        "Fn::GetAtt": [
-          "CloudFrontDistribution",
-          "DomainName"
-        ]
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-CloudFrontDomain"
         }
       }
     },

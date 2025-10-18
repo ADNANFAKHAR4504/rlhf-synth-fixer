@@ -2,7 +2,7 @@
 
 ## Architecture Overview
 
-This CloudFormation template creates a production-ready, highly available AWS cloud environment with comprehensive auto-scaling capabilities, global content delivery, and advanced security features. The infrastructure spans multiple Availability Zones with automatic scaling based on demand, CloudFront CDN for global content distribution, AWS WAF for web application security, and centralized backup management following AWS best practices and the Well-Architected Framework.
+This CloudFormation template creates a production-ready, highly available AWS cloud environment with comprehensive auto-scaling capabilities, and advanced security features. The infrastructure spans multiple Availability Zones with automatic scaling based on demand, AWS WAF for web application security, and centralized backup management following AWS best practices and the Well-Architected Framework.
 
 ### Network Architecture
 
@@ -18,15 +18,15 @@ The RDS MySQL 8.0.43 database deploys in Multi-AZ configuration across private s
 
 ### Storage and Content Delivery
 
-An S3 bucket configured for static website hosting serves as the origin for global content delivery. The bucket has versioning enabled to preserve file history and supports public read access for website content. Website configuration designates index.html as the index document and error.html for error responses. A bucket policy grants public read access to all objects. A CloudFront distribution serves the S3 website globally with caching for optimal performance using managed cache policies. An ACM SSL/TLS certificate validates the custom domain and enables HTTPS access through the CloudFront distribution. The certificate uses DNS validation for automatic renewal. The stack includes a Retain deletion policy on the S3 bucket to prevent accidental data loss.
+An S3 bucket configured for static website hosting serves as the origin for global content delivery. The bucket has versioning enabled to preserve file history and supports public read access for website content. Website configuration designates index.html as the index document and error.html for error responses. A bucket policy grants public read access to all objects. The stack includes a Retain deletion policy on the S3 bucket to prevent accidental data loss.
 
 ### DNS and Domain Configuration
 
-A Route 53 hosted zone manages DNS records for the specified domain. An A record with alias configuration routes traffic to the CloudFront distribution, enabling users to access the website via the custom domain. The hosted zone provides authoritative DNS responses and integrates with ACM for automated certificate validation. Route 53 alias records route traffic to the CloudFront distribution without incurring query charges, unlike standard CNAME records.
+A Route 53 hosted zone manages DNS records for the specified domain.
 
 ### Security Layer
 
-AWS WAF protects the CloudFront distribution against common web threats and DDoS attacks. The WAF Web ACL includes two rule sets: a rate-limiting rule that blocks IP addresses exceeding 2000 requests within a 5-minute period, and AWS Managed Rules Core Rule Set that provides protection against OWASP Top 10 vulnerabilities including SQL injection and cross-site scripting. Security groups follow the principle of least privilege: the web server security group allows HTTP/HTTPS from anywhere but restricts database access, while the RDS security group permits MySQL traffic only from the web server security group using security group references. IAM policies grant minimal permissions with the EC2 role allowing S3 read/write access only to the specific bucket and Secrets Manager access only to the database credential secret.
+AWS WAF with REGIONAL scope protects against common web threats and DDoS attacks. The WAF Web ACL includes two rule sets: a rate-limiting rule that blocks IP addresses exceeding 2000 requests within a 5-minute period, and AWS Managed Rules Core Rule Set that provides protection against OWASP Top 10 vulnerabilities including SQL injection and cross-site scripting. Security groups follow the principle of least privilege: the web server security group allows HTTP/HTTPS from anywhere but restricts database access, while the RDS security group permits MySQL traffic only from the web server security group using security group references. IAM policies grant minimal permissions with the EC2 role allowing S3 read/write access only to the specific bucket and Secrets Manager access only to the database credential secret.
 
 ### Monitoring and Logging
 
@@ -38,14 +38,14 @@ AWS Backup provides centralized backup management for critical resources. A back
 
 ### High Availability and Fault Tolerance
 
-The architecture achieves high availability through multiple mechanisms. Two NAT Gateways eliminate single points of failure in private subnet internet connectivity. The Auto Scaling Group maintains minimum capacity of 2 instances across both AZs, automatically replacing failed instances. RDS Multi-AZ deployment provides automatic failover with synchronous replication maintaining database consistency. CloudFront distribution serves content from edge locations globally with automatic failover to healthy origins. Route 53 provides 100% uptime SLA for DNS queries. This multi-layer redundancy ensures the application remains available even during component failures or AZ outages.
+The architecture achieves high availability through multiple mechanisms. Two NAT Gateways eliminate single points of failure in private subnet internet connectivity. The Auto Scaling Group maintains minimum capacity of 2 instances across both AZs, automatically replacing failed instances. RDS Multi-AZ deployment provides automatic failover with synchronous replication maintaining database consistency. Route 53 provides 100% uptime SLA for DNS queries. This multi-layer redundancy ensures the application remains available even during component failures or AZ outages.
 
 ## CloudFormation Template
 
 ```json
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "Comprehensive Cloud Environment - VPC, Auto Scaling, RDS, S3, CloudFront, WAF, Route 53, and Monitoring",
+  "Description": "Comprehensive Cloud Environment - VPC, Auto Scaling, RDS, S3, WAF, Route 53, and Monitoring",
   "Metadata": {
     "AWS::CloudFormation::Interface": {
       "ParameterGroups": [
@@ -142,7 +142,11 @@ The architecture achieves high availability through multiple mechanisms. Two NAT
       "Type": "String",
       "Default": "t2.micro",
       "Description": "EC2 instance type for Auto Scaling Group",
-      "AllowedValues": ["t2.micro", "t2.small", "t2.medium"]
+      "AllowedValues": [
+        "t2.micro",
+        "t2.small",
+        "t2.medium"
+      ]
     },
     "LatestAmiId": {
       "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
@@ -167,7 +171,11 @@ The architecture achieves high availability through multiple mechanisms. Two NAT
       "Type": "String",
       "Default": "db.t3.micro",
       "Description": "RDS instance class",
-      "AllowedValues": ["db.t3.micro", "db.t3.small", "db.t3.medium"]
+      "AllowedValues": [
+        "db.t3.micro",
+        "db.t3.small",
+        "db.t3.medium"
+      ]
     },
     "DBName": {
       "Type": "String",
@@ -180,7 +188,7 @@ The architecture achieves high availability through multiple mechanisms. Two NAT
     "DomainName": {
       "Type": "String",
       "Default": "test-domain.com",
-      "Description": "Domain name for CloudFront distribution and Route 53"
+      "Description": "Domain name for Route 53"
     }
   },
   "Resources": {
@@ -1308,33 +1316,6 @@ The architecture achieves high availability through multiple mechanisms. Two NAT
         }
       }
     },
-    "Certificate": {
-      "Type": "AWS::CertificateManager::Certificate",
-      "Properties": {
-        "DomainName": {
-          "Ref": "DomainName"
-        },
-        "ValidationMethod": "DNS",
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "Certificate-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "EnvironmentSuffix"
-            }
-          },
-          {
-            "Key": "Project",
-            "Value": "ComprehensiveCloudEnvironment"
-          }
-        ]
-      }
-    },
     "WebACL": {
       "Type": "AWS::WAFv2::WebACL",
       "Properties": {
@@ -1410,76 +1391,6 @@ The architecture achieves high availability through multiple mechanisms. Two NAT
         ]
       }
     },
-    "CloudFrontDistribution": {
-      "Type": "AWS::CloudFront::Distribution",
-      "DependsOn": [
-        "Certificate",
-        "WebACL"
-      ],
-      "Properties": {
-        "DistributionConfig": {
-          "Origins": [
-            {
-              "Id": "S3Origin",
-              "DomainName": {
-                "Fn::GetAtt": [
-                  "S3WebsiteBucket",
-                  "RegionalDomainName"
-                ]
-              },
-              "S3OriginConfig": {
-                "OriginAccessIdentity": ""
-              }
-            }
-          ],
-          "Enabled": true,
-          "Comment": {
-            "Fn::Sub": "CloudFront Distribution for ${EnvironmentSuffix}"
-          },
-          "DefaultRootObject": "index.html",
-          "DefaultCacheBehavior": {
-            "TargetOriginId": "S3Origin",
-            "ViewerProtocolPolicy": "redirect-to-https",
-            "AllowedMethods": [
-              "GET",
-              "HEAD"
-            ],
-            "CachedMethods": [
-              "GET",
-              "HEAD"
-            ],
-            "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
-            "Compress": true
-          },
-          "PriceClass": "PriceClass_100",
-          "ViewerCertificate": {
-            "AcmCertificateArn": {
-              "Ref": "Certificate"
-            },
-            "SslSupportMethod": "sni-only",
-            "MinimumProtocolVersion": "TLSv1.2_2021"
-          }
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "CloudFrontDistribution-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "EnvironmentSuffix"
-            }
-          },
-          {
-            "Key": "Project",
-            "Value": "ComprehensiveCloudEnvironment"
-          }
-        ]
-      }
-    },
     "Route53HostedZone": {
       "Type": "AWS::Route53::HostedZone",
       "Properties": {
@@ -1504,27 +1415,6 @@ The architecture achieves high availability through multiple mechanisms. Two NAT
             "Value": "ComprehensiveCloudEnvironment"
           }
         ]
-      }
-    },
-    "Route53RecordSet": {
-      "Type": "AWS::Route53::RecordSet",
-      "Properties": {
-        "HostedZoneId": {
-          "Ref": "Route53HostedZone"
-        },
-        "Name": {
-          "Ref": "DomainName"
-        },
-        "Type": "A",
-        "AliasTarget": {
-          "DNSName": {
-            "Fn::GetAtt": [
-              "CloudFrontDistribution",
-              "DomainName"
-            ]
-          },
-          "HostedZoneId": "Z2FDTNDATAQYW2"
-        }
       }
     },
     "VPCFlowLogRole": {
@@ -1809,20 +1699,6 @@ The architecture achieves high availability through multiple mechanisms. Two NAT
         }
       }
     },
-    "CloudFrontDistributionDomain": {
-      "Description": "CloudFront Distribution Domain Name",
-      "Value": {
-        "Fn::GetAtt": [
-          "CloudFrontDistribution",
-          "DomainName"
-        ]
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-CloudFrontDomain"
-        }
-      }
-    },
     "Route53HostedZoneId": {
       "Description": "Route 53 Hosted Zone ID",
       "Value": {
@@ -1971,11 +1847,11 @@ The template achieves operational excellence through infrastructure as code with
 
 ### Cost Optimization
 
-The design balances cost with functionality through several optimizations. T2/T3 instance types provide burstable performance at lower cost for variable workloads. Auto Scaling ensures you pay only for capacity actually needed, scaling down during low-traffic periods with automatic instance replacement. CloudFront reduces bandwidth costs with edge caching using PriceClass_100 (North America and Europe only) and reduces origin request volume with compression enabled. RDS backup retention is set to 30 days with automatic deletion to manage storage costs. The template uses AllowedValues constraints to prevent accidental deployment of oversized instances. RDS uses gp3 storage for cost-effective performance without premium IOPS charges. Flow logs retention is limited to 7 days to minimize storage costs while maintaining security visibility.
+The design balances cost with functionality through several optimizations. T2/T3 instance types provide burstable performance at lower cost for variable workloads. Auto Scaling ensures you pay only for capacity actually needed, scaling down during low-traffic periods with automatic instance replacement. RDS backup retention is set to 30 days with automatic deletion to manage storage costs. The template uses AllowedValues constraints to prevent accidental deployment of oversized instances. RDS uses gp3 storage for cost-effective performance without premium IOPS charges. Flow logs retention is limited to 7 days to minimize storage costs while maintaining security visibility.
 
 ### Reliability
 
-The architecture achieves high reliability through multi-layer redundancy. Resources span two Availability Zones protecting against AZ-level failures. Two NAT Gateways with separate route tables eliminate single points of failure in private subnet connectivity. The Auto Scaling Group maintains minimum 2-instance capacity with health checks and 5-minute grace period, automatically replacing failed instances within minutes. RDS Multi-AZ deployment provides automatic failover with synchronous replication maintaining data consistency across AZs within 1-2 minutes. CloudFront distribution serves content from 100+ edge locations with automatic failover to healthy origins. Route 53 provides 100% uptime SLA for DNS queries with alias records. Automated daily backups enable recovery from data corruption or accidental deletion. This comprehensive redundancy ensures application availability during component failures, AZ outages, or disaster scenarios.
+The architecture achieves high reliability through multi-layer redundancy. Resources span two Availability Zones protecting against AZ-level failures. Two NAT Gateways with separate route tables eliminate single points of failure in private subnet connectivity. The Auto Scaling Group maintains minimum 2-instance capacity with health checks and 5-minute grace period, automatically replacing failed instances within minutes. RDS Multi-AZ deployment provides automatic failover with synchronous replication maintaining data consistency across AZs within 1-2 minutes. Route 53 provides 100% uptime SLA for DNS queries. S3 provides 11 nines of durability for website content. Automated daily backups enable recovery from data corruption or accidental deletion. This comprehensive redundancy ensures application availability during component failures, AZ outages, or disaster scenarios.
 
 ## Modern AWS Practices
 
@@ -1991,13 +1867,9 @@ Database credentials are fully managed by AWS Secrets Manager with automatic gen
 
 The RDS instance uses Enhanced Monitoring with 60-second intervals, providing visibility into operating system metrics beyond standard CloudWatch metrics. Enhanced Monitoring shows CPU utilization by process, memory breakdown by type, disk I/O statistics, and network activity. A dedicated IAM role (RDSMonitoringRole) grants RDS permission to publish metrics to CloudWatch using the AmazonRDSEnhancedMonitoringRole managed policy. This granular monitoring enables rapid identification of performance bottlenecks such as resource-intensive queries, memory pressure, disk I/O contention, or network saturation. CloudWatch Logs integration exports RDS error, general, and slow query logs for centralized analysis.
 
-### CloudFront with Managed Cache Policies
-
-The CloudFront distribution uses AWS managed cache policies (CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6) rather than legacy cache behaviors. Managed cache policies provide optimized caching configurations maintained by AWS with automatic updates for best practices. The distribution enforces HTTPS with redirect-to-https viewer protocol policy and uses TLS 1.2 as the minimum protocol version for security. Compression is enabled to reduce bandwidth and improve load times. The S3 origin uses regional domain name for better performance. PriceClass_100 limits edge locations to North America and Europe for cost optimization.
-
 ### AWS WAF Integration
 
-AWS WAF provides application layer protection for the CloudFront distribution deployed globally. The rate-limiting rule blocks IP addresses exceeding 2000 requests per 5-minute period, protecting against DDoS attacks, aggressive scrapers, and API abuse. The AWS Managed Rules Core Rule Set provides protection against OWASP Top 10 vulnerabilities including SQL injection, cross-site scripting, local file inclusion, and remote file inclusion. WAF rules can be updated without infrastructure changes or distribution redeployment. CloudWatch metrics enable monitoring of blocked requests, rule effectiveness, and attack patterns with sampled requests for detailed analysis.
+AWS WAF with REGIONAL scope provides application layer protection for web applications. The rate-limiting rule blocks IP addresses exceeding 2000 requests per 5-minute period, protecting against DDoS attacks, aggressive scrapers, and API abuse. The AWS Managed Rules Core Rule Set provides protection against OWASP Top 10 vulnerabilities including SQL injection, cross-site scripting, local file inclusion, and remote file inclusion. WAF rules can be updated without infrastructure changes. CloudWatch metrics enable monitoring of blocked requests, rule effectiveness, and attack patterns with sampled requests for detailed analysis.
 
 ### VPC Flow Logs
 
@@ -2007,18 +1879,10 @@ VPC Flow Logs capture metadata about all network traffic entering and leaving th
 
 AWS Backup provides centralized backup management across AWS services using a single backup plan. The backup plan defines schedule (daily at 5 AM UTC using cron expression), retention (30 days for cost optimization), and lifecycle policy. Backup selection uses explicit RDS instance ARN rather than tag-based selection for precise control. This ARN-based approach ensures specific critical resources are backed up without dependency on tag propagation. An IAM role grants AWS Backup cross-service permissions to create backups and perform restores using AWS managed policies (AWSBackupServiceRolePolicyForBackup, AWSBackupServiceRolePolicyForRestores).
 
-### Route 53 Alias Records
-
-The Route 53 A record uses alias functionality to route traffic to the CloudFront distribution rather than a standard CNAME record. Alias records provide several advantages: they work at the zone apex (naked domain like test-domain.com), don't incur Route 53 query charges, and provide automatic health checking. The alias points to CloudFront's hosted zone ID (Z2FDTNDATAQYW2, consistent across all CloudFront distributions globally) and the distribution's domain name. Route 53 automatically resolves the alias to current CloudFront IP addresses without manual DNS updates.
-
-### ACM Certificate with DNS Validation
-
-The ACM certificate uses DNS validation rather than email validation for automatic renewal capabilities. DNS validation provides hands-free certificate renewal: ACM adds validation records to Route 53 and automatically renews certificates before expiration as long as the validation records remain. The certificate is referenced in the CloudFront distribution for HTTPS support with SNI (Server Name Indication) for cost-effective SSL/TLS. The template uses explicit DependsOn for CloudFront to ensure certificate and WAF are created first, preventing deployment race conditions.
-
 ### Multi-AZ High Availability
 
 The architecture achieves true high availability by spanning two Availability Zones with independent failure domains. Each AZ has dedicated public and private subnets with separate NAT Gateways and private route tables. Private subnets route through their respective NAT Gateway, ensuring continued connectivity even if one AZ experiences complete failure. RDS Multi-AZ deployment maintains a synchronous standby replica in the second AZ with sub-minute automatic failover using synchronous replication. The Auto Scaling Group distributes instances across both AZs with automatic rebalancing. This multi-AZ design protects against AZ-level infrastructure failures, power outages, network partitions, or disaster scenarios while maintaining application availability and data consistency.
 
 ### Infrastructure as Code Best Practices
 
-All resources follow consistent naming conventions using Fn::Sub to incorporate the environment suffix, enabling multiple environment deployments from the same template without naming conflicts. Parameters use validation through AllowedPattern, AllowedValues, MinValue, and MaxValue to prevent configuration errors at deploy time. The template uses DependsOn attributes for explicit dependencies (EIPs depend on Internet Gateway attachment, CloudFront depends on Certificate and WAF) and implicit dependencies through Ref and GetAtt functions for automatic resource ordering. Metadata sections organize parameters into logical groups for improved user experience in the CloudFormation console. Comprehensive tagging with Name, Environment, and Project enables cost allocation through AWS Cost Explorer, automated compliance auditing, and operational automation through tag-based resource selection. All outputs use Export for cross-stack references following the naming pattern `${AWS::StackName}-{Name}` for predictable cross-stack integration.
+All resources follow consistent naming conventions using Fn::Sub to incorporate the environment suffix, enabling multiple environment deployments from the same template without naming conflicts. Parameters use validation through AllowedPattern, AllowedValues, MinValue, and MaxValue to prevent configuration errors at deploy time. The template uses DependsOn attributes for explicit dependencies (EIPs depend on Internet Gateway attachment) and implicit dependencies through Ref and GetAtt functions for automatic resource ordering. Metadata sections organize parameters into logical groups for improved user experience in the CloudFormation console. Comprehensive tagging with Name, Environment, and Project enables cost allocation through AWS Cost Explorer, automated compliance auditing, and operational automation through tag-based resource selection. All outputs use Export for cross-stack references following the naming pattern `${AWS::StackName}-{Name}` for predictable cross-stack integration.

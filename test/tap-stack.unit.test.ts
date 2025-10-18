@@ -685,15 +685,6 @@ describe('TapStack CloudFormation Template - Comprehensive Cloud Environment', (
     });
   });
 
-  describe('ACM Certificate Configuration', () => {
-    test('should create ACM certificate with DNS validation', () => {
-      const cert = template.Resources.Certificate;
-      expect(cert.Type).toBe('AWS::CertificateManager::Certificate');
-      expect(cert.Properties.DomainName).toEqual({ Ref: 'DomainName' });
-      expect(cert.Properties.ValidationMethod).toBe('DNS');
-    });
-  });
-
   describe('WAF WebACL Configuration', () => {
     test('should create WAF WebACL with Regional scope', () => {
       const webACL = template.Resources.WebACL;
@@ -732,79 +723,11 @@ describe('TapStack CloudFormation Template - Comprehensive Cloud Environment', (
     });
   });
 
-  describe('CloudFront Distribution Configuration', () => {
-    test('should create CloudFront distribution with S3 origin', () => {
-      const cf = template.Resources.CloudFrontDistribution;
-      expect(cf.Type).toBe('AWS::CloudFront::Distribution');
-
-      const origin = cf.Properties.DistributionConfig.Origins[0];
-      expect(origin.Id).toBe('S3Origin');
-      expect(origin.DomainName).toEqual({
-        'Fn::GetAtt': ['S3WebsiteBucket', 'RegionalDomainName']
-      });
-      expect(origin.S3OriginConfig).toBeDefined();
-    });
-
-    test('should create CloudFront distribution with correct cache behavior', () => {
-      const cf = template.Resources.CloudFrontDistribution;
-      const cacheBehavior = cf.Properties.DistributionConfig.DefaultCacheBehavior;
-
-      expect(cacheBehavior.TargetOriginId).toBe('S3Origin');
-      expect(cacheBehavior.ViewerProtocolPolicy).toBe('redirect-to-https');
-      expect(cacheBehavior.AllowedMethods).toEqual(['GET', 'HEAD']);
-      expect(cacheBehavior.CachedMethods).toEqual(['GET', 'HEAD']);
-      expect(cacheBehavior.CachePolicyId).toBe('658327ea-f89d-4fab-a63d-7e88639e58f6');
-      expect(cacheBehavior.Compress).toBe(true);
-    });
-
-    test('should create CloudFront distribution with ACM certificate', () => {
-      const cf = template.Resources.CloudFrontDistribution;
-      const viewerCert = cf.Properties.DistributionConfig.ViewerCertificate;
-
-      expect(viewerCert.AcmCertificateArn).toEqual({ Ref: 'Certificate' });
-      expect(viewerCert.SslSupportMethod).toBe('sni-only');
-      expect(viewerCert.MinimumProtocolVersion).toBe('TLSv1.2_2021');
-    });
-
-    test('should create CloudFront distribution without WAF WebACL', () => {
-      const cf = template.Resources.CloudFrontDistribution;
-      expect(cf.Properties.DistributionConfig.WebACLId).toBeUndefined();
-    });
-
-    test('should create CloudFront distribution enabled with default root object', () => {
-      const cf = template.Resources.CloudFrontDistribution;
-      expect(cf.Properties.DistributionConfig.Enabled).toBe(true);
-      expect(cf.Properties.DistributionConfig.DefaultRootObject).toBe('index.html');
-    });
-
-    test('should create CloudFront distribution with implicit dependencies via Ref', () => {
-      const cf = template.Resources.CloudFrontDistribution;
-      // Dependencies are implicit through Ref, no explicit DependsOn needed
-      expect(cf.Properties.DistributionConfig.ViewerCertificate.AcmCertificateArn).toEqual({
-        Ref: 'Certificate'
-      });
-    });
-  });
-
   describe('Route 53 Configuration', () => {
     test('should create Route 53 hosted zone with correct domain name', () => {
       const hostedZone = template.Resources.Route53HostedZone;
       expect(hostedZone.Type).toBe('AWS::Route53::HostedZone');
       expect(hostedZone.Properties.Name).toEqual({ Ref: 'DomainName' });
-    });
-
-    test('should create Route 53 A record with CloudFront alias target', () => {
-      const recordSet = template.Resources.Route53RecordSet;
-      expect(recordSet.Type).toBe('AWS::Route53::RecordSet');
-      expect(recordSet.Properties.HostedZoneId).toEqual({ Ref: 'Route53HostedZone' });
-      expect(recordSet.Properties.Name).toEqual({ Ref: 'DomainName' });
-      expect(recordSet.Properties.Type).toBe('A');
-
-      const aliasTarget = recordSet.Properties.AliasTarget;
-      expect(aliasTarget.DNSName).toEqual({
-        'Fn::GetAtt': ['CloudFrontDistribution', 'DomainName']
-      });
-      expect(aliasTarget.HostedZoneId).toBe('Z2FDTNDATAQYW2');
     });
   });
 

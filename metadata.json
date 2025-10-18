@@ -10,5 +10,5 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "VPC, EC2, RDS, S3, Auto Scaling, CloudFront, Route 53, ACM, CloudWatch, IAM, Secrets Manager, NAT Gateway, Internet Gateway, AWS WAF, AWS Backup"
+  "aws_services": "VPC, EC2, RDS, S3, Auto Scaling, Route 53, CloudWatch, IAM, Secrets Manager, NAT Gateway, Internet Gateway, AWS WAF, AWS Backup"
 }

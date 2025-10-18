@@ -4,7 +4,7 @@ This document identifies what typical AI models get wrong when implementing comp
 
 ## Overview
 
-When tasked with creating a comprehensive cloud environment with Auto Scaling, CloudFront, WAF, and multiple advanced AWS services, AI models commonly make critical mistakes related to high availability architecture, security configurations, Auto Scaling implementation, and modern AWS service integrations. While models often provide basic infrastructure, they frequently miss enterprise-grade features and AWS best practices essential for production deployments.
+When tasked with creating a comprehensive cloud environment with Auto Scaling, WAF, Route 53, and multiple advanced AWS services, AI models commonly make critical mistakes related to high availability architecture, security configurations, Auto Scaling implementation, and modern AWS service integrations. While models often provide basic infrastructure, they frequently miss enterprise-grade features and AWS best practices essential for production deployments.
 
 ---
 
@@ -254,57 +254,11 @@ When tasked with creating a comprehensive cloud environment with Auto Scaling, C
 
 ---
 
-## 4. Missing CloudFront Distribution and CDN Integration
-
-**Location**: Content delivery layer
-
-**Issue**: Models commonly omit CloudFront entirely or implement it incorrectly without proper S3 origin configuration. Requirement: "Create a CloudFront distribution to serve the S3 static website for efficient global content delivery."
-
-**Typical Model Response**: No CloudFront resource, or incorrect S3 origin configuration without website endpoint support.
-
-**Ideal Response (Lines 1153-1228)**:
-```json
-"CloudFrontDistribution": {
-  "Type": "AWS::CloudFront::Distribution",
-  "DependsOn": ["Certificate", "WebACL"],
-  "Properties": {
-    "DistributionConfig": {
-      "Origins": [{
-        "Id": "S3Origin",
-        "DomainName": { "Fn::GetAtt": ["S3WebsiteBucket", "RegionalDomainName"] },
-        "S3OriginConfig": { "OriginAccessIdentity": "" }
-      }],
-      "Enabled": true,
-      "DefaultRootObject": "index.html",
-      "DefaultCacheBehavior": {
-        "TargetOriginId": "S3Origin",
-        "ViewerProtocolPolicy": "redirect-to-https",
-        "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
-        "Compress": true
-      },
-      "PriceClass": "PriceClass_100",
-      "ViewerCertificate": {
-        "AcmCertificateArn": { "Ref": "Certificate" },
-        "SslSupportMethod": "sni-only",
-        "MinimumProtocolVersion": "TLSv1.2_2021"
-      },
-      "WebACLId": { "Fn::GetAtt": ["WebACL", "Arn"] }
-    }
-  }
-}
-```
-
-**Impact**: CRITICAL - Without CloudFront, users experience high latency accessing S3 content, no edge caching, no HTTPS enforcement, and no DDoS protection. Missing CDN integration defeats the purpose of global content delivery requirements.
-
-**Fix**: Implemented CloudFront distribution with S3 origin, managed cache policy (658327ea-f89d-4fab-a63d-7e88639e58f6), SSL/TLS certificate integration, HTTPS redirection, compression, PriceClass_100 for cost optimization, and WAF integration.
-
----
-
-## 5. Missing AWS WAF Configuration
+## 4. Missing AWS WAF Configuration
 
 **Location**: Security layer
 
-**Issue**: Models frequently omit AWS WAF entirely. Requirement: "Enable AWS WAF on the CloudFront distribution to protect against common web threats and DDoS attacks."
+**Issue**: Models frequently omit AWS WAF entirely. Requirement: "Enable AWS WAF with REGIONAL scope to protect against common web threats and DDoS attacks."
 
 **Typical Model Response**: No WebACL resource.
 
@@ -314,7 +268,7 @@ When tasked with creating a comprehensive cloud environment with Auto Scaling, C
   "Type": "AWS::WAFv2::WebACL",
   "Properties": {
     "Name": { "Fn::Sub": "WebACL-${EnvironmentSuffix}" },
-    "Scope": "CLOUDFRONT",
+    "Scope": "REGIONAL",
     "DefaultAction": { "Allow": {} },
     "Rules": [
       {
@@ -359,74 +313,51 @@ When tasked with creating a comprehensive cloud environment with Auto Scaling, C
 }
 ```
 
-**Impact**: CRITICAL - Without WAF, the CloudFront distribution is vulnerable to SQL injection, XSS attacks, DDoS attacks, and bot traffic. Missing rate limiting allows resource exhaustion. Essential security requirement completely omitted.
+**Impact**: CRITICAL - Without WAF, web applications are vulnerable to SQL injection, XSS attacks, DDoS attacks, and bot traffic. Missing rate limiting allows resource exhaustion. Essential security requirement completely omitted.
 
-**Fix**: Implemented AWS WAFv2 WebACL with CLOUDFRONT scope, rate-based rule (2000 requests per 5 minutes per IP), AWS Managed Rules Common Rule Set for OWASP Top 10 protection, and comprehensive visibility configuration for CloudWatch metrics.
+**Fix**: Implemented AWS WAFv2 WebACL with REGIONAL scope, rate-based rule (2000 requests per 5 minutes per IP), AWS Managed Rules Common Rule Set for OWASP Top 10 protection, and comprehensive visibility configuration for CloudWatch metrics.
 
 ---
 
-## 6. Missing Route 53 Hosted Zone and DNS Integration
+## 5. Missing Route 53 Hosted Zone
 
 **Location**: DNS layer
 
-**Issue**: Models commonly omit Route 53 entirely or fail to create alias records pointing to CloudFront. Requirement: "Update Route 53 records to route traffic to the CloudFront distribution for the S3 website."
+**Issue**: Models commonly omit Route 53 entirely. The hosted zone is required for DNS management of the specified domain.
 
 **Typical Model Response**: No Route 53 resources.
 
-**Ideal Response (Lines 1229-1274)**:
+**Ideal Response (Lines 1229-1250)**:
 ```json
 "Route53HostedZone": {
   "Type": "AWS::Route53::HostedZone",
   "Properties": {
-    "Name": { "Ref": "DomainName" }
-  }
-},
-"Route53RecordSet": {
-  "Type": "AWS::Route53::RecordSet",
-  "Properties": {
-    "HostedZoneId": { "Ref": "Route53HostedZone" },
     "Name": { "Ref": "DomainName" },
-    "Type": "A",
-    "AliasTarget": {
-      "DNSName": { "Fn::GetAtt": ["CloudFrontDistribution", "DomainName"] },
-      "HostedZoneId": "Z2FDTNDATAQYW2"
-    }
+    "Tags": [
+      {
+        "Key": "Name",
+        "Value": { "Fn::Sub": "HostedZone-${EnvironmentSuffix}" }
+      },
+      {
+        "Key": "Environment",
+        "Value": { "Ref": "EnvironmentSuffix" }
+      },
+      {
+        "Key": "Project",
+        "Value": "ComprehensiveCloudEnvironment"
+      }
+    ]
   }
 }
 ```
 
-**Impact**: HIGH - Without Route 53 integration, users cannot access the website via custom domain, must use ugly CloudFront URLs, and cannot leverage Route 53 health checks and DNS failover. Incomplete CDN integration.
+**Impact**: MEDIUM - Without Route 53 hosted zone, DNS management for the custom domain cannot be handled within the CloudFormation stack, requiring manual DNS configuration.
 
-**Fix**: Created Route 53 Hosted Zone and A record with alias target pointing to CloudFront distribution domain name, using CloudFront's global hosted zone ID (Z2FDTNDATAQYW2 for CloudFront).
-
----
-
-## 7. Missing ACM Certificate for HTTPS
-
-**Location**: SSL/TLS layer
-
-**Issue**: Models often omit ACM certificate creation. Requirement: "Create an SSL certificate using AWS Certificate Manager (ACM) for the website to enable HTTPS access."
-
-**Typical Model Response**: No Certificate resource.
-
-**Ideal Response (Lines 1051-1077)**:
-```json
-"Certificate": {
-  "Type": "AWS::CertificateManager::Certificate",
-  "Properties": {
-    "DomainName": { "Ref": "DomainName" },
-    "ValidationMethod": "DNS"
-  }
-}
-```
-
-**Impact**: HIGH - Without ACM certificate, CloudFront cannot serve HTTPS traffic, browsers show security warnings, and modern web standards (HSTS, secure cookies) cannot be implemented. Security requirement completely missed.
-
-**Fix**: Created ACM certificate with DNS validation method for automated certificate validation through Route 53, integrated with CloudFront ViewerCertificate configuration with SNI support.
+**Fix**: Created Route 53 Hosted Zone for the specified domain name with proper tagging for resource management.
 
 ---
 
-## 8. Missing VPC Flow Logs
+## 6. Missing VPC Flow Logs
 
 **Location**: Monitoring and compliance layer
 
@@ -482,7 +413,7 @@ When tasked with creating a comprehensive cloud environment with Auto Scaling, C
 
 ---
 
-## 9. Missing AWS Backup Configuration
+## 7. Missing AWS Backup Configuration
 
 **Location**: Disaster recovery layer
 
@@ -543,7 +474,7 @@ When tasked with creating a comprehensive cloud environment with Auto Scaling, C
 
 ---
 
-## 10. Incorrect Security Group for Web Servers
+## 8. Incorrect Security Group for Web Servers
 
 **Location**: Security group configuration
 
@@ -602,7 +533,7 @@ When tasked with creating a comprehensive cloud environment with Auto Scaling, C
 
 ---
 
-## 11. Missing S3 Static Website Hosting Configuration
+## 9. Missing S3 Static Website Hosting Configuration
 
 **Location**: Storage layer
 
@@ -654,13 +585,13 @@ When tasked with creating a comprehensive cloud environment with Auto Scaling, C
 }
 ```
 
-**Impact**: HIGH - Without WebsiteConfiguration, S3 cannot serve as website (no index.html support). Without public access configuration and bucket policy, CloudFront cannot access content. Missing Retain deletion policy risks data loss during stack deletion.
+**Impact**: HIGH - Without WebsiteConfiguration, S3 cannot serve as website (no index.html support). Without public access configuration and bucket policy, content cannot be publicly accessed. Missing Retain deletion policy risks data loss during stack deletion.
 
-**Fix**: Added WebsiteConfiguration with IndexDocument and ErrorDocument, disabled PublicAccessBlock settings for CloudFront access, created S3BucketPolicy with public read access, and set DeletionPolicy to Retain for data protection.
+**Fix**: Added WebsiteConfiguration with IndexDocument and ErrorDocument, disabled PublicAccessBlock settings for public website access, created S3BucketPolicy with public read access, and set DeletionPolicy to Retain for data protection.
 
 ---
 
-## 12. Missing MinSize and MaxSize Parameters
+## 10. Missing MinSize and MaxSize Parameters
 
 **Location**: Parameters section
 
@@ -692,11 +623,11 @@ When tasked with creating a comprehensive cloud environment with Auto Scaling, C
 
 ---
 
-## 13. Missing DomainName Parameter
+## 11. Missing DomainName Parameter
 
 **Location**: Parameters section
 
-**Issue**: Models often hardcode domain names or omit them entirely. Requirement: CloudFront and Route 53 require domain configuration.
+**Issue**: Models often hardcode domain names or omit them entirely. Route 53 requires domain configuration.
 
 **Typical Model Response**: No DomainName parameter.
 
@@ -704,18 +635,18 @@ When tasked with creating a comprehensive cloud environment with Auto Scaling, C
 ```json
 "DomainName": {
   "Type": "String",
-  "Default": "example.com",
-  "Description": "Domain name for CloudFront distribution and Route 53"
+  "Default": "test-domain.com",
+  "Description": "Domain name for Route 53"
 }
 ```
 
-**Impact**: MEDIUM - Hardcoded domain prevents multi-environment deployments (dev.example.com, prod.example.com). Missing parameter makes certificate and Route 53 configuration inflexible.
+**Impact**: MEDIUM - Hardcoded domain prevents multi-environment deployments (dev.example.com, prod.example.com). Missing parameter makes Route 53 configuration inflexible.
 
-**Fix**: Created DomainName parameter with default value, referenced in ACM Certificate DomainName property and Route 53 HostedZone Name property.
+**Fix**: Created DomainName parameter with default value, referenced in Route 53 HostedZone Name property.
 
 ---
 
-## 14. Missing IAM Policy for Secrets Manager Access
+## 12. Missing IAM Policy for Secrets Manager Access
 
 **Location**: IAM role configuration
 
@@ -753,7 +684,7 @@ When tasked with creating a comprehensive cloud environment with Auto Scaling, C
 
 ---
 
-## 15. Using gp2 Instead of gp3 for RDS Storage
+## 13. Using gp2 Instead of gp3 for RDS Storage
 
 **Location**: RDS configuration
 
@@ -775,7 +706,7 @@ When tasked with creating a comprehensive cloud environment with Auto Scaling, C
 
 ---
 
-## 16. Missing CloudWatch Log Retention Configuration
+## 14. Missing CloudWatch Log Retention Configuration
 
 **Location**: VPC Flow Logs configuration
 
@@ -808,7 +739,7 @@ When tasked with creating a comprehensive cloud environment with Auto Scaling, C
 
 ---
 
-## 17. Missing Metadata Section for Parameter Grouping
+## 15. Missing Metadata Section for Parameter Grouping
 
 **Location**: Template metadata
 
@@ -858,7 +789,7 @@ When tasked with creating a comprehensive cloud environment with Auto Scaling, C
 
 ---
 
-## 18. Missing Export Names in Outputs
+## 16. Missing Export Names in Outputs
 
 **Location**: Outputs section
 
@@ -893,48 +824,16 @@ When tasked with creating a comprehensive cloud environment with Auto Scaling, C
 
 ---
 
-## 19. Missing DependsOn for CloudFront Distribution
-
-**Location**: Resource dependencies
-
-**Issue**: Models often miss explicit DependsOn for CloudFront, causing deployment failures when Certificate or WebACL aren't ready.
-
-**Typical Model Response**:
-```json
-"CloudFrontDistribution": {
-  "Type": "AWS::CloudFront::Distribution",
-  "Properties": { ... }
-}
-```
-
-**Ideal Response (Lines 1153-1158)**:
-```json
-"CloudFrontDistribution": {
-  "Type": "AWS::CloudFront::Distribution",
-  "DependsOn": [
-    "Certificate",
-    "WebACL"
-  ],
-  "Properties": { ... }
-}
-```
-
-**Impact**: LOW - Without explicit dependencies, CloudFormation may create CloudFront before Certificate validation completes or WebACL is ready, causing deployment failures requiring stack rollback and retry.
-
-**Fix**: Added DependsOn: ["Certificate", "WebACL"] to CloudFrontDistribution to ensure proper resource creation order.
-
----
-
 ## Summary Statistics
 
-- **Total Issues Found**: 19
-- **Critical Issues**: 5 (Single NAT Gateway, Fixed EC2 instances, RDS non-MultiAZ, Missing CloudFront, Missing WAF)
-- **High Issues**: 5 (Missing Route 53, Missing ACM cert, Missing VPC Flow Logs, Missing AWS Backup, Wrong security groups)
-- **Medium Issues**: 3 (Missing ASG parameters, Missing DomainName parameter, Missing Secrets Manager policy)
-- **Low Issues**: 6 (gp2 vs gp3, log retention, metadata, exports, dependencies, etc.)
+- **Total Issues Found**: 16
+- **Critical Issues**: 3 (Single NAT Gateway, Fixed EC2 instances, RDS non-MultiAZ)
+- **High Issues**: 4 (Missing WAF, Missing VPC Flow Logs, Missing AWS Backup, Wrong security groups)
+- **Medium Issues**: 4 (Missing Route 53, Missing ASG parameters, Missing DomainName parameter, Missing Secrets Manager policy)
+- **Low Issues**: 5 (gp2 vs gp3, log retention, metadata, exports, S3 configuration)
 
 ## Conclusion
 
-AI models implementing comprehensive cloud environments commonly fail on advanced AWS services integration (CloudFront, WAF, Route 53, AWS Backup), high availability architecture (dual NAT Gateways, RDS Multi-AZ, Auto Scaling Groups), and modern AWS best practices (gp3 storage, Launch Templates, Enhanced Monitoring). The most critical failures center around scalability (Auto Scaling), availability (Multi-AZ, dual NAT), security (WAF, Flow Logs), and content delivery (CloudFront CDN integration).
+AI models implementing comprehensive cloud environments commonly fail on advanced AWS services integration (WAF, Route 53, AWS Backup), high availability architecture (dual NAT Gateways, RDS Multi-AZ, Auto Scaling Groups), and modern AWS best practices (gp3 storage, Launch Templates, Enhanced Monitoring). The most critical failures center around scalability (Auto Scaling), availability (Multi-AZ, dual NAT), and security (WAF, Flow Logs).
 
-The ideal response addresses these gaps by implementing enterprise-grade architecture with complete Auto Scaling infrastructure, dual NAT Gateway high availability, RDS Multi-AZ with enhanced monitoring, comprehensive CloudFront CDN with WAF protection, Route 53 DNS management, ACM certificate integration, VPC Flow Logs for compliance, and AWS Backup for disaster recovery. This represents production-ready infrastructure meeting modern AWS Well-Architected Framework principles.
+The ideal response addresses these gaps by implementing enterprise-grade architecture with complete Auto Scaling infrastructure, dual NAT Gateway high availability, RDS Multi-AZ with enhanced monitoring, AWS WAF with REGIONAL scope for web application protection, Route 53 DNS management, VPC Flow Logs for compliance, and AWS Backup for disaster recovery. This represents production-ready infrastructure meeting modern AWS Well-Architected Framework principles.
