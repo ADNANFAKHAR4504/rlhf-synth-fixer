@@ -818,7 +818,7 @@ Resources:
       VPCSecurityGroups: [!Ref DbSG]
       PubliclyAccessible: false
       BackupRetentionPeriod: 7
-      DeletionProtection: true
+      DeletionProtection: false
 
   # ---------- Custom Resource: Write SecureString app secret to SSM ----------
   SSMWriterRole:
