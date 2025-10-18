@@ -124,6 +124,65 @@ import { App, Testing } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
 
 describe('TapStack CDKTF Tests', () => {
+  test('Stack synthesis uses default region when region is missing', () => {
+    const app = new App();
+    // @ts-expect-error: intentionally omit region to test default
+    const stack = new TapStack(app, 'TestStackDefaultRegion', { env: {} });
+    const synthesized = JSON.parse(Testing.synth(stack));
+    expect(synthesized.provider.aws[0].region).toBe('us-east-1');
+  });
+  test('Stack synthesis with only required config', () => {
+    const app = new App();
+    const stack = new TapStack(app, 'TestStackMinimal', {
+      env: { region: 'us-east-2' }
+    });
+    const synthesized = JSON.parse(Testing.synth(stack));
+    expect(synthesized.resource.aws_vpc).toBeDefined();
+  });
+
+  test('Stack synthesis with only environmentSuffix', () => {
+    const app = new App();
+    const stack = new TapStack(app, 'TestStackEnvSuffix', {
+      env: { region: 'us-east-2' },
+      environmentSuffix: 'qa'
+    });
+    const synthesized = JSON.parse(Testing.synth(stack));
+    expect(synthesized.resource.aws_vpc).toBeDefined();
+  });
+
+  test('Stack synthesis with only stateBucket and stateBucketRegion', () => {
+    const app = new App();
+    const stack = new TapStack(app, 'TestStackStateBucket', {
+      env: { region: 'us-east-2' },
+      stateBucket: 'my-state-bucket',
+      stateBucketRegion: 'us-east-1'
+    });
+    const synthesized = JSON.parse(Testing.synth(stack));
+    expect(synthesized.resource.aws_vpc).toBeDefined();
+  });
+
+  test('Stack synthesis with only defaultTags', () => {
+    const app = new App();
+    const stack = new TapStack(app, 'TestStackDefaultTags', {
+      env: { region: 'us-east-2' },
+      defaultTags: { tags: { Owner: 'QA' } }
+    });
+    const synthesized = JSON.parse(Testing.synth(stack));
+    expect(synthesized.resource.aws_vpc).toBeDefined();
+  });
+
+  test('Stack synthesis with all optional config', () => {
+    const app = new App();
+    const stack = new TapStack(app, 'TestStackAllOptional', {
+      env: { region: 'us-east-2' },
+      environmentSuffix: 'all',
+      stateBucket: 'bucket-all',
+      stateBucketRegion: 'us-west-1',
+      defaultTags: { tags: { Project: 'All', Owner: 'All' } }
+    });
+    const synthesized = JSON.parse(Testing.synth(stack));
+    expect(synthesized.resource.aws_vpc).toBeDefined();
+  });
   test('Stack synthesis works', () => {
     const app = new App();
     const stack = new TapStack(app, 'TestStack', {
@@ -147,11 +206,11 @@ describe('TapStack CDKTF Tests', () => {
       defaultTags: { tags: { Project: 'TestProject' } }
     });
 
-  const synthesized = JSON.parse(Testing.synth(stack));
-  expect(synthesized).toBeDefined();
-  expect(synthesized.resource).toBeDefined();
-  expect(synthesized.resource.aws_vpc).toBeDefined();
-  // No tags property in synthesized output, so skip tag assertion
+    const synthesized = JSON.parse(Testing.synth(stack));
+    expect(synthesized).toBeDefined();
+    expect(synthesized.resource).toBeDefined();
+    expect(synthesized.resource.aws_vpc).toBeDefined();
+    // No tags property in synthesized output, so skip tag assertion
   });
 
   test('Stack synthesis with missing optional config', () => {
@@ -160,9 +219,9 @@ describe('TapStack CDKTF Tests', () => {
       env: { region: 'us-east-2' }
       // No optional config
     });
-  const synthesized = JSON.parse(Testing.synth(stack));
-  const vpc = Object.values(synthesized.resource.aws_vpc)[0] as any;
-  expect(vpc.cidr_block).toBe('10.0.0.0/16');
+    const synthesized = JSON.parse(Testing.synth(stack));
+    const vpc = Object.values(synthesized.resource.aws_vpc)[0] as any;
+    expect(vpc.cidr_block).toBe('10.0.0.0/16');
   });
 
   test('Stack synthesis with different region', () => {
@@ -172,9 +231,9 @@ describe('TapStack CDKTF Tests', () => {
       environmentSuffix: 'prod',
       defaultTags: { tags: { Owner: 'DevOps' } }
     });
-  const synthesized = JSON.parse(Testing.synth(stack));
-  const vpc = Object.values(synthesized.resource.aws_vpc)[0] as any;
-  // No tags property in synthesized output, so skip tag assertion
+    const synthesized = JSON.parse(Testing.synth(stack));
+    const vpc = Object.values(synthesized.resource.aws_vpc)[0] as any;
+    // No tags property in synthesized output, so skip tag assertion
   });
 
   test('Stack synthesis with custom tags', () => {
@@ -183,8 +242,8 @@ describe('TapStack CDKTF Tests', () => {
       env: { region: 'us-east-2' },
       defaultTags: { tags: { Team: 'Platform', CostCenter: 'Engineering' } }
     });
-  const synthesized = JSON.parse(Testing.synth(stack));
-  const vpc = Object.values(synthesized.resource.aws_vpc)[0] as any;
-  // No tags property in synthesized output, so skip tag assertion
+    const synthesized = JSON.parse(Testing.synth(stack));
+    const vpc = Object.values(synthesized.resource.aws_vpc)[0] as any;
+    // No tags property in synthesized output, so skip tag assertion
   });
 });
