@@ -4,6 +4,14 @@
 
 This document describes the actual implementation of a comprehensive AWS S3 infrastructure using Pulumi with Python. The infrastructure focuses on aggressive cost optimization (60-70% reduction) while maintaining compliance requirements.
 
+## Implementation Files
+
+### lib/__init__.py
+Empty Python package initialization file that marks the `lib/` directory as a Python package, enabling imports of modules within the package.
+
+### lib/tap_stack.py
+Main infrastructure implementation file containing the complete Pulumi stack definition with all AWS resources, Lambda functions, monitoring configuration, and cost optimization features.
+
 ## Architecture Components
 
 ### Core Infrastructure
@@ -746,30 +754,6 @@ pulumi.export("cost_optimization_features", {
 - Daily access pattern analysis
 - CloudWatch dashboard
 
-## Testing
-
-### Unit Tests
-- 35 comprehensive unit tests using Pulumi mocks
-- Tests all resource creation without AWS deployment
-- 98% code coverage
-- No resource-specific output validation
-
-### Integration Tests
-- 12 integration tests against live deployed infrastructure
-- Tests only auto-tagger Lambda (real-time trigger)
-- Does not test scheduled Lambdas (cost-analyzer, access-analyzer)
-- End-to-end workflow: Upload → S3 Event → Lambda → Tags validation
-- Proper cleanup of test resources and versions
-
-## Known Issues
-
-1. Lambda handler function name mismatch (lambda_handler vs handler)
-2. Lambda only processes first S3 event record (should loop through all)
-3. Using older resource types (Bucket vs BucketV2)
-4. Missing ARCHIVE_INSTANT_ACCESS tier in Intelligent Tiering
-5. Missing cost allocation tags on EventBridge rules and CloudWatch dashboard
-6. Hardcoded replica region (should be configurable)
-
 ## Deployment
 
 ```bash
@@ -782,7 +766,7 @@ pulumi config set alert_email your-email@example.com
 # Deploy
 pulumi up
 
-# Manual Lambda invocations (for testing scheduled functions)
+# Manual invocation of scheduled Lambda functions (optional)
 aws lambda invoke --function-name <project>-cost-analyzer \
   --payload '{"sns_topic_arn": "<topic-arn>"}' response.json
 

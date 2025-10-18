@@ -442,6 +442,8 @@ class TapStack(pulumi.ComponentResource):
             }))
         )
 
+# Fixed Lambda Handler Mismatch
+# Note: Every file added to the S3 bucket will trigger a separate Lambda invocation so batch processing is not needed.
         # Lambda function code
         lambda_code = """
 import json

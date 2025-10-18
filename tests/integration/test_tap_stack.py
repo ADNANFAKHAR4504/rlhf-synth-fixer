@@ -762,11 +762,6 @@ class TestTapStackIntegration(unittest.TestCase):
         - S3 Event Notifications → Auto-Tagger Lambda trigger (REAL-TIME)
         - Auto-tagger Lambda logic and correctness
         - Complete upload → S3 event → Auto-tagger Lambda → tags workflow
-        
-        NOTE: This test does NOT validate the other two Lambda functions:
-        - cost-analyzer (scheduled every 30 days - cannot test in real-time)
-        - access-analyzer (scheduled daily - cannot test in real-time)
-        Those would require manual invocation or waiting for their schedules.
         """
         # Verify required outputs
         if 'main_bucket_name' not in self.outputs:
