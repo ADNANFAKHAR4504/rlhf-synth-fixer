@@ -686,6 +686,9 @@ def lambda_handler(event, context):
                             value="Compliance"
                         )
                     ),
+                    delete_marker_replication=aws.s3.BucketReplicationConfigRuleDeleteMarkerReplicationArgs(
+                        status="Enabled"
+                    ),
                     destination=aws.s3.BucketReplicationConfigRuleDestinationArgs(
                         bucket=replica_bucket.arn,
                         storage_class="GLACIER",  # Cost-optimized storage
