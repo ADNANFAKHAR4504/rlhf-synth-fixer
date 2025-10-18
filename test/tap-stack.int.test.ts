@@ -1,77 +1,125 @@
-import { EKS, AppMesh } from "aws-sdk";
-import * as fs from "fs";
-import * as path from "path";
+// test/tap-stack.int.test.ts
+import AWS from 'aws-sdk'; // Using AWS SDK v2
+import * as fs from 'fs';
+import * as path from 'path';
 import * as dns from 'dns/promises';
 
-jest.setTimeout(300000); // 5-minute timeout
+// Pattern from your successful example: Check for the CI/CD output file
+const outputsFilePath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+const cfnOutputsExist = fs.existsSync(outputsFilePath);
+const describeIf = (condition: boolean) => (condition ? describe : describe.skip);
 
-interface StackOutputs {
-  PrimaryEKSClusterName: { value: string };
-  DREKSClusterName: { value: string };
-  Route53FailoverDNS: { value: string };
-  AppMeshName: { value: string };
-}
+// Wrap the entire suite in the conditional describe block
+describeIf(cfnOutputsExist)('EKS DR Live Infrastructure Integration Tests (AWS SDK v2)', () => {
 
-const getStackOutputs = (): StackOutputs | null => {
-  try {
-    const outputPath = path.join(__dirname, "../cdktf.out/stacks/EksDrStack/outputs.json");
-    if (fs.existsSync(outputPath)) {
-      const outputs = JSON.parse(fs.readFileSync(outputPath, "utf8"));
-      if (outputs.PrimaryEKSClusterName && outputs.DREKSClusterName && outputs.Route53FailoverDNS && outputs.AppMeshName) {
-        return outputs;
-      }
-    }
-    return null;
-  } catch (error) {
-    console.warn("Could not read CDKTF output file.", error);
-    return null;
-  }
-};
+  let outputs: any;
+  // Define regions based on your tap-stack.ts
+  const primaryRegion = 'us-east-2';
+  const drRegion = 'eu-central-1';
 
-const outputs = getStackOutputs();
+  // Set a longer timeout for AWS API calls
+  jest.setTimeout(300000); // 5 minutes
 
-// Conditionally run tests only if the deployment outputs file exists
-if (outputs) {
-  describe("EKS DR Live Infrastructure Integration Tests", () => {
+  // Read and parse the correct output file before tests run
+  beforeAll(() => {
+    const outputsFile = fs.readFileSync(outputsFilePath, 'utf8');
+    const outputsJson = JSON.parse(outputsFile);
+    // Correctly access the nested outputs object using the stack name from deploy log
+    outputs = outputsJson.EksDrStack;
+  });
 
-    const primaryEks = new EKS({ region: 'us-east-2' });
-    const drEks = new EKS({ region: 'eu-central-1' });
-    const primaryAppMesh = new AppMesh({ region: 'us-east-2' });
+  // Initialize AWS SDK v2 clients
+  const primaryEks = new AWS.EKS({ region: primaryRegion });
+  const drEks = new AWS.EKS({ region: drRegion });
+  const primaryAppMesh = new AWS.AppMesh({ region: primaryRegion });
+  const primaryEc2 = new AWS.EC2({ region: primaryRegion }); // Added for VPC/Subnet checks
+  const iam = new AWS.IAM(); // IAM is global, no region needed
 
-    it("should have an active primary EKS cluster", async () => {
-      console.log(`Checking primary EKS cluster: ${outputs.PrimaryEKSClusterName.value}`);
-      const response = await primaryEks.describeCluster({ name: outputs.PrimaryEKSClusterName.value }).promise();
+  describe('EKS Clusters', () => {
+    it('should have an active primary EKS cluster', async () => {
+      console.log(`Checking primary EKS cluster: ${outputs.PrimaryEKSClusterName}`);
+      const response = await primaryEks.describeCluster({ name: outputs.PrimaryEKSClusterName }).promise();
       expect(response.cluster?.status).toBe("ACTIVE");
-      console.log("✅ Primary EKS cluster is active.");
+      console.log("Primary EKS cluster is active.");
     });
 
-    it("should have an active DR EKS cluster", async () => {
-      console.log(`Checking DR EKS cluster: ${outputs.DREKSClusterName.value}`);
-      const response = await drEks.describeCluster({ name: outputs.DREKSClusterName.value }).promise();
+    it('should have an active DR EKS cluster', async () => {
+      console.log(`Checking DR EKS cluster: ${outputs.DREKSClusterName}`);
+      const response = await drEks.describeCluster({ name: outputs.DREKSClusterName }).promise();
       expect(response.cluster?.status).toBe("ACTIVE");
-      console.log("✅ DR EKS cluster is active.");
+      console.log("DR EKS cluster is active.");
     });
+  });
 
-    it("should have an active App Mesh", async () => {
-      console.log(`Checking App Mesh: ${outputs.AppMeshName.value}`);
-      const response = await primaryAppMesh.describeMesh({ meshName: outputs.AppMeshName.value }).promise();
+  describe('App Mesh and Networking', () => {
+    it('should have an active App Mesh', async () => {
+      console.log(`Checking App Mesh: ${outputs.AppMeshName}`);
+      const response = await primaryAppMesh.describeMesh({ meshName: outputs.AppMeshName }).promise();
       expect(response.mesh?.status?.status).toBe("ACTIVE");
-      console.log("✅ App Mesh is active.");
+      console.log("App Mesh is active.");
     });
 
-    it("should have a resolvable Route 53 DNS failover record", async () => {
-      console.log(`Resolving DNS for: ${outputs.Route53FailoverDNS.value}`);
-      // This test verifies that the DNS name is registered and resolves.
-      // It doesn't check which region it points to, just that it's a valid CNAME.
-      const addresses = await dns.resolve(outputs.Route53FailoverDNS.value, 'CNAME');
+    it('should have a resolvable Route 53 DNS failover record', async () => {
+      console.log(`Resolving DNS for: ${outputs.Route53FailoverDNS}`);
+      const addresses = await dns.resolve(outputs.Route53FailoverDNS, 'CNAME');
       expect(addresses.length).toBeGreaterThan(0);
-      console.log(`✅ Route 53 DNS resolved to: ${addresses[0]}`);
+      console.log(`Route 53 DNS resolved to: ${addresses[0]}`);
+    });
+
+    // **NEW EASY TEST**: Check if the primary VPC exists and is available
+    it('should have an available primary VPC', async () => {
+      // We need the VPC ID - assuming it's tagged consistently or identifiable
+      // This example assumes we can find it by a known tag or CIDR block
+      console.log(`Checking primary VPC state...`);
+      const vpcs = await primaryEc2.describeVpcs({
+        Filters: [{ Name: 'cidr', Values: ['10.0.0.0/16'] }] // Filter by CIDR used in tap-stack.ts
+      }).promise();
+      expect(vpcs.Vpcs?.length).toBe(1);
+      expect(vpcs.Vpcs?.[0]?.State).toBe('available');
+      console.log(` Primary VPC found and available (ID: ${vpcs.Vpcs?.[0]?.VpcId}).`);
+    });
+
+    // **NEW EASY TEST**: Check if the expected number of public subnets exist in the primary VPC
+    it('should have 2 public subnets in the primary VPC', async () => {
+      // Find VPC ID first
+      const vpcs = await primaryEc2.describeVpcs({
+        Filters: [{ Name: 'cidr', Values: ['10.0.0.0/16'] }]
+      }).promise();
+      const vpcId = vpcs.Vpcs?.[0]?.VpcId;
+      expect(vpcId).toBeDefined();
+
+      console.log(`Checking public subnets for VPC ${vpcId}...`);
+      const subnets = await primaryEc2.describeSubnets({
+        Filters: [
+          { Name: 'vpc-id', Values: [vpcId!] },
+          { Name: 'cidr-block', Values: ['10.0.1.0/24', '10.0.2.0/24'] } // CIDRs used for public subnets
+        ]
+      }).promise();
+      expect(subnets.Subnets?.length).toBe(2);
+      console.log(`Found 2 public subnets.`);
     });
   });
-} else {
-  describe("Integration Tests Skipped", () => {
-    it("logs a warning because CDKTF output file was not found", () => {
-      console.warn("\n⚠️ WARNING: CDKTF output file not found. Skipping live integration tests.\n");
+
+  describe('IAM Roles', () => {
+    // **NEW EASY TEST**: Check if the EKS Cluster role exists
+    it('should have the primary EKS Cluster IAM role created', async () => {
+      // Extract role name structure from tap-stack.ts
+      const roleNamePrefix = `eks-cluster-role-${primaryRegion}`;
+      console.log(`Checking for IAM role starting with: ${roleNamePrefix}`);
+      const roles = await iam.listRoles({ PathPrefix: '/' }).promise(); // List roles (might need pagination for many roles)
+      const foundRole = roles.Roles.find(role => role.RoleName.startsWith(roleNamePrefix));
+      expect(foundRole).toBeDefined();
+      console.log(`Primary EKS Cluster role found (Name: ${foundRole?.RoleName}).`);
+    });
+
+    // **NEW EASY TEST**: Check if the EKS Node role exists
+    it('should have the primary EKS Node IAM role created', async () => {
+      const roleNamePrefix = `eks-node-role-${primaryRegion}`;
+      console.log(`Checking for IAM role starting with: ${roleNamePrefix}`);
+      const roles = await iam.listRoles({ PathPrefix: '/' }).promise();
+      const foundRole = roles.Roles.find(role => role.RoleName.startsWith(roleNamePrefix));
+      expect(foundRole).toBeDefined();
+      console.log(`Primary EKS Node role found (Name: ${foundRole?.RoleName}).`);
     });
   });
-}
+});
