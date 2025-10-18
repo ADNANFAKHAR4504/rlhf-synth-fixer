@@ -1,9 +1,3 @@
-variable "aws_region" {
-  description = "AWS region for resources"
-  type        = string
-  default     = "us-east-1"
-}
-
 variable "domain_name" {
   description = "Domain name for the e-book delivery system"
   type        = string
@@ -22,7 +16,7 @@ resource "aws_kms_key" "content_key" {
   description             = "KMS key for e-book content encryption"
   deletion_window_in_days = 30
   enable_key_rotation     = true
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -65,7 +59,7 @@ resource "aws_kms_key" "logs_key" {
   description             = "KMS key for log encryption"
   deletion_window_in_days = 30
   enable_key_rotation     = true
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -346,7 +340,7 @@ resource "aws_cloudfront_distribution" "ebook_distribution" {
     min_ttl                = 0
     default_ttl            = 3600
     max_ttl                = 86400
-    
+
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security_headers_policy.id
   }
 
