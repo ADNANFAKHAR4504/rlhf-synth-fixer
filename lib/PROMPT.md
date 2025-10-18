@@ -1,133 +1,81 @@
-You are a Terraform and AWS Infrastructure-as-Code expert responsible for designing and implementing a highly secure AWS environment for a new enterprise-grade application.
+Hey team,
 
-Your objective is to ensure that every component of the infrastructure follows AWS security best practices, including encryption, least-privilege access, monitoring, and compliance.
+We need to build out secure AWS infrastructure for our new enterprise application. This needs to be rock solid from a security perspective since we're dealing with sensitive data and need to pass compliance audits.
 
-All resources must be implemented entirely using Terraform in a single file (main.tf).
+The whole thing needs to be deployed in us-west-2 and I want everything in a single Terraform file to keep it simple for the team to manage.
 
-The environment will be deployed in us-west-2 (Oregon) and must be fully production-ready with strong defense-in-depth principles.
+Here's what we need:
 
-Core Implementation Requirements
+## VPC and Networking
 
-Build a Terraform configuration that implements the following:
+Set up a proper VPC with two public and two private subnets spread across two availability zones. We'll need an Internet Gateway for the public subnets and a NAT Gateway so our private resources can reach out when needed.
 
-VPC Architecture
+Make sure to lock things down with Network ACLs and Security Groups following least privilege - only allow what's actually needed.
 
-Create one VPC with two public and two private subnets across two availability zones.
+## S3 Storage
 
-Attach an Internet Gateway and NAT Gateway for private subnet outbound access.
+We need S3 buckets for CloudTrail logs and application logs. All buckets must have:
+- Server-side encryption (use KMS)
+- Versioning enabled
+- Block all public access
+- Proper bucket policies for the services that need access
 
-Apply Network ACLs and Security Groups that enforce least privilege.
+## IAM Setup
 
-S3 Buckets
+Create IAM roles and policies that follow least privilege. No overly broad permissions - each service should only get exactly what it needs to function. 
 
-All S3 buckets must:
+We'll need roles for Lambda functions, EC2 instances, and RDS. Make sure the policies are tight.
 
-Have Server-Side Encryption (SSE-S3 or SSE-KMS) enabled.
+## Monitoring and Compliance
 
-Have versioning enabled.
+Enable CloudTrail for everything - we need to log all account activity. Store those logs in an encrypted S3 bucket.
 
-Block public access.
+Set up CloudWatch logs with a customer-managed KMS key for encryption.
 
-Be used for CloudTrail logs and application logs.
+Get AWS Config running to monitor our security groups and enforce compliance rules. This will help us during audits.
 
-IAM Configuration
+## Compute and Database
 
-Define IAM roles and policies adhering to the least privilege principle.
+Launch EC2 instances in the private subnets with encrypted EBS volumes.
 
-Ensure IAM policies do not exceed required permissions.
+For the database, we want RDS with:
+- Multi-AZ deployment for high availability
+- Encrypted storage
+- Security groups that only allow access from our EC2 instances
 
-Attach necessary roles to Lambda, EC2, and RDS resources securely.
+## Security Configuration
 
-CloudWatch & CloudTrail
+Security groups should only allow HTTPS (port 443) from our organization's IP ranges. Keep outbound rules minimal.
 
-Enable CloudTrail for all account activity logging.
+## Application Load Balancer
 
-Store logs in an encrypted S3 bucket.
+Deploy an ALB with HTTPS using an ACM certificate. Integrate AWS WAF to protect against SQL injection, XSS, and other common web attacks.
 
-Use a customer-managed KMS key to encrypt CloudWatch logs.
+Point the target group to our EC2 instances in the private subnets.
 
-Setup AWS Config to monitor security group changes and enforce compliance rules.
+## Content Delivery
 
-Compute and Storage
+Set up CloudFront with the ALB as the origin. Force HTTPS everywhere and use a custom SSL certificate.
 
-Launch EC2 instances in private subnets with EBS volumes encrypted at rest.
+## Lambda Functions
 
-Setup an RDS instance with:
+Any Lambda functions need to run inside our VPC in the private subnets. Use IAM roles with least privilege and pull config from SSM Parameter Store.
 
-Multi-AZ deployment.
+## Secrets and Notifications
 
-Encrypted storage.
+Use AWS Systems Manager Parameter Store for storing secrets - make sure to use SecureString type with KMS encryption.
 
-Security group restricted to private subnet traffic only.
+Create SNS topics for alerts and notifications, with SSL enforced for all deliveries.
 
-Networking & Security
+## Requirements
 
-Define security groups allowing inbound traffic only on port 443 (HTTPS) from a specified CIDR range (organization’s IPs).
+- Everything in us-west-2 region
+- Single Terraform file (keep it simple)
+- Use latest stable AWS provider
+- Every service needs encryption enabled
+- Proper logging and monitoring
+- Restricted access controls everywhere
 
-Ensure outbound rules are minimal and secure.
+The end result should be something we can deploy with just `terraform init` and `terraform apply`. Make sure to include good comments explaining the security configurations, especially around encryption, IAM restrictions, and VPC isolation.
 
-Application Load Balancer (ALB)
-
-Deploy an ALB with HTTPS enabled using an ACM certificate.
-
-Integrate AWS WAF to protect against common web exploits (SQLi, XSS, etc.).
-
-Target group should point to private EC2 instances or ECS services.
-
-Content Delivery:
-
-Configure CloudFront distribution enforcing HTTPS and using a custom SSL certificate.
-
-Origin should be the ALB endpoint.
-
-Lambda Functions
-
-All Lambda functions must run inside the VPC private subnets.
-
-Secure them using IAM roles with least privilege and environment variables sourced from SSM Parameter Store.
-
-Secrets & Messaging
-
-Use AWS Systems Manager Parameter Store for secret storage (with SecureString type and KMS encryption).
-
-Create SNS Topics with enforced SSL delivery for secure notifications.
-
-Constraints
-
-All resources must be deployed in us-west-2 region.
-
-The entire Terraform configuration must be contained in a single file (main.tf).
-
-Use only Terraform AWS provider (latest stable version).
-
-Follow Terraform best practices (variables, outputs, modules optional but inline for single-file format).
-
-Ensure every service explicitly enables encryption, logging, and restricted access controls.
-
-Validate syntax using terraform validate and logical correctness with terraform plan.
-
-Expected Output
-
-Claude should produce:
-
-A single complete Terraform configuration (main.tf) that:
-
-Creates and secures all listed resources.
-
-Enforces encryption, access control, monitoring, and compliance features.
-
-Is ready for direct deployment using:
-
-terraform init
-terraform apply
-
-
-The Terraform should include inline comments explaining key security configurations (e.g., encryption, IAM restrictions, VPC isolation, etc.).
-
-Proper resource dependencies must be defined using depends_on where appropriate.
-
-Output Instructions
-Generate a single-file Terraform configuration (main.tf) implementing all requirements above.
-Ensure the output is formatted as valid Terraform HCL code 
-Include comments throughout explaining key security best practices.
-Do not summarize or break into sections — produce one full Terraform file as the output.
+Let me know if you have questions about any of this.

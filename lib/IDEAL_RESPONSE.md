@@ -289,91 +289,79 @@ terraform destroy
 
 ---
 
-## Testing & Validation
+## Security Best Practices
 
-### Unit Tests (130 tests) ✅ ALL PASSING
+### ✅ Encryption Everywhere
+- **At Rest**: KMS encryption for S3, RDS, EBS, CloudWatch Logs, SNS, SSM
+- **In Transit**: TLS 1.2+ for all services (ALB, CloudFront, RDS)
+- **Key Rotation**: Automatic KMS key rotation enabled
 
-**Test Coverage:**
-- File structure validation (6 tests)
-- Data sources (3 tests)
-- KMS encryption (4 tests)
-- VPC architecture (10 tests)
-- Network security (6 tests)
-- S3 buckets (11 tests)
-- CloudWatch logging (5 tests)
-- CloudTrail (5 tests)
-- AWS Config (6 tests)
-- IAM roles (6 tests)
-- RDS database (6 tests)
-- EC2/Auto Scaling (4 tests)
-- ALB (6 tests)
-- WAF (4 tests)
-- CloudFront (5 tests)
-- Lambda IAM (5 tests)
-- SSM (4 tests)
-- SNS (4 tests)
-- Security best practices (6 tests)
-- Outputs (6 tests)
-- Resource counts (3 tests)
-- Compliance (4 tests)
-- High availability (4 tests)
+### ✅ Least Privilege Access
+- IAM roles with minimal, specific permissions
+- Security groups with source-based rules (not CIDR)
+- No wildcard (*) permissions in IAM policies
 
-**Run Unit Tests:**
-```bash
-npm run test:unit
-# Test Suites: 1 passed, 1 total
-# Tests: 130 passed, 130 total
-```
+### ✅ Network Isolation
+- Private subnets for compute (EC2) and database (RDS)
+- NAT Gateway for controlled outbound access
+- Security group chaining: Internet → ALB → EC2 → RDS
 
-### Integration Tests (33 tests) ✅ GRACEFUL HANDLING
+### ✅ Monitoring & Compliance
+- CloudTrail for all API activity (multi-region)
+- AWS Config for resource compliance
+- CloudWatch alarms for critical metrics
+- Log aggregation in encrypted S3 buckets
 
-**Test Coverage:**
-- VPC and networking (4 tests)
-- Security groups (3 tests)
-- S3 buckets (3 tests)
-- KMS encryption (1 test)
-- RDS database (2 tests)
-- CloudTrail (1 test)
-- ALB (3 tests)
-- Auto Scaling (1 test)
-- CloudFront (1 test)
-- CloudWatch logging (2 tests)
-- AWS Config (2 tests)
-- SNS topics (1 test)
-- SSM parameters (2 tests)
-- WAF (1 test)
-- End-to-end workflow (3 tests)
-- Security validation (2 tests)
+### ✅ High Availability
+- Multi-AZ deployment for RDS
+- Auto Scaling Group across 2 AZs
+- ALB across 2 AZs
+- NAT Gateway with Elastic IP
 
-**Run Integration Tests:**
-```bash
-npm run test:integration
-# Tests gracefully skip when infrastructure not deployed
-# All tests pass when infrastructure is deployed
-```
-
-**Run All Tests:**
-```bash
-npm test
-# Test Suites: 2 passed, 2 total
-# Tests: 131 passed, 32 skipped, 163 total
-```
+### ✅ Defense in Depth
+- **Layer 7**: WAF (application layer protection)
+- **Layer 4**: Security Groups (stateful firewall)
+- **Layer 3**: Network ACLs (stateless firewall)
+- **Layer 1**: CloudFront (DDoS protection)
 
 ---
 
-## File Structure
+## Deployment Instructions
 
-```
-lib/
-├── tap_stack.tf           # Complete infrastructure (1,407 lines) ✅
-├── PROMPT.md              # Original requirements
-├── IDEAL_RESPONSE.md      # This file - solution documentation
-├── MODEL_RESPONSE.md      # Reference model response
-└── MODEL_FAILURES.md      # Comparison and analysis
+### Prerequisites
+- AWS CLI configured
+- Terraform >= 1.4.0 installed
+- S3 bucket for state backend
+- AWS credentials with admin permissions
 
-test/
-├── terraform.unit.test.ts     # 130 unit tests ✅ ALL PASSING
-└── terraform.int.test.ts      # 33 integration tests ✅ GRACEFUL
+### Deployment Steps
+
+```bash
+# 1. Navigate to the lib directory
+cd lib
+
+# 2. Initialize Terraform with backend configuration
+terraform init \
+  -backend-config="bucket=my-terraform-state-bucket" \
+  -backend-config="key=enterprise-app/terraform.tfstate" \
+  -backend-config="region=us-west-2" \
+  -backend-config="encrypt=true"
+
+# 3. Validate configuration syntax
+terraform validate
+# Output: Success! The configuration is valid.
+
+# 4. Review execution plan
+terraform plan -out=tfplan
+
+# 5. Apply configuration
+terraform apply tfplan
+
+# 6. Retrieve outputs
+terraform output
+
+# 7. (Optional) Destroy infrastructure when done
+terraform destroy
 ```
 
 ---
@@ -386,29 +374,6 @@ test/
 - ✅ **PCI-DSS Ready** - Payment card data security standards
 - ✅ **HIPAA Ready** - Healthcare data protection
 - ✅ **SOC 2 Ready** - Service organization controls
-
----
-
-## Cost Optimization
-
-**Instance Types:**
-- t3.medium (burstable performance) for EC2
-- db.t3.medium for RDS
-- Optimized for cost-effective cloud deployment
-
-**Storage:**
-- GP3 volumes (better price/performance than GP2)
-- 30-day log retention (not indefinite)
-- S3 Standard storage (lifecycle policies can be added)
-
-**Networking:**
-- Single NAT Gateway (can add more for HA in production)
-- CloudFront PriceClass_100 (regional coverage)
-
-**Reserved Capacity:**
-- Consider Reserved Instances for production
-- Consider RDS Reserved Instances
-- Savings Plans for consistent usage
 
 ---
 
