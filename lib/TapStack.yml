@@ -1010,11 +1010,11 @@ Resources:
                   - s3:PutObject
                   - s3:GetObject
                   - s3:DeleteObject
-                Resource: !Sub '${NovaConfigBucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${NovaConfigBucket}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Ref NovaConfigBucket
+                Resource: !Sub 'arn:aws:s3:::${NovaConfigBucket}'
               - Effect: Allow
                 Action:
                   - kms:Decrypt
@@ -1072,7 +1072,7 @@ Resources:
             Action:
               - s3:PutObject
               - s3:GetObject
-            Resource: !Sub '${NovaConfigBucket}/*'
+            Resource: !Sub 'arn:aws:s3:::${NovaConfigBucket}/*'
             Condition:
               StringEquals:
                 's3:x-amz-server-side-encryption': 'aws:kms'
@@ -1083,7 +1083,7 @@ Resources:
               Service: config.amazonaws.com
             Action:
               - s3:ListBucket
-            Resource: !Ref NovaConfigBucket
+            Resource: !Sub 'arn:aws:s3:::${NovaConfigBucket}'
 
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
