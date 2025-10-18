@@ -1000,6 +1000,26 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
+      Policies:
+        - PolicyName: ConfigS3KMSAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:DeleteObject
+                Resource: !Sub '${NovaConfigBucket}/*'
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !Ref NovaConfigBucket
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                Resource: !GetAtt NovaKMSKey.Arn
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${Environment}-config-service-role'
@@ -1038,10 +1058,39 @@ Resources:
         - Key: iac-rlhf-amazon
           Value: 'true'
 
+  NovaConfigBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref NovaConfigBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ConfigBucketPolicy
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action:
+              - s3:PutObject
+              - s3:GetObject
+            Resource: !Sub '${NovaConfigBucket}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-server-side-encryption': 'aws:kms'
+                's3:x-amz-server-side-encryption-aws-kms-key-id': !GetAtt NovaKMSKey.Arn
+          - Sid: ConfigBucketListPolicy
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action:
+              - s3:ListBucket
+            Resource: !Ref NovaConfigBucket
+
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
     Properties:
       S3BucketName: !Ref NovaConfigBucket
+      S3KeyPrefix: 'config/'
+      S3KmsKeyArn: !GetAtt NovaKMSKey.Arn
       ConfigSnapshotDeliveryProperties:
         DeliveryFrequency: TwentyFour_Hours
 
