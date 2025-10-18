@@ -119,7 +119,7 @@ Resources:
   KMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: alias/production-key
+      AliasName: !Sub 'alias/${AWS::StackName}-production-key'
       TargetKeyId: !Ref KMSKey
 
   # ====================
@@ -136,6 +136,8 @@ Resources:
           Value: ProductionVPC
         - Key: Environment
           Value: Production
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -145,6 +147,8 @@ Resources:
           Value: ProductionIGW
         - Key: Environment
           Value: Production
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -164,6 +168,8 @@ Resources:
           Value: PublicSubnet1
         - Key: Environment
           Value: Production
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -534,7 +540,7 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'production-static-assets-${AWS::AccountId}'
+      BucketName: !Sub '${AWS::StackName}-production-static-assets-${AWS::AccountId}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -550,6 +556,8 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   S3BucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -573,7 +581,7 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: ProductionALB
+      Name: !Sub '${AWS::StackName}-ProductionALB'
       Subnets:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
@@ -582,11 +590,13 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: ProductionTargetGroup
+      Name: !Sub '${AWS::StackName}-ProductionTG'
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC
@@ -599,6 +609,8 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -616,7 +628,7 @@ Resources:
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: ProductionLaunchTemplate
+      LaunchTemplateName: !Sub '${AWS::StackName}-ProductionLT'
       LaunchTemplateData:
         ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
         InstanceType: !Ref InstanceType
@@ -650,7 +662,7 @@ Resources:
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: ProductionASG
+      AutoScalingGroupName: !Sub '${AWS::StackName}-ProductionASG'
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
@@ -689,7 +701,7 @@ Resources:
   RDSDatabase:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceIdentifier: production-database
+      DBInstanceIdentifier: !Sub '${AWS::StackName}-production-database'
       DBName: !Ref DBName
       Engine: mysql
       EngineVersion: '8.0.43'
@@ -710,16 +722,20 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   RDSReadReplica:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceIdentifier: production-database-read-replica
+      DBInstanceIdentifier: !Sub '${AWS::StackName}-production-database-read-replica'
       SourceDBInstanceIdentifier: !Ref RDSDatabase
       DBInstanceClass: !Ref DBInstanceClass
       Tags:
         - Key: Environment
           Value: Production
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   # ====================
   # ELASTICACHE
@@ -754,7 +770,7 @@ Resources:
   LambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: ProductionScheduledTask
+      FunctionName: !Sub '${AWS::StackName}-ProductionScheduledTask'
       Runtime: python3.9
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -796,6 +812,8 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   LambdaScheduleRule:
     Type: AWS::Events::Rule
@@ -822,7 +840,7 @@ Resources:
     Type: AWS::CloudFront::OriginAccessControl
     Properties:
       OriginAccessControlConfig:
-        Name: ProductionOAC
+        Name: !Sub '${AWS::StackName}-ProductionOAC'
         OriginAccessControlOriginType: s3
         SigningBehavior: always
         SigningProtocol: sigv4
@@ -832,7 +850,7 @@ Resources:
     Properties:
       DistributionConfig:
         Enabled: true
-        Comment: Production CloudFront Distribution
+        Comment: !Sub '${AWS::StackName} Production CloudFront Distribution'
         DefaultRootObject: index.html
         Origins:
           - Id: S3Origin
@@ -885,6 +903,8 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   # ====================
   # WAF WEB ACL
@@ -892,12 +912,12 @@ Resources:
   WAFWebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
-      Name: !Sub '${AWS::StackName}-web-acl'
+      Name: !Sub '${AWS::StackName}-${AWS::AccountId}-web-acl'
       Scope: REGIONAL
       DefaultAction:
         Allow: {}
       Rules:
-        - Name: RateLimitRule
+        - Name: !Sub '${AWS::StackName}-RateLimitRule'
           Priority: 1
           Action:
             Block: {}
@@ -908,8 +928,8 @@ Resources:
           VisibilityConfig:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
-            MetricName: RateLimitRule
-        - Name: AWSManagedRulesCommonRuleSet
+            MetricName: !Sub '${AWS::StackName}-RateLimitRule'
+        - Name: !Sub '${AWS::StackName}-AWSManagedRulesCommonRuleSet'
           Priority: 2
           OverrideAction:
             None: {}
@@ -920,8 +940,8 @@ Resources:
           VisibilityConfig:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
-            MetricName: CommonRuleSet
-        - Name: AWSManagedRulesKnownBadInputsRuleSet
+            MetricName: !Sub '${AWS::StackName}-CommonRuleSet'
+        - Name: !Sub '${AWS::StackName}-AWSManagedRulesKnownBadInputsRuleSet'
           Priority: 3
           OverrideAction:
             None: {}
@@ -932,14 +952,16 @@ Resources:
           VisibilityConfig:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
-            MetricName: KnownBadInputs
+            MetricName: !Sub '${AWS::StackName}-KnownBadInputs'
       VisibilityConfig:
         SampledRequestsEnabled: true
         CloudWatchMetricsEnabled: true
-        MetricName: !Sub '${AWS::StackName}-web-acl'
+        MetricName: !Sub '${AWS::StackName}-${AWS::AccountId}-web-acl'
       Tags:
         - Key: Environment
           Value: Production
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   # ====================
   # ROUTE 53
@@ -951,6 +973,8 @@ Resources:
       HostedZoneTags:
         - Key: Environment
           Value: Production
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   HealthCheck:
     Type: AWS::Route53::HealthCheck
@@ -965,6 +989,8 @@ Resources:
       HealthCheckTags:
         - Key: Environment
           Value: Production
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   PrimaryRecord:
     Type: AWS::Route53::RecordSet
@@ -999,7 +1025,7 @@ Resources:
   CloudTrailS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'production-cloudtrail-logs-${AWS::AccountId}'
+      BucketName: !Sub '${AWS::StackName}-production-cloudtrail-logs-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -1013,6 +1039,8 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   CloudTrailS3BucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -1040,7 +1068,7 @@ Resources:
     Type: AWS::CloudTrail::Trail
     DependsOn: CloudTrailS3BucketPolicy
     Properties:
-      TrailName: ProductionTrail
+      TrailName: !Sub '${AWS::StackName}-ProductionTrail'
       S3BucketName: !Ref CloudTrailS3Bucket
       IncludeGlobalServiceEvents: true
       IsLogging: true
@@ -1057,6 +1085,8 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   # ====================
   # AWS CONFIG
@@ -1064,7 +1094,7 @@ Resources:
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
     Properties:
-      Name: ProductionConfigRecorder
+      Name: !Sub '${AWS::StackName}-ProductionConfigRecorder'
       RoleARN: !GetAtt ConfigRole.Arn
       RecordingGroup:
         AllSupported: true
@@ -1072,14 +1102,14 @@ Resources:
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
     Properties:
-      Name: ProductionDeliveryChannel
+      Name: !Sub '${AWS::StackName}-ProductionDeliveryChannel'
       S3BucketName: !Ref ConfigS3Bucket
       SnsTopicARN: !Ref SNSTopic
 
   ConfigS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'production-config-logs-${AWS::AccountId}'
+      BucketName: !Sub '${AWS::StackName}-production-config-logs-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -1093,6 +1123,8 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   ConfigS3BucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -1197,12 +1229,14 @@ Resources:
   SNSTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: ProductionNotifications
-      DisplayName: Production Environment Notifications
+      TopicName: !Sub '${AWS::StackName}-ProductionNotifications'
+      DisplayName: !Sub '${AWS::StackName} Production Environment Notifications'
       KmsMasterKeyId: !Ref KMSKey
       Tags:
         - Key: Environment
           Value: Production
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   SNSTopicPolicy:
     Type: AWS::SNS::TopicPolicy
