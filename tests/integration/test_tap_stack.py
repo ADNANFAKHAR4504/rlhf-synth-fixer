@@ -577,7 +577,8 @@ class TestTapStackIntegration(unittest.TestCase):
                 Bucket=bucket_name,
                 Key=scenario1_key,
                 Body=b"Finance report data",
-                ContentType='application/pdf'
+                ContentType='application/pdf',
+                ServerSideEncryption='AES256'  # Required by bucket policy
             )
             test_scenarios.append({
                 'key': scenario1_key,
@@ -597,7 +598,8 @@ class TestTapStackIntegration(unittest.TestCase):
                 Bucket=bucket_name,
                 Key=scenario2_key,
                 Body=b'{"test": "data"}',
-                ContentType='application/json'
+                ContentType='application/json',
+                ServerSideEncryption='AES256'  # Required by bucket policy
             )
             test_scenarios.append({
                 'key': scenario2_key,
@@ -617,7 +619,8 @@ class TestTapStackIntegration(unittest.TestCase):
                 Bucket=bucket_name,
                 Key=scenario3_key,
                 Body=b"Compliance policy document",
-                ContentType='application/msword'
+                ContentType='application/msword',
+                ServerSideEncryption='AES256'  # Required by bucket policy
             )
             test_scenarios.append({
                 'key': scenario3_key,
@@ -639,7 +642,8 @@ class TestTapStackIntegration(unittest.TestCase):
                 Bucket=bucket_name,
                 Key=scenario4_key,
                 Body=b"fake image data",
-                ContentType='image/jpeg'
+                ContentType='image/jpeg',
+                ServerSideEncryption='AES256'  # Required by bucket policy
             )
             test_scenarios.append({
                 'key': scenario4_key,
@@ -791,6 +795,7 @@ class TestTapStackIntegration(unittest.TestCase):
                 Key=test_key,
                 Body=test_data,
                 ContentType='text/plain',
+                ServerSideEncryption='AES256',  # Required by bucket policy
                 Metadata={
                     'test': 'true',
                     'test-id': test_object_id
