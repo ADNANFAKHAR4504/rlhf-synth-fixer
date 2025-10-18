@@ -600,7 +600,7 @@ resource "aws_iam_role_policy" "ec2_logging" {
           "ssm:GetParameters",
           "ssm:GetParametersByPath"
         ]
-        Resource = "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:parameter/enterprise-app${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}/*"
+        Resource = "arn:aws:ssm:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:parameter/enterprise-app${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}/*"
       },
       {
         Effect = "Allow"
@@ -1222,7 +1222,7 @@ resource "aws_iam_role_policy" "lambda_vpc" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*"
+        Resource = "arn:aws:logs:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:*"
       },
       {
         Effect = "Allow"
@@ -1231,7 +1231,7 @@ resource "aws_iam_role_policy" "lambda_vpc" {
           "ssm:GetParameters",
           "ssm:GetParametersByPath"
         ]
-        Resource = "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:parameter/enterprise-app${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}/*"
+        Resource = "arn:aws:ssm:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:parameter/enterprise-app${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}/*"
       },
       {
         Effect = "Allow"
