@@ -1,4 +1,12 @@
-## Ideal solution
+# Ideal Solution
+
+This document outlines the ideal implementation of the `TapStack` class, which provisions a serverless backend using AWS CDK with Python. The solution includes DynamoDB, Lambda, and API Gateway, following best practices for security, performance, and maintainability.
+
+---
+
+## **1. TapStack Class**
+
+### **File: `tap_stack.py`**
 
 ```python
 """tap_stack.py
@@ -86,7 +94,7 @@ class TapStack(cdk.Stack):
                 type=dynamodb.AttributeType.STRING
             ),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
-            removal_policy=RemovalPolicy.DESTROY,  # For dev - use RETAIN for production
+            removal_policy=RemovalPolicy.RETAIN,  # Use RETAIN for production
             point_in_time_recovery=True,  # Enable PITR for production data safety
             encryption=dynamodb.TableEncryption.AWS_MANAGED,  # Encryption at rest
         )

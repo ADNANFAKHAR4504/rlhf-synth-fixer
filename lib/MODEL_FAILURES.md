@@ -21,7 +21,7 @@
 ### Problem:
 - **Hardcoded Values**: The `MODEL_RESPONSE.md` uses hardcoded values for resource names (e.g., `user-data-table`, `user-api-handler`). This can lead to naming conflicts during deployment.
 - **Region-Specific Configuration**: The `MODEL_RESPONSE.md` does not explicitly set the region in the stack configuration, which can cause deployment issues in multi-region setups.
-- **Improper Removal Policies**: The `RemovalPolicy.DESTROY` is applied to critical resources like DynamoDB and S3, which is unsafe for production environments.
+- **Improper Removal Policies**: The `RemovalPolicy.DESTROY` is applied to critical resources like DynamoDB, which is unsafe for production environments.
 
 ### Fix:
 - Use dynamic naming conventions with environment suffixes to avoid conflicts.
@@ -33,12 +33,10 @@
 ## 3. Security Concerns
 
 ### Problem:
-- **S3 Bucket Security**: The `MODEL_RESPONSE.md` does not block public access to the S3 bucket, which can expose sensitive data.
 - **IAM Role Permissions**: The Lambda execution role in `MODEL_RESPONSE.md` grants overly permissive policies, violating the principle of least privilege.
 - **Environment Variables**: Sensitive data like `TABLE_NAME` is hardcoded in the stack, which is a security risk.
 
 ### Fix:
-- Enable `block_public_access` for the S3 bucket.
 - Restrict IAM role permissions to only the required actions and resources.
 - Use AWS Secrets Manager or Parameter Store for sensitive data instead of hardcoding.
 
@@ -47,12 +45,10 @@
 ## 4. Performance Optimizations
 
 ### Problem:
-- **CloudFront Configuration**: The `MODEL_RESPONSE.md` does not enable caching optimizations for CloudFront, which can lead to higher latency and costs.
 - **API Gateway Throttling**: The `MODEL_RESPONSE.md` does not configure throttling limits for API Gateway, which can lead to abuse or overuse of the API.
 - **Lambda Function Memory and Timeout**: The `MODEL_RESPONSE.md` uses the same memory and timeout settings for all Lambda functions, which is inefficient.
 
 ### Fix:
-- Enable caching policies in CloudFront to reduce latency and costs.
 - Configure throttling limits in API Gateway to prevent abuse.
 - Optimize Lambda memory and timeout settings based on the function's workload.
 
@@ -63,12 +59,10 @@
 ### Problem:
 - **Tagging**: The `MODEL_RESPONSE.md` does not include consistent tagging for resources, making it difficult to manage and track costs.
 - **CORS Configuration**: The `MODEL_RESPONSE.md` allows all origins in the CORS configuration, which is insecure for production environments.
-- **Logging and Monitoring**: The `MODEL_RESPONSE.md` does not enable detailed logging and monitoring for Lambda functions and API Gateway.
 
 ### Fix:
 - Add consistent tags (e.g., `Name`, `Environment`, `Owner`) to all resources.
 - Restrict CORS configuration to specific origins in production.
-- Enable detailed logging and monitoring for all resources.
 
 ---
 
@@ -78,6 +72,8 @@
 |-----------------------|----------------------------------------------------------------------|----------------------------------------------------------------------------------------|
 | Syntax               | Missing imports, incorrect method calls, inline Lambda code issues   | Add necessary imports, validate method calls, and fix Lambda code syntax              |
 | Deployment           | Hardcoded values, region-specific issues, improper removal policies | Use dynamic naming, set region explicitly, and use `RemovalPolicy.RETAIN` for critical resources |
-| Security             | S3 bucket security, IAM role permissions, hardcoded sensitive data  | Block public access, restrict IAM permissions, and use AWS Secrets Manager            |
-| Performance          | CloudFront caching, API Gateway throttling, Lambda memory settings  | Enable caching, configure throttling, and optimize Lambda settings                    |
-| Best Practices       | Tagging, CORS configuration, logging and monitoring                 | Add consistent tags, restrict CORS, and enable detailed logging                       |
+| Security             | IAM role permissions, hardcoded sensitive data                      | Restrict IAM permissions and use AWS Secrets Manager                                  |
+| Performance          | API Gateway throttling, Lambda memory settings                      | Configure throttling and optimize Lambda settings                                     |
+| Best Practices       | Tagging, CORS configuration                                         | Add consistent tags and restrict CORS                                                |
+
+---
