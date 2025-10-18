@@ -43,8 +43,8 @@ describe("Terraform single-file stack: tap_stack.tf", () => {
   });
 
   describe("Variables", () => {
-    test("declares aws_region variable", () => {
-      expect(stackContent).toMatch(/variable\s+"aws_region"\s*{/);
+    test("declares aws_region variable in provider.tf", () => {
+      expect(providerContent).toMatch(/variable\s+"aws_region"\s*{/);
     });
 
     test("declares domain_name variable", () => {
@@ -55,8 +55,8 @@ describe("Terraform single-file stack: tap_stack.tf", () => {
       expect(stackContent).toMatch(/variable\s+"environment"\s*{/);
     });
 
-    test("aws_region variable has correct type and default", () => {
-      expect(stackContent).toMatch(/variable\s+"aws_region"\s*{[^}]*type\s*=\s*string[^}]*default\s*=\s*"us-east-1"/s);
+    test("aws_region variable has correct type and default in provider.tf", () => {
+      expect(providerContent).toMatch(/variable\s+"aws_region"\s*{[^}]*type\s*=\s*string[^}]*default\s*=\s*"us-east-1"/s);
     });
 
     test("domain_name variable has correct type and default", () => {
