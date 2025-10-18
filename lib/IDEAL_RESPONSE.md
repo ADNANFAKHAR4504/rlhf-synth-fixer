@@ -1,10 +1,32 @@
+# provider.tf
+
 ```terraform
+terraform {
+  backend "s3" {}
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+  required_version = ">= 1.0"
+}
+
+provider "aws" {
+  region = var.aws_region
+}
+
 variable "aws_region" {
   description = "AWS region for resources"
   type        = string
   default     = "us-east-1"
 }
+```
 
+# tap_stack.tf
+
+```terraform
 variable "domain_name" {
   description = "Domain name for the e-book delivery system"
   type        = string
@@ -17,13 +39,19 @@ variable "environment" {
   default     = "prod"
 }
 
+variable "enable_custom_domain" {
+  description = "Enable custom domain with Route53 and ACM certificate"
+  type        = bool
+  default     = false
+}
+
 data "aws_caller_identity" "current" {}
 
 resource "aws_kms_key" "content_key" {
   description             = "KMS key for e-book content encryption"
   deletion_window_in_days = 30
   enable_key_rotation     = true
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -66,7 +94,7 @@ resource "aws_kms_key" "logs_key" {
   description             = "KMS key for log encryption"
   deletion_window_in_days = 30
   enable_key_rotation     = true
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -184,6 +212,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs_lifecycle" {
     id     = "log-rotation"
     status = "Enabled"
 
+    filter {}
+
     transition {
       days          = 30
       storage_class = "STANDARD_IA"
@@ -222,6 +252,8 @@ resource "aws_s3_bucket_policy" "ebook_bucket_policy" {
 }
 
 resource "aws_acm_certificate" "ebook_cert" {
+  count = var.enable_custom_domain ? 1 : 0
+
   domain_name       = var.domain_name
   validation_method = "DNS"
 
@@ -236,6 +268,8 @@ resource "aws_acm_certificate" "ebook_cert" {
 }
 
 resource "aws_route53_zone" "primary" {
+  count = var.enable_custom_domain ? 1 : 0
+
   name = "example.com"
 
   tags = {
@@ -245,24 +279,26 @@ resource "aws_route53_zone" "primary" {
 }
 
 resource "aws_route53_record" "cert_validation" {
-  for_each = {
-    for dvo in aws_acm_certificate.ebook_cert.domain_validation_options : dvo.domain_name => {
+  for_each = var.enable_custom_domain ? {
+    for dvo in aws_acm_certificate.ebook_cert[0].domain_validation_options : dvo.domain_name => {
       name   = dvo.resource_record_name
       record = dvo.resource_record_value
       type   = dvo.resource_record_type
     }
-  }
+  } : {}
 
   allow_overwrite = true
   name            = each.value.name
   records         = [each.value.record]
   ttl             = 60
   type            = each.value.type
-  zone_id         = aws_route53_zone.primary.zone_id
+  zone_id         = aws_route53_zone.primary[0].zone_id
 }
 
 resource "aws_acm_certificate_validation" "ebook_cert_validation" {
-  certificate_arn         = aws_acm_certificate.ebook_cert.arn
+  count = var.enable_custom_domain ? 1 : 0
+
+  certificate_arn         = aws_acm_certificate.ebook_cert[0].arn
   validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
 }
 
@@ -329,7 +365,7 @@ resource "aws_cloudfront_distribution" "ebook_distribution" {
     prefix          = "cloudfront/"
   }
 
-  aliases = [var.domain_name]
+  aliases = var.enable_custom_domain ? [var.domain_name] : []
 
   default_cache_behavior {
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
@@ -347,7 +383,7 @@ resource "aws_cloudfront_distribution" "ebook_distribution" {
     min_ttl                = 0
     default_ttl            = 3600
     max_ttl                = 86400
-    
+
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security_headers_policy.id
   }
 
@@ -360,9 +396,10 @@ resource "aws_cloudfront_distribution" "ebook_distribution" {
   }
 
   viewer_certificate {
-    acm_certificate_arn      = aws_acm_certificate_validation.ebook_cert_validation.certificate_arn
-    ssl_support_method       = "sni-only"
-    minimum_protocol_version = "TLSv1.2_2021"
+    acm_certificate_arn            = var.enable_custom_domain ? aws_acm_certificate_validation.ebook_cert_validation[0].certificate_arn : null
+    cloudfront_default_certificate = var.enable_custom_domain ? false : true
+    ssl_support_method             = var.enable_custom_domain ? "sni-only" : null
+    minimum_protocol_version       = "TLSv1.2_2021"
   }
 
   web_acl_id = aws_wafv2_web_acl.ebook_waf.arn
@@ -403,7 +440,9 @@ resource "aws_cloudfront_response_headers_policy" "security_headers_policy" {
 }
 
 resource "aws_route53_record" "ebook_record" {
-  zone_id = aws_route53_zone.primary.zone_id
+  count = var.enable_custom_domain ? 1 : 0
+
+  zone_id = aws_route53_zone.primary[0].zone_id
   name    = var.domain_name
   type    = "A"
 
@@ -560,12 +599,12 @@ output "kms_logs_key_id" {
 
 output "route53_zone_id" {
   description = "Route 53 hosted zone ID"
-  value       = aws_route53_zone.primary.zone_id
+  value       = var.enable_custom_domain ? aws_route53_zone.primary[0].zone_id : null
 }
 
 output "acm_certificate_arn" {
   description = "ACM certificate ARN"
-  value       = aws_acm_certificate.ebook_cert.arn
+  value       = var.enable_custom_domain ? aws_acm_certificate.ebook_cert[0].arn : null
 }
 
 output "waf_web_acl_arn" {
