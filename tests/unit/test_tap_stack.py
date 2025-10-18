@@ -13,41 +13,95 @@ from lib.tap_stack import TapStack, TapStackProps
 
 @mark.describe("TapStack")
 class TestTapStack(unittest.TestCase):
-  """Test cases for the TapStack CDK stack"""
+  """Unit tests for the TapStack CDK stack"""
 
   def setUp(self):
     """Set up a fresh CDK app for each test"""
     self.app = cdk.App()
 
-  @mark.it("creates an S3 bucket with the correct environment suffix")
-  def test_creates_s3_bucket_with_env_suffix(self):
+  @mark.it("creates a DynamoDB table with the correct configuration")
+  def test_dynamodb_table_configuration(self):
     # ARRANGE
-    env_suffix = "testenv"
-    stack = TapStack(self.app, "TapStackTest",
-                     TapStackProps(environment_suffix=env_suffix))
+    stack = TapStack(self.app, "TapStackTest", TapStackProps(environment_suffix="testenv"))
     template = Template.from_stack(stack)
 
     # ASSERT
-    template.resource_count_is("AWS::S3::Bucket", 1)
-    template.has_resource_properties("AWS::S3::Bucket", {
-        "BucketName": f"tap-bucket-{env_suffix}"
+    template.resource_count_is("AWS::DynamoDB::Table", 1)
+    template.has_resource_properties("AWS::DynamoDB::Table", {
+        "TableName": "user-data-table-testenv",
+        "BillingMode": "PAY_PER_REQUEST",
+        "SSESpecification": {"SSEEnabled": True},
+        "PointInTimeRecoverySpecification": {"PointInTimeRecoveryEnabled": True},
+        "KeySchema": [
+            {"AttributeName": "userId", "KeyType": "HASH"}
+        ],
     })
 
-  @mark.it("defaults environment suffix to 'dev' if not provided")
-  def test_defaults_env_suffix_to_dev(self):
+  @mark.it("creates a Lambda function with the correct configuration")
+  def test_lambda_function_configuration(self):
     # ARRANGE
-    stack = TapStack(self.app, "TapStackTestDefault")
+    stack = TapStack(self.app, "TapStackTest", TapStackProps(environment_suffix="testenv"))
     template = Template.from_stack(stack)
 
     # ASSERT
-    template.resource_count_is("AWS::S3::Bucket", 1)
-    template.has_resource_properties("AWS::S3::Bucket", {
-        "BucketName": "tap-bucket-dev"
+    template.resource_count_is("AWS::Lambda::Function", 1)
+    template.has_resource_properties("AWS::Lambda::Function", {
+        "FunctionName": "user-api-handler-testenv",
+        "Runtime": "python3.11",
+        "Handler": "index.lambda_handler",
+        "Timeout": 10,
+        "MemorySize": 256,
+        "TracingConfig": {"Mode": "Active"}
     })
 
-  @mark.it("Write Unit Tests")
-  def test_write_unit_tests(self):
+  @mark.it("creates an API Gateway with the correct configuration")
+  def test_api_gateway_configuration(self):
     # ARRANGE
-    self.fail(
-        "Unit test for TapStack should be implemented here."
-    )
+    stack = TapStack(self.app, "TapStackTest", TapStackProps(environment_suffix="testenv"))
+    template = Template.from_stack(stack)
+
+    # ASSERT
+    template.resource_count_is("AWS::ApiGateway::RestApi", 1)
+    template.has_resource_properties("AWS::ApiGateway::RestApi", {
+        "Name": "user-data-api-testenv",
+        "EndpointConfiguration": {"Types": ["REGIONAL"]}
+    })
+
+    # Validate CORS configuration
+    template.has_resource_properties("AWS::ApiGateway::Method", {
+        "HttpMethod": "OPTIONS",
+        "Integration": {
+            "IntegrationResponses": [
+                {
+                    "ResponseParameters": {
+                        "method.response.header.Access-Control-Allow-Origin": "'*'"
+                    }
+                }
+            ]
+        }
+    })
+
+  @mark.it("creates CloudFormation outputs for key resources")
+  def test_cloudformation_outputs(self):
+    # ARRANGE
+    stack = TapStack(self.app, "TapStackTest", TapStackProps(environment_suffix="testenv"))
+    template = Template.from_stack(stack)
+
+    # ASSERT
+    template.has_output("ApiEndpoint", {
+        "Description": "API Gateway endpoint URL for user retrieval"
+    })
+    template.has_output("TableName", {
+        "Description": "DynamoDB table name for user data"
+    })
+    template.has_output("LambdaFunctionName", {
+        "Description": "Lambda function name for user API"
+    })
+    template.has_output("Environment", {
+        "Description": "Environment suffix used for resource naming"
+    })
+
+
+
+if __name__ == "__main__":
+    unittest.main()
