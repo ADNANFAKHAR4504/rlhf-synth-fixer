@@ -879,7 +879,7 @@ Resources:
   WAFWebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
-      Name: !Sub '${AWS::StackName}-web-acl'
+      Name: !Sub '${AWS::StackName}-${AWS::AccountId}-web-acl'
       Scope: REGIONAL
       DefaultAction:
         Allow: {}
@@ -933,7 +933,7 @@ Resources:
       VisibilityConfig:
         SampledRequestsEnabled: true
         CloudWatchMetricsEnabled: true
-        MetricName: !Sub '${AWS::StackName}-web-acl'
+        MetricName: !Sub '${AWS::StackName}-${AWS::AccountId}-web-acl'
       Tags:
         - Key: Owner
           Value: !Ref Owner
