@@ -58,18 +58,6 @@ Resources:
         - Key: iac-rlhf-amazon
           Value: 'true'
 
-  NovaDatabaseSecretRotation:
-    Type: 'AWS::SecretsManager::RotationSchedule'
-    DependsOn: NovaDatabaseSecretAttachment
-    Properties:
-      SecretId: !Ref NovaRDSPasswordSecret
-      HostedRotationLambda:
-        RotationType: 'MySQLSingleUser'
-        RotationLambdaName: 'nova-prod-db-rotation-lambda'
-        VpcSecurityGroupIds: !Ref NovaDatabaseSecurityGroup
-        VpcSubnetIds: !Join [',', [!Ref NovaDatabaseSubnet1, !Ref NovaDatabaseSubnet2]]
-      RotationRules:
-        AutomaticallyAfterDays: 30
 
   # KMS Key for encryption across all resources
   NovaEncryptionKey:
