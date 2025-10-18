@@ -21,6 +21,13 @@ provider "aws" {
   region = "us-west-2"
 }
 
+# Environment suffix variable for resource naming isolation
+variable "environment_suffix" {
+  description = "Environment suffix to append to resource names for deployment isolation"
+  type        = string
+  default     = ""
+}
+
 # Data sources for current account and region
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
@@ -32,12 +39,12 @@ resource "aws_kms_key" "main" {
   enable_key_rotation     = true
 
   tags = {
-    Name = "enterprise-app-kms-key"
+    Name = "enterprise-app-kms-key${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   }
 }
 
 resource "aws_kms_alias" "main" {
-  name          = "alias/enterprise-app"
+  name          = "alias/enterprise-app${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   target_key_id = aws_kms_key.main.key_id
 }
 
@@ -48,7 +55,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = {
-    Name = "enterprise-vpc"
+    Name = "enterprise-vpc${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   }
 }
 
@@ -57,7 +64,7 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name = "enterprise-igw"
+    Name = "enterprise-igw${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   }
 }
 
@@ -66,7 +73,7 @@ resource "aws_eip" "nat" {
   domain = "vpc"
 
   tags = {
-    Name = "enterprise-nat-eip"
+    Name = "enterprise-nat-eip${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   }
 }
 
@@ -79,7 +86,7 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "enterprise-public-subnet-${count.index + 1}"
+    Name = "enterprise-public-subnet-${count.index + 1}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
     Type = "Public"
   }
 }
@@ -92,7 +99,7 @@ resource "aws_subnet" "private" {
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = {
-    Name = "enterprise-private-subnet-${count.index + 1}"
+    Name = "enterprise-private-subnet-${count.index + 1}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
     Type = "Private"
   }
 }
@@ -103,7 +110,7 @@ resource "aws_nat_gateway" "main" {
   subnet_id     = aws_subnet.public[0].id
 
   tags = {
-    Name = "enterprise-nat-gateway"
+    Name = "enterprise-nat-gateway${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   }
 
   depends_on = [aws_internet_gateway.main]
@@ -124,7 +131,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name = "enterprise-public-rt"
+    Name = "enterprise-public-rt${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   }
 }
 
@@ -138,7 +145,7 @@ resource "aws_route_table" "private" {
   }
 
   tags = {
-    Name = "enterprise-private-rt"
+    Name = "enterprise-private-rt${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   }
 }
 
@@ -199,13 +206,13 @@ resource "aws_network_acl" "main" {
   }
 
   tags = {
-    Name = "enterprise-nacl"
+    Name = "enterprise-nacl${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   }
 }
 
 # S3 bucket for CloudTrail logs with encryption and versioning
 resource "aws_s3_bucket" "cloudtrail_logs" {
-  bucket = "enterprise-cloudtrail-logs-${data.aws_caller_identity.current.account_id}"
+  bucket = "enterprise-cloudtrail-logs${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-${data.aws_caller_identity.current.account_id}"
 
   tags = {
     Name = "CloudTrail Logs"
@@ -278,7 +285,7 @@ resource "aws_s3_bucket_policy" "cloudtrail_logs" {
 
 # S3 bucket for application logs with encryption and versioning
 resource "aws_s3_bucket" "app_logs" {
-  bucket = "enterprise-app-logs-${data.aws_caller_identity.current.account_id}"
+  bucket = "enterprise-app-logs${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-${data.aws_caller_identity.current.account_id}"
 
   tags = {
     Name = "Application Logs"
@@ -317,7 +324,7 @@ resource "aws_s3_bucket_public_access_block" "app_logs" {
 
 # CloudWatch Log Group for application logs with KMS encryption
 resource "aws_cloudwatch_log_group" "app" {
-  name              = "/aws/enterprise-app"
+  name              = "/aws/enterprise-app${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   retention_in_days = 30
   kms_key_id        = aws_kms_key.main.arn
 
@@ -328,7 +335,7 @@ resource "aws_cloudwatch_log_group" "app" {
 
 # CloudTrail configuration for audit logging
 resource "aws_cloudtrail" "main" {
-  name           = "enterprise-cloudtrail"
+  name           = "enterprise-cloudtrail${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   s3_bucket_name = aws_s3_bucket.cloudtrail_logs.id
 
   # Enable logging for all regions
@@ -361,7 +368,7 @@ resource "aws_cloudtrail" "main" {
 
 # AWS Config configuration bucket
 resource "aws_s3_bucket" "config" {
-  bucket = "enterprise-config-${data.aws_caller_identity.current.account_id}"
+  bucket = "enterprise-config${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-${data.aws_caller_identity.current.account_id}"
 
   tags = {
     Name = "AWS Config Bucket"
@@ -400,7 +407,7 @@ resource "aws_s3_bucket_public_access_block" "config" {
 
 # IAM role for AWS Config
 resource "aws_iam_role" "config" {
-  name = "enterprise-config-role"
+  name = "enterprise-config-role${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -420,7 +427,7 @@ resource "aws_iam_role" "config" {
 
 # IAM policy for AWS Config
 resource "aws_iam_role_policy" "config" {
-  name = "enterprise-config-policy"
+  name = "enterprise-config-policy${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   role = aws_iam_role.config.id
 
   policy = jsonencode({
@@ -495,7 +502,7 @@ resource "aws_s3_bucket_policy" "config" {
 
 # AWS Config Recorder
 resource "aws_config_configuration_recorder" "main" {
-  name     = "enterprise-config-recorder"
+  name     = "enterprise-config-recorder${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   role_arn = aws_iam_role.config.arn
 
   recording_group {
@@ -507,7 +514,7 @@ resource "aws_config_configuration_recorder" "main" {
 
 # AWS Config Delivery Channel
 resource "aws_config_delivery_channel" "main" {
-  name           = "enterprise-config-delivery"
+  name           = "enterprise-config-delivery${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   s3_bucket_name = aws_s3_bucket.config.bucket
 
   depends_on = [aws_s3_bucket_policy.config]
@@ -535,7 +542,7 @@ resource "aws_config_config_rule" "security_group_ssh_check" {
 
 # IAM role for EC2 instances with least privilege
 resource "aws_iam_role" "ec2" {
-  name = "enterprise-ec2-role"
+  name = "enterprise-ec2-role${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -555,7 +562,7 @@ resource "aws_iam_role" "ec2" {
 
 # IAM policy for EC2 to write logs to S3 and CloudWatch
 resource "aws_iam_role_policy" "ec2_logging" {
-  name = "enterprise-ec2-logging-policy"
+  name = "enterprise-ec2-logging-policy${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   role = aws_iam_role.ec2.id
 
   policy = jsonencode({
@@ -593,7 +600,7 @@ resource "aws_iam_role_policy" "ec2_logging" {
           "ssm:GetParameters",
           "ssm:GetParametersByPath"
         ]
-        Resource = "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:parameter/enterprise-app/*"
+        Resource = "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:parameter/enterprise-app${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}/*"
       },
       {
         Effect = "Allow"
@@ -608,13 +615,13 @@ resource "aws_iam_role_policy" "ec2_logging" {
 
 # EC2 instance profile
 resource "aws_iam_instance_profile" "ec2" {
-  name = "enterprise-ec2-profile"
+  name = "enterprise-ec2-profile${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   role = aws_iam_role.ec2.name
 }
 
 # Security group for ALB (allows HTTPS from organization IPs)
 resource "aws_security_group" "alb" {
-  name        = "enterprise-alb-sg"
+  name        = "enterprise-alb-sg${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   description = "Security group for Application Load Balancer"
   vpc_id      = aws_vpc.main.id
 
@@ -637,13 +644,13 @@ resource "aws_security_group" "alb" {
   }
 
   tags = {
-    Name = "enterprise-alb-sg"
+    Name = "enterprise-alb-sg${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   }
 }
 
 # Security group for EC2 instances (allows traffic from ALB only)
 resource "aws_security_group" "ec2" {
-  name        = "enterprise-ec2-sg"
+  name        = "enterprise-ec2-sg${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   description = "Security group for EC2 instances"
   vpc_id      = aws_vpc.main.id
 
@@ -666,13 +673,13 @@ resource "aws_security_group" "ec2" {
   }
 
   tags = {
-    Name = "enterprise-ec2-sg"
+    Name = "enterprise-ec2-sg${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   }
 }
 
 # Security group for RDS (allows traffic from EC2 only)
 resource "aws_security_group" "rds" {
-  name        = "enterprise-rds-sg"
+  name        = "enterprise-rds-sg${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   description = "Security group for RDS database"
   vpc_id      = aws_vpc.main.id
 
@@ -695,13 +702,13 @@ resource "aws_security_group" "rds" {
   }
 
   tags = {
-    Name = "enterprise-rds-sg"
+    Name = "enterprise-rds-sg${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   }
 }
 
 # Security group for Lambda functions
 resource "aws_security_group" "lambda" {
-  name        = "enterprise-lambda-sg"
+  name        = "enterprise-lambda-sg${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   description = "Security group for Lambda functions"
   vpc_id      = aws_vpc.main.id
 
@@ -715,13 +722,13 @@ resource "aws_security_group" "lambda" {
   }
 
   tags = {
-    Name = "enterprise-lambda-sg"
+    Name = "enterprise-lambda-sg${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   }
 }
 
 # RDS subnet group for Multi-AZ deployment
 resource "aws_db_subnet_group" "main" {
-  name       = "enterprise-db-subnet-group"
+  name       = "enterprise-db-subnet-group${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   subnet_ids = aws_subnet.private[*].id
 
   tags = {
@@ -737,7 +744,7 @@ resource "random_password" "rds" {
 
 # Store RDS password in SSM Parameter Store
 resource "aws_ssm_parameter" "rds_password" {
-  name        = "/enterprise-app/rds/password"
+  name        = "/enterprise-app${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}/rds/password"
   description = "RDS master password"
   type        = "SecureString"
   value       = random_password.rds.result
@@ -750,7 +757,7 @@ resource "aws_ssm_parameter" "rds_password" {
 
 # RDS instance with encryption and Multi-AZ
 resource "aws_db_instance" "main" {
-  identifier = "enterprise-db"
+  identifier = "enterprise-db${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
 
   # Engine configuration
   engine         = "postgres"
@@ -798,7 +805,7 @@ resource "aws_db_instance" "main" {
 
 # Launch template for EC2 instances with encrypted EBS
 resource "aws_launch_template" "app" {
-  name_prefix   = "enterprise-app-"
+  name_prefix   = "enterprise-app${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-"
   image_id      = "ami-0c94855ba95c71c57" # Amazon Linux 2023 in us-west-2
   instance_type = "t3.medium"
 
@@ -893,7 +900,7 @@ resource "aws_launch_template" "app" {
 
 # Auto Scaling Group for EC2 instances
 resource "aws_autoscaling_group" "app" {
-  name                      = "enterprise-app-asg"
+  name                      = "enterprise-app-asg${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   vpc_zone_identifier       = aws_subnet.private[*].id
   min_size                  = 2
   max_size                  = 6
@@ -929,7 +936,7 @@ resource "aws_acm_certificate" "alb" {
 
 # Application Load Balancer
 resource "aws_lb" "main" {
-  name               = "enterprise-alb"
+  name               = "enterprise-alb${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -958,7 +965,7 @@ resource "aws_lb" "main" {
 
 # ALB Target Group
 resource "aws_lb_target_group" "app" {
-  name     = "enterprise-app-tg"
+  name     = "enterprise-app-tg${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -1005,7 +1012,7 @@ resource "aws_autoscaling_attachment" "app" {
 
 # WAF Web ACL for protection against common attacks
 resource "aws_wafv2_web_acl" "main" {
-  name  = "enterprise-waf"
+  name  = "enterprise-waf${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   scope = "REGIONAL"
 
   default_action {
@@ -1083,7 +1090,7 @@ resource "aws_wafv2_web_acl" "main" {
 
   visibility_config {
     cloudwatch_metrics_enabled = true
-    metric_name                = "enterprise-waf"
+    metric_name                = "enterprise-waf${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
     sampled_requests_enabled   = true
   }
 
@@ -1171,7 +1178,7 @@ resource "aws_cloudfront_distribution" "main" {
 
 # IAM role for Lambda functions
 resource "aws_iam_role" "lambda" {
-  name = "enterprise-lambda-role"
+  name = "enterprise-lambda-role${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -1191,7 +1198,7 @@ resource "aws_iam_role" "lambda" {
 
 # IAM policy for Lambda VPC access and logging
 resource "aws_iam_role_policy" "lambda_vpc" {
-  name = "enterprise-lambda-vpc-policy"
+  name = "enterprise-lambda-vpc-policy${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   role = aws_iam_role.lambda.id
 
   policy = jsonencode({
@@ -1224,7 +1231,7 @@ resource "aws_iam_role_policy" "lambda_vpc" {
           "ssm:GetParameters",
           "ssm:GetParametersByPath"
         ]
-        Resource = "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:parameter/enterprise-app/*"
+        Resource = "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:parameter/enterprise-app${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}/*"
       },
       {
         Effect = "Allow"
@@ -1244,7 +1251,7 @@ resource "aws_iam_role_policy" "lambda_vpc" {
 #
 # resource "aws_lambda_function" "processor" {
 #   filename         = "lambda_function.zip"
-#   function_name    = "enterprise-processor"
+#   function_name    = "enterprise-processor${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
 #   role             = aws_iam_role.lambda.arn
 #   handler          = "index.handler"
 #   source_code_hash = filebase64sha256("lambda_function.zip")
@@ -1262,7 +1269,7 @@ resource "aws_iam_role_policy" "lambda_vpc" {
 #   environment {
 #     variables = {
 #       DB_ENDPOINT = aws_db_instance.main.endpoint
-#       SSM_PREFIX  = "/enterprise-app"
+#       SSM_PREFIX  = "/enterprise-app${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
 #     }
 #   }
 #
@@ -1286,7 +1293,7 @@ resource "aws_iam_role_policy" "lambda_vpc" {
 
 # CloudWatch Log Group for Lambda
 resource "aws_cloudwatch_log_group" "lambda" {
-  name              = "/aws/lambda/enterprise-processor"
+  name              = "/aws/lambda/enterprise-processor${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   retention_in_days = 30
   kms_key_id        = aws_kms_key.main.arn
 
@@ -1297,7 +1304,7 @@ resource "aws_cloudwatch_log_group" "lambda" {
 
 # SSM Parameter for application configuration
 resource "aws_ssm_parameter" "app_config" {
-  name        = "/enterprise-app/config/api-key"
+  name        = "/enterprise-app${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}/config/api-key"
   description = "API key for external service"
   type        = "SecureString"
   value       = "your-secure-api-key" # Replace with actual value
@@ -1310,7 +1317,7 @@ resource "aws_ssm_parameter" "app_config" {
 
 # SNS topic for alerts with encryption
 resource "aws_sns_topic" "alerts" {
-  name              = "enterprise-alerts"
+  name              = "enterprise-alerts${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   kms_master_key_id = aws_kms_key.main.id
 
   tags = {
@@ -1359,7 +1366,7 @@ resource "aws_sns_topic_policy" "alerts" {
 
 # CloudWatch Alarm for high CPU usage
 resource "aws_cloudwatch_metric_alarm" "high_cpu" {
-  alarm_name          = "enterprise-high-cpu"
+  alarm_name          = "enterprise-high-cpu${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
