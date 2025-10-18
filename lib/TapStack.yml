@@ -1065,18 +1065,24 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Sid: ConfigBucketPolicy
+          - Sid: ConfigBucketPutPolicy
             Effect: Allow
             Principal:
               Service: config.amazonaws.com
             Action:
               - s3:PutObject
-              - s3:GetObject
             Resource: !Sub 'arn:aws:s3:::${NovaConfigBucket}/*'
             Condition:
               StringEquals:
                 's3:x-amz-server-side-encryption': 'aws:kms'
                 's3:x-amz-server-side-encryption-aws-kms-key-id': !GetAtt NovaKMSKey.Arn
+          - Sid: ConfigBucketGetPolicy
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action:
+              - s3:GetObject
+            Resource: !Sub 'arn:aws:s3:::${NovaConfigBucket}/*'
           - Sid: ConfigBucketListPolicy
             Effect: Allow
             Principal:
