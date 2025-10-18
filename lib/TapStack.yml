@@ -98,9 +98,23 @@ Resources:
               - 'kms:GenerateDataKey'
               - 'kms:CreateGrant'
             Resource: '*'
+          - Sid: Allow Auto Scaling service to use the key
+            Effect: Allow
+            Principal:
+              AWS: 
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling'
+                - !GetAtt EC2Role.Arn
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+              - 'kms:CreateGrant'
+              - 'kms:DescribeKey'
+            Resource: '*'
       Tags:
         - Key: Environment
           Value: Production
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   KMSKeyAlias:
     Type: AWS::KMS::Alias
@@ -616,7 +630,7 @@ Resources:
               VolumeSize: 20
               VolumeType: gp3
               Encrypted: true
-              KmsKeyId: !Ref KMSKey
+              # Using default AWS managed key instead of custom KMS key for Auto Scaling compatibility
         UserData:
           Fn::Base64: !Sub |
             #!/bin/bash
@@ -630,6 +644,8 @@ Resources:
             Tags:
               - Key: Environment
                 Value: Production
+              - Key: rlhf-iac-amazon
+                Value: 'true'
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -638,9 +654,9 @@ Resources:
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
-      MinSize: 2
-      MaxSize: 6
-      DesiredCapacity: 2
+      MinSize: 1
+      MaxSize: 2
+      DesiredCapacity: 1
       VPCZoneIdentifier:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
@@ -651,6 +667,9 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
+          PropagateAtLaunch: true
+        - Key: rlhf-iac-amazon
+          Value: 'true'
           PropagateAtLaunch: true
 
   # ====================
