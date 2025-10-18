@@ -205,9 +205,9 @@ class TapStack(cdk.Stack):
         self.lambda_function = _lambda.Function(
             self, "UploadHandler",
             function_name=f"file-upload-handler-{self.environment_suffix}",
-            runtime=_lambda.Runtime.PYTHON_3_9,
+            runtime=_lambda.Runtime.PYTHON_3_12,
             handler="handler.lambda_handler",
-            code=_lambda.Code.from_asset("lambda"),
+            code=_lambda.Code.from_asset("lib/lambda"),
             timeout=Duration.minutes(5),
             memory_size=512,
             environment={
@@ -362,7 +362,7 @@ class TapStack(cdk.Stack):
         )
 ```
 
-### Lambda Handler Implementation (lambda/handler.py)
+### Lambda Handler Implementation (lib/lambda/handler.py)
 
 ```python
 """Lambda handler for file upload processing"""
@@ -371,6 +371,7 @@ import json
 import base64
 import boto3
 import logging
+import os
 from datetime import datetime
 from typing import Dict, Any
 
@@ -382,9 +383,16 @@ logger.setLevel(logging.INFO)
 s3_client = boto3.client('s3')
 dynamodb = boto3.resource('dynamodb')
 
+
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Lambda handler for processing file uploads.
+
+    This function processes file uploads by:
+    1. Validating the incoming request
+    2. Decoding the base64 file content
+    3. Uploading the file to S3
+    4. Storing metadata in DynamoDB
 
     Args:
         event: API Gateway event containing the request body
@@ -404,10 +412,16 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         required_fields = ['productId', 'productName', 'price', 'fileContent']
         for field in required_fields:
             if field not in body:
+                logger.warning(f"Missing required field: {field}")
                 return {
                     'statusCode': 400,
+                    'headers': {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                    },
                     'body': json.dumps({
-                        'error': f'Missing required field: {field}'
+                        'error': f'Missing required field: {field}',
+                        'code': 'MISSING_FIELD'
                     })
                 }
 
@@ -420,51 +434,132 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         # Validate price
         if price < 0:
+            logger.warning(f"Invalid price: {price}")
             return {
                 'statusCode': 400,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
                 'body': json.dumps({
-                    'error': 'Price must be non-negative'
+                    'error': 'Price must be non-negative',
+                    'code': 'INVALID_PRICE'
+                })
+            }
+
+        # Validate product ID and name
+        if not product_id.strip() or not product_name.strip():
+            logger.warning("Empty product ID or name")
+            return {
+                'statusCode': 400,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': json.dumps({
+                    'error': 'Product ID and name cannot be empty',
+                    'code': 'INVALID_PRODUCT_INFO'
                 })
             }
 
         # Decode base64 file content
         try:
             file_data = base64.b64decode(file_content)
+            if len(file_data) == 0:
+                raise ValueError("Empty file content")
         except Exception as e:
             logger.error(f"Failed to decode base64 content: {str(e)}")
             return {
                 'statusCode': 400,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
                 'body': json.dumps({
-                    'error': 'Invalid base64 file content'
+                    'error': 'Invalid base64 file content',
+                    'code': 'INVALID_FILE_CONTENT'
                 })
             }
 
         # Get environment variables
-        bucket_name = os.environ['BUCKET_NAME']
-        table_name = os.environ['TABLE_NAME']
+        bucket_name = os.environ.get('BUCKET_NAME')
+        table_name = os.environ.get('TABLE_NAME')
+
+        if not bucket_name or not table_name:
+            logger.error("Missing required environment variables")
+            return {
+                'statusCode': 500,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': json.dumps({
+                    'error': 'Server configuration error',
+                    'code': 'CONFIG_ERROR'
+                })
+            }
 
         # Upload file to S3
         s3_key = f"uploads/{product_id}/{file_name}"
-        s3_client.put_object(
-            Bucket=bucket_name,
-            Key=s3_key,
-            Body=file_data,
-            ContentType='application/octet-stream'
-        )
+        try:
+            s3_client.put_object(
+                Bucket=bucket_name,
+                Key=s3_key,
+                Body=file_data,
+                ContentType='application/octet-stream',
+                ServerSideEncryption='aws:kms'
+            )
+            logger.info(f"Successfully uploaded file to S3: {s3_key}")
+        except Exception as e:
+            logger.error(f"Failed to upload to S3: {str(e)}")
+            return {
+                'statusCode': 500,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': json.dumps({
+                    'error': 'Failed to upload file',
+                    'code': 'UPLOAD_ERROR'
+                })
+            }
 
         # Store metadata in DynamoDB
-        table = dynamodb.Table(table_name)
-        table.put_item(
-            Item={
-                'productId': product_id,
-                'productName': product_name,
-                'price': price,
-                'fileName': file_name,
-                's3Key': s3_key,
-                'uploadTimestamp': datetime.now().isoformat(),
-                'fileSize': len(file_data)
+        try:
+            table = dynamodb.Table(table_name)
+            table.put_item(
+                Item={
+                    'productId': product_id,
+                    'productName': product_name,
+                    'price': price,
+                    'fileName': file_name,
+                    's3Key': s3_key,
+                    'uploadTimestamp': datetime.now().isoformat(),
+                    'fileSize': len(file_data),
+                    'ttl': int(datetime.now().timestamp()) + (365 * 24 * 60 * 60)  # 1 year TTL
+                }
+            )
+            logger.info(f"Successfully stored metadata in DynamoDB for product {product_id}")
+        except Exception as e:
+            logger.error(f"Failed to store metadata in DynamoDB: {str(e)}")
+            # Try to clean up S3 object
+            try:
+                s3_client.delete_object(Bucket=bucket_name, Key=s3_key)
+                logger.info(f"Cleaned up S3 object: {s3_key}")
+            except Exception as cleanup_error:
+                logger.error(f"Failed to clean up S3 object: {str(cleanup_error)}")
+
+            return {
+                'statusCode': 500,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': json.dumps({
+                    'error': 'Failed to store metadata',
+                    'code': 'METADATA_ERROR'
+                })
             }
-        )
 
         logger.info(f"Successfully processed upload for product {product_id}")
 
@@ -477,7 +572,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'body': json.dumps({
                 'message': 'File uploaded successfully',
                 'productId': product_id,
-                's3Key': s3_key
+                's3Key': s3_key,
+                'fileSize': len(file_data),
+                'uploadTimestamp': datetime.now().isoformat()
             })
         }
 
@@ -485,16 +582,39 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         logger.error(f"JSON decode error: {str(e)}")
         return {
             'statusCode': 400,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
             'body': json.dumps({
-                'error': 'Invalid JSON in request body'
+                'error': 'Invalid JSON in request body',
+                'code': 'INVALID_JSON'
+            })
+        }
+    except ValueError as e:
+        logger.error(f"Value error: {str(e)}")
+        return {
+            'statusCode': 400,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
+            'body': json.dumps({
+                'error': str(e),
+                'code': 'VALUE_ERROR'
             })
         }
     except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
+        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
         return {
             'statusCode': 500,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
             'body': json.dumps({
-                'error': 'Internal server error'
+                'error': 'Internal server error',
+                'code': 'INTERNAL_ERROR'
             })
         }
 ```
@@ -506,23 +626,44 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
    - Least privilege IAM roles
    - Block public access on S3
    - SSL enforcement
+   - Explicit KMS encryption for S3 uploads (`ServerSideEncryption='aws:kms'`)
 
 2. **Scalability Features**:
    - Pay-per-request DynamoDB billing
    - Lambda auto-scaling with concurrency limits
    - API Gateway throttling (1000 RPS)
    - CloudWatch monitoring and logging
+   - DynamoDB TTL for automatic cleanup
 
 3. **Operational Excellence**:
-   - Comprehensive logging
+   - Comprehensive logging with structured error codes
    - X-Ray tracing enabled
    - Point-in-time recovery for DynamoDB
    - S3 versioning and lifecycle rules
+   - Automatic cleanup on DynamoDB failures
+   - Environment variable validation
 
 4. **API Design**:
    - Request validation with JSON schema
    - CORS configuration
    - Usage plans for rate limiting
-   - Proper error handling and responses
+   - Comprehensive error handling with error codes
+   - Proper HTTP status codes and headers
+   - Enhanced response format with additional metadata
 
-This implementation fully satisfies all the functional requirements and acceptance criteria specified in the prompt.
+5. **Error Handling**:
+   - Structured error responses with error codes
+   - Comprehensive input validation
+   - Graceful error handling for all failure scenarios
+   - Automatic cleanup on partial failures
+   - Detailed logging for debugging
+
+6. **Data Management**:
+   - Automatic TTL for DynamoDB records (1 year)
+   - File size tracking
+   - Upload timestamp recording
+   - Proper S3 key structure (`uploads/{productId}/{fileName}`)
+   - Metadata consistency between S3 and DynamoDB
+
+This implementation fully satisfies all the functional requirements and acceptance criteria
+specified in the prompt, with enhanced error handling, security, and operational features.

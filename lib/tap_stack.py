@@ -198,7 +198,7 @@ class TapStack(cdk.Stack):
             function_name=f"file-upload-handler-{self.environment_suffix}",
             runtime=_lambda.Runtime.PYTHON_3_9,
             handler="handler.lambda_handler",
-            code=_lambda.Code.from_asset("lambda"),
+            code=_lambda.Code.from_asset("lib/lambda"),
             timeout=Duration.minutes(5),
             memory_size=512,
             environment={
