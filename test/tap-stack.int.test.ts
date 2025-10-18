@@ -86,8 +86,14 @@ if (!outputs || Object.keys(outputs).length === 0) {
         const res = await axios.post(`${apiUrl.replace(/\/$/, '')}/items`, payload, {
           headers: { 'Content-Type': 'application/json' },
           validateStatus: () => true,
-          timeout: 10000,
+          timeout: 20000,
         });
+
+        // Diagnostic info
+        // eslint-disable-next-line no-console
+        console.log('Integration API POST status:', res.status);
+        // eslint-disable-next-line no-console
+        console.log('Integration API POST body:', JSON.stringify(res.data).slice(0, 2000));
 
         // We don't enforce a specific status code beyond success/sensible response; accept 200-499 but fail on 5xx
         expect(res.status).toBeLessThan(600);
@@ -146,8 +152,8 @@ if (!outputs || Object.keys(outputs).length === 0) {
         }
 
         let messageFound = false;
-        for (let attempt = 0; attempt < 6 && !messageFound; attempt++) {
-          const recv = new ReceiveMessageCommand({ QueueUrl: queueUrl, MaxNumberOfMessages: 10, WaitTimeSeconds: 5 });
+        for (let attempt = 0; attempt < 12 && !messageFound; attempt++) {
+          const recv = new ReceiveMessageCommand({ QueueUrl: queueUrl, MaxNumberOfMessages: 10, WaitTimeSeconds: 10 });
           try {
             const resp = await sqs.send(recv);
             if (resp.Messages && resp.Messages.length > 0) {

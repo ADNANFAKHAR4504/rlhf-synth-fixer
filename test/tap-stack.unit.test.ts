@@ -209,7 +209,7 @@ describe('TapStack Unit Tests (single file)', () => {
   });
 
   test('creates WAF WebACL when region is us-east-1', () => {
-    const app = new cdk.App();
+    const app = new cdk.App({ context: { enableWaf: 'true' } });
     const parent = new cdk.Stack(app, 'WafCreateParent', {
       env: { region: 'us-east-1' },
     });
@@ -229,6 +229,41 @@ describe('TapStack Unit Tests (single file)', () => {
     // The else branch emits a CfnOutput named WafCreationSkipped
     const outputs = template.toJSON().Outputs || {};
     expect(outputs).toHaveProperty('WafCreationSkipped');
+  });
+
+  test('allows importing existing RDS subnet group via env var', () => {
+    // If RDS_SUBNET_GROUP_NAME is set, the construct should not create a new DBSubnetGroup
+    process.env.RDS_SUBNET_GROUP_NAME = 'existing-subnet-group';
+    const app = new cdk.App();
+    const parent = new cdk.Stack(app, 'RdsImportParent');
+    const multi = new MultiComponentApplicationStack(parent, 'RdsImportTest');
+    const template = Template.fromStack(multi);
+    const subnetGroups = template.findResources('AWS::RDS::DBSubnetGroup');
+    // Expect zero DBSubnetGroup resources created when importing
+    expect(Object.keys(subnetGroups).length).toBeLessThanOrEqual(0);
+    delete process.env.RDS_SUBNET_GROUP_NAME;
+  });
+
+  test('adds SNS subscription when ALARM_NOTIFICATION_EMAIL is set', () => {
+    process.env.ALARM_NOTIFICATION_EMAIL = 'alerts@example.com';
+    const app = new cdk.App();
+    const parent = new cdk.Stack(app, 'SnsParent');
+    const multi = new MultiComponentApplicationStack(parent, 'SnsTest');
+    const template = Template.fromStack(multi);
+    const subs = template.findResources('AWS::SNS::Subscription');
+    expect(Object.keys(subs).length).toBeGreaterThanOrEqual(1);
+    delete process.env.ALARM_NOTIFICATION_EMAIL;
+  });
+
+  test('creates WAF when allowGlobalWaf is true in non-us-east region', () => {
+    const app = new cdk.App({ context: { enableWaf: 'true', allowGlobalWaf: 'true' } });
+    const parent = new cdk.Stack(app, 'WafGlobalParent', {
+      env: { region: 'eu-west-1' },
+    });
+    const multi = new MultiComponentApplicationStack(parent, 'WafGlobalTest');
+    const template = Template.fromStack(multi);
+    const webAcls = template.findResources('AWS::WAFv2::WebACL');
+    expect(Object.keys(webAcls).length).toBeGreaterThanOrEqual(1);
   });
 });
 

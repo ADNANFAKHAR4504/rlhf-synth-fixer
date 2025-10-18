@@ -127,6 +127,21 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
 
     // Use a generally-available Postgres engine version. Some regions may not have
     // older minor versions (e.g. 13.7). Prefer Postgres 15.x which has wider availability.
+    // Allow reusing an existing DB subnet group to avoid hitting account quotas
+    // (provide either env var RDS_SUBNET_GROUP_NAME or CDK context key
+    // `rdsSubnetGroupName` to import an existing group). If not provided,
+    // CDK will create a new SubnetGroup automatically.
+    const importedSubnetGroupName =
+      process.env.RDS_SUBNET_GROUP_NAME ||
+      this.node.tryGetContext('rdsSubnetGroupName');
+    const importedSubnetGroup = importedSubnetGroupName
+      ? rds.SubnetGroup.fromSubnetGroupName(
+          this,
+          'ImportedRdsSubnetGroup',
+          String(importedSubnetGroupName)
+        )
+      : undefined;
+
     const rdsInstance = new rds.DatabaseInstance(this, 'PostgresDatabase', {
       instanceIdentifier: `prod-rds-postgres-${this.stringSuffix.toLowerCase().replace(/[^a-z0-9-]/g, '')}`,
       engine: rds.DatabaseInstanceEngine.postgres({
@@ -143,6 +158,8 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
       },
+      // If an imported subnet group was provided, pass it to the DB instance
+      subnetGroup: importedSubnetGroup,
       securityGroups: [databaseSecurityGroup],
       credentials: rds.Credentials.fromSecret(databaseSecret),
       databaseName: 'proddb',
@@ -211,10 +228,37 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
         iam.ManagedPolicy.fromAwsManagedPolicyName(
           'service-role/AWSLambdaVPCAccessExecutionRole'
         ),
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess'
-        ),
+        // Use the managed policy name (not a full ARN) so CDK renders the
+        // correct ARN for the current partition. The earlier code used a
+        // duplicated ARN string which produced an invalid managed policy name
+        // and caused CloudFormation to reject the role creation.
+        iam.ManagedPolicy.fromAwsManagedPolicyName('AWSXRayDaemonWriteAccess'),
       ],
+    });
+
+    // API Gateway needs an account-level CloudWatch role to push logs.
+    // Create a role that API Gateway can assume to write to CloudWatch Logs
+    // and then set it on the API Gateway account via the L1 CfnAccount resource.
+    const apiGatewayCloudWatchRole = new iam.Role(
+      this,
+      'ApiGatewayCloudWatchRole',
+      {
+        assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
+        description:
+          'Role allowing API Gateway to write logs to CloudWatch Logs',
+        managedPolicies: [
+          // AWS managed policy that grants API Gateway permissions to push logs
+          iam.ManagedPolicy.fromAwsManagedPolicyName(
+            'service-role/AmazonAPIGatewayPushToCloudWatchLogs'
+          ),
+        ],
+      }
+    );
+
+    // Set the account-level CloudWatch role for API Gateway so stages can enable logging.
+    // This maps to the AWS::ApiGateway::Account resource.
+    new apigateway.CfnAccount(this, 'ApiGatewayAccount', {
+      cloudWatchRoleArn: apiGatewayCloudWatchRole.roleArn,
     });
 
     // Lambda permissions
@@ -466,7 +510,17 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
     const allowGlobalWaf =
       this.node.tryGetContext('allowGlobalWaf') === true ||
       this.node.tryGetContext('allowGlobalWaf') === 'true';
-    const shouldCreateWaf = stackRegion === 'us-east-1' || allowGlobalWaf;
+
+    // New: WAF is disabled by default to avoid cross-region/global resource
+    // creation surprises during CI. Enable it explicitly by setting the
+    // CDK context `enableWaf=true` or environment var `ENABLE_WAF=true`.
+    const enableWafContext = this.node.tryGetContext('enableWaf');
+    const enableWafEnv = process.env.ENABLE_WAF === 'true';
+    const enableWaf =
+      enableWafContext === true || enableWafContext === 'true' || enableWafEnv;
+
+    const shouldCreateWaf =
+      enableWaf && (stackRegion === 'us-east-1' || allowGlobalWaf);
 
     if (shouldCreateWaf) {
       const webAcl = new wafv2.CfnWebACL(this, 'WebAcl', {
@@ -498,11 +552,44 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
         ],
       });
 
-      // Associate the WebACL with the CloudFront distribution (global scope)
-      new wafv2.CfnWebACLAssociation(this, 'WebAclAssociation', {
-        resourceArn: distribution.distributionArn,
-        webAclArn: webAcl.attrArn,
+      // Associate the WebACL with the CloudFront distribution (global scope).
+      // WAF expects a resource ARN like:
+      // arn:${Partition}:cloudfront::${Account}:distribution/${DistributionId}
+      // CloudFront distributions are global; the account in the distribution ARN
+      // can be empty in some CDK constructs. Build the ARN explicitly using the
+      // current partition and account along with the distribution id.
+      // Build the CloudFront distribution ARN explicitly for WAF. CloudFront
+      // is a global service: the ARN must have an empty region ("") and the
+      // account ID. Example: arn:aws:cloudfront::123456789012:distribution/EDFDVBD632BHDS5
+      const cloudFrontArn = cdk.Stack.of(this).formatArn({
+        service: 'cloudfront',
+        resource: `distribution/${distribution.distributionId}`,
+        arnFormat: cdk.ArnFormat.SLASH_RESOURCE_NAME,
+        region: '',
+        account: cdk.Aws.ACCOUNT_ID,
       });
+
+      const webAclAssociation = new wafv2.CfnWebACLAssociation(
+        this,
+        'WebAclAssociation',
+        {
+          resourceArn: cloudFrontArn,
+          webAclArn: webAcl.attrArn,
+        }
+      );
+
+      // Ensure CloudFormation creates the distribution before attempting the
+      // WebACL association. The CDK sometimes renders the association without
+      // an explicit dependency which can cause WAF to receive an ARN that
+      // isn't yet usable. Add explicit dependencies on the distribution's
+      // low-level resource and the WebACL itself.
+      const cfResource = distribution.node.defaultChild as
+        | cdk.CfnResource
+        | undefined;
+      if (cfResource) {
+        webAclAssociation.node.addDependency(cfResource as cdk.CfnResource);
+      }
+      webAclAssociation.node.addDependency(webAcl);
     } else {
       // Emit an explicit output so reviewers/operators can see the WAF was
       // intentionally skipped for this region during deploy/synth.
@@ -859,10 +946,9 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
     cdk.Tags.of(this).add('iac-rlhf-amazon', 'enabled');
   }
 }
-
 ```
 
-### lib/tap-stack.ts (full source)
+### lib/tap-stack.ts 
 
 ```typescript
 import * as cdk from 'aws-cdk-lib';
@@ -870,75 +956,75 @@ import { Construct } from 'constructs';
 import { MultiComponentApplicationStack } from './multi-component-stack';
 
 interface TapStackProps extends cdk.StackProps {
-	environmentSuffix?: string;
+  environmentSuffix?: string;
 }
 
 export class TapStack extends cdk.Stack {
-	constructor(scope: Construct, id: string, props?: TapStackProps) {
-		super(scope, id, props);
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
+    super(scope, id, props);
 
-		// Get environment suffix from props, context, or use 'dev' as default
-		// eslint-disable-next-line @typescript-eslint/no-unused-vars
-		const environmentSuffix =
-			props?.environmentSuffix ||
-			this.node.tryGetContext('environmentSuffix') ||
-			'dev';
+    // Get environment suffix from props, context, or use 'dev' as default
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const environmentSuffix =
+      props?.environmentSuffix ||
+      this.node.tryGetContext('environmentSuffix') ||
+      'dev';
 
-		// Instantiate the multi-component application stack and keep a reference
-		// so we can re-expose important runtime values without using CloudFormation
-		// exports/imports (which can cause circular create-time dependency issues).
-		const child = new MultiComponentApplicationStack(
-			this,
-			'MultiComponentApplication',
-			{
-				...props,
-				// do not set explicit stackName for nested stacks; let CDK manage the nested logical id
-			}
-		);
+    // Instantiate the multi-component application stack and keep a reference
+    // so we can re-expose important runtime values without using CloudFormation
+    // exports/imports (which can cause circular create-time dependency issues).
+    const child = new MultiComponentApplicationStack(
+      this,
+      'MultiComponentApplication',
+      {
+        ...props,
+        // do not set explicit stackName for nested stacks; let CDK manage the nested logical id
+      }
+    );
 
-		// Re-expose selected runtime tokens from the nested child as top-level outputs.
-		// Because the child is a NestedStack, these outputs are resolved within the
-		// same CloudFormation stack (no account-level exports/imports are created),
-		// avoiding the cross-stack export/import blocking issue.
-		const forward = {
-			VpcId: child.vpcId,
-			ApiGatewayUrl: child.apiUrl,
-			LambdaFunctionArn: child.lambdaFunctionArn,
-			RdsEndpoint: child.rdsEndpoint,
-			S3BucketName: child.s3BucketName,
-			SqsQueueUrl: child.sqsQueueUrl,
-			CloudFrontDomainName: child.cloudFrontDomainName,
-			HostedZoneId: child.hostedZoneId,
-			DatabaseSecretArn: child.databaseSecretArn,
-			LambdaRoleArn: child.lambdaRoleArn,
-			DatabaseSecurityGroupId: child.databaseSecurityGroupId,
-			LambdaSecurityGroupId: child.lambdaSecurityGroupId,
-			LambdaLogGroupName: child.lambdaLogGroupName,
-		} as Record<string, any>;
+    // Re-expose selected runtime tokens from the nested child as top-level outputs.
+    // Because the child is a NestedStack, these outputs are resolved within the
+    // same CloudFormation stack (no account-level exports/imports are created),
+    // avoiding the cross-stack export/import blocking issue.
+    const forward = {
+      VpcId: child.vpcId,
+      ApiGatewayUrl: child.apiUrl,
+      LambdaFunctionArn: child.lambdaFunctionArn,
+      RdsEndpoint: child.rdsEndpoint,
+      S3BucketName: child.s3BucketName,
+      SqsQueueUrl: child.sqsQueueUrl,
+      CloudFrontDomainName: child.cloudFrontDomainName,
+      HostedZoneId: child.hostedZoneId,
+      DatabaseSecretArn: child.databaseSecretArn,
+      LambdaRoleArn: child.lambdaRoleArn,
+      DatabaseSecurityGroupId: child.databaseSecurityGroupId,
+      LambdaSecurityGroupId: child.lambdaSecurityGroupId,
+      LambdaLogGroupName: child.lambdaLogGroupName,
+    } as Record<string, string | undefined>;
 
-		for (const [key, value] of Object.entries(forward)) {
-			new cdk.CfnOutput(this, key, {
-				value: value ?? cdk.Aws.NO_VALUE,
-			});
-		}
+    for (const [key, value] of Object.entries(forward)) {
+      new cdk.CfnOutput(this, key, {
+        value: value ?? cdk.Aws.NO_VALUE,
+      });
+    }
 
-		// IMPORTANT: Do NOT create CloudFormation-level outputs that reference
-		// child stack tokens here. Referencing child stack tokens from this stack
-		// causes CDK to generate CloudFormation exports/imports which create a
-		// hard dependency: the child stack cannot change or remove those exports
-		// while this stack imports them. That leads to deployment failures like
-		// "Cannot update export ... as it is in use by TapStack..." when the
-		// child stack is updated. If you need these runtime values at test/runtime
-		// use the `cfn-outputs/flat-outputs.json` produced by the deployment or
-		// publish shared values to SSM/SecretsManager instead.
+    // IMPORTANT: Do NOT create CloudFormation-level outputs that reference
+    // child stack tokens here. Referencing child stack tokens from this stack
+    // causes CDK to generate CloudFormation exports/imports which create a
+    // hard dependency: the child stack cannot change or remove those exports
+    // while this stack imports them. That leads to deployment failures like
+    // "Cannot update export ... as it is in use by TapStack..." when the
+    // child stack is updated. If you need these runtime values at test/runtime
+    // use the `cfn-outputs/flat-outputs.json` produced by the deployment or
+    // publish shared values to SSM/SecretsManager instead.
 
-		// Intentionally do not re-expose child runtime tokens here to avoid
-		// cross-stack CloudFormation exports/imports.
-	}
+    // Intentionally do not re-expose child runtime tokens here to avoid
+    // cross-stack CloudFormation exports/imports.
+  }
 }
 ```
 
-### lib/string-utils.ts (full source)
+### lib/string-utils.ts 
 
 ```typescript
 export function safeSuffix(input?: string): string {
