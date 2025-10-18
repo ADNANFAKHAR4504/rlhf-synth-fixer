@@ -680,11 +680,7 @@ def lambda_handler(event, context):
                     status="Enabled",
                     priority=1,
                     filter=aws.s3.BucketReplicationConfigRuleFilterArgs(
-                        prefix="compliance/",
-                        tag=aws.s3.BucketReplicationConfigRuleFilterTagArgs(
-                            key="DataType",
-                            value="Compliance"
-                        )
+                        prefix="compliance/"
                     ),
                     delete_marker_replication=aws.s3.BucketReplicationConfigRuleDeleteMarkerReplicationArgs(
                         status="Enabled"
