@@ -793,11 +793,15 @@ Resources:
       TaskRoleArn: !GetAtt ECSTaskRole.Arn
       ContainerDefinitions:
         - Name: transaction-processor
-          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/transaction-processor:latest'
+          Image: nginxdemos/hello:latest
           Essential: true
           PortMappings:
             - ContainerPort: 8080
               Protocol: tcp
+          Command:
+            - /bin/sh
+            - -c
+            - sed -i 's/listen       80;/listen       8080;/g' /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'
           Environment:
             - Name: KINESIS_STREAM_NAME
               Value: !Ref TransactionDataStream
@@ -829,7 +833,7 @@ Resources:
           HealthCheck:
             Command:
               - CMD-SHELL
-              - curl -f http://localhost:8080/health || exit 1
+              - wget --spider -q http://localhost:8080/ || exit 1
             Interval: 30
             Timeout: 5
             Retries: 3
@@ -870,7 +874,7 @@ Resources:
       Protocol: HTTP
       TargetType: ip
       HealthCheckEnabled: true
-      HealthCheckPath: /health
+      HealthCheckPath: /
       HealthCheckProtocol: HTTP
       HealthCheckIntervalSeconds: 30
       HealthCheckTimeoutSeconds: 5
