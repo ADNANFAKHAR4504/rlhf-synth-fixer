@@ -74,7 +74,7 @@ Integrate AWS WAF to protect against common web exploits (SQLi, XSS, etc.).
 
 Target group should point to private EC2 instances or ECS services.
 
-Content Delivery
+Content Delivery:
 
 Configure CloudFront distribution enforcing HTTPS and using a custom SSL certificate.
 
