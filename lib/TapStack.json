@@ -515,9 +515,6 @@
             "DeletionPolicy": "Delete",
             "UpdateReplacePolicy": "Delete",
             "Properties": {
-                "GroupName": {
-                    "Fn::Sub": "sg-alb-${EnvironmentSuffix}"
-                },
                 "GroupDescription": "Security group for Application Load Balancer",
                 "VpcId": {
                     "Ref": "VPC"
@@ -560,9 +557,6 @@
             "DeletionPolicy": "Delete",
             "UpdateReplacePolicy": "Delete",
             "Properties": {
-                "GroupName": {
-                    "Fn::Sub": "sg-ecs-${EnvironmentSuffix}"
-                },
                 "GroupDescription": "Security group for ECS Fargate tasks",
                 "VpcId": {
                     "Ref": "VPC"
@@ -600,9 +594,6 @@
             "DeletionPolicy": "Delete",
             "UpdateReplacePolicy": "Delete",
             "Properties": {
-                "GroupName": {
-                    "Fn::Sub": "sg-database-${EnvironmentSuffix}"
-                },
                 "GroupDescription": "Security group for RDS Aurora",
                 "VpcId": {
                     "Ref": "VPC"
@@ -640,9 +631,6 @@
             "DeletionPolicy": "Delete",
             "UpdateReplacePolicy": "Delete",
             "Properties": {
-                "GroupName": {
-                    "Fn::Sub": "sg-redis-${EnvironmentSuffix}"
-                },
                 "GroupDescription": "Security group for ElastiCache Redis",
                 "VpcId": {
                     "Ref": "VPC"
@@ -680,9 +668,6 @@
             "DeletionPolicy": "Delete",
             "UpdateReplacePolicy": "Delete",
             "Properties": {
-                "GroupName": {
-                    "Fn::Sub": "sg-efs-${EnvironmentSuffix}"
-                },
                 "GroupDescription": "Security group for EFS",
                 "VpcId": {
                     "Ref": "VPC"

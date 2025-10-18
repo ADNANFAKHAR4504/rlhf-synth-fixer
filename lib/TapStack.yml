@@ -308,7 +308,6 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      GroupName: !Sub 'sg-alb-${EnvironmentSuffix}'
       GroupDescription: Security group for Application Load Balancer
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -335,7 +334,6 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      GroupName: !Sub 'sg-ecs-${EnvironmentSuffix}'
       GroupDescription: Security group for ECS Fargate tasks
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -357,7 +355,6 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      GroupName: !Sub 'sg-database-${EnvironmentSuffix}'
       GroupDescription: Security group for RDS Aurora
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -379,7 +376,6 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      GroupName: !Sub 'sg-redis-${EnvironmentSuffix}'
       GroupDescription: Security group for ElastiCache Redis
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -401,7 +397,6 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      GroupName: !Sub 'sg-efs-${EnvironmentSuffix}'
       GroupDescription: Security group for EFS
       VpcId: !Ref VPC
       SecurityGroupIngress:
