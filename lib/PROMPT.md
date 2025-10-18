@@ -12,7 +12,7 @@ Set up a proper VPC with two public and two private subnets spread across two av
 
 Make sure to lock things down with Network ACLs and Security Groups following least privilege - only allow what's actually needed.
 
-## S3 Storage
+## S3 Storage:
 
 We need S3 buckets for CloudTrail logs and application logs. All buckets must have:
 - Server-side encryption (use KMS)
