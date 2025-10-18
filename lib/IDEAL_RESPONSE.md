@@ -1256,8 +1256,6 @@ The architecture achieves high availability through multiple mechanisms. Two NAT
     },
     "S3WebsiteBucket": {
       "Type": "AWS::S3::Bucket",
-      "DeletionPolicy": "Retain",
-      "UpdateReplacePolicy": "Retain",
       "Properties": {
         "BucketName": {
           "Fn::Sub": "website-${AWS::AccountId}-${EnvironmentSuffix}"

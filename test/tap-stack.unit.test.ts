@@ -663,10 +663,10 @@ describe('TapStack CloudFormation Template - Comprehensive Cloud Environment', (
       expect(publicAccessConfig.RestrictPublicBuckets).toBe(false);
     });
 
-    test('should create S3 bucket with Retain deletion policy', () => {
+    test('should create S3 bucket with default deletion policy', () => {
       const bucket = template.Resources.S3WebsiteBucket;
-      expect(bucket.DeletionPolicy).toBe('Retain');
-      expect(bucket.UpdateReplacePolicy).toBe('Retain');
+      expect(bucket.DeletionPolicy).toBeUndefined();
+      expect(bucket.UpdateReplacePolicy).toBeUndefined();
     });
   });
 
