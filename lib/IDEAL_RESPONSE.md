@@ -41,6 +41,8 @@ package lib
 
 import (
 	"fmt"
+	"math/rand"
+	"time"
 
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsapigateway"
@@ -72,6 +74,17 @@ type TapStackProps struct {
 	EnvironmentSuffix *string
 }
 
+// generateRandomSuffix creates a random 6-character suffix for resource naming
+func generateRandomSuffix() string {
+	rand.Seed(time.Now().UnixNano())
+	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
+	suffix := make([]byte, 6)
+	for i := range suffix {
+		suffix[i] = charset[rand.Intn(len(charset))]
+	}
+	return string(suffix)
+}
+
 // TapStack represents the main CDK stack for the Tap project.
 //
 // This stack is responsible for orchestrating the instantiation of other resource-specific stacks.
@@ -85,6 +98,8 @@ type TapStack struct {
 	awscdk.Stack
 	// EnvironmentSuffix stores the environment suffix used for resource naming and configuration.
 	EnvironmentSuffix *string
+	// RandomSuffix stores a random suffix to ensure unique resource names
+	RandomSuffix *string
 
 	// Data infrastructure resources
 	EncryptionKey   awskms.Key
@@ -144,9 +159,13 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		environmentSuffix = "dev"
 	}
 
+	// Generate random suffix for unique resource names
+	randomSuffix := generateRandomSuffix()
+
 	tapStack := &TapStack{
 		Stack:             stack,
 		EnvironmentSuffix: jsii.String(environmentSuffix),
+		RandomSuffix:      jsii.String(randomSuffix),
 	}
 
 	// 1. Create Data Infrastructure
@@ -178,7 +197,7 @@ func (tapStack *TapStack) createDataInfrastructure(stack awscdk.Stack) {
 
 	// Raw image bucket (input)
 	tapStack.RawImageBucket = awss3.NewBucket(stack, jsii.String("RawImageBucket"), &awss3.BucketProps{
-		BucketName:        jsii.String(fmt.Sprintf("raw-images-%s", *tapStack.EnvironmentSuffix)),
+		BucketName:        jsii.String(fmt.Sprintf("raw-images-%s-%s", *tapStack.EnvironmentSuffix, *tapStack.RandomSuffix)),
 		Versioned:         jsii.Bool(true),
 		RemovalPolicy:     awscdk.RemovalPolicy_DESTROY,
 		AutoDeleteObjects: jsii.Bool(true),
@@ -189,7 +208,7 @@ func (tapStack *TapStack) createDataInfrastructure(stack awscdk.Stack) {
 
 	// Processed data bucket (for preprocessed images)
 	tapStack.ProcessedBucket = awss3.NewBucket(stack, jsii.String("ProcessedDataBucket"), &awss3.BucketProps{
-		BucketName:        jsii.String(fmt.Sprintf("processed-images-%s", *tapStack.EnvironmentSuffix)),
+		BucketName:        jsii.String(fmt.Sprintf("processed-images-%s-%s", *tapStack.EnvironmentSuffix, *tapStack.RandomSuffix)),
 		Versioned:         jsii.Bool(true),
 		RemovalPolicy:     awscdk.RemovalPolicy_DESTROY,
 		AutoDeleteObjects: jsii.Bool(true),
@@ -200,7 +219,7 @@ func (tapStack *TapStack) createDataInfrastructure(stack awscdk.Stack) {
 
 	// DynamoDB table for image metadata
 	tapStack.MetadataTable = awsdynamodb.NewTable(stack, jsii.String("ImageMetadataTable"), &awsdynamodb.TableProps{
-		TableName:   jsii.String(fmt.Sprintf("image-metadata-%s", *tapStack.EnvironmentSuffix)),
+		TableName:   jsii.String(fmt.Sprintf("image-metadata-%s-%s", *tapStack.EnvironmentSuffix, *tapStack.RandomSuffix)),
 		BillingMode: awsdynamodb.BillingMode_PAY_PER_REQUEST,
 		PartitionKey: &awsdynamodb.Attribute{
 			Name: jsii.String("image_id"),
@@ -214,7 +233,7 @@ func (tapStack *TapStack) createDataInfrastructure(stack awscdk.Stack) {
 
 	// Kinesis stream for real-time image processing
 	tapStack.DataStream = awskinesis.NewStream(stack, jsii.String("ImageProcessingStream"), &awskinesis.StreamProps{
-		StreamName:      jsii.String(fmt.Sprintf("image-processing-%s", *tapStack.EnvironmentSuffix)),
+		StreamName:      jsii.String(fmt.Sprintf("image-processing-%s-%s", *tapStack.EnvironmentSuffix, *tapStack.RandomSuffix)),
 		RetentionPeriod: awscdk.Duration_Hours(jsii.Number(24)),
 		StreamMode:      awskinesis.StreamMode_ON_DEMAND,
 		Encryption:      awskinesis.StreamEncryption_KMS,
@@ -529,6 +548,7 @@ func (tapStack *TapStack) addStackOutputs(stack awscdk.Stack) {
 ### Operational Excellence
 
 - Environment-specific naming with suffix support
+- Random suffix generation to prevent resource naming conflicts
 - Stack outputs for external integration
 - Proper removal policies for development
 - Comprehensive tagging strategy

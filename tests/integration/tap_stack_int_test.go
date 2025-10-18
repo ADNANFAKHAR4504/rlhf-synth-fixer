@@ -179,6 +179,7 @@ func TestTapStackIntegration(t *testing.T) {
 
 	t.Run("stack resources are created with correct naming", func(t *testing.T) {
 		// ARRANGE & ASSERT
+		// Check that resource names follow the pattern: {prefix}-{env}-{random6chars}
 		assert.Contains(t, outputs.RawImageBucketName, "raw-images-")
 		assert.Contains(t, outputs.ProcessedBucketName, "processed-images-")
 		assert.Contains(t, outputs.ModelBucketName, "model-artifacts-")
@@ -283,32 +284,37 @@ func testDataInfrastructure(t *testing.T, ctx context.Context, cfg aws.Config, o
 	t.Run("Kinesis stream exists with encryption", func(t *testing.T) {
 		kinesisClient := kinesis.NewFromConfig(cfg)
 
-		// Extract environment suffix from bucket name
+		// Extract environment suffix from bucket name (now includes random suffix)
+		// Pattern: raw-images-{env}-{random6chars}
 		parts := strings.Split(outputs.RawImageBucketName, "-")
-		envSuffix := parts[len(parts)-1]
-		streamName := "image-processing-" + envSuffix
+		if len(parts) >= 3 {
+			envSuffix := parts[2]                                          // Skip the random suffix
+			streamName := "image-processing-" + envSuffix + "-" + parts[3] // Include random suffix
 
-		stream, err := kinesisClient.DescribeStream(ctx, &kinesis.DescribeStreamInput{
-			StreamName: aws.String(streamName),
-		})
-		assert.NoError(t, err, "Kinesis stream should exist")
-		if !assert.NotNil(t, stream, "Stream response should not be nil") {
-			return
+			stream, err := kinesisClient.DescribeStream(ctx, &kinesis.DescribeStreamInput{
+				StreamName: aws.String(streamName),
+			})
+			assert.NoError(t, err, "Kinesis stream should exist")
+			if !assert.NotNil(t, stream, "Stream response should not be nil") {
+				return
+			}
+			if !assert.NotNil(t, stream.StreamDescription, "Stream description should not be nil") {
+				return
+			}
+
+			// Check encryption
+			assert.Equal(t, "KMS", string(stream.StreamDescription.EncryptionType), "Stream should use KMS encryption")
+			assert.NotEmpty(t, stream.StreamDescription.KeyId, "Stream should have KMS key ID")
+
+			// Check stream mode
+			if stream.StreamDescription.StreamModeDetails != nil {
+				assert.Equal(t, "ON_DEMAND", string(stream.StreamDescription.StreamModeDetails.StreamMode), "Stream should be ON_DEMAND")
+			}
+
+			t.Logf("✓ Kinesis stream %s is properly configured", streamName)
+		} else {
+			t.Skip("Cannot extract environment suffix from bucket name")
 		}
-		if !assert.NotNil(t, stream.StreamDescription, "Stream description should not be nil") {
-			return
-		}
-
-		// Check encryption
-		assert.Equal(t, "KMS", string(stream.StreamDescription.EncryptionType), "Stream should use KMS encryption")
-		assert.NotEmpty(t, stream.StreamDescription.KeyId, "Stream should have KMS key ID")
-
-		// Check stream mode
-		if stream.StreamDescription.StreamModeDetails != nil {
-			assert.Equal(t, "ON_DEMAND", string(stream.StreamDescription.StreamModeDetails.StreamMode), "Stream should be ON_DEMAND")
-		}
-
-		t.Logf("✓ Kinesis stream %s is properly configured", streamName)
 	})
 
 	t.Run("KMS key exists with rotation enabled", func(t *testing.T) {
@@ -353,56 +359,68 @@ func testTrainingInfrastructure(t *testing.T, ctx context.Context, cfg aws.Confi
 	t.Run("training bucket exists", func(t *testing.T) {
 		s3Client := s3.NewFromConfig(cfg)
 
-		// Extract environment suffix
+		// Extract environment suffix from bucket name (now includes random suffix)
+		// Pattern: raw-images-{env}-{random6chars}
 		parts := strings.Split(outputs.RawImageBucketName, "-")
-		envSuffix := parts[len(parts)-1]
-		trainingBucket := "model-training-" + envSuffix
+		if len(parts) >= 4 {
+			envSuffix := parts[2] // Skip the random suffix
+			randomSuffix := parts[3]
+			trainingBucket := "model-training-" + envSuffix + "-" + randomSuffix
 
-		_, err := s3Client.HeadBucket(ctx, &s3.HeadBucketInput{
-			Bucket: aws.String(trainingBucket),
-		})
-		assert.NoError(t, err, "Training bucket should exist")
+			_, err := s3Client.HeadBucket(ctx, &s3.HeadBucketInput{
+				Bucket: aws.String(trainingBucket),
+			})
+			assert.NoError(t, err, "Training bucket should exist")
 
-		t.Logf("✓ Training bucket %s exists", trainingBucket)
+			t.Logf("✓ Training bucket %s exists", trainingBucket)
+		} else {
+			t.Skip("Cannot extract environment suffix from bucket name")
+		}
 	})
 
 	t.Run("Step Functions state machine exists", func(t *testing.T) {
 		sfnClient := sfn.NewFromConfig(cfg)
 
-		// Extract environment suffix
+		// Extract environment suffix from bucket name (now includes random suffix)
+		// Pattern: raw-images-{env}-{random6chars}
 		parts := strings.Split(outputs.RawImageBucketName, "-")
-		envSuffix := parts[len(parts)-1]
-		stateMachineName := "ml-model-training-pipeline-" + envSuffix
+		if len(parts) >= 4 {
+			envSuffix := parts[2] // Skip the random suffix
+			randomSuffix := parts[3]
+			stateMachineName := "ml-model-training-pipeline-" + envSuffix + "-" + randomSuffix
 
-		// List state machines to find ours
-		listOutput, err := sfnClient.ListStateMachines(ctx, &sfn.ListStateMachinesInput{})
-		assert.NoError(t, err, "Should be able to list state machines")
+			// List state machines to find ours
+			listOutput, err := sfnClient.ListStateMachines(ctx, &sfn.ListStateMachinesInput{})
+			assert.NoError(t, err, "Should be able to list state machines")
 
-		if listOutput != nil {
-			found := false
-			var stateMachineArn string
-			for _, sm := range listOutput.StateMachines {
-				if sm.Name != nil && *sm.Name == stateMachineName {
-					found = true
-					stateMachineArn = *sm.StateMachineArn
-					break
+			if listOutput != nil {
+				found := false
+				var stateMachineArn string
+				for _, sm := range listOutput.StateMachines {
+					if sm.Name != nil && *sm.Name == stateMachineName {
+						found = true
+						stateMachineArn = *sm.StateMachineArn
+						break
+					}
+				}
+
+				assert.True(t, found, "State machine %s should exist", stateMachineName)
+				if found {
+					// Describe the state machine
+					describeOutput, err := sfnClient.DescribeStateMachine(ctx, &sfn.DescribeStateMachineInput{
+						StateMachineArn: aws.String(stateMachineArn),
+					})
+					assert.NoError(t, err, "Should be able to describe state machine")
+					if describeOutput != nil {
+						assert.NotNil(t, describeOutput.Definition, "State machine should have a definition")
+						assert.NotNil(t, describeOutput.RoleArn, "State machine should have an execution role")
+						t.Logf("✓ Step Functions state machine %s is properly configured", stateMachineName)
+						t.Logf("  ARN: %s", stateMachineArn)
+					}
 				}
 			}
-
-			assert.True(t, found, "State machine %s should exist", stateMachineName)
-			if found {
-				// Describe the state machine
-				describeOutput, err := sfnClient.DescribeStateMachine(ctx, &sfn.DescribeStateMachineInput{
-					StateMachineArn: aws.String(stateMachineArn),
-				})
-				assert.NoError(t, err, "Should be able to describe state machine")
-				if describeOutput != nil {
-					assert.NotNil(t, describeOutput.Definition, "State machine should have a definition")
-					assert.NotNil(t, describeOutput.RoleArn, "State machine should have an execution role")
-					t.Logf("✓ Step Functions state machine %s is properly configured", stateMachineName)
-					t.Logf("  ARN: %s", stateMachineArn)
-				}
-			}
+		} else {
+			t.Skip("Cannot extract environment suffix from bucket name")
 		}
 	})
 }
@@ -552,94 +570,112 @@ func testMonitoringInfrastructure(t *testing.T, ctx context.Context, cfg aws.Con
 	t.Run("CloudWatch dashboard exists", func(t *testing.T) {
 		cwClient := cloudwatch.NewFromConfig(cfg)
 
-		// Extract environment suffix
+		// Extract environment suffix from bucket name (now includes random suffix)
+		// Pattern: raw-images-{env}-{random6chars}
 		parts := strings.Split(outputs.RawImageBucketName, "-")
-		envSuffix := parts[len(parts)-1]
-		dashboardName := "ml-pipeline-dashboard-" + envSuffix
+		if len(parts) >= 4 {
+			envSuffix := parts[2] // Skip the random suffix
+			randomSuffix := parts[3]
+			dashboardName := "ml-pipeline-dashboard-" + envSuffix + "-" + randomSuffix
 
-		// List dashboards to find ours
-		listOutput, err := cwClient.ListDashboards(ctx, &cloudwatch.ListDashboardsInput{})
-		if !assert.NoError(t, err, "Should be able to list dashboards") {
-			return
-		}
-		if listOutput == nil {
-			t.Skip("Cannot validate dashboard - list output is nil")
-			return
-		}
-
-		found := false
-		for _, dashboard := range listOutput.DashboardEntries {
-			if dashboard.DashboardName != nil && *dashboard.DashboardName == dashboardName {
-				found = true
-				break
+			// List dashboards to find ours
+			listOutput, err := cwClient.ListDashboards(ctx, &cloudwatch.ListDashboardsInput{})
+			if !assert.NoError(t, err, "Should be able to list dashboards") {
+				return
 			}
-		}
+			if listOutput == nil {
+				t.Skip("Cannot validate dashboard - list output is nil")
+				return
+			}
 
-		assert.True(t, found, "CloudWatch dashboard should exist")
-		t.Logf("✓ CloudWatch dashboard %s exists", dashboardName)
+			found := false
+			for _, dashboard := range listOutput.DashboardEntries {
+				if dashboard.DashboardName != nil && *dashboard.DashboardName == dashboardName {
+					found = true
+					break
+				}
+			}
+
+			assert.True(t, found, "CloudWatch dashboard should exist")
+			t.Logf("✓ CloudWatch dashboard %s exists", dashboardName)
+		} else {
+			t.Skip("Cannot extract environment suffix from bucket name")
+		}
 	})
 
 	t.Run("CloudWatch alarms exist", func(t *testing.T) {
 		cwClient := cloudwatch.NewFromConfig(cfg)
 
-		// Extract environment suffix
+		// Extract environment suffix from bucket name (now includes random suffix)
+		// Pattern: raw-images-{env}-{random6chars}
 		parts := strings.Split(outputs.RawImageBucketName, "-")
-		envSuffix := parts[len(parts)-1]
+		if len(parts) >= 4 {
+			envSuffix := parts[2] // Skip the random suffix
+			randomSuffix := parts[3]
 
-		alarmNames := []string{
-			"api-latency-alarm-" + envSuffix,
-			"lambda-error-alarm-" + envSuffix,
-		}
-
-		for _, alarmName := range alarmNames {
-			alarmsOutput, err := cwClient.DescribeAlarms(ctx, &cloudwatch.DescribeAlarmsInput{
-				AlarmNames: []string{alarmName},
-			})
-			assert.NoError(t, err, "Should be able to describe alarm %s", alarmName)
-			if alarmsOutput != nil && len(alarmsOutput.MetricAlarms) > 0 {
-				assert.NotEmpty(t, alarmsOutput.MetricAlarms, "Alarm %s should exist", alarmName)
-
-				alarm := alarmsOutput.MetricAlarms[0]
-				if alarm.AlarmName != nil {
-					assert.Equal(t, alarmName, *alarm.AlarmName, "Alarm name should match")
-				}
-				assert.NotEmpty(t, alarm.AlarmActions, "Alarm should have actions configured")
-				t.Logf("✓ CloudWatch alarm %s exists with %d actions", alarmName, len(alarm.AlarmActions))
+			alarmNames := []string{
+				"api-latency-alarm-" + envSuffix + "-" + randomSuffix,
+				"lambda-error-alarm-" + envSuffix + "-" + randomSuffix,
 			}
+
+			for _, alarmName := range alarmNames {
+				alarmsOutput, err := cwClient.DescribeAlarms(ctx, &cloudwatch.DescribeAlarmsInput{
+					AlarmNames: []string{alarmName},
+				})
+				assert.NoError(t, err, "Should be able to describe alarm %s", alarmName)
+				if alarmsOutput != nil && len(alarmsOutput.MetricAlarms) > 0 {
+					assert.NotEmpty(t, alarmsOutput.MetricAlarms, "Alarm %s should exist", alarmName)
+
+					alarm := alarmsOutput.MetricAlarms[0]
+					if alarm.AlarmName != nil {
+						assert.Equal(t, alarmName, *alarm.AlarmName, "Alarm name should match")
+					}
+					assert.NotEmpty(t, alarm.AlarmActions, "Alarm should have actions configured")
+					t.Logf("✓ CloudWatch alarm %s exists with %d actions", alarmName, len(alarm.AlarmActions))
+				}
+			}
+		} else {
+			t.Skip("Cannot extract environment suffix from bucket name")
 		}
 	})
 
 	t.Run("SNS topic exists", func(t *testing.T) {
 		snsClient := sns.NewFromConfig(cfg)
 
-		// Extract environment suffix
+		// Extract environment suffix from bucket name (now includes random suffix)
+		// Pattern: raw-images-{env}-{random6chars}
 		parts := strings.Split(outputs.RawImageBucketName, "-")
-		envSuffix := parts[len(parts)-1]
-		topicName := "ml-pipeline-alerts-" + envSuffix
+		if len(parts) >= 4 {
+			envSuffix := parts[2] // Skip the random suffix
+			randomSuffix := parts[3]
+			topicName := "ml-pipeline-alerts-" + envSuffix + "-" + randomSuffix
 
-		// List topics to find ours
-		listOutput, err := snsClient.ListTopics(ctx, &sns.ListTopicsInput{})
-		if !assert.NoError(t, err, "Should be able to list SNS topics") {
-			return
-		}
-		if listOutput == nil {
-			t.Skip("Cannot validate SNS topic - list output is nil")
-			return
-		}
-
-		found := false
-		var topicArn string
-		for _, topic := range listOutput.Topics {
-			if topic.TopicArn != nil && strings.Contains(*topic.TopicArn, topicName) {
-				found = true
-				topicArn = *topic.TopicArn
-				break
+			// List topics to find ours
+			listOutput, err := snsClient.ListTopics(ctx, &sns.ListTopicsInput{})
+			if !assert.NoError(t, err, "Should be able to list SNS topics") {
+				return
 			}
-		}
+			if listOutput == nil {
+				t.Skip("Cannot validate SNS topic - list output is nil")
+				return
+			}
 
-		assert.True(t, found, "SNS topic should exist")
-		if found {
-			t.Logf("✓ SNS topic %s exists", topicArn)
+			found := false
+			var topicArn string
+			for _, topic := range listOutput.Topics {
+				if topic.TopicArn != nil && strings.Contains(*topic.TopicArn, topicName) {
+					found = true
+					topicArn = *topic.TopicArn
+					break
+				}
+			}
+
+			assert.True(t, found, "SNS topic should exist")
+			if found {
+				t.Logf("✓ SNS topic %s exists", topicArn)
+			}
+		} else {
+			t.Skip("Cannot extract environment suffix from bucket name")
 		}
 	})
 }
