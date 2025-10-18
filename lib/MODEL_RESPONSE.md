@@ -34,6 +34,8 @@ Resources:
 
   DatabaseEncryptionKey:
     Type: AWS::KMS::Key
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       Description: !Sub 'KMS key for RDS Aurora encryption - ${EnvironmentSuffix}'
       EnableKeyRotation: true
@@ -58,12 +60,16 @@ Resources:
 
   DatabaseEncryptionKeyAlias:
     Type: AWS::KMS::Alias
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       AliasName: !Sub 'alias/rds-encryption-${EnvironmentSuffix}'
       TargetKeyId: !Ref DatabaseEncryptionKey
 
   EFSEncryptionKey:
     Type: AWS::KMS::Key
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       Description: !Sub 'KMS key for EFS encryption - ${EnvironmentSuffix}'
       EnableKeyRotation: true
@@ -88,6 +94,8 @@ Resources:
 
   EFSEncryptionKeyAlias:
     Type: AWS::KMS::Alias
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       AliasName: !Sub 'alias/efs-encryption-${EnvironmentSuffix}'
       TargetKeyId: !Ref EFSEncryptionKey
@@ -98,6 +106,8 @@ Resources:
 
   VPC:
     Type: AWS::EC2::VPC
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       CidrBlock: !Ref VpcCIDR
       EnableDnsHostnames: true
@@ -108,6 +118,8 @@ Resources:
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       Tags:
         - Key: Name
@@ -122,6 +134,8 @@ Resources:
   # Public Subnets (3 AZs)
   PublicSubnet1:
     Type: AWS::EC2::Subnet
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [0, !GetAZs '']
@@ -133,6 +147,8 @@ Resources:
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [1, !GetAZs '']
@@ -144,6 +160,8 @@ Resources:
 
   PublicSubnet3:
     Type: AWS::EC2::Subnet
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [2, !GetAZs '']
@@ -156,6 +174,8 @@ Resources:
   # Private Subnets (3 AZs)
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [0, !GetAZs '']
@@ -167,6 +187,8 @@ Resources:
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [1, !GetAZs '']
@@ -178,6 +200,8 @@ Resources:
 
   PrivateSubnet3:
     Type: AWS::EC2::Subnet
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [2, !GetAZs '']
@@ -190,6 +214,8 @@ Resources:
   # NAT Gateway for Private Subnet Internet Access
   NatGatewayEIP:
     Type: AWS::EC2::EIP
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     DependsOn: InternetGatewayAttachment
     Properties:
       Domain: vpc
@@ -199,6 +225,8 @@ Resources:
 
   NatGateway:
     Type: AWS::EC2::NatGateway
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       AllocationId: !GetAtt NatGatewayEIP.AllocationId
       SubnetId: !Ref PublicSubnet1
@@ -209,6 +237,8 @@ Resources:
   # Route Tables
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       VpcId: !Ref VPC
       Tags:
@@ -243,6 +273,8 @@ Resources:
 
   PrivateRouteTable:
     Type: AWS::EC2::RouteTable
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       VpcId: !Ref VPC
       Tags:
@@ -280,6 +312,8 @@ Resources:
 
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       GroupName: !Sub 'sg-alb-${EnvironmentSuffix}'
       GroupDescription: Security group for Application Load Balancer
@@ -305,6 +339,8 @@ Resources:
 
   ECSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       GroupName: !Sub 'sg-ecs-${EnvironmentSuffix}'
       GroupDescription: Security group for ECS Fargate tasks
@@ -325,6 +361,8 @@ Resources:
 
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       GroupName: !Sub 'sg-database-${EnvironmentSuffix}'
       GroupDescription: Security group for RDS Aurora
@@ -345,6 +383,8 @@ Resources:
 
   RedisSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       GroupName: !Sub 'sg-redis-${EnvironmentSuffix}'
       GroupDescription: Security group for ElastiCache Redis
@@ -365,6 +405,8 @@ Resources:
 
   EFSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       GroupName: !Sub 'sg-efs-${EnvironmentSuffix}'
       GroupDescription: Security group for EFS
@@ -389,6 +431,8 @@ Resources:
 
   DatabaseSecret:
     Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       Name: !Sub 'secret-database-${EnvironmentSuffix}'
       Description: Database credentials for RDS Aurora
@@ -405,6 +449,8 @@ Resources:
 
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       DBSubnetGroupName: !Sub 'dbsubnet-transaction-${EnvironmentSuffix}'
       DBSubnetGroupDescription: Subnet group for RDS Aurora
@@ -418,6 +464,8 @@ Resources:
 
   AuroraDBCluster:
     Type: AWS::RDS::DBCluster
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       DBClusterIdentifier: !Sub 'aurora-transaction-${EnvironmentSuffix}'
       Engine: aurora-postgresql
@@ -443,6 +491,8 @@ Resources:
 
   AuroraDBInstance1:
     Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       DBInstanceIdentifier: !Sub 'aurora-instance-1-${EnvironmentSuffix}'
       DBClusterIdentifier: !Ref AuroraDBCluster
@@ -457,6 +507,8 @@ Resources:
 
   AuroraDBInstance2:
     Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       DBInstanceIdentifier: !Sub 'aurora-instance-2-${EnvironmentSuffix}'
       DBClusterIdentifier: !Ref AuroraDBCluster
@@ -471,6 +523,8 @@ Resources:
 
   AuroraDBInstance3:
     Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       DBInstanceIdentifier: !Sub 'aurora-instance-3-${EnvironmentSuffix}'
       DBClusterIdentifier: !Ref AuroraDBCluster
@@ -489,6 +543,8 @@ Resources:
 
   RedisSubnetGroup:
     Type: AWS::ElastiCache::SubnetGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       Description: Subnet group for ElastiCache Redis
       SubnetIds:
@@ -499,6 +555,8 @@ Resources:
 
   RedisReplicationGroup:
     Type: AWS::ElastiCache::ReplicationGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       ReplicationGroupId: !Sub 'redis-transaction-${EnvironmentSuffix}'
       ReplicationGroupDescription: Redis cluster for session management
@@ -526,6 +584,8 @@ Resources:
 
   EFSFileSystem:
     Type: AWS::EFS::FileSystem
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       Encrypted: true
       KmsKeyId: !Ref EFSEncryptionKey
@@ -539,6 +599,8 @@ Resources:
 
   EFSMountTarget1:
     Type: AWS::EFS::MountTarget
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       FileSystemId: !Ref EFSFileSystem
       SubnetId: !Ref PrivateSubnet1
@@ -547,6 +609,8 @@ Resources:
 
   EFSMountTarget2:
     Type: AWS::EFS::MountTarget
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       FileSystemId: !Ref EFSFileSystem
       SubnetId: !Ref PrivateSubnet2
@@ -555,6 +619,8 @@ Resources:
 
   EFSMountTarget3:
     Type: AWS::EFS::MountTarget
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       FileSystemId: !Ref EFSFileSystem
       SubnetId: !Ref PrivateSubnet3
@@ -567,6 +633,8 @@ Resources:
 
   TransactionDataStream:
     Type: AWS::Kinesis::Stream
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       Name: !Sub 'kinesis-transaction-${EnvironmentSuffix}'
       RetentionPeriodHours: 24
@@ -586,12 +654,16 @@ Resources:
 
   ECSLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       LogGroupName: !Sub '/ecs/transaction-processing-${EnvironmentSuffix}'
       RetentionInDays: 30
 
   APIGatewayLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       LogGroupName: !Sub '/aws/apigateway/transaction-api-${EnvironmentSuffix}'
       RetentionInDays: 30
@@ -602,6 +674,8 @@ Resources:
 
   ECSTaskExecutionRole:
     Type: AWS::IAM::Role
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       RoleName: !Sub 'role-ecs-execution-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
@@ -634,6 +708,8 @@ Resources:
 
   ECSTaskRole:
     Type: AWS::IAM::Role
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       RoleName: !Sub 'role-ecs-task-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
@@ -676,6 +752,8 @@ Resources:
 
   APIGatewayCloudWatchRole:
     Type: AWS::IAM::Role
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       RoleName: !Sub 'role-apigateway-cloudwatch-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
@@ -694,6 +772,8 @@ Resources:
 
   ECSCluster:
     Type: AWS::ECS::Cluster
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       ClusterName: !Sub 'ecs-transaction-${EnvironmentSuffix}'
       CapacityProviders:
@@ -712,6 +792,8 @@ Resources:
 
   ECSTaskDefinition:
     Type: AWS::ECS::TaskDefinition
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       Family: !Sub 'task-transaction-processing-${EnvironmentSuffix}'
       NetworkMode: awsvpc
@@ -772,6 +854,8 @@ Resources:
 
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       Name: !Sub 'alb-transaction-${EnvironmentSuffix}'
       Type: application
@@ -789,6 +873,8 @@ Resources:
 
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       Name: !Sub 'tg-transaction-${EnvironmentSuffix}'
       VpcId: !Ref VPC
@@ -824,6 +910,8 @@ Resources:
   ECSService:
     Type: AWS::ECS::Service
     DependsOn: ALBListener
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       ServiceName: !Sub 'service-transaction-${EnvironmentSuffix}'
       Cluster: !Ref ECSCluster
@@ -888,6 +976,8 @@ Resources:
 
   TransactionAPI:
     Type: AWS::ApiGateway::RestApi
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       Name: !Sub 'api-transaction-${EnvironmentSuffix}'
       Description: REST API for transaction processing
@@ -1070,6 +1160,7 @@ All resources include the `EnvironmentSuffix` parameter for uniqueness, followin
 - VPC: `vpc-transaction-{suffix}`
 - Database: `aurora-transaction-{suffix}`
 - ECS: `ecs-transaction-{suffix}`
+- Security Groups: `sg-{purpose}-{suffix}`
 - And so on for all resources
 
 ### Monitoring and Observability
