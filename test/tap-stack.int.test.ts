@@ -15,12 +15,14 @@ interface StackOutputs {
   CPUAlarmName: string;
   DBInstanceIdentifier: string;
   DBSecretARN: string;
+  // WebsiteURL and CloudFrontDomainName are not used in these simplified tests
 }
 
 describeIf(cfnOutputsExist)("WordPress Live Infrastructure Integration Tests - Reliable Checks", () => {
 
   let outputs: StackOutputs;
-  const region = 'us-east-1'; // Ensure this matches tap-stack.ts region
+  // ** THE FIX: Changed region to us-east-2 to match tap-stack.ts **
+  const region = 'us-east-2';
   const s3 = new S3({ region });
   const ec2 = new EC2({ region });
   const rds = new RDS({ region });
@@ -49,6 +51,8 @@ describeIf(cfnOutputsExist)("WordPress Live Infrastructure Integration Tests - R
     }
   });
 
+  // --- Simple, Reliable Tests Based ONLY On Available Outputs ---
+
   it("should have a created S3 bucket", async () => {
     console.log(`Checking S3 bucket exists: ${outputs.S3BucketName}`);
     await s3.headBucket({ Bucket: outputs.S3BucketName }).promise();
@@ -57,21 +61,18 @@ describeIf(cfnOutputsExist)("WordPress Live Infrastructure Integration Tests - R
 
   it("should have a running or pending EC2 instance", async () => {
     console.log(`Checking EC2 instance state: ${outputs.EC2InstanceId}`);
-    // Wait a bit longer for EC2 state to potentially become 'running'
     console.log("Waiting 60s for EC2 instance state...");
     await new Promise(resolve => setTimeout(resolve, 60000));
     const response = await ec2.describeInstances({
       InstanceIds: [outputs.EC2InstanceId]
     }).promise();
     const instanceState = response.Reservations?.[0]?.Instances?.[0]?.State?.Name;
-    // Accept 'pending' or 'running' as valid states shortly after creation
     expect(instanceState).toMatch(/pending|running/);
-    console.log(`EC2 instance state is ${instanceState}.`);
+    console.log(` EC2 instance state is ${instanceState}.`);
   });
 
   it("should have an available, creating, or backing-up RDS DB instance", async () => {
     console.log(`Checking RDS instance status: ${outputs.DBInstanceIdentifier}`);
-    // Wait longer for DB instance to become available
     console.log("Waiting 120s for RDS instance availability...");
     await new Promise(resolve => setTimeout(resolve, 120000));
     try {
@@ -80,20 +81,16 @@ describeIf(cfnOutputsExist)("WordPress Live Infrastructure Integration Tests - R
       }).promise();
       const dbStatus = response.DBInstances?.[0]?.DBInstanceStatus;
       expect(response.DBInstances).toHaveLength(1);
-      // Accept 'creating', 'backing-up', or 'available' as valid states.
       expect(dbStatus).toMatch(/creating|backing-up|available/);
       console.log(` RDS DB instance status is ${dbStatus}.`);
     } catch (error: any) {
-      // Handle potential 'DBInstanceNotFound' if checked too early, but fail test
       console.error("Error checking RDS instance:", error);
-      // Fail the test clearly if the instance check errors out after waiting
-      expect(error).toBeNull();
+      return Promise.reject(error);
     }
   });
 
   it("should have a CloudWatch alarm in OK or INSUFFICIENT_DATA state", async () => {
     console.log(`Checking status of CloudWatch alarm: ${outputs.CPUAlarmName}`);
-    // Give CloudWatch some time to initialize the alarm state
     console.log("Waiting 30s for CloudWatch alarm state...");
     await new Promise(resolve => setTimeout(resolve, 30000));
     const response = await cloudwatch.describeAlarms({
@@ -112,4 +109,4 @@ describeIf(cfnOutputsExist)("WordPress Live Infrastructure Integration Tests - R
     console.log(" Database secret exists in Secrets Manager.");
   });
 
-}); // End of describeIf block
+});
