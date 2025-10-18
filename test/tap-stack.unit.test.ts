@@ -300,7 +300,7 @@ describe('TapStack CloudFormation Template - Comprehensive Cloud Environment', (
 
     test('should create DB secret with correct name and description', () => {
       const secret = template.Resources.DBSecret;
-      expect(secret.Properties.Name).toEqual({ 'Fn::Sub': 'RDS-Credentials-${EnvironmentSuffix}' });
+      expect(secret.Properties.Name).toEqual({ 'Fn::Sub': 'RDS-Credentials-${EnvironmentSuffix}-${AWS::StackName}' });
       expect(secret.Properties.Description).toBe('RDS MySQL database master credentials');
     });
   });
@@ -758,7 +758,7 @@ describe('TapStack CloudFormation Template - Comprehensive Cloud Environment', (
       const logGroup = template.Resources.VPCFlowLogGroup;
       expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
       expect(logGroup.Properties.LogGroupName).toEqual({
-        'Fn::Sub': '/aws/vpc/${EnvironmentSuffix}'
+        'Fn::Sub': '/aws/vpc/${EnvironmentSuffix}-${AWS::StackName}'
       });
       expect(logGroup.Properties.RetentionInDays).toBe(7);
     });
@@ -782,7 +782,7 @@ describe('TapStack CloudFormation Template - Comprehensive Cloud Environment', (
       const vault = template.Resources.BackupVault;
       expect(vault.Type).toBe('AWS::Backup::BackupVault');
       expect(vault.Properties.BackupVaultName).toEqual({
-        'Fn::Sub': 'BackupVault-${EnvironmentSuffix}'
+        'Fn::Sub': 'BackupVault-${EnvironmentSuffix}-${AWS::StackName}'
       });
     });
 

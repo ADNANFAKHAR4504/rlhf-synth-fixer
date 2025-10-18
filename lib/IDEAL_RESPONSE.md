@@ -771,7 +771,7 @@ The architecture achieves high availability through multiple mechanisms. Two NAT
       "Type": "AWS::SecretsManager::Secret",
       "Properties": {
         "Name": {
-          "Fn::Sub": "RDS-Credentials-${EnvironmentSuffix}"
+          "Fn::Sub": "RDS-Credentials-${EnvironmentSuffix}-${AWS::StackName}"
         },
         "Description": "RDS MySQL database master credentials",
         "GenerateSecretString": {
@@ -1320,7 +1320,7 @@ The architecture achieves high availability through multiple mechanisms. Two NAT
       "Type": "AWS::WAFv2::WebACL",
       "Properties": {
         "Name": {
-          "Fn::Sub": "WebACL-${EnvironmentSuffix}"
+          "Fn::Sub": "WebACL-${EnvironmentSuffix}-${AWS::StackName}"
         },
         "Scope": "REGIONAL",
         "DefaultAction": {
@@ -1368,14 +1368,14 @@ The architecture achieves high availability through multiple mechanisms. Two NAT
           "SampledRequestsEnabled": true,
           "CloudWatchMetricsEnabled": true,
           "MetricName": {
-            "Fn::Sub": "WebACL-${EnvironmentSuffix}"
+            "Fn::Sub": "WebACL-${EnvironmentSuffix}-${AWS::StackName}"
           }
         },
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "WebACL-${EnvironmentSuffix}"
+              "Fn::Sub": "WebACL-${EnvironmentSuffix}-${AWS::StackName}"
             }
           },
           {
@@ -1459,7 +1459,7 @@ The architecture achieves high availability through multiple mechanisms. Two NAT
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
         "LogGroupName": {
-          "Fn::Sub": "/aws/vpc/${EnvironmentSuffix}"
+          "Fn::Sub": "/aws/vpc/${EnvironmentSuffix}-${AWS::StackName}"
         },
         "RetentionInDays": 7
       }
@@ -1506,11 +1506,11 @@ The architecture achieves high availability through multiple mechanisms. Two NAT
       "Type": "AWS::Backup::BackupVault",
       "Properties": {
         "BackupVaultName": {
-          "Fn::Sub": "BackupVault-${EnvironmentSuffix}"
+          "Fn::Sub": "BackupVault-${EnvironmentSuffix}-${AWS::StackName}"
         },
         "BackupVaultTags": {
           "Name": {
-            "Fn::Sub": "BackupVault-${EnvironmentSuffix}"
+            "Fn::Sub": "BackupVault-${EnvironmentSuffix}-${AWS::StackName}"
           },
           "Environment": {
             "Ref": "EnvironmentSuffix"

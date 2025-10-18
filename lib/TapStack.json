@@ -726,7 +726,7 @@
       "Type": "AWS::SecretsManager::Secret",
       "Properties": {
         "Name": {
-          "Fn::Sub": "RDS-Credentials-${EnvironmentSuffix}"
+          "Fn::Sub": "RDS-Credentials-${EnvironmentSuffix}-${AWS::StackName}"
         },
         "Description": "RDS MySQL database master credentials",
         "GenerateSecretString": {
@@ -1279,7 +1279,7 @@
       "Type": "AWS::WAFv2::WebACL",
       "Properties": {
         "Name": {
-          "Fn::Sub": "WebACL-${EnvironmentSuffix}"
+          "Fn::Sub": "WebACL-${EnvironmentSuffix}-${AWS::StackName}"
         },
         "Scope": "REGIONAL",
         "DefaultAction": {
@@ -1327,7 +1327,7 @@
           "SampledRequestsEnabled": true,
           "CloudWatchMetricsEnabled": true,
           "MetricName": {
-            "Fn::Sub": "WebACL-${EnvironmentSuffix}"
+            "Fn::Sub": "WebACL-${EnvironmentSuffix}-${AWS::StackName}"
           }
         },
         "Tags": [
@@ -1400,7 +1400,7 @@
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
         "LogGroupName": {
-          "Fn::Sub": "/aws/vpc/${EnvironmentSuffix}"
+          "Fn::Sub": "/aws/vpc/${EnvironmentSuffix}-${AWS::StackName}"
         },
         "RetentionInDays": 7
       }
@@ -1447,7 +1447,7 @@
       "Type": "AWS::Backup::BackupVault",
       "Properties": {
         "BackupVaultName": {
-          "Fn::Sub": "BackupVault-${EnvironmentSuffix}"
+          "Fn::Sub": "BackupVault-${EnvironmentSuffix}-${AWS::StackName}"
         },
         "BackupVaultTags": {
           "Name": {
