@@ -298,7 +298,8 @@ systemctl enable httpd
     );
 
     // Monitoring (CloudWatch)
-    new CloudwatchMetricAlarm(this, 'CPUAlarm', {
+    // **FIX**: Assigned the alarm resource to the constant 'cpuAlarm'
+    const cpuAlarm = new CloudwatchMetricAlarm(this, 'CPUAlarm', {
       alarmName: `High-CPU-Utilization-${randomSuffix}`,
       comparisonOperator: 'GreaterThanOrEqualToThreshold',
       evaluationPeriods: 5,
@@ -322,6 +323,18 @@ systemctl enable httpd
     new TerraformOutput(this, 'DBSecretARN', {
       value: dbSecret.arn,
       description: 'ARN of the Secrets Manager secret for the DB password',
+    });
+    new TerraformOutput(this, 'EC2InstanceId', {
+      value: ec2Instance.id,
+      description: 'ID of the WordPress EC2 Instance',
+    });
+    new TerraformOutput(this, 'CPUAlarmName', {
+      value: cpuAlarm.alarmName,
+      description: 'Name of the EC2 High CPU Utilization Alarm',
+    });
+    new TerraformOutput(this, 'DBInstanceIdentifier', {
+      value: dbInstance.identifier,
+      description: 'Identifier of the RDS DB Instance',
     });
   }
 }
