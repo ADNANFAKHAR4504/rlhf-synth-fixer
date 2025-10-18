@@ -760,7 +760,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "EC2InstanceRole-${EnvironmentSuffix}"
+          "Fn::Sub": "EC2InstanceRole-${EnvironmentSuffix}-${AWS::StackName}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",

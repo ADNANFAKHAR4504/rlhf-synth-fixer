@@ -805,7 +805,7 @@ The architecture achieves high availability through multiple mechanisms. Two NAT
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "EC2InstanceRole-${EnvironmentSuffix}"
+          "Fn::Sub": "EC2InstanceRole-${EnvironmentSuffix}-${AWS::StackName}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -874,7 +874,7 @@ The architecture achieves high availability through multiple mechanisms. Two NAT
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "EC2InstanceRole-${EnvironmentSuffix}"
+              "Fn::Sub": "EC2InstanceRole-${EnvironmentSuffix}-${AWS::StackName}"
             }
           },
           {
