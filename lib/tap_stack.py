@@ -450,7 +450,7 @@ from urllib.parse import unquote_plus
 
 s3_client = boto3.client('s3')
 
-def lambda_handler(event, context):
+def handler(event, context):
     # Lambda function to automatically tag S3 objects based on their properties.
     # Triggered by S3 ObjectCreated events.
     # Each file upload triggers a separate Lambda invocation.
