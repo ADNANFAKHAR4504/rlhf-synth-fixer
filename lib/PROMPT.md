@@ -67,7 +67,7 @@ Use AWS Systems Manager Parameter Store for storing secrets - make sure to use S
 
 Create SNS topics for alerts and notifications, with SSL enforced for all deliveries.
 
-## Requirements
+## Requirements:
 
 - Everything in us-west-2 region
 - Single Terraform file (keep it simple)
