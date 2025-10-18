@@ -62,7 +62,12 @@ if (multiRegion && (!fileRegion || forceMultiRegion)) {
   new TapStack(app, primaryName, {
     stackName: primaryName,
     environmentSuffix: primarySuffix,
+    baseEnvironmentSuffix: environmentSuffix,
     env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: primaryRegion },
+    // Pass the secondary region into the primary stack so the primary
+    // stack can optionally configure cross-region resources like S3
+    // replication when requested via context.
+    secondaryRegion: secondaryRegion,
   });
 
   const secondarySuffix = `${environmentSuffix}-${secondaryRegion.replace(/[^a-z0-9]/gi, '')}`;
@@ -70,6 +75,7 @@ if (multiRegion && (!fileRegion || forceMultiRegion)) {
   new TapStack(app, secondaryName, {
     stackName: secondaryName,
     environmentSuffix: secondarySuffix,
+    baseEnvironmentSuffix: environmentSuffix,
     env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: secondaryRegion },
   });
 } else {
@@ -81,6 +87,7 @@ if (multiRegion && (!fileRegion || forceMultiRegion)) {
   new TapStack(app, stackName, {
     stackName: stackName, // ensures CloudFormation stack name includes the suffix
     environmentSuffix: environmentSuffix,
+    baseEnvironmentSuffix: environmentSuffix,
     env: {
       account: process.env.CDK_DEFAULT_ACCOUNT,
       region: targetRegion,

@@ -161,8 +161,24 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
     // ========================================
     // S3 Buckets
     // ========================================
+    // Prefer a deterministic base suffix for cross-region deployments when provided
+    const baseEnvSuffix = (props as any)?.baseEnvironmentSuffix as
+      | string
+      | undefined;
+
+    const bucketNameParts = [
+      'prod-s3-static',
+      // Use the provided base environment suffix if present so both stacks
+      // produce the same base bucket name across regions. Otherwise fall
+      // back to the internal stringSuffix which is derived from the stack id.
+      baseEnvSuffix
+        ? baseEnvSuffix.toLowerCase().replace(/[^a-z0-9-]/g, '')
+        : this.stringSuffix.toLowerCase().replace(/[^a-z0-9-]/g, ''),
+      cdk.Aws.REGION,
+    ];
+
     const staticFilesBucket = new s3.Bucket(this, 'StaticFilesBucket', {
-      bucketName: `prod-s3-static-${this.stringSuffix.toLowerCase().replace(/[^a-z0-9-]/g, '')}`,
+      bucketName: cdk.Fn.join('-', bucketNameParts),
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -176,6 +192,104 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
         },
       ],
     });
+
+    // Optional S3 replication: if the CDK context `enableReplication=true`
+    // and a `secondaryRegion` prop was forwarded to this nested stack, then
+    // configure cross-region replication from the primary bucket to the
+    // deterministic destination bucket in the secondary region. The
+    // destination bucket will follow the same naming pattern but with the
+    // secondary region token appended so the destination's name is stable.
+    const enableReplicationContext =
+      this.node.tryGetContext('enableReplication');
+    const enableReplicationEnv = process.env.ENABLE_REPLICATION === 'true';
+    const enableReplication =
+      enableReplicationContext === true ||
+      enableReplicationContext === 'true' ||
+      enableReplicationEnv;
+
+    // Accept secondaryRegion via props (forwarded by TapStack) as a token or literal
+    const secondaryRegion = (props as any)?.secondaryRegion as
+      | string
+      | undefined;
+    // When computing the destination bucket name, prefer the same deterministic
+    // base suffix as used for the local bucket so the destination bucket's
+    // name will match the bucket created by the nested stack in the
+    // secondary region.
+    const bucketBaseNameToken = baseEnvSuffix
+      ? baseEnvSuffix.toLowerCase().replace(/[^a-z0-9-]/g, '')
+      : this.stringSuffix.toLowerCase().replace(/[^a-z0-9-]/g, '');
+
+    if (enableReplication && secondaryRegion) {
+      // Destination bucket name (deterministic)
+      const destinationBucketName = cdk.Fn.join('-', [
+        'prod-s3-static',
+        bucketBaseNameToken,
+        secondaryRegion,
+      ]);
+
+      // Build the destination bucket ARN explicitly (works across partitions).
+      const destinationBucketArn = cdk.Stack.of(this).formatArn({
+        service: 's3',
+        resource: destinationBucketName,
+        arnFormat: cdk.ArnFormat.NO_RESOURCE_NAME,
+      });
+
+      // Assume the destination bucket exists in the secondary stack/region.
+      // Create the replication role that S3 will use to replicate objects.
+      const replicationRole = new iam.Role(this, 'S3ReplicationRole', {
+        assumedBy: new iam.ServicePrincipal('s3.amazonaws.com'),
+        description: 'Role for cross-region S3 replication',
+      });
+
+      replicationRole.addToPolicy(
+        new iam.PolicyStatement({
+          actions: [
+            's3:GetObjectVersionForReplication',
+            's3:GetObjectVersionAcl',
+            's3:GetObjectVersionTagging',
+          ],
+          resources: [staticFilesBucket.bucketArn + '/*'],
+        })
+      );
+
+      replicationRole.addToPolicy(
+        new iam.PolicyStatement({
+          actions: [
+            's3:ReplicateObject',
+            's3:ReplicateDelete',
+            's3:ReplicateTags',
+            's3:PutObjectAcl',
+          ],
+          // destination bucket ARN for objects is arn:aws:s3:::bucketName/*
+          resources: [`${destinationBucketArn}/*`],
+        })
+      );
+
+      // Add replication configuration via L1 CfnBucket
+      const cfnSourceBucket = staticFilesBucket.node
+        .defaultChild as s3.CfnBucket;
+      if (cfnSourceBucket) {
+        cfnSourceBucket.replicationConfiguration = {
+          role: replicationRole.roleArn,
+          rules: [
+            {
+              id: 'ReplicateAll',
+              priority: 1,
+              status: 'Enabled',
+              filter: { prefix: '' },
+              destination: {
+                // The destination.bucket expects the destination bucket's ARN for
+                // cross-region replication. Use the explicit ARN we constructed
+                // above so CloudFormation receives a valid value across partitions.
+                bucket: destinationBucketArn,
+                account: cdk.Aws.ACCOUNT_ID,
+                storageClass: 'STANDARD',
+              },
+            },
+          ],
+        } as any;
+      }
+    }
 
     // ========================================
     // SQS Queue
@@ -200,6 +314,53 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
       logGroupName: `/aws/lambda/prod-lambda-api-v2-${this.stringSuffix.toLowerCase().replace(/[^a-zA-Z0-9-_/]/g, '')}`,
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: RemovalPolicy.DESTROY,
+    });
+
+    // VPC Flow Logs: ship VPC traffic logs to CloudWatch Logs for security/monitoring
+    const vpcFlowLogGroup = new logs.LogGroup(this, 'VpcFlowLogGroup', {
+      logGroupName: `/aws/vpc-flow-logs/prod-${this.stringSuffix.toLowerCase().replace(/[^a-z0-9-]/g, '')}`,
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: RemovalPolicy.DESTROY,
+    });
+
+    new ec2.FlowLog(this, 'VpcFlowLog', {
+      resourceType: ec2.FlowLogResourceType.fromVpc(vpc),
+      destination: ec2.FlowLogDestination.toCloudWatchLogs(vpcFlowLogGroup),
+      trafficType: ec2.FlowLogTrafficType.ALL,
+    });
+
+    // Metric filters for VPC Flow Logs
+    // Count rejected packets (action = REJECT)
+    new logs.MetricFilter(this, 'VpcRejectsMetricFilter', {
+      logGroup: vpcFlowLogGroup,
+      metricNamespace: 'VPC/FlowLogs',
+      metricName: 'RejectedPackets',
+      filterPattern: logs.FilterPattern.literal(
+        '[version, account, interfaceId, srcAddr, dstAddr, srcPort, dstPort, protocol, packets, bytes, start, end, action = REJECT, logStatus]'
+      ),
+      metricValue: '1',
+    });
+
+    // Count SSH (dstPort = 22) connection attempts
+    new logs.MetricFilter(this, 'VpcSshMetricFilter', {
+      logGroup: vpcFlowLogGroup,
+      metricNamespace: 'VPC/FlowLogs',
+      metricName: 'SshConnectionAttempts',
+      filterPattern: logs.FilterPattern.literal(
+        '[version, account, interfaceId, srcAddr, dstAddr, srcPort, dstPort = 22, protocol, packets, bytes, start, end, action, logStatus]'
+      ),
+      metricValue: '1',
+    });
+
+    // Count RDP (dstPort = 3389) connection attempts
+    new logs.MetricFilter(this, 'VpcRdpMetricFilter', {
+      logGroup: vpcFlowLogGroup,
+      metricNamespace: 'VPC/FlowLogs',
+      metricName: 'RdpConnectionAttempts',
+      filterPattern: logs.FilterPattern.literal(
+        '[version, account, interfaceId, srcAddr, dstAddr, srcPort, dstPort = 3389, protocol, packets, bytes, start, end, action, logStatus]'
+      ),
+      metricValue: '1',
     });
 
     // ========================================
@@ -655,6 +816,52 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
         )
       );
     }
+
+    // CloudWatch Alarms for VPC Flow Log derived metrics
+    const rejectedPacketsMetric = new cloudwatch.Metric({
+      namespace: 'VPC/FlowLogs',
+      metricName: 'RejectedPackets',
+      period: Duration.minutes(5),
+      statistic: 'Sum',
+    });
+
+    const sshAttemptsMetric = new cloudwatch.Metric({
+      namespace: 'VPC/FlowLogs',
+      metricName: 'SshConnectionAttempts',
+      period: Duration.minutes(5),
+      statistic: 'Sum',
+    });
+
+    const rdpAttemptsMetric = new cloudwatch.Metric({
+      namespace: 'VPC/FlowLogs',
+      metricName: 'RdpConnectionAttempts',
+      period: Duration.minutes(5),
+      statistic: 'Sum',
+    });
+
+    new cloudwatch.Alarm(this, 'VpcRejectedPacketsAlarm', {
+      alarmName: `prod-vpc-rejected-packets-${this.stringSuffix}`,
+      metric: rejectedPacketsMetric,
+      threshold: 10,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+    }).addAlarmAction(new cw_actions.SnsAction(alarmsTopic));
+
+    new cloudwatch.Alarm(this, 'VpcSshAttemptsAlarm', {
+      alarmName: `prod-vpc-ssh-attempts-${this.stringSuffix}`,
+      metric: sshAttemptsMetric,
+      threshold: 20,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+    }).addAlarmAction(new cw_actions.SnsAction(alarmsTopic));
+
+    new cloudwatch.Alarm(this, 'VpcRdpAttemptsAlarm', {
+      alarmName: `prod-vpc-rdp-attempts-${this.stringSuffix}`,
+      metric: rdpAttemptsMetric,
+      threshold: 10,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+    }).addAlarmAction(new cw_actions.SnsAction(alarmsTopic));
 
     // SQS alarms
     new cloudwatch.Alarm(this, 'SqsVisibleMessagesAlarm', {

@@ -154,6 +154,10 @@ describe('TapStack Unit Tests (single file)', () => {
     // CloudWatch Log Group (Lambda log group creation)
     const logs = template.findResources('AWS::Logs::LogGroup');
     expect(Object.keys(logs).length).toBeGreaterThanOrEqual(0);
+
+    // VPC Flow Log resource should be present
+    const flowLogs = template.findResources('AWS::EC2::FlowLog');
+    expect(Object.keys(flowLogs).length).toBeGreaterThanOrEqual(1);
   });
 
   test('creates CloudWatch alarms and outputs', () => {
@@ -264,6 +268,34 @@ describe('TapStack Unit Tests (single file)', () => {
     const template = Template.fromStack(multi);
     const webAcls = template.findResources('AWS::WAFv2::WebACL');
     expect(Object.keys(webAcls).length).toBeGreaterThanOrEqual(1);
+  });
+
+  test('adds replication configuration when enabled and secondaryRegion provided', () => {
+    // Enable replication via context and provide a secondaryRegion prop on the parent stack
+    const app = new cdk.App({ context: { enableReplication: 'true' } });
+    const parent = new cdk.Stack(app, 'ReplicationParent', {
+      env: { region: 'us-east-1' },
+    });
+    // Pass secondaryRegion through props (the nested stack reads props.secondaryRegion)
+    const multi = new MultiComponentApplicationStack(parent, 'ReplicationTest', { secondaryRegion: 'us-west-2' } as any);
+
+    const template = Template.fromStack(multi);
+
+    // Find the L1 S3 bucket resource and ensure ReplicationConfiguration exists
+    const buckets = template.findResources('AWS::S3::Bucket');
+    const bucketKeys = Object.keys(buckets);
+    expect(bucketKeys.length).toBeGreaterThanOrEqual(1);
+
+    // The Template doesn't expose nested Cfn properties easily, but the synthesized
+    // template for the S3 Bucket L1 (AWS::S3::Bucket) will include a
+    // ReplicationConfiguration when replication is enabled. Inspect each bucket
+    // and assert at least one has ReplicationConfiguration defined.
+    const templateJson = template.toJSON().Resources || {};
+    const hasReplication = bucketKeys.some(key => {
+      const res = templateJson[key];
+      return !!(res && res.Properties && res.Properties.ReplicationConfiguration);
+    });
+    expect(hasReplication).toBe(true);
   });
 });
 

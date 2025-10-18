@@ -4,6 +4,8 @@ import { MultiComponentApplicationStack } from './multi-component-stack';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
+  secondaryRegion?: string;
+  baseEnvironmentSuffix?: string;
 }
 
 export class TapStack extends cdk.Stack {
@@ -26,7 +28,10 @@ export class TapStack extends cdk.Stack {
       {
         ...props,
         // do not set explicit stackName for nested stacks; let CDK manage the nested logical id
-      }
+        // forward secondaryRegion through props so nested stack can optionally
+        // configure cross-region replication when requested by context.
+        secondaryRegion: (props as any)?.secondaryRegion,
+      } as any
     );
 
     // Re-expose selected runtime tokens from the nested child as top-level outputs.
