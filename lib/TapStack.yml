@@ -118,6 +118,8 @@ Resources:
 
   KMSKeyAlias:
     Type: AWS::KMS::Alias
+    DependsOn:
+      - KMSKey
     Properties:
       AliasName: !Sub 'alias/${AWS::StackName}-production-key'
       TargetKeyId: !Ref KMSKey
@@ -183,6 +185,8 @@ Resources:
           Value: PublicSubnet2
         - Key: Environment
           Value: Production
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -429,6 +433,8 @@ Resources:
   # ====================
   DBPasswordSecret:
     Type: AWS::SecretsManager::Secret
+    DependsOn:
+      - KMSKey
     Properties:
       Description: RDS Master Password
       GenerateSecretString:
@@ -440,6 +446,8 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   # ====================
   # IAM ROLES AND POLICIES
@@ -485,6 +493,8 @@ Resources:
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
+    DependsOn:
+      - EC2Role
     Properties:
       Roles:
         - !Ref EC2Role
@@ -573,7 +583,7 @@ Resources:
             Resource: !Sub '${S3Bucket.Arn}/*'
             Condition:
               StringEquals:
-                AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}'
+                AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/*'
 
   # ====================
   # APPLICATION LOAD BALANCER
@@ -627,6 +637,9 @@ Resources:
   # ====================
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
+    DependsOn:
+      - EC2InstanceProfile
+      - EC2SecurityGroup
     Properties:
       LaunchTemplateName: !Sub '${AWS::StackName}-ProductionLT'
       LaunchTemplateData:
@@ -661,6 +674,11 @@ Resources:
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn:
+      - LaunchTemplate
+      - ALBTargetGroup
+      - PrivateSubnet1
+      - PrivateSubnet2
     Properties:
       AutoScalingGroupName: !Sub '${AWS::StackName}-ProductionASG'
       LaunchTemplate:
@@ -727,6 +745,8 @@ Resources:
 
   RDSReadReplica:
     Type: AWS::RDS::DBInstance
+    DependsOn:
+      - RDSDatabase
     Properties:
       DBInstanceIdentifier: !Sub '${AWS::StackName}-production-database-read-replica'
       SourceDBInstanceIdentifier: !Ref RDSDatabase
@@ -769,6 +789,12 @@ Resources:
   # ====================
   LambdaFunction:
     Type: AWS::Lambda::Function
+    DependsOn:
+      - LambdaExecutionRole
+      - LambdaSecurityGroup
+      - SNSTopic
+      - PrivateSubnet1
+      - PrivateSubnet2
     Properties:
       FunctionName: !Sub '${AWS::StackName}-ProductionScheduledTask'
       Runtime: python3.9
@@ -827,6 +853,9 @@ Resources:
 
   LambdaInvokePermission:
     Type: AWS::Lambda::Permission
+    DependsOn:
+      - LambdaFunction
+      - LambdaScheduleRule
     Properties:
       FunctionName: !Ref LambdaFunction
       Action: lambda:InvokeFunction
@@ -847,6 +876,10 @@ Resources:
 
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
+    DependsOn:
+      - S3Bucket
+      - ApplicationLoadBalancer
+      - OriginAccessControl
     Properties:
       DistributionConfig:
         Enabled: true
@@ -994,6 +1027,9 @@ Resources:
 
   PrimaryRecord:
     Type: AWS::Route53::RecordSet
+    DependsOn: 
+      - CloudFrontDistribution
+      - HealthCheck
     Properties:
       HostedZoneId: !Ref HostedZone
       Name: !Ref DomainName
@@ -1093,6 +1129,8 @@ Resources:
   # ====================
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
+    DependsOn:
+      - ConfigRole
     Properties:
       Name: !Sub '${AWS::StackName}-ProductionConfigRecorder'
       RoleARN: !GetAtt ConfigRole.Arn
@@ -1101,6 +1139,11 @@ Resources:
 
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
+    DependsOn:
+      - ConfigS3Bucket
+      - ConfigS3BucketPolicy
+      - SNSTopic
+      - SNSTopicPolicy
     Properties:
       Name: !Sub '${AWS::StackName}-ProductionDeliveryChannel'
       S3BucketName: !Ref ConfigS3Bucket
@@ -1188,7 +1231,9 @@ Resources:
   # Config Rules
   RequiredTagsRule:
     Type: AWS::Config::ConfigRule
-    DependsOn: ConfigRecorder
+    DependsOn: 
+      - ConfigRecorder
+      - ConfigDeliveryChannel
     Properties:
       ConfigRuleName: required-tags
       Description: Checks whether resources have required tags
@@ -1205,7 +1250,9 @@ Resources:
 
   S3VersioningRule:
     Type: AWS::Config::ConfigRule
-    DependsOn: ConfigRecorder
+    DependsOn: 
+      - ConfigRecorder
+      - ConfigDeliveryChannel
     Properties:
       ConfigRuleName: s3-bucket-versioning-enabled
       Description: Checks whether versioning is enabled for S3 buckets
@@ -1215,7 +1262,9 @@ Resources:
 
   RDSBackupRule:
     Type: AWS::Config::ConfigRule
-    DependsOn: ConfigRecorder
+    DependsOn: 
+      - ConfigRecorder
+      - ConfigDeliveryChannel
     Properties:
       ConfigRuleName: rds-backup-enabled
       Description: Checks whether RDS DB instances have backup enabled
