@@ -1,0 +1,14 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "356229_2",
+  "team": "1",
+  "startedAt": "2025-10-18T06:05:51.805Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "\"CodePipeline\",    \"CodeBuild\",    \"CodeDeploy\",    \"EC2\",    \"VPC\",    \"S3\",    \"IAM\",    \"CloudWatch\",    \"CloudWatch Logs\",    \"Secrets Manager\",    \"Lambda\",    \"SNS\",    \"EventBridge\",    \"CloudFormation\""
+}
