@@ -38,7 +38,7 @@ describe("Educational Content Delivery Platform Integration Tests", () => {
   let awsAccountId: string;
 
   beforeAll(async () => {
-    const outputFilePath = path.join(__dirname, "..", "cfn-outputs", "flat-outputs.json");
+    const outputFilePath = path.join(__dirname, "..", "..", "cfn-outputs", "flat-outputs.json");
     if (!fs.existsSync(outputFilePath)) {
       throw new Error(`flat-outputs.json not found at ${outputFilePath}`);
     }
