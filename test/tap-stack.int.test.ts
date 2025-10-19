@@ -25,7 +25,7 @@ const secretsClient = new SecretsManagerClient({ region: process.env.AWS_REGION 
 const snsClient = new SNSClient({ region: process.env.AWS_REGION || 'us-west-2' });
 const configClient = new ConfigServiceClient({ region: process.env.AWS_REGION || 'us-west-2' });
 const logsClient = new CloudWatchLogsClient({ region: process.env.AWS_REGION || 'us-west-2' });
-const wafClient = new WAFv2.WAFv2Client({ region: process.env.AWS_REGION || 'us-west-2' });
+const wafClient = new WAFv2.WAFV2Client({ region: process.env.AWS_REGION || 'us-west-2' });
 
 describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
   const testTimeout = 600000; // 10 minutes
