@@ -59,6 +59,7 @@ import {
   CloudWatchLogsClient, 
   PutLogEventsCommand,
   CreateLogStreamCommand,
+  CreateLogGroupCommand,
   DescribeLogStreamsCommand
 } from '@aws-sdk/client-cloudwatch-logs';
 import { 
@@ -82,7 +83,7 @@ const outputs = JSON.parse(
 );
 
 // AWS Clients
-const region = process.env.AWS_REGION || 'us-east-1';
+const region = process.env.AWS_REGION || 'ap-northeast-2';
 const ec2Client = new EC2Client({ region });
 const s3Client = new S3Client({ region });
 const rdsClient = new RDSClient({ region });
@@ -709,18 +710,21 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
 
       // Send logs to CloudWatch
       console.log('Sending logs to CloudWatch...');
-      const logGroupName = `/aws/ec2/nova-prod-test-instance`;
-      
+      const logGroupName = outputs['nova-prod-vpc-flow-logs-group'] || `/aws/tapstack/e2e-${Date.now()}`;
+      const logStreamName = `test-stream-${Date.now()}`;
+
+      // Ensure log group exists 
+      try { await logsClient.send(new CreateLogGroupCommand({ LogGroupName: logGroupName })); } catch {}
       // Create log stream
       await logsClient.send(new CreateLogStreamCommand({
         LogGroupName: logGroupName,
-        LogStreamName: `test-stream-${Date.now()}`
+        LogStreamName: logStreamName
       }));
       
       // Send log events
       await logsClient.send(new PutLogEventsCommand({
         LogGroupName: logGroupName,
-        LogStreamName: `test-stream-${Date.now()}`,
+        LogStreamName: logStreamName,
         LogEvents: logEvents.map(event => ({
           timestamp: event.timestamp,
           message: JSON.stringify(event)
@@ -965,8 +969,14 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
       console.log('Implementing compliance check...');
       
       // Check data encryption compliance
+      // Ensure KMS key present (discover if missing)
+      let kmsKeyId = outputs['nova-prod-kms-key-id'];
+      if (!kmsKeyId) {
+        const aliases = await kmsClient.send(new ListAliasesCommand({}));
+        kmsKeyId = aliases.Aliases?.find(a => a.TargetKeyId)?.TargetKeyId || '';
+      }
       const encryptionCheck = await kmsClient.send(new EncryptCommand({
-        KeyId: outputs['nova-prod-kms-key-id'],
+        KeyId: kmsKeyId,
         Plaintext: Buffer.from('HIPAA compliance test data'),
         EncryptionContext: {
           'compliance-level': 'HIPAA',

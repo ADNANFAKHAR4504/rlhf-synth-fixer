@@ -1916,6 +1916,15 @@
                 "Name": "nova-prod-alb-dns"
             }
         },
+        "ALBArn": {
+            "Description": "Application Load Balancer ARN",
+            "Value": {
+                "Ref": "NovaApplicationLoadBalancer"
+            },
+            "Export": {
+                "Name": "nova-prod-alb-arn"
+            }
+        },
         "SecurityAlertTopicArn": {
             "Description": "SNS Topic ARN for Security Alerts",
             "Value": {
@@ -1923,6 +1932,15 @@
             },
             "Export": {
                 "Name": "nova-prod-security-alert-topic"
+            }
+        },
+        "VPCFlowLogsGroupName": {
+            "Description": "VPC Flow Logs CloudWatch Log Group Name",
+            "Value": {
+                "Ref": "NovaVPCFlowLogsGroup"
+            },
+            "Export": {
+                "Name": "nova-prod-vpc-flow-logs-group"
             }
         }
     }
