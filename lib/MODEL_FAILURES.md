@@ -216,6 +216,51 @@ resource "aws_athena_workgroup" "cloudtrail" {
 }
 ```
 
+### 13. CloudTrail KMS Key Permissions - DescribeKey Without Conditions
+**Potential Failure**: CloudTrail creation fails with InsufficientEncryptionPolicyException
+**Error Message**: `InsufficientEncryptionPolicyException: Insufficient permissions to access S3 bucket ... or KMS key`
+**Solution Applied**:
+- CloudTrail needs `kms:DescribeKey` permission WITHOUT conditions
+- Separate the DescribeKey permission into its own statement
+- Keep encryption/decryption operations with encryption context conditions for security
+
+**Why this happens**:
+- CloudTrail must describe the KMS key before it can use it
+- The encryption context condition cannot be satisfied during key description
+- Need unconditional DescribeKey for initial setup, conditional GenerateDataKey/DecryptDataKey for operations
+
+**Critical Pattern**:
+```hcl
+# Statement 1: Operations with encryption context for security
+{
+  Sid    = "Allow CloudTrail to encrypt logs"
+  Effect = "Allow"
+  Principal = { Service = "cloudtrail.amazonaws.com" }
+  Action = [
+    "kms:GenerateDataKey*",
+    "kms:DecryptDataKey",
+    "kms:DescribeKey"
+  ]
+  Resource = "*"
+  Condition = {
+    StringLike = {
+      "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:aws:cloudtrail:*:ACCOUNT_ID:trail/*"
+    }
+  }
+}
+
+# Statement 2: DescribeKey without conditions (required for initial setup)
+{
+  Sid    = "Allow CloudTrail to describe key"
+  Effect = "Allow"
+  Principal = { Service = "cloudtrail.amazonaws.com" }
+  Action = "kms:DescribeKey"
+  Resource = "*"
+}
+```
+
+**Important**: Without the unconditional DescribeKey statement, CloudTrail creation will fail even though the key policy looks correct!
+
 ## Testing Lessons
 
 ### Unit Tests (93 tests)

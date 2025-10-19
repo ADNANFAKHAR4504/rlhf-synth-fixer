@@ -273,7 +273,8 @@ resource "aws_kms_key" "cloudtrail" {
           }
           Action = [
             "kms:GenerateDataKey*",
-            "kms:DecryptDataKey"
+            "kms:DecryptDataKey",
+            "kms:DescribeKey"
           ]
           Resource = "*"
           Condition = {
@@ -281,6 +282,15 @@ resource "aws_kms_key" "cloudtrail" {
               "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:${data.aws_partition.current.partition}:cloudtrail:*:${local.account_id}:trail/*"
             }
           }
+        },
+        {
+          Sid    = "Allow CloudTrail to describe key"
+          Effect = "Allow"
+          Principal = {
+            Service = "cloudtrail.amazonaws.com"
+          }
+          Action   = "kms:DescribeKey"
+          Resource = "*"
         },
         {
           Sid    = "Allow CloudWatch Logs"
