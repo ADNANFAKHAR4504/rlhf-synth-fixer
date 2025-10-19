@@ -12,19 +12,18 @@
   ],
   "training_quality": 8,
   "aws_services": [
-    "AWS::S3::Bucket",
-    "AWS::IAM::Role", 
-    "AWS::IAM::ManagedPolicy",
-    "AWS::ApiGateway::RestApi",
-    "AWS::RDS::DBInstance",
-    "AWS::Config::ConfigurationRecorder",
-    "AWS::EC2::Instance",
-    "AWS::EC2::SecurityGroup",
-    "AWS::CloudFront::Distribution",
-    "AWS::Budgets::Budget",
-    "AWS::EC2::VPC",
-    "AWS::SecretsManager::Secret",
-    "AWS::WAFv2::WebACL",
-    "AWS::SNS::Topic"
+    "S3",
+    "IAM", 
+    "API Gateway",
+    "RDS",
+    "Config",
+    "EC2",
+    "Security Groups",
+    "CloudFront",
+    "Budgets",
+    "VPC",
+    "Secrets Manager",
+    "WAF",
+    "SNS"
   ]
 }
