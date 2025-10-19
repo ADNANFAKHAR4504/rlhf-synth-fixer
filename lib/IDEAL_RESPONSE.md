@@ -2,6 +2,7 @@
 # CloudFormation template for Nova Clinical Trial Data Platform
 # Region: us-west-2
 # Purpose: Secure infrastructure for handling sensitive patient trial data
+
 ```yml
 
 AWSTemplateFormatVersion: '2010-09-09'
@@ -19,7 +20,6 @@ Parameters:
     AllowedValues: ['dev', 'staging', 'prod']
     Description: 'Environment name for resource naming convention'
 
-
   NotificationEmail:
     Type: String
     Default: 'admin@nova-clinical.com'
@@ -33,13 +33,10 @@ Parameters:
     MinValue: 1
     MaxValue: 100000
 
-
   EC2ImageId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
     Description: 'AMI ID for the EC2 instance (uses latest Amazon Linux 2 AMI by default, or specify custom AMI ID)'
-
-
 
 Resources:
   # ==========================================
