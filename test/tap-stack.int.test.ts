@@ -41,14 +41,14 @@ import {
   GetTrailStatusCommand
 } from '@aws-sdk/client-cloudtrail';
 import { 
-  ELBv2Client, 
+  ElasticLoadBalancingV2Client as ELBv2Client, 
   CreateTargetGroupCommand,
   RegisterTargetsCommand,
   DeregisterTargetsCommand,
   DeleteTargetGroupCommand,
   CreateListenerCommand,
   DeleteListenerCommand
-} from '@aws-sdk/client-elbv2';
+} from '@aws-sdk/client-elastic-load-balancing-v2';
 import { 
   SNSClient, 
   PublishCommand,
