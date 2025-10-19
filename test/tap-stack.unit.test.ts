@@ -7,7 +7,7 @@ describe('TapStack CloudFormation Template - Educational Content Platform', () =
   let template: any;
 
   beforeAll(() => {
-    const templatePath = path.join(__dirname, '..', 'TapStack.json');
+    const templatePath = path.join(__dirname, '..', 'lib', 'TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
   });
