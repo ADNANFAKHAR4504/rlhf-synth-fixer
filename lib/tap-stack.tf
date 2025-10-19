@@ -1,3 +1,54 @@
+terraform {
+  required_version = ">= 1.4.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
+  }
+  backend "s3" {}
+}
+
+provider "aws" {
+  region = "us-east-2"
+  default_tags {
+    tags = {
+      Environment = "Production"
+      ManagedBy   = "Terraform"
+    }
+  }
+}
+
+variable "key_name" {
+  description = "Name of the AWS key pair for EC2 SSH access"
+  type        = string
+  validation {
+    condition     = length(var.key_name) > 0
+    error_message = "Key name must not be empty"
+  }
+}
+
+variable "allowed_ip" {
+  description = "IP address allowed to SSH into EC2 instance (format: x.x.x.x/32)"
+  type        = string
+  validation {
+    condition     = can(regex("^([0-9]{1,3}\\.){3}[0-9]{1,3}/[0-9]{1,2}$", var.allowed_ip))
+    error_message = "Allowed IP must be in CIDR format (e.g., 192.168.1.1/32)"
+  }
+}
+
+variable "environment_suffix" {
+  description = "Unique suffix for all resource names (e.g., prod, dev, a1b2c3)"
+  type        = string
+  validation {
+    condition     = length(var.environment_suffix) > 0
+    error_message = "Environment suffix must not be empty"
+  }
+}
 data "aws_ami" "amazon_linux_2" {
   most_recent = true
   owners      = ["amazon"]
@@ -26,7 +77,7 @@ resource "random_id" "bucket_suffix" {
 # S3 Bucket with versioning and encryption
 resource "aws_s3_bucket" "prod_app_bucket" {
   # Best practice: Use lowercase and include unique identifier for global uniqueness
-  bucket = "prod-app-bucket-${random_id.bucket_suffix.hex}"
+  bucket = "prod-app-bucket-${var.environment_suffix}-${random_id.bucket_suffix.hex}"
 
   # Best practice: Prevent accidental deletion of production resources
   lifecycle {
@@ -34,7 +85,7 @@ resource "aws_s3_bucket" "prod_app_bucket" {
   }
 
   tags = {
-    Name        = "ProdAppBucket"
+    Name        = "ProdAppBucket-${var.environment_suffix}"
     Environment = "Production"
     Purpose     = "Application storage bucket"
   }
@@ -72,7 +123,7 @@ resource "aws_s3_bucket_public_access_block" "prod_app_bucket_pab" {
 
 # Security Group for EC2 instance with restrictive ingress rules
 resource "aws_security_group" "prod_ec2_sg" {
-  name        = "ProdEC2SecurityGroup"
+  name        = "ProdEC2SecurityGroup-${var.environment_suffix}"
   description = "Production security group for EC2 instance - SSH access only"
 
   # Best practice: Explicitly define ingress rules with minimal access
@@ -94,17 +145,14 @@ resource "aws_security_group" "prod_ec2_sg" {
   }
 
   tags = {
-    Name        = "ProdEC2SecurityGroup"
+    Name        = "ProdEC2SecurityGroup-${var.environment_suffix}"
     Environment = "Production"
     Purpose     = "EC2 SSH access control"
   }
 }
 
-# IAM role for EC2 instance with trust policy
 resource "aws_iam_role" "prod_ec2_role" {
-  name = "ProdEC2S3AccessRole"
-
-  # Trust policy allowing EC2 service to assume this role
+  name = "ProdEC2S3AccessRole-${var.environment_suffix}"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -117,20 +165,16 @@ resource "aws_iam_role" "prod_ec2_role" {
       }
     ]
   })
-
   tags = {
-    Name        = "ProdEC2S3AccessRole"
+    Name        = "ProdEC2S3AccessRole-${var.environment_suffix}"
     Environment = "Production"
     Purpose     = "EC2 to S3 access"
   }
 }
 
-# IAM policy for S3 read access - principle of least privilege
 resource "aws_iam_role_policy" "prod_ec2_s3_policy" {
-  name = "ProdEC2S3ReadPolicy"
+  name = "ProdEC2S3ReadPolicy-${var.environment_suffix}"
   role = aws_iam_role.prod_ec2_role.id
-
-  # Best practice: Grant minimal required permissions
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -156,79 +200,56 @@ resource "aws_iam_role_policy" "prod_ec2_s3_policy" {
   })
 }
 
-# Instance profile to attach IAM role to EC2 instance
 resource "aws_iam_instance_profile" "prod_ec2_profile" {
-  name = "ProdEC2InstanceProfile"
+  name = "ProdEC2InstanceProfile-${var.environment_suffix}"
   role = aws_iam_role.prod_ec2_role.name
-
   tags = {
-    Name        = "ProdEC2InstanceProfile"
+    Name        = "ProdEC2InstanceProfile-${var.environment_suffix}"
     Environment = "Production"
   }
 }
 
-# EC2 Instance with production configurations
 resource "aws_instance" "prod_server" {
-  # Use t3.micro for cost optimization while meeting performance requirements
   instance_type = "t3.micro"
   ami           = data.aws_ami.amazon_linux_2.id
   key_name      = var.key_name
-
-  # Security configuration
   vpc_security_group_ids = [aws_security_group.prod_ec2_sg.id]
   iam_instance_profile   = aws_iam_instance_profile.prod_ec2_profile.name
-
-  # Best practice: Enable detailed monitoring for production instances
   monitoring = true
-
-  # Best practice: Enable termination protection for production instances
   disable_api_termination = false # Set to true in actual production
-
-  # Best practice: Use IMDSv2 for enhanced security
   metadata_options {
     http_endpoint               = "enabled"
     http_tokens                 = "required"
     http_put_response_hop_limit = 1
   }
-
-  # Root volume configuration with encryption
   root_block_device {
     volume_type = "gp3"
     volume_size = 20
     encrypted   = true
-
     tags = {
-      Name        = "ProdEC2RootVolume"
+      Name        = "ProdEC2RootVolume-${var.environment_suffix}"
       Environment = "Production"
     }
   }
-
-  # User data script for initial configuration
   user_data = <<-EOF
     #!/bin/bash
     # Best practice: Update system packages on launch
     yum update -y
-    
     # Install AWS CLI for S3 interaction
     yum install -y aws-cli
-    
     # Install CloudWatch agent for monitoring
     wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
     rpm -U ./amazon-cloudwatch-agent.rpm
-    
     # Log deployment information
     echo "EC2 instance deployed at $(date)" >> /var/log/deployment.log
     echo "S3 bucket: ${aws_s3_bucket.prod_app_bucket.id}" >> /var/log/deployment.log
   EOF
-
-  # Explicit dependencies to ensure proper resource creation order
   depends_on = [
     aws_iam_role_policy.prod_ec2_s3_policy,
     aws_security_group.prod_ec2_sg
   ]
-
   tags = {
-    Name        = "ProdApplicationServer"
+    Name        = "ProdApplicationServer-${var.environment_suffix}"
     Environment = "Production"
     Purpose     = "Application server with S3 access"
   }
@@ -236,11 +257,11 @@ resource "aws_instance" "prod_server" {
 
 # Best practice: Create CloudWatch log group for application logs
 resource "aws_cloudwatch_log_group" "prod_app_logs" {
-  name              = "/aws/ec2/prod-application"
+  name              = "/aws/ec2/prod-application-${var.environment_suffix}"
   retention_in_days = 30 # Adjust based on compliance requirements
 
   tags = {
-    Name        = "ProdApplicationLogs"
+    Name        = "ProdApplicationLogs-${var.environment_suffix}"
     Environment = "Production"
   }
 }

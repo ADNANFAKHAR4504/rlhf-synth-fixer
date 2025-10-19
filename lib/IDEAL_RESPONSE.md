@@ -1,3 +1,25 @@
+# IDEAL RESPONSE
+
+## File Structure
+
+```
+lib/
+  tap_stack.tf     # Contains all resources, provider, backend
+  variables.tf     # Contains all variable definitions (aws_region, key_name, allowed_ip)
+```
+
+## tap_stack.tf
+
+```hcl
+# ...
+```
+
+## variables.tf
+
+```hcl
+# ...
+```
+
 # IDEAL RESPONSE - Terraform Production Infrastructure
 
 ## Overview
