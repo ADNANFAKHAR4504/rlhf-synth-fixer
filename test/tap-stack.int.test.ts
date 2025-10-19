@@ -2,7 +2,7 @@ import fs from 'fs';
 import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
 import { CloudFrontClient, GetDistributionCommand, CreateInvalidationCommand } from '@aws-sdk/client-cloudfront';
-import { ApiGatewayClient, GetRestApiCommand, GetStageCommand, TestInvokeMethodCommand } from '@aws-sdk/client-apigateway';
+import { ApiGatewayClient, GetRestApiCommand, GetStageCommand, TestInvokeMethodCommand } from '@aws-sdk/client-api-gateway';
 import { EC2Client, DescribeInstancesCommand, StartInstancesCommand, StopInstancesCommand } from '@aws-sdk/client-ec2';
 import { KMSClient, EncryptCommand, DecryptCommand, GenerateDataKeyCommand } from '@aws-sdk/client-kms';
 import { SecretsManagerClient, GetSecretValueCommand, UpdateSecretCommand } from '@aws-sdk/client-secrets-manager';
