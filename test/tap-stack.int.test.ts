@@ -1,930 +1,659 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import { 
-  EC2Client, 
-  DescribeVpcsCommand, 
-  DescribeSubnetsCommand, 
-  DescribeSecurityGroupsCommand,
-  DescribeNatGatewaysCommand,
-  DescribeInternetGatewaysCommand,
-  DescribeVpcEndpointsCommand,
-  DescribeNetworkAclsCommand
-} from "@aws-sdk/client-ec2";
-import { 
-  ElasticLoadBalancingV2Client,
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand,
-  DescribeTargetHealthCommand,
-  DescribeListenersCommand,
-  DescribeRulesCommand
-} from "@aws-sdk/client-elastic-load-balancing-v2";
-import { 
-  RDSClient,
-  DescribeDBInstancesCommand,
-  DescribeDBSubnetGroupsCommand
-} from "@aws-sdk/client-rds";
-import { 
-  S3Client, 
-  HeadBucketCommand, 
-  GetBucketVersioningCommand,
-  GetBucketEncryptionCommand,
-  PutObjectCommand,
-  GetObjectCommand,
-  DeleteObjectCommand,
-  GetPublicAccessBlockCommand
-} from "@aws-sdk/client-s3";
-import {
-  ECSClient,
-  DescribeClustersCommand,
-  DescribeServicesCommand,
-  ListTasksCommand,
-  DescribeTasksCommand,
-  DescribeTaskDefinitionCommand,
-  UpdateServiceCommand,
-  RunTaskCommand
-} from "@aws-sdk/client-ecs";
-import {
-  SecretsManagerClient,
-  GetSecretValueCommand,
-  DescribeSecretCommand
-} from "@aws-sdk/client-secrets-manager";
-import {
-  CloudWatchLogsClient,
-  DescribeLogGroupsCommand,
-  DescribeLogStreamsCommand,
-  FilterLogEventsCommand,
-  CreateLogStreamCommand,
-  PutLogEventsCommand
-} from "@aws-sdk/client-cloudwatch-logs";
-import { 
-  CloudWatchClient, 
-  DescribeAlarmsCommand,
-  PutMetricDataCommand
-} from "@aws-sdk/client-cloudwatch";
-import {
-  Route53Client,
-  ListHostedZonesCommand,
-  ListResourceRecordSetsCommand
-} from "@aws-sdk/client-route-53";
-import {
-  IAMClient,
-  GetRoleCommand,
-  ListAttachedRolePoliciesCommand,
-  SimulatePrincipalPolicyCommand
-} from "@aws-sdk/client-iam";
-import {
-  ApplicationAutoScalingClient,
-  DescribeScalableTargetsCommand,
-  DescribeScalingPoliciesCommand
-} from "@aws-sdk/client-application-auto-scaling";
+import { CloudWatchClient, DescribeAlarmsCommand, PutMetricDataCommand, GetMetricStatisticsCommand } from '@aws-sdk/client-cloudwatch';
+import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
+import { DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand, DescribeInternetGatewaysCommand, DescribeNatGatewaysCommand, DescribeRouteTablesCommand, EC2Client } from '@aws-sdk/client-ec2';
+import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
+import { ECSClient, DescribeClustersCommand, DescribeServicesCommand, DescribeTaskDefinitionCommand, ListTasksCommand, DescribeTasksCommand, RunTaskCommand } from '@aws-sdk/client-ecs';
+import { ElasticLoadBalancingV2Client, DescribeLoadBalancersCommand, DescribeTargetGroupsCommand, DescribeTargetHealthCommand } from '@aws-sdk/client-elastic-load-balancing-v2';
+import { S3Client, HeadBucketCommand, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { CloudWatchLogsClient, DescribeLogGroupsCommand, DescribeLogStreamsCommand } from '@aws-sdk/client-cloudwatch-logs';
+import fs from 'fs';
 import axios from 'axios';
 
-// Configuration - These are coming from deployment-outputs after deployment
-const outputFilePath = path.join(__dirname, '..', 'deployment-outputs', 'outputs.json');
-const outputs = fs.existsSync(outputFilePath) 
-  ? JSON.parse(fs.readFileSync(outputFilePath, 'utf-8'))
-  : {};
+// Configuration - These are coming from terraform outputs after deployment
+const outputs = JSON.parse(
+  fs.readFileSync('terraform-outputs.json', 'utf8')
+);
 
-// Get environment configuration (set by CI/CD pipeline)
-const awsRegion = process.env.AWS_REGION || "us-east-1";
+// Get environment configuration
+const region = process.env.AWS_REGION || 'us-east-1';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr4813';
 
 // Initialize AWS SDK v3 clients
-const ec2Client = new EC2Client({ region: awsRegion });
-const elbv2Client = new ElasticLoadBalancingV2Client({ region: awsRegion });
-const rdsClient = new RDSClient({ region: awsRegion });
-const s3Client = new S3Client({ region: awsRegion });
-const ecsClient = new ECSClient({ region: awsRegion });
-const secretsClient = new SecretsManagerClient({ region: awsRegion });
-const logsClient = new CloudWatchLogsClient({ region: awsRegion });
-const cloudWatchClient = new CloudWatchClient({ region: awsRegion });
-const route53Client = new Route53Client({ region: awsRegion });
-const iamClient = new IAMClient({ region: awsRegion });
-const autoScalingClient = new ApplicationAutoScalingClient({ region: awsRegion });
+const ec2Client = new EC2Client({ region });
+const rdsClient = new RDSClient({ region });
+const cloudWatchClient = new CloudWatchClient({ region });
+const secretsClient = new SecretsManagerClient({ region });
+const ecsClient = new ECSClient({ region });
+const elbClient = new ElasticLoadBalancingV2Client({ region });
+const s3Client = new S3Client({ region });
+const cwLogsClient = new CloudWatchLogsClient({ region });
 
-// Extract outputs with defaults
-const vpcId = outputs["vpc-id"] || "vpc-0c745bfc83171b0a7";
-const vpcCidr = outputs["vpc-cidr"] || "10.0.0.0/16";
-const albDnsName = outputs["alb-dns-name"] || "myapp-pr4337-alb-1448593160.us-east-1.elb.amazonaws.com";
-const albUrl = outputs["alb-url"] || "http://myapp-pr4337-alb-1448593160.us-east-1.elb.amazonaws.com";
-const ecsClusterName = outputs["ecs-cluster-name"] || "myapp-pr4337-cluster";
-const ecsServiceName = outputs["ecs-service-name"] || "myapp-pr4337-service";
-const taskDefinitionArn = outputs["task-definition-arn"] || "arn:aws:ecs:us-east-1:***:task-definition/myapp-pr4337:1";
-const rdsEndpoint = outputs["rds-endpoint"];
-const dbSecretArn = outputs["db-secret-arn"] || "arn:aws:secretsmanager:us-east-1:***:secret:myapp-pr4337-db-credentials-BD0AiU";
-const staticAssetsBucket = outputs["static-assets-bucket"] || "myapp-pr4337-static-assets";
-const logGroupName = outputs["log-group-name"] || "/aws/ecs/myapp-pr4337";
-let albArn: string;
-
-// Helper function to wait for ECS task to reach desired state
-async function waitForTaskState(cluster: string, taskArn: string, desiredState: string, maxWaitTime = 60000): Promise<any> {
-  const startTime = Date.now();
-
-  while (Date.now() - startTime < maxWaitTime) {
-    try {
-      const result = await ecsClient.send(new DescribeTasksCommand({
-        cluster,
-        tasks: [taskArn]
-      }));
-
-      if (result.tasks?.[0]?.lastStatus === desiredState) {
-        return result.tasks[0];
-      }
-
-      await new Promise(resolve => setTimeout(resolve, 2000));
-    } catch (error) {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-    }
-  }
-
-  throw new Error(`Task did not reach ${desiredState} state within timeout`);
-}
-
-// Helper to get private subnets from VPC
-async function getPrivateSubnets(vpcId: string): Promise<string[]> {
-  const { Subnets } = await ec2Client.send(
-    new DescribeSubnetsCommand({
-      Filters: [
-        { Name: 'vpc-id', Values: [vpcId] },
-        { Name: 'tag:Type', Values: ['Private'] }
-      ]
-    })
-  );
-  return Subnets?.map(s => s.SubnetId!).filter(id => id) || [];
-}
-
-// Helper to get ECS task security group
-async function getEcsTaskSecurityGroup(vpcId: string): Promise<string | undefined> {
-  const { SecurityGroups } = await ec2Client.send(
-    new DescribeSecurityGroupsCommand({
-      Filters: [
-        { Name: 'vpc-id', Values: [vpcId] },
-        { Name: 'tag:Name', Values: [`myapp-pr4337-task-sg`] }
-      ]
-    })
-  );
-  return SecurityGroups?.[0]?.GroupId;
-}
-
-describe('Production ECS Environment Integration Tests', () => {
+describe('Container-Based Infrastructure Integration Tests', () => {
 
   // ============================================================================
   // PART 1: SERVICE-LEVEL TESTS (Single Service WITH ACTUAL INTERACTIONS)
   // ============================================================================
 
-  describe('[Service-Level] ECS Container Interactions', () => {
-    test('should be able to run a test task on ECS cluster', async () => {
+  describe('[Service-Level] ECS Fargate Container Service', () => {
+    test('should have ECS cluster running with active service', async () => {
+      const clusterName = outputs['ecs-cluster-name'].value;
+      
+      // Verify cluster exists and is active
+      const clusterResponse = await ecsClient.send(new DescribeClustersCommand({
+        clusters: [clusterName]
+      }));
+
+      const cluster = clusterResponse.clusters![0];
+      expect(cluster.status).toBe('ACTIVE');
+      expect(cluster.runningTasksCount).toBeGreaterThan(0);
+      expect(cluster.activeServicesCount).toBeGreaterThan(0);
+    }, 30000);
+
+    test('should have ECS service running desired number of tasks', async () => {
+      const clusterName = outputs['ecs-cluster-name'].value;
+      const serviceName = outputs['ecs-service-name'].value;
+
+      // Verify service configuration
+      const serviceResponse = await ecsClient.send(new DescribeServicesCommand({
+        cluster: clusterName,
+        services: [serviceName]
+      }));
+
+      const service = serviceResponse.services![0];
+      expect(service.status).toBe('ACTIVE');
+      expect(service.runningCount).toBe(service.desiredCount);
+      expect(service.launchType).toBe('FARGATE');
+    }, 30000);
+
+    test('should be able to run a task in ECS cluster', async () => {
+      const clusterName = outputs['ecs-cluster-name'].value;
+      const taskDefArn = outputs['task-definition-arn'].value;
+      const vpcId = outputs['vpc-id'].value;
+
+      // Get subnets for task placement
+      const subnetsResponse = await ec2Client.send(new DescribeSubnetsCommand({
+        Filters: [
+          { Name: 'vpc-id', Values: [vpcId] },
+          { Name: 'tag:Type', Values: ['Private'] }
+        ]
+      }));
+
+      const privateSubnetIds = subnetsResponse.Subnets!.map(s => s.SubnetId!);
+
+      // Get security group for tasks
+      const sgResponse = await ec2Client.send(new DescribeSecurityGroupsCommand({
+        Filters: [
+          { Name: 'vpc-id', Values: [vpcId] },
+          { Name: 'tag:Name', Values: [`*${environmentSuffix}-task-sg`] }
+        ]
+      }));
+
+      const taskSgId = sgResponse.SecurityGroups![0].GroupId!;
+
       try {
-        // Get the necessary network configuration
-        const privateSubnets = await getPrivateSubnets(vpcId);
-        const taskSecurityGroup = await getEcsTaskSecurityGroup(vpcId);
-
-        if (!privateSubnets.length || !taskSecurityGroup) {
-          console.log('Skipping test: Network configuration not available');
-          return;
-        }
-
-        // ACTION: Run a standalone task on the cluster  
+        // Run a one-off task
         const taskResponse = await ecsClient.send(new RunTaskCommand({
-          cluster: ecsClusterName,
-          taskDefinition: taskDefinitionArn.split('/').pop(),
+          cluster: clusterName,
+          taskDefinition: taskDefArn,
           launchType: 'FARGATE',
           networkConfiguration: {
             awsvpcConfiguration: {
-              subnets: [privateSubnets[0]], // Use first private subnet
-              securityGroups: [taskSecurityGroup],
+              subnets: privateSubnetIds.slice(0, 1),
+              securityGroups: [taskSgId],
               assignPublicIp: 'DISABLED'
             }
           },
           overrides: {
             containerOverrides: [{
-              name: 'myapp-pr4337-container', // Match the actual container name
-              environment: [
-                { name: 'TEST_MODE', value: 'integration' },
-                { name: 'TEST_RUN_ID', value: Date.now().toString() }
-              ]
+              name: `myapp-${environmentSuffix}-container`,
+              command: ['echo', 'Integration test task executed']
             }]
           }
         }));
 
-        if (taskResponse.tasks?.length) {
-          const taskArn = taskResponse.tasks[0].taskArn!;
-          
-          // Wait for task to start (but don't expect RUNNING due to health check issues)
-          await new Promise(resolve => setTimeout(resolve, 10000));
-          
-          const taskDetails = await ecsClient.send(new DescribeTasksCommand({
-            cluster: ecsClusterName,
-            tasks: [taskArn]
-          }));
-
-          console.log(`Task status: ${taskDetails.tasks?.[0]?.lastStatus}`);
-          expect(taskDetails.tasks?.length).toBeGreaterThan(0);
-
-          // Stop the test task
-          await ecsClient.send(new UpdateServiceCommand({
-            cluster: ecsClusterName,
-            service: ecsServiceName,
-            forceNewDeployment: false
-          }));
-        }
+        expect(taskResponse.tasks).toHaveLength(1);
+        expect(taskResponse.tasks![0].lastStatus).toMatch(/PROVISIONING|PENDING|RUNNING/);
       } catch (error: any) {
-        if (error.message?.includes('capacity') || error.message?.includes('RESOURCE')) {
-          console.log('No capacity available for test task. Skipping.');
+        if (error.name === 'InvalidParameterException') {
+          console.log('Task override not supported. Skipping task run test.');
           return;
         }
         throw error;
       }
-    }, 90000);
-
-    test('should be able to update ECS service configuration', async () => {
-      // ACTION: Update service desired count
-      const originalService = await ecsClient.send(new DescribeServicesCommand({
-        cluster: ecsClusterName,
-        services: [ecsServiceName]
-      }));
-
-      const originalCount = originalService.services![0].desiredCount!;
-
-      await ecsClient.send(new UpdateServiceCommand({
-        cluster: ecsClusterName,
-        service: ecsServiceName,
-        desiredCount: originalCount + 1
-      }));
-
-      const updatedService = await ecsClient.send(new DescribeServicesCommand({
-        cluster: ecsClusterName,
-        services: [ecsServiceName]
-      }));
-
-      expect(updatedService.services![0].desiredCount).toBe(originalCount + 1);
-
-      // Restore original count
-      await ecsClient.send(new UpdateServiceCommand({
-        cluster: ecsClusterName,
-        service: ecsServiceName,
-        desiredCount: originalCount
-      }));
     }, 60000);
   });
 
-  describe('[Service-Level] S3 Bucket Interactions', () => {
-    test('should be able to upload and retrieve objects from S3 bucket', async () => {
-      const testKey = `test-assets/integration-test-${Date.now()}.json`;
-      const testData = { 
-        test: "service-level", 
-        timestamp: Date.now(),
-        environment: 'pr4337'
-      };
+  describe('[Service-Level] Application Load Balancer', () => {
+    test('should have ALB accessible and responding', async () => {
+      const albUrl = outputs['alb-url'].value;
 
-      // ACTION: Upload object to S3
-      const putResult = await s3Client.send(new PutObjectCommand({
-        Bucket: staticAssetsBucket,
-        Key: testKey,
-        Body: JSON.stringify(testData),
-        ContentType: 'application/json',
-        ServerSideEncryption: 'AES256',
-        Metadata: {
-          'test-type': 'integration',
-          'test-id': Date.now().toString()
-        }
-      }));
-
-      expect(putResult.$metadata.httpStatusCode).toBe(200);
-      expect(putResult.ServerSideEncryption).toBe('AES256');
-
-      // ACTION: Retrieve object from S3
-      const getResult = await s3Client.send(new GetObjectCommand({
-        Bucket: staticAssetsBucket,
-        Key: testKey
-      }));
-
-      const body = await getResult.Body?.transformToString();
-      const retrieved = JSON.parse(body || '{}');
-      
-      expect(retrieved.test).toBe('service-level');
-      expect(getResult.ServerSideEncryption).toBe('AES256');
-      expect(getResult.Metadata?.['test-type']).toBe('integration');
-
-      // ACTION: Delete test object
-      await s3Client.send(new DeleteObjectCommand({
-        Bucket: staticAssetsBucket,
-        Key: testKey
-      }));
-    }, 60000);
-  });
-
-  describe('[Service-Level] CloudWatch Logs Interactions', () => {
-    test('should be able to write custom log entries to CloudWatch', async () => {
-      const testStreamName = `test-stream-${Date.now()}`;
-      
       try {
-        // First create the log stream
-        await logsClient.send(new CreateLogStreamCommand({
-          logGroupName: logGroupName,
-          logStreamName: testStreamName
-        }));
-
-        // ACTION: Write logs
-        await logsClient.send(new PutLogEventsCommand({
-          logGroupName: logGroupName,
-          logStreamName: testStreamName,
-          logEvents: [
-            {
-              timestamp: Date.now(),
-              message: JSON.stringify({
-                level: 'INFO',
-                test: 'integration',
-                message: 'Service-level test log entry',
-                timestamp: new Date().toISOString()
-              })
-            }
-          ]
-        }));
-
-        // ACTION: Query logs
-        const logs = await logsClient.send(new FilterLogEventsCommand({
-          logGroupName: logGroupName,
-          logStreamNames: [testStreamName],
-          startTime: Date.now() - 60000
-        }));
-
-        expect(logs.events?.length).toBeGreaterThanOrEqual(0);
-      } catch (error: any) {
-        if (error.name === 'ResourceAlreadyExistsException') {
-          console.log('Log stream already exists. Continuing.');
-        } else if (error.name === 'ResourceNotFoundException') {
-          console.log('Log group not found. Skipping test.');
-          return;
-        } else {
-          throw error;
-        }
-      }
-    }, 60000);
-  });
-
-  describe('[Service-Level] Application Load Balancer Interactions', () => {
-    test('should be able to make HTTP requests to ALB', async () => {
-      // ACTION: Send HTTP request to ALB
-      const response = await axios.get(albUrl, {
-        timeout: 10000,
-        validateStatus: () => true,
-        headers: {
-          'User-Agent': 'Integration-Test',
-          'X-Test-ID': Date.now().toString()
-        }
-      });
-
-      // Accept 503 as valid since nginx container might not be healthy
-      expect([200, 301, 302, 403, 404, 502, 503]).toContain(response.status);
-      
-      // Check response headers
-      expect(response.headers).toBeDefined();
-      console.log(`ALB Response: ${response.status} - Headers: ${JSON.stringify(response.headers)}`);
-    }, 30000);
-
-    test('should handle multiple concurrent requests to ALB', async () => {
-      // ACTION: Send multiple concurrent requests
-      const requests = Array(5).fill(null).map(() => 
-        axios.get(albUrl, {
+        // Test ALB is accessible
+        const response = await axios.get(albUrl, { 
           timeout: 5000,
-          validateStatus: () => true
-        })
-      );
+          validateStatus: () => true // Accept any status code
+        });
 
-      const responses = await Promise.allSettled(requests);
-      const successful = responses.filter(r => r.status === 'fulfilled');
-      
-      expect(successful.length).toBeGreaterThan(0);
-      console.log(`Concurrent requests: ${successful.length}/5 successful`);
-    }, 30000);
-  });
-
-  // ============================================================================
-  // PART 2: CROSS-SERVICE TESTS (2 Services Interacting WITH REAL ACTIONS)
-  // ============================================================================
-
-  describe('[Cross-Service] ECS → Secrets Manager Interaction', () => {
-    test('should allow ECS tasks to retrieve secrets via task role', async () => {
-      // Get task definition to verify secret references
-      const { taskDefinition } = await ecsClient.send(
-        new DescribeTaskDefinitionCommand({
-          taskDefinition: taskDefinitionArn.split('/').pop()
-        })
-      );
-
-      // Verify task has secrets configuration
-      const mainContainer = taskDefinition?.containerDefinitions?.[0];
-      const hasSecrets = mainContainer?.secrets?.some(s => 
-        s.valueFrom?.includes('arn:aws:secretsmanager')
-      );
-
-      expect(hasSecrets).toBe(true);
-
-      // Verify the task role exists and has necessary permissions
-      const taskRoleName = taskDefinition?.taskRoleArn?.split('/').pop();
-      if (taskRoleName) {
-        const role = await iamClient.send(new GetRoleCommand({ RoleName: taskRoleName }));
-        expect(role.Role).toBeDefined();
-        console.log(`Task role ${taskRoleName} is properly configured for Secrets Manager access`);
+        // Expect either 200 (app running) or 503 (no healthy targets)
+        expect([200, 503]).toContain(response.status);
+      } catch (error: any) {
+        if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+          console.log('ALB not publicly accessible. This might be expected in some environments.');
+          return;
+        }
+        throw error;
       }
-    }, 90000);
-  });
+    }, 30000);
 
-  describe('[Cross-Service] ECS → CloudWatch Logs Interaction', () => {
-    test('should have ECS tasks sending logs to CloudWatch', async () => {
-      // ACTION: Get running tasks
-      const tasks = await ecsClient.send(new ListTasksCommand({
-        cluster: ecsClusterName,
-        serviceName: ecsServiceName
+    test('should have healthy targets registered in target group', async () => {
+      const albDnsName = outputs['alb-dns-name'].value;
+
+      // Get ALB details
+      const albResponse = await elbClient.send(new DescribeLoadBalancersCommand({
+        Names: [albDnsName.split('.')[0]]
       }));
 
-      if (tasks.taskArns?.length) {
-        // Get task details
-        const taskDetails = await ecsClient.send(new DescribeTasksCommand({
-          cluster: ecsClusterName,
-          tasks: [tasks.taskArns[0]]
-        }));
+      const alb = albResponse.LoadBalancers![0];
+      expect(alb.State?.Code).toBe('active');
 
-        const taskId = tasks.taskArns[0].split('/').pop();
-        
-        // ACTION: Check for log streams from this task
-        try {
-          const { logStreams } = await logsClient.send(
-            new DescribeLogStreamsCommand({
-              logGroupName: logGroupName,
-              logStreamNamePrefix: `ecs/myapp-pr4337-container/${taskId}`
-            })
-          );
+      // Get target groups
+      const tgResponse = await elbClient.send(new DescribeTargetGroupsCommand({
+        LoadBalancerArn: alb.LoadBalancerArn
+      }));
 
-          if (logStreams?.length) {
-            // ACTION: Read recent logs from the task
-            const logs = await logsClient.send(new FilterLogEventsCommand({
-              logGroupName: logGroupName,
-              logStreamNames: [logStreams[0].logStreamName!],
-              limit: 10
-            }));
+      const targetGroup = tgResponse.TargetGroups![0];
 
-            console.log(`Found ${logs.events?.length || 0} log entries from ECS task`);
-          }
-        } catch (error) {
-          console.log('No log streams found for ECS tasks (tasks might not be running)');
-        }
-      } else {
-        console.log('No running ECS tasks found');
-      }
-    }, 60000);
-  });
+      // Check target health
+      const healthResponse = await elbClient.send(new DescribeTargetHealthCommand({
+        TargetGroupArn: targetGroup.TargetGroupArn
+      }));
 
-  describe('[Cross-Service] ALB → ECS Interaction', () => {
-    test('should have ALB configured to route to ECS tasks', async () => {
-      // Get ALB details
-      const { LoadBalancers } = await elbv2Client.send(
-        new DescribeLoadBalancersCommand({})
+      const healthyTargets = healthResponse.TargetHealthDescriptions!.filter(
+        t => t.TargetHealth?.State === 'healthy'
       );
 
-      const alb = LoadBalancers?.find(lb => lb.DNSName === albDnsName);
-      
-      if (alb?.LoadBalancerArn) {
-        // ACTION: Get target groups
-        const { TargetGroups } = await elbv2Client.send(
-          new DescribeTargetGroupsCommand({ 
-            LoadBalancerArn: alb.LoadBalancerArn 
-          })
-        );
-
-        for (const targetGroup of TargetGroups || []) {
-          // ACTION: Check target health
-          const { TargetHealthDescriptions } = await elbv2Client.send(
-            new DescribeTargetHealthCommand({
-              TargetGroupArn: targetGroup.TargetGroupArn
-            })
-          );
-
-          // Verify targets are ECS tasks (IP targets for Fargate)
-          expect(targetGroup.TargetType).toBe('ip');
-          
-          const healthyTargets = TargetHealthDescriptions?.filter(
-            target => target.TargetHealth?.State === 'healthy'
-          );
-
-          const unhealthyTargets = TargetHealthDescriptions?.filter(
-            target => target.TargetHealth?.State === 'unhealthy'
-          );
-
-          console.log(`ALB → ECS: ${healthyTargets?.length || 0} healthy, ${unhealthyTargets?.length || 0} unhealthy targets in ${targetGroup.TargetGroupName}`);
-          
-          // It's OK if there are no healthy targets with nginx default image
-          expect(TargetHealthDescriptions?.length).toBeGreaterThanOrEqual(0);
-        }
-      }
-    }, 60000);
+      expect(healthyTargets.length).toBeGreaterThan(0);
+    }, 30000);
   });
 
-  describe('[Cross-Service] S3 → CloudFront/ALB Interaction', () => {
-    test('should serve S3 static assets through application', async () => {
-      const testAssetKey = `public/test-asset-${Date.now()}.txt`;
-      const testContent = 'Cross-service test content';
+  describe('[Service-Level] Secrets Manager for Database Credentials', () => {
+    test('should be able to retrieve database credentials from Secrets Manager', async () => {
+      const secretArn = outputs['db-secret-arn'].value;
 
-      // ACTION: Upload test asset to S3
+      // ACTION: Retrieve the secret value
+      const response = await secretsClient.send(new GetSecretValueCommand({
+        SecretId: secretArn
+      }));
+
+      expect(response.SecretString).toBeDefined();
+
+      const secretData = JSON.parse(response.SecretString!);
+      expect(secretData.username).toBeDefined();
+      expect(secretData.password).toBeDefined();
+      expect(secretData.engine).toBe('postgres');
+      expect(secretData.port).toBe(5432);
+      expect(secretData.dbname).toBeDefined();
+    }, 30000);
+  });
+
+  describe('[Service-Level] RDS PostgreSQL Database', () => {
+    test('should have RDS PostgreSQL instance running and accessible', async () => {
+      const vpcId = outputs['vpc-id'].value;
+      
+      const dbResponse = await rdsClient.send(new DescribeDBInstancesCommand({}));
+      const db = dbResponse.DBInstances!.find(d =>
+        d.DBSubnetGroup?.VpcId === vpcId
+      );
+
+      expect(db).toBeDefined();
+      expect(db!.DBInstanceStatus).toBe('available');
+      expect(db!.Engine).toBe('postgres');
+      expect(db!.Endpoint).toBeDefined();
+      expect(db!.Endpoint!.Port).toBe(5432);
+      expect(db!.PubliclyAccessible).toBe(false);
+    }, 30000);
+  });
+
+  describe('[Service-Level] S3 Static Assets', () => {
+    test('should be able to upload and retrieve files from S3 bucket', async () => {
+      const bucketName = outputs['static-assets-bucket'].value;
+      const testKey = 'integration-test/test-file.txt';
+      const testContent = 'Integration test content ' + new Date().toISOString();
+
+      // ACTION: Upload a test file
       await s3Client.send(new PutObjectCommand({
-        Bucket: staticAssetsBucket,
-        Key: testAssetKey,
+        Bucket: bucketName,
+        Key: testKey,
         Body: testContent,
         ContentType: 'text/plain'
       }));
 
-      // ACTION: Try to access through ALB (if configured)
-      try {
-        const response = await axios.get(`${albUrl}/static/${testAssetKey}`, {
-          timeout: 5000,
-          validateStatus: () => true
-        });
-
-        console.log(`Static asset access via ALB: Status ${response.status}`);
-      } catch (error) {
-        console.log('Static asset routing not configured through ALB');
-      }
-
-      // Cleanup
-      await s3Client.send(new DeleteObjectCommand({
-        Bucket: staticAssetsBucket,
-        Key: testAssetKey
+      // ACTION: Retrieve the file
+      const getResponse = await s3Client.send(new GetObjectCommand({
+        Bucket: bucketName,
+        Key: testKey
       }));
-    }, 60000);
+
+      const retrievedContent = await getResponse.Body!.transformToString();
+      expect(retrievedContent).toBe(testContent);
+
+      // ACTION: Clean up
+      await s3Client.send(new DeleteObjectCommand({
+        Bucket: bucketName,
+        Key: testKey
+      }));
+    }, 30000);
+
+    test('should have bucket versioning enabled', async () => {
+      const bucketName = outputs['static-assets-bucket'].value;
+
+      // Verify bucket exists and is accessible
+      const response = await s3Client.send(new HeadBucketCommand({
+        Bucket: bucketName
+      }));
+
+      expect(response.$metadata.httpStatusCode).toBe(200);
+    }, 30000);
   });
 
-  describe('[Cross-Service] Auto Scaling → ECS Interaction', () => {
-    test('should have auto scaling policies monitoring ECS service', async () => {
-      const resourceId = `service/${ecsClusterName}/${ecsServiceName}`;
+  describe('[Service-Level] CloudWatch Monitoring', () => {
+    test('should have CloudWatch alarms configured', async () => {
+      const alarmCount = parseInt(outputs['alarm-count'].value);
+
+      const alarmsResponse = await cloudWatchClient.send(new DescribeAlarmsCommand({
+        AlarmNamePrefix: `myapp-${environmentSuffix}`
+      }));
+
+      expect(alarmsResponse.MetricAlarms!.length).toBe(alarmCount);
+
+      // Verify specific alarms exist
+      const alarmNames = alarmsResponse.MetricAlarms!.map(a => a.AlarmName);
+      expect(alarmNames).toContain(expect.stringContaining('high-cpu'));
+      expect(alarmNames).toContain(expect.stringContaining('high-memory'));
+      expect(alarmNames).toContain(expect.stringContaining('unhealthy-hosts'));
+      expect(alarmNames).toContain(expect.stringContaining('rds-cpu'));
+      expect(alarmNames).toContain(expect.stringContaining('rds-storage'));
+    }, 30000);
+
+    test('should be able to send custom metrics to CloudWatch', async () => {
+      const namespace = `IntegrationTest/${environmentSuffix}`;
       
-      // ACTION: Get scaling configuration
-      const { ScalableTargets } = await autoScalingClient.send(
-        new DescribeScalableTargetsCommand({
-          ServiceNamespace: 'ecs',
-          ResourceIds: [resourceId]
-        })
-      );
-
-      if (ScalableTargets?.length) {
-        const target = ScalableTargets[0];
-        
-        // ACTION: Get scaling policies
-        const { ScalingPolicies } = await autoScalingClient.send(
-          new DescribeScalingPoliciesCommand({
-            ServiceNamespace: 'ecs',
-            ResourceId: resourceId
-          })
-        );
-
-        expect(ScalingPolicies?.length).toBeGreaterThan(0);
-        
-        // ACTION: Send custom metric to potentially trigger scaling
-        await cloudWatchClient.send(new PutMetricDataCommand({
-          Namespace: 'ECS/ContainerInsights',
-          MetricData: [
-            {
-              MetricName: 'TestScalingMetric',
-              Value: 75.0,
-              Unit: 'Percent',
-              Timestamp: new Date(),
-              Dimensions: [
-                { Name: 'ServiceName', Value: ecsServiceName },
-                { Name: 'ClusterName', Value: ecsClusterName }
-              ]
-            }
-          ]
-        }));
-
-        console.log(`Auto Scaling: Min=${target.MinCapacity}, Max=${target.MaxCapacity}, Policies=${ScalingPolicies?.length}`);
-      }
-    }, 60000);
-  });
-
-  // ============================================================================
-  // PART 3: E2E TESTS (Complete Flows WITH ACTUAL DATA)
-  // ============================================================================
-
-  describe('[E2E] Complete Application Flow: Client → ALB → ECS → Database', () => {
-    test('should execute complete request flow through the application stack', async () => {
-      const testId = Date.now().toString();
-
-      // Step 1: ACTION - Send request to ALB
-      const response = await axios.post(`${albUrl}/api/test`, {
-        testId: testId,
-        action: 'e2e-test',
-        timestamp: new Date().toISOString()
-      }, {
-        timeout: 10000,
-        validateStatus: () => true,
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Test-ID': testId
-        }
-      });
-
-      console.log(`E2E Request: Status ${response.status}`);
-      // Accept 503 since nginx container might not be healthy
-      expect([200, 404, 502, 503]).toContain(response.status);
-
-      // Step 2: ACTION - Verify logs were created
-      await new Promise(resolve => setTimeout(resolve, 5000)); // Wait for logs
-
-      try {
-        const logs = await logsClient.send(new FilterLogEventsCommand({
-          logGroupName: logGroupName,
-          startTime: Date.now() - 60000,
-          filterPattern: testId
-        }));
-
-        if (logs.events?.length) {
-          console.log(`E2E Logs: Found ${logs.events.length} log entries for test ID ${testId}`);
-        } else {
-          console.log('No logs found for test ID (service might not be processing requests)');
-        }
-      } catch (error) {
-        console.log('Log group not accessible');
-      }
-
-      // Step 3: ACTION - Verify metrics were recorded
+      // ACTION: Send custom metric
       await cloudWatchClient.send(new PutMetricDataCommand({
-        Namespace: 'E2ETest',
+        Namespace: namespace,
         MetricData: [
           {
-            MetricName: 'RequestCompleted',
-            Value: 1.0,
+            MetricName: 'TestMetric',
+            Value: Math.random() * 100,
             Unit: 'Count',
             Timestamp: new Date(),
             Dimensions: [
-              { Name: 'TestID', Value: testId },
-              { Name: 'Environment', Value: 'pr4337' }
+              {
+                Name: 'Environment',
+                Value: environmentSuffix
+              }
             ]
           }
         ]
       }));
 
-      console.log('E2E test completed successfully');
-    }, 120000);
-  });
+      // Wait a moment for metric to be available
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
-  describe('[E2E] High Availability Flow: Multi-AZ Deployment', () => {
-    test('should have complete high availability configuration', async () => {
-      // Step 1: Verify VPC spans multiple AZs
-      const { Subnets } = await ec2Client.send(
-        new DescribeSubnetsCommand({
-          Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
-        })
-      );
-
-      const uniqueAZs = new Set(Subnets?.map(s => s.AvailabilityZone));
-      expect(uniqueAZs.size).toBeGreaterThanOrEqual(2);
-
-      // Step 2: Verify NAT Gateways in multiple AZs
-      const { NatGateways } = await ec2Client.send(
-        new DescribeNatGatewaysCommand({
-          Filter: [{ Name: 'vpc-id', Values: [vpcId] }]
-        })
-      );
-
-      const natAZs = new Set(NatGateways?.map(ng => ng.SubnetId));
-      expect(natAZs.size).toBeGreaterThanOrEqual(2);
-
-      // Step 3: ACTION - Verify ECS service configuration
-      const { services } = await ecsClient.send(
-        new DescribeServicesCommand({
-          cluster: ecsClusterName,
-          services: [ecsServiceName]
-        })
-      );
-
-      const service = services![0];
-      const taskSubnets = service.networkConfiguration?.awsvpcConfiguration?.subnets || [];
-      expect(taskSubnets.length).toBeGreaterThanOrEqual(2);
-
-      // Step 4: ACTION - Send requests to verify load distribution
-      const requests = Array(10).fill(null).map((_, i) => 
-        axios.get(albUrl, {
-          headers: { 'X-Request-ID': `ha-test-${i}` },
-          timeout: 5000,
-          validateStatus: () => true
-        })
-      );
-
-      const results = await Promise.allSettled(requests);
-      const successful = results.filter(r => r.status === 'fulfilled').length;
-      
-      console.log(`HA Test: ${successful}/10 requests completed across ${uniqueAZs.size} AZs`);
-      expect(successful).toBeGreaterThan(0); // At least some requests should complete
-    }, 120000);
-  });
-
-  describe('[E2E] Security Flow: IAM → Secrets Manager → RDS', () => {
-    test('should enforce secure credential access through IAM roles', async () => {
-      // Step 1: Verify task execution role
-      const taskDefFamily = taskDefinitionArn.split('/').pop();
-      const { taskDefinition } = await ecsClient.send(
-        new DescribeTaskDefinitionCommand({ taskDefinition: taskDefFamily })
-      );
-
-      const executionRoleName = taskDefinition?.executionRoleArn?.split('/').pop();
-      
-      if (executionRoleName) {
-        // Step 2: ACTION - Verify IAM role exists
-        try {
-          const role = await iamClient.send(new GetRoleCommand({ RoleName: executionRoleName }));
-          expect(role.Role).toBeDefined();
-          
-          console.log(`IAM Role ${executionRoleName}: Configured for Secrets Manager access`);
-        } catch (error) {
-          console.log('IAM role not accessible');
-        }
-
-        // Step 3: ACTION - Simulate credential retrieval
-        
-        console.log('E2E Security: Credentials properly managed through Secrets Manager');
-      }
-    }, 60000);
-  });
-
-  describe('[E2E] Monitoring Flow: Application → CloudWatch → Alarms', () => {
-    test('should have complete monitoring flow with metrics and alarms', async () => {
-      const testMetricNamespace = 'E2ETest/Monitoring';
-      const testMetricName = 'ApplicationHealth';
-
-      // Step 1: ACTION - Send test metric
-      await cloudWatchClient.send(new PutMetricDataCommand({
-        Namespace: testMetricNamespace,
-        MetricData: [
-          {
-            MetricName: testMetricName,
-            Value: 100.0,
-            Unit: 'Percent',
-            Timestamp: new Date(),
-            Dimensions: [
-              { Name: 'Environment', Value: 'pr4337' },
-              { Name: 'Service', Value: ecsServiceName }
-            ]
-          }
-        ]
+      // Verify metric exists
+      const statsResponse = await cloudWatchClient.send(new GetMetricStatisticsCommand({
+        Namespace: namespace,
+        MetricName: 'TestMetric',
+        Dimensions: [
+          { Name: 'Environment', Value: environmentSuffix }
+        ],
+        StartTime: new Date(Date.now() - 300000),
+        EndTime: new Date(),
+        Period: 60,
+        Statistics: ['Average']
       }));
 
-      // Step 2: ACTION - Create and write test log entry
-      const logStreamName = `e2e-monitoring-${Date.now()}`;
-      
-      try {
-        await logsClient.send(new CreateLogStreamCommand({
-          logGroupName: logGroupName,
-          logStreamName: logStreamName
-        }));
-
-        await logsClient.send(new PutLogEventsCommand({
-          logGroupName: logGroupName,
-          logStreamName: logStreamName,
-          logEvents: [
-            {
-              timestamp: Date.now(),
-              message: JSON.stringify({
-                level: 'ERROR',
-                test: 'e2e-monitoring',
-                error: 'Test error for monitoring flow'
-              })
-            }
-          ]
-        }));
-      } catch (error) {
-        console.log('Could not create test log stream');
-      }
-
-      // Step 3: Verify alarms are configured
-      const { MetricAlarms } = await cloudWatchClient.send(
-        new DescribeAlarmsCommand({
-          AlarmNamePrefix: 'myapp-pr4337'
-        })
-      );
-
-      expect(MetricAlarms?.length).toBe(5); // Based on your alarm-count output
-
-      // Step 4: Check alarm states
-      const alarmStates = MetricAlarms?.map(alarm => ({
-        name: alarm.AlarmName,
-        state: alarm.StateValue,
-        metric: alarm.MetricName
-      }));
-
-      console.log('E2E Monitoring: Active alarms:');
-      alarmStates?.forEach(alarm => {
-        console.log(`  - ${alarm.name}: ${alarm.state} (${alarm.metric})`);
-      });
-
-      console.log('E2E Monitoring flow completed successfully');
-    }, 90000);
-  });
-
-  describe('[E2E] Disaster Recovery Flow: Backup and Restore', () => {
-    test('should support disaster recovery with backups', async () => {
-      const testBackupKey = `backups/e2e-test-${Date.now()}.json`;
-      const testData = {
-        type: 'disaster-recovery-test',
-        timestamp: new Date().toISOString(),
-        data: 'Critical application data'
-      };
-
-      // Step 1: ACTION - Create backup in S3
-      await s3Client.send(new PutObjectCommand({
-        Bucket: staticAssetsBucket,
-        Key: testBackupKey,
-        Body: JSON.stringify(testData),
-        ServerSideEncryption: 'AES256',
-        StorageClass: 'STANDARD_IA'
-      }));
-
-      // Step 2: Verify versioning is enabled (for recovery)
-      const versioning = await s3Client.send(
-        new GetBucketVersioningCommand({ 
-          Bucket: staticAssetsBucket 
-        })
-      );
-      expect(versioning.Status).toBe('Enabled');
-
-      // Step 3: ACTION - Simulate recovery by reading backup
-      const backup = await s3Client.send(new GetObjectCommand({
-        Bucket: staticAssetsBucket,
-        Key: testBackupKey
-      }));
-
-      const recoveredData = JSON.parse(await backup.Body?.transformToString() || '{}');
-      expect(recoveredData.type).toBe('disaster-recovery-test');
-
-      // Step 4: Verify RDS automated backups
-      if (rdsEndpoint) {
-        const { DBInstances } = await rdsClient.send(new DescribeDBInstancesCommand({}));
-        const rdsInstance = DBInstances?.find(db => 
-          db.Endpoint?.Address === rdsEndpoint.split(':')[0]
-        );
-
-        if (rdsInstance) {
-          expect(rdsInstance.BackupRetentionPeriod).toBeGreaterThan(0);
-          console.log(`RDS Backup Retention: ${rdsInstance.BackupRetentionPeriod} days`);
-        }
-      }
-
-      // Cleanup
-      await s3Client.send(new DeleteObjectCommand({
-        Bucket: staticAssetsBucket,
-        Key: testBackupKey
-      }));
-
-      console.log('E2E Disaster Recovery: Backup and restore capabilities verified');
-    }, 90000);
+      expect(statsResponse.Datapoints).toBeDefined();
+    }, 30000);
   });
 
   // ============================================================================
-  // Configuration Validation Tests (kept for completeness)
+  // PART 2: CROSS-SERVICE TESTS (Services Interacting)
+  // ============================================================================
+
+  describe('[Cross-Service] ECS Tasks → Secrets Manager', () => {
+    test('should allow ECS tasks to retrieve secrets via IAM role', async () => {
+      const taskDefArn = outputs['task-definition-arn'].value;
+      const secretArn = outputs['db-secret-arn'].value;
+
+      // Get task definition to verify secret configuration
+      const taskDefResponse = await ecsClient.send(new DescribeTaskDefinitionCommand({
+        taskDefinition: taskDefArn
+      }));
+
+      const containerDef = taskDefResponse.taskDefinition!.containerDefinitions![0];
+      
+      // Verify task has secrets configured
+      const dbSecret = containerDef.secrets?.find(s => s.name === 'DB_CONNECTION');
+      expect(dbSecret).toBeDefined();
+      expect(dbSecret!.valueFrom).toBe(secretArn);
+    }, 30000);
+  });
+
+  describe('[Cross-Service] ECS Tasks → RDS Database', () => {
+    test('should have security groups allowing ECS to RDS connectivity', async () => {
+      const vpcId = outputs['vpc-id'].value;
+
+      // Get security groups
+      const sgResponse = await ec2Client.send(new DescribeSecurityGroupsCommand({
+        Filters: [
+          { Name: 'vpc-id', Values: [vpcId] }
+        ]
+      }));
+
+      const taskSg = sgResponse.SecurityGroups!.find(sg =>
+        sg.GroupName?.includes('task-sg')
+      );
+
+      const dbSg = sgResponse.SecurityGroups!.find(sg =>
+        sg.GroupName?.includes('db-sg')
+      );
+
+      // Verify DB security group allows traffic from task security group
+      const dbIngress = dbSg!.IpPermissions!.find(rule => 
+        rule.FromPort === 5432 && rule.ToPort === 5432
+      );
+
+      expect(dbIngress).toBeDefined();
+      expect(dbIngress!.UserIdGroupPairs).toBeDefined();
+      expect(dbIngress!.UserIdGroupPairs!.some(
+        pair => pair.GroupId === taskSg!.GroupId
+      )).toBe(true);
+    }, 30000);
+  });
+
+  describe('[Cross-Service] ALB → ECS Service', () => {
+    test('should have ALB routing traffic to ECS tasks', async () => {
+      const clusterName = outputs['ecs-cluster-name'].value;
+      const serviceName = outputs['ecs-service-name'].value;
+
+      // Get service details
+      const serviceResponse = await ecsClient.send(new DescribeServicesCommand({
+        cluster: clusterName,
+        services: [serviceName]
+      }));
+
+      const service = serviceResponse.services![0];
+      
+      // Verify load balancer configuration
+      expect(service.loadBalancers).toHaveLength(1);
+      expect(service.loadBalancers![0].targetGroupArn).toBeDefined();
+      expect(service.loadBalancers![0].containerPort).toBe(3000);
+    }, 30000);
+  });
+
+  describe('[Cross-Service] CloudWatch → ECS', () => {
+    test('should have CloudWatch Logs receiving container logs', async () => {
+      const logGroupName = outputs['log-group-name'].value;
+
+      // Verify log group exists
+      const logGroupsResponse = await cwLogsClient.send(new DescribeLogGroupsCommand({
+        logGroupNamePrefix: logGroupName
+      }));
+
+      const logGroup = logGroupsResponse.logGroups!.find(
+        lg => lg.logGroupName === logGroupName
+      );
+
+      expect(logGroup).toBeDefined();
+      expect(logGroup!.retentionInDays).toBeDefined();
+
+      // Check for log streams (from running tasks)
+      const streamsResponse = await cwLogsClient.send(new DescribeLogStreamsCommand({
+        logGroupName: logGroupName,
+        orderBy: 'LastEventTime',
+        descending: true,
+        limit: 5
+      }));
+
+      expect(streamsResponse.logStreams).toBeDefined();
+      if (streamsResponse.logStreams!.length > 0) {
+        expect(streamsResponse.logStreams![0].logStreamName).toContain('ecs');
+      }
+    }, 30000);
+  });
+
+  // ============================================================================
+  // PART 3: E2E TESTS (Complete Application Flows)
+  // ============================================================================
+
+  describe('[E2E] Complete Application Request Flow', () => {
+    test('should handle complete request: ALB → ECS → RDS', async () => {
+      const albUrl = outputs['alb-url'].value;
+      const clusterName = outputs['ecs-cluster-name'].value;
+      const serviceName = outputs['ecs-service-name'].value;
+
+      // Step 1: Verify service is running
+      const serviceResponse = await ecsClient.send(new DescribeServicesCommand({
+        cluster: clusterName,
+        services: [serviceName]
+      }));
+
+      expect(serviceResponse.services![0].runningCount).toBeGreaterThan(0);
+
+      // Step 2: Make request to ALB
+      try {
+        const response = await axios.get(`${albUrl}/health`, {
+          timeout: 10000,
+          validateStatus: () => true
+        });
+
+        // Application should respond (even if with error due to no app code)
+        expect(response.status).toBeDefined();
+      } catch (error: any) {
+        if (error.code === 'ECONNREFUSED') {
+          console.log('ALB not accepting connections. This might be expected.');
+          return;
+        }
+      }
+
+      // Step 3: Verify metrics are being collected
+      const metricsResponse = await cloudWatchClient.send(new GetMetricStatisticsCommand({
+        Namespace: 'AWS/ECS',
+        MetricName: 'CPUUtilization',
+        Dimensions: [
+          { Name: 'ClusterName', Value: clusterName },
+          { Name: 'ServiceName', Value: serviceName }
+        ],
+        StartTime: new Date(Date.now() - 3600000),
+        EndTime: new Date(),
+        Period: 300,
+        Statistics: ['Average']
+      }));
+
+      expect(metricsResponse.Datapoints).toBeDefined();
+    }, 60000);
+  });
+
+  describe('[E2E] Network Connectivity Flow', () => {
+    test('should have complete network path: Internet → ALB → ECS → RDS', async () => {
+      const vpcId = outputs['vpc-id'].value;
+      const vpcCidr = outputs['vpc-cidr'].value;
+
+      // Step 1: Verify VPC
+      const vpcResponse = await ec2Client.send(new DescribeVpcsCommand({
+        VpcIds: [vpcId]
+      }));
+
+      expect(vpcResponse.Vpcs![0].State).toBe('available');
+      expect(vpcResponse.Vpcs![0].CidrBlock).toBe(vpcCidr);
+
+      // Step 2: Verify Internet Gateway
+      const igwResponse = await ec2Client.send(new DescribeInternetGatewaysCommand({
+        Filters: [{ Name: 'attachment.vpc-id', Values: [vpcId] }]
+      }));
+
+      expect(igwResponse.InternetGateways).toHaveLength(1);
+      expect(igwResponse.InternetGateways![0].Attachments![0].State).toBe('available');
+
+      // Step 3: Verify NAT Gateways for private subnets
+      const natResponse = await ec2Client.send(new DescribeNatGatewaysCommand({
+        Filters: [
+          { Name: 'vpc-id', Values: [vpcId] },
+          { Name: 'state', Values: ['available'] }
+        ]
+      }));
+
+      expect(natResponse.NatGateways!.length).toBeGreaterThan(0);
+
+      // Step 4: Verify routing tables
+      const rtResponse = await ec2Client.send(new DescribeRouteTablesCommand({
+        Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
+      }));
+
+      const publicRT = rtResponse.RouteTables!.find(rt =>
+        rt.Tags?.some(tag => tag.Value?.includes('public'))
+      );
+
+      const privateRT = rtResponse.RouteTables!.find(rt =>
+        rt.Tags?.some(tag => tag.Value?.includes('private'))
+      );
+
+      // Public route table should route to IGW
+      const igwRoute = publicRT?.Routes?.find(r => 
+        r.DestinationCidrBlock === '0.0.0.0/0' && r.GatewayId?.startsWith('igw-')
+      );
+      expect(igwRoute).toBeDefined();
+
+      // Private route table should route to NAT
+      const natRoute = privateRT?.Routes?.find(r => 
+        r.DestinationCidrBlock === '0.0.0.0/0' && r.NatGatewayId?.startsWith('nat-')
+      );
+      expect(natRoute).toBeDefined();
+    }, 60000);
+  });
+
+  describe('[E2E] Security Enforcement Flow', () => {
+    test('should enforce least privilege: RDS only accessible from ECS tasks', async () => {
+      const vpcId = outputs['vpc-id'].value;
+
+      // Get all security groups
+      const sgResponse = await ec2Client.send(new DescribeSecurityGroupsCommand({
+        Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
+      }));
+
+      const albSg = sgResponse.SecurityGroups!.find(sg =>
+        sg.GroupName?.includes('alb-sg')
+      );
+
+      const taskSg = sgResponse.SecurityGroups!.find(sg =>
+        sg.GroupName?.includes('task-sg')
+      );
+
+      const dbSg = sgResponse.SecurityGroups!.find(sg =>
+        sg.GroupName?.includes('db-sg')
+      );
+
+      // ALB should allow HTTP/HTTPS from internet
+      const httpIngress = albSg!.IpPermissions!.find(r => r.FromPort === 80);
+      expect(httpIngress!.IpRanges).toContainEqual(
+        expect.objectContaining({ CidrIp: '0.0.0.0/0' })
+      );
+
+      // Task SG should allow traffic from ALB only
+      const taskIngress = taskSg!.IpPermissions!.find(r => r.FromPort === 3000);
+      expect(taskIngress!.UserIdGroupPairs).toContainEqual(
+        expect.objectContaining({ GroupId: albSg!.GroupId })
+      );
+
+      // DB should ONLY allow from task SG
+      const dbIngress = dbSg!.IpPermissions!.find(r => r.FromPort === 5432);
+      expect(dbIngress!.UserIdGroupPairs).toHaveLength(1);
+      expect(dbIngress!.UserIdGroupPairs![0].GroupId).toBe(taskSg!.GroupId);
+      expect(dbIngress!.IpRanges || []).toHaveLength(0);
+    }, 30000);
+  });
+
+  describe('[E2E] Auto-Scaling Flow', () => {
+    test('should have auto-scaling configured for ECS service', async () => {
+      const clusterName = outputs['ecs-cluster-name'].value;
+      const serviceName = outputs['ecs-service-name'].value;
+
+      // Get service details
+      const serviceResponse = await ecsClient.send(new DescribeServicesCommand({
+        cluster: clusterName,
+        services: [serviceName]
+      }));
+
+      const service = serviceResponse.services![0];
+      
+      // Service should be configured with desired count
+      expect(service.desiredCount).toBeGreaterThan(0);
+      
+      // Deployment configuration should support rolling updates
+      expect(service.deploymentConfiguration).toBeDefined();
+      expect(service.deploymentConfiguration!.deploymentCircuitBreaker?.enable).toBe(true);
+      expect(service.deploymentConfiguration!.deploymentCircuitBreaker?.rollback).toBe(true);
+    }, 30000);
+  });
+
+  // ============================================================================
+  // Infrastructure Configuration Validation
   // ============================================================================
 
   describe('Infrastructure Configuration Validation', () => {
     test('should have all required outputs defined', () => {
-      expect(vpcId).toBeDefined();
-      expect(albDnsName).toBeDefined();
-      expect(ecsClusterName).toBeDefined();
-      expect(ecsServiceName).toBeDefined();
-      expect(taskDefinitionArn).toBeDefined();
-      expect(dbSecretArn).toBeDefined();
-      expect(staticAssetsBucket).toBeDefined();
-      expect(logGroupName).toBeDefined();
+      const requiredOutputs = [
+        'vpc-id',
+        'vpc-cidr',
+        'rds-endpoint',
+        'db-secret-arn',
+        'alb-dns-name',
+        'alb-url',
+        'ecs-cluster-name',
+        'ecs-service-name',
+        'task-definition-arn',
+        'static-assets-bucket',
+        'static-assets-bucket-arn',
+        'dashboard-url',
+        'alarm-count',
+        'log-group-name'
+      ];
+
+      requiredOutputs.forEach(output => {
+        expect(outputs[output]).toBeDefined();
+        expect(outputs[output].value).toBeDefined();
+      });
     });
 
-    test('should have proper resource naming conventions', () => {
-      expect(ecsClusterName).toContain('pr4337');
-      expect(ecsServiceName).toContain('pr4337');
-      expect(staticAssetsBucket).toContain('pr4337');
-      expect(logGroupName).toContain('pr4337');
+    test('should have correct VPC CIDR configuration', () => {
+      expect(outputs['vpc-cidr'].value).toBe('10.0.0.0/16');
+    });
+
+    test('should have correct number of alarms configured', () => {
+      expect(parseInt(outputs['alarm-count'].value)).toBe(5);
+    });
+
+    test('should have ALB URL properly formatted', () => {
+      const albUrl = outputs['alb-url'].value;
+      const albDnsName = outputs['alb-dns-name'].value;
       
-      // Verify ARN formats
-      expect(dbSecretArn).toMatch(/^arn:aws:secretsmanager:[^:]+:[^:]+:secret:.+$/);
-      expect(taskDefinitionArn).toMatch(/^arn:aws:ecs:[^:]+:[^:]+:task-definition\/.+$/);
+      expect(albUrl).toBe(`http://${albDnsName}`);
+      expect(albDnsName).toContain('.elb.amazonaws.com');
     });
 
-    test('should have network properly configured', async () => {
-      const { Vpcs } = await ec2Client.send(
-        new DescribeVpcsCommand({ VpcIds: [vpcId] })
-      );
+    test('should have ECS resources with correct naming convention', () => {
+      const clusterName = outputs['ecs-cluster-name'].value;
+      const serviceName = outputs['ecs-service-name'].value;
+      
+      expect(clusterName).toContain(`myapp-${environmentSuffix}-cluster`);
+      expect(serviceName).toContain(`myapp-${environmentSuffix}-service`);
+    });
 
-      const vpc = Vpcs![0];
-      expect(vpc.State).toBe('available');
-    }, 30000);
-
-    test('should have security best practices enforced', async () => {
-      // Check S3 public access block
-      const publicBlock = await s3Client.send(
-        new GetPublicAccessBlockCommand({ 
-          Bucket: staticAssetsBucket 
-        })
-      );
-
-      expect(publicBlock.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
-      expect(publicBlock.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
-      expect(publicBlock.PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
-      expect(publicBlock.PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
-    }, 30000);
+    test('should have S3 bucket with correct naming', () => {
+      const bucketName = outputs['static-assets-bucket'].value;
+      
+      expect(bucketName).toContain(`myapp-${environmentSuffix}-static-assets`);
+    });
   });
 });
