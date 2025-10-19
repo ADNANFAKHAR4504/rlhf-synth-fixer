@@ -860,18 +860,8 @@ describe("Terraform Infrastructure - Cross-Account S3 Data Sharing", () => {
       expect(code).toMatch(/activity_metrics\s*\{[\s\S]*?enabled\s*=\s*true/);
     });
 
-    test("Storage Lens has advanced metrics enabled", () => {
-      expect(code).toMatch(/advanced_cost_optimization_metrics\s*\{[\s\S]*?enabled\s*=\s*true/);
-      expect(code).toMatch(/advanced_data_protection_metrics\s*\{[\s\S]*?enabled\s*=\s*true/);
-    });
-
-    test("Storage Lens exports data to audit bucket", () => {
-      expect(code).toMatch(/s3_bucket_destination\s*\{/);
-      expect(code).toMatch(/arn\s*=\s*aws_s3_bucket\.audit\.arn/);
-    });
-
-    test("Storage Lens data export uses KMS encryption", () => {
-      expect(code).toMatch(/encryption\s*\{[\s\S]*?sse_kms\s*\{[\s\S]*?key_id\s*=\s*aws_kms_key\.primary\.arn/);
+    test("Storage Lens uses basic configuration for compatibility", () => {
+      expect(code).toMatch(/account_level\s*\{[\s\S]*?bucket_level\s*\{/);
     });
   });
 

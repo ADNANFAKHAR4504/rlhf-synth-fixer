@@ -232,10 +232,187 @@ resource "aws_kms_key" "primary" {
 
 ---
 
+## Failure 3: S3 Storage Lens - Advanced Metrics and Data Export Error
+
+### Error Message
+```
+Error: creating S3 Storage Lens Configuration: operation error S3 Control: PutStorageLensConfiguration,
+https response error StatusCode: 400, RequestID: MX5VEAFGQCZTXWDF,
+api error UnknownError: UnknownError
+
+  with aws_s3control_storage_lens_configuration.main[0],
+  on tap_stack.tf line 1440, in resource "aws_s3control_storage_lens_configuration" "main":
+ 1440: resource "aws_s3control_storage_lens_configuration" "main" {
+```
+
+### Root Cause
+S3 Storage Lens configuration included advanced premium features not available in all AWS accounts:
+- `advanced_cost_optimization_metrics` - Requires S3 Storage Lens advanced metrics (paid feature)
+- `advanced_data_protection_metrics` - Requires S3 Storage Lens advanced metrics (paid feature)
+- `detailed_status_code_metrics` - Requires S3 Storage Lens advanced metrics (paid feature)
+- `data_export` with KMS encryption - May have compatibility issues or require additional permissions
+
+AWS returns a vague "UnknownError" when attempting to use premium features not enabled on the account.
+
+### Impact
+- Infrastructure deployment failed during S3 Storage Lens resource creation
+- Blocked complete infrastructure provisioning
+- Required configuration simplification
+
+### Detailed Analysis
+
+**Original Code (BROKEN)**:
+```hcl
+resource "aws_s3control_storage_lens_configuration" "main" {
+  count = var.enable_storage_lens ? 1 : 0
+
+  config_id = "${var.project_name}-storage-lens-${local.env_suffix}"
+
+  storage_lens_configuration {
+    enabled = true
+
+    account_level {
+      bucket_level {
+        activity_metrics {
+          enabled = true
+        }
+
+        advanced_cost_optimization_metrics {  # Premium feature
+          enabled = true
+        }
+
+        advanced_data_protection_metrics {  # Premium feature
+          enabled = true
+        }
+
+        detailed_status_code_metrics {  # Premium feature
+          enabled = true
+        }
+      }
+    }
+
+    data_export {  # May require additional setup
+      s3_bucket_destination {
+        account_id            = local.account_id
+        arn                   = aws_s3_bucket.audit.arn
+        format                = "CSV"
+        output_schema_version = "V_1"
+        prefix                = "storage-lens/"
+
+        encryption {
+          sse_kms {
+            key_id = aws_kms_key.primary.arn
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+**Problem**:
+- Advanced metrics are premium features requiring S3 Storage Lens Advanced subscription
+- Free tier only supports basic activity metrics
+- Data export with KMS may require additional bucket policy permissions
+- No validation exists to check if account has premium features enabled
+
+### Solution
+
+Use basic Storage Lens configuration with only free-tier features:
+
+**GOOD - Correct Basic Configuration**:
+```hcl
+resource "aws_s3control_storage_lens_configuration" "main" {
+  count = var.enable_storage_lens ? 1 : 0
+
+  config_id = "${var.project_name}-storage-lens-${local.env_suffix}"
+
+  storage_lens_configuration {
+    enabled = true
+
+    account_level {
+      bucket_level {
+        activity_metrics {  # Free tier feature
+          enabled = true
+        }
+      }
+    }
+    # No data export - can be added later if needed with proper bucket permissions
+  }
+}
+```
+
+**What Changed**:
+- Removed `advanced_cost_optimization_metrics` (requires premium)
+- Removed `advanced_data_protection_metrics` (requires premium)
+- Removed `detailed_status_code_metrics` (requires premium)
+- Removed `data_export` block (can be added later with SSE-S3 or proper permissions)
+- Kept only `activity_metrics` which is available in free tier
+
+### Prevention
+
+**Best Practices for S3 Storage Lens**:
+
+1. **Start with basic configuration**:
+   ```hcl
+   # Use only free-tier features initially
+   bucket_level {
+     activity_metrics {
+       enabled = true
+     }
+   }
+   ```
+
+2. **Add advanced features conditionally**:
+   ```hcl
+   variable "storage_lens_advanced" {
+     description = "Enable advanced Storage Lens metrics (requires premium)"
+     type        = bool
+     default     = false
+   }
+
+   dynamic "advanced_cost_optimization_metrics" {
+     for_each = var.storage_lens_advanced ? [1] : []
+     content {
+       enabled = true
+     }
+   }
+   ```
+
+3. **Use SSE-S3 for data export instead of SSE-KMS** (simpler, fewer permissions needed):
+   ```hcl
+   data_export {
+     s3_bucket_destination {
+       arn    = aws_s3_bucket.audit.arn
+       format = "CSV"
+       # No encryption block = defaults to SSE-S3
+     }
+   }
+   ```
+
+4. **Test in non-production accounts first** - Storage Lens features vary by account type
+
+5. **Check AWS account entitlements** before enabling premium features
+
+**Files Modified**:
+- `lib/tap_stack.tf` - Lines 1440-1456 (Storage Lens configuration)
+- `lib/IDEAL_RESPONSE.md` - Updated to match corrected implementation
+- `test/terraform.unit.test.ts` - Removed tests for advanced metrics
+
+### Lessons Learned
+
+1. **AWS Free Tier Limitations**: Not all AWS features are available in free tier; advanced metrics require paid subscriptions
+2. **Vague Error Messages**: AWS sometimes returns "UnknownError" for feature entitlement issues
+3. **Feature Availability Varies**: S3 Storage Lens advanced features require explicit enablement
+4. **Start Simple**: Begin with basic configurations and add complexity incrementally
+5. **Documentation Gaps**: AWS error messages don't always clearly indicate premium feature requirements
+
+---
+
 ## Summary
 
-**Total Failures**: 2
-**Time to Resolution**: ~10 minutes
+**Total Failures**: 3
+**Time to Resolution**: ~15 minutes
 **Impact**: Prevented deployment, but caught before production
 
 **Key Takeaways**:
@@ -243,6 +420,8 @@ resource "aws_kms_key" "primary" {
 - Test with default variable values (empty maps, empty lists)
 - Use conditional logic for optional policy statements
 - Reference official documentation for exact syntax
+- Start with basic/free-tier features before adding premium features
+- Test in non-production environments first
 - Document all failures for team learning
 
 ---

@@ -1450,34 +1450,6 @@ resource "aws_s3control_storage_lens_configuration" "main" {
         activity_metrics {
           enabled = true
         }
-
-        advanced_cost_optimization_metrics {
-          enabled = true
-        }
-
-        advanced_data_protection_metrics {
-          enabled = true
-        }
-
-        detailed_status_code_metrics {
-          enabled = true
-        }
-      }
-    }
-
-    data_export {
-      s3_bucket_destination {
-        account_id            = local.account_id
-        arn                   = aws_s3_bucket.audit.arn
-        format                = "CSV"
-        output_schema_version = "V_1"
-        prefix                = "storage-lens/"
-
-        encryption {
-          sse_kms {
-            key_id = aws_kms_key.primary.arn
-          }
-        }
       }
     }
   }

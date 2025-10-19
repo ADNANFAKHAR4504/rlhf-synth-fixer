@@ -3,7 +3,7 @@
   "language": "hcl",
   "complexity": "expert",
   "turn_type": "single",
-  "po_id": "4797",
+  "po_id": "4803",
   "team": "5",
   "training_quality": 10,
   "background": "Cross-account S3 data sharing system with KMS encryption, DynamoDB access control, CloudTrail auditing, real-time monitoring, Lambda governance automation, and comprehensive security alerting for 10TB data distribution across 20 AWS accounts",
