@@ -5,8 +5,8 @@ import path from 'path';
 const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
 const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
 
-// Load consolidated outputs to get stack name
-const consolidatedPath = path.join(__dirname, '../cfn-outputs/consolidated-outputs.json');
+// Load consolidated outputs to get stack name (CI uses all-outputs.json)
+const consolidatedPath = path.join(__dirname, '../cfn-outputs/all-outputs.json');
 const consolidatedOutputs = JSON.parse(fs.readFileSync(consolidatedPath, 'utf8'));
 const stackName = Object.keys(consolidatedOutputs)[0];
 
