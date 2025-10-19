@@ -1751,7 +1751,7 @@ resource "aws_cloudwatch_metric_alarm" "aurora_lag_alarm" {
 # ========================================
 
 resource "aws_sns_topic" "dr_notifications" {
-  provider = aws.primary
+  provider = aws.dr
   name     = "${var.project_name}-dr-notifications-${local.unique_suffix}"
 
   tags = merge(local.common_tags, {
@@ -1760,7 +1760,7 @@ resource "aws_sns_topic" "dr_notifications" {
 }
 
 resource "aws_sns_topic_subscription" "dr_email" {
-  provider  = aws.primary
+  provider  = aws.dr
   topic_arn = aws_sns_topic.dr_notifications.arn
   protocol  = "email"
   endpoint  = var.alarm_email
