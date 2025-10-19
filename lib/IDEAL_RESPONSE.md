@@ -382,7 +382,7 @@ exports.handler = async (event) => {
     }
     
     if (suspiciousEvents.length > 0) {
-      const snsClient = new SNSClient({ region: process.env.AWS_REGION });
+      const snsClient = new SNSClient();
       const command = new PublishCommand({
         TopicArn: process.env.SNS_TOPIC_ARN,
         Subject: 'Security Alert: Suspicious Network Activity',
@@ -485,7 +485,6 @@ resource "aws_lambda_function" "monitoring_lambda" {
   environment {
     variables = {
       SNS_TOPIC_ARN = aws_sns_topic.alerts_topic.arn
-      AWS_REGION    = var.aws_region
     }
   }
 

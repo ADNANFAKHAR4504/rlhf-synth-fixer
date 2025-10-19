@@ -71,11 +71,20 @@ The model response did not provide sufficient outputs for integration testing an
 
 Required changes: Add outputs for all critical resources including nat_gateway_id and internet_gateway_id for complete infrastructure verification.
 
+### 13. Lambda Reserved Environment Variables
+The model response set AWS_REGION as a Lambda environment variable, which is a reserved variable that cannot be modified in AWS Lambda. This causes deployment failure with error: "InvalidParameterValueException: Lambda was unable to configure your environment variables because the environment variables you have provided contains reserved keys".
+
+Required changes:
+- Remove AWS_REGION from Lambda environment variables block
+- Update Lambda code to use SNSClient() without explicit region parameter - AWS SDK v3 automatically detects region from Lambda execution environment
+- Rely on AWS Lambda's native AWS_REGION environment variable instead of setting it manually
+
 ## Summary
 The primary infrastructure deficiencies in the model response were:
 - Inadequate security controls with overly permissive egress rules
 - Non-deletable resources due to long retention and deletion windows
 - Use of deprecated Lambda runtime
+- Use of reserved Lambda environment variables causing deployment failure
 - Missing proper IAM policies and service integrations
 - Lack of environment parameterization for test isolation
 - Insufficient error handling in Lambda code
