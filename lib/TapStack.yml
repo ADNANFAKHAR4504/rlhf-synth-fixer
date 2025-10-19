@@ -833,7 +833,7 @@ Resources:
           HealthCheck:
             Command:
               - CMD-SHELL
-              - wget --spider -q http://localhost:8080/ || exit 1
+              - 'nc -z localhost 8080 || exit 1'
             Interval: 30
             Timeout: 5
             Retries: 3
