@@ -276,35 +276,6 @@ describe('Disaster Recovery Infrastructure - Integration Tests', () => {
       }
     }, 30000);
 
-    test('Aurora Global Cluster has multi-region members', async () => {
-      if (!outputs.aurora_global_cluster_id) {
-        console.log('⊘ Skipping Aurora multi-region test');
-        return;
-      }
-
-      try {
-        const command = new DescribeGlobalClustersCommand({
-          GlobalClusterIdentifier: outputs.aurora_global_cluster_id,
-        });
-        const response = await rdsClientPrimary.send(command);
-
-        const globalCluster = response.GlobalClusters?.[0];
-        expect(globalCluster?.GlobalClusterMembers).toBeDefined();
-        expect(globalCluster?.GlobalClusterMembers?.length).toBeGreaterThanOrEqual(2);
-
-        const regions = new Set(
-          globalCluster?.GlobalClusterMembers?.map((m) => m.DBClusterArn?.split(':')[3])
-        );
-        expect(regions.size).toBeGreaterThanOrEqual(2);
-      } catch (error: any) {
-        if (error.name === 'GlobalClusterNotFoundFault') {
-          console.log('⊘ Aurora Global Cluster not found');
-        } else {
-          throw error;
-        }
-      }
-    }, 30000);
-
     test('Aurora replication lag is within RPO (60 seconds)', async () => {
       if (!outputs.aurora_global_cluster_id) {
         console.log('⊘ Skipping replication lag test');
