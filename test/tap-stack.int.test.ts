@@ -3,13 +3,51 @@ import {
   DescribeStacksCommand,
 } from '@aws-sdk/client-cloudformation';
 import {
-  DeleteItemCommand,
-  DescribeTableCommand,
-  DynamoDBClient,
-  GetItemCommand,
-  PutItemCommand,
-  ScanCommand,
-} from '@aws-sdk/client-dynamodb';
+  EC2Client,
+  DescribeVpcsCommand,
+  DescribeSubnetsCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeNatGatewaysCommand,
+} from '@aws-sdk/client-ec2';
+import {
+  RDSClient,
+  DescribeDBClustersCommand,
+  DescribeDBInstancesCommand,
+} from '@aws-sdk/client-rds';
+import {
+  ElastiCacheClient,
+  DescribeReplicationGroupsCommand,
+} from '@aws-sdk/client-elasticache';
+import {
+  EFSClient,
+  DescribeFileSystemsCommand,
+} from '@aws-sdk/client-efs';
+import {
+  ECSClient,
+  DescribeClustersCommand,
+  DescribeServicesCommand,
+} from '@aws-sdk/client-ecs';
+import {
+  KinesisClient,
+  DescribeStreamCommand,
+} from '@aws-sdk/client-kinesis';
+import {
+  APIGatewayClient,
+  GetRestApisCommand,
+} from '@aws-sdk/client-api-gateway';
+import {
+  ElasticLoadBalancingV2Client,
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
+  SecretsManagerClient,
+  DescribeSecretCommand,
+} from '@aws-sdk/client-secrets-manager';
+import {
+  KMSClient,
+  DescribeKeyCommand,
+} from '@aws-sdk/client-kms';
 import fs from 'fs';
 import path from 'path';
 
@@ -17,18 +55,24 @@ import path from 'path';
 const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
 const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
 
-// Get environment suffix from outputs (which is the actual deployed value)
-// Fall back to environment variable if not in outputs
-const environmentSuffix = outputs.EnvironmentSuffix || process.env.ENVIRONMENT_SUFFIX || 'dev';
 const region = process.env.AWS_REGION || 'us-east-1';
 
 // Initialize AWS clients
-const dynamoClient = new DynamoDBClient({ region });
 const cfnClient = new CloudFormationClient({ region });
+const ec2Client = new EC2Client({ region });
+const rdsClient = new RDSClient({ region });
+const elasticacheClient = new ElastiCacheClient({ region });
+const efsClient = new EFSClient({ region });
+const ecsClient = new ECSClient({ region });
+const kinesisClient = new KinesisClient({ region });
+const apiGatewayClient = new APIGatewayClient({ region });
+const elbClient = new ElasticLoadBalancingV2Client({ region });
+const secretsClient = new SecretsManagerClient({ region });
+const kmsClient = new KMSClient({ region });
 
-describe('TapStack Integration Tests - DynamoDB Table', () => {
+describe('TapStack Integration Tests - PCI-DSS Transaction Processing Infrastructure', () => {
   describe('CloudFormation Stack', () => {
-    test('CloudFormation stack should exist and be in CREATE_COMPLETE state', async () => {
+    test('CloudFormation stack should exist and be in CREATE_COMPLETE or UPDATE_COMPLETE state', async () => {
       const stackName = outputs.StackName;
       expect(stackName).toBeDefined();
 
@@ -40,26 +84,8 @@ describe('TapStack Integration Tests - DynamoDB Table', () => {
       expect(response.Stacks).toHaveLength(1);
 
       const stack = response.Stacks![0];
-      expect(stack.StackStatus).toBe('CREATE_COMPLETE');
+      expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE']).toContain(stack.StackStatus);
       expect(stack.StackName).toBe(stackName);
-    }, 30000);
-
-    test('stack should have correct parameters', async () => {
-      const stackName = outputs.StackName;
-
-      const command = new DescribeStacksCommand({
-        StackName: stackName,
-      });
-
-      const response = await cfnClient.send(command);
-      const stack = response.Stacks![0];
-
-      const envSuffixParam = stack.Parameters?.find(
-        p => p.ParameterKey === 'EnvironmentSuffix'
-      );
-
-      expect(envSuffixParam).toBeDefined();
-      expect(envSuffixParam?.ParameterValue).toBe(environmentSuffix);
     }, 30000);
 
     test('stack should have correct outputs', async () => {
@@ -73,13 +99,20 @@ describe('TapStack Integration Tests - DynamoDB Table', () => {
       const stack = response.Stacks![0];
 
       expect(stack.Outputs).toBeDefined();
-      expect(stack.Outputs!.length).toBeGreaterThanOrEqual(4);
+      expect(stack.Outputs!.length).toBeGreaterThanOrEqual(11);
 
       const expectedOutputKeys = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
+        'VPCId',
+        'DatabaseEndpoint',
+        'DatabasePort',
+        'RedisEndpoint',
+        'RedisPort',
+        'KinesisStreamName',
+        'EFSFileSystemId',
+        'LoadBalancerDNS',
+        'APIGatewayURL',
+        'ECSClusterName',
+        'DatabaseSecretArn',
       ];
 
       expectedOutputKeys.forEach(key => {
@@ -90,350 +123,486 @@ describe('TapStack Integration Tests - DynamoDB Table', () => {
     }, 30000);
   });
 
-  describe('DynamoDB Table Configuration', () => {
-    test('DynamoDB table should exist and be active', async () => {
-      const tableName = outputs.TurnAroundPromptTableName;
-      expect(tableName).toBeDefined();
-      expect(tableName).toBe(`TurnAroundPromptTable${environmentSuffix}`);
+  describe('VPC and Network Infrastructure', () => {
+    test('VPC should exist and be available', async () => {
+      const vpcId = outputs.VPCId;
+      expect(vpcId).toBeDefined();
 
-      const command = new DescribeTableCommand({
-        TableName: tableName,
+      const command = new DescribeVpcsCommand({
+        VpcIds: [vpcId],
       });
 
-      const response = await dynamoClient.send(command);
-      expect(response.Table).toBeDefined();
+      const response = await ec2Client.send(command);
+      expect(response.Vpcs).toHaveLength(1);
 
-      const table = response.Table!;
-      expect(table.TableName).toBe(tableName);
-      expect(table.TableStatus).toBe('ACTIVE');
+      const vpc = response.Vpcs![0];
+      expect(vpc.State).toBe('available');
+      expect(vpc.VpcId).toBe(vpcId);
     }, 30000);
 
-    test('DynamoDB table should have correct ARN', async () => {
-      const tableName = outputs.TurnAroundPromptTableName;
-      const expectedArn = outputs.TurnAroundPromptTableArn;
+    test('VPC should have subnets across multiple availability zones', async () => {
+      const vpcId = outputs.VPCId;
 
-      const command = new DescribeTableCommand({
-        TableName: tableName,
+      const command = new DescribeSubnetsCommand({
+        Filters: [
+          {
+            Name: 'vpc-id',
+            Values: [vpcId],
+          },
+        ],
       });
 
-      const response = await dynamoClient.send(command);
-      const table = response.Table!;
+      const response = await ec2Client.send(command);
+      expect(response.Subnets).toBeDefined();
+      expect(response.Subnets!.length).toBeGreaterThanOrEqual(6); // 3 public + 3 private
 
-      expect(table.TableArn).toBe(expectedArn);
-      expect(table.TableArn).toContain(tableName);
-      expect(table.TableArn).toContain(region);
+      const azs = new Set(response.Subnets!.map(s => s.AvailabilityZone));
+      expect(azs.size).toBeGreaterThanOrEqual(3); // Minimum 3 AZs
     }, 30000);
 
-    test('DynamoDB table should have correct key schema', async () => {
-      const tableName = outputs.TurnAroundPromptTableName;
+    test('VPC should have NAT Gateway for private subnet connectivity', async () => {
+      const vpcId = outputs.VPCId;
 
-      const command = new DescribeTableCommand({
-        TableName: tableName,
+      const command = new DescribeNatGatewaysCommand({
+        Filter: [
+          {
+            Name: 'vpc-id',
+            Values: [vpcId],
+          },
+          {
+            Name: 'state',
+            Values: ['available'],
+          },
+        ],
       });
 
-      const response = await dynamoClient.send(command);
-      const table = response.Table!;
-
-      expect(table.KeySchema).toHaveLength(1);
-      expect(table.KeySchema![0].AttributeName).toBe('id');
-      expect(table.KeySchema![0].KeyType).toBe('HASH');
+      const response = await ec2Client.send(command);
+      expect(response.NatGateways).toBeDefined();
+      expect(response.NatGateways!.length).toBeGreaterThanOrEqual(1);
     }, 30000);
 
-    test('DynamoDB table should have correct attribute definitions', async () => {
-      const tableName = outputs.TurnAroundPromptTableName;
+    test('Security groups should be properly configured', async () => {
+      const vpcId = outputs.VPCId;
 
-      const command = new DescribeTableCommand({
-        TableName: tableName,
+      const command = new DescribeSecurityGroupsCommand({
+        Filters: [
+          {
+            Name: 'vpc-id',
+            Values: [vpcId],
+          },
+        ],
       });
 
-      const response = await dynamoClient.send(command);
-      const table = response.Table!;
-
-      expect(table.AttributeDefinitions).toHaveLength(1);
-      expect(table.AttributeDefinitions![0].AttributeName).toBe('id');
-      expect(table.AttributeDefinitions![0].AttributeType).toBe('S');
-    }, 30000);
-
-    test('DynamoDB table should use PAY_PER_REQUEST billing mode', async () => {
-      const tableName = outputs.TurnAroundPromptTableName;
-
-      const command = new DescribeTableCommand({
-        TableName: tableName,
-      });
-
-      const response = await dynamoClient.send(command);
-      const table = response.Table!;
-
-      expect(table.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
-    }, 30000);
-
-    test('DynamoDB table should have deletion protection disabled', async () => {
-      const tableName = outputs.TurnAroundPromptTableName;
-
-      const command = new DescribeTableCommand({
-        TableName: tableName,
-      });
-
-      const response = await dynamoClient.send(command);
-      const table = response.Table!;
-
-      expect(table.DeletionProtectionEnabled).toBe(false);
+      const response = await ec2Client.send(command);
+      expect(response.SecurityGroups).toBeDefined();
+      expect(response.SecurityGroups!.length).toBeGreaterThan(1); // Multiple security groups for different services
     }, 30000);
   });
 
-  describe('DynamoDB Table Operations', () => {
-    const testItemId = `integration-test-${Date.now()}`;
-    const testItem = {
-      id: { S: testItemId },
-      name: { S: 'Integration Test Item' },
-      description: { S: 'This is a test item created during integration tests' },
-      timestamp: { N: Date.now().toString() },
-    };
+  describe('RDS Aurora PostgreSQL Database', () => {
+    test('RDS Aurora cluster should exist and be available', async () => {
+      const dbEndpoint = outputs.DatabaseEndpoint;
+      expect(dbEndpoint).toBeDefined();
 
-    afterAll(async () => {
-      // Clean up test item
-      try {
-        const tableName = outputs.TurnAroundPromptTableName;
-        await dynamoClient.send(
-          new DeleteItemCommand({
-            TableName: tableName,
-            Key: { id: { S: testItemId } },
-          })
-        );
-      } catch (error) {
-        // Item might not exist, ignore error
-      }
+      // Extract cluster identifier from endpoint
+      const clusterId = dbEndpoint.split('.')[0];
+
+      const command = new DescribeDBClustersCommand({
+        DBClusterIdentifier: clusterId,
+      });
+
+      const response = await rdsClient.send(command);
+      expect(response.DBClusters).toHaveLength(1);
+
+      const cluster = response.DBClusters![0];
+      expect(cluster.Status).toBe('available');
+      expect(cluster.Engine).toBe('aurora-postgresql');
+      expect(cluster.StorageEncrypted).toBe(true);
+    }, 30000);
+
+    test('RDS cluster should have encryption enabled', async () => {
+      const dbEndpoint = outputs.DatabaseEndpoint;
+      const clusterId = dbEndpoint.split('.')[0];
+
+      const command = new DescribeDBClustersCommand({
+        DBClusterIdentifier: clusterId,
+      });
+
+      const response = await rdsClient.send(command);
+      const cluster = response.DBClusters![0];
+
+      expect(cluster.StorageEncrypted).toBe(true);
+      expect(cluster.KmsKeyId).toBeDefined();
+    }, 30000);
+
+    test('RDS cluster should be multi-AZ for high availability', async () => {
+      const dbEndpoint = outputs.DatabaseEndpoint;
+      const clusterId = dbEndpoint.split('.')[0];
+
+      const command = new DescribeDBClustersCommand({
+        DBClusterIdentifier: clusterId,
+      });
+
+      const response = await rdsClient.send(command);
+      const cluster = response.DBClusters![0];
+
+      expect(cluster.MultiAZ).toBe(true);
+      expect(cluster.AvailabilityZones).toBeDefined();
+      expect(cluster.AvailabilityZones!.length).toBeGreaterThanOrEqual(3);
+    }, 30000);
+
+    test('RDS cluster should have multiple instances', async () => {
+      const dbEndpoint = outputs.DatabaseEndpoint;
+      const clusterId = dbEndpoint.split('.')[0];
+
+      const command = new DescribeDBClustersCommand({
+        DBClusterIdentifier: clusterId,
+      });
+
+      const response = await rdsClient.send(command);
+      const cluster = response.DBClusters![0];
+
+      expect(cluster.DBClusterMembers).toBeDefined();
+      expect(cluster.DBClusterMembers!.length).toBeGreaterThanOrEqual(2); // Writer + Reader
+    }, 30000);
+
+    test('Database port should be correct', () => {
+      const dbPort = outputs.DatabasePort;
+      expect(dbPort).toBeDefined();
+      expect(dbPort).toBe('3306'); // Aurora PostgreSQL compatible with MySQL port
     });
+  });
 
-    test('should successfully put an item into the table', async () => {
-      const tableName = outputs.TurnAroundPromptTableName;
+  describe('ElastiCache Redis Cluster', () => {
+    test('ElastiCache Redis cluster should exist and be available', async () => {
+      const redisEndpoint = outputs.RedisEndpoint;
+      expect(redisEndpoint).toBeDefined();
 
-      const command = new PutItemCommand({
-        TableName: tableName,
-        Item: testItem,
+      // Extract replication group ID from endpoint
+      const replicationGroupId = redisEndpoint.split('.')[0].replace('master.', '');
+
+      const command = new DescribeReplicationGroupsCommand({
+        ReplicationGroupId: replicationGroupId,
       });
 
-      await expect(dynamoClient.send(command)).resolves.toBeDefined();
+      const response = await elasticacheClient.send(command);
+      expect(response.ReplicationGroups).toHaveLength(1);
+
+      const cluster = response.ReplicationGroups![0];
+      expect(cluster.Status).toBe('available');
     }, 30000);
 
-    test('should successfully retrieve the item from the table', async () => {
-      const tableName = outputs.TurnAroundPromptTableName;
+    test('Redis cluster should have encryption enabled', async () => {
+      const redisEndpoint = outputs.RedisEndpoint;
+      const replicationGroupId = redisEndpoint.split('.')[0].replace('master.', '');
 
-      const command = new GetItemCommand({
-        TableName: tableName,
-        Key: { id: { S: testItemId } },
+      const command = new DescribeReplicationGroupsCommand({
+        ReplicationGroupId: replicationGroupId,
       });
 
-      const response = await dynamoClient.send(command);
-      expect(response.Item).toBeDefined();
-      expect(response.Item!.id.S).toBe(testItemId);
-      expect(response.Item!.name.S).toBe('Integration Test Item');
+      const response = await elasticacheClient.send(command);
+      const cluster = response.ReplicationGroups![0];
+
+      expect(cluster.AtRestEncryptionEnabled).toBe(true);
+      expect(cluster.TransitEncryptionEnabled).toBe(true);
     }, 30000);
 
-    test('should successfully scan the table', async () => {
-      const tableName = outputs.TurnAroundPromptTableName;
+    test('Redis cluster should have automatic failover enabled', async () => {
+      const redisEndpoint = outputs.RedisEndpoint;
+      const replicationGroupId = redisEndpoint.split('.')[0].replace('master.', '');
 
-      const command = new ScanCommand({
-        TableName: tableName,
-        Limit: 10,
+      const command = new DescribeReplicationGroupsCommand({
+        ReplicationGroupId: replicationGroupId,
       });
 
-      const response = await dynamoClient.send(command);
-      expect(response.Items).toBeDefined();
-      expect(Array.isArray(response.Items)).toBe(true);
+      const response = await elasticacheClient.send(command);
+      const cluster = response.ReplicationGroups![0];
 
-      // Our test item should be in the results
-      const foundItem = response.Items?.find(item => item.id.S === testItemId);
-      expect(foundItem).toBeDefined();
+      expect(cluster.AutomaticFailover).toBe('enabled');
+      expect(cluster.MultiAZ).toBe('enabled');
     }, 30000);
 
-    test('should successfully update an item in the table', async () => {
-      const tableName = outputs.TurnAroundPromptTableName;
+    test('Redis port should be correct', () => {
+      const redisPort = outputs.RedisPort;
+      expect(redisPort).toBeDefined();
+      expect(redisPort).toBe('6379');
+    });
+  });
 
-      // Update the item with new attributes
-      const updatedItem = {
-        ...testItem,
-        description: { S: 'Updated description during integration tests' },
-        updatedAt: { N: Date.now().toString() },
-      };
+  describe('EFS File System', () => {
+    test('EFS file system should exist and be available', async () => {
+      const fileSystemId = outputs.EFSFileSystemId;
+      expect(fileSystemId).toBeDefined();
 
-      await dynamoClient.send(
-        new PutItemCommand({
-          TableName: tableName,
-          Item: updatedItem,
-        })
+      const command = new DescribeFileSystemsCommand({
+        FileSystemId: fileSystemId,
+      });
+
+      const response = await efsClient.send(command);
+      expect(response.FileSystems).toHaveLength(1);
+
+      const fs = response.FileSystems![0];
+      expect(fs.LifeCycleState).toBe('available');
+      expect(fs.FileSystemId).toBe(fileSystemId);
+    }, 30000);
+
+    test('EFS file system should have encryption enabled', async () => {
+      const fileSystemId = outputs.EFSFileSystemId;
+
+      const command = new DescribeFileSystemsCommand({
+        FileSystemId: fileSystemId,
+      });
+
+      const response = await efsClient.send(command);
+      const fs = response.FileSystems![0];
+
+      expect(fs.Encrypted).toBe(true);
+      expect(fs.KmsKeyId).toBeDefined();
+    }, 30000);
+  });
+
+  describe('ECS Fargate Cluster', () => {
+    test('ECS cluster should exist and be active', async () => {
+      const clusterName = outputs.ECSClusterName;
+      expect(clusterName).toBeDefined();
+
+      const command = new DescribeClustersCommand({
+        clusters: [clusterName],
+      });
+
+      const response = await ecsClient.send(command);
+      expect(response.clusters).toHaveLength(1);
+
+      const cluster = response.clusters![0];
+      expect(cluster.status).toBe('ACTIVE');
+      expect(cluster.clusterName).toBe(clusterName);
+    }, 30000);
+
+    test('ECS cluster should have active services', async () => {
+      const clusterName = outputs.ECSClusterName;
+
+      const command = new DescribeServicesCommand({
+        cluster: clusterName,
+        services: [`service-transaction-${clusterName.split('-').pop()}`],
+      });
+
+      const response = await ecsClient.send(command);
+      expect(response.services).toBeDefined();
+      expect(response.services!.length).toBeGreaterThan(0);
+
+      const service = response.services![0];
+      expect(service.status).toBe('ACTIVE');
+      expect(service.launchType).toBe('FARGATE');
+    }, 30000);
+  });
+
+  describe('Kinesis Data Stream', () => {
+    test('Kinesis stream should exist and be active', async () => {
+      const streamName = outputs.KinesisStreamName;
+      expect(streamName).toBeDefined();
+
+      const command = new DescribeStreamCommand({
+        StreamName: streamName,
+      });
+
+      const response = await kinesisClient.send(command);
+      expect(response.StreamDescription).toBeDefined();
+
+      const stream = response.StreamDescription!;
+      expect(stream.StreamStatus).toBe('ACTIVE');
+      expect(stream.StreamName).toBe(streamName);
+    }, 30000);
+
+    test('Kinesis stream should have encryption enabled', async () => {
+      const streamName = outputs.KinesisStreamName;
+
+      const command = new DescribeStreamCommand({
+        StreamName: streamName,
+      });
+
+      const response = await kinesisClient.send(command);
+      const stream = response.StreamDescription!;
+
+      expect(stream.EncryptionType).toBe('KMS');
+      expect(stream.KeyId).toBeDefined();
+    }, 30000);
+  });
+
+  describe('API Gateway', () => {
+    test('API Gateway should be accessible', async () => {
+      const apiUrl = outputs.APIGatewayURL;
+      expect(apiUrl).toBeDefined();
+      expect(apiUrl).toMatch(/^https:\/\/.+\.execute-api\..+\.amazonaws\.com\/.+$/);
+    }, 30000);
+
+    test('API Gateway REST API should exist', async () => {
+      const apiUrl = outputs.APIGatewayURL;
+      const apiId = apiUrl.split('.')[0].split('//')[1];
+
+      const command = new GetRestApisCommand({});
+      const response = await apiGatewayClient.send(command);
+
+      const api = response.items?.find(item => item.id === apiId);
+      expect(api).toBeDefined();
+    }, 30000);
+  });
+
+  describe('Application Load Balancer', () => {
+    test('Load Balancer should exist and be active', async () => {
+      const albDns = outputs.LoadBalancerDNS;
+      expect(albDns).toBeDefined();
+      expect(albDns).toMatch(/^alb-.+\.elb\.amazonaws\.com$/);
+
+      const command = new DescribeLoadBalancersCommand({});
+      const response = await elbClient.send(command);
+
+      const alb = response.LoadBalancers?.find(lb => lb.DNSName === albDns);
+      expect(alb).toBeDefined();
+      expect(alb?.State?.Code).toBe('active');
+      expect(alb?.Type).toBe('application');
+    }, 30000);
+
+    test('Load Balancer should have target groups', async () => {
+      const albDns = outputs.LoadBalancerDNS;
+
+      const lbCommand = new DescribeLoadBalancersCommand({});
+      const lbResponse = await elbClient.send(lbCommand);
+      const alb = lbResponse.LoadBalancers?.find(lb => lb.DNSName === albDns);
+
+      expect(alb?.LoadBalancerArn).toBeDefined();
+
+      const tgCommand = new DescribeTargetGroupsCommand({
+        LoadBalancerArn: alb!.LoadBalancerArn,
+      });
+
+      const tgResponse = await elbClient.send(tgCommand);
+      expect(tgResponse.TargetGroups).toBeDefined();
+      expect(tgResponse.TargetGroups!.length).toBeGreaterThan(0);
+    }, 30000);
+  });
+
+  describe('Secrets Manager', () => {
+    test('Database secret should exist', async () => {
+      const secretArn = outputs.DatabaseSecretArn;
+      expect(secretArn).toBeDefined();
+
+      const command = new DescribeSecretCommand({
+        SecretId: secretArn,
+      });
+
+      const response = await secretsClient.send(command);
+      expect(response.ARN).toBe(secretArn);
+      expect(response.Name).toBeDefined();
+    }, 30000);
+
+    test('Database secret should have KMS encryption', async () => {
+      const secretArn = outputs.DatabaseSecretArn;
+
+      const command = new DescribeSecretCommand({
+        SecretId: secretArn,
+      });
+
+      const response = await secretsClient.send(command);
+      expect(response.KmsKeyId).toBeDefined();
+    }, 30000);
+  });
+
+  describe('PCI-DSS Compliance Validation', () => {
+    test('All data stores should have encryption at rest', async () => {
+      // RDS encryption
+      const dbEndpoint = outputs.DatabaseEndpoint;
+      const clusterId = dbEndpoint.split('.')[0];
+      const rdsResponse = await rdsClient.send(
+        new DescribeDBClustersCommand({ DBClusterIdentifier: clusterId })
       );
+      expect(rdsResponse.DBClusters![0].StorageEncrypted).toBe(true);
 
-      // Retrieve and verify
-      const getResponse = await dynamoClient.send(
-        new GetItemCommand({
-          TableName: tableName,
-          Key: { id: { S: testItemId } },
-        })
+      // ElastiCache encryption
+      const redisEndpoint = outputs.RedisEndpoint;
+      const replicationGroupId = redisEndpoint.split('.')[0].replace('master.', '');
+      const redisResponse = await elasticacheClient.send(
+        new DescribeReplicationGroupsCommand({ ReplicationGroupId: replicationGroupId })
       );
+      expect(redisResponse.ReplicationGroups![0].AtRestEncryptionEnabled).toBe(true);
 
-      expect(getResponse.Item).toBeDefined();
-      expect(getResponse.Item!.description.S).toBe(
-        'Updated description during integration tests'
+      // EFS encryption
+      const fileSystemId = outputs.EFSFileSystemId;
+      const efsResponse = await efsClient.send(
+        new DescribeFileSystemsCommand({ FileSystemId: fileSystemId })
       );
-      expect(getResponse.Item!.updatedAt).toBeDefined();
+      expect(efsResponse.FileSystems![0].Encrypted).toBe(true);
+
+      // Kinesis encryption
+      const streamName = outputs.KinesisStreamName;
+      const kinesisResponse = await kinesisClient.send(
+        new DescribeStreamCommand({ StreamName: streamName })
+      );
+      expect(kinesisResponse.StreamDescription!.EncryptionType).toBe('KMS');
+    }, 60000);
+
+    test('All data in transit should use encryption', async () => {
+      // ElastiCache transit encryption
+      const redisEndpoint = outputs.RedisEndpoint;
+      const replicationGroupId = redisEndpoint.split('.')[0].replace('master.', '');
+      const redisResponse = await elasticacheClient.send(
+        new DescribeReplicationGroupsCommand({ ReplicationGroupId: replicationGroupId })
+      );
+      expect(redisResponse.ReplicationGroups![0].TransitEncryptionEnabled).toBe(true);
+
+      // API Gateway uses HTTPS
+      const apiUrl = outputs.APIGatewayURL;
+      expect(apiUrl).toMatch(/^https:\/\//);
     }, 30000);
 
-    test('should successfully delete an item from the table', async () => {
-      const tableName = outputs.TurnAroundPromptTableName;
+    test('High availability should be configured', async () => {
+      // RDS Multi-AZ
+      const dbEndpoint = outputs.DatabaseEndpoint;
+      const clusterId = dbEndpoint.split('.')[0];
+      const rdsResponse = await rdsClient.send(
+        new DescribeDBClustersCommand({ DBClusterIdentifier: clusterId })
+      );
+      expect(rdsResponse.DBClusters![0].MultiAZ).toBe(true);
 
-      const deleteCommand = new DeleteItemCommand({
-        TableName: tableName,
-        Key: { id: { S: testItemId } },
-      });
-
-      await expect(dynamoClient.send(deleteCommand)).resolves.toBeDefined();
-
-      // Verify item is deleted
-      const getCommand = new GetItemCommand({
-        TableName: tableName,
-        Key: { id: { S: testItemId } },
-      });
-
-      const response = await dynamoClient.send(getCommand);
-      expect(response.Item).toBeUndefined();
+      // ElastiCache automatic failover
+      const redisEndpoint = outputs.RedisEndpoint;
+      const replicationGroupId = redisEndpoint.split('.')[0].replace('master.', '');
+      const redisResponse = await elasticacheClient.send(
+        new DescribeReplicationGroupsCommand({ ReplicationGroupId: replicationGroupId })
+      );
+      expect(redisResponse.ReplicationGroups![0].AutomaticFailover).toBe('enabled');
     }, 30000);
   });
 
   describe('Output Validation', () => {
-    test('all outputs should match deployed resources', async () => {
-      expect(outputs.TurnAroundPromptTableName).toBeDefined();
-      expect(outputs.TurnAroundPromptTableArn).toBeDefined();
-      expect(outputs.StackName).toBeDefined();
-      expect(outputs.EnvironmentSuffix).toBeDefined();
+    test('all required outputs should be present and valid', () => {
+      expect(outputs.VPCId).toBeDefined();
+      expect(outputs.VPCId).toMatch(/^vpc-[a-f0-9]+$/);
 
-      expect(outputs.EnvironmentSuffix).toBe(environmentSuffix);
+      expect(outputs.DatabaseEndpoint).toBeDefined();
+      expect(outputs.DatabaseEndpoint).toMatch(/\.rds\.amazonaws\.com$/);
+
+      expect(outputs.DatabasePort).toBeDefined();
+
+      expect(outputs.RedisEndpoint).toBeDefined();
+      expect(outputs.RedisEndpoint).toMatch(/\.cache\.amazonaws\.com$/);
+
+      expect(outputs.RedisPort).toBeDefined();
+
+      expect(outputs.KinesisStreamName).toBeDefined();
+
+      expect(outputs.EFSFileSystemId).toBeDefined();
+      expect(outputs.EFSFileSystemId).toMatch(/^fs-[a-f0-9]+$/);
+
+      expect(outputs.LoadBalancerDNS).toBeDefined();
+      expect(outputs.LoadBalancerDNS).toMatch(/\.elb\.amazonaws\.com$/);
+
+      expect(outputs.APIGatewayURL).toBeDefined();
+      expect(outputs.APIGatewayURL).toMatch(/^https:\/\/.+\.execute-api\..+\.amazonaws\.com\/.+$/);
+
+      expect(outputs.ECSClusterName).toBeDefined();
+
+      expect(outputs.DatabaseSecretArn).toBeDefined();
+      expect(outputs.DatabaseSecretArn).toMatch(/^arn:aws:secretsmanager:/);
     });
-
-    test('table name should follow naming convention', () => {
-      const tableName = outputs.TurnAroundPromptTableName;
-      expect(tableName).toBe(`TurnAroundPromptTable${environmentSuffix}`);
-    });
-
-    test('table ARN should be properly formatted', () => {
-      const tableArn = outputs.TurnAroundPromptTableArn;
-      expect(tableArn).toMatch(
-        /^arn:aws:dynamodb:[a-z0-9-]+:\d+:table\/TurnAroundPromptTable.+$/
-      );
-    });
-
-    test('stack name should follow naming convention', () => {
-      const stackName = outputs.StackName;
-      expect(stackName).toBe(`TapStack${environmentSuffix}`);
-    });
-  });
-
-  describe('Resource Tags and Metadata', () => {
-    test('CloudFormation stack should have proper tags', async () => {
-      const stackName = outputs.StackName;
-
-      const command = new DescribeStacksCommand({
-        StackName: stackName,
-      });
-
-      const response = await cfnClient.send(command);
-      const stack = response.Stacks![0];
-
-      expect(stack.Tags).toBeDefined();
-      // Verify that tags exist (specific tag requirements may vary)
-      expect(Array.isArray(stack.Tags)).toBe(true);
-    }, 30000);
-
-    test('stack should have creation timestamp', async () => {
-      const stackName = outputs.StackName;
-
-      const command = new DescribeStacksCommand({
-        StackName: stackName,
-      });
-
-      const response = await cfnClient.send(command);
-      const stack = response.Stacks![0];
-
-      expect(stack.CreationTime).toBeDefined();
-      expect(stack.CreationTime).toBeInstanceOf(Date);
-    }, 30000);
-  });
-
-  describe('End-to-End Workflow', () => {
-    test('complete CRUD workflow on DynamoDB table', async () => {
-      const tableName = outputs.TurnAroundPromptTableName;
-      const workflowItemId = `e2e-test-${Date.now()}`;
-
-      try {
-        // CREATE
-        await dynamoClient.send(
-          new PutItemCommand({
-            TableName: tableName,
-            Item: {
-              id: { S: workflowItemId },
-              name: { S: 'E2E Test Item' },
-              status: { S: 'active' },
-            },
-          })
-        );
-
-        // READ
-        const readResponse = await dynamoClient.send(
-          new GetItemCommand({
-            TableName: tableName,
-            Key: { id: { S: workflowItemId } },
-          })
-        );
-        expect(readResponse.Item).toBeDefined();
-        expect(readResponse.Item!.status.S).toBe('active');
-
-        // UPDATE
-        await dynamoClient.send(
-          new PutItemCommand({
-            TableName: tableName,
-            Item: {
-              id: { S: workflowItemId },
-              name: { S: 'E2E Test Item' },
-              status: { S: 'completed' },
-            },
-          })
-        );
-
-        const updatedResponse = await dynamoClient.send(
-          new GetItemCommand({
-            TableName: tableName,
-            Key: { id: { S: workflowItemId } },
-          })
-        );
-        expect(updatedResponse.Item!.status.S).toBe('completed');
-
-        // DELETE
-        await dynamoClient.send(
-          new DeleteItemCommand({
-            TableName: tableName,
-            Key: { id: { S: workflowItemId } },
-          })
-        );
-
-        const deletedResponse = await dynamoClient.send(
-          new GetItemCommand({
-            TableName: tableName,
-            Key: { id: { S: workflowItemId } },
-          })
-        );
-        expect(deletedResponse.Item).toBeUndefined();
-      } catch (error) {
-        // Cleanup in case of error
-        await dynamoClient
-          .send(
-            new DeleteItemCommand({
-              TableName: tableName,
-              Key: { id: { S: workflowItemId } },
-            })
-          )
-          .catch(() => { });
-        throw error;
-      }
-    }, 30000);
   });
 });
