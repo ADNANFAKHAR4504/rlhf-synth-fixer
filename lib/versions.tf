@@ -32,3 +32,19 @@ provider "aws" {
     }
   }
 }
+
+# Secondary provider for cross-region replication
+provider "aws" {
+  alias  = "replication"
+  region = var.replication_region
+
+  default_tags {
+    tags = {
+      Project     = var.project_name
+      Environment = var.environment
+      ManagedBy   = "Terraform"
+      Purpose     = "Legal Document Storage - Replication"
+      Compliance  = "Legal Retention Policy"
+    }
+  }
+}

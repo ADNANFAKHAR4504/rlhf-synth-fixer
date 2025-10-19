@@ -53,6 +53,14 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "primary" {
   }
 }
 
+# S3 Transfer Acceleration
+resource "aws_s3_bucket_accelerate_configuration" "primary" {
+  count = var.enable_transfer_acceleration ? 1 : 0
+
+  bucket = aws_s3_bucket.primary.id
+  status = "Enabled"
+}
+
 # Public Access Block
 resource "aws_s3_bucket_public_access_block" "primary" {
   bucket = aws_s3_bucket.primary.id
@@ -181,6 +189,107 @@ resource "aws_s3_bucket_inventory" "primary" {
     "ObjectLockRetainUntilDate",
     "ObjectLockMode",
     "ObjectLockLegalHoldStatus"
+  ]
+}
+
+# Cross-Region Replication Bucket (Destination)
+resource "aws_s3_bucket" "replication" {
+  count = var.enable_cross_region_replication ? 1 : 0
+
+  provider = aws.replication
+  bucket   = "${local.primary_bucket_name}-replication"
+
+  object_lock_enabled = var.enable_object_lock
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${local.primary_bucket_name}-replication"
+      Type = "Cross-Region Replication"
+    }
+  )
+}
+
+# Replication Bucket Versioning
+resource "aws_s3_bucket_versioning" "replication" {
+  count = var.enable_cross_region_replication ? 1 : 0
+
+  provider = aws.replication
+  bucket   = aws_s3_bucket.replication[0].id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# Replication Bucket Encryption
+resource "aws_s3_bucket_server_side_encryption_configuration" "replication" {
+  count = var.enable_cross_region_replication ? 1 : 0
+
+  provider = aws.replication
+  bucket   = aws_s3_bucket.replication[0].id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+    bucket_key_enabled = true
+  }
+}
+
+# Replication Bucket Public Access Block
+resource "aws_s3_bucket_public_access_block" "replication" {
+  count = var.enable_cross_region_replication ? 1 : 0
+
+  provider = aws.replication
+  bucket   = aws_s3_bucket.replication[0].id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# Replication Configuration
+resource "aws_s3_bucket_replication_configuration" "primary" {
+  count = var.enable_cross_region_replication ? 1 : 0
+
+  bucket = aws_s3_bucket.primary.id
+  role   = aws_iam_role.replication[0].arn
+
+  rule {
+    id     = "replicate-all-objects"
+    status = "Enabled"
+
+    filter {}
+
+    destination {
+      bucket        = aws_s3_bucket.replication[0].arn
+      storage_class = "STANDARD_IA"
+
+      replication_time {
+        status = "Enabled"
+        time {
+          minutes = 15
+        }
+      }
+
+      metrics {
+        status = "Enabled"
+        event_threshold {
+          minutes = 15
+        }
+      }
+    }
+
+    delete_marker_replication {
+      status = "Enabled"
+    }
+  }
+
+  depends_on = [
+    aws_s3_bucket_versioning.primary,
+    aws_s3_bucket_versioning.replication
   ]
 }
 

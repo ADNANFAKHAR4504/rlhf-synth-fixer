@@ -516,3 +516,76 @@ resource "aws_iam_role_policy" "cloudtrail_cloudwatch" {
     ]
   })
 }
+
+# ============================================================================
+# IAM Role for S3 Cross-Region Replication
+# ============================================================================
+
+resource "aws_iam_role" "replication" {
+  count = var.enable_cross_region_replication ? 1 : 0
+
+  name = "${local.name_prefix}-replication-role-${local.name_suffix}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "s3.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${local.name_prefix}-replication-role"
+      Type = "S3 Replication Role"
+    }
+  )
+}
+
+resource "aws_iam_role_policy" "replication" {
+  count = var.enable_cross_region_replication ? 1 : 0
+
+  name = "${local.name_prefix}-replication-policy"
+  role = aws_iam_role.replication[0].id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowSourceBucketRead"
+        Effect = "Allow"
+        Action = [
+          "s3:GetReplicationConfiguration",
+          "s3:ListBucket"
+        ]
+        Resource = aws_s3_bucket.primary.arn
+      },
+      {
+        Sid    = "AllowSourceObjectRead"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObjectVersionForReplication",
+          "s3:GetObjectVersionAcl",
+          "s3:GetObjectVersionTagging"
+        ]
+        Resource = "${aws_s3_bucket.primary.arn}/*"
+      },
+      {
+        Sid    = "AllowDestinationBucketWrite"
+        Effect = "Allow"
+        Action = [
+          "s3:ReplicateObject",
+          "s3:ReplicateDelete",
+          "s3:ReplicateTags"
+        ]
+        Resource = "${aws_s3_bucket.replication[0].arn}/*"
+      }
+    ]
+  })
+}

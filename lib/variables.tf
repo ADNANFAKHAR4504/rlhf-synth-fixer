@@ -280,6 +280,51 @@ variable "reporting_lambda_timeout" {
   default     = 600
 }
 
+# S3 Transfer Acceleration
+variable "enable_transfer_acceleration" {
+  description = "Enable S3 Transfer Acceleration for faster uploads from global locations"
+  type        = bool
+  default     = true
+}
+
+# Cross-Region Replication
+variable "enable_cross_region_replication" {
+  description = "Enable cross-region replication for disaster recovery"
+  type        = bool
+  default     = false
+}
+
+variable "replication_region" {
+  description = "AWS region for replication bucket (e.g., us-west-2)"
+  type        = string
+  default     = "us-west-2"
+}
+
+# AWS Backup
+variable "enable_aws_backup" {
+  description = "Enable AWS Backup for automated backup management"
+  type        = bool
+  default     = true
+}
+
+variable "backup_schedule" {
+  description = "Cron expression for backup schedule (default: daily at 1 AM UTC)"
+  type        = string
+  default     = "cron(0 1 * * ? *)"
+}
+
+variable "backup_retention_days" {
+  description = "Number of days to retain backups"
+  type        = number
+  default     = 30
+}
+
+variable "backup_cold_storage_after_days" {
+  description = "Number of days before moving backups to cold storage"
+  type        = number
+  default     = 7
+}
+
 # Tagging
 variable "additional_tags" {
   description = "Additional tags to apply to all resources"
