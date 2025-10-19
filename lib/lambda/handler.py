@@ -7,6 +7,7 @@ import logging
 import os
 from datetime import datetime
 from typing import Dict, Any
+from decimal import Decimal
 
 # Configure logging
 logger = logging.getLogger()
@@ -139,8 +140,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 Bucket=bucket_name,
                 Key=s3_key,
                 Body=file_data,
-                ContentType='application/octet-stream',
-                ServerSideEncryption='aws:kms'
+                ContentType='application/octet-stream'
+                # Server-side encryption is handled by bucket's default encryption
             )
             logger.info(f"Successfully uploaded file to S3: {s3_key}")
         except Exception as e:
@@ -164,12 +165,11 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 Item={
                     'productId': product_id,
                     'productName': product_name,
-                    'price': price,
+                    'price': Decimal(str(price)),
                     'fileName': file_name,
                     's3Key': s3_key,
                     'uploadTimestamp': datetime.now().isoformat(),
-                    'fileSize': len(file_data),
-                    'ttl': int(datetime.now().timestamp()) + (365 * 24 * 60 * 60)  # 1 year TTL
+                    'fileSize': len(file_data)
                 }
             )
             logger.info(f"Successfully stored metadata in DynamoDB for product {product_id}")
