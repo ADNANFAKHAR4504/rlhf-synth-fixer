@@ -642,6 +642,18 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
       }
     );
 
+    // Ensure the CloudFront Distribution is created after the
+    // OriginAccessIdentity low-level resource. Without this explicit
+    // dependency CloudFormation can attempt to create the distribution
+    // before CloudFront has finished creating the OAI which results in
+    // errors like "The specified origin access identity does not exist".
+    const oaiResource = cloudFrontOAI.node.defaultChild as
+      | cdk.CfnResource
+      | undefined;
+    if (oaiResource) {
+      distribution.node.addDependency(oaiResource as cdk.CfnResource);
+    }
+
     // ========================================
     // WAFv2 WebACL (protect CloudFront and proxied API)
     // ========================================
