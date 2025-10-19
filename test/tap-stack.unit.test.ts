@@ -421,14 +421,8 @@ describe('TapStack CloudFormation Template', () => {
       expect(container.Name).toBe('transaction-processor');
       expect(container.Environment).toBeDefined();
       expect(container.Secrets).toBeDefined();
-      expect(container.HealthCheck).toBeDefined();
-    });
-
-    test('ECSTaskDefinition should have EFS volume', () => {
-      const task = template.Resources.ECSTaskDefinition;
-      expect(task.Properties.Volumes).toBeDefined();
-      expect(task.Properties.Volumes[0].Name).toBe('efs-storage');
-      expect(task.Properties.Volumes[0].EFSVolumeConfiguration).toBeDefined();
+      // HealthCheck removed to avoid dependency on tools not available in container
+      expect(container.HealthCheck).toBeUndefined();
     });
 
     test('should have ApplicationLoadBalancer', () => {

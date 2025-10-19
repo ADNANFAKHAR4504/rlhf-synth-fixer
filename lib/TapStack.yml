@@ -338,8 +338,8 @@ Resources:
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 8080
-          ToPort: 8080
+          FromPort: 80
+          ToPort: 80
           SourceSecurityGroupId: !Ref ALBSecurityGroup
           Description: Allow traffic from ALB
       SecurityGroupEgress:
@@ -796,12 +796,8 @@ Resources:
           Image: nginxdemos/hello:latest
           Essential: true
           PortMappings:
-            - ContainerPort: 8080
+            - ContainerPort: 80
               Protocol: tcp
-          Command:
-            - /bin/sh
-            - -c
-            - sed -i 's/listen       80;/listen       8080;/g' /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'
           Environment:
             - Name: KINESIS_STREAM_NAME
               Value: !Ref TransactionDataStream
@@ -853,7 +849,7 @@ Resources:
     Properties:
       Name: !Sub 'tg-transaction-${EnvironmentSuffix}'
       VpcId: !Ref VPC
-      Port: 8080
+      Port: 80
       Protocol: HTTP
       TargetType: ip
       HealthCheckEnabled: true
@@ -905,7 +901,7 @@ Resources:
             - !Ref ECSSecurityGroup
       LoadBalancers:
         - ContainerName: transaction-processor
-          ContainerPort: 8080
+          ContainerPort: 80
           TargetGroupArn: !Ref ALBTargetGroup
       HealthCheckGracePeriodSeconds: 60
       DeploymentConfiguration:
