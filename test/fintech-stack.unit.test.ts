@@ -4,9 +4,18 @@ import { FinTechTradingStack } from '../lib/main';
 
 describe('FinTechTradingStack Unit Tests', () => {
   let app: App;
+  let originalEnv: NodeJS.ProcessEnv;
 
   beforeEach(() => {
     app = Testing.app();
+    originalEnv = { ...process.env };
+    delete process.env.TERRAFORM_STATE_BUCKET;
+    delete process.env.TERRAFORM_STATE_BUCKET_REGION;
+    delete process.env.TERRAFORM_STATE_BUCKET_KEY;
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
   });
 
   describe('Stack Initialization', () => {
