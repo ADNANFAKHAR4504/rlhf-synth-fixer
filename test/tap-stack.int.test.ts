@@ -83,14 +83,14 @@ describe('Container-Based Infrastructure Integration Tests', () => {
   const hasValidOutputs = Object.values(outputs).some(v => v !== undefined);
 
   // Skip all tests if no outputs are available
-  const testOrSkip = hasValidOutputs ? test : test.skip;
+  const test = hasValidOutputs ? test : test.skip;
 
   // ============================================================================
   // PART 1: SERVICE-LEVEL TESTS (Single Service WITH ACTUAL INTERACTIONS)
   // ============================================================================
 
   describe('[Service-Level] ECS Fargate Container Service', () => {
-    testOrSkip('should have ECS cluster running with active service', async () => {
+    test('should have ECS cluster running with active service', async () => {
       const clusterName = outputs['ecs-cluster-name'];
       expect(clusterName).toBeDefined();
       
@@ -105,7 +105,7 @@ describe('Container-Based Infrastructure Integration Tests', () => {
       expect(cluster.activeServicesCount).toBeGreaterThanOrEqual(0);
     }, 30000);
 
-    testOrSkip('should have ECS service running desired number of tasks', async () => {
+    test('should have ECS service running desired number of tasks', async () => {
       const clusterName = outputs['ecs-cluster-name'];
       const serviceName = outputs['ecs-service-name'];
       
@@ -124,7 +124,7 @@ describe('Container-Based Infrastructure Integration Tests', () => {
       expect(service.launchType).toBe('FARGATE');
     }, 30000);
 
-    testOrSkip('should be able to run a task in ECS cluster', async () => {
+    test('should be able to run a task in ECS cluster', async () => {
       const clusterName = outputs['ecs-cluster-name'];
       const taskDefArn = outputs['task-definition-arn'];
       const vpcId = outputs['vpc-id'];
@@ -191,7 +191,7 @@ describe('Container-Based Infrastructure Integration Tests', () => {
   });
 
   describe('[Service-Level] Application Load Balancer', () => {
-    testOrSkip('should have ALB accessible and responding', async () => {
+    test('should have ALB accessible and responding', async () => {
       const albUrl = outputs['alb-url'];
       expect(albUrl).toBeDefined();
 
@@ -213,7 +213,7 @@ describe('Container-Based Infrastructure Integration Tests', () => {
       }
     }, 30000);
 
-    testOrSkip('should have healthy targets registered in target group', async () => {
+    test('should have healthy targets registered in target group', async () => {
       const albDnsName = outputs['alb-dns-name'];
       expect(albDnsName).toBeDefined();
 
@@ -254,7 +254,7 @@ describe('Container-Based Infrastructure Integration Tests', () => {
   });
 
   describe('[Service-Level] Secrets Manager for Database Credentials', () => {
-    testOrSkip('should be able to retrieve database credentials from Secrets Manager', async () => {
+    test('should be able to retrieve database credentials from Secrets Manager', async () => {
       const secretArn = outputs['db-secret-arn'];
       expect(secretArn).toBeDefined();
 
@@ -275,7 +275,7 @@ describe('Container-Based Infrastructure Integration Tests', () => {
   });
 
   describe('[Service-Level] RDS PostgreSQL Database', () => {
-    testOrSkip('should have RDS PostgreSQL instance running and accessible', async () => {
+    test('should have RDS PostgreSQL instance running and accessible', async () => {
       const vpcId = outputs['vpc-id'];
       expect(vpcId).toBeDefined();
       
@@ -294,7 +294,7 @@ describe('Container-Based Infrastructure Integration Tests', () => {
   });
 
   describe('[Service-Level] S3 Static Assets', () => {
-    testOrSkip('should be able to upload and retrieve files from S3 bucket', async () => {
+    test('should be able to upload and retrieve files from S3 bucket', async () => {
       const bucketName = outputs['static-assets-bucket'];
       expect(bucketName).toBeDefined();
       
@@ -325,7 +325,7 @@ describe('Container-Based Infrastructure Integration Tests', () => {
       }));
     }, 30000);
 
-    testOrSkip('should have bucket versioning enabled', async () => {
+    test('should have bucket versioning enabled', async () => {
       const bucketName = outputs['static-assets-bucket'];
       expect(bucketName).toBeDefined();
 
@@ -339,7 +339,7 @@ describe('Container-Based Infrastructure Integration Tests', () => {
   });
 
   describe('[Service-Level] CloudWatch Monitoring', () => {
-    testOrSkip('should have CloudWatch alarms configured', async () => {
+    test('should have CloudWatch alarms configured', async () => {
       const alarmCount = outputs['alarm-count'] ? parseInt(outputs['alarm-count']) : 5;
 
       const alarmsResponse = await cloudWatchClient.send(new DescribeAlarmsCommand({
@@ -402,7 +402,7 @@ describe('Container-Based Infrastructure Integration Tests', () => {
   // ============================================================================
 
   describe('[Cross-Service] ECS Tasks → Secrets Manager', () => {
-    testOrSkip('should allow ECS tasks to retrieve secrets via IAM role', async () => {
+    test('should allow ECS tasks to retrieve secrets via IAM role', async () => {
       const taskDefArn = outputs['task-definition-arn'];
       const secretArn = outputs['db-secret-arn'];
       
@@ -427,7 +427,7 @@ describe('Container-Based Infrastructure Integration Tests', () => {
   });
 
   describe('[Cross-Service] ECS Tasks → RDS Database', () => {
-    testOrSkip('should have security groups allowing ECS to RDS connectivity', async () => {
+    test('should have security groups allowing ECS to RDS connectivity', async () => {
       const vpcId = outputs['vpc-id'];
       expect(vpcId).toBeDefined();
 
@@ -462,7 +462,7 @@ describe('Container-Based Infrastructure Integration Tests', () => {
   });
 
   describe('[Cross-Service] ALB → ECS Service', () => {
-    testOrSkip('should have ALB routing traffic to ECS tasks', async () => {
+    test('should have ALB routing traffic to ECS tasks', async () => {
       const clusterName = outputs['ecs-cluster-name'];
       const serviceName = outputs['ecs-service-name'];
       
@@ -489,7 +489,7 @@ describe('Container-Based Infrastructure Integration Tests', () => {
   });
 
   describe('[Cross-Service] CloudWatch → ECS', () => {
-    testOrSkip('should have CloudWatch Logs receiving container logs', async () => {
+    test('should have CloudWatch Logs receiving container logs', async () => {
       const logGroupName = outputs['log-group-name'];
       expect(logGroupName).toBeDefined();
 
@@ -528,7 +528,7 @@ describe('Container-Based Infrastructure Integration Tests', () => {
   // ============================================================================
 
   describe('[E2E] Complete Application Request Flow', () => {
-    testOrSkip('should handle complete request: ALB → ECS → RDS', async () => {
+    test('should handle complete request: ALB → ECS → RDS', async () => {
       const albUrl = outputs['alb-url'];
       const clusterName = outputs['ecs-cluster-name'];
       const serviceName = outputs['ecs-service-name'];
@@ -580,7 +580,7 @@ describe('Container-Based Infrastructure Integration Tests', () => {
   });
 
   describe('[E2E] Network Connectivity Flow', () => {
-    testOrSkip('should have complete network path: Internet → ALB → ECS → RDS', async () => {
+    test('should have complete network path: Internet → ALB → ECS → RDS', async () => {
       const vpcId = outputs['vpc-id'];
       const vpcCidr = outputs['vpc-cidr'] || '10.0.0.0/16';
       
@@ -624,7 +624,7 @@ describe('Container-Based Infrastructure Integration Tests', () => {
   });
 
   describe('[E2E] Security Enforcement Flow', () => {
-    testOrSkip('should enforce least privilege: RDS only accessible from ECS tasks', async () => {
+    test('should enforce least privilege: RDS only accessible from ECS tasks', async () => {
       const vpcId = outputs['vpc-id'];
       expect(vpcId).toBeDefined();
 
@@ -668,7 +668,7 @@ describe('Container-Based Infrastructure Integration Tests', () => {
   });
 
   describe('[E2E] Auto-Scaling Flow', () => {
-    testOrSkip('should have auto-scaling configured for ECS service', async () => {
+    test('should have auto-scaling configured for ECS service', async () => {
       const clusterName = outputs['ecs-cluster-name'];
       const serviceName = outputs['ecs-service-name'];
       
@@ -701,7 +701,7 @@ describe('Container-Based Infrastructure Integration Tests', () => {
   // ============================================================================
 
   describe('Infrastructure Configuration Validation', () => {
-    testOrSkip('should have all required outputs defined', () => {
+    test('should have all required outputs defined', () => {
       const requiredOutputs = [
         'vpc-id',
         'vpc-cidr',
@@ -724,16 +724,16 @@ describe('Container-Based Infrastructure Integration Tests', () => {
       });
     });
 
-    testOrSkip('should have correct VPC CIDR configuration', () => {
+    test('should have correct VPC CIDR configuration', () => {
       expect(outputs['vpc-cidr'] || '10.0.0.0/16').toBe('10.0.0.0/16');
     });
 
-    testOrSkip('should have correct number of alarms configured', () => {
+    test('should have correct number of alarms configured', () => {
       const alarmCount = outputs['alarm-count'] ? parseInt(outputs['alarm-count']) : 5;
       expect(alarmCount).toBeGreaterThanOrEqual(0);
     });
 
-    testOrSkip('should have ALB URL properly formatted', () => {
+    test('should have ALB URL properly formatted', () => {
       const albUrl = outputs['alb-url'];
       const albDnsName = outputs['alb-dns-name'];
       
@@ -743,7 +743,7 @@ describe('Container-Based Infrastructure Integration Tests', () => {
       }
     });
 
-    testOrSkip('should have ECS resources with correct naming convention', () => {
+    test('should have ECS resources with correct naming convention', () => {
       const clusterName = outputs['ecs-cluster-name'];
       const serviceName = outputs['ecs-service-name'];
       
@@ -755,7 +755,7 @@ describe('Container-Based Infrastructure Integration Tests', () => {
       }
     });
 
-    testOrSkip('should have S3 bucket with correct naming', () => {
+    test('should have S3 bucket with correct naming', () => {
       const bucketName = outputs['static-assets-bucket'];
       
       if (bucketName) {
