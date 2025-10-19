@@ -9,7 +9,7 @@ import { SecretsManagerClient, GetSecretValueCommand, UpdateSecretCommand } from
 import { SNSClient, PublishCommand, ListTopicsCommand } from '@aws-sdk/client-sns';
 import { ConfigServiceClient, StartConfigRulesEvaluationCommand, GetComplianceDetailsByConfigRuleCommand } from '@aws-sdk/client-config-service';
 import { CloudWatchLogsClient, PutLogEventsCommand, CreateLogStreamCommand } from '@aws-sdk/client-cloudwatch-logs';
-import { WAFv2Client, GetWebACLCommand, UpdateWebACLCommand } from '@aws-sdk/client-wafv2';
+import * as WAFv2 from '@aws-sdk/client-wafv2';
 
 // Configuration from CloudFormation outputs
 const outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
@@ -25,7 +25,7 @@ const secretsClient = new SecretsManagerClient({ region: process.env.AWS_REGION 
 const snsClient = new SNSClient({ region: process.env.AWS_REGION || 'us-west-2' });
 const configClient = new ConfigServiceClient({ region: process.env.AWS_REGION || 'us-west-2' });
 const logsClient = new CloudWatchLogsClient({ region: process.env.AWS_REGION || 'us-west-2' });
-const wafClient = new WAFv2Client({ region: process.env.AWS_REGION || 'us-west-2' });
+const wafClient = new WAFv2.WAFv2Client({ region: process.env.AWS_REGION || 'us-west-2' });
 
 describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
   const testTimeout = 600000; // 10 minutes
@@ -219,7 +219,7 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
       // Step 1: Test WAF protection
       const webACLId = outputs['nova-clinical-prod-web-acl-id'];
       if (webACLId) {
-        const wafResponse = await wafClient.send(new GetWebACLCommand({
+        const wafResponse = await wafClient.send(new WAFv2.GetWebACLCommand({
           Id: webACLId,
           Scope: 'REGIONAL'
         }));
