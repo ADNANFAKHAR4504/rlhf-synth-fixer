@@ -600,7 +600,7 @@ export class FinTechTradingStack extends TerraformStack {
       this,
       'elasticache-subnet-group',
       {
-        name: `trading-elasticache-subnet-group-${environmentSuffix}`,
+        name: `trading-elasticache-${environmentSuffix}-${Date.now()}`,
         subnetIds: [privateSubnet1.id, privateSubnet2.id, privateSubnet3.id],
         tags: {
           Name: `trading-elasticache-subnet-group-${environmentSuffix}`,
