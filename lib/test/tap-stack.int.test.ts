@@ -2,7 +2,7 @@ import { S3Client, HeadBucketCommand, GetBucketEncryptionCommand, GetPublicAcces
 import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand, DescribeInternetGatewaysCommand } from "@aws-sdk/client-ec2";
 import { ECSClient, DescribeClustersCommand, DescribeServicesCommand, DescribeTaskDefinitionCommand } from "@aws-sdk/client-ecs";
 import { ElasticLoadBalancingV2Client, DescribeLoadBalancersCommand, DescribeTargetGroupsCommand, DescribeListenersCommand } from "@aws-sdk/client-elastic-load-balancing-v2";
-import { DynamoDBClient, DescribeTableCommand } from "@aws-sdk/client-dynamodb";
+import { DynamoDBClient, DescribeTableCommand, DescribeContinuousBackupsCommand } from "@aws-sdk/client-dynamodb";
 import { CloudFrontClient, GetDistributionCommand } from "@aws-sdk/client-cloudfront";
 import { SNSClient, GetTopicAttributesCommand } from "@aws-sdk/client-sns";
 import { KMSClient, DescribeKeyCommand } from "@aws-sdk/client-kms";
@@ -326,7 +326,11 @@ describe("Educational Content Delivery Platform Integration Tests", () => {
       expect(Table?.TableName).toBe(courseMetadataTableName);
       expect(Table?.TableStatus).toBe("ACTIVE");
       expect(Table?.SSEDescription?.Status).toBe("ENABLED");
-      expect(Table?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus).toBe("ENABLED");
+
+      const { ContinuousBackupsDescription } = await dynamoClient.send(
+        new DescribeContinuousBackupsCommand({ TableName: courseMetadataTableName })
+      );
+      expect(ContinuousBackupsDescription?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus).toBe("ENABLED");
     }, 20000);
   });
 
@@ -438,10 +442,10 @@ describe("Educational Content Delivery Platform Integration Tests", () => {
       const tables = [userProgressTableName, courseMetadataTableName];
 
       for (const tableName of tables) {
-        const { Table } = await dynamoClient.send(
-          new DescribeTableCommand({ TableName: tableName })
+        const { ContinuousBackupsDescription } = await dynamoClient.send(
+          new DescribeContinuousBackupsCommand({ TableName: tableName })
         );
-        expect(Table?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus).toBe("ENABLED");
+        expect(ContinuousBackupsDescription?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus).toBe("ENABLED");
       }
     }, 30000);
 
