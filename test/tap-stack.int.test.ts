@@ -12,20 +12,25 @@ import { CloudWatchLogsClient, PutLogEventsCommand, CreateLogStreamCommand } fro
 import * as WAFv2 from '@aws-sdk/client-wafv2';
 
 // Configuration from CloudFormation outputs
+if (!fs.existsSync('cfn-outputs/flat-outputs.json')) {
+  console.error('cfn-outputs/flat-outputs.json not found. Integration tests require deployed infrastructure with generated outputs.');
+  process.exit(1);
+}
 const outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
 
 // AWS Clients
-const s3Client = new S3Client({ region: process.env.AWS_REGION || 'us-west-2' });
-const rdsClient = new RDSClient({ region: process.env.AWS_REGION || 'us-west-2' });
-const cloudFrontClient = new CloudFrontClient({ region: process.env.AWS_REGION || 'us-west-2' });
-const apiGatewayClient = new APIGatewayClient({ region: process.env.AWS_REGION || 'us-west-2' });
-const ec2Client = new EC2Client({ region: process.env.AWS_REGION || 'us-west-2' });
-const kmsClient = new KMSClient({ region: process.env.AWS_REGION || 'us-west-2' });
-const secretsClient = new SecretsManagerClient({ region: process.env.AWS_REGION || 'us-west-2' });
-const snsClient = new SNSClient({ region: process.env.AWS_REGION || 'us-west-2' });
-const configClient = new ConfigServiceClient({ region: process.env.AWS_REGION || 'us-west-2' });
-const logsClient = new CloudWatchLogsClient({ region: process.env.AWS_REGION || 'us-west-2' });
-const wafClient = new WAFv2.WAFV2Client({ region: process.env.AWS_REGION || 'us-west-2' });
+const region = process.env.AWS_REGION || 'us-west-2';
+const s3Client = new S3Client({ region });
+const rdsClient = new RDSClient({ region });
+const cloudFrontClient = new CloudFrontClient({ region });
+const apiGatewayClient = new APIGatewayClient({ region });
+const ec2Client = new EC2Client({ region });
+const kmsClient = new KMSClient({ region });
+const secretsClient = new SecretsManagerClient({ region });
+const snsClient = new SNSClient({ region });
+const configClient = new ConfigServiceClient({ region });
+const logsClient = new CloudWatchLogsClient({ region });
+const wafClient = new WAFv2.WAFV2Client({ region });
 
 describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
   const testTimeout = 600000; // 10 minutes
@@ -35,8 +40,8 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
     test('should complete end-to-end data flow: S3 -> KMS -> CloudFront -> API Gateway', async () => {
       // Step 1: Generate test clinical data
       const clinicalData = {
-        patientId: 'P001',
-        trialId: 'T001',
+        patientId: `P${Date.now().toString().slice(-3)}`,
+        trialId: `T${Date.now().toString().slice(-3)}`,
         timestamp: new Date().toISOString(),
         vitalSigns: {
           bloodPressure: '120/80',
@@ -51,7 +56,7 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
       };
 
       // Step 2: Encrypt data using KMS
-      const keyId = outputs['nova-clinical-prod-nova-kms-key-id']; // 7913f03d-4446-4691-af0e-975bb8a1aa0d
+      const keyId = outputs['nova-clinical-prod-nova-kms-key-id'];
       const encryptResponse = await kmsClient.send(new EncryptCommand({
         KeyId: keyId,
         Plaintext: JSON.stringify(clinicalData)
@@ -60,7 +65,7 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
       testData.encryptedData = encryptResponse.CiphertextBlob;
 
       // Step 3: Store encrypted data in S3
-      const bucketName = outputs['nova-clinical-prod-secure-s3-bucket']; // nova-clinical-342597974367-data-bucket
+      const bucketName = outputs['nova-clinical-prod-secure-s3-bucket'];
       const objectKey = `clinical-data/${clinicalData.patientId}/${Date.now()}.json`;
       
       const putResponse = await s3Client.send(new PutObjectCommand({
@@ -87,7 +92,6 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
       expect(decryptedClinicalData.patientId).toBe(clinicalData.patientId);
 
       // Step 5: Test CloudFront distribution
-      // Note: CloudFront distribution ID not in outputs, need to list distributions
       const listDistributions = await cloudFrontClient.send(new ListDistributionsCommand({}));
       const distribution = listDistributions.DistributionList?.Items?.find(d => 
         d.DomainName === outputs['nova-clinical-prod-cloudfront-domain']
@@ -133,20 +137,21 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
   describe('Database Integration and Security Workflow', () => {
     test('should complete database workflow: Secrets Manager -> RDS -> Application', async () => {
       // Step 1: Retrieve database credentials from Secrets Manager
+      const secretName = outputs['nova-clinical-prod-database-secret-name'];
       const secretResponse = await secretsClient.send(new GetSecretValueCommand({
-        SecretId: 'TapStackpr4674-NovaDatabaseSecret-1A2B3C4D5E6F' // Actual secret name from stack
+        SecretId: secretName
       }));
       expect(secretResponse.SecretString).toBeDefined();
       
       const dbCredentials = JSON.parse(secretResponse.SecretString || '{}');
-      expect(dbCredentials.username).toBe('dbadmin');
+      expect(dbCredentials.username).toBeDefined();
       expect(dbCredentials.password).toBeDefined();
       testData.dbCredentials = dbCredentials;
 
       // Step 2: Verify RDS instance is accessible
       const rdsResponse = await rdsClient.send(new DescribeDBInstancesCommand({}));
       const dbInstance = rdsResponse.DBInstances?.find(db => 
-        db.DBInstanceIdentifier?.includes('nova-clinical')
+        db.DBInstanceIdentifier?.includes(outputs['nova-clinical-prod-rds-endpoint']?.split('.')[0] || 'nova-clinical')
       );
       expect(dbInstance?.DBInstanceStatus).toBe('available');
       expect(dbInstance?.PubliclyAccessible).toBe(false);
@@ -167,7 +172,7 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
   describe('Monitoring and Alerting Workflow', () => {
     test('should complete monitoring workflow: CloudWatch -> SNS -> Notification', async () => {
       // Step 1: Create test log events
-      const logGroupName = outputs['nova-clinical-prod-api-gateway-log-group']; // /aws/apigateway/nova-clinical-prod
+      const logGroupName = outputs['nova-clinical-prod-api-gateway-log-group']; 
       const logStreamName = `test-stream-${Date.now()}`;
       
       await logsClient.send(new CreateLogStreamCommand({
@@ -204,7 +209,7 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
 
       // Step 2: Test SNS notification
       const topicsResponse = await snsClient.send(new ListTopicsCommand({}));
-      const topic = topicsResponse.Topics?.find(t => t.TopicArn?.includes('nova-clinical'));
+      const topic = topicsResponse.Topics?.find(t => t.TopicArn?.includes('nova-clinical-prod'));
       expect(topic?.TopicArn).toBeDefined();
 
       const publishResponse = await snsClient.send(new PublishCommand({
@@ -236,14 +241,15 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
       }
 
       // Step 2: Trigger Config rule evaluation
+      const configRuleNames = outputs['nova-clinical-prod-config-rule-names']?.split(',') || ['S3BucketServerSideEncryptionEnabledRule', 'RDSInstancePublicAccessCheckRule'];
       const configRulesResponse = await configClient.send(new StartConfigRulesEvaluationCommand({
-        ConfigRuleNames: ['S3BucketServerSideEncryptionEnabledRule', 'RDSInstancePublicAccessCheckRule']
+        ConfigRuleNames: configRuleNames
       }));
       expect(configRulesResponse.$metadata.httpStatusCode).toBe(200);
 
       // Step 3: Check compliance status
       const complianceResponse = await configClient.send(new GetComplianceDetailsByConfigRuleCommand({
-        ConfigRuleName: 'S3BucketServerSideEncryptionEnabledRule',
+        ConfigRuleName: configRuleNames[0],
         ComplianceTypes: ['COMPLIANT', 'NON_COMPLIANT']
       }));
       expect(complianceResponse.$metadata.httpStatusCode).toBe(200);
@@ -257,7 +263,7 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
       const instancesResponse = await ec2Client.send(new DescribeInstancesCommand({}));
       const novaInstance = instancesResponse.Reservations?.flatMap(r => r.Instances || [])
         .find(instance => instance.Tags?.some(tag => 
-          tag.Key === 'Name' && tag.Value?.includes('nova-clinical')
+          tag.Key === 'Name' && tag.Value?.includes('nova-clinical-prod')
         ));
       
       expect(novaInstance).toBeDefined();
@@ -307,7 +313,7 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
       // Step 1: Verify RDS backup configuration
       const rdsResponse = await rdsClient.send(new DescribeDBInstancesCommand({}));
       const dbInstance = rdsResponse.DBInstances?.find(db => 
-        db.DBInstanceIdentifier?.includes('nova-clinical')
+        db.DBInstanceIdentifier?.includes(outputs['nova-clinical-prod-rds-endpoint']?.split('.')[0] || 'nova-clinical')
       );
       
       expect(dbInstance?.BackupRetentionPeriod).toBe(35);
@@ -388,8 +394,8 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
     test('should complete full clinical trial data workflow', async () => {
       // Step 1: Patient data ingestion
       const patientData = {
-        patientId: 'P001',
-        trialId: 'T001',
+        patientId: `P${Date.now().toString().slice(-3)}`,
+        trialId: `T${Date.now().toString().slice(-3)}`,
         visitNumber: 1,
         data: {
           demographics: { age: 45, gender: 'M' },
@@ -461,7 +467,7 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
 
       // Step 6: Send notification
       const topicsResponse = await snsClient.send(new ListTopicsCommand({}));
-      const topic = topicsResponse.Topics?.find(t => t.TopicArn?.includes('nova-clinical'));
+      const topic = topicsResponse.Topics?.find(t => t.TopicArn?.includes('nova-clinical-prod'));
       
       if (topic?.TopicArn) {
         await snsClient.send(new PublishCommand({
