@@ -34,7 +34,7 @@ IAM and Resource Management
 
 For IAM, we need roles and policies that stick to least privilege. Tag everything consistently with Environment, CostCenter, and any custom tags we define. For critical resources like databases and S3 buckets, use lifecycle prevent_destroy based on a variable so we don't accidentally delete production data.
 
-Technical Constraints
+Technical Constraints:
 
 Keep everything in one Terraform file - no separate modules or split files. Use Terraform 1.4 or higher with AWS provider version 5.0 or above. Create all the KMS keys we need in the same file and use them consistently across S3, RDS, Secrets Manager, and CloudTrail.
 
