@@ -2,7 +2,7 @@ import fs from 'fs';
 import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
 import { CloudFrontClient, GetDistributionCommand, CreateInvalidationCommand } from '@aws-sdk/client-cloudfront';
-import { ApiGatewayClient, GetRestApiCommand, GetStageCommand, TestInvokeMethodCommand } from '@aws-sdk/client-api-gateway';
+import * as ApiGateway from '@aws-sdk/client-api-gateway';
 import { EC2Client, DescribeInstancesCommand, StartInstancesCommand, StopInstancesCommand } from '@aws-sdk/client-ec2';
 import { KMSClient, EncryptCommand, DecryptCommand, GenerateDataKeyCommand } from '@aws-sdk/client-kms';
 import { SecretsManagerClient, GetSecretValueCommand, UpdateSecretCommand } from '@aws-sdk/client-secrets-manager';
@@ -18,7 +18,7 @@ const outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf
 const s3Client = new S3Client({ region: process.env.AWS_REGION || 'us-west-2' });
 const rdsClient = new RDSClient({ region: process.env.AWS_REGION || 'us-west-2' });
 const cloudFrontClient = new CloudFrontClient({ region: process.env.AWS_REGION || 'us-west-2' });
-const apiGatewayClient = new ApiGatewayClient({ region: process.env.AWS_REGION || 'us-west-2' });
+const apiGatewayClient = new ApiGateway.ApiGatewayClient({ region: process.env.AWS_REGION || 'us-west-2' });
 const ec2Client = new EC2Client({ region: process.env.AWS_REGION || 'us-west-2' });
 const kmsClient = new KMSClient({ region: process.env.AWS_REGION || 'us-west-2' });
 const secretsClient = new SecretsManagerClient({ region: process.env.AWS_REGION || 'us-west-2' });
@@ -106,11 +106,11 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
 
       // Step 7: Test API Gateway endpoint
       const apiId = outputs['nova-clinical-prod-api-gateway-id'];
-      const apiResponse = await apiGatewayClient.send(new GetRestApiCommand({ restApiId: apiId }));
+      const apiResponse = await apiGatewayClient.send(new ApiGateway.GetRestApiCommand({ restApiId: apiId }));
       expect(apiResponse.$metadata.httpStatusCode).toBe(200);
 
       // Step 8: Test API Gateway method invocation
-      const testInvokeResponse = await apiGatewayClient.send(new TestInvokeMethodCommand({
+      const testInvokeResponse = await apiGatewayClient.send(new ApiGateway.TestInvokeMethodCommand({
         restApiId: apiId,
         resourceId: apiResponse.resources?.find(r => r.pathPart === 'clinical-data')?.id,
         httpMethod: 'GET',
@@ -411,7 +411,7 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
 
       // Step 3: Process data through API Gateway
       const apiId = outputs['nova-clinical-prod-api-gateway-id'];
-      const apiResponse = await apiGatewayClient.send(new GetRestApiCommand({ restApiId: apiId }));
+      const apiResponse = await apiGatewayClient.send(new ApiGateway.GetRestApiCommand({ restApiId: apiId }));
       
       // Step 4: Store processed results
       const processedData = {
