@@ -497,7 +497,7 @@ export class FinTechTradingStack extends TerraformStack {
       handler: 'lambda_rotation_handler.handler',
       runtime: 'python3.11',
       timeout: 30,
-      filename: 'lib/lambda-rotation.zip',
+      filename: '${path.module}/../../../lib/lambda-rotation.zip',
       sourceCodeHash:
         'Njk0MGY0MjU4ODMyNzZjYmJiNGEzMDJmOGE0MGJkZTI3ZWQwNzljODRiNzM0NzM4NjA4Njg5NTcxZTdhZjk1Ywo=',
       vpcConfig: {
