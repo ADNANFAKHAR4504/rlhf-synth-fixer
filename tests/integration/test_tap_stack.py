@@ -97,8 +97,17 @@ class TestVPCInfrastructure:
 
         assert vpc["State"] == "available"
         assert vpc["CidrBlock"] == "10.0.0.0/16"
-        assert vpc["EnableDnsHostnames"] is True
-        assert vpc["EnableDnsSupport"] is True
+
+        # Check DNS attributes separately as they may not be in the VPC response
+        dns_support = ec2_client.describe_vpc_attribute(
+            VpcId=vpc_id, Attribute="enableDnsSupport"
+        )
+        dns_hostnames = ec2_client.describe_vpc_attribute(
+            VpcId=vpc_id, Attribute="enableDnsHostnames"
+        )
+
+        assert dns_support["EnableDnsSupport"]["Value"] is True
+        assert dns_hostnames["EnableDnsHostnames"]["Value"] is True
 
     def test_subnets_across_multiple_azs(self, outputs, ec2_client):
         """Test that subnets are deployed across multiple availability zones."""
@@ -351,7 +360,7 @@ class TestSecurityAndCompliance:
         """Test that sensitive resources (RDS, EFS, Redis) are in private subnets."""
         vpc_id = outputs.get("vpc_id")
 
-        # Get all private subnets (those without direct route to IGW)
+        # Get all subnets
         subnets_response = ec2_client.describe_subnets(
             Filters=[{"Name": "vpc-id", "Values": [vpc_id]}]
         )
@@ -361,18 +370,52 @@ class TestSecurityAndCompliance:
             Filters=[{"Name": "vpc-id", "Values": [vpc_id]}]
         )
 
+        # Build map of subnet to route table
+        subnet_to_rt = {}
+        for rt in route_tables_response["RouteTables"]:
+            for assoc in rt.get("Associations", []):
+                if "SubnetId" in assoc:
+                    subnet_to_rt[assoc["SubnetId"]] = rt
+
+        # Identify private subnets (those without direct route to IGW)
         private_subnet_ids = set()
+        public_subnet_ids = set()
+
         for rt in route_tables_response["RouteTables"]:
             has_igw = any(
                 route.get("GatewayId", "").startswith("igw-")
                 for route in rt.get("Routes", [])
             )
-            if not has_igw:
-                for assoc in rt.get("Associations", []):
-                    if "SubnetId" in assoc:
+
+            for assoc in rt.get("Associations", []):
+                if "SubnetId" in assoc:
+                    if has_igw:
+                        public_subnet_ids.add(assoc["SubnetId"])
+                    else:
                         private_subnet_ids.add(assoc["SubnetId"])
 
-        assert len(private_subnet_ids) >= 3, "Should have at least 3 private subnets"
+        # If no explicit associations, check for main route table
+        all_subnets = {subnet["SubnetId"] for subnet in subnets_response["Subnets"]}
+        main_rt = next((rt for rt in route_tables_response["RouteTables"]
+                       if any(assoc.get("Main", False) for assoc in rt.get("Associations", []))), None)
+
+        if main_rt:
+            has_igw_main = any(
+                route.get("GatewayId", "").startswith("igw-")
+                for route in main_rt.get("Routes", [])
+            )
+
+            # Subnets not explicitly associated use main route table
+            unassociated_subnets = all_subnets - public_subnet_ids - private_subnet_ids
+            for subnet_id in unassociated_subnets:
+                if has_igw_main:
+                    public_subnet_ids.add(subnet_id)
+                else:
+                    private_subnet_ids.add(subnet_id)
+
+        # Should have both public and private subnets
+        assert len(private_subnet_ids) >= 3, f"Should have at least 3 private subnets, found {len(private_subnet_ids)}"
+        assert len(public_subnet_ids) >= 3, f"Should have at least 3 public subnets, found {len(public_subnet_ids)}"
 
 
 class TestHighAvailability:
