@@ -303,92 +303,96 @@ resource "aws_kms_key" "primary" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "Enable IAM User Permissions"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:${data.aws_partition.current.partition}:iam::${local.account_id}:root"
+    Statement = concat(
+      [
+        {
+          Sid    = "Enable IAM User Permissions"
+          Effect = "Allow"
+          Principal = {
+            AWS = "arn:${data.aws_partition.current.partition}:iam::${local.account_id}:root"
+          }
+          Action   = "kms:*"
+          Resource = "*"
+        },
+        {
+          Sid    = "Allow CloudWatch Logs"
+          Effect = "Allow"
+          Principal = {
+            Service = "logs.${var.aws_region}.amazonaws.com"
+          }
+          Action = [
+            "kms:Encrypt",
+            "kms:Decrypt",
+            "kms:ReEncrypt*",
+            "kms:GenerateDataKey*",
+            "kms:CreateGrant",
+            "kms:DescribeKey"
+          ]
+          Resource = "*"
+          Condition = {
+            ArnLike = {
+              "kms:EncryptionContext:aws:logs:arn" = "arn:${data.aws_partition.current.partition}:logs:${var.aws_region}:${local.account_id}:log-group:*"
+            }
+          }
+        },
+        {
+          Sid    = "Allow S3 Service"
+          Effect = "Allow"
+          Principal = {
+            Service = "s3.amazonaws.com"
+          }
+          Action = [
+            "kms:Decrypt",
+            "kms:GenerateDataKey"
+          ]
+          Resource = "*"
+        },
+        {
+          Sid    = "Allow CloudTrail"
+          Effect = "Allow"
+          Principal = {
+            Service = "cloudtrail.amazonaws.com"
+          }
+          Action = [
+            "kms:GenerateDataKey*",
+            "kms:DescribeKey"
+          ]
+          Resource = "*"
+        },
+        {
+          Sid    = "Allow DynamoDB Service"
+          Effect = "Allow"
+          Principal = {
+            Service = "dynamodb.amazonaws.com"
+          }
+          Action = [
+            "kms:Decrypt",
+            "kms:DescribeKey"
+          ]
+          Resource = "*"
         }
-        Action   = "kms:*"
-        Resource = "*"
-      },
-      {
-        Sid    = "Allow CloudWatch Logs"
-        Effect = "Allow"
-        Principal = {
-          Service = "logs.${var.aws_region}.amazonaws.com"
-        }
-        Action = [
-          "kms:Encrypt",
-          "kms:Decrypt",
-          "kms:ReEncrypt*",
-          "kms:GenerateDataKey*",
-          "kms:CreateGrant",
-          "kms:DescribeKey"
-        ]
-        Resource = "*"
-        Condition = {
-          ArnLike = {
-            "kms:EncryptionContext:aws:logs:arn" = "arn:${data.aws_partition.current.partition}:logs:${var.aws_region}:${local.account_id}:log-group:*"
+      ],
+      length(local.consumer_account_ids) > 0 ? [
+        {
+          Sid    = "Allow Consumer Accounts Decrypt"
+          Effect = "Allow"
+          Principal = {
+            AWS = [for account_id in local.consumer_account_ids : "arn:${data.aws_partition.current.partition}:iam::${account_id}:root"]
+          }
+          Action = [
+            "kms:Decrypt",
+            "kms:DescribeKey",
+            "kms:CreateGrant"
+          ]
+          Resource = "*"
+          Condition = {
+            StringEquals = {
+              "kms:ViaService" = "s3.${var.aws_region}.amazonaws.com"
+            }
           }
         }
-      },
-      {
-        Sid    = "Allow S3 Service"
-        Effect = "Allow"
-        Principal = {
-          Service = "s3.amazonaws.com"
-        }
-        Action = [
-          "kms:Decrypt",
-          "kms:GenerateDataKey"
-        ]
-        Resource = "*"
-      },
-      {
-        Sid    = "Allow CloudTrail"
-        Effect = "Allow"
-        Principal = {
-          Service = "cloudtrail.amazonaws.com"
-        }
-        Action = [
-          "kms:GenerateDataKey*",
-          "kms:DescribeKey"
-        ]
-        Resource = "*"
-      },
-      {
-        Sid    = "Allow DynamoDB Service"
-        Effect = "Allow"
-        Principal = {
-          Service = "dynamodb.amazonaws.com"
-        }
-        Action = [
-          "kms:Decrypt",
-          "kms:DescribeKey"
-        ]
-        Resource = "*"
-      },
-      {
-        Sid    = "Allow Consumer Accounts Decrypt"
-        Effect = length(local.consumer_account_ids) > 0 ? "Allow" : "Deny"
-        Principal = {
-          AWS = [for account_id in local.consumer_account_ids : "arn:${data.aws_partition.current.partition}:iam::${account_id}:root"]
-        }
-        Action = [
-          "kms:Decrypt",
-          "kms:DescribeKey",
-          "kms:CreateGrant"
-        ]
-        Resource = "*"
-        Condition = {
-          StringEquals = {
-            "kms:ViaService" = "s3.${var.aws_region}.amazonaws.com"
-          }
-        }
-      }
-    ]
+      ] : []
+    )
   })
 
   tags = merge(

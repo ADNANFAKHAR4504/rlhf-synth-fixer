@@ -76,7 +76,7 @@ Resources named as: `${var.project_name}-${resource-type}-${local.env_suffix}`
 
 # Complete Source Code
 
-## terraform Infrastructure - tap_stack.tf
+## Terraform Infrastructure - tap_stack.tf
 
 ```hcl
 # ============================================================================
@@ -384,92 +384,96 @@ resource "aws_kms_key" "primary" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "Enable IAM User Permissions"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:${data.aws_partition.current.partition}:iam::${local.account_id}:root"
+    Statement = concat(
+      [
+        {
+          Sid    = "Enable IAM User Permissions"
+          Effect = "Allow"
+          Principal = {
+            AWS = "arn:${data.aws_partition.current.partition}:iam::${local.account_id}:root"
+          }
+          Action   = "kms:*"
+          Resource = "*"
+        },
+        {
+          Sid    = "Allow CloudWatch Logs"
+          Effect = "Allow"
+          Principal = {
+            Service = "logs.${var.aws_region}.amazonaws.com"
+          }
+          Action = [
+            "kms:Encrypt",
+            "kms:Decrypt",
+            "kms:ReEncrypt*",
+            "kms:GenerateDataKey*",
+            "kms:CreateGrant",
+            "kms:DescribeKey"
+          ]
+          Resource = "*"
+          Condition = {
+            ArnLike = {
+              "kms:EncryptionContext:aws:logs:arn" = "arn:${data.aws_partition.current.partition}:logs:${var.aws_region}:${local.account_id}:log-group:*"
+            }
+          }
+        },
+        {
+          Sid    = "Allow S3 Service"
+          Effect = "Allow"
+          Principal = {
+            Service = "s3.amazonaws.com"
+          }
+          Action = [
+            "kms:Decrypt",
+            "kms:GenerateDataKey"
+          ]
+          Resource = "*"
+        },
+        {
+          Sid    = "Allow CloudTrail"
+          Effect = "Allow"
+          Principal = {
+            Service = "cloudtrail.amazonaws.com"
+          }
+          Action = [
+            "kms:GenerateDataKey*",
+            "kms:DescribeKey"
+          ]
+          Resource = "*"
+        },
+        {
+          Sid    = "Allow DynamoDB Service"
+          Effect = "Allow"
+          Principal = {
+            Service = "dynamodb.amazonaws.com"
+          }
+          Action = [
+            "kms:Decrypt",
+            "kms:DescribeKey"
+          ]
+          Resource = "*"
         }
-        Action   = "kms:*"
-        Resource = "*"
-      },
-      {
-        Sid    = "Allow CloudWatch Logs"
-        Effect = "Allow"
-        Principal = {
-          Service = "logs.${var.aws_region}.amazonaws.com"
-        }
-        Action = [
-          "kms:Encrypt",
-          "kms:Decrypt",
-          "kms:ReEncrypt*",
-          "kms:GenerateDataKey*",
-          "kms:CreateGrant",
-          "kms:DescribeKey"
-        ]
-        Resource = "*"
-        Condition = {
-          ArnLike = {
-            "kms:EncryptionContext:aws:logs:arn" = "arn:${data.aws_partition.current.partition}:logs:${var.aws_region}:${local.account_id}:log-group:*"
+      ],
+      length(local.consumer_account_ids) > 0 ? [
+        {
+          Sid    = "Allow Consumer Accounts Decrypt"
+          Effect = "Allow"
+          Principal = {
+            AWS = [for account_id in local.consumer_account_ids : "arn:${data.aws_partition.current.partition}:iam::${account_id}:root"]
+          }
+          Action = [
+            "kms:Decrypt",
+            "kms:DescribeKey",
+            "kms:CreateGrant"
+          ]
+          Resource = "*"
+          Condition = {
+            StringEquals = {
+              "kms:ViaService" = "s3.${var.aws_region}.amazonaws.com"
+            }
           }
         }
-      },
-      {
-        Sid    = "Allow S3 Service"
-        Effect = "Allow"
-        Principal = {
-          Service = "s3.amazonaws.com"
-        }
-        Action = [
-          "kms:Decrypt",
-          "kms:GenerateDataKey"
-        ]
-        Resource = "*"
-      },
-      {
-        Sid    = "Allow CloudTrail"
-        Effect = "Allow"
-        Principal = {
-          Service = "cloudtrail.amazonaws.com"
-        }
-        Action = [
-          "kms:GenerateDataKey*",
-          "kms:DescribeKey"
-        ]
-        Resource = "*"
-      },
-      {
-        Sid    = "Allow DynamoDB Service"
-        Effect = "Allow"
-        Principal = {
-          Service = "dynamodb.amazonaws.com"
-        }
-        Action = [
-          "kms:Decrypt",
-          "kms:DescribeKey"
-        ]
-        Resource = "*"
-      },
-      {
-        Sid    = "Allow Consumer Accounts Decrypt"
-        Effect = length(local.consumer_account_ids) > 0 ? "Allow" : "Deny"
-        Principal = {
-          AWS = [for account_id in local.consumer_account_ids : "arn:${data.aws_partition.current.partition}:iam::${account_id}:root"]
-        }
-        Action = [
-          "kms:Decrypt",
-          "kms:DescribeKey",
-          "kms:CreateGrant"
-        ]
-        Resource = "*"
-        Condition = {
-          StringEquals = {
-            "kms:ViaService" = "s3.${var.aws_region}.amazonaws.com"
-          }
-        }
-      }
-    ]
+      ] : []
+    )
   })
 
   tags = merge(
@@ -715,7 +719,7 @@ resource "aws_s3_bucket_policy" "primary" {
           Principal = {
             AWS = "*"
           }
-          Action   = "s3:*"
+          Action = "s3:*"
           Resource = [
             aws_s3_bucket.primary.arn,
             "${aws_s3_bucket.primary.arn}/*"
@@ -739,7 +743,7 @@ resource "aws_s3_bucket_policy" "primary" {
             "s3:GetObjectVersion",
             "s3:PutObject",
             "s3:DeleteObject"
-          ] : [
+            ] : [
             "s3:GetObject",
             "s3:GetObjectVersion"
           ]
@@ -763,10 +767,10 @@ resource "aws_s3_bucket_policy" "primary" {
 # ============================================================================
 
 resource "aws_dynamodb_table" "access_control" {
-  name           = "${var.project_name}-access-control-${local.env_suffix}"
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "account_id"
-  range_key      = "prefix"
+  name         = "${var.project_name}-access-control-${local.env_suffix}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "account_id"
+  range_key    = "prefix"
 
   attribute {
     name = "account_id"
@@ -812,10 +816,10 @@ resource "aws_dynamodb_table" "access_control" {
 # ============================================================================
 
 resource "aws_dynamodb_table" "audit_logs" {
-  name           = "${var.project_name}-audit-logs-${local.env_suffix}"
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "timestamp"
-  range_key      = "request_id"
+  name         = "${var.project_name}-audit-logs-${local.env_suffix}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "timestamp"
+  range_key    = "request_id"
 
   attribute {
     name = "timestamp"
@@ -1544,11 +1548,11 @@ resource "aws_s3control_storage_lens_configuration" "main" {
 
     data_export {
       s3_bucket_destination {
-        account_id     = local.account_id
-        arn            = aws_s3_bucket.audit.arn
-        format         = "CSV"
+        account_id            = local.account_id
+        arn                   = aws_s3_bucket.audit.arn
+        format                = "CSV"
         output_schema_version = "V_1"
-        prefix         = "storage-lens/"
+        prefix                = "storage-lens/"
 
         encryption {
           sse_kms {
@@ -3318,13 +3322,13 @@ The infrastructure exports the following outputs:
 All source code files from the `lib/` directory have been included above:
 
 **Terraform Configuration Files** (1 total):
-1. ✅ tap_stack.tf (1,200+ lines) - Complete infrastructure definition
+1. tap_stack.tf (1,200+ lines) - Complete infrastructure definition
 
 **Lambda Functions** (4 total):
-1. ✅ lambda-access-validator/index.py (195 lines) - Access validation against DynamoDB
-2. ✅ lambda-access-logger/index.py (245 lines) - CloudTrail event processing
-3. ✅ lambda-governance-check/index.py (420 lines) - Daily compliance validation
-4. ✅ lambda-expiration-enforcer/index.py (290 lines) - Hourly access expiration
+1. lambda-access-validator/index.py (195 lines) - Access validation against DynamoDB
+2. lambda-access-logger/index.py (245 lines) - CloudTrail event processing
+3. lambda-governance-check/index.py (420 lines) - Daily compliance validation
+4. lambda-expiration-enforcer/index.py (290 lines) - Hourly access expiration
 
 **Total Lines of Code**: ~2,350 lines across all files
 
