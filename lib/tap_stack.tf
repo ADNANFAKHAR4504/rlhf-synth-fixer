@@ -1698,7 +1698,7 @@ resource "aws_cloudwatch_metric_alarm" "primary_health" {
     TargetGroup  = aws_lb_target_group.primary.arn_suffix
   }
 
-  alarm_actions = [aws_sns_topic.dr_notifications.arn]
+  alarm_actions = [aws_sns_topic.primary_notifications.arn]
 
   tags = local.common_tags
 }
@@ -1741,15 +1741,33 @@ resource "aws_cloudwatch_metric_alarm" "aurora_lag_alarm" {
     DBClusterIdentifier = aws_rds_cluster.primary.cluster_identifier
   }
 
-  alarm_actions = [aws_sns_topic.dr_notifications.arn]
+  alarm_actions = [aws_sns_topic.primary_notifications.arn]
 
   tags = local.common_tags
 }
 
 # ========================================
-# SNS Topic for DR Notifications
+# SNS Topics for Notifications
 # ========================================
 
+# SNS topic in primary region for primary region alarms
+resource "aws_sns_topic" "primary_notifications" {
+  provider = aws.primary
+  name     = "${var.project_name}-primary-notifications-${local.unique_suffix}"
+
+  tags = merge(local.common_tags, {
+    Purpose = "primary-notifications"
+  })
+}
+
+resource "aws_sns_topic_subscription" "primary_email" {
+  provider  = aws.primary
+  topic_arn = aws_sns_topic.primary_notifications.arn
+  protocol  = "email"
+  endpoint  = var.alarm_email
+}
+
+# SNS topic in DR region for DR region alarms
 resource "aws_sns_topic" "dr_notifications" {
   provider = aws.dr
   name     = "${var.project_name}-dr-notifications-${local.unique_suffix}"
@@ -1824,7 +1842,7 @@ resource "aws_iam_role_policy" "lambda_failover" {
         Action = [
           "sns:Publish"
         ]
-        Resource = aws_sns_topic.dr_notifications.arn
+        Resource = aws_sns_topic.primary_notifications.arn
       },
       {
         Effect = "Allow"
@@ -1862,7 +1880,7 @@ resource "aws_lambda_function" "failover_orchestrator" {
     variables = {
       GLOBAL_CLUSTER_ID = aws_rds_global_cluster.financial_db.id
       DR_CLUSTER_ID     = aws_rds_cluster.dr.cluster_identifier
-      SNS_TOPIC_ARN     = aws_sns_topic.dr_notifications.arn
+      SNS_TOPIC_ARN     = aws_sns_topic.primary_notifications.arn
       DR_REGION         = local.regions.dr
     }
   }
@@ -2051,7 +2069,7 @@ resource "aws_iam_role_policy" "ssm_automation" {
         Action = [
           "sns:Publish"
         ]
-        Resource = aws_sns_topic.dr_notifications.arn
+        Resource = aws_sns_topic.primary_notifications.arn
       }
     ]
   })
@@ -2106,7 +2124,7 @@ mainSteps:
     inputs:
       Service: sns
       Api: Publish
-      TopicArn: ${aws_sns_topic.dr_notifications.arn}
+      TopicArn: ${aws_sns_topic.primary_notifications.arn}
       Message: 'DR Test completed successfully. Type: {{ TestType }}'
 DOC
 
@@ -2218,9 +2236,12 @@ output "secrets_manager_arn" {
   sensitive   = true
 }
 
-output "sns_topic_arn" {
-  description = "SNS topic ARN for notifications"
-  value       = aws_sns_topic.dr_notifications.arn
+output "sns_topic_arns" {
+  description = "SNS topic ARNs for notifications"
+  value = {
+    primary = aws_sns_topic.primary_notifications.arn
+    dr      = aws_sns_topic.dr_notifications.arn
+  }
 }
 
 output "lambda_function_arns" {
