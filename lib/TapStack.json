@@ -963,7 +963,7 @@
           "Ref": "VPC"
         },
         "HealthCheckEnabled": true,
-        "HealthCheckPath": "/health",
+        "HealthCheckPath": "/",
         "HealthCheckProtocol": "HTTP",
         "HealthCheckIntervalSeconds": 30,
         "HealthCheckTimeoutSeconds": 5,

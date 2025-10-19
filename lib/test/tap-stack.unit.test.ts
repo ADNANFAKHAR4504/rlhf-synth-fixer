@@ -293,7 +293,7 @@ describe('TapStack CloudFormation Template - Educational Content Platform', () =
     test('target group should have health checks configured', () => {
       const tg = template.Resources.ALBTargetGroup;
       expect(tg.Properties.HealthCheckEnabled).toBe(true);
-      expect(tg.Properties.HealthCheckPath).toBe('/health');
+      expect(tg.Properties.HealthCheckPath).toBe('/');
     });
 
     test('should have ALB listener', () => {
