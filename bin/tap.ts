@@ -23,7 +23,7 @@ const primaryRegion =
   process.env.CDK_DEFAULT_REGION ||
   'us-east-1';
 const secondaryRegion =
-  app.node.tryGetContext('secondaryRegion') || 'us-west-2';
+  app.node.tryGetContext('secondaryRegion') || 'us-east-2';
 
 // Apply tags to all stacks in this app (optional - you can do this at stack level instead)
 Tags.of(app).add('Environment', environmentSuffix);
