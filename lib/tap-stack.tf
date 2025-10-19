@@ -23,23 +23,6 @@ provider "aws" {
   }
 }
 
-variable "key_name" {
-  description = "Name of the AWS key pair for EC2 SSH access"
-  type        = string
-  validation {
-    condition     = length(var.key_name) > 0
-    error_message = "Key name must not be empty"
-  }
-}
-
-variable "allowed_ip" {
-  description = "IP address allowed to SSH into EC2 instance (format: x.x.x.x/32)"
-  type        = string
-  validation {
-    condition     = can(regex("^([0-9]{1,3}\\.){3}[0-9]{1,3}/[0-9]{1,2}$", var.allowed_ip))
-    error_message = "Allowed IP must be in CIDR format (e.g., 192.168.1.1/32)"
-  }
-}
 
 variable "environment_suffix" {
   description = "Unique suffix for all resource names (e.g., prod, dev, a1b2c3)"
