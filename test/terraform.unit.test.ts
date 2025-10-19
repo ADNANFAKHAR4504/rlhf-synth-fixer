@@ -194,9 +194,9 @@ describe("CloudTrail Analytics Platform - Unit Tests", () => {
       expect(terraformCode).toMatch(/kms_key_id\s*=\s*aws_kms_key\.cloudtrail\.arn/);
     });
 
-    test("CloudTrail includes data events", () => {
+    test("CloudTrail includes event selector with dynamic data resource", () => {
       expect(terraformCode).toMatch(/event_selector\s*{/);
-      expect(terraformCode).toMatch(/data_resource\s*{/);
+      expect(terraformCode).toMatch(/dynamic\s+"data_resource"\s*{/);
     });
   });
 

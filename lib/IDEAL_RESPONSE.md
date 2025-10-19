@@ -686,14 +686,14 @@ resource "aws_cloudtrail" "organization" {
     read_write_type           = "All"
     include_management_events = true
 
-    data_resource {
-      type   = "AWS::S3::Object"
-      values = var.enable_data_events ? ["arn:${data.aws_partition.current.partition}:s3:::*/*"] : []
-    }
-
-    data_resource {
-      type   = "AWS::Lambda::Function"
-      values = var.enable_data_events ? ["arn:${data.aws_partition.current.partition}:lambda:*:*:function/*"] : []
+    dynamic "data_resource" {
+      for_each = var.enable_data_events ? [1] : []
+      content {
+        type = "AWS::Lambda::Function"
+        values = [
+          "arn:${data.aws_partition.current.partition}:lambda"
+        ]
+      }
     }
   }
 
@@ -2197,6 +2197,37 @@ A single customer-managed KMS key encrypts all data at rest with comprehensive s
 5. Alert Enricher Lambda responds to EventBridge events in real-time
 6. Log Compactor Lambda runs weekly to optimize storage
 7. Compliance Reporter Lambda generates monthly reports
+
+### CloudTrail Event Selector Configuration
+
+The CloudTrail trail is configured with event selectors to capture:
+- Management events (all API calls for resource management)
+- Lambda function data events (conditional, based on `enable_data_events` variable)
+
+**Important Note on S3 Data Events**:
+Basic event selectors in CloudTrail do not support wildcard patterns like `arn:aws:s3:::*/*` for S3 object-level events. To log S3 data events, you must either:
+1. Specify explicit bucket ARNs in the event selector
+2. Use advanced event selectors instead of basic event selectors
+3. Rely on management events only (which capture bucket-level operations)
+
+This implementation uses management events for S3 bucket operations and Lambda data events when enabled. If you need S3 object-level logging, you can:
+- Add specific bucket ARNs to the event selector
+- Migrate to advanced event selectors (different Terraform syntax)
+
+```hcl
+event_selector {
+  read_write_type           = "All"
+  include_management_events = true
+
+  dynamic "data_resource" {
+    for_each = var.enable_data_events ? [1] : []
+    content {
+      type = "AWS::Lambda::Function"
+      values = ["arn:aws:lambda"]
+    }
+  }
+}
+```
 
 ### Security Controls
 

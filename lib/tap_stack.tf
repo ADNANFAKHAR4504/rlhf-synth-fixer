@@ -633,14 +633,14 @@ resource "aws_cloudtrail" "organization" {
     read_write_type           = "All"
     include_management_events = true
 
-    data_resource {
-      type   = "AWS::S3::Object"
-      values = var.enable_data_events ? ["arn:${data.aws_partition.current.partition}:s3:::*/*"] : []
-    }
-
-    data_resource {
-      type   = "AWS::Lambda::Function"
-      values = var.enable_data_events ? ["arn:${data.aws_partition.current.partition}:lambda:*:*:function/*"] : []
+    dynamic "data_resource" {
+      for_each = var.enable_data_events ? [1] : []
+      content {
+        type = "AWS::Lambda::Function"
+        values = [
+          "arn:${data.aws_partition.current.partition}:lambda"
+        ]
+      }
     }
   }
 
