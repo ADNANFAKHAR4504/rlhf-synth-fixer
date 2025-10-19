@@ -244,6 +244,7 @@ terraform output view_dashboard_url
 | `aws_region` | string | us-east-1 | AWS region for resources |
 | `project_name` | string | legal-docs | Project name for resource naming |
 | `environment` | string | prod | Environment (dev, staging, prod) |
+| `environment_suffix` | string | "" | Unique suffix for resource naming (e.g., pr4798, synth123). Reads from ENVIRONMENT_SUFFIX env variable |
 | `enable_object_lock` | bool | true | Enable S3 Object Lock (cannot be disabled after creation) |
 | `object_lock_retention_days` | number | 90 | Default Object Lock retention period |
 | `legal_retention_years` | number | 7 | Legal retention period in years |
@@ -274,12 +275,12 @@ Full variable list with validation rules available in `variables.tf` (40+ variab
 
 **Purpose**: Validate Terraform configuration syntax and structure
 **Command**: `npm run test:unit`
-**Coverage**: 164 tests covering:
+**Coverage**: 166 tests covering:
 - File structure (12 tests)
 - Provider configuration (5 tests)
-- Variables with validation (18 tests)
+- Variables with validation (19 tests)
 - Data sources (8 tests)
-- Local values (14 tests)
+- Local values (15 tests)
 - KMS keys (7 tests)
 - S3 buckets (18 tests)
 - IAM roles (12 tests)
@@ -542,6 +543,17 @@ variable "environment" {
   validation {
     condition     = contains(["dev", "staging", "prod"], var.environment)
     error_message = "Environment must be dev, staging, or prod."
+  }
+}
+
+variable "environment_suffix" {
+  description = "Unique suffix for resource naming (e.g., pr4798, synth123). Reads from ENVIRONMENT_SUFFIX env variable if not provided."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.environment_suffix == "" || can(regex("^[a-z0-9-]+$", var.environment_suffix))
+    error_message = "Environment suffix must contain only lowercase letters, numbers, and hyphens."
   }
 }
 
@@ -817,4 +829,4 @@ To view the complete source code for each file, please refer to the individual f
 **Complexity**: Hard
 **Production Ready**: Yes
 **Compliance**: Legal document retention standards
-**Testing**: 164 unit tests + 56 integration tests (including application flow tests)
+**Testing**: 166 unit tests + 56 integration tests (including application flow tests)

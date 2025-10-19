@@ -122,6 +122,13 @@ describe('Legal Document Storage - Terraform Unit Tests', () => {
       expect(variablesContent).toMatch(/contains.*dev.*staging.*prod/);
     });
 
+    test('defines environment_suffix variable with validation', () => {
+      expect(variablesContent).toMatch(/variable\s+"environment_suffix"/);
+      expect(variablesContent).toMatch(/validation\s*{/);
+      expect(variablesContent).toContain('[a-z0-9-]');
+      expect(variablesContent).toContain('ENVIRONMENT_SUFFIX');
+    });
+
     test('defines primary_bucket_name variable with validation', () => {
       expect(variablesContent).toMatch(/variable\s+"primary_bucket_name"/);
       expect(variablesContent).toMatch(/validation\s*{/);
@@ -361,6 +368,12 @@ describe('Legal Document Storage - Terraform Unit Tests', () => {
     test('defines common_tags local with merge', () => {
       expect(localsContent).toMatch(/common_tags\s*=\s*merge/);
       expect(localsContent).toMatch(/DataClassification.*Confidential/);
+    });
+
+    test('uses environment_suffix pattern for name_suffix', () => {
+      expect(localsContent).toMatch(/name_suffix\s*=/);
+      expect(localsContent).toMatch(/var\.environment_suffix/);
+      expect(localsContent).toMatch(/random_string\.suffix\.result/);
     });
   });
 

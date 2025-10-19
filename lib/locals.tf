@@ -1,4 +1,4 @@
-# Random suffix for unique resource naming
+# Random suffix for unique resource naming (fallback when environment_suffix not provided)
 resource "random_string" "suffix" {
   length  = 8
   special = false
@@ -8,7 +8,8 @@ resource "random_string" "suffix" {
 locals {
   # Resource naming
   name_prefix = "${var.project_name}-${var.environment}"
-  name_suffix = random_string.suffix.result
+  # Use environment_suffix if provided (from ENVIRONMENT_SUFFIX env var), otherwise use random suffix
+  name_suffix = var.environment_suffix != "" ? var.environment_suffix : random_string.suffix.result
 
   # S3 bucket names
   primary_bucket_name   = var.primary_bucket_name != "" ? var.primary_bucket_name : "${local.name_prefix}-primary-${local.name_suffix}"

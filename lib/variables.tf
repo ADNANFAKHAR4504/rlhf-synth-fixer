@@ -27,6 +27,17 @@ variable "environment" {
   }
 }
 
+variable "environment_suffix" {
+  description = "Unique suffix for resource naming (e.g., pr4798, synth123). Reads from ENVIRONMENT_SUFFIX env variable if not provided."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.environment_suffix == "" || can(regex("^[a-z0-9-]+$", var.environment_suffix))
+    error_message = "Environment suffix must contain only lowercase letters, numbers, and hyphens."
+  }
+}
+
 # S3 Bucket Configuration
 variable "primary_bucket_name" {
   description = "Name for the primary document storage bucket (leave empty for auto-generated)"
