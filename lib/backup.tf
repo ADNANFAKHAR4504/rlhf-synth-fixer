@@ -79,11 +79,6 @@ resource "aws_iam_role" "backup" {
     ]
   })
 
-  managed_policy_arns = [
-    "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup",
-    "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores"
-  ]
-
   tags = merge(
     local.common_tags,
     {
@@ -91,6 +86,21 @@ resource "aws_iam_role" "backup" {
       Type = "Backup Service Role"
     }
   )
+}
+
+# Attach AWS Backup service role policies
+resource "aws_iam_role_policy_attachment" "backup_service" {
+  count = var.enable_aws_backup ? 1 : 0
+
+  role       = aws_iam_role.backup[0].name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup"
+}
+
+resource "aws_iam_role_policy_attachment" "backup_restores" {
+  count = var.enable_aws_backup ? 1 : 0
+
+  role       = aws_iam_role.backup[0].name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores"
 }
 
 # Backup Selection - Tag-based resource selection

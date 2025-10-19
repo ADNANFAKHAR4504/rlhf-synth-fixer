@@ -1,91 +1,47 @@
-Create Terraform code for a legal document storage system that handles about 15,000 documents per day. The system needs strict version control, retention policies, and full audit logging to meet legal compliance requirements.
+Hey,
 
-Here's what I need:
+I need help setting up a document storage system for our legal team using Terraform. We're handling around 15,000 documents daily and need really strict version control and retention policies to stay compliant with legal requirements. Everything needs proper audit trails too.
 
-**S3 Bucket Setup**
-Set up the main bucket with versioning turned on. Enable Object Lock in compliance mode with a 90-day default retention (make this configurable). Block all public access and enforce encrypted uploads only. Consider adding MFA Delete protection (configurable, since it needs root account setup).
+So basically, we need an S3-based system but with a lot of compliance features baked in. Our legal department is pretty particular about document retention - we're talking 7 years minimum, and they want Object Lock so nobody can accidentally (or intentionally) delete stuff before that. The compliance folks also want every single action logged, which makes sense given the sensitivity.
 
-**Storage Lifecycle**
-Create lifecycle rules that:
+## What I'm thinking for the setup
 
-- Move current documents to Intelligent-Tiering after 30 days
-- Move old versions to Glacier after 90 days
-- Delete old versions after 7 years (2,555 days) for legal retention
-- Clean up incomplete uploads after 7 days
-- Remove expired delete markers
+The main bucket needs versioning turned on obviously, and I'd like to enable Object Lock in compliance mode with maybe a 90-day default retention to start with. Make that configurable though since legal might want to adjust it. Oh, and definitely block all public access - that should go without saying, but you know how it is. We should probably add MFA Delete protection too, though that needs root account access to set up, so maybe make it optional?
 
-**Encryption**
-Use a customer-managed KMS key with automatic rotation enabled. Create a separate key for audit logs if needed (make this optional). Make sure the bucket policy blocks any unencrypted uploads and requires SSL/TLS for all operations.
+For the lifecycle stuff, I'm thinking we could save some money by moving current documents to Intelligent-Tiering after 30 days, then push old versions to Glacier after 90 days. The legal team says we have to keep everything for 7 years (that's 2,555 days), so we can delete old versions after that. Also need to clean up any incomplete uploads after a week and remove those expired delete markers.
 
-**Access Control**
-Create three IAM roles:
+Encryption-wise, I want to use a customer-managed KMS key with automatic rotation. Maybe create a separate key for audit logs if needed, but let's make that optional. The bucket policy should definitely block any unencrypted uploads and require SSL/TLS for everything.
 
-- Uploader role: can only add documents, no delete permissions
-- Auditor role: read-only access to documents and logs
-- Admin role: full access but requires MFA for deleting versions
+### Access control is important here
 
-Add bucket policies that enforce SSL, encryption headers, and optionally restrict access to specific VPC endpoints or allow trusted partner accounts.
+We need three different IAM roles with different permission levels. The uploader role should only be able to add documents - no delete permissions at all. Then we need an auditor role that has read-only access to both documents and logs. And finally an admin role with full access, but it should require MFA when deleting versions.
 
-**Audit Logging**
-Enable CloudTrail to log every action on the bucket (reads, writes, deletes). Store these logs in a separate audit bucket with its own encryption and retention rules. Also turn on S3 access logging. Make CloudTrail integration with CloudWatch Logs optional.
+The bucket policies need to enforce SSL, proper encryption headers, and maybe we can optionally restrict access to specific VPC endpoints or allow some trusted partner accounts if needed down the line.
 
-**Monitoring**
-Set up CloudWatch alarms for:
+### Audit logging requirements
 
-- Too many failed requests (possible unauthorized access)
-- Unexpected delete operations
-- High download volumes (potential data leak)
-- Upload failures
+CloudTrail needs to log absolutely everything - reads, writes, deletes, the works. Store those logs in a completely separate audit bucket with its own encryption and retention rules. Also turn on S3 access logging. The CloudTrail integration with CloudWatch Logs should probably be optional since it can get pricey.
 
-Create metric filters on CloudWatch Logs to catch suspicious activity like access denials, deletions, or attempts to disable versioning.
+We'll need some CloudWatch alarms for stuff like too many failed requests (might indicate someone trying unauthorized access), unexpected delete operations, high download volumes (potential data leak), and upload failures.
 
-**Compliance Checks**
-Build a Lambda function that runs daily to verify:
+Also create metric filters on CloudWatch Logs to catch suspicious activity - things like access denials, deletions, or if someone tries to disable versioning.
 
-- Versioning is still enabled
-- Object Lock is active
-- All objects are encrypted
-- Lifecycle policies are in place
-- No public access configured
-- CloudTrail is logging properly
+### Automated compliance checking
 
-Send results to CloudWatch metrics and alert via SNS if anything fails.
+Build a Lambda function that runs daily to verify everything's still configured correctly. It should check that versioning is enabled, Object Lock is active, all objects are encrypted, lifecycle policies are in place, no public access is configured, and CloudTrail is logging properly. Send the results to CloudWatch metrics and fire off an SNS alert if anything fails.
 
-**Monthly Reports**
-Create another Lambda that runs on the first of each month to generate a storage report showing:
+Then we need another Lambda that runs on the first of each month to generate a storage report. Show total documents and versions, storage usage by tier (Standard, Glacier, whatever), monthly growth rates, top users and access patterns, any errors or issues. Save it as a CSV to a reporting bucket and optionally email it via SES.
 
-- Total documents and versions
-- Storage usage by tier (Standard, Glacier, etc.)
-- Monthly growth rates
-- Top users and access patterns
-- Any errors or issues
+### Additional nice-to-haves
 
-Save the report as CSV to a reporting bucket and optionally email it via SES.
+If you can squeeze it in, enable S3 Inventory for detailed object reports. Set up EventBridge rules to trigger the Lambdas and send alerts when bucket configs change. We'll need an SNS topic for all the alerts with email subscriptions. And a CloudWatch dashboard showing storage metrics and compliance status would be great, but that's optional.
 
-**Additional Features**
+## Deliverables
 
-- Optionally enable S3 Inventory for detailed object reports
-- Create EventBridge rules to trigger Lambdas and alert on config changes
-- Set up an SNS topic for all alerts with email subscriptions
-- Build a CloudWatch dashboard showing storage metrics and compliance status (optional)
+I'm expecting separate Terraform files for everything - provider configs, variables with sensible defaults (7-year retention, 90-day lock, etc.), the primary and audit S3 buckets with all their configs, an optional reporting bucket, KMS keys and policies, IAM roles with proper permissions, CloudTrail setup, CloudWatch alarms and metric filters, both Lambda functions with Python code, EventBridge rules, optional inventory and dashboard configs, and outputs for all the important resource IDs.
 
-**What to deliver:**
-Separate Terraform files for:
+Make everything configurable through variables where it makes sense. Include validation for bucket names and retention periods. Add clear comments explaining Object Lock limitations (like how it needs versioning and only works at bucket creation). Would be nice to have example commands for uploading documents and querying audit logs with Athena.
 
-- Version and provider configs
-- Variables with sensible defaults (7-year retention, 90-day lock, etc.)
-- Primary and audit S3 buckets with all configs
-- Optional reporting bucket
-- KMS keys and policies
-- IAM roles with proper permissions
-- CloudTrail setup
-- CloudWatch alarms and metric filters
-- Both Lambda functions with Python code
-- EventBridge rules
-- Optional inventory and dashboard configs
-- Outputs for all important resource IDs
-- Detailed README with setup instructions, MFA Delete setup, role assumption examples, and troubleshooting tips
+Keep the code modular and production-ready with proper error handling and security best practices. We're going to production with this so it needs to be solid.
 
-Make everything configurable through variables where it makes sense. Include validation for bucket names and retention periods. Add clear comments explaining Object Lock limitations (needs versioning, only works at bucket creation). Provide example commands for uploading documents and querying audit logs with Athena.
-
-Keep the code modular and production-ready with proper error handling and security best practices throughout.
+Thanks!

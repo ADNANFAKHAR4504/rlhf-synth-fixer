@@ -314,15 +314,25 @@ variable "backup_schedule" {
 }
 
 variable "backup_retention_days" {
-  description = "Number of days to retain backups"
+  description = "Number of days to retain backups (must be at least 90 days after cold storage)"
   type        = number
-  default     = 30
+  default     = 120
+
+  validation {
+    condition     = var.backup_retention_days >= 97
+    error_message = "Backup retention must be at least 97 days (minimum 90 days after cold storage transition)."
+  }
 }
 
 variable "backup_cold_storage_after_days" {
-  description = "Number of days before moving backups to cold storage"
+  description = "Number of days before moving backups to cold storage (must be at least 90 days before deletion)"
   type        = number
-  default     = 7
+  default     = 30
+
+  validation {
+    condition     = var.backup_cold_storage_after_days >= 7
+    error_message = "Cold storage transition must be at least 7 days after backup creation."
+  }
 }
 
 # Tagging
