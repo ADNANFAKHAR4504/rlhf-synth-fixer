@@ -10,5 +10,7 @@
   "subject_labels": [
     "IaC Optimization"
   ],
-  "aws_services": "S3, Lambda, Cloudwatch"
+  "aws_services": ["S3", "Lambda", "Cloudwatch"],
+  "training_quality": "9",
+  "background": "AWS IAC Optimization - Pulumi Python"
 }

@@ -382,12 +382,9 @@ lambda_policy = aws.iam.RolePolicy("auto-tagger-policy",
 
 **Lambda Code:**
 
-Issue: Function is named `lambda_handler` but handler config points to `handler`
-
 ```python
-def lambda_handler(event, context):  # Should be: def handler(event, context)
-    # Issue: Only processes first record, should loop through all
-    record = event['Records'][0]  # Should be: for record in event['Records']:
+def lambda_handler(event, context):
+    record = event['Records'][0]
     bucket = record['s3']['bucket']['name']
     key = unquote_plus(record['s3']['object']['key'])
     
