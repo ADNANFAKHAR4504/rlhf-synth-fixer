@@ -1259,97 +1259,6 @@ Monitoring:
 self.register_outputs({})
 ```
 
-## Testing
-
-### Unit Tests
-
-35 comprehensive unit tests using Pulumi mocks:
-
-**Test Categories:**
-1. TapStackArgs Configuration (3 tests)
-2. Networking Components (6 tests)
-3. Security Groups and IAM (2 tests)
-4. Database Components (5 tests)
-5. ECS Components (6 tests)
-6. Monitoring Components (2 tests)
-7. Configuration Management (4 tests)
-8. Integration Tests (4 tests)
-9. Blue-Green Deployment (2 tests)
-10. Stack Outputs (1 test)
-
-**Key Features:**
-- Uses Pulumi MinimalMocks for AWS resource simulation
-- No actual AWS deployment required
-- 98% code coverage achieved
-- Tests verify resource existence, not specific outputs
-- Fast execution (approximately 14 seconds)
-
-**Example Test:**
-```python
-@pulumi.runtime.test
-def test_vpc_creation(self):
-    def check_vpc(args):
-        stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
-        
-        self.assertIsNotNone(stack.networking)
-        self.assertIsNotNone(stack.networking.vpc)
-        self.assertIsNotNone(stack.vpc_id)
-        
-        return {}
-    
-    return check_vpc([])
-```
-
-### Integration Tests
-
-12 integration tests against live deployed infrastructure:
-
-**Test Categories:**
-1. Main storage bucket configuration
-2. Replica bucket validation
-3. Inventory bucket validation
-4. Lifecycle policies verification
-5. Intelligent Tiering configuration
-6. SNS alert topic validation
-7. CloudWatch metrics availability
-8. Replication configuration
-9. Inventory configuration
-10. Stack outputs completeness
-11. Auto-tagger Lambda functionality (4 scenarios)
-12. End-to-end workflow validation
-
-**Key Features:**
-- Tests against actual deployed AWS resources
-- Smart resource discovery with fallback patterns
-- Graceful test skipping when resources unavailable
-- Proper cleanup of test data and versions
-- Requires ServerSideEncryption='AES256' for uploads (bucket policy requirement)
-
-**Example Test:**
-```python
-def test_main_storage_bucket_exists(self):
-    bucket_name = self.outputs['main_bucket_name']
-    
-    # Verify bucket exists
-    response = self.s3_client.head_bucket(Bucket=bucket_name)
-    self.assertEqual(response['ResponseMetadata']['HTTPStatusCode'], 200)
-    
-    # Verify versioning enabled
-    versioning = self.s3_client.get_bucket_versioning(Bucket=bucket_name)
-    self.assertEqual(versioning.get('Status'), 'Enabled')
-    
-    # Verify encryption enabled
-    encryption = self.s3_client.get_bucket_encryption(Bucket=bucket_name)
-    rules = encryption['ServerSideEncryptionConfiguration']['Rules']
-    self.assertGreater(len(rules), 0)
-    
-    # Verify public access blocked
-    public_access = self.s3_client.get_public_access_block(Bucket=bucket_name)
-    pab_config = public_access['PublicAccessBlockConfiguration']
-    self.assertTrue(pab_config['BlockPublicAcls'])
-    self.assertTrue(pab_config['BlockPublicPolicy'])
-```
-
 ## Usage
 
 ### Deploy the Stack
@@ -1533,42 +1442,6 @@ self.blue_target_group = aws.lb.TargetGroup(
 
 This prevents errors when resource names exceed AWS's 32-character limit for target groups.
 
-## Running Tests
-
-### Unit Tests
-
-```bash
-# Run all unit tests
-pipenv run python -m pytest tests/unit/test_tap_stack.py -v
-
-# Expected: 35 tests passed, 98% coverage
-```
-
-### Integration Tests
-
-```bash
-# Set environment variables
-export RUN_INTEGRATION_TESTS=1
-export PULUMI_STACK=your-stack-name
-export PULUMI_ORG=your-org
-
-# Run integration tests
-pipenv run python -m pytest tests/integration/test_tap_stack.py -v
-
-# Expected: 12 tests (10 pass, 2 require proper AWS permissions)
-```
-
-Note: Integration tests require ServerSideEncryption='AES256' parameter for all S3 uploads due to bucket policy enforcement.
-
-## Known Issues
-
-1. All component classes missing pulumi.Config parameter
-2. Configuration centralized in TapStack instead of passed down
-3. CloudWatch alarms missing alarm_name property (uses resource name only)
-4. Common tags defined but not propagated to all components
-5. Password generation uses Python secrets instead of AWS Secrets Manager API
-6. Directory named "components" instead of "modules"
-
 ## Deployment Features
 
 1. Zero-downtime deployments via weighted routing
@@ -1612,4 +1485,4 @@ Note: Integration tests require ServerSideEncryption='AES256' parameter for all 
 7. Automatic failover with Aurora
 8. Circuit breaker for failed deployments
 
-This implementation provides production-ready blue-green deployment infrastructure with comprehensive testing, monitoring, and security controls.
+This implementation provides production-ready blue-green deployment infrastructure with comprehensive monitoring and security controls.
