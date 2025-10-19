@@ -173,9 +173,21 @@ resource "aws_iam_role_policy" "lambda_execution" {
   })
 }
 
-# Lambda layer for common dependencies
-resource "aws_lambda_layer_version" "common" {
+# Lambda layer for common dependencies - Primary region
+resource "aws_lambda_layer_version" "common_primary" {
   provider            = aws.primary
+  filename            = "lambda_layer.zip"
+  layer_name          = "${var.project_name}-common-layer"
+  compatible_runtimes = ["python3.10"]
+
+  lifecycle {
+    ignore_changes = [filename]
+  }
+}
+
+# Lambda layer for common dependencies - Secondary region
+resource "aws_lambda_layer_version" "common_secondary" {
+  provider            = aws.secondary
   filename            = "lambda_layer.zip"
   layer_name          = "${var.project_name}-common-layer"
   compatible_runtimes = ["python3.10"]
@@ -197,7 +209,7 @@ resource "aws_lambda_function" "authorizer_primary" {
   timeout          = 10
   memory_size      = 256
 
-  layers = [aws_lambda_layer_version.common.arn]
+  layers = [aws_lambda_layer_version.common_primary.arn]
 
   environment {
     variables = {
@@ -229,6 +241,8 @@ resource "aws_lambda_function" "authorizer_secondary" {
   timeout          = 10
   memory_size      = 256
 
+  layers = [aws_lambda_layer_version.common_secondary.arn]
+
   environment {
     variables = {
       SECRET_NAME = aws_secretsmanager_secret.api_keys.name
@@ -259,7 +273,7 @@ resource "aws_lambda_function" "transaction_primary" {
   timeout          = 30
   memory_size      = 512
 
-  layers = [aws_lambda_layer_version.common.arn]
+  layers = [aws_lambda_layer_version.common_primary.arn]
 
   environment {
     variables = {
@@ -290,6 +304,8 @@ resource "aws_lambda_function" "transaction_secondary" {
   runtime          = "python3.10"
   timeout          = 30
   memory_size      = 512
+
+  layers = [aws_lambda_layer_version.common_secondary.arn]
 
   environment {
     variables = {
