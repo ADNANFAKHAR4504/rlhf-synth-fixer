@@ -10,6 +10,7 @@
   "subject_labels": [
     "Security Configuration as Code"
   ],
+  "training_quality": 8,
   "aws_services": [
     "AWS::S3::Bucket",
     "AWS::IAM::Role", 
