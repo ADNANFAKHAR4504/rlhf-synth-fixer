@@ -1,0 +1,14 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "4800",
+  "team": "5",
+  "startedAt": "2025-10-19T05:12:39.449Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "VPC, VPC Endpoints (S3, DynamoDB), Security Groups, CloudWatch, Lambda, IAM"
+}
