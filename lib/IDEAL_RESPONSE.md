@@ -27,6 +27,12 @@ variable "aws_region" {
 # tap_stack.tf
 
 ```terraform
+variable "environment_suffix" {
+  description = "Suffix to differentiate resources across deployments"
+  type        = string
+  default     = "dev"
+}
+
 variable "domain_name" {
   description = "Domain name for the e-book delivery system"
   type        = string
@@ -129,12 +135,12 @@ resource "aws_kms_key" "logs_key" {
 }
 
 resource "aws_kms_alias" "content_key_alias" {
-  name          = "alias/ebook-content-key"
+  name          = "alias/ebook-content-key-${var.environment_suffix}"
   target_key_id = aws_kms_key.content_key.key_id
 }
 
 resource "aws_kms_alias" "logs_key_alias" {
-  name          = "alias/ebook-logs-key"
+  name          = "alias/ebook-logs-key-${var.environment_suffix}"
   target_key_id = aws_kms_key.logs_key.key_id
 }
 
@@ -303,7 +309,7 @@ resource "aws_acm_certificate_validation" "ebook_cert_validation" {
 }
 
 resource "aws_wafv2_web_acl" "ebook_waf" {
-  name        = "ebook-waf-${var.environment}"
+  name        = "ebook-waf-${var.environment}-${var.environment_suffix}"
   description = "WAF for eBook distribution"
   scope       = "CLOUDFRONT"
 
@@ -411,7 +417,7 @@ resource "aws_cloudfront_distribution" "ebook_distribution" {
 }
 
 resource "aws_cloudfront_response_headers_policy" "security_headers_policy" {
-  name = "ebook-security-headers-${var.environment}"
+  name = "ebook-security-headers-${var.environment}-${var.environment_suffix}"
 
   security_headers_config {
     content_type_options {
@@ -454,7 +460,7 @@ resource "aws_route53_record" "ebook_record" {
 }
 
 resource "aws_cloudwatch_dashboard" "ebook_dashboard" {
-  dashboard_name = "eBooks-Metrics-${var.environment}"
+  dashboard_name = "eBooks-Metrics-${var.environment}-${var.environment_suffix}"
 
   dashboard_body = jsonencode({
     widgets = [
@@ -516,7 +522,7 @@ resource "aws_cloudwatch_dashboard" "ebook_dashboard" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "high_error_rate" {
-  alarm_name          = "ebook-high-error-rate-${var.environment}"
+  alarm_name          = "ebook-high-error-rate-${var.environment}-${var.environment_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "5xxErrorRate"
@@ -537,7 +543,7 @@ resource "aws_cloudwatch_metric_alarm" "high_error_rate" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "high_4xx_rate" {
-  alarm_name          = "ebook-high-4xx-rate-${var.environment}"
+  alarm_name          = "ebook-high-4xx-rate-${var.environment}-${var.environment_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "4xxErrorRate"
