@@ -929,8 +929,8 @@ export class FinTechTradingStack extends TerraformStack {
     });
 
     new TerraformOutput(this, 'elasticache-endpoint', {
-      value: elasticacheCluster.configurationEndpointAddress,
-      description: 'ElastiCache Redis endpoint',
+      value: elasticacheCluster.primaryEndpointAddress,
+      description: 'ElastiCache Redis primary endpoint',
     });
 
     new TerraformOutput(this, 'efs-id', {
