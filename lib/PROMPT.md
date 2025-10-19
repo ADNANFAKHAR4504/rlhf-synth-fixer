@@ -1,93 +1,124 @@
-Design and implement a production-grade AWS CloudFormation YAML template that deploys a highly available, secure, and scalable multi-tier infrastructure in AWS us-west-2 region. The solution must be cross-account executable, parameterized (no hardcoding), and fully automated — no manual steps post-deployment.
+# Production-Grade Multi-Tier AWS Infrastructure
 
-Architecture Requirements:
+## Overview
 
-VPC & Networking:
+Design and implement a production-grade AWS CloudFormation template that deploys a highly available, secure, and scalable multi-tier infrastructure. The solution should be:
 
-Create a new VPC with a configurable CIDR (default 10.0.0.0/16).
+- Cross-account executable
+- Fully parameterized (no hardcoding)
+- Completely automated (no manual steps)
 
-Two public subnets and two private subnets, distributed across different Availability Zones.
+## Architecture Requirements
 
-Each subnet should be parameterized for flexibility.
+### VPC & Networking
 
-Attach an Internet Gateway for public access.
+- **VPC Configuration**
+  - New VPC with configurable CIDR (default: `10.0.0.0/16`)
+  - Two public and two private subnets across different AZs
+  - All subnet CIDRs should be parameterized
+  - Internet Gateway for public access
+  - NAT Gateways in public subnets with Elastic IPs
 
-Provision NAT Gateways (with Elastic IPs) in public subnets for private subnet outbound Internet access.
+### Load Balancing (NLB)
 
-Load Balancing (NLB):
+- **Network Load Balancer Setup**
+  - Deploy in front of EC2 instances in public subnets
+  - Configure for HTTP/HTTPS traffic distribution
+  - Automatic Elastic IP management
+  - Auto Scaling Group integration for target registration
 
-Deploy a Network Load Balancer (NLB) in front of EC2 instances in public subnets.
+### Compute Layer (EC2 + Auto Scaling)
 
-Configure NLB to distribute inbound traffic (HTTP/HTTPS) evenly across multiple EC2 instances in different AZs.
+- **Instance Configuration**
+  - Amazon Linux 2 AMI (via SSM Parameter Store)
+  - Programmatically created EC2 Key Pair
+  - Auto Scaling Group across multiple AZs
+  - Security Group rules:
+    - Inbound HTTP (80) and HTTPS (443) via NLB only
 
-Ensure the NLB automatically manages Elastic IPs (no manual allocation required).
+### Database Layer (RDS)
 
-EC2 instances should register with the NLB target group automatically using Auto Scaling.
+- **RDS Configuration**
+  - MySQL/PostgreSQL with Multi-AZ enabled
+  - Deployed in private subnets
+  - No public access
+  - Security Group: EC2 access only
 
-Compute (EC2 + Auto Scaling):
+### Storage Layer (S3)
 
-Use Amazon Linux 2 AMI (resolved dynamically via SSM Parameter Store).
+- **S3 Bucket Setup**
+  - Server-side encryption (SSE-S3 or SSE-KMS)
+  - Private access bucket policies
 
-Create a new EC2 Key Pair programmatically within CloudFormation (no dependency on existing key pairs).
+### Monitoring & Logging
 
-Deploy EC2 instances in both public subnets under an Auto Scaling Group for high availability.
+- **Observability Configuration**
+  - VPC Flow Logs to S3 or CloudWatch Logs
+  - Comprehensive resource tagging:
+    - Project
+    - Environment
+    - Owner
+    - Other relevant tags
 
-Security Group: Allow inbound HTTP (80) and HTTPS (443) traffic only via the NLB.
+## Cross-Account Requirements
 
-Database (RDS):
+### Resource References
 
-Create an RDS instance (MySQL/PostgreSQL) with Multi-AZ enabled.
+- Avoid hardcoding:
+  - AWS Account IDs
+  - ARNs
+  - Region names
 
-Deployed within private subnets.
+### Dynamic Resolution
 
-No public access.
+Use:
+- Parameters
+- Pseudo parameters (`AWS::AccountId`, `AWS::Region`, `AWS::Partition`)
+- Dynamic references (SSM, Secrets Manager)
 
-Security Group restricts access to EC2 instances only.
+## Output Expectations
 
-Storage (S3):
+### Deliverables
 
-Create an S3 bucket with server-side encryption (SSE-S3 or SSE-KMS) enabled.
+1. Complete CloudFormation YAML template
+2. Direct deployment capability via:
+   - AWS Console
+   - AWS CLI
 
-Enforce bucket policies for private access only.
+### Required Resources
 
-Monitoring & Logging:
+The template should create:
+- VPC infrastructure (VPC, Subnets, IGW, NAT, NLB)
+- Compute resources (EC2 ASG with Launch Template)
+- Database (Multi-AZ RDS)
+- Storage (SSE-enabled S3)
+- Logging (VPC Flow Logs)
 
-Enable VPC Flow Logs to an S3 bucket or CloudWatch Logs.
+### Parameters
 
-Apply comprehensive tagging (Project, Environment, Owner, etc.) to all resources.
+Clear definition of:
+- CIDR ranges
+- Key pair names
+- Instance types
+- Database credentials
+- Other configurable values
 
-Cross-Account Executability:
+## Technical Constraints
 
-Avoid any hardcoded AWS Account IDs, ARNs, or Region names.
+1. **AMI Selection**
+   ```
+   /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+   ```
 
-Use parameters, pseudo parameters (AWS::AccountId, AWS::Region, AWS::Partition), and dynamic references (SSM, Secrets Manager) wherever applicable.
+2. **Validation Requirements**
+   - Must pass `cfn-lint`
+   - Must pass `aws cloudformation validate-template`
 
-Output Expectations:
+## Final Deliverable
 
-A complete CloudFormation YAML template that can be deployed directly via the AWS Console or CLI.
-
-No manual steps or modifications required.
-
-The template must create:
-
-VPC, Subnets, IGW, NAT, NLB
-
-EC2 Auto Scaling Group with Launch Template
-
-RDS (Multi-AZ)
-
-S3 Bucket with SSE
-
-VPC Flow Logs
-
-All parameters should be clearly defined (CIDR ranges, key pair name, instance types, DB credentials, etc.).
-
-Important Constraints:
-
-Use SSM Parameter /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2 for EC2 AMI.
-
-No hardcoded region names, account IDs, or subnet AZs.
-
-The template must pass cfn-lint and aws cloudformation validate-template checks without errors.
-
-Deliverable: Provide the full CloudFormation YAML template that automatically provisions all the above components end-to-end, including dynamic parameter usage, NLB-based traffic routing, and complete tagging.
+Provide a production-ready CloudFormation YAML template that:
+- Implements all required components
+- Uses dynamic parameter resolution
+- Includes NLB traffic routing
+- Applies comprehensive tagging
+- Requires no manual intervention

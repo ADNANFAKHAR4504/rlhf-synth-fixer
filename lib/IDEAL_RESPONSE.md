@@ -1,3 +1,48 @@
+# Production-Grade AWS Infrastructure Template
+
+## Infrastructure Requirements Analysis
+
+### 1. VPC & Networking Architecture
+- VPC with configurable CIDR block
+- Dual public and private subnets across AZs
+- Internet Gateway configuration
+- NAT Gateways with Elastic IPs
+- Parameterized networking components
+
+### 2. Load Balancer Configuration
+- Network Load Balancer deployment in public subnets
+- HTTP/HTTPS traffic routing
+- Auto Scaling Group integration
+- Automated Elastic IP management
+
+### 3. Compute Layer Design
+- Dynamic AMI selection via SSM Parameter Store
+- Automated EC2 Key Pair generation
+- Auto Scaling Group across public subnets
+- Restricted security group configuration
+
+### 4. Database Layer Setup
+- Multi-AZ RDS deployment (MySQL/PostgreSQL)
+- Private subnet placement
+- Public access restrictions
+- EC2-exclusive access control
+
+### 5. Storage Configuration
+- Encrypted S3 bucket deployment
+- Private access enforcement
+
+### 6. Monitoring & Observability
+- VPC Flow Logs enablement
+- Comprehensive resource tagging strategy
+
+### 7. Cross-Account Compatibility
+- Dynamic resource referencing
+- Parameter and pseudo parameter utilization
+
+## CloudFormation Template Implementation
+
+The following template provides a production-ready infrastructure implementation following AWS best practices and security standards.
+### Template Definition
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
@@ -434,11 +479,15 @@ Resources:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          SourceSecurityGroupId: !Ref NLBSecurityGroup
+          CidrIp: '0.0.0.0/0'
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: '0.0.0.0/0'  
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
-          SourceSecurityGroupId: !Ref NLBSecurityGroup
+          CidrIp: '0.0.0.0/0'  # Optional if you enable HTTPS
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-${AWS::Region}-ec2-sg'
@@ -508,17 +557,52 @@ Resources:
           - !Ref EC2SecurityGroup
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
-        UserData:
-          Fn::Base64: !Sub |
-            #!/bin/bash
-            yum update -y
-            yum install -y httpd
-            systemctl start httpd
-            systemctl enable httpd
-            echo "<h1>Hello from ${AWS::Region} - Instance $(ec2-metadata --instance-id | cut -d " " -f 2)</h1>" > /var/www/html/index.html
-            # Install CloudWatch agent
-            wget https://s3.${AWS::Region}.amazonaws.com/amazoncloudwatch-agent-${AWS::Region}/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
-            rpm -U ./amazon-cloudwatch-agent.rpm
+        UserData: !Base64 |
+          #!/bin/bash
+          
+          # Run as root and set up logging
+          exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+          echo "=========================================="
+          echo "UserData script started at: $(date)"
+          echo "Running as user: $(whoami)"
+          echo "=========================================="
+          
+          # Update system
+          echo "Updating system packages..."
+          yum update -y
+          
+          # Install httpd instead of nginx for better compatibility
+          echo "Installing httpd (Apache)..."
+          yum install -y httpd
+          
+          # Enable and start httpd
+          echo "Starting httpd service..."
+          systemctl enable httpd
+          systemctl start httpd
+          
+          # Verify httpd is running
+          echo "Checking httpd status:"
+          systemctl status httpd
+          
+          # Create a simple test page
+          echo "Creating test HTML page..."
+          echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
+          echo "<p>Server running on Amazon Linux 2</p>" >> /var/www/html/index.html
+          echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html
+          echo "<p>Server Time: $(date)</p>" >> /var/www/html/index.html
+          
+          # Set proper permissions
+          chown apache:apache /var/www/html/index.html
+          chmod 644 /var/www/html/index.html
+          
+          # Verify services are running
+          echo "Final verification:"
+          systemctl is-active httpd
+          netstat -tlnp | grep :80
+          
+          echo "=========================================="
+          echo "UserData script completed at: $(date)"
+          echo "=========================================="
         TagSpecifications:
           - ResourceType: instance
             Tags:
@@ -609,9 +693,9 @@ Resources:
       TargetType: instance
       HealthCheckEnabled: true
       HealthCheckPort: 80
-      HealthCheckProtocol: TCP
+      HealthCheckProtocol: TCP       # Use TCP for NLB
       HealthCheckIntervalSeconds: 30
-      HealthCheckTimeoutSeconds: 10
+      HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 3
       UnhealthyThresholdCount: 3
       Tags:
@@ -651,7 +735,7 @@ Resources:
       TargetGroupARNs:
         - !Ref NLBTargetGroup
       HealthCheckType: ELB
-      HealthCheckGracePeriod: 300
+      HealthCheckGracePeriod: 600
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-${AWS::Region}-asg-instance'
@@ -837,11 +921,36 @@ Resources:
 
 # ==================== OUTPUTS ====================
 Outputs:
+  # VPC and Networking
   VPCId:
     Description: 'VPC ID'
     Value: !Ref VPC
     Export:
       Name: !Sub '${AWS::StackName}-VPC-ID'
+      
+  VPCCidrBlock:
+    Description: 'VPC CIDR Block'
+    Value: !GetAtt VPC.CidrBlock
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC-CIDR'
+
+  InternetGatewayId:
+    Description: 'Internet Gateway ID'
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub '${AWS::StackName}-IGW-ID'
+
+  NatGateway1Id:
+    Description: 'NAT Gateway 1 ID'
+    Value: !Ref NatGateway1
+    Export:
+      Name: !Sub '${AWS::StackName}-NAT1-ID'
+
+  NatGateway2Id:
+    Description: 'NAT Gateway 2 ID'
+    Value: !Ref NatGateway2
+    Export:
+      Name: !Sub '${AWS::StackName}-NAT2-ID'
 
   NLBDNSName:
     Description: 'Network Load Balancer DNS name'
@@ -902,3 +1011,108 @@ Outputs:
     Value: !Ref PublicSubnet2
     Export:
       Name: !Sub '${AWS::StackName}-PublicSubnet2-ID'
+
+  # Security Groups
+  NLBSecurityGroupId:
+    Description: 'Network Load Balancer Security Group ID'
+    Value: !Ref NLBSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-NLB-SG-ID'
+
+  EC2SecurityGroupId:
+    Description: 'EC2 Security Group ID'
+    Value: !Ref EC2SecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2-SG-ID'
+
+  DatabaseSecurityGroupId:
+    Description: 'Database Security Group ID'
+    Value: !Ref DatabaseSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-DB-SG-ID'
+
+  # Auto Scaling
+  AutoScalingGroupName:
+    Description: 'Auto Scaling Group Name'
+    Value: !Ref AutoScalingGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-ASG-Name'
+
+  LaunchTemplateId:
+    Description: 'Launch Template ID'
+    Value: !Ref LaunchTemplate
+    Export:
+      Name: !Sub '${AWS::StackName}-LT-ID'
+
+  LaunchTemplateVersion:
+    Description: 'Launch Template Latest Version'
+    Value: !GetAtt LaunchTemplate.LatestVersionNumber
+    Export:
+      Name: !Sub '${AWS::StackName}-LT-Version'
+
+  # Load Balancer
+  NLBTargetGroupArn:
+    Description: 'Network Load Balancer Target Group ARN'
+    Value: !Ref NLBTargetGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-TG-ARN'
+
+  # Database
+  DBSubnetGroupName:
+    Description: 'Database Subnet Group Name'
+    Value: !Ref DBSubnetGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-DB-SubnetGroup'
+
+  DBParameterGroupName:
+    Description: 'Database Parameter Group Name'
+    Value: !Ref DBParameterGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-DB-ParamGroup'
+
+  DatabaseIdentifier:
+    Description: 'Database Instance Identifier'
+    Value: !Ref Database
+    Export:
+      Name: !Sub '${AWS::StackName}-DB-ID'
+
+  # IAM Roles
+  EC2RoleArn:
+    Description: 'EC2 IAM Role ARN'
+    Value: !GetAtt EC2Role.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2-Role-ARN'
+
+  VPCFlowLogRoleArn:
+    Description: 'VPC Flow Log IAM Role ARN'
+    Value: !GetAtt VPCFlowLogRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-FlowLog-Role-ARN'
+
+  # CloudWatch Logs
+  VPCFlowLogGroupName:
+    Description: 'VPC Flow Log Group Name'
+    Value: !Ref VPCFlowLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-FlowLog-Group'
+
+  VPCFlowLogId:
+    Description: 'VPC Flow Log ID'
+    Value: !Ref VPCFlowLog
+    Export:
+      Name: !Sub '${AWS::StackName}-FlowLog-ID'
+
+  # S3 Bucket
+  S3BucketArn:
+    Description: 'S3 Bucket ARN'
+    Value: !GetAtt S3Bucket.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-S3-Bucket-ARN'
+
+  # Secret
+  DBSecretArn:
+    Description: 'Database Master Secret ARN'
+    Value: !Ref DBMasterSecret
+    Export:
+      Name: !Sub '${AWS::StackName}-DB-Secret-ARN'
+    

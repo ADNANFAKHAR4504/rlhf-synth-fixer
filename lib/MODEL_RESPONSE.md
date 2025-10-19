@@ -1,50 +1,48 @@
-### Reasoning Trace
----
+# AWS CloudFormation Template Analysis
 
-This is a comprehensive request for a production-grade CloudFormation template. Let me break down what needs to be included:
+## Requirements Analysis
 
-1. VPC & Networking:
-   - VPC with configurable CIDR
-   - 2 public subnets and 2 private subnets across different AZs
-   - Internet Gateway
-   - NAT Gateways with Elastic IPs in public subnets
-   - All parameterized
+### 1. VPC & Networking Requirements
+- VPC with configurable CIDR
+- 2 public subnets and 2 private subnets across different AZs
+- Internet Gateway
+- NAT Gateways with Elastic IPs in public subnets
+- All parameters to be configurable
 
-2. Load Balancing (NLB):
-   - Network Load Balancer in public subnets
-   - Distribute HTTP/HTTPS traffic
-   - Auto-register EC2 instances via Auto Scaling
-   - Elastic IPs automatically managed
+### 2. Load Balancing (NLB) Requirements
+- Network Load Balancer in public subnets
+- HTTP/HTTPS traffic distribution
+- Auto-register EC2 instances via Auto Scaling
+- Automatic Elastic IP management
 
-3. Compute:
-   - Amazon Linux 2 AMI via SSM Parameter Store
-   - Create EC2 Key Pair programmatically
-   - EC2 instances in public subnets with Auto Scaling Group
-   - Security Group for HTTP/HTTPS via NLB only
+### 3. Compute Requirements
+- Amazon Linux 2 AMI via SSM Parameter Store
+- Create EC2 Key Pair programmatically
+- EC2 instances in public subnets with Auto Scaling Group
+- Security Group for HTTP/HTTPS via NLB only
 
-4. Database:
-   - RDS MySQL/PostgreSQL with Multi-AZ
-   - In private subnets
-   - No public access
-   - Access restricted to EC2 instances
+### 4. Database Requirements
+- RDS MySQL/PostgreSQL with Multi-AZ
+- Placement in private subnets
+- No public accessibility
+- Access restricted to EC2 instances
 
-5. Storage:
-   - S3 bucket with encryption
-   - Private access only
+### 5. Storage Requirements
+- S3 bucket with encryption
+- Private access only
 
-6. Monitoring:
-   - VPC Flow Logs
-   - Comprehensive tagging
+### 6. Monitoring Requirements
+- VPC Flow Logs implementation
+- Comprehensive resource tagging
 
-7. Cross-Account:
-   - No hardcoded account IDs, ARNs, or regions
-   - Use parameters and pseudo parameters
+### 7. Cross-Account Requirements
+- No hardcoded account IDs, ARNs, or regions
+- Use parameters and pseudo parameters for dynamic values
 
-Let me create a comprehensive CloudFormation template that addresses all these requirements.
-### Answer 
----
+## CloudFormation Template Implementation
+The following CloudFormation template implements the requirements for a production-grade, multi-tier infrastructure with high availability, security, and scalability.
 
-I'll create a comprehensive CloudFormation template that meets all your requirements. This template will deploy a production-grade, multi-tier infrastructure with high availability, security, and scalability.
+### Template Structure
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
