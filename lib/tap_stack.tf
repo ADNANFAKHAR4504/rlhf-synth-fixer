@@ -1701,6 +1701,12 @@ resource "aws_cloudwatch_metric_alarm" "primary_health" {
   alarm_actions = [aws_sns_topic.primary_notifications.arn]
 
   tags = local.common_tags
+
+  depends_on = [
+    aws_sns_topic.primary_notifications,
+    aws_lb.primary,
+    aws_lb_target_group.primary
+  ]
 }
 
 resource "aws_cloudwatch_metric_alarm" "dr_health" {
@@ -1723,6 +1729,12 @@ resource "aws_cloudwatch_metric_alarm" "dr_health" {
   alarm_actions = [aws_sns_topic.dr_notifications.arn]
 
   tags = local.common_tags
+
+  depends_on = [
+    aws_sns_topic.dr_notifications,
+    aws_lb.dr,
+    aws_lb_target_group.dr
+  ]
 }
 
 resource "aws_cloudwatch_metric_alarm" "aurora_lag_alarm" {
@@ -1744,6 +1756,11 @@ resource "aws_cloudwatch_metric_alarm" "aurora_lag_alarm" {
   alarm_actions = [aws_sns_topic.primary_notifications.arn]
 
   tags = local.common_tags
+
+  depends_on = [
+    aws_sns_topic.primary_notifications,
+    aws_rds_cluster.primary
+  ]
 }
 
 # ========================================
