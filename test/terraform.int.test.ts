@@ -331,7 +331,7 @@ describe('Secure API Integration Tests', () => {
       expect(response.Items?.length).toBeGreaterThan(0);
     }, 30000);
 
-    test('Invalid JWT token returns 401 Unauthorized', async () => {
+    test('Invalid JWT token returns 403 Forbidden', async () => {
       const transaction = {
         amount: 50.00,
         currency: 'USD',
@@ -350,7 +350,8 @@ describe('Secure API Integration Tests', () => {
       };
 
       const response = await httpsRequest(options, JSON.stringify(transaction));
-      expect(response.statusCode).toBe(401);
+      // Lambda custom authorizer returns 403 when denying access (API Gateway behavior)
+      expect(response.statusCode).toBe(403);
     }, 30000);
 
     test('Missing authorization header returns 401', async () => {

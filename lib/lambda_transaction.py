@@ -76,8 +76,9 @@ def process_transaction(transaction: Dict[str, Any], user_id: str) -> Dict[str, 
         'currency': transaction['currency'],
         'recipient': transaction['recipient'],
         'type': transaction['type'],
-        'status': 'pending',
+        'status': 'completed',  # Set as completed immediately for synchronous processing
         'createdAt': datetime.utcnow().isoformat(),
+        'updatedAt': datetime.utcnow().isoformat(),
         'metadata': transaction.get('metadata', {}),
         'hash': generate_transaction_hash(transaction_id, user_id, str(transaction['amount']))
     }
@@ -93,10 +94,6 @@ def process_transaction(transaction: Dict[str, Any], user_id: str) -> Dict[str, 
             Item=transaction_record,
             ConditionExpression='attribute_not_exists(transactionId)'
         )
-        
-        # Simulate processing delay (in real scenario, this would be async)
-        transaction_record['status'] = 'completed'
-        update_transaction_status(transaction_id, 'completed')
         
     except Exception as e:
         print(f"Error storing transaction: {e}")
