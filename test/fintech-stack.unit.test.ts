@@ -618,5 +618,28 @@ describe('FinTechTradingStack Unit Tests', () => {
         }).not.toThrow();
       });
     });
+
+    test('should handle custom Terraform state configuration', () => {
+      process.env.TERRAFORM_STATE_BUCKET = 'test-bucket';
+      process.env.TERRAFORM_STATE_BUCKET_REGION = 'eu-west-1';
+      process.env.TERRAFORM_STATE_BUCKET_KEY = 'custom-key';
+
+      const stack = new FinTechTradingStack(app, 'test-stack-state', {
+        environmentSuffix: 'test',
+        region: 'ca-central-1',
+        vpcCidr: '10.0.0.0/16',
+        dbUsername: 'testadmin',
+        enableMutualTls: true,
+      });
+
+      const synthesized = Testing.synth(stack);
+      expect(synthesized).toContain('test-bucket');
+      expect(synthesized).toContain('eu-west-1');
+      expect(synthesized).toContain('custom-key');
+
+      delete process.env.TERRAFORM_STATE_BUCKET;
+      delete process.env.TERRAFORM_STATE_BUCKET_REGION;
+      delete process.env.TERRAFORM_STATE_BUCKET_KEY;
+    });
   });
 });
