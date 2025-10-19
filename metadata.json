@@ -10,5 +10,24 @@
   "subject_labels": [
     "Security Configuration as Code"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC"
+  "aws_services": [
+    "KMS",
+    "S3",
+    "IAM",
+    "VPC",
+    "EC2",
+    "RDS",
+    "CloudTrail",
+    "CloudWatch",
+    "VPC Flow Logs",
+    "SNS",
+    "Secrets Manager",
+    "Security Groups",
+    "EventBridge",
+    "WAF",
+    "CloudFront",
+    "Load Balancer",
+    "Route Tables",
+    "KMS"
+  ]
 }
