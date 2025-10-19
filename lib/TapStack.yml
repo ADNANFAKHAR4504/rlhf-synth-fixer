@@ -93,17 +93,17 @@ Resources:
                 - rds.amazonaws.com
                 - ec2.amazonaws.com
                 - cloudtrail.amazonaws.com
+                - autoscaling.amazonaws.com
             Action:
               - 'kms:Decrypt'
               - 'kms:GenerateDataKey'
               - 'kms:CreateGrant'
+              - 'kms:DescribeKey'
             Resource: '*'
           - Sid: Allow Auto Scaling service to use the key
             Effect: Allow
             Principal:
-              AWS: 
-                - !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling'
-                - !GetAtt EC2Role.Arn
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling'
             Action:
               - 'kms:Decrypt'
               - 'kms:GenerateDataKey'
@@ -549,8 +549,10 @@ Resources:
   # ====================
   S3Bucket:
     Type: AWS::S3::Bucket
+    DependsOn:
+      - KMSKey
     Properties:
-      BucketName: !Sub '${AWS::StackName}-production-static-assets-${AWS::AccountId}'
+      BucketName: !Sub 'production-static-assets-${AWS::AccountId}-${AWS::Region}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -571,6 +573,8 @@ Resources:
 
   S3BucketPolicy:
     Type: AWS::S3::BucketPolicy
+    DependsOn:
+      - S3Bucket
     Properties:
       Bucket: !Ref S3Bucket
       PolicyDocument:
@@ -581,9 +585,6 @@ Resources:
               Service: cloudfront.amazonaws.com
             Action: 's3:GetObject'
             Resource: !Sub '${S3Bucket.Arn}/*'
-            Condition:
-              StringEquals:
-                AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/*'
 
   # ====================
   # APPLICATION LOAD BALANCER
@@ -718,6 +719,10 @@ Resources:
 
   RDSDatabase:
     Type: AWS::RDS::DBInstance
+    DependsOn:
+      - DBSubnetGroup
+      - RDSSecurityGroup
+      - DBPasswordSecret
     Properties:
       DBInstanceIdentifier: !Sub '${AWS::StackName}-production-database'
       DBName: !Ref DBName
@@ -792,7 +797,6 @@ Resources:
     DependsOn:
       - LambdaExecutionRole
       - LambdaSecurityGroup
-      - SNSTopic
       - PrivateSubnet1
       - PrivateSubnet2
     Properties:
@@ -880,6 +884,7 @@ Resources:
       - S3Bucket
       - ApplicationLoadBalancer
       - OriginAccessControl
+      - S3BucketPolicy
     Properties:
       DistributionConfig:
         Enabled: true
@@ -1029,7 +1034,6 @@ Resources:
     Type: AWS::Route53::RecordSet
     DependsOn: 
       - CloudFrontDistribution
-      - HealthCheck
     Properties:
       HostedZoneId: !Ref HostedZone
       Name: !Ref DomainName
@@ -1039,8 +1043,7 @@ Resources:
       AliasTarget:
         DNSName: !GetAtt CloudFrontDistribution.DomainName
         HostedZoneId: Z2FDTNDATAQYW2  # CloudFront Hosted Zone ID
-        EvaluateTargetHealth: true
-      HealthCheckId: !Ref HealthCheck
+        EvaluateTargetHealth: false
 
   SecondaryRecord:
     Type: AWS::Route53::RecordSet
@@ -1060,8 +1063,10 @@ Resources:
   # ====================
   CloudTrailS3Bucket:
     Type: AWS::S3::Bucket
+    DependsOn:
+      - KMSKey
     Properties:
-      BucketName: !Sub '${AWS::StackName}-production-cloudtrail-logs-${AWS::AccountId}'
+      BucketName: !Sub 'production-cloudtrail-logs-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -1102,7 +1107,9 @@ Resources:
 
   CloudTrail:
     Type: AWS::CloudTrail::Trail
-    DependsOn: CloudTrailS3BucketPolicy
+    DependsOn: 
+      - CloudTrailS3Bucket
+      - CloudTrailS3BucketPolicy
     Properties:
       TrailName: !Sub '${AWS::StackName}-ProductionTrail'
       S3BucketName: !Ref CloudTrailS3Bucket
@@ -1142,17 +1149,16 @@ Resources:
     DependsOn:
       - ConfigS3Bucket
       - ConfigS3BucketPolicy
-      - SNSTopic
-      - SNSTopicPolicy
     Properties:
       Name: !Sub '${AWS::StackName}-ProductionDeliveryChannel'
       S3BucketName: !Ref ConfigS3Bucket
-      SnsTopicARN: !Ref SNSTopic
 
   ConfigS3Bucket:
     Type: AWS::S3::Bucket
+    DependsOn:
+      - KMSKey
     Properties:
-      BucketName: !Sub '${AWS::StackName}-production-config-logs-${AWS::AccountId}'
+      BucketName: !Sub 'production-config-logs-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -1277,6 +1283,8 @@ Resources:
   # ====================
   SNSTopic:
     Type: AWS::SNS::Topic
+    DependsOn:
+      - KMSKey
     Properties:
       TopicName: !Sub '${AWS::StackName}-ProductionNotifications'
       DisplayName: !Sub '${AWS::StackName} Production Environment Notifications'
