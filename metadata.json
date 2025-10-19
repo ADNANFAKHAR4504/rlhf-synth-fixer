@@ -10,5 +10,7 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "ECS, Load Balancer, RDS, Cloudwatch"
+  "aws_services": ["ECS", "Load Balancer", "RDS", " Cloudwatch"],
+  "training_quality": "9",
+  "background": "AWS Cloud Environment Setup - Pulumi Python"
 }
