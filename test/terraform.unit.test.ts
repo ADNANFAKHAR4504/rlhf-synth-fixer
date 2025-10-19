@@ -260,7 +260,7 @@ describe('Terraform Financial Application Infrastructure - Unit Tests', () => {
     test('Lambda function has environment variables', () => {
       expect(stackContent).toMatch(/environment\s*{/);
       expect(stackContent).toMatch(/SNS_TOPIC_ARN\s*=\s*aws_sns_topic\.alerts_topic\.arn/);
-      expect(stackContent).toMatch(/AWS_REGION\s*=\s*var\.aws_region/);
+      // AWS_REGION is a reserved Lambda environment variable and cannot be set
     });
 
     test('Lambda function depends on log group', () => {
