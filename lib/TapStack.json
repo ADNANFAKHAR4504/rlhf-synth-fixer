@@ -69,7 +69,6 @@
               "Principal": {
                 "Service": [
                   "s3.amazonaws.com",
-                  "logs.amazonaws.com",
                   "codebuild.amazonaws.com",
                   "codepipeline.amazonaws.com",
                   "sns.amazonaws.com"
@@ -81,6 +80,31 @@
                 "kms:CreateGrant"
               ],
               "Resource": "*"
+            },
+            {
+              "Sid": "Allow CloudWatch Logs to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": {
+                  "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+                }
+              },
+              "Action": [
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:CreateGrant",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "ArnLike": {
+                  "kms:EncryptionContext:aws:logs:arn": {
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*"
+                  }
+                }
+              }
             }
           ]
         },
