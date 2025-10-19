@@ -77,6 +77,10 @@ describe("CloudTrail Analytics Platform - Unit Tests", () => {
     test("declares aws_region data source", () => {
       expect(terraformCode).toMatch(/data\s+"aws_region"\s+"current"\s*{/);
     });
+
+    test("declares aws_organizations_organization data source for organization trail", () => {
+      expect(terraformCode).toMatch(/data\s+"aws_organizations_organization"\s+"current"\s*{/);
+    });
   });
 
   describe("Random Resources", () => {
@@ -165,6 +169,11 @@ describe("CloudTrail Analytics Platform - Unit Tests", () => {
     test("configures bucket policy for CloudTrail logs", () => {
       expect(terraformCode).toMatch(/resource\s+"aws_s3_bucket_policy"\s+"cloudtrail_logs"\s*{/);
       expect(terraformCode).toMatch(/AWSCloudTrailWrite/);
+    });
+
+    test("organization trail S3 bucket policy includes both account and organization paths", () => {
+      expect(terraformCode).toMatch(/AWSLogs\/\$\{local\.account_id\}\/\*/);
+      expect(terraformCode).toMatch(/AWSLogs\/\$\{data\.aws_organizations_organization\.current\.id\}\/\*/);
     });
   });
 

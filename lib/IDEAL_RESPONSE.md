@@ -253,6 +253,8 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
+data "aws_organizations_organization" "current" {}
+
 # ==============================================================================
 # RANDOM RESOURCES FOR UNIQUE NAMING
 # ==============================================================================
@@ -540,7 +542,10 @@ resource "aws_s3_bucket_policy" "cloudtrail_logs" {
           Service = "cloudtrail.amazonaws.com"
         }
         Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.cloudtrail_logs.arn}/AWSLogs/${local.account_id}/*"
+        Resource = [
+          "${aws_s3_bucket.cloudtrail_logs.arn}/AWSLogs/${local.account_id}/*",
+          "${aws_s3_bucket.cloudtrail_logs.arn}/AWSLogs/${data.aws_organizations_organization.current.id}/*"
+        ]
         Condition = {
           StringEquals = {
             "s3:x-amz-acl" = "bucket-owner-full-control"

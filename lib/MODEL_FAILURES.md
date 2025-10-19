@@ -261,6 +261,53 @@ resource "aws_athena_workgroup" "cloudtrail" {
 
 **Important**: Without the unconditional DescribeKey statement, CloudTrail creation will fail even though the key policy looks correct!
 
+### 14. Organization Trail S3 Bucket Policy - Multiple Resource Paths
+**Potential Failure**: CloudTrail organization trail creation fails with InsufficientEncryptionPolicyException for S3 bucket
+**Error Message**: `InsufficientEncryptionPolicyException: Insufficient permissions to access S3 bucket ... or KMS key`
+**Solution Applied**:
+- For organization trails, S3 bucket policy must allow CloudTrail to write to BOTH account and organization paths
+- Single account path is insufficient for organization-wide trail
+- Must include organization ID in addition to account ID
+
+**Why this happens**:
+- Organization trails write logs for ALL accounts in the organization, not just the management account
+- CloudTrail writes logs to two different S3 prefixes:
+  - `/AWSLogs/account-id/*` - for the management account's own logs
+  - `/AWSLogs/organization-id/*` - for organization-wide logs across all member accounts
+- If only the account path is allowed, CloudTrail cannot write organization logs
+
+**Critical Pattern**:
+```hcl
+# Add data source for organization
+data "aws_organizations_organization" "current" {}
+
+# S3 bucket policy with BOTH paths
+resource "aws_s3_bucket_policy" "cloudtrail_logs" {
+  bucket = aws_s3_bucket.cloudtrail_logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AWSCloudTrailWrite"
+        Effect = "Allow"
+        Principal = { Service = "cloudtrail.amazonaws.com" }
+        Action   = "s3:PutObject"
+        Resource = [
+          "${aws_s3_bucket.cloudtrail_logs.arn}/AWSLogs/${local.account_id}/*",           # Account path
+          "${aws_s3_bucket.cloudtrail_logs.arn}/AWSLogs/${data.aws_organizations_organization.current.id}/*"  # Organization path
+        ]
+        Condition = {
+          StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" }
+        }
+      }
+    ]
+  })
+}
+```
+
+**Important**: For organization trails (is_organization_trail = true), BOTH resource paths are mandatory. Without the organization path, the trail creation will fail!
+
 ## Testing Lessons
 
 ### Unit Tests (93 tests)
@@ -304,7 +351,9 @@ resource "aws_athena_workgroup" "cloudtrail" {
 ## Deployment Checklist
 
 - [ ] KMS key policy includes all service principals
+- [ ] KMS key policy has unconditional DescribeKey for CloudTrail
 - [ ] S3 bucket policies allow CloudTrail write access
+- [ ] Organization trail S3 bucket policy includes BOTH account and organization paths
 - [ ] S3 lifecycle rules include filter {} blocks
 - [ ] CloudWatch log groups exist before Lambda functions
 - [ ] Glue database names use underscores not hyphens
@@ -314,6 +363,7 @@ resource "aws_athena_workgroup" "cloudtrail" {
 - [ ] IAM roles have comprehensive permissions
 - [ ] All resources use unique suffix pattern
 - [ ] Athena workgroup uses kms_key_arn (not kms_key)
+- [ ] aws_organizations_organization data source defined for organization trails
 - [ ] Integration tests include application flow validation
 - [ ] Terraform validate passes with no errors or warnings
 
