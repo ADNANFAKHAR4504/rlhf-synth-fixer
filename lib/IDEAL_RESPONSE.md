@@ -48,6 +48,31 @@ This infrastructure implements a comprehensive CloudTrail log analytics platform
 
 ## Complete Source Code
 
+### File: lib/provider.tf
+
+```hcl
+# provider.tf
+
+terraform {
+  required_version = ">= 1.4.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
+  }
+
+  # Partial backend config: values are injected at `terraform init` time
+  backend "s3" {}
+}
+
+# Primary AWS provider for general resources
+provider "aws" {
+  region = var.aws_region
+}
+```
+
 ### File: lib/tap_stack.tf
 
 ```hcl
@@ -2238,46 +2263,6 @@ event_selector {
 - DynamoDB security findings have automatic TTL
 - X-Ray tracing enabled for all Lambda functions
 - Dead letter queues configured for failed executions
-
-## Testing
-
-### Unit Tests
-
-103 comprehensive unit tests validate:
-- Variable definitions and validation rules
-- Resource naming with unique suffixes
-- KMS key policy includes all service principals
-- S3 bucket configurations (versioning, encryption, lifecycle)
-- CloudTrail configuration (multi-region, organization trail, data events)
-- Glue Data Catalog and crawler settings
-- Athena workgroup with cost controls
-- DynamoDB table with GSI and TTL
-- Lambda function configurations
-- EventBridge rules and targets
-- CloudWatch alarms and log groups
-- Security and compliance requirements
-
-Run unit tests:
-```bash
-npm run test:unit
-```
-
-### Integration Tests
-
-50+ integration tests validate deployed infrastructure:
-- S3 buckets have versioning, encryption, lifecycle policies
-- KMS key rotation enabled
-- CloudTrail trail is active and using KMS encryption
-- Glue crawler scheduled and pointing to correct S3 path
-- Athena workgroup enforces encryption
-- DynamoDB table has correct GSI and TTL enabled
-- Lambda functions deployed with correct runtime and environment variables
-- SNS topics encrypted with KMS
-- CloudWatch alarms configured correctly
-- End-to-end workflows (log processing, security analysis, alerting)
-- Security validation (encryption at rest, no public access)
-
-Integration tests run automatically in CI/CD after deployment.
 
 ## Deployment
 
