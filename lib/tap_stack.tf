@@ -1111,7 +1111,6 @@ resource "aws_rds_cluster" "dr" {
   provider                  = aws.dr
   cluster_identifier        = "${var.project_name}-dr-cluster-${local.unique_suffix}"
   engine                    = aws_rds_global_cluster.financial_db.engine
-  engine_version            = aws_rds_global_cluster.financial_db.engine_version
   global_cluster_identifier = aws_rds_global_cluster.financial_db.id
   db_subnet_group_name      = aws_db_subnet_group.dr.name
   vpc_security_group_ids    = [aws_security_group.aurora_dr.id]
@@ -1129,6 +1128,10 @@ resource "aws_rds_cluster" "dr" {
     Name   = "${var.project_name}-dr-cluster-${local.unique_suffix}"
     Region = "dr"
   })
+
+  lifecycle {
+    ignore_changes = [engine_version]
+  }
 
   depends_on = [aws_rds_cluster.primary]
 }
@@ -1706,34 +1709,6 @@ resource "aws_cloudwatch_metric_alarm" "primary_health" {
     aws_sns_topic.primary_notifications,
     aws_lb.primary,
     aws_lb_target_group.primary
-  ]
-}
-
-resource "aws_cloudwatch_metric_alarm" "dr_health" {
-  provider            = aws.dr
-  alarm_name          = "${var.project_name}-dr-health-alarm-${local.unique_suffix}"
-  comparison_operator = "LessThanThreshold"
-  evaluation_periods  = 2
-  metric_name         = "HealthyHostCount"
-  namespace           = "AWS/ApplicationELB"
-  period              = 60
-  statistic           = "Average"
-  threshold           = 1
-  alarm_description   = "This metric monitors DR ALB health"
-
-  dimensions = {
-    LoadBalancer = aws_lb.dr.arn_suffix
-    TargetGroup  = aws_lb_target_group.dr.arn_suffix
-  }
-
-  alarm_actions = [aws_sns_topic.dr_notifications.arn]
-
-  tags = local.common_tags
-
-  depends_on = [
-    aws_sns_topic.dr_notifications,
-    aws_lb.dr,
-    aws_lb_target_group.dr
   ]
 }
 
