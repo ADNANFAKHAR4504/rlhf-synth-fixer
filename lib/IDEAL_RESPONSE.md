@@ -188,7 +188,7 @@ rds_cluster = RdsCluster(...,
 )
 ```
 
-### 8. Infrastructure Outputs (Integration Testing)
+### 8. Infrastructure Outputs
 
 ```python
 TerraformOutput(self, "vpc_id", value=vpc.id)
@@ -198,8 +198,6 @@ TerraformOutput(self, "efs_file_system_id", value=efs.id)
 TerraformOutput(self, "elasticache_primary_endpoint", value=elasticache.primary_endpoint_address)
 TerraformOutput(self, "api_gateway_stage_invoke_url", value=f"{api.api_endpoint}/{api_stage.name}")
 ```
-
-**Purpose:** Enables integration tests to connect to deployed resources and validate functionality.
 
 ## PCI-DSS Compliance Matrix
 
@@ -251,20 +249,6 @@ cat cfn-outputs/flat-outputs.json
 }
 ```
 
-## Testing Strategy
-
-### Unit Tests (100% Coverage)
-```bash
-pytest tests/unit/test_tap_stack.py -v
-# 22 tests covering all resources, security configs, naming conventions
-```
-
-### Integration Tests
-```bash
-pytest tests/integration/test_tap_stack.py -v
-# Uses cfn-outputs/flat-outputs.json to test deployed resources
-```
-
 ## Cost Analysis
 
 **Monthly cost estimate (moderate load):**
@@ -289,7 +273,5 @@ pytest tests/integration/test_tap_stack.py -v
 ✅ API throttling configured (10k TPS)
 ✅ PCI-DSS compliance tags
 ✅ Fully destroyable infrastructure
-✅ 100% unit test coverage
-✅ Infrastructure outputs for integration testing
 
 **Status: PRODUCTION READY** ✅
