@@ -135,7 +135,7 @@ resource "aws_kms_key" "main" {
   enable_key_rotation     = true
 
   lifecycle {
-    prevent_destroy = var.prevent_destroy
+    prevent_destroy = false
   }
 }
 
@@ -599,7 +599,7 @@ resource "aws_autoscaling_group" "app" {
   }
 
   lifecycle {
-    prevent_destroy = var.prevent_destroy
+    prevent_destroy = false
   }
 }
 
@@ -685,7 +685,7 @@ resource "aws_s3_bucket" "logs" {
   bucket = "${var.environment}-logs-${random_id.suffix.hex}"
 
   lifecycle {
-    prevent_destroy = var.prevent_destroy
+    prevent_destroy = false
   }
 }
 
@@ -776,7 +776,7 @@ resource "aws_s3_bucket" "app_data" {
   bucket = "${var.environment}-app-data-${random_id.suffix.hex}"
 
   lifecycle {
-    prevent_destroy = var.prevent_destroy
+    prevent_destroy = false
   }
 }
 
@@ -880,7 +880,7 @@ resource "aws_db_instance" "main" {
   }
 
   lifecycle {
-    prevent_destroy = var.prevent_destroy
+    prevent_destroy = false
   }
 }
 
@@ -920,7 +920,7 @@ resource "aws_secretsmanager_secret" "db_credentials" {
   kms_key_id              = aws_kms_key.main.id
 
   lifecycle {
-    prevent_destroy = var.prevent_destroy
+    prevent_destroy = false
   }
 }
 
@@ -1204,7 +1204,7 @@ resource "aws_cloudtrail" "main" {
   }
 
   lifecycle {
-    prevent_destroy = var.prevent_destroy
+    prevent_destroy = false
   }
 }
 

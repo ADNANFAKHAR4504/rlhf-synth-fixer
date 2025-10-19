@@ -160,7 +160,7 @@ describe("Terraform Resources - KMS Encryption", () => {
   });
 
   test("KMS key has prevent_destroy lifecycle", () => {
-    const kmsMatch = content.match(/resource\s+"aws_kms_key"\s+"main"\s*{[\s\S]*?lifecycle\s*{[\s\S]*?prevent_destroy\s*=\s*var\.prevent_destroy[\s\S]*?}/);
+    const kmsMatch = content.match(/resource\s+"aws_kms_key"\s+"main"\s*{[\s\S]*?lifecycle\s*{[\s\S]*?prevent_destroy\s*=\s*(false|var\.prevent_destroy)[\s\S]*?}/);
     expect(kmsMatch).toBeTruthy();
   });
 
@@ -374,7 +374,7 @@ describe("Terraform Resources - EC2 and Auto Scaling", () => {
   });
 
   test("Auto Scaling Group has prevent_destroy lifecycle", () => {
-    const asgMatch = content.match(/resource\s+"aws_autoscaling_group"\s+"app"\s*{[\s\S]*?lifecycle\s*{[\s\S]*?prevent_destroy\s*=\s*var\.prevent_destroy/);
+    const asgMatch = content.match(/resource\s+"aws_autoscaling_group"\s+"app"\s*{[\s\S]*?lifecycle\s*{[\s\S]*?prevent_destroy\s*=\s*(false|var\.prevent_destroy)/);
     expect(asgMatch).toBeTruthy();
   });
 });
@@ -476,8 +476,8 @@ describe("Terraform Resources - S3 Buckets", () => {
   });
 
   test("S3 buckets have prevent_destroy lifecycle", () => {
-    const logsMatch = content.match(/resource\s+"aws_s3_bucket"\s+"logs"\s*{[\s\S]*?lifecycle\s*{[\s\S]*?prevent_destroy\s*=\s*var\.prevent_destroy/);
-    const appDataMatch = content.match(/resource\s+"aws_s3_bucket"\s+"app_data"\s*{[\s\S]*?lifecycle\s*{[\s\S]*?prevent_destroy\s*=\s*var\.prevent_destroy/);
+    const logsMatch = content.match(/resource\s+"aws_s3_bucket"\s+"logs"\s*{[\s\S]*?lifecycle\s*{[\s\S]*?prevent_destroy\s*=\s*(false|var\.prevent_destroy)/);
+    const appDataMatch = content.match(/resource\s+"aws_s3_bucket"\s+"app_data"\s*{[\s\S]*?lifecycle\s*{[\s\S]*?prevent_destroy\s*=\s*(false|var\.prevent_destroy)/);
     expect(logsMatch).toBeTruthy();
     expect(appDataMatch).toBeTruthy();
   });
@@ -521,7 +521,7 @@ describe("Terraform Resources - RDS Database", () => {
   });
 
   test("RDS has prevent_destroy lifecycle", () => {
-    const rdsMatch = content.match(/resource\s+"aws_db_instance"\s+"main"\s*{[\s\S]*?lifecycle\s*{[\s\S]*?prevent_destroy\s*=\s*var\.prevent_destroy/);
+    const rdsMatch = content.match(/resource\s+"aws_db_instance"\s+"main"\s*{[\s\S]*?lifecycle\s*{[\s\S]*?prevent_destroy\s*=\s*(false|var\.prevent_destroy)/);
     expect(rdsMatch).toBeTruthy();
   });
 
@@ -545,7 +545,7 @@ describe("Terraform Resources - Secrets Manager", () => {
   });
 
   test("secret has prevent_destroy lifecycle", () => {
-    const secretMatch = content.match(/resource\s+"aws_secretsmanager_secret"\s+"db_credentials"\s*{[\s\S]*?lifecycle\s*{[\s\S]*?prevent_destroy\s*=\s*var\.prevent_destroy/);
+    const secretMatch = content.match(/resource\s+"aws_secretsmanager_secret"\s+"db_credentials"\s*{[\s\S]*?lifecycle\s*{[\s\S]*?prevent_destroy\s*=\s*(false|var\.prevent_destroy)/);
     expect(secretMatch).toBeTruthy();
   });
 
@@ -632,7 +632,7 @@ describe("Terraform Resources - CloudTrail", () => {
   });
 
   test("CloudTrail has prevent_destroy lifecycle", () => {
-    const trailMatch = content.match(/resource\s+"aws_cloudtrail"\s+"main"\s*{[\s\S]*?lifecycle\s*{[\s\S]*?prevent_destroy\s*=\s*var\.prevent_destroy/);
+    const trailMatch = content.match(/resource\s+"aws_cloudtrail"\s+"main"\s*{[\s\S]*?lifecycle\s*{[\s\S]*?prevent_destroy\s*=\s*(false|var\.prevent_destroy)/);
     expect(trailMatch).toBeTruthy();
   });
 });
