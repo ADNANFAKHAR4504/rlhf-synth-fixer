@@ -144,8 +144,9 @@ describe('Terraform Infrastructure - Core Resources', () => {
     expect(contains(mainContent, 'resource "aws_dynamodb_table" "transactions"')).toBe(true);
   });
 
-  test('has DynamoDB Global Table resource', () => {
-    expect(contains(mainContent, 'resource "aws_dynamodb_global_table" "transactions"')).toBe(true);
+  test('has DynamoDB Global Table v2 with replica configuration', () => {
+    // Global Table v2 uses replica block within the table resource
+    expect(contains(mainContent, /resource "aws_dynamodb_table" "transactions"[\s\S]*?replica\s*{/)).toBe(true);
   });
 
   test('has API Gateway REST API resources for both regions', () => {
@@ -171,9 +172,9 @@ describe('Terraform Infrastructure - Core Resources', () => {
     expect(contains(mainContent, 'resource "aws_secretsmanager_secret" "api_keys"')).toBe(true);
   });
 
-  test('has KMS keys for encryption', () => {
-    expect(contains(mainContent, 'resource "aws_kms_key" "dynamodb"')).toBe(true);
-    expect(contains(mainContent, 'resource "aws_kms_key" "dynamodb_secondary"')).toBe(true);
+  test('has encryption configuration (AWS-managed keys)', () => {
+    // Using AWS-managed encryption for Global Table v2 compatibility
+    expect(contains(mainContent, /server_side_encryption\s*{[\s\S]*?enabled\s*=\s*true/)).toBe(true);
   });
 });
 
@@ -293,12 +294,10 @@ describe('Terraform Infrastructure - Multi-Region Setup', () => {
     expect(contains(mainContent, /cloudfront_distribution[\s\S]*?provider = aws\.global/)).toBe(true);
   });
 
-  test('DynamoDB Global Table has both region replicas', () => {
-    // Match the global table resource block including both replica blocks
-    const globalTableMatch = /resource "aws_dynamodb_global_table" "transactions"[\s\S]*?replica\s*{[\s\S]*?}[\s\S]*?replica\s*{[\s\S]*?}/;
-    expect(contains(mainContent, globalTableMatch)).toBe(true);
-    expect(contains(mainContent, 'region_name = var.primary_region')).toBe(true);
-    expect(contains(mainContent, 'region_name = var.secondary_region')).toBe(true);
+  test('DynamoDB Global Table v2 has replica in secondary region', () => {
+    // Global Table v2 uses replica block within the table resource
+    const tableWithReplica = /resource "aws_dynamodb_table" "transactions"[\s\S]*?replica\s*{[\s\S]*?region_name\s*=\s*var\.secondary_region/;
+    expect(contains(mainContent, tableWithReplica)).toBe(true);
   });
 });
 
@@ -386,12 +385,11 @@ describe('Terraform Infrastructure - Dependencies', () => {
     expect(contains(mainContent, /resource "aws_api_gateway_deployment"[\s\S]*?depends_on/)).toBe(true);
   });
 
-  test('DynamoDB Global Table has depends_on for regional tables', () => {
-    const globalTableMatch = mainContent.match(/resource "aws_dynamodb_global_table"[\s\S]*?}/);
-    expect(globalTableMatch).toBeTruthy();
-    if (globalTableMatch) {
-      expect(contains(globalTableMatch[0], 'depends_on')).toBe(true);
-    }
+  test('DynamoDB Global Table v2 has proper replication configuration', () => {
+    // Global Table v2 doesn't need depends_on for regional tables
+    // Replica is configured directly within the table resource
+    const replicaConfig = /replica\s*{[\s\S]*?region_name\s*=\s*var\.secondary_region[\s\S]*?point_in_time_recovery\s*=/;
+    expect(contains(mainContent, replicaConfig)).toBe(true);
   });
 
   test('WAF logging has depends_on for S3 bucket', () => {
