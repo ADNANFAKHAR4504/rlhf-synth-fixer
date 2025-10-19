@@ -62,7 +62,6 @@ describe('FinTechTradingStack Unit Tests', () => {
 
       const synthesized = Testing.synth(stack);
 
-      // Check for KMS keys (ElastiCache uses AWS default service key in non-cluster mode)
       expect(synthesized).toContain('rds-kms-key');
       expect(synthesized).toContain('efs-kms-key');
       expect(synthesized).toContain('secrets-kms-key');
@@ -96,7 +95,6 @@ describe('FinTechTradingStack Unit Tests', () => {
 
       const synthesized = Testing.synth(stack);
 
-      // Check for KMS aliases (ElastiCache uses AWS default service key)
       expect(synthesized).toContain('alias/rds-key');
       expect(synthesized).toContain('alias/efs-key');
       expect(synthesized).toContain('alias/secrets-key');
