@@ -72,6 +72,13 @@ Parameters:
     Default: 'devops-team'
     Description: 'Owner tag for all resources'
 
+  EnvironmentSuffix:
+    Type: String
+    Description: 'Suffix for resource names to support multiple parallel deployments'
+    Default: "dev"
+    AllowedPattern: '^[a-zA-Z0-9\-]*$'
+    ConstraintDescription: 'Must contain only alphanumeric characters and hyphens'
+
   VpcCidr:
     Type: String
     Default: '10.0.0.0/16'
@@ -202,7 +209,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${AWS::Region}-vpc'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-vpc'
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -215,7 +222,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${AWS::Region}-igw'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-igw'
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -238,7 +245,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${AWS::Region}-public-subnet-1'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-public-subnet-1'
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -255,7 +262,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${AWS::Region}-public-subnet-2'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-public-subnet-2'
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -272,7 +279,7 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${AWS::Region}-private-subnet-1'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-private-subnet-1'
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -289,7 +296,7 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${AWS::Region}-private-subnet-2'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-private-subnet-2'
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -304,7 +311,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${AWS::Region}-nat-eip-1'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-nat-eip-1'
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -319,7 +326,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${AWS::Region}-nat-eip-2'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-nat-eip-2'
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -334,7 +341,7 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${AWS::Region}-nat-gateway-1'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-nat-gateway-1'
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -349,7 +356,7 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${AWS::Region}-nat-gateway-2'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-nat-gateway-2'
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -363,7 +370,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${AWS::Region}-public-route-table'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-public-route-table'
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -397,7 +404,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${AWS::Region}-private-route-table-1'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-private-route-table-1'
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -424,7 +431,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${AWS::Region}-private-route-table-2'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-private-route-table-2'
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -462,7 +469,7 @@ Resources:
           CidrIp: '0.0.0.0/0'
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${AWS::Region}-nlb-sg'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-nlb-sg'
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -490,7 +497,7 @@ Resources:
           CidrIp: '0.0.0.0/0'  # Optional if you enable HTTPS
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${AWS::Region}-ec2-sg'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-ec2-sg'
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -510,7 +517,7 @@ Resources:
           SourceSecurityGroupId: !Ref EC2SecurityGroup
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${AWS::Region}-db-sg'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-db-sg'
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -522,10 +529,10 @@ Resources:
   EC2KeyPair:
     Type: 'AWS::EC2::KeyPair'
     Properties:
-      KeyName: !Sub '${AWS::StackName}-${AWS::Region}-keypair'
+      KeyName: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-keypair'
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${AWS::Region}-keypair'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-keypair'
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -536,7 +543,7 @@ Resources:
   DBMasterSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub '${AWS::StackName}-${AWS::Region}-db-master-secret'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-db-master-secret'
       Description: 'RDS master password'
       GenerateSecretString:
         SecretStringTemplate: !Sub '{"username": "${DatabaseMasterUsername}"}'
@@ -548,7 +555,7 @@ Resources:
   LaunchTemplate:
     Type: 'AWS::EC2::LaunchTemplate'
     Properties:
-      LaunchTemplateName: !Sub '${AWS::StackName}-${AWS::Region}-lt'
+      LaunchTemplateName: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-lt'
       LaunchTemplateData:
         ImageId: !Sub '{{resolve:ssm:${SourceAmiIdSsmParameter}}}'
         InstanceType: !Ref InstanceType
@@ -607,7 +614,7 @@ Resources:
           - ResourceType: instance
             Tags:
               - Key: Name
-                Value: !Sub '${AWS::StackName}-${AWS::Region}-instance'
+                Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-instance'
               - Key: Project
                 Value: !Ref ProjectName
               - Key: Environment
@@ -649,7 +656,7 @@ Resources:
                   - !GetAtt S3Bucket.Arn
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${AWS::Region}-ec2-role'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-ec2-role'
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -675,7 +682,7 @@ Resources:
         - !Ref PublicSubnet2
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${AWS::Region}-nlb'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-nlb'
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -686,7 +693,7 @@ Resources:
   NLBTargetGroup:
     Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
     Properties:
-      Name: !Sub '${AWS::StackName}-${AWS::Region}-tg'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-tg'
       Port: 80
       Protocol: TCP
       VpcId: !Ref VPC
@@ -700,7 +707,7 @@ Resources:
       UnhealthyThresholdCount: 3
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${AWS::Region}-tg'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-tg'
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -722,7 +729,7 @@ Resources:
   AutoScalingGroup:
     Type: 'AWS::AutoScaling::AutoScalingGroup'
     Properties:
-      AutoScalingGroupName: !Sub '${AWS::StackName}-${AWS::Region}-asg'
+      AutoScalingGroupName: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-asg'
       VPCZoneIdentifier:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
@@ -738,7 +745,7 @@ Resources:
       HealthCheckGracePeriod: 600
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${AWS::Region}-asg-instance'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-asg-instance'
           PropagateAtLaunch: true
         - Key: Project
           Value: !Ref ProjectName
@@ -754,14 +761,14 @@ Resources:
   DBSubnetGroup:
     Type: 'AWS::RDS::DBSubnetGroup'
     Properties:
-      DBSubnetGroupName: !Sub '${AWS::StackName}-${AWS::Region}-db-subnet-group'
+      DBSubnetGroupName: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-db-subnet-group'
       DBSubnetGroupDescription: 'Subnet group for RDS database'
       SubnetIds:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${AWS::Region}-db-subnet-group'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-db-subnet-group'
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -776,7 +783,7 @@ Resources:
       Family: !FindInMap [DatabaseEngineMap, !Ref DatabaseEngine, Family]
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${AWS::Region}-db-pg'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-db-pg'
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -787,7 +794,7 @@ Resources:
   Database:
     Type: 'AWS::RDS::DBInstance'
     Properties:
-      DBInstanceIdentifier: !Sub '${AWS::StackName}-${AWS::Region}-db'
+      DBInstanceIdentifier: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-db'
       Engine: !FindInMap [DatabaseEngineMap, !Ref DatabaseEngine, Engine]
       EngineVersion: !FindInMap [DatabaseEngineMap, !Ref DatabaseEngine, EngineVersion]
       DBInstanceClass: !Ref DatabaseInstanceClass
@@ -812,7 +819,7 @@ Resources:
       DeletionProtection: false
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${AWS::Region}-db'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-db'
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -892,12 +899,12 @@ Resources:
                   - 'logs:PutLogEvents'
                   - 'logs:DescribeLogGroups'
                   - 'logs:DescribeLogStreams'
-                Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/vpc/${AWS::StackName}-${AWS::Region}*'
+                Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/vpc/${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}*'
 
   VPCFlowLogGroup:
     Type: 'AWS::Logs::LogGroup'
     Properties:
-      LogGroupName: !Sub '/aws/vpc/${AWS::StackName}-${AWS::Region}'
+      LogGroupName: !Sub '/aws/vpc/${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}'
       RetentionInDays: 7
 
   VPCFlowLog:
@@ -911,7 +918,7 @@ Resources:
       DeliverLogsPermissionArn: !GetAtt VPCFlowLogRole.Arn
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${AWS::Region}-vpc-flow-log'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-vpc-flow-log'
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -926,193 +933,193 @@ Outputs:
     Description: 'VPC ID'
     Value: !Ref VPC
     Export:
-      Name: !Sub '${AWS::StackName}-VPC-ID'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-VPC-ID'
       
   VPCCidrBlock:
     Description: 'VPC CIDR Block'
     Value: !GetAtt VPC.CidrBlock
     Export:
-      Name: !Sub '${AWS::StackName}-VPC-CIDR'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-VPC-CIDR'
 
   InternetGatewayId:
     Description: 'Internet Gateway ID'
     Value: !Ref InternetGateway
     Export:
-      Name: !Sub '${AWS::StackName}-IGW-ID'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-IGW-ID'
 
   NatGateway1Id:
     Description: 'NAT Gateway 1 ID'
     Value: !Ref NatGateway1
     Export:
-      Name: !Sub '${AWS::StackName}-NAT1-ID'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-NAT1-ID'
 
   NatGateway2Id:
     Description: 'NAT Gateway 2 ID'
     Value: !Ref NatGateway2
     Export:
-      Name: !Sub '${AWS::StackName}-NAT2-ID'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-NAT2-ID'
 
   NLBDNSName:
     Description: 'Network Load Balancer DNS name'
     Value: !GetAtt NetworkLoadBalancer.DNSName
     Export:
-      Name: !Sub '${AWS::StackName}-NLB-DNS'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-NLB-DNS'
 
   NLBHostedZoneId:
     Description: 'Network Load Balancer Hosted Zone ID'
     Value: !GetAtt NetworkLoadBalancer.CanonicalHostedZoneID
     Export:
-      Name: !Sub '${AWS::StackName}-NLB-HostedZoneID'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-NLB-HostedZoneID'
 
   DatabaseEndpoint:
     Description: 'RDS database endpoint'
     Value: !GetAtt Database.Endpoint.Address
     Export:
-      Name: !Sub '${AWS::StackName}-DB-Endpoint'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-DB-Endpoint'
 
   DatabasePort:
     Description: 'RDS database port'
     Value: !GetAtt Database.Endpoint.Port
     Export:
-      Name: !Sub '${AWS::StackName}-DB-Port'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-DB-Port'
 
   S3BucketName:
     Description: 'S3 bucket name'
     Value: !Ref S3Bucket
     Export:
-      Name: !Sub '${AWS::StackName}-S3-Bucket'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-S3-Bucket'
 
   EC2KeyPairName:
     Description: 'EC2 Key Pair name'
     Value: !Ref EC2KeyPair
     Export:
-      Name: !Sub '${AWS::StackName}-KeyPair'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-KeyPair'
 
   PrivateSubnet1Id:
     Description: 'Private Subnet 1 ID'
     Value: !Ref PrivateSubnet1
     Export:
-      Name: !Sub '${AWS::StackName}-PrivateSubnet1-ID'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-PrivateSubnet1-ID'
 
   PrivateSubnet2Id:
     Description: 'Private Subnet 2 ID'
     Value: !Ref PrivateSubnet2
     Export:
-      Name: !Sub '${AWS::StackName}-PrivateSubnet2-ID'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-PrivateSubnet2-ID'
 
   PublicSubnet1Id:
     Description: 'Public Subnet 1 ID'
     Value: !Ref PublicSubnet1
     Export:
-      Name: !Sub '${AWS::StackName}-PublicSubnet1-ID'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-PublicSubnet1-ID'
 
   PublicSubnet2Id:
     Description: 'Public Subnet 2 ID'
     Value: !Ref PublicSubnet2
     Export:
-      Name: !Sub '${AWS::StackName}-PublicSubnet2-ID'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-PublicSubnet2-ID'
 
   # Security Groups
   NLBSecurityGroupId:
     Description: 'Network Load Balancer Security Group ID'
     Value: !Ref NLBSecurityGroup
     Export:
-      Name: !Sub '${AWS::StackName}-NLB-SG-ID'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-NLB-SG-ID'
 
   EC2SecurityGroupId:
     Description: 'EC2 Security Group ID'
     Value: !Ref EC2SecurityGroup
     Export:
-      Name: !Sub '${AWS::StackName}-EC2-SG-ID'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-EC2-SG-ID'
 
   DatabaseSecurityGroupId:
     Description: 'Database Security Group ID'
     Value: !Ref DatabaseSecurityGroup
     Export:
-      Name: !Sub '${AWS::StackName}-DB-SG-ID'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-DB-SG-ID'
 
   # Auto Scaling
   AutoScalingGroupName:
     Description: 'Auto Scaling Group Name'
     Value: !Ref AutoScalingGroup
     Export:
-      Name: !Sub '${AWS::StackName}-ASG-Name'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-ASG-Name'
 
   LaunchTemplateId:
     Description: 'Launch Template ID'
     Value: !Ref LaunchTemplate
     Export:
-      Name: !Sub '${AWS::StackName}-LT-ID'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-LT-ID'
 
   LaunchTemplateVersion:
     Description: 'Launch Template Latest Version'
     Value: !GetAtt LaunchTemplate.LatestVersionNumber
     Export:
-      Name: !Sub '${AWS::StackName}-LT-Version'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-LT-Version'
 
   # Load Balancer
   NLBTargetGroupArn:
     Description: 'Network Load Balancer Target Group ARN'
     Value: !Ref NLBTargetGroup
     Export:
-      Name: !Sub '${AWS::StackName}-TG-ARN'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-TG-ARN'
 
   # Database
   DBSubnetGroupName:
     Description: 'Database Subnet Group Name'
     Value: !Ref DBSubnetGroup
     Export:
-      Name: !Sub '${AWS::StackName}-DB-SubnetGroup'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-DB-SubnetGroup'
 
   DBParameterGroupName:
     Description: 'Database Parameter Group Name'
     Value: !Ref DBParameterGroup
     Export:
-      Name: !Sub '${AWS::StackName}-DB-ParamGroup'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-DB-ParamGroup'
 
   DatabaseIdentifier:
     Description: 'Database Instance Identifier'
     Value: !Ref Database
     Export:
-      Name: !Sub '${AWS::StackName}-DB-ID'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-DB-ID'
 
   # IAM Roles
   EC2RoleArn:
     Description: 'EC2 IAM Role ARN'
     Value: !GetAtt EC2Role.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-EC2-Role-ARN'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-EC2-Role-ARN'
 
   VPCFlowLogRoleArn:
     Description: 'VPC Flow Log IAM Role ARN'
     Value: !GetAtt VPCFlowLogRole.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-FlowLog-Role-ARN'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-FlowLog-Role-ARN'
 
   # CloudWatch Logs
   VPCFlowLogGroupName:
     Description: 'VPC Flow Log Group Name'
     Value: !Ref VPCFlowLogGroup
     Export:
-      Name: !Sub '${AWS::StackName}-FlowLog-Group'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-FlowLog-Group'
 
   VPCFlowLogId:
     Description: 'VPC Flow Log ID'
     Value: !Ref VPCFlowLog
     Export:
-      Name: !Sub '${AWS::StackName}-FlowLog-ID'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-FlowLog-ID'
 
   # S3 Bucket
   S3BucketArn:
     Description: 'S3 Bucket ARN'
     Value: !GetAtt S3Bucket.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-S3-Bucket-ARN'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-S3-Bucket-ARN'
 
   # Secret
   DBSecretArn:
     Description: 'Database Master Secret ARN'
     Value: !Ref DBMasterSecret
     Export:
-      Name: !Sub '${AWS::StackName}-DB-Secret-ARN'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-DB-Secret-ARN'
     
