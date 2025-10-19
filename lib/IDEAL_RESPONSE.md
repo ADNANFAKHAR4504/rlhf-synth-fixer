@@ -32,7 +32,8 @@ The system implements:
 
 ```
 lib/
-├── tap_stack.tf                          # Complete Terraform infrastructure (single file)
+├── provider.tf                            # Terraform and AWS provider configuration
+├── tap_stack.tf                           # Complete Terraform infrastructure (single file)
 ├── lambda-access-validator/
 │   └── index.py                           # Validates access requests against DynamoDB
 ├── lambda-access-logger/
@@ -75,6 +76,31 @@ Resources named as: `${var.project_name}-${resource-type}-${local.env_suffix}`
 ---
 
 # Complete Source Code
+
+## Provider Configuration - provider.tf
+
+```hcl
+# provider.tf
+
+terraform {
+  required_version = ">= 1.4.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
+  }
+
+  # Partial backend config: values are injected at `terraform init` time
+  backend "s3" {}
+}
+
+# Primary AWS provider for general resources
+provider "aws" {
+  region = var.aws_region
+}
+```
 
 ## Terraform Infrastructure - tap_stack.tf
 
@@ -3293,8 +3319,9 @@ The infrastructure exports the following outputs:
 
 All source code files from the `lib/` directory have been included above:
 
-**Terraform Configuration Files** (1 total):
-1. tap_stack.tf (1,200+ lines) - Complete infrastructure definition
+**Terraform Configuration Files** (2 total):
+1. provider.tf (21 lines) - Terraform and AWS provider configuration
+2. tap_stack.tf (1,200+ lines) - Complete infrastructure definition
 
 **Lambda Functions** (4 total):
 1. lambda-access-validator/index.py (195 lines) - Access validation against DynamoDB
@@ -3302,7 +3329,7 @@ All source code files from the `lib/` directory have been included above:
 3. lambda-governance-check/index.py (420 lines) - Daily compliance validation
 4. lambda-expiration-enforcer/index.py (290 lines) - Hourly access expiration
 
-**Total Lines of Code**: ~2,350 lines across all files
+**Total Lines of Code**: ~2,371 lines across all files
 
 ---
 
