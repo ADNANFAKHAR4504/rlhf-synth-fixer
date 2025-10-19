@@ -826,23 +826,6 @@ Resources:
               awslogs-group: !Ref ECSLogGroup
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
-          MountPoints:
-            - SourceVolume: efs-storage
-              ContainerPath: /mnt/efs
-              ReadOnly: false
-          HealthCheck:
-            Command:
-              - CMD-SHELL
-              - 'nc -z localhost 8080 || exit 1'
-            Interval: 30
-            Timeout: 5
-            Retries: 3
-            StartPeriod: 60
-      Volumes:
-        - Name: efs-storage
-          EFSVolumeConfiguration:
-            FilesystemId: !Ref EFSFileSystem
-            TransitEncryption: ENABLED
 
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
