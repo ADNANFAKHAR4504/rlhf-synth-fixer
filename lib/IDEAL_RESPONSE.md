@@ -693,7 +693,7 @@ Resources:
   NLBTargetGroup:
     Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
     Properties:
-      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-tg'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-tg'
       Port: 80
       Protocol: TCP
       VpcId: !Ref VPC
@@ -707,7 +707,7 @@ Resources:
       UnhealthyThresholdCount: 3
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-tg'
+          Value: !Sub '${AWS::StackName}-${EnvironmentSuffix}-tg'
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
