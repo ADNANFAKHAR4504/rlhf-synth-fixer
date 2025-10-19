@@ -201,9 +201,9 @@ variable "enable_self_service" {
 }
 
 variable "enable_storage_lens" {
-  description = "Enable S3 Storage Lens for usage analytics"
+  description = "Enable S3 Storage Lens for usage analytics (requires account-level enablement)"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "governance_check_schedule" {

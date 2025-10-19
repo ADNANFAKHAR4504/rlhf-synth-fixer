@@ -197,9 +197,9 @@ describe("Terraform Infrastructure - Cross-Account S3 Data Sharing", () => {
       expect(code).toMatch(/default\s*=\s*false/);
     });
 
-    test("declares enable_storage_lens variable", () => {
+    test("declares enable_storage_lens variable with default false", () => {
       expect(code).toMatch(/variable\s+"enable_storage_lens"\s+\{/);
-      expect(code).toMatch(/default\s*=\s*true/);
+      expect(code).toMatch(/variable\s+"enable_storage_lens"[\s\S]*?default\s*=\s*false/);
     });
 
     test("declares governance_check_schedule variable", () => {

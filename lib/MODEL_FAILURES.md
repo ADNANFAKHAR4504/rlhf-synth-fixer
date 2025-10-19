@@ -318,9 +318,8 @@ resource "aws_s3control_storage_lens_configuration" "main" {
 
 ### Solution
 
-Use basic Storage Lens configuration with only free-tier features:
+**Step 1**: Simplify Storage Lens configuration to use only free-tier features:
 
-**GOOD - Correct Basic Configuration**:
 ```hcl
 resource "aws_s3control_storage_lens_configuration" "main" {
   count = var.enable_storage_lens ? 1 : 0
@@ -342,18 +341,38 @@ resource "aws_s3control_storage_lens_configuration" "main" {
 }
 ```
 
+**Step 2**: Disable Storage Lens by default (error persisted even with basic config):
+
+```hcl
+variable "enable_storage_lens" {
+  description = "Enable S3 Storage Lens for usage analytics (requires account-level enablement)"
+  type        = bool
+  default     = false  # Changed from true to false
+}
+```
+
 **What Changed**:
 - Removed `advanced_cost_optimization_metrics` (requires premium)
 - Removed `advanced_data_protection_metrics` (requires premium)
 - Removed `detailed_status_code_metrics` (requires premium)
 - Removed `data_export` block (can be added later with SSE-S3 or proper permissions)
 - Kept only `activity_metrics` which is available in free tier
+- **Changed default to `false`** - Storage Lens must be explicitly enabled with `enable_storage_lens = true`
 
 ### Prevention
 
 **Best Practices for S3 Storage Lens**:
 
-1. **Start with basic configuration**:
+1. **Disable by default and require explicit enablement**:
+   ```hcl
+   variable "enable_storage_lens" {
+     description = "Enable S3 Storage Lens (requires account-level enablement)"
+     type        = bool
+     default     = false  # Disabled by default
+   }
+   ```
+
+2. **Start with basic configuration**:
    ```hcl
    # Use only free-tier features initially
    bucket_level {
@@ -363,7 +382,7 @@ resource "aws_s3control_storage_lens_configuration" "main" {
    }
    ```
 
-2. **Add advanced features conditionally**:
+3. **Add advanced features conditionally**:
    ```hcl
    variable "storage_lens_advanced" {
      description = "Enable advanced Storage Lens metrics (requires premium)"
@@ -379,7 +398,7 @@ resource "aws_s3control_storage_lens_configuration" "main" {
    }
    ```
 
-3. **Use SSE-S3 for data export instead of SSE-KMS** (simpler, fewer permissions needed):
+4. **Use SSE-S3 for data export instead of SSE-KMS** (simpler, fewer permissions needed):
    ```hcl
    data_export {
      s3_bucket_destination {
@@ -390,12 +409,15 @@ resource "aws_s3control_storage_lens_configuration" "main" {
    }
    ```
 
-4. **Test in non-production accounts first** - Storage Lens features vary by account type
+5. **Test in non-production accounts first** - Storage Lens features vary by account type
 
-5. **Check AWS account entitlements** before enabling premium features
+6. **Check AWS account entitlements** before enabling premium features
+
+7. **Document that Storage Lens requires manual enablement** in deployment instructions
 
 **Files Modified**:
-- `lib/tap_stack.tf` - Lines 1440-1456 (Storage Lens configuration)
+- `lib/tap_stack.tf` - Lines 203-207 (Changed `enable_storage_lens` default to `false`)
+- `lib/tap_stack.tf` - Lines 1440-1456 (Simplified Storage Lens configuration)
 - `lib/IDEAL_RESPONSE.md` - Updated to match corrected implementation
 - `test/terraform.unit.test.ts` - Removed tests for advanced metrics
 
@@ -406,6 +428,8 @@ resource "aws_s3control_storage_lens_configuration" "main" {
 3. **Feature Availability Varies**: S3 Storage Lens advanced features require explicit enablement
 4. **Start Simple**: Begin with basic configurations and add complexity incrementally
 5. **Documentation Gaps**: AWS error messages don't always clearly indicate premium feature requirements
+6. **Disable Optional Features by Default**: Features that require account-level setup should default to `false` to prevent deployment failures
+7. **Account-Level Prerequisites**: Some AWS features (like Storage Lens) require manual account configuration before Terraform can create them
 
 ---
 
