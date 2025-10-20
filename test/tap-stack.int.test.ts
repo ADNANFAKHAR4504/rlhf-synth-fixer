@@ -1,51 +1,39 @@
-import * as fs from 'fs';
-import * as path from 'path';
+import { CloudWatchLogsClient, CreateLogStreamCommand, DescribeLogGroupsCommand, PutLogEventsCommand } from '@aws-sdk/client-cloudwatch-logs';
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
   DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
   DescribeVpcAttributeCommand,
-  DescribeInternetGatewaysCommand,
-  DescribeNatGatewaysCommand,
-  DescribeRouteTablesCommand
+  DescribeVpcsCommand,
+  EC2Client
 } from '@aws-sdk/client-ec2';
+import { GetRoleCommand, IAMClient, ListAttachedRolePoliciesCommand } from '@aws-sdk/client-iam';
+import { GetKeyRotationStatusCommand, KMSClient } from '@aws-sdk/client-kms';
+import { GetFunctionCommand, GetFunctionConfigurationCommand, InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
+import { DescribeDBInstancesCommand, DescribeDBSubnetGroupsCommand, RDSClient } from '@aws-sdk/client-rds';
 import {
-  S3Client,
-  HeadBucketCommand,
+  GetResourcesCommand,
+  ResourceGroupsTaggingAPIClient
+} from '@aws-sdk/client-resource-groups-tagging-api';
+import {
+  DeleteObjectCommand,
   GetBucketEncryptionCommand,
   GetBucketVersioningCommand,
-  PutObjectCommand,
   GetObjectCommand,
-  DeleteObjectCommand,
   GetPublicAccessBlockCommand,
-  GetBucketLifecycleConfigurationCommand,
-  GetBucketLoggingCommand
+  HeadBucketCommand,
+  PutObjectCommand,
+  S3Client
 } from '@aws-sdk/client-s3';
-import { RDSClient, DescribeDBInstancesCommand, DescribeDBSubnetGroupsCommand } from '@aws-sdk/client-rds';
-import { LambdaClient, GetFunctionCommand, InvokeCommand, GetFunctionConfigurationCommand } from '@aws-sdk/client-lambda';
-import { CloudWatchLogsClient, DescribeLogGroupsCommand, PutLogEventsCommand, CreateLogStreamCommand } from '@aws-sdk/client-cloudwatch-logs';
-import { IAMClient, GetRoleCommand, GetRolePolicyCommand, ListAttachedRolePoliciesCommand } from '@aws-sdk/client-iam';
-import { KMSClient, DescribeKeyCommand, GetKeyRotationStatusCommand } from '@aws-sdk/client-kms';
-import {
-  ResourceGroupsTaggingAPIClient,
-  GetResourcesCommand
-} from '@aws-sdk/client-resource-groups-tagging-api';
+import * as fs from 'fs';
 
 const region = process.env.AWS_REGION || 'ap-northeast-1';
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const stackName = `TapStack${environmentSuffix}`;
 const projectName = 'tap-web-app';
 
 // Load stack outputs from flat-outputs.json
-const outputs = JSON.parse(
-  fs.readFileSync(path.join(__dirname, '..', 'flat-outputs.json'), 'utf8')
+const stackOutputs = JSON.parse(
+  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
-const stackOutputs = outputs[stackName];
-
-if (!stackOutputs) {
-  throw new Error(`Stack outputs not found for ${stackName} in flat-outputs.json`);
-}
 
 // AWS Clients
 const ec2Client = new EC2Client({ region });
