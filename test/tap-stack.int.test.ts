@@ -101,9 +101,8 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
   let testData: any = {};
 
   beforeAll(async () => {
-    // Fallback: Discover missing resources using AWS APIs if file-based outputs are empty
-    if (Object.keys(outputs).length === 0) {
-      console.log('No outputs from file, discovering resources using AWS APIs...');
+
+    console.log('Discovering resources using AWS APIs to backfill missing outputs...');
     
     // Discover S3 buckets
     if (!outputs['nova-prod-patient-documents-bucket']) {
@@ -196,6 +195,19 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
     }
 
       console.log(`✓ Resource discovery completed. Found ${Object.keys(outputs).length} resources`);
+
+    const requiredKeys = [
+      'nova-prod-patient-documents-bucket',
+      'nova-prod-kms-key-id',
+      'nova-prod-rds-endpoint',
+      'nova-prod-app-sg-id',
+      'nova-prod-vpc-id',
+      'nova-prod-security-alert-topic',
+      'nova-prod-alb-dns'
+    ];
+    const missing = requiredKeys.filter(k => !outputs[k] || String(outputs[k]).length === 0);
+    if (missing.length > 0) {
+      throw new Error(`Missing required live resources after discovery: ${missing.join(', ')}`);
     }
 
     // Initialize test data for workflows with dynamic values
@@ -1297,10 +1309,16 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
       }));
       expect(trailStatus.IsLogging).toBe(true);
       
-      // Check data retention compliance
-      const s3Buckets = await s3Client.send(new ListObjectsV2Command({
-        Bucket: outputs['nova-prod-patient-documents-bucket']
-      }));
+      // Check data retention compliance 
+      let s3Buckets: any = { Contents: undefined };
+      const patientDocsBucket = outputs['nova-prod-patient-documents-bucket'];
+      if (patientDocsBucket && typeof patientDocsBucket === 'string' && patientDocsBucket.length > 0) {
+        s3Buckets = await s3Client.send(new ListObjectsV2Command({
+          Bucket: patientDocsBucket
+        }));
+      } else {
+        console.warn('Patient documents bucket output missing; skipping S3 retention check');
+      }
       
       const complianceCheck = {
         dataEncryption: encryptionCheck.CiphertextBlob !== undefined,
