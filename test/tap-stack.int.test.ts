@@ -10,10 +10,8 @@ import { SNSClient, PublishCommand, ListTopicsCommand } from '@aws-sdk/client-sn
 import { ConfigServiceClient, StartConfigRulesEvaluationCommand, GetComplianceDetailsByConfigRuleCommand } from '@aws-sdk/client-config-service';
 import { CloudWatchLogsClient, PutLogEventsCommand, CreateLogStreamCommand } from '@aws-sdk/client-cloudwatch-logs';
 import { WAFV2Client, ListWebACLsCommand, GetWebACLCommand } from '@aws-sdk/client-wafv2';
-import { SignatureV4 } from '@aws-sdk/signature-v4';
-import { Sha256 } from '@aws-crypto/sha256-js';
 import { defaultProvider } from '@aws-sdk/credential-provider-node';
-import { HttpRequest } from '@aws-sdk/protocol-http';
+import aws4 from 'aws4';
 
 // Configuration from CloudFormation outputs
 if (!fs.existsSync('cfn-outputs/flat-outputs.json')) {
@@ -1104,28 +1102,22 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
       try {
         const url = new URL(clinicalDataEndpoint);
         const credentials = await defaultProvider()();
-        const signer = new SignatureV4({
-          credentials,
-          region,
-          service: 'execute-api',
-          sha256: Sha256
-        });
-
-        const request = new HttpRequest({
-          protocol: url.protocol,
-          hostname: url.hostname,
+        const requestOptions = {
+          host: url.hostname,
           method: 'GET',
-          path: `${url.pathname}`,
-          headers: {
-            host: url.hostname,
-            accept: 'application/json'
-          }
+          path: url.pathname,
+          service: 'execute-api',
+          region,
+          headers: { 'accept': 'application/json' }
+        } as any;
+        aws4.sign(requestOptions, {
+          accessKeyId: credentials.accessKeyId,
+          secretAccessKey: credentials.secretAccessKey,
+          sessionToken: credentials.sessionToken
         });
-
-        const signed = await signer.sign(request);
         const response = await fetch(`${url.protocol}//${url.hostname}${url.pathname}`, {
           method: 'GET',
-          headers: signed.headers as any
+          headers: requestOptions.headers
         });
 
         expect(response.status).toBeDefined();
