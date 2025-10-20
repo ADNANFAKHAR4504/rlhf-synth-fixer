@@ -1,7 +1,7 @@
 # CloudFormation Template Configuration Failures
 
 ## Overview
-This document identifies the differences between the ideal CloudFormation template configuration (`IDEAL_RESPONSE.md`) and the model's implementation (`MODEL_RESPONSE.md`), listing them as configuration failures that need to be addressed.
+This document identifies the enhancements that were performed on top of teh model responses inorder to successfully deploy the stack and determine the configurations for a successful stack.
 
 ## 1. KMS Key Policy Configuration
 

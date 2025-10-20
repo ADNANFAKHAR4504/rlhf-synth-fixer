@@ -10,5 +10,21 @@
   "subject_labels": [
     "Security Configuration as Code"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, Fargate, VPC"
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "RDS",
+    "S3",
+    "KMS",
+    "CloudTrail",
+    "CloudWatch",
+    "AWS Config",
+    "IAM",
+    "Secrets Manager",
+    "Certificate Manager",
+    "Elastic Load Balancing",
+    "WAF"
+  ],
+  "training_quality": 9
 }

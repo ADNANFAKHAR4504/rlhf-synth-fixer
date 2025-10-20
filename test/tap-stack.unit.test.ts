@@ -45,7 +45,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have core infrastructure parameters', () => {
       expect(template.Parameters.VpcCidrBlock).toBeDefined();
       expect(template.Parameters.SshAllowedCidr).toBeDefined();
-      expect(template.Parameters.DbInstanceClass).toBeDefined();
+      // DbInstanceClass parameter removed - now using environment-based mappings for cost optimization
       expect(template.Parameters.DbMasterUsername).toBeDefined();
       expect(template.Parameters.DomainName).toBeDefined();
     });
@@ -67,13 +67,13 @@ describe('TapStack CloudFormation Template', () => {
     test('Environment parameter should have allowed values', () => {
       const param = template.Parameters.Environment;
       expect(param.Type).toBe('String');
-      expect(param.Default).toBe('Production');
+      expect(param.Default).toBe('Development'); // Changed for cost optimization
       expect(param.AllowedValues).toEqual(['Development', 'Staging', 'Production']);
     });
 
-    test('should have exactly 9 parameters', () => {
+    test('should have exactly 8 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(9);
+      expect(parameterCount).toBe(8); // Reduced from 9 due to DbInstanceClass removal
     });
   });
 
@@ -130,7 +130,8 @@ describe('TapStack CloudFormation Template', () => {
       expect(rds.Type).toBe('AWS::RDS::DBInstance');
       expect(rds.Properties.Engine).toBe('mysql');
       expect(rds.Properties.StorageEncrypted).toBe(true);
-      expect(rds.Properties.MultiAZ).toBe(true);
+      // MultiAZ is now environment-dependent for cost optimization
+      expect(rds.Properties.MultiAZ).toBeDefined();
     });
 
     test('WAFWebACL should have correct scope', () => {
@@ -220,7 +221,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have expected number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(9);
+      expect(parameterCount).toBe(8); // Reduced from 9 due to DbInstanceClass removal for cost optimization
     });
 
     test('should have expected number of outputs', () => {
@@ -300,6 +301,61 @@ describe('TapStack CloudFormation Template', () => {
           })
         );
       });
+    });
+  });
+
+  describe('Cost Optimization Features', () => {
+    test('should have environment-based cost optimization mappings', () => {
+      expect(template.Mappings.InstanceTypeMapping).toBeDefined();
+      expect(template.Mappings.RDSConfig).toBeDefined();
+      
+      // Verify cost optimization for different environments
+      expect(template.Mappings.InstanceTypeMapping.Development.OnDemandPercentage).toBe(0);
+      expect(template.Mappings.InstanceTypeMapping.Production.OnDemandPercentage).toBe(50);
+    });
+
+    test('should have cost optimization conditions', () => {
+      expect(template.Conditions.IsProduction).toBeDefined();
+      expect(template.Conditions.IsNotDevelopment).toBeDefined();
+      expect(template.Conditions.EnablePerformanceInsights).toBeDefined();
+    });
+
+    test('AutoScalingGroup should use MixedInstancesPolicy for cost optimization', () => {
+      const asg = template.Resources.AutoScalingGroup;
+      expect(asg.Properties.MixedInstancesPolicy).toBeDefined();
+      expect(asg.Properties.MixedInstancesPolicy.InstancesDistribution).toBeDefined();
+      expect(asg.Properties.MixedInstancesPolicy.LaunchTemplate.Overrides).toBeDefined();
+    });
+
+    test('should have target tracking scaling policy', () => {
+      const scalingPolicy = template.Resources.AutoScalingPolicy;
+      expect(scalingPolicy.Type).toBe('AWS::AutoScaling::ScalingPolicy');
+      expect(scalingPolicy.Properties.PolicyType).toBe('TargetTrackingScaling');
+    });
+
+    test('RDS should use environment-based configuration for cost optimization', () => {
+      const rds = template.Resources.RDSInstance;
+      // Verify that instance class comes from mapping
+      expect(rds.Properties.DBInstanceClass).toEqual({
+        'Fn::FindInMap': ['RDSConfig', { 'Ref': 'Environment' }, 'InstanceClass']
+      });
+      // Verify storage autoscaling
+      expect(rds.Properties.MaxAllocatedStorage).toBeDefined();
+    });
+
+    test('NAT Gateway should have conditional deployment for cost optimization', () => {
+      const natGateway2 = template.Resources.NatGateway2;
+      expect(natGateway2.Condition).toBe('IsNotDevelopment');
+      
+      const natGateway2EIP = template.Resources.NatGateway2EIP;
+      expect(natGateway2EIP.Condition).toBe('IsNotDevelopment');
+    });
+
+    test('Launch Template should use ARM-based Graviton instances', () => {
+      const launchTemplate = template.Resources.LaunchTemplate;
+      const imageId = launchTemplate.Properties.LaunchTemplateData.ImageId;
+      // Should use ARM64 AMI for Graviton2 instances
+      expect(imageId).toContain('arm64');
     });
   });
 });
