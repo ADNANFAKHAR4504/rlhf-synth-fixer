@@ -1,0 +1,37 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "356229_2",
+  "team": "1",
+  "startedAt": "2025-10-18T06:05:51.805Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "CodePipeline",
+    "CodeBuild",
+    "CodeDeploy",
+    "EC2",
+    "VPC",
+    "S3",
+    "IAM",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "Secrets Manager",
+    "Lambda",
+    "SNS",
+    "EventBridge",
+    "CloudFormation"
+  ],
+  "training_quality": 7,
+  "training_quality_notes": "Score: 7/10 (Below threshold of 8). Complex multi-service CI/CD pipeline with 14 AWS services, security best practices, monitoring, and comprehensive infrastructure. However, MODEL_RESPONSE.md contains only placeholder text (-3 points), preventing full training value assessment. Implementation required 8 significant fixes including IAM policies, GitHub webhooks, S3 versioning, CodeBuild caching, security groups, CodeDeploy roles, CloudWatch alarms, and resource naming. Platform/language compliance verified (CDK+TypeScript). PROMPT.md is human-style. environmentSuffix consistently used. All resources destroyable. To reach ≥8: Complete MODEL_RESPONSE.md with actual content.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
+}
