@@ -12,54 +12,16 @@ import json
 
 class MinimalMocks(pulumi.runtime.Mocks):
     """
-    Minimal mock that provides only essential computed outputs.
-    Returns inputs as outputs, plus critical computed properties.
+    Minimal mock that returns inputs as outputs without resource-specific logic.
     """
     
     def new_resource(self, args: pulumi.runtime.MockResourceArgs):
         """Return inputs as outputs with minimal computed properties."""
         outputs = {**args.inputs, "id": f"{args.name}-id"}
-        
-        # Add computed outputs for S3 buckets
-        if args.typ == "aws:s3/bucket:Bucket":
-            outputs["arn"] = f"arn:aws:s3:::{args.name}"
-            if "bucket" not in outputs:
-                outputs["bucket"] = args.name
-        
-        # Add computed outputs for SNS topics
-        if args.typ == "aws:sns/topic:Topic":
-            outputs["arn"] = f"arn:aws:sns:us-east-1:123456789012:{args.name}"
-        
-        # Add computed outputs for Lambda functions
-        if args.typ == "aws:lambda/function:Function":
-            outputs["arn"] = f"arn:aws:lambda:us-east-1:123456789012:function:{args.name}"
-            outputs["invoke_arn"] = f"arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:123456789012:function:{args.name}/invocations"
-        
-        # Add computed outputs for IAM roles
-        if args.typ == "aws:iam/role:Role":
-            outputs["arn"] = f"arn:aws:iam::123456789012:role/{args.name}"
-        
-        # Add computed outputs for CloudWatch dashboards
-        if args.typ == "aws:cloudwatch/dashboard:Dashboard":
-            if "dashboard_name" not in outputs:
-                outputs["dashboard_name"] = args.name
-        
-        # Add computed outputs for EventBridge rules
-        if args.typ == "aws:cloudwatch/eventRule:EventRule":
-            outputs["arn"] = f"arn:aws:events:us-east-1:123456789012:rule/{args.name}"
-        
         return [f"{args.name}-id", outputs]
     
     def call(self, args: pulumi.runtime.MockCallArgs):
-        """Return mock data for function calls."""
-        # Mock aws.get_region()
-        if args.token == "aws:index/getRegion:getRegion":
-            return {"region": "us-east-1", "name": "us-east-1"}
-        
-        # Mock aws.get_caller_identity()
-        if args.token == "aws:index/getCallerIdentity:getCallerIdentity":
-            return {"account_id": "123456789012"}
-        
+        """Return empty dict for all function calls."""
         return {}
 
 
