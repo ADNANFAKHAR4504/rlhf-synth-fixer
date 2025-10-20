@@ -93,8 +93,5 @@
   "python.testing.pytestEnabled": true,
   "python.testing.pytestArgs": ["-s", "-l", "--no-cov", "--testdox"],
   "python.testing.unittestEnabled": false,
-  "python.testing.autoTestDiscoverOnSaveEnabled": true,
-  "python-envs.defaultEnvManager": "ms-python.python:conda",
-  "python-envs.defaultPackageManager": "ms-python.python:conda",
-  "python-envs.pythonProjects": []
+  "python.testing.autoTestDiscoverOnSaveEnabled": true
 }

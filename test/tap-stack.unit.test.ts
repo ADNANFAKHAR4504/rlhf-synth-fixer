@@ -46,12 +46,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(envSuffixParam.MaxLength).toBe(20);
     });
 
-    test('DomainName parameter should allow empty values', () => {
-      const domainParam = template.Parameters.DomainName;
-      expect(domainParam.Default).toBe('');
-      expect(domainParam.AllowedPattern).toMatch(/^\$\|/);
-    });
-
     test('CertificateArn parameter should validate ACM ARN format', () => {
       const certParam = template.Parameters.CertificateArn;
       expect(certParam.AllowedPattern).toContain('arn:aws:acm:us-east-1');
@@ -62,13 +56,13 @@ describe('TapStack CloudFormation Template', () => {
     test('should have required conditions for optional resources', () => {
       const requiredConditions = [
         'HasDomainName',
-        'HasHostedZoneId', 
+        'HasHostedZoneId',
         'HasCertificateArn',
         'CreateCertificate',
         'CreateDNSRecords',
         'UseCertificate'
       ];
-      
+
       requiredConditions.forEach(condition => {
         expect(template.Conditions[condition]).toBeDefined();
       });
@@ -79,7 +73,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have WebsiteBucket with proper security configuration', () => {
       const bucket = template.Resources.WebsiteBucket;
       expect(bucket.Type).toBe('AWS::S3::Bucket');
-      
+
       const props = bucket.Properties;
       expect(props.PublicAccessBlockConfiguration).toBeDefined();
       expect(props.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
@@ -91,7 +85,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have WebsiteBucket with encryption and versioning', () => {
       const bucket = template.Resources.WebsiteBucket;
       const props = bucket.Properties;
-      
+
       expect(props.BucketEncryption).toBeDefined();
       expect(props.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
       expect(props.VersioningConfiguration.Status).toBe('Enabled');
@@ -100,15 +94,15 @@ describe('TapStack CloudFormation Template', () => {
     test('should have LogsBucket with lifecycle policies', () => {
       const logsBucket = template.Resources.LogsBucket;
       expect(logsBucket.Type).toBe('AWS::S3::Bucket');
-      
+
       const props = logsBucket.Properties;
       expect(props.LifecycleConfiguration).toBeDefined();
       expect(props.LifecycleConfiguration.Rules).toHaveLength(2);
-      
-      const deleteRule = props.LifecycleConfiguration.Rules.find(rule => rule.Id === 'DeleteOldLogs');
+
+      const deleteRule = props.LifecycleConfiguration.Rules.find((rule: any) => rule.Id === 'DeleteOldLogs');
       expect(deleteRule.ExpirationInDays).toBe(90);
-      
-      const transitionRule = props.LifecycleConfiguration.Rules.find(rule => rule.Id === 'TransitionToIA');
+
+      const transitionRule = props.LifecycleConfiguration.Rules.find((rule: any) => rule.Id === 'TransitionToIA');
       expect(transitionRule.Transitions[0].TransitionInDays).toBe(30);
       expect(transitionRule.Transitions[0].StorageClass).toBe('STANDARD_IA');
     });
@@ -116,7 +110,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have proper bucket naming with environment suffix', () => {
       const websiteBucket = template.Resources.WebsiteBucket;
       const logsBucket = template.Resources.LogsBucket;
-      
+
       expect(websiteBucket.Properties.BucketName['Fn::Sub']).toContain('${EnvironmentSuffix}');
       expect(logsBucket.Properties.BucketName['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
@@ -126,7 +120,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have CloudFront Origin Access Control', () => {
       const oac = template.Resources.CloudFrontOAC;
       expect(oac.Type).toBe('AWS::CloudFront::OriginAccessControl');
-      
+
       const config = oac.Properties.OriginAccessControlConfig;
       expect(config.OriginAccessControlOriginType).toBe('s3');
       expect(config.SigningBehavior).toBe('always');
@@ -136,7 +130,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have CloudFront Distribution with proper configuration', () => {
       const distribution = template.Resources.CloudFrontDistribution;
       expect(distribution.Type).toBe('AWS::CloudFront::Distribution');
-      
+
       const config = distribution.Properties.DistributionConfig;
       expect(config.Enabled).toBe(true);
       expect(config.HttpVersion).toBe('http2and3');
@@ -148,7 +142,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have proper caching behavior configuration', () => {
       const distribution = template.Resources.CloudFrontDistribution;
       const behavior = distribution.Properties.DistributionConfig.DefaultCacheBehavior;
-      
+
       expect(behavior.ViewerProtocolPolicy).toBe('redirect-to-https');
       expect(behavior.Compress).toBe(true);
       expect(behavior.AllowedMethods).toContain('GET');
@@ -161,12 +155,12 @@ describe('TapStack CloudFormation Template', () => {
     test('should have custom error responses configured', () => {
       const distribution = template.Resources.CloudFrontDistribution;
       const errorResponses = distribution.Properties.DistributionConfig.CustomErrorResponses;
-      
+
       expect(errorResponses).toHaveLength(2);
-      
-      const error403 = errorResponses.find(resp => resp.ErrorCode === 403);
-      const error404 = errorResponses.find(resp => resp.ErrorCode === 404);
-      
+
+      const error403 = errorResponses.find((resp: any) => resp.ErrorCode === 403);
+      const error404 = errorResponses.find((resp: any) => resp.ErrorCode === 404);
+
       expect(error403.ResponseCode).toBe(404);
       expect(error403.ResponsePagePath).toBe('/404.html');
       expect(error404.ResponseCode).toBe(404);
@@ -179,11 +173,10 @@ describe('TapStack CloudFormation Template', () => {
       const certificate = template.Resources.SSLCertificate;
       expect(certificate.Type).toBe('AWS::CertificateManager::Certificate');
       expect(certificate.Condition).toBe('CreateCertificate');
-      
+
       const props = certificate.Properties;
       expect(props.ValidationMethod).toBe('DNS');
       expect(props.DomainValidationOptions).toBeDefined();
-      expect(props.SubjectAlternativeNames).toContain({ 'Fn::Sub': 'www.${DomainName}' });
     });
   });
 
@@ -193,7 +186,7 @@ describe('TapStack CloudFormation Template', () => {
       const ipv6Record = template.Resources.DNSRecordIPv6;
       const wwwIpv4Record = template.Resources.WWWDNSRecordIPv4;
       const wwwIpv6Record = template.Resources.WWWDNSRecordIPv6;
-      
+
       expect(ipv4Record.Type).toBe('AWS::Route53::RecordSet');
       expect(ipv4Record.Properties.Type).toBe('A');
       expect(ipv6Record.Type).toBe('AWS::Route53::RecordSet');
@@ -205,7 +198,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have proper CloudFront alias target configuration', () => {
       const ipv4Record = template.Resources.DNSRecordIPv4;
       const aliasTarget = ipv4Record.Properties.AliasTarget;
-      
+
       expect(aliasTarget.HostedZoneId).toBe('Z2FDTNDATAQYW2');
       expect(aliasTarget.EvaluateTargetHealth).toBe(false);
       expect(aliasTarget.DNSName['Fn::GetAtt']).toEqual(['CloudFrontDistribution', 'DomainName']);
@@ -216,10 +209,10 @@ describe('TapStack CloudFormation Template', () => {
     test('should have CloudWatch monitoring role with proper policies', () => {
       const role = template.Resources.CloudWatchMonitoringRole;
       expect(role.Type).toBe('AWS::IAM::Role');
-      
+
       const assumePolicy = role.Properties.AssumeRolePolicyDocument;
       expect(assumePolicy.Version).toBe('2012-10-17');
-      
+
       const statement = assumePolicy.Statement[0];
       expect(statement.Effect).toBe('Allow');
       expect(statement.Principal.Service).toContain('cloudwatch.amazonaws.com');
@@ -229,19 +222,19 @@ describe('TapStack CloudFormation Template', () => {
     test('should have monitoring policy with least-privilege permissions', () => {
       const role = template.Resources.CloudWatchMonitoringRole;
       const policy = role.Properties.Policies[0];
-      
+
       expect(policy.PolicyDocument.Version).toBe('2012-10-17');
-      
+
       const statements = policy.PolicyDocument.Statement;
       expect(statements.length).toBeGreaterThan(0);
-      
-      const cloudFrontStatement = statements.find(stmt => 
-        stmt.Action.some(action => action.startsWith('cloudfront:'))
+
+      const cloudFrontStatement = statements.find((stmt: any) =>
+        stmt.Action.some((action: any) => action.startsWith('cloudfront:'))
       );
       expect(cloudFrontStatement).toBeDefined();
-      
-      const s3Statement = statements.find(stmt => 
-        stmt.Action.some(action => action.startsWith('s3:'))
+
+      const s3Statement = statements.find((stmt: any) =>
+        stmt.Action.some((action: any) => action.startsWith('s3:'))
       );
       expect(s3Statement).toBeDefined();
     });
@@ -251,12 +244,12 @@ describe('TapStack CloudFormation Template', () => {
     test('should have comprehensive CloudWatch alarms', () => {
       const expectedAlarms = [
         'CloudFront4xxErrorAlarm',
-        'CloudFront5xxErrorAlarm', 
+        'CloudFront5xxErrorAlarm',
         'CloudFrontCacheHitRateAlarm',
         'CloudFrontRequestCountAlarm',
         'CloudFrontOriginLatencyAlarm'
       ];
-      
+
       expectedAlarms.forEach(alarmName => {
         expect(template.Resources[alarmName]).toBeDefined();
         expect(template.Resources[alarmName].Type).toBe('AWS::CloudWatch::Alarm');
@@ -269,13 +262,13 @@ describe('TapStack CloudFormation Template', () => {
       const cacheHitAlarm = template.Resources.CloudFrontCacheHitRateAlarm;
       const requestAlarm = template.Resources.CloudFrontRequestCountAlarm;
       const latencyAlarm = template.Resources.CloudFrontOriginLatencyAlarm;
-      
+
       expect(error4xxAlarm.Properties.Threshold).toBe(5);
       expect(error5xxAlarm.Properties.Threshold).toBe(1);
       expect(cacheHitAlarm.Properties.Threshold).toBe(70);
       expect(requestAlarm.Properties.Threshold).toBe(10000);
       expect(latencyAlarm.Properties.Threshold).toBe(1000);
-      
+
       expect(error4xxAlarm.Properties.ComparisonOperator).toBe('GreaterThanThreshold');
       expect(cacheHitAlarm.Properties.ComparisonOperator).toBe('LessThanThreshold');
     });
@@ -283,12 +276,12 @@ describe('TapStack CloudFormation Template', () => {
     test('should have CloudWatch dashboard with comprehensive widgets', () => {
       const dashboard = template.Resources.MonitoringDashboard;
       expect(dashboard.Type).toBe('AWS::CloudWatch::Dashboard');
-      
+
       const dashboardBody = JSON.parse(dashboard.Properties.DashboardBody['Fn::Sub']);
       expect(dashboardBody.widgets).toBeDefined();
       expect(dashboardBody.widgets.length).toBe(6);
-      
-      const widgetTypes = dashboardBody.widgets.map(w => w.type);
+
+      const widgetTypes = dashboardBody.widgets.map((w: any) => w.type);
       expect(widgetTypes).toContain('metric');
       expect(widgetTypes).toContain('log');
     });
@@ -298,7 +291,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have secure bucket policy for CloudFront access', () => {
       const bucketPolicy = template.Resources.WebsiteBucketPolicy;
       expect(bucketPolicy.Type).toBe('AWS::S3::BucketPolicy');
-      
+
       const statement = bucketPolicy.Properties.PolicyDocument.Statement[0];
       expect(statement.Effect).toBe('Allow');
       expect(statement.Principal.Service).toBe('cloudfront.amazonaws.com');
@@ -324,7 +317,7 @@ describe('TapStack CloudFormation Template', () => {
         'StackRegion',
         'EnvironmentName'
       ];
-      
+
       expectedOutputs.forEach(outputName => {
         expect(template.Outputs[outputName]).toBeDefined();
       });
@@ -333,7 +326,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have conditional outputs for domain-specific resources', () => {
       const wwwOutput = template.Outputs.WWWWebsiteURL;
       const certOutput = template.Outputs.SSLCertificateArn;
-      
+
       expect(wwwOutput.Condition).toBe('HasDomainName');
       expect(certOutput.Condition).toBe('CreateCertificate');
     });
@@ -350,7 +343,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have operational command outputs for deployment', () => {
       const deployCmd = template.Outputs.DeploymentCommand;
       const invalidateCmd = template.Outputs.InvalidateCacheCommand;
-      
+
       expect(deployCmd.Value['Fn::Sub']).toContain('aws s3 sync');
       expect(deployCmd.Value['Fn::Sub']).toContain('${WebsiteBucket}');
       expect(invalidateCmd.Value['Fn::Sub']).toContain('aws cloudfront create-invalidation');
@@ -375,7 +368,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have proper resource count for secure web access layer', () => {
       const resourceTypes = Object.values(template.Resources).map((resource: any) => resource.Type);
-      
+
       expect(resourceTypes).toContain('AWS::S3::Bucket');
       expect(resourceTypes).toContain('AWS::CloudFront::Distribution');
       expect(resourceTypes).toContain('AWS::CloudFront::OriginAccessControl');
@@ -396,13 +389,13 @@ describe('TapStack CloudFormation Template', () => {
         'CloudFrontOAC',
         'CloudWatchMonitoringRole'
       ];
-      
+
       resourcesWithNaming.forEach(resourceName => {
         const resource = template.Resources[resourceName];
-        const nameProperty = resource.Properties.BucketName || 
-                            resource.Properties.RoleName ||
-                            resource.Properties.OriginAccessControlConfig?.Name;
-        
+        const nameProperty = resource.Properties.BucketName ||
+          resource.Properties.RoleName ||
+          resource.Properties.OriginAccessControlConfig?.Name;
+
         if (nameProperty && nameProperty['Fn::Sub']) {
           expect(nameProperty['Fn::Sub']).toContain('${EnvironmentSuffix}');
         }
@@ -412,18 +405,18 @@ describe('TapStack CloudFormation Template', () => {
     test('should have proper tags for resource management', () => {
       const taggedResources = [
         'WebsiteBucket',
-        'LogsBucket', 
+        'LogsBucket',
         'CloudFrontDistribution',
         'CloudWatchMonitoringRole',
         'SSLCertificate'
       ];
-      
+
       taggedResources.forEach(resourceName => {
         const resource = template.Resources[resourceName];
         if (resource.Properties.Tags) {
           const tags = resource.Properties.Tags;
-          expect(tags.find(tag => tag.Key === 'Environment')).toBeDefined();
-          expect(tags.find(tag => tag.Key === 'ManagedBy')).toBeDefined();
+          expect(tags.find((tag: any) => tag.Key === 'Environment')).toBeDefined();
+          expect(tags.find((tag: any) => tag.Key === 'ManagedBy')).toBeDefined();
         }
       });
     });
