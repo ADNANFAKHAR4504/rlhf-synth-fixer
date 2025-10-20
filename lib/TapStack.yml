@@ -70,11 +70,11 @@ Mappings:
     Development:
       InstanceTypes: ['t4g.nano', 't4g.micro', 't3.micro']
       OnDemandPercentage: 0
-      SpotAllocationStrategy: 'diversified'
+      SpotAllocationStrategy: 'lowest-price'
     Staging:
       InstanceTypes: ['t4g.small', 't4g.medium', 't3.small']
       OnDemandPercentage: 20
-      SpotAllocationStrategy: 'diversified'
+      SpotAllocationStrategy: 'price-capacity-optimized'
     Production:
       InstanceTypes: ['t4g.medium', 't4g.large', 'm6g.large']
       OnDemandPercentage: 50
