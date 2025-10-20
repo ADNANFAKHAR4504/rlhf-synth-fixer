@@ -45,14 +45,17 @@ const outputs = JSON.parse(
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
+// Read AWS region from lib/AWS_REGION file
+const awsRegion = fs.readFileSync('lib/AWS_REGION', 'utf8').trim();
+
 // Initialize AWS SDK clients
-const asgClient = new AutoScalingClient({ region: 'us-west-1' });
-const ssmClient = new SSMClient({ region: 'us-west-1' });
-const s3Client = new S3Client({ region: 'us-west-1' });
-const cloudwatchLogsClient = new CloudWatchLogsClient({ region: 'us-west-1' });
-const cloudwatchClient = new CloudWatchClient({ region: 'us-west-1' });
-const ec2Client = new EC2Client({ region: 'us-west-1' });
-const route53Client = new Route53Client({ region: 'us-west-1' });
+const asgClient = new AutoScalingClient({ region: awsRegion });
+const ssmClient = new SSMClient({ region: awsRegion });
+const s3Client = new S3Client({ region: awsRegion });
+const cloudwatchLogsClient = new CloudWatchLogsClient({ region: awsRegion });
+const cloudwatchClient = new CloudWatchClient({ region: awsRegion });
+const ec2Client = new EC2Client({ region: awsRegion });
+const route53Client = new Route53Client({ region: awsRegion });
 
 // Helper function to wait for SSM command completion
 async function waitForCommand(
@@ -505,7 +508,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
                   'sudo yum install -y jq',
                   '',
                   '# Retrieve password from Secrets Manager',
-                  `SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id "${secretArn}" --region us-west-1 --query SecretString --output text)`,
+                  `SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id "${secretArn}" --region ${awsRegion} --query SecretString --output text)`,
                   'DB_PASSWORD=$(echo $SECRET_JSON | jq -r .password)',
                   '',
                   '# Test RDS connection',
@@ -555,7 +558,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
                   '  --namespace "TAPStack/IntegrationTests" \\',
                   '  --metric-name "TestMetric" \\',
                   '  --value 1 \\',
-                  '  --region us-west-1',
+                  `  --region ${awsRegion}`,
                   '',
                   'echo "Custom metric sent to CloudWatch"',
                 ],
@@ -610,7 +613,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
                   'sudo yum install -y jq',
                   '',
                   '# Step 1: Retrieve password from Secrets Manager',
-                  `SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id "${secretArn}" --region us-west-1 --query SecretString --output text)`,
+                  `SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id "${secretArn}" --region ${awsRegion} --query SecretString --output text)`,
                   'DB_PASSWORD=$(echo $SECRET_JSON | jq -r .password)',
                   '',
                   '# Step 2: Connect to RDS and perform operations',
