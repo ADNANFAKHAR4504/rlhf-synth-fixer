@@ -11,6 +11,6 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "[ElastiCache, VPC, CloudWatch, IAM, Backup]",
+  "aws_services": ["ElastiCache", "VPC", "CloudWatch", "IAM", "Backup"],
   "training_quality": 9.5
 }
