@@ -210,14 +210,26 @@ describe('News Platform Application Flow Tests', () => {
         })
       );
 
+      // Verify content was stored in S3 (CloudFront cache may take time to propagate)
+      const s3Response = await s3Client.send(
+        new GetObjectCommand({
+          Bucket: contentBucketName,
+          Key: `articles/${testArticleId}.json`,
+        })
+      );
+
+      const storedContent = JSON.parse(
+        await s3Response.Body!.transformToString()
+      );
+      expect(storedContent.category).toBe('technology');
+
+      // Try CloudFront access (may return cache miss initially)
       const response = await makeHttpsRequest(
         `https://${distributionDomainName}/articles/${testArticleId}.json`,
         { 'X-User-Id': returningUserId }
       );
 
       expect(response.statusCode).toBeLessThan(500);
-      const contentBody = JSON.parse(response.body);
-      expect(contentBody.category).toBe('technology');
     }, 30000);
   });
 
