@@ -1,65 +1,62 @@
-# Application Deployment
+Application Deployment
 
-> **⚠️ CRITICAL REQUIREMENT: This task MUST be implemented using cloudformation with json**
-> 
-> Platform: **cloudformation**  
-> Language: **json**  
-> Region: **ap-southeast-1**
+CRITICAL: Use cloudformation with json. No exceptions.
+Platform: cloudformation
+Language: json
+Region: ap-southeast-1
 
----
+Background
 
-## Background
-Infrastructure task for CloudFormation
+Infrastructure task for CloudFormation. Need to set up educational content platform.
 
-## Problem Statement
-Design and implement a CloudFormation template that creates a secure CI/CD pipeline for an educational content delivery platform.
+Problem
 
-The task involves:
-- Creating a CI/CD pipeline infrastructure
-- Ensuring compliance with educational data handling requirements
-- Implementing security best practices for cloud environment setup
+Design and implement CloudFormation template for educational content delivery platform.
 
-## Constraints and Requirements
-- Constraint 1
-- Constraint 2
-- Constraint 3
+Requirements:
+- Secure infrastructure
+- Educational data handling compliance
+- Cloud security best practices
 
-## Environment Setup
-CloudFormation environment setup required
+Constraints
 
----
+- Must use CloudFormation with JSON
+- Must deploy to ap-southeast-1
+- Must be fully destroyable
 
-## Implementation Guidelines
+Setup
 
-### Platform Requirements
-- Use cloudformation as the IaC framework
-- All code must be written in json
-- Follow cloudformation best practices for resource organization
-- Ensure all resources use the `environmentSuffix` variable for naming
+Standard CloudFormation environment
 
-### Security and Compliance
-- Implement encryption at rest for all data stores using AWS KMS
-- Enable encryption in transit using TLS/SSL
-- Follow the principle of least privilege for IAM roles and policies
-- Enable logging and monitoring using CloudWatch
-- Tag all resources appropriately
+Implementation
 
-### Testing
-- Write unit tests with good coverage
-- Integration tests must validate end-to-end workflows using deployed resources
-- Load test outputs from `cfn-outputs/flat-outputs.json`
+Platform:
+- Use cloudformation framework
+- Write in json
+- Follow cloudformation best practices
+- Use environmentSuffix variable for naming
 
-### Resource Management
-- Infrastructure should be fully destroyable for CI/CD workflows
-- **Important**: Secrets should be fetched from existing Secrets Manager entries, not created
-- Avoid DeletionPolicy: Retain unless required
+Security:
+- Encrypt data at rest with AWS KMS
+- Use TLS/SSL for transit
+- Least privilege IAM
+- Enable CloudWatch logging
+- Tag all resources
 
-## Target Region
-Deploy all resources to: **ap-southeast-1**
+Testing:
+- Unit tests with good coverage
+- Integration tests validate end-to-end workflows
+- Load outputs from cfn-outputs/flat-outputs.json
 
-## Success Criteria
-- Infrastructure deploys successfully
-- All security and compliance constraints are met
-- Tests pass successfully
-- Resources are properly tagged and named with environmentSuffix
-- Infrastructure can be cleanly destroyed
+Resources:
+- Infrastructure fully destroyable for CI/CD
+- Fetch secrets from Secrets Manager, don't create new ones
+- Avoid DeletionPolicy: Retain
+
+Success Criteria
+
+- Infrastructure deploys
+- Security and compliance met
+- Tests pass
+- Resources tagged and named correctly
+- Clean destruction works
