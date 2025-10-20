@@ -31,6 +31,7 @@ export class TapStack extends pulumi.ComponentResource {
   private readonly environmentSuffix: string;
   private readonly commonTags: Record<string, string>;
   private readonly availabilityZones: pulumi.Output<string[]>;
+  private hubIgw?: aws.ec2.InternetGateway;
 
   constructor(
     name: string,
@@ -145,11 +146,15 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   private createFlowLogsBucket(): aws.s3.Bucket {
+    // FIXED: Add unique identifier to prevent naming conflicts
+    const timestamp = Date.now();
+    const bucketName = `vpc-flow-logs-${this.environmentSuffix}-${this.region}-${timestamp}`;
+    
     const bucket = new aws.s3.Bucket(
       `vpc-flow-logs-${this.environmentSuffix}`,
       {
-        bucket: `vpc-flow-logs-${this.environmentSuffix}-${this.region}`,
-        acl: "private",
+        bucket: bucketName,
+        forceDestroy: true,
         serverSideEncryptionConfiguration: {
           rule: {
             applyServerSideEncryptionByDefault: {
@@ -213,9 +218,9 @@ export class TapStack extends pulumi.ComponentResource {
     // Create subnets
     this.createSubnets(vpc, config);
 
-    // Create Internet Gateway for Hub VPC only
+    // Create Internet Gateway for Hub VPC only and STORE THE REFERENCE
     if (config.hasPublicSubnets) {
-      const igw = new aws.ec2.InternetGateway(
+      this.hubIgw = new aws.ec2.InternetGateway(
         `${config.name}-igw-${this.environmentSuffix}`,
         {
           vpcId: vpc.id,
@@ -232,7 +237,6 @@ export class TapStack extends pulumi.ComponentResource {
     return vpc;
   }
 
-  // FIXED: Properly typed parameters
   private createSubnets(vpc: aws.ec2.Vpc, config: VpcConfig): void {
     this.availabilityZones.apply((azs: string[]) => {
       azs.forEach((az: string, index: number) => {
@@ -498,7 +502,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     publicSubnets.ids.apply((subnetIds: string[]) => {
       subnetIds.forEach((subnetId: string, index: number) => {
-        // Allocate Elastic IP - FIXED: Use domain instead of vpc
+        // Allocate Elastic IP
         const eip = new aws.ec2.Eip(
           `nat-eip-${index}-${this.environmentSuffix}`,
           {
@@ -559,10 +563,10 @@ export class TapStack extends pulumi.ComponentResource {
       ],
     });
 
-    // Get Internet Gateway
-    const igw = aws.ec2.getInternetGatewayOutput({
-      filters: [{ name: "attachment.vpc-id", values: [this.hubVpc.id] }],
-    });
+    // FIXED: Use the IGW reference we stored
+    if (!this.hubIgw) {
+      throw new Error("Hub Internet Gateway not found");
+    }
 
     // Create route table for public subnets
     publicSubnets.ids.apply((subnetIds: string[]) => {
@@ -579,15 +583,15 @@ export class TapStack extends pulumi.ComponentResource {
         { parent: this }
       );
 
-      // Add route to Internet Gateway
+      // Add route to Internet Gateway - FIXED: Use stored IGW
       new aws.ec2.Route(
         `hub-public-igw-route-${this.environmentSuffix}`,
         {
           routeTableId: publicRouteTable.id,
           destinationCidrBlock: "0.0.0.0/0",
-          gatewayId: igw.internetGatewayId,
+          gatewayId: this.hubIgw!.id,
         },
-        { parent: this }
+        { parent: this, dependsOn: [publicRouteTable] }
       );
 
       // Associate with public subnets
@@ -912,7 +916,7 @@ export class TapStack extends pulumi.ComponentResource {
     ];
 
     tgwAttachments.forEach(({ attachment, name }) => {
-      // FIXED: Use 'name' instead of 'alarmName'
+      // Alarm for packet drops
       new aws.cloudwatch.MetricAlarm(
         `tgw-packet-drop-alarm-${name}-${this.environmentSuffix}`,
         {
@@ -952,7 +956,6 @@ export class TapStack extends pulumi.ComponentResource {
 
     subnets.ids.apply((subnetIds: string[]) => {
       subnetIds.forEach((subnetId: string, index: number) => {
-        // FIXED: Use 'name' instead of 'alarmName'
         new aws.cloudwatch.MetricAlarm(
           `subnet-ip-alarm-${name}-${index}-${this.environmentSuffix}`,
           {
@@ -980,7 +983,6 @@ export class TapStack extends pulumi.ComponentResource {
     });
   }
 
-  // FIXED: Return type changed to pulumi.Output<any>
   private exportOutputs(attachments: any, natGateways: aws.ec2.NatGateway[]): pulumi.Output<any> {
     const outputData = pulumi.all([
       this.hubVpc.id,
