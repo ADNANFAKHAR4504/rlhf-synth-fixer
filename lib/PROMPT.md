@@ -18,7 +18,7 @@ VPC and Network Configuration
 - Set up an Internet Gateway for the public subnets
 - Configure NAT Gateway(s) so private subnets can reach the internet when needed
 
-EC2 Instances
+EC2 Instances:
 - Deploy one EC2 instance in each public subnet (so two total)
 - Use t2.micro instance type
 - AMI ID should be configurable via a variable
