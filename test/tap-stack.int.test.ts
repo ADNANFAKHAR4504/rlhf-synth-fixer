@@ -10,7 +10,7 @@ import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
   FilterLogEventsCommand,
-} from '@aws-sdk/client-cloudwatchlogs';
+} from '@aws-sdk/client-cloudwatch-logs';
 import {
   BatchGetProjectsCommand,
   CodeBuildClient,
@@ -45,7 +45,7 @@ import {
   DescribeSecretCommand,
   GetSecretValueCommand,
   SecretsManagerClient,
-} from '@aws-sdk/client-secretsmanager';
+} from '@aws-sdk/client-secrets-manager';
 import {
   GetTopicAttributesCommand,
   SNSClient,
