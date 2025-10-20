@@ -6,7 +6,9 @@ import {
   DescribeInstancesCommand,
   CreateTagsCommand,
   AuthorizeSecurityGroupIngressCommand,
-  RevokeSecurityGroupIngressCommand
+  RevokeSecurityGroupIngressCommand,
+  DescribeVpcsCommand,
+  DescribeSecurityGroupsCommand
 } from '@aws-sdk/client-ec2';
 import { 
   S3Client, 
@@ -14,7 +16,8 @@ import {
   GetObjectCommand,
   DeleteObjectCommand,
   ListObjectsV2Command,
-  HeadObjectCommand
+  HeadObjectCommand,
+  ListBucketsCommand
 } from '@aws-sdk/client-s3';
 import { 
   RDSClient, 
@@ -48,13 +51,15 @@ import {
   DeregisterTargetsCommand,
   DeleteTargetGroupCommand,
   CreateListenerCommand,
-  DeleteListenerCommand
+  DeleteListenerCommand,
+  DescribeLoadBalancersCommand
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import { 
   SNSClient, 
   PublishCommand,
   SubscribeCommand,
-  UnsubscribeCommand
+  UnsubscribeCommand,
+  ListTopicsCommand
 } from '@aws-sdk/client-sns';
 import { 
   CloudWatchLogsClient, 
