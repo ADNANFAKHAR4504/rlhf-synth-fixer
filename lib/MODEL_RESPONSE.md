@@ -1,4 +1,3 @@
-```md
 **model_response**
 
 The model’s final solution accurately represents a complete, well-structured CloudFormation design for the TapStack environment. It delivers every resource defined in the brief, ensuring all dependencies, parameters, and conditions are present and logically connected.
@@ -15,7 +14,7 @@ The explanation confirms that:
 * Every resource is tagged with `Project=SecurityConfig` and all intrinsic functions are valid under CloudFormation validation.
 
 Overall, the model’s response would read as a confident and human-authored technical explanation of the final architecture, clarifying design intent and confirming compliance with every requirement.
-```
+
 
 ```yaml
 

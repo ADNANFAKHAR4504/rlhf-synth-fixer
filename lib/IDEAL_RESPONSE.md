@@ -1,21 +1,83 @@
-```md
-**ideal_response**
+ideal_response
+Overview
 
-The ideal response should present a clearly structured explanation of how to design a secure AWS environment using CloudFormation according to the defined requirements. It should read like a human-written technical deliverable — straightforward, logically organized, and focused on completeness rather than verbosity.
+Deliver a single, self-contained CloudFormation template (TapStack.yml) that builds a brand-new, secure environment in us-west-2 without referencing any pre-existing resources. The template must include all parameters with sensible defaults, conditions for optional inputs, least-privilege IAM, end-to-end tagging, and comprehensive outputs. It should pass aws cloudformation validate-template and be clean under cfn-lint.
 
-It must describe the reasoning behind each component and confirm that the final template meets all project and compliance expectations. The tone should be professional yet approachable, demonstrating that the author understands AWS best practices and infrastructure design.
+What the final template must include
 
-Key qualities of the ideal response:
+Networking
 
-* Uses precise technical language and human tone.
-* References each AWS resource (VPC, subnets, IGW, EC2, S3, IAM, KMS, CloudTrail, CloudWatch, SNS) and explains its purpose.
-* Demonstrates clear adherence to security and compliance standards (least privilege, encryption, TLS enforcement, versioning).
-* Mentions deployment readiness and validation (cfn-lint clean, `aws cloudformation validate-template` pass).
-* Confirms that naming conventions, parameters, and tagging policies follow AWS guidelines (especially lowercase S3 bucket names).
-* Shows awareness of how the stack integrates monitoring, alerting, and audit logging.
+One new VPC with DNS support/hostnames enabled.
 
-The document should leave no doubt that the solution is production-ready, secure, and fully aligned with AWS best practices.
-```
+One public subnet and one private subnet across two AZs.
+
+Internet Gateway, public route table with default route to IGW, associations for subnets.
+
+Security Groups
+
+Web SG allowing only HTTP (80) and HTTPS (443) from anywhere.
+
+Conditional SSH (22) only when a CIDR is provided via parameter.
+
+Compute
+
+One t3.micro EC2 instance in the public subnet.
+
+AMI resolved via SSM parameter for Amazon Linux 2023.
+
+Optional KeyPair via condition.
+
+Instance Profile with minimal permissions for CloudWatch agent and S3 read to the sensitive bucket.
+
+Storage & Encryption
+
+Sensitive-data S3 bucket with SSE-KMS, versioning enabled, TLS-only policy, and public access block.
+
+Dedicated KMS CMK with rotation and a service principal statement for S3.
+
+Audit & Logging
+
+CloudTrail trail writing to a dedicated, DNS-compliant logs bucket with correct bucket policy.
+
+KMS CMK for CloudTrail with proper key policy allowances.
+
+Monitoring
+
+CloudWatch Alarm on EC2 CPUUtilization with parameterized threshold.
+
+Optional SNS topic and email subscription (created only if email provided).
+
+Parameters, Conditions, Outputs
+
+Parameters with defaults for CIDRs, instance type, KeyName, SSH CIDR, alarm threshold, KMS aliases, SSM AMI path, and a lowercase name prefix for S3 bucket names.
+
+Conditions to enable SSH, KeyName, and notifications.
+
+Comprehensive outputs for VPC, subnets, route tables, gateway, SG, instance, S3 buckets, KMS keys, CloudTrail, and alarms.
+
+Design choices and best practices
+
+DNS-compliant S3 bucket names enforced via a NamePrefix parameter and ${AWS::AccountId}-${AWS::Region} suffix.
+
+TLS-only bucket policy plus account-level public access blocks to avoid accidental exposure.
+
+KMS key policies scoped for required services, with rotation enabled.
+
+No NAT Gateway since the instance runs in a public subnet and a NAT wasn’t required by the constraints.
+
+Least privilege IAM inline policy limiting S3 read to the sensitive bucket and KMS decrypt for that key only.
+
+cfn-lint cleanliness by avoiding unnecessary Fn::Sub and using SSM parameter types for the AMI.
+
+Done criteria
+
+Stack deploys cleanly in us-west-2.
+
+Template validates and is lint-clean.
+
+All resources are tagged with Project=SecurityConfig.
+
+Every constraint from the prompt is verifiably implemented.
 
 ```yaml
 
