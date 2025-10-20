@@ -1,0 +1,973 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  TapStack — Secure, private-only VPC web app with ASG, internet-facing ALB in dedicated egress subnets,
+  RDS in private DB subnets, KMS, S3 (app + logs), SSM (SecureString via custom resource), CloudTrail, VPC Flow Logs, and least-privilege IAM.
+  Region-locked to us-west-2 via mapping guard dereference.
+
+Metadata:
+  TemplateName: TapStack.yml
+  Version: "1.0.13"
+  Owner: TapStack
+  Security: Confidential
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: { default: "General Settings" }
+        Parameters: [EnvironmentName, OwnerTag]
+      - Label: { default: "Networking (us-west-2 only)" }
+        Parameters: [VpcCidr, AppSubnetCidrs, DbSubnetCidrs, EgressSubnetCidrs]
+      - Label: { default: "Compute (EC2 ASG Web Tier)" }
+        Parameters: [AppImageId, InstanceType, MinCapacity, DesiredCapacity, MaxCapacity, UseAwsManagedEbsKey]
+      - Label: { default: "Database (RDS - PostgreSQL/MySQL)" }
+        Parameters: [DbEngine, DbEngineVersion, DbInstanceClass, DbAllocatedStorage, DbMasterUsername, DbPort]
+      - Label: { default: "SSM Parameters (values written as SecureString)" }
+        Parameters: [AppSecretValue, AppSecretParamPath]
+    ParameterLabels:
+      EnvironmentName: { default: "Environment name prefix (e.g., prod, staging, dev)" }
+      OwnerTag: { default: "Owner tag" }
+
+Mappings:
+  RegionGuard:
+    us-west-2:
+      Allowed: "true"
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: prod
+    AllowedPattern: "^[a-z0-9-]+$"
+    Description: Prefix for resource names/tags (e.g., prod, staging, dev)
+
+  OwnerTag:
+    Type: String
+    Default: "TapStack"
+    Description: Owner tag for resources
+
+  # Networking
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: VPC CIDR
+
+  AppSubnetCidrs:
+    Type: CommaDelimitedList
+    Default: "10.0.10.0/24,10.0.11.0/24"
+    Description: Two private app subnet CIDRs (AZ0, AZ1)
+
+  DbSubnetCidrs:
+    Type: CommaDelimitedList
+    Default: "10.0.20.0/24,10.0.21.0/24"
+    Description: Two private DB subnet CIDRs (AZ0, AZ1)
+
+  EgressSubnetCidrs:
+    Type: CommaDelimitedList
+    Default: "10.0.1.0/24,10.0.2.0/24"
+    Description: Two egress/NAT subnet CIDRs (AZ0, AZ1). No app/DB resources here.
+
+  # Compute
+  AppImageId:
+    Type: "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>"
+    Description: Resolved from public SSM path for Amazon Linux 2023 x86_64 in us-west-2
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    AllowedValues: [t3.micro, t3.small, t3.medium, t4g.micro, t4g.small, t4g.medium]
+
+  MinCapacity:
+    Type: Number
+    Default: 2
+    MinValue: 1
+
+  DesiredCapacity:
+    Type: Number
+    Default: 2
+    MinValue: 1
+
+  MaxCapacity:
+    Type: Number
+    Default: 4
+    MinValue: 1
+
+  # Fast launch switch
+  UseAwsManagedEbsKey:
+    Type: String
+    AllowedValues: ["true", "false"]
+    Default: "true"
+    Description: If true, do NOT set KmsKeyId for EBS (use AWS-managed EBS key). If false, use the customer CMK for EBS.
+
+  # Database
+  DbEngine:
+    Type: String
+    Default: postgres
+    AllowedValues: [mysql, postgres]
+
+  DbEngineVersion:
+    Type: String
+    Default: ""   # Leave blank to let AWS choose a supported version automatically
+
+  DbInstanceClass:
+    Type: String
+    Default: db.t3.micro
+
+  DbAllocatedStorage:
+    Type: Number
+    Default: 20
+    MinValue: 20
+
+  DbMasterUsername:
+    Type: String
+    Default: tapadmin
+    AllowedPattern: "^[a-zA-Z0-9_]+$"
+
+  DbPort:
+    Type: Number
+    Default: 5432
+    Description: 5432 for Postgres, 3306 for MySQL
+
+  # SSM values (written as SecureString by custom resource)
+  AppSecretValue:
+    Type: String
+    NoEcho: true
+    Default: "replace-this-app-secret"
+
+  AppSecretParamPath:
+    Type: String
+    Default: "/tapstack/prod/app/secret"
+
+Conditions:
+  HasDbEngineVersion: !Not [!Equals [!Ref DbEngineVersion, ""]]
+  UseCMKForEbs: !Equals [!Ref UseAwsManagedEbsKey, "false"]
+
+Resources:
+  # ---------- Region Guard (hard-fails if not us-west-2) ----------
+  RegionAssert:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/tapstack/${EnvironmentName}/region-assert"
+      Type: String
+      Value: !FindInMap [RegionGuard, !Ref "AWS::Region", Allowed]
+      Description: "Prevents deployment outside us-west-2 by mapping lookup."
+
+  # ---------- KMS ----------
+  KmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub "${EnvironmentName}-tapstack primary CMK for S3, Logs, SSM (custom), and RDS"
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowAccountAdmin
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
+
+          - Sid: AllowS3ForBucketEncryption
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+              - kms:CreateGrant
+            Resource: "*"
+            Condition:
+              StringEquals:
+                kms:ViaService: !Sub "s3.${AWS::Region}.amazonaws.com"
+                aws:PrincipalAccount: !Ref AWS::AccountId
+                kms:GrantIsForAWSResource: "true"
+
+          # CloudTrail KMS permissions
+          - Sid: AllowCloudTrail
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: "*"
+            Condition:
+              StringLike:
+                kms:EncryptionContext:aws:cloudtrail:arn: !Sub "arn:${AWS::Partition}:cloudtrail:*:${AWS::AccountId}:trail/*"
+
+          # CloudWatch Logs permissions
+          - Sid: AllowCloudWatchLogs
+            Effect: Allow
+            Principal:
+              Service: !Sub "logs.${AWS::Region}.amazonaws.com"
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:GenerateDataKey*
+              - kms:CreateGrant
+            Resource: "*"
+
+          # RDS uses this key
+          - Sid: AllowRDS
+            Effect: Allow
+            Principal:
+              Service: rds.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:GenerateDataKey*
+              - kms:ReEncrypt*
+              - kms:CreateGrant
+            Resource: "*"
+            Condition:
+              StringEquals:
+                kms:GrantIsForAWSResource: "true"
+
+          # SSM Parameter Store custom resource
+          - Sid: AllowSSMParameterStore
+            Effect: Allow
+            Principal:
+              Service: ssm.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:GenerateDataKey*
+              - kms:CreateGrant
+            Resource: "*"
+            Condition:
+              StringEquals:
+                kms:GrantIsForAWSResource: "true"
+
+          # EC2 for EBS encryption on instance launch
+          - Sid: AllowEC2ForEBS
+            Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+              - kms:CreateGrant
+            Resource: "*"
+            Condition:
+              StringEquals:
+                kms:ViaService: !Sub "ec2.${AWS::Region}.amazonaws.com"
+                aws:PrincipalAccount: !Ref AWS::AccountId
+                kms:GrantIsForAWSResource: "true"
+
+          # Auto Scaling service principal
+          - Sid: AllowAutoScalingToCreateGrants
+            Effect: Allow
+            Principal:
+              Service: autoscaling.amazonaws.com
+            Action:
+              - kms:CreateGrant
+              - kms:DescribeKey
+            Resource: "*"
+            Condition:
+              StringEquals:
+                aws:PrincipalAccount: !Ref AWS::AccountId
+
+          # >>> NEW: Auto Scaling SERVICE-LINKED ROLE (critical in some accounts)
+          - Sid: AllowASGServiceLinkedRole
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
+            Action:
+              - kms:CreateGrant
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:GenerateDataKey*
+              - kms:ReEncrypt*
+            Resource: "*"
+            Condition:
+              StringEquals:
+                kms:GrantIsForAWSResource: "true"
+
+  KmsAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub "alias/${EnvironmentName}-tapstack-kms"
+      TargetKeyId: !Ref KmsKey
+
+  # ---------- S3 (Logs + App) ----------
+  LogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${EnvironmentName}-tapstack-logs-${AWS::AccountId}-${AWS::Region}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
+
+  LogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LogsBucket
+    # (unchanged statements)
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AWSCloudTrailAclCheck20150319
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt LogsBucket.Arn
+          - Sid: AWSCloudTrailWrite20150319
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub "${LogsBucket.Arn}/cloudtrail/AWSLogs/${AWS::AccountId}/*"
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+          - Sid: AWSALBLogDeliveryCheck
+            Effect: Allow
+            Principal:
+              Service: logdelivery.elasticloadbalancing.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt LogsBucket.Arn
+          - Sid: AWSALBLogDeliveryWrite
+            Effect: Allow
+            Principal:
+              Service: logdelivery.elasticloadbalancing.amazonaws.com
+            Action: s3:PutObject
+            Resource:
+              - !Sub "${LogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
+              - !Sub "${LogsBucket.Arn}/alb/${EnvironmentName}/AWSLogs/${AWS::AccountId}/*"
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+          - Sid: EnforceTLS
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt LogsBucket.Arn
+              - !Sub "${LogsBucket.Arn}/*"
+            Condition:
+              Bool: { aws:SecureTransport: false }
+
+  AppDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${EnvironmentName}-tapstack-appdata-${AWS::AccountId}-${AWS::Region}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref KmsKey
+
+  AppDataBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AppDataBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: EnforceTLS
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt AppDataBucket.Arn
+              - !Sub "${AppDataBucket.Arn}/*"
+            Condition:
+              Bool: { aws:SecureTransport: false }
+
+  # ---------- VPC (unchanged resources below) ----------
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags: [{ Key: Name, Value: !Sub "${EnvironmentName}-tapstack-vpc" }]
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags: [{ Key: Name, Value: !Sub "${EnvironmentName}-tapstack-igw" }]
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Egress/NAT subnets
+  EgressSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: !Select [0, !Ref EgressSubnetCidrs]
+      MapPublicIpOnLaunch: false
+      Tags: [{ Key: Name, Value: !Sub "${EnvironmentName}-tapstack-egress-a" }]
+
+  EgressSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: !Select [1, !Ref EgressSubnetCidrs]
+      MapPublicIpOnLaunch: false
+      Tags: [{ Key: Name, Value: !Sub "${EnvironmentName}-tapstack-egress-b" }]
+
+  EgressRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags: [{ Key: Name, Value: !Sub "${EnvironmentName}-tapstack-egress-rt" }]
+
+  EgressRouteToIGW:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref EgressRT
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  EgressAssocA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref EgressSubnetA
+      RouteTableId: !Ref EgressRT
+
+  EgressAssocB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref EgressSubnetB
+      RouteTableId: !Ref EgressRT
+
+  EIPA:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  EIPB:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  NatGwA:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt EIPA.AllocationId
+      SubnetId: !Ref EgressSubnetA
+      ConnectivityType: public
+      Tags: [{ Key: Name, Value: !Sub "${EnvironmentName}-tapstack-nat-a" }]
+
+  NatGwB:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt EIPB.AllocationId
+      SubnetId: !Ref EgressSubnetB
+      ConnectivityType: public
+      Tags: [{ Key: Name, Value: !Sub "${EnvironmentName}-tapstack-nat-b" }]
+
+  # Private app subnets
+  AppSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: !Select [0, !Ref AppSubnetCidrs]
+      MapPublicIpOnLaunch: false
+      Tags: [{ Key: Name, Value: !Sub "${EnvironmentName}-tapstack-app-a" }]
+
+  AppSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: !Select [1, !Ref AppSubnetCidrs]
+      MapPublicIpOnLaunch: false
+      Tags: [{ Key: Name, Value: !Sub "${EnvironmentName}-tapstack-app-b" }]
+
+  AppRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags: [{ Key: Name, Value: !Sub "${EnvironmentName}-tapstack-app-rt" }]
+
+  AppRouteToNATa:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref AppRT
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGwA
+
+  AppAssocA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref AppSubnetA
+      RouteTableId: !Ref AppRT
+
+  AppAssocB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref AppSubnetB
+      RouteTableId: !Ref AppRT
+
+  # Private DB subnets
+  DbSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: !Select [0, !Ref DbSubnetCidrs]
+      MapPublicIpOnLaunch: false
+      Tags: [{ Key: Name, Value: !Sub "${EnvironmentName}-tapstack-db-a" }]
+
+  DbSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: !Select [1, !Ref DbSubnetCidrs]
+      MapPublicIpOnLaunch: false
+      Tags: [{ Key: Name, Value: !Sub "${EnvironmentName}-tapstack-db-b" }]
+
+  DbRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags: [{ Key: Name, Value: !Sub "${EnvironmentName}-tapstack-db-rt" }]
+
+  DbRouteToNATb:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref DbRT
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGwB
+
+  DbAssocA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref DbSubnetA
+      RouteTableId: !Ref DbRT
+
+  DbAssocB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref DbSubnetB
+      RouteTableId: !Ref DbRT
+
+  # ---------- Security Groups ----------
+  AlbSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub "${EnvironmentName}-tapstack-alb-sg"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0 }
+      SecurityGroupEgress:
+        - { IpProtocol: -1, CidrIp: 0.0.0.0/0 }
+
+  WebSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub "${EnvironmentName}-tapstack-web-sg (HTTP only from anywhere)"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0 }
+      SecurityGroupEgress:
+        - { IpProtocol: -1, CidrIp: 0.0.0.0/0 }
+
+  DbSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub "${EnvironmentName}-tapstack-db-sg (only from WebSG)"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: !Ref DbPort
+          ToPort: !Ref DbPort
+          SourceSecurityGroupId: !Ref WebSG
+      SecurityGroupEgress:
+        - { IpProtocol: -1, CidrIp: 0.0.0.0/0 }
+
+  # ---------- CloudWatch Logs ----------
+  AppLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/tapstack/${EnvironmentName}/app"
+      RetentionInDays: 30
+      KmsKeyId: !GetAtt KmsKey.Arn
+
+  FlowLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/tapstack/${EnvironmentName}/vpc-flow-logs"
+      RetentionInDays: 30
+      KmsKeyId: !GetAtt KmsKey.Arn
+
+  FlowLogsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${EnvironmentName}-tapstack-flowlogs-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: vpc-flow-logs.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: vpc-flowlogs-to-cw
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                Resource: "*"
+
+  VpcFlowLog:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      DeliverLogsPermissionArn: !GetAtt FlowLogsRole.Arn
+      LogDestinationType: cloud-watch-logs
+      LogGroupName: !Ref FlowLogsGroup
+      ResourceId: !Ref VPC
+      ResourceType: VPC
+      TrafficType: ALL
+
+  # ---------- ALB (internet-facing in egress subnets only) ----------
+  ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: [LogsBucketPolicy]
+    Properties:
+      Name: !Sub "${EnvironmentName}-tapstack-alb"
+      Scheme: internet-facing
+      SecurityGroups: [!Ref AlbSG]
+      Subnets: [!Ref EgressSubnetA, !Ref EgressSubnetB]
+      LoadBalancerAttributes:
+        - { Key: access_logs.s3.enabled, Value: "true" }
+        - { Key: access_logs.s3.bucket,  Value: !Ref LogsBucket }
+        - { Key: access_logs.s3.prefix,  Value: !Sub "alb/${EnvironmentName}" }
+      Type: application
+      IpAddressType: ipv4
+
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${EnvironmentName}-tapstack-tg"
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      TargetType: instance
+      HealthCheckEnabled: true
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      Matcher: { HttpCode: "200-399" }
+
+  ALBListenerHTTP:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+      LoadBalancerArn: !Ref ALB
+      Port: 80
+      Protocol: HTTP
+
+  # ---------- IAM for Web Tier ----------
+  WebInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${EnvironmentName}-tapstack-web-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ec2.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
+      Policies:
+        - PolicyName: web-inline-ssm-s3-cw
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [ssm:GetParameters, ssm:GetParameter]
+                Resource: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${AppSecretParamPath}"
+              - Effect: Allow
+                Action: [s3:GetObject, s3:PutObject, s3:ListBucket]
+                Resource:
+                  - !GetAtt AppDataBucket.Arn
+                  - !Sub "${AppDataBucket.Arn}/app/*"
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: "*"
+              - Effect: Allow
+                Action: [kms:Decrypt, kms:DescribeKey]
+                Resource: !GetAtt KmsKey.Arn
+
+  WebInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [!Ref WebInstanceRole]
+
+  # ---------- Launch Template & ASG ----------
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub "${EnvironmentName}-tapstack-lt"
+      LaunchTemplateData:
+        ImageId: !Ref AppImageId
+        InstanceType: !Ref InstanceType
+        IamInstanceProfile: { Arn: !GetAtt WebInstanceProfile.Arn }
+        NetworkInterfaces:
+          - AssociatePublicIpAddress: false
+            DeviceIndex: 0
+            Groups: [!Ref WebSG]
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              Encrypted: true
+              KmsKeyId: !If [UseCMKForEbs, !Ref KmsKey, !Ref "AWS::NoValue"]
+              VolumeSize: 10
+              VolumeType: gp3
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            set -euxo pipefail
+            retry() { n=0; until [ $n -ge 5 ]; do "$@" && break; n=$((n+1)); sleep 10; done; }
+
+            retry dnf -y makecache
+            retry dnf install -y nginx awscli
+
+            echo "OK - TapStack ${EnvironmentName}" > /usr/share/nginx/html/index.html
+            systemctl enable nginx
+            systemctl start nginx
+
+            # SSM fetch (non-fatal if not yet present)
+            aws ssm get-parameter --name "${AppSecretParamPath}" --with-decryption --region ${AWS::Region} || true
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier: [!Ref AppSubnetA, !Ref AppSubnetB]
+      MinSize: !Ref MinCapacity
+      DesiredCapacity: !Ref DesiredCapacity
+      MaxSize: !Ref MaxCapacity
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      TargetGroupARNs: [!Ref ALBTargetGroup]
+      HealthCheckType: EC2
+      HealthCheckGracePeriod: 300
+      MetricsCollection:
+        - Granularity: "1Minute"
+
+  # ---------- RDS ----------
+  DbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: !Sub "${EnvironmentName}-tapstack-dbsubnets"
+      SubnetIds: [!Ref DbSubnetA, !Ref DbSubnetB]
+      DBSubnetGroupName: !Sub "${EnvironmentName}-tapstack-dbsubnets"
+
+  DBInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub "${EnvironmentName}-tapstack-db"
+      AllocatedStorage: !Ref DbAllocatedStorage
+      DBInstanceClass: !Ref DbInstanceClass
+      Engine: !Ref DbEngine
+      EngineVersion: !If [HasDbEngineVersion, !Ref DbEngineVersion, !Ref "AWS::NoValue"]
+      MasterUsername: !Ref DbMasterUsername
+      ManageMasterUserPassword: true
+      Port: !Ref DbPort
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      MultiAZ: true
+      StorageEncrypted: true
+      KmsKeyId: !Ref KmsKey
+      VPCSecurityGroups: [!Ref DbSG]
+      PubliclyAccessible: false
+      BackupRetentionPeriod: 7
+      DeletionProtection: false
+
+  # ---------- Custom Resource: Write SecureString app secret to SSM ----------
+  SSMWriterRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${EnvironmentName}-tapstack-ssm-writer-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: inline-ssm-put-secure
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - ssm:PutParameter
+                  - ssm:AddTagsToResource
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                Resource: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/*"
+              - Effect: Allow
+                Action:
+                  - kms:Encrypt
+                  - kms:Decrypt
+                  - kms:GenerateDataKey*
+                  - kms:DescribeKey
+                Resource: !GetAtt KmsKey.Arn
+
+  SSMWriterFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${EnvironmentName}-tapstack-ssm-writer"
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt SSMWriterRole.Arn
+      Timeout: 30
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          from urllib.request import Request, urlopen
+          ssm = boto3.client('ssm')
+          def send(event, context, status, data, reason=None):
+              responseUrl = event['ResponseURL']
+              body = {
+                  'Status': status,
+                  'Reason': reason or f"See CloudWatch Log Stream: {context.log_stream_name}",
+                  'PhysicalResourceId': context.log_stream_name,
+                  'StackId': event['StackId'],
+                  'RequestId': event['RequestId'],
+                  'LogicalResourceId': event['LogicalResourceId'],
+                  'Data': data or {}
+              }
+              encoded = json.dumps(body).encode('utf-8')
+              req = Request(responseUrl, data=encoded, method='PUT')
+              req.add_header('Content-Type', '')
+              req.add_header('Content-Length', str(len(encoded)))
+              urlopen(req)
+          def handler(event, context):
+              try:
+                  if event['RequestType'] in ('Create','Update'):
+                      props = event['ResourceProperties']
+                      name = props['Name']
+                      value = props['Value']
+                      key_id = props['KmsKeyId']
+                      tags = props.get('Tags', [])
+                      ssm.put_parameter(Name=name, Value=value, Type='SecureString', KeyId=key_id, Overwrite=True)
+                      if isinstance(tags, list) and tags:
+                          ssm.add_tags_to_resource(ResourceType='Parameter', ResourceId=name, Tags=tags)
+                      send(event, context, 'SUCCESS', {'Name': name})
+                  elif event['RequestType'] == 'Delete':
+                      # Leave the parameter by default
+                      send(event, context, 'SUCCESS', {})
+              except Exception as e:
+                  send(event, context, 'FAILED', {}, reason=str(e))
+
+  AppSecretParam:
+    Type: Custom::SSMParameter
+    Properties:
+      ServiceToken: !GetAtt SSMWriterFunction.Arn
+      Name: !Ref AppSecretParamPath
+      Value: !Ref AppSecretValue
+      KmsKeyId: !Ref KmsKey
+      Tags:
+        - { Key: Environment, Value: !Ref EnvironmentName }
+        - { Key: Project, Value: TapStack }
+
+  # ---------- CloudTrail ----------
+  CloudTrailTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: [LogsBucketPolicy]
+    Properties:
+      TrailName: !Sub "${EnvironmentName}-tapstack-cloudtrail"
+      S3BucketName: !Ref LogsBucket
+      S3KeyPrefix: "cloudtrail"
+      IncludeGlobalServiceEvents: true
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      IsLogging: true
+      KMSKeyId: !Ref KmsKey
+
+Outputs:
+  Region:
+    Description: Deployment region (guarded to us-west-2)
+    Value: !Ref "AWS::Region"
+  OwnerTagEcho:
+    Description: Echo of OwnerTag parameter to ensure it's in-use
+    Value: !Ref OwnerTag
+  VpcId:
+    Value: !Ref VPC
+  PrivateAppSubnets:
+    Value: !Join [",", [!Ref AppSubnetA, !Ref AppSubnetB]]
+  PrivateDbSubnets:
+    Value: !Join [",", [!Ref DbSubnetA, !Ref DbSubnetB]]
+  EgressSubnets:
+    Value: !Join [",", [!Ref EgressSubnetA, !Ref EgressSubnetB]]
+  NatGatewayIds:
+    Value: !Join [",", [!Ref NatGwA, !Ref NatGwB]]
+  InternetGatewayId:
+    Value: !Ref InternetGateway
+  AlbDnsName:
+    Value: !GetAtt ALB.DNSName
+  AppSecurityGroupId:
+    Value: !Ref WebSG
+  DbSecurityGroupId:
+    Value: !Ref DbSG
+  RdsEndpoint:
+    Value: !GetAtt DBInstance.Endpoint.Address
+  RdsArn:
+    Value: !Ref DBInstance
+  AppDataBucketName:
+    Value: !Ref AppDataBucket
+  LogsBucketName:
+    Value: !Ref LogsBucket
+  KmsKeyArn:
+    Value: !GetAtt KmsKey.Arn
+  KmsAlias:
+    Value: !Ref KmsAlias
+  ParameterPaths:
+    Value: !Ref AppSecretParamPath
+  CloudTrailTrailArn:
+    Value: !GetAtt CloudTrailTrail.Arn
