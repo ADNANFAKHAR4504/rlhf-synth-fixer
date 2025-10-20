@@ -29,7 +29,11 @@ function sanitizeName(input: string): string {
 }
 
 export class ServerlessInfrastructureStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: ServerlessInfrastructureStackProps) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props?: ServerlessInfrastructureStackProps
+  ) {
     super(scope, id, props);
 
     cdk.Tags.of(this).add('iac-rlhf-amazon', 'true');
@@ -89,16 +93,24 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
     });
 
     // Minimal logging permission
-    lambdaRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'));
+    lambdaRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName(
+        'service-role/AWSLambdaBasicExecutionRole'
+      )
+    );
 
     // X-Ray permissions: attach AWS managed policy for daemon write access
     // This avoids adding a broad PolicyStatement with Resource ['*'] and
     // relies on AWS managed policy which follows least-privilege for X-Ray
     // daemon telemetry writes.
-    lambdaRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AWSXRayDaemonWriteAccess'));
+    lambdaRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('AWSXRayDaemonWriteAccess')
+    );
 
     // Lambda function
-    const lambdaFunctionName = sanitizeName(`${this.stackName}-application-function-${resourceSuffix}`);
+    const lambdaFunctionName = sanitizeName(
+      `${this.stackName}-application-function-${resourceSuffix}`
+    );
     const lambdaFunction = new lambda.Function(this, 'ApplicationFunction', {
       functionName: lambdaFunctionName,
       runtime: lambda.Runtime.NODEJS_18_X,
@@ -129,7 +141,10 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
       displayName: `Application Alarms ${resourceSuffix}`,
     });
     const alertEmail = process.env.EMAIL_ALERT_TOPIC_ADDRESS;
-    if (alertEmail) alarmTopic.addSubscription(new subscriptions.EmailSubscription(alertEmail));
+    if (alertEmail)
+      alarmTopic.addSubscription(
+        new subscriptions.EmailSubscription(alertEmail)
+      );
 
     // CloudWatch alarms
     const lambdaErrorsAlarm = new cloudwatch.Alarm(this, 'LambdaErrorsAlarm', {
@@ -140,12 +155,16 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
     });
     lambdaErrorsAlarm.addAlarmAction(new cw_actions.SnsAction(alarmTopic));
 
-    const lambdaDurationAlarm = new cloudwatch.Alarm(this, 'LambdaDurationAlarm', {
-      metric: lambdaFunction.metricDuration(),
-      threshold: 5000,
-      evaluationPeriods: 1,
-      alarmDescription: 'Lambda duration exceeds 5 seconds',
-    });
+    const lambdaDurationAlarm = new cloudwatch.Alarm(
+      this,
+      'LambdaDurationAlarm',
+      {
+        metric: lambdaFunction.metricDuration(),
+        threshold: 5000,
+        evaluationPeriods: 1,
+        alarmDescription: 'Lambda duration exceeds 5 seconds',
+      }
+    );
     lambdaDurationAlarm.addAlarmAction(new cw_actions.SnsAction(alarmTopic));
 
     // API log group
@@ -163,7 +182,9 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
         loggingLevel: apigateway.MethodLoggingLevel.INFO,
         dataTraceEnabled: true,
         tracingEnabled: true,
-        accessLogDestination: new apigateway.LogGroupLogDestination(apiLogGroup),
+        accessLogDestination: new apigateway.LogGroupLogDestination(
+          apiLogGroup
+        ),
         accessLogFormat: apigateway.AccessLogFormat.jsonWithStandardFields(),
       },
       defaultCorsPreflightOptions: {
@@ -172,12 +193,18 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
       },
     });
 
-    const lambdaIntegration = new apigateway.LambdaIntegration(lambdaFunction, { proxy: true });
+    const lambdaIntegration = new apigateway.LambdaIntegration(lambdaFunction, {
+      proxy: true,
+    });
     const apiResource = api.root.addResource('items');
-    ['GET', 'POST', 'PUT', 'DELETE'].forEach((m) => apiResource.addMethod(m, lambdaIntegration));
+    ['GET', 'POST', 'PUT', 'DELETE'].forEach(m =>
+      apiResource.addMethod(m, lambdaIntegration)
+    );
 
     // API 5XX alarm
-    const api5xxMetric = api.metricServerError({ period: cdk.Duration.minutes(1) });
+    const api5xxMetric = api.metricServerError({
+      period: cdk.Duration.minutes(1),
+    });
     const api5xxAlarm = new cloudwatch.Alarm(this, 'Api5xxAlarm', {
       metric: api5xxMetric,
       threshold: 1,
