@@ -213,9 +213,8 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
 
       // Step 2: Verify RDS instance is accessible
       const rdsResponse = await rdsClient.send(new DescribeDBInstancesCommand({}));
-      const dbInstance = rdsResponse.DBInstances?.find(db => 
-        db.DBInstanceIdentifier?.includes(outputs['RDSEndpoint']?.split('.')[0] || 'nova-clinical')
-      );
+      const rdsEndpointFromOutputs = outputs['RDSEndpoint'];
+      const dbInstance = rdsResponse.DBInstances?.find(db => db.Endpoint?.Address === rdsEndpointFromOutputs);
       expect(dbInstance?.DBInstanceStatus).toBe('available');
       expect(dbInstance?.PubliclyAccessible).toBe(false);
       testData.dbEndpoint = dbInstance?.Endpoint?.Address;
@@ -256,11 +255,10 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
       
       // Step 3: Verify RDS security group allows EC2 access
       const rdsResponse = await rdsClient.send(new DescribeDBInstancesCommand({}));
-      const dbInstance = rdsResponse.DBInstances?.find(db => 
-        db.DBInstanceIdentifier?.includes(outputs['RDSEndpoint']?.split('.')[0] || 'nova-clinical')
-      );
+      const rdsEndpointFromOutputs = outputs['RDSEndpoint'];
+      const dbInstance = rdsResponse.DBInstances?.find(db => db.Endpoint?.Address === rdsEndpointFromOutputs);
       
-      const rdsSecurityGroupIds = dbInstance?.VPCSecurityGroups?.map(sg => sg.VpcSecurityGroupId) || [];
+      const rdsSecurityGroupIds = dbInstance?.VpcSecurityGroups?.map(sg => sg.VpcSecurityGroupId) || [];
       console.log(`RDS Security Groups: ${rdsSecurityGroupIds.length} found`);
       
       // Step 4: Test network connectivity simulation
@@ -682,9 +680,8 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
     test('should complete backup workflow: RDS Snapshot -> S3 Archive -> Recovery Test', async () => {
       // Step 1: Verify RDS backup configuration
       const rdsResponse = await rdsClient.send(new DescribeDBInstancesCommand({}));
-      const dbInstance = rdsResponse.DBInstances?.find(db => 
-        db.DBInstanceIdentifier?.includes(outputs['RDSEndpoint']?.split('.')[0] || 'nova-clinical')
-      );
+      const rdsEndpointFromOutputs = outputs['RDSEndpoint'];
+      const dbInstance = rdsResponse.DBInstances?.find(db => db.Endpoint?.Address === rdsEndpointFromOutputs);
       
       expect(dbInstance?.BackupRetentionPeriod).toBe(35);
       expect(dbInstance?.MultiAZ).toBe(false);
@@ -1102,12 +1099,15 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
       try {
         const url = new URL(clinicalDataEndpoint);
         const credentials = await defaultProvider()();
+        // Derive region from execute-api hostname to ensure correct signing region
+        const hostParts = url.hostname.split('.');
+        const apiRegionUsed = hostParts.length >= 3 ? hostParts[2] : region;
         const requestOptions = {
           host: url.hostname,
           method: 'GET',
           path: url.pathname,
           service: 'execute-api',
-          region,
+          region: apiRegionUsed,
           headers: { 'accept': 'application/json' }
         } as any;
         aws4.sign(requestOptions, {
@@ -1183,17 +1183,45 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
         console.log(`Testing CloudFront endpoint: ${cloudFrontUrl}`);
         
         try {
-          const cfResponse = await fetch(cloudFrontUrl, {
-            method: 'GET',
-            headers: {
-              'Accept': '*/*'
+          // Attempt to invalidate the probe path to speed up propagation
+          const listDistributions = await cloudFrontClient.send(new ListDistributionsCommand({}));
+          const distribution = listDistributions.DistributionList?.Items?.find(d => d.DomainName === cloudFrontDomain);
+          if (distribution?.Id) {
+            await cloudFrontClient.send(new CreateInvalidationCommand({
+              DistributionId: distribution.Id,
+              InvalidationBatch: {
+                Paths: { Quantity: 1, Items: [`/${probeKey}`] },
+                CallerReference: `probe-${Date.now()}`
+              }
+            }));
+          }
+
+          // Retry fetch with backoff to allow for propagation
+          let cfResponse: any;
+          let attempt = 0;
+          const maxAttempts = 10;
+          let lastError: any;
+          while (attempt < maxAttempts) {
+            try {
+              cfResponse = await fetch(cloudFrontUrl, {
+                method: 'GET',
+                headers: { 'Accept': '*/*' }
+              });
+              if (cfResponse?.status) break;
+            } catch (e) {
+              lastError = e;
             }
-          });
-          
+            await new Promise(r => setTimeout(r, 2000));
+            attempt++;
+          }
+
+          if (!cfResponse) {
+            throw lastError || new Error('No response from CloudFront');
+          }
+
           expect(cfResponse.status).toBeDefined();
           console.log(`CloudFront Response Status: ${cfResponse.status}`);
           
-          // Store CloudFront test results
           const cfTestData = {
             endpoint: cloudFrontUrl,
             status: cfResponse.status,
