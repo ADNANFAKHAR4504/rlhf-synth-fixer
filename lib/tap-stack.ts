@@ -127,8 +127,7 @@ exports.handler = async (event) => {
     const distribution = new cloudfront.Distribution(this, 'NewsDistribution', {
       defaultBehavior: {
         origin: new origins.S3Origin(contentBucket),
-        viewerProtocolPolicy:
-          cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         edgeLambdas: [
           {
