@@ -1112,6 +1112,9 @@ resource "aws_rds_cluster" "dr" {
   cluster_identifier     = "${var.project_name}-dr-cluster-${local.unique_suffix}"
   engine                 = "aurora-postgresql"
   engine_version         = "15.4"
+  database_name          = var.database_name
+  master_username        = var.db_master_username
+  master_password        = random_password.db_password.result
   db_subnet_group_name   = aws_db_subnet_group.dr.name
   vpc_security_group_ids = [aws_security_group.aurora_dr.id]
 
@@ -1130,7 +1133,7 @@ resource "aws_rds_cluster" "dr" {
   })
 
   lifecycle {
-    ignore_changes = [engine_version, global_cluster_identifier]
+    ignore_changes = [engine_version, global_cluster_identifier, master_password]
   }
 }
 
