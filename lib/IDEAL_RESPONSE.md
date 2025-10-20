@@ -1,9 +1,5 @@
-# secure_infrastructure.yaml
-# CloudFormation template for Nova Clinical Trial Data Platform
-# Region: us-west-2
-# Purpose: Secure infrastructure for handling sensitive patient trial data
-
 ```yml
+
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Nova Clinical Trial Data Platform - Secure Infrastructure Foundation'
 
@@ -1566,4 +1562,5 @@ Outputs:
     Value: !Ref NovaCloudWatchLogsVPCEndpoint
     Export:
       Name: !Sub '${ProjectName}-${Environment}-cloudwatch-logs-vpc-endpoint-id'
+      
 ```
