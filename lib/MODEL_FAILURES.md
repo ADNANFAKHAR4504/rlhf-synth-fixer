@@ -155,11 +155,109 @@ https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Aurora.VersionPolic
 
 ---
 
+### 4. Secrets Manager Requirement Violation
+
+**Impact Level**: Critical - Requirements Compliance Violation
+
+**MODEL_RESPONSE Issue**:
+The original template CREATED a new AWS Secrets Manager secret instead of fetching from an existing secret, directly violating the explicit requirement in PROMPT.md (lines 41-43):
+
+```yaml
+# INCORRECT - Creates a new secret (violates requirement)
+Resources:
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'healthcare-db-secret-${EnvironmentSuffix}'
+      Description: Database credentials for Healthcare Aurora cluster
+      SecretString: !Sub |
+        {
+          "username": "${DatabaseUsername}",
+          "password": "${DatabasePassword}"
+        }
+```
+
+Additionally, the `DatabasePassword` parameter had a security-violating default value:
+
+```yaml
+# INCORRECT - Default password is a security risk
+Parameters:
+  DatabasePassword:
+    Type: String
+    Description: Database master password
+    NoEcho: true
+    Default: TempPassword123  # Security violation!
+```
+
+**PROMPT.md Requirement** (Lines 41-43):
+```
+Secrets Management
+Fetch existing secrets from Secrets Manager (do not create new secrets)
+Use secrets for database credentials and API keys
+```
+
+**IDEAL_RESPONSE Fix**:
+Remove the `DatabaseSecret` resource entirely and reference only existing secrets using dynamic references:
+
+```yaml
+# CORRECT - References existing secret only
+AuroraCluster:
+  Type: AWS::RDS::DBCluster
+  Properties:
+    DBClusterIdentifier: !Sub 'healthcare-aurora-${EnvironmentSuffix}'
+    Engine: aurora-mysql
+    EngineVersion: '8.0.mysql_aurora.3.08.1'
+    MasterUsername: !Sub '{{resolve:secretsmanager:healthcare-db-secret-${EnvironmentSuffix}:SecretString:username}}'
+    MasterUserPassword: !Sub '{{resolve:secretsmanager:healthcare-db-secret-${EnvironmentSuffix}:SecretString:password}}'
+    # ... other properties
+```
+
+Also remove the default password from parameters:
+
+```yaml
+# CORRECT - No default password
+Parameters:
+  DatabasePassword:
+    Type: String
+    Description: Database master password
+    NoEcho: true
+    MinLength: 8
+    MaxLength: 41
+    # No Default property
+```
+
+**Root Cause**:
+The model failed to follow the explicit constraint "do not create new secrets" in the requirements. This represents a fundamental requirement comprehension failure where the model added functionality (secret creation) that was explicitly prohibited. The model also introduced a security anti-pattern by including a default password in the template.
+
+**Impact**:
+1. **Requirement Violation**: Direct violation of explicit PROMPT.md constraint
+2. **Security Risk**: Default password `TempPassword123` in codebase
+3. **HIPAA Compliance**: Secrets lifecycle not externalized as required
+4. **Training Quality**: Reduces value as training data - teaches incorrect pattern
+5. **Training Score Impact**: -2 points for requirement violation, -1 point for security violation
+
+**Prerequisites**:
+Before deploying the corrected template, users must create the secret externally:
+
+```bash
+aws secretsmanager create-secret \
+  --name healthcare-db-secret-dev123 \
+  --description "Database credentials for Healthcare Aurora cluster" \
+  --secret-string '{"username":"admin","password":"YourSecurePassword123"}'
+```
+
+**AWS Documentation Reference**:
+https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/dynamic-references.html#dynamic-references-secretsmanager
+
+---
+
 ## Summary
 
 ### Failure Categorization
-- **3 Critical** failures that completely blocked deployment
-- **0 High** failures (regional availability issue was critical due to hard requirement)
+- **4 Critical** failures:
+  - 3 deployment blockers (API Gateway stage conflict, WAF timing, Aurora version)
+  - 1 requirement compliance violation (Secrets Manager)
+- **0 High** failures
 - **0 Medium** failures
 - **0 Low** failures
 
@@ -167,30 +265,55 @@ https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Aurora.VersionPolic
 1. **API Gateway Resource Dependencies**: Incorrect understanding of how API Gateway deployment stages interact with explicit stage resources
 2. **CloudFormation Dependency Management**: Lack of awareness that string-interpolated ARNs don't create implicit dependencies
 3. **Regional Service Availability**: Failure to validate that selected AWS service versions are available in the target region
+4. **Requirement Comprehension**: Failed to follow explicit constraint "do not create new secrets" in PROMPT.md
+5. **Security Best Practices**: Included default password in template parameters
 
 ### Training Value
 These failures represent critical production deployment issues that would cause:
-- **100% deployment failure rate** without fixes
+- **100% deployment failure rate** without fixes (deployment blockers)
+- **100% requirement compliance failure** without fixes (Secrets Manager violation)
 - **3-5 deployment retry attempts** averaging 15-20 minutes each
 - **Cost impact**: ~$10-15 in wasted AWS resources per deployment attempt
 - **Time impact**: 45-90 minutes of debugging and remediation per deployment
+- **Security impact**: Default password in template creates known credential vulnerability
 
 The failures demonstrate the importance of:
 1. Understanding AWS service-specific resource creation patterns
 2. Explicit dependency management when CloudFormation can't infer dependencies
 3. Validating regional service availability before template creation
 4. Testing infrastructure code in the target deployment region
+5. **Following explicit requirements constraints** - especially "do not create" directives
+6. **Security best practices** - never include default passwords in templates
 
 ### Quality Metrics
 - **Template Syntax**: Valid YAML and CloudFormation syntax (no syntax errors)
-- **Resource Configuration**: 95% correct (3 critical configuration errors out of ~60 resources)
-- **Security Compliance**: 100% correct (all HIPAA requirements met)
-- **Testing Coverage**: Required comprehensive test suite creation (66 unit + 25 integration tests)
+- **Resource Configuration**: 93% correct (4 critical configuration errors out of ~60 resources)
+- **Requirements Compliance**: 91% (10/11 requirements met - failed "use existing secrets")
+- **Security Compliance**: 95% (HIPAA requirements met, but had default password vulnerability)
+- **Testing Coverage**: Required comprehensive test suite creation (66 unit + 28 integration tests)
 
 ### Training Quality Score Justification
-This task provides high training value because:
+**Original Score: 9/10**
+**Revised Score: 7/10** (after identifying Secrets Manager violation)
+
+**Score Calculation**:
+- Starting score: 10
+- Deployment blockers: -1 point (3 critical deployment issues requiring fixes)
+- **Requirement violation**: -2 points (created secret instead of using existing)
+- **Security violation**: -1 point (default password in template)
+- **Final score**: 7/10
+
+This task provides good training value because:
 1. Failures are subtle and require AWS-specific knowledge to identify
 2. Errors occur at deployment time, not template validation time
 3. Issues represent real production deployment blockers
 4. Fixes require understanding of AWS service behavior, not just CloudFormation syntax
 5. Testing required real AWS deployment and validation, not just local template checking
+6. **Demonstrates requirement comprehension failure** - model didn't follow explicit constraint
+7. **Shows security anti-pattern** - default passwords should never be in templates
+
+**Training Value**: This example is valuable for teaching:
+- What NOT to do when requirements explicitly prohibit an action
+- The difference between "use existing" vs "create new" for cloud resources
+- Security best practices for credential management in IaC
+- Importance of reading and following all requirement constraints

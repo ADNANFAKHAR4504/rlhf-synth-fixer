@@ -4,7 +4,7 @@ This CloudFormation template creates a production-ready, HIPAA-compliant healthc
 
 ## Architecture Overview
 
-The infrastructure implements a multi-tier architecture across multiple availability zones in the eu-central-1 region:
+The infrastructure implements a multi-tier architecture across multiple availability zones:
 
 - **Networking**: Multi-AZ VPC with public and private subnets, NAT Gateway for outbound connectivity
 - **Compute**: ECS Fargate cluster with auto-scaling (2-10 tasks)
@@ -12,8 +12,30 @@ The infrastructure implements a multi-tier architecture across multiple availabi
 - **Storage**: EFS with encryption at rest and in transit
 - **Caching**: ElastiCache Redis with Multi-AZ and encryption
 - **API Layer**: API Gateway with WAF protection and rate limiting
-- **Security**: KMS encryption with automatic key rotation, comprehensive security groups, Secrets Manager for credentials
+- **Security**: KMS encryption with automatic key rotation, comprehensive security groups, references existing Secrets Manager secrets
 - **Monitoring**: CloudWatch Logs with configurable retention
+
+## Prerequisites
+
+Before deploying this template, ensure the following secret exists in AWS Secrets Manager:
+
+- **Secret Name**: `healthcare-db-secret-${EnvironmentSuffix}` (e.g., `healthcare-db-secret-dev123`)
+- **Secret Format**: JSON with keys `username` and `password`
+- **Example**:
+  ```json
+  {
+    "username": "admin",
+    "password": "YourSecurePassword123"
+  }
+  ```
+
+You can create this secret using the AWS CLI:
+```bash
+aws secretsmanager create-secret \
+  --name healthcare-db-secret-dev123 \
+  --description "Database credentials for Healthcare Aurora cluster" \
+  --secret-string '{"username":"admin","password":"YourSecurePassword123"}'
+```
 
 ## File: lib/TapStack.yml
 
@@ -51,7 +73,6 @@ Parameters:
     MaxLength: 41
     AllowedPattern: ^[a-zA-Z0-9]*$
     ConstraintDescription: Must contain only alphanumeric characters
-    Default: TempPassword123
 
 Resources:
   # ============================================================================
@@ -899,10 +920,4 @@ Outputs:
     Value: !GetAtt WAFWebACL.Id
     Export:
       Name: !Sub '${AWS::StackName}-WAFWebACLId'
-```
-
-## File: lib/AWS_REGION
-
-```
-eu-central-1
 ```

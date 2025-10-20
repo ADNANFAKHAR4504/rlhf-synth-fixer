@@ -31,26 +31,8 @@ Parameters:
     MaxLength: 41
     AllowedPattern: ^[a-zA-Z0-9]*$
     ConstraintDescription: Must contain only alphanumeric characters
-    Default: TempPassword123
 
 Resources:
-  # ============================================================================
-  # Secrets Manager for Database Credentials
-  # ============================================================================
-
-  DatabaseSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub 'healthcare-db-secret-${EnvironmentSuffix}'
-      Description: Database credentials for Healthcare Aurora cluster
-      SecretString: !Sub |
-        {
-          "username": "${DatabaseUsername}",
-          "password": "${DatabasePassword}"
-        }
-      Tags:
-        - Key: Name
-          Value: !Sub 'healthcare-db-secret-${EnvironmentSuffix}'
   # ============================================================================
   # KMS Keys for Encryption
   # ============================================================================
@@ -446,8 +428,8 @@ Resources:
       ServerlessV2ScalingConfiguration:
         MinCapacity: 0.5
         MaxCapacity: 1
-      MasterUsername: !Sub '{{resolve:secretsmanager:${DatabaseSecret}::username}}'
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}::password}}'
+      MasterUsername: !Sub '{{resolve:secretsmanager:healthcare-db-secret-${EnvironmentSuffix}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:healthcare-db-secret-${EnvironmentSuffix}:SecretString:password}}'
       DBSubnetGroupName: !Ref DBSubnetGroup
       VpcSecurityGroupIds:
         - !Ref DatabaseSecurityGroup
