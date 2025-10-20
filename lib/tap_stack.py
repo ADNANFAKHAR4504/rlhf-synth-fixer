@@ -337,7 +337,6 @@ class TapStack(cdk.Stack):
         buckets['data'] = s3.Bucket(
             self,
             "DataBucket",
-            bucket_name=f"tap-data-{self.environment_suffix}-{self.account}",
             encryption=s3.BucketEncryption.KMS,
             encryption_key=self.kms_key,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
@@ -380,7 +379,6 @@ class TapStack(cdk.Stack):
         buckets['logs'] = s3.Bucket(
             self,
             "LogsBucket",
-            bucket_name=f"tap-logs-{self.environment_suffix}-{self.account}",
             encryption=s3.BucketEncryption.KMS,
             encryption_key=self.kms_key,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
