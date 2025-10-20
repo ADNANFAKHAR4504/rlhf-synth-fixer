@@ -203,7 +203,9 @@ describe('TapStack Integration Tests - Secure Multi-Tier AWS Environment', () =>
 
       // Bastion instance should have SG with outbound rules
       const bastionInstances = instances.filter(instance =>
-        instance.Tags?.some(tag => tag.Key === 'Type' && tag.Value === 'Bastion')
+        instance.Tags?.some(
+          tag => tag.Key === 'Type' && tag.Value === 'Bastion'
+        )
       );
       expect(bastionInstances.length).toBeGreaterThanOrEqual(1);
 
@@ -280,13 +282,11 @@ describe('TapStack Integration Tests - Secure Multi-Tier AWS Environment', () =>
 
       const vpc = vpcsResponse.Vpcs?.[0];
       expect(vpc?.State).toBe('available');
-      
+
       // Verify VPC Flow Logs exist via EC2 API (authoritative)
       const flowLogsResponse = await ec2Client.send(
         new DescribeFlowLogsCommand({
-          Filter: [
-            { Name: 'resource-id', Values: [vpcId] },
-          ],
+          Filter: [{ Name: 'resource-id', Values: [vpcId] }],
         })
       );
       expect((flowLogsResponse.FlowLogs || []).length).toBeGreaterThan(0);
@@ -376,15 +376,15 @@ describe('TapStack Integration Tests - Secure Multi-Tier AWS Environment', () =>
       // Verify VPC Flow Logs are configured for network monitoring
       const logGroupsResponse = await cloudWatchLogsClient.send(
         new DescribeLogGroupsCommand({
-          logGroupNamePrefix: `TapStack${environmentSuffix}-VPCFlowLogGroup`
+          logGroupNamePrefix: `TapStack${environmentSuffix}-VPCFlowLogGroup`,
         })
       );
-      
-      const flowLogGroup = logGroupsResponse.logGroups?.find(
-        lg => lg.logGroupName?.includes(environmentSuffix)
+
+      const flowLogGroup = logGroupsResponse.logGroups?.find(lg =>
+        lg.logGroupName?.includes(environmentSuffix)
       );
       expect(flowLogGroup).toBeDefined();
-      
+
       // Verify CloudWatch alarms for security monitoring
       const alarmsResponse = await cloudWatchClient.send(
         new DescribeAlarmsCommand({})
@@ -633,12 +633,12 @@ describe('TapStack Integration Tests - Secure Multi-Tier AWS Environment', () =>
       // Verify VPC Flow Logs are configured
       const logGroupsResponse = await cloudWatchLogsClient.send(
         new DescribeLogGroupsCommand({
-          logGroupNamePrefix: `TapStack${environmentSuffix}-VPCFlowLogGroup`
+          logGroupNamePrefix: `TapStack${environmentSuffix}-VPCFlowLogGroup`,
         })
       );
-      
-      const flowLogGroup = logGroupsResponse.logGroups?.find(
-        lg => lg.logGroupName?.includes(environmentSuffix)
+
+      const flowLogGroup = logGroupsResponse.logGroups?.find(lg =>
+        lg.logGroupName?.includes(environmentSuffix)
       );
       expect(flowLogGroup).toBeDefined();
       expect(flowLogGroup?.logGroupName).toContain(environmentSuffix);

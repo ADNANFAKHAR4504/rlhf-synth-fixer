@@ -8,7 +8,6 @@ import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
-import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import { Construct, IConstruct } from 'constructs';
 
@@ -59,7 +58,6 @@ export class TapStack extends cdk.Stack {
 
     // Setup monitoring and alarms
     this.setupMonitoring();
-
 
     // Setup NAT instance failover
     this.setupNatFailover();
@@ -145,9 +143,13 @@ export class TapStack extends cdk.Stack {
       );
 
       // Create Elastic IP first
-      const eip = new ec2.CfnEIP(this, `NatEIP${this.environmentSuffix}${index + 1}`, {
-        domain: 'vpc',
-      });
+      const eip = new ec2.CfnEIP(
+        this,
+        `NatEIP${this.environmentSuffix}${index + 1}`,
+        {
+          domain: 'vpc',
+        }
+      );
 
       const natInstance = new ec2.Instance(
         this,
@@ -170,10 +172,14 @@ export class TapStack extends cdk.Stack {
       // Note: Removed CloudFormation signals to avoid stabilization issues
 
       // Associate EIP with instance
-      new ec2.CfnEIPAssociation(this, `NatEipAssoc${this.environmentSuffix}${index + 1}`, {
-        eip: eip.ref,
-        instanceId: natInstance.instanceId,
-      });
+      new ec2.CfnEIPAssociation(
+        this,
+        `NatEipAssoc${this.environmentSuffix}${index + 1}`,
+        {
+          eip: eip.ref,
+          instanceId: natInstance.instanceId,
+        }
+      );
 
       // Add tags
       cdk.Tags.of(natInstance).add(
@@ -189,11 +195,15 @@ export class TapStack extends cdk.Stack {
     // Update route tables for private subnets with dependency on NAT instances
     this.vpc.privateSubnets.forEach((subnet, index) => {
       const natIndex = index % this.natInstances.length;
-      const route = new ec2.CfnRoute(this, `PrivateRoute${this.environmentSuffix}${index}`, {
-        routeTableId: subnet.routeTable.routeTableId,
-        destinationCidrBlock: '0.0.0.0/0',
-        instanceId: this.natInstances[natIndex].instanceId,
-      });
+      const route = new ec2.CfnRoute(
+        this,
+        `PrivateRoute${this.environmentSuffix}${index}`,
+        {
+          routeTableId: subnet.routeTable.routeTableId,
+          destinationCidrBlock: '0.0.0.0/0',
+          instanceId: this.natInstances[natIndex].instanceId,
+        }
+      );
       // Ensure route creation depends on NAT ready
       route.node.addDependency(this.natInstances[natIndex]);
     });
@@ -689,19 +699,23 @@ def handler(event, context):
         schedule: events.Schedule.rate(cdk.Duration.minutes(5)),
       }
     );
-    
+
     // Add destroy policy to EventBridge Rule
     rule.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
-    
+
     rule.addTarget(new targets.LambdaFunction(sgUpdateFunction));
   }
 
   private setupMonitoring(): void {
     // Create SNS topic for alarms
-    const securityAlarmTopic = new sns.Topic(this, `SecurityAlarmTopic${this.environmentSuffix}`, {
-      displayName: `Financial Platform Security Alarms-${this.environmentSuffix}`,
-    });
-    
+    const securityAlarmTopic = new sns.Topic(
+      this,
+      `SecurityAlarmTopic${this.environmentSuffix}`,
+      {
+        displayName: `Financial Platform Security Alarms-${this.environmentSuffix}`,
+      }
+    );
+
     // Add destroy policy to SNS Topic
     securityAlarmTopic.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
@@ -713,7 +727,7 @@ def handler(event, context):
         dashboardName: `financial-platform-security-${this.environmentSuffix}`,
       }
     );
-    
+
     // Add destroy policy to CloudWatch Dashboard
     dashboard.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
@@ -731,7 +745,7 @@ def handler(event, context):
         metricValue: '1',
       }
     );
-    
+
     // Add destroy policy to CloudWatch Log Metric Filter
     suspiciousTrafficFilter.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
@@ -748,7 +762,7 @@ def handler(event, context):
         alarmDescription: 'High number of rejected connections detected',
       }
     );
-    
+
     // Add destroy policy to CloudWatch Alarm
     highRejectedConnectionsAlarm.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
@@ -772,7 +786,7 @@ def handler(event, context):
           alarmDescription: `NAT instance ${index + 1} CPU utilization is high`,
         }
       );
-      
+
       // Add destroy policy to CloudWatch Alarm
       natCpuAlarm.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
     });
@@ -785,7 +799,6 @@ def handler(event, context):
       })
     );
   }
-
 
   private setupNatFailover(): void {
     // Get environment suffix from props, context, or use 'prod' as default
@@ -887,7 +900,7 @@ def handler(event, context):
           alarmDescription: `NAT instance ${index + 1} status check failed`,
         }
       );
-      
+
       // Add destroy policy to CloudWatch Alarm
       statusCheckAlarm.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
