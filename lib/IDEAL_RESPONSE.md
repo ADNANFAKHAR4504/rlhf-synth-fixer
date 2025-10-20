@@ -55,24 +55,6 @@ Parameters:
 
 Resources:
   # ============================================================================
-  # Secrets Manager for Database Credentials
-  # ============================================================================
-
-  DatabaseSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub 'healthcare-db-secret-${EnvironmentSuffix}'
-      Description: Database credentials for Healthcare Aurora cluster
-      SecretString: !Sub |
-        {
-          "username": "${DatabaseUsername}",
-          "password": "${DatabasePassword}"
-        }
-      Tags:
-        - Key: Name
-          Value: !Sub 'healthcare-db-secret-${EnvironmentSuffix}'
-
-  # ============================================================================
   # KMS Keys for Encryption
   # ============================================================================
 
@@ -405,7 +387,7 @@ Resources:
                 Action:
                   - 'secretsmanager:GetSecretValue'
                   - 'secretsmanager:DescribeSecret'
-                Resource: !Ref DatabaseSecret
+                Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:healthcare-db-secret-${EnvironmentSuffix}-*'
 
   ECSTaskRole:
     Type: AWS::IAM::Role
@@ -467,8 +449,8 @@ Resources:
       ServerlessV2ScalingConfiguration:
         MinCapacity: 0.5
         MaxCapacity: 1
-      MasterUsername: !Sub '{{resolve:secretsmanager:${DatabaseSecret}::username}}'
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}::password}}'
+      MasterUsername: !Sub '{{resolve:secretsmanager:healthcare-db-secret-${EnvironmentSuffix}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:healthcare-db-secret-${EnvironmentSuffix}:SecretString:password}}'
       DBSubnetGroupName: !Ref DBSubnetGroup
       VpcSecurityGroupIds:
         - !Ref DatabaseSecurityGroup
