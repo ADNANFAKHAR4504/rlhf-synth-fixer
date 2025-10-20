@@ -605,7 +605,9 @@ resource "aws_s3_bucket_replication_configuration" "transaction_logs_replication
     status   = "Enabled"
     priority = 1
 
-    filter {}
+    filter {
+      prefix = ""
+    }
 
     delete_marker_replication {
       status = "Enabled"
