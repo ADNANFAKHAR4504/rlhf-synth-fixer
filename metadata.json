@@ -10,5 +10,26 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "VPC, Subnet, InternetGateway, RouteTable, Route, SecurityGroup, EC2Instance, IAMRole, IAMInstanceProfile, IAMPolicy, S3Bucket, S3BucketPolicy, KMSKey, CloudTrail, CloudWatchAlarm, SNSTopic, SNSSubscription"
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "Route Table",
+    "Route",
+    "Security Group",
+    "EC2 Instance",
+    "IAM Role",
+    "IAM Instance Profile",
+    "IAM Policy",
+    "S3 Bucket",
+    "S3 Bucket Policy",
+    "KMS Key",
+    "CloudTrail Trail",
+    "CloudWatch Alarm",
+    "SNS Topic",
+    "SNS Subscription"
+  ],
+  "training_quality": 9,
+  "background": "Design a secure and modular AWS infrastructure in YAML-based CloudFormation, deploying resources in us-west-2. The stack provisions a VPC with subnets, Internet Gateway, and routing; an EC2 instance secured with IAM roles and security groups; a KMS-encrypted S3 bucket that stores CloudTrail logs; and integrates CloudWatch Alarms and SNS notifications for monitoring and alerting. The environment must follow least-privilege IAM, encryption best practices, and consistent tagging for auditing and scalability."
 }
+
