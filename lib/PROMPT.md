@@ -1,4 +1,4 @@
-Create a Pulumi Python that builds a production-ready, highly-available AWS environment focused on failure recovery and operational resilience. Keep the default region set to **us-west-1** but allow it to be easily configurable.
+Create a Pulumi Python that builds a production-ready, highly-available AWS environment focused on failure recovery and operational resilience. Keep the default region set to **us-west-1\us-east-1** but allow it to be easily configurable.
 
 Key requirements (implement in Pulumi Python):
 

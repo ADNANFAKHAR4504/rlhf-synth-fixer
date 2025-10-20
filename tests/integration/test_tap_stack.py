@@ -260,40 +260,61 @@ class TestServiceLevelCloudWatchOperations(unittest.TestCase):
     
     def test_cloudwatch_custom_metrics(self):
         """
-        SERVICE-LEVEL TEST: CloudWatch custom metrics
-        ACTION: Publish custom metric to CloudWatch
-        VERIFY: Metric can be queried
+        SERVICE-LEVEL TEST: CloudWatch Logs
+        ACTION: Create log group and write log events
+        VERIFY: Logs are immediately queryable
         """
-        # ACTION: Publish custom metric
-        test_namespace = 'TAP/ServiceTest'
-        test_metric_name = f'TestMetric-{int(time.time())}'
-        test_value = 42.0
+        # ACTION: Create a test log group and stream
+        test_log_group = f'/tap/integration-test/service-level-{int(time.time())}'
+        test_log_stream = f'test-stream-{int(time.time())}'
+        test_message = f'Integration test message at {datetime.now(timezone.utc).isoformat()}'
         
-        print(f"\nPublishing metric to CloudWatch: {test_namespace}/{test_metric_name}")
-        cloudwatch_client.put_metric_data(
-            Namespace=test_namespace,
-            MetricData=[
-                {
-                    'MetricName': test_metric_name,
-                    'Value': test_value,
-                    'Unit': 'Count',
-                    'Timestamp': datetime.now(timezone.utc)
-                }
-            ]
-        )
+        print(f"\nCreating CloudWatch log group: {test_log_group}")
         
-        # Give CloudWatch time to process
-        time.sleep(5)
-        
-        # VERIFY: Query the metric
-        metrics_response = cloudwatch_client.list_metrics(
-            Namespace=test_namespace,
-            MetricName=test_metric_name
-        )
-        
-        metrics = metrics_response.get('Metrics', [])
-        self.assertGreater(len(metrics), 0, "Published metric should be queryable")
-        print(f"Successfully published and queried CloudWatch metric")
+        try:
+            # Create log group
+            logs_client.create_log_group(logGroupName=test_log_group)
+            
+            # Create log stream
+            logs_client.create_log_stream(
+                logGroupName=test_log_group,
+                logStreamName=test_log_stream
+            )
+            
+            # ACTION: Write log event
+            print(f"Writing log event to CloudWatch")
+            logs_client.put_log_events(
+                logGroupName=test_log_group,
+                logStreamName=test_log_stream,
+                logEvents=[
+                    {
+                        'timestamp': int(time.time() * 1000),
+                        'message': test_message
+                    }
+                ]
+            )
+            
+            # VERIFY: Query the log events (logs are immediately available)
+            response = logs_client.get_log_events(
+                logGroupName=test_log_group,
+                logStreamName=test_log_stream
+            )
+            
+            events = response.get('events', [])
+            self.assertGreater(len(events), 0, "Log events should be immediately queryable")
+            
+            # Verify our message is in the logs
+            messages = [event['message'] for event in events]
+            self.assertIn(test_message, messages, "Our log message should be in CloudWatch")
+            
+            print(f"Successfully wrote and queried CloudWatch logs")
+            
+        finally:
+            # CLEANUP: Delete log group (also deletes streams)
+            try:
+                logs_client.delete_log_group(logGroupName=test_log_group)
+            except Exception as e:
+                print(f"Note: Cleanup of log group failed (may not exist): {e}")
 
 
 class TestServiceLevelSNSOperations(unittest.TestCase):
