@@ -145,9 +145,20 @@ class TestTapStackIntegration(unittest.TestCase):
             self.assertEqual(vpc_info['State'], 'available', 
                            f"VPC should be available, got: {vpc_info['State']}")
             
-            # Validate DNS settings
-            self.assertTrue(vpc_info['EnableDnsHostnames'], "VPC should have DNS hostnames enabled")
-            self.assertTrue(vpc_info['EnableDnsSupport'], "VPC should have DNS support enabled")
+            # Validate DNS settings using describe_vpc_attribute
+            dns_hostnames_response = self.ec2_client.describe_vpc_attribute(
+                VpcId=self.vpc_id, 
+                Attribute='enableDnsHostnames'
+            )
+            dns_support_response = self.ec2_client.describe_vpc_attribute(
+                VpcId=self.vpc_id, 
+                Attribute='enableDnsSupport'
+            )
+            
+            self.assertTrue(dns_hostnames_response['EnableDnsHostnames']['Value'], 
+                          "VPC should have DNS hostnames enabled")
+            self.assertTrue(dns_support_response['EnableDnsSupport']['Value'], 
+                          "VPC should have DNS support enabled")
             
             # Check for subnets
             subnets_response = self.ec2_client.describe_subnets(
