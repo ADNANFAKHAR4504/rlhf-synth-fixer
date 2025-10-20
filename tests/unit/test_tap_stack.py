@@ -20,7 +20,11 @@ class MinimalMocks(pulumi.runtime.Mocks):
         return [f"{args.name}-id", outputs]
     
     def call(self, args: pulumi.runtime.MockCallArgs):
-        """Return empty dict for all function calls."""
+        """Return minimal values only for AWS data provider functions."""
+        if args.token == "aws:index/getAvailabilityZones:getAvailabilityZones":
+            return {"names": ["us-east-1a", "us-east-1b", "us-east-1c"]}
+        if args.token == "aws:index/getRegion:getRegion":
+            return {"name": "us-east-1"}
         return {}
 
 
