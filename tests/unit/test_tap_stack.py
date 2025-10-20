@@ -21,8 +21,9 @@ class MinimalMocks(pulumi.runtime.Mocks):
         return [f"{args.name}-id", outputs]
     
     def call(self, args: pulumi.runtime.MockCallArgs):
-        """Return empty dict for all function calls."""
-        return {}
+        if args.token == "aws:index/getRegion:getRegion":
+            return {"region": "us-east-1", "name": "us-east-1"}
+        return args.args
 
 
 pulumi.runtime.set_mocks(MinimalMocks())
