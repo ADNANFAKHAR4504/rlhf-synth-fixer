@@ -454,7 +454,7 @@ class TapStack(cdk.Stack):
             "SecurityAlertsTopic",
             topic_name=f"tap-security-alerts-{self.environment_suffix}",
             display_name="TAP Security Alerts",
-            kms_master_key=self.kms_key,
+            master_key=self.kms_key,
         )
 
         # Operational alerts topic
@@ -463,7 +463,7 @@ class TapStack(cdk.Stack):
             "OperationalAlertsTopic",
             topic_name=f"tap-operational-alerts-{self.environment_suffix}",
             display_name="TAP Operational Alerts",
-            kms_master_key=self.kms_key,
+            master_key=self.kms_key,
         )
 
         return topics
