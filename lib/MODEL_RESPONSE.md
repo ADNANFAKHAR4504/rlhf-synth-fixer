@@ -196,61 +196,6 @@ import logging
 - AWS provider >= 5.0
 - Random provider >= 3.0
 
-## Test Coverage
-
-### Unit Tests: 131/131 Passing ✅
-The unit tests validate:
-- File structure and syntax
-- Terraform block configuration
-- All variable declarations
-- Data source declarations
-- All resource types and attributes
-- Security group rules
-- IAM policies and roles
-- Launch template configuration
-- Auto Scaling Group settings
-- Load balancer configuration
-- S3 bucket encryption and versioning
-- RDS Multi-AZ and encryption
-- Secrets Manager configuration
-- Lambda function setup
-- CloudTrail and AWS Config
-- CloudWatch alarms
-- Output declarations
-- Security best practices
-- Resource lifecycle rules
-- Architecture patterns
-- Code quality standards
-
-### Integration Tests: 33/33 Passing ✅
-The integration tests validate:
-- AWS credentials and prerequisites
-- VPC configuration and DNS settings
-- Public, private, and database subnets
-- Internet Gateway and NAT Gateways
-- VPC Endpoints for SSM
-- Security group configurations
-- ALB existence and listeners
-- HTTPS and HTTP redirect
-- Target groups
-- Auto Scaling Group
-- EC2 instances
-- RDS Multi-AZ instance
-- RDS CloudWatch logs
-- DB subnet groups
-- S3 bucket versioning and encryption
-- KMS key state
-- Secrets Manager secrets
-- CloudWatch alarms
-- SNS topics
-- CloudTrail configuration
-- AWS Config recorder and rules
-- Lambda functions
-- SSM Parameter Store
-- End-to-end workflow integration
-
-### Total: 164/164 Tests Passing ✅
-
 ## Deployment Process
 
 1. **Prepare Backend Configuration:**
@@ -289,14 +234,6 @@ The integration tests validate:
 5. **Collect Outputs:**
    ```bash
    terraform output -json > ../cfn-outputs/flat-outputs.json
-   ```
-
-6. **Run Tests:**
-   ```bash
-   cd ..
-   npm run test:unit      # 131 tests
-   npm run test:integration  # 33 tests
-   npm test               # All 164 tests
    ```
 
 ## Response Quality Metrics
@@ -409,8 +346,6 @@ This implementation successfully addresses all requirements from the prompt:
 - ✅ Lifecycle protection on critical resources
 - ✅ Passes terraform fmt and validate
 - ✅ Terraform 1.4+, AWS provider >= 5.0
-
-**Test Results: 164/164 passing (100%)**
 
 The implementation is production-ready, secure, highly available, and fully compliant with enterprise standards.
 
