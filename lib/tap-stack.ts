@@ -2,7 +2,7 @@
 
 /**
  * tap-stack.ts
- * 
+ *
  * Production-grade infrastructure for fintech trading analytics platform.
  * Includes auto-generated secure database password.
  */
@@ -20,6 +20,37 @@ export interface TapStackArgs {
   region?: string;
   vpcCidr?: string;
   domainName?: string;
+}
+
+export interface TapStackOutputs {
+  vpcId: string;
+  vpcCidr: string;
+  publicSubnetIds: string[];
+  privateSubnetIds: string[];
+  databaseSubnetIds: string[];
+  albSecurityGroupId: string;
+  ecsSecurityGroupId: string;
+  rdsSecurityGroupId: string;
+  albDnsName: string;
+  albArn: string;
+  albZoneId: string;
+  targetGroupBlueArn: string;
+  targetGroupGreenArn: string;
+  ecsClusterName: string;
+  ecsClusterArn: string;
+  apiServiceName: string;
+  frontendServiceName: string;
+  auroraClusterEndpoint: string;
+  auroraClusterReaderEndpoint: string;
+  auroraClusterArn: string;
+  auroraClusterId: string;
+  dbSecretArn: string;
+  ecrApiRepositoryUrl: string;
+  ecrFrontendRepositoryUrl: string;
+  apiLogGroupName: string;
+  frontendLogGroupName: string;
+  ecsTaskExecutionRoleArn: string;
+  ecsTaskRoleArn: string;
 }
 
 export class TapStack extends pulumi.ComponentResource {
@@ -83,7 +114,7 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly albRecord?: aws.route53.Record;
   public readonly certificate?: aws.acm.Certificate;
 
-  public readonly outputs: pulumi.Output<any>;
+  public readonly outputs: pulumi.Output<TapStackOutputs>;
 
   private readonly albTargetGroupFrontend: aws.lb.TargetGroup;
   private readonly config: pulumi.Config;
@@ -102,10 +133,10 @@ export class TapStack extends pulumi.ComponentResource {
       Environment: this.environmentSuffix,
       Project: 'TradingAnalyticsPlatform',
       ManagedBy: 'Pulumi',
-      ...(args.tags as any || {})
+      ...(args.tags as Record<string, string> || {})
     };
 
-    // === PHASE 1: NETWORK FOUNDATION ===
+    // PHASE 1: NETWORK FOUNDATION
     const networkResources = this.createNetworkInfrastructure();
     this.vpc = networkResources.vpc;
     this.publicSubnets = networkResources.publicSubnets;
@@ -114,13 +145,13 @@ export class TapStack extends pulumi.ComponentResource {
     this.internetGateway = networkResources.internetGateway;
     this.natGateways = networkResources.natGateways;
 
-    // === PHASE 2: SECURITY LAYER ===
+    // PHASE 2: SECURITY LAYER
     const securityResources = this.createSecurityGroups();
     this.albSecurityGroup = securityResources.albSecurityGroup;
     this.ecsSecurityGroup = securityResources.ecsSecurityGroup;
     this.rdsSecurityGroup = securityResources.rdsSecurityGroup;
 
-    // === PHASE 3: DATABASE (MOVED BEFORE IAM) ===
+    // PHASE 3: DATABASE (MOVED BEFORE IAM)
     const databaseResources = this.createDatabaseResources();
     this.auroraSubnetGroup = databaseResources.auroraSubnetGroup;
     this.auroraParameterGroup = databaseResources.auroraParameterGroup;
@@ -129,18 +160,18 @@ export class TapStack extends pulumi.ComponentResource {
     this.auroraReaderInstance = databaseResources.auroraReaderInstance;
     this.dbSecret = databaseResources.dbSecret;
 
-    // === PHASE 4: IAM ROLES (NOW AFTER DATABASE) ===
+    // PHASE 4: IAM ROLES (NOW AFTER DATABASE)
     const iamResources = this.createIAMRoles();
     this.ecsTaskExecutionRole = iamResources.ecsTaskExecutionRole;
     this.ecsTaskRole = iamResources.ecsTaskRole;
     this.autoScalingRole = iamResources.autoScalingRole;
 
-    // === PHASE 5: DATA & STORAGE ===
+    // PHASE 5: DATA & STORAGE
     const storageResources = this.createStorageResources();
     this.ecrApiRepository = storageResources.ecrApiRepository;
     this.ecrFrontendRepository = storageResources.ecrFrontendRepository;
 
-    // === PHASE 6: LOAD BALANCING ===
+    // PHASE 6: LOAD BALANCING
     const lbResources = this.createLoadBalancer();
     this.alb = lbResources.alb;
     this.albTargetGroupBlue = lbResources.albTargetGroupBlue;
@@ -148,7 +179,7 @@ export class TapStack extends pulumi.ComponentResource {
     this.albHttpListener = lbResources.albHttpListener;
     this.albTargetGroupFrontend = lbResources.albTargetGroupFrontend;
 
-    // === PHASE 7: DNS & CERTIFICATES ===
+    // PHASE 7: DNS & CERTIFICATES
     const dnsResources = this.createDNSResources(args.domainName);
     if (dnsResources) {
       this.hostedZone = dnsResources.hostedZone;
@@ -157,7 +188,7 @@ export class TapStack extends pulumi.ComponentResource {
       this.albRecord = dnsResources.albRecord;
     }
 
-    // === PHASE 8: CONTAINER ORCHESTRATION ===
+    // PHASE 8: CONTAINER ORCHESTRATION
     const containerResources = this.createContainerResources();
     this.ecsCluster = containerResources.ecsCluster;
     this.apiLogGroup = containerResources.apiLogGroup;
@@ -165,20 +196,20 @@ export class TapStack extends pulumi.ComponentResource {
     this.apiService = containerResources.apiService;
     this.frontendService = containerResources.frontendService;
 
-    // === PHASE 9: AUTO-SCALING ===
+    // PHASE 9: AUTO-SCALING
     const autoScalingResources = this.createAutoScaling();
     this.apiAutoScalingTarget = autoScalingResources.apiAutoScalingTarget;
     this.frontendAutoScalingTarget = autoScalingResources.frontendAutoScalingTarget;
     this.apiCpuScalingPolicy = autoScalingResources.apiCpuScalingPolicy;
     this.apiRequestScalingPolicy = autoScalingResources.apiRequestScalingPolicy;
 
-    // === PHASE 10: MONITORING & ALARMS ===
+    // PHASE 10: MONITORING & ALARMS
     const monitoringResources = this.createMonitoring();
     this.cpuAlarm = monitoringResources.cpuAlarm;
     this.memoryAlarm = monitoringResources.memoryAlarm;
     this.http5xxAlarm = monitoringResources.http5xxAlarm;
 
-    // === EXPORT OUTPUTS ===
+    // EXPORT OUTPUTS
     this.outputs = this.exportOutputs();
 
     this.registerOutputs({
@@ -251,7 +282,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     const publicRouteTable = new aws.ec2.RouteTable(`tap-public-rt-${this.environmentSuffix}`, {
       vpcId: vpc.id,
-      tags: { ...this.defaultTags, Name: `tap-public-rt` },
+      tags: { ...this.defaultTags, Name: 'tap-public-rt' },
     }, { parent: this });
 
     new aws.ec2.Route(`tap-public-route-${this.environmentSuffix}`, {
@@ -304,7 +335,7 @@ export class TapStack extends pulumi.ComponentResource {
       egress: [
         { protocol: '-1', fromPort: 0, toPort: 0, cidrBlocks: ['0.0.0.0/0'], description: 'All outbound traffic' },
       ],
-      tags: { ...this.defaultTags, Name: `tap-alb-sg` },
+      tags: { ...this.defaultTags, Name: 'tap-alb-sg' },
     }, { parent: this });
 
     const ecsSecurityGroup = new aws.ec2.SecurityGroup(`tap-ecs-sg-${this.environmentSuffix}`, {
@@ -313,7 +344,7 @@ export class TapStack extends pulumi.ComponentResource {
       egress: [
         { protocol: '-1', fromPort: 0, toPort: 0, cidrBlocks: ['0.0.0.0/0'], description: 'All outbound traffic' },
       ],
-      tags: { ...this.defaultTags, Name: `tap-ecs-sg` },
+      tags: { ...this.defaultTags, Name: 'tap-ecs-sg' },
     }, { parent: this });
 
     new aws.ec2.SecurityGroupRule(`tap-alb-to-ecs-${this.environmentSuffix}`, {
@@ -342,7 +373,7 @@ export class TapStack extends pulumi.ComponentResource {
       egress: [
         { protocol: '-1', fromPort: 0, toPort: 0, cidrBlocks: ['0.0.0.0/0'], description: 'All outbound traffic' },
       ],
-      tags: { ...this.defaultTags, Name: `tap-rds-sg` },
+      tags: { ...this.defaultTags, Name: 'tap-rds-sg' },
     }, { parent: this });
 
     new aws.ec2.SecurityGroupRule(`tap-ecs-to-rds-${this.environmentSuffix}`, {
@@ -362,7 +393,7 @@ export class TapStack extends pulumi.ComponentResource {
     const auroraSubnetGroup = new aws.rds.SubnetGroup(`tap-aurora-subnet-group-${this.environmentSuffix}`, {
       subnetIds: this.databaseSubnets.map(s => s.id),
       description: 'Subnet group for Aurora PostgreSQL',
-      tags: { ...this.defaultTags, Name: `tap-aurora-subnet-group` },
+      tags: { ...this.defaultTags, Name: 'tap-aurora-subnet-group' },
     }, { parent: this });
 
     const auroraParameterGroup = new aws.rds.ClusterParameterGroup(`tap-aurora-params-${this.environmentSuffix}`, {
@@ -376,7 +407,7 @@ export class TapStack extends pulumi.ComponentResource {
         { name: 'max_connections', value: '1000', applyMethod: 'pending-reboot' },
         { name: 'statement_timeout', value: '30000', applyMethod: 'immediate' },
       ],
-      tags: { ...this.defaultTags, Name: `tap-aurora-params` },
+      tags: { ...this.defaultTags, Name: 'tap-aurora-params' },
     }, { parent: this });
 
     // Generate a secure random password automatically
@@ -394,7 +425,7 @@ export class TapStack extends pulumi.ComponentResource {
     const dbSecret = new aws.secretsmanager.Secret(`tap-db-secret-${this.environmentSuffix}`, {
       name: `tap-aurora-password-${this.environmentSuffix}`,
       description: 'Aurora PostgreSQL master password',
-      tags: { ...this.defaultTags, Name: `tap-db-secret` },
+      tags: { ...this.defaultTags, Name: 'tap-db-secret' },
     }, { parent: this });
 
     new aws.secretsmanager.SecretVersion(`tap-db-secret-version-${this.environmentSuffix}`, {
@@ -426,7 +457,7 @@ export class TapStack extends pulumi.ComponentResource {
       iamDatabaseAuthenticationEnabled: true,
       deletionProtection: false,
       skipFinalSnapshot: true,
-      tags: { ...this.defaultTags, Name: `tap-aurora-cluster` },
+      tags: { ...this.defaultTags, Name: 'tap-aurora-cluster' },
     }, { parent: this });
 
     const auroraWriterInstance = new aws.rds.ClusterInstance(`tap-aurora-writer-${this.environmentSuffix}`, {
@@ -437,7 +468,7 @@ export class TapStack extends pulumi.ComponentResource {
       performanceInsightsEnabled: true,
       performanceInsightsRetentionPeriod: 7,
       publiclyAccessible: false,
-      tags: { ...this.defaultTags, Name: `tap-aurora-writer`, Role: 'writer' },
+      tags: { ...this.defaultTags, Name: 'tap-aurora-writer', Role: 'writer' },
     }, { parent: this });
 
     const auroraReaderInstance = new aws.rds.ClusterInstance(`tap-aurora-reader-${this.environmentSuffix}`, {
@@ -448,7 +479,7 @@ export class TapStack extends pulumi.ComponentResource {
       performanceInsightsEnabled: true,
       performanceInsightsRetentionPeriod: 7,
       publiclyAccessible: false,
-      tags: { ...this.defaultTags, Name: `tap-aurora-reader`, Role: 'reader' },
+      tags: { ...this.defaultTags, Name: 'tap-aurora-reader', Role: 'reader' },
     }, { parent: this });
 
     return { auroraSubnetGroup, auroraParameterGroup, auroraCluster, auroraWriterInstance, auroraReaderInstance, dbSecret };
@@ -457,14 +488,14 @@ export class TapStack extends pulumi.ComponentResource {
   private createIAMRoles() {
     const ecsTaskExecutionRole = new aws.iam.Role(`tap-ecs-task-execution-role-${this.environmentSuffix}`, {
       assumeRolePolicy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [{
-          Action: 'sts:AssumeRole',
-          Effect: 'Allow',
-          Principal: { Service: 'ecs-tasks.amazonaws.com' },
+        'Version': '2012-10-17',
+        'Statement': [{
+          'Action': 'sts:AssumeRole',
+          'Effect': 'Allow',
+          'Principal': { 'Service': 'ecs-tasks.amazonaws.com' },
         }],
       }),
-      tags: { ...this.defaultTags, Name: `tap-ecs-task-execution-role` },
+      tags: { ...this.defaultTags, Name: 'tap-ecs-task-execution-role' },
     }, { parent: this });
 
     new aws.iam.RolePolicyAttachment(`tap-ecs-task-execution-policy-${this.environmentSuffix}`, {
@@ -475,63 +506,63 @@ export class TapStack extends pulumi.ComponentResource {
     new aws.iam.RolePolicy(`tap-ecr-access-policy-${this.environmentSuffix}`, {
       role: ecsTaskExecutionRole.id,
       policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [{
-          Effect: 'Allow',
-          Action: [
+        'Version': '2012-10-17',
+        'Statement': [{
+          'Effect': 'Allow',
+          'Action': [
             'ecr:GetAuthorizationToken',
             'ecr:BatchCheckLayerAvailability',
             'ecr:GetDownloadUrlForLayer',
             'ecr:BatchGetImage',
           ],
-          Resource: '*',
+          'Resource': '*',
         }],
       }),
     }, { parent: this });
 
     const ecsTaskRole = new aws.iam.Role(`tap-ecs-task-role-${this.environmentSuffix}`, {
       assumeRolePolicy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [{
-          Action: 'sts:AssumeRole',
-          Effect: 'Allow',
-          Principal: { Service: 'ecs-tasks.amazonaws.com' },
+        'Version': '2012-10-17',
+        'Statement': [{
+          'Action': 'sts:AssumeRole',
+          'Effect': 'Allow',
+          'Principal': { 'Service': 'ecs-tasks.amazonaws.com' },
         }],
       }),
-      tags: { ...this.defaultTags, Name: `tap-ecs-task-role` },
+      tags: { ...this.defaultTags, Name: 'tap-ecs-task-role' },
     }, { parent: this });
 
     new aws.iam.RolePolicy(`tap-task-app-policy-${this.environmentSuffix}`, {
       role: ecsTaskRole.id,
       policy: pulumi.all([this.auroraCluster.arn, this.dbSecret.arn]).apply(([clusterArn, secretArn]) => JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
+        'Version': '2012-10-17',
+        'Statement': [
           {
-            Effect: 'Allow',
-            Action: ['rds-db:connect'],
-            Resource: [`${clusterArn}:dbuser/*`],
+            'Effect': 'Allow',
+            'Action': ['rds-db:connect'],
+            'Resource': [`${clusterArn}:dbuser/*`],
           },
           {
-            Effect: 'Allow',
-            Action: [
+            'Effect': 'Allow',
+            'Action': [
               'secretsmanager:GetSecretValue',
               'secretsmanager:DescribeSecret'
             ],
-            Resource: [secretArn],
+            'Resource': [secretArn],
           },
           {
-            Effect: 'Allow',
-            Action: [
+            'Effect': 'Allow',
+            'Action': [
               'logs:CreateLogGroup',
               'logs:CreateLogStream',
               'logs:PutLogEvents',
             ],
-            Resource: '*',
+            'Resource': '*',
           },
           {
-            Effect: 'Allow',
-            Action: ['cloudwatch:PutMetricData'],
-            Resource: '*',
+            'Effect': 'Allow',
+            'Action': ['cloudwatch:PutMetricData'],
+            'Resource': '*',
           },
         ],
       })),
@@ -539,14 +570,14 @@ export class TapStack extends pulumi.ComponentResource {
 
     const autoScalingRole = new aws.iam.Role(`tap-autoscaling-role-${this.environmentSuffix}`, {
       assumeRolePolicy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [{
-          Action: 'sts:AssumeRole',
-          Effect: 'Allow',
-          Principal: { Service: 'application-autoscaling.amazonaws.com' },
+        'Version': '2012-10-17',
+        'Statement': [{
+          'Action': 'sts:AssumeRole',
+          'Effect': 'Allow',
+          'Principal': { 'Service': 'application-autoscaling.amazonaws.com' },
         }],
       }),
-      tags: { ...this.defaultTags, Name: `tap-autoscaling-role` },
+      tags: { ...this.defaultTags, Name: 'tap-autoscaling-role' },
     }, { parent: this });
 
     new aws.iam.RolePolicyAttachment(`tap-autoscaling-policy-${this.environmentSuffix}`, {
@@ -564,23 +595,23 @@ export class TapStack extends pulumi.ComponentResource {
         scanOnPush: true,
       },
       imageTagMutability: 'MUTABLE',
-      tags: { ...this.defaultTags, Name: `tap-api-repo`, Service: 'api' },
+      tags: { ...this.defaultTags, Name: 'tap-api-repo', Service: 'api' },
     }, { parent: this });
 
     new aws.ecr.LifecyclePolicy(`tap-api-lifecycle-${this.environmentSuffix}`, {
       repository: ecrApiRepository.name,
       policy: JSON.stringify({
-        rules: [
+        'rules': [
           {
-            rulePriority: 1,
-            description: 'Keep last 10 images',
-            selection: {
-              tagStatus: 'any',
-              countType: 'imageCountMoreThan',
-              countNumber: 10,
+            'rulePriority': 1,
+            'description': 'Keep last 10 images',
+            'selection': {
+              'tagStatus': 'any',
+              'countType': 'imageCountMoreThan',
+              'countNumber': 10,
             },
-            action: {
-              type: 'expire',
+            'action': {
+              'type': 'expire',
             },
           },
         ],
@@ -593,23 +624,23 @@ export class TapStack extends pulumi.ComponentResource {
         scanOnPush: true,
       },
       imageTagMutability: 'MUTABLE',
-      tags: { ...this.defaultTags, Name: `tap-frontend-repo`, Service: 'frontend' },
+      tags: { ...this.defaultTags, Name: 'tap-frontend-repo', Service: 'frontend' },
     }, { parent: this });
 
     new aws.ecr.LifecyclePolicy(`tap-frontend-lifecycle-${this.environmentSuffix}`, {
       repository: ecrFrontendRepository.name,
       policy: JSON.stringify({
-        rules: [
+        'rules': [
           {
-            rulePriority: 1,
-            description: 'Keep last 10 images',
-            selection: {
-              tagStatus: 'any',
-              countType: 'imageCountMoreThan',
-              countNumber: 10,
+            'rulePriority': 1,
+            'description': 'Keep last 10 images',
+            'selection': {
+              'tagStatus': 'any',
+              'countType': 'imageCountMoreThan',
+              'countNumber': 10,
             },
-            action: {
-              type: 'expire',
+            'action': {
+              'type': 'expire',
             },
           },
         ],
@@ -629,7 +660,7 @@ export class TapStack extends pulumi.ComponentResource {
       enableDeletionProtection: false,
       enableHttp2: true,
       enableCrossZoneLoadBalancing: true,
-      tags: { ...this.defaultTags, Name: `tap-alb` },
+      tags: { ...this.defaultTags, Name: 'tap-alb' },
     }, { parent: this });
 
     const albTargetGroupBlue = new aws.lb.TargetGroup(`tap-api-tg-blue-${this.environmentSuffix}`, {
@@ -649,7 +680,7 @@ export class TapStack extends pulumi.ComponentResource {
         healthyThreshold: 2,
         unhealthyThreshold: 3,
       },
-      tags: { ...this.defaultTags, Name: `tap-api-tg-blue`, Deployment: 'blue' },
+      tags: { ...this.defaultTags, Name: 'tap-api-tg-blue', Deployment: 'blue' },
     }, { parent: this });
 
     const albTargetGroupGreen = new aws.lb.TargetGroup(`tap-api-tg-green-${this.environmentSuffix}`, {
@@ -669,7 +700,7 @@ export class TapStack extends pulumi.ComponentResource {
         healthyThreshold: 2,
         unhealthyThreshold: 3,
       },
-      tags: { ...this.defaultTags, Name: `tap-api-tg-green`, Deployment: 'green' },
+      tags: { ...this.defaultTags, Name: 'tap-api-tg-green', Deployment: 'green' },
     }, { parent: this });
 
     const albTargetGroupFrontend = new aws.lb.TargetGroup(`tap-frontend-tg-${this.environmentSuffix}`, {
@@ -689,7 +720,7 @@ export class TapStack extends pulumi.ComponentResource {
         healthyThreshold: 2,
         unhealthyThreshold: 3,
       },
-      tags: { ...this.defaultTags, Name: `tap-frontend-tg` },
+      tags: { ...this.defaultTags, Name: 'tap-frontend-tg' },
     }, { parent: this });
 
     const albHttpListener = new aws.lb.Listener(`tap-alb-http-listener-${this.environmentSuffix}`, {
@@ -747,14 +778,14 @@ export class TapStack extends pulumi.ComponentResource {
 
     const hostedZone = new aws.route53.Zone(`tap-hosted-zone-${this.environmentSuffix}`, {
       name: domainName,
-      tags: { ...this.defaultTags, Name: `tap-hosted-zone` },
+      tags: { ...this.defaultTags, Name: 'tap-hosted-zone' },
     }, { parent: this });
 
     const certificate = new aws.acm.Certificate(`tap-certificate-${this.environmentSuffix}`, {
       domainName: domainName,
       subjectAlternativeNames: [`*.${domainName}`],
       validationMethod: 'DNS',
-      tags: { ...this.defaultTags, Name: `tap-certificate` },
+      tags: { ...this.defaultTags, Name: 'tap-certificate' },
     }, { parent: this });
 
     const certificateValidationDomain = new aws.route53.Record(`tap-cert-validation-${this.environmentSuffix}`, {
@@ -808,7 +839,7 @@ export class TapStack extends pulumi.ComponentResource {
         name: 'containerInsights',
         value: 'enabled',
       }],
-      tags: { ...this.defaultTags, Name: `tap-ecs-cluster` },
+      tags: { ...this.defaultTags, Name: 'tap-ecs-cluster' },
     }, { parent: this });
 
     const fargateSpotCapacityProvider = new aws.ecs.ClusterCapacityProviders(`tap-capacity-providers-${this.environmentSuffix}`, {
@@ -823,13 +854,13 @@ export class TapStack extends pulumi.ComponentResource {
     const apiLogGroup = new aws.cloudwatch.LogGroup(`tap-api-logs-${this.environmentSuffix}`, {
       name: `/ecs/tap-api-${this.environmentSuffix}`,
       retentionInDays: 30,
-      tags: { ...this.defaultTags, Name: `tap-api-logs` },
+      tags: { ...this.defaultTags, Name: 'tap-api-logs' },
     }, { parent: this });
 
     const frontendLogGroup = new aws.cloudwatch.LogGroup(`tap-frontend-logs-${this.environmentSuffix}`, {
       name: `/ecs/tap-frontend-${this.environmentSuffix}`,
       retentionInDays: 30,
-      tags: { ...this.defaultTags, Name: `tap-frontend-logs` },
+      tags: { ...this.defaultTags, Name: 'tap-frontend-logs' },
     }, { parent: this });
 
     const apiTaskDefinition = new aws.ecs.TaskDefinition(`tap-api-task-${this.environmentSuffix}`, {
@@ -842,34 +873,34 @@ export class TapStack extends pulumi.ComponentResource {
       taskRoleArn: this.ecsTaskRole.arn,
       containerDefinitions: pulumi.all([this.ecrApiRepository.repositoryUrl, this.auroraCluster.endpoint, apiLogGroup.name, this.dbSecret.arn])
         .apply(([repoUrl, dbEndpoint, logGroupName, secretArn]) => JSON.stringify([{
-          name: 'api',
-          image: `${repoUrl}:latest`,
-          essential: true,
-          portMappings: [{ containerPort: 8080, protocol: 'tcp' }],
-          environment: [
-            { name: 'NODE_ENV', value: 'production' },
-            { name: 'DB_HOST', value: dbEndpoint },
-            { name: 'DB_PORT', value: '5432' },
-            { name: 'DB_NAME', value: 'tradinganalytics' },
-            { name: 'DB_USER', value: 'dbadmin' },
-            { name: 'DB_SECRET_ARN', value: secretArn },
-            { name: 'USE_IAM_AUTH', value: 'true' },
-            { name: 'CIRCUIT_BREAKER_TIMEOUT', value: '30000' },
-            { name: 'CIRCUIT_BREAKER_MAX_RETRIES', value: '3' },
+          'name': 'api',
+          'image': `${repoUrl}:latest`,
+          'essential': true,
+          'portMappings': [{ 'containerPort': 8080, 'protocol': 'tcp' }],
+          'environment': [
+            { 'name': 'NODE_ENV', 'value': 'production' },
+            { 'name': 'DB_HOST', 'value': dbEndpoint },
+            { 'name': 'DB_PORT', 'value': '5432' },
+            { 'name': 'DB_NAME', 'value': 'tradinganalytics' },
+            { 'name': 'DB_USER', 'value': 'dbadmin' },
+            { 'name': 'DB_SECRET_ARN', 'value': secretArn },
+            { 'name': 'USE_IAM_AUTH', 'value': 'true' },
+            { 'name': 'CIRCUIT_BREAKER_TIMEOUT', 'value': '30000' },
+            { 'name': 'CIRCUIT_BREAKER_MAX_RETRIES', 'value': '3' },
           ],
-          logConfiguration: {
-            logDriver: 'awslogs',
-            options: { 'awslogs-group': logGroupName, 'awslogs-region': 'us-east-2', 'awslogs-stream-prefix': 'api' },
+          'logConfiguration': {
+            'logDriver': 'awslogs',
+            'options': { 'awslogs-group': logGroupName, 'awslogs-region': 'us-east-2', 'awslogs-stream-prefix': 'api' },
           },
-          healthCheck: {
-            command: ['CMD-SHELL', 'curl -f http://localhost:8080/api/health || exit 1'],
-            interval: 30,
-            timeout: 5,
-            retries: 3,
-            startPeriod: 60,
+          'healthCheck': {
+            'command': ['CMD-SHELL', 'curl -f http://localhost:8080/api/health || exit 1'],
+            'interval': 30,
+            'timeout': 5,
+            'retries': 3,
+            'startPeriod': 60,
           },
         }])),
-      tags: { ...this.defaultTags, Name: `tap-api-task` },
+      tags: { ...this.defaultTags, Name: 'tap-api-task' },
     }, { parent: this });
 
     const frontendTaskDefinition = new aws.ecs.TaskDefinition(`tap-frontend-task-${this.environmentSuffix}`, {
@@ -882,27 +913,27 @@ export class TapStack extends pulumi.ComponentResource {
       taskRoleArn: this.ecsTaskRole.arn,
       containerDefinitions: pulumi.all([this.ecrFrontendRepository.repositoryUrl, this.alb.dnsName, frontendLogGroup.name])
         .apply(([repoUrl, albDns, logGroupName]) => JSON.stringify([{
-          name: 'frontend',
-          image: `${repoUrl}:latest`,
-          essential: true,
-          portMappings: [{ containerPort: 3000, protocol: 'tcp' }],
-          environment: [
-            { name: 'NODE_ENV', value: 'production' },
-            { name: 'API_URL', value: `http://${albDns}/api` },
+          'name': 'frontend',
+          'image': `${repoUrl}:latest`,
+          'essential': true,
+          'portMappings': [{ 'containerPort': 3000, 'protocol': 'tcp' }],
+          'environment': [
+            { 'name': 'NODE_ENV', 'value': 'production' },
+            { 'name': 'API_URL', 'value': `http://${albDns}/api` },
           ],
-          logConfiguration: {
-            logDriver: 'awslogs',
-            options: { 'awslogs-group': logGroupName, 'awslogs-region': 'us-east-2', 'awslogs-stream-prefix': 'frontend' },
+          'logConfiguration': {
+            'logDriver': 'awslogs',
+            'options': { 'awslogs-group': logGroupName, 'awslogs-region': 'us-east-2', 'awslogs-stream-prefix': 'frontend' },
           },
-          healthCheck: {
-            command: ['CMD-SHELL', 'curl -f http://localhost:3000/ || exit 1'],
-            interval: 30,
-            timeout: 5,
-            retries: 3,
-            startPeriod: 60,
+          'healthCheck': {
+            'command': ['CMD-SHELL', 'curl -f http://localhost:3000/ || exit 1'],
+            'interval': 30,
+            'timeout': 5,
+            'retries': 3,
+            'startPeriod': 60,
           },
         }])),
-      tags: { ...this.defaultTags, Name: `tap-frontend-task` },
+      tags: { ...this.defaultTags, Name: 'tap-frontend-task' },
     }, { parent: this });
 
     const apiService = new aws.ecs.Service(`tap-api-service-${this.environmentSuffix}`, {
@@ -926,7 +957,7 @@ export class TapStack extends pulumi.ComponentResource {
       deploymentMaximumPercent: 200,
       deploymentMinimumHealthyPercent: 100,
       enableExecuteCommand: true,
-      tags: { ...this.defaultTags, Name: `tap-api-service` },
+      tags: { ...this.defaultTags, Name: 'tap-api-service' },
     }, { parent: this, dependsOn: [fargateSpotCapacityProvider] });
 
     const frontendService = new aws.ecs.Service(`tap-frontend-service-${this.environmentSuffix}`, {
@@ -950,7 +981,7 @@ export class TapStack extends pulumi.ComponentResource {
       deploymentMaximumPercent: 200,
       deploymentMinimumHealthyPercent: 100,
       enableExecuteCommand: true,
-      tags: { ...this.defaultTags, Name: `tap-frontend-service` },
+      tags: { ...this.defaultTags, Name: 'tap-frontend-service' },
     }, { parent: this, dependsOn: [fargateSpotCapacityProvider] });
 
     return { ecsCluster, apiLogGroup, frontendLogGroup, apiService, frontendService };
@@ -1026,7 +1057,7 @@ export class TapStack extends pulumi.ComponentResource {
   private createMonitoring() {
     const alarmTopic = new aws.sns.Topic(`tap-alarms-${this.environmentSuffix}`, {
       name: `tap-alarms-${this.environmentSuffix}`,
-      tags: { ...this.defaultTags, Name: `tap-alarms` },
+      tags: { ...this.defaultTags, Name: 'tap-alarms' },
     }, { parent: this });
 
     const cpuAlarm = new aws.cloudwatch.MetricAlarm(`tap-cpu-alarm-${this.environmentSuffix}`, {
@@ -1077,7 +1108,7 @@ export class TapStack extends pulumi.ComponentResource {
     return { cpuAlarm, memoryAlarm, http5xxAlarm };
   }
 
-  private exportOutputs() {
+  private exportOutputs(): pulumi.Output<TapStackOutputs> {
     const outputs = pulumi.output({
       vpcId: this.vpc.id,
       vpcCidr: this.vpc.cidrBlock,
@@ -1112,11 +1143,13 @@ export class TapStack extends pulumi.ComponentResource {
     outputs.apply(o => {
       const outputDir = 'cfn-outputs';
       const outputFile = path.join(outputDir, 'flat-outputs.json');
+
       if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
       }
+
       fs.writeFileSync(outputFile, JSON.stringify(o, null, 2));
-      console.log(`✅ Outputs written to ${outputFile}`);
+      console.log('Outputs written to ' + outputFile);
     });
 
     return outputs;
