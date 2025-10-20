@@ -27,6 +27,7 @@ from aws_cdk import (
     aws_iam as iam,
     aws_ec2 as ec2,
     aws_s3 as s3,
+    aws_s3_notifications,
     aws_kms as kms,
     aws_sns as sns,
     aws_cloudwatch as cloudwatch,
@@ -332,7 +333,7 @@ class TapStack(cdk.Stack):
             lifecycle_rules=[
                 s3.LifecycleRule(
                     id="intelligent-tiering",
-                    status=s3.LifecycleRuleStatus.ENABLED,
+                    enabled=True,
                     transitions=[
                         s3.Transition(
                             storage_class=s3.StorageClass.INTELLIGENT_TIERING,
@@ -374,7 +375,7 @@ class TapStack(cdk.Stack):
             lifecycle_rules=[
                 s3.LifecycleRule(
                     id="log-lifecycle",
-                    status=s3.LifecycleRuleStatus.ENABLED,
+                    enabled=True,
                     expiration=Duration.days(90),
                     transitions=[
                         s3.Transition(
@@ -392,16 +393,17 @@ class TapStack(cdk.Stack):
             auto_delete_objects=True,
         )
 
-        # Enable access logging on data bucket
-        buckets['data'].add_bucket_notification(
-            s3.BucketNotification(
-                s3.EventType.OBJECT_CREATED,
-                dest=sns.Topic(
-                    self,
-                    "S3NotificationTopic",
-                    topic_name=f"tap-s3-notifications-{self.environment_suffix}",
-                )
-            )
+        # Create SNS topic for S3 notifications
+        s3_notification_topic = sns.Topic(
+            self,
+            "S3NotificationTopic",
+            topic_name=f"tap-s3-notifications-{self.environment_suffix}",
+        )
+
+        # Enable S3 notifications on data bucket
+        buckets['data'].add_event_notification(
+            s3.EventType.OBJECT_CREATED,
+            aws_s3_notifications.SnsDestination(s3_notification_topic)
         )
 
         return buckets
