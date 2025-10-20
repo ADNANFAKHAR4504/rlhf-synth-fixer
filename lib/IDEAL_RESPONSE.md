@@ -98,7 +98,7 @@ export class TapStack extends TerraformStack {
       publicSubnets: networking.publicSubnets,
       privateSubnets: networking.privateSubnets,
       dbSecretArn: rds.dbSecret.arn,
-      cacheEndpoint: elasticache.replicationGroup.configurationEndpointAddress,
+      cacheEndpoint: elasticache.replicationGroup.primaryEndpointAddress,
     });
 
     new TerraformOutput(this, 'vpc-id', {
@@ -117,8 +117,8 @@ export class TapStack extends TerraformStack {
     });
 
     new TerraformOutput(this, 'elasticache-endpoint', {
-      value: elasticache.replicationGroup.configurationEndpointAddress,
-      description: 'ElastiCache Redis configuration endpoint',
+      value: elasticache.replicationGroup.primaryEndpointAddress,
+      description: 'ElastiCache Redis primary endpoint',
     });
 
     new TerraformOutput(this, 'ecs-cluster-name', {
