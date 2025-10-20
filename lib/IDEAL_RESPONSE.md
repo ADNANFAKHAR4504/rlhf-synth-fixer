@@ -1,5 +1,3 @@
-#IDEAL_IMPLEMENTATION
-
 ```hcl
 # tap_stack.tf - Web Application Infrastructure for AWS
 # This file creates a scalable, secure web application infrastructure with VPC, 
