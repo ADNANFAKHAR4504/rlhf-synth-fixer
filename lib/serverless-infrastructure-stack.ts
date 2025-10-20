@@ -3,6 +3,8 @@ import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as path from 'path';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
@@ -95,12 +97,12 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
       `${this.stackName}-application-function-${resourceSuffix}`
     );
 
-    // Lambda function (code is provided as an asset under lib/lambda-handler)
-    const lambdaFunction = new lambda.Function(this, 'ApplicationFunction', {
+    // Lambda function using NodejsFunction bundling so dependencies are included
+    const lambdaFunction = new NodejsFunction(this, 'ApplicationFunction', {
       functionName: lambdaFunctionName,
       runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'index.handler',
-      code: lambda.Code.fromAsset('lib/lambda-handler'),
+      entry: path.join(__dirname, 'lambda-handler', 'index.js'),
+      handler: 'handler',
       role: lambdaRole,
       environment: {
         TABLE_NAME: dynamoTable.tableName,
@@ -112,6 +114,10 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
       tracing: lambda.Tracing.ACTIVE,
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
+      bundling: {
+        // ensure aws-sdk (v2) and uuid are bundled into the lambda package
+        nodeModules: ['aws-sdk', 'uuid'],
+      },
     });
 
     // Grant the lambda minimal access to resources
