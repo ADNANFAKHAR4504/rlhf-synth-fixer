@@ -32,7 +32,7 @@ export class TapStack extends pulumi.ComponentResource {
   private readonly commonTags: Record<string, string>;
   private readonly availabilityZones: string[];
   private hubIgw?: aws.ec2.InternetGateway;
-  
+
   // Store subnet references
   private hubPrivateSubnets: aws.ec2.Subnet[] = [];
   private hubPublicSubnets: aws.ec2.Subnet[] = [];
@@ -47,8 +47,8 @@ export class TapStack extends pulumi.ComponentResource {
     super("custom:network:TapStack", name, {}, opts);
 
     this.environmentSuffix = args.environmentSuffix;
-    this.region = args.region || aws.config.region || "us-east-1";
-    
+    this.region = args.region || aws.config.region || "us-east-2";
+
     const repository = process.env.REPOSITORY || "tap-infrastructure";
     const commitAuthor = process.env.COMMIT_AUTHOR || "pulumi";
 
@@ -96,6 +96,7 @@ export class TapStack extends pulumi.ComponentResource {
     this.developmentVpc = this.createVpc(devConfig);
 
     this.transitGateway = this.createTransitGateway();
+
     const tgwAttachments = this.createTransitGatewayAttachments();
     this.configureTransitGatewayRouting(tgwAttachments);
 
@@ -117,6 +118,7 @@ export class TapStack extends pulumi.ComponentResource {
     this.enableVpcFlowLogs(this.developmentVpc, "development");
 
     this.createCloudWatchAlarms(tgwAttachments);
+
     this.outputs = this.exportOutputs(tgwAttachments, natGateways);
 
     this.registerOutputs({
@@ -131,7 +133,7 @@ export class TapStack extends pulumi.ComponentResource {
   private createFlowLogsBucket(): aws.s3.Bucket {
     const timestamp = Date.now();
     const bucketName = `vpc-flow-logs-${this.environmentSuffix}-${this.region}-${timestamp}`;
-    
+
     const bucket = new aws.s3.Bucket(
       `vpc-flow-logs-${this.environmentSuffix}`,
       {
@@ -238,7 +240,7 @@ export class TapStack extends pulumi.ComponentResource {
           },
           { parent: this }
         );
-        
+
         if (config.name === "hub") {
           this.hubPublicSubnets.push(publicSubnet);
         }
@@ -260,7 +262,7 @@ export class TapStack extends pulumi.ComponentResource {
         },
         { parent: this }
       );
-      
+
       if (config.name === "hub") {
         this.hubPrivateSubnets.push(privateSubnet);
       } else if (config.name === "production") {
@@ -275,11 +277,11 @@ export class TapStack extends pulumi.ComponentResource {
     const [baseIp, prefixStr] = vpcCidr.split("/");
     const prefix = parseInt(prefixStr);
     const [octet1, octet2, octet3] = baseIp.split(".").map(Number);
-    
+
     const subnetSize = 20;
     const subnetIncrement = Math.pow(2, subnetSize - prefix);
     const newOctet3 = octet3 + (subnetIndex * subnetIncrement);
-    
+
     return `${octet1}.${octet2}.${newOctet3}.0/${subnetSize}`;
   }
 
@@ -315,7 +317,6 @@ export class TapStack extends pulumi.ComponentResource {
     name: string
   ): aws.ec2transitgateway.VpcAttachment {
     let privateSubnets: aws.ec2.Subnet[];
-    
     if (name === "hub") {
       privateSubnets = this.hubPrivateSubnets;
     } else if (name === "production") {
@@ -325,7 +326,7 @@ export class TapStack extends pulumi.ComponentResource {
     } else {
       throw new Error(`Unknown VPC name: ${name}`);
     }
-    
+
     if (privateSubnets.length === 0) {
       throw new Error(`No private subnets found for VPC ${name}`);
     }
@@ -347,7 +348,7 @@ export class TapStack extends pulumi.ComponentResource {
           Name: `tgw-attachment-${name}-${this.environmentSuffix}`,
         },
       },
-      { 
+      {
         parent: this,
         dependsOn: privateSubnets,
       }
@@ -474,7 +475,7 @@ export class TapStack extends pulumi.ComponentResource {
 
   private createNatGateways() {
     const natGateways: aws.ec2.NatGateway[] = [];
-    
+
     this.hubPublicSubnets.forEach((subnet, index) => {
       const eip = new aws.ec2.Eip(
         `nat-eip-${index}-${this.environmentSuffix}`,
@@ -617,7 +618,6 @@ export class TapStack extends pulumi.ComponentResource {
     attachment: aws.ec2transitgateway.VpcAttachment
   ): void {
     let privateSubnets: aws.ec2.Subnet[];
-    
     if (name === "production") {
       privateSubnets = this.prodPrivateSubnets;
     } else if (name === "development") {
@@ -712,7 +712,6 @@ export class TapStack extends pulumi.ComponentResource {
 
   private createVpcEndpoints(vpc: aws.ec2.Vpc, name: string): void {
     let privateSubnets: aws.ec2.Subnet[];
-    
     if (name === "hub") {
       privateSubnets = this.hubPrivateSubnets;
     } else if (name === "production") {
@@ -756,7 +755,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     const endpoints = ["ssm", "ssmmessages", "ec2messages"];
-    
+
     endpoints.forEach((endpoint: string) => {
       new aws.ec2.VpcEndpoint(
         `${name}-${endpoint}-endpoint-${this.environmentSuffix}`,
