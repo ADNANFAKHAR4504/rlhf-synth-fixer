@@ -21,23 +21,27 @@ export class PipelineStack extends cdk.Stack {
     const testOutput = new codepipeline.Artifact('TestOutput');
 
     // Create CodeBuild project for building
-    const buildProject = new codebuild.PipelineProject(this, 'TapBuildProject', {
-      projectName: 'tap-build',
-      environment: {
-        buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
-        computeType: codebuild.ComputeType.MEDIUM,
-        privileged: true,
-      },
-      environmentVariables: {
-        AWS_ACCOUNT_ID: {
-          value: cdk.Aws.ACCOUNT_ID,
+    const buildProject = new codebuild.PipelineProject(
+      this,
+      'TapBuildProject',
+      {
+        projectName: 'tap-build',
+        environment: {
+          buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
+          computeType: codebuild.ComputeType.MEDIUM,
+          privileged: true,
         },
-        AWS_DEFAULT_REGION: {
-          value: cdk.Aws.REGION,
+        environmentVariables: {
+          AWS_ACCOUNT_ID: {
+            value: cdk.Aws.ACCOUNT_ID,
+          },
+          AWS_DEFAULT_REGION: {
+            value: cdk.Aws.REGION,
+          },
         },
-      },
-      cache: codebuild.Cache.local(codebuild.LocalCacheMode.SOURCE),
-    });
+        cache: codebuild.Cache.local(codebuild.LocalCacheMode.SOURCE),
+      }
+    );
 
     // Create CodeBuild project for testing
     const testProject = new codebuild.PipelineProject(this, 'TapTestProject', {
@@ -53,9 +57,7 @@ export class PipelineStack extends cdk.Stack {
             'runtime-versions': {
               nodejs: 18,
             },
-            commands: [
-              'npm ci',
-            ],
+            commands: ['npm ci'],
           },
           build: {
             commands: [
@@ -83,7 +85,7 @@ export class PipelineStack extends cdk.Stack {
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: ['sts:AssumeRole'],
-              resources: [`arn:aws:iam::*:role/cdk-*`],
+              resources: ['arn:aws:iam::*:role/cdk-*'],
             }),
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
@@ -107,35 +109,36 @@ export class PipelineStack extends cdk.Stack {
     });
 
     // Create CodeBuild project for deployment
-    const deployProject = new codebuild.PipelineProject(this, 'TapDeployProject', {
-      projectName: 'tap-deploy',
-      role: deployRole,
-      environment: {
-        buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
-        computeType: codebuild.ComputeType.MEDIUM,
-      },
-      buildSpec: codebuild.BuildSpec.fromObject({
-        version: '0.2',
-        phases: {
-          install: {
-            'runtime-versions': {
-              nodejs: 18,
-            },
-            commands: [
-              'npm install -g aws-cdk@latest',
-              'npm ci',
-            ],
-          },
-          build: {
-            commands: [
-              'npm run build',
-              'npm run cdk -- synth',
-              'npm run cdk -- deploy TapStack --require-approval never',
-            ],
-          },
+    const deployProject = new codebuild.PipelineProject(
+      this,
+      'TapDeployProject',
+      {
+        projectName: 'tap-deploy',
+        role: deployRole,
+        environment: {
+          buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
+          computeType: codebuild.ComputeType.MEDIUM,
         },
-      }),
-    });
+        buildSpec: codebuild.BuildSpec.fromObject({
+          version: '0.2',
+          phases: {
+            install: {
+              'runtime-versions': {
+                nodejs: 18,
+              },
+              commands: ['npm install -g aws-cdk@latest', 'npm ci'],
+            },
+            build: {
+              commands: [
+                'npm run build',
+                'npm run cdk -- synth',
+                'npm run cdk -- deploy TapStack --require-approval never',
+              ],
+            },
+          },
+        }),
+      }
+    );
 
     // Create Pipeline
     const pipeline = new codepipeline.Pipeline(this, 'TapPipeline', {
@@ -204,4 +207,3 @@ export class PipelineStack extends cdk.Stack {
     });
   }
 }
-

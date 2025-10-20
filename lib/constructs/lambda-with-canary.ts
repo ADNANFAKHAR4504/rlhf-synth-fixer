@@ -34,21 +34,29 @@ export class LambdaWithCanary extends Construct {
     });
 
     // Create CodeDeploy application and deployment group
-    const application = new codedeploy.LambdaApplication(this, 'DeploymentApplication', {
-      applicationName: `${props.functionName}-deployment`,
-    });
+    const application = new codedeploy.LambdaApplication(
+      this,
+      'DeploymentApplication',
+      {
+        applicationName: `${props.functionName}-deployment`,
+      }
+    );
 
-    this.deploymentGroup = new codedeploy.LambdaDeploymentGroup(this, 'DeploymentGroup', {
-      application,
-      alias,
-      deploymentConfig: props.canaryConfig.deploymentConfig,
-      alarms: props.canaryConfig.alarmConfiguration?.alarms,
-    });
+    this.deploymentGroup = new codedeploy.LambdaDeploymentGroup(
+      this,
+      'DeploymentGroup',
+      {
+        application,
+        alias,
+        deploymentConfig: props.canaryConfig.deploymentConfig,
+        alarms: props.canaryConfig.alarmConfiguration?.alarms,
+      }
+    );
   }
 
-  public updateCanaryAlarms(alarms: cloudwatch.Alarm[]): void {
+  public updateCanaryAlarms(_alarms: cloudwatch.Alarm[]): void {
     // This method would update the deployment group with new alarms
     // In practice, you'd need to handle this through CDK updates
+    // Note: CDK doesn't support updating alarms after deployment group creation
   }
 }
-

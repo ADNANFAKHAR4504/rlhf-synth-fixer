@@ -49,18 +49,19 @@ export class SecureBucket extends Construct {
     });
 
     // Add bucket policy for secure access
-    this.bucket.addToResourcePolicy(new cdk.aws_iam.PolicyStatement({
-      sid: 'DenyUnencryptedObjectUploads',
-      effect: cdk.aws_iam.Effect.DENY,
-      principals: [new cdk.aws_iam.AnyPrincipal()],
-      actions: ['s3:PutObject'],
-      resources: [`${this.bucket.bucketArn}/*`],
-      conditions: {
-        StringNotEquals: {
-          's3:x-amz-server-side-encryption': 'aws:kms',
+    this.bucket.addToResourcePolicy(
+      new cdk.aws_iam.PolicyStatement({
+        sid: 'DenyUnencryptedObjectUploads',
+        effect: cdk.aws_iam.Effect.DENY,
+        principals: [new cdk.aws_iam.AnyPrincipal()],
+        actions: ['s3:PutObject'],
+        resources: [`${this.bucket.bucketArn}/*`],
+        conditions: {
+          StringNotEquals: {
+            's3:x-amz-server-side-encryption': 'aws:kms',
+          },
         },
-      },
-    }));
+      })
+    );
   }
 }
-

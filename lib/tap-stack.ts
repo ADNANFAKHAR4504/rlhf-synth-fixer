@@ -35,10 +35,12 @@ export class TapStack extends cdk.Stack {
       bucketName: `tap-app-logs-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      lifecycleRules: [{
-        id: 'delete-old-logs',
-        expiration: cdk.Duration.days(90),
-      }],
+      lifecycleRules: [
+        {
+          id: 'delete-old-logs',
+          expiration: cdk.Duration.days(90),
+        },
+      ],
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
@@ -49,14 +51,16 @@ export class TapStack extends cdk.Stack {
     }).bucket;
 
     // Create source bucket for pipeline if not provided
-    this.pipelineSourceBucket = props?.pipelineSourceBucket || new s3.Bucket(this, 'TapPipelineSourceBucket', {
-      bucketName: `tap-pipeline-source-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
-      versioned: true,
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
-    });
+    this.pipelineSourceBucket =
+      props?.pipelineSourceBucket ||
+      new s3.Bucket(this, 'TapPipelineSourceBucket', {
+        bucketName: `tap-pipeline-source-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+        versioned: true,
+        encryption: s3.BucketEncryption.S3_MANAGED,
+        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        autoDeleteObjects: true,
+      });
 
     // Create Dead Letter Queue
     const dlq = new sqs.Queue(this, 'TapLambdaDLQ', {
@@ -82,7 +86,9 @@ export class TapStack extends cdk.Stack {
     const lambdaRole = new iam.Role(this, 'TapLambdaRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSLambdaBasicExecutionRole'
+        ),
       ],
       inlinePolicies: {
         TapLambdaPolicy: new iam.PolicyDocument({
@@ -132,7 +138,8 @@ export class TapStack extends cdk.Stack {
       logRetention: logs.RetentionDays.ONE_MONTH,
       tracing: lambda.Tracing.ACTIVE,
       canaryConfig: {
-        deploymentConfig: codedeploy.LambdaDeploymentConfig.CANARY_10PERCENT_5MINUTES,
+        deploymentConfig:
+          codedeploy.LambdaDeploymentConfig.CANARY_10PERCENT_5MINUTES,
         alarmConfiguration: {
           alarms: [], // Will be populated below
           enabled: true,
@@ -184,20 +191,105 @@ export class TapStack extends cdk.Stack {
     // Update canary deployment alarms
     lambdaWithCanary.updateCanaryAlarms([errorAlarm]);
 
-    // Output important values
+    // Output important values for testing
     new cdk.CfnOutput(this, 'ApplicationBucketName', {
       value: this.applicationBucket.bucketName,
       description: 'Name of the application S3 bucket',
+      exportName: `${this.stackName}-ApplicationBucket`,
     });
 
-    new cdk.CfnOutput(this, 'LambdaFunctionArn', {
-      value: this.lambdaFunction.functionArn,
-      description: 'ARN of the Lambda function',
+    new cdk.CfnOutput(this, 'ApplicationBucketArn', {
+      value: this.applicationBucket.bucketArn,
+      description: 'ARN of the application S3 bucket',
+      exportName: `${this.stackName}-ApplicationBucketArn`,
+    });
+
+    new cdk.CfnOutput(this, 'LoggingBucketName', {
+      value: loggingBucket.bucketName,
+      description: 'Name of the logging S3 bucket',
+      exportName: `${this.stackName}-LoggingBucket`,
     });
 
     new cdk.CfnOutput(this, 'PipelineSourceBucketName', {
       value: this.pipelineSourceBucket.bucketName,
       description: 'Name of the pipeline source S3 bucket',
+      exportName: `${this.stackName}-PipelineSourceBucket`,
+    });
+
+    new cdk.CfnOutput(this, 'LambdaFunctionArn', {
+      value: this.lambdaFunction.functionArn,
+      description: 'ARN of the Lambda function',
+      exportName: `${this.stackName}-LambdaArn`,
+    });
+
+    new cdk.CfnOutput(this, 'LambdaFunctionName', {
+      value: this.lambdaFunction.functionName,
+      description: 'Name of the Lambda function (use for AWS CLI invocations)',
+      exportName: `${this.stackName}-LambdaName`,
+    });
+
+    new cdk.CfnOutput(this, 'DeadLetterQueueUrl', {
+      value: dlq.queueUrl,
+      description: 'URL of the Dead Letter Queue',
+      exportName: `${this.stackName}-DLQUrl`,
+    });
+
+    new cdk.CfnOutput(this, 'DeadLetterQueueArn', {
+      value: dlq.queueArn,
+      description: 'ARN of the Dead Letter Queue',
+      exportName: `${this.stackName}-DLQArn`,
+    });
+
+    new cdk.CfnOutput(this, 'SecretArn', {
+      value: appSecret.secretArn,
+      description: 'ARN of the Secrets Manager secret',
+      exportName: `${this.stackName}-SecretArn`,
+    });
+
+    new cdk.CfnOutput(this, 'AlarmTopicArn', {
+      value: alarmTopic.topicArn,
+      description: 'ARN of the SNS alarm topic',
+      exportName: `${this.stackName}-AlarmTopicArn`,
+    });
+
+    new cdk.CfnOutput(this, 'ErrorAlarmName', {
+      value: errorAlarm.alarmName,
+      description: 'Name of the Lambda error alarm',
+      exportName: `${this.stackName}-ErrorAlarmName`,
+    });
+
+    new cdk.CfnOutput(this, 'ThrottleAlarmName', {
+      value: throttleAlarm.alarmName,
+      description: 'Name of the Lambda throttle alarm',
+      exportName: `${this.stackName}-ThrottleAlarmName`,
+    });
+
+    new cdk.CfnOutput(this, 'DurationAlarmName', {
+      value: durationAlarm.alarmName,
+      description: 'Name of the Lambda duration alarm',
+      exportName: `${this.stackName}-DurationAlarmName`,
+    });
+
+    new cdk.CfnOutput(this, 'LambdaRoleArn', {
+      value: lambdaRole.roleArn,
+      description: 'ARN of the Lambda execution role',
+      exportName: `${this.stackName}-LambdaRoleArn`,
+    });
+
+    // Useful testing commands
+    new cdk.CfnOutput(this, 'TestInvokeCommand', {
+      value: `aws lambda invoke --function-name ${this.lambdaFunction.functionName} --payload '{"test": "data"}' response.json`,
+      description: 'AWS CLI command to test invoke the Lambda function',
+    });
+
+    new cdk.CfnOutput(this, 'CheckDLQCommand', {
+      value: `aws sqs receive-message --queue-url ${dlq.queueUrl} --max-number-of-messages 10`,
+      description: 'AWS CLI command to check Dead Letter Queue messages',
+    });
+
+    new cdk.CfnOutput(this, 'ViewLogsCommand', {
+      value: `aws logs tail /aws/lambda/${this.lambdaFunction.functionName} --follow`,
+      description: 'AWS CLI command to tail Lambda function logs',
     });
   }
 }
