@@ -1,6 +1,8 @@
 # Production Web Application Infrastructure
 
-I'll create a comprehensive Terraform configuration for your production-ready web application infrastructure in AWS us-east-1. This will be a single, well-organized file that includes all the components you specified.
+## Terraform Configuration for AWS Web Application
+
+This document provides a Terraform configuration for deploying a production-ready web application infrastructure in AWS us-east-1. The configuration is organized as a single, well-structured file containing all required components.
 
 ```hcl
 # Production-grade AWS Web Application Infrastructure
