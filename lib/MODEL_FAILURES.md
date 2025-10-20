@@ -256,7 +256,6 @@ ConfigRuleName: !Sub '${AWS::StackName}-encrypted-volumes'
 ## Summary
 
 The model response demonstrates significant configuration gaps including:
-- Missing standardized tagging (`rlhf-iac-amazon`)
 - Incomplete KMS key policies for EC2/Auto Scaling services
 - Suboptimal S3 bucket naming strategy
 - Missing critical networking infrastructure (NAT Gateways, Route Tables)
