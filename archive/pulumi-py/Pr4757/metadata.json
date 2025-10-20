@@ -11,5 +11,12 @@
   "subject_labels": [
     "Environment Migration"
   ],
-  "aws_services": "S3 Bucket, Lambda, IAM Role, SSM Parameter Store, Secrets Manager, CloudWatch LogGroup, CloudWatch Metric Alarm, SNS Topic"
+  "aws_services": "S3 Bucket, Lambda, IAM Role, SSM Parameter Store, Secrets Manager, CloudWatch LogGroup, CloudWatch Metric Alarm, SNS Topic",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
 }
