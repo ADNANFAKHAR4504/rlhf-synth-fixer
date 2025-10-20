@@ -250,11 +250,23 @@ class TapStack(cdk.Stack):
             self,
             "VpcFlowLogRole",
             assumed_by=iam.ServicePrincipal("vpc-flow-logs.amazonaws.com"),
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "service-role/VPCFlowLogsDeliveryRolePolicy"
+            inline_policies={
+                "FlowLogDeliveryRolePolicy": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            effect=iam.Effect.ALLOW,
+                            actions=[
+                                "logs:CreateLogGroup",
+                                "logs:CreateLogStream",
+                                "logs:PutLogEvents",
+                                "logs:DescribeLogGroups",
+                                "logs:DescribeLogStreams"
+                            ],
+                            resources=["*"]
+                        )
+                    ]
                 )
-            ],
+            }
         )
 
         ec2.FlowLog(
@@ -267,9 +279,9 @@ class TapStack(cdk.Stack):
                     "VpcFlowLogGroup",
                     log_group_name=f"/aws/vpc/flowlogs/{self.environment_suffix}",
                     retention=logs.RetentionDays.ONE_MONTH,
-                    encryption_key=self.kms_key,
                     removal_policy=RemovalPolicy.DESTROY,
-                )
+                ),
+                flow_log_role
             ),
             traffic_type=ec2.FlowLogTrafficType.ALL,
         )
@@ -418,7 +430,6 @@ class TapStack(cdk.Stack):
             "ApiGatewayLogGroup",
             log_group_name=f"/aws/apigateway/tap-api-{self.environment_suffix}",
             retention=logs.RetentionDays.ONE_MONTH if self.environment_suffix == 'dev' else logs.RetentionDays.THREE_MONTHS,
-            encryption_key=self.kms_key,
             removal_policy=RemovalPolicy.DESTROY,
         )
 
@@ -428,7 +439,6 @@ class TapStack(cdk.Stack):
             "LambdaLogGroup",
             log_group_name=f"/aws/lambda/tap-api-handler-{self.environment_suffix}",
             retention=logs.RetentionDays.ONE_MONTH if self.environment_suffix == 'dev' else logs.RetentionDays.THREE_MONTHS,
-            encryption_key=self.kms_key,
             removal_policy=RemovalPolicy.DESTROY,
         )
 
@@ -438,7 +448,6 @@ class TapStack(cdk.Stack):
             "SecurityLogGroup",
             log_group_name=f"/aws/security/tap-{self.environment_suffix}",
             retention=logs.RetentionDays.SIX_MONTHS,
-            encryption_key=self.kms_key,
             removal_policy=RemovalPolicy.RETAIN if self.environment_suffix == 'prod' else RemovalPolicy.DESTROY,
         )
 
@@ -454,7 +463,6 @@ class TapStack(cdk.Stack):
             "SecurityAlertsTopic",
             topic_name=f"tap-security-alerts-{self.environment_suffix}",
             display_name="TAP Security Alerts",
-            master_key=self.kms_key,
         )
 
         # Operational alerts topic
@@ -463,7 +471,6 @@ class TapStack(cdk.Stack):
             "OperationalAlertsTopic",
             topic_name=f"tap-operational-alerts-{self.environment_suffix}",
             display_name="TAP Operational Alerts",
-            master_key=self.kms_key,
         )
 
         return topics
