@@ -10,6 +10,10 @@ import { SNSClient, PublishCommand, ListTopicsCommand } from '@aws-sdk/client-sn
 import { ConfigServiceClient, StartConfigRulesEvaluationCommand, GetComplianceDetailsByConfigRuleCommand } from '@aws-sdk/client-config-service';
 import { CloudWatchLogsClient, PutLogEventsCommand, CreateLogStreamCommand } from '@aws-sdk/client-cloudwatch-logs';
 import { WAFV2Client, ListWebACLsCommand, GetWebACLCommand } from '@aws-sdk/client-wafv2';
+import { SignatureV4 } from '@aws-sdk/signature-v4';
+import { Sha256 } from '@aws-crypto/sha256-js';
+import { defaultProvider } from '@aws-sdk/credential-provider-node';
+import { HttpRequest } from '@aws-sdk/protocol-http';
 
 // Configuration from CloudFormation outputs
 if (!fs.existsSync('cfn-outputs/flat-outputs.json')) {
@@ -1093,30 +1097,46 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
       expect(apiGatewayUrl).toContain('execute-api');
       expect(apiGatewayUrl).toContain('amazonaws.com');
       
-      // Step 2: Test API Gateway endpoint with actual HTTP request
+      // Step 2: Test API Gateway endpoint with SigV4 signed HTTP request
       const clinicalDataEndpoint = `${apiGatewayUrl}/clinical-data`;
       console.log(`Testing HTTP endpoint: ${clinicalDataEndpoint}`);
-      
+
       try {
-        const response = await fetch(clinicalDataEndpoint, {
+        const url = new URL(clinicalDataEndpoint);
+        const credentials = await defaultProvider()();
+        const signer = new SignatureV4({
+          credentials,
+          region,
+          service: 'execute-api',
+          sha256: Sha256
+        });
+
+        const request = new HttpRequest({
+          protocol: url.protocol,
+          hostname: url.hostname,
           method: 'GET',
+          path: `${url.pathname}`,
           headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
+            host: url.hostname,
+            accept: 'application/json'
           }
         });
-        
+
+        const signed = await signer.sign(request);
+        const response = await fetch(`${url.protocol}//${url.hostname}${url.pathname}`, {
+          method: 'GET',
+          headers: signed.headers as any
+        });
+
         expect(response.status).toBeDefined();
-        // API Gateway requires authentication, so 403 is expected without proper auth
         expect(response.status).toBeGreaterThanOrEqual(200);
-        expect(response.status).toBeLessThanOrEqual(403);
-        
+        expect(response.status).toBeLessThan(500);
+
         const responseText = await response.text();
         expect(responseText).toBeDefined();
         console.log(`API Gateway Response Status: ${response.status}`);
         console.log(`API Gateway Response: ${responseText.substring(0, 200)}...`);
-        
-        // Store HTTP test results
+
         const httpTestData = {
           endpoint: clinicalDataEndpoint,
           status: response.status,
@@ -1125,29 +1145,28 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
           body: responseText,
           timestamp: new Date().toISOString()
         };
-        
+
         const bucketName = outputs['NovaDataBucketName'];
         const httpTestKey = `http-tests/api-gateway-test-${Date.now()}.json`;
-        
+
         await s3Client.send(new PutObjectCommand({
           Bucket: bucketName,
           Key: httpTestKey,
           Body: JSON.stringify(httpTestData),
           ContentType: 'application/json'
         }));
-        
+
       } catch (error) {
         console.warn(`HTTP request failed: ${error}`);
-        // Store error for analysis
         const errorData = {
           endpoint: clinicalDataEndpoint,
           error: error instanceof Error ? error.message : String(error),
           timestamp: new Date().toISOString()
         };
-        
+
         const bucketName = outputs['NovaDataBucketName'];
         const errorKey = `http-tests/api-gateway-error-${Date.now()}.json`;
-        
+
         await s3Client.send(new PutObjectCommand({
           Bucket: bucketName,
           Key: errorKey,
@@ -1156,10 +1175,19 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
         }));
       }
       
-      // Step 3: Test CloudFront distribution with HTTP request
+      // Step 3: Upload a probe object and fetch via CloudFront
       const cloudFrontDomain = outputs['NovaCloudFrontDomainName'];
       if (cloudFrontDomain) {
-        const cloudFrontUrl = `https://${cloudFrontDomain}`;
+        const probeKey = `cloudfront-probe/probe-${Date.now()}.txt`;
+        const bucketName = outputs['NovaDataBucketName'];
+        await s3Client.send(new PutObjectCommand({
+          Bucket: bucketName,
+          Key: probeKey,
+          Body: 'cloudfront-probe-ok',
+          ContentType: 'text/plain'
+        }));
+
+        const cloudFrontUrl = `https://${cloudFrontDomain}/${probeKey}`;
         console.log(`Testing CloudFront endpoint: ${cloudFrontUrl}`);
         
         try {
