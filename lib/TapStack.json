@@ -755,10 +755,10 @@
                     "MaxCapacity": 1
                 },
                 "MasterUsername": {
-                    "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}"
+                    "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}::username}}"
                 },
                 "MasterUserPassword": {
-                    "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}"
+                    "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}::password}}"
                 },
                 "DBSubnetGroupName": {
                     "Ref": "DBSubnetGroup"
