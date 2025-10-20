@@ -313,13 +313,13 @@ resource "aws_security_group" "alb" {
     }
   }
 
-  # Outbound traffic to web servers
+  # Outbound traffic to private subnets (where web servers are)
   egress {
-    description     = "HTTP to web servers"
-    from_port       = 80
-    to_port         = 80
-    protocol        = "tcp"
-    security_groups = [aws_security_group.web.id]
+    description = "HTTP to web servers"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = local.private_subnet_cidrs
   }
 
   tags = merge(local.common_tags, {
@@ -333,13 +333,13 @@ resource "aws_security_group" "web" {
   description = "Security group for web servers"
   vpc_id      = aws_vpc.main.id
 
-  # HTTP access from ALB
+  # HTTP access from public subnets (where ALB is)
   ingress {
-    description     = "HTTP from ALB"
-    from_port       = 80
-    to_port         = 80
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
+    description = "HTTP from ALB"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = local.public_subnet_cidrs
   }
 
   # SSH access (optional - for management)
@@ -384,6 +384,32 @@ resource "aws_security_group" "rds" {
   tags = merge(local.common_tags, {
     Name = "webapp-rds-sg${var.environment_suffix}"
   })
+}
+
+# ========================================
+# Security Group Rules (to avoid circular dependency)
+# ========================================
+
+# Allow ALB to communicate with web servers using security group reference
+resource "aws_security_group_rule" "alb_to_web" {
+  type                     = "egress"
+  from_port                = 80
+  to_port                  = 80
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.web.id
+  security_group_id        = aws_security_group.alb.id
+  description              = "ALB to web servers"
+}
+
+# Allow web servers to receive traffic from ALB using security group reference
+resource "aws_security_group_rule" "web_from_alb" {
+  type                     = "ingress"
+  from_port                = 80
+  to_port                  = 80
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.alb.id
+  security_group_id        = aws_security_group.web.id
+  description              = "Web servers from ALB"
 }
 
 # ========================================
