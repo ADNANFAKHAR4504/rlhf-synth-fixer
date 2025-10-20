@@ -358,19 +358,19 @@ class TapStack(cdk.Stack):
             auto_delete_objects=self.environment_suffix != 'prod',
         )
 
-        # Add bucket policy to restrict access to VPC
+        # Add bucket policy to restrict access to VPC (with exceptions for CDK operations)
         buckets['data'].add_to_resource_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.DENY,
                 principals=[iam.AnyPrincipal()],
-                actions=["s3:*"],
-                resources=[
-                    buckets['data'].bucket_arn,
-                    buckets['data'].arn_for_objects("*"),
-                ],
+                actions=["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+                resources=[buckets['data'].arn_for_objects("*")],
                 conditions={
                     "StringNotEquals": {
                         "aws:SourceVpc": self.vpc.vpc_id
+                    },
+                    "Bool": {
+                        "aws:ViaAWSService": "false"
                     }
                 },
             )
@@ -403,19 +403,6 @@ class TapStack(cdk.Stack):
             ],
             removal_policy=RemovalPolicy.DESTROY,
             auto_delete_objects=True,
-        )
-
-        # Create SNS topic for S3 notifications
-        s3_notification_topic = sns.Topic(
-            self,
-            "S3NotificationTopic",
-            topic_name=f"tap-s3-notifications-{self.environment_suffix}",
-        )
-
-        # Enable S3 notifications on data bucket
-        buckets['data'].add_event_notification(
-            s3.EventType.OBJECT_CREATED,
-            aws_s3_notifications.SnsDestination(s3_notification_topic)
         )
 
         return buckets
