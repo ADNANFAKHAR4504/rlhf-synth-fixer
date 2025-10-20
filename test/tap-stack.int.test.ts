@@ -1,17 +1,21 @@
 import fs from 'fs';
-import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command, GetBucketEncryptionCommand } from '@aws-sdk/client-s3';
 import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
 import { CloudFrontClient, GetDistributionCommand, CreateInvalidationCommand, ListDistributionsCommand } from '@aws-sdk/client-cloudfront';
 import { APIGatewayClient, GetRestApiCommand, GetStageCommand, TestInvokeMethodCommand, GetResourcesCommand } from '@aws-sdk/client-api-gateway';
-import { EC2Client, DescribeInstancesCommand, StartInstancesCommand, StopInstancesCommand, DescribeSecurityGroupsCommand } from '@aws-sdk/client-ec2';
+import { EC2Client, DescribeInstancesCommand, StartInstancesCommand, StopInstancesCommand, DescribeSecurityGroupsCommand, DescribeLaunchTemplateVersionsCommand, RebootInstancesCommand, DescribeInstanceStatusCommand } from '@aws-sdk/client-ec2';
 import { KMSClient, EncryptCommand, DecryptCommand, GenerateDataKeyCommand } from '@aws-sdk/client-kms';
 import { SecretsManagerClient, GetSecretValueCommand, UpdateSecretCommand, ListSecretsCommand } from '@aws-sdk/client-secrets-manager';
 import { SNSClient, PublishCommand, ListTopicsCommand } from '@aws-sdk/client-sns';
-import { ConfigServiceClient, StartConfigRulesEvaluationCommand, GetComplianceDetailsByConfigRuleCommand } from '@aws-sdk/client-config-service';
+import { ConfigServiceClient, StartConfigRulesEvaluationCommand, GetComplianceDetailsByConfigRuleCommand, DescribeConfigRulesCommand } from '@aws-sdk/client-config-service';
 import { CloudWatchLogsClient, PutLogEventsCommand, CreateLogStreamCommand } from '@aws-sdk/client-cloudwatch-logs';
 import { WAFV2Client, ListWebACLsCommand, GetWebACLCommand } from '@aws-sdk/client-wafv2';
+import { IAMClient, GetPolicyCommand, GetPolicyVersionCommand } from '@aws-sdk/client-iam';
+import { STSClient, GetCallerIdentityCommand } from '@aws-sdk/client-sts';
 import { defaultProvider } from '@aws-sdk/credential-provider-node';
 import aws4 from 'aws4';
+import AWS from 'aws-sdk';
+import { Client as PgClient } from 'pg';
 
 // Configuration from CloudFormation outputs
 if (!fs.existsSync('cfn-outputs/flat-outputs.json')) {
@@ -33,6 +37,8 @@ const snsClient = new SNSClient({ region });
 const configClient = new ConfigServiceClient({ region });
 const logsClient = new CloudWatchLogsClient({ region });
 const wafClient = new WAFV2Client({ region });
+const iamClient = new IAMClient({ region });
+const stsClient = new STSClient({ region });
 
 describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
   const testTimeout = 600000; // 10 minutes
@@ -98,37 +104,14 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
       const listDistributions = await cloudFrontClient.send(new ListDistributionsCommand({}));
       const targetDomain = outputs['NovaCloudFrontDomainName'];
       
-      // Try multiple search patterns to find the distribution
+      // Only use the distribution matching the expected domain from outputs
       let distribution = listDistributions.DistributionList?.Items?.find(d => 
         d.DomainName === targetDomain
       );
       
-      // If not found by exact domain, try partial matches
-      if (!distribution) {
-        distribution = listDistributions.DistributionList?.Items?.find(d => 
-          d.DomainName?.includes('cloudfront.net') && 
-          (d.Comment?.includes('nova') || d.Comment?.includes('clinical') || d.Comment?.includes('TapStack'))
-        );
-      }
-      
-      // If still not found, try any distribution with nova in the comment
-      if (!distribution) {
-        distribution = listDistributions.DistributionList?.Items?.find(d => 
-          d.Comment?.includes('nova') || d.Comment?.includes('clinical')
-        );
-      }
-      
-      // If still not found, get the first available distribution
-      if (!distribution && listDistributions.DistributionList?.Items?.length > 0) {
-        distribution = listDistributions.DistributionList.Items[0];
-        console.log(`Using first available CloudFront distribution: ${distribution.DomainName}`);
-      }
-      
-      if (!distribution?.Id) {
-        console.warn('No CloudFront distributions found');
-        return;
-      }
-      const distributionResponse = await cloudFrontClient.send(new GetDistributionCommand({ Id: distribution.Id }));
+      // Fail-fast if the expected distribution is not found
+      expect(distribution?.Id).toBeDefined();
+      const distributionResponse = await cloudFrontClient.send(new GetDistributionCommand({ Id: distribution!.Id! }));
       expect(distributionResponse.Distribution?.Status).toBeDefined();
       // CloudFront distributions can be in various states, accept deployed or in progress
       expect(['Deployed', 'InProgress']).toContain(distributionResponse.Distribution?.Status);
@@ -195,10 +178,7 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
         s.Name?.includes('rds')
       );
       
-      if (!secret?.Name) {
-        console.warn('Database secret not found, skipping database test');
-        return;
-      }
+      expect(secret?.Name).toBeDefined();
       
       const secretName = secret.Name;
       const secretResponse = await secretsClient.send(new GetSecretValueCommand({
@@ -219,10 +199,26 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
       expect(dbInstance?.PubliclyAccessible).toBe(false);
       testData.dbEndpoint = dbInstance?.Endpoint?.Address;
 
-      // Step 3: Test database connection 
-      const connectionString = `postgresql://${dbCredentials.username}:${dbCredentials.password}@${testData.dbEndpoint}:5432/nova_clinical`;
-      expect(connectionString).toContain('postgresql://');
-      expect(connectionString).toContain(testData.dbEndpoint);
+      // Step 3: Attempt a real database connection (may fail due to private networking)
+      const pgClient = new PgClient({
+        host: testData.dbEndpoint,
+        port: 5432,
+        user: dbCredentials.username,
+        password: dbCredentials.password,
+        database: 'postgres',
+        ssl: { rejectUnauthorized: false },
+        connectionTimeoutMillis: 5000,
+      });
+      try {
+        await pgClient.connect();
+        const res = await pgClient.query('SELECT 1 as ok');
+        expect(res.rows[0].ok).toBe(1);
+      } catch (e) {
+        // Validate that a real attempt happened; allow network failures but not syntax/format issues
+        expect(String(e)).toMatch(/timeout|ECONNREFUSED|ENETUNREACH|no route|connect/);
+      } finally {
+        await pgClient.end().catch(() => undefined);
+      }
 
       // Step 4: Verify encryption at rest
       expect(dbInstance?.StorageEncrypted).toBe(true);
@@ -260,48 +256,17 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
       
       const rdsSecurityGroupIds = dbInstance?.VpcSecurityGroups?.map(sg => sg.VpcSecurityGroupId) || [];
       console.log(`RDS Security Groups: ${rdsSecurityGroupIds.length} found`);
-      
-      // Step 4: Test network connectivity simulation
-      const connectivityTest = {
-        testId: `connectivity-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        source: {
-          instanceId: testData.instanceId,
-          securityGroupId: securityGroupId,
-          privateIp: novaInstance?.PrivateIpAddress,
-          subnetId: novaInstance?.SubnetId
-        },
-        target: {
-          endpoint: testData.dbEndpoint,
-          port: 5432,
-          securityGroupIds: rdsSecurityGroupIds,
-          vpcId: dbInstance?.DBSubnetGroup?.VpcId
-        },
-        networkPath: {
-          sameVpc: true,
-          sameSubnet: false,
-          securityGroupRules: {
-            ec2Ingress: ec2SecurityGroup?.SecurityGroupIngress?.length || 0,
-            ec2Egress: ec2SecurityGroup?.SecurityGroupEgress?.length || 0
-          }
-        },
-        expectedResult: {
-          connectionAllowed: true,
-          portOpen: true,
-          encryptionRequired: true
-        }
-      };
+      expect(rdsSecurityGroupIds.length).toBeGreaterThan(0);
 
-      // Step 5: Store connectivity test results
-      const bucketName = outputs['NovaDataBucketName'];
-      const connectivityKey = `connectivity-tests/ec2-rds-connectivity-${Date.now()}.json`;
+      const rdsGroupIdsFiltered = rdsSecurityGroupIds.filter((id): id is string => !!id);
+      const rdsSgDetails = await ec2Client.send(new DescribeSecurityGroupsCommand({ GroupIds: rdsGroupIdsFiltered }));
+      const hasIngressFromEc2Sg = (rdsSgDetails.SecurityGroups || []).some(group =>
+        (group.IpPermissions || []).some(p => p.FromPort === 5432 && p.ToPort === 5432 && (p.UserIdGroupPairs || []).some(pair => pair.GroupId === securityGroupId))
+      );
+      expect(hasIngressFromEc2Sg).toBe(true);
       
-      await s3Client.send(new PutObjectCommand({
-        Bucket: bucketName,
-        Key: connectivityKey,
-        Body: JSON.stringify(connectivityTest),
-        ContentType: 'application/json'
-      }));
+      // Step 4: Assert same VPC for instance and DB
+      expect(novaInstance?.VpcId).toBe(dbInstance?.DBSubnetGroup?.VpcId);
 
       // Step 6: Test database credentials and connection string
       const listSecretsResponse = await secretsClient.send(new ListSecretsCommand({}));
@@ -348,27 +313,7 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
           }
         };
 
-        // Step 8: Store connection test results
-        const connectionKey = `connectivity-tests/db-connection-test-${Date.now()}.json`;
-        
-        await s3Client.send(new PutObjectCommand({
-          Bucket: bucketName,
-          Key: connectionKey,
-          Body: JSON.stringify(connectionTest),
-          ContentType: 'application/json'
-        }));
-
-        // Step 9: Verify connection test data retrieval
-        const connectionGetResponse = await s3Client.send(new GetObjectCommand({
-          Bucket: bucketName,
-          Key: connectionKey
-        }));
-        expect(connectionGetResponse.Body).toBeDefined();
-        
-        const retrievedConnectionTest = JSON.parse(await connectionGetResponse.Body?.transformToString() || '{}');
-        expect(retrievedConnectionTest.testResults.credentialsValid).toBe(true);
-        expect(retrievedConnectionTest.testResults.endpointReachable).toBe(true);
-        expect(retrievedConnectionTest.securityValidation.publicAccess).toBe(false);
+        // Remove simulated S3 storage and retrieval; assertions are based on real infra
       }
 
       // Step 10: Test application-level database access simulation
@@ -468,18 +413,14 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
         logEvents: logEvents
       }));
 
-      // Step 2: Test SNS notification
+      // Step 2: Test SNS notification (fail-fast if not found)
       const topicsResponse = await snsClient.send(new ListTopicsCommand({}));
       const topic = topicsResponse.Topics?.find(t => 
         t.TopicArn?.includes('nova-clinical') || 
         t.TopicArn?.includes('TapStack') ||
         t.TopicArn?.includes('clinical')
       );
-      
-      if (!topic?.TopicArn) {
-        console.warn('Nova SNS topic not found, skipping SNS test');
-        return;
-      }
+      expect(topic?.TopicArn).toBeDefined();
 
       const publishResponse = await snsClient.send(new PublishCommand({
         TopicArn: topic?.TopicArn,
@@ -515,10 +456,7 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
         acl.Name?.includes('nova-clinical') || acl.Name?.includes('NovaWebACL')
       );
       
-      if (!novaWebACL || !novaWebACL.ARN) {
-        console.warn('Nova WebACL not found, skipping WAF workflow test');
-        return;
-      }
+      expect(novaWebACL?.ARN).toBeDefined();
       
       // Step 3: Get detailed WebACL configuration with rules
       const webACLResponse = await wafClient.send(new GetWebACLCommand({
@@ -606,6 +544,13 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
       }));
       expect(putResponse.$metadata.httpStatusCode).toBe(200);
 
+      // Step 3b: Verify DSSE-KMS enforcement on bucket encryption
+      const enc = await s3Client.send(new GetBucketEncryptionCommand({ Bucket: bucketName }));
+      const sseAlgo = enc.ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm;
+      expect(sseAlgo).toBeDefined();
+      // Accept aws:kms:dsse per prompt; if only aws:kms present, fail-fast to surface misconfig
+      expect(sseAlgo).toBe('aws:kms:dsse');
+
       // Step 4: Verify security group configuration
       const securityGroupId = outputs['NovaAppSecurityGroupId'];
       if (securityGroupId) {
@@ -614,6 +559,10 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
         }));
         expect(sgResponse.SecurityGroups?.length).toBeGreaterThan(0);
         expect(sgResponse.SecurityGroups?.[0].GroupId).toBe(securityGroupId);
+        // Enforce egress to 203.0.113.0/24 only (per prompt); allow 80/443 tcp as in template
+        const egress = sgResponse.SecurityGroups?.[0].IpPermissionsEgress || [];
+        const hasRequiredCidr = egress.some(p => (p.IpRanges || []).some(r => r.CidrIp === '203.0.113.0/24'));
+        expect(hasRequiredCidr).toBe(true);
       }
 
       // Step 5: Verify VPC endpoints for secure communication
@@ -625,54 +574,49 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
     }, testTimeout);
   });
 
+  describe('Compliance Configuration Workflow', () => {
+    test('should validate AWS Config rules and compliance states', async () => {
+      // Validate rules exist per prompt
+      const rules = await configClient.send(new DescribeConfigRulesCommand({}));
+      const ruleNames = (rules.ConfigRules || []).map(r => r.ConfigRuleName);
+      expect(ruleNames).toEqual(expect.arrayContaining(['S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED', 'IAM_USER_MFA_ENABLED']));
+
+      // Optionally check compliance for S3 encryption rule (may be Evaluating, so accept COMPLIANT or NOT_APPLICABLE or INSUFFICIENT_DATA but require rule present)
+      const s3EncCompliance = await configClient.send(new GetComplianceDetailsByConfigRuleCommand({ ConfigRuleName: 'S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED' }));
+      expect(s3EncCompliance).toBeDefined();
+    }, testTimeout);
+  });
+
   describe('Application Lifecycle Workflow', () => {
-    test('should complete application lifecycle: EC2 -> Application -> Health Check', async () => {
+    test('should validate launch template hardening and instance lifecycle recovery', async () => {
       // Step 1: Get EC2 instance details
       const instancesResponse = await ec2Client.send(new DescribeInstancesCommand({}));
       const novaInstance = instancesResponse.Reservations?.flatMap(r => r.Instances || [])
-        .find(instance => instance.Tags?.some(tag => 
-          tag.Key === 'Name' && tag.Value?.includes('nova-clinical-prod')
-        ));
-      
+        .find(instance => instance.Tags?.some(tag => tag.Key === 'Name' && tag.Value?.includes('nova-clinical-prod')));
       expect(novaInstance).toBeDefined();
       expect(novaInstance?.State?.Name).toBe('running');
       testData.instanceId = novaInstance?.InstanceId;
 
-      // Step 2: Test application health 
-      const healthCheckData = {
-        timestamp: new Date().toISOString(),
-        status: 'healthy',
-        services: {
-          database: 'connected',
-          storage: 'accessible',
-          api: 'responding'
-        },
-        metrics: {
-          cpu: '15%',
-          memory: '45%',
-          disk: '30%'
+      // Step 2: Validate IMDSv2 enforcement from instance metadata options
+      expect(novaInstance?.MetadataOptions?.HttpTokens).toBe('required');
+
+      // Step 3: Validate EBS encryption on volumes
+      const allEncrypted = (novaInstance?.BlockDeviceMappings || []).every(m => m.Ebs?.Encrypted === true);
+      expect(allEncrypted).toBe(true);
+
+      // Step 4: Reboot instance to validate basic recovery and status checks
+      if (novaInstance?.InstanceId) {
+        await ec2Client.send(new RebootInstancesCommand({ InstanceIds: [novaInstance.InstanceId] }));
+        // Wait for instance status checks to pass again (poll few times)
+        let ok = false;
+        for (let i = 0; i < 10; i++) {
+          const status = await ec2Client.send(new DescribeInstanceStatusCommand({ InstanceIds: [novaInstance.InstanceId], IncludeAllInstances: true }));
+          const inst = status.InstanceStatuses?.[0];
+          if (inst?.InstanceStatus?.Status === 'ok' && inst?.SystemStatus?.Status === 'ok') { ok = true; break; }
+          await new Promise(r => setTimeout(r, 10000));
         }
-      };
-
-      // Step 3: Store health check data in S3
-      const bucketName = outputs['NovaDataBucketName'];
-      const healthCheckKey = `health-checks/${testData.instanceId}/${Date.now()}.json`;
-      
-      const healthPutResponse = await s3Client.send(new PutObjectCommand({
-        Bucket: bucketName,
-        Key: healthCheckKey,
-        Body: JSON.stringify(healthCheckData),
-        ContentType: 'application/json'
-      }));
-      expect(healthPutResponse.$metadata.httpStatusCode).toBe(200);
-
-      // Step 4: Verify health check data retrieval
-      const healthGetResponse = await s3Client.send(new GetObjectCommand({
-        Bucket: bucketName,
-        Key: healthCheckKey
-      }));
-      expect(healthGetResponse.Body).toBeDefined();
-
+        expect(ok).toBe(true);
+      }
     }, testTimeout);
   });
 
@@ -720,36 +664,50 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
   });
 
   describe('Performance and Scaling Workflow', () => {
-    test('should complete performance workflow: Load Test -> Metrics -> Optimization', async () => {
-      // Step 1: Generate load test data
-      const loadTestData = Array.from({ length: 100 }, (_, i) => ({
-        requestId: `req-${i}`,
-        timestamp: new Date().toISOString(),
-        endpoint: '/clinical-data',
-        responseTime: 200 + (i % 10) * 50, // Deterministic response times
-        status: i < 95 ? 200 : 403 // 95% success rate
-      }));
+    test('should execute real concurrent HTTP requests and validate performance', async () => {
+      // Step 1: Perform real concurrent requests to API Gateway endpoint
+      const apiGatewayUrl = outputs['NovaApiGatewayUrl'];
+      const clinicalDataEndpoint = `${apiGatewayUrl}/clinical-data`;
+      const credentials = await defaultProvider()();
+      const url = new URL(clinicalDataEndpoint);
+      const hostParts = url.hostname.split('.');
+      const apiRegionUsed = hostParts.length >= 3 ? hostParts[2] : region;
 
-      // Step 2: Store load test results in S3
-      const bucketName = outputs['NovaDataBucketName'];
-      const loadTestKey = `performance-tests/load-test-${Date.now()}.json`;
-      
-      const loadTestResponse = await s3Client.send(new PutObjectCommand({
-        Bucket: bucketName,
-        Key: loadTestKey,
-        Body: JSON.stringify(loadTestData),
-        ContentType: 'application/json'
-      }));
-      expect(loadTestResponse.$metadata.httpStatusCode).toBe(200);
+      const makeSignedRequest = async () => {
+        const requestOptions: any = {
+          host: url.hostname,
+          method: 'GET',
+          path: url.pathname,
+          service: 'execute-api',
+          region: apiRegionUsed,
+          headers: { 'accept': 'application/json' }
+        };
+        aws4.sign(requestOptions, {
+          accessKeyId: credentials.accessKeyId,
+          secretAccessKey: credentials.secretAccessKey,
+          sessionToken: credentials.sessionToken
+        });
+        const start = Date.now();
+        try {
+          const res = await fetch(`${url.protocol}//${url.hostname}${url.pathname}`, { method: 'GET', headers: requestOptions.headers });
+          const rt = Date.now() - start;
+          return { status: res.status, responseTime: rt };
+        } catch (e) {
+          const rt = Date.now() - start;
+          return { status: 0, responseTime: rt, error: String(e) };
+        }
+      };
 
-      // Step 3: Analyze performance metrics
-      const successfulRequests = loadTestData.filter(r => r.status === 200).length;
-      const averageResponseTime = loadTestData.reduce((sum, r) => sum + r.responseTime, 0) / loadTestData.length;
-      
-      expect(successfulRequests).toBeGreaterThan(90);
-      expect(averageResponseTime).toBeLessThan(1000);
+      const concurrency = 25;
+      const results = await Promise.all(Array.from({ length: concurrency }, () => makeSignedRequest()));
+      const successes = results.filter(r => r.status >= 200 && r.status < 400).length;
+      const avgRt = results.reduce((s, r) => s + r.responseTime, 0) / results.length;
 
-      // Step 4: Test CloudFront caching
+      // Require at least one successful response and reasonable average latency
+      expect(successes).toBeGreaterThan(0);
+      expect(avgRt).toBeLessThan(5000);
+
+      // Step 2: Test CloudFront distribution explicitly for target domain
       const listDistributions = await cloudFrontClient.send(new ListDistributionsCommand({}));
       const targetDomain = outputs['NovaCloudFrontDomainName'];
       
@@ -757,23 +715,7 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
         d.DomainName === targetDomain
       );
       
-      if (!distribution) {
-        distribution = listDistributions.DistributionList?.Items?.find(d => 
-          d.DomainName?.includes('cloudfront.net') && 
-          (d.Comment?.includes('nova') || d.Comment?.includes('clinical') || d.Comment?.includes('TapStack'))
-        );
-      }
-      
-      if (!distribution) {
-        distribution = listDistributions.DistributionList?.Items?.find(d => 
-          d.Comment?.includes('nova') || d.Comment?.includes('clinical')
-        );
-      }
-      
-      if (!distribution && listDistributions.DistributionList?.Items?.length > 0) {
-        distribution = listDistributions.DistributionList.Items[0];
-        console.log(`Using first available CloudFront distribution: ${distribution.DomainName}`);
-      }
+      // Do not fallback to unrelated distributions; fail-fast
       
       expect(distribution).toBeDefined();
       expect(distribution?.DomainName).toBeDefined();
@@ -897,6 +839,16 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
       // Step 1: Verify budget exists and is configured
       const budgetName = outputs['NovaBudgetName'];
       expect(budgetName).toBeDefined();
+      // Validate amount is $100 per month using Budgets API
+      const caller = await stsClient.send(new GetCallerIdentityCommand({}));
+      const accountId = caller.Account!;
+      const budgets = new AWS.Budgets({ region: 'us-east-1' });
+      const budgetsResp: any = await budgets.describeBudgets({ AccountId: accountId }).promise();
+      const matched = (budgetsResp.Budgets || []).find((b: any) => b.BudgetName === budgetName);
+      expect(matched).toBeDefined();
+      expect(matched.BudgetType).toBe('COST');
+      expect(matched.TimeUnit).toBe('MONTHLY');
+      expect(Number(matched.BudgetLimit?.Amount)).toBe(100);
       
       // Step 2: Test budget alerting through SNS
       const topicsResponse = await snsClient.send(new ListTopicsCommand({}));
@@ -961,35 +913,15 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
       const mfaPolicyArn = outputs['NovaMFAPolicyArn'];
       expect(mfaPolicyArn).toBeDefined();
       
-      // Step 2: Test MFA policy enforcement simulation
-      const mfaTestData = {
-        policyArn: mfaPolicyArn,
-        timestamp: new Date().toISOString(),
-        testScenario: 'MFA Policy Validation',
-        requirements: {
-          mfaRequired: true,
-          maxSessionDuration: 3600,
-          allowedActions: ['s3:GetObject', 's3:PutObject'],
-          deniedActions: ['s3:DeleteObject', 'kms:Decrypt']
-        },
-        testResults: {
-          mfaAuthenticated: true,
-          sessionValid: true,
-          actionsAllowed: ['s3:GetObject', 's3:PutObject'],
-          actionsDenied: ['s3:DeleteObject']
-        }
-      };
-
-      // Step 3: Store MFA policy test results
-      const bucketName = outputs['NovaDataBucketName'];
-      const mfaKey = `security-tests/mfa-policy-validation-${Date.now()}.json`;
-      const mfaResponse = await s3Client.send(new PutObjectCommand({
-        Bucket: bucketName,
-        Key: mfaKey,
-        Body: JSON.stringify(mfaTestData),
-        ContentType: 'application/json'
-      }));
-      expect(mfaResponse.$metadata.httpStatusCode).toBe(200);
+      // Step 2: Validate MFA policy document contains deny without MFA
+      const getPolicy = await iamClient.send(new GetPolicyCommand({ PolicyArn: mfaPolicyArn }));
+      expect(getPolicy.Policy?.DefaultVersionId).toBeDefined();
+      const versionId = getPolicy.Policy!.DefaultVersionId!;
+      const policyVersion = await iamClient.send(new GetPolicyVersionCommand({ PolicyArn: mfaPolicyArn, VersionId: versionId }));
+      const doc = decodeURIComponent(policyVersion.PolicyVersion!.Document!);
+      const policy = JSON.parse(doc);
+      const hasDenyWithoutMfa = (policy.Statement || []).some((s: any) => s.Effect === 'Deny' && s.Condition && (s.Condition.BoolIfExists || s.Condition.Bool) && (s.Condition.BoolIfExists?.['aws:MultiFactorAuthPresent'] === 'false' || s.Condition.Bool?.['aws:MultiFactorAuthPresent'] === 'false'));
+      expect(hasDenyWithoutMfa).toBe(true);
 
       // Step 4: Test IAM role access with MFA simulation
       const readOnlyRoleArn = outputs['NovaReadOnlyRoleArn'];
@@ -1276,11 +1208,8 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
       const successfulRequests = loadTestResults.filter(r => r.success).length;
       const averageResponseTime = loadTestResults.reduce((sum, r) => sum + r.responseTime, 0) / loadTestResults.length;
       
-      // Accept 0 successful requests if all are 403 (authentication required)
-      const all403Responses = loadTestResults.every(r => r.status === 403);
-      if (!all403Responses) {
-        expect(successfulRequests).toBeGreaterThan(0);
-      }
+      // Require at least some success; 100% 403 should fail to surface auth misconfig
+      expect(successfulRequests).toBeGreaterThan(0);
       expect(averageResponseTime).toBeLessThan(5000); // 5 seconds max
       
       // Store load test results
@@ -1307,73 +1236,23 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
   });
 
   describe('Disaster Recovery Workflow', () => {
-    test('should complete disaster recovery workflow: Failover -> Recovery -> Validation', async () => {
-      // Step 1: Simulate primary system failure
-      const failureEvent = {
-        eventId: `failure-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        type: 'SYSTEM_FAILURE',
-        severity: 'CRITICAL',
-        affectedComponents: ['database', 'api'],
-        status: 'DETECTED'
-      };
+    test('should validate compute failover and recovery with real instance reboot', async () => {
+      // Use EC2 reboot and status checks to validate recovery
+      const instancesResponse = await ec2Client.send(new DescribeInstancesCommand({}));
+      const novaInstance = instancesResponse.Reservations?.flatMap(r => r.Instances || [])
+        .find(instance => instance.Tags?.some(tag => tag.Key === 'Name' && tag.Value?.includes('nova-clinical-prod')));
+      expect(novaInstance?.InstanceId).toBeDefined();
 
-      // Step 2: Store failure event
-      const bucketName = outputs['NovaDataBucketName'];
-      const failureKey = `incidents/${failureEvent.eventId}.json`;
-      
-      await s3Client.send(new PutObjectCommand({
-        Bucket: bucketName,
-        Key: failureKey,
-        Body: JSON.stringify(failureEvent),
-        ContentType: 'application/json'
-      }));
+      await ec2Client.send(new RebootInstancesCommand({ InstanceIds: [novaInstance!.InstanceId!] }));
 
-      // Step 3: Initiate recovery procedures
-      const recoveryPlan = {
-        planId: `recovery-${Date.now()}`,
-        incidentId: failureEvent.eventId,
-        steps: [
-          { step: 1, action: 'Isolate affected systems', status: 'COMPLETED' },
-          { step: 2, action: 'Activate backup systems', status: 'IN_PROGRESS' },
-          { step: 3, action: 'Restore data from backups', status: 'PENDING' },
-          { step: 4, action: 'Validate system integrity', status: 'PENDING' }
-        ],
-        estimatedRecoveryTime: '30 minutes',
-        status: 'ACTIVE'
-      };
-
-      const recoveryKey = `recovery/${recoveryPlan.planId}.json`;
-      await s3Client.send(new PutObjectCommand({
-        Bucket: bucketName,
-        Key: recoveryKey,
-        Body: JSON.stringify(recoveryPlan),
-        ContentType: 'application/json'
-      }));
-
-      // Step 4: Validate recovery success
-      const validationResults = {
-        validationId: `validation-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        checks: [
-          { component: 'Database', status: 'HEALTHY', responseTime: '45ms' },
-          { component: 'API Gateway', status: 'HEALTHY', responseTime: '120ms' },
-          { component: 'Storage', status: 'HEALTHY', responseTime: '80ms' },
-          { component: 'Encryption', status: 'HEALTHY', keyStatus: 'ACTIVE' }
-        ],
-        overallStatus: 'RECOVERED'
-      };
-
-      const validationKey = `validation/${validationResults.validationId}.json`;
-      await s3Client.send(new PutObjectCommand({
-        Bucket: bucketName,
-        Key: validationKey,
-        Body: JSON.stringify(validationResults),
-        ContentType: 'application/json'
-      }));
-
-      expect(validationResults.overallStatus).toBe('RECOVERED');
-
+      let recovered = false;
+      for (let i = 0; i < 12; i++) {
+        const status = await ec2Client.send(new DescribeInstanceStatusCommand({ InstanceIds: [novaInstance!.InstanceId!], IncludeAllInstances: true }));
+        const inst = status.InstanceStatuses?.[0];
+        if (inst?.InstanceStatus?.Status === 'ok' && inst?.SystemStatus?.Status === 'ok') { recovered = true; break; }
+        await new Promise(r => setTimeout(r, 10000));
+      }
+      expect(recovered).toBe(true);
     }, testTimeout);
   });
 });
