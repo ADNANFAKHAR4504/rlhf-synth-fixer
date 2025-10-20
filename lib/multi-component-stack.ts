@@ -129,10 +129,10 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
       this.node.tryGetContext('rdsSubnetGroupName');
     const importedSubnetGroup = importedSubnetGroupName
       ? rds.SubnetGroup.fromSubnetGroupName(
-        this,
-        'ImportedRdsSubnetGroup',
-        String(importedSubnetGroupName)
-      )
+          this,
+          'ImportedRdsSubnetGroup',
+          String(importedSubnetGroupName)
+        )
       : undefined;
 
     const rdsInstance = new rds.DatabaseInstance(this, 'PostgresDatabase', {

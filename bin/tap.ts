@@ -31,8 +31,8 @@ Tags.of(app).add('Repository', repositoryName);
 Tags.of(app).add('Author', commitAuthor);
 
 if (multiRegion) {
-  const primaryStackName = `TapStack-${environmentSuffix}-primary`;
-  const secondaryStackName = `TapStack-${environmentSuffix}-secondary`;
+  const primaryStackName = `TapStack${environmentSuffix}-primary`;
+  const secondaryStackName = `TapStack${environmentSuffix}-secondary`;
 
   // Primary stack
   new TapStack(app, primaryStackName, {
@@ -65,7 +65,7 @@ if (multiRegion) {
   });
 } else {
   // Single-region behavior: respect CDK_DEFAULT_REGION/AWS_REGION as an explicit override
-  const stackName = `TapStack-${environmentSuffix}`;
+  const stackName = `TapStack${environmentSuffix}`;
   new TapStack(app, stackName, {
     stackName,
     environmentSuffix,
