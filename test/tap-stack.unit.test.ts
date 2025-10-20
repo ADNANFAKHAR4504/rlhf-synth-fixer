@@ -139,6 +139,15 @@ pulumi.runtime.setMocks({
       outputs.zoneId = 'Z1234567890ABC';
     }
 
+    // Mock ACM Certificate
+    if (args.type === 'aws:acm/certificate:Certificate') {
+      outputs.domainValidationOptions = [{
+        resourceRecordName: '_acme-challenge.example.com',
+        resourceRecordType: 'CNAME',
+        resourceRecordValue: 'validation.example.com',
+      }];
+    }
+
     // Mock ALB Listener
     if (args.type === 'aws:lb/listener:Listener') {
       outputs.port = args.inputs.port;
@@ -175,6 +184,8 @@ describe('TapStack Unit Tests', () => {
   };
 
   beforeAll(() => {
+    // Ensure test environment
+    process.env.NODE_ENV = 'test';
     stack = new TapStack('test-stack', testArgs);
   });
 
@@ -182,6 +193,14 @@ describe('TapStack Unit Tests', () => {
     const outputFile = path.join('cfn-outputs', 'flat-outputs.json');
     if (fs.existsSync(outputFile)) {
       fs.unlinkSync(outputFile);
+    }
+    const outputDir = 'cfn-outputs';
+    if (fs.existsSync(outputDir)) {
+      try {
+        fs.rmdirSync(outputDir);
+      } catch (e) {
+        // Directory not empty or doesn't exist
+      }
     }
   });
 
@@ -831,6 +850,134 @@ describe('TapStack Unit Tests', () => {
       setTimeout(() => {
         done();
       }, 100);
+    });
+  });
+
+  describe('File Output Coverage Tests', () => {
+    it('should skip file writing in test environment', (done) => {
+      process.env.NODE_ENV = 'test';
+      
+      const stackForOutput = new TapStack('test-stack-output', {
+        environmentSuffix: 'testoutput',
+      });
+      
+      stackForOutput.outputs.apply(() => {
+        const outputFile = path.join('cfn-outputs', 'flat-outputs.json');
+        
+        setTimeout(() => {
+          // In test mode, file should not be written
+          const fileExists = fs.existsSync(outputFile);
+          expect(fileExists).toBe(false);
+          done();
+        }, 200);
+      });
+    });
+
+    it('should write outputs file in production mode', (done) => {
+      const originalEnv = process.env.NODE_ENV;
+      const originalIsDryRun = pulumi.runtime.isDryRun;
+      
+      delete process.env.NODE_ENV;
+      (pulumi.runtime.isDryRun as any) = () => false;
+      
+      const stackProduction = new TapStack('test-stack-production', {
+        environmentSuffix: 'prod',
+      });
+      
+      stackProduction.outputs.apply(() => {
+        setTimeout(() => {
+          const outputFile = path.join('cfn-outputs', 'flat-outputs.json');
+          const outputDir = path.join('cfn-outputs');
+          
+          // Verify file was created
+          const fileExists = fs.existsSync(outputFile);
+          
+          if (fileExists) {
+            const content = fs.readFileSync(outputFile, 'utf-8');
+            const parsed = JSON.parse(content);
+            expect(parsed.vpcId).toBeDefined();
+            
+            // Cleanup
+            fs.unlinkSync(outputFile);
+          }
+          
+          // Restore environment
+          process.env.NODE_ENV = originalEnv;
+          (pulumi.runtime.isDryRun as any) = originalIsDryRun;
+          
+          expect(fileExists).toBe(true);
+          done();
+        }, 500);
+      });
+    });
+
+    it('should handle dry run mode correctly', (done) => {
+      const originalEnv = process.env.NODE_ENV;
+      const originalIsDryRun = pulumi.runtime.isDryRun;
+      
+      delete process.env.NODE_ENV;
+      (pulumi.runtime.isDryRun as any) = () => true;
+      
+      const stackDryRun = new TapStack('test-stack-dryrun', {
+        environmentSuffix: 'dryrun',
+      });
+      
+      stackDryRun.outputs.apply(() => {
+        setTimeout(() => {
+          const outputFile = path.join('cfn-outputs', 'flat-outputs.json');
+          const fileExists = fs.existsSync(outputFile);
+          
+          // Restore environment
+          process.env.NODE_ENV = originalEnv;
+          (pulumi.runtime.isDryRun as any) = originalIsDryRun;
+          
+          // In dry run, file should not be written
+          expect(fileExists).toBe(false);
+          done();
+        }, 200);
+      });
+    });
+
+    it('should create output directory if it does not exist', (done) => {
+      const originalEnv = process.env.NODE_ENV;
+      const originalIsDryRun = pulumi.runtime.isDryRun;
+      
+      delete process.env.NODE_ENV;
+      (pulumi.runtime.isDryRun as any) = () => false;
+      
+      const outputDir = 'cfn-outputs';
+      const outputFile = path.join(outputDir, 'flat-outputs.json');
+      
+      // Remove directory if it exists
+      if (fs.existsSync(outputFile)) {
+        fs.unlinkSync(outputFile);
+      }
+      if (fs.existsSync(outputDir)) {
+        fs.rmdirSync(outputDir);
+      }
+      
+      const stackDirTest = new TapStack('test-stack-dir', {
+        environmentSuffix: 'dirtest',
+      });
+      
+      stackDirTest.outputs.apply(() => {
+        setTimeout(() => {
+          // Verify directory was created
+          const dirExists = fs.existsSync(outputDir);
+          expect(dirExists).toBe(true);
+          
+          // Cleanup
+          if (fs.existsSync(outputFile)) {
+            fs.unlinkSync(outputFile);
+          }
+          
+          // Restore environment
+          process.env.NODE_ENV = originalEnv;
+          (pulumi.runtime.isDryRun as any) = originalIsDryRun;
+          
+          done();
+        }, 500);
+      });
     });
   });
 });

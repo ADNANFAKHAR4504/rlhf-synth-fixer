@@ -2,7 +2,7 @@
 
 /**
  * tap-stack.ts
- *
+ * 
  * Production-grade infrastructure for fintech trading analytics platform.
  * Includes auto-generated secure database password.
  */
@@ -410,7 +410,6 @@ export class TapStack extends pulumi.ComponentResource {
       tags: { ...this.defaultTags, Name: 'tap-aurora-params' },
     }, { parent: this });
 
-    // Generate a secure random password automatically
     const dbPassword = new random.RandomPassword(`tap-db-password-${this.environmentSuffix}`, {
       length: 32,
       special: true,
@@ -421,7 +420,6 @@ export class TapStack extends pulumi.ComponentResource {
       minSpecial: 1,
     }, { parent: this });
 
-    // Store the password in AWS Secrets Manager for secure access
     const dbSecret = new aws.secretsmanager.Secret(`tap-db-secret-${this.environmentSuffix}`, {
       name: `tap-aurora-password-${this.environmentSuffix}`,
       description: 'Aurora PostgreSQL master password',
@@ -1140,7 +1138,7 @@ export class TapStack extends pulumi.ComponentResource {
       ecsTaskRoleArn: this.ecsTaskRole.arn,
     });
 
-    // Only write outputs file in non-test environment
+    // Only write outputs file in non-test environment and non-dry-run
     if (process.env.NODE_ENV !== 'test' && !pulumi.runtime.isDryRun()) {
       outputs.apply(o => {
         const outputDir = 'cfn-outputs';
@@ -1157,5 +1155,4 @@ export class TapStack extends pulumi.ComponentResource {
 
     return outputs;
   }
-
 }
