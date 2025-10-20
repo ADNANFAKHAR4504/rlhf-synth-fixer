@@ -44,28 +44,9 @@ import * as path from 'path';
 function loadOutputs(): any {
   const outputPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
 
-  // For local development, use mock data
-  if (!fs.existsSync(outputPath) && !process.env.CI) {
-    console.log('⚠️  Using mock data for local testing');
-    return {
-      api_gateway_url_primary: 'mock-api.execute-api.us-east-1.amazonaws.com/prod',
-      api_gateway_id_primary: 'mock123abc',
-      api_gateway_id_secondary: 'mock456def',
-      cloudfront_domain_name: 'mock123.cloudfront.net',
-      cloudfront_distribution_id: 'E1MOCKID',
-      dynamodb_table_name: 'fintech-api-transactions',
-      lambda_authorizer_name_primary: 'fintech-api-authorizer-primary',
-      lambda_transaction_name_primary: 'fintech-api-transaction-primary',
-      secrets_manager_secret_name: 'fintech-api-api-keys',
-      waf_web_acl_id: 'mock-waf-id',
-      primary_region: 'us-east-1',
-      secondary_region: 'us-west-2',
-    };
-  }
-
   if (!fs.existsSync(outputPath)) {
     throw new Error(
-      `Output file not found: ${outputPath}. Ensure deployment has completed.`
+      `Output file not found: ${outputPath}. Ensure deployment has completed and outputs are extracted.`
     );
   }
 
@@ -73,7 +54,6 @@ function loadOutputs(): any {
 }
 
 const outputs = loadOutputs();
-const isMockData = !process.env.CI && !fs.existsSync(path.join(__dirname, '../cfn-outputs/flat-outputs.json'));
 
 // Helper function to make HTTPS requests
 function httpsRequest(options: any, data?: string): Promise<any> {
@@ -98,10 +78,7 @@ function httpsRequest(options: any, data?: string): Promise<any> {
 }
 
 describe('Secure API Integration Tests', () => {
-  // Skip tests if using mock data
-  const skipIfMock = isMockData ? describe.skip : describe;
-
-  skipIfMock('Resource Validation', () => {
+  describe('Resource Validation', () => {
     test('API Gateway primary exists and is accessible', async () => {
       const client = new APIGatewayClient({ region: outputs.primary_region });
       const command = new GetRestApiCommand({
@@ -213,7 +190,7 @@ describe('Secure API Integration Tests', () => {
     }, 30000);
   });
 
-  skipIfMock('End-to-End Transaction Flow', () => {
+  describe('End-to-End Transaction Flow', () => {
     let jwtSecret: string;
     let testTransactionId: string;
 
@@ -406,7 +383,7 @@ describe('Secure API Integration Tests', () => {
     }, 30000);
   });
 
-  skipIfMock('Security Validation', () => {
+  describe('Security Validation', () => {
     test('API only accepts HTTPS connections', async () => {
       const http = require('http');
 
@@ -452,7 +429,7 @@ describe('Secure API Integration Tests', () => {
     }, 30000);
   });
 
-  skipIfMock('Performance and Monitoring', () => {
+  describe('Performance and Monitoring', () => {
     test('API response time is acceptable (< 2 seconds)', async () => {
       const start = Date.now();
 
