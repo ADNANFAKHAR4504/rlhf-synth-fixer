@@ -1,5 +1,11 @@
 # variables.tf
 
+variable "environment_suffix" {
+  description = "Environment suffix for unique resource naming (e.g., pr123, dev)"
+  type        = string
+  default     = "dev"
+}
+
 variable "project_name" {
   description = "Project name for resource naming"
   type        = string

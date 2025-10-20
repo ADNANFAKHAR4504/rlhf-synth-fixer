@@ -2,7 +2,7 @@
 
 # SNS topic for alarms
 resource "aws_sns_topic" "alarms" {
-  name = "${var.project_name}-alarms"
+  name = "${var.project_name}-${var.environment_suffix}-alarms"
 
   tags = var.common_tags
 }
@@ -15,7 +15,7 @@ resource "aws_sns_topic_subscription" "alarm_email" {
 
 # X-Ray sampling rule
 resource "aws_xray_sampling_rule" "api" {
-  rule_name      = "${var.project_name}-sampling"
+  rule_name      = "${var.project_name}-${var.environment_suffix}-sampling"
   priority       = 9999
   version        = 1
   reservoir_size = 1
@@ -34,7 +34,7 @@ resource "aws_xray_sampling_rule" "api" {
 
 # CloudWatch Dashboard
 resource "aws_cloudwatch_dashboard" "main" {
-  dashboard_name = "${var.project_name}-dashboard"
+  dashboard_name = "${var.project_name}-${var.environment_suffix}-dashboard"
 
   dashboard_body = jsonencode({
     widgets = [
@@ -137,7 +137,7 @@ resource "aws_cloudwatch_dashboard" "main" {
 # High API error rate
 resource "aws_cloudwatch_metric_alarm" "high_4xx_errors" {
   provider            = aws.primary
-  alarm_name          = "${var.project_name}-high-4xx-errors"
+  alarm_name          = "${var.project_name}-${var.environment_suffix}-high-4xx-errors"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "4XXError"
@@ -159,7 +159,7 @@ resource "aws_cloudwatch_metric_alarm" "high_4xx_errors" {
 
 resource "aws_cloudwatch_metric_alarm" "high_5xx_errors" {
   provider            = aws.primary
-  alarm_name          = "${var.project_name}-high-5xx-errors"
+  alarm_name          = "${var.project_name}-${var.environment_suffix}-high-5xx-errors"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "5XXError"
@@ -182,7 +182,7 @@ resource "aws_cloudwatch_metric_alarm" "high_5xx_errors" {
 # Lambda errors
 resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
   provider            = aws.primary
-  alarm_name          = "${var.project_name}-lambda-errors"
+  alarm_name          = "${var.project_name}-${var.environment_suffix}-lambda-errors"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "Errors"
@@ -204,7 +204,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
 # Lambda throttles
 resource "aws_cloudwatch_metric_alarm" "lambda_throttles" {
   provider            = aws.primary
-  alarm_name          = "${var.project_name}-lambda-throttles"
+  alarm_name          = "${var.project_name}-${var.environment_suffix}-lambda-throttles"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "Throttles"
@@ -226,7 +226,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_throttles" {
 # Lambda duration alarm
 resource "aws_cloudwatch_metric_alarm" "lambda_duration" {
   provider            = aws.primary
-  alarm_name          = "${var.project_name}-lambda-duration"
+  alarm_name          = "${var.project_name}-${var.environment_suffix}-lambda-duration"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "Duration"
@@ -248,7 +248,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_duration" {
 # CloudFront error rate alarm
 resource "aws_cloudwatch_metric_alarm" "cloudfront_error_rate" {
   provider            = aws.global
-  alarm_name          = "${var.project_name}-cloudfront-errors"
+  alarm_name          = "${var.project_name}-${var.environment_suffix}-cloudfront-errors"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "5xxErrorRate"
@@ -270,7 +270,7 @@ resource "aws_cloudwatch_metric_alarm" "cloudfront_error_rate" {
 # DynamoDB throttling alarm
 resource "aws_cloudwatch_metric_alarm" "dynamodb_throttles" {
   provider            = aws.primary
-  alarm_name          = "${var.project_name}-dynamodb-throttles"
+  alarm_name          = "${var.project_name}-${var.environment_suffix}-dynamodb-throttles"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "UserErrors"
@@ -292,7 +292,7 @@ resource "aws_cloudwatch_metric_alarm" "dynamodb_throttles" {
 # API Gateway latency alarm (P99)
 resource "aws_cloudwatch_metric_alarm" "api_latency" {
   provider            = aws.primary
-  alarm_name          = "${var.project_name}-api-latency"
+  alarm_name          = "${var.project_name}-${var.environment_suffix}-api-latency"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "Latency"
@@ -315,7 +315,7 @@ resource "aws_cloudwatch_metric_alarm" "api_latency" {
 # Lambda concurrent execution alarm
 resource "aws_cloudwatch_metric_alarm" "lambda_concurrent_executions" {
   provider            = aws.primary
-  alarm_name          = "${var.project_name}-lambda-concurrent-executions"
+  alarm_name          = "${var.project_name}-${var.environment_suffix}-lambda-concurrent-executions"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "1"
   metric_name         = "ConcurrentExecutions"
@@ -337,7 +337,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_concurrent_executions" {
 # CloudWatch Log Metric Filter for failed transactions
 resource "aws_cloudwatch_log_metric_filter" "failed_transactions" {
   provider       = aws.primary
-  name           = "${var.project_name}-failed-transactions"
+  name           = "${var.project_name}-${var.environment_suffix}-failed-transactions"
   log_group_name = aws_cloudwatch_log_group.lambda_transaction_primary.name
   pattern        = "[timestamp, request_id, level = ERROR*, msg]"
 
@@ -351,7 +351,7 @@ resource "aws_cloudwatch_log_metric_filter" "failed_transactions" {
 # Alarm for failed transactions
 resource "aws_cloudwatch_metric_alarm" "failed_transactions" {
   provider            = aws.primary
-  alarm_name          = "${var.project_name}-failed-transactions"
+  alarm_name          = "${var.project_name}-${var.environment_suffix}-failed-transactions"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "1"
   metric_name         = "FailedTransactions"

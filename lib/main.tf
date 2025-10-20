@@ -5,7 +5,7 @@
 resource "aws_dynamodb_table" "transactions" {
   provider = aws.primary
 
-  name             = "${var.project_name}-transactions"
+  name             = "${var.project_name}-${var.environment_suffix}-transactions"
   billing_mode     = "PAY_PER_REQUEST"
   hash_key         = "transactionId"
   range_key        = "timestamp"
@@ -79,7 +79,7 @@ resource "aws_dynamodb_table" "transactions" {
 # Secrets Manager for API keys
 resource "aws_secretsmanager_secret" "api_keys" {
   provider = aws.primary
-  name     = "${var.project_name}-api-keys"
+  name     = "${var.project_name}-${var.environment_suffix}-api-keys"
 
   replica {
     region = var.secondary_region
@@ -99,7 +99,7 @@ resource "aws_secretsmanager_secret_version" "api_keys" {
 
 # Lambda execution role
 resource "aws_iam_role" "lambda_execution" {
-  name = "${var.project_name}-lambda-execution-role"
+  name = "${var.project_name}-${var.environment_suffix}-lambda-execution-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -119,7 +119,7 @@ resource "aws_iam_role" "lambda_execution" {
 
 # Lambda execution policy
 resource "aws_iam_role_policy" "lambda_execution" {
-  name = "${var.project_name}-lambda-execution-policy"
+  name = "${var.project_name}-${var.environment_suffix}-lambda-execution-policy"
   role = aws_iam_role.lambda_execution.id
 
   policy = jsonencode({
@@ -177,7 +177,7 @@ resource "aws_iam_role_policy" "lambda_execution" {
 resource "aws_lambda_layer_version" "common_primary" {
   provider            = aws.primary
   filename            = "lambda_layer.zip"
-  layer_name          = "${var.project_name}-common-layer"
+  layer_name          = "${var.project_name}-${var.environment_suffix}-common-layer"
   compatible_runtimes = ["python3.10"]
 
   lifecycle {
@@ -189,7 +189,7 @@ resource "aws_lambda_layer_version" "common_primary" {
 resource "aws_lambda_layer_version" "common_secondary" {
   provider            = aws.secondary
   filename            = "lambda_layer.zip"
-  layer_name          = "${var.project_name}-common-layer"
+  layer_name          = "${var.project_name}-${var.environment_suffix}-common-layer"
   compatible_runtimes = ["python3.10"]
 
   lifecycle {
@@ -201,7 +201,7 @@ resource "aws_lambda_layer_version" "common_secondary" {
 resource "aws_lambda_function" "authorizer_primary" {
   provider         = aws.primary
   filename         = "lambda_authorizer.zip"
-  function_name    = "${var.project_name}-authorizer-primary"
+  function_name    = "${var.project_name}-${var.environment_suffix}-authorizer-primary"
   role             = aws_iam_role.lambda_execution.arn
   handler          = "lambda_authorizer.lambda_handler"
   source_code_hash = filebase64sha256("lambda_authorizer.zip")
@@ -233,7 +233,7 @@ resource "aws_lambda_function" "authorizer_primary" {
 resource "aws_lambda_function" "authorizer_secondary" {
   provider         = aws.secondary
   filename         = "lambda_authorizer.zip"
-  function_name    = "${var.project_name}-authorizer-secondary"
+  function_name    = "${var.project_name}-${var.environment_suffix}-authorizer-secondary"
   role             = aws_iam_role.lambda_execution.arn
   handler          = "lambda_authorizer.lambda_handler"
   source_code_hash = filebase64sha256("lambda_authorizer.zip")
@@ -265,7 +265,7 @@ resource "aws_lambda_function" "authorizer_secondary" {
 resource "aws_lambda_function" "transaction_primary" {
   provider         = aws.primary
   filename         = "lambda_transaction.zip"
-  function_name    = "${var.project_name}-transaction-primary"
+  function_name    = "${var.project_name}-${var.environment_suffix}-transaction-primary"
   role             = aws_iam_role.lambda_execution.arn
   handler          = "lambda_transaction.lambda_handler"
   source_code_hash = filebase64sha256("lambda_transaction.zip")
@@ -297,7 +297,7 @@ resource "aws_lambda_function" "transaction_primary" {
 resource "aws_lambda_function" "transaction_secondary" {
   provider         = aws.secondary
   filename         = "lambda_transaction.zip"
-  function_name    = "${var.project_name}-transaction-secondary"
+  function_name    = "${var.project_name}-${var.environment_suffix}-transaction-secondary"
   role             = aws_iam_role.lambda_execution.arn
   handler          = "lambda_transaction.lambda_handler"
   source_code_hash = filebase64sha256("lambda_transaction.zip")
@@ -328,7 +328,7 @@ resource "aws_lambda_function" "transaction_secondary" {
 # API Gateway - Primary region
 resource "aws_api_gateway_rest_api" "main_primary" {
   provider    = aws.primary
-  name        = "${var.project_name}-api-primary"
+  name        = "${var.project_name}-${var.environment_suffix}-api-primary"
   description = "Transaction Processing API - Primary Region"
 
   endpoint_configuration {
@@ -341,7 +341,7 @@ resource "aws_api_gateway_rest_api" "main_primary" {
 # API Gateway - Secondary region
 resource "aws_api_gateway_rest_api" "main_secondary" {
   provider    = aws.secondary
-  name        = "${var.project_name}-api-secondary"
+  name        = "${var.project_name}-${var.environment_suffix}-api-secondary"
   description = "Transaction Processing API - Secondary Region"
 
   endpoint_configuration {
@@ -377,7 +377,7 @@ resource "aws_api_gateway_authorizer" "custom_secondary" {
 
 # API Gateway IAM role for invoking Lambda
 resource "aws_iam_role" "api_gateway_authorizer" {
-  name = "${var.project_name}-api-gateway-authorizer-role"
+  name = "${var.project_name}-${var.environment_suffix}-api-gateway-authorizer-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -396,7 +396,7 @@ resource "aws_iam_role" "api_gateway_authorizer" {
 }
 
 resource "aws_iam_role_policy" "api_gateway_authorizer" {
-  name = "${var.project_name}-api-gateway-authorizer-policy"
+  name = "${var.project_name}-${var.environment_suffix}-api-gateway-authorizer-policy"
   role = aws_iam_role.api_gateway_authorizer.id
 
   policy = jsonencode({
@@ -614,7 +614,7 @@ resource "aws_route53_health_check" "primary" {
   request_interval  = "30"
 
   tags = merge(var.common_tags, {
-    Name = "${var.project_name}-primary-health-check"
+    Name = "${var.project_name}-${var.environment_suffix}-primary-health-check"
   })
 }
 
@@ -629,7 +629,7 @@ resource "aws_route53_health_check" "secondary" {
   request_interval  = "30"
 
   tags = merge(var.common_tags, {
-    Name = "${var.project_name}-secondary-health-check"
+    Name = "${var.project_name}-${var.environment_suffix}-secondary-health-check"
   })
 }
 
@@ -678,7 +678,7 @@ resource "aws_route53_record" "api_secondary" {
 resource "aws_cloudfront_distribution" "api" {
   provider = aws.global
   enabled  = true
-  comment  = "${var.project_name} API Distribution"
+  comment  = "${var.project_name}-${var.environment_suffix} API Distribution"
 
   origin {
     # Use Route 53 domain if enabled, otherwise use primary API Gateway URL
@@ -736,7 +736,7 @@ resource "aws_cloudfront_distribution" "api" {
 # CloudWatch Log Groups
 resource "aws_cloudwatch_log_group" "api_gateway_primary" {
   provider          = aws.primary
-  name              = "/aws/apigateway/${var.project_name}-primary"
+  name              = "/aws/apigateway/${var.project_name}-${var.environment_suffix}-primary"
   retention_in_days = 90
 
   tags = var.common_tags
@@ -744,7 +744,7 @@ resource "aws_cloudwatch_log_group" "api_gateway_primary" {
 
 resource "aws_cloudwatch_log_group" "api_gateway_secondary" {
   provider          = aws.secondary
-  name              = "/aws/apigateway/${var.project_name}-secondary"
+  name              = "/aws/apigateway/${var.project_name}-${var.environment_suffix}-secondary"
   retention_in_days = 90
 
   tags = var.common_tags
@@ -752,7 +752,7 @@ resource "aws_cloudwatch_log_group" "api_gateway_secondary" {
 
 resource "aws_cloudwatch_log_group" "lambda_authorizer_primary" {
   provider          = aws.primary
-  name              = "/aws/lambda/${var.project_name}-authorizer-primary"
+  name              = "/aws/lambda/${var.project_name}-${var.environment_suffix}-authorizer-primary"
   retention_in_days = 90
 
   tags = var.common_tags
@@ -760,7 +760,7 @@ resource "aws_cloudwatch_log_group" "lambda_authorizer_primary" {
 
 resource "aws_cloudwatch_log_group" "lambda_authorizer_secondary" {
   provider          = aws.secondary
-  name              = "/aws/lambda/${var.project_name}-authorizer-secondary"
+  name              = "/aws/lambda/${var.project_name}-${var.environment_suffix}-authorizer-secondary"
   retention_in_days = 90
 
   tags = var.common_tags
@@ -768,7 +768,7 @@ resource "aws_cloudwatch_log_group" "lambda_authorizer_secondary" {
 
 resource "aws_cloudwatch_log_group" "lambda_transaction_primary" {
   provider          = aws.primary
-  name              = "/aws/lambda/${var.project_name}-transaction-primary"
+  name              = "/aws/lambda/${var.project_name}-${var.environment_suffix}-transaction-primary"
   retention_in_days = 90
 
   tags = var.common_tags
@@ -776,7 +776,7 @@ resource "aws_cloudwatch_log_group" "lambda_transaction_primary" {
 
 resource "aws_cloudwatch_log_group" "lambda_transaction_secondary" {
   provider          = aws.secondary
-  name              = "/aws/lambda/${var.project_name}-transaction-secondary"
+  name              = "/aws/lambda/${var.project_name}-${var.environment_suffix}-transaction-secondary"
   retention_in_days = 90
 
   tags = var.common_tags

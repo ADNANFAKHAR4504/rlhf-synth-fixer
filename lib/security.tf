@@ -3,7 +3,7 @@
 # WAF Web ACL for CloudFront
 resource "aws_wafv2_web_acl" "api_protection" {
   provider = aws.global
-  name     = "${var.project_name}-waf-acl"
+  name     = "${var.project_name}-${var.environment_suffix}-waf-acl"
   scope    = "CLOUDFRONT"
 
   default_action {
@@ -28,7 +28,7 @@ resource "aws_wafv2_web_acl" "api_protection" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                = "${var.project_name}-rate-limit"
+      metric_name                = "${var.project_name}-${var.environment_suffix}-rate-limit"
       sampled_requests_enabled   = true
     }
   }
@@ -75,7 +75,7 @@ resource "aws_wafv2_web_acl" "api_protection" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                = "${var.project_name}-sql-injection"
+      metric_name                = "${var.project_name}-${var.environment_suffix}-sql-injection"
       sampled_requests_enabled   = true
     }
   }
@@ -122,7 +122,7 @@ resource "aws_wafv2_web_acl" "api_protection" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                = "${var.project_name}-xss"
+      metric_name                = "${var.project_name}-${var.environment_suffix}-xss"
       sampled_requests_enabled   = true
     }
   }
@@ -147,7 +147,7 @@ resource "aws_wafv2_web_acl" "api_protection" {
 
       visibility_config {
         cloudwatch_metrics_enabled = true
-        metric_name                = "${var.project_name}-ip-whitelist"
+        metric_name                = "${var.project_name}-${var.environment_suffix}-ip-whitelist"
         sampled_requests_enabled   = true
       }
     }
@@ -197,14 +197,14 @@ resource "aws_wafv2_web_acl" "api_protection" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                = "${var.project_name}-size-restriction"
+      metric_name                = "${var.project_name}-${var.environment_suffix}-size-restriction"
       sampled_requests_enabled   = true
     }
   }
 
   visibility_config {
     cloudwatch_metrics_enabled = true
-    metric_name                = "${var.project_name}-waf"
+    metric_name                = "${var.project_name}-${var.environment_suffix}-waf"
     sampled_requests_enabled   = true
   }
 
@@ -216,7 +216,7 @@ resource "aws_wafv2_ip_set" "whitelist" {
   count    = length(var.waf_ip_whitelist) > 0 ? 1 : 0
   provider = aws.global
 
-  name               = "${var.project_name}-ip-whitelist"
+  name               = "${var.project_name}-${var.environment_suffix}-ip-whitelist"
   scope              = "CLOUDFRONT"
   ip_address_version = "IPV4"
   addresses          = var.waf_ip_whitelist
@@ -233,7 +233,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = merge(var.common_tags, {
-    Name = "${var.project_name}-vpc"
+    Name = "${var.project_name}-${var.environment_suffix}-vpc"
   })
 }
 
@@ -246,7 +246,7 @@ resource "aws_subnet" "private" {
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = merge(var.common_tags, {
-    Name = "${var.project_name}-private-subnet-${count.index + 1}"
+    Name = "${var.project_name}-${var.environment_suffix}-private-subnet-${count.index + 1}"
     Type = "Private"
   })
 }
@@ -255,7 +255,7 @@ resource "aws_subnet" "private" {
 resource "aws_security_group" "lambda" {
   count = var.enable_vpc ? 1 : 0
 
-  name        = "${var.project_name}-lambda-sg"
+  name        = "${var.project_name}-${var.environment_suffix}-lambda-sg"
   description = "Security group for Lambda functions"
   vpc_id      = aws_vpc.main[0].id
 
@@ -268,7 +268,7 @@ resource "aws_security_group" "lambda" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "${var.project_name}-lambda-sg"
+    Name = "${var.project_name}-${var.environment_suffix}-lambda-sg"
   })
 }
 
@@ -311,7 +311,7 @@ data "aws_availability_zones" "available" {
 # Bucket name must start with 'aws-waf-logs-' for WAF v2 logging
 resource "aws_s3_bucket" "waf_logs" {
   provider = aws.global
-  bucket   = "aws-waf-logs-${var.project_name}-${data.aws_caller_identity.current.account_id}"
+  bucket   = "aws-waf-logs-${var.project_name}-${var.environment_suffix}-${data.aws_caller_identity.current.account_id}"
 
   # Allow bucket to be destroyed even if it contains objects
   force_destroy = true
