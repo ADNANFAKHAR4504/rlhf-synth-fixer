@@ -1,3 +1,5 @@
+/* eslint-disable prettier/prettier */
+
 /**
  * tap-stack.unit.test.ts
  * 

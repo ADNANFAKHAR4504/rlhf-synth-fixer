@@ -1,3 +1,5 @@
+/* eslint-disable prettier/prettier */
+
 /**
  * tap-stack.ts
  * 
@@ -28,29 +30,29 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly databaseSubnets: aws.ec2.Subnet[];
   public readonly internetGateway: aws.ec2.InternetGateway;
   public readonly natGateways: aws.ec2.NatGateway[];
-  
+
   // Security resources
   public readonly albSecurityGroup: aws.ec2.SecurityGroup;
   public readonly ecsSecurityGroup: aws.ec2.SecurityGroup;
   public readonly rdsSecurityGroup: aws.ec2.SecurityGroup;
-  
+
   // IAM resources
   public readonly ecsTaskExecutionRole: aws.iam.Role;
   public readonly ecsTaskRole: aws.iam.Role;
   public readonly autoScalingRole: aws.iam.Role;
-  
+
   // Container resources
   public readonly ecrApiRepository: aws.ecr.Repository;
   public readonly ecrFrontendRepository: aws.ecr.Repository;
   public readonly ecsCluster: aws.ecs.Cluster;
-  
+
   // Load balancer resources
   public readonly alb: aws.lb.LoadBalancer;
   public readonly albTargetGroupBlue: aws.lb.TargetGroup;
   public readonly albTargetGroupGreen: aws.lb.TargetGroup;
   public readonly albHttpListener: aws.lb.Listener;
   public readonly albHttpsListener?: aws.lb.Listener;
-  
+
   // Database resources
   public readonly auroraSubnetGroup: aws.rds.SubnetGroup;
   public readonly auroraParameterGroup: aws.rds.ClusterParameterGroup;
@@ -58,31 +60,31 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly auroraWriterInstance: aws.rds.ClusterInstance;
   public readonly auroraReaderInstance: aws.rds.ClusterInstance;
   public readonly dbSecret: aws.secretsmanager.Secret;
-  
+
   // ECS Services
   public readonly apiService: aws.ecs.Service;
   public readonly frontendService: aws.ecs.Service;
-  
+
   // Auto-scaling
   public readonly apiAutoScalingTarget: aws.appautoscaling.Target;
   public readonly frontendAutoScalingTarget: aws.appautoscaling.Target;
   public readonly apiCpuScalingPolicy: aws.appautoscaling.Policy;
   public readonly apiRequestScalingPolicy: aws.appautoscaling.Policy;
-  
+
   // CloudWatch resources
   public readonly apiLogGroup: aws.cloudwatch.LogGroup;
   public readonly frontendLogGroup: aws.cloudwatch.LogGroup;
   public readonly cpuAlarm: aws.cloudwatch.MetricAlarm;
   public readonly memoryAlarm: aws.cloudwatch.MetricAlarm;
   public readonly http5xxAlarm: aws.cloudwatch.MetricAlarm;
-  
+
   // DNS resources (optional)
   public readonly hostedZone?: aws.route53.Zone;
   public readonly albRecord?: aws.route53.Record;
   public readonly certificate?: aws.acm.Certificate;
-  
+
   public readonly outputs: pulumi.Output<any>;
-  
+
   private readonly albTargetGroupFrontend: aws.lb.TargetGroup;
   private readonly config: pulumi.Config;
   private readonly environmentSuffix: string;
@@ -95,7 +97,7 @@ export class TapStack extends pulumi.ComponentResource {
     this.config = new pulumi.Config();
     this.environmentSuffix = args.environmentSuffix || 'dev';
     this.availabilityZones = ['us-east-1a', 'us-east-1b'];
-    
+
     this.defaultTags = {
       Environment: this.environmentSuffix,
       Project: 'TradingAnalyticsPlatform',
@@ -190,7 +192,7 @@ export class TapStack extends pulumi.ComponentResource {
 
   private createNetworkInfrastructure() {
     const vpcCidr = '10.18.0.0/16';
-    
+
     const vpc = new aws.ec2.Vpc(`tap-vpc-${this.environmentSuffix}`, {
       cidrBlock: vpcCidr,
       enableDnsHostnames: true,
@@ -367,12 +369,12 @@ export class TapStack extends pulumi.ComponentResource {
       family: 'aurora-postgresql14',
       description: 'Parameter group for trading analytics Aurora PostgreSQL',
       parameters: [
-        { name: 'shared_preload_libraries', value: 'pg_stat_statements' },
-        { name: 'log_statement', value: 'all' },
-        { name: 'log_connections', value: '1' },
-        { name: 'log_disconnections', value: '1' },
-        { name: 'max_connections', value: '1000' },
-        { name: 'statement_timeout', value: '30000' },
+        { name: 'shared_preload_libraries', value: 'pg_stat_statements', applyMethod: 'pending-reboot' },
+        { name: 'log_statement', value: 'all', applyMethod: 'immediate' },
+        { name: 'log_connections', value: '1', applyMethod: 'immediate' },
+        { name: 'log_disconnections', value: '1', applyMethod: 'immediate' },
+        { name: 'max_connections', value: '1000', applyMethod: 'pending-reboot' },
+        { name: 'statement_timeout', value: '30000', applyMethod: 'immediate' },
       ],
       tags: { ...this.defaultTags, Name: `tap-aurora-params` },
     }, { parent: this });
@@ -406,7 +408,7 @@ export class TapStack extends pulumi.ComponentResource {
         dbname: 'tradinganalytics',
       }),
     }, { parent: this });
-    
+
     const auroraCluster = new aws.rds.Cluster(`tap-aurora-cluster-${this.environmentSuffix}`, {
       engine: 'aurora-postgresql',
       engineVersion: '14.6',
@@ -1110,11 +1112,9 @@ export class TapStack extends pulumi.ComponentResource {
     outputs.apply(o => {
       const outputDir = 'cfn-outputs';
       const outputFile = path.join(outputDir, 'flat-outputs.json');
-      
       if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
       }
-      
       fs.writeFileSync(outputFile, JSON.stringify(o, null, 2));
       console.log(`✅ Outputs written to ${outputFile}`);
     });
