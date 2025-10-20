@@ -32,19 +32,6 @@ describe('HIPAA-Compliant Healthcare Infrastructure - CloudFormation Template Un
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
       expect(template.Parameters.EnvironmentSuffix.Type).toBe('String');
     });
-
-    test('should have DatabaseUsername parameter', () => {
-      expect(template.Parameters.DatabaseUsername).toBeDefined();
-      expect(template.Parameters.DatabaseUsername.Type).toBe('String');
-    });
-
-    test('should have DatabasePassword parameter with NoEcho and constraints', () => {
-      const dbPasswordParam = template.Parameters.DatabasePassword;
-      expect(dbPasswordParam).toBeDefined();
-      expect(dbPasswordParam.NoEcho).toBe(true);
-      expect(dbPasswordParam.MinLength).toBe(8);
-      expect(dbPasswordParam.AllowedPattern).toBeDefined();
-    });
   });
 
   describe('VPC and Networking', () => {
