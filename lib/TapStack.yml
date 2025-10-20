@@ -14,12 +14,43 @@ Parameters:
     Description: CIDR block for VPC
     Default: 10.0.0.0/16
 
-  DatabaseSecretArn:
+  DatabaseUsername:
     Type: String
-    Description: ARN of the Secrets Manager secret containing database credentials
-    Default: ''
+    Description: Database master username
+    Default: admin
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: ^[a-zA-Z][a-zA-Z0-9]*$
+    ConstraintDescription: Must begin with a letter and contain only alphanumeric characters
+
+  DatabasePassword:
+    Type: String
+    Description: Database master password
+    NoEcho: true
+    MinLength: 8
+    MaxLength: 41
+    AllowedPattern: ^[a-zA-Z0-9]*$
+    ConstraintDescription: Must contain only alphanumeric characters
+    Default: TempPassword123
 
 Resources:
+  # ============================================================================
+  # Secrets Manager for Database Credentials
+  # ============================================================================
+
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'healthcare-db-secret-${EnvironmentSuffix}'
+      Description: Database credentials for Healthcare Aurora cluster
+      SecretString: !Sub |
+        {
+          "username": "${DatabaseUsername}",
+          "password": "${DatabasePassword}"
+        }
+      Tags:
+        - Key: Name
+          Value: !Sub 'healthcare-db-secret-${EnvironmentSuffix}'
   # ============================================================================
   # KMS Keys for Encryption
   # ============================================================================
@@ -415,8 +446,8 @@ Resources:
       ServerlessV2ScalingConfiguration:
         MinCapacity: 0.5
         MaxCapacity: 1
-      MasterUsername: !Sub '{{resolve:secretsmanager:${DatabaseSecretArn}:SecretString:username}}'
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecretArn}:SecretString:password}}'
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
       DBSubnetGroupName: !Ref DBSubnetGroup
       VpcSecurityGroupIds:
         - !Ref DatabaseSecurityGroup
