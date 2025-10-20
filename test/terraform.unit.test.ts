@@ -143,6 +143,23 @@ describe("Terraform multi-file structure", () => {
     expect(content).toMatch(/resource\s+"aws_lambda_function"\s+"security_response"\s*{/);
   });
 
+  test("main.tf declares EC2 host resources", () => {
+    const content = fs.readFileSync(mainTfPath, "utf8");
+    expect(content).toMatch(/resource\s+"aws_ec2_host"\s+"main"\s*{/);
+  });
+
+  test("main.tf uses aws_s3_object (not deprecated aws_s3_bucket_object)", () => {
+    const content = fs.readFileSync(mainTfPath, "utf8");
+    expect(content).toMatch(/resource\s+"aws_s3_object"\s+"threat_list"\s*{/);
+    expect(content).not.toMatch(/aws_s3_bucket_object/);
+  });
+
+  test("main.tf uses aws_s3_bucket_server_side_encryption_configuration", () => {
+    const content = fs.readFileSync(mainTfPath, "utf8");
+    expect(content).toMatch(/resource\s+"aws_s3_bucket_server_side_encryption_configuration"/);
+    expect(content).not.toMatch(/aws_s3_bucket_encryption/);
+  });
+
   test("main.tf declares Lambda rotate secret function", () => {
     const content = fs.readFileSync(mainTfPath, "utf8");
     expect(content).toMatch(/resource\s+"aws_lambda_function"\s+"rotate_secret"\s*{/);

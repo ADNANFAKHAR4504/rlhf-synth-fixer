@@ -199,7 +199,7 @@ resource "aws_networkfirewall_rule_group" "suricata_rules" {
 
   rule_group {
     rules_source {
-      stateful_rules {
+      stateful_rule {
         action = "DROP"
         header {
           protocol    = "HTTP"
@@ -277,7 +277,7 @@ resource "aws_s3_bucket" "logs" {
   tags = local.tags
 }
 
-resource "aws_s3_bucket_encryption" "logs" {
+resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
   bucket = aws_s3_bucket.logs.id
 
   rule {
@@ -302,6 +302,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs" {
   rule {
     id     = "transition-to-glacier"
     status = "Enabled"
+
+    filter {}
 
     transition {
       days          = 30
@@ -461,26 +463,6 @@ resource "aws_cloudtrail" "main" {
   enable_log_file_validation    = true
   kms_key_id                    = aws_kms_key.master.arn
 
-  event_selector {
-    read_write_type           = "All"
-    include_management_events = true
-
-    data_resource {
-      type   = "AWS::S3::Object"
-      values = ["arn:aws:s3:::*/*"]
-    }
-
-    data_resource {
-      type   = "AWS::Lambda::Function"
-      values = ["arn:aws:lambda:*:*:function/*"]
-    }
-
-    data_resource {
-      type   = "AWS::DynamoDB::Table"
-      values = ["arn:aws:dynamodb:*:*:table/*"]
-    }
-  }
-
   insight_selector {
     insight_type = "ApiCallRateInsight"
   }
@@ -506,7 +488,7 @@ resource "aws_s3_bucket" "cloudtrail" {
   tags = local.tags
 }
 
-resource "aws_s3_bucket_encryption" "cloudtrail" {
+resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
   bucket = aws_s3_bucket.cloudtrail.id
 
   rule {
@@ -645,7 +627,7 @@ resource "aws_s3_bucket" "threat_intel" {
   tags = local.tags
 }
 
-resource "aws_s3_bucket_object" "threat_list" {
+resource "aws_s3_object" "threat_list" {
   bucket  = aws_s3_bucket.threat_intel.id
   key     = "threatlist.txt"
   content = file("${path.module}/threat_list.txt")
@@ -697,7 +679,7 @@ resource "aws_s3_bucket" "config" {
   tags = local.tags
 }
 
-resource "aws_s3_bucket_encryption" "config" {
+resource "aws_s3_bucket_server_side_encryption_configuration" "config" {
   bucket = aws_s3_bucket.config.id
 
   rule {
@@ -1110,10 +1092,6 @@ resource "aws_secretsmanager_secret" "rds_master" {
   recovery_window_in_days = 30
   kms_key_id              = aws_kms_key.master.arn
 
-  rotation_rules {
-    automatically_after_days = 30
-  }
-
   tags = local.tags
 }
 
@@ -1225,7 +1203,7 @@ resource "aws_s3_bucket" "data" {
   tags = local.tags
 }
 
-resource "aws_s3_bucket_encryption" "data_ssec" {
+resource "aws_s3_bucket_server_side_encryption_configuration" "data_ssec" {
   bucket = aws_s3_bucket.data.id
 
   rule {
@@ -1235,7 +1213,7 @@ resource "aws_s3_bucket_encryption" "data_ssec" {
   }
 }
 
-resource "aws_ec2_dedicated_host" "main" {
+resource "aws_ec2_host" "main" {
   count               = 3
   availability_zone   = local.azs[count.index]
   instance_type       = "m5.large"

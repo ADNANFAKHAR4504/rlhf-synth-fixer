@@ -15,3 +15,19 @@
 6. **Created missing security_response.zip Lambda package** - The security response Lambda function referenced this deployment package. Created the Python handler code and zip file.
 
 7. **Created missing rotate_secret.zip Lambda package** - The secret rotation Lambda function referenced this deployment package. Created the Python handler code and zip file.
+
+8. **Added default value for cloudhsm_cluster_id variable** - Added `default = "cluster-placeholder"` to allow deployment without requiring actual CloudHSM cluster ID.
+
+9. **Fixed Network Firewall rule group block** - Changed `stateful_rules` to `stateful_rule` (singular) in aws_networkfirewall_rule_group resource.
+
+10. **Updated deprecated S3 resource** - Changed `aws_s3_bucket_object` to `aws_s3_object` for threat list upload.
+
+11. **Fixed S3 bucket encryption configuration** - Changed all `aws_s3_bucket_encryption` resources to `aws_s3_bucket_server_side_encryption_configuration` (4 instances: logs, cloudtrail, config, data_ssec buckets).
+
+12. **Added missing filter to S3 lifecycle rule** - Added empty `filter {}` block to S3 lifecycle configuration to satisfy AWS provider requirements.
+
+13. **Removed conflicting CloudTrail event selectors** - Removed `event_selector` block and kept only `advanced_event_selector` to avoid conflicts.
+
+14. **Removed invalid rotation_rules block** - Removed `rotation_rules` block from `aws_secretsmanager_secret` resource. Rotation is configured via separate `aws_secretsmanager_secret_rotation` resource.
+
+15. **Fixed EC2 dedicated host resource type** - Changed `aws_ec2_dedicated_host` to `aws_ec2_host` (correct resource name).
