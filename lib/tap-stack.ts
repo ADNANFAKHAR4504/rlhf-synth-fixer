@@ -30,10 +30,10 @@ export class TapStack extends pulumi.ComponentResource {
   private readonly region: string;
   private readonly environmentSuffix: string;
   private readonly commonTags: Record<string, string>;
-  private readonly availabilityZones: pulumi.Output<string[]>;
+  private readonly availabilityZones: string[];
   private hubIgw?: aws.ec2.InternetGateway;
   
-  // Store subnet references for Transit Gateway attachments
+  // Store subnet references
   private hubPrivateSubnets: aws.ec2.Subnet[] = [];
   private hubPublicSubnets: aws.ec2.Subnet[] = [];
   private prodPrivateSubnets: aws.ec2.Subnet[] = [];
@@ -49,11 +49,9 @@ export class TapStack extends pulumi.ComponentResource {
     this.environmentSuffix = args.environmentSuffix;
     this.region = args.region || aws.config.region || "us-east-1";
     
-    // Get repository and author from environment
     const repository = process.env.REPOSITORY || "tap-infrastructure";
     const commitAuthor = process.env.COMMIT_AUTHOR || "pulumi";
 
-    // Define common tags
     this.commonTags = {
       ManagedBy: "pulumi",
       CostCenter: "network-operations",
@@ -61,19 +59,15 @@ export class TapStack extends pulumi.ComponentResource {
       Author: commitAuthor,
     };
 
-    // Get availability zones
-    const azData = aws.getAvailabilityZones({
-      state: "available",
-    });
-    
-    this.availabilityZones = pulumi.output(azData).apply(data => 
-      data.names.slice(0, 3)
-    );
+    // Hardcode AZs for the region
+    if (this.region === "us-east-2") {
+      this.availabilityZones = ["us-east-2a", "us-east-2b", "us-east-2c"];
+    } else {
+      this.availabilityZones = ["us-east-1a", "us-east-1b", "us-east-1c"];
+    }
 
-    // 1. Create S3 bucket for VPC Flow Logs
     this.flowLogsBucket = this.createFlowLogsBucket();
 
-    // 2. Create Hub VPC
     const hubConfig: VpcConfig = {
       name: "hub",
       cidr: "10.0.0.0/16",
@@ -83,7 +77,6 @@ export class TapStack extends pulumi.ComponentResource {
     };
     this.hubVpc = this.createVpc(hubConfig);
 
-    // 3. Create Production Spoke VPC
     const prodConfig: VpcConfig = {
       name: "production",
       cidr: "10.1.0.0/16",
@@ -93,7 +86,6 @@ export class TapStack extends pulumi.ComponentResource {
     };
     this.productionVpc = this.createVpc(prodConfig);
 
-    // 4. Create Development Spoke VPC
     const devConfig: VpcConfig = {
       name: "development",
       cidr: "10.2.0.0/16",
@@ -103,43 +95,28 @@ export class TapStack extends pulumi.ComponentResource {
     };
     this.developmentVpc = this.createVpc(devConfig);
 
-    // 5. Create Transit Gateway
     this.transitGateway = this.createTransitGateway();
-
-    // 6. Create Transit Gateway Attachments and Route Tables
     const tgwAttachments = this.createTransitGatewayAttachments();
-
-    // 7. Configure Transit Gateway Routing
     this.configureTransitGatewayRouting(tgwAttachments);
 
-    // 8. Create NAT Gateways in Hub VPC
     const natGateways = this.createNatGateways();
-
-    // 9. Configure VPC Routing
     this.configureVpcRouting(natGateways, tgwAttachments);
 
-    // 10. Create Route53 Private Hosted Zones
     this.hubZone = this.createPrivateHostedZone("hub", this.hubVpc);
     this.prodZone = this.createPrivateHostedZone("production", this.productionVpc);
     this.devZone = this.createPrivateHostedZone("development", this.developmentVpc);
 
-    // 11. Associate Route53 zones with connected VPCs
     this.associateHostedZones(tgwAttachments);
 
-    // 12. Create VPC Endpoints for Systems Manager
     this.createVpcEndpoints(this.hubVpc, "hub");
     this.createVpcEndpoints(this.productionVpc, "production");
     this.createVpcEndpoints(this.developmentVpc, "development");
 
-    // 13. Enable VPC Flow Logs
     this.enableVpcFlowLogs(this.hubVpc, "hub");
     this.enableVpcFlowLogs(this.productionVpc, "production");
     this.enableVpcFlowLogs(this.developmentVpc, "development");
 
-    // 14. Create CloudWatch Alarms
     this.createCloudWatchAlarms(tgwAttachments);
-
-    // 15. Export outputs
     this.outputs = this.exportOutputs(tgwAttachments, natGateways);
 
     this.registerOutputs({
@@ -152,7 +129,6 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   private createFlowLogsBucket(): aws.s3.Bucket {
-    // Add unique identifier to prevent naming conflicts
     const timestamp = Date.now();
     const bucketName = `vpc-flow-logs-${this.environmentSuffix}-${this.region}-${timestamp}`;
     
@@ -189,7 +165,6 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Block all public access
     new aws.s3.BucketPublicAccessBlock(
       `vpc-flow-logs-public-access-block-${this.environmentSuffix}`,
       {
@@ -221,10 +196,8 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Create subnets
     this.createSubnets(vpc, config);
 
-    // Create Internet Gateway for Hub VPC only and STORE THE REFERENCE
     if (config.hasPublicSubnets) {
       this.hubIgw = new aws.ec2.InternetGateway(
         `${config.name}-igw-${this.environmentSuffix}`,
@@ -244,63 +217,57 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   private createSubnets(vpc: aws.ec2.Vpc, config: VpcConfig): void {
-    this.availabilityZones.apply((azs: string[]) => {
-      azs.forEach((az: string, index: number) => {
-        const publicCidr = this.calculateSubnetCidr(config.cidr, index * 2);
-        const privateCidr = this.calculateSubnetCidr(config.cidr, index * 2 + 1);
+    this.availabilityZones.forEach((az: string, index: number) => {
+      const publicCidr = this.calculateSubnetCidr(config.cidr, index * 2);
+      const privateCidr = this.calculateSubnetCidr(config.cidr, index * 2 + 1);
 
-        if (config.hasPublicSubnets) {
-          // Public subnet - STORE THE REFERENCE
-          const publicSubnet = new aws.ec2.Subnet(
-            `${config.name}-public-subnet-${index}-${this.environmentSuffix}`,
-            {
-              vpcId: vpc.id,
-              cidrBlock: publicCidr,
-              availabilityZone: az,
-              mapPublicIpOnLaunch: true,
-              tags: {
-                ...this.commonTags,
-                Environment: config.environment,
-                Name: `${config.name}-public-subnet-${index}-${this.environmentSuffix}`,
-                Type: "public",
-              },
-            },
-            { parent: this }
-          );
-          
-          // Store public subnet reference for NAT Gateway creation
-          if (config.name === "hub") {
-            this.hubPublicSubnets.push(publicSubnet);
-          }
-        }
-
-        // Private subnet - STORE THE REFERENCE
-        const privateSubnet = new aws.ec2.Subnet(
-          `${config.name}-private-subnet-${index}-${this.environmentSuffix}`,
+      if (config.hasPublicSubnets) {
+        const publicSubnet = new aws.ec2.Subnet(
+          `${config.name}-public-subnet-${index}-${this.environmentSuffix}`,
           {
             vpcId: vpc.id,
-            cidrBlock: config.hasPublicSubnets ? privateCidr : publicCidr,
+            cidrBlock: publicCidr,
             availabilityZone: az,
-            mapPublicIpOnLaunch: false,
+            mapPublicIpOnLaunch: true,
             tags: {
               ...this.commonTags,
               Environment: config.environment,
-              Name: `${config.name}-private-subnet-${index}-${this.environmentSuffix}`,
-              Type: "private",
+              Name: `${config.name}-public-subnet-${index}-${this.environmentSuffix}`,
+              Type: "public",
             },
           },
           { parent: this }
         );
         
-        // Store private subnet references
         if (config.name === "hub") {
-          this.hubPrivateSubnets.push(privateSubnet);
-        } else if (config.name === "production") {
-          this.prodPrivateSubnets.push(privateSubnet);
-        } else if (config.name === "development") {
-          this.devPrivateSubnets.push(privateSubnet);
+          this.hubPublicSubnets.push(publicSubnet);
         }
-      });
+      }
+
+      const privateSubnet = new aws.ec2.Subnet(
+        `${config.name}-private-subnet-${index}-${this.environmentSuffix}`,
+        {
+          vpcId: vpc.id,
+          cidrBlock: config.hasPublicSubnets ? privateCidr : publicCidr,
+          availabilityZone: az,
+          mapPublicIpOnLaunch: false,
+          tags: {
+            ...this.commonTags,
+            Environment: config.environment,
+            Name: `${config.name}-private-subnet-${index}-${this.environmentSuffix}`,
+            Type: "private",
+          },
+        },
+        { parent: this }
+      );
+      
+      if (config.name === "hub") {
+        this.hubPrivateSubnets.push(privateSubnet);
+      } else if (config.name === "production") {
+        this.prodPrivateSubnets.push(privateSubnet);
+      } else if (config.name === "development") {
+        this.devPrivateSubnets.push(privateSubnet);
+      }
     });
   }
 
@@ -309,7 +276,6 @@ export class TapStack extends pulumi.ComponentResource {
     const prefix = parseInt(prefixStr);
     const [octet1, octet2, octet3] = baseIp.split(".").map(Number);
     
-    // Calculate /20 subnets (4096 IPs each) from /16 VPC
     const subnetSize = 20;
     const subnetIncrement = Math.pow(2, subnetSize - prefix);
     const newOctet3 = octet3 + (subnetIndex * subnetIncrement);
@@ -337,20 +303,9 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   private createTransitGatewayAttachments() {
-    const hubAttachment = this.createTgwVpcAttachment(
-      this.hubVpc,
-      "hub"
-    );
-
-    const prodAttachment = this.createTgwVpcAttachment(
-      this.productionVpc,
-      "production"
-    );
-
-    const devAttachment = this.createTgwVpcAttachment(
-      this.developmentVpc,
-      "development"
-    );
+    const hubAttachment = this.createTgwVpcAttachment(this.hubVpc, "hub");
+    const prodAttachment = this.createTgwVpcAttachment(this.productionVpc, "production");
+    const devAttachment = this.createTgwVpcAttachment(this.developmentVpc, "development");
 
     return { hubAttachment, prodAttachment, devAttachment };
   }
@@ -359,7 +314,6 @@ export class TapStack extends pulumi.ComponentResource {
     vpc: aws.ec2.Vpc,
     name: string
   ): aws.ec2transitgateway.VpcAttachment {
-    // FIXED: Use the stored subnet references
     let privateSubnets: aws.ec2.Subnet[];
     
     if (name === "hub") {
@@ -395,13 +349,12 @@ export class TapStack extends pulumi.ComponentResource {
       },
       { 
         parent: this,
-        dependsOn: privateSubnets, // Explicit dependency on subnets
+        dependsOn: privateSubnets,
       }
     );
   }
 
   private configureTransitGatewayRouting(attachments: any): void {
-    // Create route tables for each environment
     const hubRouteTable = new aws.ec2transitgateway.RouteTable(
       `tgw-rt-hub-${this.environmentSuffix}`,
       {
@@ -441,7 +394,6 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Associate attachments with route tables
     new aws.ec2transitgateway.RouteTableAssociation(
       `tgw-rt-assoc-hub-${this.environmentSuffix}`,
       {
@@ -469,7 +421,6 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Configure routes - Hub can reach all spokes
     new aws.ec2transitgateway.Route(
       `tgw-route-hub-to-prod-${this.environmentSuffix}`,
       {
@@ -490,7 +441,6 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Production can only reach Hub
     new aws.ec2transitgateway.Route(
       `tgw-route-prod-to-hub-${this.environmentSuffix}`,
       {
@@ -501,7 +451,6 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Development can reach Hub and Production
     new aws.ec2transitgateway.Route(
       `tgw-route-dev-to-hub-${this.environmentSuffix}`,
       {
@@ -526,9 +475,7 @@ export class TapStack extends pulumi.ComponentResource {
   private createNatGateways() {
     const natGateways: aws.ec2.NatGateway[] = [];
     
-    // FIXED: Use stored public subnet references
     this.hubPublicSubnets.forEach((subnet, index) => {
-      // Allocate Elastic IP
       const eip = new aws.ec2.Eip(
         `nat-eip-${index}-${this.environmentSuffix}`,
         {
@@ -542,7 +489,6 @@ export class TapStack extends pulumi.ComponentResource {
         { parent: this }
       );
 
-      // Create NAT Gateway
       const natGw = new aws.ec2.NatGateway(
         `nat-gateway-${index}-${this.environmentSuffix}`,
         {
@@ -564,21 +510,16 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   private configureVpcRouting(natGateways: aws.ec2.NatGateway[], attachments: any): void {
-    // Configure Hub VPC routing
     this.configureHubVpcRouting(natGateways, attachments);
-    
-    // Configure Spoke VPC routing
     this.configureSpokeVpcRouting(this.productionVpc, "production", attachments.prodAttachment);
     this.configureSpokeVpcRouting(this.developmentVpc, "development", attachments.devAttachment);
   }
 
   private configureHubVpcRouting(natGateways: aws.ec2.NatGateway[], attachments: any): void {
-    // Use stored subnet references instead of queries
     if (!this.hubIgw) {
       throw new Error("Hub Internet Gateway not found");
     }
 
-    // Create route table for public subnets
     const publicRouteTable = new aws.ec2.RouteTable(
       `hub-public-rt-${this.environmentSuffix}`,
       {
@@ -592,7 +533,6 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Add route to Internet Gateway
     new aws.ec2.Route(
       `hub-public-igw-route-${this.environmentSuffix}`,
       {
@@ -603,7 +543,6 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this, dependsOn: [publicRouteTable] }
     );
 
-    // Associate with public subnets
     this.hubPublicSubnets.forEach((subnet, index) => {
       new aws.ec2.RouteTableAssociation(
         `hub-public-rta-${index}-${this.environmentSuffix}`,
@@ -615,7 +554,6 @@ export class TapStack extends pulumi.ComponentResource {
       );
     });
 
-    // Create route tables for private subnets (one per NAT Gateway)
     this.hubPrivateSubnets.forEach((subnet, index) => {
       const privateRouteTable = new aws.ec2.RouteTable(
         `hub-private-rt-${index}-${this.environmentSuffix}`,
@@ -630,7 +568,6 @@ export class TapStack extends pulumi.ComponentResource {
         { parent: this }
       );
 
-      // Add route to NAT Gateway (if available)
       if (natGateways[index]) {
         new aws.ec2.Route(
           `hub-private-nat-route-${index}-${this.environmentSuffix}`,
@@ -643,7 +580,6 @@ export class TapStack extends pulumi.ComponentResource {
         );
       }
 
-      // Routes to spoke VPCs via TGW
       new aws.ec2.Route(
         `hub-private-tgw-prod-route-${index}-${this.environmentSuffix}`,
         {
@@ -664,7 +600,6 @@ export class TapStack extends pulumi.ComponentResource {
         { parent: this }
       );
 
-      // Associate with private subnet
       new aws.ec2.RouteTableAssociation(
         `hub-private-rta-${index}-${this.environmentSuffix}`,
         {
@@ -681,7 +616,6 @@ export class TapStack extends pulumi.ComponentResource {
     name: string,
     attachment: aws.ec2transitgateway.VpcAttachment
   ): void {
-    // Get private subnets for this spoke VPC
     let privateSubnets: aws.ec2.Subnet[];
     
     if (name === "production") {
@@ -705,7 +639,6 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Default route to Transit Gateway (for internet via Hub NAT)
     new aws.ec2.Route(
       `${name}-default-route-${this.environmentSuffix}`,
       {
@@ -716,7 +649,6 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Associate with all private subnets
     privateSubnets.forEach((subnet, index) => {
       new aws.ec2.RouteTableAssociation(
         `${name}-private-rta-${index}-${this.environmentSuffix}`,
@@ -750,7 +682,6 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   private associateHostedZones(attachments: any): void {
-    // Associate hub zone with dev and prod VPCs (they can resolve hub DNS)
     new aws.route53.ZoneAssociation(
       `hub-zone-assoc-prod-${this.environmentSuffix}`,
       {
@@ -769,7 +700,6 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Associate prod zone with dev VPC (dev can resolve production DNS)
     new aws.route53.ZoneAssociation(
       `prod-zone-assoc-dev-${this.environmentSuffix}`,
       {
@@ -781,7 +711,6 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   private createVpcEndpoints(vpc: aws.ec2.Vpc, name: string): void {
-    // Get private subnets for this VPC
     let privateSubnets: aws.ec2.Subnet[];
     
     if (name === "hub") {
@@ -796,7 +725,6 @@ export class TapStack extends pulumi.ComponentResource {
 
     const subnetIds = privateSubnets.map(subnet => subnet.id);
 
-    // Create security group for endpoints
     const endpointSg = new aws.ec2.SecurityGroup(
       `${name}-endpoint-sg-${this.environmentSuffix}`,
       {
@@ -827,7 +755,6 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Create Systems Manager endpoints
     const endpoints = ["ssm", "ssmmessages", "ec2messages"];
     
     endpoints.forEach((endpoint: string) => {
@@ -852,7 +779,6 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   private enableVpcFlowLogs(vpc: aws.ec2.Vpc, name: string): void {
-    // Create IAM role for Flow Logs
     const flowLogsRole = new aws.iam.Role(
       `${name}-flow-logs-role-${this.environmentSuffix}`,
       {
@@ -877,7 +803,6 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Attach policy for S3 access
     new aws.iam.RolePolicy(
       `${name}-flow-logs-policy-${this.environmentSuffix}`,
       {
@@ -905,7 +830,6 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Create Flow Log
     new aws.ec2.FlowLog(
       `${name}-flow-log-${this.environmentSuffix}`,
       {
@@ -931,7 +855,6 @@ export class TapStack extends pulumi.ComponentResource {
     ];
 
     tgwAttachments.forEach(({ attachment, name }) => {
-      // Alarm for packet drops
       new aws.cloudwatch.MetricAlarm(
         `tgw-packet-drop-alarm-${name}-${this.environmentSuffix}`,
         {
@@ -958,7 +881,6 @@ export class TapStack extends pulumi.ComponentResource {
       );
     });
 
-    // Subnet IP exhaustion alarms for each VPC
     this.createSubnetIpExhaustionAlarms(this.hubVpc, "hub", [...this.hubPrivateSubnets, ...this.hubPublicSubnets]);
     this.createSubnetIpExhaustionAlarms(this.productionVpc, "production", this.prodPrivateSubnets);
     this.createSubnetIpExhaustionAlarms(this.developmentVpc, "development", this.devPrivateSubnets);
@@ -976,7 +898,7 @@ export class TapStack extends pulumi.ComponentResource {
           namespace: "AWS/EC2",
           period: 300,
           statistic: "Average",
-          threshold: 819, // 20% of /20 subnet (4096 * 0.2 = 819)
+          threshold: 819,
           alarmDescription: `Subnet IP utilization > 80% for ${name} subnet ${index}`,
           dimensions: {
             SubnetId: subnet.id,
@@ -1058,7 +980,6 @@ export class TapStack extends pulumi.ComponentResource {
         environmentSuffix: this.environmentSuffix,
       };
 
-      // Write outputs to file
       const outputDir = path.join(process.cwd(), "cfn-outputs");
       if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
