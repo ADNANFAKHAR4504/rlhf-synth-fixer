@@ -33,7 +33,8 @@ import {
   KMSClient, 
   EncryptCommand,
   DecryptCommand,
-  GenerateDataKeyCommand
+  GenerateDataKeyCommand,
+  ListAliasesCommand
 } from '@aws-sdk/client-kms';
 import { 
   CloudTrailClient, 
@@ -710,7 +711,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
 
       // Send logs to CloudWatch
       console.log('Sending logs to CloudWatch...');
-      const logGroupName = outputs['nova-prod-vpc-flow-logs-group'] || `/aws/tapstack/e2e-${Date.now()}`;
+      const logGroupName = (outputs && outputs['nova-prod-vpc-flow-logs-group']) ? String(outputs['nova-prod-vpc-flow-logs-group']) : `/aws/tapstack/e2e-${Date.now()}`;
       const logStreamName = `test-stream-${Date.now()}`;
 
       // Ensure log group exists 
