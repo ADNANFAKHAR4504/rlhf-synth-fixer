@@ -223,7 +223,7 @@ resource "aws_lambda_function" "authorizer_primary" {
   }
 
   lifecycle {
-    ignore_changes = [filename, source_code_hash]
+    ignore_changes = [filename]
   }
 
   tags = var.common_tags
@@ -255,7 +255,7 @@ resource "aws_lambda_function" "authorizer_secondary" {
   }
 
   lifecycle {
-    ignore_changes = [filename, source_code_hash]
+    ignore_changes = [filename]
   }
 
   tags = var.common_tags
@@ -287,7 +287,7 @@ resource "aws_lambda_function" "transaction_primary" {
   }
 
   lifecycle {
-    ignore_changes = [filename, source_code_hash]
+    ignore_changes = [filename]
   }
 
   tags = var.common_tags
@@ -319,7 +319,7 @@ resource "aws_lambda_function" "transaction_secondary" {
   }
 
   lifecycle {
-    ignore_changes = [filename, source_code_hash]
+    ignore_changes = [filename]
   }
 
   tags = var.common_tags
