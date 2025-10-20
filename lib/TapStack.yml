@@ -14,24 +14,6 @@ Parameters:
     Description: CIDR block for VPC
     Default: 10.0.0.0/16
 
-  DatabaseUsername:
-    Type: String
-    Description: Database master username
-    Default: admin
-    MinLength: 1
-    MaxLength: 16
-    AllowedPattern: ^[a-zA-Z][a-zA-Z0-9]*$
-    ConstraintDescription: Must begin with a letter and contain only alphanumeric characters
-
-  DatabasePassword:
-    Type: String
-    Description: Database master password
-    NoEcho: true
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: ^[a-zA-Z0-9]*$
-    ConstraintDescription: Must contain only alphanumeric characters
-
 Resources:
   # ============================================================================
   # KMS Keys for Encryption
