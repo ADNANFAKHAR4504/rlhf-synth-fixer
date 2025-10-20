@@ -1,20 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Production Infrastructure - Highly Available and Secure Environment",
-    "Metadata": {
-        "AWS::CloudFormation::Interface": {
-            "ParameterGroups": [
-                {
-                    "Label": {
-                        "default": "Environment Configuration"
-                    },
-                    "Parameters": [
-                        "EnvironmentSuffix"
-                    ]
-                }
-            ]
-        }
-    },
     "Parameters": {
         "VPCCidr": {
             "Type": "String",
@@ -69,7 +55,7 @@
         "DomainName": {
             "Type": "String",
             "Description": "Domain name for Route 53",
-            "Default": "example.com"
+            "Default": "abcd.com"
         }
     },
     "Resources": {
@@ -99,13 +85,31 @@
                                     "s3.amazonaws.com",
                                     "rds.amazonaws.com",
                                     "ec2.amazonaws.com",
-                                    "cloudtrail.amazonaws.com"
+                                    "cloudtrail.amazonaws.com",
+                                    "autoscaling.amazonaws.com"
                                 ]
                             },
                             "Action": [
                                 "kms:Decrypt",
                                 "kms:GenerateDataKey",
-                                "kms:CreateGrant"
+                                "kms:CreateGrant",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow Auto Scaling service to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
+                                }
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey",
+                                "kms:CreateGrant",
+                                "kms:DescribeKey"
                             ],
                             "Resource": "*"
                         }
@@ -115,6 +119,10 @@
                     {
                         "Key": "Environment",
                         "Value": "Production"
+                    },
+                    {
+                        "Key": "rlhf-iac-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -122,7 +130,9 @@
         "KMSKeyAlias": {
             "Type": "AWS::KMS::Alias",
             "Properties": {
-                "AliasName": "alias/production-key",
+                "AliasName": {
+                    "Fn::Sub": "alias/${AWS::StackName}-production-key"
+                },
                 "TargetKeyId": {
                     "Ref": "KMSKey"
                 }
@@ -144,6 +154,10 @@
                     {
                         "Key": "Environment",
                         "Value": "Production"
+                    },
+                    {
+                        "Key": "rlhf-iac-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -159,6 +173,10 @@
                     {
                         "Key": "Environment",
                         "Value": "Production"
+                    },
+                    {
+                        "Key": "rlhf-iac-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -200,6 +218,10 @@
                     {
                         "Key": "Environment",
                         "Value": "Production"
+                    },
+                    {
+                        "Key": "rlhf-iac-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -230,6 +252,10 @@
                     {
                         "Key": "Environment",
                         "Value": "Production"
+                    },
+                    {
+                        "Key": "rlhf-iac-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -681,6 +707,10 @@
                     {
                         "Key": "Environment",
                         "Value": "Production"
+                    },
+                    {
+                        "Key": "rlhf-iac-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -860,7 +890,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "production-static-assets-${AWS::AccountId}"
+                    "Fn::Sub": "production-static-assets-${AWS::AccountId}-${AWS::Region}"
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
@@ -887,6 +917,10 @@
                     {
                         "Key": "Environment",
                         "Value": "Production"
+                    },
+                    {
+                        "Key": "rlhf-iac-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -908,13 +942,6 @@
                             "Action": "s3:GetObject",
                             "Resource": {
                                 "Fn::Sub": "${S3Bucket.Arn}/*"
-                            },
-                            "Condition": {
-                                "StringEquals": {
-                                    "AWS:SourceArn": {
-                                        "Fn::Sub": "arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}"
-                                    }
-                                }
                             }
                         }
                     ]
@@ -924,7 +951,9 @@
         "ApplicationLoadBalancer": {
             "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
             "Properties": {
-                "Name": "ProductionALB",
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ProductionALB"
+                },
                 "Subnets": [
                     {
                         "Ref": "PublicSubnet1"
@@ -942,6 +971,10 @@
                     {
                         "Key": "Environment",
                         "Value": "Production"
+                    },
+                    {
+                        "Key": "rlhf-iac-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -949,7 +982,9 @@
         "ALBTargetGroup": {
             "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
             "Properties": {
-                "Name": "ProductionTargetGroup",
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ProductionTG"
+                },
                 "Port": 80,
                 "Protocol": "HTTP",
                 "VpcId": {
@@ -965,6 +1000,10 @@
                     {
                         "Key": "Environment",
                         "Value": "Production"
+                    },
+                    {
+                        "Key": "rlhf-iac-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -990,17 +1029,11 @@
         "LaunchTemplate": {
             "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
-                "LaunchTemplateName": "ProductionLaunchTemplate",
+                "LaunchTemplateName": {
+                    "Fn::Sub": "${AWS::StackName}-ProductionLT"
+                },
                 "LaunchTemplateData": {
-                    "ImageId": {
-                        "Fn::FindInMap": [
-                            "RegionMap",
-                            {
-                                "Ref": "AWS::Region"
-                            },
-                            "AMI"
-                        ]
-                    },
+                    "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
                     "InstanceType": {
                         "Ref": "InstanceType"
                     },
@@ -1023,10 +1056,7 @@
                             "Ebs": {
                                 "VolumeSize": 20,
                                 "VolumeType": "gp3",
-                                "Encrypted": true,
-                                "KmsKeyId": {
-                                    "Ref": "KMSKey"
-                                }
+                                "Encrypted": true
                             }
                         }
                     ],
@@ -1042,6 +1072,10 @@
                                 {
                                     "Key": "Environment",
                                     "Value": "Production"
+                                },
+                                {
+                                    "Key": "rlhf-iac-amazon",
+                                    "Value": "true"
                                 }
                             ]
                         }
@@ -1052,7 +1086,9 @@
         "AutoScalingGroup": {
             "Type": "AWS::AutoScaling::AutoScalingGroup",
             "Properties": {
-                "AutoScalingGroupName": "ProductionASG",
+                "AutoScalingGroupName": {
+                    "Fn::Sub": "${AWS::StackName}-ProductionASG"
+                },
                 "LaunchTemplate": {
                     "LaunchTemplateId": {
                         "Ref": "LaunchTemplate"
@@ -1064,9 +1100,9 @@
                         ]
                     }
                 },
-                "MinSize": 2,
-                "MaxSize": 6,
-                "DesiredCapacity": 2,
+                "MinSize": 1,
+                "MaxSize": 2,
+                "DesiredCapacity": 1,
                 "VPCZoneIdentifier": [
                     {
                         "Ref": "PrivateSubnet1"
@@ -1086,6 +1122,11 @@
                     {
                         "Key": "Environment",
                         "Value": "Production",
+                        "PropagateAtLaunch": true
+                    },
+                    {
+                        "Key": "rlhf-iac-amazon",
+                        "Value": "true",
                         "PropagateAtLaunch": true
                     }
                 ]
@@ -1114,12 +1155,14 @@
         "RDSDatabase": {
             "Type": "AWS::RDS::DBInstance",
             "Properties": {
-                "DBInstanceIdentifier": "production-database",
+                "DBInstanceIdentifier": {
+                    "Fn::Sub": "${AWS::StackName}-production-database"
+                },
                 "DBName": {
                     "Ref": "DBName"
                 },
                 "Engine": "mysql",
-                "EngineVersion": "8.0.35",
+                "EngineVersion": "8.0.43",
                 "DBInstanceClass": {
                     "Ref": "DBInstanceClass"
                 },
@@ -1151,6 +1194,10 @@
                     {
                         "Key": "Environment",
                         "Value": "Production"
+                    },
+                    {
+                        "Key": "rlhf-iac-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1158,7 +1205,9 @@
         "RDSReadReplica": {
             "Type": "AWS::RDS::DBInstance",
             "Properties": {
-                "DBInstanceIdentifier": "production-database-read-replica",
+                "DBInstanceIdentifier": {
+                    "Fn::Sub": "${AWS::StackName}-production-database-read-replica"
+                },
                 "SourceDBInstanceIdentifier": {
                     "Ref": "RDSDatabase"
                 },
@@ -1169,6 +1218,10 @@
                     {
                         "Key": "Environment",
                         "Value": "Production"
+                    },
+                    {
+                        "Key": "rlhf-iac-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1218,7 +1271,9 @@
         "LambdaFunction": {
             "Type": "AWS::Lambda::Function",
             "Properties": {
-                "FunctionName": "ProductionScheduledTask",
+                "FunctionName": {
+                    "Fn::Sub": "${AWS::StackName}-ProductionScheduledTask"
+                },
                 "Runtime": "python3.9",
                 "Handler": "index.lambda_handler",
                 "Role": {
@@ -1256,6 +1311,10 @@
                     {
                         "Key": "Environment",
                         "Value": "Production"
+                    },
+                    {
+                        "Key": "rlhf-iac-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1299,7 +1358,9 @@
             "Type": "AWS::CloudFront::OriginAccessControl",
             "Properties": {
                 "OriginAccessControlConfig": {
-                    "Name": "ProductionOAC",
+                    "Name": {
+                        "Fn::Sub": "${AWS::StackName}-ProductionOAC"
+                    },
                     "OriginAccessControlOriginType": "s3",
                     "SigningBehavior": "always",
                     "SigningProtocol": "sigv4"
@@ -1311,7 +1372,9 @@
             "Properties": {
                 "DistributionConfig": {
                     "Enabled": true,
-                    "Comment": "Production CloudFront Distribution",
+                    "Comment": {
+                        "Fn::Sub": "${AWS::StackName} Production CloudFront Distribution"
+                    },
                     "DefaultRootObject": "index.html",
                     "Origins": [
                         {
@@ -1392,18 +1455,16 @@
                     ],
                     "ViewerCertificate": {
                         "CloudFrontDefaultCertificate": true
-                    },
-                    "WebACLId": {
-                        "Fn::GetAtt": [
-                            "WAFWebACL",
-                            "Arn"
-                        ]
                     }
                 },
                 "Tags": [
                     {
                         "Key": "Environment",
                         "Value": "Production"
+                    },
+                    {
+                        "Key": "rlhf-iac-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1411,14 +1472,18 @@
         "WAFWebACL": {
             "Type": "AWS::WAFv2::WebACL",
             "Properties": {
-                "Name": "ProductionWebACL",
-                "Scope": "CLOUDFRONT",
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::AccountId}-web-acl"
+                },
+                "Scope": "REGIONAL",
                 "DefaultAction": {
                     "Allow": {}
                 },
                 "Rules": [
                     {
-                        "Name": "RateLimitRule",
+                        "Name": {
+                            "Fn::Sub": "${AWS::StackName}-RateLimitRule"
+                        },
                         "Priority": 1,
                         "Action": {
                             "Block": {}
@@ -1432,11 +1497,15 @@
                         "VisibilityConfig": {
                             "SampledRequestsEnabled": true,
                             "CloudWatchMetricsEnabled": true,
-                            "MetricName": "RateLimitRule"
+                            "MetricName": {
+                                "Fn::Sub": "${AWS::StackName}-RateLimitRule"
+                            }
                         }
                     },
                     {
-                        "Name": "AWSManagedRulesCommonRuleSet",
+                        "Name": {
+                            "Fn::Sub": "${AWS::StackName}-AWSManagedRulesCommonRuleSet"
+                        },
                         "Priority": 2,
                         "OverrideAction": {
                             "None": {}
@@ -1450,11 +1519,15 @@
                         "VisibilityConfig": {
                             "SampledRequestsEnabled": true,
                             "CloudWatchMetricsEnabled": true,
-                            "MetricName": "CommonRuleSet"
+                            "MetricName": {
+                                "Fn::Sub": "${AWS::StackName}-CommonRuleSet"
+                            }
                         }
                     },
                     {
-                        "Name": "AWSManagedRulesKnownBadInputsRuleSet",
+                        "Name": {
+                            "Fn::Sub": "${AWS::StackName}-AWSManagedRulesKnownBadInputsRuleSet"
+                        },
                         "Priority": 3,
                         "OverrideAction": {
                             "None": {}
@@ -1468,19 +1541,27 @@
                         "VisibilityConfig": {
                             "SampledRequestsEnabled": true,
                             "CloudWatchMetricsEnabled": true,
-                            "MetricName": "KnownBadInputs"
+                            "MetricName": {
+                                "Fn::Sub": "${AWS::StackName}-KnownBadInputs"
+                            }
                         }
                     }
                 ],
                 "VisibilityConfig": {
                     "SampledRequestsEnabled": true,
                     "CloudWatchMetricsEnabled": true,
-                    "MetricName": "ProductionWebACL"
+                    "MetricName": {
+                        "Fn::Sub": "${AWS::StackName}-${AWS::AccountId}-web-acl"
+                    }
                 },
                 "Tags": [
                     {
                         "Key": "Environment",
                         "Value": "Production"
+                    },
+                    {
+                        "Key": "rlhf-iac-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1491,10 +1572,14 @@
                 "Name": {
                     "Ref": "DomainName"
                 },
-                "Tags": [
+                "HostedZoneTags": [
                     {
                         "Key": "Environment",
                         "Value": "Production"
+                    },
+                    {
+                        "Key": "rlhf-iac-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1502,21 +1587,27 @@
         "HealthCheck": {
             "Type": "AWS::Route53::HealthCheck",
             "Properties": {
-                "Type": "HTTPS",
-                "ResourcePath": "/",
-                "FullyQualifiedDomainName": {
-                    "Fn::GetAtt": [
-                        "CloudFrontDistribution",
-                        "DomainName"
-                    ]
+                "HealthCheckConfig": {
+                    "Type": "HTTPS",
+                    "ResourcePath": "/",
+                    "FullyQualifiedDomainName": {
+                        "Fn::GetAtt": [
+                            "CloudFrontDistribution",
+                            "DomainName"
+                        ]
+                    },
+                    "Port": 443,
+                    "RequestInterval": 30,
+                    "FailureThreshold": 3
                 },
-                "Port": 443,
-                "RequestInterval": 30,
-                "FailureThreshold": 3,
-                "Tags": [
+                "HealthCheckTags": [
                     {
                         "Key": "Environment",
                         "Value": "Production"
+                    },
+                    {
+                        "Key": "rlhf-iac-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1581,7 +1672,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "production-cloudtrail-logs-${AWS::AccountId}"
+                    "Fn::Sub": "production-cloudtrail-logs-${AWS::AccountId}-${AWS::Region}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -1605,6 +1696,10 @@
                     {
                         "Key": "Environment",
                         "Value": "Production"
+                    },
+                    {
+                        "Key": "rlhf-iac-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1653,9 +1748,10 @@
         },
         "CloudTrail": {
             "Type": "AWS::CloudTrail::Trail",
-            "DependsOn": "CloudTrailS3BucketPolicy",
             "Properties": {
-                "TrailName": "ProductionTrail",
+                "TrailName": {
+                    "Fn::Sub": "${AWS::StackName}-ProductionTrail"
+                },
                 "S3BucketName": {
                     "Ref": "CloudTrailS3Bucket"
                 },
@@ -1686,6 +1782,10 @@
                     {
                         "Key": "Environment",
                         "Value": "Production"
+                    },
+                    {
+                        "Key": "rlhf-iac-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1693,8 +1793,10 @@
         "ConfigRecorder": {
             "Type": "AWS::Config::ConfigurationRecorder",
             "Properties": {
-                "Name": "ProductionConfigRecorder",
-                "RoleArn": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ProductionConfigRecorder"
+                },
+                "RoleARN": {
                     "Fn::GetAtt": [
                         "ConfigRole",
                         "Arn"
@@ -1708,12 +1810,11 @@
         "ConfigDeliveryChannel": {
             "Type": "AWS::Config::DeliveryChannel",
             "Properties": {
-                "Name": "ProductionDeliveryChannel",
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ProductionDeliveryChannel"
+                },
                 "S3BucketName": {
                     "Ref": "ConfigS3Bucket"
-                },
-                "SnsTopicARN": {
-                    "Ref": "SNSTopic"
                 }
             }
         },
@@ -1721,7 +1822,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "production-config-logs-${AWS::AccountId}"
+                    "Fn::Sub": "production-config-logs-${AWS::AccountId}-${AWS::Region}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -1745,6 +1846,10 @@
                     {
                         "Key": "Environment",
                         "Value": "Production"
+                    },
+                    {
+                        "Key": "rlhf-iac-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1821,7 +1926,7 @@
                     ]
                 },
                 "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/ConfigRole"
+                    "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
                 ],
                 "Policies": [
                     {
@@ -1866,7 +1971,10 @@
         },
         "RequiredTagsRule": {
             "Type": "AWS::Config::ConfigRule",
-            "DependsOn": "ConfigRecorder",
+            "DependsOn": [
+                "ConfigRecorder",
+                "ConfigDeliveryChannel"
+            ],
             "Properties": {
                 "ConfigRuleName": "required-tags",
                 "Description": "Checks whether resources have required tags",
@@ -1888,7 +1996,10 @@
         },
         "S3VersioningRule": {
             "Type": "AWS::Config::ConfigRule",
-            "DependsOn": "ConfigRecorder",
+            "DependsOn": [
+                "ConfigRecorder",
+                "ConfigDeliveryChannel"
+            ],
             "Properties": {
                 "ConfigRuleName": "s3-bucket-versioning-enabled",
                 "Description": "Checks whether versioning is enabled for S3 buckets",
@@ -1900,7 +2011,10 @@
         },
         "RDSBackupRule": {
             "Type": "AWS::Config::ConfigRule",
-            "DependsOn": "ConfigRecorder",
+            "DependsOn": [
+                "ConfigRecorder",
+                "ConfigDeliveryChannel"
+            ],
             "Properties": {
                 "ConfigRuleName": "rds-backup-enabled",
                 "Description": "Checks whether RDS DB instances have backup enabled",
@@ -1913,8 +2027,12 @@
         "SNSTopic": {
             "Type": "AWS::SNS::Topic",
             "Properties": {
-                "TopicName": "ProductionNotifications",
-                "DisplayName": "Production Environment Notifications",
+                "TopicName": {
+                    "Fn::Sub": "${AWS::StackName}-ProductionNotifications"
+                },
+                "DisplayName": {
+                    "Fn::Sub": "${AWS::StackName} Production Environment Notifications"
+                },
                 "KmsMasterKeyId": {
                     "Ref": "KMSKey"
                 },
@@ -1922,6 +2040,10 @@
                     {
                         "Key": "Environment",
                         "Value": "Production"
+                    },
+                    {
+                        "Key": "rlhf-iac-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -2022,13 +2144,6 @@
             "Description": "Route 53 Hosted Zone ID",
             "Value": {
                 "Ref": "HostedZone"
-            }
-        }
-    },
-    "Mappings": {
-        "RegionMap": {
-            "us-east-1": {
-                "AMI": "ami-0c02fb55731490381"
             }
         }
     }
