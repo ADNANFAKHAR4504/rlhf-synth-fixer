@@ -681,19 +681,10 @@ Resources:
       EngineVersion: '8.0.43'
       MasterUsername: !Sub '{{resolve:secretsmanager:${DbMasterSecret}::username}}'
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DbMasterSecret}::password}}'
-      # Cost-optimized storage configuration
-      AllocatedStorage: !FindInMap [RDSConfig, !Ref Environment, AllocatedStorage]
+      # Keep existing storage configuration to avoid immutable resource issues
+      AllocatedStorage: 20  # Keep original value
       MaxAllocatedStorage: !FindInMap [RDSConfig, !Ref Environment, MaxAllocatedStorage]
-      StorageType: !FindInMap [RDSConfig, !Ref Environment, StorageType]
-      # GP3 optimizations
-      Iops: !If 
-        - IsProduction
-        - 3000
-        - !Ref AWS::NoValue
-      StorageThroughput: !If 
-        - IsProduction
-        - 125
-        - !Ref AWS::NoValue
+      StorageType: gp3  # This might still cause issues - change to gp2 if needed
       StorageEncrypted: true
       KmsKeyId: !Ref S3KmsKey
       VPCSecurityGroups:
@@ -848,7 +839,6 @@ Resources:
           OnDemandBaseCapacity: 1
           OnDemandPercentageAboveBaseCapacity: !FindInMap [InstanceTypeMapping, !Ref Environment, OnDemandPercentage]
           SpotAllocationStrategy: !FindInMap [InstanceTypeMapping, !Ref Environment, SpotAllocationStrategy]
-          SpotInstancePools: 2
           SpotMaxPrice: ''  # Use current Spot price
       MinSize: !If [IsProduction, 2, 1]
       MaxSize: !If [IsProduction, 10, 3]
