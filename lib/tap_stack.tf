@@ -1106,6 +1106,14 @@ resource "aws_rds_cluster" "primary" {
   depends_on = [aws_rds_global_cluster.financial_db]
 }
 
+# Data source to read password from Secrets Manager replica in DR region
+data "aws_secretsmanager_secret_version" "db_credentials_dr" {
+  provider  = aws.dr
+  secret_id = aws_secretsmanager_secret.db_credentials_primary.id
+
+  depends_on = [aws_secretsmanager_secret_version.db_credentials_primary]
+}
+
 # DR Aurora Cluster (standalone for existing deployments)
 resource "aws_rds_cluster" "dr" {
   provider               = aws.dr
@@ -1114,7 +1122,7 @@ resource "aws_rds_cluster" "dr" {
   engine_version         = "15.4"
   database_name          = var.database_name
   master_username        = var.db_master_username
-  master_password        = random_password.db_password.result
+  master_password        = jsondecode(data.aws_secretsmanager_secret_version.db_credentials_dr.secret_string)["password"]
   db_subnet_group_name   = aws_db_subnet_group.dr.name
   vpc_security_group_ids = [aws_security_group.aurora_dr.id]
 
@@ -1135,6 +1143,8 @@ resource "aws_rds_cluster" "dr" {
   lifecycle {
     ignore_changes = [engine_version, global_cluster_identifier, master_password]
   }
+
+  depends_on = [data.aws_secretsmanager_secret_version.db_credentials_dr]
 }
 
 # Aurora Instances - Primary Region
