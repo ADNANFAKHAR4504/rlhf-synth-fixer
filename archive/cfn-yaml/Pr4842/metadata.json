@@ -30,6 +30,11 @@
     "SNS Subscription"
   ],
   "training_quality": 9,
-  "background": "Design a secure and modular AWS infrastructure in YAML-based CloudFormation, deploying resources in us-west-2. The stack provisions a VPC with subnets, Internet Gateway, and routing; an EC2 instance secured with IAM roles and security groups; a KMS-encrypted S3 bucket that stores CloudTrail logs; and integrates CloudWatch Alarms and SNS notifications for monitoring and alerting. The environment must follow least-privilege IAM, encryption best practices, and consistent tagging for auditing and scalability."
+  "background": "Design a secure and modular AWS infrastructure in YAML-based CloudFormation, deploying resources in us-west-2. The stack provisions a VPC with subnets, Internet Gateway, and routing; an EC2 instance secured with IAM roles and security groups; a KMS-encrypted S3 bucket that stores CloudTrail logs; and integrates CloudWatch Alarms and SNS notifications for monitoring and alerting. The environment must follow least-privilege IAM, encryption best practices, and consistent tagging for auditing and scalability.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
 }
-
