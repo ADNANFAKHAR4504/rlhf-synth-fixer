@@ -36,6 +36,16 @@
             "Description": "AMI ID for the EC2 instance (uses latest Amazon Linux 2 AMI by default, or specify custom AMI ID)"
         }
     },
+    "Conditions": {
+        "IsBudgetsRegion": {
+            "Fn::Equals": [
+                {
+                    "Ref": "AWS::Region"
+                },
+                "us-east-1"
+            ]
+        }
+    },
     "Resources": {
         "NovaKMSKey": {
             "Type": "AWS::KMS::Key",
@@ -2390,8 +2400,12 @@
         },
         "NovaBudget": {
             "Type": "AWS::Budgets::Budget",
+            "Condition": "IsBudgetsRegion",
             "Properties": {
                 "Budget": {
+                    "BudgetName": {
+                        "Fn::Sub": "${ProjectName}-${Environment}-monthly-budget"
+                    },
                     "BudgetType": "COST",
                     "TimeUnit": "MONTHLY",
                     "BudgetLimit": {

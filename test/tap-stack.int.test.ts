@@ -29,7 +29,7 @@ const region = process.env.AWS_REGION;
 const s3Client = new S3Client({ region });
 const rdsClient = new RDSClient({ region });
 const cloudFrontClient = new CloudFrontClient({ region });
-const cloudFrontClientGlobal = new CloudFrontClient({ region });
+const cloudFrontClientGlobal = new CloudFrontClient({ region: 'us-east-1' });
 const apiGatewayClient = new APIGatewayClient({ region });
 const ec2Client = new EC2Client({ region });
 const kmsClient = new KMSClient({ region });
@@ -1054,17 +1054,32 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
           
         } catch (error) {
           console.warn(`CloudFront HTTP request failed: ${error}`);
+          throw error;
         }
       }
       
-      // Step 4: Test load balancing and performance
+      // Step 4: Test load balancing and performance with SigV4-signed requests
+      const signedUrl = new URL(clinicalDataEndpoint);
+      const signedCreds = await defaultProvider()();
+      const signedHostParts = signedUrl.hostname.split('.');
+      const signedRegion = signedHostParts.length >= 3 ? signedHostParts[2] : region;
       const loadTestPromises = Array.from({ length: 10 }, async (_, i) => {
         const startTime = Date.now();
         try {
-          const response = await fetch(clinicalDataEndpoint, {
+          const requestOptions: any = {
+            host: signedUrl.hostname,
             method: 'GET',
-            headers: { 'Accept': 'application/json' }
+            path: signedUrl.pathname,
+            service: 'execute-api',
+            region: signedRegion,
+            headers: { 'accept': 'application/json' }
+          };
+          aws4.sign(requestOptions, {
+            accessKeyId: signedCreds.accessKeyId,
+            secretAccessKey: signedCreds.secretAccessKey,
+            sessionToken: signedCreds.sessionToken
           });
+          const response = await fetch(`${signedUrl.protocol}//${signedUrl.hostname}${signedUrl.pathname}`, { method: 'GET', headers: requestOptions.headers });
           const endTime = Date.now();
           
           return {
@@ -1088,12 +1103,8 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
       const successfulRequests = loadTestResults.filter(r => r.success).length;
       const averageResponseTime = loadTestResults.reduce((sum, r) => sum + r.responseTime, 0) / loadTestResults.length;
       
-      // Require at least some success; relax to warn but not fail if all secured (403/401)
-      if (successfulRequests === 0) {
-        console.warn('No successful unsigned requests; API likely requires IAM auth for this path.');
-      } else {
-        expect(successfulRequests).toBeGreaterThan(0);
-      }
+      // Require at least some success
+      expect(successfulRequests).toBeGreaterThan(0);
       expect(averageResponseTime).toBeLessThan(5000); // 5 seconds max
       
       // Store load test results
