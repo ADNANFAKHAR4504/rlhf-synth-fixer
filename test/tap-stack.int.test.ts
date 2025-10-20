@@ -155,8 +155,14 @@ describe('TAP Serverless CI/CD Stack - Integration Tests', () => {
       expect(arnValues.length).toBeGreaterThan(0);
 
       arnValues.forEach(value => {
-        // Should contain either *** or a 12-digit account ID
-        expect(value).toMatch(/:(\d{12}|\*\*\*):/);
+        // S3 ARNs don't have account IDs: arn:aws:s3:::bucket-name
+        // Other ARNs: arn:aws:service:region:account-id:resource or arn:aws:service::account-id:resource
+        if (value.includes('arn:aws:s3:::')) {
+          expect(value).toMatch(/^arn:aws:s3:::.+/);
+        } else {
+          // Should contain either *** or a 12-digit account ID
+          expect(value).toMatch(/:(\d{12}|\*\*\*):/);
+        }
       });
 
       const hasPlaceholder = arnValues.some(value => value.includes('***'));
@@ -173,10 +179,15 @@ describe('TAP Serverless CI/CD Stack - Integration Tests', () => {
       );
 
       arnOutputs.forEach(([key, value]) => {
-        // Allow *** as placeholder if account ID not yet replaced
-        // IAM ARNs have empty region: arn:aws:iam::account-id:resource
+        // S3 ARNs: arn:aws:s3:::bucket-name (no region, no account ID)
+        // IAM ARNs: arn:aws:iam::account-id:resource (no region)
         // Regional ARNs: arn:aws:service:region:account-id:resource
-        expect(value).toMatch(/^arn:aws:[a-z0-9-]+:[a-z0-9-]*:(\d{12}|\*\*\*):.+/);
+        if (value.includes('arn:aws:s3:::')) {
+          expect(value).toMatch(/^arn:aws:s3:::.+/);
+        } else {
+          // Allow *** as placeholder or real 12-digit account ID
+          expect(value).toMatch(/^arn:aws:[a-z0-9-]+:[a-z0-9-]*:(\d{12}|\*\*\*):.+/);
+        }
         console.log(`✓ ${key}: ${value}`);
       });
     });
