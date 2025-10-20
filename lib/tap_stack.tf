@@ -572,12 +572,6 @@ resource "aws_acm_certificate" "main" {
   })
 }
 
-# Data source for existing certificate
-data "aws_acm_certificate" "existing" {
-  count = var.enable_https && var.ssl_certificate_arn != "" ? 1 : 0
-  arn   = var.ssl_certificate_arn
-}
-
 # Local to determine which certificate to use
 locals {
   certificate_arn = var.enable_https ? (
