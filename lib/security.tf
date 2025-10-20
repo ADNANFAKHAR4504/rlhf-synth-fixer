@@ -313,6 +313,9 @@ resource "aws_s3_bucket" "waf_logs" {
   provider = aws.global
   bucket   = "aws-waf-logs-${var.project_name}-${data.aws_caller_identity.current.account_id}"
 
+  # Allow bucket to be destroyed even if it contains objects
+  force_destroy = true
+
   tags = var.common_tags
 }
 
