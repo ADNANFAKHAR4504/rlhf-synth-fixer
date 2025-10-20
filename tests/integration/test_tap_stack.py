@@ -145,7 +145,7 @@ class TestServiceLevelS3Operations(unittest.TestCase):
         
         retrieved_content = response['Body'].read().decode('utf-8')
         self.assertEqual(retrieved_content, test_content, "Retrieved content should match written content")
-        print(f"✓ Successfully wrote and read object from S3")
+        print(f"Successfully wrote and read object from S3")
         
         # CLEANUP
         s3_client.delete_object(Bucket=bucket_name, Key=test_key)
@@ -188,7 +188,7 @@ class TestServiceLevelS3Operations(unittest.TestCase):
         
         versions = versions_response.get('Versions', [])
         self.assertGreaterEqual(len(versions), 2, "Should have at least 2 versions")
-        print(f"✓ S3 versioning working: {len(versions)} versions maintained")
+        print(f"S3 versioning working: {len(versions)} versions maintained")
         
         # CLEANUP
         for version in versions:
@@ -229,7 +229,7 @@ class TestServiceLevelSSMOperations(unittest.TestCase):
         response = ssm_client.get_parameter(Name=test_param_name)
         self.assertEqual(response['Parameter']['Value'], test_value, "Parameter value should match")
         self.assertEqual(response['Parameter']['Type'], 'String')
-        print(f"✓ Successfully created and read SSM parameter")
+        print(f"Successfully created and read SSM parameter")
         
         # ACTION: Update the parameter
         updated_value = f'updated-value-{int(time.time())}'
@@ -244,7 +244,7 @@ class TestServiceLevelSSMOperations(unittest.TestCase):
         # VERIFY: Read updated value
         response = ssm_client.get_parameter(Name=test_param_name)
         self.assertEqual(response['Parameter']['Value'], updated_value, "Updated value should match")
-        print(f"✓ Successfully updated SSM parameter")
+        print(f"Successfully updated SSM parameter")
         
         # CLEANUP
         ssm_client.delete_parameter(Name=test_param_name)
@@ -293,7 +293,7 @@ class TestServiceLevelCloudWatchOperations(unittest.TestCase):
         
         metrics = metrics_response.get('Metrics', [])
         self.assertGreater(len(metrics), 0, "Published metric should be queryable")
-        print(f"✓ Successfully published and queried CloudWatch metric")
+        print(f"Successfully published and queried CloudWatch metric")
 
 
 class TestServiceLevelSNSOperations(unittest.TestCase):
@@ -328,7 +328,7 @@ class TestServiceLevelSNSOperations(unittest.TestCase):
         self.assertIn('MessageId', response, "Should receive MessageId from SNS")
         message_id = response['MessageId']
         self.assertIsNotNone(message_id, "MessageId should not be None")
-        print(f"✓ Successfully published message to SNS (MessageId: {message_id})")
+        print(f"Successfully published message to SNS (MessageId: {message_id})")
 
 
 # ============================================================================
@@ -392,7 +392,7 @@ class TestCrossServiceS3ToCloudWatch(unittest.TestCase):
         
         # Verify we can query S3 metrics in CloudWatch
         self.assertIn('Datapoints', response, "CloudWatch should be able to track S3 metrics")
-        print(f"✓ S3 operations are being tracked in CloudWatch")
+        print(f"S3 operations are being tracked in CloudWatch")
         
         # CLEANUP
         s3_client.delete_object(Bucket=bucket_name, Key=test_key)
@@ -448,7 +448,7 @@ class TestCrossServiceASGToCloudWatch(unittest.TestCase):
         
         # VERIFY: Metrics are being published
         self.assertIn('Datapoints', response, "CloudWatch should receive ASG metrics")
-        print(f"✓ ASG metrics are being published to CloudWatch")
+        print(f"ASG metrics are being published to CloudWatch")
 
 
 class TestCrossServiceCloudWatchToSNS(unittest.TestCase):
@@ -497,14 +497,24 @@ class TestCrossServiceCloudWatchToSNS(unittest.TestCase):
         stack_alarms = [alarm for alarm in alarms_response['MetricAlarms'] 
                        if ENVIRONMENT_SUFFIX in alarm['AlarmName']]
         
-        if stack_alarms:
-            alarms_with_sns = [alarm for alarm in stack_alarms 
-                             if alarm_topic_arn in alarm.get('AlarmActions', [])]
-            self.assertGreater(len(alarms_with_sns), 0, 
-                             "CloudWatch alarms should be configured to notify SNS")
-            print(f"✓ CloudWatch alarms ({len(alarms_with_sns)}) are configured to notify SNS")
+        self.assertGreater(len(stack_alarms), 0, "Should have CloudWatch alarms for the stack")
+        print(f"Found {len(stack_alarms)} CloudWatch alarms for stack")
+        
+        # Check if alarms have SNS actions configured
+        alarms_with_sns = [alarm for alarm in stack_alarms 
+                         if alarm_topic_arn in alarm.get('AlarmActions', [])]
+        
+        if len(alarms_with_sns) > 0:
+            print(f"CloudWatch alarms ({len(alarms_with_sns)}) are configured to notify SNS")
         else:
-            print("Note: No alarms found yet (may be in creation)")
+            # If no alarms have SNS yet, verify at least one alarm has any actions
+            alarms_with_actions = [alarm for alarm in stack_alarms 
+                                  if len(alarm.get('AlarmActions', [])) > 0]
+            self.assertGreater(len(alarms_with_actions), 0,
+                             f"CloudWatch alarms should have actions configured. "
+                             f"Found {len(stack_alarms)} alarms but none have AlarmActions. "
+                             f"Expected SNS topic: {alarm_topic_arn}")
+            print(f"CloudWatch alarms ({len(alarms_with_actions)}) have alarm actions configured")
 
 
 class TestCrossServiceSSMToS3(unittest.TestCase):
@@ -541,7 +551,7 @@ class TestCrossServiceSSMToS3(unittest.TestCase):
         bucket_response = s3_client.head_bucket(Bucket=bucket_name)
         self.assertEqual(bucket_response['ResponseMetadata']['HTTPStatusCode'], 200)
         
-        print(f"✓ SSM parameter and S3 bucket are both accessible")
+        print(f"SSM parameter and S3 bucket are both accessible")
 
 
 # Helper function to wait for SSM command completion
@@ -622,8 +632,8 @@ class TestE2EEC2ToS3ViaSSM(unittest.TestCase):
         )
         instances = asg_response['AutoScalingGroups'][0].get('Instances', [])
         
-        if not instances:
-            self.skipTest("No instances running in ASG")
+        self.assertGreater(len(instances), 0, 
+                          f"No instances running in ASG '{asg_name}'. ASG should have at least 1 running instance.")
         
         instance_id = instances[0]['InstanceId']
         print(f"\n{'='*70}")
@@ -685,7 +695,7 @@ class TestE2EEC2ToS3ViaSSM(unittest.TestCase):
                 print(f"{'-'*70}")
                 self.fail(f"EC2 command failed with status: {result['Status']}")
             
-            print(f"\n✓ EC2 workflow completed successfully!")
+            print(f"\nEC2 workflow completed successfully!")
             print(f"\nCommand Output:")
             print(f"{'-'*70}")
             print(result.get('StandardOutputContent', ''))
@@ -705,12 +715,12 @@ class TestE2EEC2ToS3ViaSSM(unittest.TestCase):
                 
                 self.assertIn(test_content, s3_content, 
                             "S3 object should contain the test content written by EC2")
-                print(f"  ✓ S3 object verified: {test_key}")
+                print(f"  S3 object verified: {test_key}")
                 print(f"  Content: {s3_content}")
                 
                 # CLEANUP
                 s3_client.delete_object(Bucket=bucket_name, Key=test_key)
-                print(f"  ✓ Cleaned up S3 object")
+                print(f"  Cleaned up S3 object")
                 
             except ClientError as e:
                 self.fail(f"S3 verification failed: {e}")
@@ -733,13 +743,13 @@ class TestE2EEC2ToS3ViaSSM(unittest.TestCase):
                 log_messages = [event['message'] for event in logs_response.get('events', [])]
                 
                 if log_messages:
-                    print(f"  ✓ Found {len(log_messages)} log entries in CloudWatch")
+                    print(f"  Found {len(log_messages)} log entries in CloudWatch")
                     
                     # Verify workflow completion marker
                     workflow_completed = any('E2E_TEST_MARKER' in msg for msg in log_messages)
                     self.assertTrue(workflow_completed, 
                                   "CloudWatch logs should contain workflow completion marker")
-                    print(f"  ✓ Workflow completion marker found in logs")
+                    print(f"  Workflow completion marker found in logs")
                 else:
                     print(f"  Note: Logs may still be propagating to CloudWatch")
                     
@@ -750,12 +760,13 @@ class TestE2EEC2ToS3ViaSSM(unittest.TestCase):
                     print(f"  Note: CloudWatch logs check: {e}")
             
             print(f"\n{'='*70}")
-            print(f"✓ E2E TEST PASSED: EC2 → SSM (read) → S3 (write) → CloudWatch (logs)")
+            print(f"E2E TEST PASSED: EC2 → SSM (read) → S3 (write) → CloudWatch (logs)")
             print(f"{'='*70}\n")
-            
+                
         except ClientError as e:
             if 'InvalidInstanceId' in str(e) or 'not managed by SSM' in str(e):
-                self.skipTest(f"SSM not configured on instance: {e}")
+                self.fail(f"SSM not configured on instance {instance_id}. "
+                         f"Ensure SSM agent is installed and running. Error: {e}")
             raise
 
 
@@ -792,8 +803,8 @@ class TestE2EEC2InternetConnectivity(unittest.TestCase):
         )
         instances = asg_response['AutoScalingGroups'][0].get('Instances', [])
         
-        if not instances:
-            self.skipTest("No instances running in ASG")
+        self.assertGreater(len(instances), 0, 
+                          f"No instances running in ASG '{asg_name}'. ASG should have at least 1 running instance.")
         
         instance_id = instances[0]['InstanceId']
         print(f"\n{'='*70}")
@@ -854,12 +865,13 @@ class TestE2EEC2InternetConnectivity(unittest.TestCase):
                         "Network test should complete")
             
             print(f"\n{'='*70}")
-            print(f"✓ E2E TEST PASSED: EC2 (Private) → NAT Gateway → IGW → Internet")
+            print(f"E2E TEST PASSED: EC2 (Private) → NAT Gateway → IGW → Internet")
             print(f"{'='*70}\n")
             
         except ClientError as e:
             if 'InvalidInstanceId' in str(e) or 'not managed by SSM' in str(e):
-                self.skipTest(f"SSM not configured on instance: {e}")
+                self.fail(f"SSM not configured on instance {instance_id}. "
+                         f"Ensure SSM agent is installed and running. Error: {e}")
             raise
 
 

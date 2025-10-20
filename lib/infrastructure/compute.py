@@ -93,6 +93,10 @@ class ComputeStack:
         user_data_script = f"""#!/bin/bash
 set -e
 
+# Ensure SSM agent is running (pre-installed on Amazon Linux 2023)
+systemctl enable amazon-ssm-agent
+systemctl start amazon-ssm-agent
+
 # Install Apache web server using dnf (Amazon Linux 2023)
 dnf install -y httpd
 

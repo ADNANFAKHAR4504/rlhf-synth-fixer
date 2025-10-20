@@ -61,10 +61,26 @@ class IAMStack:
             opts=ResourceOptions(parent=self.parent)
         )
         
-        # Attach CloudWatch metrics policy
+        # Attach AWS managed policy for CloudWatch Agent (includes Logs)
+        aws.iam.RolePolicyAttachment(
+            self.config.get_resource_name('ec2-cloudwatch-agent-attachment'),
+            role=role.name,
+            policy_arn='arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy',
+            opts=ResourceOptions(parent=role)
+        )
+        
+        # Attach AWS managed policy for SSM (includes Session Manager)
+        aws.iam.RolePolicyAttachment(
+            self.config.get_resource_name('ec2-ssm-managed-attachment'),
+            role=role.name,
+            policy_arn='arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
+            opts=ResourceOptions(parent=role)
+        )
+        
+        # Attach CloudWatch metrics policy (custom for namespace restriction)
         self._attach_cloudwatch_policy(role)
         
-        # Attach SSM policy for Systems Manager access
+        # Attach SSM policy for parameter store access (custom for scoped access)
         self._attach_ssm_policy(role)
         
         return role
@@ -149,13 +165,13 @@ class IAMStack:
     
     def attach_s3_read_policy(self, role: aws.iam.Role, bucket_arn: Output[str]):
         """
-        Attach S3 read-only policy to role for a specific bucket.
+        Attach S3 read and write policy to role for a specific bucket.
         
         Args:
             role: IAM role to attach policy to
             bucket_arn: ARN of the S3 bucket
         """
-        policy_name = self.config.get_resource_name('policy-s3-read')
+        policy_name = self.config.get_resource_name('policy-s3-readwrite')
         
         policy_document = bucket_arn.apply(lambda arn: json.dumps({
             "Version": "2012-10-17",
@@ -163,6 +179,7 @@ class IAMStack:
                 "Effect": "Allow",
                 "Action": [
                     "s3:GetObject",
+                    "s3:PutObject",
                     "s3:ListBucket"
                 ],
                 "Resource": [
