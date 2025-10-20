@@ -38,6 +38,9 @@ if (multiRegion) {
   new TapStack(app, primaryStackName, {
     stackName: primaryStackName,
     environmentSuffix,
+    // mark this top-level stack as primary so nested stacks can create
+    // global resources (HostedZone, health checks, primary DNS records).
+    isPrimary: true,
     // forward secondaryRegion so nested stack can configure replication if enabled
     secondaryRegion,
     baseEnvironmentSuffix: environmentSuffix,
@@ -51,6 +54,9 @@ if (multiRegion) {
   new TapStack(app, secondaryStackName, {
     stackName: secondaryStackName,
     environmentSuffix,
+    // secondary stack should not create global DNS resources to avoid
+    // duplicate HostedZone creation. It will be treated as a secondary failover target.
+    isPrimary: false,
     baseEnvironmentSuffix: environmentSuffix,
     env: {
       account: process.env.CDK_DEFAULT_ACCOUNT,

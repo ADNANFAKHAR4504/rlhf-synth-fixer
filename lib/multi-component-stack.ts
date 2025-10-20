@@ -53,6 +53,12 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
     // Respect props by passing them directly to the NestedStack constructor
     super(scope, id, props);
 
+    // Read isPrimary flag forwarded from TapStack props. Default to true
+    // to preserve single-region behavior.
+    const isPrimary = (props as any)?.isPrimary;
+    const createPrimaryResources =
+      isPrimary === undefined || isPrimary === true;
+
     // Generate unique string suffix
     this.stringSuffix = cdk.Fn.select(2, cdk.Fn.split('-', cdk.Aws.STACK_ID));
 
@@ -60,7 +66,9 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
     // VPC Configuration
     // ========================================
     const vpc = new ec2.Vpc(this, 'AppVpc', {
-      vpcName: `prod-vpc-app-${this.stringSuffix}`,
+      // Use a consistent, human-friendly VPC name across code and docs.
+      // Canonical pattern: prod-app-vpc-<suffix>
+      vpcName: `prod-app-vpc-${this.stringSuffix}`,
       cidr: '10.0.0.0/16',
       maxAzs: 2,
       natGateways: 2,
@@ -592,10 +600,13 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
     // ========================================
     // Route 53 Hosted Zone
     // ========================================
-    const hostedZone = new route53.HostedZone(this, 'HostedZone', {
-      zoneName: 'example-prod.com',
-      comment: `Production hosted zone - ${this.stringSuffix}`,
-    });
+    let hostedZone: route53.IHostedZone | undefined;
+    if (createPrimaryResources) {
+      hostedZone = new route53.HostedZone(this, 'HostedZone', {
+        zoneName: 'example-prod.com',
+        comment: `Production hosted zone - ${this.stringSuffix}`,
+      });
+    }
 
     // ========================================
     // CloudFront Distribution
@@ -757,26 +768,75 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
       });
     }
 
-    // Route 53 A Record for CloudFront
-    new route53.ARecord(this, 'CloudFrontARecord', {
-      zone: hostedZone,
-      recordName: 'www',
-      target: route53.RecordTarget.fromAlias(
-        new route53Targets.CloudFrontTarget(distribution)
-      ),
-    });
+    // If this is the primary stack, create Route53 records and health
+    // checks that point to the primary CloudFront distribution. The
+    // secondary stack will rely on the primary's hosted zone and can
+    // create failover or alias records there if required by operators.
+    if (createPrimaryResources && hostedZone) {
+      // Route 53 A Record for CloudFront (www)
+      new route53.ARecord(this, 'CloudFrontARecord', {
+        zone: hostedZone,
+        recordName: 'www',
+        target: route53.RecordTarget.fromAlias(
+          new route53Targets.CloudFrontTarget(distribution)
+        ),
+      });
 
-    // Additional Route 53 records for comprehensive DNS
-    // Point the API subdomain to the CloudFront distribution which
-    // proxies /api/* to the RestApi. This avoids requiring a
-    // default domain directly on the API Gateway.
-    new route53.ARecord(this, 'ApiARecord', {
-      zone: hostedZone,
-      recordName: 'api',
-      target: route53.RecordTarget.fromAlias(
-        new route53Targets.CloudFrontTarget(distribution)
-      ),
-    });
+      // Additional Route 53 records for API
+      new route53.ARecord(this, 'ApiARecord', {
+        zone: hostedZone,
+        recordName: 'api',
+        target: route53.RecordTarget.fromAlias(
+          new route53Targets.CloudFrontTarget(distribution)
+        ),
+      });
+
+      // Create a Route53 health check for the API endpoint so we can
+      // optionally use failover routing (primary/secondary) later.
+      const apiHost = cdk.Fn.select(
+        2,
+        cdk.Fn.split('/', this.apiUrl || api.url)
+      );
+      const apiHealthCheck = new route53.CfnHealthCheck(
+        this,
+        'ApiHealthCheck',
+        {
+          healthCheckConfig: {
+            type: 'HTTPS',
+            fullyQualifiedDomainName: apiHost,
+            port: 443,
+            resourcePath: '/',
+            requestInterval: 30,
+            failureThreshold: 3,
+          },
+        }
+      );
+
+      new cdk.CfnOutput(this, 'ApiHealthCheckId', {
+        value: apiHealthCheck.attrHealthCheckId,
+        description: 'Route53 HealthCheckId for API endpoint',
+      });
+
+      const cfHealthCheck = new route53.CfnHealthCheck(
+        this,
+        'CloudFrontHealthCheck',
+        {
+          healthCheckConfig: {
+            type: 'HTTPS',
+            fullyQualifiedDomainName: distribution.distributionDomainName,
+            port: 443,
+            resourcePath: '/',
+            requestInterval: 30,
+            failureThreshold: 3,
+          },
+        }
+      );
+
+      new cdk.CfnOutput(this, 'CloudFrontHealthCheckId', {
+        value: cfHealthCheck.attrHealthCheckId,
+        description: 'Route 53 HealthCheckId for CloudFront distribution',
+      });
+    }
 
     // ========================================
     // CloudWatch Alarms and Monitoring
@@ -1106,7 +1166,16 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
       description: 'CloudFront Distribution Domain Name',
     });
 
-    this.hostedZoneId = hostedZone.hostedZoneId;
+    if (hostedZone) {
+      this.hostedZoneId = hostedZone.hostedZoneId;
+    } else {
+      // When not creating the hosted zone (secondary stacks), set a NO_VALUE
+      // token to avoid unresolved references in top-level outputs.
+      this.hostedZoneId = cdk.Aws.NO_VALUE as unknown as string;
+    }
+
+    // Always emit the HostedZoneId output; secondary stacks will report NO_VALUE
+    // which makes it easier for output consumers to handle optional zones.
     new cdk.CfnOutput(this, 'HostedZoneId', {
       value: this.hostedZoneId,
       description: 'Route 53 Hosted Zone ID',

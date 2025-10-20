@@ -6,6 +6,7 @@ interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
   secondaryRegion?: string;
   baseEnvironmentSuffix?: string;
+  isPrimary?: boolean;
 }
 
 export class TapStack extends cdk.Stack {
@@ -27,10 +28,12 @@ export class TapStack extends cdk.Stack {
       'MultiComponentApplication',
       {
         ...props,
-        // do not set explicit stackName for nested stacks; let CDK manage the nested logical id
         // forward secondaryRegion through props so nested stack can optionally
         // configure cross-region replication when requested by context.
         secondaryRegion: (props as any)?.secondaryRegion,
+        // forward isPrimary so nested stacks can decide whether to create
+        // global resources like HostedZone and Route53 failover records.
+        isPrimary: (props as any)?.isPrimary,
       } as any
     );
 
