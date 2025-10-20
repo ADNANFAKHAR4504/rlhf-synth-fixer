@@ -390,7 +390,7 @@ Resources:
                 Action:
                   - 'secretsmanager:GetSecretValue'
                   - 'secretsmanager:DescribeSecret'
-                Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:healthcare-db-secret-${EnvironmentSuffix}-*'
+                Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:*'
 
   ECSTaskRole:
     Type: AWS::IAM::Role
