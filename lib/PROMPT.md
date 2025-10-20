@@ -5,7 +5,7 @@ Write only the complete Terraform code (no explanations, no comments, no summari
 - Use AWS Network Firewall for traffic inspection and data exfiltration prevention.
 - Launch EC2 instances on dedicated hosts with encrypted EBS volumes using CloudHSM via KMS.
 - Access EC2 only via Systems Manager Session Manager (no SSH).
--Configure FSx for Lustre for shared storage.
+- Configure FSx for Lustre for shared storage.
 - Create Aurora PostgreSQL with TDE enabled and CloudHSM integration.
 - Use S3 buckets with SSE-C encryption.
 - Enable VPC Flow Logs to S3 (encrypted).
