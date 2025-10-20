@@ -2,28 +2,6 @@
 # This file creates a scalable, secure web application infrastructure with VPC, 
 # Auto Scaling Group, Application Load Balancer, RDS MySQL database, and monitoring.
 
-terraform {
-  required_version = ">= 1.4.0"
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = ">= 5.0"
-    }
-  }
-}
-
-# ========================================
-# Provider Configuration
-# ========================================
-
-provider "aws" {
-  region = var.aws_region
-}
-
-# ========================================
-# Data Sources
-# ========================================
-
 # Get latest Amazon Linux 2 AMI
 data "aws_ami" "amazon_linux" {
   most_recent = true
