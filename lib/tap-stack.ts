@@ -32,6 +32,12 @@ export class TapStack extends pulumi.ComponentResource {
   private readonly commonTags: Record<string, string>;
   private readonly availabilityZones: pulumi.Output<string[]>;
   private hubIgw?: aws.ec2.InternetGateway;
+  
+  // Store subnet references for Transit Gateway attachments
+  private hubPrivateSubnets: aws.ec2.Subnet[] = [];
+  private hubPublicSubnets: aws.ec2.Subnet[] = [];
+  private prodPrivateSubnets: aws.ec2.Subnet[] = [];
+  private devPrivateSubnets: aws.ec2.Subnet[] = [];
 
   constructor(
     name: string,
@@ -55,7 +61,7 @@ export class TapStack extends pulumi.ComponentResource {
       Author: commitAuthor,
     };
 
-    // Get availability zones - FIXED: Properly typed as Output
+    // Get availability zones
     const azData = aws.getAvailabilityZones({
       state: "available",
     });
@@ -146,7 +152,7 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   private createFlowLogsBucket(): aws.s3.Bucket {
-    // FIXED: Add unique identifier to prevent naming conflicts
+    // Add unique identifier to prevent naming conflicts
     const timestamp = Date.now();
     const bucketName = `vpc-flow-logs-${this.environmentSuffix}-${this.region}-${timestamp}`;
     
@@ -244,8 +250,8 @@ export class TapStack extends pulumi.ComponentResource {
         const privateCidr = this.calculateSubnetCidr(config.cidr, index * 2 + 1);
 
         if (config.hasPublicSubnets) {
-          // Public subnet
-          new aws.ec2.Subnet(
+          // Public subnet - STORE THE REFERENCE
+          const publicSubnet = new aws.ec2.Subnet(
             `${config.name}-public-subnet-${index}-${this.environmentSuffix}`,
             {
               vpcId: vpc.id,
@@ -261,10 +267,15 @@ export class TapStack extends pulumi.ComponentResource {
             },
             { parent: this }
           );
+          
+          // Store public subnet reference for NAT Gateway creation
+          if (config.name === "hub") {
+            this.hubPublicSubnets.push(publicSubnet);
+          }
         }
 
-        // Private subnet
-        new aws.ec2.Subnet(
+        // Private subnet - STORE THE REFERENCE
+        const privateSubnet = new aws.ec2.Subnet(
           `${config.name}-private-subnet-${index}-${this.environmentSuffix}`,
           {
             vpcId: vpc.id,
@@ -280,6 +291,15 @@ export class TapStack extends pulumi.ComponentResource {
           },
           { parent: this }
         );
+        
+        // Store private subnet references
+        if (config.name === "hub") {
+          this.hubPrivateSubnets.push(privateSubnet);
+        } else if (config.name === "production") {
+          this.prodPrivateSubnets.push(privateSubnet);
+        } else if (config.name === "development") {
+          this.devPrivateSubnets.push(privateSubnet);
+        }
       });
     });
   }
@@ -339,20 +359,31 @@ export class TapStack extends pulumi.ComponentResource {
     vpc: aws.ec2.Vpc,
     name: string
   ): aws.ec2transitgateway.VpcAttachment {
-    // Get private subnets for this VPC
-    const subnets = aws.ec2.getSubnetsOutput({
-      filters: [
-        { name: "vpc-id", values: [vpc.id] },
-        { name: "tag:Type", values: ["private"] },
-      ],
-    });
+    // FIXED: Use the stored subnet references
+    let privateSubnets: aws.ec2.Subnet[];
+    
+    if (name === "hub") {
+      privateSubnets = this.hubPrivateSubnets;
+    } else if (name === "production") {
+      privateSubnets = this.prodPrivateSubnets;
+    } else if (name === "development") {
+      privateSubnets = this.devPrivateSubnets;
+    } else {
+      throw new Error(`Unknown VPC name: ${name}`);
+    }
+    
+    if (privateSubnets.length === 0) {
+      throw new Error(`No private subnets found for VPC ${name}`);
+    }
+
+    const subnetIds = privateSubnets.map(subnet => subnet.id);
 
     return new aws.ec2transitgateway.VpcAttachment(
       `tgw-attachment-${name}-${this.environmentSuffix}`,
       {
         transitGatewayId: this.transitGateway.id,
         vpcId: vpc.id,
-        subnetIds: subnets.ids,
+        subnetIds: subnetIds,
         dnsSupport: "enable",
         transitGatewayDefaultRouteTableAssociation: false,
         transitGatewayDefaultRouteTablePropagation: false,
@@ -362,7 +393,10 @@ export class TapStack extends pulumi.ComponentResource {
           Name: `tgw-attachment-${name}-${this.environmentSuffix}`,
         },
       },
-      { parent: this }
+      { 
+        parent: this,
+        dependsOn: privateSubnets, // Explicit dependency on subnets
+      }
     );
   }
 
@@ -492,47 +526,38 @@ export class TapStack extends pulumi.ComponentResource {
   private createNatGateways() {
     const natGateways: aws.ec2.NatGateway[] = [];
     
-    // Get public subnets from Hub VPC
-    const publicSubnets = aws.ec2.getSubnetsOutput({
-      filters: [
-        { name: "vpc-id", values: [this.hubVpc.id] },
-        { name: "tag:Type", values: ["public"] },
-      ],
-    });
-
-    publicSubnets.ids.apply((subnetIds: string[]) => {
-      subnetIds.forEach((subnetId: string, index: number) => {
-        // Allocate Elastic IP
-        const eip = new aws.ec2.Eip(
-          `nat-eip-${index}-${this.environmentSuffix}`,
-          {
-            domain: "vpc",
-            tags: {
-              ...this.commonTags,
-              Environment: "hub",
-              Name: `nat-eip-${index}-${this.environmentSuffix}`,
-            },
+    // FIXED: Use stored public subnet references
+    this.hubPublicSubnets.forEach((subnet, index) => {
+      // Allocate Elastic IP
+      const eip = new aws.ec2.Eip(
+        `nat-eip-${index}-${this.environmentSuffix}`,
+        {
+          domain: "vpc",
+          tags: {
+            ...this.commonTags,
+            Environment: "hub",
+            Name: `nat-eip-${index}-${this.environmentSuffix}`,
           },
-          { parent: this }
-        );
+        },
+        { parent: this }
+      );
 
-        // Create NAT Gateway
-        const natGw = new aws.ec2.NatGateway(
-          `nat-gateway-${index}-${this.environmentSuffix}`,
-          {
-            subnetId: subnetId,
-            allocationId: eip.id,
-            tags: {
-              ...this.commonTags,
-              Environment: "hub",
-              Name: `nat-gateway-${index}-${this.environmentSuffix}`,
-            },
+      // Create NAT Gateway
+      const natGw = new aws.ec2.NatGateway(
+        `nat-gateway-${index}-${this.environmentSuffix}`,
+        {
+          subnetId: subnet.id,
+          allocationId: eip.id,
+          tags: {
+            ...this.commonTags,
+            Environment: "hub",
+            Name: `nat-gateway-${index}-${this.environmentSuffix}`,
           },
-          { parent: this }
-        );
+        },
+        { parent: this, dependsOn: [subnet, eip] }
+      );
 
-        natGateways.push(natGw);
-      });
+      natGateways.push(natGw);
     });
 
     return natGateways;
@@ -548,125 +573,106 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   private configureHubVpcRouting(natGateways: aws.ec2.NatGateway[], attachments: any): void {
-    // Get public and private subnets
-    const publicSubnets = aws.ec2.getSubnetsOutput({
-      filters: [
-        { name: "vpc-id", values: [this.hubVpc.id] },
-        { name: "tag:Type", values: ["public"] },
-      ],
-    });
-
-    const privateSubnets = aws.ec2.getSubnetsOutput({
-      filters: [
-        { name: "vpc-id", values: [this.hubVpc.id] },
-        { name: "tag:Type", values: ["private"] },
-      ],
-    });
-
-    // FIXED: Use the IGW reference we stored
+    // Use stored subnet references instead of queries
     if (!this.hubIgw) {
       throw new Error("Hub Internet Gateway not found");
     }
 
     // Create route table for public subnets
-    publicSubnets.ids.apply((subnetIds: string[]) => {
-      const publicRouteTable = new aws.ec2.RouteTable(
-        `hub-public-rt-${this.environmentSuffix}`,
+    const publicRouteTable = new aws.ec2.RouteTable(
+      `hub-public-rt-${this.environmentSuffix}`,
+      {
+        vpcId: this.hubVpc.id,
+        tags: {
+          ...this.commonTags,
+          Environment: "hub",
+          Name: `hub-public-rt-${this.environmentSuffix}`,
+        },
+      },
+      { parent: this }
+    );
+
+    // Add route to Internet Gateway
+    new aws.ec2.Route(
+      `hub-public-igw-route-${this.environmentSuffix}`,
+      {
+        routeTableId: publicRouteTable.id,
+        destinationCidrBlock: "0.0.0.0/0",
+        gatewayId: this.hubIgw.id,
+      },
+      { parent: this, dependsOn: [publicRouteTable] }
+    );
+
+    // Associate with public subnets
+    this.hubPublicSubnets.forEach((subnet, index) => {
+      new aws.ec2.RouteTableAssociation(
+        `hub-public-rta-${index}-${this.environmentSuffix}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: publicRouteTable.id,
+        },
+        { parent: this }
+      );
+    });
+
+    // Create route tables for private subnets (one per NAT Gateway)
+    this.hubPrivateSubnets.forEach((subnet, index) => {
+      const privateRouteTable = new aws.ec2.RouteTable(
+        `hub-private-rt-${index}-${this.environmentSuffix}`,
         {
           vpcId: this.hubVpc.id,
           tags: {
             ...this.commonTags,
             Environment: "hub",
-            Name: `hub-public-rt-${this.environmentSuffix}`,
+            Name: `hub-private-rt-${index}-${this.environmentSuffix}`,
           },
         },
         { parent: this }
       );
 
-      // Add route to Internet Gateway - FIXED: Use stored IGW
+      // Add route to NAT Gateway (if available)
+      if (natGateways[index]) {
+        new aws.ec2.Route(
+          `hub-private-nat-route-${index}-${this.environmentSuffix}`,
+          {
+            routeTableId: privateRouteTable.id,
+            destinationCidrBlock: "0.0.0.0/0",
+            natGatewayId: natGateways[index].id,
+          },
+          { parent: this }
+        );
+      }
+
+      // Routes to spoke VPCs via TGW
       new aws.ec2.Route(
-        `hub-public-igw-route-${this.environmentSuffix}`,
+        `hub-private-tgw-prod-route-${index}-${this.environmentSuffix}`,
         {
-          routeTableId: publicRouteTable.id,
-          destinationCidrBlock: "0.0.0.0/0",
-          gatewayId: this.hubIgw!.id,
+          routeTableId: privateRouteTable.id,
+          destinationCidrBlock: "10.1.0.0/16",
+          transitGatewayId: this.transitGateway.id,
         },
-        { parent: this, dependsOn: [publicRouteTable] }
+        { parent: this }
       );
 
-      // Associate with public subnets
-      subnetIds.forEach((subnetId: string, index: number) => {
-        new aws.ec2.RouteTableAssociation(
-          `hub-public-rta-${index}-${this.environmentSuffix}`,
-          {
-            subnetId: subnetId,
-            routeTableId: publicRouteTable.id,
-          },
-          { parent: this }
-        );
-      });
-    });
+      new aws.ec2.Route(
+        `hub-private-tgw-dev-route-${index}-${this.environmentSuffix}`,
+        {
+          routeTableId: privateRouteTable.id,
+          destinationCidrBlock: "10.2.0.0/16",
+          transitGatewayId: this.transitGateway.id,
+        },
+        { parent: this }
+      );
 
-    // Create route tables for private subnets (one per NAT Gateway)
-    privateSubnets.ids.apply((subnetIds: string[]) => {
-      subnetIds.forEach((subnetId: string, index: number) => {
-        const privateRouteTable = new aws.ec2.RouteTable(
-          `hub-private-rt-${index}-${this.environmentSuffix}`,
-          {
-            vpcId: this.hubVpc.id,
-            tags: {
-              ...this.commonTags,
-              Environment: "hub",
-              Name: `hub-private-rt-${index}-${this.environmentSuffix}`,
-            },
-          },
-          { parent: this }
-        );
-
-        // Add route to NAT Gateway (if available)
-        if (natGateways[index]) {
-          new aws.ec2.Route(
-            `hub-private-nat-route-${index}-${this.environmentSuffix}`,
-            {
-              routeTableId: privateRouteTable.id,
-              destinationCidrBlock: "0.0.0.0/0",
-              natGatewayId: natGateways[index].id,
-            },
-            { parent: this }
-          );
-        }
-
-        // Routes to spoke VPCs via TGW
-        new aws.ec2.Route(
-          `hub-private-tgw-prod-route-${index}-${this.environmentSuffix}`,
-          {
-            routeTableId: privateRouteTable.id,
-            destinationCidrBlock: "10.1.0.0/16",
-            transitGatewayId: this.transitGateway.id,
-          },
-          { parent: this }
-        );
-
-        new aws.ec2.Route(
-          `hub-private-tgw-dev-route-${index}-${this.environmentSuffix}`,
-          {
-            routeTableId: privateRouteTable.id,
-            destinationCidrBlock: "10.2.0.0/16",
-            transitGatewayId: this.transitGateway.id,
-          },
-          { parent: this }
-        );
-
-        // Associate with private subnet
-        new aws.ec2.RouteTableAssociation(
-          `hub-private-rta-${index}-${this.environmentSuffix}`,
-          {
-            subnetId: subnetId,
-            routeTableId: privateRouteTable.id,
-          },
-          { parent: this }
-        );
-      });
+      // Associate with private subnet
+      new aws.ec2.RouteTableAssociation(
+        `hub-private-rta-${index}-${this.environmentSuffix}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: privateRouteTable.id,
+        },
+        { parent: this }
+      );
     });
   }
 
@@ -675,49 +681,51 @@ export class TapStack extends pulumi.ComponentResource {
     name: string,
     attachment: aws.ec2transitgateway.VpcAttachment
   ): void {
-    const privateSubnets = aws.ec2.getSubnetsOutput({
-      filters: [
-        { name: "vpc-id", values: [vpc.id] },
-        { name: "tag:Type", values: ["private"] },
-      ],
-    });
+    // Get private subnets for this spoke VPC
+    let privateSubnets: aws.ec2.Subnet[];
+    
+    if (name === "production") {
+      privateSubnets = this.prodPrivateSubnets;
+    } else if (name === "development") {
+      privateSubnets = this.devPrivateSubnets;
+    } else {
+      throw new Error(`Unknown VPC name: ${name}`);
+    }
 
-    privateSubnets.ids.apply((subnetIds: string[]) => {
-      const routeTable = new aws.ec2.RouteTable(
-        `${name}-private-rt-${this.environmentSuffix}`,
-        {
-          vpcId: vpc.id,
-          tags: {
-            ...this.commonTags,
-            Environment: name,
-            Name: `${name}-private-rt-${this.environmentSuffix}`,
-          },
+    const routeTable = new aws.ec2.RouteTable(
+      `${name}-private-rt-${this.environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        tags: {
+          ...this.commonTags,
+          Environment: name,
+          Name: `${name}-private-rt-${this.environmentSuffix}`,
         },
-        { parent: this }
-      );
+      },
+      { parent: this }
+    );
 
-      // Default route to Transit Gateway (for internet via Hub NAT)
-      new aws.ec2.Route(
-        `${name}-default-route-${this.environmentSuffix}`,
+    // Default route to Transit Gateway (for internet via Hub NAT)
+    new aws.ec2.Route(
+      `${name}-default-route-${this.environmentSuffix}`,
+      {
+        routeTableId: routeTable.id,
+        destinationCidrBlock: "0.0.0.0/0",
+        transitGatewayId: this.transitGateway.id,
+      },
+      { parent: this }
+    );
+
+    // Associate with all private subnets
+    privateSubnets.forEach((subnet, index) => {
+      new aws.ec2.RouteTableAssociation(
+        `${name}-private-rta-${index}-${this.environmentSuffix}`,
         {
+          subnetId: subnet.id,
           routeTableId: routeTable.id,
-          destinationCidrBlock: "0.0.0.0/0",
-          transitGatewayId: this.transitGateway.id,
         },
         { parent: this }
       );
-
-      // Associate with all private subnets
-      subnetIds.forEach((subnetId: string, index: number) => {
-        new aws.ec2.RouteTableAssociation(
-          `${name}-private-rta-${index}-${this.environmentSuffix}`,
-          {
-            subnetId: subnetId,
-            routeTableId: routeTable.id,
-          },
-          { parent: this }
-        );
-      });
     });
   }
 
@@ -773,13 +781,20 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   private createVpcEndpoints(vpc: aws.ec2.Vpc, name: string): void {
-    // Get private subnets
-    const privateSubnets = aws.ec2.getSubnetsOutput({
-      filters: [
-        { name: "vpc-id", values: [vpc.id] },
-        { name: "tag:Type", values: ["private"] },
-      ],
-    });
+    // Get private subnets for this VPC
+    let privateSubnets: aws.ec2.Subnet[];
+    
+    if (name === "hub") {
+      privateSubnets = this.hubPrivateSubnets;
+    } else if (name === "production") {
+      privateSubnets = this.prodPrivateSubnets;
+    } else if (name === "development") {
+      privateSubnets = this.devPrivateSubnets;
+    } else {
+      throw new Error(`Unknown VPC name: ${name}`);
+    }
+
+    const subnetIds = privateSubnets.map(subnet => subnet.id);
 
     // Create security group for endpoints
     const endpointSg = new aws.ec2.SecurityGroup(
@@ -822,7 +837,7 @@ export class TapStack extends pulumi.ComponentResource {
           vpcId: vpc.id,
           serviceName: `com.amazonaws.${this.region}.${endpoint}`,
           vpcEndpointType: "Interface",
-          subnetIds: privateSubnets.ids,
+          subnetIds: subnetIds,
           securityGroupIds: [endpointSg.id],
           privateDnsEnabled: true,
           tags: {
@@ -831,7 +846,7 @@ export class TapStack extends pulumi.ComponentResource {
             Name: `${name}-${endpoint}-endpoint-${this.environmentSuffix}`,
           },
         },
-        { parent: this }
+        { parent: this, dependsOn: privateSubnets }
       );
     });
   }
@@ -944,42 +959,36 @@ export class TapStack extends pulumi.ComponentResource {
     });
 
     // Subnet IP exhaustion alarms for each VPC
-    this.createSubnetIpExhaustionAlarms(this.hubVpc, "hub");
-    this.createSubnetIpExhaustionAlarms(this.productionVpc, "production");
-    this.createSubnetIpExhaustionAlarms(this.developmentVpc, "development");
+    this.createSubnetIpExhaustionAlarms(this.hubVpc, "hub", [...this.hubPrivateSubnets, ...this.hubPublicSubnets]);
+    this.createSubnetIpExhaustionAlarms(this.productionVpc, "production", this.prodPrivateSubnets);
+    this.createSubnetIpExhaustionAlarms(this.developmentVpc, "development", this.devPrivateSubnets);
   }
 
-  private createSubnetIpExhaustionAlarms(vpc: aws.ec2.Vpc, name: string): void {
-    const subnets = aws.ec2.getSubnetsOutput({
-      filters: [{ name: "vpc-id", values: [vpc.id] }],
-    });
-
-    subnets.ids.apply((subnetIds: string[]) => {
-      subnetIds.forEach((subnetId: string, index: number) => {
-        new aws.cloudwatch.MetricAlarm(
-          `subnet-ip-alarm-${name}-${index}-${this.environmentSuffix}`,
-          {
-            name: `subnet-ip-exhaustion-${name}-${index}-${this.environmentSuffix}`,
-            comparisonOperator: "LessThanThreshold",
-            evaluationPeriods: 1,
-            metricName: "AvailableIpAddressCount",
-            namespace: "AWS/EC2",
-            period: 300,
-            statistic: "Average",
-            threshold: 819, // 20% of /20 subnet (4096 * 0.2 = 819)
-            alarmDescription: `Subnet IP utilization > 80% for ${name} subnet ${index}`,
-            dimensions: {
-              SubnetId: subnetId,
-            },
-            tags: {
-              ...this.commonTags,
-              Environment: name,
-              Name: `subnet-ip-alarm-${name}-${index}-${this.environmentSuffix}`,
-            },
+  private createSubnetIpExhaustionAlarms(vpc: aws.ec2.Vpc, name: string, subnets: aws.ec2.Subnet[]): void {
+    subnets.forEach((subnet, index) => {
+      new aws.cloudwatch.MetricAlarm(
+        `subnet-ip-alarm-${name}-${index}-${this.environmentSuffix}`,
+        {
+          name: `subnet-ip-exhaustion-${name}-${index}-${this.environmentSuffix}`,
+          comparisonOperator: "LessThanThreshold",
+          evaluationPeriods: 1,
+          metricName: "AvailableIpAddressCount",
+          namespace: "AWS/EC2",
+          period: 300,
+          statistic: "Average",
+          threshold: 819, // 20% of /20 subnet (4096 * 0.2 = 819)
+          alarmDescription: `Subnet IP utilization > 80% for ${name} subnet ${index}`,
+          dimensions: {
+            SubnetId: subnet.id,
           },
-          { parent: this }
-        );
-      });
+          tags: {
+            ...this.commonTags,
+            Environment: name,
+            Name: `subnet-ip-alarm-${name}-${index}-${this.environmentSuffix}`,
+          },
+        },
+        { parent: this }
+      );
     });
   }
 
