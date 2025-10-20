@@ -23,4 +23,5 @@ variable "notification_email" {
 variable "cloudhsm_cluster_id" {
   type        = string
   description = "CloudHSM cluster ID for KMS integration"
+  default     = "cluster-placeholder"
 }
