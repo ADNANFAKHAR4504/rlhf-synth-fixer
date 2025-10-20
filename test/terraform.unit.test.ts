@@ -74,6 +74,16 @@ describe("Terraform Stack: tap_stack.tf - Variables", () => {
     content = fs.readFileSync(stackPath, "utf8");
   });
 
+  test("declares environment_suffix variable", () => {
+    expect(content).toMatch(/variable\s+"environment_suffix"\s*{/);
+  });
+  
+  test("environment_suffix variable has string type", () => {
+    const envSuffixBlock = content.match(/variable\s+"environment_suffix"\s*{[\s\S]*?}/);
+    expect(envSuffixBlock).toBeTruthy();
+    expect(envSuffixBlock![0]).toMatch(/type\s*=\s*string/);
+  });
+
   test("declares ami_id variable", () => {
     expect(content).toMatch(/variable\s+"ami_id"\s*{/);
   });
@@ -123,7 +133,7 @@ describe("Terraform Stack: tap_stack.tf - S3 Bucket Resources", () => {
   });
 
   test("S3 bucket has bucket_prefix", () => {
-    expect(content).toMatch(/bucket_prefix\s*=\s*"webapp-secure-bucket-"/);
+    expect(content).toMatch(/bucket_prefix\s*=\s*"webapp-secure-bucket-\$\{var\.environment_suffix\}-"/);
   });
 
   test("declares aws_s3_bucket_versioning resource", () => {

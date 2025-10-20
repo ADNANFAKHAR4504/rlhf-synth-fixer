@@ -28,6 +28,12 @@ data "aws_availability_zones" "available" {
 }
 
 # Variables for configuration
+variable "environment_suffix" {
+  description = "Environment suffix for resource naming to prevent conflicts across deployments"
+  type        = string
+  default     = ""
+}
+
 variable "ami_id" {
   description = "AMI ID for EC2 instances"
   type        = string
@@ -43,7 +49,7 @@ variable "instance_type" {
 # S3 Bucket Configuration with versioning and block public access
 # Security: All public access is blocked by default
 resource "aws_s3_bucket" "app_bucket" {
-  bucket_prefix = "webapp-secure-bucket-"
+  bucket_prefix = "webapp-secure-bucket-${var.environment_suffix}-"
 
   tags = {
     Name        = "WebApp-Secure-Storage"
@@ -72,7 +78,7 @@ resource "aws_s3_bucket_public_access_block" "app_bucket_pab" {
 # IAM Role for EC2 instances with S3 access
 # Security: Following least-privilege principle
 resource "aws_iam_role" "ec2_s3_role" {
-  name = "webapp-ec2-s3-role"
+  name = "webapp-ec2-s3-role-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -94,7 +100,7 @@ resource "aws_iam_role" "ec2_s3_role" {
 
 # IAM Policy for S3 bucket access - restricted to specific bucket only
 resource "aws_iam_policy" "s3_bucket_policy" {
-  name        = "webapp-s3-bucket-policy"
+  name        = "webapp-s3-bucket-policy-${var.environment_suffix}"
   description = "Policy for EC2 instances to access S3 bucket"
 
   policy = jsonencode({
@@ -125,7 +131,7 @@ resource "aws_iam_role_policy_attachment" "ec2_s3_policy_attachment" {
 
 # Instance profile for EC2 instances
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "webapp-ec2-instance-profile"
+  name = "webapp-ec2-instance-profile-${var.environment_suffix}"
   role = aws_iam_role.ec2_s3_role.name
 }
 
@@ -273,7 +279,7 @@ resource "aws_route_table_association" "private_2" {
 # Security Group for Web Servers - Only allow HTTP traffic
 # Security: Minimal exposure with specific port access only
 resource "aws_security_group" "web_sg" {
-  name        = "webapp-web-sg"
+  name        = "webapp-web-sg-${var.environment_suffix}"
   description = "Security group for web servers"
   vpc_id      = aws_vpc.main.id
 
@@ -302,7 +308,7 @@ resource "aws_security_group" "web_sg" {
 
 # Launch Template for Auto Scaling Group
 resource "aws_launch_template" "web_lt" {
-  name_prefix   = "webapp-launch-template-"
+  name_prefix   = "webapp-launch-template-${var.environment_suffix}-"
   image_id      = var.ami_id
   instance_type = var.instance_type
 
@@ -333,7 +339,7 @@ resource "aws_launch_template" "web_lt" {
 
 # Application Load Balancer for traffic distribution
 resource "aws_lb" "web_lb" {
-  name               = "webapp-alb"
+  name               = "webapp-alb-${var.environment_suffix}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.web_sg.id]
@@ -349,7 +355,7 @@ resource "aws_lb" "web_lb" {
 
 # Target Group for Load Balancer
 resource "aws_lb_target_group" "web_tg" {
-  name     = "webapp-tg"
+  name     = "webapp-tg-${var.environment_suffix}"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -385,7 +391,7 @@ resource "aws_lb_listener" "web_listener" {
 
 # Auto Scaling Group for high availability
 resource "aws_autoscaling_group" "web_asg" {
-  name                      = "webapp-asg"
+  name                      = "webapp-asg-${var.environment_suffix}"
   vpc_zone_identifier       = [aws_subnet.public_1.id, aws_subnet.public_2.id]
   target_group_arns         = [aws_lb_target_group.web_tg.arn]
   health_check_type         = "ELB"
