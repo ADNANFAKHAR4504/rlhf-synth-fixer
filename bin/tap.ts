@@ -28,7 +28,7 @@ new TapStack(app, stackName, {
   // Stack configuration
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION || 'us-east-1',
+    region: process.env.CDK_DEFAULT_REGION || 'us-east-2',
   },
 
   // Enable termination protection for production

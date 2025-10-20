@@ -110,7 +110,7 @@ describe('TapStack - Secure Multi-Tier AWS Environment', () => {
 
       // Check NAT instances have correct configuration
       template.hasResourceProperties('AWS::EC2::Instance', {
-        InstanceType: 't3.micro',
+        InstanceType: 't3.small',
         Tags: Match.arrayWith([
           {
             Key: 'Type',
@@ -130,25 +130,22 @@ describe('TapStack - Secure Multi-Tier AWS Environment', () => {
   });
 
   describe('Bastion Host Configuration', () => {
-    test('should create bastion security group with restricted access', () => {
+    test('should create bastion security group with allow outbound for SSM', () => {
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
         GroupDescription:
           'Security group for bastion host - Session Manager only',
         SecurityGroupEgress: Match.arrayWith([
-          {
+          Match.objectLike({
             CidrIp: '0.0.0.0/0',
-            Description: 'Allow HTTPS for Session Manager',
-            FromPort: 443,
-            IpProtocol: 'tcp',
-            ToPort: 443,
-          },
+            IpProtocol: '-1',
+          }),
         ]),
       });
     });
 
     test('should create bastion host instance', () => {
       template.hasResourceProperties('AWS::EC2::Instance', {
-        InstanceType: 't3.micro',
+        InstanceType: 't3.small',
         Tags: Match.arrayWith([
           {
             Key: 'Type',
@@ -175,9 +172,9 @@ describe('TapStack - Secure Multi-Tier AWS Environment', () => {
       });
     });
 
-    test('should create MFA policy for Session Manager', () => {
-      // Verify that IAM policies exist (the exact structure may vary)
-      template.resourceCountIs('AWS::IAM::Policy', 4);
+    test('should create IAM policies for bastion and functions', () => {
+      // Updated stack has 3 policies total
+      template.resourceCountIs('AWS::IAM::Policy', 3);
     });
   });
 
@@ -210,7 +207,6 @@ describe('TapStack - Secure Multi-Tier AWS Environment', () => {
   describe('VPC Flow Logs Configuration', () => {
     test('should create CloudWatch Log Group for Flow Logs', () => {
       template.hasResourceProperties('AWS::Logs::LogGroup', {
-        LogGroupName: '/aws/vpc/flowlogs/financial-platform-test',
         RetentionInDays: 180, // 6 months
       });
     });
@@ -399,98 +395,7 @@ describe('TapStack - Secure Multi-Tier AWS Environment', () => {
     });
   });
 
-  describe('AWS Config Configuration', () => {
-    test('should create S3 bucket for Config', () => {
-      template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: 'financial-platform-config-test-123456789012',
-        BucketEncryption: {
-          ServerSideEncryptionConfiguration: Match.arrayWith([
-            {
-              ServerSideEncryptionByDefault: {
-                SSEAlgorithm: 'AES256',
-              },
-            },
-          ]),
-        },
-        PublicAccessBlockConfiguration: {
-          BlockPublicAcls: true,
-          BlockPublicPolicy: true,
-          IgnorePublicAcls: true,
-          RestrictPublicBuckets: true,
-        },
-      });
-    });
-
-    test('should create Config service role', () => {
-      template.hasResourceProperties('AWS::IAM::Role', {
-        AssumeRolePolicyDocument: {
-          Statement: Match.arrayWith([
-            {
-              Action: 'sts:AssumeRole',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'config.amazonaws.com',
-              },
-            },
-          ]),
-        },
-      });
-    });
-
-    test('should create Configuration Recorder', () => {
-      template.hasResourceProperties('AWS::Config::ConfigurationRecorder', {
-        Name: 'financial-platform-recorder-test',
-        RecordingGroup: {
-          AllSupported: true,
-          IncludeGlobalResourceTypes: true,
-        },
-      });
-    });
-
-    test('should create Delivery Channel', () => {
-      template.hasResourceProperties('AWS::Config::DeliveryChannel', {
-        Name: 'financial-platform-delivery-test',
-        ConfigSnapshotDeliveryProperties: {
-          DeliveryFrequency: 'TwentyFour_Hours',
-        },
-      });
-    });
-
-    test('should create Config rules for compliance', () => {
-      template.resourceCountIs('AWS::Config::ConfigRule', 4);
-
-      template.hasResourceProperties('AWS::Config::ConfigRule', {
-        Source: {
-          Owner: 'AWS',
-          SourceIdentifier: 'VPC_SG_OPEN_ONLY_TO_AUTHORIZED_PORTS',
-        },
-        InputParameters: {
-          authorizedTcpPorts: '443,22',
-        },
-      });
-
-      template.hasResourceProperties('AWS::Config::ConfigRule', {
-        Source: {
-          Owner: 'AWS',
-          SourceIdentifier: 'VPC_FLOW_LOGS_ENABLED',
-        },
-      });
-
-      template.hasResourceProperties('AWS::Config::ConfigRule', {
-        Source: {
-          Owner: 'AWS',
-          SourceIdentifier: 'EC2_INSTANCE_MANAGED_BY_SSM',
-        },
-      });
-
-      template.hasResourceProperties('AWS::Config::ConfigRule', {
-        Source: {
-          Owner: 'AWS',
-          SourceIdentifier: 'MFA_ENABLED_FOR_IAM_CONSOLE_ACCESS',
-        },
-      });
-    });
-  });
+  // AWS Config Configuration removed from stack
 
   describe('NAT Failover Configuration', () => {
     test('should create Lambda function for NAT failover', () => {
@@ -560,14 +465,8 @@ describe('TapStack - Secure Multi-Tier AWS Environment', () => {
             Key: 'Name',
             Value: 'TestTapStack/SecureFinancialVPCtest',
           },
-          {
-            Key: 'Project',
-            Value: 'Secure-Financial-Platform',
-          },
-          {
-            Key: 'Environment',
-            Value: 'test',
-          },
+          { Key: 'Network-Tier', Value: 'Core' },
+          { Key: 'Security-Level', Value: 'High' },
         ]),
       });
     });
@@ -658,18 +557,13 @@ describe('TapStack - Secure Multi-Tier AWS Environment', () => {
       // EventBridge
       template.resourceCountIs('AWS::Events::Rule', 1);
 
-      // IAM
-      template.resourceCountIs('AWS::IAM::Role', 9); // NAT instances + Bastion + Flow Logs + 2 Lambda + Config + Custom resource
-      template.resourceCountIs('AWS::IAM::Policy', 4); // 2 Lambda policies + Config + MFA policy
-      template.resourceCountIs('AWS::IAM::InstanceProfile', 5); // 3 NAT + 1 Bastion + 1 additional
+      // IAM (updated after removing Config & MFA policy)
+      template.resourceCountIs('AWS::IAM::Role', 7);
+      template.resourceCountIs('AWS::IAM::Policy', 3);
+      template.resourceCountIs('AWS::IAM::InstanceProfile', 4); // 3 NAT + 1 Bastion
 
-      // S3
-      template.resourceCountIs('AWS::S3::Bucket', 1); // Config bucket
-
-      // AWS Config
-      template.resourceCountIs('AWS::Config::ConfigurationRecorder', 1);
-      template.resourceCountIs('AWS::Config::DeliveryChannel', 1);
-      template.resourceCountIs('AWS::Config::ConfigRule', 4);
+      // S3 (no Config bucket)
+      template.resourceCountIs('AWS::S3::Bucket', 0);
 
       // VPC Flow Logs
       template.resourceCountIs('AWS::EC2::FlowLog', 1);
@@ -683,19 +577,13 @@ describe('TapStack - Secure Multi-Tier AWS Environment', () => {
     });
 
     test('should have proper IAM role configurations', () => {
-      // Check that IAM roles exist
-      template.resourceCountIs('AWS::IAM::Role', 9);
+      // Check that IAM roles exist (updated count)
+      template.resourceCountIs('AWS::IAM::Role', 7);
     });
 
     test('should have proper S3 bucket configurations', () => {
-      template.hasResourceProperties('AWS::S3::Bucket', {
-        PublicAccessBlockConfiguration: {
-          BlockPublicAcls: true,
-          BlockPublicPolicy: true,
-          IgnorePublicAcls: true,
-          RestrictPublicBuckets: true,
-        },
-      });
+      // No S3 buckets are created by the current stack
+      template.resourceCountIs('AWS::S3::Bucket', 0);
     });
   });
 });

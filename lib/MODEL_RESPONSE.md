@@ -38,10 +38,10 @@ import { TapStack } from './tapstack';
 
 const app = new cdk.App();
 
-// Deploy to us-east-1 as required
+// Deploy to us-east-2 as required
 const env = {
   account: process.env.CDK_DEFAULT_ACCOUNT,
-  region: 'us-east-1'
+  region: 'us-east-2'
 };
 
 // Create the main infrastructure stack

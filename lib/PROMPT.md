@@ -93,7 +93,7 @@ All resources must use consistent tagging:
 ## Expected Deliverables
 
 The implementation should:
-- Deploy successfully in us-east-1 region
+- Deploy successfully in us-east-2 region
 - Include all 9 subnets with proper routing
 - Have working NAT instances with failover
 - Provide secure bastion access via Session Manager

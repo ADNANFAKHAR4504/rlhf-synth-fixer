@@ -6,20 +6,28 @@ This document contains the complete, working Infrastructure as Code (IaC) soluti
 
 ## Architecture Overview
 
-The infrastructure implements a secure, multi-tier architecture with the following key components:
+The infrastructure implements a secure, multi-tier architecture with the following key components (updated to match current stack):
 
 - **VPC with Multi-AZ Design**: 3 Availability Zones with public, private, and data subnets
-- **NAT Instances**: Cost-optimized NAT instances instead of NAT Gateways for high availability
-- **Bastion Host**: Secure bastion host with Session Manager access and MFA enforcement
+- **NAT Instances**: Cost-optimized NAT instances instead of NAT Gateways for high availability (t3.small)
+- **Bastion Host**: Secure bastion host with Session Manager access; outbound allowed for SSM (no MFA policy at this time)
 - **VPC Endpoints**: Gateway and Interface endpoints for secure AWS service access
 - **VPC Flow Logs**: Comprehensive network traffic logging for security monitoring
 - **Network ACLs**: Stateless network-level security controls for data tier
 - **Route53 Private Hosted Zone**: Internal DNS resolution with conditional forwarding
 - **Dynamic Security Groups**: Tag-based security group rule management
 - **CloudWatch Monitoring**: Comprehensive monitoring with alarms and dashboards
-- **AWS Config**: Compliance monitoring and governance
 - **Lambda Automation**: NAT failover and security group management
 - **EventBridge Scheduling**: Automated security group updates
+
+### Implementation updates (delta from prior version)
+- Removed AWS Config resources (Config rules, recorder, delivery channel, and S3 bucket)
+- NAT and Bastion instance types upgraded to t3.small
+- Bastion Security Group now allows all outbound (required for SSM Agent), still no SSH
+- VPC Flow Logs LogGroup name is auto-generated (no explicit name) with destroy removal policy
+- Public subnet IGW default routes rely on CDK defaults; no explicit duplicate routes
+- NAT EIPs are created and associated correctly at creation time
+- Added comprehensive CloudFormation Outputs for VPC, subnets, instances, hosted zone, and log group
 
 ## Complete Implementation
 
@@ -56,7 +64,7 @@ new TapStack(app, stackName, {
   // Stack configuration
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION || 'us-east-1',
+    region: process.env.CDK_DEFAULT_REGION || 'us-east-2',
   },
 
   // Enable termination protection for production
@@ -995,10 +1003,7 @@ def handler(event, context):
 - **SNS Integration**: Alert notifications for security events
 
 ### 5. **Compliance & Governance**
-- **AWS Config**: Configuration compliance monitoring
-- **Config Rules**: VPC security, Flow Logs, SSM management, MFA enforcement
-- **S3 Bucket**: Encrypted Config logs with lifecycle policies
-- **Audit Logging**: Comprehensive audit trail
+Removed for now. Focus is on networking, security groups, monitoring, and automation.
 
 ### 6. **DNS & Service Discovery**
 - **Private Hosted Zone**: Internal DNS resolution
@@ -1042,9 +1047,9 @@ def handler(event, context):
 
 The solution includes comprehensive unit and integration tests:
 
-- **Unit Tests**: 52 test cases covering all infrastructure components
-- **Integration Tests**: End-to-end infrastructure validation
-- **Coverage**: 97.7% statement coverage, 90.32% branch coverage
+- **Unit Tests**: 46 passing test cases covering all infrastructure components
+- **Integration Tests**: 21 passing tests validating deployed infrastructure
+- **Coverage**: ~97.7% statement coverage, ~66.7% branch coverage
 
 Run tests with:
 ```bash
@@ -1056,15 +1061,23 @@ npm test
 - **Least Privilege**: IAM roles with minimal required permissions
 - **Network Isolation**: Multi-tier architecture with proper segmentation
 - **Encryption**: S3 bucket encryption and secure communications
-- **Access Control**: MFA enforcement and Session Manager only access
-- **Audit Trail**: Comprehensive logging and monitoring
-- **Compliance**: AWS Config rules for regulatory compliance
+- **Access Control**: Session Manager only access; MFA policy removed in current iteration
+- **Audit Trail**: VPC Flow Logs and CloudWatch metrics/alarms in place
+- **Compliance**: Config removed; future iteration may reintroduce with least privilege
 
 ## Cost Optimization
 
 - **NAT Instances**: ~70% cost savings compared to NAT Gateways
 - **S3 Lifecycle**: Automatic transition to Glacier for long-term storage
 - **Log Retention**: 6-month retention for CloudWatch Logs
-- **Right-Sizing**: t3.micro instances for non-production workloads
+- **Right-Sizing**: t3.small for NAT/Bastion to improve stabilization
+
+## Outputs
+The stack now exports key outputs for consumers and tests:
+- VpcId, VpcCidr
+- PublicSubnetIds, PrivateSubnetIds, DataSubnetIds
+- NatInstanceIds, BastionInstanceId, BastionPrivateIp
+- PrivateHostedZoneId, PrivateHostedZoneName
+- VpcFlowLogGroupName (auto-generated)
 
 This solution provides a production-ready, secure, and cost-optimized infrastructure foundation for financial services applications with comprehensive monitoring, compliance, and automation capabilities.

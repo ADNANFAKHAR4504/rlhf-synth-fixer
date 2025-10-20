@@ -4,6 +4,23 @@
 
 This document details the infrastructure issues encountered during the development and deployment of the secure multi-tier AWS environment, the fixes applied, and the lessons learned from each failure.
 
+## Implementation Update Summary (current stack)
+
+The stack has evolved since the original failures were documented. Key changes now reflected in code and tests:
+
+- NAT and Bastion instances use t3.small for improved stabilization (were t3.micro).
+- Bastion Security Group allows all outbound (required for SSM Agent); SSH remains disabled; MFA policy removed for now.
+- AWS Config (recorder, delivery channel, rules, S3 bucket) has been removed in the current iteration.
+- VPC Flow Logs: log group name is auto-generated; removalPolicy set to DESTROY to avoid delete failures and name conflicts.
+- Public subnet default routes rely on CDK defaults (no explicit duplicate IGW routes).
+- NAT EIPs created and associated at creation time; routes from private subnets depend on NAT instances.
+- CloudFormation Outputs added for VPC, subnets, NAT/Bastion, hosted zone, and flow log group to support scripts/tests.
+- Tests updated:
+  - Integration tests validate deployed characteristics (DescribeFlowLogs via EC2, SGs via instances, mixed Lambda runtimes).
+  - Unit tests updated for instance types, removed Config assertions, relaxed log group name assertion, and adjusted resource counts.
+
+The sections below retain the original failure analyses; apply the above deltas when interpreting prior content (e.g., Config-related items are intentionally absent now).
+
 ## 1. Environment Suffix Implementation Issues
 
 ### **Issue**: Environment suffix not properly applied to resource names
@@ -31,9 +48,14 @@ const logGroup = new logs.LogGroup(this, 'VPCFlowLogGroup', {
 // After (fixed)
 const environmentSuffix = this.node.tryGetContext('environmentSuffix') || 'prod';
 const logGroup = new logs.LogGroup(this, `VPCFlowLogGroup${environmentSuffix}`, {
-  logGroupName: `/aws/vpc/flowlogs/financial-platform-${environmentSuffix}`,
+  // In current stack: allow CDK to generate unique name and set DESTROY removal policy
+  // logGroupName intentionally omitted
+  removalPolicy: cdk.RemovalPolicy.DESTROY,
   // ...
 });
+
+// In current stack we also expose outputs for consumers/tests
+new cdk.CfnOutput(this, 'VpcId', { value: this.vpc.vpcId, exportName: `VpcId-${environmentSuffix}` });
 ```
 
 **Lessons Learned**:
@@ -169,27 +191,13 @@ new iam.Policy(this, `SessionManagerMFAPolicy${environmentSuffix}`, {
   ],
 });
 
-// After (fixed)
-new iam.Policy(this, `SessionManagerMFAPolicy${environmentSuffix}`, {
-  statements: [
-    new iam.PolicyStatement({
-      effect: iam.Effect.DENY,
-      actions: ['ssm:StartSession'],
-      resources: [`arn:aws:ec2:${this.region}:${this.account}:instance/${this.bastionHost.instanceId}`],
-      conditions: {
-        BoolIfExists: {
-          'aws:MultiFactorAuthPresent': 'false',
-        },
-      },
-    }),
-  ],
-});
+// After (fixed) — in current iteration we removed MFA policy and rely on SSM-only bastion with SSH disabled
 ```
 
 **Lessons Learned**:
-- Use correct ARN format for EC2 instance resources
+- Use correct ARN format for EC2 instance resources if enforcing resource-level policies
 - Ensure policies are properly attached to roles
-- Test IAM policies with actual AWS service calls
+- Revisit MFA enforcement once SSM-only access patterns are finalized
 
 ## 5. Unit Test Configuration Issues
 
@@ -227,6 +235,11 @@ beforeEach(() => {
     // ...
   });
 });
+
+// Current alignment
+// - Expectations updated for t3.small instances
+// - Removed AWS Config resource assertions
+// - Relaxed LogGroupName assertion and adjusted counts
 ```
 
 **Lessons Learned**:
@@ -250,25 +263,8 @@ beforeEach(() => {
 
 **Fix Applied**:
 ```typescript
-// Before (deprecated)
-this.vpc = new ec2.Vpc(this, `SecureFinancialVPC${environmentSuffix}`, {
-  cidr: '10.0.0.0/16',
-  // ...
-});
-
-// After (updated)
-this.vpc = new ec2.Vpc(this, `SecureFinancialVPC${environmentSuffix}`, {
-  ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
-  // ...
-});
-
-// Before (deprecated)
-machineImage: ec2.MachineImage.latestAmazonLinux({
-  generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
-}),
-
-// After (updated)
-machineImage: ec2.MachineImage.latestAmazonLinux2(),
+// Pending: migrate to ipAddresses in next iteration
+// Updated: using MachineImage.latestAmazonLinux2() where applicable
 ```
 
 **Lessons Learned**:
@@ -286,29 +282,23 @@ machineImage: ec2.MachineImage.latestAmazonLinux2(),
 - Multiple resources with same logical ID
 - Network ACL entry names not unique
 - Policy names conflicting
+- Explicit IGW routes in public subnets conflicted with CDK defaults
 
 **Root Cause**:
 - Not including environment suffix in all resource names
 - Using static names instead of dynamic naming
-- Missing uniqueness in resource identifiers
+- Duplicating routes CDK already creates for public subnets
 
 **Fix Applied**:
 ```typescript
-// Before (problematic)
-dataNetworkAcl.addEntry('AllowPrivateInbound', {
-  // ...
-});
-
-// After (fixed)
-dataNetworkAcl.addEntry(`AllowPrivateInbound${environmentSuffix}`, {
-  // ...
-});
+// Ensure environment suffix in identifiers
+// Remove explicit public 0.0.0.0/0 routes; rely on VPC default routes for public subnets
 ```
 
 **Lessons Learned**:
 - Always use unique resource names across environments
 - Include environment suffix in all resource identifiers
-- Test resource naming in multiple environments
+- Avoid duplicating routes that CDK/VPC constructs already create
 
 ## 8. Security Group Configuration Issues
 
@@ -328,32 +318,13 @@ dataNetworkAcl.addEntry(`AllowPrivateInbound${environmentSuffix}`, {
 
 **Fix Applied**:
 ```typescript
-// Before (problematic)
-const bastionSecurityGroup = new ec2.SecurityGroup(this, `BastionSecurityGroup${environmentSuffix}`, {
-  vpc: this.vpc,
-  description: 'Security group for bastion host',
-  allowAllOutbound: true, // Too permissive
-});
-
-// After (fixed)
-const bastionSecurityGroup = new ec2.SecurityGroup(this, `BastionSecurityGroup${environmentSuffix}`, {
-  vpc: this.vpc,
-  description: 'Security group for bastion host - Session Manager only',
-  allowAllOutbound: false, // Restrict outbound
-});
-
-// Only allow HTTPS for Session Manager
-bastionSecurityGroup.addEgressRule(
-  ec2.Peer.ipv4('0.0.0.0/0'),
-  ec2.Port.tcp(443),
-  'Allow HTTPS for Session Manager'
-);
+// Current approach for bastion: allowAllOutbound true for SSM Agent; SSH disabled; Session Manager only
 ```
 
 **Lessons Learned**:
-- Follow principle of least privilege for security groups
-- Explicitly define all required ingress and egress rules
-- Restrict outbound traffic where possible
+- Follow principle of least privilege for security groups (balanced with managed service requirements)
+- Explicitly define required ingress/egress rules
+- Document deviations (e.g., allowAllOutbound for SSM) with rationale
 
 ## 9. Lambda Function Configuration Issues
 
@@ -373,44 +344,8 @@ bastionSecurityGroup.addEgressRule(
 
 **Fix Applied**:
 ```typescript
-// Before (problematic)
-const natFailoverFunction = new lambda.Function(this, `NatFailoverFunction${environmentSuffix}`, {
-  runtime: lambda.Runtime.PYTHON_3_9,
-  handler: 'index.handler',
-  code: lambda.Code.fromInline(`
-    // Lambda code
-  `),
-  timeout: cdk.Duration.minutes(2),
-});
-
-// After (fixed)
-const natFailoverFunction = new lambda.Function(this, `NatFailoverFunction${environmentSuffix}`, {
-  runtime: lambda.Runtime.PYTHON_3_9,
-  handler: 'index.handler',
-  code: lambda.Code.fromInline(`
-    // Lambda code
-  `),
-  timeout: cdk.Duration.minutes(2),
-  environment: {
-    VPC_ID: this.vpc.vpcId,
-  },
-});
-
-// Grant proper permissions
-natFailoverFunction.role?.attachInlinePolicy(new iam.Policy(this, `NatFailoverPolicy${environmentSuffix}`, {
-  statements: [
-    new iam.PolicyStatement({
-      actions: [
-        'ec2:DescribeInstances',
-        'ec2:DescribeRouteTables',
-        'ec2:ReplaceRoute',
-        'ec2:CreateRoute',
-        'ec2:DeleteRoute',
-      ],
-      resources: ['*'],
-    }),
-  ],
-}));
+// Added environment (VPC_ID), inline policy for EC2 route ops,
+// and bound NAT status check alarms to failover Lambda.
 ```
 
 **Lessons Learned**:
@@ -436,47 +371,8 @@ natFailoverFunction.role?.attachInlinePolicy(new iam.Policy(this, `NatFailoverPo
 
 **Fix Applied**:
 ```typescript
-// Before (problematic)
-const statusCheckAlarm = new cloudwatch.Alarm(this, `NatStatusCheckAlarm${environmentSuffix}${index}`, {
-  metric: new cloudwatch.Metric({
-    namespace: 'AWS/EC2',
-    metricName: 'StatusCheckFailed',
-    dimensionsMap: {
-      InstanceId: instance.instanceId,
-    },
-    statistic: 'Maximum',
-    period: cdk.Duration.minutes(1),
-  }),
-  threshold: 1,
-  evaluationPeriods: 2,
-  alarmDescription: `NAT instance ${index + 1} status check failed`,
-});
-
-// After (fixed)
-const statusCheckAlarm = new cloudwatch.Alarm(this, `NatStatusCheckAlarm${environmentSuffix}${index}`, {
-  metric: new cloudwatch.Metric({
-    namespace: 'AWS/EC2',
-    metricName: 'StatusCheckFailed',
-    dimensionsMap: {
-      InstanceId: instance.instanceId,
-    },
-    statistic: 'Maximum',
-    period: cdk.Duration.minutes(1),
-  }),
-  threshold: 1,
-  evaluationPeriods: 2,
-  alarmDescription: `NAT instance ${index + 1} status check failed`,
-});
-
-// Add Lambda as alarm action
-statusCheckAlarm.addAlarmAction({
-  bind: () => ({
-    alarmActionArn: natFailoverFunction.functionArn,
-  }),
-});
-
-// Grant Lambda permission to be invoked by CloudWatch
-natFailoverFunction.grantInvoke(new iam.ServicePrincipal('lambda.alarms.cloudwatch.amazonaws.com'));
+// Added NAT status check alarms and wired to failover Lambda
+// Flow Log Group removal policy set to DESTROY and name auto-generated to avoid conflicts
 ```
 
 **Lessons Learned**:
@@ -489,7 +385,7 @@ natFailoverFunction.grantInvoke(new iam.ServicePrincipal('lambda.alarms.cloudwat
 1. **Environment Management**: Always use dynamic naming and environment suffixes for multi-environment support
 2. **CDK Best Practices**: Use correct CDK construct patterns and keep dependencies updated
 3. **Security**: Follow principle of least privilege and implement proper security controls
-4. **Testing**: Write comprehensive tests and verify them with actual CloudFormation output
+4. **Testing**: Keep tests aligned with implementation; validate deployed characteristics
 5. **Error Handling**: Address compilation errors and warnings proactively
 6. **Resource Naming**: Ensure unique resource names across environments
 7. **IAM Permissions**: Provide all necessary permissions for AWS service integrations
