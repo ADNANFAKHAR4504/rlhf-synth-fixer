@@ -10,5 +10,22 @@
   "subject_labels": [
     "Web Application Deployment"
   ],
-  "aws_services": "VPC"
+  "aws_services": [
+    "VPC",
+    "EC2", 
+    "ELB",
+    "Auto Scaling",
+    "RDS",
+    "IAM",
+    "Secrets Manager",
+    "ACM",
+    "CloudWatch"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "jpoola-turing",
+  "dockerS3Location": ""
 }
