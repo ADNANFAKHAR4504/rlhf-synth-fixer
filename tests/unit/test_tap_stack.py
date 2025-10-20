@@ -11,68 +11,16 @@ import pulumi
 
 class MinimalMocks(pulumi.runtime.Mocks):
     """
-    Minimal mock that provides only essential computed outputs.
-    Returns inputs as outputs, plus critical computed properties.
+    Minimal mock that returns inputs as outputs without resource-specific logic.
     """
     
     def new_resource(self, args: pulumi.runtime.MockResourceArgs):
         """Return inputs as outputs with minimal computed properties."""
         outputs = {**args.inputs, "id": f"{args.name}-id"}
-        
-        # Add computed outputs that are actually used in the code
-        resource_type_defaults = {
-            "aws:ec2/vpc:Vpc": {"id": f"{args.name}-id"},
-            "aws:ec2/subnet:Subnet": {"id": f"{args.name}-id"},
-            "aws:ec2/internetGateway:InternetGateway": {"id": f"{args.name}-id"},
-            "aws:ec2/eip:Eip": {"id": f"{args.name}-id", "allocation_id": f"eipalloc-{args.name}"},
-            "aws:ec2/natGateway:NatGateway": {"id": f"{args.name}-id"},
-            "aws:ec2/routeTable:RouteTable": {"id": f"{args.name}-id"},
-            "aws:ec2/securityGroup:SecurityGroup": {"id": f"sg-{args.name}"},
-            "aws:rds/subnetGroup:SubnetGroup": {"id": f"{args.name}-id", "name": f"{args.name}"},
-            "aws:rds/cluster:Cluster": {
-                "endpoint": f"{args.name}.cluster-xyz.us-east-1.rds.amazonaws.com",
-                "reader_endpoint": f"{args.name}.cluster-ro-xyz.us-east-1.rds.amazonaws.com"
-            },
-            "aws:rds/clusterInstance:ClusterInstance": {"id": f"{args.name}-id"},
-            "aws:kms/key:Key": {"arn": f"arn:aws:kms:us-east-1:123456789012:key/{args.name}"},
-            "aws:secretsmanager/secret:Secret": {"arn": f"arn:aws:secretsmanager:us-east-1:123456789012:secret:{args.name}"},
-            "aws:secretsmanager/secretVersion:SecretVersion": {"id": f"{args.name}-id"},
-            "aws:iam/role:Role": {"arn": f"arn:aws:iam::123456789012:role/{args.name}", "name": f"{args.name}"},
-            "aws:ecs/cluster:Cluster": {"id": f"{args.name}-id", "name": f"{args.name}"},
-            "aws:ecs/taskDefinition:TaskDefinition": {
-                "arn": f"arn:aws:ecs:us-east-1:123456789012:task-definition/{args.name}:1",
-                "family": f"{args.name}"
-            },
-            "aws:ecs/service:Service": {"id": f"{args.name}-id", "name": f"{args.name}"},
-            "aws:lb/loadBalancer:LoadBalancer": {
-                "arn": f"arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/{args.name}",
-                "dns_name": f"{args.name}.us-east-1.elb.amazonaws.com"
-            },
-            "aws:lb/targetGroup:TargetGroup": {
-                "arn": f"arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/{args.name}",
-                "arn_suffix": f"targetgroup/{args.name}/1234567890"
-            },
-            "aws:lb/listener:Listener": {"arn": f"arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/{args.name}"},
-            "aws:cloudwatch/logGroup:LogGroup": {"id": f"{args.name}-id"},
-            "aws:sns/topic:Topic": {"arn": f"arn:aws:sns:us-east-1:123456789012:{args.name}"},
-            "aws:cloudwatch/metricAlarm:MetricAlarm": {"id": f"{args.name}-id"},
-        }
-        
-        # Merge type-specific defaults
-        if args.typ in resource_type_defaults:
-            outputs.update(resource_type_defaults[args.typ])
-        
         return [f"{args.name}-id", outputs]
     
     def call(self, args: pulumi.runtime.MockCallArgs):
-        """Return mock data for function calls."""
-        if args.token == "aws:index/getAvailabilityZones:getAvailabilityZones":
-            return {
-                "names": ["us-east-1a", "us-east-1b", "us-east-1c"],
-                "zone_ids": ["use1-az1", "use1-az2", "use1-az3"]
-            }
-        elif args.token == "aws:index/getRegion:getRegion":
-            return {"name": "us-east-1"}
+        """Return empty dict for all function calls."""
         return {}
 
 
