@@ -140,7 +140,7 @@ describe("TapStack", () => {
           expect.stringContaining("security"),
           expect.objectContaining({
             regions: expect.objectContaining({
-              primary: "us-east-1",
+              primary: "us-east-2",
               replicas: ["eu-west-1", "ap-southeast-1"],
             }),
           }),
