@@ -14,5 +14,5 @@
     "Amazon Aurora Global Database, Amazon DynamoDB Global Tables, Amazon S3, Application Load Balancer (ALB), Amazon Route 53, AWS Lambda, Amazon EventBridge, Amazon CloudWatch, AWS Systems Manager, AWS Security Hub"
   ],
   "training_quality": 9,
-  "background": "Production-ready serverless API for mobile app with 1M daily users requiring Cognito authentication, global scalability via DynamoDB Global Tables and CloudFront, comprehensive monitoring with CloudWatch and X-Ray, and proper security with least-privilege IAM roles. Infrastructure follows AWS best practices with encryption, versioning, and observability built-in. Modular Terraform structure with separate files for each service, Lambda Python application code in dedicated folder, complete CRUD API with user profile management, and full E2E integration tests validating real-world workflows including authentication, API operations, multi-region replication, and monitoring."
+  "background": "A financial firm processes $5 billion daily and needs a DR solution with RTO of 5 minutes and RPO of 1 minute. The system must support automated failover and compliance with PCI-DSS. Regular DR testing is required. "
 }
