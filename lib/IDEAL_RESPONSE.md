@@ -1,10 +1,5 @@
 ```yml
 
-# secure_infrastructure.yaml
-# CloudFormation template for Nova Clinical Trial Data Platform
-# Region: us-west-2
-# Purpose: Secure infrastructure for handling sensitive patient trial data
-
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Nova Clinical Trial Data Platform - Secure Infrastructure Foundation'
 
@@ -41,6 +36,9 @@ Parameters:
     Description: 'AMI ID for the EC2 instance (uses latest Amazon Linux 2 AMI by default, or specify custom AMI ID)'
 
 
+
+Conditions:
+  IsBudgetsRegion: !Equals [!Ref 'AWS::Region', 'us-east-1']
 
 Resources:
   # ==========================================
@@ -1347,8 +1345,10 @@ Resources:
   # 10. AWS NovaBudget for Cost Management
   NovaBudget:
     Type: AWS::Budgets::Budget
+    Condition: IsBudgetsRegion
     Properties:
       Budget:
+        BudgetName: !Sub '${ProjectName}-${Environment}-monthly-budget'
         BudgetType: COST
         TimeUnit: MONTHLY
         BudgetLimit:
