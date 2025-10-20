@@ -27,13 +27,13 @@ describe('TapStack', () => {
       });
     });
 
-    test('should have encryption enabled', () => {
+    test('should have KMS encryption enabled', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
         BucketEncryption: {
           ServerSideEncryptionConfiguration: [
             {
               ServerSideEncryptionByDefault: {
-                SSEAlgorithm: 'AES256',
+                SSEAlgorithm: 'aws:kms',
               },
             },
           ],
@@ -321,6 +321,116 @@ describe('TapStack', () => {
       const resources = template.findResources('AWS::DynamoDB::Table');
       Object.values(resources).forEach((resource: any) => {
         expect(resource.DeletionPolicy).toBe('Delete');
+      });
+    });
+  });
+
+  describe('KMS Encryption', () => {
+    test('should create KMS keys with rotation enabled', () => {
+      template.hasResourceProperties('AWS::KMS::Key', {
+        Description: Match.stringLikeRegexp('.*encryption'),
+        EnableKeyRotation: true,
+      });
+    });
+
+    test('should create at least 2 KMS keys', () => {
+      template.resourceCountIs('AWS::KMS::Key', 2);
+    });
+
+    test('should use KMS encryption for DynamoDB tables', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        SSESpecification: {
+          SSEEnabled: true,
+          SSEType: 'KMS',
+        },
+      });
+    });
+  });
+
+  describe('CloudWatch Alarms', () => {
+    test('should create Lambda@Edge error alarm', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: Match.stringLikeRegexp('.*LambdaEdge-Errors.*'),
+        ComparisonOperator: 'GreaterThanThreshold',
+        Threshold: 10,
+      });
+    });
+
+    test('should create CloudFront 5xx error rate alarm', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: Match.stringLikeRegexp('.*CloudFront-5xxErrors.*'),
+        Threshold: 5,
+      });
+    });
+
+    test('should create DynamoDB throttling alarm', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: Match.stringLikeRegexp('.*DynamoDB-Throttles.*'),
+      });
+    });
+
+    test('should create at least 4 CloudWatch alarms', () => {
+      const alarmCount = template.findResources('AWS::CloudWatch::Alarm');
+      expect(Object.keys(alarmCount).length).toBeGreaterThanOrEqual(4);
+    });
+
+    test('should have SNS actions configured for alarms', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmActions: Match.arrayWith([
+          Match.objectLike({
+            Ref: Match.stringLikeRegexp('AlarmTopic.*'),
+          }),
+        ]),
+      });
+    });
+  });
+
+  describe('SNS Topic', () => {
+    test('should create SNS topic for alarms', () => {
+      template.hasResourceProperties('AWS::SNS::Topic', {
+        DisplayName: Match.stringLikeRegexp('NewsPersonalization-Alarms.*'),
+      });
+    });
+
+    test('should export SNS topic ARN', () => {
+      template.hasOutput('AlarmTopicArn', {
+        Export: {
+          Name: Match.stringLikeRegexp('.*AlarmTopicArn'),
+        },
+      });
+    });
+  });
+
+  describe('Resource Tagging', () => {
+    test('should tag S3 bucket with Service tag', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Service',
+            Value: 'NewsPersonalization',
+          }),
+        ]),
+      });
+    });
+
+    test('should tag resources with Environment tag', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Environment',
+            Value: environmentSuffix,
+          }),
+        ]),
+      });
+    });
+
+    test('should tag DynamoDB tables with Component tag', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Component',
+          }),
+        ]),
       });
     });
   });

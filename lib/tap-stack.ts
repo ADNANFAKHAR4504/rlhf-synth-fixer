@@ -5,6 +5,9 @@ import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as kms from 'aws-cdk-lib/aws-kms';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 
@@ -21,13 +24,37 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
+    // KMS Keys for encryption
+    const s3EncryptionKey = new kms.Key(this, 'S3EncryptionKey', {
+      description: 'KMS key for S3 bucket encryption',
+      enableKeyRotation: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    const dynamoEncryptionKey = new kms.Key(this, 'DynamoEncryptionKey', {
+      description: 'KMS key for DynamoDB table encryption',
+      enableKeyRotation: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    // SNS Topic for CloudWatch Alarms
+    const alarmTopic = new sns.Topic(this, 'AlarmTopic', {
+      displayName: `NewsPersonalization-Alarms-${environmentSuffix}`,
+    });
+
     const contentBucket = new s3.Bucket(this, 'ContentBucket', {
       versioned: true,
-      encryption: s3.BucketEncryption.S3_MANAGED,
+      encryption: s3.BucketEncryption.KMS,
+      encryptionKey: s3EncryptionKey,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
     });
+
+    // Add tags to S3 bucket
+    cdk.Tags.of(contentBucket).add('Service', 'NewsPersonalization');
+    cdk.Tags.of(contentBucket).add('Component', 'ContentStorage');
+    cdk.Tags.of(contentBucket).add('Environment', environmentSuffix);
 
     const userPreferencesTable = new dynamodb.Table(
       this,
@@ -37,8 +64,15 @@ export class TapStack extends cdk.Stack {
         billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
         pointInTimeRecovery: true,
+        encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
+        encryptionKey: dynamoEncryptionKey,
       }
     );
+
+    // Add tags to user preferences table
+    cdk.Tags.of(userPreferencesTable).add('Service', 'NewsPersonalization');
+    cdk.Tags.of(userPreferencesTable).add('Component', 'UserData');
+    cdk.Tags.of(userPreferencesTable).add('Environment', environmentSuffix);
 
     userPreferencesTable.addGlobalSecondaryIndex({
       indexName: 'preferenceTypeIndex',
@@ -57,8 +91,15 @@ export class TapStack extends cdk.Stack {
         billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
         pointInTimeRecovery: true,
+        encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
+        encryptionKey: dynamoEncryptionKey,
       }
     );
+
+    // Add tags to engagement tracking table
+    cdk.Tags.of(engagementTrackingTable).add('Service', 'NewsPersonalization');
+    cdk.Tags.of(engagementTrackingTable).add('Component', 'Analytics');
+    cdk.Tags.of(engagementTrackingTable).add('Environment', environmentSuffix);
 
     engagementTrackingTable.addGlobalSecondaryIndex({
       indexName: 'contentIdIndex',
@@ -192,6 +233,131 @@ exports.handler = async (event) => {
       })
     );
 
+    // CloudWatch Alarms for operational monitoring
+
+    // Lambda@Edge Error Alarm
+    const lambdaErrorAlarm = new cloudwatch.Alarm(
+      this,
+      'LambdaEdgeErrorAlarm',
+      {
+        alarmName: `NewsPersonalization-LambdaEdge-Errors-${environmentSuffix}`,
+        alarmDescription: 'Alert when Lambda@Edge error rate exceeds threshold',
+        metric: personalizationFunction.metricErrors({
+          statistic: 'Sum',
+          period: cdk.Duration.minutes(5),
+        }),
+        threshold: 10,
+        evaluationPeriods: 2,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }
+    );
+    lambdaErrorAlarm.addAlarmAction(
+      new cloudwatch_actions.SnsAction(alarmTopic)
+    );
+
+    // CloudFront 5xx Error Rate Alarm
+    const cloudFrontErrorAlarm = new cloudwatch.Alarm(
+      this,
+      'CloudFront5xxErrorAlarm',
+      {
+        alarmName: `NewsPersonalization-CloudFront-5xxErrors-${environmentSuffix}`,
+        alarmDescription: 'Alert when CloudFront 5xx error rate is high',
+        metric: new cloudwatch.Metric({
+          namespace: 'AWS/CloudFront',
+          metricName: '5xxErrorRate',
+          dimensionsMap: {
+            DistributionId: distribution.distributionId,
+          },
+          statistic: 'Average',
+          period: cdk.Duration.minutes(5),
+        }),
+        threshold: 5, // 5% error rate
+        evaluationPeriods: 2,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }
+    );
+    cloudFrontErrorAlarm.addAlarmAction(
+      new cloudwatch_actions.SnsAction(alarmTopic)
+    );
+
+    // DynamoDB Throttling Alarm for User Preferences
+    const dynamoThrottleAlarm = new cloudwatch.Alarm(
+      this,
+      'DynamoDBThrottleAlarm',
+      {
+        alarmName: `NewsPersonalization-DynamoDB-Throttles-${environmentSuffix}`,
+        alarmDescription: 'Alert when DynamoDB requests are being throttled',
+        metric: new cloudwatch.Metric({
+          namespace: 'AWS/DynamoDB',
+          metricName: 'UserErrors',
+          dimensionsMap: {
+            TableName: userPreferencesTable.tableName,
+          },
+          statistic: 'Sum',
+          period: cdk.Duration.minutes(5),
+        }),
+        threshold: 5,
+        evaluationPeriods: 1,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }
+    );
+    dynamoThrottleAlarm.addAlarmAction(
+      new cloudwatch_actions.SnsAction(alarmTopic)
+    );
+
+    // DynamoDB System Errors Alarm
+    const dynamoSystemErrorAlarm = new cloudwatch.Alarm(
+      this,
+      'DynamoDBSystemErrorAlarm',
+      {
+        alarmName: `NewsPersonalization-DynamoDB-SystemErrors-${environmentSuffix}`,
+        alarmDescription: 'Alert when DynamoDB system errors occur',
+        metric: new cloudwatch.Metric({
+          namespace: 'AWS/DynamoDB',
+          metricName: 'SystemErrors',
+          dimensionsMap: {
+            TableName: engagementTrackingTable.tableName,
+          },
+          statistic: 'Sum',
+          period: cdk.Duration.minutes(5),
+        }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }
+    );
+    dynamoSystemErrorAlarm.addAlarmAction(
+      new cloudwatch_actions.SnsAction(alarmTopic)
+    );
+
+    // Add tags to Lambda functions
+    cdk.Tags.of(personalizationFunction).add('Service', 'NewsPersonalization');
+    cdk.Tags.of(personalizationFunction).add('Component', 'EdgeCompute');
+    cdk.Tags.of(personalizationFunction).add('Environment', environmentSuffix);
+
+    cdk.Tags.of(engagementTrackingFunction).add(
+      'Service',
+      'NewsPersonalization'
+    );
+    cdk.Tags.of(engagementTrackingFunction).add('Component', 'EdgeCompute');
+    cdk.Tags.of(engagementTrackingFunction).add(
+      'Environment',
+      environmentSuffix
+    );
+
+    // Add tags to CloudFront distribution
+    cdk.Tags.of(distribution).add('Service', 'NewsPersonalization');
+    cdk.Tags.of(distribution).add('Component', 'CDN');
+    cdk.Tags.of(distribution).add('Environment', environmentSuffix);
+
     new cdk.CfnOutput(this, 'DistributionDomainName', {
       value: distribution.distributionDomainName,
       exportName: `${this.stackName}-DistributionDomainName`,
@@ -215,6 +381,12 @@ exports.handler = async (event) => {
     new cdk.CfnOutput(this, 'DistributionId', {
       value: distribution.distributionId,
       exportName: `${this.stackName}-DistributionId`,
+    });
+
+    new cdk.CfnOutput(this, 'AlarmTopicArn', {
+      value: alarmTopic.topicArn,
+      exportName: `${this.stackName}-AlarmTopicArn`,
+      description: 'SNS Topic ARN for CloudWatch Alarm notifications',
     });
   }
 }
