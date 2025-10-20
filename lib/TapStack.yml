@@ -713,8 +713,8 @@ Resources:
         - slowquery
       # No deletion protection - allow removal on demand
       DeletionProtection: false
-      # Skip final snapshot for easier removal
-      SkipFinalSnapshot: true
+      # Delete automated backups for easier removal (RDS DB Instance property)
+      DeleteAutomatedBackups: true
       Tags:
         - Key: Owner
           Value: !Ref Owner
