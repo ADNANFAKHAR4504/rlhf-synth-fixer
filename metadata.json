@@ -24,5 +24,6 @@
     "Secrets Manager",
     "EC2"
   ],
-  "training_quality": 6
+  "training_quality": 6,
+  "background": "This repository contains AWS CDK (TypeScript) infrastructure code and tests for provisioning a multi-service application stack including API Gateway, Lambda, RDS (with credentials in Secrets Manager), S3, SQS, CloudFront, and monitoring/alerting via CloudWatch. It includes integration tests that validate end-to-end flows using deployment outputs in cfn-outputs/flat-outputs.json."
 }

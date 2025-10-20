@@ -11,6 +11,7 @@ import { InvokeCommand, InvokeCommandOutput, LambdaClient } from '@aws-sdk/clien
 import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
 import { PurgeQueueCommand, ReceiveMessageCommand, SQSClient } from '@aws-sdk/client-sqs';
+import { marshall } from '@aws-sdk/util-dynamodb';
 
 // Path to outputs produced by deployment
 const outputsPath = path.resolve(process.cwd(), 'cfn-outputs/flat-outputs.json');
@@ -27,12 +28,14 @@ if (fs.existsSync(outputsPath)) {
   }
 }
 
-// If outputs are missing, skip the whole suite — per guide, integration tests expect real deployed outputs
+// If outputs are missing or empty, fail explicitly — integration tests require real outputs
 if (!outputs || Object.keys(outputs).length === 0) {
-  describe.skip('Live integration (skipped - no cfn outputs)', () => {
-    test('skip', () => {
+  describe('Live integration (failed - missing outputs)', () => {
+    test('cfn-outputs/flat-outputs.json must be present and non-empty', () => {
       // eslint-disable-next-line no-console
-      console.warn('Skipping live integration tests: cfn-outputs/flat-outputs.json not found or empty');
+      console.error('ERROR: cfn-outputs/flat-outputs.json not found or empty. Integration tests require real deployment outputs.');
+      expect(outputs).not.toBeNull();
+      expect(Object.keys(outputs || {}).length).toBeGreaterThan(0);
     });
   });
 } else {
@@ -42,6 +45,11 @@ if (!outputs || Object.keys(outputs).length === 0) {
   if (fs.existsSync(regionPath)) {
     region = fs.readFileSync(regionPath, 'utf8').trim();
   }
+
+  // helper validators
+  const isMasked = (v: any) => typeof v === 'string' && v.includes('***');
+  const looksLikeArn = (v: any) => typeof v === 'string' && v.startsWith('arn:');
+  const looksLikeUrl = (v: any) => typeof v === 'string' && /^https?:\/\//.test(v);
 
   // Initialize clients
   const ec2 = new EC2Client({ region });
@@ -53,13 +61,24 @@ if (!outputs || Object.keys(outputs).length === 0) {
   const api = new APIGatewayClient({ region });
 
   describe('Live integration end-to-end workflow tests', () => {
-    // Basic presence checks for keys (do not assert configs)
-    test('outputs contain the minimal keys required for E2E flows', () => {
+    // Basic presence checks for keys and basic format/masking validation
+    test('outputs contain the minimal keys required for E2E flows and values are not masked', () => {
       const required = ['ApiGatewayUrl', 'LambdaFunctionArn', 'S3BucketName', 'SqsQueueUrl', 'RdsEndpoint', 'DatabaseSecretArn'];
       required.forEach((k) => {
         expect(Object.prototype.hasOwnProperty.call(outputs!, k)).toBe(true);
-        expect(outputs![k]).toBeTruthy();
+        const v = outputs![k];
+        expect(v).toBeTruthy();
+        // fail if the value looks masked (contains '***')
+        expect(isMasked(v)).toBe(false);
       });
+
+      // Extra basic structural checks
+      expect(looksLikeUrl(outputs!['ApiGatewayUrl'])).toBe(true);
+      expect(looksLikeArn(outputs!['LambdaFunctionArn'])).toBe(true);
+      expect(looksLikeArn(outputs!['DatabaseSecretArn'])).toBe(true);
+      expect(typeof outputs!['S3BucketName']).toBe('string');
+      expect(typeof outputs!['RdsEndpoint']).toBe('string');
+      expect(looksLikeUrl(outputs!['SqsQueueUrl'])).toBe(true);
     });
 
     describe('End-to-end: API -> Lambda -> downstream systems', () => {
@@ -73,9 +92,9 @@ if (!outputs || Object.keys(outputs).length === 0) {
           const q = outputs!['SqsQueueUrl'];
           if (q) await sqs.send(new PurgeQueueCommand({ QueueUrl: q }));
         } catch (e: any) {
-          // ignore
+          // In strict mode, log the error but do not hide it — tests will still run and fail if flows break
           // eslint-disable-next-line no-console
-          console.warn('SQS purge skipped/failed:', e.message || e);
+          console.warn('SQS purge attempted but failed:', e.message || e);
         }
       });
 
@@ -83,8 +102,14 @@ if (!outputs || Object.keys(outputs).length === 0) {
         const apiUrl = outputs!['ApiGatewayUrl'];
         expect(apiUrl).toBeTruthy();
 
+        // Support API key protected endpoints in CI by reading an API key from env.
+        // Preferred env var names: INTEGRATION_API_KEY, ADMIN_API_KEY, READ_ONLY_API_KEY
+        const apiKey = process.env.INTEGRATION_API_KEY || process.env.ADMIN_API_KEY || process.env.READ_ONLY_API_KEY;
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (apiKey) headers['x-api-key'] = apiKey;
+
         const res = await axios.post(`${apiUrl.replace(/\/$/, '')}/items`, payload, {
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           validateStatus: () => true,
           timeout: 20000,
         });
@@ -99,34 +124,32 @@ if (!outputs || Object.keys(outputs).length === 0) {
         expect(res.status).toBeLessThan(600);
         expect(Math.floor(res.status / 100)).not.toBe(5);
 
-        // If the API returns an item id, capture it for downstream checks
-        if (res.data && res.data.itemId) {
-          itemId = res.data.itemId;
+        // Helpful diagnostic for common API Gateway auth failures
+        if ((res.status === 401 || res.status === 403) || (res.data && typeof res.data === 'object' && /Missing Authentication Token/i.test(JSON.stringify(res.data)))) {
+          // If no API key was supplied, give a clearer error to the operator/CI
+          if (!apiKey) {
+            // eslint-disable-next-line no-console
+            console.error('API returned authentication error. If your API is protected by an API key, set INTEGRATION_API_KEY or ADMIN_API_KEY in the environment before running integration tests.');
+          }
         }
+
+        // Require that the API returns an itemId for downstream verification
+        expect(res.data).toBeDefined();
+        expect(res.data.itemId).toBeDefined();
+        itemId = res.data.itemId;
       }, 20000);
 
       test('verify data flows to DynamoDB and SQS (polling)', async () => {
-        // If API didn't provide itemId, try to derive or skip detailed asserts
-        if (!itemId) {
-          // best-effort: skip if we don't have an id
-          // eslint-disable-next-line no-console
-          console.warn('No itemId returned by API; skipping DynamoDB/SQS checks');
-          return;
-        }
-
+        // Strict: require an itemId and table/queue outputs to exist
+        expect(itemId).toBeDefined();
         const tableName = outputs!['TableName'] || outputs!['DynamoTableName'] || outputs!['DynamoDBTableName'];
-        if (!tableName) {
-          // Nothing to assert against
-          // eslint-disable-next-line no-console
-          console.warn('No DynamoDB table name in outputs; skipping DynamoDB checks');
-          return;
-        }
+        expect(tableName).toBeDefined();
 
         // Poll for the item in DynamoDB
         let found = false;
         for (let i = 0; i < 6; i++) {
           try {
-            const get = new GetItemCommand({ TableName: tableName, Key: { id: { S: itemId } } });
+            const get = new GetItemCommand({ TableName: tableName, Key: marshall({ id: itemId! }) });
             const resp = await dynamo.send(get);
             if (resp.Item) {
               found = true;
@@ -144,12 +167,7 @@ if (!outputs || Object.keys(outputs).length === 0) {
 
         // Poll SQS for a message that includes the item id
         const queueUrl = outputs!['SqsQueueUrl'];
-        if (!queueUrl) {
-          // skip if no queue
-          // eslint-disable-next-line no-console
-          console.warn('No SQS queue in outputs; skipping SQS checks');
-          return;
-        }
+        expect(queueUrl).toBeDefined();
 
         let messageFound = false;
         for (let attempt = 0; attempt < 12 && !messageFound; attempt++) {
@@ -176,77 +194,42 @@ if (!outputs || Object.keys(outputs).length === 0) {
           await new Promise((r) => setTimeout(r, 2000));
         }
 
-        // Don't fail suite hard on queue delays; but assert truthy for reasonable runs
+        // Fail if no message was observed within the polling window
         expect(messageFound).toBe(true);
       }, 90000);
 
       test('Lambda direct invocation returns expected shape', async () => {
         const lambdaArn = outputs!['LambdaFunctionArn'];
-        if (!lambdaArn) {
-          // skip if missing
-          // eslint-disable-next-line no-console
-          console.warn('No LambdaFunctionArn in outputs; skipping direct invocation');
-          return;
-        }
+        expect(lambdaArn).toBeDefined();
 
-        // Try invoking the function's $LATEST or production alias if present
-        // Try invoking the function's $LATEST or production alias if present
+        // Invoke and assert success; treat invocation failures as test failures
         const nameOrArn = lambdaArn.includes(':') ? lambdaArn : lambdaArn;
-        try {
-          const cmd = new InvokeCommand({ FunctionName: nameOrArn, Payload: Buffer.from(JSON.stringify({ test: 'invoke' })) });
-          const resp = await lambda.send(cmd) as InvokeCommandOutput;
-          expect(resp.StatusCode).toBeDefined();
-          expect(resp.StatusCode).toBeGreaterThanOrEqual(200);
-        } catch (e: any) {
-          // If direct invoke is not permitted, just warn and skip
-          // eslint-disable-next-line no-console
-          console.warn('Lambda invoke failed (may lack permissions):', e.message || e);
-        }
+        const cmd = new InvokeCommand({ FunctionName: nameOrArn, Payload: Buffer.from(JSON.stringify({ test: 'invoke' })) });
+        const resp = await lambda.send(cmd) as InvokeCommandOutput;
+        expect(resp.StatusCode).toBeDefined();
+        expect(resp.StatusCode).toBeGreaterThanOrEqual(200);
       });
 
       test('S3: Lambda can write and read object (via direct S3 client operations)', async () => {
         const bucket = outputs!['S3BucketName'];
-        if (!bucket) {
-          // skip if no bucket
-          // eslint-disable-next-line no-console
-          console.warn('No S3 bucket in outputs; skipping S3 checks');
-          return;
-        }
+        expect(bucket).toBeDefined();
 
         const key = `integration-test-${uuidv4()}.txt`;
-        try {
-          await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: 'hello' } as any) as any);
-          const got = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key } as any) as any);
-          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-          // @ts-ignore
-          const body = await got.Body.transformToString();
-          expect(body).toBe('hello');
-        } finally {
-          try {
-            await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key } as any) as any);
-          } catch (e) {
-            // ignore cleanup failures
-          }
-        }
+        await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: 'hello' } as any) as any);
+        const got = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key } as any) as any);
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        const body = await got.Body.transformToString();
+        expect(body).toBe('hello');
+        // cleanup, let failures in cleanup surface
+        await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key } as any) as any);
       }, 30000);
 
       test('Secrets Manager: can read secret string', async () => {
         const secretArn = outputs!['DatabaseSecretArn'];
-        if (!secretArn) {
-          // skip if missing
-          // eslint-disable-next-line no-console
-          console.warn('No DatabaseSecretArn in outputs; skipping Secrets Manager check');
-          return;
-        }
-
-        try {
-          const resp = await secrets.send(new GetSecretValueCommand({ SecretId: secretArn } as any));
-          expect(resp.SecretString || resp.SecretBinary).toBeDefined();
-        } catch (e) {
-          // warn but don't hard fail
-          // eslint-disable-next-line no-console
-          console.warn('GetSecretValue failed (may lack permissions):', (e as any).message || e);
-        }
+        expect(secretArn).toBeDefined();
+        const resp = await secrets.send(new GetSecretValueCommand({ SecretId: secretArn } as any));
+        expect(resp.SecretString || resp.SecretBinary).toBeDefined();
       }, 20000);
 
     });
