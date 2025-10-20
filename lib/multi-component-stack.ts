@@ -129,10 +129,10 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
       this.node.tryGetContext('rdsSubnetGroupName');
     const importedSubnetGroup = importedSubnetGroupName
       ? rds.SubnetGroup.fromSubnetGroupName(
-          this,
-          'ImportedRdsSubnetGroup',
-          String(importedSubnetGroupName)
-        )
+        this,
+        'ImportedRdsSubnetGroup',
+        String(importedSubnetGroupName)
+      )
       : undefined;
 
     const rdsInstance = new rds.DatabaseInstance(this, 'PostgresDatabase', {
@@ -370,6 +370,39 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
       ),
       metricValue: '1',
     });
+
+    // Expose CloudWatch metrics for the VPC flow log derived metrics so
+    // we can create alarms and dashboards from concrete Metric objects.
+    // rejectedPacketsMetric intentionally not used directly; VPC rejects are
+    // captured via MetricFilters and exposed if needed in future.
+
+    const sshAttemptsMetric = new cloudwatch.Metric({
+      namespace: 'VPC/FlowLogs',
+      metricName: 'SshConnectionAttempts',
+      period: Duration.minutes(5),
+      statistic: 'Sum',
+    });
+
+    const rdpAttemptsMetric = new cloudwatch.Metric({
+      namespace: 'VPC/FlowLogs',
+      metricName: 'RdpConnectionAttempts',
+      period: Duration.minutes(5),
+      statistic: 'Sum',
+    });
+
+    // Central SNS topic for alarm notifications. We do NOT auto-subscribe an email
+    // unless ALARM_NOTIFICATION_EMAIL is set in the environment to avoid CI auto-subscribes.
+    const alarmsTopic = new sns.Topic(this, 'AlarmsTopic', {
+      displayName: `prod-alarms-${this.stringSuffix}`,
+    });
+
+    if (process.env.ALARM_NOTIFICATION_EMAIL) {
+      alarmsTopic.addSubscription(
+        new subscriptions.EmailSubscription(
+          process.env.ALARM_NOTIFICATION_EMAIL
+        )
+      );
+    }
 
     // ========================================
     // IAM Roles (Least Privilege)
@@ -871,53 +904,12 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
         cdk.aws_cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
 
-    // ==========================
-    // Monitoring: SNS topic, additional alarms and dashboard
-    // ==========================
-
-    // Central SNS topic for alarm notifications. We do NOT auto-subscribe an email
-    // unless ALARM_NOTIFICATION_EMAIL is set in the environment to avoid CI auto-subscribes.
-    const alarmsTopic = new sns.Topic(this, 'AlarmsTopic', {
-      displayName: `prod-alarms-${this.stringSuffix}`,
-    });
-
-    if (process.env.ALARM_NOTIFICATION_EMAIL) {
-      alarmsTopic.addSubscription(
-        new subscriptions.EmailSubscription(
-          process.env.ALARM_NOTIFICATION_EMAIL
-        )
-      );
-    }
-
-    // CloudWatch Alarms for VPC Flow Log derived metrics
-    const rejectedPacketsMetric = new cloudwatch.Metric({
-      namespace: 'VPC/FlowLogs',
-      metricName: 'RejectedPackets',
-      period: Duration.minutes(5),
-      statistic: 'Sum',
-    });
-
-    const sshAttemptsMetric = new cloudwatch.Metric({
-      namespace: 'VPC/FlowLogs',
-      metricName: 'SshConnectionAttempts',
-      period: Duration.minutes(5),
-      statistic: 'Sum',
-    });
-
-    const rdpAttemptsMetric = new cloudwatch.Metric({
-      namespace: 'VPC/FlowLogs',
-      metricName: 'RdpConnectionAttempts',
-      period: Duration.minutes(5),
-      statistic: 'Sum',
-    });
-
-    new cloudwatch.Alarm(this, 'VpcRejectedPacketsAlarm', {
-      alarmName: `prod-vpc-rejected-packets-${this.stringSuffix}`,
-      metric: rejectedPacketsMetric,
-      threshold: 10,
-      evaluationPeriods: 1,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-    }).addAlarmAction(new cw_actions.SnsAction(alarmsTopic));
+    // Note: Route53 health checks are created earlier only for primary stacks
+    // (see the guarded block above guarded by `createPrimaryResources`).
+    // This section previously duplicated the creation of ApiHealthCheck and
+    // CloudFrontHealthCheck which caused a construct name collision during
+    // synthesis when the guarded block had already created them. Keep the
+    // outputs in the guarded block and avoid creating duplicate constructs here.
 
     new cloudwatch.Alarm(this, 'VpcSshAttemptsAlarm', {
       alarmName: `prod-vpc-ssh-attempts-${this.stringSuffix}`,
@@ -1081,49 +1073,9 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
     // Stack Outputs
     // ========================================
 
-    // ========================================
-    // Route53 Health Checks (for monitoring and potential failover)
-    // ========================================
-    // Extract host portion from api.url (https://host/...)
-    const apiHost = cdk.Fn.select(2, cdk.Fn.split('/', this.apiUrl || api.url));
-
-    const apiHealthCheck = new route53.CfnHealthCheck(this, 'ApiHealthCheck', {
-      healthCheckConfig: {
-        type: 'HTTPS',
-        fullyQualifiedDomainName: apiHost,
-        port: 443,
-        // Ping the root path; if you have a dedicated /health path, change resourcePath
-        resourcePath: '/',
-        requestInterval: 30,
-        failureThreshold: 3,
-      },
-    });
-
-    new cdk.CfnOutput(this, 'ApiHealthCheckId', {
-      value: apiHealthCheck.attrHealthCheckId,
-      description: 'Route53 HealthCheckId for API endpoint',
-    });
-
-    // CloudFront domain health check (optional; CloudFront may throttle health probes)
-    const cfHealthCheck = new route53.CfnHealthCheck(
-      this,
-      'CloudFrontHealthCheck',
-      {
-        healthCheckConfig: {
-          type: 'HTTPS',
-          fullyQualifiedDomainName: distribution.distributionDomainName,
-          port: 443,
-          resourcePath: '/',
-          requestInterval: 30,
-          failureThreshold: 3,
-        },
-      }
-    );
-
-    new cdk.CfnOutput(this, 'CloudFrontHealthCheckId', {
-      value: cfHealthCheck.attrHealthCheckId,
-      description: 'Route53 HealthCheckId for CloudFront distribution',
-    });
+    // Route53 health checks are created above in the primary-only guarded
+    // block (if createPrimaryResources && hostedZone). Do not recreate them
+    // here to avoid duplicate construct names during synthesis.
     this.vpcId = vpc.vpcId;
     new cdk.CfnOutput(this, 'VpcId', {
       value: this.vpcId,
