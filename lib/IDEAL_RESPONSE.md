@@ -495,6 +495,20 @@ resource "aws_eip" "web_2_eip" {
   }
 }
 
+# Attach EC2 Instance 1 to Target Group
+resource "aws_lb_target_group_attachment" "web_1_tg_attachment" {
+  target_group_arn = aws_lb_target_group.web_tg.arn
+  target_id        = aws_instance.web_1.id
+  port             = 80
+}
+
+# Attach EC2 Instance 2 to Target Group
+resource "aws_lb_target_group_attachment" "web_2_tg_attachment" {
+  target_group_arn = aws_lb_target_group.web_tg.arn
+  target_id        = aws_instance.web_2.id
+  port             = 80
+}
+
 # Outputs for reference
 output "load_balancer_dns" {
   description = "DNS name of the load balancer"
