@@ -84,15 +84,15 @@ describe("ElastiCache Redis Infrastructure - Unit Tests", () => {
       expect(has(/data\s+"aws_region"\s+"current"/)).toBe(true);
     });
 
-    test("fetches existing VPC data", () => {
-      expect(has(/data\s+"aws_vpc"\s+"existing"/)).toBe(true);
-      expect(has(/id\s*=\s*var\.vpc_id/)).toBe(true);
+    test("uses availability zones data source", () => {
+      expect(has(/data\s+"aws_availability_zones"\s+"available"/)).toBe(true);
+      expect(has(/state\s*=\s*"available"/)).toBe(true);
     });
 
-    test("fetches subnets for multiple AZs", () => {
-      expect(has(/data\s+"aws_subnets"\s+"redis_subnets"/)).toBe(true);
-      expect(has(/us-west-2a/)).toBe(true);
-      expect(has(/us-west-2b/)).toBe(true);
+    test("creates VPC resource for Redis", () => {
+      expect(has(/resource\s+"aws_vpc"\s+"redis"/)).toBe(true);
+      expect(has(/cidr_block\s*=\s*var\.vpc_cidr/)).toBe(true);
+      expect(has(/enable_dns_hostnames\s*=\s*true/)).toBe(true);
     });
 
     test("no hardcoded account IDs", () => {
@@ -100,8 +100,10 @@ describe("ElastiCache Redis Infrastructure - Unit Tests", () => {
       expect(accountIdMatches).toBeNull();
     });
 
-    test("subnet filter uses VPC ID variable", () => {
-      expect(has(/values\s*=\s*\[var\.vpc_id\]/)).toBe(true);
+    test("creates subnet resources in multiple AZs", () => {
+      expect(has(/resource\s+"aws_subnet"\s+"redis"/)).toBe(true);
+      expect(has(/count\s*=\s*3/)).toBe(true);
+      expect(has(/availability_zone\s*=\s*local\.azs\[count\.index\]/)).toBe(true);
     });
   });
 
@@ -122,8 +124,9 @@ describe("ElastiCache Redis Infrastructure - Unit Tests", () => {
       expect(has(/variable\s+"owner"/)).toBe(true);
     });
 
-    test("has vpc_id variable", () => {
-      expect(has(/variable\s+"vpc_id"/)).toBe(true);
+    test("has vpc_cidr variable", () => {
+      expect(has(/variable\s+"vpc_cidr"/)).toBe(true);
+      expect(has(/default\s*=\s*"10\.0\.0\.0\/16"/)).toBe(true);
     });
 
     test("has internal_cidr_block variable", () => {
@@ -231,7 +234,7 @@ describe("ElastiCache Redis Infrastructure - Unit Tests", () => {
     });
 
     test("security group uses VPC ID", () => {
-      expect(has(/vpc_id\s*=\s*var\.vpc_id/)).toBe(true);
+      expect(has(/vpc_id\s*=\s*aws_vpc\.redis\.id/)).toBe(true);
     });
 
     test("allows inbound traffic on port 6379", () => {
@@ -272,8 +275,8 @@ describe("ElastiCache Redis Infrastructure - Unit Tests", () => {
       expect(has(/resource\s+"aws_elasticache_subnet_group"\s+"redis"/)).toBe(true);
     });
 
-    test("subnet group uses data source subnets", () => {
-      expect(has(/subnet_ids\s*=\s*data\.aws_subnets\.redis_subnets\.ids/)).toBe(true);
+    test("subnet group uses created subnets", () => {
+      expect(has(/subnet_ids\s*=\s*aws_subnet\.redis\[\*\]\.id/)).toBe(true);
     });
 
     test("subnet group name uses cluster name", () => {
@@ -680,8 +683,8 @@ describe("Resource Naming Conventions", () => {
     });
 
     test("spans multiple availability zones", () => {
-      expect(has(/us-west-2a/)).toBe(true);
-      expect(has(/us-west-2b/)).toBe(true);
+      expect(has(/azs\s*=\s*slice\(data\.aws_availability_zones\.available\.names,\s*0,\s*3\)/)).toBe(true);
+      expect(has(/availability_zone\s*=\s*local\.azs\[count\.index\]/)).toBe(true);
     });
 
     test("has 3 nodes minimum", () => {
@@ -711,8 +714,8 @@ describe("Resource Naming Conventions", () => {
   // TEST GROUP 17: COMPLIANCE (5 tests)
   // ========================================================================
   describe("Compliance Requirements", () => {
-    test("uses us-west-2 region", () => {
-      expect(has(/us-west-2/)).toBe(true);
+    test("uses data source for current region", () => {
+      expect(has(/data\s+"aws_region"\s+"current"/)).toBe(true);
     });
 
     test("uses specified VPC", () => {
@@ -738,7 +741,7 @@ describe("Resource Naming Conventions", () => {
   // ========================================================================
   describe("Terraform Best Practices", () => {
     test("uses data sources for dynamic values", () => {
-      expect(count(/data\s+"/g)).toBeGreaterThanOrEqual(4);
+      expect(count(/data\s+"/g)).toBeGreaterThanOrEqual(3);
     });
 
     test("uses locals for reusable values", () => {
