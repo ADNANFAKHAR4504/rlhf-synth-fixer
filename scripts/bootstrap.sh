@@ -102,10 +102,21 @@ elif [ "$PLATFORM" = "tf" ]; then
   
   # Run terraform plan
   echo "Running Terraform plan..."
-  if (cd .. && npm run tf:plan --silent); then
-    echo "✅ Terraform plan succeeded"
+  # If task_sub_category indicates multi-env mgmt, read deploy_env from metadata.json
+  # and pass it as -var-file to terraform plan via TF_CLI_ARGS_plan
+  if [ "$(jq -r '.task_sub_category // ""' ../metadata.json)" = "IaC-Multi-Environment-Management" ]; then
+    DEPLOY_ENV_FILE=$(jq -r '.task_config.deploy_env // ""' ../metadata.json)
+    if [ -n "$DEPLOY_ENV_FILE" ]; then
+      export TF_CLI_ARGS_plan="-var-file=${DEPLOY_ENV_FILE} ${TF_CLI_ARGS_plan:-}"
+      echo "Using metadata var-file: ${DEPLOY_ENV_FILE}"
+      cd .. && npm run tf:plan -var-file=${DEPLOY_ENV_FILE} --silent
+    fi
   else
-    echo "⚠️ Terraform plan failed, but continuing..."
+    if (cd .. && npm run tf:plan --silent); then
+      echo "✅ Terraform plan succeeded"
+    else
+      echo "⚠️ Terraform plan failed, but continuing..."
+    fi
   fi
   
   # Verify the plan was created
