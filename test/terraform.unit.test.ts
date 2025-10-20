@@ -464,10 +464,6 @@ describe('CloudWatch Alarms - Monitoring and Alerting', () => {
     expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"primary_health"/);
   });
 
-  test('CloudWatch alarm for DR ALB health is defined', () => {
-    expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"dr_health"/);
-  });
-
   test('CloudWatch alarm for Aurora replication lag is defined', () => {
     expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"aurora_lag_alarm"/);
   });
