@@ -37,40 +37,23 @@ Metadata:
         Parameters:
           - AlarmEmail
     ParameterLabels:
-      ProjectName:
-        default: "Project Name"
-      Environment:
-        default: "Environment"
-      VpcCidr:
-        default: "VPC CIDR Block"
-      PublicSubnet1Cidr:
-        default: "Public Subnet 1 CIDR Block"
-      PublicSubnet2Cidr:
-        default: "Public Subnet 2 CIDR Block"
-      PrivateSubnet1Cidr:
-        default: "Private Subnet 1 CIDR Block"
-      PrivateSubnet2Cidr:
-        default: "Private Subnet 2 CIDR Block"
-      AllowedSshCidr:
-        default: "Allowed SSH CIDR Block"
-      KeyName:
-        default: "EC2 Key Pair Name"
-      AppInstanceType:
-        default: "Application Instance Type"
-      BastionInstanceType:
-        default: "Bastion Host Instance Type"
-      DbEngine:
-        default: "Database Engine"
-      DbEngineVersion:
-        default: "Database Engine Version"
-      DbInstanceClass:
-        default: "Database Instance Class"
-      DbName:
-        default: "Database Name"
-      DbUsername:
-        default: "Database Username"
-      AlarmEmail:
-        default: "Alarm Notification Email"
+      ProjectName: { default: "Project Name" }
+      Environment: { default: "Environment" }
+      VpcCidr: { default: "VPC CIDR Block" }
+      PublicSubnet1Cidr: { default: "Public Subnet 1 CIDR Block" }
+      PublicSubnet2Cidr: { default: "Public Subnet 2 CIDR Block" }
+      PrivateSubnet1Cidr: { default: "Private Subnet 1 CIDR Block" }
+      PrivateSubnet2Cidr: { default: "Private Subnet 2 CIDR Block" }
+      AllowedSshCidr: { default: "Allowed SSH CIDR Block" }
+      KeyName: { default: "EC2 Key Pair Name (optional)" }
+      AppInstanceType: { default: "Application Instance Type" }
+      BastionInstanceType: { default: "Bastion Host Instance Type" }
+      DbEngine: { default: "Database Engine" }
+      DbEngineVersion: { default: "Database Engine Version" }
+      DbInstanceClass: { default: "Database Instance Class" }
+      DbName: { default: "Database Name" }
+      DbUsername: { default: "Database Username" }
+      AlarmEmail: { default: "Alarm Notification Email" }
 
 Parameters:
   ProjectName:
@@ -115,10 +98,11 @@ Parameters:
     Default: "203.0.113.0/24"
     Description: "CIDR block allowed for SSH access to the Bastion host"
 
+  # Optional to avoid create-change-set failures; when empty, instances are created without a key pair (use SSM Session Manager).
   KeyName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: "Name of an existing EC2 KeyPair to enable SSH access"
-    ConstraintDescription: "Must be the name of an existing EC2 KeyPair."
+    Type: String
+    Default: ""
+    Description: "Existing EC2 KeyPair name to enable SSH access (leave empty to skip)."
 
   AppInstanceType:
     Type: String
@@ -167,13 +151,13 @@ Parameters:
 Conditions:
   CreateSNSSubscription: !Not [!Equals [!Ref AlarmEmail, ""]]
   IsPostgres: !Equals [!Ref DbEngine, "postgres"]
+  HasKeyPair: !Not [!Equals [!Ref KeyName, ""]]
 
 Resources:
   # ----------------------------
   # KMS Keys (least-privileged)
   # ----------------------------
 
-  # KMS Key for S3 encryption
   TapStackS3KMSKey:
     Type: 'AWS::KMS::Key'
     Properties:
@@ -185,26 +169,17 @@ Resources:
         Statement:
           - Sid: 'AllowRootAdmin'
             Effect: 'Allow'
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Principal: { AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root' }
             Action: 'kms:*'
             Resource: '*'
           - Sid: 'AllowS3UseOfKey'
             Effect: 'Allow'
-            Principal:
-              Service: 's3.amazonaws.com'
-            Action:
-              - 'kms:Encrypt'
-              - 'kms:Decrypt'
-              - 'kms:ReEncrypt*'
-              - 'kms:GenerateDataKey*'
-              - 'kms:DescribeKey'
+            Principal: { Service: 's3.amazonaws.com' }
+            Action: ['kms:Encrypt','kms:Decrypt','kms:ReEncrypt*','kms:GenerateDataKey*','kms:DescribeKey']
             Resource: '*'
       Tags:
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
 
   TapStackS3KMSKeyAlias:
     Type: 'AWS::KMS::Alias'
@@ -212,7 +187,6 @@ Resources:
       AliasName: !Sub 'alias/${ProjectName}-s3'
       TargetKeyId: !Ref TapStackS3KMSKey
 
-  # KMS Key for RDS encryption
   TapStackRDSKMSKey:
     Type: 'AWS::KMS::Key'
     Properties:
@@ -224,26 +198,17 @@ Resources:
         Statement:
           - Sid: 'AllowRootAdmin'
             Effect: 'Allow'
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Principal: { AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root' }
             Action: 'kms:*'
             Resource: '*'
           - Sid: 'AllowRDSUseOfKey'
             Effect: 'Allow'
-            Principal:
-              Service: 'rds.amazonaws.com'
-            Action:
-              - 'kms:Encrypt'
-              - 'kms:Decrypt'
-              - 'kms:ReEncrypt*'
-              - 'kms:GenerateDataKey*'
-              - 'kms:DescribeKey'
+            Principal: { Service: 'rds.amazonaws.com' }
+            Action: ['kms:Encrypt','kms:Decrypt','kms:ReEncrypt*','kms:GenerateDataKey*','kms:DescribeKey']
             Resource: '*'
       Tags:
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
 
   TapStackRDSKMSKeyAlias:
     Type: 'AWS::KMS::Alias'
@@ -251,7 +216,6 @@ Resources:
       AliasName: !Sub 'alias/${ProjectName}-rds'
       TargetKeyId: !Ref TapStackRDSKMSKey
 
-  # KMS Key for CloudTrail encryption
   TapStackCloudTrailKMSKey:
     Type: 'AWS::KMS::Key'
     Properties:
@@ -263,26 +227,17 @@ Resources:
         Statement:
           - Sid: 'AllowRootAdmin'
             Effect: 'Allow'
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Principal: { AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root' }
             Action: 'kms:*'
             Resource: '*'
           - Sid: 'AllowCloudTrailUseOfKey'
             Effect: 'Allow'
-            Principal:
-              Service: 'cloudtrail.amazonaws.com'
-            Action:
-              - 'kms:Encrypt'
-              - 'kms:Decrypt'
-              - 'kms:ReEncrypt*'
-              - 'kms:GenerateDataKey*'
-              - 'kms:DescribeKey'
+            Principal: { Service: 'cloudtrail.amazonaws.com' }
+            Action: ['kms:Encrypt','kms:Decrypt','kms:ReEncrypt*','kms:GenerateDataKey*','kms:DescribeKey']
             Resource: '*'
       Tags:
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
 
   TapStackCloudTrailKMSKeyAlias:
     Type: 'AWS::KMS::Alias'
@@ -290,7 +245,6 @@ Resources:
       AliasName: !Sub 'alias/${ProjectName}-cloudtrail'
       TargetKeyId: !Ref TapStackCloudTrailKMSKey
 
-  # Optional KMS for CloudWatch Logs (kept for completeness)
   TapStackCloudWatchKMSKey:
     Type: 'AWS::KMS::Key'
     Properties:
@@ -302,29 +256,20 @@ Resources:
         Statement:
           - Sid: 'AllowRootAdmin'
             Effect: 'Allow'
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Principal: { AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root' }
             Action: 'kms:*'
             Resource: '*'
           - Sid: 'AllowLogsUseOfKey'
             Effect: 'Allow'
-            Principal:
-              Service: 'logs.us-west-2.amazonaws.com'
-            Action:
-              - 'kms:Encrypt'
-              - 'kms:Decrypt'
-              - 'kms:ReEncrypt*'
-              - 'kms:GenerateDataKey*'
-              - 'kms:DescribeKey'
+            Principal: { Service: 'logs.us-west-2.amazonaws.com' }
+            Action: ['kms:Encrypt','kms:Decrypt','kms:ReEncrypt*','kms:GenerateDataKey*','kms:DescribeKey']
             Resource: '*'
             Condition:
               ArnLike:
                 'kms:EncryptionContext:aws:logs:arn': !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
       Tags:
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
 
   TapStackCloudWatchKMSKeyAlias:
     Type: 'AWS::KMS::Alias'
@@ -343,23 +288,17 @@ Resources:
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
-        - Key: 'Name'
-          Value: !Sub '${ProjectName}-vpc'
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-vpc' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
 
   TapStackInternetGateway:
     Type: 'AWS::EC2::InternetGateway'
     Properties:
       Tags:
-        - Key: 'Name'
-          Value: !Sub '${ProjectName}-igw'
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-igw' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
 
   TapStackInternetGatewayAttachment:
     Type: 'AWS::EC2::VPCGatewayAttachment'
@@ -367,7 +306,6 @@ Resources:
       VpcId: !Ref TapStackVPC
       InternetGatewayId: !Ref TapStackInternetGateway
 
-  # Public Subnets
   TapStackPublicSubnet1:
     Type: 'AWS::EC2::Subnet'
     Properties:
@@ -376,12 +314,9 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs 'us-west-2']
       MapPublicIpOnLaunch: true
       Tags:
-        - Key: 'Name'
-          Value: !Sub '${ProjectName}-public-az1'
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-public-az1' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
 
   TapStackPublicSubnet2:
     Type: 'AWS::EC2::Subnet'
@@ -391,14 +326,10 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs 'us-west-2']
       MapPublicIpOnLaunch: true
       Tags:
-        - Key: 'Name'
-          Value: !Sub '${ProjectName}-public-az2'
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-public-az2' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
 
-  # Private Subnets
   TapStackPrivateSubnet1:
     Type: 'AWS::EC2::Subnet'
     Properties:
@@ -407,12 +338,9 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs 'us-west-2']
       MapPublicIpOnLaunch: false
       Tags:
-        - Key: 'Name'
-          Value: !Sub '${ProjectName}-private-az1'
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-private-az1' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
 
   TapStackPrivateSubnet2:
     Type: 'AWS::EC2::Subnet'
@@ -422,26 +350,19 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs 'us-west-2']
       MapPublicIpOnLaunch: false
       Tags:
-        - Key: 'Name'
-          Value: !Sub '${ProjectName}-private-az2'
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-private-az2' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
 
-  # NAT Gateways & EIPs
   TapStackEIP1:
     Type: 'AWS::EC2::EIP'
     DependsOn: TapStackInternetGatewayAttachment
     Properties:
       Domain: vpc
       Tags:
-        - Key: 'Name'
-          Value: !Sub '${ProjectName}-eip-nat1'
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-eip-nat1' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
 
   TapStackEIP2:
     Type: 'AWS::EC2::EIP'
@@ -449,12 +370,9 @@ Resources:
     Properties:
       Domain: vpc
       Tags:
-        - Key: 'Name'
-          Value: !Sub '${ProjectName}-eip-nat2'
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-eip-nat2' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
 
   TapStackNATGateway1:
     Type: 'AWS::EC2::NatGateway'
@@ -462,12 +380,9 @@ Resources:
       AllocationId: !GetAtt TapStackEIP1.AllocationId
       SubnetId: !Ref TapStackPublicSubnet1
       Tags:
-        - Key: 'Name'
-          Value: !Sub '${ProjectName}-nat-az1'
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-nat-az1' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
 
   TapStackNATGateway2:
     Type: 'AWS::EC2::NatGateway'
@@ -475,49 +390,36 @@ Resources:
       AllocationId: !GetAtt TapStackEIP2.AllocationId
       SubnetId: !Ref TapStackPublicSubnet2
       Tags:
-        - Key: 'Name'
-          Value: !Sub '${ProjectName}-nat-az2'
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-nat-az2' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
 
-  # Route Tables & Routes
   TapStackPublicRouteTable:
     Type: 'AWS::EC2::RouteTable'
     Properties:
       VpcId: !Ref TapStackVPC
       Tags:
-        - Key: 'Name'
-          Value: !Sub '${ProjectName}-rt-public'
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-rt-public' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
 
   TapStackPrivateRouteTable1:
     Type: 'AWS::EC2::RouteTable'
     Properties:
       VpcId: !Ref TapStackVPC
       Tags:
-        - Key: 'Name'
-          Value: !Sub '${ProjectName}-rt-private-az1'
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-rt-private-az1' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
 
   TapStackPrivateRouteTable2:
     Type: 'AWS::EC2::RouteTable'
     Properties:
       VpcId: !Ref TapStackVPC
       Tags:
-        - Key: 'Name'
-          Value: !Sub '${ProjectName}-rt-private-az2'
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-rt-private-az2' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
 
   TapStackPublicRoute:
     Type: 'AWS::EC2::Route'
@@ -541,7 +443,6 @@ Resources:
       DestinationCidrBlock: '0.0.0.0/0'
       NatGatewayId: !Ref TapStackNATGateway2
 
-  # Subnet Associations
   TapStackPublicSubnet1RouteTableAssociation:
     Type: 'AWS::EC2::SubnetRouteTableAssociation'
     Properties:
@@ -569,14 +470,12 @@ Resources:
   # ---------------------------------------------
   # S3 Buckets (App bucket + centralized logs)
   # ---------------------------------------------
-  # Note: omit explicit BucketName to avoid naming regex warnings; AWS will assign a compliant name.
-  #       Names are provided via Outputs and Name tags.
 
+  # Omit explicit BucketName to avoid naming regex/warnings; AWS will assign a compliant name.
   TapStackLogsBucket:
     Type: 'AWS::S3::Bucket'
     Properties:
-      VersioningConfiguration:
-        Status: 'Enabled'
+      VersioningConfiguration: { Status: Enabled }
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -585,22 +484,19 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: 'aws:kms'
+              SSEAlgorithm: aws:kms
               KMSMasterKeyID: !GetAtt TapStackS3KMSKey.Arn
       LifecycleConfiguration:
         Rules:
           - Id: 'TransitionToStandardIA'
-            Status: 'Enabled'
+            Status: Enabled
             Transitions:
               - TransitionInDays: 90
-                StorageClass: 'STANDARD_IA'
+                StorageClass: STANDARD_IA
       Tags:
-        - Key: 'Name'
-          Value: !Sub '${ProjectName}-logs'
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-logs' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
 
   TapStackLogsBucketPolicy:
     Type: 'AWS::S3::BucketPolicy'
@@ -609,7 +505,6 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          # Enforce TLS
           - Sid: 'DenyNonTLSAccess'
             Effect: 'Deny'
             Principal: '*'
@@ -618,47 +513,36 @@ Resources:
               - !Sub 'arn:aws:s3:::${TapStackLogsBucket}'
               - !Sub 'arn:aws:s3:::${TapStackLogsBucket}/*'
             Condition:
-              Bool:
-                'aws:SecureTransport': false
-          # Allow CloudTrail delivery
+              Bool: { 'aws:SecureTransport': false }
           - Sid: 'AWSCloudTrailWrite'
             Effect: 'Allow'
-            Principal:
-              Service: 'cloudtrail.amazonaws.com'
-            Action:
-              - 's3:PutObject'
+            Principal: { Service: 'cloudtrail.amazonaws.com' }
+            Action: ['s3:PutObject']
             Resource: !Sub 'arn:aws:s3:::${TapStackLogsBucket}/cloudtrail/AWSLogs/${AWS::AccountId}/*'
             Condition:
-              StringEquals:
-                's3:x-amz-acl': 'bucket-owner-full-control'
+              StringEquals: { 's3:x-amz-acl': 'bucket-owner-full-control' }
           - Sid: 'AWSCloudTrailGetAcl'
             Effect: 'Allow'
-            Principal:
-              Service: 'cloudtrail.amazonaws.com'
+            Principal: { Service: 'cloudtrail.amazonaws.com' }
             Action: 's3:GetBucketAcl'
             Resource: !Sub 'arn:aws:s3:::${TapStackLogsBucket}'
-          # Allow S3 Server Access Logs delivery
           - Sid: 'S3ServerAccessLogsWrite'
             Effect: 'Allow'
-            Principal:
-              Service: 'logging.s3.amazonaws.com'
+            Principal: { Service: 'logging.s3.amazonaws.com' }
             Action: 's3:PutObject'
             Resource: !Sub 'arn:aws:s3:::${TapStackLogsBucket}/app-bucket-logs/*'
             Condition:
-              StringEquals:
-                's3:x-amz-acl': 'bucket-owner-full-control'
+              StringEquals: { 's3:x-amz-acl': 'bucket-owner-full-control' }
           - Sid: 'S3ServerAccessLogsAclRead'
             Effect: 'Allow'
-            Principal:
-              Service: 'logging.s3.amazonaws.com'
+            Principal: { Service: 'logging.s3.amazonaws.com' }
             Action: 's3:GetBucketAcl'
             Resource: !Sub 'arn:aws:s3:::${TapStackLogsBucket}'
 
   TapStackAppBucket:
     Type: 'AWS::S3::Bucket'
     Properties:
-      VersioningConfiguration:
-        Status: 'Enabled'
+      VersioningConfiguration: { Status: Enabled }
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -667,18 +551,15 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: 'aws:kms'
+              SSEAlgorithm: aws:kms
               KMSMasterKeyID: !GetAtt TapStackS3KMSKey.Arn
       LoggingConfiguration:
         DestinationBucketName: !Ref TapStackLogsBucket
         LogFilePrefix: 'app-bucket-logs/'
       Tags:
-        - Key: 'Name'
-          Value: !Sub '${ProjectName}-app'
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-app' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
 
   TapStackAppBucketPolicy:
     Type: 'AWS::S3::BucketPolicy'
@@ -695,12 +576,10 @@ Resources:
               - !Sub 'arn:aws:s3:::${TapStackAppBucket}'
               - !Sub 'arn:aws:s3:::${TapStackAppBucket}/*'
             Condition:
-              Bool:
-                'aws:SecureTransport': false
+              Bool: { 'aws:SecureTransport': false }
           - Sid: 'DenyNonAWSPrincipals'
             Effect: 'Deny'
-            NotPrincipal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            NotPrincipal: { AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root' }
             Action: 's3:*'
             Resource:
               - !Sub 'arn:aws:s3:::${TapStackAppBucket}'
@@ -716,17 +595,11 @@ Resources:
       GroupDescription: 'Security group for Bastion host'
       VpcId: !Ref TapStackVPC
       SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: !Ref AllowedSshCidr
+        - { IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: !Ref AllowedSshCidr }
       Tags:
-        - Key: 'Name'
-          Value: !Sub '${ProjectName}-sg-bastion'
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-sg-bastion' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
 
   TapStackAppSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
@@ -734,12 +607,9 @@ Resources:
       GroupDescription: 'Security group for Application instances'
       VpcId: !Ref TapStackVPC
       Tags:
-        - Key: 'Name'
-          Value: !Sub '${ProjectName}-sg-app'
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-sg-app' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
 
   TapStackAppSecurityGroupIngressSSH:
     Type: 'AWS::EC2::SecurityGroupIngress'
@@ -756,12 +626,9 @@ Resources:
       GroupDescription: 'Security group for RDS instance'
       VpcId: !Ref TapStackVPC
       Tags:
-        - Key: 'Name'
-          Value: !Sub '${ProjectName}-sg-rds'
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-sg-rds' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
 
   TapStackRDSSecurityGroupIngressDB:
     Type: 'AWS::EC2::SecurityGroupIngress'
@@ -783,17 +650,14 @@ Resources:
         Version: '2012-10-17'
         Statement:
           - Effect: 'Allow'
-            Principal:
-              Service: 'ec2.amazonaws.com'
+            Principal: { Service: 'ec2.amazonaws.com' }
             Action: 'sts:AssumeRole'
       ManagedPolicyArns:
         - 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
       Path: '/'
       Tags:
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
 
   TapStackAppEC2Policy:
     Type: 'AWS::IAM::Policy'
@@ -804,33 +668,25 @@ Resources:
         Statement:
           - Sid: 'S3ReadAppBucket'
             Effect: 'Allow'
-            Action:
-              - 's3:GetObject'
-              - 's3:ListBucket'
+            Action: ['s3:GetObject','s3:ListBucket']
             Resource:
               - !Sub 'arn:aws:s3:::${TapStackAppBucket}'
               - !Sub 'arn:aws:s3:::${TapStackAppBucket}/*'
           - Sid: 'UseS3KmsKey'
             Effect: 'Allow'
-            Action:
-              - 'kms:Decrypt'
-              - 'kms:GenerateDataKey'
+            Action: ['kms:Decrypt','kms:GenerateDataKey']
             Resource: !GetAtt TapStackS3KMSKey.Arn
           - Sid: 'PutAppMetrics'
             Effect: 'Allow'
-            Action:
-              - 'cloudwatch:PutMetricData'
-              - 'ec2:DescribeTags'
+            Action: ['cloudwatch:PutMetricData','ec2:DescribeTags']
             Resource: '*'
-      Roles:
-        - !Ref TapStackAppEC2Role
+      Roles: [ !Ref TapStackAppEC2Role ]
 
   TapStackAppInstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
       Path: '/'
-      Roles:
-        - !Ref TapStackAppEC2Role
+      Roles: [ !Ref TapStackAppEC2Role ]
 
   TapStackBastionEC2Role:
     Type: 'AWS::IAM::Role'
@@ -839,24 +695,20 @@ Resources:
         Version: '2012-10-17'
         Statement:
           - Effect: 'Allow'
-            Principal:
-              Service: 'ec2.amazonaws.com'
+            Principal: { Service: 'ec2.amazonaws.com' }
             Action: 'sts:AssumeRole'
       ManagedPolicyArns:
         - 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
       Path: '/'
       Tags:
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
 
   TapStackBastionInstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
       Path: '/'
-      Roles:
-        - !Ref TapStackBastionEC2Role
+      Roles: [ !Ref TapStackBastionEC2Role ]
 
   # ---------------------------------------------
   # Secrets Manager (DB password via dynamic ref)
@@ -871,12 +723,10 @@ Resources:
         SecretStringTemplate: !Sub '{"username":"${DbUsername}"}'
         GenerateStringKey: 'password'
         PasswordLength: 20
-        ExcludeCharacters: '"@/\''()[]{}:;,#$%&*+|<>?`~ ' # exclude tricky chars
+        ExcludeCharacters: '"@/\''()[]{}:;,#$%&*+|<>?`~ '
       Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
 
   # ---------------------------------------------
   # CloudTrail (management events to logs bucket)
@@ -897,10 +747,8 @@ Resources:
       KMSKeyId: !GetAtt TapStackCloudTrailKMSKey.Arn
       TrailName: 'TapStack-CloudTrail'
       Tags:
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
 
   # ---------------------------------------------
   # SNS (for CloudWatch Alarms)
@@ -912,10 +760,8 @@ Resources:
       DisplayName: !Sub '${ProjectName} Alarms'
       TopicName: !Sub '${ProjectName}-alarms'
       Tags:
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
 
   TapStackSNSSubscription:
     Type: 'AWS::SNS::Subscription'
@@ -941,14 +787,10 @@ Resources:
       Threshold: 80
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
-        - Name: InstanceId
-          Value: !Ref TapStackAppInstance
-      AlarmActions:
-        - !Ref TapStackSNSTopic
-      InsufficientDataActions:
-        - !Ref TapStackSNSTopic
-      OKActions:
-        - !Ref TapStackSNSTopic
+        - { Name: InstanceId, Value: !Ref TapStackAppInstance }
+      AlarmActions: [ !Ref TapStackSNSTopic ]
+      InsufficientDataActions: [ !Ref TapStackSNSTopic ]
+      OKActions: [ !Ref TapStackSNSTopic ]
       TreatMissingData: breaching
 
   TapStackAppStatusCheckAlarm:
@@ -963,14 +805,10 @@ Resources:
       Threshold: 0
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
-        - Name: InstanceId
-          Value: !Ref TapStackAppInstance
-      AlarmActions:
-        - !Ref TapStackSNSTopic
-      InsufficientDataActions:
-        - !Ref TapStackSNSTopic
-      OKActions:
-        - !Ref TapStackSNSTopic
+        - { Name: InstanceId, Value: !Ref TapStackAppInstance }
+      AlarmActions: [ !Ref TapStackSNSTopic ]
+      InsufficientDataActions: [ !Ref TapStackSNSTopic ]
+      OKActions: [ !Ref TapStackSNSTopic ]
       TreatMissingData: breaching
 
   TapStackRDSCPUAlarm:
@@ -985,14 +823,10 @@ Resources:
       Threshold: 80
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
-        - Name: DBInstanceIdentifier
-          Value: !Ref TapStackRDSInstance
-      AlarmActions:
-        - !Ref TapStackSNSTopic
-      InsufficientDataActions:
-        - !Ref TapStackSNSTopic
-      OKActions:
-        - !Ref TapStackSNSTopic
+        - { Name: DBInstanceIdentifier, Value: !Ref TapStackRDSInstance }
+      AlarmActions: [ !Ref TapStackSNSTopic ]
+      InsufficientDataActions: [ !Ref TapStackSNSTopic ]
+      OKActions: [ !Ref TapStackSNSTopic ]
       TreatMissingData: breaching
 
   # ---------------------------------------------
@@ -1004,30 +838,24 @@ Resources:
     Properties:
       Domain: vpc
       Tags:
-        - Key: 'Name'
-          Value: !Sub '${ProjectName}-eip-bastion'
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-eip-bastion' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
 
   TapStackBastionHost:
     Type: 'AWS::EC2::Instance'
     Properties:
       ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}'
       InstanceType: !Ref BastionInstanceType
-      KeyName: !Ref KeyName
-      SecurityGroupIds:
-        - !Ref TapStackBastionSecurityGroup
+      SecurityGroupIds: [ !Ref TapStackBastionSecurityGroup ]
       SubnetId: !Ref TapStackPublicSubnet1
       IamInstanceProfile: !Ref TapStackBastionInstanceProfile
       Tags:
-        - Key: 'Name'
-          Value: !Sub '${ProjectName}-bastion'
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-bastion' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
+      # Conditionally attach KeyName only if provided to avoid parameter requirement
+      KeyName: !If [ HasKeyPair, !Ref KeyName, !Ref "AWS::NoValue" ]
 
   TapStackBastionEIPAssociation:
     Type: 'AWS::EC2::EIPAssociation'
@@ -1040,9 +868,7 @@ Resources:
     Properties:
       ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}'
       InstanceType: !Ref AppInstanceType
-      KeyName: !Ref KeyName
-      SecurityGroupIds:
-        - !Ref TapStackAppSecurityGroup
+      SecurityGroupIds: [ !Ref TapStackAppSecurityGroup ]
       SubnetId: !Ref TapStackPrivateSubnet1
       IamInstanceProfile: !Ref TapStackAppInstanceProfile
       UserData:
@@ -1052,12 +878,10 @@ Resources:
           yum install -y amazon-cloudwatch-agent
           # Optional: fetch CloudWatch agent config from SSM if configured
       Tags:
-        - Key: 'Name'
-          Value: !Sub '${ProjectName}-app-ec2'
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-app-ec2' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
+      KeyName: !If [ HasKeyPair, !Ref KeyName, !Ref "AWS::NoValue" ]
 
   # ---------------------------------------------
   # RDS (Multi-AZ in private subnets, encrypted)
@@ -1071,10 +895,8 @@ Resources:
         - !Ref TapStackPrivateSubnet1
         - !Ref TapStackPrivateSubnet2
       Tags:
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
 
   TapStackRDSInstance:
     Type: 'AWS::RDS::DBInstance'
@@ -1090,19 +912,15 @@ Resources:
       MasterUsername: !Ref DbUsername
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${TapStackDBSecret}::password}}'
       DBSubnetGroupName: !Ref TapStackDBSubnetGroup
-      VPCSecurityGroups:
-        - !Ref TapStackRDSSecurityGroup
+      VPCSecurityGroups: [ !Ref TapStackRDSSecurityGroup ]
       MultiAZ: true
       PubliclyAccessible: false
       BackupRetentionPeriod: 7
       DeletionProtection: true
       Tags:
-        - Key: 'Name'
-          Value: !Sub '${ProjectName}-rds'
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'Project'
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-rds' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Project, Value: !Ref ProjectName }
 
 Outputs:
   # Networking
