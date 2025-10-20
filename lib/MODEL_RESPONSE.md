@@ -532,7 +532,7 @@ resource "aws_security_group" "db" {
 }
 ```
 
-## 6️⃣ Monitoring & Alerting
+## Monitoring & Alerting
 
 ```hcl
 # modules/monitoring/main.tf
@@ -613,7 +613,7 @@ resource "aws_cloudwatch_metric_alarm" "low_cpu" {
 }
 ```
 
-## 7️⃣ Main Configuration
+## Main Configuration
 
 ```hcl
 # main.tf
@@ -699,7 +699,7 @@ module "monitoring" {
 }
 ```
 
-## 8️⃣ Variables Configuration
+## Variables Configuration
 
 ```hcl
 # variables.tf
@@ -762,7 +762,7 @@ variable "common_tags" {
 }
 ```
 
-## 🚀 Deployment Steps
+## Deployment Steps
 
 ### 1. Initialize Terraform
 ```bash

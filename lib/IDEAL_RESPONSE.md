@@ -1141,9 +1141,9 @@ output "certificate_arn_used" {
 }
 ```
 
+```
 ## provider.tf
 
-```hcl
 terraform {
   required_version = ">= 1.4.0"
 
