@@ -69,12 +69,6 @@ variable "backup_retention_days" {
   default     = 7
 }
 
-variable "environment_suffix" {
-  description = "Environment suffix for deployment isolation (e.g., pr123, dev-branch)"
-  type        = string
-  default     = ""
-}
-
 # =============================================================================
 # Locals
 # =============================================================================
@@ -88,7 +82,7 @@ locals {
     CreatedAt   = timestamp()
   }
   
-  cluster_name = var.environment_suffix != "" ? "${var.project_name}-${var.environment}-redis-${var.environment_suffix}" : "${var.project_name}-${var.environment}-redis-${random_string.suffix.result}"
+  cluster_name = "${var.project_name}-${var.environment}-redis-${random_string.suffix.result}"
   
   # Maintenance window configuration
   maintenance_window = "sun:03:00-sun:04:00"  # Sunday 3:00-4:00 AM UTC
