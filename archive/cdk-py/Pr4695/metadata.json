@@ -1,0 +1,31 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "410129",
+  "team": "4",
+  "startedAt": "2025-10-17T07:07:15.387Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "AWS CDK",
+    "AWS Lambda",
+    "Amazon API Gateway",
+    "Amazon S3",
+    "Amazon DynamoDB",
+    "AWS IAM",
+    "AWS KMS",
+    "Amazon CloudWatch"
+  ],
+  "training_quality": 9,
+  "background": "This is a comprehensive AWS CDK implementation for a serverless file upload API that demonstrates best practices in cloud architecture. The solution includes a complete serverless stack with API Gateway, Lambda functions, S3 storage, DynamoDB for metadata, and proper security configurations using KMS encryption. The implementation follows AWS Well-Architected Framework principles with proper IAM roles, monitoring, logging, and error handling. It serves as an excellent example of Infrastructure as Code using CDK Python for building scalable, secure, and cost-effective serverless applications.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "santhosh-swe",
+  "dockerS3Location": ""
+}
