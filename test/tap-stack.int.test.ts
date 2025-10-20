@@ -171,7 +171,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
 
   describe('Patient Data Upload Workflow', () => {
     test('S3 Upload → KMS Encryption → CloudTrail Audit → SNS Notification workflow', async () => {
-      if (!outputs['nova-prod-patient-documents-bucket'] || !outputs['nova-prod-kms-key-id']) {
+      if (!outputs['PatientDocumentsBucketName'] || !outputs['KMSKeyId']) {
         console.warn('Required resources not available.');
         return;
       }
@@ -179,7 +179,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
       // Generate encryption key for patient data
       console.log('Generating encryption key for patient data...');
       const dataKeyResponse = await kmsClient.send(new GenerateDataKeyCommand({
-        KeyId: outputs['nova-prod-kms-key-id'],
+        KeyId: outputs['KMSKeyId'],
         KeySpec: 'AES_256',
         EncryptionContext: {
           'patient-id': testData.patientId,
@@ -193,7 +193,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
       // Upload encrypted patient document to S3
       console.log('Uploading encrypted patient document to S3...');
       const uploadResponse = await s3Client.send(new PutObjectCommand({
-        Bucket: outputs['nova-prod-patient-documents-bucket'],
+        Bucket: outputs['PatientDocumentsBucketName'],
         Key: `patients/${testData.patientId}/documents/${testData.documentId}.json`,
         Body: JSON.stringify({
           ...testData.metadata,
@@ -202,7 +202,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
           uploadTimestamp: new Date().toISOString()
         }),
         ServerSideEncryption: 'aws:kms',
-        SSEKMSKeyId: outputs['nova-prod-kms-key-id'],
+        SSEKMSKeyId: outputs['KMSKeyId'],
         Metadata: {
           'patient-id': testData.patientId,
           'document-type': 'medical-record',
@@ -215,14 +215,14 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
       // Verify document retrieval and decryption
       console.log('Verifying document retrieval and decryption...');
       const getResponse = await s3Client.send(new GetObjectCommand({
-        Bucket: outputs['nova-prod-patient-documents-bucket'],
+        Bucket: outputs['PatientDocumentsBucketName'],
         Key: `patients/${testData.patientId}/documents/${testData.documentId}.json`
       }));
       expect(getResponse.Body).toBeDefined();
 
       // Test S3 bucket accessibility with HTTP requests (if public access is configured)
       console.log('Testing S3 bucket accessibility...');
-      const bucketName = outputs['nova-prod-patient-documents-bucket'];
+      const bucketName = outputs['PatientDocumentsBucketName'];
       if (bucketName) {
         try {
           // Test S3 bucket endpoint accessibility
@@ -256,7 +256,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
       expect(trailEvents.Events).toBeDefined();
       const s3Event = trailEvents.Events?.find(event => 
         event.EventName === 'PutObject' && 
-        event.CloudTrailEvent?.includes(outputs['nova-prod-patient-documents-bucket'])
+        event.CloudTrailEvent?.includes(outputs['PatientDocumentsBucketName'])
       );
       expect(s3Event).toBeDefined();
       console.log('✓ CloudTrail captured S3 operations');
@@ -264,7 +264,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
       // Clean up test document
       console.log('Cleaning up test document...');
       await s3Client.send(new DeleteObjectCommand({
-        Bucket: outputs['nova-prod-patient-documents-bucket'],
+        Bucket: outputs['PatientDocumentsBucketName'],
         Key: `patients/${testData.patientId}/documents/${testData.documentId}.json`
       }));
       console.log('✓ Test document cleaned up');
@@ -275,7 +275,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
 
   describe('Database Connection and Data Workflow', () => {
     test('Secrets Manager → RDS Connection → Data Encryption → Audit Trail workflow', async () => {
-      if (!outputs['nova-prod-rds-endpoint']) {
+      if (!outputs['RDSEndpoint']) {
         console.warn('RDS endpoint not available.');
         return;
       }
@@ -314,8 +314,8 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
         MinCount: 1,
         MaxCount: 1,
         InstanceType: 't3.micro',
-        SecurityGroupIds: [outputs['nova-prod-app-sg-id']],
-        SubnetId: outputs['nova-prod-vpc-id'], // Using VPC ID as fallback - should be subnet ID
+        SecurityGroupIds: [outputs['ApplicationSecurityGroupId']],
+        SubnetId: outputs['VPCId'], // Using VPC ID as fallback - should be subnet ID
         UserData: Buffer.from(`
           #!/bin/bash
           yum update -y
@@ -353,7 +353,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
 
       // Test database connectivity via HTTP requests (if ALB is available)
       console.log('Testing database connectivity via HTTP requests...');
-      const albDnsName = outputs['nova-prod-alb-dns'];
+      const albDnsName = outputs['ALBDNSName'];
       if (albDnsName) {
         try {
           // Test database health endpoint through ALB
@@ -413,7 +413,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
 
   describe('Application Load Balancer Workflow', () => {
     test('EC2 Instance → Target Group → ALB → Health Check → Traffic Routing workflow', async () => {
-      if (!outputs['nova-prod-vpc-id'] || !outputs['nova-prod-app-sg-id']) {
+      if (!outputs['VPCId'] || !outputs['ApplicationSecurityGroupId']) {
         console.warn('ALB workflow failed.');
         return;
       }
@@ -425,8 +425,8 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
         MinCount: 1,
         MaxCount: 1,
         InstanceType: 't3.micro',
-        SecurityGroupIds: [outputs['nova-prod-app-sg-id']],
-        SubnetId: outputs['nova-prod-vpc-id'], 
+        SecurityGroupIds: [outputs['ApplicationSecurityGroupId']],
+        SubnetId: outputs['VPCId'], 
         UserData: Buffer.from(`
           #!/bin/bash
           yum update -y
@@ -467,7 +467,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
           echo ""
           
           # Test database connectivity
-          if mysql -h ${outputs['nova-prod-rds-endpoint']} -u ${credentials.username} -p${credentials.password} -e "SELECT 1;" 2>/dev/null; then
+          if mysql -h ${outputs['RDSEndpoint']} -u ${credentials.username} -p${credentials.password} -e "SELECT 1;" 2>/dev/null; then
             echo '{"status":"healthy","message":"Database connection successful"}'
           else
             echo '{"status":"unhealthy","message":"Database connection failed"}'
@@ -504,7 +504,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
         Name: 'nova-prod-test-tg',
         Protocol: 'HTTP',
         Port: 80,
-        VpcId: outputs['nova-prod-vpc-id'],
+        VpcId: outputs['VPCId'],
         HealthCheckPath: '/',
         HealthCheckProtocol: 'HTTP',
         HealthCheckIntervalSeconds: 30,
@@ -530,7 +530,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
       // Create ALB listener
       console.log('Creating ALB listener...');
       const listenerResponse = await elbClient.send(new CreateListenerCommand({
-        LoadBalancerArn: outputs['nova-prod-alb-dns'], 
+        LoadBalancerArn: outputs['ALBDNSName'], 
         Protocol: 'HTTP',
         Port: 80,
         DefaultActions: [{
@@ -548,7 +548,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
 
       // Make actual HTTP requests to test the ALB workflow
       console.log('Testing ALB with HTTP requests...');
-      const albDnsName = outputs['nova-prod-alb-dns'];
+      const albDnsName = outputs['ALBDNSName'];
       if (albDnsName) {
         try {
           // Test 1: Health check endpoint
@@ -603,7 +603,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
 
   describe('Security Monitoring Workflow', () => {
     test('Security Event → EventBridge → SNS → Email Alert → Response workflow', async () => {
-      if (!outputs['nova-prod-security-alert-topic']) {
+      if (!outputs['SecurityAlertTopicArn']) {
         console.warn('SNS topic not available.');
         return;
       }
@@ -660,7 +660,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
       // Send SNS notification
       console.log('Sending SNS notification...');
       const snsResponse = await snsClient.send(new PublishCommand({
-        TopicArn: outputs['nova-prod-security-alert-topic'],
+        TopicArn: outputs['SecurityAlertTopicArn'],
         Subject: 'SECURITY ALERT: Unauthorized Access Attempt',
         Message: JSON.stringify({
           alertType: 'security',
@@ -694,7 +694,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
 
   describe('Data Backup and Recovery Workflow', () => {
     test('S3 Data → Versioning → Lifecycle → Recovery → Validation workflow', async () => {
-      if (!outputs['nova-prod-app-data-bucket']) {
+      if (!outputs['AppDataBucket']) {
         console.warn('App data bucket not available.');
         return;
       }
@@ -708,7 +708,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
         version: 1
       };
       await s3Client.send(new PutObjectCommand({
-        Bucket: outputs['nova-prod-app-data-bucket'],
+        Bucket: outputs['AppDataBucket'],
         Key: 'backup-test/data.json',
         Body: JSON.stringify(initialData),
         Metadata: {
@@ -727,7 +727,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
         version: 2
       };
       await s3Client.send(new PutObjectCommand({
-        Bucket: outputs['nova-prod-app-data-bucket'],
+        Bucket: outputs['AppDataBucket'],
         Key: 'backup-test/data.json',
         Body: JSON.stringify(updatedData),
         Metadata: {
@@ -741,7 +741,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
       // Verify versioning is working
       console.log('Verifying versioning is working...');
       const listResponse = await s3Client.send(new ListObjectsV2Command({
-        Bucket: outputs['nova-prod-app-data-bucket'],
+        Bucket: outputs['AppDataBucket'],
         Prefix: 'backup-test/'
       }));
       expect(listResponse.Contents).toBeDefined();
@@ -752,14 +752,14 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
       
       // Test version recovery by listing object versions
       const versionResponse = await s3Client.send(new ListObjectsV2Command({
-        Bucket: outputs['nova-prod-app-data-bucket'],
+        Bucket: outputs['AppDataBucket'],
         Prefix: 'backup-test/'
       }));
       expect(versionResponse.Contents).toBeDefined();
       
       // Test data recovery
       const recoveryResponse = await s3Client.send(new GetObjectCommand({
-        Bucket: outputs['nova-prod-app-data-bucket'],
+        Bucket: outputs['AppDataBucket'],
         Key: 'backup-test/data.json'
       }));
       expect(recoveryResponse.Body).toBeDefined();
@@ -769,7 +769,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
       
       // Test cross-region backup recovery capability
       const bucketLocation = await s3Client.send(new GetObjectCommand({
-        Bucket: outputs['nova-prod-app-data-bucket'],
+        Bucket: outputs['AppDataBucket'],
         Key: 'backup-test/data.json'
       }));
       expect(bucketLocation.Body).toBeDefined();
@@ -784,7 +784,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
       // Clean up test data
       console.log('Cleaning up test data...');
       await s3Client.send(new DeleteObjectCommand({
-        Bucket: outputs['nova-prod-app-data-bucket'],
+        Bucket: outputs['AppDataBucket'],
         Key: 'backup-test/data.json'
       }));
       console.log('✓ Test data cleaned up');
@@ -795,7 +795,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
 
   describe('Encryption Key Rotation Workflow', () => {
     test('KMS Key → Data Encryption → Key Rotation → Re-encryption → Validation workflow', async () => {
-      if (!outputs['nova-prod-kms-key-id']) {
+      if (!outputs['KMSKeyId']) {
         console.warn('KMS key not available.');
         return;
       }
@@ -804,7 +804,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
       console.log('Encrypting test data with current key...');
       const testData = 'Sensitive patient information for encryption test';
       const encryptResponse = await kmsClient.send(new EncryptCommand({
-        KeyId: outputs['nova-prod-kms-key-id'],
+        KeyId: outputs['KMSKeyId'],
         Plaintext: Buffer.from(testData),
         EncryptionContext: {
           'data-type': 'patient-info',
@@ -834,7 +834,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
       
       // Create a new KMS key for rotation testing
       const newKeyResponse = await kmsClient.send(new GenerateDataKeyCommand({
-        KeyId: outputs['nova-prod-kms-key-id'],
+        KeyId: outputs['KMSKeyId'],
         KeySpec: 'AES_256',
         EncryptionContext: {
           'rotation-test': 'true',
@@ -847,7 +847,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
       // Test key rotation by encrypting with new key
       const rotationTestData = 'Key rotation test data';
       const rotationEncryptResponse = await kmsClient.send(new EncryptCommand({
-        KeyId: outputs['nova-prod-kms-key-id'],
+        KeyId: outputs['KMSKeyId'],
         Plaintext: Buffer.from(rotationTestData),
         EncryptionContext: {
           'rotation-test': 'true',
@@ -907,7 +907,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
 
       // Send logs to CloudWatch
       console.log('Sending logs to CloudWatch...');
-      const logGroupName = (outputs && outputs['nova-prod-vpc-flow-logs-group']) ? String(outputs['nova-prod-vpc-flow-logs-group']) : `/aws/tapstack/e2e-${Date.now()}`;
+      const logGroupName = (outputs && outputs['VPCFlowLogsGroupName']) ? String(outputs['VPCFlowLogsGroupName']) : `/aws/tapstack/e2e-${Date.now()}`;
       const logStreamName = `test-stream-${Date.now()}`;
 
       // Ensure log group exists 
@@ -966,7 +966,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
       if (errorLogs.length > 0) {
         // Send SNS alert for critical errors
         await snsClient.send(new PublishCommand({
-          TopicArn: outputs['nova-prod-security-alert-topic'],
+          TopicArn: outputs['SecurityAlertTopicArn'],
           Subject: 'CRITICAL: Application Errors Detected',
           Message: JSON.stringify({
             alertType: 'application-error',
@@ -988,7 +988,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
 
   describe('Network Security Workflow', () => {
     test('Security Group Change → EventBridge → SNS → Response → Audit workflow', async () => {
-      if (!outputs['nova-prod-app-sg-id'] || !outputs['nova-prod-security-alert-topic']) {
+      if (!outputs['ApplicationSecurityGroupId'] || !outputs['SecurityAlertTopicArn']) {
         console.warn('Network security workflow failed.');
         return;
       }
@@ -996,7 +996,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
       // Implement security group change
       console.log('Implementing security group change...');
       const originalRules = await ec2Client.send(new AuthorizeSecurityGroupIngressCommand({
-        GroupId: outputs['nova-prod-app-sg-id'],
+        GroupId: outputs['ApplicationSecurityGroupId'],
         IpPermissions: [{
           IpProtocol: 'tcp',
           FromPort: 8080,
@@ -1030,13 +1030,13 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
       // Send security alert
       console.log('Sending security alert...');
       const alertResponse = await snsClient.send(new PublishCommand({
-        TopicArn: outputs['nova-prod-security-alert-topic'],
+        TopicArn: outputs['SecurityAlertTopicArn'],
         Subject: 'SECURITY ALERT: Security Group Modified',
         Message: JSON.stringify({
           alertType: 'security-group-change',
           severity: 'medium',
           timestamp: new Date().toISOString(),
-          securityGroupId: outputs['nova-prod-app-sg-id'],
+          securityGroupId: outputs['ApplicationSecurityGroupId'],
           action: 'AuthorizeSecurityGroupIngress',
           recommendedAction: 'Review security group rules for compliance'
         })
@@ -1047,7 +1047,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
       // Clean up test rule
       console.log('Cleaning up test rule...');
       await ec2Client.send(new RevokeSecurityGroupIngressCommand({
-        GroupId: outputs['nova-prod-app-sg-id'],
+        GroupId: outputs['ApplicationSecurityGroupId'],
         IpPermissions: [{
           IpProtocol: 'tcp',
           FromPort: 8080,
@@ -1063,7 +1063,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
 
   describe('Disaster Recovery Workflow', () => {
     test('Data Backup → Multi-AZ Failover → Recovery → Validation → Monitoring workflow', async () => {
-      if (!outputs['nova-prod-rds-endpoint']) {
+      if (!outputs['RDSEndpoint']) {
         console.warn('RDS endpoint not available.');
         return;
       }
@@ -1180,7 +1180,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
       
       // Check data encryption compliance
       // Ensure KMS key present (discover if missing)
-      let kmsKeyId = outputs['nova-prod-kms-key-id'];
+      let kmsKeyId = outputs['KMSKeyId'];
       if (!kmsKeyId) {
         const aliases = await kmsClient.send(new ListAliasesCommand({}));
         kmsKeyId = aliases.Aliases?.find(a => a.TargetKeyId)?.TargetKeyId || '';
@@ -1210,7 +1210,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
       
       // Check data retention compliance 
       let s3Buckets: any = { Contents: undefined };
-      const patientDocsBucket = outputs['nova-prod-patient-documents-bucket'];
+      const patientDocsBucket = outputs['PatientDocumentsBucketName'];
       if (patientDocsBucket && typeof patientDocsBucket === 'string' && patientDocsBucket.length > 0) {
         s3Buckets = await s3Client.send(new ListObjectsV2Command({
           Bucket: patientDocsBucket
