@@ -674,6 +674,9 @@ Resources:
 
   RDSInstance:
     Type: AWS::RDS::DBInstance
+    # Allow removal on demand - no snapshots created on deletion
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       DBInstanceIdentifier: !Sub '${AWS::StackName}-db-instance'
       DBInstanceClass: !FindInMap [RDSConfig, !Ref Environment, InstanceClass]
@@ -708,8 +711,10 @@ Resources:
         - error
         - general
         - slowquery
-      # Deletion protection for production
-      DeletionProtection: !If [IsProduction, true, false]
+      # No deletion protection - allow removal on demand
+      DeletionProtection: false
+      # Skip final snapshot for easier removal
+      SkipFinalSnapshot: true
       Tags:
         - Key: Owner
           Value: !Ref Owner
