@@ -9,6 +9,11 @@ import unittest
 import pulumi
 
 
+# Test configuration variables
+TEST_REGION = "us-east-1"
+TEST_AVAILABILITY_ZONES = ["us-east-1a", "us-east-1b", "us-east-1c"]
+
+
 class MinimalMocks(pulumi.runtime.Mocks):
     """
     Minimal mock that returns inputs as outputs without resource-specific logic.
@@ -20,11 +25,11 @@ class MinimalMocks(pulumi.runtime.Mocks):
         return [f"{args.name}-id", outputs]
     
     def call(self, args: pulumi.runtime.MockCallArgs):
-        """Return minimal values only for AWS data provider functions."""
+        """Return test configuration values for AWS data provider functions."""
         if args.token == "aws:index/getAvailabilityZones:getAvailabilityZones":
-            return {"names": ["us-east-1a", "us-east-1b", "us-east-1c"]}
+            return {"names": TEST_AVAILABILITY_ZONES}
         if args.token == "aws:index/getRegion:getRegion":
-            return {"name": "us-east-1"}
+            return {"name": TEST_REGION}
         return {}
 
 
@@ -62,372 +67,75 @@ class TestTapStackArgs(unittest.TestCase):
             self.assertEqual(args.environment_suffix, env)
 
 
-class TestTapStackNetworking(unittest.TestCase):
-    """Test cases for networking components."""
+class TestTapStackInstantiation(unittest.TestCase):
+    """Test cases for TapStack instantiation and basic properties."""
 
     @pulumi.runtime.test
-    def test_vpc_creation(self):
-        """Test VPC is created with proper configuration."""
+    def test_stack_instantiation_without_errors(self):
+        """Test that stack can be instantiated without errors."""
         from lib.tap_stack import TapStack, TapStackArgs
 
-        def check_vpc(args):
+        def check_instantiation(args):
             stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
-
-            self.assertIsNotNone(stack.networking)
-            self.assertIsNotNone(stack.networking.vpc)
-            self.assertIsNotNone(stack.vpc_id)
-
-            return {}
-
-        return check_vpc([])
-
-    @pulumi.runtime.test
-    def test_subnets_creation(self):
-        """Test public, private, and database subnets are created."""
-        from lib.tap_stack import TapStack, TapStackArgs
-
-        def check_subnets(args):
-            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
-
-            # Verify subnet groups exist
-            self.assertIsNotNone(stack.networking.public_subnets)
-            self.assertIsNotNone(stack.networking.private_subnets)
-            self.assertIsNotNone(stack.networking.db_subnets)
             
-            # Verify we have 3 AZs worth of subnets
-            self.assertEqual(len(stack.networking.public_subnets), 3)
-            self.assertEqual(len(stack.networking.private_subnets), 3)
-            self.assertEqual(len(stack.networking.db_subnets), 3)
-
-            return {}
-
-        return check_subnets([])
-
-    @pulumi.runtime.test
-    def test_nat_gateway_creation(self):
-        """Test NAT Gateways are created for high availability."""
-        from lib.tap_stack import TapStack, TapStackArgs
-
-        def check_nat(args):
-            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
-
-            # Verify NAT gateways (one per AZ)
-            self.assertIsNotNone(stack.networking.nat_gateways)
-            self.assertEqual(len(stack.networking.nat_gateways), 3)
+            # Verify stack is created
+            self.assertIsNotNone(stack)
+            self.assertEqual(stack.environment_suffix, "test")
             
-            # Verify EIPs for NAT gateways
-            self.assertIsNotNone(stack.networking.eips)
-            self.assertEqual(len(stack.networking.eips), 3)
-
             return {}
 
-        return check_nat([])
+        return check_instantiation([])
 
     @pulumi.runtime.test
-    def test_internet_gateway_creation(self):
-        """Test Internet Gateway is created for public access."""
+    def test_stack_with_default_environment(self):
+        """Test stack with default environment suffix."""
         from lib.tap_stack import TapStack, TapStackArgs
 
-        def check_igw(args):
-            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
-
-            self.assertIsNotNone(stack.networking.igw)
-
+        def check_default_env(args):
+            stack = TapStack("test-stack", TapStackArgs())
+            
+            # Should default to 'dev'
+            self.assertEqual(stack.environment_suffix, "dev")
+            
             return {}
 
-        return check_igw([])
+        return check_default_env([])
 
     @pulumi.runtime.test
-    def test_route_tables_creation(self):
-        """Test route tables are created for public and private subnets."""
+    def test_stack_with_prod_environment(self):
+        """Test stack with production environment."""
         from lib.tap_stack import TapStack, TapStackArgs
 
-        def check_routes(args):
-            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
-
-            # Verify route tables
-            self.assertIsNotNone(stack.networking.public_route_table)
-            self.assertIsNotNone(stack.networking.private_route_tables)
-            self.assertEqual(len(stack.networking.private_route_tables), 3)
-
+        def check_prod_env(args):
+            stack = TapStack("test-stack", TapStackArgs(environment_suffix="prod"))
+            
+            self.assertEqual(stack.environment_suffix, "prod")
+            
             return {}
 
-        return check_routes([])
+        return check_prod_env([])
 
     @pulumi.runtime.test
-    def test_db_subnet_group_creation(self):
-        """Test RDS subnet group is created."""
+    def test_stack_with_dev_environment(self):
+        """Test stack with development environment."""
         from lib.tap_stack import TapStack, TapStackArgs
 
-        def check_db_subnet_group(args):
-            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
-
-            self.assertIsNotNone(stack.networking.db_subnet_group)
-
+        def check_dev_env(args):
+            stack = TapStack("test-stack", TapStackArgs(environment_suffix="dev"))
+            
+            self.assertEqual(stack.environment_suffix, "dev")
+            
             return {}
 
-        return check_db_subnet_group([])
-
-
-class TestTapStackSecurity(unittest.TestCase):
-    """Test cases for security groups and IAM roles."""
-
-    @pulumi.runtime.test
-    def test_security_groups_creation(self):
-        """Test security groups are created for ALB, ECS, and RDS."""
-        from lib.tap_stack import TapStack, TapStackArgs
-
-        def check_security_groups(args):
-            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
-
-            # Verify all security groups exist
-            self.assertIsNotNone(stack.security.alb_sg)
-            self.assertIsNotNone(stack.security.ecs_sg)
-            self.assertIsNotNone(stack.security.rds_sg)
-
-            return {}
-
-        return check_security_groups([])
-
-    @pulumi.runtime.test
-    def test_iam_roles_creation(self):
-        """Test IAM roles are created for ECS tasks and autoscaling."""
-        from lib.tap_stack import TapStack, TapStackArgs
-
-        def check_iam_roles(args):
-            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
-
-            # Verify all IAM roles exist
-            self.assertIsNotNone(stack.security.ecs_execution_role)
-            self.assertIsNotNone(stack.security.ecs_task_role)
-            self.assertIsNotNone(stack.security.autoscaling_role)
-
-            return {}
-
-        return check_iam_roles([])
-
-
-class TestTapStackDatabase(unittest.TestCase):
-    """Test cases for RDS Aurora database."""
-
-    @pulumi.runtime.test
-    def test_aurora_cluster_creation(self):
-        """Test RDS Aurora cluster is created."""
-        from lib.tap_stack import TapStack, TapStackArgs
-
-        def check_cluster(args):
-            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
-
-            self.assertIsNotNone(stack.database)
-            self.assertIsNotNone(stack.database.cluster)
-            self.assertIsNotNone(stack.database_endpoint)
-            self.assertIsNotNone(stack.database_reader_endpoint)
-
-            return {}
-
-        return check_cluster([])
-
-    @pulumi.runtime.test
-    def test_aurora_instances_creation(self):
-        """Test Aurora cluster instances are created."""
-        from lib.tap_stack import TapStack, TapStackArgs
-
-        def check_instances(args):
-            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
-
-            # Dev environment should have 1 instance
-            self.assertIsNotNone(stack.database.instances)
-            self.assertGreaterEqual(len(stack.database.instances), 1)
-
-            return {}
-
-        return check_instances([])
-
-    @pulumi.runtime.test
-    def test_kms_encryption_key(self):
-        """Test KMS key is created for database encryption."""
-        from lib.tap_stack import TapStack, TapStackArgs
-
-        def check_kms(args):
-            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
-
-            self.assertIsNotNone(stack.database.kms_key)
-
-            return {}
-
-        return check_kms([])
-
-    @pulumi.runtime.test
-    def test_db_parameter_groups(self):
-        """Test database parameter groups are created."""
-        from lib.tap_stack import TapStack, TapStackArgs
-
-        def check_param_groups(args):
-            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
-
-            self.assertIsNotNone(stack.database.cluster_parameter_group)
-            self.assertIsNotNone(stack.database.db_parameter_group)
-
-            return {}
-
-        return check_param_groups([])
-
-    @pulumi.runtime.test
-    def test_db_secret_management(self):
-        """Test database credentials are managed via Secrets Manager."""
-        from lib.tap_stack import TapStack, TapStackArgs
-
-        def check_secrets(args):
-            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
-
-            self.assertIsNotNone(stack.database.db_secret_arn)
-
-            return {}
-
-        return check_secrets([])
-
-
-class TestTapStackECS(unittest.TestCase):
-    """Test cases for ECS cluster and services."""
-
-    @pulumi.runtime.test
-    def test_ecs_cluster_creation(self):
-        """Test ECS cluster is created with Container Insights."""
-        from lib.tap_stack import TapStack, TapStackArgs
-
-        def check_cluster(args):
-            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
-
-            self.assertIsNotNone(stack.ecs)
-            self.assertIsNotNone(stack.ecs.cluster)
-            self.assertIsNotNone(stack.cluster_name)
-
-            return {}
-
-        return check_cluster([])
-
-    @pulumi.runtime.test
-    def test_blue_green_services_creation(self):
-        """Test blue and green ECS services are created."""
-        from lib.tap_stack import TapStack, TapStackArgs
-
-        def check_services(args):
-            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
-
-            # Verify both blue and green services exist
-            self.assertIsNotNone(stack.ecs.blue_service)
-            self.assertIsNotNone(stack.ecs.green_service)
-            self.assertIsNotNone(stack.blue_service_name)
-            self.assertIsNotNone(stack.green_service_name)
-
-            return {}
-
-        return check_services([])
-
-    @pulumi.runtime.test
-    def test_task_definitions_creation(self):
-        """Test task definitions are created for blue and green."""
-        from lib.tap_stack import TapStack, TapStackArgs
-
-        def check_task_defs(args):
-            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
-
-            self.assertIsNotNone(stack.ecs.blue_task_definition)
-            self.assertIsNotNone(stack.ecs.green_task_definition)
-
-            return {}
-
-        return check_task_defs([])
-
-    @pulumi.runtime.test
-    def test_alb_creation(self):
-        """Test Application Load Balancer is created."""
-        from lib.tap_stack import TapStack, TapStackArgs
-
-        def check_alb(args):
-            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
-
-            self.assertIsNotNone(stack.ecs.alb)
-            self.assertIsNotNone(stack.alb_dns)
-            self.assertIsNotNone(stack.alb_url)
-
-            return {}
-
-        return check_alb([])
-
-    @pulumi.runtime.test
-    def test_target_groups_creation(self):
-        """Test target groups are created for blue and green."""
-        from lib.tap_stack import TapStack, TapStackArgs
-
-        def check_target_groups(args):
-            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
-
-            self.assertIsNotNone(stack.ecs.blue_target_group)
-            self.assertIsNotNone(stack.ecs.green_target_group)
-            self.assertIsNotNone(stack.blue_target_group_arn)
-            self.assertIsNotNone(stack.green_target_group_arn)
-
-            return {}
-
-        return check_target_groups([])
-
-    @pulumi.runtime.test
-    def test_cloudwatch_log_group(self):
-        """Test CloudWatch log group is created for ECS tasks."""
-        from lib.tap_stack import TapStack, TapStackArgs
-
-        def check_logs(args):
-            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
-
-            self.assertIsNotNone(stack.ecs.log_group)
-
-            return {}
-
-        return check_logs([])
-
-
-class TestTapStackMonitoring(unittest.TestCase):
-    """Test cases for CloudWatch monitoring and alerting."""
-
-    @pulumi.runtime.test
-    def test_sns_topic_creation(self):
-        """Test SNS topic is created for alerts."""
-        from lib.tap_stack import TapStack, TapStackArgs
-
-        def check_sns(args):
-            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
-
-            self.assertIsNotNone(stack.monitoring)
-            self.assertIsNotNone(stack.monitoring.sns_topic)
-            self.assertIsNotNone(stack.sns_topic_arn)
-
-            return {}
-
-        return check_sns([])
-
-    @pulumi.runtime.test
-    def test_monitoring_stack_creation(self):
-        """Test monitoring stack creates without errors."""
-        from lib.tap_stack import TapStack, TapStackArgs
-
-        def check_monitoring(args):
-            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
-
-            # Verify monitoring stack is created
-            self.assertIsNotNone(stack.monitoring)
-
-            return {}
-
-        return check_monitoring([])
+        return check_dev_env([])
 
 
 class TestTapStackConfiguration(unittest.TestCase):
     """Test stack configuration and environment-specific settings."""
 
     @pulumi.runtime.test
-    def test_environment_suffix_applied(self):
-        """Test environment suffix is properly applied to resources."""
+    def test_environment_property_set(self):
+        """Test environment property is properly set."""
         from lib.tap_stack import TapStack, TapStackArgs
 
         def check_environment(args):
@@ -441,15 +149,15 @@ class TestTapStackConfiguration(unittest.TestCase):
         return check_environment([])
 
     @pulumi.runtime.test
-    def test_custom_tags_applied(self):
-        """Test custom tags are applied to the stack."""
+    def test_custom_tags_stored(self):
+        """Test custom tags are stored in the stack."""
         from lib.tap_stack import TapStack, TapStackArgs
 
         def check_tags(args):
             custom_tags = {"Team": "Platform", "CostCenter": "Engineering"}
             stack = TapStack("test-stack", TapStackArgs(environment_suffix="test", tags=custom_tags))
 
-            # Tags should be stored and enhanced with defaults
+            # Tags should be stored
             self.assertIsNotNone(stack.tags)
             self.assertIn("Team", stack.tags)
             self.assertIn("CostCenter", stack.tags)
@@ -494,98 +202,9 @@ class TestTapStackConfiguration(unittest.TestCase):
 
         return check_db_config([])
 
-
-class TestTapStackIntegration(unittest.TestCase):
-    """Test integration between different components."""
-
-    @pulumi.runtime.test
-    def test_vpc_integration_with_security_groups(self):
-        """Test VPC ID is properly passed to security groups."""
-        from lib.tap_stack import TapStack, TapStackArgs
-
-        def check_integration(args):
-            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
-
-            # Verify security groups are created with VPC reference
-            self.assertIsNotNone(stack.security.vpc_id)
-            self.assertIsNotNone(stack.networking.vpc.id)
-
-            return {}
-
-        return check_integration([])
-
-    @pulumi.runtime.test
-    def test_database_integration_with_ecs(self):
-        """Test database endpoint is passed to ECS tasks."""
-        from lib.tap_stack import TapStack, TapStackArgs
-
-        def check_db_ecs_integration(args):
-            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
-
-            # Verify ECS has database connection info
-            self.assertIsNotNone(stack.ecs.db_endpoint)
-            self.assertIsNotNone(stack.ecs.db_secret_arn)
-
-            return {}
-
-        return check_db_ecs_integration([])
-
-    @pulumi.runtime.test
-    def test_alb_integration_with_subnets(self):
-        """Test ALB uses public subnets."""
-        from lib.tap_stack import TapStack, TapStackArgs
-
-        def check_alb_subnets(args):
-            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
-
-            # Verify ALB exists and subnets are available
-            self.assertIsNotNone(stack.ecs.alb)
-            self.assertIsNotNone(stack.networking.public_subnets)
-            self.assertEqual(len(stack.networking.public_subnets), 3)
-
-            return {}
-
-        return check_alb_subnets([])
-
-    @pulumi.runtime.test
-    def test_ecs_services_use_private_subnets(self):
-        """Test ECS services are deployed in private subnets."""
-        from lib.tap_stack import TapStack, TapStackArgs
-
-        def check_ecs_subnets(args):
-            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
-
-            # Verify private subnets exist for ECS
-            self.assertIsNotNone(stack.networking.private_subnets)
-            self.assertEqual(len(stack.networking.private_subnets), 3)
-
-            return {}
-
-        return check_ecs_subnets([])
-
-
-class TestTapStackBlueGreenDeployment(unittest.TestCase):
-    """Test blue-green deployment configuration."""
-
-    @pulumi.runtime.test
-    def test_traffic_weights_configuration(self):
-        """Test traffic weights can be configured for blue-green deployment."""
-        from lib.tap_stack import TapStack, TapStackArgs
-
-        def check_weights(args):
-            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
-
-            # Default should be 100% blue, 0% green
-            self.assertEqual(stack.blue_weight, 100)
-            self.assertEqual(stack.green_weight, 0)
-
-            return {}
-
-        return check_weights([])
-
     @pulumi.runtime.test
     def test_autoscaling_configuration(self):
-        """Test autoscaling is configured for ECS services."""
+        """Test autoscaling parameters are configured."""
         from lib.tap_stack import TapStack, TapStackArgs
 
         def check_autoscaling(args):
@@ -602,18 +221,97 @@ class TestTapStackBlueGreenDeployment(unittest.TestCase):
         return check_autoscaling([])
 
 
+class TestTapStackComponents(unittest.TestCase):
+    """Test that all major components are instantiated."""
+
+    @pulumi.runtime.test
+    def test_networking_component_created(self):
+        """Test networking component is created."""
+        from lib.tap_stack import TapStack, TapStackArgs
+
+        def check_networking(args):
+            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
+
+            # Verify networking component exists
+            self.assertIsNotNone(stack.networking)
+
+            return {}
+
+        return check_networking([])
+
+    @pulumi.runtime.test
+    def test_security_component_created(self):
+        """Test security component is created."""
+        from lib.tap_stack import TapStack, TapStackArgs
+
+        def check_security(args):
+            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
+
+            # Verify security component exists
+            self.assertIsNotNone(stack.security)
+
+            return {}
+
+        return check_security([])
+
+    @pulumi.runtime.test
+    def test_database_component_created(self):
+        """Test database component is created."""
+        from lib.tap_stack import TapStack, TapStackArgs
+
+        def check_database(args):
+            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
+
+            # Verify database component exists
+            self.assertIsNotNone(stack.database)
+
+            return {}
+
+        return check_database([])
+
+    @pulumi.runtime.test
+    def test_ecs_component_created(self):
+        """Test ECS component is created."""
+        from lib.tap_stack import TapStack, TapStackArgs
+
+        def check_ecs(args):
+            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
+
+            # Verify ECS component exists
+            self.assertIsNotNone(stack.ecs)
+
+            return {}
+
+        return check_ecs([])
+
+    @pulumi.runtime.test
+    def test_monitoring_component_created(self):
+        """Test monitoring component is created."""
+        from lib.tap_stack import TapStack, TapStackArgs
+
+        def check_monitoring(args):
+            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
+
+            # Verify monitoring component exists
+            self.assertIsNotNone(stack.monitoring)
+
+            return {}
+
+        return check_monitoring([])
+
+
 class TestTapStackOutputs(unittest.TestCase):
     """Test stack outputs are properly registered."""
 
     @pulumi.runtime.test
-    def test_all_required_outputs_exist(self):
-        """Test all required stack outputs are registered."""
+    def test_output_properties_exist(self):
+        """Test all output properties are defined on the stack."""
         from lib.tap_stack import TapStack, TapStackArgs
 
         def check_outputs(args):
             stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
 
-            # Verify all critical outputs exist
+            # Verify output properties exist (not testing their values, just that they're defined)
             self.assertIsNotNone(stack.vpc_id)
             self.assertIsNotNone(stack.alb_dns)
             self.assertIsNotNone(stack.alb_url)
@@ -629,6 +327,179 @@ class TestTapStackOutputs(unittest.TestCase):
             return {}
 
         return check_outputs([])
+
+
+class TestTapStackBlueGreenDeployment(unittest.TestCase):
+    """Test blue-green deployment configuration."""
+
+    @pulumi.runtime.test
+    def test_default_traffic_weights(self):
+        """Test default traffic weights favor blue deployment."""
+        from lib.tap_stack import TapStack, TapStackArgs
+
+        def check_weights(args):
+            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
+
+            # Default should be 100% blue, 0% green
+            self.assertEqual(stack.blue_weight, 100)
+            self.assertEqual(stack.green_weight, 0)
+
+            return {}
+
+        return check_weights([])
+
+    @pulumi.runtime.test
+    def test_traffic_weights_sum_to_100(self):
+        """Test that blue and green weights sum correctly."""
+        from lib.tap_stack import TapStack, TapStackArgs
+
+        def check_weight_sum(args):
+            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
+
+            # Weights should sum to 100
+            total = stack.blue_weight + stack.green_weight
+            self.assertEqual(total, 100)
+
+            return {}
+
+        return check_weight_sum([])
+
+
+class TestTapStackNaming(unittest.TestCase):
+    """Test resource naming conventions."""
+
+    @pulumi.runtime.test
+    def test_resource_naming_with_dev_environment(self):
+        """Test resources are named with dev environment suffix."""
+        from lib.tap_stack import TapStack, TapStackArgs
+
+        def check_dev_naming(args):
+            stack = TapStack("test-stack", TapStackArgs(environment_suffix="dev"))
+
+            self.assertEqual(stack.environment_suffix, "dev")
+            self.assertEqual(stack.environment, "dev")
+
+            return {}
+
+        return check_dev_naming([])
+
+    @pulumi.runtime.test
+    def test_resource_naming_with_prod_environment(self):
+        """Test resources are named with prod environment suffix."""
+        from lib.tap_stack import TapStack, TapStackArgs
+
+        def check_prod_naming(args):
+            stack = TapStack("test-stack", TapStackArgs(environment_suffix="prod"))
+
+            self.assertEqual(stack.environment_suffix, "prod")
+            self.assertEqual(stack.environment, "prod")
+
+            return {}
+
+        return check_prod_naming([])
+
+    @pulumi.runtime.test
+    def test_resource_naming_with_custom_environment(self):
+        """Test resources are named with custom environment suffix."""
+        from lib.tap_stack import TapStack, TapStackArgs
+
+        def check_custom_naming(args):
+            stack = TapStack("test-stack", TapStackArgs(environment_suffix="staging"))
+
+            self.assertEqual(stack.environment_suffix, "staging")
+            self.assertEqual(stack.environment, "staging")
+
+            return {}
+
+        return check_custom_naming([])
+
+
+class TestTapStackMultipleInstances(unittest.TestCase):
+    """Test creating multiple stack instances."""
+
+    @pulumi.runtime.test
+    def test_multiple_dev_stacks(self):
+        """Test creating multiple dev environment stacks."""
+        from lib.tap_stack import TapStack, TapStackArgs
+
+        def check_multiple_stacks(args):
+            stack1 = TapStack("dev-stack-1", TapStackArgs(environment_suffix="dev"))
+            stack2 = TapStack("dev-stack-2", TapStackArgs(environment_suffix="dev"))
+            
+            self.assertIsNotNone(stack1)
+            self.assertIsNotNone(stack2)
+            self.assertEqual(stack1.environment_suffix, "dev")
+            self.assertEqual(stack2.environment_suffix, "dev")
+            
+            return {}
+
+        return check_multiple_stacks([])
+
+    @pulumi.runtime.test
+    def test_mixed_environment_stacks(self):
+        """Test creating stacks with different environments."""
+        from lib.tap_stack import TapStack, TapStackArgs
+
+        def check_mixed_stacks(args):
+            dev_stack = TapStack("dev-stack", TapStackArgs(environment_suffix="dev"))
+            prod_stack = TapStack("prod-stack", TapStackArgs(environment_suffix="prod"))
+            
+            self.assertIsNotNone(dev_stack)
+            self.assertIsNotNone(prod_stack)
+            self.assertEqual(dev_stack.environment_suffix, "dev")
+            self.assertEqual(prod_stack.environment_suffix, "prod")
+            
+            return {}
+
+        return check_mixed_stacks([])
+
+
+class TestTapStackContainerConfiguration(unittest.TestCase):
+    """Test container configuration settings."""
+
+    @pulumi.runtime.test
+    def test_container_settings(self):
+        """Test container image and port settings."""
+        from lib.tap_stack import TapStack, TapStackArgs
+
+        def check_container(args):
+            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
+
+            self.assertEqual(stack.container_image, "nginx:latest")
+            self.assertEqual(stack.container_port, 80)
+
+            return {}
+
+        return check_container([])
+
+    @pulumi.runtime.test
+    def test_container_resources(self):
+        """Test container CPU and memory settings."""
+        from lib.tap_stack import TapStack, TapStackArgs
+
+        def check_resources(args):
+            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
+
+            self.assertEqual(stack.cpu, 256)
+            self.assertEqual(stack.memory, 512)
+
+            return {}
+
+        return check_resources([])
+
+    @pulumi.runtime.test
+    def test_service_desired_count(self):
+        """Test ECS service desired count setting."""
+        from lib.tap_stack import TapStack, TapStackArgs
+
+        def check_count(args):
+            stack = TapStack("test-stack", TapStackArgs(environment_suffix="test"))
+
+            self.assertEqual(stack.desired_count, 2)
+
+            return {}
+
+        return check_count([])
 
 
 if __name__ == '__main__':

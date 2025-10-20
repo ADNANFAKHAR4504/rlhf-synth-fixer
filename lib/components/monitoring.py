@@ -230,4 +230,3 @@ class MonitoringStack:
             alarm_actions=[self.sns_topic.arn],
             treat_missing_data="notBreaching"
         )
-
