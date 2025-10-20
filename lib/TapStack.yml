@@ -118,8 +118,6 @@ Resources:
 
   KMSKeyAlias:
     Type: AWS::KMS::Alias
-    DependsOn:
-      - KMSKey
     Properties:
       AliasName: !Sub 'alias/${AWS::StackName}-production-key'
       TargetKeyId: !Ref KMSKey
@@ -433,8 +431,6 @@ Resources:
   # ====================
   DBPasswordSecret:
     Type: AWS::SecretsManager::Secret
-    DependsOn:
-      - KMSKey
     Properties:
       Description: RDS Master Password
       GenerateSecretString:
@@ -493,8 +489,6 @@ Resources:
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
-    DependsOn:
-      - EC2Role
     Properties:
       Roles:
         - !Ref EC2Role
@@ -549,8 +543,6 @@ Resources:
   # ====================
   S3Bucket:
     Type: AWS::S3::Bucket
-    DependsOn:
-      - KMSKey
     Properties:
       BucketName: !Sub 'production-static-assets-${AWS::AccountId}-${AWS::Region}'
       VersioningConfiguration:
@@ -573,8 +565,6 @@ Resources:
 
   S3BucketPolicy:
     Type: AWS::S3::BucketPolicy
-    DependsOn:
-      - S3Bucket
     Properties:
       Bucket: !Ref S3Bucket
       PolicyDocument:
@@ -638,9 +628,6 @@ Resources:
   # ====================
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
-    DependsOn:
-      - EC2InstanceProfile
-      - EC2SecurityGroup
     Properties:
       LaunchTemplateName: !Sub '${AWS::StackName}-ProductionLT'
       LaunchTemplateData:
@@ -675,11 +662,6 @@ Resources:
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
-    DependsOn:
-      - LaunchTemplate
-      - ALBTargetGroup
-      - PrivateSubnet1
-      - PrivateSubnet2
     Properties:
       AutoScalingGroupName: !Sub '${AWS::StackName}-ProductionASG'
       LaunchTemplate:
@@ -719,10 +701,6 @@ Resources:
 
   RDSDatabase:
     Type: AWS::RDS::DBInstance
-    DependsOn:
-      - DBSubnetGroup
-      - RDSSecurityGroup
-      - DBPasswordSecret
     Properties:
       DBInstanceIdentifier: !Sub '${AWS::StackName}-production-database'
       DBName: !Ref DBName
@@ -750,8 +728,6 @@ Resources:
 
   RDSReadReplica:
     Type: AWS::RDS::DBInstance
-    DependsOn:
-      - RDSDatabase
     Properties:
       DBInstanceIdentifier: !Sub '${AWS::StackName}-production-database-read-replica'
       SourceDBInstanceIdentifier: !Ref RDSDatabase
@@ -794,11 +770,6 @@ Resources:
   # ====================
   LambdaFunction:
     Type: AWS::Lambda::Function
-    DependsOn:
-      - LambdaExecutionRole
-      - LambdaSecurityGroup
-      - PrivateSubnet1
-      - PrivateSubnet2
     Properties:
       FunctionName: !Sub '${AWS::StackName}-ProductionScheduledTask'
       Runtime: python3.9
@@ -857,9 +828,6 @@ Resources:
 
   LambdaInvokePermission:
     Type: AWS::Lambda::Permission
-    DependsOn:
-      - LambdaFunction
-      - LambdaScheduleRule
     Properties:
       FunctionName: !Ref LambdaFunction
       Action: lambda:InvokeFunction
@@ -880,11 +848,6 @@ Resources:
 
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
-    DependsOn:
-      - S3Bucket
-      - ApplicationLoadBalancer
-      - OriginAccessControl
-      - S3BucketPolicy
     Properties:
       DistributionConfig:
         Enabled: true
@@ -1032,8 +995,6 @@ Resources:
 
   PrimaryRecord:
     Type: AWS::Route53::RecordSet
-    DependsOn: 
-      - CloudFrontDistribution
     Properties:
       HostedZoneId: !Ref HostedZone
       Name: !Ref DomainName
@@ -1063,8 +1024,6 @@ Resources:
   # ====================
   CloudTrailS3Bucket:
     Type: AWS::S3::Bucket
-    DependsOn:
-      - KMSKey
     Properties:
       BucketName: !Sub 'production-cloudtrail-logs-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
@@ -1107,9 +1066,6 @@ Resources:
 
   CloudTrail:
     Type: AWS::CloudTrail::Trail
-    DependsOn: 
-      - CloudTrailS3Bucket
-      - CloudTrailS3BucketPolicy
     Properties:
       TrailName: !Sub '${AWS::StackName}-ProductionTrail'
       S3BucketName: !Ref CloudTrailS3Bucket
@@ -1136,8 +1092,6 @@ Resources:
   # ====================
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
-    DependsOn:
-      - ConfigRole
     Properties:
       Name: !Sub '${AWS::StackName}-ProductionConfigRecorder'
       RoleARN: !GetAtt ConfigRole.Arn
@@ -1146,17 +1100,12 @@ Resources:
 
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
-    DependsOn:
-      - ConfigS3Bucket
-      - ConfigS3BucketPolicy
     Properties:
       Name: !Sub '${AWS::StackName}-ProductionDeliveryChannel'
       S3BucketName: !Ref ConfigS3Bucket
 
   ConfigS3Bucket:
     Type: AWS::S3::Bucket
-    DependsOn:
-      - KMSKey
     Properties:
       BucketName: !Sub 'production-config-logs-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
@@ -1283,8 +1232,6 @@ Resources:
   # ====================
   SNSTopic:
     Type: AWS::SNS::Topic
-    DependsOn:
-      - KMSKey
     Properties:
       TopicName: !Sub '${AWS::StackName}-ProductionNotifications'
       DisplayName: !Sub '${AWS::StackName} Production Environment Notifications'
