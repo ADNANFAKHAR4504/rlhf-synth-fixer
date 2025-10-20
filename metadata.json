@@ -10,10 +10,11 @@
   "subject_labels": [
     "Security Configuration as Code"
   ],
+  "background": "CloudFormation template for secure Clinical Trial Data Platform with KMS encryption, private VPC, IMDSv2, API Gateway logging, CloudFront distribution, AWS Config compliance monitoring, MFA enforcement, and budget alerts",
   "training_quality": 8,
   "aws_services": [
     "S3",
-    "IAM", 
+    "IAM",
     "API Gateway",
     "RDS",
     "Config",
@@ -24,6 +25,8 @@
     "VPC",
     "Secrets Manager",
     "WAF",
-    "SNS"
+    "SNS",
+    "KMS",
+    "CloudWatch Logs"
   ]
 }
