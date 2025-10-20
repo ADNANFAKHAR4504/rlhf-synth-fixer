@@ -90,8 +90,10 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
       })
     );
 
-    // Create Lambda function name
-    const lambdaFunctionName = `application-function-${resourceSuffix}`;
+    // Create Lambda function name (include stack name to avoid collisions across stacks)
+    const lambdaFunctionName = sanitizeName(
+      `${this.stackName}-application-function-${resourceSuffix}`
+    );
 
     // Lambda function (code is provided as an asset under lib/lambda-handler)
     const lambdaFunction = new lambda.Function(this, 'ApplicationFunction', {
@@ -117,12 +119,11 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
     deadLetterQueue.grantSendMessages(lambdaFunction);
     configParameter.grantRead(lambdaFunction);
 
-    // Create CloudWatch log group for Lambda with retention and destroy policy
-    new logs.LogGroup(this, 'LambdaLogGroup', {
-      logGroupName: `/aws/lambda/${lambdaFunctionName}`,
-      retention: logs.RetentionDays.ONE_WEEK,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
+    // Do not create an explicit Lambda LogGroup with a fixed name to avoid
+    // cross-stack name collisions. Lambda will create the log group at
+    // /aws/lambda/<functionName> automatically. If retention configuration
+    // is required, consider using a LogRetention construct that can apply
+    // retention to an existing log group.
 
     // API Gateway log group
     const apiLogGroup = new logs.LogGroup(this, 'ApiGatewayLogGroup', {
