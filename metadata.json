@@ -1,0 +1,14 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349023",
+  "team": "3",
+  "startedAt": "2025-10-20T15:20:28.296Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "VPC, InternetGateway, VPCGatewayAttachment, PublicSubnet1, PublicSubnet2, PrivateSubnet1, PrivateSubnet2, PublicRouteTable, PrivateRouteTable1, PrivateRouteTable2, PublicRoute, NatGateway1EIP, NatGateway2EIP, NatGateway1, NatGateway2, PublicSubnet1RouteTableAssociation, PublicSubnet2RouteTableAssociation, PrivateSubnet1RouteTableAssociation, PrivateSubnet2RouteTableAssociation, BastionSecurityGroup, AppSecurityGroup, RDSSecurityGroup, BastionHostInstance, AppEC2Instance, InstanceProfileApp, InstanceProfileBastion, RoleAppInstance, RoleBastionInstance, PolicyAppS3Access, PolicySSMCoreAccess, S3ApplicationBucket, S3AccessLogsBucket, S3BucketPolicy, KMSKeyGeneral, KMSKeyAlias, RDSInstance, RDSSubnetGroup, CloudTrail, CloudTrailBucketPolicy, CloudWatchAlarmEC2CPU, CloudWatchAlarmRDSCPU, CloudWatchAlarmEC2StatusCheck, SNSTopicAlarms, SNSSubscriptionEmail, CloudWatchLogGroupTrail, CloudWatchLogGroupEC2, IAMRoleCloudTrail, IAMPolicyCloudTrailKMSAccess, Outputs (VPCID, SubnetIDs, SecurityGroupIDs, S3BucketNames, KMSKeyARNs, RDSInstanceEndpoint, BastionPublicIP, AppInstanceID, CloudTrailARN, SNSTopicARN)."
+}
