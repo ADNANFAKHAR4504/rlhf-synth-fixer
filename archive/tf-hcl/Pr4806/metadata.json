@@ -26,5 +26,11 @@
     "CloudWatch",
     "SNS",
     "S3 Storage Lens"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raaj1021",
+  "dockerS3Location": ""
 }
