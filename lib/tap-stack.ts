@@ -165,9 +165,23 @@ exports.handler = async (event) => {
       })
     );
 
+    // Create Origin Access Identity for CloudFront to access S3
+    const originAccessIdentity = new cloudfront.OriginAccessIdentity(
+      this,
+      'OAI',
+      {
+        comment: 'OAI for News Personalization Platform',
+      }
+    );
+
+    // Grant CloudFront read access to the S3 bucket
+    contentBucket.grantRead(originAccessIdentity);
+
     const distribution = new cloudfront.Distribution(this, 'NewsDistribution', {
       defaultBehavior: {
-        origin: new origins.S3Origin(contentBucket),
+        origin: new origins.S3Origin(contentBucket, {
+          originAccessIdentity: originAccessIdentity,
+        }),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         edgeLambdas: [
