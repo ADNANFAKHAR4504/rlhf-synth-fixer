@@ -1,17 +1,14 @@
 package app;
 
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.CfnOutput;
 import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.RemovalPolicy;
-import software.amazon.awscdk.Size;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.Tags;
@@ -175,6 +172,94 @@ final class TapStackProps {
 }
 
 /**
+ * Configuration object for DatabaseStack to reduce parameter count.
+ */
+final class DatabaseStackConfig {
+    private final IVpc vpc;
+    private final SecurityGroup rdsSecurityGroup;
+    private final Key kmsKey;
+    private final Integer readReplicas;
+
+    DatabaseStackConfig(final IVpc vpcParam, final SecurityGroup rdsSecurityGroupParam, 
+                       final Key kmsKeyParam, final Integer readReplicasParam) {
+        this.vpc = vpcParam;
+        this.rdsSecurityGroup = rdsSecurityGroupParam;
+        this.kmsKey = kmsKeyParam;
+        this.readReplicas = readReplicasParam;
+    }
+
+    public IVpc getVpc() {
+        return vpc;
+    }
+
+    public SecurityGroup getRdsSecurityGroup() {
+        return rdsSecurityGroup;
+    }
+
+    public Key getKmsKey() {
+        return kmsKey;
+    }
+
+    public Integer getReadReplicas() {
+        return readReplicas;
+    }
+}
+
+/**
+ * Configuration object for ComputeStack to reduce parameter count.
+ */
+final class ComputeStackConfig {
+    private final IVpc vpc;
+    private final SecurityGroup albSecurityGroup;
+    private final SecurityGroup ec2SecurityGroup;
+    private final Key kmsKey;
+    private final Integer minInstances;
+    private final Integer maxInstances;
+    private final Topic alertTopic;
+
+    ComputeStackConfig(final IVpc vpcParam, final SecurityGroup albSecurityGroupParam,
+                      final SecurityGroup ec2SecurityGroupParam, final Key kmsKeyParam,
+                      final Integer minInstancesParam, final Integer maxInstancesParam,
+                      final Topic alertTopicParam) {
+        this.vpc = vpcParam;
+        this.albSecurityGroup = albSecurityGroupParam;
+        this.ec2SecurityGroup = ec2SecurityGroupParam;
+        this.kmsKey = kmsKeyParam;
+        this.minInstances = minInstancesParam;
+        this.maxInstances = maxInstancesParam;
+        this.alertTopic = alertTopicParam;
+    }
+
+    public IVpc getVpc() {
+        return vpc;
+    }
+
+    public SecurityGroup getAlbSecurityGroup() {
+        return albSecurityGroup;
+    }
+
+    public SecurityGroup getEc2SecurityGroup() {
+        return ec2SecurityGroup;
+    }
+
+    public Key getKmsKey() {
+        return kmsKey;
+    }
+
+    public Integer getMinInstances() {
+        return minInstances;
+    }
+
+    public Integer getMaxInstances() {
+        return maxInstances;
+    }
+
+    public Topic getAlertTopic() {
+        return alertTopic;
+    }
+}
+
+/**
  * Security Infrastructure Stack with KMS for encryption
  */
 class SecurityStack extends Stack {
@@ -189,11 +274,6 @@ class SecurityStack extends Stack {
                 .description("KMS key for social platform infrastructure encryption - " + environmentSuffix)
                 .enableKeyRotation(true)
                 .removalPolicy(RemovalPolicy.DESTROY)
-                .build();
-
-        software.amazon.awscdk.services.kms.Alias.Builder.create(this, "SocialPlatformKmsKeyAlias")
-                .aliasName("alias/social-platform-" + environmentSuffix + "-key")
-                .targetKey(kmsKey)
                 .build();
 
         // Create SNS topic for alerts
@@ -320,18 +400,18 @@ class DatabaseStack extends Stack {
     private final Table postTable;
 
     DatabaseStack(final Construct scope, final String id, final String environmentSuffix,
-                  final IVpc vpc, final SecurityGroup rdsSecurityGroup, 
-                  final Key kmsKey, final Integer readReplicas, final StackProps props) {
+                  final DatabaseStackConfig config, final StackProps props) {
         super(scope, id, props);
 
         // Create Aurora PostgreSQL Cluster with read replicas
-        this.auroraCluster = createAuroraCluster(environmentSuffix, vpc, rdsSecurityGroup, kmsKey, readReplicas);
+        this.auroraCluster = createAuroraCluster(environmentSuffix, config.getVpc(), 
+                config.getRdsSecurityGroup(), config.getKmsKey(), config.getReadReplicas());
 
         // Create DynamoDB table for user graph
-        this.userGraphTable = createUserGraphTable(environmentSuffix, kmsKey);
+        this.userGraphTable = createUserGraphTable(environmentSuffix, config.getKmsKey());
 
         // Create DynamoDB table for posts
-        this.postTable = createPostTable(environmentSuffix, kmsKey);
+        this.postTable = createPostTable(environmentSuffix, config.getKmsKey());
 
         Tags.of(this).add("project", "social-platform");
         Tags.of(this).add("environment", environmentSuffix);
@@ -341,7 +421,7 @@ class DatabaseStack extends Stack {
                                                 final SecurityGroup securityGroup, final Key kmsKey,
                                                 final Integer readReplicas) {
         // Create writer instance
-        ClusterInstance writerInstance = ClusterInstance.provisioned("writer", 
+        IClusterInstance writerInstance = ClusterInstance.provisioned("writer", 
                 software.amazon.awscdk.services.rds.ProvisionedClusterInstanceProps.builder()
                         .instanceType(InstanceType.of(InstanceClass.MEMORY6_GRAVITON, InstanceSize.XLARGE4))
                         .build());
@@ -498,39 +578,34 @@ class CacheStack extends Stack {
     private final CfnReplicationGroup redisCluster;
 
     CacheStack(final Construct scope, final String id, final String environmentSuffix,
-               final IVpc vpc, final SecurityGroup elasticacheSecurityGroup, final StackProps props) {
+               final IVpc vpc, final SecurityGroup redisSecurityGroup, final StackProps props) {
         super(scope, id, props);
 
-        // Create subnet group for ElastiCache
-        List<String> subnetIds = vpc.selectSubnets(SubnetSelection.builder()
-                .subnetType(SubnetType.PRIVATE_ISOLATED)
-                .build()).getSubnetIds();
-
+        // Create subnet group for Redis
         CfnSubnetGroup subnetGroup = CfnSubnetGroup.Builder.create(this, "RedisSubnetGroup")
-                .subnetIds(subnetIds)
                 .description("Subnet group for Redis cluster")
-                .cacheSubnetGroupName("social-platform-" + environmentSuffix + "-redis-subnet")
+                .subnetIds(vpc.selectSubnets(SubnetSelection.builder()
+                        .subnetType(SubnetType.PRIVATE_ISOLATED)
+                        .build()).getSubnetIds())
+                .cacheSubnetGroupName("social-platform-redis-" + environmentSuffix)
                 .build();
 
-        // Create Redis Replication Group (cluster mode enabled)
+        // Create Redis Replication Group
         this.redisCluster = CfnReplicationGroup.Builder.create(this, "RedisCluster")
-                .replicationGroupId("social-" + environmentSuffix + "-redis")
-                .replicationGroupDescription("Redis cluster for social platform feed caching")
+                .replicationGroupDescription("Redis cluster for social platform caching")
                 .engine("redis")
                 .engineVersion("7.0")
                 .cacheNodeType("cache.r6g.xlarge")
-                .numNodeGroups(3)
-                .replicasPerNodeGroup(2)
+                .numCacheClusters(3)
                 .automaticFailoverEnabled(true)
                 .multiAzEnabled(true)
                 .cacheSubnetGroupName(subnetGroup.getCacheSubnetGroupName())
-                .securityGroupIds(Arrays.asList(elasticacheSecurityGroup.getSecurityGroupId()))
+                .securityGroupIds(List.of(redisSecurityGroup.getSecurityGroupId()))
                 .atRestEncryptionEnabled(true)
                 .transitEncryptionEnabled(true)
                 .snapshotRetentionLimit(7)
                 .snapshotWindow("03:00-05:00")
                 .preferredMaintenanceWindow("mon:05:00-mon:07:00")
-                .autoMinorVersionUpgrade(true)
                 .build();
 
         redisCluster.addDependency(subnetGroup);
@@ -549,6 +624,7 @@ class CacheStack extends Stack {
  */
 class StorageStack extends Stack {
     private final Bucket mediaBucket;
+    private final Bucket backupBucket;
     private final Distribution cloudFrontDistribution;
 
     StorageStack(final Construct scope, final String id, final String environmentSuffix,
@@ -557,41 +633,52 @@ class StorageStack extends Stack {
 
         // Create S3 bucket for media storage
         this.mediaBucket = Bucket.Builder.create(this, "MediaBucket")
-                .bucketName("social-platform-" + environmentSuffix + "-media-" + this.getAccount())
+                .bucketName("social-platform-media-" + environmentSuffix + "-" + this.getAccount())
                 .encryption(BucketEncryption.KMS)
                 .encryptionKey(kmsKey)
                 .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
                 .versioned(true)
-                .lifecycleRules(Arrays.asList(
+                .lifecycleRules(List.of(
                         LifecycleRule.builder()
-                                .id("TransitionToIA")
-                                .enabled(true)
-                                .transitions(Arrays.asList(
+                                .transitions(List.of(
                                         software.amazon.awscdk.services.s3.Transition.builder()
                                                 .storageClass(StorageClass.INTELLIGENT_TIERING)
                                                 .transitionAfter(Duration.days(30))
+                                                .build(),
+                                        software.amazon.awscdk.services.s3.Transition.builder()
+                                                .storageClass(StorageClass.GLACIER)
+                                                .transitionAfter(Duration.days(90))
                                                 .build()
                                 ))
-                                .build(),
-                        LifecycleRule.builder()
-                                .id("DeleteOldVersions")
-                                .enabled(true)
-                                .noncurrentVersionExpiration(Duration.days(90))
                                 .build()
                 ))
                 .removalPolicy(RemovalPolicy.RETAIN)
                 .build();
 
-        // Create CloudFront Origin Access Identity
+        // Create S3 bucket for backups
+        this.backupBucket = Bucket.Builder.create(this, "BackupBucket")
+                .bucketName("social-platform-backups-" + environmentSuffix + "-" + this.getAccount())
+                .encryption(BucketEncryption.KMS)
+                .encryptionKey(kmsKey)
+                .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
+                .versioned(true)
+                .lifecycleRules(List.of(
+                        LifecycleRule.builder()
+                                .expiration(Duration.days(90))
+                                .build()
+                ))
+                .removalPolicy(RemovalPolicy.RETAIN)
+                .build();
+
+        // Create CloudFront OAI
         OriginAccessIdentity oai = OriginAccessIdentity.Builder.create(this, "OAI")
-                .comment("OAI for social platform media distribution")
+                .comment("OAI for social platform media bucket")
                 .build();
 
         mediaBucket.grantRead(oai);
 
-        // Create CloudFront Distribution
+        // Create CloudFront distribution
         this.cloudFrontDistribution = Distribution.Builder.create(this, "MediaDistribution")
-                .comment("CDN for social platform media")
                 .defaultBehavior(BehaviorOptions.builder()
                         .origin(S3Origin.Builder.create(mediaBucket)
                                 .originAccessIdentity(oai)
@@ -600,13 +687,7 @@ class StorageStack extends Stack {
                         .allowedMethods(AllowedMethods.ALLOW_GET_HEAD_OPTIONS)
                         .cachePolicy(CachePolicy.CACHING_OPTIMIZED)
                         .build())
-                .enableLogging(true)
-                .logBucket(Bucket.Builder.create(this, "CloudFrontLogsBucket")
-                        .bucketName("social-platform-" + environmentSuffix + "-cf-logs-" + this.getAccount())
-                        .encryption(BucketEncryption.S3_MANAGED)
-                        .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
-                        .removalPolicy(RemovalPolicy.RETAIN)
-                        .build())
+                .comment("CloudFront distribution for social platform media - " + environmentSuffix)
                 .build();
 
         Tags.of(this).add("project", "social-platform");
@@ -615,6 +696,10 @@ class StorageStack extends Stack {
 
     public Bucket getMediaBucket() {
         return mediaBucket;
+    }
+
+    public Bucket getBackupBucket() {
+        return backupBucket;
     }
 
     public Distribution getCloudFrontDistribution() {
@@ -631,17 +716,14 @@ class ComputeStack extends Stack {
     private final Function routingFunction;
 
     ComputeStack(final Construct scope, final String id, final String environmentSuffix,
-                 final IVpc vpc, final SecurityGroup albSecurityGroup, 
-                 final SecurityGroup ec2SecurityGroup, final Key kmsKey,
-                 final Integer minInstances, final Integer maxInstances,
-                 final Topic alertTopic, final StackProps props) {
+                 final ComputeStackConfig config, final StackProps props) {
         super(scope, id, props);
 
         // Create Application Load Balancer
         this.alb = ApplicationLoadBalancer.Builder.create(this, "ApplicationLoadBalancer")
-                .vpc(vpc)
+                .vpc(config.getVpc())
                 .internetFacing(true)
-                .securityGroup(albSecurityGroup)
+                .securityGroup(config.getAlbSecurityGroup())
                 .vpcSubnets(SubnetSelection.builder()
                         .subnetType(SubnetType.PUBLIC)
                         .build())
@@ -649,17 +731,17 @@ class ComputeStack extends Stack {
                 .build();
 
         // Create Lambda function for routing
-        this.routingFunction = createRoutingFunction(environmentSuffix, kmsKey);
+        this.routingFunction = createRoutingFunction(environmentSuffix, config.getKmsKey());
 
         // Create EC2 Auto Scaling Group
-        this.autoScalingGroup = createAutoScalingGroup(environmentSuffix, vpc, ec2SecurityGroup, 
-                                                       minInstances, maxInstances);
+        this.autoScalingGroup = createAutoScalingGroup(environmentSuffix, config.getVpc(), 
+                config.getEc2SecurityGroup(), config.getMinInstances(), config.getMaxInstances());
 
         // Configure ALB listener with Lambda and EC2 targets
         configureAlbListener();
 
         // Setup monitoring
-        setupMonitoring(alertTopic);
+        setupMonitoring(config.getAlertTopic());
 
         Tags.of(this).add("project", "social-platform");
         Tags.of(this).add("environment", environmentSuffix);
@@ -686,7 +768,7 @@ class ComputeStack extends Stack {
                 .functionName("social-platform-" + environmentSuffix + "-routing")
                 .runtime(Runtime.JAVA_17)
                 .handler("com.social.platform.routing.RoutingHandler::handleRequest")
-                .code(Code.fromAsset("lambda/routing"))
+                .code(Code.fromAsset("lambda/target/routing.jar"))
                 .memorySize(512)
                 .timeout(Duration.seconds(30))
                 .role(lambdaRole)
@@ -776,7 +858,7 @@ class ComputeStack extends Stack {
 
         // Create listener
         ApplicationListener listener = alb.addListener("HttpListener",
-                software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationListenerProps.builder()
+                software.amazon.awscdk.services.elasticloadbalancingv2.BaseApplicationListenerProps.builder()
                         .port(80)
                         .protocol(ApplicationProtocol.HTTP)
                         .defaultAction(ListenerAction.forward(Arrays.asList(ec2TargetGroup)))
@@ -875,18 +957,59 @@ class RealTimeStack extends Stack {
         // Create WebSocket API
         this.webSocketApi = WebSocketApi.Builder.create(this, "WebSocketApi")
                 .apiName("social-platform-" + environmentSuffix + "-websocket")
-                .connectRouteOptions(software.amazon.awscdk.services.apigatewayv2.WebSocketRouteOptions.builder()
-                        .integration(new software.amazon.awscdk.services.apigatewayv2.integrations.WebSocketLambdaIntegration(
-                                "ConnectIntegration", connectFunction))
-                        .build())
-                .disconnectRouteOptions(software.amazon.awscdk.services.apigatewayv2.WebSocketRouteOptions.builder()
-                        .integration(new software.amazon.awscdk.services.apigatewayv2.integrations.WebSocketLambdaIntegration(
-                                "DisconnectIntegration", disconnectFunction))
-                        .build())
-                .defaultRouteOptions(software.amazon.awscdk.services.apigatewayv2.WebSocketRouteOptions.builder()
-                        .integration(new software.amazon.awscdk.services.apigatewayv2.integrations.WebSocketLambdaIntegration(
-                                "MessageIntegration", messageFunction))
-                        .build())
+                .description("WebSocket API for real-time social platform updates")
+                .build();
+
+        // Grant invoke permissions to Lambda functions
+        connectFunction.grantInvoke(new ServicePrincipal("apigateway.amazonaws.com"));
+        disconnectFunction.grantInvoke(new ServicePrincipal("apigateway.amazonaws.com"));
+        messageFunction.grantInvoke(new ServicePrincipal("apigateway.amazonaws.com"));
+
+        // Create integrations using CfnIntegration (stable API)
+        software.amazon.awscdk.services.apigatewayv2.CfnIntegration connectIntegration = 
+                software.amazon.awscdk.services.apigatewayv2.CfnIntegration.Builder.create(this, "ConnectIntegration")
+                .apiId(webSocketApi.getApiId())
+                .integrationType("AWS_PROXY")
+                .integrationUri("arn:aws:apigateway:" + this.getRegion() 
+                               + ":lambda:path/2015-03-31/functions/" 
+                               + connectFunction.getFunctionArn() + "/invocations")
+                .build();
+
+        software.amazon.awscdk.services.apigatewayv2.CfnIntegration disconnectIntegration = 
+                software.amazon.awscdk.services.apigatewayv2.CfnIntegration.Builder.create(this, "DisconnectIntegration")
+                .apiId(webSocketApi.getApiId())
+                .integrationType("AWS_PROXY")
+                .integrationUri("arn:aws:apigateway:" + this.getRegion() 
+                               + ":lambda:path/2015-03-31/functions/" 
+                               + disconnectFunction.getFunctionArn() + "/invocations")
+                .build();
+
+        software.amazon.awscdk.services.apigatewayv2.CfnIntegration messageIntegration = 
+                software.amazon.awscdk.services.apigatewayv2.CfnIntegration.Builder.create(this, "MessageIntegration")
+                .apiId(webSocketApi.getApiId())
+                .integrationType("AWS_PROXY")
+                .integrationUri("arn:aws:apigateway:" + this.getRegion() 
+                               + ":lambda:path/2015-03-31/functions/" 
+                               + messageFunction.getFunctionArn() + "/invocations")
+                .build();
+
+        // Create routes
+        software.amazon.awscdk.services.apigatewayv2.CfnRoute.Builder.create(this, "ConnectRoute")
+                .apiId(webSocketApi.getApiId())
+                .routeKey("$connect")
+                .target("integrations/" + connectIntegration.getRef())
+                .build();
+
+        software.amazon.awscdk.services.apigatewayv2.CfnRoute.Builder.create(this, "DisconnectRoute")
+                .apiId(webSocketApi.getApiId())
+                .routeKey("$disconnect")
+                .target("integrations/" + disconnectIntegration.getRef())
+                .build();
+
+        software.amazon.awscdk.services.apigatewayv2.CfnRoute.Builder.create(this, "MessageRoute")
+                .apiId(webSocketApi.getApiId())
+                .routeKey("$default")
+                .target("integrations/" + messageIntegration.getRef())
                 .build();
 
         // Create WebSocket stage
@@ -936,7 +1059,7 @@ class RealTimeStack extends Stack {
                 .functionName("social-platform-" + environmentSuffix + "-ws-" + functionType.toLowerCase())
                 .runtime(Runtime.JAVA_17)
                 .handler("com.social.platform.websocket." + functionType + "Handler::handleRequest")
-                .code(Code.fromAsset("lambda/websocket"))
+                .code(Code.fromAsset("lambda/target/websocket.jar"))
                 .memorySize(512)
                 .timeout(Duration.seconds(30))
                 .role(lambdaRole)
@@ -968,7 +1091,7 @@ class RealTimeStack extends Stack {
                 .functionName("social-platform-" + environmentSuffix + "-notification")
                 .runtime(Runtime.JAVA_17)
                 .handler("com.social.platform.notification.NotificationHandler::handleRequest")
-                .code(Code.fromAsset("lambda/notification"))
+                .code(Code.fromAsset("lambda/target/notification.jar"))
                 .memorySize(1024)
                 .timeout(Duration.seconds(60))
                 .role(lambdaRole)
@@ -1074,8 +1197,8 @@ class MLStack extends Stack {
                 .executionRoleArn(sagemakerRole.getRoleArn())
                 .primaryContainer(CfnModel.ContainerDefinitionProperty.builder()
                         .image("763104351884.dkr.ecr.us-west-2.amazonaws.com/pytorch-inference:2.0.0-cpu-py310")
-                        .modelDataUrl("s3://sagemaker-models-" + this.getAccount() + "/" + 
-                                     modelType.toLowerCase() + "/model.tar.gz")
+                        .modelDataUrl("s3://sagemaker-models-" + this.getAccount() + "/"
+                                     + modelType.toLowerCase() + "/model.tar.gz")
                         .environment(Map.of(
                                 "SAGEMAKER_PROGRAM", "inference.py",
                                 "SAGEMAKER_SUBMIT_DIRECTORY", "/opt/ml/model/code"
@@ -1087,8 +1210,8 @@ class MLStack extends Stack {
     private CfnEndpointConfig createEndpointConfig(final String modelType, final String environmentSuffix,
                                                     final CfnModel model) {
         return CfnEndpointConfig.Builder.create(this, modelType + "EndpointConfig")
-                .endpointConfigName("social-platform-" + environmentSuffix + "-" + 
-                                   modelType.toLowerCase() + "-config")
+                .endpointConfigName("social-platform-" + environmentSuffix + "-"
+                                   + modelType.toLowerCase() + "-config")
                 .productionVariants(Arrays.asList(
                         CfnEndpointConfig.ProductionVariantProperty.builder()
                                 .variantName("AllTraffic")
@@ -1104,8 +1227,8 @@ class MLStack extends Stack {
     private CfnEndpoint createEndpoint(final String modelType, final String environmentSuffix,
                                        final CfnEndpointConfig endpointConfig) {
         return CfnEndpoint.Builder.create(this, modelType + "Endpoint")
-                .endpointName("social-platform-" + environmentSuffix + "-" + 
-                             modelType.toLowerCase() + "-endpoint")
+                .endpointName("social-platform-" + environmentSuffix + "-"
+                             + modelType.toLowerCase() + "-endpoint")
                 .endpointConfigName(endpointConfig.getEndpointConfigName())
                 .build();
     }
@@ -1120,10 +1243,9 @@ class MLStack extends Stack {
 }
 
 /**
- * Main Social Platform Infrastructure Stack
+ * Main TapStack that orchestrates all infrastructure stacks
  */
 class TapStack extends Stack {
-    private final String environmentSuffix;
     private final SecurityStack securityStack;
     private final NetworkStack networkStack;
     private final DatabaseStack databaseStack;
@@ -1132,26 +1254,15 @@ class TapStack extends Stack {
     private final ComputeStack computeStack;
     private final RealTimeStack realTimeStack;
     private final MLStack mlStack;
+    private final String environmentSuffix;
 
     TapStack(final Construct scope, final String id, final TapStackProps props) {
         super(scope, id, props != null ? props.getStackProps() : null);
 
-        // Get environment suffix
-        this.environmentSuffix = Optional.ofNullable(props)
-                .map(TapStackProps::getEnvironmentSuffix)
-                .orElse("dev");
-
-        Integer minInstances = Optional.ofNullable(props)
-                .map(TapStackProps::getMinInstances)
-                .orElse(100);
-
-        Integer maxInstances = Optional.ofNullable(props)
-                .map(TapStackProps::getMaxInstances)
-                .orElse(800);
-
-        Integer auroraReadReplicas = Optional.ofNullable(props)
-                .map(TapStackProps::getAuroraReadReplicas)
-                .orElse(20);
+        this.environmentSuffix = props != null ? props.getEnvironmentSuffix() : "dev";
+        Integer minInstances = props != null ? props.getMinInstances() : 100;
+        Integer maxInstances = props != null ? props.getMaxInstances() : 800;
+        Integer auroraReadReplicas = props != null ? props.getAuroraReadReplicas() : 20;
 
         // Create security stack
         this.securityStack = new SecurityStack(
@@ -1173,15 +1284,19 @@ class TapStack extends Stack {
                         .description("Network Stack for social platform: " + environmentSuffix)
                         .build());
 
-        // Create database stack
+        // Create database stack with config object
+        DatabaseStackConfig dbConfig = new DatabaseStackConfig(
+                networkStack.getVpc(),
+                networkStack.getRdsSecurityGroup(),
+                securityStack.getKmsKey(),
+                auroraReadReplicas
+        );
+
         this.databaseStack = new DatabaseStack(
                 this,
                 "Database",
                 environmentSuffix,
-                networkStack.getVpc(),
-                networkStack.getRdsSecurityGroup(),
-                securityStack.getKmsKey(),
-                auroraReadReplicas,
+                dbConfig,
                 StackProps.builder()
                         .env(props != null && props.getStackProps() != null ? props.getStackProps().getEnv() : null)
                         .description("Database Stack for social platform: " + environmentSuffix)
@@ -1210,18 +1325,22 @@ class TapStack extends Stack {
                         .description("Storage Stack for social platform: " + environmentSuffix)
                         .build());
 
-        // Create compute stack
-        this.computeStack = new ComputeStack(
-                this,
-                "Compute",
-                environmentSuffix,
+        // Create compute stack with config object
+        ComputeStackConfig computeConfig = new ComputeStackConfig(
                 networkStack.getVpc(),
                 networkStack.getAlbSecurityGroup(),
                 networkStack.getEc2SecurityGroup(),
                 securityStack.getKmsKey(),
                 minInstances,
                 maxInstances,
-                securityStack.getAlertTopic(),
+                securityStack.getAlertTopic()
+        );
+
+        this.computeStack = new ComputeStack(
+                this,
+                "Compute",
+                environmentSuffix,
+                computeConfig,
                 StackProps.builder()
                         .env(props != null && props.getStackProps() != null ? props.getStackProps().getEnv() : null)
                         .description("Compute Stack for social platform: " + environmentSuffix)
