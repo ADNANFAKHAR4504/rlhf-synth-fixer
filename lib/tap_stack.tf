@@ -1106,15 +1106,14 @@ resource "aws_rds_cluster" "primary" {
   depends_on = [aws_rds_global_cluster.financial_db]
 }
 
-# DR Aurora Cluster
+# DR Aurora Cluster (standalone for existing deployments)
 resource "aws_rds_cluster" "dr" {
-  provider                  = aws.dr
-  cluster_identifier        = "${var.project_name}-dr-cluster-${local.unique_suffix}"
-  engine                    = aws_rds_global_cluster.financial_db.engine
-  engine_version            = aws_rds_global_cluster.financial_db.engine_version
-  global_cluster_identifier = aws_rds_global_cluster.financial_db.id
-  db_subnet_group_name      = aws_db_subnet_group.dr.name
-  vpc_security_group_ids    = [aws_security_group.aurora_dr.id]
+  provider               = aws.dr
+  cluster_identifier     = "${var.project_name}-dr-cluster-${local.unique_suffix}"
+  engine                 = "aurora-postgresql"
+  engine_version         = "15.4"
+  db_subnet_group_name   = aws_db_subnet_group.dr.name
+  vpc_security_group_ids = [aws_security_group.aurora_dr.id]
 
   backup_retention_period         = 35
   preferred_backup_window         = "03:00-04:00"
@@ -1130,7 +1129,9 @@ resource "aws_rds_cluster" "dr" {
     Region = "dr"
   })
 
-  depends_on = [aws_rds_cluster.primary]
+  lifecycle {
+    ignore_changes = [engine_version, global_cluster_identifier]
+  }
 }
 
 # Aurora Instances - Primary Region
