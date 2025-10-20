@@ -40,6 +40,9 @@ Parameters:
 
 
 
+Conditions:
+  IsBudgetsRegion: !Equals [!Ref 'AWS::Region', 'us-east-1']
+
 Resources:
   # ==========================================
   # KMS ENCRYPTION KEY
@@ -1345,8 +1348,10 @@ Resources:
   # 10. AWS NovaBudget for Cost Management
   NovaBudget:
     Type: AWS::Budgets::Budget
+    Condition: IsBudgetsRegion
     Properties:
       Budget:
+        BudgetName: !Sub '${ProjectName}-${Environment}-monthly-budget'
         BudgetType: COST
         TimeUnit: MONTHLY
         BudgetLimit:
