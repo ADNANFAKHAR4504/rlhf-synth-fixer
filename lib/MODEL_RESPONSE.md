@@ -52,6 +52,7 @@ provider "aws" {
   region = "ap-south-1"
 }
 
+# main.tf
 # =============================================================================
 # Data Sources
 # =============================================================================
@@ -60,20 +61,8 @@ data "aws_caller_identity" "current" {}
 
 data "aws_region" "current" {}
 
-data "aws_vpc" "existing" {
-  id = var.vpc_id
-}
-
-data "aws_subnets" "redis_subnets" {
-  filter {
-    name   = "vpc-id"
-    values = [var.vpc_id]
-  }
-  
-  filter {
-    name   = "availability-zone"
-    values = ["ap-south-1a", "ap-south-1b"]  # Ensuring at least 2 AZs
-  }
+data "aws_availability_zones" "available" {
+  state = "available"
 }
 
 # =============================================================================
@@ -98,10 +87,10 @@ variable "owner" {
   default     = "devops-team"
 }
 
-variable "vpc_id" {
-  description = "VPC ID where the Redis cluster will be deployed"
+variable "vpc_cidr" {
+  description = "CIDR block for the VPC"
   type        = string
-  default     = "vpc-12345678"
+  default     = "10.0.0.0/16"
 }
 
 variable "internal_cidr_block" {
@@ -154,6 +143,9 @@ locals {
   
   # Backup window (1 hour before maintenance)
   backup_window = "02:00-03:00"  # 2:00-3:00 AM UTC
+  
+  # Select first 3 AZs for high availability
+  azs = slice(data.aws_availability_zones.available.names, 0, 3)
 }
 
 # =============================================================================
@@ -168,13 +160,89 @@ resource "random_string" "suffix" {
 }
 
 # =============================================================================
+# VPC Resources
+# =============================================================================
+
+resource "aws_vpc" "redis" {
+  cidr_block           = var.vpc_cidr
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${var.project_name}-${var.environment}-vpc-${random_string.suffix.result}"
+    }
+  )
+}
+
+# =============================================================================
+# Subnet Resources (Multi-AZ for High Availability)
+# =============================================================================
+
+resource "aws_subnet" "redis" {
+  count             = 3
+  vpc_id            = aws_vpc.redis.id
+  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index)
+  availability_zone = local.azs[count.index]
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${var.project_name}-${var.environment}-redis-subnet-${count.index + 1}-${random_string.suffix.result}"
+      AZ   = local.azs[count.index]
+    }
+  )
+}
+
+# =============================================================================
+# Internet Gateway
+# =============================================================================
+
+resource "aws_internet_gateway" "redis" {
+  vpc_id = aws_vpc.redis.id
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${var.project_name}-${var.environment}-igw-${random_string.suffix.result}"
+    }
+  )
+}
+
+# =============================================================================
+# Route Table
+# =============================================================================
+
+resource "aws_route_table" "redis" {
+  vpc_id = aws_vpc.redis.id
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${var.project_name}-${var.environment}-rt-${random_string.suffix.result}"
+    }
+  )
+}
+
+# =============================================================================
+# Route Table Associations
+# =============================================================================
+
+resource "aws_route_table_association" "redis" {
+  count          = 3
+  subnet_id      = aws_subnet.redis[count.index].id
+  route_table_id = aws_route_table.redis.id
+}
+
+# =============================================================================
 # Security Group
 # =============================================================================
 
 resource "aws_security_group" "redis" {
   name        = "${local.cluster_name}-sg"
   description = "Security group for ElastiCache Redis cluster"
-  vpc_id      = var.vpc_id
+  vpc_id      = aws_vpc.redis.id
 
   ingress {
     description = "Redis port from internal network"
@@ -207,7 +275,7 @@ resource "aws_security_group" "redis" {
 resource "aws_elasticache_subnet_group" "redis" {
   name        = "${local.cluster_name}-subnet-group"
   description = "Subnet group for ElastiCache Redis cluster spanning multiple AZs"
-  subnet_ids  = data.aws_subnets.redis_subnets.ids
+  subnet_ids  = aws_subnet.redis[*].id
 
   tags = merge(
     local.common_tags,
@@ -254,6 +322,36 @@ resource "aws_elasticache_parameter_group" "redis" {
     local.common_tags,
     {
       Name = "${local.cluster_name}-params"
+    }
+  )
+}
+
+# =============================================================================
+# CloudWatch Log Groups for Redis Logs
+# =============================================================================
+
+resource "aws_cloudwatch_log_group" "redis_slow_log" {
+  name              = "/aws/elasticache/${local.cluster_name}/slow-log"
+  retention_in_days = 7
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name     = "${local.cluster_name}-slow-log"
+      LogType  = "redis-slow-log"
+    }
+  )
+}
+
+resource "aws_cloudwatch_log_group" "redis_engine_log" {
+  name              = "/aws/elasticache/${local.cluster_name}/engine-log"
+  retention_in_days = 7
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name     = "${local.cluster_name}-engine-log"
+      LogType  = "redis-engine-log"
     }
   )
 }
@@ -331,36 +429,6 @@ resource "aws_elasticache_replication_group" "redis" {
     aws_elasticache_subnet_group.redis,
     aws_security_group.redis
   ]
-}
-
-# =============================================================================
-# CloudWatch Log Groups for Redis Logs
-# =============================================================================
-
-resource "aws_cloudwatch_log_group" "redis_slow_log" {
-  name              = "/aws/elasticache/${local.cluster_name}/slow-log"
-  retention_in_days = 7
-
-  tags = merge(
-    local.common_tags,
-    {
-      Name     = "${local.cluster_name}-slow-log"
-      LogType  = "redis-slow-log"
-    }
-  )
-}
-
-resource "aws_cloudwatch_log_group" "redis_engine_log" {
-  name              = "/aws/elasticache/${local.cluster_name}/engine-log"
-  retention_in_days = 7
-
-  tags = merge(
-    local.common_tags,
-    {
-      Name     = "${local.cluster_name}-engine-log"
-      LogType  = "redis-engine-log"
-    }
-  )
 }
 
 # =============================================================================
@@ -455,6 +523,21 @@ output "redis_subnet_group_name" {
 output "redis_cluster_name" {
   description = "Generated name of the Redis cluster"
   value       = local.cluster_name
+}
+
+output "vpc_id" {
+  description = "VPC ID where Redis cluster is deployed"
+  value       = aws_vpc.redis.id
+}
+
+output "subnet_ids" {
+  description = "Subnet IDs used by the Redis cluster"
+  value       = aws_subnet.redis[*].id
+}
+
+output "availability_zones" {
+  description = "Availability zones used by the Redis cluster"
+  value       = aws_subnet.redis[*].availability_zone
 }
 
 output "aws_account_id" {

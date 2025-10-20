@@ -339,10 +339,10 @@ resource "aws_elasticache_replication_group" "redis" {
   # Backup configuration
   snapshot_retention_limit = var.backup_retention_days
   snapshot_window         = local.backup_window
-  # REMOVE THIS LINE - snapshot_name is for RESTORING, not creating
+  # ❌ REMOVE THIS LINE - snapshot_name is for RESTORING, not creating
   # snapshot_name           = "${local.cluster_name}-final-snapshot"
   
-  # ADD THIS INSTEAD (optional - for final snapshot on destroy)
+  # ✅ ADD THIS INSTEAD (optional - for final snapshot on destroy)
   final_snapshot_identifier = "${local.cluster_name}-final-snapshot"
 
   # Maintenance configuration
@@ -501,6 +501,7 @@ output "aws_region" {
   description = "AWS Region where resources are deployed"
   value       = data.aws_region.current.name
 }
+
 ```
 
 ---
