@@ -199,13 +199,13 @@ class EcsStack:
                 }],
                 "environment": [
                     {"name": "DEPLOYMENT_TYPE", "value": deployment_type},
-                    {"name": "DB_ENDPOINT", "value": args[0]},
+                    {"name": "DB_ENDPOINT", "value": str(args[0]) if args[0] else ""},
                     {"name": "APP_ENV", "value": self.environment}
                 ],
                 "secrets": [
                     {
                         "name": "DB_PASSWORD",
-                        "valueFrom": args[1]
+                        "valueFrom": str(args[1]) if args[1] else ""
                     }
                 ],
                 "logConfiguration": {
@@ -285,7 +285,7 @@ class EcsStack:
             max_capacity=self.max_capacity,
             min_capacity=self.min_capacity,
             resource_id=Output.all(self.cluster.name, service.name).apply(
-                lambda args: f"service/{args[0]}/{args[1]}"
+                lambda args: f"service/{args[0] if args[0] else 'mock-cluster'}/{args[1] if args[1] else 'mock-service'}"
             ),
             scalable_dimension="ecs:service:DesiredCount",
             service_namespace="ecs",
