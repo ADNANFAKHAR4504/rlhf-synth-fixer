@@ -3,7 +3,7 @@
 
 import {
   APIGatewayClient,
-  GetRestApiCommand
+  GetRestApiCommand,
 } from '@aws-sdk/client-api-gateway';
 import {
   CloudFrontClient,
@@ -21,11 +21,11 @@ import {
 import {
   DescribeTableCommand,
   DynamoDBClient,
-  ScanCommand
+  ScanCommand,
 } from '@aws-sdk/client-dynamodb';
 import {
   GetFunctionCommand,
-  LambdaClient
+  LambdaClient,
 } from '@aws-sdk/client-lambda';
 import {
   GetSecretValueCommand,
@@ -55,26 +55,66 @@ function loadOutputs(): any {
 
 const outputs = loadOutputs();
 
-// Helper function to make HTTPS requests
-function httpsRequest(options: any, data?: string): Promise<any> {
+// Helper function to make HTTPS requests with retry logic
+function httpsRequest(options: any, data?: string, retries = 3): Promise<any> {
   return new Promise((resolve, reject) => {
-    const req = https.request(options, (res) => {
-      let body = '';
-      res.on('data', (chunk) => (body += chunk));
-      res.on('end', () => {
-        resolve({
-          statusCode: res.statusCode,
-          headers: res.headers,
-          body: body,
+    const attemptRequest = (attemptsLeft: number) => {
+      const req = https.request(options, (res) => {
+        let body = '';
+        res.on('data', (chunk) => (body += chunk));
+        res.on('end', () => {
+          resolve({
+            statusCode: res.statusCode,
+            headers: res.headers,
+            body: body,
+          });
         });
       });
-    });
-    req.on('error', reject);
-    if (data) {
-      req.write(data);
-    }
-    req.end();
+
+      req.on('error', (err: any) => {
+        if (attemptsLeft > 0 && (err.code === 'ENOTFOUND' || err.code === 'ECONNREFUSED')) {
+          console.log(`DNS not ready, retrying... (${attemptsLeft} attempts left)`);
+          setTimeout(() => attemptRequest(attemptsLeft - 1), 5000);
+        } else {
+          reject(err);
+        }
+      });
+
+      if (data) {
+        req.write(data);
+      }
+      req.end();
+    };
+
+    attemptRequest(retries);
   });
+}
+
+// Helper to wait for CloudFront to be ready
+async function waitForCloudFront(distributionId: string, maxWaitMinutes = 10): Promise<void> {
+  const client = new CloudFrontClient({ region: 'us-east-1' });
+  const maxAttempts = maxWaitMinutes * 2; // Check every 30 seconds
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const command = new GetDistributionCommand({ Id: distributionId });
+      const response = await client.send(command);
+
+      if (response.Distribution?.Status === 'Deployed' &&
+        response.Distribution?.DistributionConfig?.Enabled) {
+        console.log(`CloudFront distribution ready after ${attempt * 30} seconds`);
+        return;
+      }
+
+      console.log(`CloudFront status: ${response.Distribution?.Status}, waiting...`);
+      await new Promise((resolve) => setTimeout(resolve, 30000));
+    } catch (error) {
+      console.log(`Waiting for CloudFront... attempt ${attempt + 1}/${maxAttempts}`);
+      await new Promise((resolve) => setTimeout(resolve, 30000));
+    }
+  }
+
+  throw new Error('CloudFront distribution did not become ready in time');
 }
 
 describe('Secure API Integration Tests', () => {
@@ -137,6 +177,10 @@ describe('Secure API Integration Tests', () => {
 
     test('CloudFront distribution is active', async () => {
       const client = new CloudFrontClient({ region: 'us-east-1' });
+
+      // Wait for CloudFront to be ready
+      await waitForCloudFront(outputs.cloudfront_distribution_id, 5);
+
       const command = new GetDistributionCommand({
         Id: outputs.cloudfront_distribution_id,
       });
@@ -144,13 +188,13 @@ describe('Secure API Integration Tests', () => {
       const response = await client.send(command);
       expect(response.Distribution?.Status).toBe('Deployed');
       expect(response.Distribution?.DistributionConfig?.Enabled).toBe(true);
-    }, 30000);
+    }, 180000); // 3 minutes timeout for CloudFront
 
     test('WAF Web ACL is attached to CloudFront', async () => {
       const client = new WAFV2Client({ region: 'us-east-1' });
       const command = new GetWebACLCommand({
         Id: outputs.waf_web_acl_id,
-        Name: outputs.waf_web_acl_name || 'fintech-api-waf-acl',
+        Name: outputs.waf_web_acl_name || `fintech-api-${outputs.environment_suffix || 'dev'}-waf-acl`,
         Scope: 'CLOUDFRONT',
       });
 
@@ -161,8 +205,9 @@ describe('Secure API Integration Tests', () => {
 
     test('CloudWatch log groups exist with proper retention', async () => {
       const client = new CloudWatchLogsClient({ region: outputs.primary_region });
+      const envSuffix = outputs.environment_suffix || 'dev';
       const command = new DescribeLogGroupsCommand({
-        logGroupNamePrefix: '/aws/lambda/fintech-api',
+        logGroupNamePrefix: `/aws/lambda/fintech-api-${envSuffix}`,
       });
 
       const response = await client.send(command);
@@ -195,6 +240,11 @@ describe('Secure API Integration Tests', () => {
     let testTransactionId: string;
 
     beforeAll(async () => {
+      // Wait for CloudFront to be fully ready before E2E tests
+      console.log('Waiting for CloudFront distribution to be ready...');
+      await waitForCloudFront(outputs.cloudfront_distribution_id, 10);
+      console.log('CloudFront ready, proceeding with E2E tests');
+
       // Retrieve JWT secret for testing
       const secretsClient = new SecretsManagerClient({
         region: outputs.primary_region,
@@ -206,7 +256,7 @@ describe('Secure API Integration Tests', () => {
       const response = await secretsClient.send(command);
       const secretData = JSON.parse(response.SecretString!);
       jwtSecret = secretData.jwt_secret;
-    });
+    }, 600000); // 10 minutes for CloudFront propagation
 
     test('Valid transaction with JWT authorization succeeds', async () => {
       // Generate valid JWT token
@@ -243,7 +293,7 @@ describe('Secure API Integration Tests', () => {
         },
       };
 
-      const response = await httpsRequest(options, JSON.stringify(transaction));
+      const response = await httpsRequest(options, JSON.stringify(transaction), 5);
 
       expect(response.statusCode).toBe(200);
 
@@ -254,7 +304,7 @@ describe('Secure API Integration Tests', () => {
       expect(responseBody.transaction.status).toBe('completed');
 
       testTransactionId = responseBody.transaction.transactionId;
-    }, 30000);
+    }, 60000);
 
     test('Transaction is stored in DynamoDB', async () => {
       if (!testTransactionId) {
@@ -326,10 +376,10 @@ describe('Secure API Integration Tests', () => {
         },
       };
 
-      const response = await httpsRequest(options, JSON.stringify(transaction));
+      const response = await httpsRequest(options, JSON.stringify(transaction), 5);
       // Lambda custom authorizer returns 403 when denying access (API Gateway behavior)
       expect(response.statusCode).toBe(403);
-    }, 30000);
+    }, 60000);
 
     test('Missing authorization header returns 401', async () => {
       const transaction = {
@@ -348,9 +398,9 @@ describe('Secure API Integration Tests', () => {
         },
       };
 
-      const response = await httpsRequest(options, JSON.stringify(transaction));
+      const response = await httpsRequest(options, JSON.stringify(transaction), 5);
       expect(response.statusCode).toBe(401);
-    }, 30000);
+    }, 60000);
 
     test('Malformed request returns 400 Bad Request', async () => {
       const token = jwt.sign(
@@ -378,9 +428,9 @@ describe('Secure API Integration Tests', () => {
         },
       };
 
-      const response = await httpsRequest(options, JSON.stringify(invalidTransaction));
+      const response = await httpsRequest(options, JSON.stringify(invalidTransaction), 5);
       expect(response.statusCode).toBe(400);
-    }, 30000);
+    }, 60000);
   });
 
   describe('Security Validation', () => {
@@ -423,10 +473,10 @@ describe('Secure API Integration Tests', () => {
         },
       };
 
-      const response = await httpsRequest(options);
+      const response = await httpsRequest(options, undefined, 5);
       // WAF should block this - expect 403 Forbidden
       expect([403, 401]).toContain(response.statusCode);
-    }, 30000);
+    }, 60000);
   });
 
   describe('Performance and Monitoring', () => {
@@ -442,16 +492,17 @@ describe('Secure API Integration Tests', () => {
         },
       };
 
-      await httpsRequest(options);
+      await httpsRequest(options, undefined, 3);
 
       const duration = Date.now() - start;
       expect(duration).toBeLessThan(2000);
-    }, 30000);
+    }, 60000);
 
     test('CloudWatch alarms are in OK state', async () => {
       const client = new CloudWatchClient({ region: outputs.primary_region });
+      const envSuffix = outputs.environment_suffix || 'dev';
       const command = new DescribeAlarmsCommand({
-        AlarmNamePrefix: 'fintech-api',
+        AlarmNamePrefix: `fintech-api-${envSuffix}`,
       });
 
       const response = await client.send(command);
