@@ -1,6 +1,8 @@
+import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as codedeploy from 'aws-cdk-lib/aws-codedeploy';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
 
 export interface LambdaWithCanaryProps extends lambda.FunctionProps {
@@ -20,9 +22,22 @@ export class LambdaWithCanary extends Construct {
   constructor(scope: Construct, id: string, props: LambdaWithCanaryProps) {
     super(scope, id);
 
+    // Extract logRetention and create log group instead of using deprecated property
+    const { logRetention, ...lambdaProps } = props;
+
+    // Create CloudWatch Log Group with retention
+    const logGroup = logRetention
+      ? new logs.LogGroup(this, 'LogGroup', {
+          logGroupName: `/aws/lambda/${props.functionName}`,
+          retention: logRetention,
+          removalPolicy: cdk.RemovalPolicy.DESTROY,
+        })
+      : undefined;
+
     // Create Lambda function
     this.lambdaFunction = new lambda.Function(this, 'Function', {
-      ...props,
+      ...lambdaProps,
+      logGroup,
       // Enable active tracing for X-Ray
       tracing: lambda.Tracing.ACTIVE,
     });

@@ -7,6 +7,7 @@ export interface SecureBucketProps {
   bucketName: string;
   serverAccessLogsBucket: s3.IBucket;
   serverAccessLogsPrefix: string;
+  environmentSuffix: string;
 }
 
 export class SecureBucket extends Construct {
@@ -18,7 +19,8 @@ export class SecureBucket extends Construct {
     // Create KMS key for encryption
     const encryptionKey = new kms.Key(this, 'BucketEncryptionKey', {
       enableKeyRotation: true,
-      description: `Encryption key for ${props.bucketName}`,
+      description: `Encryption key for ${props.bucketName} (${props.environmentSuffix})`,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // Create secure bucket
@@ -45,7 +47,8 @@ export class SecureBucket extends Construct {
           ],
         },
       ],
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
     });
 
     // Add bucket policy for secure access

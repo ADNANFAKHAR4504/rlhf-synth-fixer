@@ -2,6 +2,9 @@ import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as codedeploy from 'aws-cdk-lib/aws-codedeploy';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as eventsTargets from 'aws-cdk-lib/aws-events-targets';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
@@ -15,24 +18,48 @@ import { SecureBucket } from './constructs/secure-bucket';
 
 export interface TapStackProps extends cdk.StackProps {
   pipelineSourceBucket?: s3.IBucket;
+  environmentSuffix: string;
 }
 
 export class TapStack extends cdk.Stack {
   public readonly applicationBucket: s3.Bucket;
   public readonly lambdaFunction: lambda.Function;
   public readonly pipelineSourceBucket: s3.IBucket;
+  public readonly vpc: ec2.Vpc;
 
-  constructor(scope: Construct, id: string, props?: TapStackProps) {
+  constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
+
+    const envSuffix = props.environmentSuffix;
+
+    // Create VPC for Lambda function
+    this.vpc = new ec2.Vpc(this, 'TapVpc', {
+      vpcName: `tap-vpc-${envSuffix}`,
+      maxAzs: 2,
+      natGateways: 1,
+      subnetConfiguration: [
+        {
+          cidrMask: 24,
+          name: `tap-public-${envSuffix}`,
+          subnetType: ec2.SubnetType.PUBLIC,
+        },
+        {
+          cidrMask: 24,
+          name: `tap-private-${envSuffix}`,
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+      ],
+    });
 
     // Create SNS topic for alarms
     const alarmTopic = new sns.Topic(this, 'TapAlarmTopic', {
-      displayName: 'TAP Application Alarms',
+      displayName: `TAP Application Alarms ${envSuffix}`,
+      topicName: `tap-alarm-topic-${envSuffix}`,
     });
 
     // Create secure application bucket with versioning and logging
     const loggingBucket = new s3.Bucket(this, 'TapLoggingBucket', {
-      bucketName: `tap-app-logs-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+      bucketName: `tap-app-logs-${envSuffix}-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       lifecycleRules: [
@@ -41,20 +68,22 @@ export class TapStack extends cdk.Stack {
           expiration: cdk.Duration.days(90),
         },
       ],
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
     });
 
     this.applicationBucket = new SecureBucket(this, 'TapApplicationBucket', {
-      bucketName: `tap-app-data-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+      bucketName: `tap-app-data-${envSuffix}-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
       serverAccessLogsBucket: loggingBucket,
       serverAccessLogsPrefix: 'app-bucket-logs/',
+      environmentSuffix: envSuffix,
     }).bucket;
 
     // Create source bucket for pipeline if not provided
     this.pipelineSourceBucket =
       props?.pipelineSourceBucket ||
       new s3.Bucket(this, 'TapPipelineSourceBucket', {
-        bucketName: `tap-pipeline-source-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+        bucketName: `tap-pipeline-source-${envSuffix}-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
         versioned: true,
         encryption: s3.BucketEncryption.S3_MANAGED,
         blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -64,15 +93,15 @@ export class TapStack extends cdk.Stack {
 
     // Create Dead Letter Queue
     const dlq = new sqs.Queue(this, 'TapLambdaDLQ', {
-      queueName: 'tap-lambda-dlq',
+      queueName: `tap-lambda-dlq-${envSuffix}`,
       retentionPeriod: cdk.Duration.days(14),
       encryption: sqs.QueueEncryption.KMS_MANAGED,
     });
 
     // Create Secrets Manager secret for sensitive data
     const appSecret = new secretsmanager.Secret(this, 'TapAppSecret', {
-      secretName: 'tap-app-secrets',
-      description: 'Secrets for TAP application',
+      secretName: `tap-app-secrets-${envSuffix}`,
+      description: `Secrets for TAP application ${envSuffix}`,
       generateSecretString: {
         secretStringTemplate: JSON.stringify({
           apiKey: 'placeholder',
@@ -80,6 +109,7 @@ export class TapStack extends cdk.Stack {
         generateStringKey: 'password',
         excludeCharacters: ' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
       },
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // Create Lambda execution role with least privilege
@@ -120,7 +150,7 @@ export class TapStack extends cdk.Stack {
 
     // Create Lambda with canary deployment
     const lambdaWithCanary = new LambdaWithCanary(this, 'TapLambda', {
-      functionName: 'tap-application-function',
+      functionName: `tap-application-function-${envSuffix}`,
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'handler.main',
       code: lambda.Code.fromAsset('lambda/serverless-ci-cd-function'),
@@ -129,19 +159,22 @@ export class TapStack extends cdk.Stack {
         APPLICATION_BUCKET: this.applicationBucket.bucketName,
         SECRET_ARN: appSecret.secretArn,
         NODE_ENV: 'production',
+        ENVIRONMENT: envSuffix,
       },
-      memorySize: 3008, // Maximum memory for better performance
+      memorySize: 3008,
       timeout: cdk.Duration.seconds(300),
-      // Note: Removed reservedConcurrentExecutions to use account-level unreserved capacity
-      // This allows Lambda to scale automatically while respecting account limits
       deadLetterQueue: dlq,
       logRetention: logs.RetentionDays.ONE_MONTH,
       tracing: lambda.Tracing.ACTIVE,
+      vpc: this.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
       canaryConfig: {
         deploymentConfig:
           codedeploy.LambdaDeploymentConfig.CANARY_10PERCENT_5MINUTES,
         alarmConfiguration: {
-          alarms: [], // Will be populated below
+          alarms: [],
           enabled: true,
         },
       },
@@ -149,8 +182,27 @@ export class TapStack extends cdk.Stack {
 
     this.lambdaFunction = lambdaWithCanary.lambdaFunction;
 
+    // Create EventBridge rule to trigger Lambda on S3 events
+    const eventRule = new events.Rule(this, 'TapS3EventRule', {
+      ruleName: `tap-s3-events-${envSuffix}`,
+      description: `Trigger Lambda on S3 events for ${envSuffix}`,
+      eventPattern: {
+        source: ['aws.s3'],
+        detailType: ['AWS API Call via CloudTrail'],
+        detail: {
+          eventName: ['PutObject', 'CompleteMultipartUpload'],
+          requestParameters: {
+            bucketName: [this.applicationBucket.bucketName],
+          },
+        },
+      },
+    });
+
+    eventRule.addTarget(new eventsTargets.LambdaFunction(this.lambdaFunction));
+
     // Create CloudWatch Alarms
     const errorAlarm = new cloudwatch.Alarm(this, 'TapLambdaErrorAlarm', {
+      alarmName: `tap-lambda-errors-${envSuffix}`,
       metric: this.lambdaFunction.metricErrors({
         statistic: 'Sum',
         period: cdk.Duration.minutes(1),
@@ -158,10 +210,11 @@ export class TapStack extends cdk.Stack {
       threshold: 10,
       evaluationPeriods: 2,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription: 'Lambda function error rate is too high',
+      alarmDescription: `Lambda function error rate is too high for ${envSuffix}`,
     });
 
     const throttleAlarm = new cloudwatch.Alarm(this, 'TapLambdaThrottleAlarm', {
+      alarmName: `tap-lambda-throttles-${envSuffix}`,
       metric: this.lambdaFunction.metricThrottles({
         statistic: 'Sum',
         period: cdk.Duration.minutes(1),
@@ -169,18 +222,19 @@ export class TapStack extends cdk.Stack {
       threshold: 5,
       evaluationPeriods: 1,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription: 'Lambda function is being throttled',
+      alarmDescription: `Lambda function is being throttled for ${envSuffix}`,
     });
 
     const durationAlarm = new cloudwatch.Alarm(this, 'TapLambdaDurationAlarm', {
+      alarmName: `tap-lambda-duration-${envSuffix}`,
       metric: this.lambdaFunction.metricDuration({
         statistic: 'Average',
         period: cdk.Duration.minutes(5),
       }),
-      threshold: 3000, // 3 seconds
+      threshold: 3000,
       evaluationPeriods: 2,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription: 'Lambda function duration is too high',
+      alarmDescription: `Lambda function duration is too high for ${envSuffix}`,
     });
 
     // Add alarm actions

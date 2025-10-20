@@ -9,11 +9,14 @@ import { Construct } from 'constructs';
 export interface PipelineStackProps extends cdk.StackProps {
   sourceS3Bucket: s3.IBucket;
   sourceS3Key: string;
+  environmentSuffix: string;
 }
 
 export class PipelineStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: PipelineStackProps) {
     super(scope, id, props);
+
+    const envSuffix = props.environmentSuffix;
 
     // Create artifact stores
     const sourceOutput = new codepipeline.Artifact('SourceOutput');
@@ -25,7 +28,7 @@ export class PipelineStack extends cdk.Stack {
       this,
       'TapBuildProject',
       {
-        projectName: 'tap-build',
+        projectName: `tap-build-${envSuffix}`,
         environment: {
           buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
           computeType: codebuild.ComputeType.MEDIUM,
@@ -45,7 +48,7 @@ export class PipelineStack extends cdk.Stack {
 
     // Create CodeBuild project for testing
     const testProject = new codebuild.PipelineProject(this, 'TapTestProject', {
-      projectName: 'tap-test',
+      projectName: `tap-test-${envSuffix}`,
       environment: {
         buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
         computeType: codebuild.ComputeType.MEDIUM,
@@ -113,7 +116,7 @@ export class PipelineStack extends cdk.Stack {
       this,
       'TapDeployProject',
       {
-        projectName: 'tap-deploy',
+        projectName: `tap-deploy-${envSuffix}`,
         role: deployRole,
         environment: {
           buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
@@ -142,7 +145,7 @@ export class PipelineStack extends cdk.Stack {
 
     // Create Pipeline
     const pipeline = new codepipeline.Pipeline(this, 'TapPipeline', {
-      pipelineName: 'tap-cicd-pipeline',
+      pipelineName: `tap-cicd-pipeline-${envSuffix}`,
       restartExecutionOnUpdate: true,
       crossAccountKeys: true, // Enable cross-account deployment
     });

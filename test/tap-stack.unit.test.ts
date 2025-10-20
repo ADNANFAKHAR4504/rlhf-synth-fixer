@@ -6,10 +6,13 @@ describe('TapStack', () => {
   let app: cdk.App;
   let stack: TapStack;
   let template: Template;
+  const testEnvSuffix = 'test';
 
   beforeEach(() => {
     app = new cdk.App();
-    stack = new TapStack(app, 'TestTapStack');
+    stack = new TapStack(app, 'TestTapStack', {
+      environmentSuffix: testEnvSuffix,
+    });
     template = Template.fromStack(stack);
   });
 
@@ -25,6 +28,116 @@ describe('TapStack', () => {
 
     test('Stack name should be set correctly', () => {
       expect(stack.stackName).toBeDefined();
+    });
+
+    test('Stack should have VPC configured', () => {
+      expect(stack.vpc).toBeDefined();
+      template.resourceCountIs('AWS::EC2::VPC', 1);
+    });
+  });
+
+  // ========== ENVIRONMENT SUFFIX TESTS ==========
+  describe('Environment Suffix Validation', () => {
+    test('S3 buckets should include environmentSuffix in names', () => {
+      const buckets = template.findResources('AWS::S3::Bucket');
+      const bucketNames = Object.values(buckets).map((bucket: any) => bucket.Properties?.BucketName);
+
+      // Filter out buckets with BucketName defined (not auto-generated)
+      const namedBuckets = bucketNames.filter((name: any) => name && typeof name === 'object');
+
+      expect(namedBuckets.length).toBeGreaterThan(0);
+      namedBuckets.forEach((name: any) => {
+        const bucketNameStr = JSON.stringify(name);
+        expect(bucketNameStr).toContain(testEnvSuffix);
+      });
+    });
+
+    test('SQS queue should include environmentSuffix in name', () => {
+      template.hasResourceProperties('AWS::SQS::Queue', {
+        QueueName: Match.stringLikeRegexp(`tap-lambda-dlq-${testEnvSuffix}`),
+      });
+    });
+
+    test('Secrets Manager secret should include environmentSuffix in name', () => {
+      template.hasResourceProperties('AWS::SecretsManager::Secret', {
+        Name: `tap-app-secrets-${testEnvSuffix}`,
+      });
+    });
+
+    test('Lambda function should include environmentSuffix in name', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        FunctionName: `tap-application-function-${testEnvSuffix}`,
+      });
+    });
+
+    test('CloudWatch alarms should include environmentSuffix in names', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: `tap-lambda-errors-${testEnvSuffix}`,
+      });
+
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: `tap-lambda-throttles-${testEnvSuffix}`,
+      });
+
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: `tap-lambda-duration-${testEnvSuffix}`,
+      });
+    });
+
+    test('SNS topic should include environmentSuffix in name', () => {
+      template.hasResourceProperties('AWS::SNS::Topic', {
+        TopicName: `tap-alarm-topic-${testEnvSuffix}`,
+      });
+    });
+
+    test('EventBridge rule should include environmentSuffix in name', () => {
+      template.hasResourceProperties('AWS::Events::Rule', {
+        Name: `tap-s3-events-${testEnvSuffix}`,
+      });
+    });
+
+    test('VPC should include environmentSuffix in name', () => {
+      template.hasResourceProperties('AWS::EC2::VPC', Match.objectLike({
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Name',
+            Value: Match.stringLikeRegexp(`tap-vpc-${testEnvSuffix}`),
+          }),
+        ]),
+      }));
+    });
+  });
+
+  // ========== REMOVAL POLICY TESTS ==========
+  describe('Resource Removal Policy Validation', () => {
+    test('S3 buckets should have autoDeleteObjects enabled', () => {
+      const buckets = template.findResources('AWS::S3::Bucket');
+
+      Object.values(buckets).forEach((bucket: any) => {
+        // Check for DeletionPolicy: Delete
+        expect(bucket.DeletionPolicy).toBe('Delete');
+      });
+    });
+
+    test('KMS keys should have DESTROY removal policy', () => {
+      const keys = template.findResources('AWS::KMS::Key');
+
+      Object.values(keys).forEach((key: any) => {
+        expect(key.DeletionPolicy).toBe('Delete');
+      });
+    });
+
+    test('Secrets Manager secret should have DESTROY removal policy', () => {
+      const secrets = template.findResources('AWS::SecretsManager::Secret');
+
+      Object.values(secrets).forEach((secret: any) => {
+        expect(secret.DeletionPolicy).toBe('Delete');
+      });
+    });
+
+    test('Custom resources for S3 bucket auto-delete should exist', () => {
+      // CDK creates custom resources to handle auto-delete of S3 objects
+      template.resourceCountIs('Custom::S3AutoDeleteObjects', 3); // 3 buckets with autoDeleteObjects
     });
   });
 
@@ -231,7 +344,7 @@ describe('TapStack', () => {
       // Log group is created implicitly by Lambda or through custom resource
       const func = template.findResources('AWS::Lambda::Function');
       const mainLambda = Object.values(func).find((f: any) =>
-        f.Properties?.FunctionName === 'tap-application-function'
+        f.Properties?.FunctionName === `tap-application-function-${testEnvSuffix}`
       );
       expect(mainLambda).toBeDefined();
     });
@@ -257,7 +370,7 @@ describe('TapStack', () => {
 
     test('DLQ should have proper queue name', () => {
       template.hasResourceProperties('AWS::SQS::Queue', {
-        QueueName: 'tap-lambda-dlq',
+        QueueName: `tap-lambda-dlq-${testEnvSuffix}`,
       });
     });
   });
@@ -270,8 +383,8 @@ describe('TapStack', () => {
 
     test('Secret should have proper name and description', () => {
       template.hasResourceProperties('AWS::SecretsManager::Secret', {
-        Name: 'tap-app-secrets',
-        Description: 'Secrets for TAP application',
+        Name: `tap-app-secrets-${testEnvSuffix}`,
+        Description: `Secrets for TAP application ${testEnvSuffix}`,
       });
     });
 
@@ -467,7 +580,7 @@ describe('TapStack', () => {
 
     test('SNS topic should have display name', () => {
       template.hasResourceProperties('AWS::SNS::Topic', {
-        DisplayName: 'TAP Application Alarms',
+        DisplayName: `TAP Application Alarms ${testEnvSuffix}`,
       });
     });
   });
@@ -510,6 +623,80 @@ describe('TapStack', () => {
           DeploymentOption: 'WITH_TRAFFIC_CONTROL',
           DeploymentType: 'BLUE_GREEN',
         },
+      });
+    });
+  });
+
+  // ========== VPC CONFIGURATION TESTS ==========
+  describe('VPC Configuration', () => {
+    test('Should create VPC', () => {
+      template.resourceCountIs('AWS::EC2::VPC', 1);
+    });
+
+    test('VPC should have public and private subnets', () => {
+      template.resourceCountIs('AWS::EC2::Subnet', 4); // 2 public + 2 private (2 AZs)
+    });
+
+    test('VPC should have NAT Gateway for private subnet egress', () => {
+      template.resourceCountIs('AWS::EC2::NatGateway', 1);
+    });
+
+    test('VPC should have Internet Gateway', () => {
+      template.resourceCountIs('AWS::EC2::InternetGateway', 1);
+    });
+
+    test('Lambda function should be configured with VPC', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        VpcConfig: Match.objectLike({
+          SubnetIds: Match.anyValue(),
+          SecurityGroupIds: Match.anyValue(),
+        }),
+      });
+    });
+
+    test('VPC should have appropriate route tables', () => {
+      template.resourceCountIs('AWS::EC2::RouteTable', 4); // 2 public + 2 private
+    });
+  });
+
+  // ========== EVENTBRIDGE INTEGRATION TESTS ==========
+  describe('EventBridge Integration', () => {
+    test('Should create EventBridge rule', () => {
+      template.resourceCountIs('AWS::Events::Rule', 1);
+    });
+
+    test('EventBridge rule should target Lambda function', () => {
+      template.hasResourceProperties('AWS::Events::Rule', {
+        Name: `tap-s3-events-${testEnvSuffix}`,
+        Description: `Trigger Lambda on S3 events for ${testEnvSuffix}`,
+        State: 'ENABLED',
+      });
+    });
+
+    test('EventBridge rule should have S3 event pattern', () => {
+      template.hasResourceProperties('AWS::Events::Rule', {
+        EventPattern: Match.objectLike({
+          source: ['aws.s3'],
+          'detail-type': ['AWS API Call via CloudTrail'],
+        }),
+      });
+    });
+
+    test('Lambda should have permission to be invoked by EventBridge', () => {
+      template.hasResourceProperties('AWS::Lambda::Permission', {
+        Action: 'lambda:InvokeFunction',
+        Principal: 'events.amazonaws.com',
+      });
+    });
+
+    test('EventBridge rule should have targets configured', () => {
+      template.hasResourceProperties('AWS::Events::Rule', {
+        Targets: Match.arrayWith([
+          Match.objectLike({
+            Arn: Match.anyValue(),
+            Id: Match.anyValue(),
+          }),
+        ]),
       });
     });
   });
@@ -755,6 +942,39 @@ describe('TapStack', () => {
       template.resourceCountIs('AWS::Lambda::Alias', 1);
       template.resourceCountIs('AWS::CodeDeploy::DeploymentGroup', 1);
     });
+
+    test('LambdaWithCanary should work without logRetention', () => {
+      // Create a separate stack to test LambdaWithCanary without logRetention
+      const testApp = new cdk.App();
+      const testStack = new cdk.Stack(testApp, 'TestStack');
+
+      // Import necessary modules
+      const lambda = require('aws-cdk-lib/aws-lambda');
+      const codedeploy = require('aws-cdk-lib/aws-codedeploy');
+      const { LambdaWithCanary } = require('../lib/constructs/lambda-with-canary');
+
+      // Create LambdaWithCanary without logRetention
+      const lambdaWithCanary = new LambdaWithCanary(testStack, 'TestLambda', {
+        functionName: 'test-function',
+        runtime: lambda.Runtime.NODEJS_18_X,
+        handler: 'index.handler',
+        code: lambda.Code.fromInline('exports.handler = async () => ({ statusCode: 200 });'),
+        canaryConfig: {
+          deploymentConfig: codedeploy.LambdaDeploymentConfig.CANARY_10PERCENT_5MINUTES,
+          alarmConfiguration: {
+            alarms: [],
+            enabled: true,
+          },
+        },
+        // Note: No logRetention specified to test the false branch
+      });
+
+      expect(lambdaWithCanary.lambdaFunction).toBeDefined();
+
+      // Verify the template was created correctly
+      const testTemplate = Template.fromStack(testStack);
+      testTemplate.resourceCountIs('AWS::Lambda::Function', 1);
+    });
   });
 
   // ========== REGION AGNOSTIC TESTS ==========
@@ -789,7 +1009,7 @@ describe('TapStack', () => {
       // Log retention is managed through custom resource or implicit creation
       const func = template.findResources('AWS::Lambda::Function');
       const mainLambda = Object.values(func).find((f: any) =>
-        f.Properties?.FunctionName === 'tap-application-function'
+        f.Properties?.FunctionName === `tap-application-function-${testEnvSuffix}`
       );
       expect(mainLambda).toBeDefined();
     });

@@ -17,7 +17,8 @@ Tags.of(app).add('Repository', repositoryName);
 Tags.of(app).add('Author', commitAuthor);
 
 new TapStack(app, stackName, {
-  stackName: stackName, // This ensures CloudFormation stack name includes the suffix
+  stackName: stackName,
+  environmentSuffix: environmentSuffix,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION,
