@@ -586,4 +586,57 @@ describe('TapStack - Secure Multi-Tier AWS Environment', () => {
       template.resourceCountIs('AWS::S3::Bucket', 0);
     });
   });
+
+  describe('Dynamic SG Aspects by Tier (branch coverage)', () => {
+    test('adds HTTPS rule for web tier', () => {
+      const webApp = new cdk.App();
+      webApp.node.setContext('environmentSuffix', 'test');
+      webApp.node.setContext('tier', 'web');
+      const webStack = new TapStack(webApp, 'WebTierStack', {
+        environmentSuffix: 'test',
+        env: { account: '123456789012', region: 'us-east-1' },
+      });
+      const webTemplate = Template.fromStack(webStack);
+      webTemplate.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupDescription: 'Security group with dynamic rules based on instance tags',
+        SecurityGroupIngress: Match.arrayWith([
+          Match.objectLike({ FromPort: 443, ToPort: 443, IpProtocol: 'tcp' }),
+        ]),
+      });
+    });
+
+    test('adds app port rule for app tier', () => {
+      const appApp = new cdk.App();
+      appApp.node.setContext('environmentSuffix', 'test');
+      appApp.node.setContext('tier', 'app');
+      const appStack = new TapStack(appApp, 'AppTierStack', {
+        environmentSuffix: 'test',
+        env: { account: '123456789012', region: 'us-east-1' },
+      });
+      const appTemplate = Template.fromStack(appStack);
+      appTemplate.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupDescription: 'Security group with dynamic rules based on instance tags',
+        SecurityGroupIngress: Match.arrayWith([
+          Match.objectLike({ FromPort: 8080, ToPort: 8080, IpProtocol: 'tcp' }),
+        ]),
+      });
+    });
+
+    test('adds database port rule for data tier', () => {
+      const dataApp = new cdk.App();
+      dataApp.node.setContext('environmentSuffix', 'test');
+      dataApp.node.setContext('tier', 'data');
+      const dataStack = new TapStack(dataApp, 'DataTierStack', {
+        environmentSuffix: 'test',
+        env: { account: '123456789012', region: 'us-east-1' },
+      });
+      const dataTemplate = Template.fromStack(dataStack);
+      dataTemplate.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupDescription: 'Security group with dynamic rules based on instance tags',
+        SecurityGroupIngress: Match.arrayWith([
+          Match.objectLike({ FromPort: 5432, ToPort: 5432, IpProtocol: 'tcp' }),
+        ]),
+      });
+    });
+  });
 });
