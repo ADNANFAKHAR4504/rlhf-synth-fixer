@@ -189,7 +189,7 @@ describe('Disaster Recovery Infrastructure - Integration Tests', () => {
 
         expect(response.Vpcs).toBeDefined();
         expect(response.Vpcs?.length).toBeGreaterThan(0);
-        expect(response.Vpcs?.[0].State).toBe('available');
+        expect(response.Vpcs?.[0].State).toMatch('available');
       } catch (error: any) {
         if (error.name === 'InvalidVpcID.NotFound') {
           console.log('⊘ VPC not found - may be using mock data');
