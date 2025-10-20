@@ -1130,7 +1130,7 @@ resource "aws_rds_cluster" "dr" {
   })
 
   lifecycle {
-    ignore_changes = [engine_version]
+    ignore_changes = [engine_version, global_cluster_identifier]
   }
 
   depends_on = [aws_rds_cluster.primary]
