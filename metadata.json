@@ -1,0 +1,14 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "291194",
+  "team": "3",
+  "startedAt": "2025-10-20T09:16:52.004Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "VPC, Subnet, InternetGateway, RouteTable, Route, SecurityGroup, EC2Instance, IAMRole, IAMInstanceProfile, IAMPolicy, S3Bucket, S3BucketPolicy, KMSKey, CloudTrail, CloudWatchAlarm, SNSTopic, SNSSubscription"
+}
