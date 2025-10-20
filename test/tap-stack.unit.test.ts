@@ -38,6 +38,38 @@ describe('ServerlessInfrastructureStack and Lambda handler', () => {
     template = Template.fromStack(stack);
   });
 
+  describe('Api url fallback branches', () => {
+    test('uses unknown when RestApi.url is undefined', () => {
+      const apigateway = require('aws-cdk-lib/aws-apigateway');
+      const spy = jest.spyOn(apigateway.RestApi.prototype, 'url', 'get').mockReturnValue(undefined);
+
+      const a = new cdk.App();
+      const s = new ServerlessInfrastructureStack(a, 'StackApiUrlUndefined');
+      const t = Template.fromStack(s);
+      const json = t.toJSON();
+      // ApiUrl output should use the fallback 'unknown'
+      expect(json.Outputs).toBeDefined();
+      const apiUrlOutput = json.Outputs && json.Outputs.ApiUrl && json.Outputs.ApiUrl.Value;
+      expect(apiUrlOutput).toBe('unknown');
+
+      spy.mockRestore();
+    });
+
+    test('uses actual url when RestApi.url is present', () => {
+      const apigateway = require('aws-cdk-lib/aws-apigateway');
+      const spy = jest.spyOn(apigateway.RestApi.prototype, 'url', 'get').mockReturnValue('https://example.test/');
+
+      const a = new cdk.App();
+      const s = new ServerlessInfrastructureStack(a, 'StackApiUrlPresent');
+      const t = Template.fromStack(s);
+      const json = t.toJSON();
+      const apiUrlOutput = json.Outputs && json.Outputs.ApiUrl && json.Outputs.ApiUrl.Value;
+      expect(apiUrlOutput).toBe('https://example.test/');
+
+      spy.mockRestore();
+    });
+  });
+
   test('synthesizes expected resources', () => {
     const json = template.toJSON();
     expect(json).toHaveProperty('Resources');
@@ -71,9 +103,9 @@ describe('ServerlessInfrastructureStack and Lambda handler', () => {
     });
 
     test('writes item to DynamoDB and returns 201 on valid input', async () => {
-  // Arrange: SSM returns config, DynamoDB put succeeds
-  getParameterMock.mockReturnValueOnce({ promise: () => Promise.resolve({ Parameter: { Value: JSON.stringify({ apiVersion: '1.0' }) } }) });
-  putMock.mockReturnValueOnce({ promise: () => Promise.resolve({}) });
+      // Arrange: SSM returns config, DynamoDB put succeeds
+      getParameterMock.mockReturnValueOnce({ promise: () => Promise.resolve({ Parameter: { Value: JSON.stringify({ apiVersion: '1.0' }) } }) });
+      putMock.mockReturnValueOnce({ promise: () => Promise.resolve({}) });
 
       const event = { body: JSON.stringify({ id: 'abc-123', payload: { foo: 'bar' } }) };
       const res = await handler(event);
@@ -101,8 +133,8 @@ describe('ServerlessInfrastructureStack and Lambda handler', () => {
 
     test('handles SSM failure gracefully and still stores item', async () => {
       // SSM throws; DynamoDB put succeeds
-  getParameterMock.mockReturnValueOnce({ promise: () => Promise.reject(new Error('SSM failure')) });
-  putMock.mockReturnValueOnce({ promise: () => Promise.resolve({}) });
+      getParameterMock.mockReturnValueOnce({ promise: () => Promise.reject(new Error('SSM failure')) });
+      putMock.mockReturnValueOnce({ promise: () => Promise.resolve({}) });
 
       const event = { body: JSON.stringify({ id: 'xyz-789', payload: {} }) };
       const res = await handler(event);
@@ -139,32 +171,58 @@ describe('ServerlessInfrastructureStack and Lambda handler', () => {
   });
 });
 
-  describe('stack env selection branches', () => {
-    test('uses envSuffix prop when provided', () => {
-      const a = new cdk.App();
-      const s = new ServerlessInfrastructureStack(a, 'StackWithProp', { envSuffix: 'propenv' });
-      const t = Template.fromStack(s);
-      const json = t.toJSON();
-      // Expect exports with prop-based suffix
-      const outputs = json.Outputs || {};
-      expect(Object.keys(outputs).length).toBeGreaterThanOrEqual(1);
-    });
-
-    test('falls back to process.env.ENV when envSuffix not provided', () => {
-      process.env.ENV = 'envvar';
-      const a = new cdk.App();
-      const s = new ServerlessInfrastructureStack(a, 'StackWithEnvVar');
-      const t = Template.fromStack(s);
-      const json = t.toJSON();
-      expect(json.Outputs).toBeDefined();
-      delete process.env.ENV;
-    });
-
-    test('defaults to dev when neither envSuffix nor ENV provided', () => {
-      const a = new cdk.App();
-      const s = new ServerlessInfrastructureStack(a, 'StackWithDefault');
-      const t = Template.fromStack(s);
-      const json = t.toJSON();
-      expect(json.Outputs).toBeDefined();
-    });
+describe('stack env selection branches', () => {
+  test('uses envSuffix prop when provided', () => {
+    const a = new cdk.App();
+    const s = new ServerlessInfrastructureStack(a, 'StackWithProp', { envSuffix: 'propenv' });
+    const t = Template.fromStack(s);
+    const json = t.toJSON();
+    // Expect exports with prop-based suffix
+    const outputs = json.Outputs || {};
+    expect(Object.keys(outputs).length).toBeGreaterThanOrEqual(1);
   });
+
+  test('falls back to process.env.ENV when envSuffix not provided', () => {
+    process.env.ENV = 'envvar';
+    const a = new cdk.App();
+    const s = new ServerlessInfrastructureStack(a, 'StackWithEnvVar');
+    const t = Template.fromStack(s);
+    const json = t.toJSON();
+    expect(json.Outputs).toBeDefined();
+    delete process.env.ENV;
+  });
+
+  test('defaults to dev when neither envSuffix nor ENV provided', () => {
+    const a = new cdk.App();
+    const s = new ServerlessInfrastructureStack(a, 'StackWithDefault');
+    const t = Template.fromStack(s);
+    const json = t.toJSON();
+    expect(json.Outputs).toBeDefined();
+  });
+});
+
+describe('SNS subscription and alarms branches', () => {
+  test('creates SNS subscription when EMAIL_ALERT_TOPIC_ADDRESS is set', () => {
+    process.env.EMAIL_ALERT_TOPIC_ADDRESS = 'alerts@example.com';
+    const a = new cdk.App();
+    const s = new ServerlessInfrastructureStack(a, 'StackWithEmailSub');
+    const t = Template.fromStack(s);
+    const json = t.toJSON();
+    // When email is provided, a subscription resource should exist
+    const resources = Object.values(json.Resources || {}).map((r: any) => r.Type);
+    expect(resources).toContain('AWS::SNS::Subscription');
+    delete process.env.EMAIL_ALERT_TOPIC_ADDRESS;
+  });
+
+  test('does not create SNS subscription when EMAIL_ALERT_TOPIC_ADDRESS is not set', () => {
+    delete process.env.EMAIL_ALERT_TOPIC_ADDRESS;
+    const a = new cdk.App();
+    const s = new ServerlessInfrastructureStack(a, 'StackWithoutEmailSub');
+    const t = Template.fromStack(s);
+    const json = t.toJSON();
+    const resources = Object.values(json.Resources || {}).map((r: any) => r.Type);
+    // There may still be a Topic resource, but no Subscription should be present
+    const hasSubscription = resources.includes('AWS::SNS::Subscription');
+    expect(hasSubscription).toBe(false);
+  });
+});

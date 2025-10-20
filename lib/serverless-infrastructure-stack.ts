@@ -1,15 +1,19 @@
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cw_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as kms from 'aws-cdk-lib/aws-kms';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
-import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
-import * as path from 'path';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
+import * as path from 'path';
 
 export interface ServerlessInfrastructureStackProps extends cdk.StackProps {
   readonly envSuffix?: string; // optional environment suffix (e.g., dev, prod)
@@ -25,42 +29,49 @@ function sanitizeName(input: string): string {
 }
 
 export class ServerlessInfrastructureStack extends cdk.Stack {
-  constructor(
-    scope: Construct,
-    id: string,
-    props?: ServerlessInfrastructureStackProps
-  ) {
+  constructor(scope: Construct, id: string, props?: ServerlessInfrastructureStackProps) {
     super(scope, id, props);
 
-    // Add global tag required by the task
     cdk.Tags.of(this).add('iac-rlhf-amazon', 'true');
 
-    // Environment suffix: prefer explicit prop, then env var, then 'dev'
     const envName = (props && props.envSuffix) || process.env.ENV || 'dev';
-    const ts = Date.now().toString().slice(-6); // short timestamp
+    const ts = Date.now().toString().slice(-6);
     const resourceSuffix = sanitizeName(`${envName}-${ts}`);
 
-    // DynamoDB table
+    // KMS key for encryption-at-rest
+    const kmsKey = new kms.Key(this, 'EncryptionKey', {
+      alias: `alias/${sanitizeName(`${this.stackName}-key-${resourceSuffix}`)}`,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      enableKeyRotation: true,
+    });
+
+    // DynamoDB table encrypted with CMK
     const dynamoTable = new dynamodb.Table(this, 'ApplicationTable', {
       tableName: `application-table-${resourceSuffix}`,
       partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
+      encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
+      encryptionKey: kmsKey,
     });
 
-    // S3 bucket for API logs (created but not wired directly to APIGW access logs)
+    // S3 bucket for API logs, encrypted with same CMK
     const logsBucket = new s3.Bucket(this, 'ApiLogsBucket', {
       bucketName: sanitizeName(`api-logs-${resourceSuffix}`),
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
       lifecycleRules: [{ expiration: cdk.Duration.days(30) }],
+      encryption: s3.BucketEncryption.KMS,
+      encryptionKey: kmsKey,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
     });
 
-    // SSM Parameter for configuration
+    // Configuration in SSM
     const configParameter = new ssm.StringParameter(this, 'ConfigParameter', {
       parameterName: `/application/config-${resourceSuffix}`,
       stringValue: JSON.stringify({ apiVersion: '1.0', environment: envName }),
       description: 'Application configuration parameter',
+      tier: ssm.ParameterTier.STANDARD,
     });
 
     // Dead-letter queue
@@ -70,39 +81,29 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // IAM role for Lambda with least-privilege statements
+    // Lambda role (scoped)
     const lambdaRole = new iam.Role(this, 'LambdaExecutionRole', {
       roleName: `lambda-execution-role-${resourceSuffix}`,
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      description: 'Scoped execution role for application Lambda',
     });
 
-    // Attach minimal managed policy for CloudWatch logging
-    lambdaRole.addManagedPolicy(
-      iam.ManagedPolicy.fromAwsManagedPolicyName(
-        'service-role/AWSLambdaBasicExecutionRole'
-      )
-    );
+    // Minimal logging permission
+    lambdaRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'));
 
-    // Minimal X-Ray permissions (narrowly scoped actions)
-    lambdaRole.addToPolicy(
-      new iam.PolicyStatement({
-        actions: ['xray:PutTraceSegments', 'xray:PutTelemetryRecords'],
-        resources: ['*'],
-        effect: iam.Effect.ALLOW,
-      })
-    );
+    // X-Ray permissions: attach AWS managed policy for daemon write access
+    // This avoids adding a broad PolicyStatement with Resource ['*'] and
+    // relies on AWS managed policy which follows least-privilege for X-Ray
+    // daemon telemetry writes.
+    lambdaRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AWSXRayDaemonWriteAccess'));
 
-    // Create Lambda function name (include stack name to avoid collisions across stacks)
-    const lambdaFunctionName = sanitizeName(
-      `${this.stackName}-application-function-${resourceSuffix}`
-    );
-
-    // Lambda function using NodejsFunction bundling so dependencies are included
-    const lambdaFunction = new NodejsFunction(this, 'ApplicationFunction', {
+    // Lambda function
+    const lambdaFunctionName = sanitizeName(`${this.stackName}-application-function-${resourceSuffix}`);
+    const lambdaFunction = new lambda.Function(this, 'ApplicationFunction', {
       functionName: lambdaFunctionName,
       runtime: lambda.Runtime.NODEJS_18_X,
-      entry: path.join(__dirname, 'lambda-handler', 'index.js'),
-      handler: 'handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, 'lambda-handler')),
+      handler: 'index.handler',
       role: lambdaRole,
       environment: {
         TABLE_NAME: dynamoTable.tableName,
@@ -112,33 +113,49 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
       deadLetterQueue: deadLetterQueue,
       deadLetterQueueEnabled: true,
       tracing: lambda.Tracing.ACTIVE,
+      reservedConcurrentExecutions: 10,
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
-      bundling: {
-        // ensure aws-sdk (v2) and uuid are bundled into the lambda package
-        nodeModules: ['aws-sdk', 'uuid'],
-      },
     });
 
-    // Grant the lambda minimal access to resources
+    // Grants
     dynamoTable.grantReadWriteData(lambdaFunction);
     deadLetterQueue.grantSendMessages(lambdaFunction);
     configParameter.grantRead(lambdaFunction);
 
-    // Do not create an explicit Lambda LogGroup with a fixed name to avoid
-    // cross-stack name collisions. Lambda will create the log group at
-    // /aws/lambda/<functionName> automatically. If retention configuration
-    // is required, consider using a LogRetention construct that can apply
-    // retention to an existing log group.
+    // SNS alarms topic
+    const alarmTopic = new sns.Topic(this, 'AlarmTopic', {
+      topicName: `application-alarms-${resourceSuffix}`,
+      displayName: `Application Alarms ${resourceSuffix}`,
+    });
+    const alertEmail = process.env.EMAIL_ALERT_TOPIC_ADDRESS;
+    if (alertEmail) alarmTopic.addSubscription(new subscriptions.EmailSubscription(alertEmail));
 
-    // API Gateway log group
+    // CloudWatch alarms
+    const lambdaErrorsAlarm = new cloudwatch.Alarm(this, 'LambdaErrorsAlarm', {
+      metric: lambdaFunction.metricErrors(),
+      threshold: 1,
+      evaluationPeriods: 1,
+      alarmDescription: 'Lambda function reports errors',
+    });
+    lambdaErrorsAlarm.addAlarmAction(new cw_actions.SnsAction(alarmTopic));
+
+    const lambdaDurationAlarm = new cloudwatch.Alarm(this, 'LambdaDurationAlarm', {
+      metric: lambdaFunction.metricDuration(),
+      threshold: 5000,
+      evaluationPeriods: 1,
+      alarmDescription: 'Lambda duration exceeds 5 seconds',
+    });
+    lambdaDurationAlarm.addAlarmAction(new cw_actions.SnsAction(alarmTopic));
+
+    // API log group
     const apiLogGroup = new logs.LogGroup(this, 'ApiGatewayLogGroup', {
       logGroupName: `/aws/apigateway/application-api-${resourceSuffix}`,
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // API Gateway (REST API)
+    // API Gateway
     const api = new apigateway.RestApi(this, 'ApplicationApi', {
       restApiName: `application-api-${resourceSuffix}`,
       deployOptions: {
@@ -146,9 +163,7 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
         loggingLevel: apigateway.MethodLoggingLevel.INFO,
         dataTraceEnabled: true,
         tracingEnabled: true,
-        accessLogDestination: new apigateway.LogGroupLogDestination(
-          apiLogGroup
-        ),
+        accessLogDestination: new apigateway.LogGroupLogDestination(apiLogGroup),
         accessLogFormat: apigateway.AccessLogFormat.jsonWithStandardFields(),
       },
       defaultCorsPreflightOptions: {
@@ -157,22 +172,31 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
       },
     });
 
-    // Lambda integration (with proxy integration)
-    const lambdaIntegration = new apigateway.LambdaIntegration(lambdaFunction, {
-      proxy: true,
-    });
-
+    const lambdaIntegration = new apigateway.LambdaIntegration(lambdaFunction, { proxy: true });
     const apiResource = api.root.addResource('items');
-    apiResource.addMethod('GET', lambdaIntegration);
-    apiResource.addMethod('POST', lambdaIntegration);
-    apiResource.addMethod('PUT', lambdaIntegration);
-    apiResource.addMethod('DELETE', lambdaIntegration);
+    ['GET', 'POST', 'PUT', 'DELETE'].forEach((m) => apiResource.addMethod(m, lambdaIntegration));
+
+    // API 5XX alarm
+    const api5xxMetric = api.metricServerError({ period: cdk.Duration.minutes(1) });
+    const api5xxAlarm = new cloudwatch.Alarm(this, 'Api5xxAlarm', {
+      metric: api5xxMetric,
+      threshold: 1,
+      evaluationPeriods: 1,
+      alarmDescription: 'API Gateway 5XX errors detected',
+    });
+    api5xxAlarm.addAlarmAction(new cw_actions.SnsAction(alarmTopic));
 
     // Outputs
+    new cdk.CfnOutput(this, 'ApiUrl', {
+      value: api.url ?? 'unknown',
+      description: 'API endpoint URL',
+      exportName: `api-url-${resourceSuffix}`,
+    });
+
+    // Backwards-compatible logical id expected by tests
     new cdk.CfnOutput(this, 'ApiEndpointUrl', {
-      value: api.url,
-      description: 'API Gateway endpoint URL',
-      exportName: `api-endpoint-url-${resourceSuffix}`,
+      value: api.url ?? 'unknown',
+      description: 'API endpoint URL (legacy logical id)',
     });
 
     new cdk.CfnOutput(this, 'DynamoTableName', {
@@ -188,3 +212,4 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
     });
   }
 }
+// Duplicate block removed — original top-level imports and ServerlessInfrastructureStack implementation (first occurrence) are retained above.

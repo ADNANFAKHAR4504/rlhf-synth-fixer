@@ -49,3 +49,45 @@ Evidence:
 
 ---
 
+7) Missing encryption-at-rest using KMS for sensitive resources
+
+Evidence:
+> No KMS key or server-side encryption configuration is used for DynamoDB or S3 in the generated stack.
+
+---
+
+8) Overly broad IAM permissions and X-Ray policy
+
+Evidence:
+> `resources: ['*']` used for X-Ray and other inline policies in the generated stack.
+
+---
+
+9) No CloudWatch Alarms or enhanced observability configured
+
+Evidence:
+> The generated stack creates log groups and enables tracing but does not create any alarms, metric filters, or dashboards.
+
+---
+
+10) Error handling and retry patterns are minimal
+
+Evidence:
+> Lambda code contains try/catch around DynamoDB put, but no structured retry/backoff or idempotency guidance.
+
+
+---
+
+11) Cost and tagging omissions
+
+Evidence:
+> No resource tagging beyond the single required tag; no table TTL or cost optimization hints.
+
+---
+
+12) Bundling and CI assumptions not recorded or enforced
+
+Evidence:
+> The Lambda assumed `aws-sdk` would be available. NodejsFunction bundling was later added, but bundling requires Docker or esbuild in CI, and bundling steps rely on lockfile consistency.
+---
+
