@@ -283,25 +283,41 @@ class TestServiceLevelCloudWatchOperations(unittest.TestCase):
             
             # ACTION: Write log event
             print(f"Writing log event to CloudWatch")
-            logs_client.put_log_events(
+            # Use current timestamp in milliseconds (CloudWatch requirement)
+            current_timestamp_ms = int(time.time() * 1000)
+            put_response = logs_client.put_log_events(
                 logGroupName=test_log_group,
                 logStreamName=test_log_stream,
                 logEvents=[
                     {
-                        'timestamp': int(time.time() * 1000),
+                        'timestamp': current_timestamp_ms,
                         'message': test_message
                     }
                 ]
             )
+            print(f"Put log events response: nextSequenceToken={put_response.get('nextSequenceToken', 'N/A')}")
             
-            # VERIFY: Query the log events (logs are immediately available)
-            response = logs_client.get_log_events(
-                logGroupName=test_log_group,
-                logStreamName=test_log_stream
-            )
+            # Check if put_log_events had any rejected events
+            if put_response.get('rejectedLogEventsInfo'):
+                self.fail(f"Log events were rejected: {put_response['rejectedLogEventsInfo']}")
             
-            events = response.get('events', [])
-            self.assertGreater(len(events), 0, "Log events should be immediately queryable")
+            # VERIFY: Query the log events with retry (CloudWatch Logs has eventual consistency)
+            events = []
+            max_retries = 10  # Increased to 10 seconds
+            for attempt in range(max_retries):
+                response = logs_client.get_log_events(
+                    logGroupName=test_log_group,
+                    logStreamName=test_log_stream,
+                    startFromHead=True  # Read from beginning
+                )
+                events = response.get('events', [])
+                if len(events) > 0:
+                    print(f"Log events retrieved after {attempt + 1} attempt(s)")
+                    break
+                if attempt < max_retries - 1:
+                    time.sleep(1)  # Wait 1 second before retry
+            
+            self.assertGreater(len(events), 0, f"Log events should be queryable within {max_retries} seconds. Put response: {put_response}")
             
             # Verify our message is in the logs
             messages = [event['message'] for event in events]
