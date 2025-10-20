@@ -663,9 +663,7 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - budgets:Describe*
-                  - budgets:Get*
-                  - budgets:View*
+                  - budgets:ViewBudget
                 Resource: '*'
       Tags:
         - Key: Name

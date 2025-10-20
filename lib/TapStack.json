@@ -1190,6 +1190,21 @@
                                 }
                             ]
                         }
+                    },
+                    {
+                        "PolicyName": "BudgetsReadAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "budgets:ViewBudget"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
                     }
                 ],
                 "Tags": [
@@ -2017,6 +2032,17 @@
                 }
             }
         },
+        "IAMUserMfaEnabledRule": {
+            "Type": "AWS::Config::ConfigRule",
+            "DependsOn": "ConfigRecorder",
+            "Properties": {
+                "Description": "Checks that IAM users have MFA enabled",
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "IAM_USER_MFA_ENABLED"
+                }
+            }
+        },
         "NovaLaunchTemplate": {
             "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
@@ -2040,7 +2066,7 @@
                     ],
                     "BlockDeviceMappings": [
                         {
-                            "DeviceName": "/dev/sdf",
+                            "DeviceName": "/dev/xvda",
                             "Ebs": {
                                 "VolumeSize": 20,
                                 "VolumeType": "gp3",
@@ -2140,14 +2166,14 @@
                         "IpProtocol": "tcp",
                         "FromPort": 80,
                         "ToPort": 80,
-                        "CidrIp": "0.0.0.0/0",
+                        "CidrIp": "203.0.113.0/24",
                         "Description": "HTTP outbound to specific IP ranges"
                     },
                     {
                         "IpProtocol": "tcp",
                         "FromPort": 443,
                         "ToPort": 443,
-                        "CidrIp": "0.0.0.0/0",
+                        "CidrIp": "203.0.113.0/24",
                         "Description": "HTTPS outbound to specific IP ranges"
                     }
                 ],
@@ -2182,7 +2208,7 @@
                     "Ref": "NovaAppSecurityGroup"
                 },
                 "IpProtocol": -1,
-                "CidrIp": "0.0.0.0/0",
+                "CidrIp": "203.0.113.0/24",
                 "Description": "Restricted outbound traffic to allowed IP ranges"
             }
         },

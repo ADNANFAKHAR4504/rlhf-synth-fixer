@@ -1,5 +1,10 @@
 ```yml
 
+# secure_infrastructure.yaml
+# CloudFormation template for Nova Clinical Trial Data Platform
+# Region: us-west-2
+# Purpose: Secure infrastructure for handling sensitive patient trial data
+
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Nova Clinical Trial Data Platform - Secure Infrastructure Foundation'
 
@@ -15,6 +20,7 @@ Parameters:
     AllowedValues: ['dev', 'staging', 'prod']
     Description: 'Environment name for resource naming convention'
 
+
   NotificationEmail:
     Type: String
     Default: 'admin@nova-clinical.com'
@@ -28,10 +34,13 @@ Parameters:
     MinValue: 1
     MaxValue: 100000
 
+
   EC2ImageId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
     Description: 'AMI ID for the EC2 instance (uses latest Amazon Linux 2 AMI by default, or specify custom AMI ID)'
+
+
 
 Resources:
   # ==========================================
@@ -650,6 +659,14 @@ Resources:
                   - tag:GetTagKeys
                   - tag:GetTagValues
                 Resource: '*'
+        - PolicyName: BudgetsReadAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - budgets:ViewBudget
+                Resource: '*'
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${Environment}-readonly-role'
@@ -1120,6 +1137,15 @@ Resources:
         Owner: AWS
         SourceIdentifier: RDS_INSTANCE_PUBLIC_ACCESS_CHECK
 
+  IAMUserMfaEnabledRule:
+    Type: AWS::Config::ConfigRule
+    DependsOn: ConfigRecorder
+    Properties:
+      Description: 'Checks that IAM users have MFA enabled'
+      Source:
+        Owner: AWS
+        SourceIdentifier: IAM_USER_MFA_ENABLED
+
   # Launch Template with IMDSv2 Enforcement
   NovaLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
@@ -1133,7 +1159,7 @@ Resources:
         SecurityGroupIds:
           - !Ref NovaAppSecurityGroup
         BlockDeviceMappings:
-          - DeviceName: '/dev/sdf'
+          - DeviceName: '/dev/xvda'
             Ebs:
               VolumeSize: 20
               VolumeType: gp3
@@ -1198,12 +1224,12 @@ Resources:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          CidrIp: 0.0.0.0/0
+          CidrIp: 203.0.113.0/24
           Description: 'HTTP outbound to specific IP ranges'
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
-          CidrIp: 0.0.0.0/0
+          CidrIp: 203.0.113.0/24
           Description: 'HTTPS outbound to specific IP ranges'
       Tags:
         - Key: Name
@@ -1221,7 +1247,7 @@ Resources:
     Properties:
       GroupId: !Ref NovaAppSecurityGroup
       IpProtocol: -1
-      CidrIp: 0.0.0.0/0
+      CidrIp: 203.0.113.0/24
       Description: 'Restricted outbound traffic to allowed IP ranges'
 
   # 9. NovaCloudFront Distribution
@@ -1562,5 +1588,6 @@ Outputs:
     Value: !Ref NovaCloudWatchLogsVPCEndpoint
     Export:
       Name: !Sub '${ProjectName}-${Environment}-cloudwatch-logs-vpc-endpoint-id'
-      
+
+
 ```
