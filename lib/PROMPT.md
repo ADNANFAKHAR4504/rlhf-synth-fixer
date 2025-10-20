@@ -1,7 +1,7 @@
-Generate a production-ready AWS CDKTF TypeScript project that provisions a secure, resilient web-application infrastructure in us-east-1. The generator must output ONLY TWO files: `lib/tap-stack.ts` and `lib/modules.ts`. Do NOT produce any other files (no `main.ts`, `package.json`, `tsconfig.json`, `cdktf.json`, README, or test harness). Provide the full content of each file in its own code block labeled with the file path.
+Generate a production-ready AWS CDKTF TypeScript project that provisions a secure, resilient web-application infrastructure in us-east-2. The generator must output ONLY TWO files: `lib/tap-stack.ts` and `lib/modules.ts`. Do NOT produce any other files (no `main.ts`, `package.json`, `tsconfig.json`, `cdktf.json`, README, or test harness). Provide the full content of each file in its own code block labeled with the file path.
 
 CONTEXT
-- Target region: us-east-1 (single-account stack run).  
+- Target region: us-east-2 (single-account stack run).  
 - Role: DevOps Engineer building a production-ready environment with strong security, monitoring, and scalability.  
 - Use `@cdktf/provider-aws` and CDKTF TypeScript idioms.  
 - All sensitive config should be parameterized and handled securely (Secrets Manager for DB secrets per requirement). Use SSM Parameter Store for non-secret config if needed.  
@@ -44,25 +44,25 @@ REQUIREMENTS (must be implemented exactly)
    - Configure ASG with health checks, scaling policies (simple or target tracking), and parameterized min/max/desired capacity. Ensure instances run in private subnets and are reachable via ALB in public subnets.  
    - Attach an IAM role to EC2 instances with least-privilege to access S3, Secrets Manager (read DB secret), CloudWatch, and SSM (Session Manager). Recommend SSM Session Manager for admin access; do not open SSH to the world.
 
-10. SSM & Secrets Management
+9. SSM & Secrets Management
     - Use AWS Secrets Manager for database credentials and any other sensitive secrets. Create IAM policies permitting services (RDS rotation role, EC2 instance role) to retrieve secrets as needed.
 
-11. Backups & Recovery
+10. Backups & Recovery
     - Configure automated RDS backups and optional snapshot retention and rotation. Provide comments and parameters for cross-region snapshot replication as a recommendation.  
     - For critical buckets or volumes, ensure lifecycle rules and replication (if required) are parameterized and documented.
 
-12. Security Controls & Policies
+11. Security Controls & Policies
     - Implement Security Groups with strict inbound rules (only allow trusted CIDRs where administrative access is required). Application SGs should only accept traffic from ALB.
     - Implement NACLs with explicit rules as defense-in-depth.  
     - Create explicit deny statements in S3 bucket policies to prevent public access.  
     - Enable EBS encryption by default for all instance volumes using KMS.
 
-14. Outputs & Documentation
+12. Outputs & Documentation
     - Provide TerraformOutputs for critical resources: VPC ID, public/private subnet IDs, ALB DNS name, ASG name, EC2 role ARN, RDS endpoint & secret ARN, S3 audit bucket name, CloudTrail S3 bucket, GuardDuty detector ID, AWS Config recorder name, Budget ARN/ID, and SNS topic ARN for alarms.  
     - Include comprehensive inline comments documenting security rationales, manual account-level actions (e.g., enable GuardDuty/Config in master account, enroll IAM users in MFA), and developer steps to validate (`cdktf synth`, `cdktf diff`, `cdktf deploy`).
 
 PARAMETERIZATION (expose as variables)
-- `projectName`, `environment` (default `production`), `region` (default `us-east-1`), `vpcCidr` (default `10.0.0.0/16`), `publicSubnetCidrs`, `privateSubnetCidrs`, `adminAllowedCidrs` (required), `rdsInstanceClass`, `rdsStorageGb`, `rdsBackupRetentionDays`.
+- `projectName`, `environment` (default `production`), `region` (default `us-east-2`), `vpcCidr` (default `10.0.0.0/16`), `publicSubnetCidrs`, `privateSubnetCidrs`, `adminAllowedCidrs` (required), `rdsInstanceClass`, `rdsStorageGb`, `rdsBackupRetentionDays`.
 
 CONSTRAINTS (strict)
 - Output exactly two TypeScript files under `lib/`: `tap-stack.ts` and `modules.ts`. No other files.  
