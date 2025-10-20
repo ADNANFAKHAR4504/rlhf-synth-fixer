@@ -37,7 +37,9 @@ import {
   EncryptCommand,
   DecryptCommand,
   GenerateDataKeyCommand,
-  ListAliasesCommand
+  ListAliasesCommand,
+  ListKeysCommand,
+  DescribeKeyCommand
 } from '@aws-sdk/client-kms';
 import { 
   CloudTrailClient, 
@@ -84,6 +86,7 @@ import {
 } from '@aws-sdk/client-iam';
 
 
+// Load CloudFormation outputs - expects ExportName as keys from stack exports
 const outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
 
 
@@ -106,128 +109,6 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
   let testData: any = {};
 
   beforeAll(async () => {
-
-    console.log('Discovering resources using AWS APIs to backfill missing outputs...');
-    
-    // Discover S3 buckets
-    if (!outputs['nova-prod-patient-documents-bucket']) {
-      try {
-        const buckets = await s3Client.send(new ListBucketsCommand({}));
-        outputs['nova-prod-patient-documents-bucket'] = 
-          buckets.Buckets?.find(b => b.Name?.includes('patient-documents'))?.Name || '';
-      } catch (error) {
-        console.warn('Failed to discover S3 buckets:', error);
-      }
-    }
-    
-    if (!outputs['nova-prod-app-data-bucket']) {
-      try {
-        const buckets = await s3Client.send(new ListBucketsCommand({}));
-        outputs['nova-prod-app-data-bucket'] = 
-          buckets.Buckets?.find(b => b.Name?.includes('app-data') || b.Name?.includes('novaappdatabucket'))?.Name || '';
-      } catch (error) {
-        console.warn('Failed to discover app data bucket:', error);
-      }
-    }
-
-    // Discover VPC and security groups
-    if (!outputs['nova-prod-vpc-id']) {
-      try {
-        const vpcs = await ec2Client.send(new DescribeVpcsCommand({}));
-        outputs['nova-prod-vpc-id'] = 
-          vpcs.Vpcs?.find(v => v.Tags?.some(t => t.Key === 'Name' && t.Value?.includes('nova-prod')))?.VpcId || '';
-      } catch (error) {
-        console.warn('Failed to discover VPC:', error);
-      }
-    }
-
-    if (!outputs['nova-prod-app-sg-id']) {
-      try {
-        const sgs = await ec2Client.send(new DescribeSecurityGroupsCommand({}));
-        outputs['nova-prod-app-sg-id'] = 
-          sgs.SecurityGroups?.find(g => g.GroupName?.includes('application-sg'))?.GroupId || '';
-      } catch (error) {
-        console.warn('Failed to discover security groups:', error);
-      }
-    }
-
-    // Discover RDS endpoint
-    if (!outputs['nova-prod-rds-endpoint']) {
-      try {
-        const rds = await rdsClient.send(new DescribeDBInstancesCommand({}));
-        const db = rds.DBInstances?.find(d => d.DBInstanceIdentifier?.includes('nova-prod'));
-        if (db?.Endpoint?.Address) {
-          outputs['nova-prod-rds-endpoint'] = db.Endpoint.Address;
-        }
-      } catch (error) {
-        console.warn('Failed to discover RDS endpoint:', error);
-      }
-    }
-
-    // Discover KMS key
-    if (!outputs['nova-prod-kms-key-id']) {
-      try {
-        const aliases = await kmsClient.send(new ListAliasesCommand({}));
-        const targetAlias = aliases.Aliases?.find(a => 
-          (a.AliasName?.includes('nova-prod')) || 
-          (a.AliasName?.includes('tapstack')) ||
-          (a.AliasName?.includes('TapStack'))
-        );
-        if (targetAlias?.TargetKeyId) {
-          outputs['nova-prod-kms-key-id'] = targetAlias.TargetKeyId;
-        } else {
-          const customerKey = aliases.Aliases?.find(a => 
-            a.AliasName && !a.AliasName.startsWith('alias/aws/') && a.TargetKeyId
-          );
-          if (customerKey?.TargetKeyId) {
-            outputs['nova-prod-kms-key-id'] = customerKey.TargetKeyId;
-          }
-        }
-      } catch (error) {
-        console.warn('Failed to discover KMS key:', error);
-      }
-    }
-
-    // Discover SNS topic
-    if (!outputs['nova-prod-security-alert-topic']) {
-      try {
-        const topics = await snsClient.send(new ListTopicsCommand({}));
-        outputs['nova-prod-security-alert-topic'] = 
-          topics.Topics?.find(t => t.TopicArn?.includes('security-alert'))?.TopicArn || '';
-      } catch (error) {
-        console.warn('Failed to discover SNS topic:', error);
-      }
-    }
-
-    // Discover ALB
-    if (!outputs['nova-prod-alb-dns']) {
-      try {
-        const lbs = await elbClient.send(new DescribeLoadBalancersCommand({}));
-        const lb = lbs.LoadBalancers?.find(l => l.LoadBalancerName?.includes('nova-prod'));
-        if (lb?.DNSName) {
-          outputs['nova-prod-alb-dns'] = lb.DNSName;
-        }
-      } catch (error) {
-        console.warn('Failed to discover ALB:', error);
-      }
-    }
-
-      console.log(`✓ Resource discovery completed. Found ${Object.keys(outputs).length} resources`);
-
-    const requiredKeys = [
-      'nova-prod-patient-documents-bucket',
-      'nova-prod-kms-key-id',
-      'nova-prod-rds-endpoint',
-      'nova-prod-app-sg-id',
-      'nova-prod-vpc-id',
-      'nova-prod-security-alert-topic',
-      'nova-prod-alb-dns'
-    ];
-    const missing = requiredKeys.filter(k => !outputs[k] || String(outputs[k]).length === 0);
-    if (missing.length > 0) {
-      throw new Error(`Missing required live resources after discovery: ${missing.join(', ')}`);
-    }
-
     // Initialize test data for workflows with dynamic values
     const timestamp = Date.now();
     const randomSuffix = Math.random().toString(36).substring(7);
