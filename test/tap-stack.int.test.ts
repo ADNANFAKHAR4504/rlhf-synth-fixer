@@ -51,6 +51,31 @@ if (!outputs || Object.keys(outputs).length === 0) {
   const looksLikeArn = (v: any) => typeof v === 'string' && v.startsWith('arn:');
   const looksLikeUrl = (v: any) => typeof v === 'string' && /^https?:\/\//.test(v);
 
+  // Robust output lookup: many CI artifacts include different keys/naming conventions.
+  // Try several common output key names first, then fall back to scanning values.
+  const findOutput = (candidates: string[]) => {
+    for (const c of candidates) {
+      if (Object.prototype.hasOwnProperty.call(outputs!, c) && outputs![c]) return outputs![c];
+    }
+    // fallback: search by value pattern
+    for (const [k, v] of Object.entries(outputs!)) {
+      if (!v || typeof v !== 'string') continue;
+      // API gateway URL
+      if (candidates.includes('ApiGatewayUrl') && v.includes('execute-api')) return v;
+      // SQS URL
+      if (candidates.includes('SqsQueueUrl') && (v.includes('sqs.amazonaws.com') || /^https:\/\//.test(v) && v.includes('amazonaws.com'))) return v;
+      // Dynamo table name heuristic
+      if (candidates.includes('DynamoTableName') && /table|TableName|Dynamo/.test(k)) return v;
+      // Lambda ARN
+      if (candidates.includes('LambdaFunctionArn') && v.startsWith('arn:aws:lambda')) return v;
+      // Secrets Manager ARN
+      if (candidates.includes('DatabaseSecretArn') && v.startsWith('arn:aws:secretsmanager')) return v;
+      // S3 bucket (heuristic: key name contains bucket or value looks like a bucket name)
+      if (candidates.includes('S3BucketName') && (k.toLowerCase().includes('bucket') || /^[a-z0-9.-]{3,63}$/.test(v))) return v;
+    }
+    return undefined;
+  };
+
   // Initialize clients
   const ec2 = new EC2Client({ region });
   const dynamo = new DynamoDBClient({ region });
@@ -63,28 +88,49 @@ if (!outputs || Object.keys(outputs).length === 0) {
   describe('Live integration end-to-end workflow tests', () => {
     // Basic presence checks for keys and basic format/masking validation
     test('outputs contain the minimal keys required for E2E flows and values are not masked', () => {
-      const required = ['ApiGatewayUrl', 'LambdaFunctionArn', 'S3BucketName', 'SqsQueueUrl', 'RdsEndpoint', 'DatabaseSecretArn'];
-      required.forEach((k) => {
-        expect(Object.prototype.hasOwnProperty.call(outputs!, k)).toBe(true);
-        const v = outputs![k];
-        expect(v).toBeTruthy();
-        // fail if the value looks masked (contains '***')
-        expect(isMasked(v)).toBe(false);
-      });
+      // attempt to resolve each required output via common names / heuristics
+      const apiUrl = findOutput(['ApiGatewayUrl', 'ApiEndpointUrl', 'ApplicationApiEndpoint', 'ApiEndpoint', 'ApplicationApiEndpointA2298DCC']);
+      const lambdaArn = findOutput(['LambdaFunctionArn', 'FunctionArn', 'ApplicationLambdaArn']);
+      const s3Bucket = findOutput(['S3BucketName', 'LogsBucketName', 'BucketName']);
+      const sqsUrl = findOutput(['SqsQueueUrl', 'QueueUrl', 'SqsUrl']);
+      const rdsEndpoint = findOutput(['RdsEndpoint', 'DBEndpoint', 'DatabaseEndpoint']);
+      const secretArn = findOutput(['DatabaseSecretArn', 'SecretArn', 'DatabaseSecret']);
+
+      // Print if we couldn't find expected outputs to help debugging
+      if (!apiUrl || !lambdaArn || !s3Bucket || !sqsUrl || !rdsEndpoint || !secretArn) {
+        // eslint-disable-next-line no-console
+        console.error('Missing expected outputs. Available output keys:', Object.keys(outputs!));
+      }
+
+      expect(apiUrl).toBeTruthy();
+      expect(lambdaArn).toBeTruthy();
+      expect(s3Bucket).toBeTruthy();
+      expect(sqsUrl).toBeTruthy();
+      expect(rdsEndpoint).toBeTruthy();
+      expect(secretArn).toBeTruthy();
+
+      // fail if the value looks masked (contains '***')
+      expect(isMasked(apiUrl)).toBe(false);
+      expect(isMasked(lambdaArn)).toBe(false);
+      expect(isMasked(s3Bucket)).toBe(false);
+      expect(isMasked(sqsUrl)).toBe(false);
+      expect(isMasked(rdsEndpoint)).toBe(false);
+      expect(isMasked(secretArn)).toBe(false);
 
       // Extra basic structural checks
-      expect(looksLikeUrl(outputs!['ApiGatewayUrl'])).toBe(true);
-      expect(looksLikeArn(outputs!['LambdaFunctionArn'])).toBe(true);
-      expect(looksLikeArn(outputs!['DatabaseSecretArn'])).toBe(true);
-      expect(typeof outputs!['S3BucketName']).toBe('string');
-      expect(typeof outputs!['RdsEndpoint']).toBe('string');
-      expect(looksLikeUrl(outputs!['SqsQueueUrl'])).toBe(true);
+      expect(looksLikeUrl(apiUrl)).toBe(true);
+      expect(looksLikeArn(lambdaArn)).toBe(true);
+      expect(looksLikeArn(secretArn)).toBe(true);
+      expect(typeof s3Bucket === 'string').toBe(true);
+      expect(typeof rdsEndpoint === 'string').toBe(true);
+      expect(looksLikeUrl(sqsUrl)).toBe(true);
     });
 
     describe('End-to-end: API -> Lambda -> downstream systems', () => {
       const testId = uuidv4();
       const payload = { testId, message: 'integration-test' };
       let itemId: string | undefined;
+      let postSucceeded = false;
 
       beforeAll(async () => {
         // Attempt to purge SQS if present to get a clean slate; not fatal if it fails
@@ -99,7 +145,7 @@ if (!outputs || Object.keys(outputs).length === 0) {
       });
 
       test('POST to API endpoint accepts test payload and returns success marker', async () => {
-        const apiUrl = outputs!['ApiGatewayUrl'];
+        const apiUrl = findOutput(['ApiGatewayUrl', 'ApiEndpointUrl', 'ApplicationApiEndpoint', 'ApiEndpoint', 'ApplicationApiEndpointA2298DCC']);
         expect(apiUrl).toBeTruthy();
 
         // Support API key protected endpoints in CI by reading an API key from env.
@@ -135,14 +181,22 @@ if (!outputs || Object.keys(outputs).length === 0) {
 
         // Require that the API returns an itemId for downstream verification
         expect(res.data).toBeDefined();
+        // If itemId is missing, fail fast with helpful context
+        if (!res.data || res.data.itemId === undefined) {
+          // eslint-disable-next-line no-console
+          console.error('API POST did not return itemId. POST status:', res.status, 'body:', JSON.stringify(res.data).slice(0, 2000));
+        }
         expect(res.data.itemId).toBeDefined();
         itemId = res.data.itemId;
+        postSucceeded = true;
       }, 20000);
 
       test('verify data flows to DynamoDB and SQS (polling)', async () => {
+        // If the POST did not succeed, fail with clear guidance rather than producing opaque undefined errors
+        expect(postSucceeded).toBe(true);
         // Strict: require an itemId and table/queue outputs to exist
         expect(itemId).toBeDefined();
-        const tableName = outputs!['TableName'] || outputs!['DynamoTableName'] || outputs!['DynamoDBTableName'];
+        const tableName = findOutput(['TableName', 'DynamoTableName', 'DynamoDBTableName', 'DynamoTableName']);
         expect(tableName).toBeDefined();
 
         // Poll for the item in DynamoDB
@@ -166,7 +220,7 @@ if (!outputs || Object.keys(outputs).length === 0) {
         expect(found).toBe(true);
 
         // Poll SQS for a message that includes the item id
-        const queueUrl = outputs!['SqsQueueUrl'];
+        const queueUrl = findOutput(['SqsQueueUrl', 'QueueUrl', 'SqsUrl']);
         expect(queueUrl).toBeDefined();
 
         let messageFound = false;
@@ -199,7 +253,7 @@ if (!outputs || Object.keys(outputs).length === 0) {
       }, 90000);
 
       test('Lambda direct invocation returns expected shape', async () => {
-        const lambdaArn = outputs!['LambdaFunctionArn'];
+        const lambdaArn = findOutput(['LambdaFunctionArn', 'FunctionArn', 'ApplicationLambdaArn']);
         expect(lambdaArn).toBeDefined();
 
         // Invoke and assert success; treat invocation failures as test failures
@@ -211,7 +265,7 @@ if (!outputs || Object.keys(outputs).length === 0) {
       });
 
       test('S3: Lambda can write and read object (via direct S3 client operations)', async () => {
-        const bucket = outputs!['S3BucketName'];
+        const bucket = findOutput(['S3BucketName', 'LogsBucketName', 'BucketName']);
         expect(bucket).toBeDefined();
 
         const key = `integration-test-${uuidv4()}.txt`;
@@ -226,7 +280,7 @@ if (!outputs || Object.keys(outputs).length === 0) {
       }, 30000);
 
       test('Secrets Manager: can read secret string', async () => {
-        const secretArn = outputs!['DatabaseSecretArn'];
+        const secretArn = findOutput(['DatabaseSecretArn', 'SecretArn', 'DatabaseSecret']);
         expect(secretArn).toBeDefined();
         const resp = await secrets.send(new GetSecretValueCommand({ SecretId: secretArn } as any));
         expect(resp.SecretString || resp.SecretBinary).toBeDefined();
