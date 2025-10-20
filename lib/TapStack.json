@@ -13,48 +13,9 @@
             "Type": "String",
             "Description": "CIDR block for VPC",
             "Default": "10.0.0.0/16"
-        },
-        "DatabaseUsername": {
-            "Type": "String",
-            "Description": "Database master username",
-            "Default": "admin",
-            "MinLength": 1,
-            "MaxLength": 16,
-            "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9]*$",
-            "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters"
-        },
-        "DatabasePassword": {
-            "Type": "String",
-            "Description": "Database master password",
-            "NoEcho": true,
-            "MinLength": 8,
-            "MaxLength": 41,
-            "AllowedPattern": "^[a-zA-Z0-9]*$",
-            "ConstraintDescription": "Must contain only alphanumeric characters",
-            "Default": "TempPassword123"
         }
     },
     "Resources": {
-        "DatabaseSecret": {
-            "Type": "AWS::SecretsManager::Secret",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "healthcare-db-secret-${EnvironmentSuffix}"
-                },
-                "Description": "Database credentials for Healthcare Aurora cluster",
-                "SecretString": {
-                    "Fn::Sub": "{\n  \"username\": \"${DatabaseUsername}\",\n  \"password\": \"${DatabasePassword}\"\n}\n"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "healthcare-db-secret-${EnvironmentSuffix}"
-                        }
-                    }
-                ]
-            }
-        },
         "DatabaseEncryptionKey": {
             "Type": "AWS::KMS::Key",
             "Properties": {
@@ -755,10 +716,10 @@
                     "MaxCapacity": 1
                 },
                 "MasterUsername": {
-                    "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}::username}}"
+                    "Fn::Sub": "{{resolve:secretsmanager:healthcare-db-secret-${EnvironmentSuffix}:SecretString:username}}"
                 },
                 "MasterUserPassword": {
-                    "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}::password}}"
+                    "Fn::Sub": "{{resolve:secretsmanager:healthcare-db-secret-${EnvironmentSuffix}:SecretString:password}}"
                 },
                 "DBSubnetGroupName": {
                     "Ref": "DBSubnetGroup"
