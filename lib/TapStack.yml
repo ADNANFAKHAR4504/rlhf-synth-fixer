@@ -7,6 +7,14 @@ Parameters:
     Type: String
     Default: SecurityConfig
 
+  # Use a lowercase, DNS-compliant prefix for S3 bucket names to avoid uppercase issues
+  NamePrefix:
+    Description: Lowercase prefix for S3 bucket names (letters, numbers, hyphens)
+    Type: String
+    Default: tapstack
+    AllowedPattern: '^[a-z0-9-]+$'
+    ConstraintDescription: 'Must be lowercase letters, numbers, and hyphens only.'
+
   VpcCidr:
     Description: CIDR block for VPC
     Type: String
@@ -290,11 +298,11 @@ Resources:
       AliasName: !Ref TrailKmsKeyAlias
       TargetKeyId: !Ref CloudTrailKmsKey
 
-  # S3 Buckets
+  # S3 Buckets (bucket names built from lowercase NamePrefix to satisfy DNS rules)
   SensitiveDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub ${AWS::StackName}-sensitive-data-${AWS::AccountId}
+      BucketName: !Sub ${NamePrefix}-sensitive-data-${AWS::AccountId}-${AWS::Region}
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -321,7 +329,6 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          # Enforce TLS-only access
           - Sid: DenyInsecureConnections
             Effect: Deny
             Principal: '*'
@@ -336,7 +343,7 @@ Resources:
   CloudTrailBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub ${AWS::StackName}-cloudtrail-logs-${AWS::AccountId}
+      BucketName: !Sub ${NamePrefix}-cloudtrail-logs-${AWS::AccountId}-${AWS::Region}
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
