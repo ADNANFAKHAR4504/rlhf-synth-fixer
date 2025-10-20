@@ -4,7 +4,7 @@ We're building a HIPAA-compliant healthcare data processing infrastructure for M
 
 The challenge here is creating a multi-tier, highly available architecture that processes patient records through a secure, containerized application while maintaining HIPAA compliance at every layer. We need encrypted data storage, comprehensive audit logging, and strict network segmentation with no direct public access to sensitive components.
 
-I've been asked to create this using **CloudFormation with YAML** for the ap-southeast-1 region. This needs to be production-grade infrastructure that can handle healthcare workloads with enterprise-level security and reliability.
+I've been asked to create this using **CloudFormation with YAML** for the eu-central-1 region. This needs to be production-grade infrastructure that can handle healthcare workloads with enterprise-level security and reliability.
 
 ## What we need to build
 
@@ -61,7 +61,7 @@ Create a HIPAA-compliant healthcare data processing infrastructure using **Cloud
 - All data in transit must be encrypted using TLS/SSL
 - Resource names must include a **string suffix** for uniqueness (EnvironmentSuffix parameter)
 - Follow naming convention: `{resource-type}-${EnvironmentSuffix}`
-- Deploy to **ap-southeast-1** region
+- Deploy to **eu-central-1** region
 - Implement strict network segmentation with no direct public access to databases or containers
 
 ### Constraints

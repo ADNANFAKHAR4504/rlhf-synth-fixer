@@ -52,7 +52,7 @@ const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
-const region = 'ap-southeast-1';
+const region = 'eu-central-1';
 
 const ec2Client = new EC2Client({ region });
 const ecsClient = new ECSClient({ region });

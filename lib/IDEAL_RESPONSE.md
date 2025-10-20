@@ -4,7 +4,7 @@ This CloudFormation template creates a production-ready, HIPAA-compliant healthc
 
 ## Architecture Overview
 
-The infrastructure implements a multi-tier architecture across multiple availability zones in the ap-southeast-1 region, with the following key components:
+The infrastructure implements a multi-tier architecture across multiple availability zones in the eu-central-1 region, with the following key components:
 
 - **Networking**: Multi-AZ VPC with public and private subnets, NAT Gateway for outbound connectivity
 - **Compute**: ECS Fargate cluster with auto-scaling (2-10 tasks)
@@ -29,7 +29,7 @@ The template properly separates API Gateway deployment from stage configuration 
 
 ### Aurora MySQL Version Compatibility
 
-The template uses Aurora MySQL version `8.0.mysql_aurora.3.08.1`, which is available in the ap-southeast-1 region.
+The template uses Aurora MySQL version `8.0.mysql_aurora.3.08.1`, which is available in the eu-central-1 region.
 
 **Critical Fix**: The original version `8.0.mysql_aurora.3.05.2` is not available in all regions.
 
@@ -69,7 +69,7 @@ All tests validate HIPAA compliance, encryption, network segmentation, and high 
 
 ## Deployment
 
-Deploy to ap-southeast-1 using:
+Deploy to eu-central-1 using:
 
 ```bash
 aws cloudformation deploy \
@@ -78,9 +78,8 @@ aws cloudformation deploy \
   --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
   --parameter-overrides \
     EnvironmentSuffix=${ENVIRONMENT_SUFFIX} \
-    DatabaseUsername=admin \
-    DatabasePassword=<secure-password> \
-  --region ap-southeast-1
+    DatabaseSecretArn=<secrets-manager-arn> \
+  --region eu-central-1
 ```
 
 ## Complete Template

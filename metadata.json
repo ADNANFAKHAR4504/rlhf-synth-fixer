@@ -21,6 +21,6 @@
     "WAF",
     "NAT Gateway"
   ],
-  "region": "ap-southeast-1",
+  "region": "eu-central-1",
   "training_quality": 9
 }

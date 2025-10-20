@@ -118,7 +118,7 @@ https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-wafv
 **Impact Level**: High - Regional Deployment Blocker
 
 **MODEL_RESPONSE Issue**:
-The template used Aurora MySQL engine version `8.0.mysql_aurora.3.05.2`, which is not available in the ap-southeast-1 region:
+The template used Aurora MySQL engine version `8.0.mysql_aurora.3.05.2`, which is not available in the eu-central-1 region:
 
 ```yaml
 # INCORRECT - Version not available in all regions
@@ -130,7 +130,7 @@ AuroraCluster:
 ```
 
 **IDEAL_RESPONSE Fix**:
-Use a more recent version that is available in ap-southeast-1:
+Use a more recent version that is available in eu-central-1:
 
 ```yaml
 # CORRECT - Version available in target region
