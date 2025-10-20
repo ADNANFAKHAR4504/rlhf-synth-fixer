@@ -168,8 +168,21 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
     if (!outputs['nova-prod-kms-key-id']) {
       try {
         const aliases = await kmsClient.send(new ListAliasesCommand({}));
-        outputs['nova-prod-kms-key-id'] = 
-          aliases.Aliases?.find(a => a.AliasName?.includes('nova-prod'))?.TargetKeyId || '';
+        const targetAlias = aliases.Aliases?.find(a => 
+          (a.AliasName?.includes('nova-prod')) || 
+          (a.AliasName?.includes('tapstack')) ||
+          (a.AliasName?.includes('TapStack'))
+        );
+        if (targetAlias?.TargetKeyId) {
+          outputs['nova-prod-kms-key-id'] = targetAlias.TargetKeyId;
+        } else {
+          const customerKey = aliases.Aliases?.find(a => 
+            a.AliasName && !a.AliasName.startsWith('alias/aws/') && a.TargetKeyId
+          );
+          if (customerKey?.TargetKeyId) {
+            outputs['nova-prod-kms-key-id'] = customerKey.TargetKeyId;
+          }
+        }
       } catch (error) {
         console.warn('Failed to discover KMS key:', error);
       }
