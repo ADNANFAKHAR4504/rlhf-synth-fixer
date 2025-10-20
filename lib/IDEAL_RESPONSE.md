@@ -21,6 +21,7 @@ This document describes the actual implementation of a blue-green deployment inf
 
 ## Detailed Implementation
 
+
 ### 1. TapStackArgs Configuration Class
 
 ```python
