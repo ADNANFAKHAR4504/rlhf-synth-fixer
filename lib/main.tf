@@ -503,7 +503,7 @@ resource "aws_api_gateway_stage" "main_primary" {
   provider             = aws.primary
   deployment_id        = aws_api_gateway_deployment.main_primary.id
   rest_api_id          = aws_api_gateway_rest_api.main_primary.id
-  stage_name           = var.api_stage
+  stage_name           = "${var.api_stage}-${var.environment_suffix}"
   xray_tracing_enabled = true
 
   access_log_settings {
@@ -528,7 +528,7 @@ resource "aws_api_gateway_stage" "main_secondary" {
   provider             = aws.secondary
   deployment_id        = aws_api_gateway_deployment.main_secondary.id
   rest_api_id          = aws_api_gateway_rest_api.main_secondary.id
-  stage_name           = var.api_stage
+  stage_name           = "${var.api_stage}-${var.environment_suffix}"
   xray_tracing_enabled = true
 
   access_log_settings {
@@ -609,7 +609,7 @@ resource "aws_route53_health_check" "primary" {
   fqdn              = "${aws_api_gateway_rest_api.main_primary.id}.execute-api.${var.primary_region}.amazonaws.com"
   port              = 443
   type              = "HTTPS"
-  resource_path     = "/${var.api_stage}/health"
+  resource_path     = "/${var.api_stage}-${var.environment_suffix}/health"
   failure_threshold = "5"
   request_interval  = "30"
 
@@ -624,7 +624,7 @@ resource "aws_route53_health_check" "secondary" {
   fqdn              = "${aws_api_gateway_rest_api.main_secondary.id}.execute-api.${var.secondary_region}.amazonaws.com"
   port              = 443
   type              = "HTTPS"
-  resource_path     = "/${var.api_stage}/health"
+  resource_path     = "/${var.api_stage}-${var.environment_suffix}/health"
   failure_threshold = "5"
   request_interval  = "30"
 
@@ -684,7 +684,7 @@ resource "aws_cloudfront_distribution" "api" {
     # Use Route 53 domain if enabled, otherwise use primary API Gateway URL
     domain_name = var.enable_route53 ? "api.${var.domain_name}" : "${aws_api_gateway_rest_api.main_primary.id}.execute-api.${var.primary_region}.amazonaws.com"
     origin_id   = "api-origin"
-    origin_path = var.enable_route53 ? "" : "/${var.api_stage}"
+    origin_path = var.enable_route53 ? "" : "/${var.api_stage}-${var.environment_suffix}"
 
     custom_origin_config {
       http_port              = 80
@@ -731,6 +731,12 @@ resource "aws_cloudfront_distribution" "api" {
   web_acl_id = aws_wafv2_web_acl.api_protection.arn
 
   tags = var.common_tags
+
+  depends_on = [
+    aws_wafv2_web_acl.api_protection,
+    aws_api_gateway_rest_api.main_primary,
+    aws_api_gateway_rest_api.main_secondary
+  ]
 }
 
 # CloudWatch Log Groups

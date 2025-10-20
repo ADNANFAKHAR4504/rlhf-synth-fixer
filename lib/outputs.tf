@@ -3,12 +3,12 @@
 # API Gateway Endpoints
 output "api_gateway_url_primary" {
   description = "Primary region API Gateway endpoint URL"
-  value       = "${aws_api_gateway_rest_api.main_primary.id}.execute-api.${var.primary_region}.amazonaws.com/${var.api_stage}"
+  value       = "${aws_api_gateway_rest_api.main_primary.id}.execute-api.${var.primary_region}.amazonaws.com/${var.api_stage}-${var.environment_suffix}"
 }
 
 output "api_gateway_url_secondary" {
   description = "Secondary region API Gateway endpoint URL"
-  value       = "${aws_api_gateway_rest_api.main_secondary.id}.execute-api.${var.secondary_region}.amazonaws.com/${var.api_stage}"
+  value       = "${aws_api_gateway_rest_api.main_secondary.id}.execute-api.${var.secondary_region}.amazonaws.com/${var.api_stage}-${var.environment_suffix}"
 }
 
 output "api_gateway_id_primary" {

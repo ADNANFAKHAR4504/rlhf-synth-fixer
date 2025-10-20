@@ -151,7 +151,7 @@ resource "aws_cloudwatch_metric_alarm" "high_4xx_errors" {
 
   dimensions = {
     ApiName = aws_api_gateway_rest_api.main_primary.name
-    Stage   = var.api_stage
+    Stage   = "${var.api_stage}-${var.environment_suffix}"
   }
 
   tags = var.common_tags
@@ -173,7 +173,7 @@ resource "aws_cloudwatch_metric_alarm" "high_5xx_errors" {
 
   dimensions = {
     ApiName = aws_api_gateway_rest_api.main_primary.name
-    Stage   = var.api_stage
+    Stage   = "${var.api_stage}-${var.environment_suffix}"
   }
 
   tags = var.common_tags
@@ -306,7 +306,7 @@ resource "aws_cloudwatch_metric_alarm" "api_latency" {
 
   dimensions = {
     ApiName = aws_api_gateway_rest_api.main_primary.name
-    Stage   = var.api_stage
+    Stage   = "${var.api_stage}-${var.environment_suffix}"
   }
 
   tags = var.common_tags
@@ -368,7 +368,7 @@ resource "aws_cloudwatch_metric_alarm" "failed_transactions" {
 
 # Composite alarm for critical path
 resource "aws_cloudwatch_composite_alarm" "critical_system_health" {
-  alarm_name        = "${var.project_name}-critical-health"
+  alarm_name        = "${var.project_name}-${var.environment_suffix}-critical-health"
   alarm_description = "Composite alarm for critical system health"
   actions_enabled   = true
   alarm_actions     = [aws_sns_topic.alarms.arn]
