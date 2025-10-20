@@ -27,7 +27,7 @@ import {
   DescribeListenersCommand,
   DescribeLoadBalancersCommand,
   DescribeTargetGroupsCommand,
-  ELBv2Client
+  ElasticLoadBalancingV2Client
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
   GetRoleCommand,
@@ -47,7 +47,7 @@ import * as path from 'path';
 // Initialize AWS clients - region agnostic based on environment
 const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
 const ec2Client = new EC2Client({ region });
-const elbv2Client = new ELBv2Client({ region });
+  const elbv2Client = new ElasticLoadBalancingV2Client({ region });
 const autoScalingClient = new AutoScalingClient({ region });
 const rdsClient = new RDSClient({ region });
 const secretsClient = new SecretsManagerClient({ region });
