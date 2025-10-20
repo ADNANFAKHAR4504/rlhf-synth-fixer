@@ -15,7 +15,7 @@
   "aws_services": [
     "VPC",
     "EC2",
-    "RDS", 
+    "RDS",
     "ECS",
     "ALB",
     "S3",
@@ -26,5 +26,11 @@
     "SNS",
     "WAF",
     "AWS Backup"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sanket-turing",
+  "dockerS3Location": ""
 }
