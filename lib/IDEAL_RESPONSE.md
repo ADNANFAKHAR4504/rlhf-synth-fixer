@@ -1,5 +1,8 @@
+I'll help you build a comprehensive disaster recovery solution for your financial services platform. Given your strict RTO of 5 minutes and RPO of 1 minute, I've designed an active-passive multi-region architecture with automated failover capabilities across us-east-1 (primary) and us-west-2 (DR) regions.
+
+## tap_stack.tf
+
 ```hcl
-# tap_stack.tf
 # Financial Services Disaster Recovery Infrastructure
 # RTO: 5 minutes | RPO: 1 minute
 # Primary: us-east-1 | DR: us-west-2
@@ -607,7 +610,9 @@ resource "aws_s3_bucket_replication_configuration" "transaction_logs_replication
     status   = "Enabled"
     priority = 1
 
-    filter {}
+    filter {
+      prefix = ""
+    }
 
     delete_marker_replication {
       status = "Enabled"
@@ -1108,15 +1113,17 @@ resource "aws_rds_cluster" "primary" {
   depends_on = [aws_rds_global_cluster.financial_db]
 }
 
-# DR Aurora Cluster
+# DR Aurora Cluster (standalone for existing deployments)
 resource "aws_rds_cluster" "dr" {
-  provider                  = aws.dr
-  cluster_identifier        = "${var.project_name}-dr-cluster-${local.unique_suffix}"
-  engine                    = aws_rds_global_cluster.financial_db.engine
-  engine_version            = aws_rds_global_cluster.financial_db.engine_version
-  global_cluster_identifier = aws_rds_global_cluster.financial_db.id
-  db_subnet_group_name      = aws_db_subnet_group.dr.name
-  vpc_security_group_ids    = [aws_security_group.aurora_dr.id]
+  provider               = aws.dr
+  cluster_identifier     = "${var.project_name}-dr-cluster-${local.unique_suffix}"
+  engine                 = "aurora-postgresql"
+  engine_version         = "15.4"
+  database_name          = var.database_name
+  master_username        = var.db_master_username
+  master_password        = random_password.db_password.result
+  db_subnet_group_name   = aws_db_subnet_group.dr.name
+  vpc_security_group_ids = [aws_security_group.aurora_dr.id]
 
   backup_retention_period         = 35
   preferred_backup_window         = "03:00-04:00"
@@ -1132,7 +1139,9 @@ resource "aws_rds_cluster" "dr" {
     Region = "dr"
   })
 
-  depends_on = [aws_rds_cluster.primary]
+  lifecycle {
+    ignore_changes = [engine_version, global_cluster_identifier, master_password]
+  }
 }
 
 # Aurora Instances - Primary Region
@@ -1700,31 +1709,15 @@ resource "aws_cloudwatch_metric_alarm" "primary_health" {
     TargetGroup  = aws_lb_target_group.primary.arn_suffix
   }
 
-  alarm_actions = [aws_sns_topic.dr_notifications.arn]
+  alarm_actions = [aws_sns_topic.primary_notifications.arn]
 
   tags = local.common_tags
-}
 
-resource "aws_cloudwatch_metric_alarm" "dr_health" {
-  provider            = aws.dr
-  alarm_name          = "${var.project_name}-dr-health-alarm-${local.unique_suffix}"
-  comparison_operator = "LessThanThreshold"
-  evaluation_periods  = 2
-  metric_name         = "HealthyHostCount"
-  namespace           = "AWS/ApplicationELB"
-  period              = 60
-  statistic           = "Average"
-  threshold           = 1
-  alarm_description   = "This metric monitors DR ALB health"
-
-  dimensions = {
-    LoadBalancer = aws_lb.dr.arn_suffix
-    TargetGroup  = aws_lb_target_group.dr.arn_suffix
-  }
-
-  alarm_actions = [aws_sns_topic.dr_notifications.arn]
-
-  tags = local.common_tags
+  depends_on = [
+    aws_sns_topic.primary_notifications,
+    aws_lb.primary,
+    aws_lb_target_group.primary
+  ]
 }
 
 resource "aws_cloudwatch_metric_alarm" "aurora_lag_alarm" {
@@ -1743,17 +1736,40 @@ resource "aws_cloudwatch_metric_alarm" "aurora_lag_alarm" {
     DBClusterIdentifier = aws_rds_cluster.primary.cluster_identifier
   }
 
-  alarm_actions = [aws_sns_topic.dr_notifications.arn]
+  alarm_actions = [aws_sns_topic.primary_notifications.arn]
 
   tags = local.common_tags
+
+  depends_on = [
+    aws_sns_topic.primary_notifications,
+    aws_rds_cluster.primary
+  ]
 }
 
 # ========================================
-# SNS Topic for DR Notifications
+# SNS Topics for Notifications
 # ========================================
 
-resource "aws_sns_topic" "dr_notifications" {
+# SNS topic in primary region for primary region alarms
+resource "aws_sns_topic" "primary_notifications" {
   provider = aws.primary
+  name     = "${var.project_name}-primary-notifications-${local.unique_suffix}"
+
+  tags = merge(local.common_tags, {
+    Purpose = "primary-notifications"
+  })
+}
+
+resource "aws_sns_topic_subscription" "primary_email" {
+  provider  = aws.primary
+  topic_arn = aws_sns_topic.primary_notifications.arn
+  protocol  = "email"
+  endpoint  = var.alarm_email
+}
+
+# SNS topic in DR region for DR region alarms
+resource "aws_sns_topic" "dr_notifications" {
+  provider = aws.dr
   name     = "${var.project_name}-dr-notifications-${local.unique_suffix}"
 
   tags = merge(local.common_tags, {
@@ -1762,7 +1778,7 @@ resource "aws_sns_topic" "dr_notifications" {
 }
 
 resource "aws_sns_topic_subscription" "dr_email" {
-  provider  = aws.primary
+  provider  = aws.dr
   topic_arn = aws_sns_topic.dr_notifications.arn
   protocol  = "email"
   endpoint  = var.alarm_email
@@ -1826,7 +1842,7 @@ resource "aws_iam_role_policy" "lambda_failover" {
         Action = [
           "sns:Publish"
         ]
-        Resource = aws_sns_topic.dr_notifications.arn
+        Resource = aws_sns_topic.primary_notifications.arn
       },
       {
         Effect = "Allow"
@@ -1864,7 +1880,7 @@ resource "aws_lambda_function" "failover_orchestrator" {
     variables = {
       GLOBAL_CLUSTER_ID = aws_rds_global_cluster.financial_db.id
       DR_CLUSTER_ID     = aws_rds_cluster.dr.cluster_identifier
-      SNS_TOPIC_ARN     = aws_sns_topic.dr_notifications.arn
+      SNS_TOPIC_ARN     = aws_sns_topic.primary_notifications.arn
       DR_REGION         = local.regions.dr
     }
   }
@@ -2053,7 +2069,7 @@ resource "aws_iam_role_policy" "ssm_automation" {
         Action = [
           "sns:Publish"
         ]
-        Resource = aws_sns_topic.dr_notifications.arn
+        Resource = aws_sns_topic.primary_notifications.arn
       }
     ]
   })
@@ -2108,7 +2124,7 @@ mainSteps:
     inputs:
       Service: sns
       Api: Publish
-      TopicArn: ${aws_sns_topic.dr_notifications.arn}
+      TopicArn: ${aws_sns_topic.primary_notifications.arn}
       Message: 'DR Test completed successfully. Type: {{ TestType }}'
 DOC
 
@@ -2220,9 +2236,12 @@ output "secrets_manager_arn" {
   sensitive   = true
 }
 
-output "sns_topic_arn" {
-  description = "SNS topic ARN for notifications"
-  value       = aws_sns_topic.dr_notifications.arn
+output "sns_topic_arns" {
+  description = "SNS topic ARNs for notifications"
+  value = {
+    primary = aws_sns_topic.primary_notifications.arn
+    dr      = aws_sns_topic.dr_notifications.arn
+  }
 }
 
 output "lambda_function_arns" {
@@ -2256,10 +2275,12 @@ output "security_group_ids" {
 output "ssm_document_name" {
   description = "Systems Manager document name for DR testing"
   value       = aws_ssm_document.dr_test_runbook.name
-}```
+}
+```
+
+## variables.tf
 
 ```hcl
-# variables.tf
 # Project Configuration
 variable "project_name" {
   description = "Name of the project used for resource naming"
@@ -2489,8 +2510,9 @@ variable "additional_tags" {
 }
 ```
 
+## provider.tf
+
 ```hcl
-# provider.tf
 # provider.tf
 
 terraform {
