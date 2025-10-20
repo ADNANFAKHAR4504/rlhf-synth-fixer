@@ -1,0 +1,321 @@
+import * as cdk from 'aws-cdk-lib';
+import { Template, Match } from 'aws-cdk-lib/assertions';
+import { TapStack } from '../lib/tap-stack';
+
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+
+describe('TapStack', () => {
+  let app: cdk.App;
+  let stack: TapStack;
+  let template: Template;
+
+  beforeEach(() => {
+    app = new cdk.App();
+    stack = new TapStack(app, 'TestTapStack', { environmentSuffix });
+    template = Template.fromStack(stack);
+  });
+
+  describe('S3 Bucket', () => {
+    test('should create content bucket with versioning enabled', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        VersioningConfiguration: {
+          Status: 'Enabled',
+        },
+      });
+    });
+
+    test('should have encryption enabled', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketEncryption: {
+          ServerSideEncryptionConfiguration: [
+            {
+              ServerSideEncryptionByDefault: {
+                SSEAlgorithm: 'AES256',
+              },
+            },
+          ],
+        },
+      });
+    });
+
+    test('should block all public access', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        PublicAccessBlockConfiguration: {
+          BlockPublicAcls: true,
+          BlockPublicPolicy: true,
+          IgnorePublicAcls: true,
+          RestrictPublicBuckets: true,
+        },
+      });
+    });
+  });
+
+  describe('DynamoDB Tables', () => {
+    test('should create UserPreferencesTable with correct configuration', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        KeySchema: [
+          {
+            AttributeName: 'userId',
+            KeyType: 'HASH',
+          },
+        ],
+        BillingMode: 'PAY_PER_REQUEST',
+        PointInTimeRecoverySpecification: {
+          PointInTimeRecoveryEnabled: true,
+        },
+      });
+    });
+
+    test('should create EngagementTrackingTable with composite key', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        KeySchema: [
+          {
+            AttributeName: 'userId',
+            KeyType: 'HASH',
+          },
+          {
+            AttributeName: 'timestamp',
+            KeyType: 'RANGE',
+          },
+        ],
+      });
+    });
+
+    test('should create GSI on UserPreferencesTable', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        GlobalSecondaryIndexes: [
+          {
+            IndexName: 'preferenceTypeIndex',
+            KeySchema: [
+              {
+                AttributeName: 'preferenceType',
+                KeyType: 'HASH',
+              },
+            ],
+          },
+        ],
+      });
+    });
+
+    test('should create GSI on EngagementTrackingTable', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        GlobalSecondaryIndexes: [
+          {
+            IndexName: 'contentIdIndex',
+            KeySchema: [
+              {
+                AttributeName: 'contentId',
+                KeyType: 'HASH',
+              },
+              {
+                AttributeName: 'timestamp',
+                KeyType: 'RANGE',
+              },
+            ],
+          },
+        ],
+      });
+    });
+  });
+
+  describe('Lambda@Edge Functions', () => {
+    test('should create personalization Lambda@Edge function', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Runtime: 'nodejs20.x',
+        Handler: 'index.handler',
+        MemorySize: 128,
+      });
+    });
+
+    test('should have IAM policy for DynamoDB access on personalization function', () => {
+      template.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Action: ['dynamodb:GetItem', 'dynamodb:Query'],
+              Effect: 'Allow',
+            }),
+          ]),
+        },
+      });
+    });
+
+    test('should have IAM policy for DynamoDB write on engagement tracking function', () => {
+      template.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Action: ['dynamodb:PutItem', 'dynamodb:UpdateItem'],
+              Effect: 'Allow',
+            }),
+          ]),
+        },
+      });
+    });
+  });
+
+  describe('CloudFront Distribution', () => {
+    test('should create CloudFront distribution', () => {
+      template.hasResourceProperties('AWS::CloudFront::Distribution', {
+        DistributionConfig: Match.objectLike({
+          Enabled: true,
+        }),
+      });
+    });
+
+    test('should redirect HTTP to HTTPS', () => {
+      template.hasResourceProperties('AWS::CloudFront::Distribution', {
+        DistributionConfig: {
+          DefaultCacheBehavior: Match.objectLike({
+            ViewerProtocolPolicy: 'redirect-to-https',
+          }),
+        },
+      });
+    });
+
+    test('should have Lambda@Edge associations', () => {
+      template.hasResourceProperties('AWS::CloudFront::Distribution', {
+        DistributionConfig: {
+          DefaultCacheBehavior: {
+            LambdaFunctionAssociations: Match.arrayWith([
+              Match.objectLike({
+                EventType: 'origin-request',
+              }),
+              Match.objectLike({
+                EventType: 'viewer-response',
+              }),
+            ]),
+          },
+        },
+      });
+    });
+
+    test('should use price class 100', () => {
+      template.hasResourceProperties('AWS::CloudFront::Distribution', {
+        DistributionConfig: {
+          PriceClass: 'PriceClass_100',
+        },
+      });
+    });
+  });
+
+  describe('CloudWatch Dashboard', () => {
+    test('should create CloudWatch dashboard with environment suffix', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
+        DashboardName: `NewsPersonalizationDashboard-${environmentSuffix}`,
+      });
+    });
+
+    test('should have dashboard body with widgets', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
+        DashboardBody: Match.stringLikeRegexp('.*CloudFront Requests.*'),
+      });
+    });
+  });
+
+  describe('Stack Outputs', () => {
+    test('should export DistributionDomainName', () => {
+      template.hasOutput('DistributionDomainName', {
+        Export: {
+          Name: Match.stringLikeRegexp('.*DistributionDomainName'),
+        },
+      });
+    });
+
+    test('should export ContentBucketName', () => {
+      template.hasOutput('ContentBucketName', {
+        Export: {
+          Name: Match.stringLikeRegexp('.*ContentBucketName'),
+        },
+      });
+    });
+
+    test('should export UserPreferencesTableName', () => {
+      template.hasOutput('UserPreferencesTableName', {
+        Export: {
+          Name: Match.stringLikeRegexp('.*UserPreferencesTableName'),
+        },
+      });
+    });
+
+    test('should export EngagementTrackingTableName', () => {
+      template.hasOutput('EngagementTrackingTableName', {
+        Export: {
+          Name: Match.stringLikeRegexp('.*EngagementTrackingTableName'),
+        },
+      });
+    });
+
+    test('should export DistributionId', () => {
+      template.hasOutput('DistributionId', {
+        Export: {
+          Name: Match.stringLikeRegexp('.*DistributionId'),
+        },
+      });
+    });
+  });
+
+  describe('Resource Count', () => {
+    test('should create expected number of S3 buckets', () => {
+      template.resourceCountIs('AWS::S3::Bucket', 1);
+    });
+
+    test('should create expected number of DynamoDB tables', () => {
+      template.resourceCountIs('AWS::DynamoDB::Table', 2);
+    });
+
+    test('should create expected number of Lambda functions', () => {
+      const lambdaCount = template.findResources('AWS::Lambda::Function');
+      expect(Object.keys(lambdaCount).length).toBeGreaterThanOrEqual(2);
+    });
+
+    test('should create one CloudFront distribution', () => {
+      template.resourceCountIs('AWS::CloudFront::Distribution', 1);
+    });
+
+    test('should create one CloudWatch dashboard', () => {
+      template.resourceCountIs('AWS::CloudWatch::Dashboard', 1);
+    });
+  });
+
+  describe('Environment Suffix Handling', () => {
+    test('should use default environment suffix if not provided', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestStack');
+      const testTemplate = Template.fromStack(testStack);
+
+      testTemplate.hasResourceProperties('AWS::CloudWatch::Dashboard', {
+        DashboardName: Match.stringLikeRegexp('NewsPersonalizationDashboard-.*'),
+      });
+    });
+
+    test('should use provided environment suffix', () => {
+      const testApp = new cdk.App();
+      const customSuffix = 'prod';
+      const testStack = new TapStack(testApp, 'TestStack', {
+        environmentSuffix: customSuffix,
+      });
+      const testTemplate = Template.fromStack(testStack);
+
+      testTemplate.hasResourceProperties('AWS::CloudWatch::Dashboard', {
+        DashboardName: `NewsPersonalizationDashboard-${customSuffix}`,
+      });
+    });
+  });
+
+  describe('Removal Policy', () => {
+    test('should have DESTROY removal policy on S3 bucket', () => {
+      const resources = template.findResources('AWS::S3::Bucket');
+      Object.values(resources).forEach((resource: any) => {
+        expect(resource.DeletionPolicy).toBe('Delete');
+      });
+    });
+
+    test('should have DESTROY removal policy on DynamoDB tables', () => {
+      const resources = template.findResources('AWS::DynamoDB::Table');
+      Object.values(resources).forEach((resource: any) => {
+        expect(resource.DeletionPolicy).toBe('Delete');
+      });
+    });
+  });
+});
