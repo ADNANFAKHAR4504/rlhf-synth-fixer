@@ -20,31 +20,31 @@ pulumi.runtime.setMocks({
     outputs.id = args.id || args.name;
     outputs.arn = `arn:aws:::${args.type}/${args.name}`;
     outputs.name = args.name;
-    
+
     // Mock VPC
     if (args.type === 'aws:ec2/vpc:Vpc') {
       outputs.cidrBlock = args.inputs.cidrBlock;
       outputs.enableDnsHostnames = true;
       outputs.enableDnsSupport = true;
     }
-    
+
     // Mock Subnet
     if (args.type === 'aws:ec2/subnet:Subnet') {
       outputs.availabilityZone = args.inputs.availabilityZone;
       outputs.cidrBlock = args.inputs.cidrBlock;
       outputs.mapPublicIpOnLaunch = args.inputs.mapPublicIpOnLaunch;
     }
-    
+
     // Mock Load Balancer
     if (args.type === 'aws:lb/loadBalancer:LoadBalancer') {
-      outputs.dnsName = `${args.name}.elb.us-east-1.amazonaws.com`;
+      outputs.dnsName = `${args.name}.elb.us-east-2.amazonaws.com`;
       outputs.zoneId = 'Z35SXDOTRQ7X7K';
       outputs.arnSuffix = `app/${args.name}/1234567890`;
       outputs.loadBalancerType = args.inputs.loadBalancerType;
       outputs.internal = args.inputs.internal;
       outputs.enableHttp2 = args.inputs.enableHttp2;
     }
-    
+
     // Mock Target Group
     if (args.type === 'aws:lb/targetGroup:TargetGroup') {
       outputs.arnSuffix = `targetgroup/${args.name}/1234567890`;
@@ -54,33 +54,33 @@ pulumi.runtime.setMocks({
       outputs.port = args.inputs.port;
       outputs.protocol = args.inputs.protocol;
     }
-    
+
     // Mock RDS Cluster
     if (args.type === 'aws:rds/cluster:Cluster') {
-      outputs.endpoint = `${args.name}.cluster-123456.us-east-1.rds.amazonaws.com`;
-      outputs.readerEndpoint = `${args.name}.cluster-ro-123456.us-east-1.rds.amazonaws.com`;
+      outputs.endpoint = `${args.name}.cluster-123456.us-east-2.rds.amazonaws.com`;
+      outputs.readerEndpoint = `${args.name}.cluster-ro-123456.us-east-2.rds.amazonaws.com`;
       outputs.port = 5432;
       outputs.iamDatabaseAuthenticationEnabled = args.inputs.iamDatabaseAuthenticationEnabled;
       outputs.storageEncrypted = args.inputs.storageEncrypted;
       outputs.backupRetentionPeriod = args.inputs.backupRetentionPeriod;
       outputs.enabledCloudwatchLogsExports = args.inputs.enabledCloudwatchLogsExports;
     }
-    
+
     // Mock RDS Instance
     if (args.type === 'aws:rds/clusterInstance:ClusterInstance') {
       outputs.instanceClass = args.inputs.instanceClass;
       outputs.performanceInsightsEnabled = args.inputs.performanceInsightsEnabled;
     }
-    
+
     // Mock ECS Cluster
     if (args.type === 'aws:ecs/cluster:Cluster') {
-      outputs.arn = `arn:aws:ecs:us-east-1:123456789012:cluster/${args.name}`;
+      outputs.arn = `arn:aws:ecs:us-east-2:123456789012:cluster/${args.name}`;
       outputs.settings = args.inputs.settings;
     }
-    
+
     // Mock ECS Service
     if (args.type === 'aws:ecs/service:Service') {
-      outputs.arn = `arn:aws:ecs:us-east-1:123456789012:service/${args.name}`;
+      outputs.arn = `arn:aws:ecs:us-east-2:123456789012:service/${args.name}`;
       outputs.desiredCount = args.inputs.desiredCount;
       outputs.launchType = args.inputs.launchType;
       outputs.networkConfiguration = args.inputs.networkConfiguration;
@@ -88,14 +88,14 @@ pulumi.runtime.setMocks({
       outputs.deploymentMaximumPercent = args.inputs.deploymentMaximumPercent;
       outputs.deploymentMinimumHealthyPercent = args.inputs.deploymentMinimumHealthyPercent;
     }
-    
+
     // Mock ECR Repository
     if (args.type === 'aws:ecr/repository:Repository') {
-      outputs.repositoryUrl = `123456789012.dkr.ecr.us-east-1.amazonaws.com/${args.name}`;
+      outputs.repositoryUrl = `123456789012.dkr.ecr.us-east-2.amazonaws.com/${args.name}`;
       outputs.imageScanningConfiguration = args.inputs.imageScanningConfiguration;
       outputs.imageTagMutability = args.inputs.imageTagMutability;
     }
-    
+
     // Mock Security Group
     if (args.type === 'aws:ec2/securityGroup:SecurityGroup') {
       outputs.ingress = args.inputs.ingress;
@@ -103,17 +103,17 @@ pulumi.runtime.setMocks({
       outputs.description = args.inputs.description;
       outputs.vpcId = args.inputs.vpcId;
     }
-    
+
     // Mock IAM Role
     if (args.type === 'aws:iam/role:Role') {
       outputs.assumeRolePolicy = args.inputs.assumeRolePolicy;
     }
-    
+
     // Mock CloudWatch Log Group
     if (args.type === 'aws:cloudwatch/logGroup:LogGroup') {
       outputs.retentionInDays = args.inputs.retentionInDays;
     }
-    
+
     // Mock CloudWatch Metric Alarm
     if (args.type === 'aws:cloudwatch/metricAlarm:MetricAlarm') {
       outputs.metricName = args.inputs.metricName;
@@ -121,36 +121,36 @@ pulumi.runtime.setMocks({
       outputs.comparisonOperator = args.inputs.comparisonOperator;
       outputs.evaluationPeriods = args.inputs.evaluationPeriods;
     }
-    
+
     // Mock App Autoscaling Target
     if (args.type === 'aws:appautoscaling/target:Target') {
       outputs.minCapacity = args.inputs.minCapacity;
       outputs.maxCapacity = args.inputs.maxCapacity;
     }
-    
+
     // Mock App Autoscaling Policy
     if (args.type === 'aws:appautoscaling/policy:Policy') {
       outputs.policyType = args.inputs.policyType;
       outputs.targetTrackingScalingPolicyConfiguration = args.inputs.targetTrackingScalingPolicyConfiguration;
     }
-    
+
     // Mock Route53 Zone
     if (args.type === 'aws:route53/zone:Zone') {
       outputs.zoneId = 'Z1234567890ABC';
     }
-    
+
     // Mock ALB Listener
     if (args.type === 'aws:lb/listener:Listener') {
       outputs.port = args.inputs.port;
       outputs.protocol = args.inputs.protocol;
     }
-    
+
     // Mock Parameter Group
     if (args.type === 'aws:rds/clusterParameterGroup:ClusterParameterGroup') {
       outputs.family = args.inputs.family;
       outputs.parameters = args.inputs.parameters;
     }
-    
+
     return { id: outputs.id, state: outputs };
   },
   call: function(args: pulumi.runtime.MockCallArgs) {
@@ -163,9 +163,10 @@ pulumi.runtime.setConfig('dbPassword', 'test-password-12345');
 
 describe('TapStack Unit Tests', () => {
   let stack: TapStack;
+
   const testArgs: TapStackArgs = {
     environmentSuffix: 'test',
-    region: 'us-east-1',
+    region: 'us-east-2',
     vpcCidr: '10.18.0.0/16',
     tags: {
       Environment: 'test',
@@ -206,8 +207,8 @@ describe('TapStack Unit Tests', () => {
         stack.publicSubnets[0].availabilityZone,
         stack.publicSubnets[1].availabilityZone
       ]).apply(([az1, az2]) => {
-        expect(az1).toBe('us-east-1a');
-        expect(az2).toBe('us-east-1b');
+        expect(az1).toBe('us-east-2a');
+        expect(az2).toBe('us-east-2b');
         done();
       });
     });
@@ -427,7 +428,6 @@ describe('TapStack Unit Tests', () => {
     it('should create writer and reader instances', (done) => {
       expect(stack.auroraWriterInstance).toBeDefined();
       expect(stack.auroraReaderInstance).toBeDefined();
-      
       pulumi.all([
         stack.auroraWriterInstance.instanceClass,
         stack.auroraReaderInstance.instanceClass
@@ -476,7 +476,6 @@ describe('TapStack Unit Tests', () => {
     it('should create blue and green target groups for blue-green deployment', (done) => {
       expect(stack.albTargetGroupBlue).toBeDefined();
       expect(stack.albTargetGroupGreen).toBeDefined();
-      
       pulumi.all([
         stack.albTargetGroupBlue.tags,
         stack.albTargetGroupGreen.tags
@@ -537,7 +536,6 @@ describe('TapStack Unit Tests', () => {
     it('should create CloudWatch log groups for API and Frontend', (done) => {
       expect(stack.apiLogGroup).toBeDefined();
       expect(stack.frontendLogGroup).toBeDefined();
-      
       pulumi.all([
         stack.apiLogGroup.retentionInDays,
         stack.frontendLogGroup.retentionInDays
@@ -798,17 +796,41 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('Error Handling Tests', () => {
-    it('should handle missing optional domain name gracefully', () => {
+    it('should handle missing optional domain name gracefully', (done) => {
       const stackWithoutDomain = new TapStack('test-stack-no-domain', {
         environmentSuffix: 'test',
       });
       expect(stackWithoutDomain).toBeDefined();
       expect(stackWithoutDomain.hostedZone).toBeUndefined();
+      
+      setTimeout(() => {
+        done();
+      }, 100);
     });
 
-    it('should use default environment suffix if not provided', () => {
+    it('should use default environment suffix if not provided', (done) => {
       const stackDefaultEnv = new TapStack('test-stack-default', {});
       expect(stackDefaultEnv).toBeDefined();
+      
+      setTimeout(() => {
+        done();
+      }, 100);
+    });
+  });
+
+  describe('DNS Resources Coverage Tests', () => {
+    it('should test DNS resource creation with domain name', (done) => {
+      const stackWithDomain = new TapStack('test-stack-with-domain', {
+        environmentSuffix: 'test',
+        domainName: 'example.com',
+      });
+      expect(stackWithDomain).toBeDefined();
+      expect(stackWithDomain.hostedZone).toBeDefined();
+      expect(stackWithDomain.certificate).toBeDefined();
+      
+      setTimeout(() => {
+        done();
+      }, 100);
     });
   });
 });

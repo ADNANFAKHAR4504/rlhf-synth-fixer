@@ -1140,18 +1140,22 @@ export class TapStack extends pulumi.ComponentResource {
       ecsTaskRoleArn: this.ecsTaskRole.arn,
     });
 
-    outputs.apply(o => {
-      const outputDir = 'cfn-outputs';
-      const outputFile = path.join(outputDir, 'flat-outputs.json');
+    // Only write outputs file in non-test environment
+    if (process.env.NODE_ENV !== 'test' && !pulumi.runtime.isDryRun()) {
+      outputs.apply(o => {
+        const outputDir = 'cfn-outputs';
+        const outputFile = path.join(outputDir, 'flat-outputs.json');
 
-      if (!fs.existsSync(outputDir)) {
-        fs.mkdirSync(outputDir, { recursive: true });
-      }
+        if (!fs.existsSync(outputDir)) {
+          fs.mkdirSync(outputDir, { recursive: true });
+        }
 
-      fs.writeFileSync(outputFile, JSON.stringify(o, null, 2));
-      console.log('Outputs written to ' + outputFile);
-    });
+        fs.writeFileSync(outputFile, JSON.stringify(o, null, 2));
+        console.log('Outputs written to ' + outputFile);
+      });
+    }
 
     return outputs;
   }
+
 }
