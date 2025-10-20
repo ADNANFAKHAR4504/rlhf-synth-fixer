@@ -96,7 +96,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     this.config = new pulumi.Config();
     this.environmentSuffix = args.environmentSuffix || 'dev';
-    this.availabilityZones = ['us-east-1a', 'us-east-1b'];
+    this.availabilityZones = ['us-east-2a', 'us-east-2b'];
 
     this.defaultTags = {
       Environment: this.environmentSuffix,
@@ -859,7 +859,7 @@ export class TapStack extends pulumi.ComponentResource {
           ],
           logConfiguration: {
             logDriver: 'awslogs',
-            options: { 'awslogs-group': logGroupName, 'awslogs-region': 'us-east-1', 'awslogs-stream-prefix': 'api' },
+            options: { 'awslogs-group': logGroupName, 'awslogs-region': 'us-east-2', 'awslogs-stream-prefix': 'api' },
           },
           healthCheck: {
             command: ['CMD-SHELL', 'curl -f http://localhost:8080/api/health || exit 1'],
@@ -892,7 +892,7 @@ export class TapStack extends pulumi.ComponentResource {
           ],
           logConfiguration: {
             logDriver: 'awslogs',
-            options: { 'awslogs-group': logGroupName, 'awslogs-region': 'us-east-1', 'awslogs-stream-prefix': 'frontend' },
+            options: { 'awslogs-group': logGroupName, 'awslogs-region': 'us-east-2', 'awslogs-stream-prefix': 'frontend' },
           },
           healthCheck: {
             command: ['CMD-SHELL', 'curl -f http://localhost:3000/ || exit 1'],
