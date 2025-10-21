@@ -209,7 +209,9 @@
         "Engine": "aurora-postgresql",
         "EngineMode": "provisioned",
         "MasterUserSecret": {
-          "Ref": "AuroraSecret"
+          "SecretArn": {
+            "Ref": "AuroraSecret"
+          }
         },
         "DatabaseName": "reportingdb",
         "DBClusterParameterGroupName": "default-aurora-postgresql16",
