@@ -39,6 +39,11 @@
       "Type": "String",
       "Description": "SES verified email address for sending reports and notifications.",
       "Default": "govardhan.y@turing.com"
+    },
+    "BucketNamePrefix": {
+      "Type": "String",
+      "Default": "tap-stack",
+      "Description": "Prefix for S3 bucket names. Must be lowercase."
     }
   },
   "Resources": {
@@ -91,7 +96,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "${AWS::StackName}-reports-${Environment}-${AWS::AccountId}"
+          "Fn::Sub": "${BucketNamePrefix}-reports-${Environment}-${AWS::AccountId}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -776,7 +781,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "${AWS::StackName}-cloudtrail-logs-${AWS::AccountId}"
+          "Fn::Sub": "${BucketNamePrefix}-cloudtrail-logs-${AWS::AccountId}"
         },
         "OwnershipControls": {
           "Rules": [
