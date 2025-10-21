@@ -92,16 +92,25 @@ class ComputeStack:
         lt_name = self.config.get_resource_name('launch-template')
         
         # User data script to ensure SSM agent is running
-        # Amazon Linux 2023 has SSM agent pre-installed
+        # Amazon Linux 2023 has SSM agent pre-installed and uses DNF (not YUM)
         user_data = """#!/bin/bash
+set -e
+exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+
+echo "Starting user data script execution..."
+
 # Ensure SSM agent is running (pre-installed on Amazon Linux 2023)
+echo "Configuring SSM agent..."
 systemctl enable amazon-ssm-agent
 systemctl start amazon-ssm-agent
+systemctl status amazon-ssm-agent
 
-# Install CloudWatch agent
-yum install -y amazon-cloudwatch-agent
+# Install CloudWatch agent using DNF (Amazon Linux 2023 uses DNF, not YUM)
+echo "Installing CloudWatch agent..."
+dnf install -y amazon-cloudwatch-agent
 
 # Configure CloudWatch agent for basic monitoring
+echo "Configuring CloudWatch agent..."
 cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
 {
   "metrics": {
@@ -135,16 +144,19 @@ cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
 EOF
 
 # Start CloudWatch agent
+echo "Starting CloudWatch agent..."
 /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
     -a fetch-config \
     -m ec2 \
     -s \
     -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+
+echo "User data script completed successfully!"
 """
         
         launch_template = aws.ec2.LaunchTemplate(
             lt_name,
-            name_prefix=f"{lt_name}-",
+            name=lt_name,
             image_id=self.ami_id,
             instance_type=self.config.instance_type,
             iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(
