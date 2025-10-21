@@ -1,3 +1,4 @@
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production Infrastructure - Highly Available and Secure Environment'
 
@@ -1243,3 +1244,4 @@ Outputs:
   HostedZoneId:
     Description: Route 53 Hosted Zone ID
     Value: !Ref HostedZone
+  ```
