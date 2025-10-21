@@ -1,5 +1,19 @@
-```python
+## lib/__init__.py
 
+```python
+# TAP Infrastructure Library
+# This package contains the main CDK stack definitions and supporting modules
+```
+
+## lib/stacks/__init__.py
+
+```python
+# Nested stacks for modular infrastructure
+```
+
+## lib/tap_stack.py
+
+```python
 """
 TAP Stack - Secure AWS Infrastructure as Code
 
