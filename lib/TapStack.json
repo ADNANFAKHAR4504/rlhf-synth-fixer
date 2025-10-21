@@ -819,6 +819,13 @@
                   "AuditTrailBucket",
                   "Arn"
                 ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                  }
+                }
               }
             },
             {
@@ -833,7 +840,10 @@
               },
               "Condition": {
                 "StringEquals": {
-                  "s3:x-amz-acl": "bucket-owner-full-control"
+                  "s3:x-amz-acl": "bucket-owner-full-control",
+                  "aws:SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                  }
                 }
               }
             }
