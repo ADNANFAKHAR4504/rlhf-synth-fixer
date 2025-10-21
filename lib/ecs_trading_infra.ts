@@ -1,16 +1,16 @@
 import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
-import * as ecs from 'aws-cdk-lib/aws-ecs';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
-import * as iam from 'aws-cdk-lib/aws-iam';
+import * as autoscaling from 'aws-cdk-lib/aws-applicationautoscaling';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as codedeploy from 'aws-cdk-lib/aws-codedeploy';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as ecs from 'aws-cdk-lib/aws-ecs';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as subs from 'aws-cdk-lib/aws-sns-subscriptions';
-import * as codedeploy from 'aws-cdk-lib/aws-codedeploy';
-import * as autoscaling from 'aws-cdk-lib/aws-applicationautoscaling';
-import * as logs from 'aws-cdk-lib/aws-logs';
+import { Construct } from 'constructs';
 
 export interface EcsTradingInfraProps {
   vpc: ec2.IVpc;
@@ -19,6 +19,15 @@ export interface EcsTradingInfraProps {
 export class EcsTradingInfra extends Construct {
   public readonly ecsCluster: ecs.Cluster;
   public readonly orderBrokerService: ecs.FargateService;
+  public readonly loadBalancer: elbv2.ApplicationLoadBalancer;
+  public readonly blueTargetGroup: elbv2.ApplicationTargetGroup;
+  public readonly greenTargetGroup: elbv2.ApplicationTargetGroup;
+  public readonly productionListener: elbv2.ApplicationListener;
+  public readonly testListener: elbv2.ApplicationListener;
+  public readonly codeDeployApplication: codedeploy.EcsApplication;
+  public readonly deploymentGroup: codedeploy.EcsDeploymentGroup;
+  public readonly alarmTopic: sns.Topic;
+  public readonly logGroup: logs.LogGroup;
 
   constructor(scope: Construct, id: string, props: EcsTradingInfraProps) {
     super(scope, id);
@@ -93,42 +102,30 @@ export class EcsTradingInfra extends Construct {
     );
 
     // Create log group for the container
-    const logGroup = new logs.LogGroup(this, 'OrderBrokerLogGroup', {
+    this.logGroup = new logs.LogGroup(this, 'OrderBrokerLogGroup', {
       logGroupName: '/ecs/order-broker',
       retention: logs.RetentionDays.ONE_MONTH,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // Create container definition
+    // Using blue-green test image for easy deployment validation
     const orderBrokerContainer = orderBrokerTaskDef.addContainer(
       'OrderBrokerContainer',
       {
-        image: ecs.ContainerImage.fromRegistry(
-          'your-ecr-repo/order-broker:latest'
-        ),
+        image: ecs.ContainerImage.fromRegistry('amasucci/bluegreen'),
         logging: ecs.LogDrivers.awsLogs({
           streamPrefix: 'order-broker',
-          logGroup: logGroup,
+          logGroup: this.logGroup,
         }),
-        healthCheck: {
-          command: [
-            'CMD-SHELL',
-            'curl -f http://localhost:8080/health || exit 1',
-          ],
-          interval: cdk.Duration.seconds(30),
-          timeout: cdk.Duration.seconds(5),
-          retries: 3,
-          startPeriod: cdk.Duration.seconds(60),
-        },
         environment: {
-          NODE_ENV: 'production',
-          REGION: 'us-east-2',
+          COLOR: 'blue', // Start with BLUE deployment
         },
       }
     );
 
     orderBrokerContainer.addPortMappings({
-      containerPort: 8080,
+      containerPort: 80, // Blue-green image listens on port 80
       protocol: ecs.Protocol.TCP,
     });
 
@@ -144,32 +141,54 @@ export class EcsTradingInfra extends Construct {
       description: 'Security group for OrderBroker ALB',
     });
 
+    // Allow HTTP traffic from internet to ALB (for testing)
+    albSG.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(80),
+      'Allow HTTP traffic from internet'
+    );
+
+    // Allow test listener traffic from internet to ALB (for blue-green testing)
+    albSG.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(9090),
+      'Allow test listener traffic from internet'
+    );
+
     // Allow inbound traffic from ALB to the service
     serviceSG.addIngressRule(
       albSG,
-      ec2.Port.tcp(8080),
+      ec2.Port.tcp(80),
       'Allow inbound traffic from ALB'
     );
 
     // Create ALB for the service
-    const alb = new elbv2.ApplicationLoadBalancer(this, 'OrderBrokerALB', {
-      vpc: props.vpc,
-      internetFacing: false,
-      securityGroup: albSG,
-    });
+    // Using internet-facing ALB for testing purposes
+    this.loadBalancer = new elbv2.ApplicationLoadBalancer(
+      this,
+      'OrderBrokerALB',
+      {
+        vpc: props.vpc,
+        internetFacing: true,
+        securityGroup: albSG,
+      }
+    );
 
     // Create production listener (using HTTP for testing - HTTPS requires valid certificate)
-    const productionListener = alb.addListener('ProductionListener', {
-      port: 80,
-      protocol: elbv2.ApplicationProtocol.HTTP,
-      defaultAction: elbv2.ListenerAction.fixedResponse(200, {
-        contentType: 'text/plain',
-        messageBody: 'Default response from OrderBroker ALB',
-      }),
-    });
+    this.productionListener = this.loadBalancer.addListener(
+      'ProductionListener',
+      {
+        port: 80,
+        protocol: elbv2.ApplicationProtocol.HTTP,
+        defaultAction: elbv2.ListenerAction.fixedResponse(200, {
+          contentType: 'text/plain',
+          messageBody: 'Default response from OrderBroker ALB',
+        }),
+      }
+    );
 
     // Create test listener for blue-green deployments
-    const testListener = alb.addListener('TestListener', {
+    this.testListener = this.loadBalancer.addListener('TestListener', {
       port: 9090,
       protocol: elbv2.ApplicationProtocol.HTTP,
       defaultAction: elbv2.ListenerAction.fixedResponse(200, {
@@ -179,17 +198,20 @@ export class EcsTradingInfra extends Construct {
     });
 
     // Create target group for the service (Blue)
-    const blueTargetGroup = new elbv2.ApplicationTargetGroup(
+    this.blueTargetGroup = new elbv2.ApplicationTargetGroup(
       this,
       'OrderBrokerBlueTargetGroup',
       {
         vpc: props.vpc,
-        port: 8080,
+        port: 80, // Blue-green image listens on port 80
         protocol: elbv2.ApplicationProtocol.HTTP,
         targetType: elbv2.TargetType.IP,
         healthCheck: {
-          path: '/health',
+          path: '/',
           interval: cdk.Duration.seconds(30),
+          timeout: cdk.Duration.seconds(5),
+          healthyThresholdCount: 2,
+          unhealthyThresholdCount: 3,
           healthyHttpCodes: '200',
         },
         deregistrationDelay: cdk.Duration.seconds(30),
@@ -197,17 +219,20 @@ export class EcsTradingInfra extends Construct {
     );
 
     // Create target group for the service (Green)
-    const greenTargetGroup = new elbv2.ApplicationTargetGroup(
+    this.greenTargetGroup = new elbv2.ApplicationTargetGroup(
       this,
       'OrderBrokerGreenTargetGroup',
       {
         vpc: props.vpc,
-        port: 8080,
+        port: 80, // Blue-green image listens on port 80
         protocol: elbv2.ApplicationProtocol.HTTP,
         targetType: elbv2.TargetType.IP,
         healthCheck: {
-          path: '/health',
+          path: '/',
           interval: cdk.Duration.seconds(30),
+          timeout: cdk.Duration.seconds(5),
+          healthyThresholdCount: 2,
+          unhealthyThresholdCount: 3,
           healthyHttpCodes: '200',
         },
         deregistrationDelay: cdk.Duration.seconds(30),
@@ -215,13 +240,13 @@ export class EcsTradingInfra extends Construct {
     );
 
     // Set up production listener with target group
-    productionListener.addTargetGroups('DefaultProdRoute', {
-      targetGroups: [blueTargetGroup],
+    this.productionListener.addTargetGroups('DefaultProdRoute', {
+      targetGroups: [this.blueTargetGroup],
     });
 
     // Set up test listener with target group
-    testListener.addTargetGroups('DefaultTestRoute', {
-      targetGroups: [blueTargetGroup],
+    this.testListener.addTargetGroups('DefaultTestRoute', {
+      targetGroups: [this.blueTargetGroup],
     });
 
     // Create the ECS service with CODE_DEPLOY controller for blue-green deployments
@@ -251,7 +276,9 @@ export class EcsTradingInfra extends Construct {
     );
 
     // Attach service to target group
-    this.orderBrokerService.attachToApplicationTargetGroup(blueTargetGroup);
+    this.orderBrokerService.attachToApplicationTargetGroup(
+      this.blueTargetGroup
+    );
 
     // Set up auto-scaling
     const scaling = this.orderBrokerService.autoScaleTaskCount({
@@ -287,37 +314,41 @@ export class EcsTradingInfra extends Construct {
     });
 
     // Create a CodeDeploy Application
-    const codeDeployApp = new codedeploy.EcsApplication(
+    this.codeDeployApplication = new codedeploy.EcsApplication(
       this,
       'OrderBrokerCodeDeployApp'
     );
 
     // Create a CodeDeploy Deployment Group for blue/green deployment
-    new codedeploy.EcsDeploymentGroup(this, 'OrderBrokerDeploymentGroup', {
-      application: codeDeployApp,
-      service: this.orderBrokerService,
-      blueGreenDeploymentConfig: {
-        listener: productionListener,
-        testListener: testListener,
-        blueTargetGroup: blueTargetGroup,
-        greenTargetGroup: greenTargetGroup,
-        deploymentApprovalWaitTime: cdk.Duration.minutes(10),
-        terminationWaitTime: cdk.Duration.minutes(5),
-      },
-      deploymentConfig: codedeploy.EcsDeploymentConfig.ALL_AT_ONCE,
-      autoRollback: {
-        failedDeployment: true,
-        stoppedDeployment: true,
-      },
-    });
+    this.deploymentGroup = new codedeploy.EcsDeploymentGroup(
+      this,
+      'OrderBrokerDeploymentGroup',
+      {
+        application: this.codeDeployApplication,
+        service: this.orderBrokerService,
+        blueGreenDeploymentConfig: {
+          listener: this.productionListener,
+          testListener: this.testListener,
+          blueTargetGroup: this.blueTargetGroup,
+          greenTargetGroup: this.greenTargetGroup,
+          deploymentApprovalWaitTime: cdk.Duration.minutes(1), // Immediate - manual control via CLI
+          terminationWaitTime: cdk.Duration.minutes(1),
+        },
+        deploymentConfig: codedeploy.EcsDeploymentConfig.ALL_AT_ONCE,
+        autoRollback: {
+          failedDeployment: true,
+          stoppedDeployment: true,
+        },
+      }
+    );
 
     // Create an SNS topic for alarms
-    const alarmTopic = new sns.Topic(this, 'OrderBrokerAlarmTopic', {
+    this.alarmTopic = new sns.Topic(this, 'OrderBrokerAlarmTopic', {
       displayName: 'OrderBroker Alarms',
     });
 
     // Add subscription to the SNS topic
-    alarmTopic.addSubscription(
+    this.alarmTopic.addSubscription(
       new subs.EmailSubscription('sre-team@example.com')
     );
 
@@ -346,10 +377,10 @@ export class EcsTradingInfra extends Construct {
     });
 
     jvmHeapUsageAlarm.addAlarmAction(
-      new cloudwatch_actions.SnsAction(alarmTopic)
+      new cloudwatch_actions.SnsAction(this.alarmTopic)
     );
     jvmHeapUsageAlarm.addOkAction(
-      new cloudwatch_actions.SnsAction(alarmTopic)
+      new cloudwatch_actions.SnsAction(this.alarmTopic)
     );
 
     // Database connection pool utilization alarm
@@ -380,10 +411,10 @@ export class EcsTradingInfra extends Construct {
     );
 
     dbConnectionPoolAlarm.addAlarmAction(
-      new cloudwatch_actions.SnsAction(alarmTopic)
+      new cloudwatch_actions.SnsAction(this.alarmTopic)
     );
     dbConnectionPoolAlarm.addOkAction(
-      new cloudwatch_actions.SnsAction(alarmTopic)
+      new cloudwatch_actions.SnsAction(this.alarmTopic)
     );
 
     // Apply tags using built-in Tags functionality

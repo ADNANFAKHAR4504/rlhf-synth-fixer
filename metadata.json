@@ -10,5 +10,18 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC"
+  "background": "Refactor AWS CDK TypeScript project for real-time stock trading platform OrderBroker microservice with predictive auto-scaling, blue-green deployments, and enhanced observability",
+  "training_quality": 9,
+  "aws_services": [
+    "ECS",
+    "Fargate",
+    "VPC",
+    "ALB",
+    "CodeDeploy",
+    "IAM",
+    "CloudWatch",
+    "SNS",
+    "Auto Scaling",
+    "EC2"
+  ]
 }

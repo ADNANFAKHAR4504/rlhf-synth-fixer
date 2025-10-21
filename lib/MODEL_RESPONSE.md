@@ -712,7 +712,7 @@ export class EcsTradingInfra extends Construct {
     // Create ALB for the service
     const alb = new elbv2.ApplicationLoadBalancer(this, 'OrderBrokerALB', {
       vpc: props.vpc,
-      internetFacing: false,
+      internetFacing: true,
       securityGroup: albSG,
     });
 
