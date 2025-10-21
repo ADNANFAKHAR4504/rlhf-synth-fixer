@@ -350,20 +350,6 @@ Resources:
                   - "ssm:GetParametersByPath"
                 Resource:
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/*"
-        - PolicyName: KMSAccessPolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "kms:Decrypt"
-                  - "kms:Encrypt"
-                  - "kms:ReEncrypt*"
-                  - "kms:GenerateDataKey*"
-                  - "kms:DescribeKey"
-                  - "kms:CreateGrant"
-                Resource:
-                  - !GetAtt EBSKMSKey.Arn
       Tags:
         - Key: Name
           Value: !Sub "${AWS::StackName}-EC2-Role"
@@ -575,79 +561,10 @@ Resources:
           Value: Prod
 
   # =====================================
-  # KMS Keys for Encryption
+  # KMS Key for RDS Encryption
   # =====================================
-  # Note: EBS KMS Key is used for encrypting EBS volumes in the Launch Template
-  # This provides additional security and control over encryption keys
-  EBSKMSKey:
-    Type: AWS::KMS::Key
-    Properties:
-      Description: KMS key for EBS volume encryption
-      Enabled: true
-      EnableKeyRotation: true
-      KeySpec: SYMMETRIC_DEFAULT
-      KeyUsage: ENCRYPT_DECRYPT
-      KeyPolicy:
-        Version: "2012-10-17"
-        Id: ebs-key-policy
-        Statement:
-          - Sid: Enable IAM User Permissions
-            Effect: Allow
-            Principal:
-              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
-            Action: "kms:*"
-            Resource: "*"
-          - Sid: Allow EC2 to use the key for EBS
-            Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
-            Action:
-              - "kms:Decrypt"
-              - "kms:Encrypt"
-              - "kms:ReEncrypt*"
-              - "kms:GenerateDataKey*"
-              - "kms:CreateGrant"
-              - "kms:DescribeKey"
-            Resource: "*"
-            Condition:
-              StringEquals:
-                "kms:ViaService": !Sub "ec2.${AWS::Region}.amazonaws.com"
-          - Sid: Allow AutoScaling to use the key
-            Effect: Allow
-            Principal:
-              Service: autoscaling.amazonaws.com
-            Action:
-              - "kms:Decrypt"
-              - "kms:Encrypt"
-              - "kms:ReEncrypt*"
-              - "kms:GenerateDataKey*"
-              - "kms:CreateGrant"
-              - "kms:DescribeKey"
-            Resource: "*"
-          - Sid: Allow attachment of persistent resources
-            Effect: Allow
-            Principal:
-              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
-            Action:
-              - "kms:CreateGrant"
-              - "kms:ListGrants"
-              - "kms:RevokeGrant"
-            Resource: "*"
-            Condition:
-              Bool:
-                "kms:GrantIsForAWSResource": "true"
-      Tags:
-        - Key: Name
-          Value: !Sub "${AWS::StackName}-EBS-KMS-Key"
-        - Key: Environment
-          Value: Prod
-
-  EBSKMSKeyAlias:
-    Type: AWS::KMS::Alias
-    Properties:
-      AliasName: !Sub "alias/${AWS::StackName}-ebs-key"
-      TargetKeyId: !Ref EBSKMSKey
-
+  # Note: EC2 instances use AWS-managed encryption (aws/ebs)
+  # RDS database uses custom KMS key for enhanced security
   RDSKMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -799,9 +716,6 @@ Resources:
   # =====================================
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
-    DependsOn:
-      - EBSKMSKey
-      - EBSKMSKeyAlias
     Properties:
       LaunchTemplateName: !Sub "${AWS::StackName}-LaunchTemplate"
       LaunchTemplateData:
@@ -818,7 +732,6 @@ Resources:
               VolumeSize: 8
               VolumeType: gp3
               Encrypted: true
-              KmsKeyId: !GetAtt EBSKMSKey.Arn
               DeleteOnTermination: true
         Monitoring:
           Enabled: true
@@ -1130,18 +1043,6 @@ Outputs:
     Value: !Ref DBPasswordSecret
     Export:
       Name: !Sub "${AWS::StackName}-DBPasswordSecret"
-
-  EBSKMSKeyId:
-    Description: EBS KMS Key ID
-    Value: !Ref EBSKMSKey
-    Export:
-      Name: !Sub "${AWS::StackName}-EBS-KMS-Key-ID"
-
-  EBSKMSKeyArn:
-    Description: EBS KMS Key ARN
-    Value: !GetAtt EBSKMSKey.Arn
-    Export:
-      Name: !Sub "${AWS::StackName}-EBS-KMS-Key-ARN"
 
   RDSKMSKeyId:
     Description: RDS KMS Key ID
