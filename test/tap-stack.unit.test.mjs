@@ -94,7 +94,7 @@ describe('TapStack Unit Tests', () => {
   describe('ECR Model Repository', () => {
     test('should create ECR repository', () => {
       template.hasResourceProperties('AWS::ECR::Repository', {
-        RepositoryName: 'fraud-detection',
+        RepositoryName: `fraud-detection-${environmentSuffix}`,
         ImageScanningConfiguration: {
           ScanOnPush: true
         }
