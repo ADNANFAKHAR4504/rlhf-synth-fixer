@@ -353,7 +353,7 @@ describe('TAP Serverless CI/CD Stack - Integration Tests', () => {
       }));
 
       // Should not have reserved concurrency set (allows auto-scaling)
-      expect(func.ReservedConcurrentExecutions).toBeUndefined();
+      expect((func as any).ReservedConcurrentExecutions).toBeUndefined();
 
       console.log('✓ Lambda configured for auto-scaling (no reserved concurrency)');
     }, 30000);
@@ -543,8 +543,8 @@ describe('TAP Serverless CI/CD Stack - Integration Tests', () => {
 
       expect(topic.Attributes).toBeDefined();
       // ARN will have *** but that's OK
-      expect(topic.Attributes!.TopicArn).toContain('TapStackpr4747-TapAlarmTopic');
-      expect(topic.Attributes!.DisplayName).toBe('TAP Application Alarms');
+      expect(topic.Attributes!.TopicArn).toContain('tap-alarm-topic-pr4747');
+      expect(topic.Attributes!.DisplayName).toBe('TAP Application Alarms pr4747');
 
       console.log('✓ SNS alarm topic configured');
     }, 30000);
