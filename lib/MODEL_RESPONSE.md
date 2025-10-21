@@ -26,8 +26,6 @@ Create:
 - CloudWatch alarms
 - KMS key for encryption
 
-Structure this properly with all the components.
-
 ### Answer
 
 ---
