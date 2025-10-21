@@ -1,17 +1,6 @@
-# HIPAA-Compliant Healthcare Data Processing Infrastructure Solution
+# HIPAA-Compliant Healthcare Data Processing Infrastructure
 
-I'll help you create a HIPAA-compliant healthcare data processing infrastructure using Pulumi and Python. This solution will include all the required components with proper encryption, security, and compliance controls.
-
-## Solution Architecture
-
-The infrastructure will consist of:
-- VPC with public and private subnets across multiple availability zones
-- ECS Fargate cluster for containerized applications
-- Aurora Serverless v2 cluster for patient records with encryption
-- ElastiCache Redis cluster for session management
-- AWS Secrets Manager for credential management
-- KMS keys for encryption at rest
-- Proper security groups and network isolation
+This ideal solution provisions a HIPAA-aligned environment with encrypted networking, Aurora Serverless v2 for patient records, Redis caching, and containerized workloads on ECS Fargate. Every component is tagged and scoped to a configurable environment suffix, and all sensitive data is protected with a dedicated KMS key whose policy allows the dependent AWS services to encrypt and decrypt data safely.
 
 ## Implementation
 
@@ -25,9 +14,12 @@ Main Pulumi stack for HIPAA-compliant healthcare data processing infrastructure.
 """
 
 from typing import Optional
+import json
 import pulumi
 import pulumi_aws as aws
+import pulumi_random as random
 from pulumi import ResourceOptions, Output
+
 
 class TapStackArgs:
     """Arguments for the TapStack."""
@@ -61,12 +53,54 @@ class TapStack(pulumi.ComponentResource):
         }
         self.tags = {**base_tags, **args.tags}
 
+        region = aws.get_region()
+        caller_identity = aws.get_caller_identity()
+        self.region = region.name
+
+        kms_key_policy = json.dumps({
+            "Version": "2012-10-17",
+            "Id": "healthcare-kms-policy",
+            "Statement": [
+                {
+                    "Sid": "AllowRootAccount",
+                    "Effect": "Allow",
+                    "Principal": {
+                        "AWS": f"arn:aws:iam::{caller_identity.account_id}:root"
+                    },
+                    "Action": "kms:*",
+                    "Resource": "*"
+                },
+                {
+                    "Sid": "AllowAWSServiceUse",
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": [
+                            f"logs.{self.region}.amazonaws.com",
+                            "rds.amazonaws.com",
+                            "secretsmanager.amazonaws.com",
+                            "elasticache.amazonaws.com",
+                            "ecs-tasks.amazonaws.com"
+                        ]
+                    },
+                    "Action": [
+                        "kms:Encrypt",
+                        "kms:Decrypt",
+                        "kms:ReEncrypt*",
+                        "kms:GenerateDataKey*",
+                        "kms:DescribeKey"
+                    ],
+                    "Resource": "*"
+                }
+            ]
+        })
+
         # Create KMS key for encryption
         self.kms_key = aws.kms.Key(
             f"healthcare-kms-{self.environment_suffix}",
             description=f"KMS key for healthcare data encryption - {self.environment_suffix}",
             deletion_window_in_days=30,
             enable_key_rotation=True,
+            policy=kms_key_policy,
             tags={**self.tags, 'Name': f"healthcare-kms-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
@@ -108,7 +142,11 @@ class TapStack(pulumi.ComponentResource):
                 cidr_block=f"10.0.{i}.0/24",
                 availability_zone=az,
                 map_public_ip_on_launch=True,
-                tags={**self.tags, 'Name': f"healthcare-public-subnet-{i+1}-{self.environment_suffix}", 'Type': 'Public'},
+                tags={
+                    **self.tags,
+                    'Name': f"healthcare-public-subnet-{i+1}-{self.environment_suffix}",
+                    'Type': 'Public'
+                },
                 opts=ResourceOptions(parent=self.vpc)
             )
             self.public_subnets.append(subnet)
@@ -138,7 +176,11 @@ class TapStack(pulumi.ComponentResource):
                 vpc_id=self.vpc.id,
                 cidr_block=f"10.0.{10+i}.0/24",
                 availability_zone=az,
-                tags={**self.tags, 'Name': f"healthcare-private-app-subnet-{i+1}-{self.environment_suffix}", 'Type': 'Private-App'},
+                tags={
+                    **self.tags,
+                    'Name': f"healthcare-private-app-subnet-{i+1}-{self.environment_suffix}",
+                    'Type': 'Private-App'
+                },
                 opts=ResourceOptions(parent=self.vpc)
             )
             self.private_app_subnets.append(subnet)
@@ -151,7 +193,11 @@ class TapStack(pulumi.ComponentResource):
                 vpc_id=self.vpc.id,
                 cidr_block=f"10.0.{20+i}.0/24",
                 availability_zone=az,
-                tags={**self.tags, 'Name': f"healthcare-private-db-subnet-{i+1}-{self.environment_suffix}", 'Type': 'Private-DB'},
+                tags={
+                    **self.tags,
+                    'Name': f"healthcare-private-db-subnet-{i+1}-{self.environment_suffix}",
+                    'Type': 'Private-DB'
+                },
                 opts=ResourceOptions(parent=self.vpc)
             )
             self.private_db_subnets.append(subnet)
@@ -213,14 +259,7 @@ class TapStack(pulumi.ComponentResource):
                     from_port=443,
                     to_port=443,
                     cidr_blocks=["10.0.0.0/16"],
-                    description="HTTPS from VPC",
-                ),
-                aws.ec2.SecurityGroupIngressArgs(
-                    protocol="tcp",
-                    from_port=8080,
-                    to_port=8080,
-                    cidr_blocks=["10.0.0.0/16"],
-                    description="Application port from VPC",
+                    description="HTTPS traffic from within the VPC",
                 ),
             ],
             egress=[
@@ -307,7 +346,6 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # Create database password in Secrets Manager
-        import json
         self.db_secret = aws.secretsmanager.Secret(
             f"healthcare-db-secret-{self.environment_suffix}",
             description="Master password for healthcare Aurora database",
@@ -317,7 +355,6 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # Generate random password
-        import pulumi_random as random
         self.db_password = random.RandomPassword(
             f"healthcare-db-password-{self.environment_suffix}",
             length=32,
@@ -326,11 +363,13 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self.db_secret)
         )
 
+        self.db_password_secret = Output.secret(self.db_password.result)
+
         # Store password in secret
         self.db_secret_version = aws.secretsmanager.SecretVersion(
             f"healthcare-db-secret-version-{self.environment_suffix}",
             secret_id=self.db_secret.id,
-            secret_string=self.db_password.result.apply(
+            secret_string=self.db_password_secret.apply(
                 lambda pwd: json.dumps({
                     "username": "healthcare_admin",
                     "password": pwd,
@@ -350,7 +389,7 @@ class TapStack(pulumi.ComponentResource):
             engine_version="15.5",
             database_name="healthcaredb",
             master_username="healthcare_admin",
-            master_password=self.db_password.result,
+            master_password=self.db_password_secret,
             db_subnet_group_name=self.db_subnet_group.name,
             vpc_security_group_ids=[self.rds_sg.id],
             storage_encrypted=True,
@@ -399,7 +438,6 @@ class TapStack(pulumi.ComponentResource):
             transit_encryption_enabled=True,
             transit_encryption_mode="required",
             kms_key_id=self.kms_key.arn,
-            auth_token_enabled=False,
             automatic_failover_enabled=True,
             snapshot_retention_limit=5,
             snapshot_window="03:00-05:00",
@@ -409,12 +447,22 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
+        # Create CloudMap namespace for Service Connect
+        self.service_discovery_namespace = aws.servicediscovery.PrivateDnsNamespace(
+            f"healthcare-namespace-{self.environment_suffix}",
+            name=f"healthcare-{self.environment_suffix}.local",
+            vpc=self.vpc.id,
+            description="Service discovery namespace for healthcare services",
+            tags={**self.tags, 'Name': f"healthcare-namespace-{self.environment_suffix}"},
+            opts=ResourceOptions(parent=self.vpc)
+        )
+
         # Create ECS cluster with Service Connect namespace
         self.ecs_cluster = aws.ecs.Cluster(
             f"healthcare-ecs-cluster-{self.environment_suffix}",
             name=f"healthcare-cluster-{self.environment_suffix}",
             service_connect_defaults=aws.ecs.ClusterServiceConnectDefaultsArgs(
-                namespace=f"healthcare-{self.environment_suffix}.local",
+                namespace=self.service_discovery_namespace.arn,
             ),
             settings=[
                 aws.ecs.ClusterSettingArgs(
@@ -426,7 +474,7 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Create CloudWatch log group for ECS
+        # Create CloudWatch log group for ECS with KMS encryption
         self.ecs_log_group = aws.cloudwatch.LogGroup(
             f"healthcare-ecs-logs-{self.environment_suffix}",
             name=f"/ecs/healthcare-{self.environment_suffix}",
@@ -529,9 +577,9 @@ class TapStack(pulumi.ComponentResource):
                     "memory": 512,
                     "essential": True,
                     "portMappings": [{
-                        "containerPort": 80,
+                        "containerPort": 443,
                         "protocol": "tcp",
-                        "name": "http"
+                        "name": "https"
                     }],
                     "environment": [
                         {"name": "DB_HOST", "value": args[0]},
@@ -548,7 +596,7 @@ class TapStack(pulumi.ComponentResource):
                         "logDriver": "awslogs",
                         "options": {
                             "awslogs-group": args[3],
-                            "awslogs-region": "us-east-1",
+                            "awslogs-region": self.region,
                             "awslogs-stream-prefix": "healthcare"
                         }
                     }
@@ -573,13 +621,12 @@ class TapStack(pulumi.ComponentResource):
             ),
             service_connect_configuration=aws.ecs.ServiceServiceConnectConfigurationArgs(
                 enabled=True,
-                namespace=f"healthcare-{self.environment_suffix}.local",
                 services=[
                     aws.ecs.ServiceServiceConnectConfigurationServiceArgs(
-                        port_name="http",
+                        port_name="https",
                         discovery_name="healthcare-app",
                         client_alias=aws.ecs.ServiceServiceConnectConfigurationServiceClientAliasArgs(
-                            port=80,
+                            port=443,
                             dns_name="healthcare-app"
                         )
                     )
@@ -599,15 +646,14 @@ class TapStack(pulumi.ComponentResource):
         })
 ```
 
-This implementation creates a complete HIPAA-compliant infrastructure with:
+## Compliance Highlights
+- Uses a custom KMS key with service principals for RDS, Secrets Manager, ElastiCache, ECS tasks, and CloudWatch Logs
+- Stores database credentials in Secrets Manager only; RDS master password stays encrypted as a Pulumi secret
+- Forces HTTPS traffic for ECS tasks and enables TLS in-transit encryption for Redis
+- Retains 30 days of automated backups for Aurora and keeps Redis snapshots for recovery
+- Centralizes observability with encrypted CloudWatch Logs and ECS Container Insights
 
-1. **Network Isolation**: VPC with public and private subnets across multiple AZs
-2. **Encryption**: KMS key with automatic rotation for all data at rest
-3. **Database**: Aurora Serverless v2 with 30-day backups and point-in-time recovery
-4. **Caching**: ElastiCache Redis with encryption at rest and in transit
-5. **Compute**: ECS Fargate cluster with Service Connect for service discovery
-6. **Security**: Least-privilege security groups and IAM roles
-7. **Secrets Management**: Database credentials stored in AWS Secrets Manager
-8. **Logging**: CloudWatch logs with encryption for audit trails
-
-All components follow AWS best practices for HIPAA compliance.
+## Deployment Notes
+- Configure AWS credentials and set the desired AWS region (matches `{region}` from your Pulumi configuration)
+- Pass the desired environment suffix (for example `prod` or `hipaa`) when constructing `TapStackArgs`
+- Run `pulumi up` from the project root to provision the full stack

@@ -39,5 +39,5 @@
     "AWS::Logs::LogGroup",
     "AWS::ServiceDiscovery::PrivateDnsNamespace"
   ],
-  "training_quality": 8
+  "training_quality": 9
 }

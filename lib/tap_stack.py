@@ -44,12 +44,54 @@ class TapStack(pulumi.ComponentResource):
         }
         self.tags = {**base_tags, **args.tags}
 
+        region = aws.get_region()
+        caller_identity = aws.get_caller_identity()
+        self.region = region.name
+
+        kms_key_policy = json.dumps({
+            "Version": "2012-10-17",
+            "Id": "healthcare-kms-policy",
+            "Statement": [
+                {
+                    "Sid": "AllowRootAccount",
+                    "Effect": "Allow",
+                    "Principal": {
+                        "AWS": f"arn:aws:iam::{caller_identity.account_id}:root"
+                    },
+                    "Action": "kms:*",
+                    "Resource": "*"
+                },
+                {
+                    "Sid": "AllowAWSServiceUse",
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": [
+                            f"logs.{self.region}.amazonaws.com",
+                            "rds.amazonaws.com",
+                            "secretsmanager.amazonaws.com",
+                            "elasticache.amazonaws.com",
+                            "ecs-tasks.amazonaws.com"
+                        ]
+                    },
+                    "Action": [
+                        "kms:Encrypt",
+                        "kms:Decrypt",
+                        "kms:ReEncrypt*",
+                        "kms:GenerateDataKey*",
+                        "kms:DescribeKey"
+                    ],
+                    "Resource": "*"
+                }
+            ]
+        })
+
         # Create KMS key for encryption
         self.kms_key = aws.kms.Key(
             f"healthcare-kms-{self.environment_suffix}",
             description=f"KMS key for healthcare data encryption - {self.environment_suffix}",
             deletion_window_in_days=30,
             enable_key_rotation=True,
+            policy=kms_key_policy,
             tags={**self.tags, 'Name': f"healthcare-kms-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
@@ -208,14 +250,7 @@ class TapStack(pulumi.ComponentResource):
                     from_port=443,
                     to_port=443,
                     cidr_blocks=["10.0.0.0/16"],
-                    description="HTTPS from VPC",
-                ),
-                aws.ec2.SecurityGroupIngressArgs(
-                    protocol="tcp",
-                    from_port=8080,
-                    to_port=8080,
-                    cidr_blocks=["10.0.0.0/16"],
-                    description="Application port from VPC",
+                    description="HTTPS traffic from within the VPC",
                 ),
             ],
             egress=[
@@ -319,11 +354,13 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self.db_secret)
         )
 
+        self.db_password_secret = Output.secret(self.db_password.result)
+
         # Store password in secret
         self.db_secret_version = aws.secretsmanager.SecretVersion(
             f"healthcare-db-secret-version-{self.environment_suffix}",
             secret_id=self.db_secret.id,
-            secret_string=self.db_password.result.apply(
+            secret_string=self.db_password_secret.apply(
                 lambda pwd: json.dumps({
                     "username": "healthcare_admin",
                     "password": pwd,
@@ -343,7 +380,7 @@ class TapStack(pulumi.ComponentResource):
             engine_version="15.5",
             database_name="healthcaredb",
             master_username="healthcare_admin",
-            master_password=self.db_password.result,
+            master_password=self.db_password_secret,
             db_subnet_group_name=self.db_subnet_group.name,
             vpc_security_group_ids=[self.rds_sg.id],
             storage_encrypted=True,
@@ -428,12 +465,12 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Create CloudWatch log group for ECS
-        # Note: KMS encryption removed due to permission requirements
+        # Create CloudWatch log group for ECS with KMS encryption
         self.ecs_log_group = aws.cloudwatch.LogGroup(
             f"healthcare-ecs-logs-{self.environment_suffix}",
             name=f"/ecs/healthcare-{self.environment_suffix}",
             retention_in_days=30,
+            kms_key_id=self.kms_key.arn,
             tags={**self.tags, 'Name': f"healthcare-ecs-logs-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self.ecs_cluster)
         )
@@ -531,9 +568,9 @@ class TapStack(pulumi.ComponentResource):
                     "memory": 512,
                     "essential": True,
                     "portMappings": [{
-                        "containerPort": 80,
+                        "containerPort": 443,
                         "protocol": "tcp",
-                        "name": "http"
+                        "name": "https"
                     }],
                     "environment": [
                         {"name": "DB_HOST", "value": args[0]},
@@ -550,7 +587,7 @@ class TapStack(pulumi.ComponentResource):
                         "logDriver": "awslogs",
                         "options": {
                             "awslogs-group": args[3],
-                            "awslogs-region": "us-east-1",
+                            "awslogs-region": self.region,
                             "awslogs-stream-prefix": "healthcare"
                         }
                     }
@@ -577,10 +614,10 @@ class TapStack(pulumi.ComponentResource):
                 enabled=True,
                 services=[
                     aws.ecs.ServiceServiceConnectConfigurationServiceArgs(
-                        port_name="http",
+                        port_name="https",
                         discovery_name="healthcare-app",
                         client_alias=aws.ecs.ServiceServiceConnectConfigurationServiceClientAliasArgs(
-                            port=80,
+                            port=443,
                             dns_name="healthcare-app"
                         )
                     )
