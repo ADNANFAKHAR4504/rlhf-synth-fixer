@@ -6,6 +6,7 @@
  */
 import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
+import * as aws from '@pulumi/aws';
 
 // Import nested stack components
 import { NetworkStack } from './global-banking/network-stack';
@@ -143,6 +144,15 @@ export class TapStack extends pulumi.ComponentResource {
       Compliance: 'PCI-DSS',
     }));
 
+    // Explicit AWS provider to ensure correct signing region in CI
+    const awsProvider = new aws.Provider(
+      `${name}-aws-provider`,
+      {
+        region: regions.primary,
+      },
+      { parent: this }
+    );
+
     //  1. Security Stack (Deploy First)
     const securityStack = new SecurityStack(
       `${name}-security`,
@@ -152,7 +162,7 @@ export class TapStack extends pulumi.ComponentResource {
         enablePciCompliance,
         regions,
       },
-      { parent: this }
+      { parent: this, provider: awsProvider }
     );
 
     //  2. Network Stack
@@ -168,7 +178,7 @@ export class TapStack extends pulumi.ComponentResource {
         kmsKeyId: securityStack.kmsKeyId,
         kmsKeyArn: securityStack.kmsKeyArn,
       },
-      { parent: this }
+      { parent: this, provider: awsProvider }
     );
 
     // 3. Storage Stack
@@ -184,7 +194,7 @@ export class TapStack extends pulumi.ComponentResource {
         enableVersioning: true,
         enableObjectLock: true,
       },
-      { parent: this }
+      { parent: this, provider: awsProvider }
     );
 
     //  4. Database Stack
@@ -201,7 +211,11 @@ export class TapStack extends pulumi.ComponentResource {
         enablePointInTimeRecovery: true,
         secretsManagerArn: securityStack.dbSecretArn,
       },
-      { parent: this, dependsOn: [networkStack, securityStack] }
+      {
+        parent: this,
+        provider: awsProvider,
+        dependsOn: [networkStack, securityStack],
+      }
     );
 
     //  5. Messaging Stack
@@ -215,7 +229,11 @@ export class TapStack extends pulumi.ComponentResource {
         enableFifoQueues: true,
         enableCrossRegionEvents: enableMultiRegion,
       },
-      { parent: this, dependsOn: [securityStack, storageStack] }
+      {
+        parent: this,
+        provider: awsProvider,
+        dependsOn: [securityStack, storageStack],
+      }
     );
 
     // 6. Compute Stack (ECS Fargate + App Mesh)
@@ -233,7 +251,11 @@ export class TapStack extends pulumi.ComponentResource {
         enableAutoScaling: true,
         secretsManagerArns: securityStack.secretsManagerArns,
       },
-      { parent: this, dependsOn: [networkStack, securityStack] }
+      {
+        parent: this,
+        provider: awsProvider,
+        dependsOn: [networkStack, securityStack],
+      }
     );
 
     // --- 7. API Stack (API Gateway, ALB, Global Accelerator) ---
@@ -266,6 +288,7 @@ export class TapStack extends pulumi.ComponentResource {
       },
       {
         parent: this,
+        provider: awsProvider,
         dependsOn: [networkStack, securityStack, computeStack, storageStack],
       }
     );
@@ -290,6 +313,7 @@ export class TapStack extends pulumi.ComponentResource {
       },
       {
         parent: this,
+        provider: awsProvider,
         dependsOn: [computeStack, apiStack, databaseStack, messagingStack],
       }
     );
@@ -311,6 +335,7 @@ export class TapStack extends pulumi.ComponentResource {
       },
       {
         parent: this,
+        provider: awsProvider,
         dependsOn: [storageStack, securityStack, monitoringStack],
       }
     );
