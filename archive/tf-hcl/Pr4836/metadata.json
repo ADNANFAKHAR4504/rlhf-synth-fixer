@@ -20,5 +20,11 @@
     "@aws-sdk/client-elastic-load-balancing-v2",
     "@aws-sdk/client-auto-scaling",
     "axios"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
 }
