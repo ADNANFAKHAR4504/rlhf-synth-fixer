@@ -542,7 +542,7 @@ export class TapStack extends pulumi.ComponentResource {
 
   private configureVpcRouting(
     natGateways: aws.ec2.NatGateway[],
-    attachments: {
+    _attachments: {
       hubAttachment: aws.ec2transitgateway.VpcAttachment;
       prodAttachment: aws.ec2transitgateway.VpcAttachment;
       devAttachment: aws.ec2transitgateway.VpcAttachment;
