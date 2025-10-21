@@ -6,6 +6,7 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as sns from 'aws-cdk-lib/aws-sns';
@@ -111,24 +112,55 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
     const lambdaFunctionName = sanitizeName(
       `${this.stackName}-application-function-${resourceSuffix}`
     );
-    const lambdaFunction = new lambda.Function(this, 'ApplicationFunction', {
-      functionName: lambdaFunctionName,
-      runtime: lambda.Runtime.NODEJS_18_X,
-      code: lambda.Code.fromAsset(path.join(__dirname, 'lambda-handler')),
-      handler: 'index.handler',
-      role: lambdaRole,
-      environment: {
-        TABLE_NAME: dynamoTable.tableName,
-        CONFIG_PARAMETER_NAME: configParameter.parameterName,
-        ENV: envName,
-      },
-      deadLetterQueue: deadLetterQueue,
-      deadLetterQueueEnabled: true,
-      tracing: lambda.Tracing.ACTIVE,
-      reservedConcurrentExecutions: 10,
-      timeout: cdk.Duration.seconds(30),
-      memorySize: 256,
-    });
+    // Use NodejsFunction bundling in CI to include runtime dependencies
+    // (CI environments typically have Docker available for esbuild bundling).
+    // For local unit tests we prefer a simple Code.fromAsset to avoid requiring Docker.
+    const useBundler = process.env.CI === '1' || process.env.CI === 'true' || process.env.USE_NODEJS_BUNDLER === '1';
+    let lambdaFunction: lambda.Function;
+    if (useBundler) {
+      const nodefn = new NodejsFunction(this, 'ApplicationFunction', {
+        functionName: lambdaFunctionName,
+        runtime: lambda.Runtime.NODEJS_18_X,
+        entry: path.join(__dirname, 'lambda-handler', 'index.js'),
+        handler: 'handler',
+        role: lambdaRole,
+        environment: {
+          TABLE_NAME: dynamoTable.tableName,
+          CONFIG_PARAMETER_NAME: configParameter.parameterName,
+          ENV: envName,
+        },
+        deadLetterQueue: deadLetterQueue,
+        deadLetterQueueEnabled: true,
+        tracing: lambda.Tracing.ACTIVE,
+        reservedConcurrentExecutions: 10,
+        timeout: cdk.Duration.seconds(30),
+        memorySize: 256,
+        bundling: {
+          nodeModules: ['aws-sdk', 'uuid'],
+        },
+      });
+      // NodejsFunction is a specialized construct but is a subclass of Function
+      lambdaFunction = nodefn as unknown as lambda.Function;
+    } else {
+      lambdaFunction = new lambda.Function(this, 'ApplicationFunction', {
+        functionName: lambdaFunctionName,
+        runtime: lambda.Runtime.NODEJS_18_X,
+        code: lambda.Code.fromAsset(path.join(__dirname, 'lambda-handler')),
+        handler: 'index.handler',
+        role: lambdaRole,
+        environment: {
+          TABLE_NAME: dynamoTable.tableName,
+          CONFIG_PARAMETER_NAME: configParameter.parameterName,
+          ENV: envName,
+        },
+        deadLetterQueue: deadLetterQueue,
+        deadLetterQueueEnabled: true,
+        tracing: lambda.Tracing.ACTIVE,
+        reservedConcurrentExecutions: 10,
+        timeout: cdk.Duration.seconds(30),
+        memorySize: 256,
+      });
+    }
 
     // Grants
     dynamoTable.grantReadWriteData(lambdaFunction);
