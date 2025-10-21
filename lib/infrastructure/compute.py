@@ -30,6 +30,7 @@ class ComputeStack:
         private_subnet_ids: List[Output[str]],
         security_group_id: Output[str],
         instance_profile_name: Output[str],
+        instance_profile_arn: Output[str],
         parent: Optional[pulumi.Resource] = None
     ):
         """
@@ -40,12 +41,14 @@ class ComputeStack:
             private_subnet_ids: List of private subnet IDs for ASG (MODEL_FAILURES fix #3)
             security_group_id: Security group ID for EC2 instances
             instance_profile_name: IAM instance profile name
+            instance_profile_arn: IAM instance profile ARN (for better IAM propagation)
             parent: Optional parent resource for dependency management
         """
         self.config = config
         self.private_subnet_ids = private_subnet_ids
         self.security_group_id = security_group_id
         self.instance_profile_name = instance_profile_name
+        self.instance_profile_arn = instance_profile_arn
         self.parent = parent
         
         # Get latest Amazon Linux 2023 AMI
@@ -147,10 +150,21 @@ echo "=========================================="
             image_id=self.ami.id,
             instance_type=self.config.instance_type,
             iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(
-                name=self.instance_profile_name
+                arn=self.instance_profile_arn  # Use ARN for better IAM propagation
             ),
             vpc_security_group_ids=[self.security_group_id],
             user_data=base64.b64encode(user_data.encode()).decode(),
+            block_device_mappings=[
+                aws.ec2.LaunchTemplateBlockDeviceMappingArgs(
+                    device_name="/dev/xvda",
+                    ebs=aws.ec2.LaunchTemplateBlockDeviceMappingEbsArgs(
+                        volume_size=8,
+                        volume_type="gp3",
+                        delete_on_termination=True,
+                        encrypted=False  # Explicitly disable encryption to avoid KMS issues
+                    )
+                )
+            ],
             metadata_options=aws.ec2.LaunchTemplateMetadataOptionsArgs(
                 http_endpoint="enabled",
                 http_tokens="optional",  # Allow both IMDSv1 and IMDSv2 for compatibility
