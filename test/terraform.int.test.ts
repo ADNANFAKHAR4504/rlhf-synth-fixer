@@ -35,10 +35,28 @@ import {
   GetWebACLCommand,
   WAFV2Client,
 } from '@aws-sdk/client-wafv2';
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as https from 'https';
-import * as jwt from 'jsonwebtoken';
 import * as path from 'path';
+
+// Simple JWT generation without external dependencies
+function createJWT(payload: any, secret: string): string {
+  const header = { alg: 'HS256', typ: 'JWT' };
+  
+  const base64url = (str: string) => 
+    Buffer.from(str).toString('base64')
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  
+  const headerEncoded = base64url(JSON.stringify(header));
+  const payloadEncoded = base64url(JSON.stringify(payload));
+  const signature = crypto.createHmac('sha256', secret)
+    .update(`${headerEncoded}.${payloadEncoded}`)
+    .digest('base64')
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  
+  return `${headerEncoded}.${payloadEncoded}.${signature}`;
+}
 
 // Load outputs from deployment
 function loadOutputs(): any {
@@ -260,14 +278,13 @@ describe('Secure API Integration Tests', () => {
 
     test('Valid transaction with JWT authorization succeeds', async () => {
       // Generate valid JWT token
-      const token = jwt.sign(
+      const token = createJWT(
         {
           user_id: 'test-user-123',
           permissions: ['transactions', 'read', 'write'],
           exp: Math.floor(Date.now() / 1000) + 3600,
         },
-        jwtSecret,
-        { algorithm: 'HS256' }
+        jwtSecret
       );
 
       // Create test transaction
@@ -403,14 +420,13 @@ describe('Secure API Integration Tests', () => {
     }, 60000);
 
     test('Malformed request returns 400 Bad Request', async () => {
-      const token = jwt.sign(
+      const token = createJWT(
         {
           user_id: 'test-user-456',
           permissions: ['transactions'],
           exp: Math.floor(Date.now() / 1000) + 3600,
         },
-        jwtSecret,
-        { algorithm: 'HS256' }
+        jwtSecret
       );
 
       const invalidTransaction = {
