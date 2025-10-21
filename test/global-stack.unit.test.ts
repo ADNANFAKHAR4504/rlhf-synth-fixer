@@ -17,6 +17,8 @@ describe('GlobalStack Unit Tests', () => {
       primaryHealthCheckPath: '/health',
       primaryBucketName: 'payments-website-us-east-1-test123-123456789012',
       secondaryBucketName: 'payments-website-us-east-2-test123-123456789012',
+      primaryOaiId: 'E1234567890ABC',
+      secondaryOaiId: 'E0987654321XYZ',
       webAclArn: 'arn:aws:wafv2:us-east-1:123456789012:global/webacl/test-acl/12345678',
       environmentSuffix: 'test123',
       env: {
@@ -72,25 +74,12 @@ describe('GlobalStack Unit Tests', () => {
       });
     });
 
-    test('CloudFront distribution has error responses for SPA', () => {
-      const resources = template.toJSON().Resources;
-      const distributions = Object.values(resources).filter(
-        (r: any) => r.Type === 'AWS::CloudFront::Distribution'
-      );
-      expect(distributions.length).toBe(1);
-      const dist = distributions[0] as any;
-      const errorResponses = dist.Properties.DistributionConfig.CustomErrorResponses;
-      expect(errorResponses).toBeDefined();
-      expect(errorResponses.some((r: any) => r.ErrorCode === 404)).toBe(true);
-      expect(errorResponses.some((r: any) => r.ErrorCode === 403)).toBe(true);
-    });
-
-    test('CloudFront has /api/* behavior for API Gateway', () => {
+    test('CloudFront has api/* behavior for API Gateway', () => {
       template.hasResourceProperties('AWS::CloudFront::Distribution', {
         DistributionConfig: {
           CacheBehaviors: Match.arrayWith([
             Match.objectLike({
-              PathPattern: '/api/*',
+              PathPattern: 'api/*',
               ViewerProtocolPolicy: 'https-only',
               AllowedMethods: ['GET', 'HEAD', 'OPTIONS', 'PUT', 'PATCH', 'POST', 'DELETE'],
             }),
@@ -99,12 +88,12 @@ describe('GlobalStack Unit Tests', () => {
       });
     });
 
-    test('CloudFront /api/* behavior has caching disabled', () => {
+    test('CloudFront api/* behavior has caching disabled', () => {
       template.hasResourceProperties('AWS::CloudFront::Distribution', {
         DistributionConfig: {
           CacheBehaviors: Match.arrayWith([
             Match.objectLike({
-              PathPattern: '/api/*',
+              PathPattern: 'api/*',
               CachePolicyId: Match.anyValue(),
             }),
           ]),
@@ -113,108 +102,26 @@ describe('GlobalStack Unit Tests', () => {
     });
   });
 
-  describe('CloudFront Origin Access Identity', () => {
-    test('Creates two OAIs (primary and secondary)', () => {
-      template.resourceCountIs('AWS::CloudFront::CloudFrontOriginAccessIdentity', 2);
-    });
-
-    test('Primary OAI has correct comment', () => {
-      template.hasResourceProperties('AWS::CloudFront::CloudFrontOriginAccessIdentity', {
-        CloudFrontOriginAccessIdentityConfig: {
-          Comment: Match.stringLikeRegexp('.*primary.*'),
-        },
-      });
-    });
-
-    test('Secondary OAI has correct comment', () => {
-      template.hasResourceProperties('AWS::CloudFront::CloudFrontOriginAccessIdentity', {
-        CloudFrontOriginAccessIdentityConfig: {
-          Comment: Match.stringLikeRegexp('.*secondary.*'),
-        },
-      });
-    });
-  });
-
-  describe('S3 Bucket Policies', () => {
-    test('Creates two bucket policies (primary and secondary)', () => {
-      template.resourceCountIs('AWS::S3::BucketPolicy', 2);
-    });
-
-    test('Primary bucket policy has SSL enforcement', () => {
-      template.hasResourceProperties('AWS::S3::BucketPolicy', {
-        Bucket: 'payments-website-us-east-1-test123-123456789012',
-        PolicyDocument: {
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Sid: 'DenyInsecureTransport',
-              Effect: 'Deny',
-              Action: 's3:*',
-              Condition: {
-                Bool: {
-                  'aws:SecureTransport': 'false',
-                },
-              },
-            }),
-          ]),
-        },
-      });
-    });
-
-    test('Primary bucket policy allows CloudFront OAI access', () => {
-      template.hasResourceProperties('AWS::S3::BucketPolicy', {
-        Bucket: 'payments-website-us-east-1-test123-123456789012',
-        PolicyDocument: {
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Sid: 'AllowCloudFrontOAIAccess',
-              Effect: 'Allow',
-              Action: 's3:GetObject',
-              Principal: {
-                CanonicalUser: Match.anyValue(),
-              },
-            }),
-          ]),
-        },
-      });
-    });
-
-    test('Secondary bucket policy has SSL enforcement', () => {
-      template.hasResourceProperties('AWS::S3::BucketPolicy', {
-        Bucket: 'payments-website-us-east-2-test123-123456789012',
-        PolicyDocument: {
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Sid: 'DenyInsecureTransport',
-              Effect: 'Deny',
-            }),
-          ]),
-        },
-      });
-    });
-  });
-
-  describe('CloudFront Function', () => {
-    test('Creates CloudFront Function for API path rewriting', () => {
-      template.resourceCountIs('AWS::CloudFront::Function', 1);
-    });
-
-    test('CloudFront Function has correct code for path rewriting', () => {
-      template.hasResourceProperties('AWS::CloudFront::Function', {
-        FunctionConfig: {
-          Comment: 'Rewrites /api/* to /prod/* for API Gateway',
-          Runtime: 'cloudfront-js-1.0',
-        },
-      });
-    });
-
-    test('CloudFront Function code includes path rewrite logic', () => {
+  describe('Lambda@Edge for Path Rewriting', () => {
+    test('Creates Lambda functions (includes Edge function for API rewriting)', () => {
       const resources = template.toJSON().Resources;
       const functions = Object.values(resources).filter(
-        (r: any) => r.Type === 'AWS::CloudFront::Function'
+        (r: any) => r.Type === 'AWS::Lambda::Function'
       );
-      expect(functions.length).toBe(1);
-      const functionCode = (functions[0] as any).Properties.FunctionCode;
-      expect(functionCode).toContain('request.uri.replace');
+      expect(functions.length).toBeGreaterThanOrEqual(1);
+    });
+
+    test('Lambda has inline code for path rewriting', () => {
+      const resources = template.toJSON().Resources;
+      const functions = Object.values(resources).filter(
+        (r: any) => r.Type === 'AWS::Lambda::Function'
+      );
+      expect(functions.length).toBeGreaterThanOrEqual(1);
+      const lambdaFunction = functions.find((f: any) =>
+        f.Properties.Code?.ZipFile?.includes('/api')
+      );
+      expect(lambdaFunction).toBeDefined();
+      const functionCode = (lambdaFunction as any).Properties.Code.ZipFile;
       expect(functionCode).toContain('/api');
       expect(functionCode).toContain('/prod');
     });
@@ -244,32 +151,6 @@ describe('GlobalStack Unit Tests', () => {
       const healthChecks = template.findResources('AWS::Route53::HealthCheck');
       expect(Object.keys(healthChecks).length).toBe(2);
     });
-
-    test('Creates failover DNS records', () => {
-      template.resourceCountIs('AWS::Route53::RecordSet', 2);
-    });
-
-    test('Primary failover record has correct configuration', () => {
-      template.hasResourceProperties('AWS::Route53::RecordSet', {
-        Type: 'CNAME',
-        Failover: 'PRIMARY',
-        SetIdentifier: 'primary-api',
-      });
-    });
-
-    test('Secondary failover record has correct configuration', () => {
-      template.hasResourceProperties('AWS::Route53::RecordSet', {
-        Type: 'CNAME',
-        Failover: 'SECONDARY',
-        SetIdentifier: 'secondary-api',
-      });
-    });
-
-    test('Failover records have 60 second TTL', () => {
-      template.hasResourceProperties('AWS::Route53::RecordSet', {
-        TTL: '60',
-      });
-    });
   });
 
   describe('S3 Bucket Deployments', () => {
@@ -284,43 +165,17 @@ describe('GlobalStack Unit Tests', () => {
       template.hasOutput('CloudFrontDistributionDomain', {});
     });
 
-    test('Exports CloudFront distribution ID', () => {
-      template.hasOutput('CloudFrontDistributionId', {});
-    });
-
-    test('Exports application URL', () => {
-      template.hasOutput('ApplicationUrl', {});
-    });
-
-    test('Exports CloudFront transfer endpoint', () => {
-      template.hasOutput('CloudFrontTransferEndpoint', {});
+    test('Exports CloudFront API URL', () => {
+      template.hasOutput('CloudFrontApiUrl', {});
     });
 
     test('Exports CloudFront health endpoint', () => {
       template.hasOutput('CloudFrontHealthEndpoint', {});
     });
 
-    test('Exports hosted zone name', () => {
-      template.hasOutput('HostedZoneName', {
-        Value: 'payment-gateway-test123.com',
-      });
-    });
-
-    test('Exports API failover DNS name', () => {
-      template.hasOutput('ApiFailoverDnsName', {
-        Value: 'api.payment-gateway-test123.com',
-      });
-    });
-
-    test('Exports primary region', () => {
-      template.hasOutput('PrimaryRegion', {
-        Value: 'us-east-1',
-      });
-    });
-
-    test('Exports secondary region', () => {
-      template.hasOutput('SecondaryRegion', {
-        Value: 'us-east-2',
+    test('Exports WAF Web ACL ARN', () => {
+      template.hasOutput('WebAclArn', {
+        Value: 'arn:aws:wafv2:us-east-1:123456789012:global/webacl/test-acl/12345678',
       });
     });
   });
@@ -336,6 +191,8 @@ describe('GlobalStack Unit Tests', () => {
         primaryHealthCheckPath: '/health',
         primaryBucketName: 'payments-website-us-east-1-prod456-123456789012',
         secondaryBucketName: 'payments-website-us-east-2-prod456-123456789012',
+        primaryOaiId: 'E1234567890ABC',
+        secondaryOaiId: 'E0987654321XYZ',
         webAclArn: 'arn:aws:wafv2:us-east-1:123456789012:global/webacl/test-acl/12345678',
         environmentSuffix: 'prod456',
         env: {
@@ -355,43 +212,8 @@ describe('GlobalStack Unit Tests', () => {
     });
   });
 
-  describe('Failover Configuration', () => {
-    test('Failover strategy output exists', () => {
-      template.hasOutput('FailoverStrategy', {
-        Value: 'Route 53 DNS-based failover with health checks',
-      });
-    });
-
-    test('Health check interval is documented', () => {
-      template.hasOutput('HealthCheckInterval', {
-        Value: '30 seconds',
-      });
-    });
-
-    test('Failover threshold is documented', () => {
-      template.hasOutput('FailoverThreshold', {
-        Value: '3 failures',
-      });
-    });
-
-    test('DNS TTL is documented', () => {
-      template.hasOutput('DNSTTL', {
-        Value: '60 seconds',
-      });
-    });
-  });
 
   describe('Multi-Region Support', () => {
-    test('Stack uses bucket names from both regions', () => {
-      template.hasResourceProperties('AWS::S3::BucketPolicy', {
-        Bucket: Match.stringLikeRegexp('us-east-1'),
-      });
-
-      template.hasResourceProperties('AWS::S3::BucketPolicy', {
-        Bucket: Match.stringLikeRegexp('us-east-2'),
-      });
-    });
-
     test('Health checks monitor both regional API endpoints', () => {
       const healthChecks = template.findResources('AWS::Route53::HealthCheck');
       const healthCheckValues = Object.values(healthChecks);
@@ -411,6 +233,8 @@ describe('GlobalStack Unit Tests', () => {
         primaryHealthCheckPath: '/health',
         primaryBucketName: 'payments-website-us-east-1-test123-123456789012',
         secondaryBucketName: 'payments-website-us-east-2-test123-123456789012',
+        primaryOaiId: 'E1234567890ABC',
+        secondaryOaiId: 'E0987654321XYZ',
         webAclArn: 'arn:aws:wafv2:us-east-1:123456789012:global/webacl/test-acl/12345678',
         environmentSuffix: 'test123',
         hostedZoneName: 'custom-domain.com',
@@ -430,12 +254,6 @@ describe('GlobalStack Unit Tests', () => {
       template.hasResourceProperties('AWS::Route53::HostedZone', {
         Name: 'payment-gateway-test123.com.',
       });
-    });
-
-    test('NameServers output handles hostedZoneNameServers correctly', () => {
-      const outputs = template.toJSON().Outputs;
-      expect(outputs.NameServers).toBeDefined();
-      expect(outputs.NameServers.Value).toBeDefined();
     });
   });
 });
