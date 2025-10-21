@@ -96,6 +96,7 @@ class TapStack(pulumi.ComponentResource):
             security_group_id=self.security_stack.get_ec2_security_group_id(),
             instance_profile_name=self.iam_stack.get_ec2_instance_profile_name(),
             instance_profile_arn=self.iam_stack.get_ec2_instance_profile_arn(),
+            instance_profile=self.iam_stack.get_ec2_instance_profile(),
             parent=self
         )
         

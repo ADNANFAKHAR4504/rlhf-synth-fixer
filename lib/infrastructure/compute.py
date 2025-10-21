@@ -31,6 +31,7 @@ class ComputeStack:
         security_group_id: Output[str],
         instance_profile_name: Output[str],
         instance_profile_arn: Output[str],
+        instance_profile: aws.iam.InstanceProfile,
         parent: Optional[pulumi.Resource] = None
     ):
         """
@@ -42,6 +43,7 @@ class ComputeStack:
             security_group_id: Security group ID for EC2 instances
             instance_profile_name: IAM instance profile name
             instance_profile_arn: IAM instance profile ARN (for better IAM propagation)
+            instance_profile: IAM instance profile resource (for explicit dependency)
             parent: Optional parent resource for dependency management
         """
         self.config = config
@@ -49,6 +51,7 @@ class ComputeStack:
         self.security_group_id = security_group_id
         self.instance_profile_name = instance_profile_name
         self.instance_profile_arn = instance_profile_arn
+        self.instance_profile = instance_profile
         self.parent = parent
         
         # Get latest Amazon Linux 2023 AMI
@@ -161,7 +164,8 @@ echo "=========================================="
                         volume_size=8,
                         volume_type="gp3",
                         delete_on_termination=True,
-                        encrypted=False  # Explicitly disable encryption to avoid KMS issues
+                        encrypted=True,  # Enable encryption for compliance
+                        kms_key_id="alias/aws/ebs"  # Use AWS-managed key to avoid invalid KMS key state
                     )
                 )
             ],
@@ -194,7 +198,10 @@ echo "=========================================="
                 **self.config.get_common_tags(),
                 'Name': lt_name
             },
-            opts=ResourceOptions(parent=self.parent)
+            opts=ResourceOptions(
+                parent=self.parent,
+                depends_on=[self.instance_profile]  # Wait for IAM propagation
+            )
         )
         
         return launch_template

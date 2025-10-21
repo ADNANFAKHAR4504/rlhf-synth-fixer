@@ -249,4 +249,8 @@ class IAMStack:
     def get_ec2_instance_profile_arn(self) -> Output[str]:
         """Get EC2 instance profile ARN."""
         return self.ec2_instance_profile.arn
+    
+    def get_ec2_instance_profile(self) -> aws.iam.InstanceProfile:
+        """Get EC2 instance profile resource for dependency management."""
+        return self.ec2_instance_profile
 
