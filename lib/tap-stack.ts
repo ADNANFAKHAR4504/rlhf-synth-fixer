@@ -300,7 +300,7 @@ export class TapStack extends pulumi.ComponentResource {
         kmsKeyArn: securityStack.kmsKeyArn,
         snsTopicArn: monitoringStack.snsTopicArn,
         enableGuardDuty: true,
-        enableSecurityHub: true,
+        enableSecurityHub: false,
         enableConfig: true,
       },
       {

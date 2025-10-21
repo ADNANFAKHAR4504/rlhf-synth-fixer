@@ -423,7 +423,7 @@ describe("TapStack", () => {
           kmsKeyArn: expect.anything(),
           snsTopicArn: expect.anything(),
           enableGuardDuty: true,
-          enableSecurityHub: true,
+          enableSecurityHub: false,
           enableConfig: true,
         }),
         expect.objectContaining({
