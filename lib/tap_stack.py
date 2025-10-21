@@ -54,14 +54,14 @@ class TapStack(TerraformStack):
             default_tags=[default_tags],
         )
 
-        # Configure S3 Backend
-        S3Backend(
-            self,
-            bucket=state_bucket,
-            key=f"{environment_suffix}/{construct_id}.tfstate",
-            region=state_bucket_region,
-            encrypt=True,
-        )
+        # Configure S3 Backend (commented out for local deployment)
+        # S3Backend(
+        #     self,
+        #     bucket=state_bucket,
+        #     key=f"{environment_suffix}/{construct_id}.tfstate",
+        #     region=state_bucket_region,
+        #     encrypt=True,
+        # )
 
         # Get availability zones
         azs = DataAwsAvailabilityZones(

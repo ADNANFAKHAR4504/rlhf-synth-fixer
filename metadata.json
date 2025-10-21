@@ -29,21 +29,5 @@
     "IAM",
     "CloudWatch Logs"
   ],
-  "training_quality": 8,
-  "problem": "Develop a CDKTF configuration to deploy a scalable Learning Management System (LMS) using ECS and ElastiCache Redis for session management and content caching in the education sector.",
-  "environment": {
-    "setup_requirements": [
-      "Python 3.8+",
-      "CDKTF CLI installed",
-      "AWS credentials configured",
-      "Docker installed locally for container testing"
-    ],
-    "core_components": [
-      "ECS Fargate cluster for the LMS application",
-      "ElastiCache Redis cluster for session management",
-      "SecretsManager for database credentials",
-      "Application Load Balancer for traffic distribution"
-    ]
-  },
-  "constraints": "All resources must be deployed in ca-central-1 region with multi-AZ configuration; Redis cluster must be encrypted at rest and in transit with automatic failover enabled"
+  "training_quality": 8
 }
