@@ -6,6 +6,7 @@
   "complexity": "medium",
   "turn_type": "single",
   "team": "synth",
+  "startedAt": "2025-10-21T13:25:14.641150+05:30",
   "subtask": "Failure Recovery and High Availability",
   "background": "FastShop, a growing e-commerce platform in Brazil, needs to implement a scalable product catalog system that can handle high-traffic periods like Black Friday. The system must maintain fast response times and comply with Brazilian e-commerce regulations (LGPD).",
   "aws_services": [
