@@ -126,7 +126,7 @@ describe('TapStack Serverless CloudFormation Template', () => {
       const s3Statement = policy.Statement[1];
       expect(s3Statement.Action).toEqual(['s3:PutObject']);
       expect(s3Statement.Resource).toEqual({
-        'Fn::Sub': '${LogsBucket}/*',
+        'Fn::Sub': 'arn:aws:s3:::${LogsBucket}/*',
       });
     });
 
