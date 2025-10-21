@@ -17,9 +17,11 @@ Parameters:
     ConstraintDescription: Must be a valid CIDR block
     
   KeyPairName:
-    Description: EC2 Key Pair for SSH access
-    Type: AWS::EC2::KeyPair::KeyName
-    ConstraintDescription: Must be an existing EC2 KeyPair
+    Description: EC2 Key Pair for SSH access (optional - leave empty to disable SSH access)
+    Type: String
+    Default: ''
+    AllowedPattern: '^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$|^$'
+    ConstraintDescription: Must be a valid EC2 KeyPair name or empty string
     
   DBMasterUsername:
     Description: Database master username
@@ -32,19 +34,6 @@ Parameters:
     ConstraintDescription: Must begin with a letter and contain only alphanumeric characters
     
     
-  ACMCertificateArn:
-    Description: ARN of the ACM certificate for HTTPS listeners
-    Type: String
-    Default: ''
-    AllowedPattern: '^arn:aws:acm:.*:.*:certificate/.*$|^$'
-    ConstraintDescription: Must be a valid ACM certificate ARN
-    
-  ApplicationPort:
-    Description: Application port for ALB target group
-    Type: Number
-    Default: 443
-    MinValue: 1
-    MaxValue: 65535
     
   DatabasePort:
     Description: Database port for RDS instance
@@ -53,15 +42,7 @@ Parameters:
     MinValue: 1150
     MaxValue: 65535
 
-Mappings:
-  AWSRegionToAMI:
-    us-east-1:
-      AMIID: ami-0c02fb55731490381  # Amazon Linux 2 AMI
-    us-west-2:
-      AMIID: ami-0abcdef1234567890  # Example for multi-region readiness
 
-Conditions:
-  HasACMCertificate: !Not [!Equals [!Ref ACMCertificateArn, '']]
 
 Resources:
   # ============================================
@@ -341,10 +322,10 @@ Resources:
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
+          FromPort: 80
+          ToPort: 80
           CidrIp: !Ref CorporateIPRange
-          Description: HTTPS from corporate network
+          Description: HTTP from corporate network
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentName}-ALB-SG'
@@ -361,10 +342,10 @@ Resources:
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: !Ref ApplicationPort
-          ToPort: !Ref ApplicationPort
+          FromPort: 80
+          ToPort: 80
           SourceSecurityGroupId: !Ref ALBSecurityGroup
-          Description: Application traffic from ALB
+          Description: HTTP traffic from ALB
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
@@ -757,7 +738,7 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub '${EnvironmentName}-launch-template'
       LaunchTemplateData:
-        ImageId: !FindInMap [AWSRegionToAMI, !Ref 'AWS::Region', AMIID]
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
         InstanceType: t3.medium
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
@@ -871,14 +852,14 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Name: !Sub '${EnvironmentName}-TG'
-      Port: !Ref ApplicationPort
-      Protocol: HTTPS
+      Port: 80
+      Protocol: HTTP
       VpcId: !Ref VPC
       TargetType: instance
       HealthCheckEnabled: true
       HealthCheckIntervalSeconds: 30
       HealthCheckPath: /health
-      HealthCheckProtocol: HTTPS
+      HealthCheckProtocol: HTTP
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 3
@@ -892,31 +873,13 @@ Resources:
         - Key: iac-rlhf-amazon
           Value: 'true'
 
-  # HTTPS Listener with ACM Certificate
-  ALBHTTPSListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: HasACMCertificate
-    Properties:
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref ALBTargetGroup
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Port: 443
-      Protocol: HTTPS
-      Certificates:
-        - CertificateArn: !Ref ACMCertificateArn
-      SslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
-
-  # HTTP to HTTPS Redirect Listener
+  # HTTP Listener (simplified - no HTTPS redirect)
   ALBHTTPListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
-        - Type: redirect
-          RedirectConfig:
-            Protocol: HTTPS
-            Port: '443'
-            StatusCode: HTTP_301
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 80
       Protocol: HTTP
@@ -1068,13 +1031,6 @@ Resources:
               StringEquals:
                 'aws:SourceArn': !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${EnvironmentName}-audit-processor'
       EnableKeyRotation: true
-      Tags:
-        - Key: Name
-          Value: !Sub '${EnvironmentName}-Lambda-KMS-Key'
-        - Key: team
-          Value: '2'
-        - Key: iac-rlhf-amazon
-          Value: 'true'
 
   LambdaKMSKeyAlias:
     Type: AWS::KMS::Alias
@@ -1241,13 +1197,6 @@ Resources:
               StringLike:
                 'kms:EncryptionContext:aws:cloudtrail:arn': !Sub 'arn:aws:cloudtrail:*:${AWS::AccountId}:trail/*'
       EnableKeyRotation: true
-      Tags:
-        - Key: Name
-          Value: !Sub '${EnvironmentName}-CloudTrail-KMS-Key'
-        - Key: team
-          Value: '2'
-        - Key: iac-rlhf-amazon
-          Value: 'true'
 
   CloudTrailKMSKeyAlias:
     Type: AWS::KMS::Alias
@@ -1484,13 +1433,6 @@ Resources:
               - 'kms:GenerateDataKey'
             Resource: '*'
       EnableKeyRotation: true
-      Tags:
-        - Key: Name
-          Value: !Sub '${EnvironmentName}-SNS-KMS-Key'
-        - Key: team
-          Value: '2'
-        - Key: iac-rlhf-amazon
-          Value: 'true'
 
   NotificationKMSKeyAlias:
     Type: AWS::KMS::Alias
