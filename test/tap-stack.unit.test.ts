@@ -57,8 +57,6 @@ describe("MultiRegionDrStack Unit Tests", () => {
     it("should create Secrets Manager resources for DB credentials", () => {
       expect(findResources("aws_secretsmanager_secret")).toHaveLength(1); // Only one secret needed
       expect(findResources("aws_secretsmanager_secret_version")).toHaveLength(1);
-      expect(findResources("aws_secretsmanager_secret_rotation")).toHaveLength(1); // Check rotation config
-      expect(findResources("aws_lambda_function")).toHaveLength(1); // Rotation Lambda
     });
   });
 

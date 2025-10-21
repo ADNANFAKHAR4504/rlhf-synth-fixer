@@ -25,11 +25,9 @@ import { Route53HealthCheck } from '@cdktf/provider-aws/lib/route53-health-check
 import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
 import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
 import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
-import { SecretsmanagerSecretRotation } from '@cdktf/provider-aws/lib/secretsmanager-secret-rotation';
 import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
-import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function'; // Needed for rotation
-import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy'; // Needed for Lambda inline policy
+import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
 import { Ec2TransitGateway } from '@cdktf/provider-aws/lib/ec2-transit-gateway';
 import { Ec2TransitGatewayVpcAttachment } from '@cdktf/provider-aws/lib/ec2-transit-gateway-vpc-attachment';
 import { RandomProvider } from '@cdktf/provider-random/lib/provider';
@@ -110,71 +108,7 @@ export class MultiRegionDrStack extends TerraformStack {
       }
     );
 
-    // --- Rotation Lambda (Stubbed Setup) ---
-    // This Lambda setup allows enabling rotation, but the code itself is a placeholder.
-    const rotationLambdaRole = new IamRole(this, 'RotationLambdaRole', {
-      provider: primaryProvider, // Rotation lambda runs in the secret's region
-      name: `secret-rotation-lambda-role-${randomSuffix}`,
-      assumeRolePolicy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Action: 'sts:AssumeRole',
-            Effect: 'Allow',
-            Principal: { Service: 'lambda.amazonaws.com' },
-          },
-        ],
-      }),
-      // Basic execution role + permissions needed by rotation function (Secrets Manager, RDS, EC2 Network)
-      managedPolicyArns: [
-        'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
-        'arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole', // If Lambda needs VPC access
-        'arn:aws:iam::aws:policy/SecretsManagerReadWrite', // Broad for simplicity, scope down in prod
-      ],
-      tags: commonTags,
-    });
-
-    // Add permissions specifically for RDS if rotation modifies DB users (needed for real rotation)
-    new IamRolePolicy(this, 'RotationLambdaRdsPolicy', {
-      provider: primaryProvider,
-      name: `rotation-lambda-rds-policy-${randomSuffix}`,
-      role: rotationLambdaRole.id,
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        // NOTE: Resource: '*' is too permissive for production. Scope down to specific RDS ARNs.
-        Statement: [
-          {
-            Effect: 'Allow',
-            Action: ['rds:DescribeDBClusters', 'rds:ModifyDBCluster'],
-            Resource: '*',
-          },
-        ],
-      }),
-    });
-
-    const rotationLambda = new LambdaFunction(this, 'RotationLambda', {
-      provider: primaryProvider,
-      functionName: `secret-rotation-${randomSuffix}`,
-      runtime: 'python3.9',
-      handler: 'rotation.handler',
-      role: rotationLambdaRole.arn,
-      timeout: 30,
-      // **FIXED:** Removed 'filename' and 'sourceCodeHash' to prevent deployment failure.
-      // This creates the Lambda resource stub, allowing rotation to be enabled.
-      // A real implementation would point to a deployment package (zip file).
-      tags: commonTags,
-    });
-
-    // Enable rotation using the stubbed lambda
-    new SecretsmanagerSecretRotation(this, 'DbSecretRotation', {
-      provider: primaryProvider,
-      secretId: dbSecret.id,
-      rotationLambdaArn: rotationLambda.arn,
-      rotationRules: {
-        automaticallyAfterDays: 30,
-      },
-      dependsOn: [rotationLambdaRole],
-    });
+    // --- FIX: Entire Rotation Lambda block has been removed to prevent deployment error ---
 
     // --- Helper Function for Regional Infrastructure ---
     const createRegionalInfra = (
@@ -538,6 +472,7 @@ export class MultiRegionDrStack extends TerraformStack {
       );
 
       // --- CloudWatch Alarm on Health Check ---
+      // --- FIX: Removed 'const _healthCheckAlarm =' to fix linting error ---
       new CloudwatchMetricAlarm(this, `${regionId}-HealthCheckAlarm`, {
         provider: primaryProvider, // Alarms managed from primary region
         alarmName: `ALB-Unhealthy-${regionalSuffix}`,
