@@ -15,6 +15,9 @@ interface TaskMetadata {
   subtask: string;
   subject_labels?: string[];
   aws_services?: string;
+  task_config?: {
+    deploy_env: string;
+  };
 }
 
 async function generateMetadataFile(metadata: TaskMetadata): Promise<void> {
@@ -285,6 +288,25 @@ async function main(): Promise<void> {
     }
 
     const label = subjectLabelsBySubtask[taskSubCategory];
+
+    let deployEnv: string | undefined = undefined;
+    if (
+      taskSubCategory === 'Multi-Environment Consistency' &&
+      platform === 'tf'
+    ) {
+      deployEnv = await input({
+        message:
+          'Enter the deployment environment tfvars (e.g., dev.tfvars, staging.tfvars, prod.tfvars):',
+        validate: value => {
+          if (!value || !value.trim()) {
+            return 'Deployment environment is required';
+          }
+          return true;
+        },
+        default: 'dev.tfvars',
+      });
+    }
+
     const metadata: TaskMetadata = {
       platform,
       language,
@@ -297,6 +319,13 @@ async function main(): Promise<void> {
       ...(taskSubCategory ? { subject_labels: [taskSubCategory] } : {}),
       ...(resourcesText && resourcesText.trim().length > 0
         ? { aws_services: resourcesText.trim() }
+        : {}),
+      ...(deployEnv
+        ? {
+          task_config: {
+            deploy_env: deployEnv,
+          },
+        }
         : {}),
     };
 
@@ -312,6 +341,10 @@ async function main(): Promise<void> {
     console.log(`Task ID: ${taskId}`);
     console.log(`Team: ${team}`);
     console.log(`Template: ${templateName}`);
+    console.log(`Task Sub-category: ${taskSubCategory}`);
+    if (deployEnv) {
+      console.log(`Deployment Environment: ${deployEnv}`);
+    }
 
     const confirmApply = await confirm({
       message:
