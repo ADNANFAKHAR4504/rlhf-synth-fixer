@@ -159,6 +159,7 @@ class TapStack(pulumi.ComponentResource):
             )
 
         # Create private route tables (one per AZ for HA)
+        self.private_route_tables = []
         for i, (private_subnet, nat_gateway) in enumerate(zip(self.private_subnets, self.nat_gateways)):
             private_rt = aws.ec2.RouteTable(
                 f"emergency-alert-private-rt-{i}-{self.environment_suffix}",
@@ -166,6 +167,7 @@ class TapStack(pulumi.ComponentResource):
                 tags={**self.tags, 'Name': f'emergency-alert-private-rt-{i}-{self.environment_suffix}'},
                 opts=ResourceOptions(parent=self.vpc)
             )
+            self.private_route_tables.append(private_rt)
 
             aws.ec2.Route(
                 f"emergency-alert-private-route-{i}-{self.environment_suffix}",
@@ -965,17 +967,41 @@ class TapStack(pulumi.ComponentResource):
 
         # Register outputs
         self.register_outputs({
+            'region': self.region,
             'vpc_id': self.vpc.id,
+            'public_subnet_ids': [subnet.id for subnet in self.public_subnets],
+            'private_subnet_ids': [subnet.id for subnet in self.private_subnets],
+            'nat_gateway_ids': [nat.id for nat in self.nat_gateways],
+            'nat_eip_ids': [eip.id for eip in self.eips],
+            'public_route_table_id': self.public_route_table.id,
+            'private_route_table_ids': [rt.id for rt in self.private_route_tables],
+            'ecs_security_group_id': self.ecs_security_group.id,
+            'rds_security_group_id': self.rds_security_group.id,
+            'elasticache_security_group_id': self.elasticache_security_group.id,
+            'efs_security_group_id': self.efs_security_group.id,
             'kinesis_stream_name': self.kinesis_stream.name,
             'kinesis_stream_arn': self.kinesis_stream.arn,
+            'db_subnet_group_name': self.db_subnet_group.name,
+            'db_parameter_group_name': self.db_parameter_group.name,
             'ecs_cluster_name': self.ecs_cluster.name,
             'ecs_cluster_arn': self.ecs_cluster.arn,
             'ecs_service_name': self.ecs_service.name,
+            'ecs_service_id': self.ecs_service.id,
             'rds_endpoint': self.rds_instance.endpoint,
             'rds_address': self.rds_instance.address,
+            'rds_instance_identifier': self.rds_instance.identifier,
             'elasticache_endpoint': self.elasticache_cluster.configuration_endpoint_address,
+            'elasticache_primary_endpoint': self.elasticache_cluster.primary_endpoint_address,
+            'elasticache_reader_endpoint': self.elasticache_cluster.reader_endpoint_address,
+            'elasticache_parameter_group_name': self.elasticache_parameter_group.name,
+            'elasticache_subnet_group_name': self.elasticache_subnet_group.name,
             'efs_id': self.efs.id,
             'efs_dns_name': self.efs.dns_name,
+            'efs_mount_target_ids': [mt.id for mt in self.efs_mount_targets],
+            'ecs_log_group_name': self.ecs_log_group.name,
+            'api_log_group_name': self.api_log_group.name,
+            'api_gateway_id': self.api_gateway.id,
+            'api_stage_name': self.api_stage.stage_name,
             'api_gateway_url': Output.concat(
                 "https://", self.api_gateway.id, ".execute-api.",
                 self.region, ".amazonaws.com/", self.api_stage.stage_name
@@ -983,5 +1009,12 @@ class TapStack(pulumi.ComponentResource):
             'db_secret_arn': self.db_secret.arn,
             'redis_secret_arn': self.redis_secret.arn,
             'kms_key_id': self.kms_key.id,
+            'kms_key_arn': self.kms_key.arn,
+            'kms_alias_name': self.kms_alias.name,
+            'ecs_task_execution_role_arn': self.ecs_task_execution_role.arn,
+            'ecs_task_role_arn': self.ecs_task_role.arn,
+            'ecs_task_definition_arn': self.ecs_task_definition.arn,
+            'ecs_autoscaling_target_resource_id': self.ecs_autoscaling_target.resource_id,
+            'ecs_autoscaling_policy_cpu_arn': self.ecs_autoscaling_policy_cpu.arn,
             'alarm_topic_arn': self.alarm_topic.arn
         })
