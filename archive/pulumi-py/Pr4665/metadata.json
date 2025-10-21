@@ -34,5 +34,11 @@
   },
   "prompt_file": "lib/PROMPT.md",
   "model_response_file": "lib/MODEL_RESPONSE.md",
-  "ideal_response_file": "lib/IDEAL_RESPONSE.md"
+  "ideal_response_file": "lib/IDEAL_RESPONSE.md",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
