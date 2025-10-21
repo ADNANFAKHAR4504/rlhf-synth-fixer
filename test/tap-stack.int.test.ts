@@ -1,5 +1,5 @@
 import { CloudWatchClient, DescribeAlarmsCommand } from "@aws-sdk/client-cloudwatch";
-import { ExecuteStatementCommand, RDSDataClient } from "@aws-sdk/client-rds-data"; // Assuming usage of Aurora Data API
+import { ExecuteStatementCommand, RDSDataClient } from "@aws-sdk/client-rds-data";
 import { DeleteObjectCommand, GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { DescribeExecutionCommand, SFNClient, StartExecutionCommand } from "@aws-sdk/client-sfn";
 import { TextDecoder } from 'util';
