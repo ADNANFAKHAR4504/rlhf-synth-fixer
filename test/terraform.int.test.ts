@@ -3,15 +3,15 @@
 // These tests verify that resources are correctly deployed and functioning
 // Tests will pass gracefully if infrastructure is not deployed yet
 
+import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';
+import { DescribeInstancesCommand, DescribeSecurityGroupsCommand, DescribeVolumesCommand, EC2Client } from '@aws-sdk/client-ec2';
+import { GetInstanceProfileCommand, GetRoleCommand, GetRolePolicyCommand, IAMClient } from '@aws-sdk/client-iam';
+import { GetBucketEncryptionCommand, GetBucketVersioningCommand, GetPublicAccessBlockCommand, HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
 import fs from 'fs';
 import path from 'path';
-import { S3Client, GetBucketVersioningCommand, GetBucketEncryptionCommand, GetPublicAccessBlockCommand, HeadBucketCommand } from '@aws-sdk/client-s3';
-import { EC2Client, DescribeInstancesCommand, DescribeSecurityGroupsCommand, DescribeVolumesCommand } from '@aws-sdk/client-ec2';
-import { IAMClient, GetRoleCommand, GetRolePolicyCommand, GetInstanceProfileCommand } from '@aws-sdk/client-iam';
-import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';
 
-// AWS SDK clients configured for us-west-2 region
-const region = 'us-west-2';
+// AWS SDK clients configured for us-east-2 region
+const region = 'us-east-2';
 const s3Client = new S3Client({ region });
 const ec2Client = new EC2Client({ region });
 const iamClient = new IAMClient({ region });
@@ -46,10 +46,10 @@ describe('Terraform Production Infrastructure Integration Tests', () => {
 
   // Helper function to check if infrastructure is deployed
   const checkDeployment = () => {
-    return !!(outputs.s3_bucket_name && 
-              outputs.ec2_instance_id && 
-              outputs.security_group_id && 
-              outputs.iam_role_arn);
+    return !!(outputs.s3_bucket_name &&
+      outputs.ec2_instance_id &&
+      outputs.security_group_id &&
+      outputs.iam_role_arn);
   };
 
   beforeAll(async () => {
@@ -647,7 +647,7 @@ describe('Terraform Production Infrastructure Integration Tests', () => {
       const hasWriteActions = policyDocument.Statement.some(
         (stmt: any) => {
           const actions = Array.isArray(stmt.Action) ? stmt.Action : [stmt.Action];
-          return actions.some((action: string) => 
+          return actions.some((action: string) =>
             action.includes('Put') || action.includes('Delete') || action.includes('Create')
           );
         }

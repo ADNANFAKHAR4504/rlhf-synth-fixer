@@ -1,6 +1,6 @@
 Hey team,
 
-We need to set up a production AWS environment using Terraform. Nothing too fancy, just the basics to get us started with a solid foundation in us-west-2.
+We need to set up a production AWS environment using Terraform. Nothing too fancy, just the basics to get us started with a solid foundation in us-east-2.
 
 The whole thing should be in one Terraform file to keep it simple. We're looking at S3, EC2, IAM, and security groups - standard production setup.
 
