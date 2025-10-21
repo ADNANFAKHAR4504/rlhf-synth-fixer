@@ -106,7 +106,7 @@ describe("Terraform VPC Infrastructure Unit Tests - tap_stack.tf", () => {
       expect(vpcSection).toBeTruthy();
       if (vpcSection) {
         expect(vpcSection[0]).toMatch(/tags\s*=\s*{/);
-        expect(vpcSection[0]).toMatch(/Name\s*=\s*"main-vpc"/);
+        expect(vpcSection[0]).toMatch(/Name\s*=\s*"main-vpc-\$\{var\.environment_suffix\}"/);
       }
     });
   });
@@ -282,7 +282,7 @@ describe("Terraform VPC Infrastructure Unit Tests - tap_stack.tf", () => {
   describe("S3 Bucket Configuration", () => {
     test("creates S3 bucket resource", () => {
       expect(tapStackContent).toMatch(/resource\s+"aws_s3_bucket"\s+"main"\s*{/);
-      expect(tapStackContent).toMatch(/bucket\s*=\s*var\.bucket_name/);
+      expect(tapStackContent).toMatch(/bucket\s*=\s*"\$\{var\.bucket_name\}-\$\{var\.environment_suffix\}"/);
     });
 
     test("S3 bucket has force_destroy enabled", () => {
@@ -315,7 +315,7 @@ describe("Terraform VPC Infrastructure Unit Tests - tap_stack.tf", () => {
   describe("IAM Configuration", () => {
     test("creates IAM role for EC2 S3 access", () => {
       expect(tapStackContent).toMatch(/resource\s+"aws_iam_role"\s+"ec2_s3_access"\s*{/);
-      expect(tapStackContent).toMatch(/name\s*=\s*"ec2-s3-access-role"/);
+      expect(tapStackContent).toMatch(/name\s*=\s*"ec2-s3-access-role-\$\{var\.environment_suffix\}"/);
     });
 
     test("IAM role has correct assume role policy", () => {
@@ -329,7 +329,7 @@ describe("Terraform VPC Infrastructure Unit Tests - tap_stack.tf", () => {
 
     test("creates IAM role policy for S3 access", () => {
       expect(tapStackContent).toMatch(/resource\s+"aws_iam_role_policy"\s+"ec2_s3_access"\s*{/);
-      expect(tapStackContent).toMatch(/name\s*=\s*"ec2-s3-access-policy"/);
+      expect(tapStackContent).toMatch(/name\s*=\s*"ec2-s3-access-policy-\$\{var\.environment_suffix\}"/);
     });
 
     test("IAM policy includes S3 permissions", () => {
@@ -345,7 +345,7 @@ describe("Terraform VPC Infrastructure Unit Tests - tap_stack.tf", () => {
 
     test("creates IAM instance profile", () => {
       expect(tapStackContent).toMatch(/resource\s+"aws_iam_instance_profile"\s+"ec2_s3_access"\s*{/);
-      expect(tapStackContent).toMatch(/name\s*=\s*"ec2-s3-access-profile"/);
+      expect(tapStackContent).toMatch(/name\s*=\s*"ec2-s3-access-profile-\$\{var\.environment_suffix\}"/);
       expect(tapStackContent).toMatch(/role\s*=\s*aws_iam_role\.ec2_s3_access\.name/);
     });
   });
@@ -385,7 +385,7 @@ describe("Terraform VPC Infrastructure Unit Tests - tap_stack.tf", () => {
   describe("Security Group", () => {
     test("creates EC2 security group", () => {
       expect(tapStackContent).toMatch(/resource\s+"aws_security_group"\s+"ec2"\s*{/);
-      expect(tapStackContent).toMatch(/name\s*=\s*"ec2-security-group"/);
+      expect(tapStackContent).toMatch(/name\s*=\s*"ec2-security-group-\$\{var\.environment_suffix\}"/);
       expect(tapStackContent).toMatch(/vpc_id\s*=\s*aws_vpc\.main\.id/);
     });
 

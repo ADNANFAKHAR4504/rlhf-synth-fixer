@@ -1,4 +1,8 @@
-I'll provide a comprehensive Terraform migration plan for moving your AWS application from us-west-1 to us-west-2. This approach uses `terraform import` to preserve resource identities and minimize downtime.
+# Terraform AWS Migration Solution - us-west-1 to us-west-2
+
+This document provides a Terraform migration plan for moving an AWS application from us-west-1 to us-west-2 using `terraform import` to preserve resource identities and minimize downtime.
+
+## Migration Approach
 
 ```hcl
 # main.tf
@@ -527,7 +531,7 @@ terraform {
 #   }
 # }
 
-# Local backend for testing (not recommended for production)
+# Local backend alternative (not recommended for production)
 # terraform {
 #   backend "local" {
 #     path = "terraform.tfstate"
@@ -538,7 +542,7 @@ terraform {
 ```markdown
 # state-migration.md
 
-# Terraform State Migration Guide: us-west-1 → us-west-2
+# Terraform State Migration Guide: us-west-1 to us-west-2
 
 ## Prerequisites
 
@@ -573,7 +577,7 @@ terraform init
 
 ## Step 3: Import Resources to New State
 
-**Important**: Execute imports in dependency order (VPC → Subnets → Security Groups → etc.)
+**Important**: Execute imports in dependency order (VPC -> Subnets -> Security Groups -> etc.)
 
 ### Network Resources
 
@@ -750,7 +754,7 @@ Route Table Association 4,aws_route_table_association.private[1],subnet-def456gh
 ```markdown
 # runbook.md
 
-# AWS Region Migration Runbook: us-west-1 → us-west-2
+# AWS Region Migration Runbook: us-west-1 to us-west-2
 
 ## Overview
 

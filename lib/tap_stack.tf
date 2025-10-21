@@ -52,6 +52,12 @@ variable "bucket_name" {
   default     = "secure-vpc-bucket-demo-2024"
 }
 
+variable "environment_suffix" {
+  description = "Environment suffix for resource naming (e.g., dev, staging, prod)"
+  type        = string
+  default     = "dev"
+}
+
 # ==========================================
 # DATA SOURCES
 # ==========================================
@@ -86,7 +92,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = {
-    Name        = "main-vpc"
+    Name        = "main-vpc-${var.environment_suffix}"
     Environment = "production"
   }
 }
@@ -99,7 +105,7 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name = "main-igw"
+    Name = "main-igw-${var.environment_suffix}"
   }
 }
 
@@ -112,7 +118,7 @@ resource "aws_eip" "nat" {
   domain = "vpc"
 
   tags = {
-    Name = "nat-eip-az${count.index + 1}"
+    Name = "nat-eip-az${count.index + 1}-${var.environment_suffix}"
   }
 
   depends_on = [aws_internet_gateway.main]
@@ -130,7 +136,7 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "PublicSubnet${count.index + 1}"
+    Name = "PublicSubnet${count.index + 1}-${var.environment_suffix}"
     Type = "Public"
     AZ   = data.aws_availability_zones.available.names[count.index]
   }
@@ -147,7 +153,7 @@ resource "aws_subnet" "private" {
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = {
-    Name = "PrivateSubnet${count.index + 1}"
+    Name = "PrivateSubnet${count.index + 1}-${var.environment_suffix}"
     Type = "Private"
     AZ   = data.aws_availability_zones.available.names[count.index]
   }
@@ -163,7 +169,7 @@ resource "aws_nat_gateway" "main" {
   subnet_id     = aws_subnet.public[count.index].id
 
   tags = {
-    Name = "nat-gateway-az${count.index + 1}"
+    Name = "nat-gateway-az${count.index + 1}-${var.environment_suffix}"
   }
 
   depends_on = [aws_internet_gateway.main]
@@ -182,7 +188,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name = "public-route-table"
+    Name = "public-route-table-${var.environment_suffix}"
     Type = "Public"
   }
 }
@@ -198,7 +204,7 @@ resource "aws_route_table" "private" {
   }
 
   tags = {
-    Name = "private-route-table-az${count.index + 1}"
+    Name = "private-route-table-az${count.index + 1}-${var.environment_suffix}"
     Type = "Private"
   }
 }
@@ -225,11 +231,11 @@ resource "aws_route_table_association" "private" {
 # ==========================================
 # Create S3 bucket with security best practices
 resource "aws_s3_bucket" "main" {
-  bucket        = var.bucket_name
+  bucket        = "${var.bucket_name}-${var.environment_suffix}"
   force_destroy = true # Enable for testing; remove in production
 
   tags = {
-    Name        = var.bucket_name
+    Name        = "${var.bucket_name}-${var.environment_suffix}"
     Environment = "production"
     Encryption  = "enabled"
   }
@@ -270,7 +276,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
 # ==========================================
 # IAM role for EC2 instances to access S3
 resource "aws_iam_role" "ec2_s3_access" {
-  name = "ec2-s3-access-role"
+  name = "ec2-s3-access-role-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -292,7 +298,7 @@ resource "aws_iam_role" "ec2_s3_access" {
 
 # IAM policy for S3 bucket access
 resource "aws_iam_role_policy" "ec2_s3_access" {
-  name = "ec2-s3-access-policy"
+  name = "ec2-s3-access-policy-${var.environment_suffix}"
   role = aws_iam_role.ec2_s3_access.id
 
   policy = jsonencode({
@@ -320,7 +326,7 @@ resource "aws_iam_role_policy" "ec2_s3_access" {
 
 # IAM instance profile for EC2 instances
 resource "aws_iam_instance_profile" "ec2_s3_access" {
-  name = "ec2-s3-access-profile"
+  name = "ec2-s3-access-profile-${var.environment_suffix}"
   role = aws_iam_role.ec2_s3_access.name
 }
 
@@ -377,7 +383,7 @@ resource "aws_s3_bucket_policy" "main" {
 # ==========================================
 # Security group with restricted SSH access and internal VPC communication
 resource "aws_security_group" "ec2" {
-  name        = "ec2-security-group"
+  name        = "ec2-security-group-${var.environment_suffix}"
   description = "Security group for EC2 instances in private subnets"
   vpc_id      = aws_vpc.main.id
 
@@ -409,7 +415,7 @@ resource "aws_security_group" "ec2" {
   }
 
   tags = {
-    Name = "ec2-security-group"
+    Name = "ec2-security-group-${var.environment_suffix}"
   }
 }
 
@@ -433,7 +439,7 @@ resource "aws_instance" "private" {
     
     # Create a test file and upload to S3
     echo "Instance ${count.index + 1} initialized at $(date)" > /tmp/instance-init.txt
-    aws s3 cp /tmp/instance-init.txt s3://${var.bucket_name}/instance-${count.index + 1}-init.txt
+    aws s3 cp /tmp/instance-init.txt s3://${var.bucket_name}-${var.environment_suffix}/instance-${count.index + 1}-init.txt
     
     # Log S3 access test
     echo "S3 access test completed" >> /var/log/user-data.log
@@ -452,7 +458,7 @@ resource "aws_instance" "private" {
   }
 
   tags = {
-    Name = "private-instance-az${count.index + 1}"
+    Name = "private-instance-az${count.index + 1}-${var.environment_suffix}"
     Type = "Private"
     AZ   = data.aws_availability_zones.available.names[count.index]
   }
@@ -469,7 +475,7 @@ resource "aws_vpc_endpoint" "s3" {
   route_table_ids = aws_route_table.private[*].id
 
   tags = {
-    Name = "s3-vpc-endpoint"
+    Name = "s3-vpc-endpoint-${var.environment_suffix}"
   }
 }
 
