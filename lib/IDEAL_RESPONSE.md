@@ -34,6 +34,11 @@ Parameters:
     Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
     Description: 'AMI ID for the EC2 instance (uses latest Amazon Linux 2 AMI by default, or specify custom AMI ID)'
 
+  ApiDeploymentVersion:
+    Type: String
+    Default: 'v4'
+    Description: 'Bump this to force API Gateway deployment replacement when methods change'
+
 
 
 Conditions:
@@ -779,11 +784,13 @@ Resources:
       - NovaApiGatewayIngestMethod
     Properties:
       RestApiId: !Ref NovaApiGateway
+      Description: !Sub 'Deployment-${ApiDeploymentVersion}'
 
   # API Gateway Stage with Logging
   NovaApiGatewayStage:
     Type: AWS::ApiGateway::Stage
-    DependsOn: NovaApiGatewayAccount
+    DependsOn:
+      - NovaApiGatewayAccount
     Properties:
       RestApiId: !Ref NovaApiGateway
       DeploymentId: !Ref NovaApiGatewayDeployment
@@ -851,6 +858,7 @@ Resources:
       ResourceId: !Ref NovaApiGatewayResource
       HttpMethod: POST
       AuthorizationType: AWS_IAM
+      ApiKeyRequired: false
       RequestParameters:
         method.request.header.X-Instance-Id: true
       Integration:
