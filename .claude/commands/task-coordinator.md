@@ -6,7 +6,7 @@ Orchestrates the complete Infrastructure as Code development lifecycle by coordi
 
 **BEFORE modifying tasks.csv:**
 1. READ "CSV File Corruption Prevention" in `.claude/lessons_learnt.md`
-2. READ complete guide in `.claude/csv_safety_guide.md`
+2. READ complete guide in `.claude/docs/policies/csv_safety_guide.md`
 3. RUN safety check: `./.claude/scripts/check-csv-safety.sh`
 
 ALL CSV operations MUST:
@@ -42,15 +42,15 @@ Execute these phases in sequence to deliver production-ready IaC:
 After task selection and metadata.json generation, validate:
 
 **Validation**: Run Checkpoint A: Metadata Completeness
-- See `docs/references/validation-checkpoints.md` for field requirements
-- See `docs/references/shared-validations.md` for field definitions
+- See `.claude/docs/references/validation-checkpoints.md` for field requirements
+- See `.claude/docs/references/shared-validations.md` for field definitions
 
 **Validation**: Run Checkpoint B: Platform-Language Compatibility
-- See `docs/references/validation-checkpoints.md` for compatibility matrix
-- See `docs/references/shared-validations.md` for valid combinations
+- See `.claude/docs/references/validation-checkpoints.md` for compatibility matrix
+- See `.claude/docs/references/shared-validations.md` for valid combinations
 
 **Validation**: Run Checkpoint C: Template Structure
-- See `docs/references/validation-checkpoints.md` for required files
+- See `.claude/docs/references/validation-checkpoints.md` for required files
 
 **Task Context Completeness**:
 ```
@@ -105,7 +105,7 @@ Emphasize: "Platform and language are MANDATORY constraints from metadata.json"
 
 **Agent**: `iac-code-reviewer`
 
-**Iteration Policy**: See `docs/policies/iteration-policy.md` for complete decision logic.
+**Iteration Policy**: See `.claude/docs/policies/iteration-policy.md` for complete decision logic.
 
 **Quick Reference**:
 - Score ≥8: Approve PR
@@ -128,7 +128,7 @@ Emphasize: "Platform and language are MANDATORY constraints from metadata.json"
 **Pre-flight Checks**:
 
 **Validation**: Run Checkpoint K: PR Prerequisites
-- See `docs/references/validation-checkpoints.md` for prerequisite checks
+- See `.claude/docs/references/validation-checkpoints.md` for prerequisite checks
 
 Script reference:
 ```bash
@@ -146,7 +146,7 @@ bash .claude/scripts/preflight-checks.sh
 2. **Validate training quality**:
 
 **Validation**: Run Checkpoint J: Training Quality Threshold
-- See `docs/references/validation-checkpoints.md` for threshold check
+- See `.claude/docs/references/validation-checkpoints.md` for threshold check
 - Minimum: 8, Target: 9
 
 ```bash
@@ -522,7 +522,7 @@ All subagents MUST report using this format:
 - Blocking situations
 - Phase completion
 
-See `docs/references/error-handling.md` for detailed status reporting patterns.
+See `.claude/docs/references/error-handling.md` for detailed status reporting patterns.
 
 ## Usage
 
