@@ -15,9 +15,9 @@ Create an industrial IoT monitoring system using **Pulumi with Python** that han
 1. **IoT Device Connectivity**
    - AWS IoT Core for managing thousands of IoT sensors
    - MQTT protocol support for efficient sensor data transmission
-   - Device registry with certificate-based authentication
+   - IoT policy enabling certificate-based authentication (device credential provisioning happens outside this stack)
    - Support for thousands of concurrent device connections
-   - IoT rules engine for routing and processing sensor data
+   - IoT rules engine for routing and processing sensor data through resilient integration components
 
 2. **Real-time Data Processing Pipeline**
    - High-throughput data ingestion from IoT sensors
@@ -34,11 +34,10 @@ Create an industrial IoT monitoring system using **Pulumi with Python** that han
    - Support for time-based queries and aggregations
 
 4. **Monitoring and Visualization**
-   - Real-time dashboards for manufacturing operations
    - CloudWatch metrics for system health monitoring
    - Alarms for critical system events and anomalies
    - Performance metrics tracking (throughput, latency, errors)
-   - Operational visibility into sensor status
+   - Guidance for operations teams to plug metrics into dashboards
 
 5. **Security and Authentication**
    - End-to-end encryption for IoT data in transit and at rest
@@ -88,7 +87,7 @@ Create an industrial IoT monitoring system using **Pulumi with Python** that han
 - **Performance**: Handles thousands of concurrent connections with sub-second processing latency
 - **Reliability**: Multi-AZ deployment with automatic failover, data backup to S3, proper error handling
 - **Security**: Certificate-based device authentication, IAM roles with least privilege, encryption enabled
-- **Monitoring**: CloudWatch dashboards, alarms for anomalies, metrics tracking for throughput and latency
+- **Monitoring**: CloudWatch metrics and alarms for anomalies, with guidance for dashboard integration
 - **Data Management**: Hot/cold storage tiers implemented, retention policies configured
 - **Resource Naming**: All resources include string suffix for uniqueness
 - **Code Quality**: Clean Python code, well-structured, properly documented
@@ -97,12 +96,12 @@ Create an industrial IoT monitoring system using **Pulumi with Python** that han
 ## What to deliver
 
 - Complete Pulumi Python implementation in tap_stack.py
-- AWS IoT Core configuration (thing types, policies, certificate handling)
+- AWS IoT Core configuration (policies, routing rules, and guidance for certificate handling handled outside the stack)
 - Kinesis Data Streams for high-throughput ingestion
 - Lambda functions for data processing and transformation
 - Time-series database (Timestream or DynamoDB)
 - S3 buckets for data archiving with lifecycle policies
-- CloudWatch alarms and dashboards
+- CloudWatch alarms and metric publication for dashboard consumption
 - IAM roles and policies with least privilege access
 - Proper error handling, logging, and monitoring
 - Unit tests validating infrastructure setup

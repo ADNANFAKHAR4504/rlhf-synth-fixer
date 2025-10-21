@@ -10,7 +10,7 @@ The system consists of:
 3. **Lambda Functions** - Serverless data processing and transformation
 4. **DynamoDB** - Time-series data storage with TTL for hot/cold tiers
 5. **S3** - Long-term data archival with lifecycle policies
-6. **CloudWatch** - Monitoring, dashboards, and alarms
+6. **CloudWatch** - Monitoring metrics and alarms that operations teams can wire into dashboards
 7. **IAM Roles** - Least privilege access control
 
 ## File: lib/tap_stack.py
@@ -972,27 +972,29 @@ if __name__ == '__main__':
 
 3. **Serverless Approach**: Lambda for processing, DynamoDB on-demand, and Kinesis provide automatic scaling without managing servers.
 
-4. **Data Tiering**:
+4. **IoT Rule Bridge**: Added a dedicated bridge Lambda to forward IoT Core messages into Kinesis, avoiding deprecated provider arguments and giving room for custom preprocessing.
+
+5. **Data Tiering**:
    - Hot tier: DynamoDB with 30-day TTL
    - Cold tier: S3 with lifecycle policies (90 days -> Glacier, 180 days -> Deep Archive)
 
-5. **Security**:
+6. **Security**:
    - Certificate-based IoT authentication via IoT policies
    - KMS encryption for Kinesis
    - S3 encryption at rest
    - DynamoDB encryption enabled
    - IAM roles with least privilege
 
-6. **High Availability**:
+7. **High Availability**:
    - Multi-AZ: DynamoDB, S3, Lambda are multi-AZ by default
    - Point-in-time recovery for DynamoDB
    - S3 versioning enabled
    - Retry logic in Lambda event source mapping
 
-7. **Monitoring**:
+8. **Monitoring**:
    - CloudWatch alarms for errors, throttling, and lag
    - Custom metrics published from Lambda
-   - SNS topic for alarm notifications
+   - SNS topic for alarm notifications that operations can route into dashboards or incident tooling
 
 ### Testing Strategy
 

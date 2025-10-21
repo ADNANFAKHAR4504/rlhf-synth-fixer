@@ -71,7 +71,7 @@ The model was unaware that AWS Lambda reserves certain environment variable keys
 - **Quality assessment**:
   - Architecture: Excellent (9/10)
   - Security: Excellent (9/10)
-  - Monitoring: Excellent (9/10)
+  - Monitoring: Excellent (9/10) - CloudWatch alarms and metrics give operations dashboard-ready visibility
   - Testing: Excellent (9/10) - 91% unit test coverage, 10/10 integration tests passed
   - Code Quality: Excellent (9/10)
   - API Knowledge: Good (7/10) - Used outdated Pulumi provider APIs
