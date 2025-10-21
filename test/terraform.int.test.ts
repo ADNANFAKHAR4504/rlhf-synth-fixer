@@ -418,7 +418,7 @@ describeIfAws("Terraform Stack Integration Tests", () => {
     outputs.lambda_function_arn || outputs.kinesis_stream_arn || outputs.alb_arn,
   );
   const resourcePrefix = deriveResourcePrefix(outputs.lambda_function_name);
-  const albLogBucketName = resourcePrefix ? `${resourcePrefix}-alb-logs` : null;
+  const albLogBucketName = resourcePrefix ? `${resourcePrefix}-alb-logs-v2` : null;
   const expectedAlarmNames = resourcePrefix
     ? [
       `${resourcePrefix}-kinesis-iterator-age`,
