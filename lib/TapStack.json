@@ -218,7 +218,7 @@
         },
         "ManageMasterUserPassword": true,
         "DatabaseName": "reportingdb",
-        "DBClusterParameterGroupName": "default.aurora-postgresql16",
+        "DBClusterParameterGroupName": "default.aurora-postgresql17",
         "StorageEncrypted": true,
         "KmsKeyId": {
           "Fn::GetAtt": [
