@@ -14,5 +14,7 @@
     "Security Configuration as Code"
   ],
   "training_quality": 8.5,
-  "aws_services": "VPC, EC2, RDS Aurora PostgreSQL, RDS Global Cluster, S3, KMS, IAM, Secrets Manager, CloudWatch Logs, CloudWatch Alarms, CloudTrail, AWS Backup, SNS, NAT Gateway, Internet Gateway, VPC Endpoints"
+  "aws_services": "VPC, EC2, RDS Aurora PostgreSQL, RDS Global Cluster, S3, KMS, IAM, Secrets Manager, CloudWatch Logs, CloudWatch Alarms, CloudTrail, AWS Backup, SNS, NAT Gateway, Internet Gateway, VPC Endpoints",
+  "aws_region": "eu-central-1",
+  "dr_region": "eu-west-1"
 }

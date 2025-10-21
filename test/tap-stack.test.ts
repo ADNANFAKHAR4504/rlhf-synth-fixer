@@ -12,8 +12,8 @@ describe('HIPAA-Compliant Disaster Recovery Infrastructure Tests', () => {
     stack = new TapStack(app, 'TestHIPAAStack', {
       environmentSuffix: 'test',
       stateBucket: 'test-state-bucket',
-      stateBucketRegion: 'us-east-1',
-      awsRegion: 'us-east-1',
+      stateBucketRegion: 'eu-central-1',
+      awsRegion: 'eu-central-1',
     });
     synthesized = Testing.synth(stack);
   });
@@ -42,13 +42,13 @@ describe('HIPAA-Compliant Disaster Recovery Infrastructure Tests', () => {
   describe('AWS Providers Configuration', () => {
     test('Creates primary AWS provider with correct region', () => {
       expect(synthesized).toContain('"provider":"aws"');
-      expect(synthesized).toContain('"region":"us-east-1"');
+      expect(synthesized).toContain('"region":"eu-central-1"');
       expect(synthesized).toContain('"alias":"primary"');
     });
 
     test('Creates DR AWS provider with correct region', () => {
       expect(synthesized).toContain('"provider":"aws"');
-      expect(synthesized).toContain('"region":"us-west-2"');
+      expect(synthesized).toContain('"region":"eu-west-1"');
       expect(synthesized).toContain('"alias":"dr"');
     });
 
@@ -104,7 +104,7 @@ describe('HIPAA-Compliant Disaster Recovery Infrastructure Tests', () => {
 
     test('Creates S3 VPC endpoint', () => {
       expect(synthesized).toContain('aws_vpc_endpoint');
-      expect(synthesized).toContain('com.amazonaws.us-east-1.s3');
+      expect(synthesized).toContain('com.amazonaws.eu-central-1.s3');
       expect(synthesized).toContain('hipaa-s3-endpoint-test');
     });
 
@@ -130,7 +130,7 @@ describe('HIPAA-Compliant Disaster Recovery Infrastructure Tests', () => {
 
     test('Creates KMS key for DR region', () => {
       const drKeyMatches = synthesized.match(
-        /"aws_kms_key"[\s\S]*?"region":"us-west-2"/g
+        /"aws_kms_key"[\s\S]*?"region":"eu-west-1"/g
       );
       expect(drKeyMatches).toBeTruthy();
     });
@@ -159,11 +159,11 @@ describe('HIPAA-Compliant Disaster Recovery Infrastructure Tests', () => {
   describe('Storage Resources', () => {
     test('Creates S3 bucket for patient data in primary region', () => {
       expect(synthesized).toContain('aws_s3_bucket');
-      expect(synthesized).toContain('hipaa-patient-data-test-us-east-1');
+      expect(synthesized).toContain('hipaa-patient-data-test-eu-central-1');
     });
 
     test('Creates S3 bucket in DR region', () => {
-      expect(synthesized).toContain('hipaa-patient-data-test-us-west-2');
+      expect(synthesized).toContain('hipaa-patient-data-test-eu-west-1');
     });
 
     test('Enables S3 bucket versioning', () => {
@@ -444,7 +444,7 @@ describe('HIPAA-Compliant Disaster Recovery Infrastructure Tests', () => {
 
     test('Cross-region replication configured for both storage types', () => {
       // S3 cross-region replication
-      expect(synthesized).toContain('us-west-2');
+      expect(synthesized).toContain('eu-west-1');
       expect(synthesized).toContain('replica');
 
       // RDS Global Cluster
