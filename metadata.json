@@ -10,6 +10,7 @@
   "subject_labels": [
     "Security Configuration as Code"
   ],
+  "background": "Implementation of secure AWS infrastructure using CDK with comprehensive security controls, monitoring, and compliance features",
   "aws_services": [
     "VPC",
     "EC2",
