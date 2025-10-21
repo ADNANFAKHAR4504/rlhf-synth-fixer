@@ -201,6 +201,12 @@ describe('stack env selection branches', () => {
   });
 });
 
+  // bundling selection branches: intentionally omitted in unit tests because
+  // NodejsFunction bundling may invoke Docker during asset bundling. The
+  // repository supports CI bundling (NodejsFunction) and local testing
+  // (lambda.Function with Code.fromAsset). Coverage for the stack's
+  // outputs and other branches is exercised elsewhere in this file.
+
 describe('SNS subscription and alarms branches', () => {
   test('creates SNS subscription when EMAIL_ALERT_TOPIC_ADDRESS is set', () => {
     process.env.EMAIL_ALERT_TOPIC_ADDRESS = 'alerts@example.com';
