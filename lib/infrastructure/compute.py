@@ -174,7 +174,7 @@ echo "=========================================="
                 aws.ec2.LaunchTemplateBlockDeviceMappingArgs(
                     device_name="/dev/xvda",
                     ebs=aws.ec2.LaunchTemplateBlockDeviceMappingEbsArgs(
-                        volume_size=8,
+                        volume_size=30,  # Amazon Linux 2023 requires minimum 30GB
                         volume_type="gp3",
                         delete_on_termination=True,
                         encrypted=True,  # Enable encryption for compliance
