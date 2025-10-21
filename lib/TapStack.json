@@ -1325,7 +1325,7 @@
             "Type": "AWS::WAFv2::WebACL",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "nova-prod-waf-acl-${AWS::StackName}"
+                    "Fn::Sub": "nova-prod-waf-acl-${AWS::StackName}-${AWS::AccountId}"
                 },
                 "Scope": "REGIONAL",
                 "DefaultAction": {
@@ -1800,81 +1800,6 @@
                     "Ref": "NovaRDSInstance"
                 },
                 "TargetType": "AWS::RDS::DBInstance"
-            }
-        },
-        "NovaSecretsRotationSecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
-            "Properties": {
-                "GroupName": "nova-prod-secrets-rotation-sg",
-                "GroupDescription": "SG for secrets rotation lambda to access RDS",
-                "VpcId": {
-                    "Ref": "NovaVPC"
-                },
-                "SecurityGroupEgress": [
-                    {
-                        "IpProtocol": -1,
-                        "CidrIp": "0.0.0.0/0"
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "nova-prod-secrets-rotation-sg"
-                    },
-                    {
-                        "Key": "team",
-                        "Value": "2"
-                    },
-                    {
-                        "Key": "iac-rlhf-amazon",
-                        "Value": "true"
-                    }
-                ]
-            }
-        },
-        "NovaDBIngressFromRotation": {
-            "Type": "AWS::EC2::SecurityGroupIngress",
-            "Properties": {
-                "GroupId": {
-                    "Ref": "NovaDatabaseSecurityGroup"
-                },
-                "IpProtocol": "tcp",
-                "FromPort": 3306,
-                "ToPort": 3306,
-                "SourceSecurityGroupId": {
-                    "Ref": "NovaSecretsRotationSecurityGroup"
-                },
-                "Description": "Allow Secrets Manager rotation to access RDS"
-            }
-        },
-        "NovaRDSSecretRotation": {
-            "Type": "AWS::SecretsManager::RotationSchedule",
-            "Properties": {
-                "SecretId": {
-                    "Ref": "NovaRDSPasswordSecret"
-                },
-                "RotationRules": {
-                    "AutomaticallyAfterDays": 30
-                },
-                "HostedRotationLambda": {
-                    "RotationType": "MySQLSingleUser",
-                    "VpcSecurityGroupIds": {
-                        "Ref": "NovaSecretsRotationSecurityGroup"
-                    },
-                    "VpcSubnetIds": {
-                        "Fn::Join": [
-                            ",",
-                            [
-                                {
-                                    "Ref": "NovaDatabaseSubnet1"
-                                },
-                                {
-                                    "Ref": "NovaDatabaseSubnet2"
-                                }
-                            ]
-                        ]
-                    }
-                }
             }
         },
         "NovaVPCFlowLogsGroup": {
