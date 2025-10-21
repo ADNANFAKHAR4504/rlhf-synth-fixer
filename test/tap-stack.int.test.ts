@@ -1,4 +1,4 @@
-// Configuration - These are coming from cfn-outputs after cdk deploy
+// Configuration - These are coming from cfn-outputs
 import fs from 'fs';
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
