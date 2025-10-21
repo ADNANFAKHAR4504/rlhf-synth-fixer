@@ -46,6 +46,13 @@ class TapStack(pulumi.ComponentResource):
         self.environment_suffix = args.environment_suffix
         self.tags = args.tags or {}
 
+        region_info = aws.get_region()
+        self.region = (
+            getattr(region_info, "region", None)
+            or getattr(region_info, "name", None)
+            or region_info.id
+        )
+
         # Create VPC
         vpc = aws.ec2.Vpc(
             f"fedramp-vpc-{self.environment_suffix}",
@@ -64,8 +71,9 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Create subnets in 3 AZs for high availability
-        availability_zones = ["ap-southeast-1a", "ap-southeast-1b", "ap-southeast-1c"]
+        # Create subnets in available AZs for high availability
+        azs = aws.get_availability_zones(state="available")
+        availability_zones = azs.names[:3] if len(azs.names) >= 3 else azs.names
 
         public_subnets = []
         private_subnets = []
@@ -800,7 +808,7 @@ class TapStack(pulumi.ComponentResource):
                     {"name": "DB_ENDPOINT", "value": args[1]},
                     {"name": "CACHE_ENDPOINT", "value": args[2]},
                     {"name": "EFS_ID", "value": args[3]},
-                    {"name": "AWS_REGION", "value": "ap-southeast-1"},
+                    {"name": "AWS_REGION", "value": self.region},
                 ],
                 "secrets": [
                     {"name": "DB_SECRET", "valueFrom": args[4]}
@@ -809,7 +817,7 @@ class TapStack(pulumi.ComponentResource):
                     "logDriver": "awslogs",
                     "options": {
                         "awslogs-group": args[5],
-                        "awslogs-region": "ap-southeast-1",
+                        "awslogs-region": self.region,
                         "awslogs-stream-prefix": "ecs"
                     }
                 },
@@ -1095,7 +1103,8 @@ class TapStack(pulumi.ComponentResource):
         self.kms_key_id = kms_key.id
         self.cloudtrail_name = cloudtrail.name
 
-        self.register_outputs({
+        outputs = {
+            "region": self.region,
             "vpc_id": self.vpc_id,
             "kinesis_stream_name": self.kinesis_stream_name,
             "kinesis_stream_arn": self.kinesis_stream_arn,
@@ -1109,4 +1118,10 @@ class TapStack(pulumi.ComponentResource):
             "alb_dns": self.alb_dns,
             "kms_key_id": self.kms_key_id,
             "cloudtrail_name": self.cloudtrail_name,
-        })
+        }
+
+        self.register_outputs(outputs)
+
+        if opts is None or getattr(opts, "parent", None) is None:
+            for key, value in outputs.items():
+                pulumi.export(key, value)
