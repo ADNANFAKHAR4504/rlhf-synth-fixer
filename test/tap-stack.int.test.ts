@@ -28,8 +28,8 @@ import axios from 'axios';
 import { describe, test, beforeAll, expect } from '@jest/globals';
 
 // Test configuration 
-const STACK_NAME = `TapStackpr3693`;
-const PRIMARY_REGION = process.env.AWS_REGION || 'us-east-1';
+const STACK_NAME = `TapStackpr4877`;
+const PRIMARY_REGION = process.env.AWS_REGION || 'us-east-2';
 const TEST_TIMEOUT = 60000; // 60 seconds
 
 // Stack outputs interface
