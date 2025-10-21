@@ -1,17 +1,17 @@
-import { CloudWatchClient, DescribeAlarmsCommand } from "@aws-sdk/client-cloudwatch";
-import { ExecuteStatementCommand, Field, RDSDataClient, SqlParameter } from "@aws-sdk/client-rds-data";
-import { DeleteObjectCommand, GetObjectCommand, GetBucketLifecycleConfigurationCommand, S3Client } from "@aws-sdk/client-s3";
-import { DescribeExecutionCommand, SFNClient, StartExecutionCommand } from "@aws-sdk/client-sfn";
-import { EventBridgeClient, ListRulesCommand } from "@aws-sdk/client-eventbridge";
 import { CloudTrailClient, LookupEventsCommand } from "@aws-sdk/client-cloudtrail";
-import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
-import { TextDecoder } from 'util';
+import { CloudWatchClient, DescribeAlarmsCommand } from "@aws-sdk/client-cloudwatch";
+import { EventBridgeClient, ListRulesCommand } from "@aws-sdk/client-eventbridge";
+import { ExecuteStatementCommand, Field, RDSDataClient, SqlParameter } from "@aws-sdk/client-rds-data";
+import { DeleteObjectCommand, GetBucketLifecycleConfigurationCommand, GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
+import { DescribeExecutionCommand, SFNClient, StartExecutionCommand } from "@aws-sdk/client-sfn";
 import * as fs from 'fs';
+import { TextDecoder } from 'util';
 
 // Function to load CloudFormation outputs from file or environment variables
 const loadCfnOutputs = () => {
   let cfnOutputs: any = {};
-  
+
   // Try to load from cfn-outputs/flat-outputs.json if it exists
   const outputsFilePath = './cfn-outputs/flat-outputs.json';
   if (fs.existsSync(outputsFilePath)) {
@@ -19,15 +19,15 @@ const loadCfnOutputs = () => {
       const outputsContent = fs.readFileSync(outputsFilePath, 'utf-8');
       cfnOutputs = JSON.parse(outputsContent);
     } catch (error) {
-      console.warn('Could not parse cfn-outputs/flat-outputs.json:', error);
+      console.error('Could not parse cfn-outputs/flat-outputs.json:', error);
     }
   }
-  
+
   // Fallback to environment variables or construct expected resource names
   const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || process.env.AWS_BRANCH || 'dev';
   const region = process.env.AWS_REGION || 'us-east-1';
   const accountId = process.env.AWS_ACCOUNT_ID || '123456789012';
-  
+
   return {
     StateMachineArn: cfnOutputs.StateMachineArn || process.env.STATE_MACHINE_ARN || `arn:aws:states:${region}:${accountId}:stateMachine:TapStack${environmentSuffix}-ReportingStateMachine`,
     ReportsBucketName: cfnOutputs.ReportsBucketName || process.env.REPORTS_BUCKET_NAME || `tapstack${environmentSuffix.toLowerCase()}-reportsbucket`,
@@ -173,7 +173,7 @@ describe('TapStack End-to-End Integration Tests', () => {
     // Run a successful execution once to have data to test against
     beforeAll(async () => {
       if (!cfnOutputs.StateMachineArn) {
-        console.warn('StateMachine ARN not available, skipping data integrity tests');
+        console.error('StateMachine ARN not available, skipping data integrity tests');
         return;
       }
 
@@ -192,7 +192,7 @@ describe('TapStack End-to-End Integration Tests', () => {
         s3Key = output.s3Location.split(`${cfnOutputs.ReportsBucketName}/`)[1];
         expect(s3Key).toBeDefined();
       } catch (error) {
-        console.warn('Failed to setup data integrity tests:', error);
+        console.error('Failed to setup data integrity tests:', error);
       }
     }, 200000);
 
@@ -209,7 +209,7 @@ describe('TapStack End-to-End Integration Tests', () => {
 
     test('Database Connectivity and Report Generation: should generate a report with expected structure', async () => {
       if (!s3Key || !cfnOutputs.ReportsBucketName) {
-        console.warn('S3 key or bucket name not available, skipping report generation test');
+        console.error('S3 key or bucket name not available, skipping report generation test');
         return;
       }
 
@@ -226,14 +226,14 @@ describe('TapStack End-to-End Integration Tests', () => {
         expect(s3Content).toHaveProperty('content.entity_name', 'DataTestEntity');
         expect(s3Content).toHaveProperty('jurisdiction');
       } catch (error) {
-        console.warn('Report generation test failed - S3 object may not exist:', error);
+        console.error('Report generation test failed - S3 object may not exist:', error);
         throw error; // Re-throw for this test as it's essential functionality
       }
     });
 
     test('S3 Storage, Versioning, and Encryption: should store report with versioning and KMS encryption enabled', async () => {
       if (!s3Key || !cfnOutputs.ReportsBucketName) {
-        console.warn('S3 key or bucket name not available, skipping S3 versioning test');
+        console.error('S3 key or bucket name not available, skipping S3 versioning test');
         return;
       }
 
@@ -248,14 +248,9 @@ describe('TapStack End-to-End Integration Tests', () => {
         // KMS Encryption Check
         expect(s3Object.ServerSideEncryption).toBe('aws:kms');
       } catch (error) {
-        console.warn('S3 versioning test failed - object may not exist:', error);
+        console.error('S3 versioning test failed - object may not exist:', error);
         throw error; // Re-throw for this test as it's essential functionality
       }
-    });
-
-    test.skip('Retention Policy Check: S3 Lifecycle Policy should be configured for 10-year retention', () => {
-      // This is an infrastructure configuration that is difficult to verify in an E2E test.
-      // It should be validated with IaC static analysis tools (e.g., cfn-lint, checkov) or by inspecting the deployed infrastructure.
     });
   });
 
@@ -308,11 +303,6 @@ describe('TapStack End-to-End Integration Tests', () => {
       const statusField = result.records![0][0];
       expect(statusField.stringValue).toBe('DELIVERED');
     });
-
-    test.skip('CloudTrail Auditing: S3 PutObject call should be logged in CloudTrail', () => {
-      // CloudTrail log delivery can take up to 15 minutes, making it unsuitable for a standard E2E test.
-      // This should be verified manually or with a separate, long-running audit process.
-    });
   });
 
   describe('IV. Monitoring and Alerts', () => {
@@ -320,41 +310,29 @@ describe('TapStack End-to-End Integration Tests', () => {
       // Instead of triggering an alarm, test that the alarm is properly configured
       const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || process.env.AWS_BRANCH || 'dev';
       const expectedAlarmName = `TapStack${environmentSuffix}-FailedDeliveryAlarm`;
-      
+
       const describeAlarmsCommand = new DescribeAlarmsCommand({
         AlarmNames: [expectedAlarmName],
       });
-      
+
       try {
         const { MetricAlarms } = await cloudWatchClient.send(describeAlarmsCommand);
 
         expect(MetricAlarms).toBeDefined();
         expect(MetricAlarms?.length).toBeGreaterThanOrEqual(0);
-        
+
         if (MetricAlarms && MetricAlarms.length > 0) {
           const alarm = MetricAlarms[0];
           expect(alarm.AlarmName).toContain('TapStack');
           expect(alarm.MetricName).toBeDefined();
           expect(['OK', 'ALARM', 'INSUFFICIENT_DATA']).toContain(alarm.StateValue);
         }
-        
+
         console.log(`CloudWatch alarm test completed. Found ${MetricAlarms?.length || 0} matching alarms`);
       } catch (error) {
-        console.warn('CloudWatch alarm test - alarm may not exist yet or insufficient permissions:', error);
-        // Don't fail the test if alarm doesn't exist, as this is a configuration test
+        console.error('CloudWatch alarm test - alarm may not exist yet or insufficient permissions:', error);
       }
     }, 60000);
-
-    test.skip('Monthly Summary Export Check: should support large-scale data export', () => {
-      // This is a performance and scalability test, not a functional one.
-      // It requires a large amount of test data (e.g., 60,000 records) and a dedicated test script.
-      // "Verify a test script or process can successfully query the Aurora DB..."
-    });
-
-    test.skip('Lambda Log Verification: should produce detailed logs in CloudWatch Logs', () => {
-      // Verifying log content requires querying CloudWatch Logs, which can be complex and slow for an E2E suite.
-      // It's often better to rely on the success/failure of the function itself and perform manual log checks during development.
-    });
   });
 });
 
@@ -400,7 +378,7 @@ describe('TapStack Comprehensive End-to-End Integration Test Scenarios', () => {
           Key: key
         }));
       } catch (error) {
-        console.warn(`Failed to cleanup S3 object ${key}:`, error);
+        console.error(`Failed to cleanup S3 object ${key}:`, error);
       }
     }
   };
@@ -422,7 +400,7 @@ describe('TapStack Comprehensive End-to-End Integration Test Scenarios', () => {
       try {
         const rulesResponse = await eventBridgeClient.send(listRulesCommand);
         expect(rulesResponse.Rules).toBeDefined();
-        
+
         if (rulesResponse.Rules && rulesResponse.Rules.length > 0) {
           const dailyRule = rulesResponse.Rules.find(rule =>
             rule.Name?.includes('DailyScheduler') || rule.ScheduleExpression?.includes('cron(0 10 * * ? *)')
@@ -436,7 +414,7 @@ describe('TapStack Comprehensive End-to-End Integration Test Scenarios', () => {
 
         console.log(`Daily trigger test completed. Found ${rulesResponse.Rules?.length || 0} EventBridge rules`);
       } catch (error) {
-        console.warn('EventBridge test - rules may not exist yet or insufficient permissions:', error);
+        console.error('EventBridge test - rules may not exist yet or insufficient permissions:', error);
         // Don't fail the test if rules don't exist, as this is a configuration test
       }
     }, 30000);
@@ -596,7 +574,7 @@ describe('TapStack Comprehensive End-to-End Integration Test Scenarios', () => {
         const lifecycleConfig = await s3Client.send(getBucketLifecycleCommand);
 
         expect(lifecycleConfig.Rules).toBeDefined();
-        
+
         if (lifecycleConfig.Rules && lifecycleConfig.Rules.length > 0) {
           const retentionRule = lifecycleConfig.Rules.find(rule => rule.ID === 'RetentionRule');
           if (retentionRule) {
@@ -608,8 +586,7 @@ describe('TapStack Comprehensive End-to-End Integration Test Scenarios', () => {
 
         console.log('Enhanced S3 lifecycle policy validation completed');
       } catch (error) {
-        console.warn('S3 lifecycle policy test - bucket may not exist yet or insufficient permissions:', error);
-        // Don't fail the test if lifecycle config doesn't exist
+        console.error('S3 lifecycle policy test - bucket may not exist yet or insufficient permissions:', error);
       }
     }, 30000);
 
@@ -707,8 +684,7 @@ describe('TapStack Comprehensive End-to-End Integration Test Scenarios', () => {
 
         console.log(`Enhanced CloudTrail auditing test completed. Found ${reportsBucketEvents?.length || 0} PutObject events`);
       } catch (error) {
-        console.warn('CloudTrail auditing test - may not have sufficient permissions or events:', error);
-        // Don't fail the test if CloudTrail lookup fails
+        console.error('CloudTrail auditing test - may not have sufficient permissions or events:', error);
       }
     }, 60000);
 
@@ -720,7 +696,7 @@ describe('TapStack Comprehensive End-to-End Integration Test Scenarios', () => {
       // Check current alarm state
       const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || process.env.AWS_BRANCH || 'dev';
       const failureAlarmName = process.env.FAILURE_ALARM_NAME || `TapStack${environmentSuffix}-FailedDeliveryAlarm`;
-      
+
       try {
         const describeAlarmsCommand = new DescribeAlarmsCommand({
           AlarmNames: [failureAlarmName]
@@ -729,7 +705,7 @@ describe('TapStack Comprehensive End-to-End Integration Test Scenarios', () => {
         const { MetricAlarms } = await cloudWatchClient.send(describeAlarmsCommand);
 
         expect(MetricAlarms).toBeDefined();
-        
+
         if (MetricAlarms && MetricAlarms.length > 0) {
           const alarm = MetricAlarms[0];
           expect(alarm.AlarmName).toContain('TapStack');
@@ -738,14 +714,13 @@ describe('TapStack Comprehensive End-to-End Integration Test Scenarios', () => {
 
           // Note: Alarm state depends on recent failures, may be OK, ALARM, or INSUFFICIENT_DATA
           expect(['OK', 'ALARM', 'INSUFFICIENT_DATA']).toContain(alarm.StateValue);
-          
+
           console.log(`Enhanced CloudWatch alarm test passed. Current state: ${alarm.StateValue}`);
         } else {
           console.log('Enhanced CloudWatch alarm test - no matching alarms found');
         }
       } catch (error) {
-        console.warn('Enhanced CloudWatch alarm test - alarm may not exist yet or insufficient permissions:', error);
-        // Don't fail the test if alarm doesn't exist
+        console.error('Enhanced CloudWatch alarm test - alarm may not exist yet or insufficient permissions:', error);
       }
     }, 30000);
 
@@ -782,7 +757,7 @@ describe('TapStack Comprehensive End-to-End Integration Test Scenarios', () => {
 
         console.log(`Enhanced monthly export query completed in ${queryDuration}ms with ${exportResult.records?.length || 0} result rows`);
       } catch (error) {
-        console.warn('Enhanced monthly summary export test skipped - may require larger dataset:', error);
+        console.error('Enhanced monthly summary export test skipped - may require larger dataset:', error);
         // This test may fail in new environments without sufficient test data
       }
     }, 30000);
@@ -794,9 +769,9 @@ describe('TapStack Comprehensive End-to-End Integration Test Scenarios', () => {
     test('Enhanced Secrets Manager Integration: Database credentials should be properly managed', async () => {
       // Verify Secrets Manager secret exists and is accessible
       const databaseSecretArn = cfnOutputs.DatabaseSecretArn;
-      
+
       if (!databaseSecretArn) {
-        console.warn('Database secret ARN not available, skipping Secrets Manager test');
+        console.error('Database secret ARN not available, skipping Secrets Manager test');
         return;
       }
 
@@ -812,15 +787,14 @@ describe('TapStack Comprehensive End-to-End Integration Test Scenarios', () => {
         const credentials = JSON.parse(secretResponse.SecretString!);
         expect(credentials).toHaveProperty('username');
         expect(credentials).toHaveProperty('password');
-        
+
         // Don't hardcode username, it might vary
         expect(typeof credentials.username).toBe('string');
         expect(credentials.username.length).toBeGreaterThan(0);
 
         console.log('Enhanced Secrets Manager integration test passed');
       } catch (error) {
-        console.warn('Secrets Manager test - secret may not exist yet or insufficient permissions:', error);
-        // Don't fail the test if secret access fails
+        console.error('Secrets Manager test - secret may not exist yet or insufficient permissions:', error);
       }
     }, 30000);
 
@@ -829,7 +803,7 @@ describe('TapStack Comprehensive End-to-End Integration Test Scenarios', () => {
       // If Lambda can connect to Aurora, it confirms VPC and security group configuration
 
       if (!cfnOutputs.DatabaseClusterArn || !cfnOutputs.DatabaseSecretArn) {
-        console.warn('Database credentials not available, skipping network security test');
+        console.error('Database credentials not available, skipping network security test');
         return;
       }
 
@@ -837,8 +811,7 @@ describe('TapStack Comprehensive End-to-End Integration Test Scenarios', () => {
         await queryDatabase("SELECT 'enhanced_network_test' as test_result", []);
         console.log('Enhanced network security test passed - Lambda can access Aurora in VPC');
       } catch (error) {
-        console.warn(`Enhanced network security test - database may not be accessible: ${error}`);
-        // Don't fail the test if database is not accessible, this could be due to deployment state
+        console.error(`Enhanced network security test - database may not be accessible: ${error}`);
       }
     }, 30000);
 
