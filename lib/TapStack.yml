@@ -587,7 +587,7 @@ Resources:
       LaunchTemplateName: 'nova-prod-app-lt'
       LaunchTemplateData:
         IamInstanceProfile:
-          Arn: !GetAtt NovaEC2InstanceProfile.Arn
+          Name: !Ref NovaEC2InstanceProfile
         InstanceType: t3.small
         ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
         SecurityGroupIds:
@@ -873,7 +873,7 @@ Resources:
       SubnetId: !Ref NovaPublicSubnet1
       InstanceType: t3.micro
       ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
-      IamInstanceProfile: !Ref NovaBastionInstanceProfile
+      IamInstanceProfile: !Ref NovaEC2InstanceProfile
       SecurityGroupIds:
         - !Ref NovaBastionSecurityGroup
       BlockDeviceMappings:
