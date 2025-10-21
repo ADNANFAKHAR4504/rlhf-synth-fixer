@@ -2,12 +2,14 @@
 
 # SNS topic for alarms
 resource "aws_sns_topic" "alarms" {
-  name = "${var.project_name}-${var.environment_suffix}-alarms"
+  provider = aws.primary
+  name     = "${var.project_name}-${var.environment_suffix}-alarms"
 
   tags = var.common_tags
 }
 
 resource "aws_sns_topic_subscription" "alarm_email" {
+  provider  = aws.primary
   topic_arn = aws_sns_topic.alarms.arn
   protocol  = "email"
   endpoint  = var.alarm_email
@@ -15,6 +17,7 @@ resource "aws_sns_topic_subscription" "alarm_email" {
 
 # X-Ray sampling rule
 resource "aws_xray_sampling_rule" "api" {
+  provider       = aws.primary
   rule_name      = "${var.project_name}-${var.environment_suffix}-sampling"
   priority       = 9999
   version        = 1
@@ -34,6 +37,7 @@ resource "aws_xray_sampling_rule" "api" {
 
 # CloudWatch Dashboard
 resource "aws_cloudwatch_dashboard" "main" {
+  provider       = aws.primary
   dashboard_name = "${var.project_name}-${var.environment_suffix}-dashboard"
 
   dashboard_body = jsonencode({
@@ -343,7 +347,7 @@ resource "aws_cloudwatch_log_metric_filter" "failed_transactions" {
 
   metric_transformation {
     name      = "FailedTransactions"
-    namespace = "${var.project_name}/BusinessMetrics"
+    namespace = "${var.project_name}-${var.environment_suffix}/BusinessMetrics"
     value     = "1"
   }
 }
@@ -355,7 +359,7 @@ resource "aws_cloudwatch_metric_alarm" "failed_transactions" {
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "1"
   metric_name         = "FailedTransactions"
-  namespace           = "${var.project_name}/BusinessMetrics"
+  namespace           = "${var.project_name}-${var.environment_suffix}/BusinessMetrics"
   period              = "300"
   statistic           = "Sum"
   threshold           = "50"
@@ -368,6 +372,7 @@ resource "aws_cloudwatch_metric_alarm" "failed_transactions" {
 
 # Composite alarm for critical path
 resource "aws_cloudwatch_composite_alarm" "critical_system_health" {
+  provider          = aws.primary
   alarm_name        = "${var.project_name}-${var.environment_suffix}-critical-health"
   alarm_description = "Composite alarm for critical system health"
   actions_enabled   = true
