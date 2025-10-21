@@ -9,7 +9,6 @@ CloudTrail for audit trail
 EventBridge for daily scheduling
 
 Goals
-
 Generate ~2k reports daily
 Validate before delivery (simple rules, not full engine)
 Deliver with success logging and confirmation capture
@@ -17,5 +16,4 @@ Store all reports & confirmations with auditability
 Monthly summary export instead of real-time dashboards
 
 Deliverable
-
 One JSON IaC stack wiring Step Functions, Lambda, Aurora, S3, SES, EventBridge, CloudWatch, CloudTrail, and KMS — plus simple sample Lambdas for generation, validation, and delivery.
