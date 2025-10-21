@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "CLO_YML_MED_BEANSTALK_WEB_4m5n6o_7j8k9l1mKL",
+  "team": "4",
+  "startedAt": "2025-10-15T09:58:11.807Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "training_quality": 8,
+  "background": "Set up scalable web application infrastructure with secure access, basic monitoring, and streamlined deployment.",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "CloudFormation",
+    "Elastic Beanstalk",
+    "EC2",
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "Route Table",
+    "Security Group",
+    "IAM",
+    "S3",
+    "CloudWatch"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
+}
