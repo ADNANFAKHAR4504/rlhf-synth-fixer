@@ -1,6 +1,6 @@
 # Infrastructure Requirements for GlobeCart E-Commerce Platform
 
-I need help setting up a high availability database infrastructure for our e-commerce platform using Pulumi with Python in the ca-central-1 region.
+I need help setting up a high availability database infrastructure for our e-commerce platform using Pulumi with Python in the ca-central-1 region
 
 ## Background
 
