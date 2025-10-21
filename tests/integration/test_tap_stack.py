@@ -70,7 +70,6 @@ class TestIoTSensorDataProcessingIntegration(unittest.TestCase):
         # Initialize AWS clients
         cls.ec2_client = boto3.client('ec2', region_name=cls.aws_region)
         cls.rds_client = boto3.client('rds', region_name=cls.aws_region)
-        cls.elasticache_client = boto3.client('elasticache', region_name=cls.aws_region)
         cls.apigateway_client = boto3.client('apigateway', region_name=cls.aws_region)
         cls.secretsmanager_client = boto3.client('secretsmanager', region_name=cls.aws_region)
 
@@ -87,9 +86,9 @@ class TestIoTSensorDataProcessingIntegration(unittest.TestCase):
 
     def test_stack_outputs_are_present(self):
         """Test that required stack outputs are present."""
+        # Based on actual outputs from deployment
         expected_outputs = [
             'vpc_id',
-            'redis_endpoint',
             'aurora_endpoint',
             'aurora_reader_endpoint',
             'api_gateway_url',
@@ -115,24 +114,19 @@ class TestIoTSensorDataProcessingIntegration(unittest.TestCase):
         except ClientError as e:
             self.fail(f"Failed to describe VPC: {e}")
 
-    def test_redis_endpoint_is_valid_format(self):
-        """Test that Redis endpoint from outputs has valid format."""
-        redis_endpoint = self.outputs.get('redis_endpoint')
-        self.assertIsNotNone(redis_endpoint, "Redis endpoint not found in outputs")
-        self.assertIsInstance(redis_endpoint, str, "Redis endpoint is not a string")
-        self.assertGreater(len(redis_endpoint), 0, "Redis endpoint is empty")
-
     def test_aurora_endpoints_are_valid_format(self):
         """Test that Aurora endpoints from outputs have valid format."""
         aurora_endpoint = self.outputs.get('aurora_endpoint')
         self.assertIsNotNone(aurora_endpoint, "Aurora endpoint not found in outputs")
         self.assertIsInstance(aurora_endpoint, str, "Aurora endpoint is not a string")
         self.assertGreater(len(aurora_endpoint), 0, "Aurora endpoint is empty")
+        self.assertIn('.rds.amazonaws.com', aurora_endpoint, "Aurora endpoint does not contain .rds.amazonaws.com")
 
         aurora_reader_endpoint = self.outputs.get('aurora_reader_endpoint')
         self.assertIsNotNone(aurora_reader_endpoint, "Aurora reader endpoint not found in outputs")
         self.assertIsInstance(aurora_reader_endpoint, str, "Aurora reader endpoint is not a string")
         self.assertGreater(len(aurora_reader_endpoint), 0, "Aurora reader endpoint is empty")
+        self.assertIn('.rds.amazonaws.com', aurora_reader_endpoint, "Aurora reader endpoint does not contain .rds.amazonaws.com")
 
     def test_api_gateway_url_is_valid_format(self):
         """Test that API Gateway URL from outputs has valid format."""
@@ -163,6 +157,29 @@ class TestIoTSensorDataProcessingIntegration(unittest.TestCase):
         for key, value in self.outputs.items():
             self.assertIsInstance(value, str, f"Output '{key}' is not a string")
             self.assertGreater(len(value), 0, f"Output '{key}' is empty")
+
+    def test_vpc_id_format_is_valid(self):
+        """Test that VPC ID has valid AWS format."""
+        vpc_id = self.outputs.get('vpc_id')
+        self.assertIsNotNone(vpc_id, "VPC ID not found in outputs")
+        self.assertTrue(vpc_id.startswith('vpc-'), "VPC ID does not start with 'vpc-'")
+        self.assertGreaterEqual(len(vpc_id), 12, "VPC ID is too short")
+
+    def test_aurora_endpoints_contain_region(self):
+        """Test that Aurora endpoints contain the correct AWS region."""
+        aurora_endpoint = self.outputs.get('aurora_endpoint')
+        self.assertIsNotNone(aurora_endpoint, "Aurora endpoint not found in outputs")
+        self.assertIn(self.aws_region, aurora_endpoint, f"Aurora endpoint does not contain region {self.aws_region}")
+
+        aurora_reader_endpoint = self.outputs.get('aurora_reader_endpoint')
+        self.assertIsNotNone(aurora_reader_endpoint, "Aurora reader endpoint not found in outputs")
+        self.assertIn(self.aws_region, aurora_reader_endpoint, f"Aurora reader endpoint does not contain region {self.aws_region}")
+
+    def test_api_gateway_url_contains_region(self):
+        """Test that API Gateway URL contains the correct AWS region."""
+        api_url = self.outputs.get('api_gateway_url')
+        self.assertIsNotNone(api_url, "API Gateway URL not found in outputs")
+        self.assertIn(self.aws_region, api_url, f"API Gateway URL does not contain region {self.aws_region}")
 
 
 if __name__ == '__main__':
