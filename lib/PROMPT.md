@@ -1,109 +1,93 @@
-You are required to design a secure, production-ready AWS environment implemented entirely in Terraform using a single file named main.tf. The configuration must follow IaC best practices, be idempotent, and be deployable in us-west-2. Do not use external modules or additional files — everything must be inline in main.tf.
+Hey team,
 
-Core Implementation Requirements
+We need to build out a solid AWS environment using Terraform - everything should go into a single main.tf file. The goal is a production-ready setup that's secure, follows IaC best practices, and can be deployed reliably in us-west-2. Let's keep it simple - no external modules or extra files, just clean inline Terraform code.
 
-VPC & Networking
+Here's what we need to cover:
 
-Create a VPC with CIDR 10.0.0.0/16 in us-west-2.
+**Networking Foundation**
 
-Create 3 subnets: 1 public and 2 private, distributed across Availability Zones.
+Start with a VPC using 10.0.0.0/16 in us-west-2. We'll need 3 subnets total: 1 public and 2 private, spread across different availability zones for redundancy.
 
-Enable DNS support and hostnames on the VPC.
+Make sure DNS support and hostnames are enabled on the VPC - that'll help with service discovery later.
 
-Create and attach an Internet Gateway; configure a public route table that routes 0.0.0.0/0 to the IGW for the public subnet.
+Set up an Internet Gateway and configure the public route table to route 0.0.0.0/0 traffic through it. That'll handle our public subnet's internet access.
 
-Create RDS subnet group using the two private subnets.
+For the database, create an RDS subnet group using those two private subnets.
 
-Compute & Access
+**Compute Layer**
 
-Create an EC2 Launch Template and an Auto Scaling Group (min=1, max=3) in the public subnet for the web tier.
+We'll need an EC2 Launch Template and Auto Scaling Group configured for min=1, max=3 instances in the public subnet. This gives us our web tier.
 
-Provide an example of associating an Elastic IP to a primary instance; note autoscaling recommendation to use a Load Balancer (include an ALB example or comment explaining best practice).
+Include an example showing how to associate an Elastic IP to a primary instance, but also note that with autoscaling, a Load Balancer is the better approach. Add an ALB example or at least comment on the best practice there.
 
-Enable AWS Systems Manager Session Manager by attaching an IAM role to EC2 (no SSH required by default).
+For access, let's use AWS Systems Manager Session Manager - attach the right IAM role to EC2 so we don't need SSH keys by default.
 
-Database
+**Database Setup**
 
-Provision an RDS MySQL instance (Multi-AZ) in the private subnets.
+Spin up an RDS MySQL instance with Multi-AZ enabled in those private subnets for high availability.
 
-Enable automated backups (retention ≥ 7 days), storage encryption using a KMS key created inline (with rotation enabled), and set publicly_accessible = false.
+We need automated backups with at least 7 days retention. Storage should be encrypted using a KMS key we create inline (make sure rotation is enabled). Obviously set publicly_accessible to false.
 
-RDS security group must allow inbound MySQL (3306) only from the EC2 autoscaling security group.
+The RDS security group should only allow MySQL traffic (port 3306) from the EC2 autoscaling security group - nothing else.
 
-Security, IAM & KMS
+**Security and IAM**
 
-Create an inline KMS key with enable_key_rotation = true used to encrypt RDS and S3.
+Create an inline KMS key with enable_key_rotation set to true. We'll use this for encrypting both RDS and S3 data.
 
-Create an S3 bucket for storing CloudFormation templates (as requested), with versioning enabled, block public access, and server-side encryption using the KMS key.
+Set up an S3 bucket for storing CloudFormation templates. Enable versioning, block all public access, and use server-side encryption with that KMS key.
 
-Create IAM roles/policies:
+For IAM roles and policies:
+- EC2 role needs SSM access, CloudWatch Logs Put permissions, and S3 read access - keep it least privilege
+- Add minimal IAM resources as needed for Terraform operations
 
-EC2 role: SSM, CloudWatch Logs Put, and S3 read access (least privilege).
+Important: no hard-coded credentials anywhere. Mark any sensitive variables with sensitive = true.
 
-Minimal IAM resources for Terraform where required.
+**Monitoring and Alerts**
 
-Ensure no hard-coded credentials; mark sensitive variables as sensitive = true.
+Set up CloudWatch Log Groups for both EC2 and RDS with appropriate retention settings.
 
-Observability & Notifications
+We'll need a few CloudWatch alarms:
+- High EC2 CPU alarm that triggers an SNS topic and an Auto Scaling policy to scale out/in
+- Low RDS free storage alarm that sends to an SNS topic
 
-Create CloudWatch Log Groups (EC2 & RDS) with retention settings.
+Create an SNS topic for these alarm notifications and include it in the outputs.
 
-Create CloudWatch alarms:
+**Auto Scaling**
 
-High EC2 CPU → SNS topic → Auto Scaling policy to scale out/in.
+Implement CPU-based autoscaling. Something like: scale out when average CPU goes above 70% for 2 periods, scale in when it drops below 30%.
 
-Low RDS free storage → SNS topic.
+You'll need aws_launch_template, aws_autoscaling_group, aws_cloudwatch_metric_alarm, and aws_autoscaling_policy all working together.
 
-Create an SNS topic for alarm notifications and outputs.
+**Tagging and Documentation**
 
-Autoscaling & Alarms
+Tag everything with Name, Project, Environment, Owner, and CostCenter. Use variables for project, environment, and owner so they're consistent.
 
-Implement CPU-based autoscaling (example: scale out when avg CPU > 70% for 2 periods; scale in when < 30%).
+Add inline comments throughout for major resources and any decisions that might not be obvious to someone reading the code later.
 
-Use aws_launch_template + aws_autoscaling_group + aws_cloudwatch_metric_alarm + aws_autoscaling_policy.
+Would be nice to include a commented example showing how you could do a CloudFormation ChangeSet-like workflow - maybe using null_resource with local-exec to upload a template to S3. Just illustrative though, not required for the main infrastructure.
 
-Operational Hygiene & Tags
+**Variables and Outputs**
 
-Tag all resources with Name, Project, Environment, Owner, CostCenter. Use variables for project, environment, and owner.
+Set up variables with sensible defaults for: aws_region (default us-west-2), project, environment, owner, instance_type, allowed_admin_cidr, db_username, db_password (mark as sensitive), db_allocated_storage, db_instance_class, autoscaling min/max, and s3_bucket_name.
 
-Add inline comments/documentation for each major resource and non-obvious decisions.
+Output these key values: vpc_id, public_subnet_ids, private_subnet_ids, ec2_asg_name, eip_addresses (if applicable), rds_endpoint, s3_bucket_name, sns_topic_arn, kms_key_id.
 
-Include a commented example showing how to create a CloudFormation ChangeSet-like workflow (e.g., null_resource + local-exec uploading a CloudFormation template to S3) — this is illustrative only and must not be required for main infra.
+**Important Constraints**
 
-Variables & Outputs
+Everything needs to be in us-west-2.
 
-Provide variables (with sensible defaults) for: aws_region (default us-west-2), project, environment, owner, instance_type, allowed_admin_cidr, db_username, db_password (sensitive), db_allocated_storage, db_instance_class, autoscaling min/max, and s3_bucket_name.
+Keep it to a single file - main.tf. That means provider block, terraform block with required_version, all your variables, locals, data sources, resources, and outputs in one place.
 
-Produce outputs: vpc_id, public_subnet_ids, private_subnet_ids, ec2_asg_name, eip_addresses (if any), rds_endpoint, s3_bucket_name, sns_topic_arn, kms_key_id.
+Use the Terraform AWS Provider.
 
-Constraints
+Security basics: RDS cannot be publicly accessible, S3 must block public access, IAM follows least privilege principle.
 
-All resources must be in region us-west-2.
+Make sure sensitive variables are marked appropriately.
 
-Single file only: main.tf — include provider block, terraform block (required_version), variables, locals, data sources, resources, and outputs.
+**What We're Looking For**
 
-Use Terraform AWS Provider 
+A single complete Terraform file called main.tf that implements everything above. Should be well-commented, ready to run through terraform init and terraform validate without issues.
 
-RDS must not be publicly accessible; S3 must block public access; IAM must follow least privilege.
+Use clean Terraform patterns - for_each where it makes sense, lifecycle blocks where useful.
 
-Mark sensitive variables appropriately.
-
-Expected Output
-
-Generate only one complete Terraform file named main.tf (HCL) that:
-
-Implements all resources above.
-
-Includes inline comments/documentation.
-
-Is ready to terraform init, terraform validate
-
-Uses clean, maintainable Terraform idioms (for_each where appropriate, lifecycle blocks where useful).
-
-Includes example terraform apply usage as a top-file comment and example terraform.tfvars content as comments (do not create separate files).
-
-Output Instructions
-Generate a single-file Terraform configuration (main.tf) implementing all requirements above.
-Ensure the output is formatted as valid Terraform HCL code 
-Include comments throughout explaining key security best practices.
-Do not summarize or break into sections — produce one full Terraform file as the output.
+Add a comment block at the top with example terraform apply usage and what a terraform.tfvars file would look like, but don't create separate files.

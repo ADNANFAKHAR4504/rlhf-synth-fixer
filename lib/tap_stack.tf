@@ -152,7 +152,7 @@ resource "aws_secretsmanager_secret" "db_password" {
   name                    = "${var.project}-${var.environment}-db-password"
   description             = "RDS MySQL master password for ${var.project}-${var.environment}"
   kms_key_id              = aws_kms_key.main.id
-  recovery_window_in_days = 0 # Set to 0 for immediate deletion (QA environment)
+  recovery_window_in_days = 0 # Set to 0 for immediate deletion in test environments
 
   tags = merge(local.common_tags, {
     Name = "${var.project}-${var.environment}-db-password"
