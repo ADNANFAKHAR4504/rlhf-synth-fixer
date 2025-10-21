@@ -1,6 +1,6 @@
 {
   "platform": "cdktf",
-  "language": "py",
+  "language": "python",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "5962726542",
