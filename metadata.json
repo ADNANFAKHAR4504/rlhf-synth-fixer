@@ -7,12 +7,26 @@
   "team": "synth",
   "startedAt": "2025-10-21T15:02:09.353717",
   "subtask": "Application Deployment",
-  "background": "StreamFlix, a growing media streaming company, needs to build a robust infrastructure to process and deliver video content to millions of users. They require a system that can ingest raw video files, transcode them into multiple formats, store metadata in a scalable database, and manage content delivery efficiently. The system must maintain MPAA (Motion Picture Association of America) compliance standards for content security.",
+  "background": "Infrastructure task for CDKTF Python.",
   "subject_labels": [
     "CI/CD Pipeline",
     "Infrastructure Analysis/Monitoring",
     "Security Configuration as Code"
   ],
-  "aws_services": "ECS Fargate, RDS Aurora PostgreSQL Serverless v2, ElastiCache Redis, EFS, Kinesis Data Streams, API Gateway, Secrets Manager",
-  "training_quality": 9
+  "aws_services": [
+    "ECS Fargate",
+    "RDS Aurora PostgreSQL Serverless v2",
+    "ElastiCache Redis",
+    "EFS",
+    "Kinesis Data Streams",
+    "API Gateway",
+    "Secrets Manager"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
