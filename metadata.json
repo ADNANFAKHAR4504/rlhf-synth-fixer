@@ -1,0 +1,38 @@
+{
+  "platform": "CDKTF",
+  "language": "py",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-10-21T11:09:50.110246Z",
+  "po_id": "9000420391",
+  "subtask": "Failure Recovery and High Availability",
+  "background": "An e-commerce company needs to store sensitive customer payment and personal information in compliance with PCI DSS requirements. They need an infrastructure setup that ensures data encryption at rest and in transit, with automated credentials management.",
+  "problem": "Implement a secure RDS database infrastructure for an e-commerce platform using CDKTF with Python. The solution must include encrypted data storage, secrets rotation, and secure access management.",
+  "subject_labels": [
+    "Failure Recovery Automation",
+    "Security Configuration as Code"
+  ],
+  "environment": {
+    "setup_requirements": {
+      "cdktf_version": ">=0.15.0",
+      "python_version": ">=3.7",
+      "aws_provider": "eu-central-1",
+      "required_packages": [
+        "cdktf",
+        "cdktf-aws-provider"
+      ]
+    }
+  },
+  "constraints": "Database credentials must be rotated automatically every 30 days using SecretsManager; All database storage must be encrypted using AWS KMS custom keys",
+  "region": "eu-central-1",
+  "aws_services": [
+    "RDS",
+    "Secrets Manager",
+    "KMS",
+    "VPC",
+    "Security Groups"
+  ],
+  "training_quality": 9,
+  "training_quality_justification": "Score 9/10 - Excellent training value. Base score 8 + 4 Category A significant fixes (VPC/networking, secrets integration, security violations, KMS rotation) +2 points, capped at +2. Complexity bonus: multiple services (RDS, VPC, KMS, Secrets Manager) +1, security best practices (encryption, IAM, private access) +1, high availability (multi-AZ capable) +1, capped at +2 total complexity. Final: 8 + 2 + 2 = 12, reduced to 9 accounting for some implementation being removed (Lambda rotation function). Significant learning opportunity on production networking, security best practices, and compliance-driven architecture."
+}
