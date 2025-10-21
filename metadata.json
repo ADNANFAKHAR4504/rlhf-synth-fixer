@@ -1,5 +1,5 @@
 {
-  "platform": "pulumi",
+  "platform": "cdktf",
   "language": "py",
   "complexity": "hard",
   "turn_type": "single",
