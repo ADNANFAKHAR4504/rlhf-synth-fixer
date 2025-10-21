@@ -6,7 +6,7 @@ These tests validate actual AWS resources with LIVE ACTIONS and INTERACTIONS.
 Test Structure:
 - Service-Level Tests: PERFORM ACTIONS within a single service (invoke Lambda, send metrics, etc.)
 - Cross-Service Tests: TEST INTERACTIONS between two services (EC2 writes to CloudWatch, Lambda checks ASG)  
-- End-to-End Tests: TRIGGER complete data flows through 3+ services
+- End-to-End Tests: TRIGGER complete data flows through 3+ service
 """
 
 import json
