@@ -268,7 +268,8 @@ class TestComputeStack(unittest.TestCase):
             self.config,
             networking_stack.get_private_subnet_ids(),
             security_stack.get_ec2_security_group_id(),
-            iam_stack.get_ec2_instance_profile_name()
+            iam_stack.get_ec2_instance_profile_name(),
+            iam_stack.get_ec2_instance_profile_arn()
         )
         
         # Test getter methods return Output objects
@@ -302,7 +303,8 @@ class TestLambdaStack(unittest.TestCase):
             self.config,
             networking_stack.get_private_subnet_ids(),
             security_stack.get_ec2_security_group_id(),
-            iam_stack.get_ec2_instance_profile_name()
+            iam_stack.get_ec2_instance_profile_name(),
+            iam_stack.get_ec2_instance_profile_arn()
         )
         
         lambda_stack = LambdaStack(
@@ -340,7 +342,8 @@ class TestMonitoringStack(unittest.TestCase):
             self.config,
             networking_stack.get_private_subnet_ids(),
             security_stack.get_ec2_security_group_id(),
-            iam_stack.get_ec2_instance_profile_name()
+            iam_stack.get_ec2_instance_profile_name(),
+            iam_stack.get_ec2_instance_profile_arn()
         )
         lambda_stack = LambdaStack(
             self.config,
