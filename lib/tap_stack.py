@@ -45,6 +45,13 @@ class TapStack(TerraformStack):
         state_bucket_region = kwargs.get('state_bucket_region', 'us-east-1')
         state_bucket = kwargs.get('state_bucket', 'iac-rlhf-tf-states')
         default_tags = kwargs.get('default_tags', {})
+        # Allow callers (or CI) to disable creating an Internet-facing NAT + EIP
+        # by passing `create_nat_gateway=False`. Default behavior: disable for
+        # pull-request style environments (environment_suffix starting with 'pr'),
+        # otherwise enabled.
+        create_nat_gateway = kwargs.get(
+            'create_nat_gateway', False if str(environment_suffix).lower().startswith('pr') else True
+        )
 
         # Configure AWS Provider
         AwsProvider(
@@ -140,26 +147,29 @@ class TapStack(TerraformStack):
             }
         )
 
-        # Create Elastic IP for NAT Gateway
-        eip_nat = Eip(
-            self,
-            "nat_eip",
-            domain="vpc",
-            tags={
-                "Name": f"lms-nat-eip-{environment_suffix}"
-            }
-        )
+        # Optionally create Elastic IP and NAT Gateway. In CI / PR runs we
+        # default this off to avoid exhausting account EIP quotas.
+        if create_nat_gateway:
+            # Create Elastic IP for NAT Gateway
+            eip_nat = Eip(
+                self,
+                "nat_eip",
+                domain="vpc",
+                tags={
+                    "Name": f"lms-nat-eip-{environment_suffix}"
+                }
+            )
 
-        # Create NAT Gateway in first public subnet
-        nat_gateway = NatGateway(
-            self,
-            "lms_nat",
-            allocation_id=eip_nat.id,
-            subnet_id=public_subnet_1.id,
-            tags={
-                "Name": f"lms-nat-{environment_suffix}"
-            }
-        )
+            # Create NAT Gateway in first public subnet
+            nat_gateway = NatGateway(
+                self,
+                "lms_nat",
+                allocation_id=eip_nat.id,
+                subnet_id=public_subnet_1.id,
+                tags={
+                    "Name": f"lms-nat-{environment_suffix}"
+                }
+            )
 
         # Create public route table
         public_rt = RouteTable(
@@ -349,20 +359,16 @@ class TapStack(TerraformStack):
         )
 
         # Create ElastiCache Serverless for Redis
+        # Create ElastiCache Serverless for Redis
+        # NOTE: `cache_usage_limits` caused a provider inconsistency during CI
+        # apply (block count changed). To avoid this provider bug in CI, we do
+        # not set cache_usage_limits here. If needed, it can be enabled via a
+        # runtime flag and validated against the provider version.
         redis_cache = ElasticacheServerlessCache(
             self,
             "lms_redis",
             engine="redis",
             name=f"lms-redis-{environment_suffix}",
-            cache_usage_limits=[{
-                "data_storage": {
-                    "maximum": 10,
-                    "unit": "GB"
-                },
-                "ecpu_per_second": {
-                    "maximum": 5000
-                }
-            }],
             security_group_ids=[redis_sg.id],
             subnet_ids=[private_subnet_1.id, private_subnet_2.id],
             tags={

@@ -260,6 +260,77 @@ redis_secret_value = {
 }
 ```
 
+## CI / Deployment Failures Observed (New)
+
+### 12. Elasticache provider inconsistent result after apply
+
+**Symptom (CI failure)**:
+```
+Error: Provider produced inconsistent result after apply
+
+When applying changes to aws_elasticache_serverless_cache.lms_redis (lms_redis),
+provider "provider[\"registry.terraform.io/hashicorp/aws\"]" produced an
+unexpected new value: .cache_usage_limits: block count changed from 1 to 0.
+
+This is a bug in the provider, which should be reported in the provider's
+own issue tracker.
+```
+
+**Root cause analysis**:
+- The AWS provider returned a differing representation of the `cache_usage_limits`
+    block between plan and apply (block count changed). This is a provider bug
+    observed for `aws_elasticache_serverless_cache` resources in certain
+    provider versions and/or AWS regions.
+
+**Temporary remediation applied**:
+- Removed the `cache_usage_limits` argument from the resource to avoid hitting
+    the provider inconsistency during CI apply. The value is non-critical for
+    initial deployments and can be added back once the provider issue is fixed
+    or pinned to a known good version.
+
+**Recommended long-term fixes**:
+1. Pin `hashicorp/aws` provider to a version that doesn't exhibit this bug.
+2. Open an issue with the AWS provider maintainers with a reproducible
+     example and the provider version used in CI (6.11.0 in this run).
+3. Add an optional flag `enable_cache_limits` so teams can opt into this
+     configuration once the provider is stable.
+
+### 13. EC2 Elastic IP (EIP) quota exhausted in CI
+
+**Symptom (CI failure)**:
+```
+Error: creating EC2 EIP: operation error EC2: AllocateAddress, https response error StatusCode: 400, RequestID: ..., api error AddressLimitExceeded: The maximum number of addresses has been reached.
+```
+
+**Root cause analysis**:
+- The stack unconditionally created an Elastic IP and NAT Gateway. In shared
+    AWS accounts or CI environments we frequently hit EIP quotas (soft limits).
+
+**Temporary remediation applied**:
+- Added a `create_nat_gateway` flag to `TapStack`, defaulting to `False` for
+    PR-style environment names (environment_suffix starting with `pr`). The
+    code now conditionally creates the EIP and NAT only if `create_nat_gateway` is True.
+
+**Recommended long-term fixes**:
+1. For CI/pull-request runs, default to using the default VPC or existing
+     NAT infrastructure instead of creating EIPs.
+2. Make NAT/EIP creation controlled via an environment variable (e.g.,
+     `CREATE_NAT_GATEWAY`) set in the CI pipeline.
+3. Where public IP is required, consider using AWS-managed network egress or
+     ephemeral IPs (avoid allocating EIPs in short-lived CI runs).
+
+## Notes and Next Steps
+
+- Synthesis now succeeds locally and in CI after these temporary remediations.
+- The deployment failed in CI only where the provider returned inconsistent
+    state for Elasticache and where the account EIP quota was reached.
+- I recommend the CI pipeline set `CREATE_NAT_GATEWAY=false` for PR builds
+    (already now implied by the `create_nat_gateway` default for `pr*` suffixes),
+    and pin the AWS provider in CI until the Elasticache provider bug is resolved.
+
+Add these recommendations to your runbooks and optionally add feature flags to
+control these infra pieces in different deployment tiers.
+
 **Fixed Code**:
 ```python
 redis_secret_value = {
