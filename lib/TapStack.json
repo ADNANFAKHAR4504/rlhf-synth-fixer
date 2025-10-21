@@ -874,6 +874,7 @@
     },
     "AuditingTrail": {
       "Type": "AWS::CloudTrail::Trail",
+      "DependsOn": "AuditTrailBucketPolicy",
       "Properties": {
         "S3BucketName": {
           "Ref": "AuditTrailBucket"
