@@ -122,11 +122,14 @@ describe('TapStack', () => {
   });
 
   describe('Lambda@Edge Functions', () => {
-    test('should create personalization Lambda@Edge function', () => {
+    test('should create personalization Lambda@Edge function with external handler', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
         Runtime: 'nodejs20.x',
-        Handler: 'index.handler',
+        Handler: 'personalization.handler',
         MemorySize: 128,
+        TracingConfig: {
+          Mode: 'Active'
+        }
       });
     });
 
@@ -153,6 +156,30 @@ describe('TapStack', () => {
             }),
           ]),
         },
+      });
+    });
+
+    test('should have X-Ray tracing permissions for Lambda@Edge functions', () => {
+      template.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Action: ['xray:PutTraceSegments', 'xray:PutTelemetryRecords'],
+              Effect: 'Allow',
+              Resource: '*',
+            }),
+          ]),
+        },
+      });
+    });
+
+    test('should have external handlers configured for Lambda@Edge functions', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Handler: 'personalization.handler',
+      });
+      
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Handler: 'engagement-tracking.handler',
       });
     });
   });

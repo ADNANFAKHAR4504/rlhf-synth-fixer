@@ -63,7 +63,9 @@ export class TapStack extends cdk.Stack {
         partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
         billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
-        pointInTimeRecovery: true,
+        pointInTimeRecoverySpecification: {
+          pointInTimeRecoveryEnabled: true,
+        },
         encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
         encryptionKey: dynamoEncryptionKey,
       }
@@ -90,7 +92,9 @@ export class TapStack extends cdk.Stack {
         sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
         billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
-        pointInTimeRecovery: true,
+        pointInTimeRecoverySpecification: {
+          pointInTimeRecoveryEnabled: true,
+        },
         encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
         encryptionKey: dynamoEncryptionKey,
       }
@@ -115,17 +119,10 @@ export class TapStack extends cdk.Stack {
       'PersonalizationFunction',
       {
         runtime: lambda.Runtime.NODEJS_20_X,
-        handler: 'index.handler',
-        code: lambda.Code.fromInline(`
-exports.handler = async (event) => {
-  const request = event.Records[0].cf.request;
-  const headers = request.headers;
-  const userId = headers['x-user-id'] ? headers['x-user-id'][0].value : 'anonymous';
-  request.headers['x-personalized-user'] = [{ key: 'X-Personalized-User', value: userId }];
-  return request;
-};
-        `),
+        handler: 'personalization.handler',
+        code: lambda.Code.fromAsset('lib/lambda'),
         memorySize: 128,
+        tracing: lambda.Tracing.ACTIVE,
       }
     );
 
@@ -140,20 +137,27 @@ exports.handler = async (event) => {
       })
     );
 
+    // Add X-Ray permissions for personalization function
+    personalizationFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'xray:PutTraceSegments',
+          'xray:PutTelemetryRecords',
+        ],
+        resources: ['*'],
+      })
+    );
+
     const engagementTrackingFunction = new cloudfront.experimental.EdgeFunction(
       this,
       'EngagementTrackingFunction',
       {
         runtime: lambda.Runtime.NODEJS_20_X,
-        handler: 'index.handler',
-        code: lambda.Code.fromInline(`
-exports.handler = async (event) => {
-  const response = event.Records[0].cf.response;
-  response.headers['x-engagement-tracked'] = [{ key: 'X-Engagement-Tracked', value: 'true' }];
-  return response;
-};
-        `),
+        handler: 'engagement-tracking.handler',
+        code: lambda.Code.fromAsset('lib/lambda'),
         memorySize: 128,
+        tracing: lambda.Tracing.ACTIVE,
       }
     );
 
@@ -162,6 +166,18 @@ exports.handler = async (event) => {
         effect: iam.Effect.ALLOW,
         actions: ['dynamodb:PutItem', 'dynamodb:UpdateItem'],
         resources: [engagementTrackingTable.tableArn],
+      })
+    );
+
+    // Add X-Ray permissions for engagement tracking function
+    engagementTrackingFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'xray:PutTraceSegments',
+          'xray:PutTelemetryRecords',
+        ],
+        resources: ['*'],
       })
     );
 
