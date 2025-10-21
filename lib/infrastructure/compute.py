@@ -5,6 +5,7 @@ This module creates EC2 launch templates and Auto Scaling Groups with CPU-based 
 addressing MODEL_FAILURES #3 by deploying ASG in private subnets (not public).
 """
 
+import base64
 from typing import List, Optional
 
 import pulumi
@@ -91,13 +92,42 @@ class ComputeStack:
         """
         lt_name = self.config.get_resource_name('launch-template')
         
-        # ABSOLUTE MINIMAL user data - just log and exit
-        # SSM agent is pre-installed and auto-enabled on Amazon Linux 2023
-        user_data = """#!/bin/bash
-echo "User data started: $(date)" >> /var/log/user-data.log
-echo "SSM agent is pre-installed on AL2023 - no action needed" >> /var/log/user-data.log
-echo "User data completed: $(date)" >> /var/log/user-data.log
-exit 0
+        # SSM agent is pre-installed on Amazon Linux 2023
+        user_data = f"""#!/bin/bash
+set -e
+
+# Ensure SSM agent is running (pre-installed on Amazon Linux 2023)
+systemctl enable amazon-ssm-agent
+systemctl start amazon-ssm-agent
+
+# Install Apache web server using dnf (Amazon Linux 2023)
+dnf install -y httpd
+
+# Create a simple health check endpoint
+cat > /var/www/html/health <<'EOF'
+OK
+EOF
+
+# Create a simple index page
+cat > /var/www/html/index.html <<'EOF'
+<!DOCTYPE html>
+<html>
+<head>
+    <title>TAP Application</title>
+</head>
+<body>
+    <h1>TAP Application - Environment: {self.config.environment_suffix}</h1>
+    <p>Instance is running successfully!</p>
+</body>
+</html>
+EOF
+
+# Start and enable Apache
+systemctl start httpd
+systemctl enable httpd
+
+# Signal that instance is ready
+echo "Instance ready at $(date)" > /var/log/user-data-complete.log
 """
         
         launch_template = aws.ec2.LaunchTemplate(
@@ -109,9 +139,7 @@ exit 0
                 name=self.instance_profile_name
             ),
             vpc_security_group_ids=[self.security_group_id],
-            user_data=pulumi.Output.secret(user_data).apply(
-                lambda ud: __import__('base64').b64encode(ud.encode()).decode()
-            ),
+            user_data=base64.b64encode(user_data.encode()).decode(),
             metadata_options=aws.ec2.LaunchTemplateMetadataOptionsArgs(
                 http_endpoint="enabled",
                 http_tokens="optional",  # Allow both IMDSv1 and IMDSv2 for compatibility
@@ -166,8 +194,14 @@ exit 0
                 version="$Latest"
             ),
             health_check_type="EC2",
-            health_check_grace_period=600,
-            wait_for_capacity_timeout="15m",
+            health_check_grace_period=300,  # 5 minutes
+            enabled_metrics=[
+                'GroupMinSize',
+                'GroupMaxSize',
+                'GroupDesiredCapacity',
+                'GroupInServiceInstances',
+                'GroupTotalInstances'
+            ],
             tags=[
                 aws.autoscaling.GroupTagArgs(
                     key="Name",
