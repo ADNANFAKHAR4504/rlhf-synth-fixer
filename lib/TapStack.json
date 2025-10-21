@@ -829,6 +829,27 @@
               }
             },
             {
+              "Sid": "AWSCloudTrailBucketExistenceCheck",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudtrail.amazonaws.com"
+              },
+              "Action": "s3:ListBucket",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "AuditTrailBucket",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                  }
+                }
+              }
+            },
+            {
               "Sid": "AWSCloudTrailWrite",
               "Effect": "Allow",
               "Principal": {
