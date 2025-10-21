@@ -61,7 +61,7 @@ class TapStack(TerraformStack):
 
         # Extract configuration from kwargs
         environment_suffix = kwargs.get('environment_suffix', 'dev')
-        aws_region = kwargs.get('aws_region', 'ca-central-1')
+        aws_region = kwargs.get('aws_region', 'eu-west-2')
         state_bucket_region = kwargs.get('state_bucket_region', 'us-east-1')
         state_bucket = kwargs.get('state_bucket', 'iac-rlhf-tf-states')
         default_tags = kwargs.get('default_tags', {})
@@ -726,7 +726,7 @@ class TapStack(TerraformStack):
         )
 ```
 
-## lib/__init__.py
+## lib/**init**.py
 
 ```python
 """StreamFlix infrastructure module."""
@@ -743,7 +743,8 @@ This infrastructure includes all the required AWS services:
 7. **Secrets Manager** - Storing database credentials and API keys with 7-day recovery window
 
 Key features:
-- Multi-AZ deployment across ca-central-1a and ca-central-1b
+
+- Multi-AZ deployment across eu-west-2a and eu-west-2b
 - All resources include environmentSuffix in naming
 - Encryption at rest and in transit for all data stores
 - MPAA compliance through encryption and access controls

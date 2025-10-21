@@ -1,7 +1,7 @@
 """Unit tests for TAP Stack."""
+import json
 import os
 import sys
-import json
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -27,7 +27,7 @@ class TestStackStructure:
             environment_suffix="test",
             state_bucket="custom-state-bucket",
             state_bucket_region="us-west-2",
-            aws_region="ca-central-1",
+            aws_region="eu-west-2",
         )
 
         # Verify that TapStack instantiates without errors via props
@@ -48,7 +48,7 @@ class TestStackStructure:
             app,
             "TestStackSynth",
             environment_suffix="test",
-            aws_region="ca-central-1",
+            aws_region="eu-west-2",
         )
 
         # Synthesize the stack
@@ -101,7 +101,7 @@ class TestNetworkingConfiguration:
             app,
             "TestVPC",
             environment_suffix="test",
-            aws_region="ca-central-1",
+            aws_region="eu-west-2",
         )
 
         synthesized = Testing.synth(stack)
@@ -121,7 +121,7 @@ class TestNetworkingConfiguration:
             app,
             "TestSubnets",
             environment_suffix="test",
-            aws_region="ca-central-1",
+            aws_region="eu-west-2",
         )
 
         synthesized = Testing.synth(stack)
@@ -150,7 +150,7 @@ class TestDatabaseConfiguration:
             app,
             "TestRDS",
             environment_suffix="test",
-            aws_region="ca-central-1",
+            aws_region="eu-west-2",
         )
 
         synthesized = Testing.synth(stack)
@@ -174,7 +174,7 @@ class TestSecurityConfiguration:
             app,
             "TestSecrets",
             environment_suffix="test",
-            aws_region="ca-central-1",
+            aws_region="eu-west-2",
         )
 
         synthesized = Testing.synth(stack)
@@ -190,7 +190,7 @@ class TestSecurityConfiguration:
             app,
             "TestIAM",
             environment_suffix="test",
-            aws_region="ca-central-1",
+            aws_region="eu-west-2",
         )
 
         synthesized = Testing.synth(stack)
@@ -210,7 +210,7 @@ class TestCacheConfiguration:
             app,
             "TestCache",
             environment_suffix="test",
-            aws_region="ca-central-1",
+            aws_region="eu-west-2",
         )
 
         synthesized = Testing.synth(stack)
@@ -234,7 +234,7 @@ class TestStorageConfiguration:
             app,
             "TestEFS",
             environment_suffix="test",
-            aws_region="ca-central-1",
+            aws_region="eu-west-2",
         )
 
         synthesized = Testing.synth(stack)
@@ -257,7 +257,7 @@ class TestStreamingConfiguration:
             app,
             "TestKinesis",
             environment_suffix="test",
-            aws_region="ca-central-1",
+            aws_region="eu-west-2",
         )
 
         synthesized = Testing.synth(stack)
@@ -280,7 +280,7 @@ class TestAPIConfiguration:
             app,
             "TestAPI",
             environment_suffix="test",
-            aws_region="ca-central-1",
+            aws_region="eu-west-2",
         )
 
         synthesized = Testing.synth(stack)
@@ -300,7 +300,7 @@ class TestComputeConfiguration:
             app,
             "TestECS",
             environment_suffix="test",
-            aws_region="ca-central-1",
+            aws_region="eu-west-2",
         )
 
         synthesized = Testing.synth(stack)

@@ -15,7 +15,8 @@ Please create infrastructure code using CDKTF with Python that includes:
 7. Secrets Manager for storing all sensitive credentials like database passwords, API keys, and encryption keys - please use automatic rotation where possible
 
 Important requirements:
-- Everything must be deployed in ca-central-1 region
+
+- Everything must be deployed in eu-west-2 region
 - The system needs to be highly available with multi-AZ deployment
 - Target 99.99% availability
 - All sensitive data must be managed through Secrets Manager
