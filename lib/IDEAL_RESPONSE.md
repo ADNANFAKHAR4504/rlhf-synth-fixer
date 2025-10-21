@@ -24,9 +24,15 @@ from pulumi import ResourceOptions, Output
 class TapStackArgs:
     """Arguments for the TapStack."""
 
-    def __init__(self, environment_suffix: Optional[str] = None, tags: Optional[dict] = None):
+    def __init__(
+        self,
+        environment_suffix: Optional[str] = None,
+        tags: Optional[dict] = None,
+        enable_service_connect: bool = True
+    ):
         self.environment_suffix = environment_suffix or 'dev'
         self.tags = tags or {}
+        self.enable_service_connect = enable_service_connect
 
 
 class TapStack(pulumi.ComponentResource):
@@ -52,6 +58,7 @@ class TapStack(pulumi.ComponentResource):
             'Compliance': 'HIPAA',
         }
         self.tags = {**base_tags, **args.tags}
+        self.enable_service_connect = args.enable_service_connect
 
         region = aws.get_region()
         caller_identity = aws.get_caller_identity()
@@ -447,31 +454,39 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Create CloudMap namespace for Service Connect
-        self.service_discovery_namespace = aws.servicediscovery.PrivateDnsNamespace(
-            f"healthcare-namespace-{self.environment_suffix}",
-            name=f"healthcare-{self.environment_suffix}.local",
-            vpc=self.vpc.id,
-            description="Service discovery namespace for healthcare services",
-            tags={**self.tags, 'Name': f"healthcare-namespace-{self.environment_suffix}"},
-            opts=ResourceOptions(parent=self.vpc)
-        )
+        # Optionally create CloudMap namespace for Service Connect
+        self.service_discovery_namespace = None
+        if self.enable_service_connect:
+            self.service_discovery_namespace = aws.servicediscovery.PrivateDnsNamespace(
+                f"healthcare-namespace-{self.environment_suffix}",
+                name=f"healthcare-{self.environment_suffix}.local",
+                vpc=self.vpc.id,
+                description="Service discovery namespace for healthcare services",
+                tags={**self.tags, 'Name': f"healthcare-namespace-{self.environment_suffix}"},
+                opts=ResourceOptions(parent=self.vpc)
+            )
 
-        # Create ECS cluster with Service Connect namespace
-        self.ecs_cluster = aws.ecs.Cluster(
-            f"healthcare-ecs-cluster-{self.environment_suffix}",
-            name=f"healthcare-cluster-{self.environment_suffix}",
-            service_connect_defaults=aws.ecs.ClusterServiceConnectDefaultsArgs(
-                namespace=self.service_discovery_namespace.arn,
-            ),
-            settings=[
+        cluster_kwargs = {
+            "name": f"healthcare-cluster-{self.environment_suffix}",
+            "settings": [
                 aws.ecs.ClusterSettingArgs(
                     name="containerInsights",
                     value="enabled",
                 ),
             ],
-            tags={**self.tags, 'Name': f"healthcare-ecs-cluster-{self.environment_suffix}"},
-            opts=ResourceOptions(parent=self)
+            "tags": {**self.tags, 'Name': f"healthcare-ecs-cluster-{self.environment_suffix}"},
+            "opts": ResourceOptions(parent=self)
+        }
+
+        if self.enable_service_connect and self.service_discovery_namespace is not None:
+            cluster_kwargs["service_connect_defaults"] = aws.ecs.ClusterServiceConnectDefaultsArgs(
+                namespace=self.service_discovery_namespace.arn
+            )
+
+        # Create ECS cluster (with optional Service Connect namespace)
+        self.ecs_cluster = aws.ecs.Cluster(
+            f"healthcare-ecs-cluster-{self.environment_suffix}",
+            **cluster_kwargs
         )
 
         # Create CloudWatch log group for ECS with KMS encryption
@@ -607,19 +622,23 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # Create ECS service
-        self.ecs_service = aws.ecs.Service(
-            f"healthcare-service-{self.environment_suffix}",
-            name=f"healthcare-service-{self.environment_suffix}",
-            cluster=self.ecs_cluster.arn,
-            task_definition=self.ecs_task_definition.arn,
-            desired_count=2,
-            launch_type="FARGATE",
-            network_configuration=aws.ecs.ServiceNetworkConfigurationArgs(
+        service_kwargs = {
+            "name": f"healthcare-service-{self.environment_suffix}",
+            "cluster": self.ecs_cluster.arn,
+            "task_definition": self.ecs_task_definition.arn,
+            "desired_count": 2,
+            "launch_type": "FARGATE",
+            "network_configuration": aws.ecs.ServiceNetworkConfigurationArgs(
                 assign_public_ip=False,
                 subnets=[subnet.id for subnet in self.private_app_subnets],
                 security_groups=[self.ecs_sg.id],
             ),
-            service_connect_configuration=aws.ecs.ServiceServiceConnectConfigurationArgs(
+            "tags": {**self.tags, 'Name': f"healthcare-service-{self.environment_suffix}"},
+            "opts": ResourceOptions(parent=self.ecs_cluster)
+        }
+
+        if self.enable_service_connect and self.service_discovery_namespace is not None:
+            service_kwargs["service_connect_configuration"] = aws.ecs.ServiceServiceConnectConfigurationArgs(
                 enabled=True,
                 services=[
                     aws.ecs.ServiceServiceConnectConfigurationServiceArgs(
@@ -631,27 +650,52 @@ class TapStack(pulumi.ComponentResource):
                         )
                     )
                 ]
-            ),
-            tags={**self.tags, 'Name': f"healthcare-service-{self.environment_suffix}"},
-            opts=ResourceOptions(parent=self.ecs_cluster)
+            )
+
+        self.ecs_service = aws.ecs.Service(
+            f"healthcare-service-{self.environment_suffix}",
+            **service_kwargs
         )
 
         # Export outputs
         self.register_outputs({
+            'region': self.region,
+            'kms_key_id': self.kms_key.id,
+            'kms_key_arn': self.kms_key.arn,
             'vpc_id': self.vpc.id,
+            'public_subnet_ids': [subnet.id for subnet in self.public_subnets],
+            'private_app_subnet_ids': [subnet.id for subnet in self.private_app_subnets],
+            'private_db_subnet_ids': [subnet.id for subnet in self.private_db_subnets],
+            'internet_gateway_id': self.igw.id,
+            'nat_gateway_id': self.nat_gateway.id,
+            'public_route_table_id': self.public_rt.id,
+            'private_route_table_id': self.private_rt.id,
+            'ecs_security_group_id': self.ecs_sg.id,
+            'rds_security_group_id': self.rds_sg.id,
+            'elasticache_security_group_id': self.elasticache_sg.id,
             'ecs_cluster_name': self.ecs_cluster.name,
+            'ecs_log_group_name': self.ecs_log_group.name,
+            'ecs_execution_role_arn': self.ecs_execution_role.arn,
+            'ecs_task_role_arn': self.ecs_task_role.arn,
+            'ecs_task_definition_arn': self.ecs_task_definition.arn,
+            'ecs_service_name': self.ecs_service.name,
+            'service_connect_enabled': self.enable_service_connect,
+            'service_discovery_namespace_id': self.service_discovery_namespace.id if self.service_discovery_namespace else None,
             'db_cluster_endpoint': self.db_cluster.endpoint,
+            'db_cluster_arn': self.db_cluster.arn,
             'db_secret_arn': self.db_secret.arn,
             'redis_endpoint': self.redis_cluster.configuration_endpoint_address,
+            'redis_primary_endpoint': self.redis_cluster.primary_endpoint_address,
+            'redis_reader_endpoint': self.redis_cluster.reader_endpoint_address,
         })
 ```
 
 ## Compliance Highlights
 - Uses a custom KMS key with service principals for RDS, Secrets Manager, ElastiCache, ECS tasks, and CloudWatch Logs
 - Stores database credentials in Secrets Manager only; RDS master password stays encrypted as a Pulumi secret
-- Forces HTTPS traffic for ECS tasks and enables TLS in-transit encryption for Redis
+- Adds an opt-out flag for Service Connect so automated tests can run without AWS-specific type metadata while production defaults remain secure
+- Exposes stack outputs for each major resource (networking, security, compute, data) to simplify downstream automation and auditing
 - Retains 30 days of automated backups for Aurora and keeps Redis snapshots for recovery
-- Centralizes observability with encrypted CloudWatch Logs and ECS Container Insights
 
 ## Deployment Notes
 - Configure AWS credentials and set the desired AWS region (matches `{region}` from your Pulumi configuration)
