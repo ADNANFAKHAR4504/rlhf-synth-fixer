@@ -212,7 +212,7 @@ describe('Secure API Integration Tests', () => {
       const client = new WAFV2Client({ region: 'us-east-1' });
       const command = new GetWebACLCommand({
         Id: outputs.waf_web_acl_id,
-        Name: outputs.waf_web_acl_name || `fintech-api-${outputs.environment_suffix || 'dev'}-waf-acl`,
+        Name: outputs.waf_web_acl_name || `fintechapi-v2-${outputs.environment_suffix || 'dev'}-waf-acl-v2`,
         Scope: 'CLOUDFRONT',
       });
 
@@ -225,7 +225,7 @@ describe('Secure API Integration Tests', () => {
       const client = new CloudWatchLogsClient({ region: outputs.primary_region });
       const envSuffix = outputs.environment_suffix || 'dev';
       const command = new DescribeLogGroupsCommand({
-        logGroupNamePrefix: `/aws/lambda/fintech-api-${envSuffix}`,
+        logGroupNamePrefix: `/aws/lambda/fintechapi-v2-${envSuffix}`,
       });
 
       const response = await client.send(command);
@@ -518,7 +518,7 @@ describe('Secure API Integration Tests', () => {
       const client = new CloudWatchClient({ region: outputs.primary_region });
       const envSuffix = outputs.environment_suffix || 'dev';
       const command = new DescribeAlarmsCommand({
-        AlarmNamePrefix: `fintech-api-${envSuffix}`,
+        AlarmNamePrefix: `fintechapi-v2-${envSuffix}`,
       });
 
       const response = await client.send(command);
