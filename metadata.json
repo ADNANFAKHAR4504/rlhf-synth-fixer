@@ -1,0 +1,25 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-10-21T08:58:52.914604+00:00",
+  "subtask": "Infrastructure Analysis/Monitoring",
+  "background": "EduTech Solutions needs to build a secure, scalable platform that processes student performance metrics in real-time while ensuring data privacy and compliance with FERPA regulations. The platform needs to ingest data from multiple sources, process it in real-time, and provide analytical insights to authorized personnel.",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "po_id": "7544124524",
+  "aws_services": [
+    "Kinesis Data Streams",
+    "ECS Fargate",
+    "ElastiCache Redis",
+    "RDS Aurora PostgreSQL",
+    "API Gateway",
+    "EFS",
+    "Secrets Manager"
+  ],
+  "training_quality": 9.5
+}
