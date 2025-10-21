@@ -157,10 +157,12 @@
               "Sid": "AllowLambdaAccess",
               "Effect": "Allow",
               "Principal": {
-                "Fn::GetAtt": [
-                  "LambdaExecutionRole",
-                  "Arn"
-                ]
+                "AWS": {
+                  "Fn::GetAtt": [
+                    "LambdaExecutionRole",
+                    "Arn"
+                  ]
+                }
               },
               "Action": [
                 "s3:GetObject",
