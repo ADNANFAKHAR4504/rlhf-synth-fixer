@@ -5,7 +5,7 @@ Orchestrates the complete Infrastructure as Code development lifecycle by coordi
 ## ⚠️ CRITICAL: CSV Data Integrity
 
 **BEFORE modifying tasks.csv:**
-1. READ the "CSV File Corruption Prevention" section in `lessons_learnt.md`
+1. READ the "CSV File Corruption Prevention" section in `.claude/lessons_learnt.md`
 2. READ the complete guide in `.claude/csv_safety_guide.md`
 3. RUN the safety check: `./.claude/scripts/check-csv-safety.sh`
 
