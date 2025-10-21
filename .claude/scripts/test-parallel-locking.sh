@@ -58,7 +58,7 @@ run_agent() {
         echo "Agent $agent_id: Starting at $(date +%H:%M:%S.%N)"
         
         # Use test CSV files and capture output properly
-        TASK_JSON=$(CSV_FILE="$TEST_CSV" BACKUP_FILE="$TEST_BACKUP" LOCK_FILE="$TEST_LOCK" LOCK_TIMEOUT=10 ./scripts/task-manager.sh select-and-update 2>&1)
+        TASK_JSON=$(CSV_FILE="$TEST_CSV" BACKUP_FILE="$TEST_BACKUP" LOCK_FILE="$TEST_LOCK" LOCK_TIMEOUT=10 ./.claude/scripts/task-manager.sh select-and-update 2>&1)
         
         local exit_code=$?
         
@@ -70,7 +70,7 @@ run_agent() {
             sleep 0.1
             
             # Mark as done
-            CSV_FILE="$TEST_CSV" BACKUP_FILE="$TEST_BACKUP" LOCK_FILE="$TEST_LOCK" ./scripts/task-manager.sh update "$TASK_ID" "done" "Agent $agent_id" 2>&1
+            CSV_FILE="$TEST_CSV" BACKUP_FILE="$TEST_BACKUP" LOCK_FILE="$TEST_LOCK" ./.claude/scripts/task-manager.sh update "$TASK_ID" "done" "Agent $agent_id" 2>&1
             
             echo "Agent $agent_id: Completed task $TASK_ID at $(date +%H:%M:%S.%N)"
         else
@@ -135,7 +135,7 @@ main() {
     
     # Show final CSV state
     log_info "Final Task Status:"
-    CSV_FILE="$TEST_CSV" ./scripts/task-manager.sh status 2>/dev/null | head -20
+    CSV_FILE="$TEST_CSV" ./.claude/scripts/task-manager.sh status 2>/dev/null | head -20
     echo ""
     
     # Verify row count

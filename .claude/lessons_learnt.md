@@ -66,11 +66,11 @@ if verify_count != original_count:
 **Applies to**: ALL agents that modify tasks.csv (task-selector, task-coordinator)
 
 **Recovery**: If corruption occurs:
-1. Use the validation tool: `python3 scripts/validate-tasks-csv.py --restore`
+1. Use the validation tool: `python3 .claude/scripts/validate-tasks-csv.py --restore`
 2. Or manually restore: `cp tasks.csv.backup tasks.csv`
 3. Or use git: `git checkout tasks.csv` (if committed)
 
-**Validation Tool**: Use `python3 scripts/validate-tasks-csv.py` to:
+**Validation Tool**: Use `python3 .claude/scripts/validate-tasks-csv.py` to:
 - Validate CSV structure and integrity
 - Check backup file status
 - Create backups: `--create-backup`

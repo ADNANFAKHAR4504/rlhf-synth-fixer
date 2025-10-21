@@ -7,7 +7,7 @@ Orchestrates the complete Infrastructure as Code development lifecycle by coordi
 **BEFORE modifying tasks.csv:**
 1. READ the "CSV File Corruption Prevention" section in `lessons_learnt.md`
 2. READ the complete guide in `.claude/csv_safety_guide.md`
-3. RUN the safety check: `./scripts/check-csv-safety.sh`
+3. RUN the safety check: `./.claude/scripts/check-csv-safety.sh`
 
 ALL CSV operations MUST:
 1. Create backup before ANY modification

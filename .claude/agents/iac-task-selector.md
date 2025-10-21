@@ -14,7 +14,7 @@ This agent is responsible for selecting a task to perform. if `tasks.csv` is pre
 **BEFORE modifying tasks.csv:**
 1. READ the "CSV File Corruption Prevention" section in `lessons_learnt.md`
 2. READ the complete guide in `.claude/csv_safety_guide.md`
-3. RUN the safety check: `./scripts/check-csv-safety.sh`
+3. RUN the safety check: `./.claude/scripts/check-csv-safety.sh`
 
 ALL CSV operations MUST:
 1. Create backup before ANY modification
@@ -46,7 +46,7 @@ If `tasks.csv` is present:
    ```bash
    # Select next pending task and mark as in_progress atomically
    # This is thread-safe and can be run from multiple agents simultaneously
-   TASK_JSON=$(./scripts/task-manager.sh select-and-update)
+   TASK_JSON=$(./.claude/scripts/task-manager.sh select-and-update)
    
    # Extract task_id and other fields
    TASK_ID=$(echo "$TASK_JSON" | jq -r '.task_id')
@@ -61,7 +61,7 @@ If `tasks.csv` is present:
 2. **Get full task details** (if you need all fields):
    ```bash
    # Get complete task data including background, problem, constraints, etc.
-   TASK_DETAILS=$(./scripts/task-manager.sh get "$TASK_ID")
+   TASK_DETAILS=$(./.claude/scripts/task-manager.sh get "$TASK_ID")
    
    # Save to temporary file for create-task-files.sh
    echo "$TASK_DETAILS" > /tmp/task_${TASK_ID}.json
@@ -69,14 +69,14 @@ If `tasks.csv` is present:
 
 3. **Check task status distribution** (optional - for monitoring):
    ```bash
-   ./scripts/task-manager.sh status
+   ./.claude/scripts/task-manager.sh status
    ```
 
 4. **Create metadata.json and PROMPT.md**:
    ```bash
    # Use the optimized script to generate both files
    # This is much faster than Python equivalents
-   ./scripts/create-task-files.sh /tmp/task_${TASK_ID}.json worktree/synth-${TASK_ID}
+   ./.claude/scripts/create-task-files.sh /tmp/task_${TASK_ID}.json worktree/synth-${TASK_ID}
    ```
 
 **Benefits of task-manager.sh:**
