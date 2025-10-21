@@ -59,7 +59,13 @@ fi
 
 echo -e "${GREEN}✅ CloudFormation template found: $TEMPLATE_FILE${NC}"
 
-# Set parameters
+echo -e "${NC} uploading template to LocalStack S3...${NC}"
+# Create a temporary bucket to hold the template
+awslocal s3 mb s3://cf-templates-$AWS_DEFAULT_REGION 2>/dev/null || true
+awslocal s3 cp $TEMPLATE_FILE s3://cf-templates-$AWS_DEFAULT_REGION/$TEMPLATE_FILE
+echo -e "${GREEN}✅ Template uploaded to LocalStack S3${NC}"
+
+# Set stack name and parameters
 STACK_NAME="tap-stack-localstack"
 ENVIRONMENT_SUFFIX="${ENVIRONMENT_SUFFIX:-dev}"
 
@@ -68,6 +74,48 @@ echo -e "${BLUE}  • Stack Name: $STACK_NAME${NC}"
 echo -e "${BLUE}  • Environment: $ENVIRONMENT_SUFFIX${NC}"
 echo -e "${BLUE}  • Template: $TEMPLATE_FILE${NC}"
 
+# Check if stack exists and clean it up
+if awslocal cloudformation describe-stacks --stack-name $STACK_NAME > /dev/null 2>&1; then
+    echo -e "${YELLOW}🗑️  Stack exists, cleaning up before redeployment...${NC}"
+
+    awslocal cloudformation delete-stack --stack-name $STACK_NAME
+
+    echo -e "${YELLOW}⏳ Waiting for stack deletion to complete...${NC}"
+
+    # Monitor stack deletion
+    while true; do
+        STACK_STATUS=$(awslocal cloudformation describe-stacks --stack-name $STACK_NAME --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DELETE_COMPLETE")
+
+        if [[ "$STACK_STATUS" == "DELETE_COMPLETE" ]] || [[ "$STACK_STATUS" == "UNKNOWN" ]]; then
+            echo -e "${GREEN}✅ Stack deletion completed${NC}"
+            break
+        elif [[ "$STACK_STATUS" == "DELETE_FAILED" ]]; then
+            echo -e "${RED}❌ Stack deletion failed${NC}"
+            echo -e "${YELLOW}📋 Failed resources:${NC}"
+            awslocal cloudformation describe-stack-events --stack-name $STACK_NAME \
+                --query 'StackEvents[?ResourceStatus==`DELETE_FAILED`].[LogicalResourceId,ResourceType,ResourceStatusReason]' \
+                --output table
+            exit 1
+        else
+            echo -e "${BLUE}⏳ Stack status: $STACK_STATUS${NC}"
+        fi
+
+        sleep 3
+    done
+fi
+
+echo -e "${YELLOW}📦 Creating new stack...${NC}"
+
+awslocal cloudformation create-stack \
+    --stack-name $STACK_NAME \
+    --template-url https://cf-templates-$AWS_DEFAULT_REGION.s3.amazonaws.com/$TEMPLATE_FILE \
+    --parameters ParameterKey=EnvironmentSuffix,ParameterValue=$ENVIRONMENT_SUFFIX \
+    --capabilities CAPABILITY_IAM
+
+echo -e "${YELLOW}⏳ Waiting for stack creation to complete...${NC}"
+
+# Monitor stack creation with detailed progress updates
+LAST_RESOURCE_COUNT=0
 DEPLOYMENT_START_TIME=$(date +%s)
 
 # Create the stack

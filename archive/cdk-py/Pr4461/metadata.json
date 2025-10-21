@@ -1,0 +1,28 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "Iac-Iot-cdk-4457",
+  "team": "5",
+  "startedAt": "2025-10-15T04:19:47.965Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "Kinesis",
+    "DynamoDB",
+    "Lambda",
+    "IOT Core",
+    "EventBridge",
+    "IAM",
+    "CloudWatch"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
+}
