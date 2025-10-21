@@ -1,4 +1,5 @@
 ```python
+
 """
 TAP Stack - Secure AWS Infrastructure as Code
 
