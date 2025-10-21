@@ -327,6 +327,168 @@ select_and_update() {
     echo "$task_json" | sed 's/"status":"[^"]*"/"status":"in_progress"/'
 }
 
+# Mark task as done (thread-safe)
+# Usage: mark_done <task_id> <pr_number>
+mark_done() {
+    local task_id="$1"
+    local pr_number="${2:-}"
+    
+    [ -z "$task_id" ] && { log_error "Task ID required"; exit 1; }
+    [ -z "$pr_number" ] && { log_error "PR number required"; exit 1; }
+    
+    [ ! -f "$CSV_FILE" ] && { log_error "CSV not found"; exit 1; }
+    
+    # Acquire lock
+    if ! acquire_lock; then
+        log_error "Could not acquire lock for mark_done"
+        exit 1
+    fi
+    trap "release_lock" EXIT INT TERM
+    
+    backup
+    
+    local original_count
+    original_count=$(tail -n +2 "$CSV_FILE" | wc -l | tr -d ' ')
+    log_info "Marking task $task_id as done (PR: #$pr_number, total rows: $original_count)"
+    
+    # Read CSV, update specific row, write back
+    local temp_file
+    temp_file=$(mktemp)
+    local found=0
+    local updated=0
+    
+    while IFS= read -r line; do
+        # Check if this is the target task
+        if echo "$line" | grep -q "^$task_id,"; then
+            found=1
+            # Check if task is in_progress
+            local current_status
+            current_status=$(echo "$line" | cut -d',' -f2)
+            if [ "$current_status" = "in_progress" ]; then
+                # Update status to done (field 2)
+                echo "$line" | sed "s/^\\([^,]*\\),in_progress,/\\1,done,/"
+                updated=1
+            else
+                log_warn "Task $task_id is not in 'in_progress' status (current: '$current_status')"
+                echo "$line"
+            fi
+        else
+            echo "$line"
+        fi
+    done < "$CSV_FILE" > "$temp_file"
+    
+    if [ $found -eq 0 ]; then
+        rm -f "$temp_file"
+        release_lock
+        trap - EXIT INT TERM
+        log_error "Task $task_id not found"
+        return 1
+    fi
+    
+    if [ $updated -eq 0 ]; then
+        rm -f "$temp_file"
+        release_lock
+        trap - EXIT INT TERM
+        log_error "Task $task_id was not updated (not in 'in_progress' status)"
+        return 1
+    fi
+    
+    mv "$temp_file" "$CSV_FILE"
+    
+    local result=0
+    if validate "$original_count"; then
+        log_info "Task $task_id marked as done with PR #$pr_number ($original_count rows preserved)"
+    else
+        result=$?
+    fi
+    
+    release_lock
+    trap - EXIT INT TERM
+    
+    return $result
+}
+
+# Mark task as error (thread-safe)
+# Usage: mark_error <task_id> <error_message> [error_step]
+mark_error() {
+    local task_id="$1"
+    local error_msg="${2:-Unknown error}"
+    local error_step="${3:-}"
+    
+    [ -z "$task_id" ] && { log_error "Task ID required"; exit 1; }
+    
+    [ ! -f "$CSV_FILE" ] && { log_error "CSV not found"; exit 1; }
+    
+    # Acquire lock
+    if ! acquire_lock; then
+        log_error "Could not acquire lock for mark_error"
+        exit 1
+    fi
+    trap "release_lock" EXIT INT TERM
+    
+    backup
+    
+    local original_count
+    original_count=$(tail -n +2 "$CSV_FILE" | wc -l | tr -d ' ')
+    log_info "Marking task $task_id as error (total rows: $original_count)"
+    
+    # Read CSV, update specific row, write back
+    local temp_file
+    temp_file=$(mktemp)
+    local found=0
+    local updated=0
+    
+    while IFS= read -r line; do
+        # Check if this is the target task
+        if echo "$line" | grep -q "^$task_id,"; then
+            found=1
+            # Check if task is in_progress
+            local current_status
+            current_status=$(echo "$line" | cut -d',' -f2)
+            if [ "$current_status" = "in_progress" ]; then
+                # Update status to error (field 2)
+                echo "$line" | sed "s/^\\([^,]*\\),in_progress,/\\1,error,/"
+                updated=1
+            else
+                log_warn "Task $task_id is not in 'in_progress' status (current: '$current_status')"
+                echo "$line"
+            fi
+        else
+            echo "$line"
+        fi
+    done < "$CSV_FILE" > "$temp_file"
+    
+    if [ $found -eq 0 ]; then
+        rm -f "$temp_file"
+        release_lock
+        trap - EXIT INT TERM
+        log_error "Task $task_id not found"
+        return 1
+    fi
+    
+    if [ $updated -eq 0 ]; then
+        rm -f "$temp_file"
+        release_lock
+        trap - EXIT INT TERM
+        log_error "Task $task_id was not updated (not in 'in_progress' status)"
+        return 1
+    fi
+    
+    mv "$temp_file" "$CSV_FILE"
+    
+    local result=0
+    if validate "$original_count"; then
+        log_info "Task $task_id marked as error: $error_msg ($original_count rows preserved)"
+    else
+        result=$?
+    fi
+    
+    release_lock
+    trap - EXIT INT TERM
+    
+    return $result
+}
+
 # Command dispatcher
 case "${1:-help}" in
     select) select_task ;;
@@ -334,6 +496,8 @@ case "${1:-help}" in
     status) check_status ;;
     get) get_task "$2" ;;
     select-and-update) select_and_update ;;
+    mark-done) mark_done "$2" "$3" ;;
+    mark-error) mark_error "$2" "$3" "$4" ;;
     *)
         cat <<'EOF'
 Task Manager - Pure Shell (No Python, 10-20x faster)
@@ -345,6 +509,8 @@ Commands:
     select                          Select next pending hard/medium task
     select-and-update               Select and mark in_progress (atomic, locked)
     update <id> [status] [notes]    Update task status (locked)
+    mark-done <id> <pr_number>      Mark task as done with PR number (locked)
+    mark-error <id> <error_msg> [step]  Mark task as error (locked)
     status                          Show task distribution
     get <id>                        Get task details
 
@@ -352,14 +518,20 @@ Environment:
     CSV_FILE        CSV path (default: tasks.csv)
     BACKUP_FILE     Backup path (default: tasks.csv.backup)
     LOCK_FILE       Lock file path (default: tasks.csv.lock)
-    LOCK_TIMEOUT    Lock timeout in seconds (default: 60)
+    LOCK_TIMEOUT    Lock timeout in seconds (default: 120)
 
 Examples:
     # Atomic select and update (recommended for parallel workflows)
     TASK=$(./scripts/task-manager.sh select-and-update)
     TASK_ID=$(echo "$TASK" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
     
-    # Update status (thread-safe)
+    # Mark task as done (thread-safe)
+    ./scripts/task-manager.sh mark-done $TASK_ID 1234
+    
+    # Mark task as error (thread-safe)
+    ./scripts/task-manager.sh mark-error $TASK_ID "Build failed" "Phase 3"
+    
+    # Update status (thread-safe, general purpose)
     ./scripts/task-manager.sh update $TASK_ID done "Completed"
     
     # Check distribution
@@ -370,6 +542,8 @@ Parallel Execution:
     ✅ Automatic file locking prevents race conditions
     ✅ Configurable timeout for lock acquisition
     ⚠️  If lock timeout is reached, process will fail gracefully
+    ✅ Single backup file (tasks.csv.backup) - no timestamped backups
+    ✅ Automatic backup before each modification
 
 Performance: ~0.04s vs ~0.5s for Python (12x faster)
 Dependencies: Only awk, sed, grep (standard Unix tools)

@@ -21,7 +21,7 @@ from pathlib import Path
 def get_csv_path():
     """Get the path to tasks.csv (should be in repo root)"""
     script_dir = Path(__file__).parent
-    repo_root = script_dir.parent
+    repo_root = script_dir.parent.parent
     return repo_root / "tasks.csv"
 
 

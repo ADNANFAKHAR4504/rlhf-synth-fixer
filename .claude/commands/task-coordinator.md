@@ -5,9 +5,9 @@ Orchestrates the complete Infrastructure as Code development lifecycle by coordi
 ## ⚠️ CRITICAL: CSV Data Integrity
 
 **BEFORE modifying tasks.csv:**
-1. READ the "CSV File Corruption Prevention" section in `lessons_learnt.md`
-2. READ the complete guide in `.claude/csv_safety_guide.md`
-3. RUN the safety check: `./.claude/scripts/check-csv-safety.sh`
+1. READ "CSV File Corruption Prevention" in `.claude/lessons_learnt.md`
+2. READ complete guide in `.claude/docs/policies/csv_safety_guide.md`
+3. RUN safety check: `./.claude/scripts/check-csv-safety.sh`
 
 ALL CSV operations MUST:
 1. Create backup before ANY modification
@@ -15,7 +15,7 @@ ALL CSV operations MUST:
 3. Validate row counts before and after
 4. Restore from backup if ANY validation fails
 
-**Failure to follow these rules will corrupt the tasks.csv file and lose all task data!**
+**Failure to follow these rules will corrupt tasks.csv and lose all task data!**
 
 ## ⚠️ CRITICAL: Commit Message Requirements
 
@@ -25,7 +25,7 @@ ALL CSV operations MUST:
 - ✅ CORRECT: `feat(synth-{task_id}): add infrastructure for healthcare`
 - ❌ WRONG: `feat(synth-{task_id}): Add infrastructure for healthcare`
 
-The CI/CD pipeline validates commits using `commitlint` and will **FAIL** if the subject starts with uppercase. See Phase 5 for detailed commit instructions.
+The CI/CD pipeline validates commits using `commitlint` and will **FAIL** if subject starts with uppercase. See Phase 5 for detailed instructions.
 
 ## Workflow
 
@@ -37,91 +37,41 @@ Execute these phases in sequence to deliver production-ready IaC:
 
 ### Phase 1.5: Validate Task Selection and Setup
 
-**Goal**: Ensure selected task and generated metadata.json match CLI tool expectations.
+**Goal**: Ensure selected task and metadata.json match CLI tool expectations.
 
-**After task selection and metadata.json generation, validate**:
+After task selection and metadata.json generation, validate:
 
-1. **Metadata Completeness Check**:
-   ```
-   Review metadata.json and confirm:
-   ✓ platform field exists and is valid (cdk/cdktf/cfn/tf/pulumi)
-   ✓ language field exists and matches platform
-     - cdk: ts, js, py, java, go
-     - cdktf: ts, py, go, java
-     - pulumi: ts, js, py, java, go
-     - tf: hcl
-     - cfn: yaml, json
-   ✓ complexity matches CSV difficulty value exactly (medium/hard/expert)
-   ✓ turn_type is single or multi
-   ✓ po_id matches selected task ID
-   ✓ team is "synth"
-   ✓ subtask field exists
-   ✓ startedAt timestamp exists
-   ✓ aws_services field exists (may be empty string)
-   ✓ subject_labels array exists (may be empty)
-   
-   Report status:
-   "✅ metadata.json validated - all required fields present"
-   
-   Or if issues:
-   "❌ metadata.json incomplete - missing fields: {LIST}"
-   ```
+**Validation**: Run Checkpoint A: Metadata Completeness
+- See `.claude/docs/references/validation-checkpoints.md` for field requirements
+- See `.claude/docs/references/shared-validations.md` for field definitions
 
-2. **Platform-Language Compatibility Validation**:
-   ```
-   Extract platform and language from metadata.json
-   
-   Check compatibility matrix:
-   - cdk + (ts|js|py|java|go) ✓
-   - cdktf + (ts|py|go|java) ✓
-   - pulumi + (ts|js|py|java|go) ✓
-   - tf + hcl ✓
-   - cfn + (yaml|json) ✓
-   - Any other combination ✗
-   
-   If invalid:
-   "❌ BLOCKED: Invalid platform-language: {PLATFORM}-{LANGUAGE}"
-   "Valid languages for {PLATFORM}: {LIST}"
-   Stop and fix metadata.json before proceeding.
-   ```
+**Validation**: Run Checkpoint B: Platform-Language Compatibility
+- See `.claude/docs/references/validation-checkpoints.md` for compatibility matrix
+- See `.claude/docs/references/shared-validations.md` for valid combinations
 
-3. **Template Structure Validation**:
-   ```
-   Verify template files were copied:
-   ✓ lib/ directory exists
-   ✓ test/ directory exists
-   ✓ Platform-specific files exist:
-     - ts/js: package.json, tsconfig.json (for ts)
-     - py: Pipfile, setup.py
-     - go: go.mod
-     - java: build.gradle or pom.xml
-     - hcl: (no strict requirements)
-     - yaml/json: (no strict requirements)
-   
-   Report:
-   "✅ Template structure validated for {PLATFORM}-{LANGUAGE}"
-   ```
+**Validation**: Run Checkpoint C: Template Structure
+- See `.claude/docs/references/validation-checkpoints.md` for required files
 
-4. **Task Context Completeness**:
-   ```
-   Verify task context for iac-infra-generator:
-   ✓ Task description is complete (not summarized)
-   ✓ All AWS services mentioned are noted
-   ✓ All constraints are documented
-   ✓ Region requirements identified
-   ✓ Security/compliance requirements captured
-   
-   Remember: Pass COMPLETE task info to iac-infra-generator
-   Do NOT summarize or paraphrase requirements
-   ```
+**Task Context Completeness**:
+```
+Verify task context for iac-infra-generator:
+✓ Task description complete (not summarized)
+✓ All AWS services mentioned
+✓ All constraints documented
+✓ Region requirements identified
+✓ Security/compliance requirements captured
+
+Remember: Pass COMPLETE task info to iac-infra-generator
+Do NOT summarize or paraphrase requirements
+```
 
 **CHECKPOINT**:
 ```
-If all validations pass:
+If all pass:
 - Report: "✅ Phase 1.5: Task setup validated - ready for code generation"
 - Proceed to Phase 2 (iac-infra-generator)
 
-If any validation fails:
+If any fail:
 - Report: "❌ Phase 1.5: Validation FAILED"
 - List specific issues
 - Fix metadata.json or task setup
@@ -130,13 +80,13 @@ If any validation fails:
 
 **Handoff to iac-infra-generator**:
 ```
-When ready, provide to iac-infra-generator:
+Provide:
 - Complete task description (ALL requirements)
 - Background context
 - Specific constraints from task
 - ALL AWS services mentioned
-- Platform: {PLATFORM}
-- Language: {LANGUAGE}
+- Platform: {PLATFORM} (from metadata.json)
+- Language: {LANGUAGE} (from metadata.json)
 - Region: {REGION or default}
 - Complexity: {COMPLEXITY}
 
@@ -155,153 +105,111 @@ Emphasize: "Platform and language are MANDATORY constraints from metadata.json"
 
 **Agent**: `iac-code-reviewer`
 
-- **Cost-Optimized Iteration Logic**: If the `lib/MODEL_FAILURES.md` file reports minimal issues (not big deployment 
-  issues deploying the MODEL_RESPONSE) AND `training_quality` score < 6, consider requesting iac-infra-generator to 
-  add 1 additional AWS feature or service to increase task complexity.
-  - **Maximum 1 additional iteration** to avoid excessive regeneration cycles
-  - Only iterate if the current task would provide limited training value (score < 6)
-  - The goal is to ensure meaningful differences between MODEL_RESPONSE.md and IDEAL_RESPONSE.md
-  - Skip iteration if training_quality >= 6 (already provides good training value)
-- **Cost Impact**: Reducing "always add 2 features" to "conditionally add 1 feature max" saves 5-10% by avoiding 
-  unnecessary iterations
+**Iteration Policy**: See `.claude/docs/policies/iteration-policy.md` for complete decision logic.
+
+**Quick Reference**:
+- Score ≥8: Approve PR
+- Score 6-7: Conditional iteration (if first attempt AND can add significant features)
+- Score <6: Mark as ERROR (insufficient training value)
+- Max iterations: 1 per task
+
+**Decision Authority**: iac-code-reviewer recommends, task-coordinator enforces
 
 ### Phase 5: PR Creation & Task Completion
 
 **Agent**: `task-coordinator` (orchestrates final steps)
 
-**Prerequisites**: 
+**Prerequisites**:
 - Phase 4 (code-reviewer) reports "Ready"
-- GitHub CLI (`gh`) is installed and authenticated
-- Git remote origin is accessible
-- User has write permissions to the repository
+- GitHub CLI (`gh`) installed and authenticated
+- Git remote origin accessible
+- User has write permissions
 
 **Pre-flight Checks**:
+
+**Validation**: Run Checkpoint K: PR Prerequisites
+- See `.claude/docs/references/validation-checkpoints.md` for prerequisite checks
+
+Script reference:
 ```bash
-# Verify gh CLI is installed
-if ! command -v gh &> /dev/null; then
-    echo "❌ GitHub CLI (gh) is not installed"
-    echo "Install from: https://cli.github.com/"
-    exit 1
-fi
-
-# Verify gh CLI is authenticated
-if ! gh auth status &> /dev/null; then
-    echo "❌ GitHub CLI is not authenticated"
-    echo "Run: gh auth login"
-    exit 1
-fi
-
-# Verify we're in the correct worktree directory
-if [[ ! $(pwd) =~ worktree/synth-[^/]+$ ]]; then
-    echo "❌ Not in worktree directory. Current: $(pwd)"
-    exit 1
-fi
-
-echo "✅ Pre-flight checks passed"
+# See .claude/scripts/preflight-checks.sh for implementation
+bash .claude/scripts/preflight-checks.sh
 ```
 
 **Steps**:
 
-1. **Verify you're in worktree directory**:
+1. **Verify worktree location**:
    ```bash
    pwd  # Should end with: /worktree/synth-{task_id}
    ```
 
-2. **Validate training quality meets minimum threshold**:
-   ```bash
-   # Extract training_quality from metadata.json
-   TRAINING_QUALITY=$(jq -r '.training_quality // 0' metadata.json)
-   
-   # Minimum acceptable training quality is 8 (aiming for 9)
-   if [ "$TRAINING_QUALITY" -lt 8 ]; then
-     echo "❌ Training quality ($TRAINING_QUALITY) is below minimum threshold of 8"
-     echo "⚠️ This task needs improvement before PR creation"
-     echo ""
-     echo "Actions required:"
-     echo "1. Review lib/MODEL_FAILURES.md to understand what improvements were made"
-     echo "2. If improvements are minimal, consider:"
-     echo "   - Adding more AWS services or features to increase complexity"
-     echo "   - Implementing additional security best practices"
-     echo "   - Adding monitoring, logging, or observability features"
-     echo "3. Have iac-code-reviewer reassess and update training_quality score"
-     echo "4. Target minimum score: 8, ideal score: 9"
-     exit 1
-   fi
-   
-   echo "✅ Training quality validated: $TRAINING_QUALITY/10"
-   ```
-   
-   **If validation fails**:
-   - Return to Phase 4 (code-reviewer) to improve the implementation
-   - Add meaningful features that increase training value
-   - Ensure MODEL_FAILURES.md demonstrates significant learning opportunities
-   - Re-run validation after improvements
+2. **Validate training quality**:
 
-3. **Stage all changes**:
+**Validation**: Run Checkpoint J: Training Quality Threshold
+- See `.claude/docs/references/validation-checkpoints.md` for threshold check
+- Minimum: 8, Target: 9
+
+```bash
+TRAINING_QUALITY=$(jq -r '.training_quality // 0' metadata.json)
+
+if [ "$TRAINING_QUALITY" -lt 8 ]; then
+  echo "❌ Training quality ($TRAINING_QUALITY) below minimum 8"
+  echo "Actions: Review MODEL_FAILURES.md, add features, re-assess"
+  exit 1
+fi
+
+echo "✅ Training quality validated: $TRAINING_QUALITY/10"
+```
+
+If fails: Return to Phase 4, improve implementation, re-validate
+
+3. **Stage changes**:
    ```bash
    git add .
    git status  # Review what will be committed
    ```
 
 4. **Commit with standardized message**:
-   
-   **CRITICAL COMMIT MESSAGE FORMAT**: The CI/CD pipeline validates commits using `commitlint` with conventional commits format.
-   
-   **Requirements**:
-   - Subject (text after colon and space) MUST start with lowercase letter
-   - Format: `<type>(<scope>): <subject in lowercase>`
-   - The pipeline will FAIL if subject starts with uppercase
-   
-   ```bash
-   # Extract metadata for commit message (training_quality already validated above)
-   TASK_ID=$(jq -r '.po_id' metadata.json)
-   SUBTASK=$(jq -r '.subtask' metadata.json)
-   BACKGROUND=$(jq -r '.background' metadata.json)
-   PLATFORM=$(jq -r '.platform' metadata.json)
-   LANGUAGE=$(jq -r '.language' metadata.json)
-   COMPLEXITY=$(jq -r '.complexity' metadata.json)
-   TRAINING_QUALITY=$(jq -r '.training_quality' metadata.json)
-   
-   # IMPORTANT: Convert SUBTASK to lowercase for subject
-   SUBTASK_LOWER=$(echo "${SUBTASK}" | tr '[:upper:]' '[:lower:]')
-   
-   git commit -m "feat(synth-${TASK_ID}): ${SUBTASK_LOWER}
+
+**CRITICAL FORMAT**: Subject MUST start with lowercase (commitlint validation)
+
+```bash
+# Extract metadata
+TASK_ID=$(jq -r '.po_id' metadata.json)
+SUBTASK=$(jq -r '.subtask' metadata.json)
+BACKGROUND=$(jq -r '.background' metadata.json)
+PLATFORM=$(jq -r '.platform' metadata.json)
+LANGUAGE=$(jq -r '.language' metadata.json)
+COMPLEXITY=$(jq -r '.complexity' metadata.json)
+TRAINING_QUALITY=$(jq -r '.training_quality' metadata.json)
+
+# Convert SUBTASK to lowercase for subject
+SUBTASK_LOWER=$(echo "${SUBTASK}" | tr '[:upper:]' '[:lower:]')
+
+git commit -m "feat(synth-${TASK_ID}): ${SUBTASK_LOWER}
 
 Platform: ${PLATFORM}-${LANGUAGE}
 Complexity: ${COMPLEXITY}
 Training Quality: ${TRAINING_QUALITY}/10
 
 Task ID: ${TASK_ID}"
-   ```
-   
-   **Example CORRECT commit**:
-   ```
-   feat(synth-{task_id}): add infrastructure implementation
-   ```
-   
-   **Example WRONG commit** (will fail CI):
-   ```
-   feat(synth-{task_id}): Add infrastructure implementation  # Capital 'A' will fail
-   ```
+```
 
-5. **Push branch to remote**:
+**Example**:
+- ✅ CORRECT: `feat(synth-123): add infrastructure implementation`
+- ❌ WRONG: `feat(synth-123): Add infrastructure implementation` (fails CI)
+
+5. **Push branch**:
    ```bash
    BRANCH_NAME=$(git branch --show-current)
    git push origin ${BRANCH_NAME}
    ```
 
-6. **Create PR using gh CLI**:
+6. **Create PR**:
    ```bash
-   # Get AWS services count
    AWS_SERVICES_COUNT=$(jq -r '.aws_services | length' metadata.json)
-   
-   # CRITICAL: Verify metadata fields for PR body
-   # Complexity must match the value from tasks.csv (medium/hard/expert)
-   # Complexity is already extracted at line 154 from metadata.json
-   
-   # Create PR with error handling
-   # PR Title Format: synth-{TASK_ID} {SUBTASK} (lowercase "synth")
-   if gh pr create \
+
+   gh pr create \
      --title "synth-${TASK_ID} {SUBTASK}" \
      --body "**Platform**: ${PLATFORM}-${LANGUAGE}
 **Complexity**: ${COMPLEXITY}
@@ -321,7 +229,7 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
 ### PR Checklist
 - [x] Code includes appropriate test coverage
 - [x] Code includes proper integration tests
-- [x] Code follows the style guidelines
+- [x] Code follows style guidelines
 - [x] Self-review completed
 - [x] Code properly commented
 - [x] Prompt follows proper markdown format
@@ -332,119 +240,35 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
      --head ${BRANCH_NAME} \
      --label "synth" \
      --label "automated" \
-     --label "complexity-${COMPLEXITY}"; then
-     echo "✅ PR created successfully"
-   else
-     echo "❌ Failed to create PR. Checking if gh CLI is authenticated..."
-     gh auth status
-     echo "ERROR: PR creation failed. Task status will be updated to 'error'."
-     exit 1
-   fi
+     --label "complexity-${COMPLEXITY}"
    ```
 
-7. **Capture PR number and validate**:
+7. **Capture PR number**:
    ```bash
-   # Capture PR number with retry logic
    PR_NUMBER=$(gh pr view ${BRANCH_NAME} --json number -q .number)
-   
+
    if [ -z "$PR_NUMBER" ]; then
      echo "❌ Failed to capture PR number"
      exit 1
    fi
-   
+
    echo "✅ Created PR #${PR_NUMBER}"
-   
-   # Verify PR was created successfully
    PR_URL=$(gh pr view ${PR_NUMBER} --json url -q .url)
    echo "📎 PR URL: ${PR_URL}"
    ```
 
-8. **Update CSV status to "done"**:
+8. **Update CSV status**:
    ```bash
-   # Return to main repo to update CSV
-   cd ../..
-   
-   # Verify we're in the correct directory
+   cd ../..  # Return to main repo
+
    if [ ! -f "tasks.csv" ]; then
-     echo "❌ ERROR: tasks.csv not found. Current directory: $(pwd)"
+     echo "❌ ERROR: tasks.csv not found at $(pwd)"
      exit 1
    fi
-   
-   # Update tasks.csv (using Python for safe CSV handling with backup and validation)
-   python3 << 'PYTHON_SCRIPT'
-import csv
-import sys
-import shutil
-import os
 
-task_id = "${TASK_ID}"
-pr_number = "${PR_NUMBER}"
+   # Thread-safe CSV update (uses file locking for parallel execution)
+   ./.claude/scripts/task-manager.sh mark-done "${TASK_ID}" "${PR_NUMBER}"
 
-try:
-    # CRITICAL: Create backup before modifying
-    shutil.copy2('tasks.csv', 'tasks.csv.backup')
-    
-    # Read CSV
-    rows = []
-    updated = False
-    original_count = 0
-    with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
-        fieldnames = reader.fieldnames
-        for row in reader:
-            original_count += 1
-            if row['task_id'] == task_id and row['status'] == 'in_progress':
-                row['status'] = 'done'
-                row['trainr_notes'] = f"Completed - PR #{pr_number}"
-                updated = True
-            rows.append(row)
-    
-    # VALIDATION: Ensure we haven't lost any rows
-    if len(rows) != original_count:
-        print(f"❌ ERROR: Row count mismatch. Original: {original_count}, Current: {len(rows)}")
-        print("Restoring from backup...")
-        shutil.copy2('tasks.csv.backup', 'tasks.csv')
-        sys.exit(1)
-    
-    # VALIDATION: Ensure we have all fieldnames
-    if not fieldnames or len(fieldnames) == 0:
-        print("❌ ERROR: No fieldnames found in CSV")
-        print("Restoring from backup...")
-        shutil.copy2('tasks.csv.backup', 'tasks.csv')
-        sys.exit(1)
-
-    # Write back
-    if updated:
-        with open('tasks.csv', 'w', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(rows)
-        
-        # VALIDATION: Verify the write was successful
-        verify_count = 0
-        with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                verify_count += 1
-        
-        if verify_count != original_count:
-            print(f"❌ ERROR: Write verification failed. Expected {original_count} rows, found {verify_count}")
-            print("Restoring from backup...")
-            shutil.copy2('tasks.csv.backup', 'tasks.csv')
-            sys.exit(1)
-        
-        print(f"✅ Updated task {task_id} status to 'done' with PR #{pr_number} ({verify_count} total rows preserved)")
-    else:
-        print(f"⚠️ Task {task_id} not found or not in 'in_progress' status")
-        sys.exit(1)
-except Exception as e:
-    print(f"❌ ERROR updating CSV: {e}")
-    print("Restoring from backup...")
-    if os.path.exists('tasks.csv.backup'):
-        shutil.copy2('tasks.csv.backup', 'tasks.csv')
-    sys.exit(1)
-PYTHON_SCRIPT
-   
    if [ $? -ne 0 ]; then
      echo "❌ Failed to update tasks.csv"
      exit 1
@@ -453,356 +277,281 @@ PYTHON_SCRIPT
 
 9. **Cleanup worktree**:
    ```bash
-   # Remove worktree (keeps branch for PR)
    git worktree remove worktree/synth-${TASK_ID} --force
-   
-   # Verify cleanup
    git worktree list
    echo "✅ Worktree cleaned up. Branch synth-${TASK_ID} remains for PR."
    ```
 
 10. **Final validation**:
-   ```bash
-   # Verify PR was created
-   gh pr view ${PR_NUMBER} --json state,url,title
-   
-   # Verify worktree is cleaned up
-   if [ ! -d "worktree/synth-${TASK_ID}" ]; then
-     echo "✅ Cleanup successful"
-   else
-     echo "⚠️ Worktree directory still exists"
-   fi
-   ```
+    ```bash
+    gh pr view ${PR_NUMBER} --json state,url,title
 
-**Note**: Branch `synth-{task_id}` remains active for the PR. GitHub will auto-delete it after PR merge.
+    if [ ! -d "worktree/synth-${TASK_ID}" ]; then
+      echo "✅ Cleanup successful"
+    else
+      echo "⚠️ Worktree directory still exists"
+    fi
+    ```
 
+**Note**: Branch `synth-{task_id}` remains for PR. GitHub auto-deletes after merge.
 
 ### Setup Worktree
 
 **CRITICAL: Strict worktree structure enforcement**
 
-1. **Create git worktree with EXACT naming convention**:
+1. **Create git worktree** (EXACT naming):
    ```bash
-   # REQUIRED format - do not deviate from this:
+   # REQUIRED format - do not deviate:
    git worktree add worktree/synth-{task_id} -b synth-{task_id}
    ```
-   
+
    **Naming Rules**:
    - Directory: MUST be `worktree/synth-{task_id}` (with forward slash)
-   - Branch: MUST be `synth-{task_id}` (matching the directory name)
-   - ❌ WRONG: `worktree-synth-{task_id}`, `worktrees/`, `worktree-{task_id}`, `IAC-synth-{task_id}`
+   - Branch: MUST be `synth-{task_id}` (matching directory name)
+   - ❌ WRONG: `worktree-synth-{task_id}`, `worktrees/`, `IAC-synth-{task_id}`
    - ✅ CORRECT: `worktree/synth-{task_id}`
 
-2. **Immediately change to worktree directory**:
+2. **Immediately change directory**:
    ```bash
    cd worktree/synth-{task_id}
    ```
-   
-   **From this point forward, ALL commands run from this directory unless explicitly stated otherwise.**
 
-3. **Validate worktree setup before proceeding**:
+   **From this point forward, ALL commands run from this directory unless explicitly stated.**
+
+3. **Validate worktree setup**:
    ```bash
-   # Verify correct location
+   # Verify location
    pwd  # Must end with: /worktree/synth-{task_id}
-   
-   # Verify correct branch
+
+   # Verify branch
    CURRENT_BRANCH=$(git branch --show-current)
    if [ "$CURRENT_BRANCH" != "synth-{task_id}" ]; then
      echo "❌ ERROR: Wrong branch. Expected synth-{task_id}, got $CURRENT_BRANCH"
      exit 1
    fi
-   
-   # Verify .claude instructions are present
+
+   # Verify .claude instructions present
    if [ ! -f .claude/commands/task-coordinator.md ]; then
-     echo "❌ ERROR: .claude instructions not found. Worktree not created from main branch."
+     echo "❌ ERROR: .claude instructions not found"
      exit 1
    fi
-   
-   echo "✅ Worktree structure validated successfully"
+
+   echo "✅ Worktree structure validated"
    ```
-   
-   **If validation fails, STOP immediately and report BLOCKED status.**
 
-4. Must read `.claude/platform_enforcement.md` and transform the task to use the platform and language declared in that file.
-   instead of the platform+language declared in the task description.
+   **If validation fails, STOP immediately and report BLOCKED.**
 
-5. If its a multi-cloud task, notify the user and stop every execution. This project is only for AWS tasks.
+4. **Read platform enforcement**:
+   - Must read `.claude/platform_enforcement.md`
+   - Transform task to use platform+language declared in that file
+   - Override platform+language from task description if different
+
+5. **Multi-cloud check**:
+   - If multi-cloud task, notify user and STOP
+   - This project is AWS-only
 
 6. **Working Directory Context**:
-   - You are now in: `worktree/synth-{task_id}/`
-   - All file paths are relative to this directory
-   - All sub-agents will work in this directory
-   - Do not return to main repo until Phase 5 (PR creation)
-7. **Generate metadata.json with ALL required fields** (CRITICAL - validation will fail if any field is missing):
-    - If `metadata.json` is not present, extract platform and language from the selected task
-    - **CRITICAL**: Platform and language from CSV are MANDATORY constraints:
-      - CSV specifies `platform: Pulumi` and `language: Go` → metadata.json MUST have `"platform": "pulumi", "language": "go"`
-      - CSV specifies `platform: CDK` and `language: TypeScript` → metadata.json MUST have `"platform": "cdk", "language": "ts"`
-      - CSV specifies `platform: Terraform` and `language: HCL` → metadata.json MUST have `"platform": "tf", "language": "hcl"`
-      - **CSV specifies `language: Python` or `language: py` → metadata.json MUST have `"language": "py"` (normalize "python" to "py")**
-      - **Do NOT change or override these values** - they are fixed requirements
-    - Validate `cli/create-task.ts` exists before mimicking its actions
-    - If `cli/create-task.ts` is missing, use fallback platform detection logic:
-    - Determine platform (cdk, cdktf, cfn, tf, pulumi) from task description
-    - Determine language (ts, py, yaml, json, hcl, go) from task description
-    - **CRITICAL**: Normalize language value: if "python" → use "py"
-    - Prefer TypeScript for tests only, avoid Python where possible (unless the project is in python e.g. pulumi-py, cdktf-py)
-    - **CRITICAL**: Set `complexity` field to EXACT value from CSV `difficulty` column (NOT "difficulty")
-      - Read the `difficulty` value from tasks.csv for the selected task
-      - Valid values: "medium", "hard", "expert" (must match CSV exactly)
-      - This value will be displayed in the PR body - ensure accuracy
-    - Set `team` as "synth" (REQUIRED - validation will fail without this)
-    - Set `turn_type` as "single" (REQUIRED - validation will fail without this)
-    - Set `startedAt` as current timestamp using `date -Iseconds` (REQUIRED - validation will fail without this)
-    - **Extract `subtask`, `background`, and `subject_labels` from tasks.csv** (REQUIRED - validation will fail without these):
-      - Read the selected task row from tasks.csv
-      - Get the `subtask` value from the subtask column
-      - Get the `background` value from the background column (REQUIRED for PR title in Phase 5)
-      - Get the `subject_labels` value from the subject_labels column (parse as JSON array)
-      - All three fields MUST be included in metadata.json
-    - Do not add more fields to metadata.json than the ones shown in the example below
-    - Validate `templates/` directory exists and contains required platform template
-    - If template missing, report BLOCKED status with specific template needed
-    - Copy appropriate template from `templates/` directory matching the platform-language from CSV
-    - Generate `metadata.json` with ALL required fields. Set `po_id` field to the task_id value. Example:
+   - Now in: `worktree/synth-{task_id}/`
+   - All file paths relative to this directory
+   - All sub-agents work in this directory
+   - Do not return to main repo until Phase 5
 
-   ```json
-    {
-       "platform": "cdk",
-       "language": "ts",
-       "complexity": "hard",
-       "turn_type": "single",
-       "po_id": "trainr97",
-       "team": "synth",
-       "startedAt": "2025-08-12T13:19:10-05:00",
-       "subtask": "Application Deployment",
-       "background": "A manufacturing company needs to modernize their factory monitoring system...",
-       "subject_labels": ["CI/CD Pipeline", "Security Configuration as Code"]
-     }
-   ```
+7. **Generate metadata.json** (CRITICAL - all fields required):
 
-   - **Validate metadata.json immediately after creation**:
-     - Run: `bash scripts/detect-metadata.sh` to verify all required fields are present
-     - If validation fails, fix the metadata.json before proceeding
-     - Common errors: missing `team`, missing `startedAt`, missing `subtask`, missing `background`, missing `subject_labels`, using `difficulty` instead of `complexity`
-   - **CRITICAL**: The `background` field is REQUIRED and will be used as the PR title in Phase 5
-   - If the deployment needs to be done in a specific region, create the file `lib/AWS_REGION` with the
-     region name. e.g: `echo "us-east-1" > lib/AWS_REGION`
+If `metadata.json` not present:
+- Extract platform and language from selected task
+- **CRITICAL**: Platform and language from CSV are MANDATORY constraints (see shared-validations.md)
+- Validate `cli/create-task.ts` exists before mimicking actions
+- If missing, use fallback platform detection logic
+- Determine platform (cdk, cdktf, cfn, tf, pulumi) from task
+- Determine language (ts, py, yaml, json, hcl, go) from task
+- **CRITICAL**: Normalize "python" → "py"
+- Prefer TypeScript for tests (unless project is Python-based)
+- **CRITICAL**: Set `complexity` = EXACT value from CSV `difficulty` column (NOT "difficulty")
+  - Valid: "medium", "hard", "expert" (must match CSV exactly)
+- Set `team` = "synth" (REQUIRED)
+- Set `turn_type` = "single" (REQUIRED)
+- Set `startedAt` = current timestamp: `date -Iseconds` (REQUIRED)
+- **Extract from tasks.csv** (REQUIRED):
+  - `subtask` from subtask column
+  - `background` from background column (REQUIRED for PR title in Phase 5)
+  - `subject_labels` from subject_labels column (parse as JSON array)
+- Do not add more fields than shown in example
+- Validate `templates/` directory exists with required platform template
+- If missing, report BLOCKED with specific template needed
+- Copy appropriate template from `templates/` matching platform-language from CSV
+- Set `po_id` = task_id value
 
-### Context Optimization (Cost Reduction Strategy)
+Example metadata.json:
+```json
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr97",
+  "team": "synth",
+  "startedAt": "2025-08-12T13:19:10-05:00",
+  "subtask": "Application Deployment",
+  "background": "A manufacturing company needs to modernize...",
+  "subject_labels": ["CI/CD Pipeline", "Security Configuration"]
+}
+```
 
-**Purpose**: Minimize redundant file reads and context loading across agent phases.
+**Validate immediately**:
+```bash
+bash scripts/detect-metadata.sh
+```
+
+If fails, fix before proceeding. Common errors: missing team, startedAt, subtask, background, subject_labels, using "difficulty" instead of "complexity"
+
+**CRITICAL**: `background` field REQUIRED for PR title in Phase 5
+
+**Region setup** (if needed):
+```bash
+echo "us-east-1" > lib/AWS_REGION  # or specified region
+```
+
+### Context Optimization (Cost Reduction)
+
+**Purpose**: Minimize redundant file reads and context loading.
 
 **Guidelines for All Sub-Agents**:
 
 1. **Cache Frequently Accessed Files**:
-   - Read `metadata.json` once and reference the cached content across operations
-   - Template files should be loaded once per phase, not repeatedly
-   - Use file modification timestamps to detect changes before re-reading
+   - Read `metadata.json` once, reference cached content
+   - Template files loaded once per phase
+   - Use file modification timestamps to detect changes
 
-2. **Avoid Redundant File Operations**:
-   - Before reading a file, check if you already have its current content
-   - Use `ls -l --time-style=full-iso` to check modification times
-   - Skip re-reading files that haven't changed since last access
+2. **Avoid Redundant Operations**:
+   - Check if file content already available before re-reading
+   - Use `ls -l --time-style=full-iso` for modification times
+   - Skip re-reading unchanged files
 
 3. **Efficient Context Management**:
-   - When comparing files (e.g., IDEAL_RESPONSE vs TapStack), check file sizes first
-   - Use checksums (md5sum/sha256sum) for quick equality checks before detailed comparison
-   - Load only necessary portions of large files when possible
+   - Check file sizes before comparing (e.g., IDEAL_RESPONSE vs TapStack)
+   - Use checksums (md5sum/sha256sum) for quick equality checks
+   - Load only necessary portions of large files
 
 4. **Cross-Phase Communication**:
-   - Each phase should document what files it modified
-   - Next phase can skip validation of unmodified files
+   - Document modified files per phase
+   - Next phase skips validation of unmodified files
    - Share key metadata across phases without re-extraction
 
-**Cost Impact**: These optimizations reduce token usage by 2-4% across all phases by eliminating redundant reads.
+**Cost Impact**: 2-4% token reduction by eliminating redundant reads
 
-8. Install dependencies inside the worktree with error handling:
-    - If language is py: `pipenv install --dev --ignore-pipfile`
-    - If language is not py: `npm ci`
-    - If installation fails, report BLOCKED status with error details
+8. **Install dependencies**:
+```bash
+# Python: pipenv install --dev --ignore-pipfile
+# Not Python: npm ci
+# If fails, report BLOCKED with error details
+```
+
 9. **Pass complete task context to iac-infra-generator**:
-    - Provide full task description including:
-      - Background context
-      - Problem statement
-      - Environment/technology requirements
-      - Specific constraints (region, security, compliance, etc.)
-      - ALL AWS services mentioned
-      - Platform and language from metadata.json (MANDATORY)
-    - **Do NOT summarize or paraphrase** - pass complete requirements
-    - Generator MUST honor platform/language from metadata.json
-10. Use the selected task description for the workflow. Start the workflow.
-    - Report final status before handoff to next agent
+- Full task description including:
+  - Background context
+  - Problem statement
+  - Environment/technology requirements
+  - Specific constraints (region, security, compliance)
+  - ALL AWS services mentioned
+  - Platform and language from metadata.json (MANDATORY)
+- **Do NOT summarize or paraphrase** - pass complete requirements
+- Generator MUST honor platform/language from metadata.json
 
-Important: Do not generate the `/lib/PROMPT.md` code, delegate that to the subagent. Send the COMPLETE task information to the generator agent including all constraints.
+10. **Use selected task description for workflow. Start workflow.**
+    - Report final status before handoff
 
+**Important**: Do not generate `/lib/PROMPT.md` - delegate to subagent. Send COMPLETE task info including all constraints.
 
 ## Task Completion Requirements
-Important: If, for any reason, you're unable to finish the task. set the task status in the csv as "error" and put the error
-information inside the trainr_notes column of that task.
+
+If unable to finish task: set task status in CSV as "error" and put error info in trainr_notes column.
 
 ### Error Handling for PR Creation Failures
 
-If PR creation fails at any step:
+If PR creation fails:
 
-1. **Capture the error details**:
+1. **Capture error**:
    ```bash
-   ERROR_MESSAGE="<detailed error description>"
-   ERROR_STEP="<which step failed: commit/push/pr-create/csv-update>"
+   ERROR_MESSAGE="<detailed error>"
+   ERROR_STEP="<step: commit/push/pr-create/csv-update>"
    ```
 
-2. **Update CSV with error status**:
+2. **Update CSV with error**:
    ```bash
-   cd ../../  # Return to main repo if not already there
-   
-   python3 << 'PYTHON_SCRIPT'
-import csv
-import sys
-import shutil
-import os
+   cd ../../  # Return to main repo if needed
 
-task_id = "${TASK_ID}"
-error_msg = "${ERROR_MESSAGE}"
-error_step = "${ERROR_STEP}"
-
-try:
-    # CRITICAL: Create backup before modifying
-    shutil.copy2('tasks.csv', 'tasks.csv.backup')
-    
-    rows = []
-    updated = False
-    original_count = 0
-    with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
-        fieldnames = reader.fieldnames
-        for row in reader:
-            original_count += 1
-            if row['task_id'] == task_id and row['status'] == 'in_progress':
-                row['status'] = 'error'
-                row['trainr_notes'] = f"PR creation failed at {error_step}: {error_msg}"
-                updated = True
-            rows.append(row)
-    
-    # VALIDATION: Ensure we haven't lost any rows
-    if len(rows) != original_count:
-        print(f"❌ ERROR: Row count mismatch. Original: {original_count}, Current: {len(rows)}")
-        print("Restoring from backup...")
-        shutil.copy2('tasks.csv.backup', 'tasks.csv')
-        sys.exit(1)
-    
-    # VALIDATION: Ensure we have all fieldnames
-    if not fieldnames or len(fieldnames) == 0:
-        print("❌ ERROR: No fieldnames found in CSV")
-        print("Restoring from backup...")
-        shutil.copy2('tasks.csv.backup', 'tasks.csv')
-        sys.exit(1)
-
-    if updated:
-        with open('tasks.csv', 'w', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(rows)
-        
-        # VALIDATION: Verify the write was successful
-        verify_count = 0
-        with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                verify_count += 1
-        
-        if verify_count != original_count:
-            print(f"❌ ERROR: Write verification failed. Expected {original_count} rows, found {verify_count}")
-            print("Restoring from backup...")
-            shutil.copy2('tasks.csv.backup', 'tasks.csv')
-            sys.exit(1)
-        
-        print(f"✅ Updated task {task_id} status to 'error' ({verify_count} total rows preserved)")
-    else:
-        print(f"⚠️ Task {task_id} not found or not in 'in_progress' status")
-except Exception as e:
-    print(f"❌ ERROR updating CSV: {e}")
-    print("Restoring from backup...")
-    if os.path.exists('tasks.csv.backup'):
-        shutil.copy2('tasks.csv.backup', 'tasks.csv')
-    sys.exit(1)
-PYTHON_SCRIPT
+   # Thread-safe error marking (uses file locking)
+   ./.claude/scripts/task-manager.sh mark-error "${TASK_ID}" "${ERROR_MESSAGE}" "${ERROR_STEP}"
    ```
 
-3. **Report to user with recovery options**:
+3. **Report with recovery options**:
    ```
    ❌ Task ${TASK_ID} failed at ${ERROR_STEP}
    Error: ${ERROR_MESSAGE}
-   
-   Recovery options:
-   - For auth issues: Run 'gh auth login' and retry Phase 5
-   - For network issues: Check connectivity and retry
-   - For permission issues: Verify repository write access
-   - For git issues: Check branch state and remote status
+
+   Recovery:
+   - Auth issues: Run 'gh auth login' and retry Phase 5
+   - Network issues: Check connectivity and retry
+   - Permission issues: Verify repository write access
+   - Git issues: Check branch state and remote status
    ```
 
-Additional:
-- If you find an issue in the task description that blocks you from deploying the infrastructure properly, and its an issue
-  that can block future tasks, document it in `.claude/lessons_learnt.md`
+**Additional**:
+- If issue in task description blocks deployment and can block future tasks, document in `.claude/lessons_learnt.md`
 
 ## Status Reporting Requirements
-You must always report in each log, the taskId you're working on and the region specified for deployment (default is us-east-1).
 
-All subagents MUST report their execution status to the coordinator using the following format:
+Always report in each log: taskId and deployment region (default: us-east-1).
 
-### Status Format
+All subagents MUST report using this format:
 
 ```markdown
 **AGENT STATUS**: [PHASE] - [STATUS] - [CURRENT_STEP]
 **TASK**: [Specific task being worked on]
 **PROGRESS**: [X/Y] steps completed
-**NEXT ACTION**: [Description of next planned action]
-**ISSUES**: [Any blocking issues or errors encountered - NONE if no issues]
-**BLOCKED**: [YES/NO - If YES, explain blocking reason and required resolution]
+**NEXT ACTION**: [Next planned action]
+**ISSUES**: [Blocking issues or NONE]
+**BLOCKED**: [YES/NO - If YES, explain and resolution needed]
 ```
 
-### Required Status Updates
+**Required Updates**:
+- Start of execution
+- Step completion
+- Error encounters
+- Blocking situations
+- Phase completion
 
-Each sub-agent must provide status updates at these key points:
-
-- **Start of execution**: Report phase initiation with task description
-- **Step completion**: Report after each major workflow step with current task
-- **Error encounters**: Immediate status report when errors occur with blocking status
-- **Blocking situations**: Report when unable to proceed and what's needed to continue
-- **Phase completion**: Final status with outcomes and handoff details
-
-### Agent-Specific Reporting
-Please refer to the specific agent's documentation for reporting requirements.
+See `.claude/docs/references/error-handling.md` for detailed status reporting patterns.
 
 ## Usage
 
-When presented with an IaC task:
+When presented with IaC task:
 
-1. **Task Selection**: Use `iac-task-selector` to choose the task
-2. **Generate**: Use `iac-infra-generator` to create initial implementation
-3. **Validate**: Use `iac-infra-qa-trainer` to test and perfect the solution
-4. **Review**: Use `iac-code-reviewer` to ensure production readiness
+1. **Task Selection**: Use `iac-task-selector`
+2. **Generate**: Use `iac-infra-generator` for initial implementation
+3. **Validate**: Use `iac-infra-qa-trainer` to test and perfect solution
+4. **Review**: Use `iac-code-reviewer` for production readiness
 
 ### Coordination Protocol
 
 The coordinator will:
-
-- Monitor all sub-agent status reports for task progress and blocking issues
-- Intervene immediately when agents report BLOCKED: YES status
-- Facilitate resolution of blocking issues by providing additional context or resources
-- Ensure proper handoff between phases with complete task and issue status
-- Maintain overall workflow visibility with real-time status tracking
-- Escalate to user when multiple agents report blocking issues that require external resolution
+- Monitor sub-agent status reports
+- Intervene when BLOCKED: YES reported
+- Facilitate resolution by providing context/resources
+- Ensure proper handoff between phases
+- Maintain workflow visibility
+- Escalate to user when multiple agents blocked requiring external resolution
 
 ### Issue Resolution Process
 
-When sub-agents report issues or blocking conditions:
+When sub-agents report issues:
 
-1. **Non-blocking issues**: Coordinator logs the issue and monitors for escalation
-2. **Blocking issues**: Coordinator immediately:
-   - Analyzes the blocking condition reported by the sub-agent
-   - Attempts automated resolution (file access, dependency installation, etc.)
-   - If unable to resolve, provides specific guidance to the sub-agent
-   - Escalates to user with detailed issue description if automated resolution fails
+1. **Non-blocking**: Log issue, monitor for escalation
+2. **Blocking**: Coordinator immediately:
+   - Analyzes blocking condition
+   - Attempts automated resolution (file access, dependencies, etc.)
+   - Provides specific guidance if unable to auto-resolve
+   - Escalates to user with detailed description if automated resolution fails
 
-This coordinated approach ensures robust, tested, and compliant infrastructure code with full execution
-transparency and proactive issue resolution.
+This approach ensures robust, tested, compliant infrastructure code with full transparency and proactive issue resolution.

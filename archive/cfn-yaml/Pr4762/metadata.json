@@ -1,0 +1,43 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350142",
+  "team": "4",
+  "startedAt": "2025-10-17T17:27:20.000Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "training_quality": 8,
+  "background": "The task involves deploying a scalable and secure AWS environment using infrastructure as code. Familiarity with AWS network architecture, EC2, RDS, S3 configurations, and CloudFormation syntax in YAML is necessary.",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Elastic IP",
+    "Route Table",
+    "Security Group",
+    "EC2",
+    "Auto Scaling",
+    "Load Balancer",
+    "Target Group",
+    "Listener",
+    "RDS",
+    "DB Subnet Group",
+    "S3",
+    "IAM",
+    "CloudWatch Logs",
+    "VPC Flow Logs",
+    "Parameter Store",
+    "Secrets Manager"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
+}
