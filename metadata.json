@@ -1,5 +1,5 @@
 {
-  "platform": "CDKTF",
+  "platform": "cdktf",
   "language": "ts",
   "complexity": "hard",
   "turn_type": "single",
