@@ -208,6 +208,9 @@
       "Properties": {
         "Engine": "aurora-postgresql",
         "EngineMode": "provisioned",
+        "MasterUsername": {
+          "Ref": "DatabaseMasterUsername"
+        },
         "MasterUserSecret": {
           "SecretArn": {
             "Ref": "AuroraSecret"
