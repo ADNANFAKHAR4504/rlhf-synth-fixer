@@ -108,17 +108,35 @@ def get_recent_lambda_logs(function_name: str, minutes: int = 5) -> List[str]:
 
 
 def wait_for_ssm_command(command_id: str, instance_id: str, max_wait_seconds: int = 60) -> Dict[str, Any]:
-    """Wait for SSM command to complete."""
+    """Wait for SSM command to complete with detailed logging."""
     start_time = time.time()
+    last_status = None
+    
+    print(f"  [SSM] Waiting for command to complete...")
+    print(f"    Command ID: {command_id[:20]}...")
+    print(f"    Instance: {instance_id}")
+    print(f"    Timeout: {max_wait_seconds}s")
     
     while time.time() - start_time < max_wait_seconds:
+        elapsed = int(time.time() - start_time)
         try:
             result = ssm_client.get_command_invocation(
                 CommandId=command_id,
                 InstanceId=instance_id
             )
             
+            current_status = result['Status']
+            if current_status != last_status:
+                print(f"    [{elapsed}s] Status: {current_status}")
+                last_status = current_status
+            
             if result['Status'] in ['Success', 'Failed', 'Cancelled', 'TimedOut']:
+                if result['Status'] == 'Success':
+                    print(f"    [SUCCESS] Command completed in {elapsed}s")
+                else:
+                    print(f"    [FAILED] Command status: {result['Status']}")
+                    if result.get('StandardErrorContent'):
+                        print(f"    Error: {result['StandardErrorContent'][:200]}")
                 return result
             
             time.sleep(2)
@@ -126,12 +144,14 @@ def wait_for_ssm_command(command_id: str, instance_id: str, max_wait_seconds: in
             if e.response['Error']['Code'] == 'InvocationDoesNotExist':
                 time.sleep(2)
                 continue
+            print(f"    [ERROR] AWS API error: {str(e)}")
             raise
     
+    print(f"    [TIMEOUT] Command did not complete within {max_wait_seconds}s")
     raise TimeoutError(f"SSM command {command_id} did not complete within {max_wait_seconds} seconds")
 
 
-def wait_for_asg_instances(asg_name: str, min_instances: int = 1, max_wait_seconds: int = 180) -> List[Dict[str, Any]]:
+def wait_for_asg_instances(asg_name: str, min_instances: int = 1, max_wait_seconds: int = 90) -> List[Dict[str, Any]]:
     """
     Wait for ASG to have at least min_instances in InService state.
     
@@ -142,10 +162,13 @@ def wait_for_asg_instances(asg_name: str, min_instances: int = 1, max_wait_secon
     last_status = None
     check_count = 0
     
-    print(f"\n[WAIT] Waiting for ASG instances to be ready...")
-    print(f"  ASG: {asg_name}")
+    print(f"\n{'='*70}")
+    print(f"[WAIT] Waiting for ASG instances to be ready...")
+    print(f"{'='*70}")
+    print(f"  ASG Name: {asg_name}")
     print(f"  Minimum instances required: {min_instances}")
     print(f"  Timeout: {max_wait_seconds}s")
+    print(f"  Region: {PRIMARY_REGION}")
     
     while time.time() - start_time < max_wait_seconds:
         check_count += 1
@@ -187,11 +210,13 @@ def wait_for_asg_instances(asg_name: str, min_instances: int = 1, max_wait_secon
             if len(instances) == 0 and elapsed > 60:
                 print(f"  [WARNING] ({elapsed}s): No instances launching after 60s")
                 print(f"    ASG Desired: {asg['DesiredCapacity']}, Min: {asg['MinSize']}, Max: {asg['MaxSize']}")
+                print(f"    Launch Template: Check user data script and IAM permissions")
             
             if len(unhealthy) > 0:
                 print(f"  [WARNING] ({elapsed}s): {len(unhealthy)} unhealthy instance(s) detected")
                 for inst in unhealthy:
                     print(f"    - Instance {inst['InstanceId']}: {inst['LifecycleState']}/{inst['HealthStatus']}")
+                    print(f"      Tip: Check /var/log/user-data.log on instance for errors")
             
             # Wait before next check (exponential backoff up to 10s)
             wait_interval = min(2 ** min(check_count // 3, 3), 10)
@@ -202,9 +227,15 @@ def wait_for_asg_instances(asg_name: str, min_instances: int = 1, max_wait_secon
             time.sleep(5)
     
     # Timeout reached
-    print(f"  [TIMEOUT] ({max_wait_seconds}s): Instances not ready")
-    print(f"    Final status: {last_status}")
-    print(f"    Note: Tests will pass gracefully, instances may still be initializing")
+    elapsed = int(time.time() - start_time)
+    print(f"\n{'='*70}")
+    print(f"[TIMEOUT] Failed to get {min_instances} healthy instance(s) within {max_wait_seconds}s")
+    print(f"{'='*70}")
+    print(f"  Total time elapsed: {elapsed}s")
+    print(f"  Final status: {last_status}")
+    print(f"  ASG: {asg_name}")
+    print(f"  Region: {PRIMARY_REGION}")
+    print(f"{'='*70}\n")
     return []
 
 
@@ -277,6 +308,55 @@ class TestServiceLevelInteractions(BaseIntegrationTest):
     Service-level tests - PERFORM ACTUAL ACTIONS within a single AWS service.
     Maps to PROMPT.md: Individual service functionality with real operations.
     """
+
+    def test_asg_instances_available(self):
+        """
+        CRITICAL TEST: Verify ASG has launched instances successfully.
+        Maps to PROMPT.md: "Auto Scaling Group for EC2 instances"
+        
+        This test FAILS HARD if instances aren't available to stop wasteful CI/CD runs.
+        All other tests depend on this passing.
+        """
+        self.skip_if_output_missing('auto_scaling_group_name')
+        
+        asg_name = OUTPUTS['auto_scaling_group_name']
+        
+        print(f"\n{'='*70}")
+        print(f"CRITICAL TEST: ASG Instance Availability")
+        print(f"{'='*70}")
+        print(f"This test MUST pass for other tests to run successfully.")
+        print(f"If this fails, CI/CD will stop to avoid wasting resources.\n")
+        
+        # Wait for instances with detailed logging
+        instances = wait_for_asg_instances(asg_name, min_instances=1, max_wait_seconds=90)
+        
+        # FAIL HARD if no instances
+        self.assertGreater(
+            len(instances), 0,
+            f"\n\n{'='*70}\n"
+            f"CRITICAL FAILURE: ASG has not launched any instances!\n"
+            f"{'='*70}\n"
+            f"ASG: {asg_name}\n"
+            f"Region: {PRIMARY_REGION}\n\n"
+        )
+        
+        # Verify instance details
+        instance = instances[0]
+        instance_id = instance['InstanceId']
+        
+        print(f"\n[SUCCESS] ASG has launched instances successfully!")
+        print(f"  Instance ID: {instance_id}")
+        print(f"  Lifecycle State: {instance['LifecycleState']}")
+        print(f"  Health Status: {instance['HealthStatus']}")
+        print(f"  Availability Zone: {instance['AvailabilityZone']}")
+        
+        # Verify instance is truly healthy
+        self.assertEqual(instance['LifecycleState'], 'InService')
+        self.assertEqual(instance['HealthStatus'], 'Healthy')
+        
+        print(f"\n{'='*70}")
+        print(f"CRITICAL TEST PASSED: Infrastructure is healthy")
+        print(f"{'='*70}\n")
 
     def test_lambda_function_invocation_and_response(self):
         """
@@ -425,7 +505,7 @@ class TestServiceLevelInteractions(BaseIntegrationTest):
             print(f"SSM command sent: {command_id}")
             
             # Wait for command completion
-            result = wait_for_ssm_command(command_id, instance_id, max_wait_seconds=90)
+            result = wait_for_ssm_command(command_id, instance_id, max_wait_seconds=60)
             
             # VERIFY: Command executed successfully
             self.assertEqual(result['Status'], 'Success', f"SSM command failed: {result.get('StandardErrorContent', '')}")
@@ -485,7 +565,7 @@ class TestServiceLevelInteractions(BaseIntegrationTest):
             )
             
             command_id = command_response['Command']['CommandId']
-            result = wait_for_ssm_command(command_id, instance_id, max_wait_seconds=90)
+            result = wait_for_ssm_command(command_id, instance_id, max_wait_seconds=60)
             
             # VERIFY: File operations successful
             self.assertEqual(result['Status'], 'Success')
@@ -585,7 +665,7 @@ class TestCrossServiceInteractions(BaseIntegrationTest):
             )
             
             command_id = command_response['Command']['CommandId']
-            result = wait_for_ssm_command(command_id, instance_id, max_wait_seconds=90)
+            result = wait_for_ssm_command(command_id, instance_id, max_wait_seconds=60)
             
             # VERIFY: EC2 successfully sent metric
             self.assertEqual(result['Status'], 'Success')
@@ -780,7 +860,7 @@ class TestCrossServiceInteractions(BaseIntegrationTest):
             )
             
             command_id = command_response['Command']['CommandId']
-            result = wait_for_ssm_command(command_id, instance_id, max_wait_seconds=90)
+            result = wait_for_ssm_command(command_id, instance_id, max_wait_seconds=60)
             
             # VERIFY: EC2 reached internet via NAT Gateway
             self.assertEqual(result['Status'], 'Success')
@@ -910,7 +990,7 @@ class TestEndToEndFlows(BaseIntegrationTest):
             )
             
             command_id = command_response['Command']['CommandId']
-            result = wait_for_ssm_command(command_id, instance_id, max_wait_seconds=90)
+            result = wait_for_ssm_command(command_id, instance_id, max_wait_seconds=60)
             
             # VERIFY: Complete network path successful
             self.assertEqual(result['Status'], 'Success')
@@ -1000,7 +1080,7 @@ class TestEndToEndFlows(BaseIntegrationTest):
             )
             
             command_id = command_response['Command']['CommandId']
-            result = wait_for_ssm_command(command_id, instance_id, max_wait_seconds=90)
+            result = wait_for_ssm_command(command_id, instance_id, max_wait_seconds=60)
             
             # VERIFY: EC2 successfully sent metric
             self.assertEqual(result['Status'], 'Success')

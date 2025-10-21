@@ -91,67 +91,24 @@ class ComputeStack:
         """
         lt_name = self.config.get_resource_name('launch-template')
         
-        # User data script to ensure SSM agent is running
-        # Amazon Linux 2023 has SSM agent pre-installed and uses DNF (not YUM)
+        # MINIMAL user data script - SSM agent is pre-installed and auto-starts on AL2023
+        # CloudWatch agent is optional and installed in background to avoid blocking
         user_data = """#!/bin/bash
-set -e
-exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+exec > /var/log/user-data.log 2>&1
+echo "User data script started at $(date)"
 
-echo "Starting user data script execution..."
+# SSM agent is pre-installed and enabled by default on Amazon Linux 2023
+# Just ensure it's running (should already be)
+systemctl is-active amazon-ssm-agent || systemctl start amazon-ssm-agent
 
-# Ensure SSM agent is running (pre-installed on Amazon Linux 2023)
-echo "Configuring SSM agent..."
-systemctl enable amazon-ssm-agent
-systemctl start amazon-ssm-agent
-systemctl status amazon-ssm-agent
+# Install CloudWatch agent in background (non-blocking)
+(
+  echo "Installing CloudWatch agent..."
+  dnf install -y amazon-cloudwatch-agent 2>&1
+  echo "CloudWatch agent installation completed"
+) &
 
-# Install CloudWatch agent using DNF (Amazon Linux 2023 uses DNF, not YUM)
-echo "Installing CloudWatch agent..."
-dnf install -y amazon-cloudwatch-agent
-
-# Configure CloudWatch agent for basic monitoring
-echo "Configuring CloudWatch agent..."
-cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
-{
-  "metrics": {
-    "namespace": "CWAgent",
-    "metrics_collected": {
-      "cpu": {
-        "measurement": [
-          {"name": "cpu_usage_idle", "rename": "CPU_IDLE", "unit": "Percent"},
-          {"name": "cpu_usage_iowait", "rename": "CPU_IOWAIT", "unit": "Percent"},
-          "cpu_time_guest"
-        ],
-        "metrics_collection_interval": 60,
-        "totalcpu": false
-      },
-      "disk": {
-        "measurement": [
-          {"name": "used_percent", "rename": "DISK_USED", "unit": "Percent"}
-        ],
-        "metrics_collection_interval": 60,
-        "resources": ["*"]
-      },
-      "mem": {
-        "measurement": [
-          {"name": "mem_used_percent", "rename": "MEM_USED", "unit": "Percent"}
-        ],
-        "metrics_collection_interval": 60
-      }
-    }
-  }
-}
-EOF
-
-# Start CloudWatch agent
-echo "Starting CloudWatch agent..."
-/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-    -a fetch-config \
-    -m ec2 \
-    -s \
-    -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
-
-echo "User data script completed successfully!"
+echo "User data script completed at $(date)"
 """
         
         launch_template = aws.ec2.LaunchTemplate(
@@ -165,6 +122,15 @@ echo "User data script completed successfully!"
             vpc_security_group_ids=[self.security_group_id],
             user_data=pulumi.Output.secret(user_data).apply(
                 lambda ud: __import__('base64').b64encode(ud.encode()).decode()
+            ),
+            metadata_options=aws.ec2.LaunchTemplateMetadataOptionsArgs(
+                http_endpoint="enabled",
+                http_tokens="optional",  # Allow both IMDSv1 and IMDSv2 for compatibility
+                http_put_response_hop_limit=1,
+                instance_metadata_tags="enabled"
+            ),
+            monitoring=aws.ec2.LaunchTemplateMonitoringArgs(
+                enabled=True  # Enable detailed monitoring
             ),
             tag_specifications=[
                 aws.ec2.LaunchTemplateTagSpecificationArgs(
@@ -212,6 +178,7 @@ echo "User data script completed successfully!"
             ),
             health_check_type="EC2",
             health_check_grace_period=600,
+            wait_for_capacity_timeout="15m",
             tags=[
                 aws.autoscaling.GroupTagArgs(
                     key="Name",
