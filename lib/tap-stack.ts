@@ -5,7 +5,7 @@ import * as path from "path";
 
 export interface TapStackArgs {
   environmentSuffix: string;
-  region?: string;
+  tags?: Record<string, string>;
 }
 
 export interface VpcConfig {
@@ -26,11 +26,10 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly prodZone: aws.route53.Zone;
   public readonly devZone: aws.route53.Zone;
   public readonly outputs: pulumi.Output<any>;
-
   private readonly region: string;
   private readonly environmentSuffix: string;
   private readonly commonTags: Record<string, string>;
-  private readonly availabilityZones: string[];
+  private readonly availabilityZones: pulumi.Output<string[]>;
   private hubIgw?: aws.ec2.InternetGateway;
 
   // Store subnet references
@@ -45,26 +44,27 @@ export class TapStack extends pulumi.ComponentResource {
     opts?: pulumi.ComponentResourceOptions
   ) {
     super("custom:network:TapStack", name, {}, opts);
-
     this.environmentSuffix = args.environmentSuffix;
-    this.region = args.region || aws.config.region || "us-east-2";
+    this.region = aws.config.region || "us-east-2";
 
     const repository = process.env.REPOSITORY || "tap-infrastructure";
     const commitAuthor = process.env.COMMIT_AUTHOR || "pulumi";
 
     this.commonTags = {
+      ...(args.tags || {}),
       ManagedBy: "pulumi",
       CostCenter: "network-operations",
       Repository: repository,
       Author: commitAuthor,
     };
 
-    // Hardcode AZs for the region
-    if (this.region === "us-east-2") {
-      this.availabilityZones = ["us-east-2a", "us-east-2b", "us-east-2c"];
-    } else {
-      this.availabilityZones = ["us-east-1a", "us-east-1b", "us-east-1c"];
-    }
+    // Dynamically fetch available availability zones
+    const azData = aws.getAvailabilityZonesOutput({
+      state: "available",
+    });
+    
+    // Use the first 3 available AZs
+    this.availabilityZones = azData.names.apply(names => names.slice(0, 3));
 
     this.flowLogsBucket = this.createFlowLogsBucket();
 
@@ -96,7 +96,6 @@ export class TapStack extends pulumi.ComponentResource {
     this.developmentVpc = this.createVpc(devConfig);
 
     this.transitGateway = this.createTransitGateway();
-
     const tgwAttachments = this.createTransitGatewayAttachments();
     this.configureTransitGatewayRouting(tgwAttachments);
 
@@ -118,7 +117,6 @@ export class TapStack extends pulumi.ComponentResource {
     this.enableVpcFlowLogs(this.developmentVpc, "development");
 
     this.createCloudWatchAlarms(tgwAttachments);
-
     this.outputs = this.exportOutputs(tgwAttachments, natGateways);
 
     this.registerOutputs({
@@ -219,57 +217,60 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   private createSubnets(vpc: aws.ec2.Vpc, config: VpcConfig): void {
-    this.availabilityZones.forEach((az: string, index: number) => {
-      const publicCidr = this.calculateSubnetCidr(config.cidr, index * 2);
-      const privateCidr = this.calculateSubnetCidr(config.cidr, index * 2 + 1);
+    // Since availabilityZones is now an Output<string[]>, we need to handle it differently
+    pulumi.output(this.availabilityZones).apply(zones => {
+      zones.forEach((az: string, index: number) => {
+        const publicCidr = this.calculateSubnetCidr(config.cidr, index * 2);
+        const privateCidr = this.calculateSubnetCidr(config.cidr, index * 2 + 1);
 
-      if (config.hasPublicSubnets) {
-        const publicSubnet = new aws.ec2.Subnet(
-          `${config.name}-public-subnet-${index}-${this.environmentSuffix}`,
+        if (config.hasPublicSubnets) {
+          const publicSubnet = new aws.ec2.Subnet(
+            `${config.name}-public-subnet-${index}-${this.environmentSuffix}`,
+            {
+              vpcId: vpc.id,
+              cidrBlock: publicCidr,
+              availabilityZone: az,
+              mapPublicIpOnLaunch: true,
+              tags: {
+                ...this.commonTags,
+                Environment: config.environment,
+                Name: `${config.name}-public-subnet-${index}-${this.environmentSuffix}`,
+                Type: "public",
+              },
+            },
+            { parent: this }
+          );
+
+          if (config.name === "hub") {
+            this.hubPublicSubnets.push(publicSubnet);
+          }
+        }
+
+        const privateSubnet = new aws.ec2.Subnet(
+          `${config.name}-private-subnet-${index}-${this.environmentSuffix}`,
           {
             vpcId: vpc.id,
-            cidrBlock: publicCidr,
+            cidrBlock: config.hasPublicSubnets ? privateCidr : publicCidr,
             availabilityZone: az,
-            mapPublicIpOnLaunch: true,
+            mapPublicIpOnLaunch: false,
             tags: {
               ...this.commonTags,
               Environment: config.environment,
-              Name: `${config.name}-public-subnet-${index}-${this.environmentSuffix}`,
-              Type: "public",
+              Name: `${config.name}-private-subnet-${index}-${this.environmentSuffix}`,
+              Type: "private",
             },
           },
           { parent: this }
         );
 
         if (config.name === "hub") {
-          this.hubPublicSubnets.push(publicSubnet);
+          this.hubPrivateSubnets.push(privateSubnet);
+        } else if (config.name === "production") {
+          this.prodPrivateSubnets.push(privateSubnet);
+        } else if (config.name === "development") {
+          this.devPrivateSubnets.push(privateSubnet);
         }
-      }
-
-      const privateSubnet = new aws.ec2.Subnet(
-        `${config.name}-private-subnet-${index}-${this.environmentSuffix}`,
-        {
-          vpcId: vpc.id,
-          cidrBlock: config.hasPublicSubnets ? privateCidr : publicCidr,
-          availabilityZone: az,
-          mapPublicIpOnLaunch: false,
-          tags: {
-            ...this.commonTags,
-            Environment: config.environment,
-            Name: `${config.name}-private-subnet-${index}-${this.environmentSuffix}`,
-            Type: "private",
-          },
-        },
-        { parent: this }
-      );
-
-      if (config.name === "hub") {
-        this.hubPrivateSubnets.push(privateSubnet);
-      } else if (config.name === "production") {
-        this.prodPrivateSubnets.push(privateSubnet);
-      } else if (config.name === "development") {
-        this.devPrivateSubnets.push(privateSubnet);
-      }
+      });
     });
   }
 
@@ -755,7 +756,6 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     const endpoints = ["ssm", "ssmmessages", "ec2messages"];
-
     endpoints.forEach((endpoint: string) => {
       new aws.ec2.VpcEndpoint(
         `${name}-${endpoint}-endpoint-${this.environmentSuffix}`,
