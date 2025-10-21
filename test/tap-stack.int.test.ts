@@ -107,8 +107,15 @@ import { WAFV2Client, GetWebACLForResourceCommand } from '@aws-sdk/client-wafv2'
 import { STSClient, GetCallerIdentityCommand } from '@aws-sdk/client-sts';
 
 
-// Load CloudFormation outputs - expects ExportName as keys from stack exports
+// Load CloudFormation outputs - support both Logical Output Keys and Export Names as keys
 const outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
+function getOutput(logicalKey: string, exportName: string): string {
+  const v = outputs[logicalKey] ?? outputs[exportName];
+  if (!v || typeof v !== 'string' || v.length === 0) {
+    throw new Error(`Missing required CloudFormation output: ${logicalKey} / ${exportName}`);
+  }
+  return v;
+}
 
 
 // AWS Clients
@@ -328,8 +335,8 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
 
   describe('Patient Data Upload Workflow', () => {
     test('S3 Upload → KMS Encryption → CloudTrail Audit → SNS Notification workflow', async () => {
-      expect(outputs['PatientDocumentsBucketName']).toBeDefined();
-      expect(outputs['KMSKeyId']).toBeDefined();
+      const patientDocumentsBucket = getOutput('PatientDocumentsBucketName', 'nova-prod-patient-documents-bucket');
+      const kmsKeyId = getOutput('KMSKeyId', 'nova-prod-kms-key-id');
 
       // Generate encryption key for patient data
       console.log('Generating encryption key for patient data...');
@@ -348,7 +355,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
       // Upload encrypted patient document to S3
       console.log('Uploading encrypted patient document to S3...');
       const uploadResponse = await s3Client.send(new PutObjectCommand({
-        Bucket: outputs['PatientDocumentsBucketName'],
+        Bucket: patientDocumentsBucket,
         Key: `patients/${testData.patientId}/documents/${testData.documentId}.json`,
         Body: JSON.stringify({
           ...testData.metadata,
@@ -357,7 +364,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
           uploadTimestamp: new Date().toISOString()
         }),
         ServerSideEncryption: 'aws:kms',
-        SSEKMSKeyId: outputs['KMSKeyId'],
+        SSEKMSKeyId: kmsKeyId,
         Metadata: {
           'patient-id': testData.patientId,
           'document-type': 'medical-record',
@@ -370,14 +377,14 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
       // Verify document retrieval and decryption
       console.log('Verifying document retrieval and decryption...');
       const getResponse = await s3Client.send(new GetObjectCommand({
-        Bucket: outputs['PatientDocumentsBucketName'],
+        Bucket: patientDocumentsBucket,
         Key: `patients/${testData.patientId}/documents/${testData.documentId}.json`
       }));
       expect(getResponse.Body).toBeDefined();
 
       // Test S3 bucket accessibility with HTTP requests (if public access is configured)
       console.log('Testing S3 bucket accessibility...');
-      const bucketName = outputs['PatientDocumentsBucketName'];
+      const bucketName = patientDocumentsBucket;
       try {
         const s3Endpoint = `https://${bucketName}.s3.${region}.amazonaws.com/`;
         const s3Response = await fetch(s3Endpoint, { method: 'HEAD' });
@@ -417,7 +424,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
       // Clean up test document
       console.log('Cleaning up test document...');
       await s3Client.send(new DeleteObjectCommand({
-        Bucket: outputs['PatientDocumentsBucketName'],
+        Bucket: patientDocumentsBucket,
         Key: `patients/${testData.patientId}/documents/${testData.documentId}.json`
       }));
       console.log('✓ Test document cleaned up');
@@ -428,7 +435,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
 
   describe('Database Connection and Data Workflow', () => {
     test('Secrets Manager → RDS Connection → Data Encryption → Audit Trail workflow', async () => {
-      expect(outputs['RDSEndpoint']).toBeDefined();
+      const rdsEndpoint = getOutput('RDSEndpoint', 'nova-prod-rds-endpoint');
 
       // Retrieve database credentials from Secrets Manager
       console.log('Retrieving database credentials from Secrets Manager...');
@@ -459,7 +466,9 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
 
       // Launch EC2 instance to test actual database connectivity
       console.log('Launching EC2 instance to test database connectivity...');
-      const subnetId = await getSubnetIdFromVpc(outputs['VPCId']);
+      const vpcId = getOutput('VPCId', 'nova-prod-vpc-id');
+      const appSgId = getOutput('ApplicationSecurityGroupId', 'nova-prod-app-sg-id');
+      const subnetId = await getSubnetIdFromVpc(vpcId);
       expect(subnetId).toBeDefined();
       const imageId = await resolveAmiId();
       const testInstanceResponse = await ec2Client.send(new RunInstancesCommand({
@@ -467,7 +476,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
         MinCount: 1,
         MaxCount: 1,
         InstanceType: 't3.micro',
-        SecurityGroupIds: [outputs['ApplicationSecurityGroupId']],
+        SecurityGroupIds: [appSgId],
         SubnetId: subnetId,
         UserData: Buffer.from(`#!/bin/bash
 yum update -y
@@ -501,7 +510,7 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
 
       // Test database connectivity via HTTP requests (if ALB is available)
       console.log('Testing database connectivity via HTTP requests...');
-      const albDnsName = outputs['ALBDNSName'];
+      const albDnsName = getOutput('ALBDNSName', 'nova-prod-alb-dns');
       const dbHealthResponse = await fetch(`http://${albDnsName}/health/database`, { method: 'GET' });
       expect(dbHealthResponse.ok).toBe(true);
       const healthData = await dbHealthResponse.json();
@@ -546,10 +555,10 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
 
   describe('Application Load Balancer Workflow', () => {
     test('EC2 Instance → Target Group → ALB → Health Check → Traffic Routing workflow', async () => {
-      expect(outputs['VPCId']).toBeDefined();
-      expect(outputs['ApplicationSecurityGroupId']).toBeDefined();
-      expect(outputs['ALBArn']).toBeDefined();
-      expect(outputs['ALBDNSName']).toBeDefined();
+      const vpcId = getOutput('VPCId', 'nova-prod-vpc-id');
+      const appSgId = getOutput('ApplicationSecurityGroupId', 'nova-prod-app-sg-id');
+      const albArn = getOutput('ALBArn', 'nova-prod-alb-arn');
+      const albDnsName = getOutput('ALBDNSName', 'nova-prod-alb-dns');
 
       // Retrieve database credentials for health check endpoint
       const secretResponse = await secretsClient.send(new GetSecretValueCommand({
@@ -560,7 +569,7 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
 
       // Launch test EC2 instance
       console.log('Launching test EC2 instance...');
-      const subnetId = await getSubnetIdFromVpc(outputs['VPCId']);
+      const subnetId = await getSubnetIdFromVpc(vpcId);
       expect(subnetId).toBeDefined();
       const imageId = await resolveAmiId();
       const instanceResponse = await ec2Client.send(new RunInstancesCommand({
@@ -568,7 +577,7 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
         MinCount: 1,
         MaxCount: 1,
         InstanceType: 't3.micro',
-        SecurityGroupIds: [outputs['ApplicationSecurityGroupId']],
+        SecurityGroupIds: [appSgId],
         SubnetId: subnetId, 
         UserData: Buffer.from(`
           #!/bin/bash
@@ -647,7 +656,7 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
         Name: testData.testTargetGroupName,
         Protocol: 'HTTP',
         Port: 80,
-        VpcId: outputs['VPCId'],
+        VpcId: vpcId,
         HealthCheckPath: '/',
         HealthCheckProtocol: 'HTTP',
         HealthCheckIntervalSeconds: 30,
@@ -677,7 +686,7 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
       // Open temporary SG rules for port 80 and create ALB listener (HTTP)
       console.log('Opening temporary SG rules for port 80 and creating ALB listener...');
       const lbs = await elbClient.send(new DescribeLoadBalancersCommand({}));
-      const lb = lbs.LoadBalancers?.find(l => l.LoadBalancerArn === outputs['ALBArn']);
+      const lb = lbs.LoadBalancers?.find(l => l.LoadBalancerArn === albArn);
       expect(lb).toBeDefined();
       const albSg = lb!.SecurityGroups?.[0];
       expect(albSg).toBeDefined();
@@ -694,7 +703,7 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
       testData.openedAppSg80FromAlb = true;
 
       const listenerResponse = await elbClient.send(new CreateListenerCommand({
-        LoadBalancerArn: outputs['ALBArn'], 
+        LoadBalancerArn: albArn, 
         Protocol: 'HTTP',
         Port: 80,
         DefaultActions: [{
@@ -712,7 +721,7 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
 
       // Make actual HTTP requests to test the ALB workflow
       console.log('Testing ALB with HTTP requests...');
-      const albDnsName = outputs['ALBDNSName'];
+      
       // Test 1: Health check endpoint
       const healthResponse = await fetch(`http://${albDnsName}/`, { method: 'GET' });
       expect(healthResponse.ok).toBe(true);
@@ -742,7 +751,7 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
 
       // Validate WAF association
       console.log('Validating WAF association...');
-      const webAclAssoc = await wafv2Client.send(new GetWebACLForResourceCommand({ ResourceArn: outputs['ALBArn'] }));
+      const webAclAssoc = await wafv2Client.send(new GetWebACLForResourceCommand({ ResourceArn: albArn }));
       expect(webAclAssoc.WebACL?.Name).toBeDefined();
       console.log('✓ WAF association verified');
     }, 600000);
@@ -783,12 +792,12 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
     })); } catch {}
         await teardownSnsSqsSubscription(queueUrl, subscriptionArn);
       }
-    });
+    }, 300000);
   });
 
   describe('Data Backup and Recovery Workflow', () => {
     test('S3 Data → Versioning → Lifecycle → Recovery → Validation workflow', async () => {
-      expect(outputs['AppDataBucket']).toBeDefined();
+      const appDataBucket = getOutput('AppDataBucket', 'nova-prod-app-data-bucket');
 
       // Upload initial data version
       console.log('Uploading initial data version...');
@@ -799,7 +808,7 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
         version: 1
       };
       await s3Client.send(new PutObjectCommand({
-        Bucket: outputs['AppDataBucket'],
+        Bucket: appDataBucket,
         Key: 'backup-test/data.json',
         Body: JSON.stringify(initialData),
         Metadata: {
@@ -818,7 +827,7 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
         version: 2
       };
       await s3Client.send(new PutObjectCommand({
-        Bucket: outputs['AppDataBucket'],
+        Bucket: appDataBucket,
         Key: 'backup-test/data.json',
         Body: JSON.stringify(updatedData),
         Metadata: {
@@ -831,9 +840,9 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
 
       // Verify versioning is enabled and versions exist
       console.log('Verifying versioning...');
-      const ver = await s3Client.send(new GetBucketVersioningCommand({ Bucket: outputs['AppDataBucket'] }));
+      const ver = await s3Client.send(new GetBucketVersioningCommand({ Bucket: appDataBucket }));
       expect(ver.Status).toBe('Enabled');
-      const versions = await s3Client.send(new ListObjectVersionsCommand({ Bucket: outputs['AppDataBucket'], Prefix: 'backup-test/data.json' }));
+      const versions = await s3Client.send(new ListObjectVersionsCommand({ Bucket: appDataBucket, Prefix: 'backup-test/data.json' }));
       expect((versions.Versions || []).length).toBeGreaterThanOrEqual(2);
       console.log('✓ Versioning verified');
 
@@ -842,14 +851,14 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
       
       // Test version recovery by listing object versions
       const versionResponse = await s3Client.send(new ListObjectsV2Command({
-        Bucket: outputs['AppDataBucket'],
+        Bucket: appDataBucket,
         Prefix: 'backup-test/'
       }));
       expect(versionResponse.Contents).toBeDefined();
       
       // Test data recovery
       const recoveryResponse = await s3Client.send(new GetObjectCommand({
-        Bucket: outputs['AppDataBucket'],
+        Bucket: appDataBucket,
         Key: 'backup-test/data.json'
       }));
       expect(recoveryResponse.Body).toBeDefined();
@@ -874,7 +883,7 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
       // Clean up test data
       console.log('Cleaning up test data...');
       await s3Client.send(new DeleteObjectCommand({
-        Bucket: outputs['AppDataBucket'],
+        Bucket: appDataBucket,
         Key: 'backup-test/data.json'
       }));
       console.log('✓ Test data cleaned up');
@@ -1357,24 +1366,25 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
       // Discover IAM group that contains the inline policy named 'EnforceMFA'
       let marker: string | undefined = undefined;
       let targetGroupName: string | undefined = undefined;
-      do {
+      outer: while (true) {
         const groupsResp = await iamClient.send(new ListGroupsCommand({ Marker: marker } as any));
         const groups = groupsResp.Groups || [];
         for (const g of groups) {
           let policyMarker: string | undefined = undefined;
-          do {
+          while (true) {
             const polResp = await iamClient.send(new ListGroupPoliciesCommand({ GroupName: g.GroupName!, Marker: policyMarker } as any));
             const names = polResp.PolicyNames || [];
             if (names.includes('EnforceMFA')) {
               targetGroupName = g.GroupName;
-              break;
+              break outer;
             }
             policyMarker = (polResp as any).Marker;
-          } while ((polResp as any)?.IsTruncated);
-          if (targetGroupName) break;
+            if (!(polResp as any)?.IsTruncated) break;
+          }
         }
         marker = (groupsResp as any).Marker;
-      } while ((marker as any));
+        if (!(groupsResp as any)?.IsTruncated) break;
+      }
 
       if (!targetGroupName) {
         throw new Error('EnforceMFA inline policy not found on any IAM group');
