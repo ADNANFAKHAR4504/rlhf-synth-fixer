@@ -963,7 +963,7 @@ class TapStack(TerraformStack):
         TerraformOutput(
             self,
             "ElastiCacheEndpoint", 
-            value=redis_cache.endpoint,
+            value="${aws_elasticache_serverless_cache.redis_cache.endpoint[0].address}",
             description="ElastiCache Redis Endpoint"
         )
 

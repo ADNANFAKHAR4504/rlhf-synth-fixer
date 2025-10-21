@@ -40,7 +40,18 @@ value=sns_topic.arn
 value=alarm_topic.arn
 ```
 
-### 4. Integration Test Fixture Structure Issue
+### 4. ElastiCache Endpoint Output Structure Issue
+**Issue**: ElastiCache endpoint output was returning complex object structure instead of address string
+**Fix**: Changed to return only the address string using Terraform interpolation
+```python
+# Before:
+value=redis_cache.endpoint
+
+# After:
+value="${aws_elasticache_serverless_cache.redis_cache.endpoint[0].address}"
+```
+
+### 5. Integration Test Fixture Structure Issue
 **Issue**: Test fixture expected flat outputs structure but CDKTF outputs are nested under stack name
 **Fix**: Modified outputs fixture to extract from nested structure
 ```python
@@ -65,7 +76,7 @@ def outputs():
 
 ## Previously Documented Critical Compliance Issues Fixed
 
-### 5. ElastiCache Serverless Parameter Naming (Lines 435-454)
+### 6. ElastiCache Serverless Parameter Naming (Lines 435-454)
 **Issue**: Used incorrect parameter name `serverless_cache_name` instead of `name`
 **Fix**: Changed to use the correct parameter `name` for ElastiCache Serverless cache
 ```python
@@ -76,7 +87,7 @@ serverless_cache_name=f"catalog-cache-{environment_suffix}"
 name=f"catalog-cache-{environment_suffix}"
 ```
 
-### 6. ElastiCache cache_usage_limits Structure (Lines 442-450)
+### 7. ElastiCache cache_usage_limits Structure (Lines 442-450)
 **Issue**: Incorrect nesting - `data_storage` and `ecpu_per_second` were objects instead of arrays
 **Fix**: Wrapped both `data_storage` and `ecpu_per_second` in arrays as per CDKTF Python bindings
 ```python
@@ -93,7 +104,7 @@ cache_usage_limits=[ElasticacheServerlessCacheCacheUsageLimits(
 )]
 ```
 
-### 7. Target Group deregistration_delay Data Type (Line 479)
+### 8. Target Group deregistration_delay Data Type (Line 479)
 **Issue**: Initially changed to int but CDKTF requires string type
 **Resolution**: Kept as string "30" as per CDKTF Python bindings requirements
 ```python
@@ -101,7 +112,7 @@ cache_usage_limits=[ElasticacheServerlessCacheCacheUsageLimits(
 deregistration_delay="30"
 ```
 
-### 8. Container Definitions Serialization (Lines 549-583)
+### 9. Container Definitions Serialization (Lines 549-583)
 **Issue**: Used complex string replacement for Terraform references which caused interpolation warnings
 **Fix**: Simplified to use `Fn.jsonencode()` with placeholder values, avoiding complex interpolation
 ```python
@@ -236,7 +247,7 @@ Comprehensive integration tests validating:
 **After**: 9/10
 
 ### Quality Improvements:
-1. **Compliance**: Fixed all 8 critical issues (4 new integration test issues + 4 previous issues)
+1. **Compliance**: Fixed all 9 critical issues (5 new integration test issues + 4 previous issues)
 2. **Integration Tests**: Added complete stack outputs enabling full integration test coverage
 3. **Complexity**: Increased from 37 to 60+ resources
 4. **Best Practices**: Added monitoring, alerting, auto-scaling, and WAF
@@ -274,5 +285,6 @@ The most critical issues were related to integration test failures caused by mis
 2. **Test Fixture**: Integration test fixture correctly extracts outputs from CDKTF nested structure  
 3. **Variable References**: All output values reference correct variable names
 4. **Output Format**: Output keys match exactly what integration tests expect (camelCase)
+5. **Data Structure**: ElastiCache endpoint returns address string instead of complex object
 
 These changes transformed the integration test suite from 100% failure to 100% success, enabling proper validation of deployed infrastructure.
