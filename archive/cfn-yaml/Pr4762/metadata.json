@@ -33,5 +33,11 @@
     "VPC Flow Logs",
     "Parameter Store",
     "Secrets Manager"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
 }
