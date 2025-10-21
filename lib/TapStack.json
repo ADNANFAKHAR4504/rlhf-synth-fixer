@@ -27,6 +27,7 @@
       "Type": "String",
       "NoEcho": true,
       "MinLength": 8,
+      "Default": "TempPassword123!",
       "Description": "Master password for Aurora database."
     },
     "DailyScheduleExpression": {
