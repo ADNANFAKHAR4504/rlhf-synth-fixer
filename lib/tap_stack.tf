@@ -905,12 +905,12 @@ resource "aws_lb" "api" {
 
 # S3 Bucket for ALB Logs
 resource "aws_s3_bucket" "alb_logs" {
-  bucket = "${local.resource_prefix}-alb-logs"
+  bucket = "${local.resource_prefix}-alb-logs-v2"
   
   tags = merge(
     local.common_tags,
     {
-      Name = "${local.resource_prefix}-alb-logs"
+      Name = "${local.resource_prefix}-alb-logs-v2"
     }
   )
 }
