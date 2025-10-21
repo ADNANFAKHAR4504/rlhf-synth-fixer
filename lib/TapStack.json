@@ -1,0 +1,898 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Regulatory Reporting Platform (Single-Stack JSON) - Orchestrates ~2000 daily reports with validation, audit, and 10-year S3 retention. Uses Aurora Serverless V2 and Secrets Manager.",
+  "Parameters": {
+    "Environment": {
+      "Type": "String",
+      "Default": "prod",
+      "AllowedValues": [
+        "prod",
+        "staging",
+        "dev"
+      ],
+      "Description": "Deployment environment."
+    },
+    "NotificationEmail": {
+      "Type": "String",
+      "Description": "Email for CloudWatch alarm notifications (e.g., failed report delivery).",
+      "Default": "govardhan.y@turing.com"
+    },
+    "DatabaseMasterUsername": {
+      "Type": "String",
+      "Default": "reportadmin",
+      "NoEcho": true,
+      "Description": "Master username for Aurora database."
+    },
+    "DatabaseMasterPassword": {
+      "Type": "String",
+      "NoEcho": true,
+      "MinLength": 8,
+      "Description": "Master password for Aurora database."
+    },
+    "DailyScheduleExpression": {
+      "Type": "String",
+      "Default": "cron(0 10 * * ? *)",
+      "Description": "Cron expression for daily report generation (e.g., 10:00 AM UTC)."
+    },
+    "SenderEmailAddress": {
+      "Type": "String",
+      "Description": "SES verified email address for sending reports and notifications.",
+      "Default": "govardhan.y@turing.com"
+    }
+  },
+  "Resources": {
+    "KMSKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "Description": "KMS key for regulatory reporting platform encryption (S3, Aurora)",
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow Key Use By Account Resources",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": "*"
+              },
+              "Action": [
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "kms:CallerAccount": {
+                    "Ref": "AWS::AccountId"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "KeyUsage": "ENCRYPT_DECRYPT"
+      }
+    },
+    "ReportsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "${AWS::StackName}-reports-${Environment}-${AWS::AccountId}"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "KMSMasterKeyID": {
+                  "Fn::GetAtt": [
+                    "KMSKey",
+                    "Arn"
+                  ]
+                },
+                "SSEAlgorithm": "aws:kms"
+              }
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "RetentionRule",
+              "Status": "Enabled",
+              "ExpirationInDays": 3650,
+              "NoncurrentVersionExpirationInDays": 3650,
+              "AbortIncompleteMultipartUpload": {
+                "DaysAfterInitiation": 7
+              }
+            }
+          ]
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerEnforced"
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "IgnorePublicAcls": true,
+          "BlockPublicPolicy": true,
+          "RestrictPublicBuckets": true
+        }
+      }
+    },
+    "ReportsBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "ReportsBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AllowLambdaAccess",
+              "Effect": "Allow",
+              "Principal": {
+                "Fn::GetAtt": [
+                  "LambdaExecutionRole",
+                  "Arn"
+                ]
+              },
+              "Action": [
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:DeleteObject"
+              ],
+              "Resource": {
+                "Fn::Sub": "arn:aws:s3:::${ReportsBucket}/*"
+              }
+            },
+            {
+              "Sid": "DenyUnencryptedObjectUploads",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "arn:aws:s3:::${ReportsBucket}/*"
+              },
+              "Condition": {
+                "StringNotEquals": {
+                  "s3:x-amz-server-side-encryption": "aws:kms"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "AuroraSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "${AWS::StackName}-Aurora-Master-Credentials"
+        },
+        "SecretString": {
+          "Fn::Sub": "{\"username\":\"${DatabaseMasterUsername}\",\"password\":\"${DatabaseMasterPassword}\"}"
+        },
+        "KmsKeyId": {
+          "Ref": "KMSKey"
+        }
+      }
+    },
+    "AuroraCluster": {
+      "Type": "AWS::RDS::DBCluster",
+      "Properties": {
+        "Engine": "aurora-postgresql",
+        "EngineMode": "provisioned",
+        "MasterUserSecret": {
+          "Ref": "AuroraSecret"
+        },
+        "DatabaseName": "reportingdb",
+        "DBClusterParameterGroupName": "default-aurora-postgresql16",
+        "StorageEncrypted": true,
+        "KmsKeyId": {
+          "Fn::GetAtt": [
+            "KMSKey",
+            "Arn"
+          ]
+        },
+        "BackupRetentionPeriod": 7,
+        "ServerlessV2ScalingConfiguration": {
+          "MinCapacity": 0.5,
+          "MaxCapacity": 4.0
+        },
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "AuroraSecurityGroup"
+          }
+        ],
+        "DBSubnetGroupName": {
+          "Ref": "AuroraDBSubnetGroup"
+        }
+      }
+    },
+    "AuroraInstance": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "DBClusterIdentifier": {
+          "Ref": "AuroraCluster"
+        },
+        "DBInstanceClass": "db.serverless",
+        "Engine": "aurora-postgresql"
+      }
+    },
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsSupport": true,
+        "EnableDnsHostnames": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-VPC"
+            }
+          }
+        ]
+      }
+    },
+    "SubnetA": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-SubnetA"
+            }
+          }
+        ]
+      }
+    },
+    "SubnetB": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-SubnetB"
+            }
+          }
+        ]
+      }
+    },
+    "AuroraDBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupDescription": "Subnets for Aurora Serverless v2",
+        "SubnetIds": [
+          {
+            "Ref": "SubnetA"
+          },
+          {
+            "Ref": "SubnetB"
+          }
+        ]
+      }
+    },
+    "AuroraSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for Aurora",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5432,
+            "ToPort": 5432,
+            "SourceSecurityGroupId": {
+              "Ref": "LambdaSecurityGroup"
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-Aurora-SG"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for Lambda functions (to access Aurora)",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-Lambda-SG"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "ReportingPlatformLambdaPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": "arn:aws:logs:*:*:*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:GetObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::${ReportsBucket}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "ses:SendEmail",
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "kms:Decrypt",
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "KMSKey",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "rds-data:*",
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraCluster}"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "secretsmanager:GetSecretValue",
+                  "Resource": {
+                    "Ref": "AuroraSecret"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "StepFunctionsExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "states.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "StepFunctionsLambdaExecutionPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": "lambda:InvokeFunction",
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "GenerateReportLambda",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::GetAtt": [
+                        "ValidateReportLambda",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::GetAtt": [
+                        "DeliverReportLambda",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${GenerateReportLambda}:*"
+                    },
+                    {
+                      "Fn::Sub": "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${ValidateReportLambda}:*"
+                    },
+                    {
+                      "Fn::Sub": "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${DeliverReportLambda}:*"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "GenerateReportLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Handler": "lambda_generate_report.handler",
+        "Runtime": "python3.12",
+        "Code": {
+          "ZipFile": "import json\nimport os\nimport random\nfrom datetime import datetime, timezone\n\ndef handler(event, context):\n    report_id = str(random.randint(10000, 99999))\n    timestamp = datetime.now(timezone.utc).isoformat()\n    \n    # Production Query Logic Placeholder (Using RDS Data API)\n    # db_client.execute(\"SELECT data FROM reporting_view WHERE status='pending'\")\n    \n    report_data = {\n        \"reportId\": report_id,\n        \"jurisdiction\": \"US_WEST_2\",\n        \"creationDate\": timestamp,\n        \"reportType\": \"REG_FORM_49\",\n        \"metadata\": {\n            \"accountId\": os.environ.get('AWS_ACCOUNT_ID', '123456789012'),\n            \"sourceDataHash\": \"sha256_mock_hash\",\n        },\n        \"content\": {\n            \"entity_name\": f\"Entity {report_id}\",\n            \"transaction_count\": random.randint(10, 500),\n            \"total_value\": round(random.uniform(1000.00, 1000000.00), 2)\n        }\n    }\n\n    print(f\"Generated report {report_id} for US_WEST_2\")\n    return report_data\n"
+        },
+        "Timeout": 60,
+        "MemorySize": 256,
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "VpcConfig": {
+          "SecurityGroupIds": [
+            {
+              "Ref": "LambdaSecurityGroup"
+            }
+          ],
+          "SubnetIds": [
+            {
+              "Ref": "SubnetA"
+            },
+            {
+              "Ref": "SubnetB"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Function",
+            "Value": "GenerateReport"
+          }
+        ]
+      }
+    },
+    "ValidateReportLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Handler": "lambda_validate_report.handler",
+        "Runtime": "python3.12",
+        "Code": {
+          "ZipFile": "import json\n\ndef handler(event, context):\n    report_id = event.get('reportId')\n    report_data = event.get('content', {})\n    validation_errors = []\n    \n    if not report_data.get(\"entity_name\"):\n        validation_errors.append(\"Missing required field: entity_name\")\n\n    min_transactions = 20\n    if report_data.get(\"transaction_count\", 0) < min_transactions:\n        validation_errors.append(f\"Transaction count ({report_data.get('transaction_count')}) below minimum threshold of {min_transactions}.\")\n\n    max_value = 500000.00\n    if report_data.get(\"total_value\", 0) > max_value:\n        validation_errors.append(f\"Total value ({report_data.get('total_value')}) exceeds maximum allowed value of {max_value}.\")\n\n    is_valid = len(validation_errors) == 0\n\n    print(f\"Validation for Report {report_id}: {'Success' if is_valid else 'Failure'}\")\n    \n    event['validationResult'] = {\n        \"isValid\": is_valid,\n        \"errors\": validation_errors\n    }\n    \n    return event\n"
+        },
+        "Timeout": 60,
+        "MemorySize": 256,
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "VpcConfig": {
+          "SecurityGroupIds": [
+            {
+              "Ref": "LambdaSecurityGroup"
+            }
+          ],
+          "SubnetIds": [
+            {
+              "Ref": "SubnetA"
+            },
+            {
+              "Ref": "SubnetB"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Function",
+            "Value": "ValidateReport"
+          }
+        ]
+      }
+    },
+    "DeliverReportLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Handler": "lambda_deliver_report.handler",
+        "Runtime": "python3.12",
+        "Code": {
+          "ZipFile": "import json\nimport os\nimport boto3\nfrom datetime import datetime, timezone\n\ns3 = boto3.client('s3')\nses = boto3.client('ses')\n# Initialize RDS Data API client\nrds_data = boto3.client('rds-data')\n\nREPORTS_BUCKET = os.environ.get('REPORTS_BUCKET_NAME')\nSENDER_EMAIL = os.environ.get('SENDER_EMAIL')\nREGULATOR_EMAIL = \"regulator@example.com\"\n\n# Database connection details from environment variables\nDB_CLUSTER_ARN = os.environ.get('DB_CLUSTER_ARN')\nDB_SECRET_ARN = os.environ.get('DB_SECRET_ARN')\nDB_NAME = os.environ.get('DB_NAME')\n\n# Helper function to execute SQL using RDS Data API\ndef execute_statement(sql, parameters=None):\n    if not all([DB_CLUSTER_ARN, DB_SECRET_ARN, DB_NAME]):\n        # In a production setup, this should be a robust error/alert\n        print(\"Database environment variables missing. Skipping DB log.\")\n        return\n        \n    try:\n        return rds_data.execute_statement(\n            resourceArn=DB_CLUSTER_ARN,\n            secretArn=DB_SECRET_ARN,\n            database=DB_NAME,\n            sql=sql,\n            parameters=parameters or []\n        )\n    except Exception as db_e:\n        # Log error but don't re-raise, as S3 and SES steps might have succeeded\n        print(f\"RDS Data API execution failed: {str(db_e)}\")\n\n\ndef handler(event, context):\n    report_data = event.get('content', {})\n    report_id = event.get('reportId')\n    jurisdiction = event.get('jurisdiction')\n    creation_timestamp = event.get('creationDate')\n\n    if not REPORTS_BUCKET:\n        raise EnvironmentError(\"REPORTS_BUCKET_NAME environment variable not set.\")\n\n    # 1. Store Report in S3 (Auditability)\n    s3_key = f\"{jurisdiction}/{report_id}/{report_id}-{creation_timestamp.split('T')[0]}.json\"\n    s3_url = f\"s3://{REPORTS_BUCKET}/{s3_key}\"\n    \n    try:\n        s3.put_object(\n            Bucket=REPORTS_BUCKET,\n            Key=s3_key,\n            Body=json.dumps(event, indent=2),\n            ContentType='application/json',\n            ServerSideEncryption='aws:kms',\n        )\n        print(f\"Report stored successfully at {s3_url}\")\n        \n    except Exception as e:\n        raise RuntimeError(f\"Failed to store report in S3: {str(e)}\")\n\n\n    # 2. Deliver Report via SES (Notification)\n    delivery_status = \"DELIVERY_FAILED\"\n    try:\n        ses_response = ses.send_email(\n            Source=SENDER_EMAIL,\n            Destination={'ToAddresses': [REGULATOR_EMAIL]},\n            Message={\n                'Subject': {'Data': f\"Regulatory Report Submission: {report_id}\"},\n                'Body': {\n                    'Text': {'Data': f\"The report {report_id} has been generated, validated, and is available for download at {s3_url}.\"},\n                    'Html': {'Data': f\"<html><body><p>The report <b>{report_id}</b> has been generated, validated, and is available for download.</p></body></html>\"}\n                }\n            }\n        )\n        delivery_status = \"DELIVERED\"\n        print(f\"SES delivery success: {ses_response['MessageId']}\")\n\n    except Exception as e:\n        print(f\"SES delivery failed: {str(e)}\")\n        \n    \n    # 3. Capture Confirmation Status (Log to Aurora DB)\n    current_timestamp = datetime.now(timezone.utc).isoformat()\n    \n    # The actual INSERT operation using the RDS Data API\n    sql = \"INSERT INTO audit_log (report_id, delivery_status, delivery_timestamp, s3_url) VALUES (:report_id, :status, :timestamp, :s3_url)\"\n    \n    parameters = [\n        {'name': 'report_id', 'value': {'stringValue': report_id}},\n        {'name': 'status', 'value': {'stringValue': delivery_status}},\n        {'name': 'timestamp', 'value': {'stringValue': current_timestamp}},\n        {'name': 's3_url', 'value': {'stringValue': s3_url}}\n    ]\n    \n    execute_statement(sql, parameters)\n    print(f\"Confirmation log attempted for Aurora DB with status: {delivery_status}\")\n    \n    event['s3Url'] = s3_url\n    event['confirmation'] = {\n        \"reportId\": report_id,\n        \"deliveryStatus\": delivery_status,\n        \"deliveryTimestamp\": current_timestamp,\n        \"regulatorAck\": \"PENDING\"\n    }\n\n    return event\n"
+        },
+        "Timeout": 60,
+        "MemorySize": 256,
+        "Environment": {
+          "Variables": {
+            "REPORTS_BUCKET_NAME": {
+              "Ref": "ReportsBucket"
+            },
+            "SENDER_EMAIL": {
+              "Ref": "SenderEmailAddress"
+            },
+            "DB_CLUSTER_ARN": {
+              "Fn::Sub": "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraCluster}"
+            },
+            "DB_SECRET_ARN": {
+              "Ref": "AuroraSecret"
+            },
+            "DB_NAME": "reportingdb"
+          }
+        },
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "VpcConfig": {
+          "SecurityGroupIds": [
+            {
+              "Ref": "LambdaSecurityGroup"
+            }
+          ],
+          "SubnetIds": [
+            {
+              "Ref": "SubnetA"
+            },
+            {
+              "Ref": "SubnetB"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Function",
+            "Value": "DeliverReport"
+          }
+        ]
+      }
+    },
+    "ReportingStateMachine": {
+      "Type": "AWS::StepFunctions::StateMachine",
+      "Properties": {
+        "StateMachineName": {
+          "Fn::Sub": "${AWS::StackName}-ReportingOrchestrator"
+        },
+        "RoleArn": {
+          "Fn::GetAtt": [
+            "StepFunctionsExecutionRole",
+            "Arn"
+          ]
+        },
+        "DefinitionString": {
+          "Fn::Sub": [
+            "{\n  \"Comment\": \"Regulatory Report Generation and Delivery Workflow\",\n  \"StartAt\": \"GenerateReport\",\n  \"States\": {\n    \"GenerateReport\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"arn:aws:states:::lambda:invoke\",\n      \"Parameters\": {\n        \"FunctionName\": \"${GenerateReportLambdaArn}\",\n        \"Payload.$\": \"$\"\n      },\n      \"Retry\": [ { \"ErrorEquals\": [\"Lambda.ServiceException\", \"Lambda.AWSAPICallFailed\"], \"IntervalSeconds\": 2, \"MaxAttempts\": 6, \"BackoffRate\": 2.0 } ],\n      \"Next\": \"ValidateReport\"\n    },\n    \"ValidateReport\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"arn:aws:states:::lambda:invoke\",\n      \"Parameters\": {\n        \"FunctionName\": \"${ValidateReportLambdaArn}\",\n        \"Payload.$\": \"$\"\n      },\n      \"Next\": \"ValidationChoice\"\n    },\n    \"ValidationChoice\": {\n      \"Type\": \"Choice\",\n      \"Choices\": [\n        {\n          \"Variable\": \"$.validationResult.isValid\",\n          \"BooleanEquals\": true,\n          \"Next\": \"DeliverReport\"\n        }\n      ],\n      \"Default\": \"ValidationFailedNotification\"\n    },\n    \"DeliverReport\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"arn:aws:states:::lambda:invoke\",\n      \"Parameters\": {\n        \"FunctionName\": \"${DeliverReportLambdaArn}\",\n        \"Payload.$\": \"$\"\n      },\n      \"Catch\": [ { \"ErrorEquals\": [\"States.ALL\"], \"Next\": \"DeliveryFailedNotification\", \"ResultPath\": \"$.error\" } ],\n      \"Next\": \"ReportGenerationSuccess\"\n    },\n    \"ValidationFailedNotification\": {\n      \"Type\": \"Fail\",\n      \"Cause\": \"Report failed validation rules\",\n      \"Error\": \"ValidationFailed\"\n    },\n    \"DeliveryFailedNotification\": {\n      \"Type\": \"Fail\",\n      \"Cause\": \"Report delivery or S3 storage failed\",\n      \"Error\": \"DeliveryFailed\"\n    },\n    \"ReportGenerationSuccess\": {\n      \"Type\": \"Succeed\"\n    }\n  }\n}",
+            {
+              "GenerateReportLambdaArn": {
+                "Fn::GetAtt": [
+                  "GenerateReportLambda",
+                  "Arn"
+                ]
+              },
+              "ValidateReportLambdaArn": {
+                "Fn::GetAtt": [
+                  "ValidateReportLambda",
+                  "Arn"
+                ]
+              },
+              "DeliverReportLambdaArn": {
+                "Fn::GetAtt": [
+                  "DeliverReportLambda",
+                  "Arn"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "DailyScheduler": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Description": "Triggers the regulatory reporting state machine daily.",
+        "ScheduleExpression": {
+          "Ref": "DailyScheduleExpression"
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Ref": "ReportingStateMachine"
+            },
+            "Id": "StepFunctionsTarget",
+            "RoleArn": {
+              "Fn::GetAtt": [
+                "EventBridgeRole",
+                "Arn"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "EventBridgeRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "EventBridgeStepFunctionsExecutionPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": "states:StartExecution",
+                  "Resource": {
+                    "Ref": "ReportingStateMachine"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "SNSTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "Subscription": [
+          {
+            "Endpoint": {
+              "Ref": "NotificationEmail"
+            },
+            "Protocol": "email"
+          }
+        ]
+      }
+    },
+    "FailureAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription": "Alarm when 10% or more of daily reports fail.",
+        "Namespace": "AWS/States",
+        "MetricName": "ExecutionsFailed",
+        "Dimensions": [
+          {
+            "Name": "StateMachineArn",
+            "Value": {
+              "Ref": "ReportingStateMachine"
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": 86400,
+        "EvaluationPeriods": 1,
+        "Threshold": "200",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "AlarmActions": [
+          {
+            "Ref": "SNSTopic"
+          }
+        ]
+      }
+    },
+    "AuditTrailBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "${AWS::StackName}-cloudtrail-logs-${AWS::AccountId}"
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerPreferred"
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "IgnorePublicAcls": true,
+          "BlockPublicPolicy": true,
+          "RestrictPublicBuckets": true
+        }
+      }
+    },
+    "AuditTrailBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "AuditTrailBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AWSCloudTrailAclCheck",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudtrail.amazonaws.com"
+              },
+              "Action": "s3:GetBucketAcl",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "AuditTrailBucket",
+                  "Arn"
+                ]
+              }
+            },
+            {
+              "Sid": "AWSCloudTrailWrite",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudtrail.amazonaws.com"
+              },
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "arn:aws:s3:::${AuditTrailBucket}/AWSLogs/${AWS::AccountId}/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "s3:x-amz-acl": "bucket-owner-full-control"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "AuditingTrail": {
+      "Type": "AWS::CloudTrail::Trail",
+      "Properties": {
+        "S3BucketName": {
+          "Ref": "AuditTrailBucket"
+        },
+        "IsLogging": true,
+        "IncludeGlobalServiceEvents": true
+      }
+    }
+  },
+  "Outputs": {
+    "ReportsBucketName": {
+      "Description": "S3 bucket for storing regulatory reports (versioned, 10-year retention)",
+      "Value": {
+        "Ref": "ReportsBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ReportsBucket"
+        }
+      }
+    },
+    "StateMachineArn": {
+      "Description": "ARN of the regulatory reporting Step Functions state machine",
+      "Value": {
+        "Ref": "ReportingStateMachine"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-StateMachineArn"
+        }
+      }
+    },
+    "AuroraClusterEndpoint": {
+      "Description": "Aurora Serverless v2 cluster endpoint for read/write access",
+      "Value": {
+        "Fn::GetAtt": [
+          "AuroraCluster",
+          "Endpoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBEndpoint"
+        }
+      }
+    },
+    "SNSTopicArn": {
+      "Description": "SNS topic for CloudWatch failure alerts",
+      "Value": {
+        "Ref": "SNSTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SNSTopicArn"
+        }
+      }
+    }
+  }
+}
