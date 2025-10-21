@@ -1,3 +1,23 @@
+# Serverless Infrastructure Solution
+
+## Overview
+
+This CloudFormation template creates a comprehensive serverless infrastructure for logging API requests to both S3 and CloudWatch. The solution includes an API Gateway with GET and POST endpoints, a Lambda function for request processing and logging, and proper IAM roles with least privilege access. All resources are tagged for cost allocation and include security best practices like S3 public access blocking.
+
+## Architecture
+
+The serverless architecture consists of:
+
+1. **API Gateway** - Regional REST API with `/v1/resource` endpoint supporting GET and POST methods
+2. **Lambda Function** - Python-based function that processes requests and writes structured logs to S3
+3. **S3 Bucket** - Secure storage for application logs with versioning, lifecycle policies, and public access blocking
+4. **CloudWatch Logs** - Centralized logging for both Lambda execution and API Gateway access logs
+5. **IAM Roles** - Least privilege roles for Lambda execution and API Gateway CloudWatch integration
+
+The flow is: API Gateway → Lambda Function → S3 Logging + CloudWatch Logging
+
+## CloudFormation Template
+
 ```json
 {
   "AWSTemplateFormatVersion": "2010-09-09",
@@ -504,3 +524,126 @@
   }
 }
 ```
+
+## Key Features Explained
+
+### 1. **Enhanced Security with Public Access Blocking**
+
+The S3 bucket now includes `PublicAccessBlockConfiguration` to prevent any public access to sensitive log data:
+
+```json
+"PublicAccessBlockConfiguration": {
+  "BlockPublicAcls": true,
+  "BlockPublicPolicy": true,
+  "IgnorePublicAcls": true,
+  "RestrictPublicBuckets": true
+}
+```
+
+### 2. **Improved Parameter Naming Convention**
+
+Changed from `Environment` to `EnvironmentSuffix` to follow organizational naming conventions and removed restrictive `AllowedValues`:
+
+```json
+"EnvironmentSuffix": {
+  "Type": "String",
+  "Default": "dev",
+  "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+  "AllowedPattern": "^[a-zA-Z0-9]+$",
+  "ConstraintDescription": "Must contain only alphanumeric characters"
+}
+```
+
+### 3. **Clean Resource Destruction**
+
+Added `DeletionPolicy: Delete` and `UpdateReplacePolicy: Delete` to the S3 bucket for guaranteed cleanup:
+
+```json
+"LogsBucket": {
+  "Type": "AWS::S3::Bucket",
+  "DeletionPolicy": "Delete",
+  "UpdateReplacePolicy": "Delete",
+  // ... rest of configuration
+}
+```
+
+### 4. **IAM Roles with Least Privilege**
+
+- **Lambda Role**: Only has permissions to write to specific CloudWatch log groups and put objects in the designated S3 bucket
+- **API Gateway Role**: Only has CloudWatch logging permissions via managed policy
+
+### 5. **Lambda Function**
+
+The Lambda function:
+
+- Logs incoming requests to both CloudWatch and S3 with structured JSON
+- Writes execution logs with date-based partitioning to S3: `logs/YYYY/MM/DD/request-id.json`
+- Returns appropriate HTTP responses while gracefully handling S3 write errors
+
+### 6. **API Gateway Configuration**
+
+- Exposes `/v1/resource` endpoint with GET and POST methods
+- Configured with CloudWatch access logging and detailed request tracing
+- Uses AWS_PROXY integration for seamless Lambda integration
+
+### 7. **Comprehensive Logging Architecture**
+
+- **CloudWatch Logs**: Both Lambda and API Gateway write to separate log groups with 7-day retention
+- **S3 Logging**: Lambda writes detailed execution logs with timestamp and request details
+- **API Gateway Access Logs**: Captures request/response metadata for auditing
+
+### 8. **Resource Tagging Strategy**
+
+All resources are tagged with:
+
+- `environment`: Environment suffix (dev, staging, prod, etc.)
+- `project`: Project name for cost allocation and resource management
+
+## Deployment Instructions
+
+1. **Validate the template**:
+
+```bash
+aws cloudformation validate-template --template-body file://serverless_setup.json
+```
+
+2. **Deploy the stack**:
+
+```bash
+aws cloudformation deploy \
+  --template-file serverless_setup.json \
+  --stack-name serverless-app-stack \
+  --parameter-overrides EnvironmentSuffix=dev ProjectName=serverless-demo \
+  --capabilities CAPABILITY_IAM \
+  --region us-east-1
+```
+
+3. **Verify deployment**:
+
+```bash
+# Test GET request
+curl -X GET https://<api-id>.execute-api.us-east-1.amazonaws.com/prod/v1/resource
+
+# Test POST request
+curl -X POST https://<api-id>.execute-api.us-east-1.amazonaws.com/prod/v1/resource \
+  -H "Content-Type: application/json" \
+  -d '{"test": "data"}'
+
+# Check CloudWatch logs
+aws logs tail /aws/lambda/serverless-lambda-dev --follow
+
+# Check S3 logs
+aws s3 ls s3://project-logs-dev/logs/ --recursive
+```
+
+4. **Clean up**:
+
+```bash
+# Empty the S3 bucket first (important for successful stack deletion)
+aws s3 rm s3://project-logs-dev --recursive
+
+# Delete the stack
+aws cloudformation delete-stack --stack-name serverless-app-stack --region us-east-1
+```
+
+This template provides a complete serverless infrastructure with enhanced security, comprehensive logging, and proper resource management while adhering to all specified requirements and AWS Well-Architected Framework principles.
