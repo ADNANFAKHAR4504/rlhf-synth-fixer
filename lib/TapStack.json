@@ -195,14 +195,23 @@
           ]
         },
         "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/service-role/AWSStepFunctionsFullAccess"
+          "arn:aws:iam::aws:policy/service-role/AWSStepFunctionsBasicExecutionRole"
         ],
         "Policies": [
           {
-            "PolicyName": "CloudWatchLogsPolicy",
+            "PolicyName": "StateMachineExecutionPolicy",
             "PolicyDocument": {
               "Version": "2012-10-17",
               "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "lambda:InvokeFunction"
+                  ],
+                  "Resource": [
+                    { "Fn::GetAtt": ["ApiGatewayHandlerFunction", "Arn"] }
+                  ]
+                },
                 {
                   "Effect": "Allow",
                   "Action": [
