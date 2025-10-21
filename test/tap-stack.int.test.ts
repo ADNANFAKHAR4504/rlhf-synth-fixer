@@ -622,25 +622,34 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
         rdsEndpoint
       });
 
-      const requestOptions: any = {
-        host: url.hostname,
-        method: 'POST',
-        path: url.pathname,
-        service: 'execute-api',
-        region: apiRegionUsed,
-        headers: { 'content-type': 'application/json', 'X-Instance-Id': instanceId },
-        body: bodyPayload
+      const doSignedPost = async () => {
+        const req: any = {
+          host: url.hostname,
+          method: 'POST',
+          path: url.pathname,
+          service: 'execute-api',
+          region: apiRegionUsed,
+          headers: { 'content-type': 'application/json', 'X-Instance-Id': instanceId },
+          body: bodyPayload
+        };
+        aws4.sign(req, {
+          accessKeyId: credentials.accessKeyId,
+          secretAccessKey: credentials.secretAccessKey,
+          sessionToken: credentials.sessionToken
+        });
+        return await fetch(`${url.protocol}//${url.hostname}${url.pathname}`, {
+          method: 'POST',
+          headers: req.headers,
+          body: bodyPayload
+        });
       };
-      aws4.sign(requestOptions, {
-        accessKeyId: credentials.accessKeyId,
-        secretAccessKey: credentials.secretAccessKey,
-        sessionToken: credentials.sessionToken
-      });
-      const postResp = await fetch(`${url.protocol}//${url.hostname}${url.pathname}`, {
-        method: 'POST',
-        headers: requestOptions.headers,
-        body: bodyPayload
-      });
+
+      // Retry POST for eventual deployment consistency
+      let postResp = await doSignedPost();
+      for (let i = 0; i < 10 && postResp.status === 404; i++) {
+        await new Promise(r => setTimeout(r, 3000));
+        postResp = await doSignedPost();
+      }
       expect(postResp.status).toBeGreaterThanOrEqual(200);
       expect(postResp.status).toBeLessThan(400);
       let commandId: string | undefined;
