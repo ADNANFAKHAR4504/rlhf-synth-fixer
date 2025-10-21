@@ -13,6 +13,7 @@ class AlbStack(Construct):
         self,
         scope: Construct,
         construct_id: str,
+        *,
         vpc_id: str,
         public_subnet_ids: list,
         alb_security_group_id: str,

@@ -12,6 +12,7 @@ class CacheStack(Construct):
         self,
         scope: Construct,
         construct_id: str,
+        *,
         vpc_id: str,
         private_subnet_ids: list,
         cache_security_group_id: str,
