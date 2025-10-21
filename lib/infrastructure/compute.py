@@ -199,7 +199,7 @@ EOF
                 version="$Latest"
             ),
             health_check_type="EC2",
-            health_check_grace_period=300,
+            health_check_grace_period=600,
             tags=[
                 aws.autoscaling.GroupTagArgs(
                     key="Name",
