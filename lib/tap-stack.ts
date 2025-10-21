@@ -257,6 +257,12 @@ export class TapStack extends pulumi.ComponentResource {
         kmsKeyId: securityStack.kmsKeyId,
         kmsKeyArn: securityStack.kmsKeyArn,
         secretsManagerArns: securityStack.secretsManagerArns,
+        kinesisStreamArn: messagingStack.kinesisStreamArn,
+        kinesisStreamName: messagingStack.kinesisStreamName,
+        transactionQueueArn: messagingStack.transactionQueueArn,
+        transactionQueueUrl: messagingStack.transactionQueueUrl,
+        fraudDetectionQueueArn: messagingStack.fraudDetectionQueueArn,
+        fraudDetectionQueueUrl: messagingStack.fraudDetectionQueueUrl,
       },
       {
         parent: this,

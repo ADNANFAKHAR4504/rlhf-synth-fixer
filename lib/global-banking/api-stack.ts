@@ -1,8 +1,14 @@
 /**
- * api-stack.ts
+ * api-stack.ts - ENHANCED VERSION
  *
  * API Gateway, Application Load Balancer, Global Accelerator
  * Lambda functions for transaction processing
+ *
+ * ENHANCEMENTS:
+ * - Added Lambda Event Source Mappings for Kinesis streams
+ * - Added Lambda Event Source Mappings for SQS queues
+ * - Enhanced IAM permissions for stream/queue consumption
+ * - All enhancements are OPTIONAL and backward compatible
  */
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
@@ -30,6 +36,20 @@ export interface ApiStackArgs {
   kmsKeyId: pulumi.Input<string>;
   kmsKeyArn: pulumi.Input<string>;
   secretsManagerArns: pulumi.Output<{ database: string; api: string }>;
+
+  // ========================================
+  // NEW: Optional ARNs for event source mappings
+  // ========================================
+  kinesisStreamArn?: pulumi.Input<string>;
+  kinesisStreamName?: pulumi.Input<string>;
+  transactionQueueArn?: pulumi.Input<string>;
+  transactionQueueUrl?: pulumi.Input<string>;
+  fraudDetectionQueueArn?: pulumi.Input<string>;
+  fraudDetectionQueueUrl?: pulumi.Input<string>;
+
+  // Optional: Enable/disable event source mappings
+  enableKinesisConsumers?: boolean;
+  enableSqsConsumers?: boolean;
 }
 
 export class ApiStack extends pulumi.ComponentResource {
@@ -63,6 +83,15 @@ export class ApiStack extends pulumi.ComponentResource {
       lambdaRuntime,
       kmsKeyArn,
       secretsManagerArns,
+      // Event source mapping parameters (optional)
+      kinesisStreamArn,
+      kinesisStreamName,
+      transactionQueueArn,
+      transactionQueueUrl,
+      fraudDetectionQueueArn,
+      // fraudDetectionQueueUrl is not used but kept for future use
+      enableKinesisConsumers = true,
+      enableSqsConsumers = true,
     } = args;
 
     // Security Group for ALB
@@ -224,7 +253,8 @@ export class ApiStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Grant Lambda permissions
+    // ENHANCED: Lambda permissions with Kinesis and SQS consumption
+
     new aws.iam.RolePolicy(
       `${name}-lambda-policy`,
       {
@@ -250,12 +280,25 @@ export class ApiStack extends pulumi.ComponentResource {
               },
               {
                 Effect: 'Allow',
-                Action: ['sqs:SendMessage', 'sqs:ReceiveMessage'],
+                Action: [
+                  'sqs:SendMessage',
+                  'sqs:ReceiveMessage',
+                  'sqs:DeleteMessage', //  For consuming messages
+                  'sqs:GetQueueAttributes', // For event source mappings
+                ],
                 Resource: '*',
               },
               {
                 Effect: 'Allow',
-                Action: ['kinesis:PutRecord', 'kinesis:PutRecords'],
+                Action: [
+                  'kinesis:PutRecord',
+                  'kinesis:PutRecords',
+                  'kinesis:GetRecords', // For consuming from stream
+                  'kinesis:GetShardIterator', //  For consuming from stream
+                  'kinesis:DescribeStream', // For event source mappings
+                  'kinesis:ListShards', // For event source mappings
+                  'kinesis:ListStreams', //  For event source mappings
+                ],
                 Resource: '*',
               },
               {
@@ -328,6 +371,19 @@ export class ApiStack extends pulumi.ComponentResource {
               'index.js': new pulumi.asset.StringAsset(`
                 exports.handler = async (event) => {
                   console.log('Placeholder Lambda - Transaction Processor');
+                  console.log('Event:', JSON.stringify(event, null, 2));
+                  
+                  // Handle different event sources
+                  if (event.Records) {
+                    for (const record of event.Records) {
+                      if (record.kinesis) {
+                        console.log('Processing Kinesis record:', record.kinesis.sequenceNumber);
+                      } else if (record.body) {
+                        console.log('Processing SQS message:', record.messageId);
+                      }
+                    }
+                  }
+                  
                   return {
                     statusCode: 200,
                     body: JSON.stringify({ message: 'Transaction processed' })
@@ -342,8 +398,11 @@ export class ApiStack extends pulumi.ComponentResource {
           variables: {
             ENVIRONMENT: environmentSuffix,
             DYNAMODB_TABLE: `transactions-${environmentSuffix}`,
-            SQS_QUEUE_URL: `https://sqs.${regions.primary}.amazonaws.com/transactions-${environmentSuffix}`,
-            KINESIS_STREAM: `transactions-stream-${environmentSuffix}`,
+            SQS_QUEUE_URL:
+              transactionQueueUrl ||
+              `https://sqs.${regions.primary}.amazonaws.com/transactions-${environmentSuffix}`,
+            KINESIS_STREAM:
+              kinesisStreamName || `transactions-stream-${environmentSuffix}`,
           },
         },
         vpcConfig: {
@@ -377,6 +436,17 @@ export class ApiStack extends pulumi.ComponentResource {
               'index.js': new pulumi.asset.StringAsset(`
                 exports.handler = async (event) => {
                   console.log('Placeholder Lambda - Fraud Detection');
+                  console.log('Event:', JSON.stringify(event, null, 2));
+                  
+                  // Handle SQS messages
+                  if (event.Records) {
+                    for (const record of event.Records) {
+                      if (record.body) {
+                        console.log('Processing fraud check for message:', record.messageId);
+                      }
+                    }
+                  }
+                  
                   return {
                     statusCode: 200,
                     body: JSON.stringify({ fraudScore: 0, approved: true })
@@ -427,6 +497,85 @@ export class ApiStack extends pulumi.ComponentResource {
       },
       { parent: this }
     );
+
+    // NEW: Lambda Event Source Mappings
+
+    // Event Source Mapping: Kinesis → Transaction Lambda
+    if (enableKinesisConsumers && kinesisStreamArn) {
+      new aws.lambda.EventSourceMapping(
+        `${name}-kinesis-transaction-mapping`,
+        {
+          functionName: transactionLambda.name,
+          eventSourceArn: kinesisStreamArn,
+          startingPosition: 'LATEST',
+          batchSize: 100,
+          maximumBatchingWindowInSeconds: 5,
+          parallelizationFactor: 10,
+          bisectBatchOnFunctionError: true,
+          maximumRetryAttempts: 2,
+          maximumRecordAgeInSeconds: 604800, // 7 days
+          enabled: true,
+          functionResponseTypes: ['ReportBatchItemFailures'],
+        },
+        { parent: this, dependsOn: [transactionLambda] }
+      );
+
+      pulumi.log.info(
+        ` Created Kinesis event source mapping for ${transactionLambda.name}`
+      );
+    } else if (enableKinesisConsumers && !kinesisStreamArn) {
+      pulumi.log.warn(
+        '  enableKinesisConsumers is true but kinesisStreamArn not provided. Skipping Kinesis event source mapping.'
+      );
+    }
+
+    // Event Source Mapping: SQS Transaction Queue → Transaction Lambda
+    if (enableSqsConsumers && transactionQueueArn) {
+      new aws.lambda.EventSourceMapping(
+        `${name}-sqs-transaction-mapping`,
+        {
+          functionName: transactionLambda.name,
+          eventSourceArn: transactionQueueArn,
+          batchSize: 10,
+          maximumBatchingWindowInSeconds: 5,
+          functionResponseTypes: ['ReportBatchItemFailures'],
+          enabled: true,
+        },
+        { parent: this, dependsOn: [transactionLambda] }
+      );
+
+      pulumi.log.info(
+        ` Created SQS event source mapping for ${transactionLambda.name} (Transaction Queue)`
+      );
+    } else if (enableSqsConsumers && !transactionQueueArn) {
+      pulumi.log.warn(
+        '  enableSqsConsumers is true but transactionQueueArn not provided. Skipping SQS transaction queue mapping.'
+      );
+    }
+
+    // Event Source Mapping: SQS Fraud Detection Queue → Fraud Lambda
+    if (enableSqsConsumers && fraudDetectionQueueArn) {
+      new aws.lambda.EventSourceMapping(
+        `${name}-sqs-fraud-mapping`,
+        {
+          functionName: fraudDetectionLambda.name,
+          eventSourceArn: fraudDetectionQueueArn,
+          batchSize: 5,
+          maximumBatchingWindowInSeconds: 10,
+          functionResponseTypes: ['ReportBatchItemFailures'],
+          enabled: true,
+        },
+        { parent: this, dependsOn: [fraudDetectionLambda] }
+      );
+
+      pulumi.log.info(
+        ` Created SQS event source mapping for ${fraudDetectionLambda.name} (Fraud Detection Queue)`
+      );
+    } else if (enableSqsConsumers && !fraudDetectionQueueArn) {
+      pulumi.log.warn(
+        '  enableSqsConsumers is true but fraudDetectionQueueArn not provided. Skipping SQS fraud detection queue mapping.'
+      );
+    }
 
     //  API Gateway REST API
     const api = new aws.apigateway.RestApi(
@@ -591,8 +740,6 @@ export class ApiStack extends pulumi.ComponentResource {
       {
         parent: this,
         dependsOn: [deployment, apiAccessLogGroup],
-        // REMOVED: ignoreChanges: ['deployment']
-        // This allows proper tracking of deployment changes and correct deletion ordering
       }
     );
 

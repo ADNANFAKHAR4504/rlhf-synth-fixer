@@ -1344,6 +1344,309 @@ describe("ApiStack", () => {
     });
   });
 
+  describe("Lambda Event Source Mappings", () => {
+    it("creates Kinesis event source mapping when enabled and ARN provided", (done) => {
+      createdResources.clear();
+      stack = new ApiStack("test-kinesis-mapping", {
+        environmentSuffix: "kinesis",
+        tags: pulumi.output({ EventSource: "kinesis" }),
+        vpcId: pulumi.output("vpc-123"),
+        publicSubnetIds: pulumi.output(["subnet-1", "subnet-2"]),
+        privateSubnetIds: pulumi.output(["subnet-3", "subnet-4"]),
+        ecsClusterArn: pulumi.output("arn:aws:ecs:us-east-1:123456789012:cluster/test"),
+        certificateArn: pulumi.output("arn:aws:acm:us-east-1:123456789012:certificate/cert-123"),
+        cognitoUserPoolArn: pulumi.output("arn:aws:cognito-idp:us-east-1:123456789012:userpool/pool-123"),
+        wafWebAclArn: pulumi.output("arn:aws:wafv2:us-east-1:123456789012:regional/webacl/waf-123"),
+        domainName: "test.example.com",
+        regions: { primary: "us-east-1", replicas: [] },
+        enableGlobalAccelerator: false,
+        enableMutualTls: false,
+        lambdaRuntime: "java17",
+        kmsKeyId: pulumi.output("key-123"),
+        kmsKeyArn: pulumi.output("arn:aws:kms:us-east-1:123456789012:key/key-123"),
+        secretsManagerArns: pulumi.output({
+          database: "arn:aws:secretsmanager:us-east-1:123456789012:secret:db-secret",
+          api: "arn:aws:secretsmanager:us-east-1:123456789012:secret:api-secret",
+        }),
+        kinesisStreamArn: pulumi.output("arn:aws:kinesis:us-east-1:123456789012:stream/test-stream"),
+        kinesisStreamName: pulumi.output("test-stream"),
+        enableKinesisConsumers: true,
+      });
+
+      process.nextTick(() => {
+        const kinesisMapping = Array.from(createdResources.values()).find(
+          r => r.type === "aws:lambda/eventSourceMapping:EventSourceMapping" && 
+               r.name.includes("kinesis")
+        );
+        expect(kinesisMapping).toBeDefined();
+        done();
+      });
+    });
+
+    it("skips Kinesis event source mapping when ARN not provided", (done) => {
+      createdResources.clear();
+      stack = new ApiStack("test-no-kinesis-arn", {
+        environmentSuffix: "nokinesis",
+        tags: pulumi.output({ EventSource: "none" }),
+        vpcId: pulumi.output("vpc-123"),
+        publicSubnetIds: pulumi.output(["subnet-1", "subnet-2"]),
+        privateSubnetIds: pulumi.output(["subnet-3", "subnet-4"]),
+        ecsClusterArn: pulumi.output("arn:aws:ecs:us-east-1:123456789012:cluster/test"),
+        certificateArn: pulumi.output("arn:aws:acm:us-east-1:123456789012:certificate/cert-123"),
+        cognitoUserPoolArn: pulumi.output("arn:aws:cognito-idp:us-east-1:123456789012:userpool/pool-123"),
+        wafWebAclArn: pulumi.output("arn:aws:wafv2:us-east-1:123456789012:regional/webacl/waf-123"),
+        domainName: "test.example.com",
+        regions: { primary: "us-east-1", replicas: [] },
+        enableGlobalAccelerator: false,
+        enableMutualTls: false,
+        lambdaRuntime: "java17",
+        kmsKeyId: pulumi.output("key-123"),
+        kmsKeyArn: pulumi.output("arn:aws:kms:us-east-1:123456789012:key/key-123"),
+        secretsManagerArns: pulumi.output({
+          database: "arn:aws:secretsmanager:us-east-1:123456789012:secret:db-secret",
+          api: "arn:aws:secretsmanager:us-east-1:123456789012:secret:api-secret",
+        }),
+        enableKinesisConsumers: true,
+      });
+
+      process.nextTick(() => {
+        const kinesisMapping = Array.from(createdResources.values()).find(
+          r => r.type === "aws:lambda/eventSourceMapping:EventSourceMapping" && 
+               r.name.includes("kinesis")
+        );
+        expect(kinesisMapping).toBeUndefined();
+        done();
+      });
+    });
+
+    it("creates SQS transaction queue event source mapping when enabled and ARN provided", (done) => {
+      createdResources.clear();
+      stack = new ApiStack("test-sqs-transaction", {
+        environmentSuffix: "sqstxn",
+        tags: pulumi.output({ EventSource: "sqs-txn" }),
+        vpcId: pulumi.output("vpc-123"),
+        publicSubnetIds: pulumi.output(["subnet-1", "subnet-2"]),
+        privateSubnetIds: pulumi.output(["subnet-3", "subnet-4"]),
+        ecsClusterArn: pulumi.output("arn:aws:ecs:us-east-1:123456789012:cluster/test"),
+        certificateArn: pulumi.output("arn:aws:acm:us-east-1:123456789012:certificate/cert-123"),
+        cognitoUserPoolArn: pulumi.output("arn:aws:cognito-idp:us-east-1:123456789012:userpool/pool-123"),
+        wafWebAclArn: pulumi.output("arn:aws:wafv2:us-east-1:123456789012:regional/webacl/waf-123"),
+        domainName: "test.example.com",
+        regions: { primary: "us-east-1", replicas: [] },
+        enableGlobalAccelerator: false,
+        enableMutualTls: false,
+        lambdaRuntime: "java17",
+        kmsKeyId: pulumi.output("key-123"),
+        kmsKeyArn: pulumi.output("arn:aws:kms:us-east-1:123456789012:key/key-123"),
+        secretsManagerArns: pulumi.output({
+          database: "arn:aws:secretsmanager:us-east-1:123456789012:secret:db-secret",
+          api: "arn:aws:secretsmanager:us-east-1:123456789012:secret:api-secret",
+        }),
+        transactionQueueArn: pulumi.output("arn:aws:sqs:us-east-1:123456789012:transaction-queue"),
+        transactionQueueUrl: pulumi.output("https://sqs.us-east-1.amazonaws.com/123456789012/transaction-queue"),
+        enableSqsConsumers: true,
+      });
+
+      process.nextTick(() => {
+        const sqsMapping = Array.from(createdResources.values()).find(
+          r => r.type === "aws:lambda/eventSourceMapping:EventSourceMapping" && 
+               r.name.includes("sqs-transaction")
+        );
+        expect(sqsMapping).toBeDefined();
+        done();
+      });
+    });
+
+    it("skips SQS transaction queue mapping when ARN not provided", (done) => {
+      createdResources.clear();
+      stack = new ApiStack("test-no-sqs-txn", {
+        environmentSuffix: "nosqstxn",
+        tags: pulumi.output({ EventSource: "none" }),
+        vpcId: pulumi.output("vpc-123"),
+        publicSubnetIds: pulumi.output(["subnet-1", "subnet-2"]),
+        privateSubnetIds: pulumi.output(["subnet-3", "subnet-4"]),
+        ecsClusterArn: pulumi.output("arn:aws:ecs:us-east-1:123456789012:cluster/test"),
+        certificateArn: pulumi.output("arn:aws:acm:us-east-1:123456789012:certificate/cert-123"),
+        cognitoUserPoolArn: pulumi.output("arn:aws:cognito-idp:us-east-1:123456789012:userpool/pool-123"),
+        wafWebAclArn: pulumi.output("arn:aws:wafv2:us-east-1:123456789012:regional/webacl/waf-123"),
+        domainName: "test.example.com",
+        regions: { primary: "us-east-1", replicas: [] },
+        enableGlobalAccelerator: false,
+        enableMutualTls: false,
+        lambdaRuntime: "java17",
+        kmsKeyId: pulumi.output("key-123"),
+        kmsKeyArn: pulumi.output("arn:aws:kms:us-east-1:123456789012:key/key-123"),
+        secretsManagerArns: pulumi.output({
+          database: "arn:aws:secretsmanager:us-east-1:123456789012:secret:db-secret",
+          api: "arn:aws:secretsmanager:us-east-1:123456789012:secret:api-secret",
+        }),
+        enableSqsConsumers: true,
+      });
+
+      process.nextTick(() => {
+        const sqsMapping = Array.from(createdResources.values()).find(
+          r => r.type === "aws:lambda/eventSourceMapping:EventSourceMapping" && 
+               r.name.includes("sqs-transaction")
+        );
+        expect(sqsMapping).toBeUndefined();
+        done();
+      });
+    });
+
+    it("creates SQS fraud detection queue event source mapping when enabled and ARN provided", (done) => {
+      createdResources.clear();
+      stack = new ApiStack("test-sqs-fraud", {
+        environmentSuffix: "sqsfraud",
+        tags: pulumi.output({ EventSource: "sqs-fraud" }),
+        vpcId: pulumi.output("vpc-123"),
+        publicSubnetIds: pulumi.output(["subnet-1", "subnet-2"]),
+        privateSubnetIds: pulumi.output(["subnet-3", "subnet-4"]),
+        ecsClusterArn: pulumi.output("arn:aws:ecs:us-east-1:123456789012:cluster/test"),
+        certificateArn: pulumi.output("arn:aws:acm:us-east-1:123456789012:certificate/cert-123"),
+        cognitoUserPoolArn: pulumi.output("arn:aws:cognito-idp:us-east-1:123456789012:userpool/pool-123"),
+        wafWebAclArn: pulumi.output("arn:aws:wafv2:us-east-1:123456789012:regional/webacl/waf-123"),
+        domainName: "test.example.com",
+        regions: { primary: "us-east-1", replicas: [] },
+        enableGlobalAccelerator: false,
+        enableMutualTls: false,
+        lambdaRuntime: "java17",
+        kmsKeyId: pulumi.output("key-123"),
+        kmsKeyArn: pulumi.output("arn:aws:kms:us-east-1:123456789012:key/key-123"),
+        secretsManagerArns: pulumi.output({
+          database: "arn:aws:secretsmanager:us-east-1:123456789012:secret:db-secret",
+          api: "arn:aws:secretsmanager:us-east-1:123456789012:secret:api-secret",
+        }),
+        fraudDetectionQueueArn: pulumi.output("arn:aws:sqs:us-east-1:123456789012:fraud-queue"),
+        enableSqsConsumers: true,
+      });
+
+      process.nextTick(() => {
+        const fraudMapping = Array.from(createdResources.values()).find(
+          r => r.type === "aws:lambda/eventSourceMapping:EventSourceMapping" && 
+               r.name.includes("sqs-fraud")
+        );
+        expect(fraudMapping).toBeDefined();
+        done();
+      });
+    });
+
+    it("skips SQS fraud detection queue mapping when ARN not provided", (done) => {
+      createdResources.clear();
+      stack = new ApiStack("test-no-sqs-fraud", {
+        environmentSuffix: "nosqsfraud",
+        tags: pulumi.output({ EventSource: "none" }),
+        vpcId: pulumi.output("vpc-123"),
+        publicSubnetIds: pulumi.output(["subnet-1", "subnet-2"]),
+        privateSubnetIds: pulumi.output(["subnet-3", "subnet-4"]),
+        ecsClusterArn: pulumi.output("arn:aws:ecs:us-east-1:123456789012:cluster/test"),
+        certificateArn: pulumi.output("arn:aws:acm:us-east-1:123456789012:certificate/cert-123"),
+        cognitoUserPoolArn: pulumi.output("arn:aws:cognito-idp:us-east-1:123456789012:userpool/pool-123"),
+        wafWebAclArn: pulumi.output("arn:aws:wafv2:us-east-1:123456789012:regional/webacl/waf-123"),
+        domainName: "test.example.com",
+        regions: { primary: "us-east-1", replicas: [] },
+        enableGlobalAccelerator: false,
+        enableMutualTls: false,
+        lambdaRuntime: "java17",
+        kmsKeyId: pulumi.output("key-123"),
+        kmsKeyArn: pulumi.output("arn:aws:kms:us-east-1:123456789012:key/key-123"),
+        secretsManagerArns: pulumi.output({
+          database: "arn:aws:secretsmanager:us-east-1:123456789012:secret:db-secret",
+          api: "arn:aws:secretsmanager:us-east-1:123456789012:secret:api-secret",
+        }),
+        enableSqsConsumers: true,
+      });
+
+      process.nextTick(() => {
+        const fraudMapping = Array.from(createdResources.values()).find(
+          r => r.type === "aws:lambda/eventSourceMapping:EventSourceMapping" && 
+               r.name.includes("sqs-fraud")
+        );
+        expect(fraudMapping).toBeUndefined();
+        done();
+      });
+    });
+
+    it("creates all event source mappings when all ARNs provided", (done) => {
+      createdResources.clear();
+      stack = new ApiStack("test-all-mappings", {
+        environmentSuffix: "allmappings",
+        tags: pulumi.output({ EventSource: "all" }),
+        vpcId: pulumi.output("vpc-123"),
+        publicSubnetIds: pulumi.output(["subnet-1", "subnet-2"]),
+        privateSubnetIds: pulumi.output(["subnet-3", "subnet-4"]),
+        ecsClusterArn: pulumi.output("arn:aws:ecs:us-east-1:123456789012:cluster/test"),
+        certificateArn: pulumi.output("arn:aws:acm:us-east-1:123456789012:certificate/cert-123"),
+        cognitoUserPoolArn: pulumi.output("arn:aws:cognito-idp:us-east-1:123456789012:userpool/pool-123"),
+        wafWebAclArn: pulumi.output("arn:aws:wafv2:us-east-1:123456789012:regional/webacl/waf-123"),
+        domainName: "test.example.com",
+        regions: { primary: "us-east-1", replicas: [] },
+        enableGlobalAccelerator: false,
+        enableMutualTls: false,
+        lambdaRuntime: "java17",
+        kmsKeyId: pulumi.output("key-123"),
+        kmsKeyArn: pulumi.output("arn:aws:kms:us-east-1:123456789012:key/key-123"),
+        secretsManagerArns: pulumi.output({
+          database: "arn:aws:secretsmanager:us-east-1:123456789012:secret:db-secret",
+          api: "arn:aws:secretsmanager:us-east-1:123456789012:secret:api-secret",
+        }),
+        kinesisStreamArn: pulumi.output("arn:aws:kinesis:us-east-1:123456789012:stream/test-stream"),
+        kinesisStreamName: pulumi.output("test-stream"),
+        transactionQueueArn: pulumi.output("arn:aws:sqs:us-east-1:123456789012:transaction-queue"),
+        transactionQueueUrl: pulumi.output("https://sqs.us-east-1.amazonaws.com/123456789012/transaction-queue"),
+        fraudDetectionQueueArn: pulumi.output("arn:aws:sqs:us-east-1:123456789012:fraud-queue"),
+        enableKinesisConsumers: true,
+        enableSqsConsumers: true,
+      });
+
+      process.nextTick(() => {
+        const eventSourceMappings = Array.from(createdResources.values()).filter(
+          r => r.type === "aws:lambda/eventSourceMapping:EventSourceMapping"
+        );
+        expect(eventSourceMappings.length).toBe(3);
+        done();
+      });
+    });
+
+    it("does not create mappings when consumers disabled", (done) => {
+      createdResources.clear();
+      stack = new ApiStack("test-disabled-consumers", {
+        environmentSuffix: "disabled",
+        tags: pulumi.output({ EventSource: "disabled" }),
+        vpcId: pulumi.output("vpc-123"),
+        publicSubnetIds: pulumi.output(["subnet-1", "subnet-2"]),
+        privateSubnetIds: pulumi.output(["subnet-3", "subnet-4"]),
+        ecsClusterArn: pulumi.output("arn:aws:ecs:us-east-1:123456789012:cluster/test"),
+        certificateArn: pulumi.output("arn:aws:acm:us-east-1:123456789012:certificate/cert-123"),
+        cognitoUserPoolArn: pulumi.output("arn:aws:cognito-idp:us-east-1:123456789012:userpool/pool-123"),
+        wafWebAclArn: pulumi.output("arn:aws:wafv2:us-east-1:123456789012:regional/webacl/waf-123"),
+        domainName: "test.example.com",
+        regions: { primary: "us-east-1", replicas: [] },
+        enableGlobalAccelerator: false,
+        enableMutualTls: false,
+        lambdaRuntime: "java17",
+        kmsKeyId: pulumi.output("key-123"),
+        kmsKeyArn: pulumi.output("arn:aws:kms:us-east-1:123456789012:key/key-123"),
+        secretsManagerArns: pulumi.output({
+          database: "arn:aws:secretsmanager:us-east-1:123456789012:secret:db-secret",
+          api: "arn:aws:secretsmanager:us-east-1:123456789012:secret:api-secret",
+        }),
+        kinesisStreamArn: pulumi.output("arn:aws:kinesis:us-east-1:123456789012:stream/test-stream"),
+        transactionQueueArn: pulumi.output("arn:aws:sqs:us-east-1:123456789012:transaction-queue"),
+        fraudDetectionQueueArn: pulumi.output("arn:aws:sqs:us-east-1:123456789012:fraud-queue"),
+        enableKinesisConsumers: false,
+        enableSqsConsumers: false,
+      });
+
+      process.nextTick(() => {
+        const eventSourceMappings = Array.from(createdResources.values()).filter(
+          r => r.type === "aws:lambda/eventSourceMapping:EventSourceMapping"
+        );
+        expect(eventSourceMappings.length).toBe(0);
+        done();
+      });
+    });
+  });
+
   describe("Output Registration", () => {
     beforeEach(() => {
       stack = new ApiStack("test-outputs", {

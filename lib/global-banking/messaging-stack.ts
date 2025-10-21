@@ -26,6 +26,8 @@ export class MessagingStack extends pulumi.ComponentResource {
   public readonly kinesisStreamArn: pulumi.Output<string>;
   public readonly kinesisStreamName: pulumi.Output<string>;
   public readonly eventBusArn: pulumi.Output<string>;
+  public readonly fraudDetectionQueueArn: pulumi.Output<string>;
+  public readonly fraudDetectionQueueUrl: pulumi.Output<string>;
 
   constructor(
     name: string,
