@@ -26,7 +26,10 @@ if (!fs.existsSync('cfn-outputs/flat-outputs.json')) {
 const outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
 
 // AWS Clients
-const region = process.env.AWS_REGION;
+// Derive region from API Gateway URL in outputs to ensure correct region usage
+const apiGatewayUrl = outputs['NovaApiGatewayUrl'] || '';
+const regionMatch = apiGatewayUrl.match(/\.execute-api\.([a-z0-9-]+)\.amazonaws\.com/);
+const region = regionMatch ? regionMatch[1] : (process.env.AWS_REGION || 'us-west-2');
 const s3Client = new S3Client({ region });
 const rdsClient = new RDSClient({ region });
 const cloudFrontClient = new CloudFrontClient({ region });
