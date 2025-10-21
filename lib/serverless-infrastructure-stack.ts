@@ -115,7 +115,10 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
     // Use NodejsFunction bundling in CI to include runtime dependencies
     // (CI environments typically have Docker available for esbuild bundling).
     // For local unit tests we prefer a simple Code.fromAsset to avoid requiring Docker.
-    const useBundler = process.env.CI === '1' || process.env.CI === 'true' || process.env.USE_NODEJS_BUNDLER === '1';
+    const useBundler =
+      process.env.CI === '1' ||
+      process.env.CI === 'true' ||
+      process.env.USE_NODEJS_BUNDLER === '1';
     let lambdaFunction: lambda.Function;
     if (useBundler) {
       const nodefn = new NodejsFunction(this, 'ApplicationFunction', {
