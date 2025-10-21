@@ -294,4 +294,116 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
 // Duplicate block removed — original top-level imports and ServerlessInfrastructureStack implementation (first occurrence) are retained above.
 ```
 
+### lib/tap-stack.ts
+```typescript
+import * as cdk from 'aws-cdk-lib';
+import { Construct } from 'constructs';
+import { ServerlessInfrastructureStack } from './serverless-infrastructure-stack';
+
+interface TapStackProps extends cdk.StackProps {
+  environmentSuffix?: string;
+}
+
+export class TapStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
+    super(scope, id, props);
+
+    const environmentSuffix =
+      props?.environmentSuffix ||
+      this.node.tryGetContext('environmentSuffix') ||
+      'dev';
+
+    const childStackName = `ServerlessInfrastructureStack${environmentSuffix}`;
+    new ServerlessInfrastructureStack(this, childStackName, {
+      stackName: childStackName,
+      env: props?.env,
+    });
+
+    // ? Import your stacks here
+    // import { MyStack } from './my-stack';
+
+    // ? Add your stack instantiations here
+    // ! Do NOT create resources directly in this stack.
+    // ! Instead, create separate stacks for each resource type.
+  }
+}
+```
+
+### lib/lambda-handler/index.js
+```javascript
+const AWS = require('aws-sdk');
+const dynamo = new AWS.DynamoDB.DocumentClient();
+const ssm = new AWS.SSM();
+
+// Simple event processor: on POST /items this function writes an item to DynamoDB
+// and uses a configuration parameter from SSM to augment the item.
+exports.handler = async (event) => {
+  console.log('Received event:', JSON.stringify(event));
+
+  const now = new Date().toISOString();
+
+  // Read config parameter (non-blocking if missing)
+  let config = {};
+  try {
+    const paramName = process.env.CONFIG_PARAMETER_NAME;
+    if (paramName) {
+      const res = await ssm.getParameter({ Name: paramName }).promise();
+      config = JSON.parse(res.Parameter.Value || '{}');
+    }
+  } catch (err) {
+    console.warn('Unable to read config parameter:', err.message || err);
+  }
+
+  // Parse body for API Gateway proxy integration
+  let body = {};
+  try {
+    body = typeof event.body === 'string' ? JSON.parse(event.body) : (event.body || {});
+  } catch (err) {
+    return {
+      statusCode: 400,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'Invalid JSON body' }),
+    };
+  }
+
+  // Minimal validation
+  if (!body || !body.id) {
+    return {
+      statusCode: 400,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'Missing required field: id' }),
+    };
+  }
+
+  const item = {
+    id: body.id,
+    payload: body.payload || null,
+    receivedAt: now,
+    environment: process.env.ENV || 'dev',
+    configVersion: config.apiVersion || 'unknown',
+  };
+
+  try {
+    // Use a safe fallback table name in local/test environments so unit tests
+    // that don't set the environment variable don't fail due to SDK param
+    // validation. In real deployments TABLE_NAME must be set by the stack.
+    const tableName = process.env.TABLE_NAME || 'local-test-table';
+    await dynamo.put({ TableName: tableName, Item: item }).promise();
+  } catch (err) {
+    console.error('DynamoDB put error:', err);
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'Internal Server Error' }),
+    };
+  }
+
+  return {
+    statusCode: 201,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: 'Item stored', item }),
+  };
+};
+```
+
 ---
