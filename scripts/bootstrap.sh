@@ -119,6 +119,7 @@ elif [ "$PLATFORM" = "tf" ]; then
     fi
   fi
   
+  
   # Verify the plan was created
   if [ -f "tfplan" ]; then
     echo "✅ Terraform plan file created successfully"
