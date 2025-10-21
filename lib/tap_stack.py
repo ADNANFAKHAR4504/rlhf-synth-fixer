@@ -197,24 +197,24 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # Enable versioning on CloudTrail bucket
-        aws.s3.BucketVersioningV2(
+        aws.s3.BucketVersioning(
             f"cloudtrail-bucket-versioning-{self.environment_suffix}",
             bucket=cloudtrail_bucket.id,
-            versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
+            versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
                 status="Enabled",
             ),
             opts=ResourceOptions(parent=self)
         )
 
         # Server-side encryption for CloudTrail bucket
-        ct_sse_args = aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+        ct_sse_args = aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
             sse_algorithm="aws:kms",
             kms_master_key_id=kms_key.arn,
         )
-        aws.s3.BucketServerSideEncryptionConfigurationV2(
+        aws.s3.BucketServerSideEncryptionConfiguration(
             f"cloudtrail-bucket-encryption-{self.environment_suffix}",
             bucket=cloudtrail_bucket.id,
-            rules=[aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
+            rules=[aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
                 apply_server_side_encryption_by_default=ct_sse_args,
             )],
             opts=ResourceOptions(parent=self)
@@ -1017,14 +1017,14 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        cfg_sse_args = aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+        cfg_sse_args = aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
             sse_algorithm="aws:kms",
             kms_master_key_id=kms_key.arn,
         )
-        aws.s3.BucketServerSideEncryptionConfigurationV2(
+        aws.s3.BucketServerSideEncryptionConfiguration(
             f"config-bucket-encryption-{self.environment_suffix}",
             bucket=config_bucket.id,
-            rules=[aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
+            rules=[aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
                 apply_server_side_encryption_by_default=cfg_sse_args,
             )],
             opts=ResourceOptions(parent=self)
