@@ -9,7 +9,8 @@ import {
   RevokeSecurityGroupIngressCommand,
   DescribeVpcsCommand,
   DescribeSecurityGroupsCommand,
-  DescribeSubnetsCommand
+  DescribeSubnetsCommand,
+  DescribeFlowLogsCommand
 } from '@aws-sdk/client-ec2';
 import { 
   S3Client, 
@@ -18,7 +19,10 @@ import {
   DeleteObjectCommand,
   ListObjectsV2Command,
   HeadObjectCommand,
-  ListBucketsCommand
+  ListBucketsCommand,
+  GetObjectLockConfigurationCommand,
+  GetBucketVersioningCommand,
+  ListObjectVersionsCommand
 } from '@aws-sdk/client-s3';
 import { 
   RDSClient, 
@@ -55,7 +59,8 @@ import {
   DeleteTargetGroupCommand,
   CreateListenerCommand,
   DeleteListenerCommand,
-  DescribeLoadBalancersCommand
+  DescribeLoadBalancersCommand,
+  DescribeTargetHealthCommand
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import { 
   SNSClient, 
@@ -83,8 +88,23 @@ import {
   AssumeRoleCommand,
   GetRoleCommand,
   CreateRoleCommand,
-  DeleteRoleCommand
+  DeleteRoleCommand,
+  ListGroupsCommand,
+  ListGroupPoliciesCommand,
+  GetGroupPolicyCommand
 } from '@aws-sdk/client-iam';
+import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
+import { 
+  SQSClient,
+  CreateQueueCommand,
+  GetQueueAttributesCommand,
+  SetQueueAttributesCommand,
+  ReceiveMessageCommand,
+  DeleteMessageCommand,
+  DeleteQueueCommand
+} from '@aws-sdk/client-sqs';
+import { WAFV2Client, GetWebACLForResourceCommand } from '@aws-sdk/client-wafv2';
+import { STSClient, GetCallerIdentityCommand } from '@aws-sdk/client-sts';
 
 
 // Load CloudFormation outputs - expects ExportName as keys from stack exports
@@ -92,7 +112,17 @@ const outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf
 
 
 // AWS Clients
-const region = process.env.AWS_REGION || 'ap-northeast-2';
+function readRegion(): string {
+  const envRegion = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION;
+  if (envRegion && envRegion.trim().length > 0) return envRegion;
+  try {
+    const fileRegion = fs.readFileSync('iac-test-automations/lib/AWS_REGION', 'utf8').trim();
+    if (fileRegion) return fileRegion;
+  } catch {}
+  return 'us-east-1';
+}
+
+const region = readRegion();
 const ec2Client = new EC2Client({ region });
 const s3Client = new S3Client({ region });
 const rdsClient = new RDSClient({ region });
@@ -104,6 +134,10 @@ const snsClient = new SNSClient({ region });
 const logsClient = new CloudWatchLogsClient({ region });
 const eventbridgeClient = new EventBridgeClient({ region });
 const iamClient = new IAMClient({ region });
+const ssmClient = new SSMClient({ region });
+const sqsClient = new SQSClient({ region });
+const wafv2Client = new WAFV2Client({ region });
+const stsClient = new STSClient({ region });
 
 // Helper function to get a subnet ID from VPC
 async function getSubnetIdFromVpc(vpcId: string): Promise<string | undefined> {
@@ -116,6 +150,88 @@ async function getSubnetIdFromVpc(vpcId: string): Promise<string | undefined> {
     console.warn('Failed to get subnet from VPC:', error);
     return undefined;
   }
+}
+
+// Resolve latest Amazon Linux 2023 AMI via SSM
+async function resolveAmiId(): Promise<string> {
+  const paramName = '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64';
+  const resp = await ssmClient.send(new GetParameterCommand({ Name: paramName }));
+  if (!resp.Parameter?.Value) throw new Error('Failed to resolve AMI ID from SSM');
+  return resp.Parameter.Value;
+}
+
+// Wait for EC2 instance to reach running state
+async function waitForInstanceRunning(instanceId: string, timeoutMs = 300000): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const status = await ec2Client.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }));
+    const state = status.Reservations?.[0]?.Instances?.[0]?.State?.Name;
+    if (state === 'running') return;
+    await new Promise(r => setTimeout(r, 5000));
+  }
+  throw new Error('Instance did not reach running state in time');
+}
+
+// Wait for ELB target to become healthy
+async function waitForTargetHealthy(targetGroupArn: string, instanceId: string, timeoutMs = 300000): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const health = await elbClient.send(new DescribeTargetHealthCommand({ TargetGroupArn: targetGroupArn }));
+    const target = health.TargetHealthDescriptions?.find(t => t.Target?.Id === instanceId);
+    const state = target?.TargetHealth?.State;
+    if (state === 'healthy') return;
+    await new Promise(r => setTimeout(r, 5000));
+  }
+  throw new Error('Target did not become healthy in time');
+}
+
+// Subscribe temporary SQS queue to SNS topic and return {queueUrl, subscriptionArn}
+async function setupSnsSqsSubscription(topicArn: string): Promise<{ queueUrl: string, subscriptionArn: string }>{
+  const createResp = await sqsClient.send(new CreateQueueCommand({ QueueName: `tapstack-int-${Date.now()}` }));
+  const queueUrl = createResp.QueueUrl as string;
+  const attrs = await sqsClient.send(new GetQueueAttributesCommand({ QueueUrl: queueUrl, AttributeNames: ['QueueArn'] }));
+  const queueArn = attrs.Attributes?.QueueArn as string;
+
+  // Allow SNS topic to publish to this queue
+  const policy = {
+    Version: '2012-10-17',
+    Statement: [{
+      Effect: 'Allow',
+      Principal: { Service: 'sns.amazonaws.com' },
+      Action: 'SQS:SendMessage',
+      Resource: queueArn,
+      Condition: { ArnEquals: { 'aws:SourceArn': topicArn } }
+    }]
+  };
+  await sqsClient.send(new SetQueueAttributesCommand({ QueueUrl: queueUrl, Attributes: { Policy: JSON.stringify(policy) } }));
+
+  const subResp = await snsClient.send(new SubscribeCommand({ TopicArn: topicArn, Protocol: 'sqs', Endpoint: queueArn, ReturnSubscriptionArn: true }));
+  const subscriptionArn = subResp.SubscriptionArn as string;
+  return { queueUrl, subscriptionArn };
+}
+
+async function teardownSnsSqsSubscription(queueUrl: string, subscriptionArn: string): Promise<void> {
+  try { await snsClient.send(new UnsubscribeCommand({ SubscriptionArn: subscriptionArn })); } catch {}
+  try { await sqsClient.send(new DeleteQueueCommand({ QueueUrl: queueUrl })); } catch {}
+}
+
+async function pollQueueForMessage(queueUrl: string, matcher: (body: string) => boolean, timeoutMs = 300000): Promise<string> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const resp = await sqsClient.send(new ReceiveMessageCommand({ QueueUrl: queueUrl, MaxNumberOfMessages: 1, WaitTimeSeconds: 10 }));
+    const msg = resp.Messages?.[0];
+    if (msg?.Body && matcher(msg.Body)) {
+      try { await sqsClient.send(new DeleteMessageCommand({ QueueUrl: queueUrl, ReceiptHandle: msg.ReceiptHandle! })); } catch {}
+      return msg.Body;
+    }
+  }
+  throw new Error('Expected SNS message not received in time');
+}
+
+async function getAccountId(): Promise<string> {
+  const id = await stsClient.send(new GetCallerIdentityCommand({}));
+  if (!id.Account) throw new Error('Unable to determine AWS AccountId');
+  return id.Account;
 }
 
 describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
@@ -143,7 +259,10 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
       testListenerArn: null,
       testSecretName: `test-secret-${timestamp}-${randomSuffix}`,
       testRoleName: `test-role-${timestamp}-${randomSuffix}`,
-      testTargetGroupName: `test-tg-${timestamp}-${randomSuffix}`
+      testTargetGroupName: `test-tg-${timestamp}-${randomSuffix}`,
+      albSecurityGroupId: null,
+      openedAlb80: false,
+      openedAppSg80FromAlb: false
     };
   });
 
@@ -181,14 +300,36 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
         console.warn('Failed to delete test target group:', error);
       }
     }
+
+    // Revoke temporary security group rules (port 80)
+    try {
+      if (testData.albSecurityGroupId && testData.openedAlb80) {
+        await ec2Client.send(new RevokeSecurityGroupIngressCommand({
+          GroupId: testData.albSecurityGroupId,
+          IpPermissions: [{ IpProtocol: 'tcp', FromPort: 80, ToPort: 80, IpRanges: [{ CidrIp: '0.0.0.0/0' }] }]
+        }));
+        console.log('✓ Reverted ALB SG port 80 rule');
+      }
+    } catch (error) {
+      console.warn('Failed to revoke ALB SG rule:', error);
+    }
+    try {
+      if (outputs['ApplicationSecurityGroupId'] && testData.albSecurityGroupId && testData.openedAppSg80FromAlb) {
+        await ec2Client.send(new RevokeSecurityGroupIngressCommand({
+          GroupId: outputs['ApplicationSecurityGroupId'],
+          IpPermissions: [{ IpProtocol: 'tcp', FromPort: 80, ToPort: 80, UserIdGroupPairs: [{ GroupId: testData.albSecurityGroupId }] }]
+        }));
+        console.log('✓ Reverted App SG port 80 from ALB rule');
+      }
+    } catch (error) {
+      console.warn('Failed to revoke App SG rule:', error);
+    }
   });
 
   describe('Patient Data Upload Workflow', () => {
     test('S3 Upload → KMS Encryption → CloudTrail Audit → SNS Notification workflow', async () => {
-      if (!outputs['PatientDocumentsBucketName'] || !outputs['KMSKeyId']) {
-        console.warn('Required resources not available.');
-        return;
-      }
+      expect(outputs['PatientDocumentsBucketName']).toBeDefined();
+      expect(outputs['KMSKeyId']).toBeDefined();
 
       // Generate encryption key for patient data
       console.log('Generating encryption key for patient data...');
@@ -237,17 +378,12 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
       // Test S3 bucket accessibility with HTTP requests (if public access is configured)
       console.log('Testing S3 bucket accessibility...');
       const bucketName = outputs['PatientDocumentsBucketName'];
-      if (bucketName) {
-        try {
-          // Test S3 bucket endpoint accessibility
-          const s3Endpoint = `https://${bucketName}.s3.${process.env.AWS_REGION || 'ap-northeast-2'}.amazonaws.com/`;
-          const s3Response = await fetch(s3Endpoint, {
-            method: 'HEAD'
-          });
-          console.log(`✓ S3 bucket endpoint accessible: ${s3Response.status}`);
-        } catch (error) {
-          console.log(`S3 bucket endpoint not publicly accessible (expected for security): ${error}`);
-        }
+      try {
+        const s3Endpoint = `https://${bucketName}.s3.${region}.amazonaws.com/`;
+        const s3Response = await fetch(s3Endpoint, { method: 'HEAD' });
+        console.log(`✓ S3 bucket endpoint accessible: ${s3Response.status}`);
+      } catch (error) {
+        console.log(`S3 bucket endpoint not publicly accessible (expected for security): ${error}`);
       }
       const documentContent = await getResponse.Body?.transformToString();
       const parsedDocument = JSON.parse(documentContent!);
@@ -292,10 +428,7 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
 
   describe('Database Connection and Data Workflow', () => {
     test('Secrets Manager → RDS Connection → Data Encryption → Audit Trail workflow', async () => {
-      if (!outputs['RDSEndpoint']) {
-        console.warn('RDS endpoint not available.');
-        return;
-      }
+      expect(outputs['RDSEndpoint']).toBeDefined();
 
       // Retrieve database credentials from Secrets Manager
       console.log('Retrieving database credentials from Secrets Manager...');
@@ -327,12 +460,10 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
       // Launch EC2 instance to test actual database connectivity
       console.log('Launching EC2 instance to test database connectivity...');
       const subnetId = await getSubnetIdFromVpc(outputs['VPCId']);
-      if (!subnetId) {
-        console.warn('No subnet available in VPC; skipping EC2 database connectivity test');
-        return;
-      }
+      expect(subnetId).toBeDefined();
+      const imageId = await resolveAmiId();
       const testInstanceResponse = await ec2Client.send(new RunInstancesCommand({
-        ImageId: 'ami-0c9c942bd7bf113a2', // Amazon Linux 2023 for ap-northeast-2
+        ImageId: imageId,
         MinCount: 1,
         MaxCount: 1,
         InstanceType: 't3.micro',
@@ -359,7 +490,7 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
 
       // Wait for instance to be ready and run connectivity test
       console.log('Waiting for instance to be ready...');
-      await new Promise(resolve => setTimeout(resolve, 60000)); // Wait 1 minute
+      await waitForInstanceRunning(testInstanceId!);
 
       // Check instance status
       const instanceStatus = await ec2Client.send(new DescribeInstancesCommand({
@@ -371,25 +502,10 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
       // Test database connectivity via HTTP requests (if ALB is available)
       console.log('Testing database connectivity via HTTP requests...');
       const albDnsName = outputs['ALBDNSName'];
-      if (albDnsName) {
-        try {
-          // Test database health endpoint through ALB
-          const dbHealthResponse = await fetch(`http://${albDnsName}/health/database`, {
-            method: 'GET'
-          });
-          if (dbHealthResponse.ok) {
-            const healthData = await dbHealthResponse.json();
-            expect(healthData.status).toBe('healthy');
-            console.log('✓ Database health check via HTTP successful');
-          } else {
-            console.log('Database health endpoint not available (expected)');
-          }
-        } catch (error) {
-          console.log('Database health endpoint not accessible (expected for security)');
-        }
-      } else {
-        console.log('ALB not available for HTTP database testing');
-      }
+      const dbHealthResponse = await fetch(`http://${albDnsName}/health/database`, { method: 'GET' });
+      expect(dbHealthResponse.ok).toBe(true);
+      const healthData = await dbHealthResponse.json();
+      expect(healthData.status).toBeDefined();
 
       // Clean up test instance
       await ec2Client.send(new TerminateInstancesCommand({
@@ -430,27 +546,25 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
 
   describe('Application Load Balancer Workflow', () => {
     test('EC2 Instance → Target Group → ALB → Health Check → Traffic Routing workflow', async () => {
-      if (!outputs['VPCId'] || !outputs['ApplicationSecurityGroupId']) {
-        console.warn('ALB workflow failed.');
-        return;
-      }
+      expect(outputs['VPCId']).toBeDefined();
+      expect(outputs['ApplicationSecurityGroupId']).toBeDefined();
+      expect(outputs['ALBArn']).toBeDefined();
+      expect(outputs['ALBDNSName']).toBeDefined();
 
       // Retrieve database credentials for health check endpoint
       const secretResponse = await secretsClient.send(new GetSecretValueCommand({
         SecretId: 'nova-prod-database-password'
       }));
       const credentials = JSON.parse(secretResponse.SecretString!);
-      const dbEndpoint = outputs['RDSEndpoint'] || 'localhost';
+      const dbEndpoint = outputs['RDSEndpoint'];
 
       // Launch test EC2 instance
       console.log('Launching test EC2 instance...');
       const subnetId = await getSubnetIdFromVpc(outputs['VPCId']);
-      if (!subnetId) {
-        console.warn('No subnet available in VPC; skipping ALB workflow test');
-        return;
-      }
+      expect(subnetId).toBeDefined();
+      const imageId = await resolveAmiId();
       const instanceResponse = await ec2Client.send(new RunInstancesCommand({
-        ImageId: 'ami-0c9c942bd7bf113a2', // Amazon Linux 2023 for ap-northeast-2
+        ImageId: imageId,
         MinCount: 1,
         MaxCount: 1,
         InstanceType: 't3.micro',
@@ -530,7 +644,7 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
       // Create target group
       console.log('Creating target group...');
       const targetGroupResponse = await elbClient.send(new CreateTargetGroupCommand({
-        Name: 'nova-prod-test-tg',
+        Name: testData.testTargetGroupName,
         Protocol: 'HTTP',
         Port: 80,
         VpcId: outputs['VPCId'],
@@ -547,13 +661,7 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
 
       // Wait for instance to be in running state
       console.log('Waiting for instance to be running...');
-      await new Promise(resolve => setTimeout(resolve, 30000)); // Wait 30 seconds
-      
-      const instanceStatusCheck = await ec2Client.send(new DescribeInstancesCommand({
-        InstanceIds: [testData.testInstanceId!]
-      }));
-      const instanceState = instanceStatusCheck.Reservations?.[0]?.Instances?.[0]?.State?.Name;
-      console.log(`Instance state: ${instanceState}`);
+      await waitForInstanceRunning(testData.testInstanceId!);
 
       // Register instance with target group
       console.log('Registering instance with target group...');
@@ -566,10 +674,27 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
       }));
       console.log('✓ Instance registered with target group');
 
-      // Create ALB listener
-      console.log('Creating ALB listener...');
+      // Open temporary SG rules for port 80 and create ALB listener (HTTP)
+      console.log('Opening temporary SG rules for port 80 and creating ALB listener...');
+      const lbs = await elbClient.send(new DescribeLoadBalancersCommand({}));
+      const lb = lbs.LoadBalancers?.find(l => l.LoadBalancerArn === outputs['ALBArn']);
+      expect(lb).toBeDefined();
+      const albSg = lb!.SecurityGroups?.[0];
+      expect(albSg).toBeDefined();
+      testData.albSecurityGroupId = albSg!;
+      await ec2Client.send(new AuthorizeSecurityGroupIngressCommand({
+        GroupId: albSg!,
+        IpPermissions: [{ IpProtocol: 'tcp', FromPort: 80, ToPort: 80, IpRanges: [{ CidrIp: '0.0.0.0/0', Description: 'Temporary test HTTP' }] }]
+      }));
+      testData.openedAlb80 = true;
+      await ec2Client.send(new AuthorizeSecurityGroupIngressCommand({
+        GroupId: outputs['ApplicationSecurityGroupId'],
+        IpPermissions: [{ IpProtocol: 'tcp', FromPort: 80, ToPort: 80, UserIdGroupPairs: [{ GroupId: albSg! }] }]
+      }));
+      testData.openedAppSg80FromAlb = true;
+
       const listenerResponse = await elbClient.send(new CreateListenerCommand({
-        LoadBalancerArn: outputs['ALBDNSName'], 
+        LoadBalancerArn: outputs['ALBArn'], 
         Protocol: 'HTTP',
         Port: 80,
         DefaultActions: [{
@@ -581,169 +706,89 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
       testData.testListenerArn = listenerResponse.Listeners![0].ListenerArn;
       console.log('✓ ALB listener created successfully');
 
-      // Wait for instance to be ready and health checks to pass
-      console.log('Waiting for instance to be ready...');
-      await new Promise(resolve => setTimeout(resolve, 60000)); // Wait 1 minute for health checks
+      // Wait for target to become healthy
+      console.log('Waiting for target to become healthy...');
+      await waitForTargetHealthy(testData.testTargetGroupArn!, testData.testInstanceId!);
 
       // Make actual HTTP requests to test the ALB workflow
       console.log('Testing ALB with HTTP requests...');
       const albDnsName = outputs['ALBDNSName'];
-      if (albDnsName) {
-        try {
-          // Test 1: Health check endpoint
-          const healthResponse = await fetch(`http://${albDnsName}/`, {
-            method: 'GET'
-          });
-          expect(healthResponse.ok).toBe(true);
-          const healthText = await healthResponse.text();
-          expect(healthText).toContain('Test Application');
-          console.log('✓ ALB health check passed - HTTP request successful');
+      // Test 1: Health check endpoint
+      const healthResponse = await fetch(`http://${albDnsName}/`, { method: 'GET' });
+      expect(healthResponse.ok).toBe(true);
+      const healthText = await healthResponse.text();
+      expect(healthText).toContain('Test Application');
+      console.log('✓ ALB health check passed - HTTP request successful');
 
-          // Test 2: Load balancer routing
-          const routingResponse = await fetch(`http://${albDnsName}/`, {
-            method: 'GET'
-          });
-          expect(routingResponse.status).toBe(200);
-          console.log('✓ ALB traffic routing verified - HTTP request successful');
+      // Test 2: Load balancer routing
+      const routingResponse = await fetch(`http://${albDnsName}/`, { method: 'GET' });
+      expect(routingResponse.status).toBe(200);
+      console.log('✓ ALB traffic routing verified - HTTP request successful');
 
-          // Test 3: Database connectivity through ALB
-          const dbHealthResponse = await fetch(`http://${albDnsName}/health/database`, {
-            method: 'GET'
-          });
-          if (dbHealthResponse.ok) {
-            const dbHealthData = await dbHealthResponse.json();
-            expect(dbHealthData.status).toBeDefined();
-            console.log('✓ Database connectivity through ALB verified');
-          } else {
-            console.log('Database health endpoint not available (expected)');
-          }
+      // Test 3: Database connectivity through ALB
+      const dbHealthResponse = await fetch(`http://${albDnsName}/health/database`, { method: 'GET' });
+      expect(dbHealthResponse.ok).toBe(true);
+      const dbHealthData = await dbHealthResponse.json();
+      expect(dbHealthData.status).toBeDefined();
+      console.log('✓ Database connectivity through ALB verified');
 
-          // Test 4: Multiple requests to verify load balancing
-          const promises = Array(3).fill(null).map(() => 
-            fetch(`http://${albDnsName}/`, { method: 'GET' })
-          );
-          const responses = await Promise.all(promises);
-          responses.forEach(response => {
-            expect(response.ok).toBe(true);
-          });
-          console.log('✓ ALB load balancing verified - Multiple HTTP requests successful');
-
-        } catch (error) {
-          console.warn(`HTTP request failed: ${error}`);
-          // Don't fail the test if HTTP requests fail (ALB might not be fully ready)
-        }
-      } else {
-        console.warn('ALB DNS name not available for HTTP testing');
-      }
+      // Test 4: Multiple requests to verify load balancing
+      const promises = Array(3).fill(null).map(() => fetch(`http://${albDnsName}/`, { method: 'GET' }));
+      const responses = await Promise.all(promises);
+      responses.forEach(response => { expect(response.ok).toBe(true); });
+      console.log('✓ ALB load balancing verified - Multiple HTTP requests successful');
 
       console.log('✓ Complete ALB workflow executed successfully');
-    }, 120000); // 2 minute timeout for EC2 and ALB operations
+
+      // Validate WAF association
+      console.log('Validating WAF association...');
+      const webAclAssoc = await wafv2Client.send(new GetWebACLForResourceCommand({ ResourceArn: outputs['ALBArn'] }));
+      expect(webAclAssoc.WebACL?.Name).toBeDefined();
+      console.log('✓ WAF association verified');
+    }, 600000);
   });
 
   describe('Security Monitoring Workflow', () => {
-    test('Security Event → EventBridge → SNS → Email Alert → Response workflow', async () => {
-      if (!outputs['SecurityAlertTopicArn']) {
-        console.warn('SNS topic not available.');
-        return;
+    test('Security Group Change → EventBridge Rule → SNS → SQS Subscription → Delivery Verified', async () => {
+      expect(outputs['ApplicationSecurityGroupId']).toBeDefined();
+      expect(outputs['SecurityAlertTopicArn']).toBeDefined();
+
+      // Subscribe temporary SQS to SNS topic
+      const { queueUrl, subscriptionArn } = await setupSnsSqsSubscription(outputs['SecurityAlertTopicArn']);
+      try {
+        // Implement audited security group change that matches EventBridge rule pattern
+        console.log('Authorizing temporary SG ingress to trigger EventBridge rule...');
+    await ec2Client.send(new AuthorizeSecurityGroupIngressCommand({
+      GroupId: outputs['ApplicationSecurityGroupId'],
+      IpPermissions: [{
+        IpProtocol: 'tcp', FromPort: 0, ToPort: 0, IpRanges: [{ CidrIp: '10.255.255.255/32', Description: 'temporary-eb-test' }]
+      }]
+    }));
+
+        // Verify CloudTrail logged the API call
+        const trailEvents = await cloudtrailClient.send(new LookupEventsCommand({
+          LookupAttributes: [{ AttributeKey: 'EventName', AttributeValue: 'AuthorizeSecurityGroupIngress' }],
+          StartTime: new Date(Date.now() - 10 * 60 * 1000), EndTime: new Date()
+        }));
+        expect(trailEvents.Events).toBeDefined();
+
+        // Expect SNS message delivery via SQS (EventBridge -> SNS -> SQS)
+        const body = await pollQueueForMessage(queueUrl, (b) => b.includes('Security Group') || b.includes('AuthorizeSecurityGroupIngress'));
+        expect(body).toBeDefined();
+      } finally {
+        // Cleanup: revoke the temporary rule and teardown subscription
+    try { await ec2Client.send(new RevokeSecurityGroupIngressCommand({
+      GroupId: outputs['ApplicationSecurityGroupId'],
+      IpPermissions: [{ IpProtocol: 'tcp', FromPort: 0, ToPort: 0, IpRanges: [{ CidrIp: '10.255.255.255/32' }] }]
+    })); } catch {}
+        await teardownSnsSqsSubscription(queueUrl, subscriptionArn);
       }
-
-      // Implement security event (unauthorized access attempt)
-      console.log('Implementing security event...');
-      const securityEvent = {
-        Source: 'aws.ec2',
-        DetailType: 'EC2 Instance State-change Notification',
-        Detail: {
-          'instance-id': 'i-1234567890abcdef0',
-          state: 'running',
-          'reason-code': 'User initiated (204)',
-          'user-id': 'AIDACKCEVSQ6C2EXAMPLE',
-          'timestamp': new Date().toISOString(),
-          'severity': 'high',
-          'event-type': 'security-breach',
-          'source-ip': '192.168.1.100',
-          'action': 'unauthorized-access-attempt'
-        }
-      };
-      
-      // Verify security event structure
-      expect(securityEvent.Source).toBe('aws.ec2');
-      expect(securityEvent.DetailType).toBe('EC2 Instance State-change Notification');
-      expect(securityEvent.Detail['event-type']).toBe('security-breach');
-      expect(securityEvent.Detail.severity).toBe('high');
-      
-      console.log('✓ Security event implemented');
-
-      // Send event to EventBridge
-      console.log('Sending event to EventBridge...');
-      const eventResponse = await eventbridgeClient.send(new PutEventsCommand({
-        Entries: [{
-          Source: securityEvent.Source,
-          DetailType: securityEvent.DetailType,
-          Detail: JSON.stringify(securityEvent.Detail),
-          Time: new Date()
-        }]
-      }));
-      expect(eventResponse.Entries).toHaveLength(1);
-      if (eventResponse.Entries![0].EventId) {
-        console.log('✓ Event sent to EventBridge');
-      } else {
-        console.warn('EventBridge event sent but EventId not immediately available');
-      }
-
-      // Verify EventBridge rules are active
-      console.log('Verifying EventBridge rules...');
-      const rulesResponse = await eventbridgeClient.send(new ListRulesCommand({}));
-      const securityRules = rulesResponse.Rules?.filter(rule => 
-        rule.Name?.includes('nova-prod')
-      );
-      expect(securityRules).toBeDefined();
-      if (securityRules && securityRules.length > 0) {
-        console.log(`✓ EventBridge rules verified (${securityRules.length} rules found)`);
-      } else {
-        console.warn('No EventBridge rules found with nova-prod prefix');
-      }
-
-      // Send SNS notification
-      console.log('Sending SNS notification...');
-      const snsResponse = await snsClient.send(new PublishCommand({
-        TopicArn: outputs['SecurityAlertTopicArn'],
-        Subject: 'SECURITY ALERT: Unauthorized Access Attempt',
-        Message: JSON.stringify({
-          alertType: 'security',
-          severity: 'high',
-          timestamp: new Date().toISOString(),
-          details: securityEvent.Detail,
-          recommendedAction: 'Review access logs and investigate'
-        })
-      }));
-      expect(snsResponse.MessageId).toBeDefined();
-      console.log('✓ SNS notification sent');
-
-      // Verify CloudTrail captured the event
-      console.log('Verifying CloudTrail captured the event...');
-      const trailEvents = await cloudtrailClient.send(new LookupEventsCommand({
-        LookupAttributes: [
-          {
-            AttributeKey: 'EventName',
-            AttributeValue: 'PutEvents'
-          }
-        ],
-        StartTime: new Date(Date.now() - 5 * 60 * 1000),
-        EndTime: new Date()
-      }));
-      expect(trailEvents.Events).toBeDefined();
-      console.log('✓ CloudTrail captured security event');
-
-      console.log('✓ Complete security monitoring workflow executed successfully');
     });
   });
 
   describe('Data Backup and Recovery Workflow', () => {
     test('S3 Data → Versioning → Lifecycle → Recovery → Validation workflow', async () => {
-      if (!outputs['AppDataBucket']) {
-        console.warn('App data bucket not available.');
-        return;
-      }
+      expect(outputs['AppDataBucket']).toBeDefined();
 
       // Upload initial data version
       console.log('Uploading initial data version...');
@@ -784,13 +829,12 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
       }));
       console.log('✓ Updated data version created');
 
-      // Verify versioning is working
-      console.log('Verifying versioning is working...');
-      const listResponse = await s3Client.send(new ListObjectsV2Command({
-        Bucket: outputs['AppDataBucket'],
-        Prefix: 'backup-test/'
-      }));
-      expect(listResponse.Contents).toBeDefined();
+      // Verify versioning is enabled and versions exist
+      console.log('Verifying versioning...');
+      const ver = await s3Client.send(new GetBucketVersioningCommand({ Bucket: outputs['AppDataBucket'] }));
+      expect(ver.Status).toBe('Enabled');
+      const versions = await s3Client.send(new ListObjectVersionsCommand({ Bucket: outputs['AppDataBucket'], Prefix: 'backup-test/data.json' }));
+      expect((versions.Versions || []).length).toBeGreaterThanOrEqual(2);
       console.log('✓ Versioning verified');
 
       // Implement data recovery
@@ -978,6 +1022,12 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
       }));
       console.log('✓ Logs sent to CloudWatch');
 
+      // Validate VPC Flow Logs are configured
+      if (outputs['VPCId']) {
+        const flowLogs = await ec2Client.send(new DescribeFlowLogsCommand({ Filter: [{ Name: 'resource-id', Values: [outputs['VPCId']] }] }));
+        expect((flowLogs.FlowLogs || []).length).toBeGreaterThan(0);
+      }
+
       // Test CloudWatch Logs Insights API with HTTP requests
       console.log('Testing CloudWatch Logs Insights API...');
       try {
@@ -1037,10 +1087,8 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
 
   describe('Network Security Workflow', () => {
     test('Security Group Change → EventBridge → SNS → Response → Audit workflow', async () => {
-      if (!outputs['ApplicationSecurityGroupId'] || !outputs['SecurityAlertTopicArn']) {
-        console.warn('Network security workflow failed.');
-        return;
-      }
+      expect(outputs['ApplicationSecurityGroupId']).toBeDefined();
+      expect(outputs['SecurityAlertTopicArn']).toBeDefined();
 
       // Implement security group change
       console.log('Implementing security group change...');
@@ -1050,15 +1098,16 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
           IpProtocol: 'tcp',
           FromPort: 8080,
           ToPort: 8080,
-          CidrIp: '0.0.0.0/0',
-          Description: 'Test rule for security monitoring'
+          IpRanges: [{ CidrIp: '0.0.0.0/0', Description: 'Test rule for security monitoring' }]
         }]
       }));
       
-      // Verify the rule was actually added
-      const describeResponse = await ec2Client.send(new DescribeInstancesCommand({
-        InstanceIds: []
+      // Verify CloudTrail captured the API call
+      const trailEventsVerify = await cloudtrailClient.send(new LookupEventsCommand({
+        LookupAttributes: [{ AttributeKey: 'EventName', AttributeValue: 'AuthorizeSecurityGroupIngress' }],
+        StartTime: new Date(Date.now() - 10 * 60 * 1000), EndTime: new Date()
       }));
+      expect(trailEventsVerify.Events).toBeDefined();
       console.log('✓ Security group change implemented');
 
       // Verify change was captured
@@ -1101,7 +1150,7 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
           IpProtocol: 'tcp',
           FromPort: 8080,
           ToPort: 8080,
-          CidrIp: '0.0.0.0/0'
+          IpRanges: [{ CidrIp: '0.0.0.0/0' }]
         }]
       }));
       console.log('✓ Test rule cleaned up');
@@ -1112,10 +1161,7 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
 
   describe('Disaster Recovery Workflow', () => {
     test('Data Backup → Multi-AZ Failover → Recovery → Validation → Monitoring workflow', async () => {
-      if (!outputs['RDSEndpoint']) {
-        console.warn('RDS endpoint not available.');
-        return;
-      }
+      expect(outputs['RDSEndpoint']).toBeDefined();
 
       // Verify Multi-AZ configuration
       console.log('Verifying Multi-AZ configuration...');
@@ -1267,6 +1313,12 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
       } else {
         console.warn('Patient documents bucket output missing; skipping S3 retention check');
       }
+
+      // Validate CloudTrail bucket object lock configuration
+      const accountId = await getAccountId();
+      const trailBucketName = `nova-prod-audit-logs-${accountId}`;
+      const lockCfg = await s3Client.send(new GetObjectLockConfigurationCommand({ Bucket: trailBucketName }));
+      expect(lockCfg.ObjectLockConfiguration?.ObjectLockEnabled).toBe('Enabled');
       
       const complianceCheck = {
         dataEncryption: encryptionCheck.CiphertextBlob !== undefined,
@@ -1298,5 +1350,65 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
 
       console.log('✓ Complete compliance audit workflow executed successfully');
     });
+  });
+
+  describe('IAM MFA Enforcement', () => {
+    test('DevelopersGroup has EnforceMFA inline policy with MFA-required deny condition', async () => {
+      // Discover IAM group that contains the inline policy named 'EnforceMFA'
+      let marker: string | undefined = undefined;
+      let targetGroupName: string | undefined = undefined;
+      do {
+        const groupsResp = await iamClient.send(new ListGroupsCommand({ Marker: marker } as any));
+        const groups = groupsResp.Groups || [];
+        for (const g of groups) {
+          let policyMarker: string | undefined = undefined;
+          do {
+            const polResp = await iamClient.send(new ListGroupPoliciesCommand({ GroupName: g.GroupName!, Marker: policyMarker } as any));
+            const names = polResp.PolicyNames || [];
+            if (names.includes('EnforceMFA')) {
+              targetGroupName = g.GroupName;
+              break;
+            }
+            policyMarker = (polResp as any).Marker;
+          } while ((polResp as any)?.IsTruncated);
+          if (targetGroupName) break;
+        }
+        marker = (groupsResp as any).Marker;
+      } while ((marker as any));
+
+      if (!targetGroupName) {
+        throw new Error('EnforceMFA inline policy not found on any IAM group');
+      }
+
+      // Fetch and validate the EnforceMFA inline policy document
+      const policy = await iamClient.send(new GetGroupPolicyCommand({ GroupName: targetGroupName, PolicyName: 'EnforceMFA' }));
+      expect(policy.PolicyDocument).toBeDefined();
+      const decoded = decodeURIComponent(policy.PolicyDocument!);
+      const doc = JSON.parse(decoded);
+      expect(doc.Version).toBe('2012-10-17');
+      expect(Array.isArray(doc.Statement)).toBe(true);
+
+      const denyStmt = (doc.Statement as any[]).find(s => s.Sid === 'DenyAllExceptUnlessSignedInWithMFA');
+      expect(denyStmt).toBeDefined();
+      expect(denyStmt.Effect).toBe('Deny');
+      expect(denyStmt.Condition).toBeDefined();
+      expect(denyStmt.Condition.BoolIfExists).toBeDefined();
+      expect(denyStmt.Condition.BoolIfExists['aws:MultiFactorAuthPresent']).toBe('false');
+
+      // Ensure NotAction contains the expected allowlist when MFA is missing
+      const expectedNotActions = [
+        'iam:CreateVirtualMFADevice',
+        'iam:EnableMFADevice',
+        'iam:GetUser',
+        'iam:ListMFADevices',
+        'iam:ListVirtualMFADevices',
+        'iam:ResyncMFADevice',
+        'sts:GetSessionToken',
+      ];
+      const notAction = Array.isArray(denyStmt.NotAction) ? denyStmt.NotAction : [denyStmt.NotAction];
+      for (const act of expectedNotActions) {
+        expect(notAction).toContain(act);
+      }
+    }, 120000);
   });
 });
