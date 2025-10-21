@@ -1005,7 +1005,7 @@ Resources:
       MultiAZ: true
       PubliclyAccessible: false
       BackupRetentionPeriod: 7
-      DeletionProtection: true
+      DeletionProtection: 
       Tags:
         - { Key: Name, Value: !Sub '${ProjectName}-rds' }
         - { Key: Environment, Value: !Ref Environment }
@@ -3092,7 +3092,7 @@ Outputs:
                 "MultiAZ": true,
                 "PubliclyAccessible": false,
                 "BackupRetentionPeriod": 7,
-                "DeletionProtection": true,
+                "DeletionProtection": false,
                 "Tags": [
                     {
                         "Key": "Name",
