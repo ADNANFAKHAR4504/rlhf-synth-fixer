@@ -1,0 +1,14 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350194",
+  "team": "4",
+  "startedAt": "2025-10-21T13:31:18.638Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "VPC, EC2, RDS, IAM, ALB, CloudWatch, S3 Bucket"
+}
