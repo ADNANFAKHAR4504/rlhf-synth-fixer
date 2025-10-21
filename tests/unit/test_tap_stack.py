@@ -315,13 +315,13 @@ class TestTapStack(unittest.TestCase):
         
         # Test that very long suffixes are handled (should fail gracefully)
         try:
-            very_long_suffix = "a" * 100  # This should cause IAM role name to exceed limits
+            very_long_suffix = "a" * 100  # This should cause function name to exceed limits
             stack_long = self._create_test_stack(suffix=very_long_suffix)
             # If it doesn't fail, that's also valid behavior
             self.assertIsInstance(stack_long, TapStack)
         except RuntimeError as e:
-            # Expected to fail due to AWS naming constraints
-            self.assertIn("roleName", str(e))
+            # Expected to fail due to AWS naming constraints (function name length)
+            self.assertIn("Function name can not be longer than 64 characters", str(e))
 
     @mark.it("supports stack inheritance and polymorphism")
     def test_stack_inheritance(self):
