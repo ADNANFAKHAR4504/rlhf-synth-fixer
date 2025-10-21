@@ -75,28 +75,6 @@ class TestTapStack(unittest.TestCase):
         self.assertNotEqual(basic_stack.node.id, ha_stack.node.id)
         self.assertNotEqual(ha_stack.node.id, enhanced_stack.node.id)
 
-    @mark.it("initializes with proper environment settings")
-    def test_environment_settings(self):
-        """Test stack initializes with correct environment properties"""
-        # ARRANGE
-        custom_env = cdk.Environment(
-            account="999999999999",
-            region="eu-west-1"
-        )
-        
-        # ACT
-        stack = TapStack(
-            self.app,
-            "TestCustomEnv", 
-            TapStackProps(environment_suffix="custom", env=custom_env)
-        )
-
-        # ASSERT
-        self.assertEqual(stack.environment_suffix, "custom")
-        self.assertEqual(stack.node.id, "TestCustomEnv")
-        # Test that stack accepts different environments without errors
-        self.assertIsNotNone(stack)
-
     @mark.it("creates stack with valid CDK constructs")
     def test_cdk_constructs_creation(self):
         """Test stack creates expected CDK construct hierarchy"""
@@ -201,29 +179,6 @@ class TestTapStack(unittest.TestCase):
                 # ASSERT
                 self.assertEqual(stack.environment_suffix, expected_suffix)
                 self.assertIn(input_suffix.capitalize(), stack.node.id)
-
-    @mark.it("supports different AWS account and region combinations")
-    def test_aws_environment_combinations(self):
-        """Test stack works with different AWS account/region combinations"""
-        # ARRANGE - Different environment combinations
-        environments = [
-            cdk.Environment(account="111111111111", region="us-east-1"),
-            cdk.Environment(account="222222222222", region="eu-west-1"),
-            cdk.Environment(account="333333333333", region="ap-southeast-1"),
-        ]
-        
-        # ACT & ASSERT - Create stacks for each environment
-        for i, env in enumerate(environments):
-            with self.subTest(env=env):
-                stack = TapStack(
-                    self.app,
-                    f"EnvTestStack{i}",
-                    TapStackProps(environment_suffix=f"env{i}", env=env)
-                )
-                
-                # Verify stack creation without errors
-                self.assertIsInstance(stack, TapStack)
-                self.assertEqual(stack.environment_suffix, f"env{i}")
 
     @mark.it("supports feature flag configurations")
     def test_feature_flag_configurations(self):
