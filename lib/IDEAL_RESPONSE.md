@@ -180,7 +180,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	// 4. Create Monitoring Infrastructure
 	tapStack.createMonitoringInfrastructure(stack)
 
-	// 5. Add stack outputs
+	// 5. Add outputs for integration testing
 	tapStack.addStackOutputs(stack)
 
 	return tapStack
@@ -244,7 +244,7 @@ func (tapStack *TapStack) createDataInfrastructure(stack awscdk.Stack) {
 func (tapStack *TapStack) createTrainingInfrastructure(stack awscdk.Stack) {
 	// Training data bucket
 	tapStack.TrainingBucket = awss3.NewBucket(stack, jsii.String("TrainingDataBucket"), &awss3.BucketProps{
-		BucketName:        jsii.String(fmt.Sprintf("model-training-%s", *tapStack.EnvironmentSuffix)),
+		BucketName:        jsii.String(fmt.Sprintf("model-training-%s-%s", *tapStack.EnvironmentSuffix, *tapStack.RandomSuffix)),
 		Versioned:         jsii.Bool(true),
 		RemovalPolicy:     awscdk.RemovalPolicy_DESTROY,
 		AutoDeleteObjects: jsii.Bool(true),
@@ -319,7 +319,7 @@ func (tapStack *TapStack) createTrainingInfrastructure(stack awscdk.Stack) {
 	definition := prepTask.Next(trainingJob).Next(evalTask)
 
 	trainPipeline := awsstepfunctions.NewStateMachine(stack, jsii.String("ModelTrainingPipeline"), &awsstepfunctions.StateMachineProps{
-		StateMachineName: jsii.String(fmt.Sprintf("ml-model-training-pipeline-%s", *tapStack.EnvironmentSuffix)),
+		StateMachineName: jsii.String(fmt.Sprintf("ml-model-training-pipeline-%s-%s", *tapStack.EnvironmentSuffix, *tapStack.RandomSuffix)),
 		Definition:       definition,
 		Timeout:          awscdk.Duration_Hours(jsii.Number(2)),
 	})
@@ -330,7 +330,7 @@ func (tapStack *TapStack) createTrainingInfrastructure(stack awscdk.Stack) {
 func (tapStack *TapStack) createInferenceInfrastructure(stack awscdk.Stack) {
 	// Model artifacts bucket
 	tapStack.ModelBucket = awss3.NewBucket(stack, jsii.String("ModelArtifactsBucket"), &awss3.BucketProps{
-		BucketName:        jsii.String(fmt.Sprintf("model-artifacts-%s", *tapStack.EnvironmentSuffix)),
+		BucketName:        jsii.String(fmt.Sprintf("model-artifacts-%s-%s", *tapStack.EnvironmentSuffix, *tapStack.RandomSuffix)),
 		Versioned:         jsii.Bool(true),
 		RemovalPolicy:     awscdk.RemovalPolicy_DESTROY,
 		AutoDeleteObjects: jsii.Bool(true),
@@ -359,14 +359,14 @@ func (tapStack *TapStack) createInferenceInfrastructure(stack awscdk.Stack) {
 
 	// API Gateway with authentication
 	tapStack.InferenceApi = awsapigateway.NewRestApi(stack, jsii.String("InferenceAPI"), &awsapigateway.RestApiProps{
-		RestApiName: jsii.String(fmt.Sprintf("ml-inference-api-%s", *tapStack.EnvironmentSuffix)),
+		RestApiName: jsii.String(fmt.Sprintf("ml-inference-api-%s-%s", *tapStack.EnvironmentSuffix, *tapStack.RandomSuffix)),
 		Description: jsii.String("API for ML model inference with API Key authentication"),
 		DeployOptions: &awsapigateway.StageOptions{
-			StageName:           jsii.String("v1"),
-			LoggingLevel:        awsapigateway.MethodLoggingLevel_INFO,
-			DataTraceEnabled:    jsii.Bool(true),
-			MetricsEnabled:      jsii.Bool(true),
-			TracingEnabled:      jsii.Bool(true),
+			StageName:            jsii.String("v1"),
+			LoggingLevel:         awsapigateway.MethodLoggingLevel_INFO,
+			DataTraceEnabled:     jsii.Bool(true),
+			MetricsEnabled:       jsii.Bool(true),
+			TracingEnabled:       jsii.Bool(true),
 			ThrottlingBurstLimit: jsii.Number(100),
 			ThrottlingRateLimit:  jsii.Number(50),
 		},
@@ -375,13 +375,13 @@ func (tapStack *TapStack) createInferenceInfrastructure(stack awscdk.Stack) {
 
 	// Create API Key for authentication
 	apiKey := tapStack.InferenceApi.AddApiKey(jsii.String("InferenceApiKey"), &awsapigateway.ApiKeyOptions{
-		ApiKeyName:  jsii.String(fmt.Sprintf("ml-inference-key-%s", *tapStack.EnvironmentSuffix)),
+		ApiKeyName:  jsii.String(fmt.Sprintf("ml-inference-key-%s-%s", *tapStack.EnvironmentSuffix, *tapStack.RandomSuffix)),
 		Description: jsii.String("API Key for ML inference endpoint"),
 	})
 
 	// Create usage plan with throttling and quota
 	usagePlan := tapStack.InferenceApi.AddUsagePlan(jsii.String("InferenceUsagePlan"), &awsapigateway.UsagePlanProps{
-		Name:        jsii.String(fmt.Sprintf("ml-inference-usage-plan-%s", *tapStack.EnvironmentSuffix)),
+		Name:        jsii.String(fmt.Sprintf("ml-inference-usage-plan-%s-%s", *tapStack.EnvironmentSuffix, *tapStack.RandomSuffix)),
 		Description: jsii.String("Usage plan for ML inference API"),
 		Throttle: &awsapigateway.ThrottleSettings{
 			RateLimit:  jsii.Number(50),
@@ -412,19 +412,19 @@ func (tapStack *TapStack) createInferenceInfrastructure(stack awscdk.Stack) {
 	awscdk.NewCfnOutput(stack, jsii.String("InferenceApiKeyId"), &awscdk.CfnOutputProps{
 		Value:       apiKey.KeyId(),
 		Description: jsii.String("API Key ID for inference endpoint (use AWS CLI to get the value)"),
-		ExportName:  jsii.String(fmt.Sprintf("InferenceApiKeyId-%s", *tapStack.EnvironmentSuffix)),
+		ExportName:  jsii.String(fmt.Sprintf("InferenceApiKeyId-%s-%s", *tapStack.EnvironmentSuffix, *tapStack.RandomSuffix)),
 	})
 }
 
 func (tapStack *TapStack) createMonitoringInfrastructure(stack awscdk.Stack) {
 	// SNS topic for alerts
 	tapStack.AlertTopic = awssns.NewTopic(stack, jsii.String("AlertTopic"), &awssns.TopicProps{
-		TopicName: jsii.String(fmt.Sprintf("ml-pipeline-alerts-%s", *tapStack.EnvironmentSuffix)),
+		TopicName: jsii.String(fmt.Sprintf("ml-pipeline-alerts-%s-%s", *tapStack.EnvironmentSuffix, *tapStack.RandomSuffix)),
 	})
 
 	// CloudWatch Dashboard
 	tapStack.Dashboard = awscloudwatch.NewDashboard(stack, jsii.String("MLPipelineDashboard"), &awscloudwatch.DashboardProps{
-		DashboardName: jsii.String(fmt.Sprintf("ml-pipeline-dashboard-%s", *tapStack.EnvironmentSuffix)),
+		DashboardName: jsii.String(fmt.Sprintf("ml-pipeline-dashboard-%s-%s", *tapStack.EnvironmentSuffix, *tapStack.RandomSuffix)),
 	})
 
 	// API Gateway widget
@@ -457,7 +457,7 @@ func (tapStack *TapStack) createAlarms(stack awscdk.Stack) {
 	apiLatencyAlarm := tapStack.InferenceApi.MetricLatency(nil).CreateAlarm(stack, jsii.String("ApiLatencyAlarm"), &awscloudwatch.CreateAlarmOptions{
 		EvaluationPeriods:  jsii.Number(3),
 		Threshold:          jsii.Number(500),
-		AlarmName:          jsii.String(fmt.Sprintf("api-latency-alarm-%s", *tapStack.EnvironmentSuffix)),
+		AlarmName:          jsii.String(fmt.Sprintf("api-latency-alarm-%s-%s", *tapStack.EnvironmentSuffix, *tapStack.RandomSuffix)),
 		AlarmDescription:   jsii.String("Alarm when API Gateway latency exceeds 500ms"),
 		ComparisonOperator: awscloudwatch.ComparisonOperator_GREATER_THAN_THRESHOLD,
 		TreatMissingData:   awscloudwatch.TreatMissingData_NOT_BREACHING,
@@ -467,7 +467,7 @@ func (tapStack *TapStack) createAlarms(stack awscdk.Stack) {
 	lambdaErrorAlarm := tapStack.InferenceLambda.MetricErrors(nil).CreateAlarm(stack, jsii.String("LambdaErrorAlarm"), &awscloudwatch.CreateAlarmOptions{
 		EvaluationPeriods:  jsii.Number(1),
 		Threshold:          jsii.Number(1),
-		AlarmName:          jsii.String(fmt.Sprintf("lambda-error-alarm-%s", *tapStack.EnvironmentSuffix)),
+		AlarmName:          jsii.String(fmt.Sprintf("lambda-error-alarm-%s-%s", *tapStack.EnvironmentSuffix, *tapStack.RandomSuffix)),
 		AlarmDescription:   jsii.String("Alarm when Lambda has errors"),
 		ComparisonOperator: awscloudwatch.ComparisonOperator_GREATER_THAN_THRESHOLD,
 	})
@@ -478,6 +478,7 @@ func (tapStack *TapStack) createAlarms(stack awscdk.Stack) {
 
 	// Schedule daily training job
 	schedule := awsevents.NewRule(stack, jsii.String("DailyTrainingSchedule"), &awsevents.RuleProps{
+		RuleName: jsii.String(fmt.Sprintf("daily-training-schedule-%s-%s", *tapStack.EnvironmentSuffix, *tapStack.RandomSuffix)),
 		Schedule: awsevents.Schedule_Expression(jsii.String("cron(0 0 * * ? *)")),
 		Enabled:  jsii.Bool(false), // Disabled by default
 	})
@@ -486,35 +487,35 @@ func (tapStack *TapStack) createAlarms(stack awscdk.Stack) {
 }
 
 func (tapStack *TapStack) addStackOutputs(stack awscdk.Stack) {
-	// Export stack outputs
+	// Add outputs for resources
 	awscdk.NewCfnOutput(stack, jsii.String("RawImageBucketName"), &awscdk.CfnOutputProps{
 		Value:       tapStack.RawImageBucket.BucketName(),
 		Description: jsii.String("Raw image bucket name"),
-		ExportName:  jsii.String(fmt.Sprintf("RawImageBucket-%s", *tapStack.EnvironmentSuffix)),
+		ExportName:  jsii.String(fmt.Sprintf("RawImageBucket-%s-%s", *tapStack.EnvironmentSuffix, *tapStack.RandomSuffix)),
 	})
 
 	awscdk.NewCfnOutput(stack, jsii.String("ProcessedBucketName"), &awscdk.CfnOutputProps{
 		Value:       tapStack.ProcessedBucket.BucketName(),
 		Description: jsii.String("Processed data bucket name"),
-		ExportName:  jsii.String(fmt.Sprintf("ProcessedBucket-%s", *tapStack.EnvironmentSuffix)),
+		ExportName:  jsii.String(fmt.Sprintf("ProcessedBucket-%s-%s", *tapStack.EnvironmentSuffix, *tapStack.RandomSuffix)),
 	})
 
 	awscdk.NewCfnOutput(stack, jsii.String("MetadataTableName"), &awscdk.CfnOutputProps{
 		Value:       tapStack.MetadataTable.TableName(),
 		Description: jsii.String("Image metadata table name"),
-		ExportName:  jsii.String(fmt.Sprintf("MetadataTable-%s", *tapStack.EnvironmentSuffix)),
+		ExportName:  jsii.String(fmt.Sprintf("MetadataTable-%s-%s", *tapStack.EnvironmentSuffix, *tapStack.RandomSuffix)),
 	})
 
 	awscdk.NewCfnOutput(stack, jsii.String("ModelBucketName"), &awscdk.CfnOutputProps{
 		Value:       tapStack.ModelBucket.BucketName(),
 		Description: jsii.String("Model artifacts bucket name"),
-		ExportName:  jsii.String(fmt.Sprintf("ModelBucket-%s", *tapStack.EnvironmentSuffix)),
+		ExportName:  jsii.String(fmt.Sprintf("ModelBucket-%s-%s", *tapStack.EnvironmentSuffix, *tapStack.RandomSuffix)),
 	})
 
 	awscdk.NewCfnOutput(stack, jsii.String("InferenceApiEndpoint"), &awscdk.CfnOutputProps{
 		Value:       tapStack.InferenceApi.Url(),
 		Description: jsii.String("Inference API endpoint"),
-		ExportName:  jsii.String(fmt.Sprintf("InferenceApiEndpoint-%s", *tapStack.EnvironmentSuffix)),
+		ExportName:  jsii.String(fmt.Sprintf("InferenceApiEndpoint-%s-%s", *tapStack.EnvironmentSuffix, *tapStack.RandomSuffix)),
 	})
 }
 ```
