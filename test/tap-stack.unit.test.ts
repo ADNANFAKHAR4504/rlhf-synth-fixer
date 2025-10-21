@@ -287,8 +287,14 @@ describe('TapStack Unit Tests', () => {
       // API Gateway Account should depend on API Gateway Role
       expect(resources.NovaApiGatewayAccount).toHaveProperty('Properties.CloudWatchRoleArn');
       
-      // API Gateway Stage should depend on Account
-      expect(resources.NovaApiGatewayStage).toHaveProperty('DependsOn', 'NovaApiGatewayAccount');
+      // API Gateway Stage should depend on Account (allow scalar or array)
+      const stageDependsOn = resources.NovaApiGatewayStage.DependsOn;
+      expect(stageDependsOn).toBeDefined();
+      if (Array.isArray(stageDependsOn)) {
+        expect(stageDependsOn).toContain('NovaApiGatewayAccount');
+      } else {
+        expect(stageDependsOn).toBe('NovaApiGatewayAccount');
+      }
       
       // Config Rules should depend on Config Recorder
       expect(resources.S3BucketServerSideEncryptionEnabledRule).toHaveProperty('DependsOn', 'ConfigRecorder');

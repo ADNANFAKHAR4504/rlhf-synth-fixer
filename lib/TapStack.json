@@ -34,6 +34,11 @@
             "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
             "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
             "Description": "AMI ID for the EC2 instance (uses latest Amazon Linux 2 AMI by default, or specify custom AMI ID)"
+        },
+        "ApiDeploymentVersion": {
+            "Type": "String",
+            "Default": "v3",
+            "Description": "Bump this to force API Gateway deployment replacement when methods change"
         }
     },
     "Conditions": {
@@ -1437,12 +1442,17 @@
             "Properties": {
                 "RestApiId": {
                     "Ref": "NovaApiGateway"
+                },
+                "Description": {
+                    "Fn::Sub": "Deployment-${ApiDeploymentVersion}"
                 }
             }
         },
         "NovaApiGatewayStage": {
             "Type": "AWS::ApiGateway::Stage",
-            "DependsOn": "NovaApiGatewayAccount",
+            "DependsOn": [
+                "NovaApiGatewayAccount"
+            ],
             "Properties": {
                 "RestApiId": {
                     "Ref": "NovaApiGateway"
@@ -1550,6 +1560,7 @@
                 },
                 "HttpMethod": "POST",
                 "AuthorizationType": "AWS_IAM",
+                "ApiKeyRequired": false,
                 "RequestParameters": {
                     "method.request.header.X-Instance-Id": true
                 },
