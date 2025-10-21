@@ -132,13 +132,14 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
     const lambdaFunctionName = sanitizeName(
       `${this.stackName}-application-function-${resourceSuffix}`
     );
-    // Use NodejsFunction bundling in CI to include runtime dependencies
-    // (CI environments typically have Docker available for esbuild bundling).
-    // For local unit tests we prefer a simple Code.fromAsset to avoid requiring Docker.
+    // NodejsFunction bundling is potentially expensive and may invoke
+    // `npm ci` during asset staging; require explicit opt-in via
+    // USE_NODEJS_BUNDLER to avoid synth failures in environments where
+    // the repository lockfile and handler package.json are out of sync.
+    // This keeps bundling opt-in and avoids touching files outside `lib/`.
     const useBundler =
-      process.env.CI === '1' ||
-      process.env.CI === 'true' ||
-      process.env.USE_NODEJS_BUNDLER === '1';
+      process.env.USE_NODEJS_BUNDLER === '1' ||
+      process.env.USE_NODEJS_BUNDLER === 'true';
     let lambdaFunction: lambda.Function;
     if (useBundler) {
       const nodefn = new NodejsFunction(this, 'ApplicationFunction', {
@@ -304,6 +305,7 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
   }
 }
 // Duplicate block removed — original top-level imports and ServerlessInfrastructureStack implementation (first occurrence) are retained above.
+
 ```
 
 ### lib/tap-stack.ts
