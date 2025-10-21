@@ -1,3 +1,31 @@
+### Reasoning Trace
+---
+
+I need to create a comprehensive CloudFormation template that meets all the specified requirements. Let me break down what I need to include:
+
+1. **VPC with CIDR 10.0.0.0/16**
+2. **Public Subnets** (2) in different AZs - 10.0.1.0/24 and 10.0.2.0/24
+3. **Private Subnets** (2) in different AZs - 10.0.3.0/24 and 10.0.4.0/24
+4. **Internet Gateway** attached to VPC
+5. **Elastic IP** and **NAT Gateway** in one public subnet
+6. **Route Tables** - public (to IGW) and private (to NAT)
+7. **Security Group** - HTTP/HTTPS inbound, all outbound
+8. **IAM Role** with S3 access
+9. **S3 Bucket** with versioning and public access blocked
+10. **RDS MySQL** in private subnets with Multi-AZ
+11. **DynamoDB Table** with specified capacity
+
+Key constraints:
+- No hardcoding - use parameters and pseudo parameters
+- Must work in any account/region
+- All configurable values as parameters
+- Security best practices
+
+Let me create the template step by step.
+### Answer 
+---
+
+I'll create a comprehensive CloudFormation template that meets all your requirements. This template will be fully parameterized and deployable across any AWS account without modification.
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
@@ -119,7 +147,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-VPC'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-vpc'
 
   # Internet Gateway
   InternetGateway:
@@ -127,7 +155,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-IGW'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-igw'
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -145,7 +173,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-PublicSubnet1'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-public-subnet-1'
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -156,7 +184,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-PublicSubnet2'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-public-subnet-2'
 
   # Private Subnets
   PrivateSubnet1:
@@ -167,7 +195,7 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-PrivateSubnet1'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-private-subnet-1'
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -177,7 +205,7 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-PrivateSubnet2'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-private-subnet-2'
 
   # Elastic IP for NAT Gateway
   NATGatewayEIP:
@@ -187,7 +215,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-NAT-EIP'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-nat-eip'
 
   # NAT Gateway
   NATGateway:
@@ -197,7 +225,7 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-NAT-Gateway'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-nat-gateway'
 
   # Route Tables
   PublicRouteTable:
@@ -206,7 +234,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-PublicRouteTable'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-public-route-table'
 
   PrivateRouteTable:
     Type: AWS::EC2::RouteTable
@@ -214,7 +242,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-PrivateRouteTable'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-private-route-table'
 
   # Routes
   PublicRoute:
@@ -261,7 +289,7 @@ Resources:
   WebSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${AWS::StackName}-WebSecurityGroup'
+      GroupName: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-web-sg'
       GroupDescription: 'Security group for web traffic'
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -281,13 +309,13 @@ Resources:
           Description: 'Allow all outbound traffic'
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-WebSecurityGroup'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-web-sg'
 
   # RDS Security Group
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${AWS::StackName}-RDSSecurityGroup'
+      GroupName: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-rds-sg'
       GroupDescription: 'Security group for RDS database'
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -298,13 +326,13 @@ Resources:
           Description: !Sub 'Allow ${DatabaseEngine} from Web Security Group'
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-RDSSecurityGroup'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-rds-sg'
 
   # IAM Role for EC2
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${AWS::StackName}-EC2Role'
+      RoleName: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-ec2-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -334,13 +362,13 @@ Resources:
                   - !Sub '${S3Bucket.Arn}/*'
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-EC2Role'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-ec2-role'
 
   # Instance Profile
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${AWS::StackName}-EC2InstanceProfile'
+      InstanceProfileName: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-ec2-instance-profile'
       Roles:
         - !Ref EC2Role
 
@@ -368,14 +396,14 @@ Resources:
   RDSSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub '${AWS::StackName}-rds-subnet-group'
+      DBSubnetGroupName: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-rds-subnet-group'
       DBSubnetGroupDescription: 'Subnet group for RDS database'
       SubnetIds:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-RDSSubnetGroup'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-rds-subnet-group'
 
   DBMasterSecret:
     Type: AWS::SecretsManager::Secret
@@ -392,6 +420,7 @@ Resources:
   RDSInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-db'
       DBInstanceClass: !Ref DBInstanceClass
@@ -416,7 +445,7 @@ Resources:
         - slowquery
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-RDSInstance'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-rds-instance'
 
   # DynamoDB Table
   DynamoDBTable:
@@ -436,71 +465,119 @@ Resources:
         SSEEnabled: true
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-DynamoDBTable'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-dynamodb-table'
 
 Outputs:
   VPCId:
     Description: 'VPC ID'
     Value: !Ref VPC
     Export:
-      Name: !Sub '${AWS::StackName}-VPC-ID'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-vpc-id'
 
   PublicSubnet1Id:
     Description: 'Public Subnet 1 ID'
     Value: !Ref PublicSubnet1
     Export:
-      Name: !Sub '${AWS::StackName}-PublicSubnet1-ID'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-public-subnet-1-id'
 
   PublicSubnet2Id:
     Description: 'Public Subnet 2 ID'
     Value: !Ref PublicSubnet2
     Export:
-      Name: !Sub '${AWS::StackName}-PublicSubnet2-ID'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-public-subnet-2-id'
 
   PrivateSubnet1Id:
     Description: 'Private Subnet 1 ID'
     Value: !Ref PrivateSubnet1
     Export:
-      Name: !Sub '${AWS::StackName}-PrivateSubnet1-ID'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-private-subnet-1-id'
 
   PrivateSubnet2Id:
     Description: 'Private Subnet 2 ID'
     Value: !Ref PrivateSubnet2
     Export:
-      Name: !Sub '${AWS::StackName}-PrivateSubnet2-ID'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-private-subnet-2-id'
 
   WebSecurityGroupId:
     Description: 'Web Security Group ID'
     Value: !Ref WebSecurityGroup
     Export:
-      Name: !Sub '${AWS::StackName}-WebSecurityGroup-ID'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-web-sg-id'
 
   S3BucketName:
     Description: 'S3 Bucket Name'
     Value: !Ref S3Bucket
     Export:
-      Name: !Sub '${AWS::StackName}-S3Bucket-Name'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-s3-bucket-name'
 
   RDSEndpoint:
     Description: 'RDS MySQL Endpoint'
     Value: !GetAtt RDSInstance.Endpoint.Address
     Export:
-      Name: !Sub '${AWS::StackName}-RDS-Endpoint'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-rds-endpoint'
 
   DynamoDBTableName:
     Description: 'DynamoDB Table Name'
     Value: !Ref DynamoDBTable
     Export:
-      Name: !Sub '${AWS::StackName}-DynamoDB-TableName'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-dynamodb-table-name'
 
   EC2RoleArn:
     Description: 'EC2 Role ARN'
     Value: !GetAtt EC2Role.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-EC2Role-ARN'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-ec2-role-arn'
 
   EC2InstanceProfileArn:
     Description: 'EC2 Instance Profile ARN'
     Value: !GetAtt EC2InstanceProfile.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-EC2InstanceProfile-ARN'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-ec2-instance-profile-arn'
+
+  RDSSecurityGroupId:
+    Description: 'RDS Security Group ID'
+    Value: !Ref RDSSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-rds-sg-id'
+
+  NATGatewayId:
+    Description: 'NAT Gateway ID'
+    Value: !Ref NATGateway
+    Export:
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-nat-gateway-id'
+
+  NATGatewayEIP:
+    Description: 'NAT Gateway Elastic IP'
+    Value: !Ref NATGatewayEIP
+    Export:
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-nat-gateway-eip'
+
+  PublicRouteTableId:
+    Description: 'Public Route Table ID'
+    Value: !Ref PublicRouteTable
+    Export:
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-public-route-table-id'
+
+  PrivateRouteTableId:
+    Description: 'Private Route Table ID'
+    Value: !Ref PrivateRouteTable
+    Export:
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-private-route-table-id'
+
+  S3BucketArn:
+    Description: 'S3 Bucket ARN'
+    Value: !GetAtt S3Bucket.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-s3-bucket-arn'
+
+  DBSecretArn:
+    Description: 'Database Master Secret ARN'
+    Value: !Ref DBMasterSecret
+    Export:
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-db-master-secret-arn'
+
+  RDSPort:
+    Description: 'RDS Database Port'
+    Value: !FindInMap [DatabaseEngineMap, !Ref DatabaseEngine, Port]
+    Export:
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-rds-port'

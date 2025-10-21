@@ -1,101 +1,104 @@
-Prompt: Generate a Cross-Account, Parameterized AWS CloudFormation Template
+# AWS CloudFormation Template Design Challenge
 
-Task:
+## Overview
 
-You are tasked with generating a fully deployable, production-grade AWS CloudFormation YAML template that sets up a highly available and secure AWS environment in the us-east-1 region.
+Build a production-ready AWS CloudFormation template that creates a secure, highly available infrastructure in us-east-1. The template should be deployable across different AWS accounts and combine all infrastructure components in a single YAML file.
 
-The environment must include networking, security, compute access, storage, and database components — all defined in a single CloudFormation template.
+## Core Infrastructure Requirements
 
-Requirements
+### Network Layer
 
-The CloudFormation stack must create and configure the following resources:
+1. VPC Configuration
+   - Main CIDR: 10.0.0.0/16
 
-VPC
+2. Subnet Layout
+   - Public Subnets
+     - 2 subnets across different AZs
+     - CIDR ranges: 10.0.1.0/24, 10.0.2.0/24
+   - Private Subnets
+     - 2 subnets across different AZs
+     - CIDR ranges: 10.0.3.0/24, 10.0.4.0/24
 
-CIDR: 10.0.0.0/16
+3. Gateway Setup
+   - Internet Gateway
+     - Attach to VPC for public access
+   - NAT Gateway
+     - Deploy in public subnet
+     - Needs Elastic IP allocation
 
-Public Subnets
+4. Routing Configuration
+   - Public Routes
+     - Default route (0.0.0.0/0) to Internet Gateway
+     - Link to public subnets
+   - Private Routes
+     - Default route (0.0.0.0/0) to NAT Gateway
+     - Link to private subnets
 
-Two public subnets, each in different Availability Zones
+5. Network Security
+   - Inbound Rules
+     - Allow HTTP (port 80)
+     - Allow HTTPS (port 443)
+   - Outbound Rules
+     - Allow all traffic
 
-CIDRs: 10.0.1.0/24 and 10.0.2.0/24
+### Access Management
 
-Private Subnets
+1. IAM Configuration
+   - EC2 instance role for S3 access
+   - S3 bucket policy with list/get/put/delete permissions
 
-Two private subnets, each in different Availability Zones
+2. Storage Setup
+   - S3 Bucket
+     - Enable versioning
+     - Block all public access
 
-CIDRs: 10.0.3.0/24 and 10.0.4.0/24
+### Database Layer
 
-Internet Gateway
+1. RDS Setup
+   - MySQL deployment
+   - Private subnet placement
+   - Multi-AZ configuration
+   - Automated backups
+   - Configurable settings:
+     - Instance class
+     - Engine version
+     - Backup retention
+     - Access credentials
+   - No public access
 
-Create and attach it to the VPC
+2. DynamoDB Configuration
+   - Configurable table name
+   - Capacity settings:
+     - Read units: 5
+     - Write units: 5
+   - Schema:
+     - Primary key: id (String)
 
-Elastic IP + NAT Gateway
+## Technical Requirements
 
-Allocate an Elastic IP
+1. Cross-Account Support
+   - Template must work in any AWS account
+   - Region-independent deployment
+   - No environment-specific modifications needed
 
-Deploy NAT Gateway in one of the public subnets
+2. Dynamic Configuration
+   - No hardcoded values for:
+     - ARNs
+     - Account IDs
+     - Region names
+     - Resource names
+   - Use parameters or AWS pseudo parameters
+   - Example: ${AWS::AccountId}, ${AWS::Region}
 
-Route Tables
+3. Parameter Management
+   - User inputs for:
+     - CIDR ranges
+     - Database credentials
+     - Bucket names
+   - Define as CloudFormation Parameters
 
-Public route table → route 0.0.0.0/0 → Internet Gateway
-
-Private route table → route 0.0.0.0/0 → NAT Gateway
-
-Associate route tables with their respective subnets
-
-Security Group
-
-Allow inbound HTTP (80) and HTTPS (443) from anywhere
-
-Allow all outbound traffic
-
-IAM Role and Instance Profile
-
-IAM role for EC2 or other instances to access S3
-
-Attach inline policy for S3 list/get/put/delete on the created bucket
-
-S3 Bucket
-
-Enable versioning
-
-Must block all public access
-
-RDS (MySQL)
-
-Deploy in private subnets
-
-Multi-AZ and automated backups enabled
-
-Specify instance class, engine version, backup retention, and credentials as parameters
-
-Public access disabled
-
-DynamoDB Table
-
-Table name parameterized
-
-ReadCapacityUnits = 5
-
-WriteCapacityUnits = 5
-
-Primary key: id (String)
-
-Constraints
-
-Cross-Account Executability:
-The template must deploy successfully in any AWS account or region without modification.
-
-No Hardcoding:
-Absolutely no hardcoded ARNs, Account IDs, Region names, or specific resource names.
-All configurable or unique identifiers (like S3 bucket names) must use parameters or pseudo parameters (e.g., ${AWS::AccountId}, ${AWS::Region}).
-
-Parameterization:
-Any user-supplied values (CIDRs, DB credentials, bucket name, etc.) must be defined as CloudFormation Parameters.
-
-Security and Availability:
-All subnets must span multiple AZs.
-No public exposure of private components (RDS, DynamoDB).
-S3 bucket must have versioning and public access blocked.
-RDS must be Multi-AZ and have automated backups.
+4. Security Standards
+   - Multi-AZ subnet distribution
+   - Private resource protection
+   - S3 security best practices
+   - Database redundancy and backups
