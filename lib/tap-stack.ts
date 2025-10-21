@@ -29,7 +29,7 @@ export class TapStack extends pulumi.ComponentResource {
   private readonly region: string;
   private readonly environmentSuffix: string;
   private readonly commonTags: Record<string, string>;
-  private readonly availabilityZones: pulumi.Output<string[]>;
+  private readonly availabilityZones: pulumi.Output<string[]>; // Fixed type
   private hubIgw?: aws.ec2.InternetGateway;
 
   // Store subnet references
@@ -59,12 +59,9 @@ export class TapStack extends pulumi.ComponentResource {
     };
 
     // Dynamically fetch available availability zones
-    const azData = aws.getAvailabilityZonesOutput({
+    this.availabilityZones = aws.getAvailabilityZonesOutput({
       state: "available",
-    });
-    
-    // Use the first 3 available AZs
-    this.availabilityZones = azData.names.apply(names => names.slice(0, 3));
+    }).names.apply(names => names.slice(0, 3));
 
     this.flowLogsBucket = this.createFlowLogsBucket();
 
@@ -217,8 +214,8 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   private createSubnets(vpc: aws.ec2.Vpc, config: VpcConfig): void {
-    // Since availabilityZones is now an Output<string[]>, we need to handle it differently
-    pulumi.output(this.availabilityZones).apply(zones => {
+    // Use apply to work with the Output type
+    this.availabilityZones.apply(zones => {
       zones.forEach((az: string, index: number) => {
         const publicCidr = this.calculateSubnetCidr(config.cidr, index * 2);
         const privateCidr = this.calculateSubnetCidr(config.cidr, index * 2 + 1);
