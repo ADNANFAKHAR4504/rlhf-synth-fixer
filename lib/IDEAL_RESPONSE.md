@@ -34,8 +34,8 @@ The flow is: API Gateway → Lambda Function → S3 Logging + CloudWatch Logging
       ]
     },
     "DeploymentInstructions": {
-      "Validation": "aws cloudformation validate-template --template-body file://serverless_setup.json",
-      "Deployment": "aws cloudformation deploy --template-file serverless_setup.json --stack-name serverless-app-stack --parameter-overrides Environment=dev ProjectName=serverless-demo --capabilities CAPABILITY_IAM --region us-east-1",
+      "Validation": "aws cloudformation validate-template --template-body file://TapStack.json",
+      "Deployment": "aws cloudformation deploy --template-file TapStack.json --stack-name serverless-app-stack --parameter-overrides Environment=dev ProjectName=serverless-demo --capabilities CAPABILITY_IAM --region us-east-1",
       "Verification": {
         "TestAPI": "curl -X GET https://<api-id>.execute-api.us-east-1.amazonaws.com/prod/v1/resource",
         "CheckCloudWatchLogs": "aws logs describe-log-groups --log-group-name-prefix '/aws/lambda/serverless-' --region us-east-1",
@@ -604,14 +604,14 @@ All resources are tagged with:
 1. **Validate the template**:
 
 ```bash
-aws cloudformation validate-template --template-body file://serverless_setup.json
+aws cloudformation validate-template --template-body file://TapStack.json
 ```
 
 2. **Deploy the stack**:
 
 ```bash
 aws cloudformation deploy \
-  --template-file serverless_setup.json \
+  --template-file TapStack.json \
   --stack-name serverless-app-stack \
   --parameter-overrides EnvironmentSuffix=dev ProjectName=serverless-demo \
   --capabilities CAPABILITY_IAM \

@@ -15,8 +15,7 @@
     "Lambda",
     "API Gateway",
     "CloudWatch Logs",
-    "IAM",
-    "DynamoDB"
+    "IAM"
   ],
   "training_quality": 8,
   "background": "Serverless Infrastructure with AWS CloudFormation (JSON) - File Upload Application"
