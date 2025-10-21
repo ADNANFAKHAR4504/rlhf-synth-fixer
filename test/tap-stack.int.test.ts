@@ -89,7 +89,8 @@ if (!outputs || Object.keys(outputs).length === 0) {
     // Basic presence checks for keys and basic format/masking validation
     test('outputs contain the minimal keys required for E2E flows and values are not masked', () => {
       // attempt to resolve each required output via common names / heuristics
-      const apiUrl = findOutput(['ApiGatewayUrl', 'ApiEndpointUrl', 'ApplicationApiEndpoint', 'ApiEndpoint', 'ApplicationApiEndpointA2298DCC']);
+      // Prefer explicit environment override (CI-friendly) then fall back to outputs
+      const apiUrl = process.env.API_GATEWAY_ENDPOINT || findOutput(['ApiGatewayUrl', 'ApiEndpointUrl', 'ApplicationApiEndpoint', 'ApiEndpoint', 'ApplicationApiEndpointA2298DCC']);
       const lambdaArn = findOutput(['LambdaFunctionArn', 'FunctionArn', 'ApplicationLambdaArn']);
       const s3Bucket = findOutput(['S3BucketName', 'LogsBucketName', 'BucketName']);
       const sqsUrl = findOutput(['SqsQueueUrl', 'QueueUrl', 'SqsUrl']);
@@ -149,8 +150,9 @@ if (!outputs || Object.keys(outputs).length === 0) {
         expect(apiUrl).toBeTruthy();
 
         // Support API key protected endpoints in CI by reading an API key from env.
-        // Preferred env var names: INTEGRATION_API_KEY, ADMIN_API_KEY, READ_ONLY_API_KEY
-        const apiKey = process.env.INTEGRATION_API_KEY || process.env.ADMIN_API_KEY || process.env.READ_ONLY_API_KEY;
+        // Preferred env var names (in order): INTEGRATION_API_KEY, ADMIN_API_KEY, READ_ONLY_API_KEY
+        // Backwards-compatible: also accept API_KEY and the CI-standard names used in docs.
+        const apiKey = process.env.INTEGRATION_API_KEY || process.env.ADMIN_API_KEY || process.env.READ_ONLY_API_KEY || process.env.API_KEY;
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         if (apiKey) headers['x-api-key'] = apiKey;
 
@@ -172,11 +174,17 @@ if (!outputs || Object.keys(outputs).length === 0) {
 
         // Helpful diagnostic for common API Gateway auth failures
         if ((res.status === 401 || res.status === 403) || (res.data && typeof res.data === 'object' && /Missing Authentication Token/i.test(JSON.stringify(res.data)))) {
-          // If no API key was supplied, give a clearer error to the operator/CI
+          // If no API key was supplied, fail fast with a clear error so CI doesn't silently pass or produce opaque downstream failures.
           if (!apiKey) {
             // eslint-disable-next-line no-console
-            console.error('API returned authentication error. If your API is protected by an API key, set INTEGRATION_API_KEY or ADMIN_API_KEY in the environment before running integration tests.');
+            console.error('API returned authentication error and no API key was provided. For live integration tests provide an API key in CI as INTEGRATION_API_KEY, ADMIN_API_KEY or READ_ONLY_API_KEY.');
+            // Make the test fail explicitly with actionable guidance.
+            throw new Error('API authentication failed (401/403) and no API key found in environment. Set INTEGRATION_API_KEY or ADMIN_API_KEY in CI.');
           }
+          // If an API key was provided but we still got 401/403, surface that as a failure too (likely misconfigured key or stage)
+          // eslint-disable-next-line no-console
+          console.error('API returned authentication error despite having an API key set. Verify the key and that it is associated with the deployed stage.');
+          throw new Error(`API authentication failed with status ${res.status}.`);
         }
 
         // Require that the API returns an itemId for downstream verification
@@ -199,18 +207,27 @@ if (!outputs || Object.keys(outputs).length === 0) {
         const tableName = findOutput(['TableName', 'DynamoTableName', 'DynamoDBTableName', 'DynamoTableName']);
         expect(tableName).toBeDefined();
 
-        // Poll for the item in DynamoDB
+        // Poll for the item in DynamoDB. Different lambdas use different primary key names
+        // (common ones: 'id' and 'assetId'). Try both when probing the table.
         let found = false;
+        const keyCandidates = [{ id: itemId! }, { assetId: itemId! }];
         for (let i = 0; i < 6; i++) {
           try {
-            const get = new GetItemCommand({ TableName: tableName, Key: marshall({ id: itemId! }) });
-            const resp = await dynamo.send(get);
-            if (resp.Item) {
-              found = true;
-              break;
+            for (const candidateKey of keyCandidates) {
+              try {
+                const get = new GetItemCommand({ TableName: tableName, Key: marshall(candidateKey) });
+                const resp = await dynamo.send(get);
+                if (resp.Item) {
+                  found = true;
+                  break;
+                }
+              } catch (innerErr: any) {
+                // ignore per-key errors and try next key variant
+              }
             }
+            if (found) break;
           } catch (e: any) {
-            // ignore transient
+            // ignore transient errors and retry
           }
           // wait
           // eslint-disable-next-line no-await-in-loop
@@ -232,7 +249,8 @@ if (!outputs || Object.keys(outputs).length === 0) {
               for (const m of resp.Messages) {
                 try {
                   const body = JSON.parse(m.Body as string);
-                  if (body && (body.id === itemId || (body.id && body.id.S === itemId))) {
+                  // message shape varies; accept either 'id' or 'assetId' top-level fields
+                  if (body && (body.id === itemId || body.assetId === itemId || (body.id && body.id.S === itemId) || (body.assetId && body.assetId.S === itemId))) {
                     messageFound = true;
                     break;
                   }
