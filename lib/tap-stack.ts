@@ -162,7 +162,7 @@ export class TapStack extends pulumi.ComponentResource {
         enablePciCompliance,
         regions,
       },
-      { parent: this, provider: awsProvider }
+      { parent: this, provider: awsProvider, ignoreChanges: ['provider'] }
     );
 
     //  2. Network Stack
@@ -179,7 +179,7 @@ export class TapStack extends pulumi.ComponentResource {
         kmsKeyArn: securityStack.kmsKeyArn,
         awsProvider: awsProvider,
       },
-      { parent: this, provider: awsProvider }
+      { parent: this, provider: awsProvider, ignoreChanges: ['provider'] }
     );
 
     // 3. Storage Stack
@@ -195,7 +195,7 @@ export class TapStack extends pulumi.ComponentResource {
         enableVersioning: true,
         enableObjectLock: true,
       },
-      { parent: this, provider: awsProvider }
+      { parent: this, provider: awsProvider, ignoreChanges: ['provider'] }
     );
 
     //  4. Database Stack
@@ -215,6 +215,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         parent: this,
         provider: awsProvider,
+        ignoreChanges: ['provider'],
         dependsOn: [networkStack, securityStack],
       }
     );
@@ -255,6 +256,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         parent: this,
         provider: awsProvider,
+        ignoreChanges: ['provider'],
         dependsOn: [networkStack, securityStack],
       }
     );
@@ -290,6 +292,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         parent: this,
         provider: awsProvider,
+        ignoreChanges: ['provider'],
         dependsOn: [networkStack, securityStack, computeStack, storageStack],
       }
     );
@@ -315,6 +318,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         parent: this,
         provider: awsProvider,
+        ignoreChanges: ['provider'],
         dependsOn: [computeStack, apiStack, databaseStack, messagingStack],
       }
     );
@@ -337,6 +341,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         parent: this,
         provider: awsProvider,
+        ignoreChanges: ['provider'],
         dependsOn: [storageStack, securityStack, monitoringStack],
       }
     );

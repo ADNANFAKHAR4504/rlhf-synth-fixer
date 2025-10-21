@@ -71,7 +71,7 @@ jobs:
           download-artifacts: 'false'
 
       - name: Validate commit message
-        run: npx commitlint --from=${{ github.event.pull_request.base.sha }} --to=HEAD
+        run: npx commitlint --last
 
   build:
     name: Build
