@@ -57,6 +57,9 @@ class ComputeStack:
         # Get latest Amazon Linux 2023 AMI
         self.ami = self._get_latest_ami()
         
+        # Get AWS-managed EBS KMS key
+        self.ebs_kms_key = self._get_ebs_kms_key()
+        
         # Create launch template
         self.launch_template = self._create_launch_template()
         
@@ -93,6 +96,16 @@ class ComputeStack:
             ]
         )
         return ami
+    
+    def _get_ebs_kms_key(self) -> aws.kms.AwaitableGetAliasResult:
+        """
+        Get the AWS-managed EBS KMS key.
+        
+        Returns:
+            KMS key data for alias/aws/ebs
+        """
+        kms_key = aws.kms.get_alias(name="alias/aws/ebs")
+        return kms_key
     
     def _create_launch_template(self) -> aws.ec2.LaunchTemplate:
         """
@@ -165,7 +178,7 @@ echo "=========================================="
                         volume_type="gp3",
                         delete_on_termination=True,
                         encrypted=True,  # Enable encryption for compliance
-                        kms_key_id="alias/aws/ebs"  # Use AWS-managed key to avoid invalid KMS key state
+                        kms_key_id=self.ebs_kms_key.target_key_arn  # Use AWS-managed key ARN to avoid invalid KMS key state
                     )
                 )
             ],

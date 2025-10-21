@@ -63,6 +63,12 @@ class MyMocks(pulumi.runtime.Mocks):
             return {"names": ["us-east-1a", "us-east-1b"]}
         elif args.token == "aws:index/getCallerIdentity:getCallerIdentity":
             return {"account_id": "123456789012"}
+        elif args.token == "aws:kms/getAlias:getAlias":
+            return {
+                "arn": "arn:aws:kms:us-east-1:123456789012:alias/aws/ebs",
+                "target_key_arn": "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012",
+                "target_key_id": "12345678-1234-1234-1234-123456789012"
+            }
         return {}
 
 
