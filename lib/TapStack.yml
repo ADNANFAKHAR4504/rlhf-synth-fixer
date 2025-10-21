@@ -737,7 +737,7 @@ Resources:
   NovaWAFWebACL:
     Type: 'AWS::WAFv2::WebACL'
     Properties:
-      Name: 'nova-prod-waf-acl'
+      Name: !Sub 'nova-prod-waf-acl-${AWS::StackName}'
       Scope: REGIONAL
       DefaultAction:
         Allow: {}

@@ -18,7 +18,10 @@
         },
         "ACMCertificateArn": {
             "Type": "String",
-            "Description": "ACM certificate ARN for the ALB HTTPS listener"
+            "Description": "ACM certificate ARN for the ALB HTTPS listener",
+            "Default": "",
+            "AllowedPattern": "^$|arn:aws:acm:[a-z0-9-]+:\\d{12}:certificate\\/[A-Za-z0-9-]+",
+            "ConstraintDescription": "Provide a valid ACM certificate ARN or leave empty"
         }
     },
     "Mappings": {
@@ -44,6 +47,28 @@
             "DatabaseSubnet2": {
                 "CIDR": "10.0.21.0/24"
             }
+        }
+    },
+    "Conditions": {
+        "HasACMCertificateArn": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ACMCertificateArn"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "NoACMCertificateArn": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ACMCertificateArn"
+                },
+                ""
+            ]
         }
     },
     "Resources": {
@@ -1036,11 +1061,8 @@
                 "LaunchTemplateName": "nova-prod-app-lt",
                 "LaunchTemplateData": {
                     "IamInstanceProfile": {
-                        "Arn": {
-                            "Fn::GetAtt": [
-                                "NovaEC2InstanceProfile",
-                                "Arn"
-                            ]
+                        "Name": {
+                            "Ref": "NovaEC2InstanceProfile"
                         }
                     },
                     "InstanceType": "t3.small",
@@ -1235,6 +1257,7 @@
         },
         "NovaALBHTTPSListener": {
             "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Condition": "HasACMCertificateArn",
             "Properties": {
                 "LoadBalancerArn": {
                     "Ref": "NovaApplicationLoadBalancer"
@@ -1258,10 +1281,52 @@
                 ]
             }
         },
+        "NovaALBHTTPRedirectListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Condition": "HasACMCertificateArn",
+            "Properties": {
+                "LoadBalancerArn": {
+                    "Ref": "NovaApplicationLoadBalancer"
+                },
+                "Port": 80,
+                "Protocol": "HTTP",
+                "DefaultActions": [
+                    {
+                        "Type": "redirect",
+                        "RedirectConfig": {
+                            "Protocol": "HTTPS",
+                            "Port": "443",
+                            "StatusCode": "HTTP_301"
+                        }
+                    }
+                ]
+            }
+        },
+        "NovaALBHTTPForwardListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Condition": "NoACMCertificateArn",
+            "Properties": {
+                "LoadBalancerArn": {
+                    "Ref": "NovaApplicationLoadBalancer"
+                },
+                "Port": 80,
+                "Protocol": "HTTP",
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "NovaALBTargetGroup"
+                        }
+                    }
+                ]
+            }
+        },
         "NovaWAFWebACL": {
             "Type": "AWS::WAFv2::WebACL",
             "Properties": {
-                "Name": "nova-prod-waf-acl",
+                "Name": {
+                    "Fn::Sub": "nova-prod-waf-acl-${AWS::StackName}"
+                },
                 "Scope": "REGIONAL",
                 "DefaultAction": {
                     "Allow": {}
@@ -1466,7 +1531,7 @@
                 "InstanceType": "t3.micro",
                 "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
                 "IamInstanceProfile": {
-                    "Ref": "NovaBastionInstanceProfile"
+                    "Ref": "NovaEC2InstanceProfile"
                 },
                 "SecurityGroupIds": [
                     {
@@ -2277,6 +2342,60 @@
             },
             "Export": {
                 "Name": "nova-prod-vpc-flow-logs-group"
+            }
+        },
+        "DatabaseSecretArn": {
+            "Description": "Secrets Manager ARN for the RDS master credential",
+            "Value": {
+                "Ref": "NovaRDSPasswordSecret"
+            },
+            "Export": {
+                "Name": "nova-prod-db-secret-arn"
+            }
+        },
+        "BastionSecurityGroupId": {
+            "Description": "Bastion host Security Group ID",
+            "Value": {
+                "Ref": "NovaBastionSecurityGroup"
+            },
+            "Export": {
+                "Name": "nova-prod-bastion-sg-id"
+            }
+        },
+        "ALBSecurityGroupId": {
+            "Description": "Application Load Balancer Security Group ID",
+            "Value": {
+                "Ref": "NovaALBSecurityGroup"
+            },
+            "Export": {
+                "Name": "nova-prod-alb-sg-id"
+            }
+        },
+        "DatabaseSecurityGroupId": {
+            "Description": "Database Security Group ID",
+            "Value": {
+                "Ref": "NovaDatabaseSecurityGroup"
+            },
+            "Export": {
+                "Name": "nova-prod-db-sg-id"
+            }
+        },
+        "CloudTrailBucketName": {
+            "Description": "CloudTrail S3 bucket name",
+            "Value": {
+                "Ref": "NovaCloudTrailBucket"
+            },
+            "Export": {
+                "Name": "nova-prod-cloudtrail-bucket"
+            }
+        },
+        "RDSInstanceIdentifier": {
+            "Description": "RDS Instance Identifier",
+            "Value": {
+                "Ref": "NovaRDSInstance"
+            },
+            "Export": {
+                "Name": "nova-prod-rds-identifier"
             }
         }
     }
