@@ -4,6 +4,7 @@
 
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure foundation for Healthcare Patient Portal with HIPAA compliance'
+Transform: AWS::SecretsManager-2020-07-23
 
 Parameters:
   TrustedIP:
