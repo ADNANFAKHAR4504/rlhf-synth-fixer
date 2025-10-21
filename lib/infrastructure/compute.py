@@ -49,7 +49,7 @@ class ComputeStack:
         self.parent = parent
         
         # Get latest Amazon Linux 2023 AMI
-        self.ami_id = self._get_latest_ami()
+        self.ami = self._get_latest_ami()
         
         # Create launch template
         self.launch_template = self._create_launch_template()
@@ -61,12 +61,12 @@ class ComputeStack:
         self.scale_up_policy = self._create_scale_up_policy()
         self.scale_down_policy = self._create_scale_down_policy()
     
-    def _get_latest_ami(self) -> str:
+    def _get_latest_ami(self) -> aws.ec2.AwaitableGetAmiResult:
         """
         Get the latest Amazon Linux 2023 AMI.
         
         Returns:
-            AMI ID
+            AMI data (matching reference Pr4863)
         """
         ami = aws.ec2.get_ami(
             most_recent=True,
@@ -77,12 +77,16 @@ class ComputeStack:
                     values=["al2023-ami-*-x86_64"]
                 ),
                 aws.ec2.GetAmiFilterArgs(
+                    name="virtualization-type",
+                    values=["hvm"]
+                ),
+                aws.ec2.GetAmiFilterArgs(
                     name="state",
                     values=["available"]
                 )
             ]
         )
-        return ami.id
+        return ami
     
     def _create_launch_template(self) -> aws.ec2.LaunchTemplate:
         """
@@ -92,48 +96,55 @@ class ComputeStack:
         """
         lt_name = self.config.get_resource_name('launch-template')
         
+        # User data with comprehensive logging and SSM agent
         # SSM agent is pre-installed on Amazon Linux 2023
-        user_data = f"""#!/bin/bash
-set -e
+        user_data = """#!/bin/bash
+# Comprehensive logging for debugging
+exec > >(tee -a /var/log/user-data.log) 2>&1
 
-# Ensure SSM agent is running (pre-installed on Amazon Linux 2023)
-systemctl enable amazon-ssm-agent
-systemctl start amazon-ssm-agent
+echo "=========================================="
+echo "User data script started at: $(date)"
+echo "Instance ID: $(ec2-metadata --instance-id 2>/dev/null || echo 'unknown')"
+echo "Region: $(ec2-metadata --availability-zone 2>/dev/null || echo 'unknown')"
+echo "=========================================="
 
-# Install Apache web server using dnf (Amazon Linux 2023)
-dnf install -y httpd
+# Check network connectivity
+echo "Testing network connectivity..."
+if ping -c 3 8.8.8.8 > /dev/null 2>&1; then
+    echo " Network connectivity: OK"
+else
+    echo " Network connectivity: FAILED"
+fi
 
-# Create a simple health check endpoint
-cat > /var/www/html/health <<'EOF'
-OK
-EOF
+# Check DNS resolution
+echo "Testing DNS resolution..."
+if nslookup amazon.com > /dev/null 2>&1; then
+    echo " DNS resolution: OK"
+else
+    echo " DNS resolution: FAILED"
+fi
 
-# Create a simple index page
-cat > /var/www/html/index.html <<'EOF'
-<!DOCTYPE html>
-<html>
-<head>
-    <title>TAP Application</title>
-</head>
-<body>
-    <h1>TAP Application - Environment: {self.config.environment_suffix}</h1>
-    <p>Instance is running successfully!</p>
-</body>
-</html>
-EOF
+# Check SSM agent status
+echo "Checking SSM agent..."
+systemctl enable amazon-ssm-agent 2>&1
+systemctl start amazon-ssm-agent 2>&1
+sleep 2
+if systemctl is-active amazon-ssm-agent > /dev/null 2>&1; then
+    echo " SSM agent: RUNNING"
+else
+    echo " SSM agent: FAILED"
+    systemctl status amazon-ssm-agent --no-pager
+fi
 
-# Start and enable Apache
-systemctl start httpd
-systemctl enable httpd
-
-# Signal that instance is ready
-echo "Instance ready at $(date)" > /var/log/user-data-complete.log
+echo "=========================================="
+echo "User data script completed at: $(date)"
+echo "=========================================="
 """
         
         launch_template = aws.ec2.LaunchTemplate(
             lt_name,
             name=lt_name,
-            image_id=self.ami_id,
+            image_id=self.ami.id,
             instance_type=self.config.instance_type,
             iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(
                 name=self.instance_profile_name
@@ -194,7 +205,7 @@ echo "Instance ready at $(date)" > /var/log/user-data-complete.log
                 version="$Latest"
             ),
             health_check_type="EC2",
-            health_check_grace_period=300,  # 5 minutes
+            health_check_grace_period=300,
             enabled_metrics=[
                 'GroupMinSize',
                 'GroupMaxSize',

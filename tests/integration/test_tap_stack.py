@@ -161,6 +161,7 @@ def wait_for_asg_instances(asg_name: str, min_instances: int = 1, max_wait_secon
     start_time = time.time()
     last_status = None
     check_count = 0
+    seen_instance_ids = set()
     
     print(f"\n{'='*70}")
     print(f"[WAIT] Waiting for ASG instances to be ready...")
@@ -169,6 +170,21 @@ def wait_for_asg_instances(asg_name: str, min_instances: int = 1, max_wait_secon
     print(f"  Minimum instances required: {min_instances}")
     print(f"  Timeout: {max_wait_seconds}s")
     print(f"  Region: {PRIMARY_REGION}")
+    
+    # Get ASG activity history for debugging
+    try:
+        activities = autoscaling_client.describe_scaling_activities(
+            AutoScalingGroupName=asg_name,
+            MaxRecords=10
+        )
+        if activities['Activities']:
+            print(f"\n  Recent ASG Activities:")
+            for act in activities['Activities'][:3]:
+                print(f"    - {act['StartTime']}: {act['Description']}")
+                if 'StatusMessage' in act and act['StatusMessage']:
+                    print(f"      Status: {act['StatusMessage']}")
+    except Exception as e:
+        print(f"  Could not fetch ASG activities: {e}")
     
     while time.time() - start_time < max_wait_seconds:
         check_count += 1
@@ -186,11 +202,34 @@ def wait_for_asg_instances(asg_name: str, min_instances: int = 1, max_wait_secon
             asg = response['AutoScalingGroups'][0]
             instances = asg.get('Instances', [])
             
+            # Track all instance IDs we've seen
+            for inst in instances:
+                inst_id = inst['InstanceId']
+                if inst_id not in seen_instance_ids:
+                    seen_instance_ids.add(inst_id)
+                    print(f"  [NEW INSTANCE] {inst_id} - State: {inst['LifecycleState']}, Health: {inst['HealthStatus']}")
+            
             # Count instances by state
             in_service = [i for i in instances if i['LifecycleState'] == 'InService' and i['HealthStatus'] == 'Healthy']
             pending = [i for i in instances if i['LifecycleState'] == 'Pending']
             terminating = [i for i in instances if i['LifecycleState'] in ['Terminating', 'Terminated']]
             unhealthy = [i for i in instances if i['HealthStatus'] == 'Unhealthy']
+            
+            # Check if any instances disappeared
+            current_instance_ids = {i['InstanceId'] for i in instances}
+            disappeared = seen_instance_ids - current_instance_ids
+            if disappeared:
+                print(f"  [TERMINATED] Instances disappeared: {disappeared}")
+                # Try to get termination reason from EC2
+                try:
+                    for inst_id in disappeared:
+                        ec2_info = ec2_client.describe_instances(InstanceIds=[inst_id])
+                        if ec2_info['Reservations']:
+                            inst = ec2_info['Reservations'][0]['Instances'][0]
+                            state_reason = inst.get('StateReason', {}).get('Message', 'Unknown')
+                            print(f"    {inst_id} termination reason: {state_reason}")
+                except Exception as e:
+                    print(f"    Could not fetch termination details: {e}")
             
             current_status = f"Total: {len(instances)}, InService: {len(in_service)}, Pending: {len(pending)}, Terminating: {len(terminating)}, Unhealthy: {len(unhealthy)}"
             
