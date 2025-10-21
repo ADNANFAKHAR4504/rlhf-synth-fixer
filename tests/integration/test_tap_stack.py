@@ -13,7 +13,19 @@ def outputs():
         pytest.skip("No deployment outputs found")
 
     with open(outputs_file, 'r') as f:
-        return json.load(f)
+        flat_outputs = json.load(f)
+    
+    # Find the TapStack outputs (nested under stack name like TapStackpr4916)
+    stack_keys = [key for key in flat_outputs if key.startswith("TapStack")]
+    if not stack_keys:
+        pytest.skip("TapStack outputs are missing from flat outputs")
+
+    stack_key = stack_keys[0]
+    stack_outputs = flat_outputs.get(stack_key, {})
+    if not isinstance(stack_outputs, dict):
+        pytest.skip(f"TapStack outputs for {stack_key} are empty or malformed")
+
+    return stack_outputs
 
 
 @pytest.fixture(scope="module")

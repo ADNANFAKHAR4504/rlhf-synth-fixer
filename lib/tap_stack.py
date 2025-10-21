@@ -1,6 +1,6 @@
 """TAP Stack module for CDKTF Python infrastructure."""
 
-from cdktf import TerraformStack, S3Backend, Fn
+from cdktf import TerraformStack, S3Backend, TerraformOutput, Fn
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.vpc import Vpc
@@ -943,4 +943,54 @@ class TapStack(TerraformStack):
             "waf_alb_association",
             resource_arn=alb.arn,
             web_acl_arn=waf_web_acl.arn
+        )
+
+        # Outputs for integration tests
+        TerraformOutput(
+            self,
+            "VpcId",
+            value=vpc.id,
+            description="VPC ID"
+        )
+
+        TerraformOutput(
+            self,
+            "EcsClusterName",
+            value=ecs_cluster.name,
+            description="ECS Cluster Name"
+        )
+
+        TerraformOutput(
+            self,
+            "ElastiCacheEndpoint", 
+            value=redis_cache.endpoint,
+            description="ElastiCache Redis Endpoint"
+        )
+
+        TerraformOutput(
+            self,
+            "AlbDns",
+            value=alb.dns_name,
+            description="Application Load Balancer DNS Name"
+        )
+
+        TerraformOutput(
+            self,
+            "SnsTopicArn",
+            value=alarm_topic.arn,
+            description="SNS Topic ARN"
+        )
+
+        TerraformOutput(
+            self,
+            "EnvironmentSuffix",
+            value=environment_suffix,
+            description="Environment Suffix"
+        )
+
+        TerraformOutput(
+            self,
+            "AwsRegion",
+            value=aws_region,
+            description="AWS Region"
         )
