@@ -177,6 +177,7 @@ export class TapStack extends pulumi.ComponentResource {
         enableFlowLogs: true,
         kmsKeyId: securityStack.kmsKeyId,
         kmsKeyArn: securityStack.kmsKeyArn,
+        awsProvider: awsProvider,
       },
       { parent: this, provider: awsProvider }
     );

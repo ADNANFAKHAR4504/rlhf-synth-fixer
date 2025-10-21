@@ -18,6 +18,8 @@ export interface NetworkStackArgs {
   enableFlowLogs: boolean;
   kmsKeyId: pulumi.Input<string>;
   kmsKeyArn: pulumi.Input<string>;
+  // optional provider passed from TapStack so lookups and resources use same region
+  awsProvider?: aws.Provider;
 }
 
 export class NetworkStack extends pulumi.ComponentResource {
@@ -42,7 +44,13 @@ export class NetworkStack extends pulumi.ComponentResource {
       enableTransitGateway,
       enableFlowLogs,
       kmsKeyArn,
+      awsProvider,
     } = args;
+
+    // Create a reusable resource options object that includes the provider (if provided)
+    const resOpts: pulumi.ResourceOptions = awsProvider
+      ? { parent: this, provider: awsProvider }
+      : { parent: this };
 
     //  Primary VPC
     const vpc = new aws.ec2.Vpc(
@@ -56,13 +64,14 @@ export class NetworkStack extends pulumi.ComponentResource {
           Name: `banking-vpc-${environmentSuffix}`,
         })),
       },
-      { parent: this }
+      resOpts
     );
 
-    // --- Get Availability Zones ---
-    const availabilityZones = aws.getAvailabilityZones({
-      state: 'available',
-    });
+    // --- Get Availability Zones using the same provider so AZ names match provider region ---
+    const availabilityZones = aws.getAvailabilityZones(
+      { state: 'available' },
+      awsProvider ? { provider: awsProvider } : {}
+    );
 
     // --- Public Subnets (3 AZs) ---
     const publicSubnets: aws.ec2.Subnet[] = [];
@@ -72,6 +81,7 @@ export class NetworkStack extends pulumi.ComponentResource {
         {
           vpcId: vpc.id,
           cidrBlock: `10.29.${i}.0/24`,
+          // resolve AZ name from the provider-scoped availabilityZones lookup
           availabilityZone: availabilityZones.then(azs => azs.names[i]),
           mapPublicIpOnLaunch: true,
           tags: pulumi.all([tags]).apply(([t]) => ({
@@ -80,7 +90,7 @@ export class NetworkStack extends pulumi.ComponentResource {
             Tier: 'Public',
           })),
         },
-        { parent: this }
+        resOpts
       );
       publicSubnets.push(subnet);
     }
@@ -100,7 +110,7 @@ export class NetworkStack extends pulumi.ComponentResource {
             Tier: 'Private',
           })),
         },
-        { parent: this }
+        resOpts
       );
       privateSubnets.push(subnet);
     }
@@ -115,11 +125,10 @@ export class NetworkStack extends pulumi.ComponentResource {
           Name: `banking-igw-${environmentSuffix}`,
         })),
       },
-      { parent: this }
+      resOpts
     );
 
     // Single NAT Gateway for dev environments
-    // Create only 1 NAT Gateway in the first public subnet
     const natEip = new aws.ec2.Eip(
       `banking-nat-eip-0-${environmentSuffix}`,
       {
@@ -129,7 +138,7 @@ export class NetworkStack extends pulumi.ComponentResource {
           Name: `banking-nat-eip-${environmentSuffix}`,
         })),
       },
-      { parent: this }
+      resOpts
     );
 
     const natGateway = new aws.ec2.NatGateway(
@@ -142,7 +151,7 @@ export class NetworkStack extends pulumi.ComponentResource {
           Name: `banking-nat-${environmentSuffix}`,
         })),
       },
-      { parent: this }
+      resOpts
     );
 
     //  Public Route Table
@@ -161,7 +170,7 @@ export class NetworkStack extends pulumi.ComponentResource {
           Name: `banking-public-rt-${environmentSuffix}`,
         })),
       },
-      { parent: this }
+      resOpts
     );
 
     // Associate Public Subnets with Public Route Table
@@ -172,12 +181,11 @@ export class NetworkStack extends pulumi.ComponentResource {
           subnetId: subnet.id,
           routeTableId: publicRouteTable.id,
         },
-        { parent: this }
+        resOpts
       );
     });
 
     //  Single Private Route Table for all private subnets
-    // All private subnets route through the single NAT Gateway
     const privateRouteTable = new aws.ec2.RouteTable(
       `banking-private-rt-${environmentSuffix}`,
       {
@@ -193,7 +201,7 @@ export class NetworkStack extends pulumi.ComponentResource {
           Name: `banking-private-rt-${environmentSuffix}`,
         })),
       },
-      { parent: this }
+      resOpts
     );
 
     // Associate all private subnets with the single route table
@@ -204,7 +212,7 @@ export class NetworkStack extends pulumi.ComponentResource {
           subnetId: subnet.id,
           routeTableId: privateRouteTable.id,
         },
-        { parent: this }
+        resOpts
       );
     });
 
@@ -225,7 +233,7 @@ export class NetworkStack extends pulumi.ComponentResource {
           }),
           tags: tags,
         },
-        { parent: this }
+        resOpts
       );
 
       new aws.iam.RolePolicy(
@@ -249,7 +257,7 @@ export class NetworkStack extends pulumi.ComponentResource {
             ],
           }),
         },
-        { parent: this }
+        resOpts
       );
 
       const flowLogsGroup = new aws.cloudwatch.LogGroup(
@@ -259,7 +267,7 @@ export class NetworkStack extends pulumi.ComponentResource {
           kmsKeyId: kmsKeyArn,
           tags: tags,
         },
-        { parent: this }
+        resOpts
       );
 
       new aws.ec2.FlowLog(
@@ -271,7 +279,7 @@ export class NetworkStack extends pulumi.ComponentResource {
           logDestination: flowLogsGroup.arn,
           tags: tags,
         },
-        { parent: this }
+        resOpts
       );
     }
 
@@ -291,7 +299,7 @@ export class NetworkStack extends pulumi.ComponentResource {
             Name: `banking-tgw-${environmentSuffix}`,
           })),
         },
-        { parent: this }
+        resOpts
       );
 
       // Attach VPC to Transit Gateway
@@ -307,7 +315,7 @@ export class NetworkStack extends pulumi.ComponentResource {
             Name: `banking-tgw-attachment-${environmentSuffix}`,
           })),
         },
-        { parent: this }
+        resOpts
       );
     }
 
@@ -338,7 +346,7 @@ export class NetworkStack extends pulumi.ComponentResource {
           Name: `banking-vpce-sg-${environmentSuffix}`,
         })),
       },
-      { parent: this }
+      resOpts
     );
 
     // Interface endpoints for AWS services
@@ -369,7 +377,7 @@ export class NetworkStack extends pulumi.ComponentResource {
             Name: `banking-vpce-${service}-${environmentSuffix}`,
           })),
         },
-        { parent: this }
+        resOpts
       );
     });
 
@@ -386,7 +394,7 @@ export class NetworkStack extends pulumi.ComponentResource {
           Name: `banking-vpce-s3-${environmentSuffix}`,
         })),
       },
-      { parent: this }
+      resOpts
     );
 
     new aws.ec2.VpcEndpoint(
@@ -401,7 +409,7 @@ export class NetworkStack extends pulumi.ComponentResource {
           Name: `banking-vpce-dynamodb-${environmentSuffix}`,
         })),
       },
-      { parent: this }
+      resOpts
     );
 
     //  Outputs
