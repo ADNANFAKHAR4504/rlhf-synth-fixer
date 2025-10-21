@@ -41,14 +41,14 @@ Report: "Using PROMPT file: {FILENAME}" and "Using MODEL_RESPONSE file: {FILENAM
 #### Step 2: Metadata Validation
 
 **Validation**: Run Checkpoint A: Metadata Completeness
-- See `validation-checkpoints.md` for validation logic
-- On failure, see `error-handling.md` Standard Error Response
+- See `docs/references/validation-checkpoints.md` for validation logic
+- On failure, see `docs/references/error-handling.md` Standard Error Response
 
 #### Step 3: PROMPT.md Style Validation
 
 **Validation**: Run Checkpoint D: PROMPT.md Style Validation
-- See `validation-checkpoints.md` for style requirements
-- See `shared-validations.md` for pass/fail patterns
+- See `docs/references/validation-checkpoints.md` for style requirements
+- See `docs/references/shared-validations.md` for pass/fail patterns
 
 If FAIL:
 - Training quality penalty: -2 points
@@ -59,8 +59,8 @@ If FAIL:
 **CRITICAL** - Catches major training data quality issues.
 
 **Validation**: Run Checkpoint E: Platform Code Compliance
-- See `validation-checkpoints.md` for platform detection patterns
-- See `shared-validations.md` for detailed platform requirements
+- See `docs/references/validation-checkpoints.md` for platform detection patterns
+- See `docs/references/shared-validations.md` for detailed platform requirements
 
 **Mismatch Detection**:
 ```
@@ -90,8 +90,8 @@ If coverage < 80%:
 #### Step 6: environmentSuffix Validation
 
 **Validation**: Run Checkpoint F: environmentSuffix Usage
-- See `validation-checkpoints.md` for suffix patterns
-- See `shared-validations.md` for language-specific examples
+- See `docs/references/validation-checkpoints.md` for suffix patterns
+- See `docs/references/shared-validations.md` for language-specific examples
 
 If < 80% resources have suffix:
 - Document: "⚠️ environmentSuffix not consistently used"
@@ -99,51 +99,49 @@ If < 80% resources have suffix:
 
 #### Step 7: Training Quality Scoring
 
-**Calculate training_quality score (0-10)**:
+**Use simplified scoring system from `docs/policies/training-quality-guide.md`**
 
-```
-START: 10 points
+**Step-by-step**:
 
-AUTOMATIC PENALTIES (see shared-validations.md):
-- Platform/language mismatch: -5 (CRITICAL)
-- Missing AWS service: -2 per service
-- Wrong region: -3
-- AI-generated PROMPT style: -2
-- Inconsistent environmentSuffix (<80%): -1
-- Retain policies present: -1
+1. **Check Critical Blockers**:
+   - Platform/language mismatch? → Score = 3, STOP
+   - Wrong region (if specified)? → Score = 5, STOP
+   - Wrong AWS account? → Score = 3, STOP
+   - Missing ≥50% required services? → Score = 4, STOP
 
-QUALITY ASSESSMENT:
-Review MODEL_FAILURES.md for improvement value:
-- Significant fixes (security, architecture): maintain score
-- Moderate fixes (configuration, patterns): -1 to -2
-- Minor fixes (typos, formatting): -2 to -4
-- Minimal fixes (almost no changes): -4 to -6
+2. **Start with Base Score: 8**
 
-Review IDEAL_RESPONSE.md complexity:
-- Complex multi-service integration: maintain score
-- Security + monitoring implemented: maintain score
-- Basic single-service: -1 to -2
-- Missing error handling: -1
-- Missing logging: -1
+3. **Review MODEL_FAILURES.md** and categorize fixes:
+   - **Category A** (Significant): Security, architecture, complete features, complex integrations → +1 to +2
+   - **Category B** (Moderate): Configuration, standard patterns, best practices, minor services → ±0
+   - **Category C** (Minor): Linting, bugs, config tweaks, outputs (if 4+ fixes) → -1 to -2
+   - **Category D** (Minimal): <5 total fixes, trivial changes only → -2 to -4
 
-FINAL SCORE:
-- 9-10: Excellent training value
-- 8: Good training value (MINIMUM for PR)
-- 6-7: Fair - needs improvement
-- 4-5: Poor - major improvements needed
-- 0-3: Insufficient - exclude from training
-```
+4. **Review IDEAL_RESPONSE.md** complexity:
+   - Single service, basic config → -1
+   - Multiple services (3+) with integrations → +1
+   - Security best practices (KMS, IAM, encryption) → +1
+   - High availability (multi-AZ, auto-scaling) → +1
+   - Advanced patterns (event-driven, serverless) → +1
+   - **Max complexity bonus: +2**
 
-**CRITICAL THRESHOLD: ≥8 for PR creation**
+5. **Calculate**: Base (8) + MODEL_FAILURES adjustment + Complexity adjustment (capped 0-10)
 
-If score < 8:
+**Examples**:
+- Significant security + architecture fixes, multi-service: 8 + 2 + 2 = 12 → 10
+- Moderate config fixes, standard setup: 8 + 0 + 0 = 8
+- Minor linting only (6 fixes), basic setup: 8 - 2 - 1 = 5
+
+**If score < 8**:
 - Report: "❌ Training quality below threshold: {SCORE}/10"
-- Provide improvement recommendations
+- Provide specific improvements needed (see training-quality-guide.md)
 - Do NOT proceed to PR creation
 
-If score ≥ 8:
+**If score ≥ 8**:
 - Report: "✅ Training quality meets threshold: {SCORE}/10"
 - Proceed with review
+
+**CRITICAL THRESHOLD: ≥8 for PR creation**
 
 #### Step 8: Add Enhanced Fields to metadata.json
 
@@ -195,17 +193,30 @@ If ANY unchecked:
 - ✅/❌ AWS Services: {Y}/{Z} services
 - ✅/❌ Training Quality: {SCORE}/10
 
-### Training Quality Analysis
-**Score: {SCORE}/10**
+### Training Quality Assessment
+**Final Score: {SCORE}/10**
 
-Justification:
-- {Reason 1}
-- {Reason 2}
-- {Reason 3}
+**Scoring Breakdown**:
+- Base Score: 8
+- MODEL_FAILURES Adjustment: {+X or -Y} ({Category A/B/C/D})
+- Complexity Adjustment: {+X or -Y}
+- Critical Blockers: {None or BLOCKER_TYPE}
 
-{If < 8: Specific improvement recommendations}
+**Justification**:
+{2-3 sentences explaining score, referencing fix categories and complexity}
 
-### Status: {READY / NOT READY}
+**Category A Fixes (Significant)**:
+- {List if any, or "None"}
+
+**Category B Fixes (Moderate)**:
+- {List if any, or "None"}
+
+**Category C/D Fixes (Minor/Minimal)**:
+- {List if any, or "None"}
+
+{If < 8: Specific recommendations to reach ≥8 per training-quality-guide.md}
+
+### Status: {✅ READY / ❌ NOT READY}
 
 {Next steps or blocking issues}
 ```
@@ -238,24 +249,31 @@ Justification:
 **CRITICAL**: Validate before reporting "Ready"
 
 **Validation**: Run Checkpoint J: Training Quality Threshold
-- See `validation-checkpoints.md` for threshold check
+- See `docs/references/validation-checkpoints.md` for threshold check
 - Minimum: 8, Target: 9
 
 If training_quality < 8:
 - Report: "NOT READY - Training quality below threshold"
-- Recommendations:
-  1. Review MODEL_FAILURES.md - are improvements significant?
-  2. Add AWS services or features from task
-  3. Implement security best practices (KMS, IAM, encryption)
-  4. Add monitoring/observability (CloudWatch, X-Ray, logging)
-  5. Implement error handling, retry logic
-  6. Add cost optimization (auto-scaling, tagging)
-- Suggest returning to iac-infra-generator or iac-infra-qa-trainer
-- Do NOT proceed to Phase 5 until training_quality ≥ 8
+- **Apply iteration-policy.md decision logic**:
+
+  ```
+  If score 6-7 AND first iteration AND can add significant features:
+    - Recommend specific features to add (1-2 AWS services or patterns)
+    - Examples: CloudWatch monitoring, KMS encryption, multi-AZ, error handling
+    - Expected post-iteration score: ≥8
+    - Hand off to task-coordinator for iteration
+
+  If score <6 OR already iterated OR only minor fixes possible:
+    - Recommend: Mark as ERROR
+    - Reason: "Insufficient training value" OR "Max iteration reached" OR "Model already competent"
+    - Do NOT iterate
+  ```
+
+- Do NOT proceed to Phase 5 until training_quality ≥ 8 after any iteration
 
 **Report "Ready" only when**:
 - All phases passed
-- Training quality ≥ 8 (target: 9)
+- Training quality ≥ 8
 - All metadata fields validated
 - Tests passing
 - Requirements met

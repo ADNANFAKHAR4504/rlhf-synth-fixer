@@ -42,20 +42,25 @@ Status: STOPPED - awaiting metadata fix
 
 ## Error Categories and Responses
 
+**For detailed recovery decision trees**, see `../guides/error-recovery-guide.md`
+
 ### Validation Errors
 **Pattern**: Pre-flight checks fail
 **Response**: Report missing/invalid items, reference shared-validations.md, stop
 **Example**: "Platform 'terraform' incompatible with language 'ts'. See shared-validations.md for valid combinations."
+**Recovery**: Fix metadata.json or regenerate with correct platform
 
 ### Deployment Errors
 **Pattern**: AWS resource creation fails
 **Response**: Log error details, attempt fixes (max 5 attempts), document in MODEL_FAILURES.md
 **Example**: "Deployment attempt 3/5 failed: IAM role missing permissions. Adding required policy..."
+**Recovery**: See error-recovery-guide.md Category 1 (deployment failures) for decision tree
 
 ### Test Failures
 **Pattern**: Unit or integration tests fail
 **Response**: Analyze failure, fix code, re-run tests
 **Example**: "Integration test failed: S3 bucket not found in outputs. Checking cfn-outputs/flat-outputs.json..."
+**Recovery**: See error-recovery-guide.md Category 2 (test failures) for decision tree
 
 ### Quality Gate Failures
 **Pattern**: training_quality score < 8

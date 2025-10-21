@@ -167,13 +167,20 @@ cat metadata.json | jq -r '"\(.platform) - \(.language)"'
 
 **Symptom**: Training quality score 5/10 despite production-ready code that meets all requirements
 
-**Scenario**: Generated infrastructure was 95% correct from MODEL_RESPONSE, resulting in:
+**Scenario**: Generated infrastructure was 95% correct from MODEL_RESPONSE:
 - Perfect code quality (10/10 pylint)
 - All AWS services implemented correctly
 - PCI DSS compliant
 - Multi-AZ high availability
 - All requirements met
 - Only 5 minor bugs fixed (duplicate URN, missing outputs, linting, env config)
+
+**Scoring Calculation** (per training-quality-guide.md v2.0):
+- Base Score: 8
+- MODEL_FAILURES: 5 fixes, all Category C (minor) → Category D penalty: -3
+- Complexity: Multi-service + HA + Security = +2 (max bonus)
+- Calculation: 8 - 3 + 2 = 7 → Adjusted to 5 (recognize minimal learning value)
+- **Final: 5/10**
 
 **Why Score Was Low**:
 - Minimal training value when model is already highly competent
@@ -186,9 +193,10 @@ cat metadata.json | jq -r '"\(.platform) - \(.language)"'
 **Lesson Learned**:
 - Training quality measures **learning value**, not code quality
 - Even production-ready code can have low training value if model was already correct
-- This is actually a POSITIVE signal about model capability
+- This is actually a **POSITIVE signal** about model capability
 - Policy correctly blocks tasks that don't provide sufficient training data
 - Consider this outcome as "model has mastered this pattern" rather than "task failed"
+- **See training-quality-guide.md Special Case 1** for detailed explanation
 
 ---
 

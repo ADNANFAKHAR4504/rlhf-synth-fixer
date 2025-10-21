@@ -42,15 +42,15 @@ Execute these phases in sequence to deliver production-ready IaC:
 After task selection and metadata.json generation, validate:
 
 **Validation**: Run Checkpoint A: Metadata Completeness
-- See `validation-checkpoints.md` for field requirements
-- See `shared-validations.md` for field definitions
+- See `docs/references/validation-checkpoints.md` for field requirements
+- See `docs/references/shared-validations.md` for field definitions
 
 **Validation**: Run Checkpoint B: Platform-Language Compatibility
-- See `validation-checkpoints.md` for compatibility matrix
-- See `shared-validations.md` for valid combinations
+- See `docs/references/validation-checkpoints.md` for compatibility matrix
+- See `docs/references/shared-validations.md` for valid combinations
 
 **Validation**: Run Checkpoint C: Template Structure
-- See `validation-checkpoints.md` for required files
+- See `docs/references/validation-checkpoints.md` for required files
 
 **Task Context Completeness**:
 ```
@@ -105,13 +105,15 @@ Emphasize: "Platform and language are MANDATORY constraints from metadata.json"
 
 **Agent**: `iac-code-reviewer`
 
-**Cost-Optimized Iteration Logic**: If lib/MODEL_FAILURES.md reports minimal issues (not big deployment issues) AND training_quality < 6, consider requesting iac-infra-generator to add 1 additional AWS feature to increase complexity.
-- **Maximum 1 iteration** to avoid excessive regeneration
-- Only iterate if score < 6 (limited training value)
-- Goal: meaningful differences between MODEL_RESPONSE and IDEAL_RESPONSE
-- Skip if training_quality ≥ 6 (already good value)
+**Iteration Policy**: See `docs/policies/iteration-policy.md` for complete decision logic.
 
-**Cost Impact**: Reducing "always add 2 features" to "conditionally add 1 max" saves 5-10%
+**Quick Reference**:
+- Score ≥8: Approve PR
+- Score 6-7: Conditional iteration (if first attempt AND can add significant features)
+- Score <6: Mark as ERROR (insufficient training value)
+- Max iterations: 1 per task
+
+**Decision Authority**: iac-code-reviewer recommends, task-coordinator enforces
 
 ### Phase 5: PR Creation & Task Completion
 
@@ -126,7 +128,7 @@ Emphasize: "Platform and language are MANDATORY constraints from metadata.json"
 **Pre-flight Checks**:
 
 **Validation**: Run Checkpoint K: PR Prerequisites
-- See `validation-checkpoints.md` for prerequisite checks
+- See `docs/references/validation-checkpoints.md` for prerequisite checks
 
 Script reference:
 ```bash
@@ -144,7 +146,7 @@ bash .claude/scripts/preflight-checks.sh
 2. **Validate training quality**:
 
 **Validation**: Run Checkpoint J: Training Quality Threshold
-- See `validation-checkpoints.md` for threshold check
+- See `docs/references/validation-checkpoints.md` for threshold check
 - Minimum: 8, Target: 9
 
 ```bash
@@ -520,7 +522,7 @@ All subagents MUST report using this format:
 - Blocking situations
 - Phase completion
 
-See `error-handling.md` for detailed status reporting patterns.
+See `docs/references/error-handling.md` for detailed status reporting patterns.
 
 ## Usage
 

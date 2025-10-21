@@ -111,34 +111,52 @@ All named resources must include environmentSuffix for uniqueness:
 
 ## Training Quality Scoring
 
-### Base Score: 10
+**See `../policies/training-quality-guide.md` for complete scoring system.**
 
-### Automatic Penalties
-- Platform/language mismatch: -5 (CRITICAL)
-- Missing AWS service from requirements: -2 per service
-- Wrong region deployment: -3
-- PROMPT.md AI-generated style: -2
-- Inconsistent environmentSuffix (<80%): -1
-- Retain policies present: -1
-- Missing error handling: -1
-- Missing logging/monitoring: -1
+### Quick Reference
 
-### Score Interpretation
-- **9-10**: Excellent - complex, secure, best practices
-- **8**: Good - meets requirements, solid implementation
-- **6-7**: Fair - some gaps, basic implementation
-- **4-5**: Poor - minimal complexity, missing requirements
-- **0-3**: Insufficient - major issues, exclude from training
+**Purpose**: Measures learning value (gap between MODEL_RESPONSE and IDEAL_RESPONSE), not code quality.
 
-**CRITICAL THRESHOLD**: Must be ≥8 for PR creation
+**Base Score**: 8 (threshold for PR creation)
 
-## Working Directory Pattern
+**Critical Blockers** (automatic fail):
+- Platform/language mismatch → Score = 3
+- Wrong region deployment → Score = 5
+- Wrong AWS account → Score = 3
+- Missing ≥50% required services → Score = 4
 
-All agents work inside: `worktree/synth-{task_id}/`
+**Adjustments**:
+- Significant improvements (security, architecture): +1 to +2
+- Moderate improvements (configuration, patterns): ±0
+- Minor fixes only (linting, typos, 4+ fixes): -1 to -2
+- Minimal changes (<5 fixes, model too good): -2 to -4
+- Complexity bonus (multi-service, security, HA): +1 to +2 (max +2)
+
+**Score Range**: 0-10 (capped)
+
+**Threshold**: ≥8 for PR creation
+
+**Special Case**: Production-ready MODEL_RESPONSE with few fixes = low score (model already competent)
+
+## Working Directory
+
+**See `../guides/working-directory-guide.md` for complete context rules.**
+
+### Quick Reference
+
+**Sub-agents work in**: `worktree/synth-{task_id}/` (never leave)
 
 **Verification**:
 ```bash
 pwd  # Must end with: /worktree/synth-{task_id}
+[[ $(pwd) =~ worktree/synth-[^/]+$ ]] && echo "✅ OK" || exit 1
+git branch --show-current  # Must match: synth-{task_id}
 ```
 
-All file operations are relative to this directory.
+**Path Rules**:
+- Use relative paths exclusively: `cat metadata.json`, `ls lib/`
+- Never use absolute paths: ~~`cat /full/path/to/file`~~
+- Verify location before ALL file operations
+
+**Files in worktree**: metadata.json, lib/, test/, cfn-outputs/
+**Files in main repo only**: tasks.csv (not accessible from worktree)
