@@ -9,7 +9,7 @@ variable "environment_suffix" {
 variable "project_name" {
   description = "Project name for resource naming"
   type        = string
-  default     = "fintech-api"
+  default     = "fintechapi-v2"
 }
 
 variable "primary_region" {
