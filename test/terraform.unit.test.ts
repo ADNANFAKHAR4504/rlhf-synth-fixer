@@ -166,7 +166,7 @@ describe("Terraform stack tap_stack.tf", () => {
     test("configures ALB with access logs and target group", () => {
       expect(stackContent).toMatch(/resource\s+"aws_lb"\s+"api"[\s\S]*enable_cross_zone_load_balancing\s*=\s*true/);
       expect(stackContent).toMatch(/access_logs\s*{\s*bucket\s*=\s*aws_s3_bucket\.alb_logs\.id/);
-      expect(stackContent).toMatch(/resource\s+"aws_s3_bucket"\s+"alb_logs"[\s\S]*bucket\s*=\s*"\$\{local\.resource_prefix}-alb-logs"/);
+      expect(stackContent).toMatch(/resource\s+"aws_s3_bucket"\s+"alb_logs"[\s\S]*bucket\s*=\s*"\$\{local\.resource_prefix}-alb-logs-v2"/);
       expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"alb_logs"[\s\S]*sse_algorithm\s*=\s*"AES256"/);
       expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_policy"\s+"alb_logs"[\s\S]*Principal\s*=\s*{\s*AWS\s*=\s*data\.aws_elb_service_account\.main\.arn\s*}/);
     });
