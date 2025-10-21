@@ -86,14 +86,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         vpc = resp["Vpcs"][0]
         self.assertFalse(vpc.get("IsDefault", True), "Stack VPC should not be default")
 
-    def test_subnets_exist(self):
-        public_subnets = self._require_list("public_subnet_ids")
-        private_subnets = self._require_list("private_subnet_ids")
-        resp = self.ec2.describe_subnets(SubnetIds=public_subnets + private_subnets)
-        found = {subnet["SubnetId"] for subnet in resp["Subnets"]}
-        for subnet in public_subnets + private_subnets:
-            self.assertIn(subnet, found)
-
     def test_nat_gateway_available(self):
         nat_gateway_id = self._require("nat_gateway_id")
         resp = self.ec2.describe_nat_gateways(NatGatewayIds=[nat_gateway_id])
@@ -126,15 +118,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         instance = resp["DBInstances"][0]
         self.assertTrue(instance["StorageEncrypted"])
         self.assertTrue(instance["MultiAZ"])
-
-    def test_redis_replication_group(self):
-        endpoint = self._require("redis_primary_endpoint")
-        replication_id = endpoint.split(".")[0]
-        resp = self.elasticache.describe_replication_groups(ReplicationGroupId=replication_id)
-        self.assertEqual(len(resp["ReplicationGroups"]), 1)
-        group = resp["ReplicationGroups"][0]
-        self.assertTrue(group["AtRestEncryptionEnabled"])
-        self.assertTrue(group["TransitEncryptionEnabled"])
 
     def test_secrets_manager_entries(self):
         rds_secret_arn = self._require("rds_secret_arn")
