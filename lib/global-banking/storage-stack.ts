@@ -76,6 +76,7 @@ export class StorageStack extends pulumi.ComponentResource {
       `${name}-transaction-archive`,
       {
         bucket: `banking-transaction-archive-${environmentSuffix}-${regions.primary}`,
+        forceDestroy: true, // Allow deletion even if not empty
         objectLockConfiguration: enableObjectLock
           ? {
               objectLockEnabled: 'Enabled',
@@ -173,6 +174,7 @@ export class StorageStack extends pulumi.ComponentResource {
       `${name}-audit-logs`,
       {
         bucket: `banking-audit-logs-${environmentSuffix}-${regions.primary}`,
+        forceDestroy: true, // Allow deletion even if not empty
         versioning: enableVersioning
           ? {
               enabled: true,
@@ -302,6 +304,7 @@ export class StorageStack extends pulumi.ComponentResource {
       `${name}-data-lake`,
       {
         bucket: `banking-data-lake-${environmentSuffix}-${regions.primary}`,
+        forceDestroy: true, // Allow deletion even if not empty
         versioning: enableVersioning
           ? {
               enabled: true,
@@ -354,6 +357,7 @@ export class StorageStack extends pulumi.ComponentResource {
       `${name}-backups`,
       {
         bucket: `banking-backups-${environmentSuffix}-${regions.primary}`,
+        forceDestroy: true, // Allow deletion even if not empty
         versioning: enableVersioning
           ? {
               enabled: true,
@@ -588,6 +592,7 @@ export class StorageStack extends pulumi.ComponentResource {
       `${name}-access-logs`,
       {
         bucket: `banking-s3-access-logs-${environmentSuffix}-${regions.primary}`,
+        forceDestroy: true, // Allow deletion even if not empty
         serverSideEncryptionConfiguration: {
           rule: {
             applyServerSideEncryptionByDefault: {
@@ -626,6 +631,7 @@ export class StorageStack extends pulumi.ComponentResource {
       `${name}-alb-logs`,
       {
         bucket: `banking-alb-logs-${environmentSuffix}`,
+        forceDestroy: true, // Allow deletion even if not empty
         serverSideEncryptionConfiguration: {
           rule: {
             applyServerSideEncryptionByDefault: {
