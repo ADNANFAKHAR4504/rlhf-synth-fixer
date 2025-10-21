@@ -1,4 +1,4 @@
-# IDEAL_RESPONSE.md — HIPAA-Compliant Monitoring Stack (Pulumi Python)
+# IDEAL_RESPONSE.md — HIPAA-Compliant Monitoring Stack (Pulumi Python) 
 
 ---
 
