@@ -171,7 +171,7 @@ class TapStack(pulumi.ComponentResource):
         """
         Register all outputs for the stack.
 
-        Following requirement #1: All infrastructure outputs must be in tap_stack.py
+        All infrastructure outputs must be in tap_stack.py
         for integration testing.
         """
         outputs = {}
@@ -223,7 +223,7 @@ class TapStack(pulumi.ComponentResource):
         outputs['ssm_access_instructions'] = "Connect to EC2 instances using AWS Systems Manager Session Manager in the AWS Console or AWS CLI"
 
         # Register outputs with Pulumi
-        # Following requirement #8: Add exception handling for pulumi.export()
+        # Add exception handling for pulumi.export()
         try:
             for key, value in outputs.items():
                 pulumi.export(key, value)

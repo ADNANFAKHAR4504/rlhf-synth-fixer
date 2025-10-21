@@ -19,7 +19,8 @@ class InfraConfig:
         """Initialize configuration from environment variables."""
         # Environment and naming
         self.environment = os.getenv('ENVIRONMENT', 'dev')
-        self.environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'pr1234')
+        # Default is only for local development - CI/CD MUST set ENVIRONMENT_SUFFIX
+        self.environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'local')
         self.project_name = os.getenv('PROJECT_NAME', 'tap')
         
         # Region configuration - dynamically fetch available AZs

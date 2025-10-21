@@ -372,7 +372,8 @@ class TestTapStackArgs(unittest.TestCase):
         from tap_stack import TapStackArgs
         args = TapStackArgs()
         
-        self.assertEqual(args.environment_suffix, 'dev')
+        # Default is 'local' for local development (CI/CD must provide explicit suffix)
+        self.assertEqual(args.environment_suffix, 'local')
         self.assertIsNone(args.tags)
 
     def test_tap_stack_args_custom_values(self):

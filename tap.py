@@ -25,8 +25,11 @@ from tap_stack import TapStack, TapStackArgs
 # Initialize Pulumi configuration
 config = Config()
 
-# Get environment suffix from config or environment variable
-environment_suffix = config.get('env') or os.getenv('ENVIRONMENT_SUFFIX', 'dev')
+# Priority: ENVIRONMENT_SUFFIX env var > Pulumi config 'env' > fallback to 'local'
+environment_suffix = os.getenv('ENVIRONMENT_SUFFIX') or config.get('env') or 'local'
+
+# Log the environment suffix being used
+pulumi.log.info(f"Deploying with environment suffix: {environment_suffix}")
 
 # Create the TAP stack
 stack = TapStack(

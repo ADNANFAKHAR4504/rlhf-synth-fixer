@@ -27,11 +27,14 @@ class TapStackArgs:
     
     Args:
         environment_suffix (Optional[str]): An optional suffix for identifying the deployment environment.
+                                           MUST be provided in CI/CD to prevent resource conflicts.
         tags (Optional[dict]): Optional default tags to apply to resources.
     """
     
     def __init__(self, environment_suffix: Optional[str] = None, tags: Optional[dict] = None):
-        self.environment_suffix = environment_suffix or 'dev'
+        # Use 'local' as fallback for local development only
+        # CI/CD MUST provide environment_suffix to prevent conflicts
+        self.environment_suffix = environment_suffix or 'local'
         self.tags = tags
 
 
@@ -121,7 +124,7 @@ class TapStack(pulumi.ComponentResource):
         """
         Register all outputs for the stack.
         
-        Following requirement #1: All infrastructure outputs must be in tap_stack.py
+        All infrastructure outputs must be in tap_stack.py
         for integration testing.
         """
         outputs = {}
@@ -173,7 +176,7 @@ class TapStack(pulumi.ComponentResource):
         outputs['ssm_access_instructions'] = "Connect to EC2 instances using AWS Systems Manager Session Manager in the AWS Console or AWS CLI"
         
         # Register outputs with Pulumi
-        # Following requirement #8: Add exception handling for pulumi.export()
+        # Add exception handling for pulumi.export()
         try:
             for key, value in outputs.items():
                 pulumi.export(key, value)

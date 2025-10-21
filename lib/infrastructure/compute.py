@@ -91,24 +91,13 @@ class ComputeStack:
         """
         lt_name = self.config.get_resource_name('launch-template')
         
-        # MINIMAL user data script - SSM agent is pre-installed and auto-starts on AL2023
-        # CloudWatch agent is optional and installed in background to avoid blocking
+        # ABSOLUTE MINIMAL user data - just log and exit
+        # SSM agent is pre-installed and auto-enabled on Amazon Linux 2023
         user_data = """#!/bin/bash
-exec > /var/log/user-data.log 2>&1
-echo "User data script started at $(date)"
-
-# SSM agent is pre-installed and enabled by default on Amazon Linux 2023
-# Just ensure it's running (should already be)
-systemctl is-active amazon-ssm-agent || systemctl start amazon-ssm-agent
-
-# Install CloudWatch agent in background (non-blocking)
-(
-  echo "Installing CloudWatch agent..."
-  dnf install -y amazon-cloudwatch-agent 2>&1
-  echo "CloudWatch agent installation completed"
-) &
-
-echo "User data script completed at $(date)"
+echo "User data started: $(date)" >> /var/log/user-data.log
+echo "SSM agent is pre-installed on AL2023 - no action needed" >> /var/log/user-data.log
+echo "User data completed: $(date)" >> /var/log/user-data.log
+exit 0
 """
         
         launch_template = aws.ec2.LaunchTemplate(
