@@ -146,7 +146,7 @@ describe('TapStack CloudFormation Template', () => {
         const lambdaAccessStatement = policy.Statement[0];
         expect(lambdaAccessStatement.Sid).toBe('AllowLambdaAccess');
         expect(lambdaAccessStatement.Effect).toBe('Allow');
-        expect(lambdaAccessStatement.Principal).toEqual({ 'Fn::GetAtt': ['LambdaExecutionRole', 'Arn'] });
+        expect(lambdaAccessStatement.Principal).toEqual({ 'AWS': { 'Fn::GetAtt': ['LambdaExecutionRole', 'Arn'] } });
         expect(lambdaAccessStatement.Action).toEqual(['s3:GetObject', 's3:PutObject', 's3:DeleteObject']);
         expect(lambdaAccessStatement.Resource).toEqual({ 'Fn::Sub': 'arn:aws:s3:::${ReportsBucket}/*' });
 
