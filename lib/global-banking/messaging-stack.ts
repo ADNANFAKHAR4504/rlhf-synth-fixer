@@ -539,6 +539,8 @@ export class MessagingStack extends pulumi.ComponentResource {
     this.kinesisStreamArn = transactionStream.arn;
     this.kinesisStreamName = transactionStream.name;
     this.eventBusArn = eventBus.arn;
+    this.fraudDetectionQueueArn = fraudDetectionQueue.arn;
+    this.fraudDetectionQueueUrl = fraudDetectionQueue.url;
 
     this.registerOutputs({
       transactionQueueUrl: this.transactionQueueUrl,
@@ -547,6 +549,8 @@ export class MessagingStack extends pulumi.ComponentResource {
       kinesisStreamArn: this.kinesisStreamArn,
       kinesisStreamName: this.kinesisStreamName,
       eventBusArn: this.eventBusArn,
+      fraudDetectionQueueArn: this.fraudDetectionQueueArn,
+      fraudDetectionQueueUrl: this.fraudDetectionQueueUrl,
     });
   }
 
