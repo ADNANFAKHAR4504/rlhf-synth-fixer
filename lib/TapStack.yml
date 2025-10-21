@@ -40,7 +40,7 @@ Parameters:
 
   ApiDeploymentVersion:
     Type: String
-    Default: 'v3'
+    Default: 'v4'
     Description: 'Bump this to force API Gateway deployment replacement when methods change'
 
 
