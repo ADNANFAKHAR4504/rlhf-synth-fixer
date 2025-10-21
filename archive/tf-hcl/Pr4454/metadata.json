@@ -1,0 +1,35 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291286",
+  "team": "5",
+  "startedAt": "2025-10-08T05:22:37.388Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "background": "An AI startup processes 1TB of image data daily for model training. The system must automate model training, support A/B testing, and provide real-time inference capabilities. Compliance with data privacy laws is critical.",
+  "aws_services": [
+    "SageMaker",
+    "S3",
+    "Lambda",
+    "Step Functions",
+    "DynamoDB",
+    "Kinesis",
+    "API Gateway",
+    "EventBridge",
+    "CloudWatch",
+    "IAM",
+    "KMS",
+    "SNS"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "devang-devops",
+  "dockerS3Location": ""
+}

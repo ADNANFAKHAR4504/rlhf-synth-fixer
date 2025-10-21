@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350064",
+  "team": "4",
+  "startedAt": "2025-10-16T12:15:55.308Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "training_quality": 8,
+  "background": "This task involves setting up an isolated environment suitable for enterprise-scale applications or development environments. It focuses on networking, computing, and storage services.",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "Route Table",
+    "EC2 Security Group",
+    "EC2 Key Pair",
+    "IAM Role",
+    "IAM Instance Profile",
+    "EC2 Instance",
+    "Elastic IP",
+    "S3 Bucket",
+    "CloudWatch Alarm",
+    "SSM Parameter"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,40 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "8280308137",
+  "team": "synth",
+  "startedAt": "2025-10-21T16:31:04+05:30",
+  "subtask": "Application Deployment",
+  "background": "Infrastructure task for CDKTF",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Elastic IP",
+    "Route Table",
+    "Security Group",
+    "ECS",
+    "Fargate",
+    "Application Load Balancer",
+    "Target Group",
+    "ElastiCache",
+    "Valkey",
+    "Secrets Manager",
+    "IAM",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

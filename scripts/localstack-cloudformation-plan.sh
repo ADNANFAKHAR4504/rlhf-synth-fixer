@@ -41,9 +41,16 @@ fi
 
 echo -e "${GREEN}✅ CloudFormation template found: $TEMPLATE_FILE${NC}"
 
+echo -e "${NC} uploading template to LocalStack S3...${NC}"
+# Create a temporary bucket to hold the template
+awslocal s3 mb s3://cf-templates-$AWS_DEFAULT_REGION 2>/dev/null || true
+awslocal s3 cp $TEMPLATE_FILE s3://cf-templates-$AWS_DEFAULT_REGION/$TEMPLATE_FILE
+echo -e "${GREEN}✅ Template uploaded to LocalStack S3${NC}"
+
+
 # Validate CloudFormation template
 echo -e "${YELLOW}🔍 Validating CloudFormation template...${NC}"
-if awslocal cloudformation validate-template --template-body file://$TEMPLATE_FILE > /dev/null; then
+if awslocal cloudformation validate-template --template-url https://cf-templates-$AWS_DEFAULT_REGION.s3.amazonaws.com/$TEMPLATE_FILE > /dev/null; then
     echo -e "${GREEN}✅ CloudFormation template is valid${NC}"
 else
     echo -e "${RED}❌ CloudFormation template validation failed${NC}"
@@ -62,7 +69,7 @@ if awslocal cloudformation describe-stacks --stack-name $STACK_NAME > /dev/null 
     awslocal cloudformation create-change-set \
         --stack-name $STACK_NAME \
         --change-set-name $CHANGE_SET_NAME \
-        --template-body file://$TEMPLATE_FILE \
+        --template-url https://cf-templates-$AWS_DEFAULT_REGION.s3.amazonaws.com/$TEMPLATE_FILE \
         --parameters ParameterKey=EnvironmentSuffix,ParameterValue=$ENVIRONMENT_SUFFIX \
         --capabilities CAPABILITY_IAM
 

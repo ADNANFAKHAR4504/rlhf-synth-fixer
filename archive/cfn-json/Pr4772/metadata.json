@@ -1,0 +1,53 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "medium",
+  "team": "synth",
+  "startedAt": "2025-10-18T01:20:01+05:30",
+  "subtask": "Application Deployment",
+  "background": "Infrastructure task for CloudFormation",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Cloud Environment Setup",
+    "Security Configuration as Code"
+  ],
+  "po_id": "5476383561",
+  "aws_services": [
+    "VPC",
+    "EC2 Subnet",
+    "EC2 Internet Gateway",
+    "EC2 Route Table",
+    "EC2 Security Group",
+    "EC2 VPC Endpoint",
+    "ECS Cluster",
+    "ECS Task Definition",
+    "ECS Service",
+    "Application Load Balancer",
+    "ALB Target Group",
+    "ALB Listener",
+    "S3 Bucket",
+    "S3 Bucket Policy",
+    "CloudFront Distribution",
+    "CloudFront Origin Access Identity",
+    "DynamoDB Table",
+    "KMS Key",
+    "KMS Alias",
+    "IAM Role",
+    "IAM Policy",
+    "CodeCommit Repository",
+    "CodeBuild Project",
+    "CodePipeline",
+    "EventBridge Rule",
+    "CloudWatch Log Group",
+    "CloudWatch Alarm",
+    "SNS Topic"
+  ],
+  "region": "ap-southeast-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

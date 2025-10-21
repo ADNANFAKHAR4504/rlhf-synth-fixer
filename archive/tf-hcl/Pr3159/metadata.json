@@ -1,0 +1,28 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "354006",
+  "team": "5",
+  "startedAt": "2025-09-30T17:08:40.759Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "Amazon VPC",
+    "Amazon EC2",
+    "Elastic Load Balancing (Application Load Balancer)",
+    "Amazon S3",
+    "Amazon CloudWatch",
+    "AWS Auto Scaling"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "devang-devops",
+  "dockerS3Location": ""
+}

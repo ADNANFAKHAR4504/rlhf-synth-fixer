@@ -1,0 +1,74 @@
+#!/bin/bash
+set -xeuo pipefail
+
+exec > >(tee /var/log/user-data.log | logger -t user-data -s 2>/dev/console) 2>&1
+
+yum update -y
+yum install -y python3 python3-pip
+python3 -m pip install --upgrade pip
+python3 -m pip install flask pymysql boto3
+yum install -y amazon-cloudwatch-agent
+
+mkdir -p /opt/example-app
+mkdir -p /var/log/example-app
+chmod 750 /var/log/example-app
+
+cat <<'PYAPP' >/opt/example-app/app.py
+${app_source}
+PYAPP
+
+chmod +x /opt/example-app/app.py
+
+cat <<'SERVICE' >/etc/systemd/system/example-app.service
+[Unit]
+Description=Example Trading Platform Application
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/example-app
+Environment="APP_REGION=${region}"
+Environment="AWS_REGION=${region}"
+Environment="AWS_DEFAULT_REGION=${region}"
+Environment="DB_WRITE_HOST=${db_write_host}"
+Environment="DB_READ_HOST=${db_read_host}"
+Environment="DB_SECRET_ARN=${db_secret_arn}"
+Environment="PYTHONUNBUFFERED=1"
+Environment="APP_PORT=${app_port}"
+ExecStart=/usr/bin/python3 /opt/example-app/app.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
+systemctl daemon-reload
+systemctl enable example-app.service
+systemctl restart example-app.service
+
+mkdir -p /opt/aws/amazon-cloudwatch-agent/etc
+
+cat <<CWAGENT >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+{
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/var/log/example-app/app.log",
+            "log_group_name": "${log_group}",
+            "log_stream_name": "{instance_id}/example-app",
+            "timestamp_format": "%Y-%m-%d %H:%M:%S",
+            "timezone": "UTC"
+          }
+        ]
+      }
+    }
+  }
+}
+CWAGENT
+
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a stop || true
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a start -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+systemctl enable amazon-cloudwatch-agent

@@ -1,0 +1,20 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "QW278T",
+  "team": "1",
+  "startedAt": "2025-10-15T13:54:59.413Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": "Amazon Lex V2, AWS Lambda, Amazon DynamoDB, Amazon ElastiCache for Redis, Amazon Comprehend, Amazon Translate, Amazon Polly, Amazon Kinesis Data Streams, Amazon Kinesis Data Firehose, Amazon S3, Amazon CloudWatch, AWS X-Ray, Amazon VPC, AWS IAM",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
+}

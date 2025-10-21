@@ -1,0 +1,34 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "subtask": "Application Deployment",
+  "background": "MedTech Solutions needs to implement a robust monitoring solution for their patient data processing pipeline. The system must track data flow, performance metrics, and maintain HIPAA compliance while processing thousands of patient records per hour.",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "po_id": "6362828428",
+  "startedAt": "2025-10-21T07:26:40.855647Z",
+  "training_quality": 9,
+  "aws_services": [
+    "Amazon VPC",
+    "Amazon EC2 (NAT Gateway, Internet Gateway, Security Groups, Subnets, Route Tables, Elastic IP)",
+    "Amazon Kinesis Data Streams",
+    "Amazon RDS (PostgreSQL)",
+    "Amazon ElastiCache (Redis)",
+    "AWS Secrets Manager",
+    "AWS IAM (Roles, Policies)",
+    "AWS KMS",
+    "Amazon CloudWatch Logs"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
