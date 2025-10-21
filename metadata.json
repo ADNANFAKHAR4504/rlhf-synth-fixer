@@ -1,5 +1,5 @@
 {
-  "platform": "CDKTF",
+  "platform": "cdktf",
   "language": "py",
   "complexity": "medium",
   "turn_type": "single",
