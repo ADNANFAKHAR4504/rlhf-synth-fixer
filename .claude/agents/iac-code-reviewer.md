@@ -41,14 +41,14 @@ Report: "Using PROMPT file: {FILENAME}" and "Using MODEL_RESPONSE file: {FILENAM
 #### Step 2: Metadata Validation
 
 **Validation**: Run Checkpoint A: Metadata Completeness
-- See `validation-checkpoints.md` for validation logic
-- On failure, see `error-handling.md` Standard Error Response
+- See `docs/references/validation-checkpoints.md` for validation logic
+- On failure, see `docs/references/error-handling.md` Standard Error Response
 
 #### Step 3: PROMPT.md Style Validation
 
 **Validation**: Run Checkpoint D: PROMPT.md Style Validation
-- See `validation-checkpoints.md` for style requirements
-- See `shared-validations.md` for pass/fail patterns
+- See `docs/references/validation-checkpoints.md` for style requirements
+- See `docs/references/shared-validations.md` for pass/fail patterns
 
 If FAIL:
 - Training quality penalty: -2 points
@@ -59,8 +59,8 @@ If FAIL:
 **CRITICAL** - Catches major training data quality issues.
 
 **Validation**: Run Checkpoint E: Platform Code Compliance
-- See `validation-checkpoints.md` for platform detection patterns
-- See `shared-validations.md` for detailed platform requirements
+- See `docs/references/validation-checkpoints.md` for platform detection patterns
+- See `docs/references/shared-validations.md` for detailed platform requirements
 
 **Mismatch Detection**:
 ```
@@ -90,8 +90,8 @@ If coverage < 80%:
 #### Step 6: environmentSuffix Validation
 
 **Validation**: Run Checkpoint F: environmentSuffix Usage
-- See `validation-checkpoints.md` for suffix patterns
-- See `shared-validations.md` for language-specific examples
+- See `docs/references/validation-checkpoints.md` for suffix patterns
+- See `docs/references/shared-validations.md` for language-specific examples
 
 If < 80% resources have suffix:
 - Document: "⚠️ environmentSuffix not consistently used"
@@ -99,7 +99,7 @@ If < 80% resources have suffix:
 
 #### Step 7: Training Quality Scoring
 
-**Use simplified scoring system from `training-quality-guide.md`**
+**Use simplified scoring system from `docs/policies/training-quality-guide.md`**
 
 **Step-by-step**:
 
@@ -249,7 +249,7 @@ If ANY unchecked:
 **CRITICAL**: Validate before reporting "Ready"
 
 **Validation**: Run Checkpoint J: Training Quality Threshold
-- See `validation-checkpoints.md` for threshold check
+- See `docs/references/validation-checkpoints.md` for threshold check
 - Minimum: 8, Target: 9
 
 If training_quality < 8:

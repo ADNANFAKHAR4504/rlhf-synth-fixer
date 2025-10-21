@@ -42,15 +42,15 @@ Execute these phases in sequence to deliver production-ready IaC:
 After task selection and metadata.json generation, validate:
 
 **Validation**: Run Checkpoint A: Metadata Completeness
-- See `validation-checkpoints.md` for field requirements
-- See `shared-validations.md` for field definitions
+- See `docs/references/validation-checkpoints.md` for field requirements
+- See `docs/references/shared-validations.md` for field definitions
 
 **Validation**: Run Checkpoint B: Platform-Language Compatibility
-- See `validation-checkpoints.md` for compatibility matrix
-- See `shared-validations.md` for valid combinations
+- See `docs/references/validation-checkpoints.md` for compatibility matrix
+- See `docs/references/shared-validations.md` for valid combinations
 
 **Validation**: Run Checkpoint C: Template Structure
-- See `validation-checkpoints.md` for required files
+- See `docs/references/validation-checkpoints.md` for required files
 
 **Task Context Completeness**:
 ```
@@ -105,7 +105,7 @@ Emphasize: "Platform and language are MANDATORY constraints from metadata.json"
 
 **Agent**: `iac-code-reviewer`
 
-**Iteration Policy**: See `iteration-policy.md` for complete decision logic.
+**Iteration Policy**: See `docs/policies/iteration-policy.md` for complete decision logic.
 
 **Quick Reference**:
 - Score ≥8: Approve PR
@@ -128,7 +128,7 @@ Emphasize: "Platform and language are MANDATORY constraints from metadata.json"
 **Pre-flight Checks**:
 
 **Validation**: Run Checkpoint K: PR Prerequisites
-- See `validation-checkpoints.md` for prerequisite checks
+- See `docs/references/validation-checkpoints.md` for prerequisite checks
 
 Script reference:
 ```bash
@@ -146,7 +146,7 @@ bash .claude/scripts/preflight-checks.sh
 2. **Validate training quality**:
 
 **Validation**: Run Checkpoint J: Training Quality Threshold
-- See `validation-checkpoints.md` for threshold check
+- See `docs/references/validation-checkpoints.md` for threshold check
 - Minimum: 8, Target: 9
 
 ```bash
@@ -522,7 +522,7 @@ All subagents MUST report using this format:
 - Blocking situations
 - Phase completion
 
-See `error-handling.md` for detailed status reporting patterns.
+See `docs/references/error-handling.md` for detailed status reporting patterns.
 
 ## Usage
 

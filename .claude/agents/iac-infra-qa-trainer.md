@@ -37,8 +37,8 @@ ls -t lib/MODEL_RESPONSE*.md | head -1
 **Platform/Language Compliance Check**:
 
 **Validation**: Run Checkpoint E: Platform Code Compliance
-- See `validation-checkpoints.md` for detection patterns
-- See `shared-validations.md` for platform requirements
+- See `docs/references/validation-checkpoints.md` for detection patterns
+- See `docs/references/shared-validations.md` for platform requirements
 
 **If MISMATCH detected**:
 - Report CRITICAL FAILURE immediately
@@ -63,8 +63,8 @@ Use commands from `package.json` and `Pipfile` per platform/language.
 3. **Synthesize**: Generate templates (CDK/Terraform/Pulumi), fix ALL errors
 
 **Validation**: Run Checkpoint G: Build Quality Gate
-- See `validation-checkpoints.md` for commands
-- See `validation_and_testing_guide.md` Phase 2 for platform-specific commands
+- See `docs/references/validation-checkpoints.md` for commands
+- See `docs/guides/validation_and_testing_guide.md` Phase 2 for platform-specific commands
 
 **CHECKPOINT**: All three (lint, build, synth) must pass before proceeding.
 
@@ -72,7 +72,7 @@ If ANY fails:
 - STOP and fix issues
 - Report blocking status if unable to resolve
 - Do NOT proceed to deployment
-- Reference `validation_and_testing_guide.md` Phase 2 for common fixes
+- Reference `docs/guides/validation_and_testing_guide.md` Phase 2 for common fixes
 
 ### 2.5. Pre-Deployment Validation
 
@@ -183,8 +183,8 @@ Use existing test/ or tests/ folder structure (create new files if needed).
   - Test critical paths, error handling, edge cases
 
 **Validation**: Run Checkpoint H: Test Coverage
-- See `validation-checkpoints.md` for coverage validation
-- See `validation_and_testing_guide.md` Phase 3 for platform-specific patterns
+- See `docs/references/validation-checkpoints.md` for coverage validation
+- See `docs/guides/validation_and_testing_guide.md` Phase 3 for platform-specific patterns
 
 **Coverage Validation**:
 ```bash
@@ -216,8 +216,8 @@ Use existing test/ or tests/ folder structure.
 - Test typical use cases and data flows
 
 **Validation**: Run Checkpoint I: Integration Test Quality
-- See `validation-checkpoints.md` for quality checks
-- See `validation_and_testing_guide.md` Phase 5 for patterns and examples
+- See `docs/references/validation-checkpoints.md` for quality checks
+- See `docs/guides/validation_and_testing_guide.md` Phase 5 for patterns and examples
 
 **Test Location**:
 ```bash
@@ -246,7 +246,7 @@ Report results with coverage %.
 
 Do NOT proceed without meeting requirements.
 
-Use `validation_and_testing_guide.md` Common Failure Patterns for troubleshooting.
+Use `docs/guides/validation_and_testing_guide.md` Common Failure Patterns for troubleshooting.
 
 ### 5. Final Steps
 

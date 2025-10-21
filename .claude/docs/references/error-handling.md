@@ -42,7 +42,7 @@ Status: STOPPED - awaiting metadata fix
 
 ## Error Categories and Responses
 
-**For detailed recovery decision trees**, see `error-recovery-guide.md`
+**For detailed recovery decision trees**, see `../guides/error-recovery-guide.md`
 
 ### Validation Errors
 **Pattern**: Pre-flight checks fail

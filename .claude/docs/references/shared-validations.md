@@ -111,7 +111,7 @@ All named resources must include environmentSuffix for uniqueness:
 
 ## Training Quality Scoring
 
-**See `training-quality-guide.md` for complete scoring system.**
+**See `../policies/training-quality-guide.md` for complete scoring system.**
 
 ### Quick Reference
 
@@ -140,7 +140,7 @@ All named resources must include environmentSuffix for uniqueness:
 
 ## Working Directory
 
-**See `working-directory-guide.md` for complete context rules.**
+**See `../guides/working-directory-guide.md` for complete context rules.**
 
 ### Quick Reference
 

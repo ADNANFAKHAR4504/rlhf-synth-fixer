@@ -30,15 +30,15 @@ pwd  # MUST end with: /worktree/synth-{task_id}
 If not in worktree, STOP and report error.
 
 **Validation**: Run Checkpoint A: Metadata Completeness
-- See `validation-checkpoints.md` for field requirements
-- On failure, see `error-handling.md` Standard Error Response
+- See `docs/references/validation-checkpoints.md` for field requirements
+- On failure, see `docs/references/error-handling.md` Standard Error Response
 
 **Validation**: Run Checkpoint B: Platform-Language Compatibility
-- See `validation-checkpoints.md` for compatibility matrix
-- See `shared-validations.md` for valid combinations
+- See `docs/references/validation-checkpoints.md` for compatibility matrix
+- See `docs/references/shared-validations.md` for valid combinations
 
 **Validation**: Run Checkpoint C: Template Structure
-- See `validation-checkpoints.md` for required directories/files
+- See `docs/references/validation-checkpoints.md` for required directories/files
 
 **Check AWS Region**:
 ```bash
@@ -78,7 +78,7 @@ echo "Target region: $REGION"
 
 **CRITICAL PATTERN REQUIREMENTS**:
 
-See `shared-validations.md` for:
+See `docs/references/shared-validations.md` for:
 - PROMPT.md Style Requirements (human vs AI-generated)
 - Required platform statement format
 - Resource naming requirements (environmentSuffix)
@@ -162,8 +162,8 @@ Create [SYSTEM] using **[PLATFORM] with [LANGUAGE]** for [PURPOSE].
 ### PHASE 2.5: Validate Generated PROMPT.md (CHECKPOINT)
 
 **Validation**: Run Checkpoint D: PROMPT.md Style Validation
-- See `validation-checkpoints.md` for validation steps
-- See `shared-validations.md` for pass/fail criteria
+- See `docs/references/validation-checkpoints.md` for validation steps
+- See `docs/references/shared-validations.md` for pass/fail criteria
 
 **Additional Checks**:
 
@@ -239,8 +239,8 @@ echo "✅ Configuration validated. Generating code..."
 2. **Verify MODEL_RESPONSE Platform/Language**:
 
 **Validation**: Run Checkpoint E: Platform Code Compliance
-- See `validation-checkpoints.md` for platform patterns
-- See `shared-validations.md` for detection logic
+- See `docs/references/validation-checkpoints.md` for platform patterns
+- See `docs/references/shared-validations.md` for detection logic
 
 If WRONG platform/language:
 - Report: "CRITICAL - MODEL_RESPONSE platform mismatch"
