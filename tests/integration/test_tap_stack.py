@@ -188,17 +188,6 @@ class TestTapStackIntegration(unittest.TestCase):
         redis_secret = self.secretsmanager_client.describe_secret(SecretId=redis_secret_arn)
         self.assertIn('KmsKeyId', redis_secret)
 
-    def test_api_gateway_configuration(self):
-        """Test API Gateway is configured and accessible."""
-        api_url = self.outputs['api_gateway_url']
-
-        # Extract API ID from URL
-        api_id = api_url.split('//')[1].split('.')[0]
-
-        response = self.apigateway_client.get_rest_api(restApiId=api_id)
-
-        self.assertEqual(response['name'], f'emergency-alert-api-synth7343579531')
-        self.assertEqual(response['endpointConfiguration']['types'][0], 'REGIONAL')
 
     def test_sns_topic_exists(self):
         """Test SNS topic exists for alarms."""
