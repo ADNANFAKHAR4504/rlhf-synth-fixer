@@ -649,7 +649,7 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # Export outputs
-        self.register_outputs({
+        outputs = {
             'region': self.region,
             'kms_key_id': self.kms_key.id,
             'kms_key_arn': self.kms_key.arn,
@@ -678,4 +678,14 @@ class TapStack(pulumi.ComponentResource):
             'redis_endpoint': self.redis_cluster.configuration_endpoint_address,
             'redis_primary_endpoint': self.redis_cluster.primary_endpoint_address,
             'redis_reader_endpoint': self.redis_cluster.reader_endpoint_address,
-        })
+        }
+
+        self.register_outputs(outputs)
+
+        # If this component is the root of the stack (no parent resource has
+        # been provided), surface the same values via `pulumi.export` so they
+        # appear in `pulumi stack output` and can be consumed by integration
+        # tooling.
+        if opts is None or getattr(opts, "parent", None) is None:
+            for key, value in outputs.items():
+                pulumi.export(key, value)

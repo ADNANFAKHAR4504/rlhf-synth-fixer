@@ -50,6 +50,8 @@ class AwsMocks(mocks.Mocks):
         if type_ == "aws:rds/cluster:Cluster":
             outputs.setdefault("storage_encrypted", inputs.get("storage_encrypted", True))
             outputs.setdefault("backup_retention_period", inputs.get("backup_retention_period", 30))
+            outputs.setdefault("endpoint", f"{name}.cluster.local")
+            outputs.setdefault("arn", f"arn:aws:rds:us-east-1:123456789012:cluster:{name}")
         if type_ == "aws:rds/clusterInstance:ClusterInstance":
             outputs.setdefault("publicly_accessible", inputs.get("publicly_accessible", False))
         if type_ == "aws:secretsmanager/secret:Secret":
@@ -57,6 +59,9 @@ class AwsMocks(mocks.Mocks):
         if type_ == "aws:elasticache/replicationGroup:ReplicationGroup":
             outputs.setdefault("at_rest_encryption_enabled", True)
             outputs.setdefault("transit_encryption_enabled", True)
+            outputs.setdefault("configuration_endpoint_address", f"{name}.cfg.local")
+            outputs.setdefault("primary_endpoint_address", f"{name}.primary.local")
+            outputs.setdefault("reader_endpoint_address", f"{name}.reader.local")
         if type_ == "aws:kms/key:Key":
             outputs.setdefault("enable_key_rotation", True)
 
