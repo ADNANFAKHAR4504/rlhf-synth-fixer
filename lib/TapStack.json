@@ -124,7 +124,7 @@
                     "s3:PutObject"
                   ],
                   "Resource": {
-                    "Fn::Sub": "${LogsBucket}/*"
+                    "Fn::Sub": "arn:aws:s3:::${LogsBucket}/*"
                   }
                 }
               ]
