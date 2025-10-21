@@ -7,6 +7,7 @@ import * as path from 'path';
 import {
   EC2Client,
   DescribeVpcsCommand,
+  DescribeVpcAttributeCommand,
   DescribeSubnetsCommand,
   DescribeInternetGatewaysCommand,
   DescribeNatGatewaysCommand,
@@ -61,7 +62,27 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
         
         // Parse terraform outputs - they might be in different formats
         if (rawOutputs && Object.keys(rawOutputs).length > 0) {
-          outputs = rawOutputs;
+          // Parse JSON string arrays into actual arrays
+          outputs = {
+            vpc_id: rawOutputs.vpc_id,
+            public_subnet_ids: typeof rawOutputs.public_subnet_ids === 'string' 
+              ? JSON.parse(rawOutputs.public_subnet_ids) 
+              : rawOutputs.public_subnet_ids,
+            private_subnet_ids: typeof rawOutputs.private_subnet_ids === 'string'
+              ? JSON.parse(rawOutputs.private_subnet_ids)
+              : rawOutputs.private_subnet_ids,
+            nat_gateway_ids: typeof rawOutputs.nat_gateway_ids === 'string'
+              ? JSON.parse(rawOutputs.nat_gateway_ids)
+              : rawOutputs.nat_gateway_ids,
+            ec2_instance_ids: typeof rawOutputs.ec2_instance_ids === 'string'
+              ? JSON.parse(rawOutputs.ec2_instance_ids)
+              : rawOutputs.ec2_instance_ids,
+            s3_bucket_name: rawOutputs.s3_bucket_name,
+            ec2_private_ips: typeof rawOutputs.ec2_private_ips === 'string'
+              ? JSON.parse(rawOutputs.ec2_private_ips)
+              : rawOutputs.ec2_private_ips,
+            security_group_id: rawOutputs.security_group_id,
+          };
           isDeployed = true;
           console.log('✓ Loaded deployment outputs:', outputs);
         } else {
@@ -104,8 +125,21 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
       const vpc = response.Vpcs![0];
       expect(vpc.CidrBlock).toBe('10.0.0.0/16');
       expect(vpc.State).toBe('available');
-      expect(vpc.EnableDnsHostnames).toBe(true);
-      expect(vpc.EnableDnsSupport).toBe(true);
+      
+      // Check DNS attributes with separate API calls
+      const dnsHostnamesCommand = new DescribeVpcAttributeCommand({
+        VpcId: outputs.vpc_id,
+        Attribute: 'enableDnsHostnames',
+      });
+      const dnsHostnamesResponse = await ec2Client.send(dnsHostnamesCommand);
+      expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
+
+      const dnsSupportCommand = new DescribeVpcAttributeCommand({
+        VpcId: outputs.vpc_id,
+        Attribute: 'enableDnsSupport',
+      });
+      const dnsSupportResponse = await ec2Client.send(dnsSupportCommand);
+      expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
     });
 
     test('VPC should have proper tags', async () => {
