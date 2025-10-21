@@ -713,7 +713,7 @@ class TapStack(TerraformStack):
                         },
                         {
                             "name": "REDIS_ENDPOINT",
-                            "value": redis_cluster.configuration_endpoint_address
+                            "value": redis_cluster.primary_endpoint_address
                         },
                         {
                             "name": "DB_ENDPOINT",
@@ -1054,8 +1054,8 @@ class TapStack(TerraformStack):
         TerraformOutput(
             self,
             "redis_endpoint",
-            value=redis_cluster.configuration_endpoint_address,
-            description="Redis configuration endpoint"
+            value=redis_cluster.primary_endpoint_address,
+            description="Redis primary endpoint"
         )
 
         TerraformOutput(
