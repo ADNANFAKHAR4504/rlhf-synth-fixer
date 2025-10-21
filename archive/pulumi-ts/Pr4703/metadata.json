@@ -1,0 +1,28 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000276",
+  "team": "1",
+  "startedAt": "2025-10-17T07:43:35.108Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": "ECS Fargate, Application Load Balancer, RDS Aurora PostgreSQL, ECR, VPC, CloudWatch, CloudWatch Logs, Auto Scaling, IAM, Security Groups, Target Groups, Route 53, NAT Gateway, Internet Gateway, Subnets",
+  "training_quality": 2,
+  "validation_issues": [
+    "CRITICAL: PROMPT.md describes Python implementation but actual code is TypeScript - complete platform/language mismatch",
+    "CRITICAL: PROMPT.md uses AI-generated format with XML-style tags instead of human conversational style",
+    "CRITICAL: IDEAL_RESPONSE.md has improperly formatted code blocks and missing complete implementation",
+    "CRITICAL: PROMPT.md describes multi-tenant SaaS application, but actual implementation is trading analytics platform",
+    "HIGH: MODEL_RESPONSE.md contains Python code that does not match TypeScript implementation"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raghav-turing",
+  "dockerS3Location": ""
+}
