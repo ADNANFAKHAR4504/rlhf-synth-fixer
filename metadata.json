@@ -1,0 +1,14 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "6504518772",
+  "team": "synth",
+  "startedAt": "2025-10-21T12:58:24+05:30",
+  "subtask": "Application Deployment",
+  "background": "A federal agency needs to process sensitive citizen data across multiple departments. The solution must implement a secure data pipeline that includes data ingestion, processing, and storage while maintaining FedRAMP High compliance requirements. The infrastructure must support real-time data processing with strict access controls and audit capabilities.",
+  "subject_labels": ["CI/CD Pipeline", "Failure Recovery Automation", "Infrastructure Analysis/Monitoring", "Security Configuration as Code"],
+  "aws_services": ["Amazon Kinesis", "Amazon ECS Fargate", "Amazon RDS", "Amazon ElastiCache", "AWS Secrets Manager", "Amazon API Gateway", "Amazon EFS", "AWS KMS", "AWS CloudTrail", "Amazon VPC", "AWS Config", "Amazon CloudWatch", "Elastic Load Balancing"],
+  "training_quality": 9
+}
