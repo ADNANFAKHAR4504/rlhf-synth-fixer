@@ -1,4 +1,4 @@
-You have been tasked with migrating an existing infrastructure to a new, highly available, and secure environment on AWS. The entire infrastructure must be defined in a single CloudFormation template for the us-east-1 region.
+You have been tasked with migrating an existing infrastructure to a new, highly available, and secure environment on AWS. The stack can be in any region.
 
 Core Requirements & Strict Constraints:
 You must generate a CloudFormation YAML template that provisions resources adhering to every one of the following constraints. Do not deviate from these specifications.
