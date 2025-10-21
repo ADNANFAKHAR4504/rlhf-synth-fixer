@@ -513,12 +513,12 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
       }
 
       const command = new GetRoleCommand({
-        RoleName: 'ec2-s3-access-role',
+        RoleName: 'ec2-s3-access-role-dev',
       });
 
       const response = await iamClient.send(command);
       expect(response.Role).toBeDefined();
-      expect(response.Role!.RoleName).toBe('ec2-s3-access-role');
+      expect(response.Role!.RoleName).toBe('ec2-s3-access-role-dev');
       
       // Verify assume role policy
       const assumePolicy = JSON.parse(
@@ -534,8 +534,8 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
       }
 
       const command = new GetRolePolicyCommand({
-        RoleName: 'ec2-s3-access-role',
-        PolicyName: 'ec2-s3-access-policy',
+        RoleName: 'ec2-s3-access-role-dev',
+        PolicyName: 'ec2-s3-access-policy-dev',
       });
 
       const response = await iamClient.send(command);
@@ -556,15 +556,15 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
       }
 
       const command = new GetInstanceProfileCommand({
-        InstanceProfileName: 'ec2-s3-access-profile',
+        InstanceProfileName: 'ec2-s3-access-profile-dev',
       });
 
       const response = await iamClient.send(command);
       expect(response.InstanceProfile).toBeDefined();
-      expect(response.InstanceProfile!.InstanceProfileName).toBe('ec2-s3-access-profile');
+      expect(response.InstanceProfile!.InstanceProfileName).toBe('ec2-s3-access-profile-dev');
       expect(response.InstanceProfile!.Roles).toBeDefined();
       expect(response.InstanceProfile!.Roles!.length).toBe(1);
-      expect(response.InstanceProfile!.Roles![0].RoleName).toBe('ec2-s3-access-role');
+      expect(response.InstanceProfile!.Roles![0].RoleName).toBe('ec2-s3-access-role-dev');
     });
   });
 
