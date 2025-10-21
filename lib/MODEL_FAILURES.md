@@ -308,10 +308,12 @@ Error: creating EC2 EIP: operation error EC2: AllocateAddress, https response er
 
 **Temporary remediation applied**:
 - Added a `create_nat_gateway` flag to `TapStack`, defaulting to `False` for
-    PR-style environment names (environment_suffix starting with `pr`). The
-    code now conditionally creates the EIP and NAT only if `create_nat_gateway` is True.
-
-**Recommended long-term fixes**:
+  PR-style environment names (environment_suffix matching `pr` + digits pattern like `pr4892`). 
+- Fixed conditional logic bug where `'prod'.startswith('pr')` was True, incorrectly
+  disabling NAT for production environments. Now uses regex pattern `^pr\d+$`.
+- Made private route table creation conditional - with NAT it routes through NAT Gateway,
+  without NAT it creates a private route table with no internet access.
+- The code now conditionally creates the EIP and NAT only if `create_nat_gateway` is True.**Recommended long-term fixes**:
 1. For CI/pull-request runs, default to using the default VPC or existing
      NAT infrastructure instead of creating EIPs.
 2. Make NAT/EIP creation controlled via an environment variable (e.g.,

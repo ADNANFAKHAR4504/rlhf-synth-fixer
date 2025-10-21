@@ -47,10 +47,12 @@ class TapStack(TerraformStack):
         default_tags = kwargs.get('default_tags', {})
         # Allow callers (or CI) to disable creating an Internet-facing NAT + EIP
         # by passing `create_nat_gateway=False`. Default behavior: disable for
-        # pull-request style environments (environment_suffix starting with 'pr'),
+        # pull-request style environments (environment_suffix matching 'pr' + digits),
         # otherwise enabled.
+        import re
+        is_pr_environment = re.match(r'^pr\d+$', str(environment_suffix).lower())
         create_nat_gateway = kwargs.get(
-            'create_nat_gateway', False if str(environment_suffix).lower().startswith('pr') else True
+            'create_nat_gateway', False if is_pr_environment else True
         )
 
         # Configure AWS Provider
@@ -202,21 +204,33 @@ class TapStack(TerraformStack):
             route_table_id=public_rt.id
         )
 
-        # Create private route table
-        private_rt = RouteTable(
-            self,
-            "private_rt",
-            vpc_id=vpc.id,
-            route=[
-                RouteTableRoute(
-                    cidr_block="0.0.0.0/0",
-                    nat_gateway_id=nat_gateway.id
-                )
-            ],
-            tags={
-                "Name": f"lms-private-rt-{environment_suffix}"
-            }
-        )
+        # Create private route table - with or without NAT Gateway
+        if create_nat_gateway:
+            # Private subnets route through NAT Gateway for internet access
+            private_rt = RouteTable(
+                self,
+                "private_rt",
+                vpc_id=vpc.id,
+                route=[
+                    RouteTableRoute(
+                        cidr_block="0.0.0.0/0",
+                        nat_gateway_id=nat_gateway.id
+                    )
+                ],
+                tags={
+                    "Name": f"lms-private-rt-{environment_suffix}"
+                }
+            )
+        else:
+            # Private subnets without internet access (no NAT Gateway)
+            private_rt = RouteTable(
+                self,
+                "private_rt",
+                vpc_id=vpc.id,
+                tags={
+                    "Name": f"lms-private-rt-{environment_suffix}"
+                }
+            )
 
         # Associate private subnets with private route table
         RouteTableAssociation(
