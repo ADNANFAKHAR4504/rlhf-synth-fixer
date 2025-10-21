@@ -1,3 +1,4 @@
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure AWS Environment - Complete Security Configuration Template'
 
@@ -1050,3 +1051,4 @@ Outputs:
     Value: !Ref WAFWebACL
     Export:
       Name: !Sub '${AWS::StackName}-waf-acl-id'
+```
