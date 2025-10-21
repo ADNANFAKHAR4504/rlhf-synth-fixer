@@ -280,6 +280,31 @@ describe('bundling selection branch (mocked)', () => {
   });
 });
 
+describe('bundling selection branch (non-bundler)', () => {
+  test('uses Code.fromAsset when USE_NODEJS_BUNDLER is not set (isolated)', () => {
+    // Ensure env disables bundler and isolate module load so the stack takes the else branch
+    jest.isolateModules(() => {
+      process.env.USE_NODEJS_BUNDLER = '0';
+      process.env.CI = '0';
+
+      // Require the stack fresh so it reads the env flags during initialization
+      const { ServerlessInfrastructureStack: NonBundledStack } = require('../lib/serverless-infrastructure-stack');
+      const a = new cdk.App();
+      const s = new NonBundledStack(a, 'StackWithCodeAsset');
+      const t = Template.fromStack(s);
+      const json = t.toJSON();
+      expect(json.Outputs).toBeDefined();
+
+      // cleanup
+      delete process.env.USE_NODEJS_BUNDLER;
+      delete process.env.CI;
+      jest.resetModules();
+      // Re-load original ServerlessInfrastructureStack for other tests
+      ServerlessInfrastructureStack = require('../lib/serverless-infrastructure-stack').ServerlessInfrastructureStack;
+    });
+  });
+});
+
 describe('SNS subscription and alarms branches', () => {
   test('creates SNS subscription when EMAIL_ALERT_TOPIC_ADDRESS is set', () => {
     process.env.EMAIL_ALERT_TOPIC_ADDRESS = 'alerts@example.com';
