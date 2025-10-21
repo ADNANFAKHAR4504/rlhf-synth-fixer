@@ -35,6 +35,32 @@ describe('HIPAA-Compliant Healthcare Infrastructure Stack', () => {
       expect(synthesized).toBeDefined();
       expect(synthesized.provider.aws[0].region).toBe('us-east-1');
     });
+
+    test('uses AWS_REGION_OVERRIDE when empty string is set', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestTapStackOverride', {
+        environmentSuffix: 'test',
+        awsRegion: 'eu-west-1',
+      });
+      synthesized = JSON.parse(Testing.synth(stack));
+
+      expect(stack).toBeDefined();
+      expect(synthesized).toBeDefined();
+      // When AWS_REGION_OVERRIDE is empty, it should use the provided awsRegion
+      expect(synthesized.provider.aws[0].region).toBe('eu-west-1');
+    });
+
+    test('uses default environment suffix when not provided', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestTapStackDefaultEnv');
+      synthesized = JSON.parse(Testing.synth(stack));
+
+      expect(stack).toBeDefined();
+      expect(synthesized).toBeDefined();
+      // Check that environment suffix 'dev' is used in resource names
+      const vpc = synthesized.resource.aws_vpc['healthcare-vpc'];
+      expect(vpc.tags.Name).toContain('dev');
+    });
   });
 
   describe('VPC Configuration', () => {
