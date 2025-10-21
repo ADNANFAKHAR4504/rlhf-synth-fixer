@@ -1,0 +1,36 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-10-18T01:21:24+05:30",
+  "subtask": "Failure Recovery and High Availability",
+  "background": "FinTech Corp needs to process credit card transactions while maintaining PCI-DSS compliance. They require a highly available database setup with encrypted storage, automated backups, and secure credential management. The infrastructure must handle 100,000 transactions per minute with sub-second response times.",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Failure Recovery Automation",
+    "Security Configuration as Code"
+  ],
+  "po_id": "5467009617",
+  "aws_services": [
+    "RDS Aurora PostgreSQL",
+    "Amazon EFS",
+    "AWS Secrets Manager",
+    "ElastiCache Redis",
+    "API Gateway",
+    "VPC",
+    "KMS",
+    "Security Groups",
+    "CloudWatch Logs",
+    "IAM"
+  ],
+  "region": "us-west-2",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

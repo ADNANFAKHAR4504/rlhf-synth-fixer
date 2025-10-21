@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "team": "synth",
+  "startedAt": "2025-10-17T22:05:27+05:30",
+  "subtask": "Failure Recovery and High Availability",
+  "background": "MediTech Solutions is launching a new patient records management system that must comply with HIPAA regulations. The system needs to process sensitive healthcare data, maintain encryption at rest and in transit, and provide comprehensive audit trails for compliance.",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Failure Recovery Automation",
+    "Security Configuration as Code"
+  ],
+  "po_id": "4943379165",
+  "aws_services": [
+    "ECS",
+    "RDS",
+    "EFS",
+    "ElastiCache",
+    "API Gateway",
+    "WAF",
+    "NAT Gateway"
+  ],
+  "region": "eu-central-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

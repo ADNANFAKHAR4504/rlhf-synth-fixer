@@ -1,0 +1,35 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291279",
+  "team": "6",
+  "startedAt": "2025-10-20T09:48:51.635Z",
+  "subtask": "Failure Recovery and High Availability",
+  "background": "The infrastructure is to be deployed in AWS, targeting us-east-1 and us-west-2 regions. It should lay out both public and private subnets within a virtual private cloud (VPC). Each availability zone should replicate this configuration to ensure redundancy and high availability. Naming of resources should follow the pattern 'projectname-environment-component', e.g., 'ecom-prod-webserver'.",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "ALB",
+    "IAM",
+    "CloudWatch",
+    "SNS",
+    "S3",
+    "Secrets Manager",
+    "SSM Parameter Store",
+    "NAT Gateway",
+    "Internet Gateway"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
+}

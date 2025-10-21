@@ -1,0 +1,1077 @@
+# Financial Firm Batch Processing System - Complete Solution
+
+I'll create a comprehensive CloudFormation template that handles 1 million nightly transactions within a 4-hour window with complete audit trail and monitoring capabilities.
+
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Batch Processing System for Financial Transactions with Complete Audit Trail and Monitoring'
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: Environment suffix for resource naming (e.g., dev, staging, prod)
+    Default: dev
+
+  NotificationEmail:
+    Type: String
+    Description: Email address for SNS notifications
+    Default: admin@example.com
+    AllowedPattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+    ConstraintDescription: Must be a valid email address
+
+  MaxvCpus:
+    Type: Number
+    Description: Maximum vCPUs for batch compute environment
+    Default: 256
+    MinValue: 16
+    MaxValue: 512
+
+  JobTimeout:
+    Type: Number
+    Description: Job timeout in seconds
+    Default: 14400
+    MinValue: 3600
+    MaxValue: 28800
+
+Resources:
+  # ==================== S3 Buckets ====================
+  TransactionDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'transactiondata-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: ArchiveOldData
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 90
+                StorageClass: GLACIER
+            ExpirationInDays: 2555
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  ProcessedDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'processeddata-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # ==================== DynamoDB Tables ====================
+  JobStatusTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'job-status-${EnvironmentSuffix}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: jobId
+          AttributeType: S
+        - AttributeName: submittedAt
+          AttributeType: N
+        - AttributeName: status
+          AttributeType: S
+      KeySchema:
+        - AttributeName: jobId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: StatusIndex
+          KeySchema:
+            - AttributeName: status
+              KeyType: HASH
+            - AttributeName: submittedAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  AuditLogTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'audit-log-${EnvironmentSuffix}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: auditId
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: N
+        - AttributeName: jobId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: auditId
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: JobIdIndex
+          KeySchema:
+            - AttributeName: jobId
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ==================== SNS Topic ====================
+  BatchProcessingTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'batchprocessing-alerts-${EnvironmentSuffix}'
+      DisplayName: Batch Processing Alerts
+      Subscription:
+        - Endpoint: !Ref NotificationEmail
+          Protocol: email
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ==================== IAM Roles ====================
+  BatchServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: batch.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSBatchServiceRole
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  BatchInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub 'arn:aws:s3:::transactiondata-${EnvironmentSuffix}-${AWS::AccountId}'
+                  - !Sub 'arn:aws:s3:::transactiondata-${EnvironmentSuffix}-${AWS::AccountId}/*'
+                  - !Sub 'arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}'
+                  - !Sub 'arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}/*'
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt JobStatusTable.Arn
+                  - !GetAtt AuditLogTable.Arn
+                  - !Sub '${JobStatusTable.Arn}/index/*'
+                  - !Sub '${AuditLogTable.Arn}/index/*'
+        - PolicyName: CloudWatchLogs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  BatchInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref BatchInstanceRole
+
+  BatchJobRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: BatchJobPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub 'arn:aws:s3:::transactiondata-${EnvironmentSuffix}-${AWS::AccountId}'
+                  - !Sub 'arn:aws:s3:::transactiondata-${EnvironmentSuffix}-${AWS::AccountId}/*'
+                  - !Sub 'arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}'
+                  - !Sub 'arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}/*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt JobStatusTable.Arn
+                  - !GetAtt AuditLogTable.Arn
+                  - !Sub '${JobStatusTable.Arn}/index/*'
+                  - !Sub '${AuditLogTable.Arn}/index/*'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref BatchProcessingTopic
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: LambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - batch:SubmitJob
+                  - batch:DescribeJobs
+                  - batch:TerminateJob
+                  - batch:ListJobs
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub 'arn:aws:s3:::transactiondata-${EnvironmentSuffix}-${AWS::AccountId}'
+                  - !Sub 'arn:aws:s3:::transactiondata-${EnvironmentSuffix}-${AWS::AccountId}/*'
+                  - !Sub 'arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}'
+                  - !Sub 'arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}/*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource:
+                  - !GetAtt JobStatusTable.Arn
+                  - !GetAtt AuditLogTable.Arn
+                  - !Sub '${JobStatusTable.Arn}/index/*'
+                  - !Sub '${AuditLogTable.Arn}/index/*'
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref BatchProcessingTopic
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ==================== VPC Configuration ====================
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'batch-vpc-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub 'batch-igw-${EnvironmentSuffix}'
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'batch-public-subnet-1-${EnvironmentSuffix}'
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'batch-public-subnet-2-${EnvironmentSuffix}'
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'batch-public-rt-${EnvironmentSuffix}'
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  SubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  BatchSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Batch compute environment
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub 'batch-sg-${EnvironmentSuffix}'
+
+  # ==================== AWS Batch ====================
+  BatchComputeEnvironment:
+    Type: AWS::Batch::ComputeEnvironment
+    Properties:
+      ComputeEnvironmentName: !Sub 'transaction-compute-env-${EnvironmentSuffix}'
+      Type: MANAGED
+      State: ENABLED
+      ServiceRole: !GetAtt BatchServiceRole.Arn
+      ComputeResources:
+        Type: EC2
+        MinvCpus: 0
+        MaxvCpus: !Ref MaxvCpus
+        DesiredvCpus: 0
+        InstanceTypes:
+          - optimal
+        Subnets:
+          - !Ref PublicSubnet1
+          - !Ref PublicSubnet2
+        SecurityGroupIds:
+          - !Ref BatchSecurityGroup
+        InstanceRole: !GetAtt BatchInstanceProfile.Arn
+        Tags:
+          Environment: !Ref EnvironmentSuffix
+
+  BatchJobQueue:
+    Type: AWS::Batch::JobQueue
+    Properties:
+      JobQueueName: !Sub 'transaction-job-queue-${EnvironmentSuffix}'
+      State: ENABLED
+      Priority: 1
+      ComputeEnvironmentOrder:
+        - Order: 1
+          ComputeEnvironment: !Ref BatchComputeEnvironment
+
+  BatchJobDefinition:
+    Type: AWS::Batch::JobDefinition
+    Properties:
+      JobDefinitionName: !Sub 'transaction-processor-${EnvironmentSuffix}'
+      Type: container
+      ContainerProperties:
+        Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/transaction-processor:latest'
+        Vcpus: 2
+        Memory: 4096
+        JobRoleArn: !GetAtt BatchJobRole.Arn
+        Environment:
+          - Name: JOB_STATUS_TABLE
+            Value: !Ref JobStatusTable
+          - Name: AUDIT_LOG_TABLE
+            Value: !Ref AuditLogTable
+          - Name: SOURCE_BUCKET
+            Value: !Ref TransactionDataBucket
+          - Name: DEST_BUCKET
+            Value: !Ref ProcessedDataBucket
+          - Name: SNS_TOPIC_ARN
+            Value: !Ref BatchProcessingTopic
+          - Name: ENVIRONMENT
+            Value: !Ref EnvironmentSuffix
+        LogConfiguration:
+          LogDriver: awslogs
+          Options:
+            awslogs-group: !Sub '/aws/batch/transaction-processor-${EnvironmentSuffix}'
+            awslogs-region: !Ref AWS::Region
+            awslogs-stream-prefix: batch-job
+            awslogs-create-group: 'true'
+      RetryStrategy:
+        Attempts: 3
+        EvaluateOnExit:
+          - Action: RETRY
+            OnStatusReason: 'Host EC2*'
+          - Action: EXIT
+            OnReason: '*'
+      Timeout:
+        AttemptDurationSeconds: !Ref JobTimeout
+
+  # ==================== Lambda Functions ====================
+  TransactionProcessorLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'transaction-processor-${EnvironmentSuffix}'
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          JOB_QUEUE: !Ref BatchJobQueue
+          JOB_DEFINITION: !Ref BatchJobDefinition
+          JOB_STATUS_TABLE: !Ref JobStatusTable
+          AUDIT_LOG_TABLE: !Ref AuditLogTable
+          SNS_TOPIC_ARN: !Ref BatchProcessingTopic
+          ENVIRONMENT: !Ref EnvironmentSuffix
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          import uuid
+          from datetime import datetime
+          from decimal import Decimal
+
+          batch = boto3.client('batch')
+          dynamodb = boto3.resource('dynamodb')
+          sns = boto3.client('sns')
+          cloudwatch = boto3.client('cloudwatch')
+
+          job_status_table = dynamodb.Table(os.environ['JOB_STATUS_TABLE'])
+          audit_log_table = dynamodb.Table(os.environ['AUDIT_LOG_TABLE'])
+
+          def lambda_handler(event, context):
+              try:
+                  for record in event['Records']:
+                      bucket = record['s3']['bucket']['name']
+                      key = record['s3']['object']['key']
+                      
+                      job_id = str(uuid.uuid4())
+                      timestamp = Decimal(str(datetime.utcnow().timestamp()))
+                      
+                      response = batch.submit_job(
+                          jobName=f'transaction-job-{job_id[:8]}',
+                          jobQueue=os.environ['JOB_QUEUE'],
+                          jobDefinition=os.environ['JOB_DEFINITION'],
+                          containerOverrides={
+                              'environment': [
+                                  {'name': 'INPUT_FILE', 'value': f's3://{bucket}/{key}'},
+                                  {'name': 'JOB_ID', 'value': job_id}
+                              ]
+                          }
+                      )
+                      
+                      batch_job_id = response['jobId']
+                      
+                      job_status_table.put_item(
+                          Item={
+                              'jobId': job_id,
+                              'batchJobId': batch_job_id,
+                              'status': 'SUBMITTED',
+                              'submittedAt': timestamp,
+                              'inputFile': f's3://{bucket}/{key}',
+                              'environment': os.environ['ENVIRONMENT']
+                          }
+                      )
+                      
+                      audit_log_table.put_item(
+                          Item={
+                              'auditId': str(uuid.uuid4()),
+                              'jobId': job_id,
+                              'timestamp': timestamp,
+                              'action': 'JOB_SUBMITTED',
+                              'details': json.dumps({
+                                  'batchJobId': batch_job_id,
+                                  'inputFile': f's3://{bucket}/{key}'
+                              }),
+                              'ttl': int(timestamp + 7776000)
+                          }
+                      )
+                      
+                      cloudwatch.put_metric_data(
+                          Namespace='BatchProcessing',
+                          MetricData=[{
+                              'MetricName': 'JobsSubmitted',
+                              'Value': 1,
+                              'Unit': 'Count',
+                              'Dimensions': [{'Name': 'Environment', 'Value': os.environ['ENVIRONMENT']}]
+                          }]
+                      )
+                      
+                      print(f'Successfully submitted job {job_id}')
+                  
+                  return {'statusCode': 200, 'body': json.dumps('Success')}
+                  
+              except Exception as e:
+                  print(f'Error: {str(e)}')
+                  sns.publish(
+                      TopicArn=os.environ['SNS_TOPIC_ARN'],
+                      Subject='Batch Job Submission Failed',
+                      Message=f'Failed to submit batch job: {str(e)}'
+                  )
+                  raise
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  JobMonitorLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'job-monitor-${EnvironmentSuffix}'
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 256
+      Environment:
+        Variables:
+          JOB_STATUS_TABLE: !Ref JobStatusTable
+          AUDIT_LOG_TABLE: !Ref AuditLogTable
+          SNS_TOPIC_ARN: !Ref BatchProcessingTopic
+          ENVIRONMENT: !Ref EnvironmentSuffix
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          import uuid
+          from datetime import datetime
+          from decimal import Decimal
+
+          batch = boto3.client('batch')
+          dynamodb = boto3.resource('dynamodb')
+          sns = boto3.client('sns')
+          cloudwatch = boto3.client('cloudwatch')
+
+          job_status_table = dynamodb.Table(os.environ['JOB_STATUS_TABLE'])
+          audit_log_table = dynamodb.Table(os.environ['AUDIT_LOG_TABLE'])
+
+          def lambda_handler(event, context):
+              try:
+                  for status in ['SUBMITTED', 'RUNNING']:
+                      response = job_status_table.query(
+                          IndexName='StatusIndex',
+                          KeyConditionExpression='#status = :status',
+                          ExpressionAttributeNames={'#status': 'status'},
+                          ExpressionAttributeValues={':status': status}
+                      )
+                      
+                      for item in response['Items']:
+                          job_id = item['jobId']
+                          batch_job_id = item['batchJobId']
+                          
+                          job_response = batch.describe_jobs(jobs=[batch_job_id])
+                          
+                          if job_response['jobs']:
+                              job = job_response['jobs'][0]
+                              new_status = job['status']
+                              timestamp = Decimal(str(datetime.utcnow().timestamp()))
+                              
+                              if new_status != item['status']:
+                                  job_status_table.update_item(
+                                      Key={'jobId': job_id},
+                                      UpdateExpression='SET #status = :status, updatedAt = :timestamp',
+                                      ExpressionAttributeNames={'#status': 'status'},
+                                      ExpressionAttributeValues={
+                                          ':status': new_status,
+                                          ':timestamp': timestamp
+                                      }
+                                  )
+                                  
+                                  audit_log_table.put_item(
+                                      Item={
+                                          'auditId': str(uuid.uuid4()),
+                                          'jobId': job_id,
+                                          'timestamp': timestamp,
+                                          'action': f'STATUS_CHANGED_TO_{new_status}',
+                                          'details': json.dumps({
+                                              'batchJobId': batch_job_id,
+                                              'previousStatus': item['status']
+                                          }),
+                                          'ttl': int(timestamp + 7776000)
+                                      }
+                                  )
+                                  
+                                  if new_status == 'FAILED':
+                                      reason = job.get('statusReason', 'Unknown')
+                                      sns.publish(
+                                          TopicArn=os.environ['SNS_TOPIC_ARN'],
+                                          Subject=f'Batch Job Failed: {job_id}',
+                                          Message=f'Job {job_id} failed.\nReason: {reason}'
+                                      )
+                                      cloudwatch.put_metric_data(
+                                          Namespace='BatchProcessing',
+                                          MetricData=[{
+                                              'MetricName': 'JobsFailed',
+                                              'Value': 1,
+                                              'Unit': 'Count',
+                                              'Dimensions': [{'Name': 'Environment', 'Value': os.environ['ENVIRONMENT']}]
+                                          }]
+                                      )
+                                  elif new_status == 'SUCCEEDED':
+                                      sns.publish(
+                                          TopicArn=os.environ['SNS_TOPIC_ARN'],
+                                          Subject=f'Batch Job Completed: {job_id}',
+                                          Message=f'Job {job_id} completed successfully.'
+                                      )
+                                      cloudwatch.put_metric_data(
+                                          Namespace='BatchProcessing',
+                                          MetricData=[{
+                                              'MetricName': 'JobsSucceeded',
+                                              'Value': 1,
+                                              'Unit': 'Count',
+                                              'Dimensions': [{'Name': 'Environment', 'Value': os.environ['ENVIRONMENT']}]
+                                          }]
+                                      )
+                  
+                  return {'statusCode': 200, 'body': json.dumps('Success')}
+              except Exception as e:
+                  print(f'Error: {str(e)}')
+                  raise
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  S3NotificationHelperLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 's3-notification-helper-${EnvironmentSuffix}'
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt S3NotificationHelperRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import cfnresponse
+
+          s3 = boto3.client('s3')
+
+          def lambda_handler(event, context):
+              try:
+                  if event['RequestType'] == 'Delete':
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                      return
+                  
+                  bucket_name = event['ResourceProperties']['BucketName']
+                  lambda_arn = event['ResourceProperties']['LambdaArn']
+                  prefix = event['ResourceProperties'].get('Prefix', '')
+                  
+                  notification_config = {
+                      'LambdaFunctionConfigurations': [{
+                          'LambdaFunctionArn': lambda_arn,
+                          'Events': ['s3:ObjectCreated:*'],
+                          'Filter': {
+                              'Key': {
+                                  'FilterRules': [{'Name': 'prefix', 'Value': prefix}]
+                              }
+                          }
+                      }]
+                  }
+                  
+                  s3.put_bucket_notification_configuration(
+                      Bucket=bucket_name,
+                      NotificationConfiguration=notification_config
+                  )
+                  
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  print(f'Error: {str(e)}')
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+
+  S3NotificationHelperRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3NotificationPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutBucketNotification
+                  - s3:GetBucketNotification
+                Resource: !Sub 'arn:aws:s3:::transactiondata-${EnvironmentSuffix}-${AWS::AccountId}'
+
+  S3InvokeLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref TransactionProcessorLambda
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub 'arn:aws:s3:::transactiondata-${EnvironmentSuffix}-${AWS::AccountId}'
+
+  S3BucketNotification:
+    Type: Custom::S3BucketNotification
+    DependsOn:
+      - S3InvokeLambdaPermission
+    Properties:
+      ServiceToken: !GetAtt S3NotificationHelperLambda.Arn
+      BucketName: !Ref TransactionDataBucket
+      LambdaArn: !GetAtt TransactionProcessorLambda.Arn
+      Prefix: raw/
+
+  # ==================== CloudWatch ====================
+  JobSubmissionAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'batch-job-submission-failures-${EnvironmentSuffix}'
+      AlarmDescription: Alert when job submissions fail
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref TransactionProcessorLambda
+      AlarmActions:
+        - !Ref BatchProcessingTopic
+      TreatMissingData: notBreaching
+
+  JobFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'batch-job-failures-${EnvironmentSuffix}'
+      AlarmDescription: Alert when batch jobs fail
+      MetricName: JobsFailed
+      Namespace: BatchProcessing
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: Environment
+          Value: !Ref EnvironmentSuffix
+      AlarmActions:
+        - !Ref BatchProcessingTopic
+      TreatMissingData: notBreaching
+
+  JobMonitoringRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'job-monitoring-rule-${EnvironmentSuffix}'
+      Description: Triggers job monitoring Lambda every 5 minutes
+      ScheduleExpression: rate(5 minutes)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt JobMonitorLambda.Arn
+          Id: JobMonitorTarget
+
+  JobMonitorLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref JobMonitorLambda
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt JobMonitoringRule.Arn
+
+  # ==================== CloudWatch Dashboard ====================
+  BatchProcessingDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub 'batchprocessing-${EnvironmentSuffix}'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["BatchProcessing", "JobsSubmitted", {"stat": "Sum"}],
+                  [".", "JobsSucceeded", {"stat": "Sum"}],
+                  [".", "JobsFailed", {"stat": "Sum"}]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Job Execution Status",
+                "period": 300
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/Lambda", "Invocations", {"stat": "Sum", "label": "Invocations"}],
+                  [".", "Errors", {"stat": "Sum", "label": "Errors"}],
+                  [".", "Duration", {"stat": "Average", "label": "Duration (ms)"}]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Lambda Metrics - Transaction Processor",
+                "period": 300
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/Batch", "RunningJobs", {"stat": "Average"}],
+                  [".", "SubmittedJobs", {"stat": "Average"}],
+                  [".", "FailedJobs", {"stat": "Sum"}]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "AWS Batch Queue Status",
+                "period": 300
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/DynamoDB", "ConsumedReadCapacityUnits", {"stat": "Sum"}],
+                  [".", "ConsumedWriteCapacityUnits", {"stat": "Sum"}]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "DynamoDB Capacity Usage",
+                "period": 300
+              }
+            }
+          ]
+        }
+
+Outputs:
+  TransactionDataBucketName:
+    Description: S3 bucket for raw transaction data
+    Value: !Ref TransactionDataBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-TransactionDataBucket'
+
+  ProcessedDataBucketName:
+    Description: S3 bucket for processed transaction data
+    Value: !Ref ProcessedDataBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-ProcessedDataBucket'
+
+  JobStatusTableName:
+    Description: DynamoDB table for job status tracking
+    Value: !Ref JobStatusTable
+    Export:
+      Name: !Sub '${AWS::StackName}-JobStatusTable'
+
+  AuditLogTableName:
+    Description: DynamoDB table for audit logs
+    Value: !Ref AuditLogTable
+    Export:
+      Name: !Sub '${AWS::StackName}-AuditLogTable'
+
+  BatchJobQueueArn:
+    Description: ARN of the Batch job queue
+    Value: !Ref BatchJobQueue
+    Export:
+      Name: !Sub '${AWS::StackName}-BatchJobQueue'
+
+  BatchJobDefinitionArn:
+    Description: ARN of the Batch job definition
+    Value: !Ref BatchJobDefinition
+    Export:
+      Name: !Sub '${AWS::StackName}-BatchJobDefinition'
+
+  TransactionProcessorLambdaArn:
+    Description: ARN of the transaction processor Lambda function
+    Value: !GetAtt TransactionProcessorLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-TransactionProcessorLambda'
+
+  JobMonitorLambdaArn:
+    Description: ARN of the job monitor Lambda function
+    Value: !GetAtt JobMonitorLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-JobMonitorLambda'
+
+  SNSTopicArn:
+    Description: ARN of the SNS topic for notifications
+    Value: !Ref BatchProcessingTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-SNSTopic'
+
+  DashboardURL:
+    Description: URL to the CloudWatch Dashboard
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=batchprocessing-${EnvironmentSuffix}'
+
+  VPCId:
+    Description: VPC ID for the batch processing environment
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC'
+
+  ComputeEnvironmentArn:
+    Description: ARN of the Batch compute environment
+    Value: !Ref BatchComputeEnvironment
+    Export:
+      Name: !Sub '${AWS::StackName}-ComputeEnvironment'
+```
+
+## Complete Solution Features
+
+This comprehensive CloudFormation template provides a production-ready batch processing system for financial transactions with the following capabilities:
+
+### Core Infrastructure
+
+- **AWS Batch**: Managed compute environment with auto-scaling (0-256 vCPUs)
+- **S3 Buckets**: Separate encrypted storage for raw and processed data with lifecycle policies
+- **DynamoDB Tables**: Job status tracking and audit logging with TTL and point-in-time recovery
+- **VPC**: Isolated network environment with public subnets across multiple AZs
+
+### Processing Pipeline
+
+- **Lambda Functions**: Automatic job submission when files arrive in S3, continuous job monitoring
+- **Batch Jobs**: Containerized processing with retry logic and timeout controls
+- **S3 Notifications**: Trigger processing pipeline automatically
+
+### Monitoring & Alerting
+
+- **CloudWatch**: Comprehensive dashboard with metrics for jobs, Lambda functions, and DynamoDB
+- **SNS**: Email notifications for job failures and completions
+- **Alarms**: Automated alerts for submission failures and job failures
+
+### Security & Compliance
+
+- **IAM Roles**: Least-privilege access controls for all components
+- **Encryption**: S3 server-side encryption and secure data transfer
+- **Audit Trail**: Complete audit logging in DynamoDB with TTL for compliance
+
+### Scalability & Reliability
+
+- **Auto-scaling**: Batch compute environment scales based on workload
+- **Retry Logic**: Automatic job retries with configurable attempts
+- **Failure Handling**: Graceful error handling and notifications
+- **Monitoring**: Real-time job status tracking and performance metrics
+
+The system can handle 1 million transactions within the 4-hour processing window through horizontal scaling and efficient resource utilization, while maintaining complete audit trails for regulatory compliance.

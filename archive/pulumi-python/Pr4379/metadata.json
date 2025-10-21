@@ -1,0 +1,37 @@
+{
+  "platform": "pulumi",
+  "language": "python",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-10-14T14:18:15+05:30",
+  "po_id": "3757826587",
+  "subtask": "Application Deployment",
+  "background": "SmartFactory Inc. needs to modernize their manufacturing monitoring system. They collect telemetry data from industrial equipment across multiple facilities. The data must be processed in real-time for predictive maintenance and quality control, with strict requirements for data retention and processing latency.",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "Kinesis Data Streams",
+    "ElastiCache Redis",
+    "RDS Aurora PostgreSQL",
+    "EFS",
+    "API Gateway",
+    "Secrets Manager",
+    "IAM",
+    "KMS",
+    "CloudWatch Logs",
+    "CloudWatch Alarms"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

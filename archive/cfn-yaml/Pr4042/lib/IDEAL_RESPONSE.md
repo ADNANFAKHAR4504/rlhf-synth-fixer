@@ -1,0 +1,1443 @@
+```yml
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Production-grade secure infrastructure stack with comprehensive compliance controls'
+
+Parameters:
+  StackName:
+    Type: String
+    Default: 'tapstack'
+    Description: 'Stack name for resource naming and uniqueness'
+    MaxLength: 50
+
+  Environment:
+    Type: String
+    Default: 'prod'
+    AllowedValues: ['dev', 'staging', 'prod']
+    Description: 'Environment name prefix for all resources'
+
+  DBUsername:
+    Type: String
+    Default: 'admin'
+    Description: 'Database administrator username'
+    MaxLength: 16
+
+  TrustedCIDR:
+    Type: String
+    Default: '0.0.0.0/0'
+    Description: 'CIDR block allowed to access bastion host (restrict in production)'
+
+  DBEngine:
+    Type: String
+    Default: 'mysql'
+    Description: 'Database engine type'
+
+  DBEngineVersion:
+    Type: String
+    Default: '8.0.42'
+    Description: 'Database engine version'
+
+  AppInstanceType:
+    Type: String
+    Default: 't3.micro'
+    Description: 'Application EC2 instance type'
+
+  LambdaFunctionName:
+    Type: String
+    Default: 'default-lambda-function'
+    Description: 'Name of the Lambda function'
+
+Mappings:
+  EnvironmentMap:
+    prod:
+      InstanceType: 't3.medium'
+      DBInstanceClass: 'db.t3.small'
+      MinSize: 2
+      MaxSize: 6
+    dev:
+      InstanceType: 't3.micro'
+      DBInstanceClass: 'db.t3.micro'
+      MinSize: 1
+      MaxSize: 2
+    staging:
+      InstanceType: 't3.small'
+      DBInstanceClass: 'db.t3.small'
+      MinSize: 1
+      MaxSize: 3
+
+Resources:
+  # =============================================
+  # KEY PAIR
+  # =============================================
+
+  TapStackKeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName: !Sub '${StackName}-key-pair'
+      KeyType: rsa
+      KeyFormat: pem
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-key-pair'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  # =============================================
+  # NETWORKING INFRASTRUCTURE
+  # =============================================
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: '10.0.0.0/16'
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-vpc'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-igw'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: '10.0.1.0/24'
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-public-subnet-1'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: '10.0.2.0/24'
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-public-subnet-2'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  PublicSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: '10.0.3.0/24'
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-public-subnet-3'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: '10.0.11.0/24'
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-private-subnet-1'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: '10.0.12.0/24'
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-private-subnet-2'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  PrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: '10.0.13.0/24'
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-private-subnet-3'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  NATGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-nat-1-eip'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  NATGateway2EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-nat-2-eip'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  NATGateway3EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-nat-3-eip'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  NATGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-nat-1'
+
+  NATGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-nat-2'
+
+  NATGateway3:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGateway3EIP.AllocationId
+      SubnetId: !Ref PublicSubnet3
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-nat-3'
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-public-rt'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  PublicSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet3
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-private-rt-1'
+
+  DefaultPrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NATGateway1
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubnet1
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-private-rt-2'
+
+  DefaultPrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NATGateway2
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      SubnetId: !Ref PrivateSubnet2
+
+  PrivateRouteTable3:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-private-rt-3'
+
+  DefaultPrivateRoute3:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable3
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NATGateway3
+
+  PrivateSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable3
+      SubnetId: !Ref PrivateSubnet3
+
+  # =============================================
+  # VPC FLOW LOGS (Constraint 13)
+  # =============================================
+
+  VPCFlowLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub
+        - '/aws/vpc/flowlogs/${AWS::AccountId}-${AWS::Region}-${Suffix}'
+        - {
+            Suffix:
+              !Select [
+                0,
+                !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
+              ],
+          }
+      RetentionInDays: 30
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-vpc-flow-logs-group'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  VPCFlowLogRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: vpc-flow-logs.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: VPCFlowLogPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                  - logs:DescribeResourcePolicies
+                  - logs:GetLogEvents
+                  - logs:GetLogGroupFields
+                  - logs:GetLogRecord
+                  - logs:GetQueryResults
+                  - logs:ListTagsLogGroup
+                  - logs:PutRetentionPolicy
+                Resource: 
+                  - !GetAtt VPCFlowLogGroup.Arn
+                  - !Sub '${VPCFlowLogGroup.Arn}:*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-vpc-flow-logs-role'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  VPCFlowLog:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      ResourceType: VPC
+      ResourceId: !Ref VPC
+      TrafficType: ALL
+      LogDestinationType: cloud-watch-logs
+      LogGroupName: !Ref VPCFlowLogGroup
+      DeliverLogsPermissionArn: !GetAtt VPCFlowLogRole.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-vpc-flow-logs'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  # =============================================
+  # SECURITY GROUPS (Constraint 6 - Least Privilege)
+  # =============================================
+
+  BastionSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for bastion host - SSH access only'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref TrustedCIDR
+          Description: 'SSH access from trusted CIDR'
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: '10.0.0.0/16'
+          Description: 'SSH to private subnets'
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTP for package updates'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTPS for package updates'
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-bastion-sg'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for application instances'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          Description: 'HTTP from ALB'
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: '10.0.0.0/16'
+          Description: 'MySQL to RDS'
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: '10.0.0.0/16'
+          Description: 'PostgreSQL to RDS'
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTP for package updates'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTPS for package updates and API calls'
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-app-sg'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  BastionToAppSecurityGroupRule:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref AppSecurityGroup
+      IpProtocol: tcp
+      FromPort: 22
+      ToPort: 22
+      SourceSecurityGroupId: !Ref BastionSecurityGroup
+      Description: 'SSH from bastion host'
+
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for Application Load Balancer'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTP from internet'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTPS from internet'
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-alb-sg'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for RDS database'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+          Description: 'MySQL from Lambda functions'
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+          Description: 'PostgreSQL from Lambda functions'
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-rds-sg'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  AppToRDSMySQLSecurityGroupRule:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref RDSSecurityGroup
+      IpProtocol: tcp
+      FromPort: 3306
+      ToPort: 3306
+      SourceSecurityGroupId: !Ref AppSecurityGroup
+      Description: 'MySQL from application instances'
+
+  AppToRDSPostgreSQLSecurityGroupRule:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref RDSSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref AppSecurityGroup
+      Description: 'PostgreSQL from application instances'
+
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for Lambda functions'
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: '10.0.0.0/16'
+          Description: 'MySQL to RDS'
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: '10.0.0.0/16'
+          Description: 'PostgreSQL to RDS'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTPS for AWS API calls'
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-lambda-sg'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  LambdaToRDSMySQLSecurityGroupRule:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref RDSSecurityGroup
+      IpProtocol: tcp
+      FromPort: 3306
+      ToPort: 3306
+      SourceSecurityGroupId: !Ref LambdaSecurityGroup
+      Description: 'MySQL from Lambda functions'
+
+  LambdaToRDSPostgreSQLSecurityGroupRule:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref RDSSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref LambdaSecurityGroup
+      Description: 'PostgreSQL from Lambda functions'
+
+  # =============================================
+  # S3 BUCKETS (Constraints 3, 11)
+  # =============================================
+
+  S3AccessLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub
+        - 'secureenv-${AWS::AccountId}-${AWS::Region}-s3-access-logs-${Suffix}'
+        - {
+            Suffix:
+              !Select [
+                0,
+                !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
+              ],
+          }
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-s3-access-logs'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  AppS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub
+        - 'secureenv-${AWS::AccountId}-${AWS::Region}-app-bucket-${Suffix}'
+        - {
+            Suffix:
+              !Select [
+                0,
+                !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
+              ],
+          }
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LoggingConfiguration:
+        DestinationBucketName: !Ref S3AccessLogsBucket
+        LogFilePrefix: 'app-bucket-logs/'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-app-bucket'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  CloudTrailBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub
+        - 'secureenv-${AWS::AccountId}-${AWS::Region}-cloudtrail-${Suffix}'
+        - {
+            Suffix:
+              !Select [
+                0,
+                !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
+              ],
+          }
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LoggingConfiguration:
+        DestinationBucketName: !Ref S3AccessLogsBucket
+        LogFilePrefix: 'cloudtrail-bucket-logs/'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: ArchiveOldLogs
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+              - TransitionInDays: 90
+                StorageClass: GLACIER
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-cloudtrail'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  CloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt CloudTrailBucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${CloudTrailBucket.Arn}/AWSLogs/${AWS::AccountId}/*'
+
+  # =============================================
+  # SYSTEMS MANAGER PARAMETERS (Constraint 10)
+  # =============================================
+
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub
+        - 'rds-credentials-${AWS::AccountId}-${AWS::Region}-${Suffix}'
+        - {
+            Suffix:
+              !Select [
+                0,
+                !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
+              ],
+          }
+      Description: 'RDS database credentials'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-rds-secret'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  # =============================================
+  # IAM ROLES (Constraints 2, 9)
+  # =============================================
+
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub 'arn:aws:s3:::${AppS3Bucket}/*'
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !GetAtt AppS3Bucket.Arn
+        - PolicyName: ParameterStoreAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                  - ssm:GetParametersByPath
+                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${StackName}/*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-ec2-role'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2InstanceRole
+
+  # =============================================
+  # RDS DATABASE (Constraints 4, 5)
+  # =============================================
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: 'DB subnet group for RDS database'
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-db-subnet-group'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub '${StackName}database'
+      DBInstanceClass: !FindInMap [EnvironmentMap, prod, DBInstanceClass]
+      Engine: !Ref DBEngine
+      EngineVersion: !Ref DBEngineVersion
+      AllocatedStorage: 20
+      MaxAllocatedStorage: 100
+      StorageType: gp2
+      StorageEncrypted: true
+      KmsKeyId: alias/aws/rds
+      MultiAZ: true
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      MasterUsername: !Ref DBUsername
+      ManageMasterUserPassword: true
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      DeletionProtection: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-rds'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  # =============================================
+  # BASTION HOST (Constraint 7, 12)
+  # =============================================
+
+  BastionHost:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+      InstanceType: t3.micro
+      KeyName: !Ref TapStackKeyPair
+      SubnetId: !Ref PublicSubnet1
+      SecurityGroupIds:
+        - !Ref BastionSecurityGroup
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 8
+            VolumeType: gp3
+            Encrypted: true
+            KmsKeyId: alias/aws/ebs
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-bastion-host'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  # =============================================
+  # APPLICATION LOAD BALANCER (ALB)
+  # =============================================
+
+  ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${StackName}-alb'
+      Scheme: internet-facing
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: '30'
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-alb'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${StackName}-tg-${AWS::AccountId}'
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      HealthCheckPath: '/'
+      HealthCheckProtocol: HTTP
+      HealthCheckPort: '80'
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      TargetType: instance
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-tg'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ALB
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+
+  # =============================================
+  # WAF WEB ACL (Constraint 15)
+  # =============================================
+
+  WAFWebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub
+        - 'web-acl-${AWS::AccountId}-${AWS::Region}-${Suffix}'
+        - {
+            Suffix:
+              !Select [
+                0,
+                !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
+              ],
+          }
+      Scope: REGIONAL
+      Description: 'Web ACL for ALB with managed rules'
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub '${StackName}-WebACLMetrics'
+      Rules:
+        - Name: AWSManagedRulesCommonRuleSet
+          Priority: 1
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub '${StackName}-AWSManagedRulesCommonRuleSet'
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-web-acl'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  WAFWebACLAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      ResourceArn: !Ref ALB
+      WebACLArn: !GetAtt WAFWebACL.Arn
+
+  # =============================================
+  # CLOUDTRAIL TRAIL (Constraint 8)
+  # =============================================
+
+  CloudTrailTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: CloudTrailBucketPolicy
+    Properties:
+      TrailName: !Sub '${StackName}-cloudtrail'
+      S3BucketName: !Ref CloudTrailBucket
+      IncludeGlobalServiceEvents: true
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      IsLogging: true
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-cloudtrail'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  # =============================================
+  # SECURITY HUB (Constraint 14) - Custom Resource
+  # =============================================
+
+  SecurityHubLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SecurityHubAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - securityhub:EnableSecurityHub
+                  - securityhub:DisableSecurityHub
+                  - securityhub:GetEnabledStandards
+                  - securityhub:GetFindings
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-securityhub-lambda-role'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  SecurityHubLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${StackName}-enable-securityhub'
+      Runtime: python3.13
+      Handler: index.lambda_handler
+      Role: !GetAtt SecurityHubLambdaRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          def lambda_handler(event, context):
+              securityhub = boto3.client('securityhub')
+              try:
+                  if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':
+                      # Enable Security Hub
+                      securityhub.enable_security_hub()
+                      response_data = {'Status': 'Enabled'}
+                  elif event['RequestType'] == 'Delete':
+                      # Disable Security Hub
+                      securityhub.disable_security_hub()
+                      response_data = {'Status': 'Disabled'}
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
+              except Exception as e:
+                  response_data = {'Error': str(e)}
+                  cfnresponse.send(event, context, cfnresponse.FAILED, response_data)
+      Timeout: 30
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-securityhub-lambda'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  SecurityHubCustomResource:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt SecurityHubLambdaFunction.Arn
+      Environment: !Ref Environment
+
+  # =============================================
+  # LAMBDA FUNCTION (Constraint 9)
+  # =============================================
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: SecretsManagerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:DescribeSecret
+                Resource: !Ref DBSecret
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-lambda-execution-role'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${StackName}-${LambdaFunctionName}'
+      Runtime: python3.13
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {
+                  'statusCode': 200,
+                  'body': 'Hello from Lambda!'
+              }
+      Timeout: 30
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+          - !Ref PrivateSubnet3
+      Environment:
+        Variables:
+          DB_SECRET_ARN: !Ref DBSecret
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-lambda'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  # =============================================
+  # APPLICATION EC2 INSTANCES (Auto Scaling Group)
+  # =============================================
+
+  AppLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub
+        - '${StackName}-app-lt-${Suffix}'
+        - {
+            Suffix:
+              !Select [
+                0,
+                !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
+              ],
+          }
+      LaunchTemplateData:
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+        InstanceType: !Ref AppInstanceType
+        SecurityGroupIds:
+          - !Ref AppSecurityGroup
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: 8
+              VolumeType: gp3
+              Encrypted: true
+              KmsKeyId: alias/aws/ebs
+              DeleteOnTermination: true
+        UserData:
+          Fn::Base64: |
+            #!/bin/bash
+            yum update -y
+            yum install -y httpd
+            systemctl start httpd
+            systemctl enable httpd
+            echo "<h1>Hello World from $(hostname -f)</h1>" > /var/www/html/index.html
+
+  AppAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub
+        - '${StackName}-app-asg-${Suffix}'
+        - {
+            Suffix:
+              !Select [
+                0,
+                !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
+              ],
+          }
+      LaunchTemplate:
+        LaunchTemplateId: !Ref AppLaunchTemplate
+        Version: !GetAtt AppLaunchTemplate.LatestVersionNumber
+      MinSize: !FindInMap [EnvironmentMap, prod, MinSize]
+      MaxSize: !FindInMap [EnvironmentMap, prod, MaxSize]
+      DesiredCapacity: !FindInMap [EnvironmentMap, prod, MinSize]
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
+      TargetGroupARNs:
+        - !Ref ALBTargetGroup
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-app-instance'
+          PropagateAtLaunch: true
+        - Key: Environment
+          Value: !Ref Environment
+          PropagateAtLaunch: true
+        - Key: team
+          Value: '2'
+          PropagateAtLaunch: true
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+          PropagateAtLaunch: true
+
+  # =============================================
+  # OUTPUTS
+  # =============================================
+
+Outputs:
+  VPCId:
+    Description: 'ID of the VPC'
+    Value: !Ref VPC
+
+  BastionHostPublicIP:
+    Description: 'Public IP address of the bastion host'
+    Value: !GetAtt BastionHost.PublicIp
+
+  BastionHostDNS:
+    Description: 'DNS name of the bastion host'
+    Value: !GetAtt BastionHost.PublicDnsName
+
+  ALBDNSName:
+    Description: 'DNS name of the Application Load Balancer'
+    Value: !GetAtt ALB.DNSName
+
+  CloudTrailName:
+    Description: 'Name of the CloudTrail being used'
+    Value: !Ref CloudTrailTrail
+
+  RDSEndpoint:
+    Description: 'Endpoint of the RDS instance'
+    Value: !GetAtt RDSInstance.Endpoint.Address
+
+  AppS3BucketName:
+    Description: 'Name of the application S3 bucket'
+    Value: !Ref AppS3Bucket
+
+  LambdaFunctionName:
+    Description: 'Name of the Lambda function'
+    Value: !Ref LambdaFunction
+
+  SecurityHubStatus:
+    Description: 'Status of Security Hub enrollment'
+    Value: !GetAtt SecurityHubCustomResource.Status
+
+```

@@ -1,0 +1,34 @@
+{
+  "platform": "cdk",
+  "language": "go",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "1398565524",
+  "team": "synth",
+  "startedAt": "2025-10-14T00:08:04+05:30",
+  "subtask": "Application Deployment",
+  "background": "GlobalStream is a major streaming platform serving millions of users across South America with live and on-demand content. They need a disaster recovery solution that maintains business continuity during regional outages while ensuring compliance with local media regulations. The solution requires automated failover capabilities, multi-region architecture, and integration with CI/CD pipelines for continuous deployment and failure recovery automation.",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Failure Recovery Automation",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "RDS",
+    "ECS",
+    "EFS",
+    "ElastiCache",
+    "API Gateway",
+    "Kinesis",
+    "CodePipeline",
+    "Secrets Manager"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

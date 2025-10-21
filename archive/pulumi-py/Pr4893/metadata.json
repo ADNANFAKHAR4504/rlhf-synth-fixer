@@ -1,0 +1,49 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "6135246883",
+  "team": "synth",
+  "startedAt": "2025-10-21T11:36:49.356491+05:30",
+  "subtask": "Application Deployment",
+  "background": "MedTech Solutions needs to process patient records from multiple healthcare providers. The system must maintain HIPAA compliance while processing sensitive health information. The application will be containerized and needs to scale based on processing demands.",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Security Configuration as Code",
+    "Container Orchestration (ECS)"
+  ],
+  "aws_services": [
+    "AWS::EC2::VPC",
+    "AWS::EC2::Subnet",
+    "AWS::EC2::InternetGateway",
+    "AWS::EC2::NatGateway",
+    "AWS::EC2::RouteTable",
+    "AWS::EC2::SecurityGroup",
+    "AWS::EC2::EIP",
+    "AWS::KMS::Key",
+    "AWS::KMS::Alias",
+    "AWS::RDS::DBCluster",
+    "AWS::RDS::DBClusterInstance",
+    "AWS::RDS::DBSubnetGroup",
+    "AWS::ElastiCache::ReplicationGroup",
+    "AWS::ElastiCache::SubnetGroup",
+    "AWS::SecretsManager::Secret",
+    "AWS::SecretsManager::SecretVersion",
+    "AWS::ECS::Cluster",
+    "AWS::ECS::Service",
+    "AWS::ECS::TaskDefinition",
+    "AWS::IAM::Role",
+    "AWS::IAM::RolePolicy",
+    "AWS::IAM::RolePolicyAttachment",
+    "AWS::Logs::LogGroup",
+    "AWS::ServiceDiscovery::PrivateDnsNamespace"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
