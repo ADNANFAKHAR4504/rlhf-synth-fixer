@@ -12,5 +12,11 @@
   "subject_labels": [
     "Security Configuration as Code"
   ],
-  "aws_services": "S3 Bucket, VPC, IAM, CloudWatch, RDS, ALB, CloudFront, Lambda, CloudTrail, EC2"
+  "aws_services": "S3 Bucket, VPC, IAM, CloudWatch, RDS, ALB, CloudFront, Lambda, CloudTrail, EC2",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
 }
