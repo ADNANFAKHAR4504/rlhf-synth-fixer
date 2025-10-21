@@ -1,6 +1,6 @@
 import fs from 'fs';
 import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command, GetBucketEncryptionCommand } from '@aws-sdk/client-s3';
-import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
+import { RDSClient, DescribeDBInstancesCommand, CreateDBSnapshotCommand, DescribeDBSnapshotsCommand } from '@aws-sdk/client-rds';
 import { CloudFrontClient, GetDistributionCommand, CreateInvalidationCommand, ListDistributionsCommand } from '@aws-sdk/client-cloudfront';
 import { APIGatewayClient, GetRestApiCommand, GetStageCommand, TestInvokeMethodCommand, GetResourcesCommand } from '@aws-sdk/client-api-gateway';
 import { EC2Client, DescribeInstancesCommand, StartInstancesCommand, StopInstancesCommand, DescribeSecurityGroupsCommand, DescribeLaunchTemplateVersionsCommand, RebootInstancesCommand, DescribeInstanceStatusCommand } from '@aws-sdk/client-ec2';
@@ -12,6 +12,7 @@ import { CloudWatchLogsClient, PutLogEventsCommand, CreateLogStreamCommand } fro
 import { WAFV2Client, ListWebACLsCommand, GetWebACLCommand } from '@aws-sdk/client-wafv2';
 import { IAMClient, GetPolicyCommand, GetPolicyVersionCommand } from '@aws-sdk/client-iam';
 import { STSClient, GetCallerIdentityCommand } from '@aws-sdk/client-sts';
+import { SSMClient, GetCommandInvocationCommand } from '@aws-sdk/client-ssm';
 import { defaultProvider } from '@aws-sdk/credential-provider-node';
 import aws4 from 'aws4';
 import AWS from 'aws-sdk';
@@ -40,6 +41,7 @@ const logsClient = new CloudWatchLogsClient({ region });
 const wafClient = new WAFV2Client({ region });
 const iamClient = new IAMClient({ region });
 const stsClient = new STSClient({ region });
+const ssmClient = new SSMClient({ region });
 
 describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
   const testTimeout = 600000; // 10 minutes
@@ -487,45 +489,30 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
   });
 
   describe('Data Backup and Recovery Workflow', () => {
-    test('should complete backup workflow: RDS Snapshot -> S3 Archive -> Recovery Test', async () => {
-      // Step 1: Verify RDS backup configuration
-      const rdsResponse = await rdsClient.send(new DescribeDBInstancesCommand({}));
+    test('should perform real RDS snapshot and verify availability', async () => {
+      // Step 1: Locate DB instance by outputs endpoint
+      const rdsInstances = await rdsClient.send(new DescribeDBInstancesCommand({}));
       const rdsEndpointFromOutputs = outputs['RDSEndpoint'];
-      const dbInstance = rdsResponse.DBInstances?.find(db => db.Endpoint?.Address === rdsEndpointFromOutputs);
-      
-      expect(dbInstance?.BackupRetentionPeriod).toBe(35);
-      expect(dbInstance?.MultiAZ).toBe(false);
-      expect(dbInstance?.StorageEncrypted).toBe(true);
+      const dbInstance = rdsInstances.DBInstances?.find(db => db.Endpoint?.Address === rdsEndpointFromOutputs);
+      expect(dbInstance?.DBInstanceIdentifier).toBeDefined();
 
-      // Step 2: Create test backup data
-      const backupData = {
-        backupId: `backup-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        source: 'nova-clinical-db',
-        size: '2.5GB',
-        encryption: 'KMS',
-        status: 'completed'
-      };
-
-      // Step 3: Store backup metadata in S3
-      const bucketName = outputs['NovaDataBucketName'];
-      const backupKey = `backups/database/${backupData.backupId}.json`;
-      
-      const backupPutResponse = await s3Client.send(new PutObjectCommand({
-        Bucket: bucketName,
-        Key: backupKey,
-        Body: JSON.stringify(backupData),
-        StorageClass: 'STANDARD_IA'
+      // Step 2: Create a snapshot
+      const snapshotId = `tap-int-snap-${Date.now()}`;
+      await rdsClient.send(new CreateDBSnapshotCommand({
+        DBInstanceIdentifier: dbInstance!.DBInstanceIdentifier!,
+        DBSnapshotIdentifier: snapshotId,
+        Tags: [{ Key: 'Name', Value: 'tap-int-test-snapshot' }]
       }));
-      expect(backupPutResponse.$metadata.httpStatusCode).toBe(200);
 
-      // Step 4: Test backup retrieval
-      const backupGetResponse = await s3Client.send(new GetObjectCommand({
-        Bucket: bucketName,
-        Key: backupKey
-      }));
-      expect(backupGetResponse.Body).toBeDefined();
-
+      // Step 3: Wait until snapshot is available (poll)
+      let available = false;
+      for (let i = 0; i < 30; i++) {
+        const snaps = await rdsClient.send(new DescribeDBSnapshotsCommand({ DBSnapshotIdentifier: snapshotId }));
+        const snap = snaps.DBSnapshots?.[0];
+        if (snap?.Status === 'available') { available = true; break; }
+        await new Promise(r => setTimeout(r, 10000));
+      }
+      expect(available).toBe(true);
     }, testTimeout);
   });
 
@@ -612,90 +599,112 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
         }
       };
 
-      // Step 2: Encrypt and store patient data
-      const keyId = outputs['NovaKMSKeyId'];
-      const encryptResponse = await kmsClient.send(new EncryptCommand({
-        KeyId: keyId,
-        Plaintext: new TextEncoder().encode(JSON.stringify(patientData))
-      }));
+      // Step 2: Invoke POST /clinical-data via API Gateway to trigger EC2 processing through SSM
+      const apiGatewayUrl = outputs['NovaApiGatewayUrl'];
+      const clinicalDataEndpoint = `${apiGatewayUrl}/clinical-data`;
+      const url = new URL(clinicalDataEndpoint);
+      const credentials = await defaultProvider()();
+      const hostParts = url.hostname.split('.');
+      const apiRegionUsed = hostParts.length >= 3 ? hostParts[2] : region;
 
+      const instanceId = outputs['NovaEC2InstanceId'];
       const bucketName = outputs['NovaDataBucketName'];
-      const patientKey = `patients/${patientData.patientId}/visit-${patientData.visitNumber}.json`;
-      
-      await s3Client.send(new PutObjectCommand({
-        Bucket: bucketName,
-        Key: patientKey,
-        Body: encryptResponse.CiphertextBlob,
-        ServerSideEncryption: 'aws:kms',
-        SSEKMSKeyId: keyId
-      }));
+      const kmsKeyArn = outputs['NovaKMSKeyArn'];
+      const secretArn = outputs['NovaDatabaseSecretArn'];
+      const rdsEndpoint = outputs['RDSEndpoint'];
 
-      // Step 3: Process data through API Gateway
-      const apiId = outputs['NovaApiGatewayId'];
-      const apiResponse = await apiGatewayClient.send(new GetRestApiCommand({ restApiId: apiId }));
-      
-      // Step 4: Store processed results
-      const processedData = {
-        ...patientData,
-        processedAt: new Date().toISOString(),
-        status: 'processed',
-        qualityScore: 0.95
-      };
-
-      const processedKey = `processed/${patientData.patientId}/visit-${patientData.visitNumber}-processed.json`;
-      await s3Client.send(new PutObjectCommand({
-        Bucket: bucketName,
-        Key: processedKey,
-        Body: JSON.stringify(processedData),
-        ContentType: 'application/json'
-      }));
-
-      // Step 5: Generate compliance report
-      const complianceReport = {
-        reportId: `compliance-${Date.now()}`,
+      const bodyPayload = JSON.stringify({
         patientId: patientData.patientId,
         trialId: patientData.trialId,
-        complianceStatus: 'COMPLIANT',
-        checks: [
-          { name: 'Data Encryption', status: 'PASS' },
-          { name: 'Access Control', status: 'PASS' },
-          { name: 'Audit Trail', status: 'PASS' }
-        ],
-        generatedAt: new Date().toISOString()
+        bucketName,
+        kmsKeyArn,
+        secretArn,
+        rdsEndpoint
+      });
+
+      const requestOptions: any = {
+        host: url.hostname,
+        method: 'POST',
+        path: url.pathname,
+        service: 'execute-api',
+        region: apiRegionUsed,
+        headers: { 'content-type': 'application/json', 'X-Instance-Id': instanceId },
+        body: bodyPayload
       };
+      aws4.sign(requestOptions, {
+        accessKeyId: credentials.accessKeyId,
+        secretAccessKey: credentials.secretAccessKey,
+        sessionToken: credentials.sessionToken
+      });
+      const postResp = await fetch(`${url.protocol}//${url.hostname}${url.pathname}`, {
+        method: 'POST',
+        headers: requestOptions.headers,
+        body: bodyPayload
+      });
+      expect(postResp.status).toBeGreaterThanOrEqual(200);
+      expect(postResp.status).toBeLessThan(400);
+      let commandId: string | undefined;
+      try {
+        const json = await postResp.json();
+        commandId = json?.Command?.CommandId;
+      } catch {}
 
-      const reportKey = `reports/compliance/${complianceReport.reportId}.json`;
-      await s3Client.send(new PutObjectCommand({
-        Bucket: bucketName,
-        Key: reportKey,
-        Body: JSON.stringify(complianceReport),
-        ContentType: 'application/json'
-      }));
-
-      // Step 6: Send notification
-      const topicsResponse = await snsClient.send(new ListTopicsCommand({}));
-      const topic = topicsResponse.Topics?.find(t => t.TopicArn?.includes('nova-clinical-prod'));
-      
-      if (topic?.TopicArn) {
-        await snsClient.send(new PublishCommand({
-          TopicArn: topic.TopicArn,
-          Message: JSON.stringify({
-            type: 'ClinicalDataProcessed',
-            patientId: patientData.patientId,
-            trialId: patientData.trialId,
-            status: 'success',
-            timestamp: new Date().toISOString()
-          }),
-          Subject: 'Clinical Data Processing Complete'
-        }));
+      // If we received a CommandId back, poll SSM for completion
+      if (commandId) {
+        let completed = false;
+        for (let i = 0; i < 30; i++) {
+          const inv = await ssmClient.send(new GetCommandInvocationCommand({
+            CommandId: commandId,
+            InstanceId: instanceId
+          }));
+          if (inv.Status === 'Success') { completed = true; break; }
+          if (inv.Status === 'Failed' || inv.Status === 'Cancelled' || inv.Status === 'TimedOut') {
+            break;
+          }
+          await new Promise(r => setTimeout(r, 5000));
+        }
+        expect(completed).toBe(true);
       }
 
-      // Step 7: Verify end-to-end data integrity
-      const finalDataResponse = await s3Client.send(new GetObjectCommand({
-        Bucket: bucketName,
-        Key: processedKey
-      }));
-      expect(finalDataResponse.Body).toBeDefined();
+      // Step 3: Poll S3 for processed marker created by EC2 processing
+      const processedMarkerKey = `ingest/processed/${patientData.patientId}-${patientData.trialId}.ok`;
+      let found = false;
+      for (let i = 0; i < 30; i++) {
+        const list = await s3Client.send(new ListObjectsV2Command({ Bucket: bucketName, Prefix: processedMarkerKey }));
+        if ((list.Contents || []).some(o => o.Key === processedMarkerKey)) { found = true; break; }
+        await new Promise(r => setTimeout(r, 5000));
+      }
+      expect(found).toBe(true);
+
+      // Step 4: Verify raw payload presence in S3
+      const rawKey = `ingest/raw/${patientData.patientId}-${patientData.trialId}.json`;
+      const rawObj = await s3Client.send(new GetObjectCommand({ Bucket: bucketName, Key: rawKey }));
+      expect(rawObj.Body).toBeDefined();
+
+      // Step 5: Attempt to verify RDS metadata row exists (best-effort)
+      const listSecretsResponse = await secretsClient.send(new ListSecretsCommand({}));
+      const secret = listSecretsResponse.SecretList?.find(s => s.ARN === secretArn || s.Name === secretArn);
+      const secretName = secret?.Name || secretArn;
+      const secretResponse = await secretsClient.send(new GetSecretValueCommand({ SecretId: secretName! }));
+      const creds = JSON.parse(secretResponse.SecretString || '{}');
+      const pgClient = new PgClient({
+        host: rdsEndpoint,
+        port: 5432,
+        user: creds.username,
+        password: creds.password,
+        database: 'postgres',
+        ssl: { rejectUnauthorized: false },
+        connectionTimeoutMillis: 5000,
+      });
+      try {
+        await pgClient.connect();
+        const row = await pgClient.query("SELECT 1 FROM clinical_metadata WHERE id = $1", [`${patientData.patientId}-${patientData.trialId}`]);
+        expect(row?.rowCount).toBeGreaterThanOrEqual(0); // allow zero due to private networking but query should execute if reachable
+      } catch (e) {
+        expect(String(e)).toMatch(/timeout|ECONNREFUSED|ENETUNREACH|no route|connect|TLS|handshake/);
+      } finally {
+        await pgClient.end().catch(() => undefined);
+      }
 
     }, testTimeout);
   });

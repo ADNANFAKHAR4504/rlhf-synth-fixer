@@ -1,5 +1,4 @@
 ```yml
-
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Nova Clinical Trial Data Platform - Secure Infrastructure Foundation'
 
@@ -643,6 +642,7 @@ Resources:
                 'aws:MultiFactorAuthPresent': 'true'
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/ReadOnlyAccess
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
       Policies:
         - PolicyName: ResourceGroupsReadOnly
           PolicyDocument:
@@ -665,6 +665,30 @@ Resources:
                 Action:
                   - budgets:ViewBudget
                 Resource: '*'
+        - PolicyName: EC2ProcessingAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub '${NovaDataBucket.Arn}'
+                  - !Sub '${NovaDataBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - kms:Encrypt
+                  - kms:Decrypt
+                  - kms:ReEncrypt*
+                  - kms:GenerateDataKey*
+                  - kms:DescribeKey
+                Resource: !GetAtt NovaKMSKey.Arn
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref NovaDatabaseSecret
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${Environment}-readonly-role'
@@ -688,6 +712,15 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+      Policies:
+        - PolicyName: SsmSendCommandFromApi
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:SendCommand
+                Resource: '*'
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${Environment}-apigateway-cloudwatch-role'
@@ -743,6 +776,7 @@ Resources:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
       - NovaApiGatewayMethod
+      - NovaApiGatewayIngestMethod
     Properties:
       RestApiId: !Ref NovaApiGateway
 
@@ -808,6 +842,55 @@ Resources:
         - StatusCode: 200
           ResponseModels:
             application/json: Empty
+
+  # API Gateway POST method to trigger EC2 processing via SSM RunCommand
+  NovaApiGatewayIngestMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref NovaApiGateway
+      ResourceId: !Ref NovaApiGatewayResource
+      HttpMethod: POST
+      AuthorizationType: AWS_IAM
+      RequestParameters:
+        method.request.header.X-Instance-Id: true
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        Credentials: !GetAtt NovaApiGatewayRole.Arn
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:ssm:action/SendCommand'
+        RequestTemplates:
+          application/json: |
+            #set($inputRoot = $input.path('$'))
+            {
+              "DocumentName": "AWS-RunShellScript",
+              "InstanceIds": ["$util.escapeJavaScript($input.params('X-Instance-Id'))"],
+              "Parameters": {
+                "commands": [
+                  "set -e",
+                  "echo '$util.escapeJavaScript($input.body)' > /tmp/payload.json",
+                  "yum -y install postgresql >/dev/null 2>&1 || true",
+                  "PATIENT=$(python3 - <<'PY'\nimport json\nprint(json.load(open('/tmp/payload.json'))['patientId'])\nPY\n)",
+                  "TRIAL=$(python3 - <<'PY'\nimport json\nprint(json.load(open('/tmp/payload.json'))['trialId'])\nPY\n)",
+                  "BUCKET=$util.escapeJavaScript($input.json('$.bucketName'))",
+                  "KMS_ARN=$util.escapeJavaScript($input.json('$.kmsKeyArn'))",
+                  "SECRET_ARN=$util.escapeJavaScript($input.json('$.secretArn'))",
+                  "RDS_ENDPOINT=$util.escapeJavaScript($input.json('$.rdsEndpoint'))",
+                  "aws s3 cp /tmp/payload.json s3://$BUCKET/ingest/raw/${PATIENT}-${TRIAL}.json --sse aws:kms --sse-kms-key-id $KMS_ARN",
+                  "SECRET_STR=$(aws secretsmanager get-secret-value --secret-id $SECRET_ARN --query SecretString --output text)",
+                  "DB_USER=$(python3 - <<'PY'\nimport json,os\nprint(json.loads(os.environ['SECRET_STR'])['username'])\nPY\n)",
+                  "DB_PASS=$(python3 - <<'PY'\nimport json,os\nprint(json.loads(os.environ['SECRET_STR'])['password'])\nPY\n)",
+                  "export PGPASSWORD=$DB_PASS",
+                  "psql -h $RDS_ENDPOINT -U $DB_USER -d postgres -c \"CREATE TABLE IF NOT EXISTS clinical_metadata(id text primary key, patient_id text, trial_id text);\"",
+                  "psql -h $RDS_ENDPOINT -U $DB_USER -d postgres -c \"INSERT INTO clinical_metadata(id, patient_id, trial_id) VALUES ('${PATIENT}-${TRIAL}','${PATIENT}','${TRIAL}') ON CONFLICT (id) DO NOTHING;\"",
+                  "echo processed > /tmp/processed && aws s3 cp /tmp/processed s3://$BUCKET/ingest/processed/${PATIENT}-${TRIAL}.ok --sse aws:kms --sse-kms-key-id $KMS_ARN"
+                ]
+              }
+            }
+        PassthroughBehavior: WHEN_NO_MATCH
+        IntegrationResponses:
+          - StatusCode: 200
+      MethodResponses:
+        - StatusCode: 200
 
   # API Gateway Usage Plan
   NovaApiGatewayUsagePlan:
@@ -1589,5 +1672,15 @@ Outputs:
     Export:
       Name: !Sub '${ProjectName}-${Environment}-cloudwatch-logs-vpc-endpoint-id'
 
+  NovaEC2InstanceId:
+    Description: 'Nova EC2 Instance ID'
+    Value: !Ref NovaEC2Instance
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-ec2-instance-id'
 
+  NovaDatabaseSecretArn:
+    Description: 'Nova Database Secret ARN'
+    Value: !Ref NovaDatabaseSecret
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-db-secret-arn'
 ```

@@ -1178,7 +1178,8 @@
                     ]
                 },
                 "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/ReadOnlyAccess"
+                    "arn:aws:iam::aws:policy/ReadOnlyAccess",
+                    "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
                 ],
                 "Policies": [
                     {
@@ -1212,6 +1213,55 @@
                                         "budgets:ViewBudget"
                                     ],
                                     "Resource": "*"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "EC2ProcessingAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutObject",
+                                        "s3:GetObject",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${NovaDataBucket.Arn}"
+                                        },
+                                        {
+                                            "Fn::Sub": "${NovaDataBucket.Arn}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Encrypt",
+                                        "kms:Decrypt",
+                                        "kms:ReEncrypt*",
+                                        "kms:GenerateDataKey*",
+                                        "kms:DescribeKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "NovaKMSKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "secretsmanager:GetSecretValue"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "NovaDatabaseSecret"
+                                    }
                                 }
                             ]
                         }
@@ -1258,6 +1308,23 @@
                 },
                 "ManagedPolicyArns": [
                     "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "SsmSendCommandFromApi",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ssm:SendCommand"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
                 ],
                 "Tags": [
                     {
@@ -1364,7 +1431,8 @@
         "NovaApiGatewayDeployment": {
             "Type": "AWS::ApiGateway::Deployment",
             "DependsOn": [
-                "NovaApiGatewayMethod"
+                "NovaApiGatewayMethod",
+                "NovaApiGatewayIngestMethod"
             ],
             "Properties": {
                 "RestApiId": {
@@ -1467,6 +1535,49 @@
                         "ResponseModels": {
                             "application/json": "Empty"
                         }
+                    }
+                ]
+            }
+        },
+        "NovaApiGatewayIngestMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "NovaApiGateway"
+                },
+                "ResourceId": {
+                    "Ref": "NovaApiGatewayResource"
+                },
+                "HttpMethod": "POST",
+                "AuthorizationType": "AWS_IAM",
+                "RequestParameters": {
+                    "method.request.header.X-Instance-Id": true
+                },
+                "Integration": {
+                    "Type": "AWS",
+                    "IntegrationHttpMethod": "POST",
+                    "Credentials": {
+                        "Fn::GetAtt": [
+                            "NovaApiGatewayRole",
+                            "Arn"
+                        ]
+                    },
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:ssm:action/SendCommand"
+                    },
+                    "RequestTemplates": {
+                        "application/json": "#set($inputRoot = $input.path('$'))\n{\n  \"DocumentName\": \"AWS-RunShellScript\",\n  \"InstanceIds\": [\"$util.escapeJavaScript($input.params('X-Instance-Id'))\"],\n  \"Parameters\": {\n    \"commands\": [\n      \"set -e\",\n      \"echo '$util.escapeJavaScript($input.body)' > /tmp/payload.json\",\n      \"yum -y install postgresql >/dev/null 2>&1 || true\",\n      \"PATIENT=$(python3 - <<'PY'\\nimport json\\nprint(json.load(open('/tmp/payload.json'))['patientId'])\\nPY\\n)\",\n      \"TRIAL=$(python3 - <<'PY'\\nimport json\\nprint(json.load(open('/tmp/payload.json'))['trialId'])\\nPY\\n)\",\n      \"BUCKET=$util.escapeJavaScript($input.json('$.bucketName'))\",\n      \"KMS_ARN=$util.escapeJavaScript($input.json('$.kmsKeyArn'))\",\n      \"SECRET_ARN=$util.escapeJavaScript($input.json('$.secretArn'))\",\n      \"RDS_ENDPOINT=$util.escapeJavaScript($input.json('$.rdsEndpoint'))\",\n      \"aws s3 cp /tmp/payload.json s3://$BUCKET/ingest/raw/${PATIENT}-${TRIAL}.json --sse aws:kms --sse-kms-key-id $KMS_ARN\",\n      \"SECRET_STR=$(aws secretsmanager get-secret-value --secret-id $SECRET_ARN --query SecretString --output text)\",\n      \"DB_USER=$(python3 - <<'PY'\\nimport json,os\\nprint(json.loads(os.environ['SECRET_STR'])['username'])\\nPY\\n)\",\n      \"DB_PASS=$(python3 - <<'PY'\\nimport json,os\\nprint(json.loads(os.environ['SECRET_STR'])['password'])\\nPY\\n)\",\n      \"export PGPASSWORD=$DB_PASS\",\n      \"psql -h $RDS_ENDPOINT -U $DB_USER -d postgres -c \\\"CREATE TABLE IF NOT EXISTS clinical_metadata(id text primary key, patient_id text, trial_id text);\\\"\",\n      \"psql -h $RDS_ENDPOINT -U $DB_USER -d postgres -c \\\"INSERT INTO clinical_metadata(id, patient_id, trial_id) VALUES ('${PATIENT}-${TRIAL}','${PATIENT}','${TRIAL}') ON CONFLICT (id) DO NOTHING;\\\"\",\n      \"echo processed > /tmp/processed && aws s3 cp /tmp/processed s3://$BUCKET/ingest/processed/${PATIENT}-${TRIAL}.ok --sse aws:kms --sse-kms-key-id $KMS_ARN\"\n    ]\n  }\n}\n"
+                    },
+                    "PassthroughBehavior": "WHEN_NO_MATCH",
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": 200
+                        }
+                    ]
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200
                     }
                 ]
             }
@@ -2848,6 +2959,28 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${ProjectName}-${Environment}-cloudwatch-logs-vpc-endpoint-id"
+                }
+            }
+        },
+        "NovaEC2InstanceId": {
+            "Description": "Nova EC2 Instance ID",
+            "Value": {
+                "Ref": "NovaEC2Instance"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-ec2-instance-id"
+                }
+            }
+        },
+        "NovaDatabaseSecretArn": {
+            "Description": "Nova Database Secret ARN",
+            "Value": {
+                "Ref": "NovaDatabaseSecret"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-db-secret-arn"
                 }
             }
         }
