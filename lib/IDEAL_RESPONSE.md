@@ -469,7 +469,6 @@ class TapStack(cdk.Stack):
         roles['lambda_execution'] = iam.Role(
             self,
             "LambdaExecutionRole",
-            role_name=f"tap-lambda-execution-role-{self.environment_suffix}",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
             description="Execution role for TAP Lambda functions",
             managed_policies=[
