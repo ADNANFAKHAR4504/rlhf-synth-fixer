@@ -138,13 +138,25 @@ All named resources must include environmentSuffix for uniqueness:
 
 **Special Case**: Production-ready MODEL_RESPONSE with few fixes = low score (model already competent)
 
-## Working Directory Pattern
+## Working Directory
 
-All agents work inside: `worktree/synth-{task_id}/`
+**See `working-directory-guide.md` for complete context rules.**
+
+### Quick Reference
+
+**Sub-agents work in**: `worktree/synth-{task_id}/` (never leave)
 
 **Verification**:
 ```bash
 pwd  # Must end with: /worktree/synth-{task_id}
+[[ $(pwd) =~ worktree/synth-[^/]+$ ]] && echo "✅ OK" || exit 1
+git branch --show-current  # Must match: synth-{task_id}
 ```
 
-All file operations are relative to this directory.
+**Path Rules**:
+- Use relative paths exclusively: `cat metadata.json`, `ls lib/`
+- Never use absolute paths: ~~`cat /full/path/to/file`~~
+- Verify location before ALL file operations
+
+**Files in worktree**: metadata.json, lib/, test/, cfn-outputs/
+**Files in main repo only**: tasks.csv (not accessible from worktree)

@@ -254,19 +254,26 @@ If ANY unchecked:
 
 If training_quality < 8:
 - Report: "NOT READY - Training quality below threshold"
-- Recommendations:
-  1. Review MODEL_FAILURES.md - are improvements significant?
-  2. Add AWS services or features from task
-  3. Implement security best practices (KMS, IAM, encryption)
-  4. Add monitoring/observability (CloudWatch, X-Ray, logging)
-  5. Implement error handling, retry logic
-  6. Add cost optimization (auto-scaling, tagging)
-- Suggest returning to iac-infra-generator or iac-infra-qa-trainer
-- Do NOT proceed to Phase 5 until training_quality ≥ 8
+- **Apply iteration-policy.md decision logic**:
+
+  ```
+  If score 6-7 AND first iteration AND can add significant features:
+    - Recommend specific features to add (1-2 AWS services or patterns)
+    - Examples: CloudWatch monitoring, KMS encryption, multi-AZ, error handling
+    - Expected post-iteration score: ≥8
+    - Hand off to task-coordinator for iteration
+
+  If score <6 OR already iterated OR only minor fixes possible:
+    - Recommend: Mark as ERROR
+    - Reason: "Insufficient training value" OR "Max iteration reached" OR "Model already competent"
+    - Do NOT iterate
+  ```
+
+- Do NOT proceed to Phase 5 until training_quality ≥ 8 after any iteration
 
 **Report "Ready" only when**:
 - All phases passed
-- Training quality ≥ 8 (target: 9)
+- Training quality ≥ 8
 - All metadata fields validated
 - Tests passing
 - Requirements met

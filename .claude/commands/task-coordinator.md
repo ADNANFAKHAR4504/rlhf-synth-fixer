@@ -105,13 +105,15 @@ Emphasize: "Platform and language are MANDATORY constraints from metadata.json"
 
 **Agent**: `iac-code-reviewer`
 
-**Cost-Optimized Iteration Logic**: If lib/MODEL_FAILURES.md reports minimal issues (not big deployment issues) AND training_quality < 6, consider requesting iac-infra-generator to add 1 additional AWS feature to increase complexity.
-- **Maximum 1 iteration** to avoid excessive regeneration
-- Only iterate if score < 6 (limited training value)
-- Goal: meaningful differences between MODEL_RESPONSE and IDEAL_RESPONSE
-- Skip if training_quality ≥ 6 (already good value)
+**Iteration Policy**: See `iteration-policy.md` for complete decision logic.
 
-**Cost Impact**: Reducing "always add 2 features" to "conditionally add 1 max" saves 5-10%
+**Quick Reference**:
+- Score ≥8: Approve PR
+- Score 6-7: Conditional iteration (if first attempt AND can add significant features)
+- Score <6: Mark as ERROR (insufficient training value)
+- Max iterations: 1 per task
+
+**Decision Authority**: iac-code-reviewer recommends, task-coordinator enforces
 
 ### Phase 5: PR Creation & Task Completion
 
