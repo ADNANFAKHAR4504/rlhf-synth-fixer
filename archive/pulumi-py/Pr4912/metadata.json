@@ -1,0 +1,39 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "7343579531",
+  "team": "synth",
+  "startedAt": "2025-10-21T13:30:57+05:30",
+  "subtask": "Failure Recovery and High Availability",
+  "background": "A federal emergency management agency requires a new system to handle critical alert processing for natural disasters and public safety incidents. The system must maintain FedRAMP High compliance while processing thousands of events per second from various government sources.",
+  "subject_labels": [
+    "Failure Recovery Automation",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Kinesis",
+    "ECS",
+    "RDS",
+    "ElastiCache",
+    "EFS",
+    "API Gateway",
+    "Secrets Manager",
+    "KMS",
+    "IAM",
+    "CloudWatch",
+    "SNS",
+    "Application Auto Scaling"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

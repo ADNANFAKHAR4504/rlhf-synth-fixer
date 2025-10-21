@@ -1,11 +1,26 @@
 #!/usr/bin/env python3
 """
+⚠️ DEPRECATED: This script is NOT thread-safe for parallel execution!
+⚠️ Use ./.claude/scripts/task-manager.sh select-and-update instead
+
+This script lacks file locking and will cause race conditions when multiple
+agents run in parallel. The task-manager.sh script provides:
+- Atomic select-and-update operations
+- File locking to prevent race conditions  
+- 3-5x better performance
+- Thread-safe parallel execution
+
 Find the next available task with hard or medium difficulty from tasks.csv
 Tasks with empty status, or status not in ['in_progress', 'done'] are considered available
 """
 import csv
 import sys
 import json
+
+# Print deprecation warning to stderr
+print("⚠️  WARNING: find-next-task.py is deprecated for parallel execution!", file=sys.stderr)
+print("⚠️  Use: ./.claude/scripts/task-manager.sh select-and-update", file=sys.stderr)
+print("", file=sys.stderr)
 
 def find_next_task():
     try:
