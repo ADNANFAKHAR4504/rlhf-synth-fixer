@@ -983,7 +983,6 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
       }
       expect(contextEnforced).toBe(true);
       console.log('✓ Encryption context enforcement verified');
-
       console.log('✓ Complete encryption workflow executed successfully');
     });
   });
