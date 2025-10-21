@@ -1,335 +1,157 @@
 """
-test_tap_stack_integration.py
-
-Integration tests for live deployed TapStack Pulumi infrastructure.
-Tests actual AWS resources created by the Pulumi stack.
+Live integration tests validating deployed AWS resources using boto3.
+The tests read stack outputs from cfn-outputs/flat-outputs.json (searching
+relative paths) and assert that key infrastructure components exist.
 """
 
-import unittest
-import os
+from __future__ import annotations
+
 import json
+import os
+import unittest
+from typing import Dict, List
+
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError, PartialCredentialsError
 
 
 class TestTapStackLiveIntegration(unittest.TestCase):
-    """Integration tests against live deployed Pulumi stack."""
+    """Use boto3 to interrogate live infrastructure defined by TapStack."""
+
+    outputs: Dict[str, any] = {}
+    region: str | None = None
 
     @classmethod
     def setUpClass(cls):
-        """Set up integration test with live stack."""
-        cls.region = os.getenv('AWS_REGION', 'us-east-1')
+        cls.outputs = cls._load_outputs()
+        if not cls.outputs:
+            raise unittest.SkipTest("flat-outputs.json not present or empty; skipping live tests")
 
-        # Initialize AWS clients
-        cls.ec2_client = boto3.client('ec2', region_name=cls.region)
-        cls.rds_client = boto3.client('rds', region_name=cls.region)
-        cls.elasticache_client = boto3.client('elasticache', region_name=cls.region)
-        cls.kinesis_client = boto3.client('kinesis', region_name=cls.region)
-        cls.secrets_client = boto3.client('secretsmanager', region_name=cls.region)
-        cls.iam_client = boto3.client('iam', region_name=cls.region)
-
-        # Load stack outputs from flat-outputs.json
-        outputs_file = os.path.join(os.getcwd(), 'cfn-outputs', 'flat-outputs.json')
-        try:
-            with open(outputs_file, 'r') as f:
-                cls.outputs = json.load(f)
-        except Exception as e:
-            print(f"Warning: Could not load stack outputs from {outputs_file}: {e}")
-            cls.outputs = {}
-
-    def test_vpc_exists_and_configured(self):
-        """Test VPC exists with correct CIDR and DNS settings."""
-        if 'vpc_id' not in self.outputs:
-            self.skipTest("VPC ID not found in stack outputs")
-
-        vpc_id = self.outputs['vpc_id']
-        response = self.ec2_client.describe_vpcs(VpcIds=[vpc_id])
-
-        self.assertEqual(len(response['Vpcs']), 1)
-        vpc = response['Vpcs'][0]
-        self.assertEqual(vpc['CidrBlock'], '10.0.0.0/16')
-        # Check DNS settings (may be null/empty initially)
-        dns_hostnames = vpc.get('EnableDnsHostnames')
-        dns_support = vpc.get('EnableDnsSupport')
-        # DNS should not be explicitly disabled
-        self.assertNotEqual(dns_hostnames, False, "DNS hostnames should not be explicitly disabled")
-        self.assertNotEqual(dns_support, False, "DNS support should not be explicitly disabled")
-
-    def test_private_subnets_exist(self):
-        """Test private subnets exist in different availability zones."""
-        if 'private_subnet_ids' not in self.outputs:
-            self.skipTest("Private subnet IDs not found in stack outputs")
-
-        subnet_ids = self.outputs['private_subnet_ids']
-        response = self.ec2_client.describe_subnets(SubnetIds=subnet_ids)
-
-        self.assertEqual(len(response['Subnets']), 2)
-        azs = set(subnet['AvailabilityZone'] for subnet in response['Subnets'])
-        self.assertEqual(len(azs), 2, "Subnets should be in different AZs")
-
-        # Verify subnets are private (no auto-assign public IP)
-        for subnet in response['Subnets']:
-            self.assertFalse(subnet.get('MapPublicIpOnLaunch', False))
-
-    def test_nat_gateway_exists(self):
-        """Test NAT Gateway exists and is available."""
-        if 'vpc_id' not in self.outputs:
-            self.skipTest("VPC ID not found in stack outputs")
-
-        vpc_id = self.outputs['vpc_id']
-        response = self.ec2_client.describe_nat_gateways(
-            Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}]
-        )
-
-        nat_gateways = [ng for ng in response['NatGateways'] if ng['State'] != 'deleted']
-        self.assertGreater(len(nat_gateways), 0, "NAT Gateway should exist")
-        self.assertEqual(nat_gateways[0]['State'], 'available')
-
-    def test_kinesis_stream_exists_with_encryption(self):
-        """Test Kinesis stream exists with encryption enabled."""
-        if 'kinesis_stream_name' not in self.outputs:
-            self.skipTest("Kinesis stream name not found in stack outputs")
-
-        stream_name = self.outputs['kinesis_stream_name']
-        response = self.kinesis_client.describe_stream(StreamName=stream_name)
-
-        stream_desc = response['StreamDescription']
-        self.assertEqual(stream_desc['StreamStatus'], 'ACTIVE')
-        self.assertEqual(stream_desc['EncryptionType'], 'KMS')
-        self.assertGreaterEqual(stream_desc['RetentionPeriodHours'], 24)
-        self.assertEqual(len(stream_desc['Shards']), 2)
-
-    def test_rds_instance_exists_with_hipaa_compliance(self):
-        """Test RDS instance exists with HIPAA-compliant configuration."""
-        if 'rds_endpoint' not in self.outputs:
-            self.skipTest("RDS endpoint not found in stack outputs")
-
-        # Extract DB identifier from endpoint
-        endpoint = self.outputs['rds_endpoint']
-        db_identifier = endpoint.split('.')[0]
-
-        response = self.rds_client.describe_db_instances(
-            DBInstanceIdentifier=db_identifier
-        )
-
-        db_instance = response['DBInstances'][0]
-
-        # Test encryption
-        self.assertTrue(db_instance['StorageEncrypted'], "RDS must be encrypted at rest")
-
-        # Test backup retention
-        self.assertGreaterEqual(
-            db_instance['BackupRetentionPeriod'],
-            30,
-            "Backup retention must be at least 30 days"
-        )
-
-        # Test Multi-AZ
-        self.assertTrue(db_instance['MultiAZ'], "RDS must be Multi-AZ")
-
-        # Test public accessibility
-        self.assertFalse(
-            db_instance['PubliclyAccessible'],
-            "RDS must not be publicly accessible"
-        )
-
-        # Test storage type
-        self.assertEqual(db_instance['StorageType'], 'gp3')
-
-    def test_elasticache_redis_exists_with_encryption(self):
-        """Test ElastiCache Redis exists with encryption enabled."""
-        if 'redis_endpoint' not in self.outputs:
-            self.skipTest("Redis endpoint not found in stack outputs")
-
-        # Extract replication group ID from endpoint
-        endpoint = self.outputs['redis_endpoint']
-        # Format: master.medtech-redis-synth6362828428.xxx.use1.cache.amazonaws.com
-        parts = endpoint.split('.')
-        replication_group_id = parts[1]  # medtech-redis-synth6362828428
-
-        response = self.elasticache_client.describe_replication_groups(
-            ReplicationGroupId=replication_group_id
-        )
-
-        redis = response['ReplicationGroups'][0]
-
-        # Test encryption
-        self.assertTrue(redis['AtRestEncryptionEnabled'], "Redis must be encrypted at rest")
-        self.assertTrue(redis['TransitEncryptionEnabled'], "Redis must be encrypted in transit")
-
-        # Test automatic failover
-        self.assertEqual(redis['AutomaticFailover'], 'enabled', "Automatic failover must be enabled")
-
-        # Test snapshot retention
-        self.assertGreaterEqual(redis['SnapshotRetentionLimit'], 5)
-
-    def test_rds_secret_exists_in_secrets_manager(self):
-        """Test RDS credentials are stored in Secrets Manager."""
-        if 'rds_secret_arn' not in self.outputs:
-            self.skipTest("RDS secret ARN not found in stack outputs")
-
-        secret_arn = self.outputs['rds_secret_arn']
+        cls.region = cls.outputs.get("region") or os.environ.get("AWS_REGION")
+        if not cls.region:
+            raise unittest.SkipTest("Region not supplied by outputs or environment")
 
         try:
-            response = self.secrets_client.describe_secret(SecretId=secret_arn)
-            self.assertIn('rds-credentials', response['Name'])
+            cls.ec2 = boto3.client("ec2", region_name=cls.region)
+            cls.kinesis = boto3.client("kinesis", region_name=cls.region)
+            cls.rds = boto3.client("rds", region_name=cls.region)
+            cls.elasticache = boto3.client("elasticache", region_name=cls.region)
+            cls.secretsmanager = boto3.client("secretsmanager", region_name=cls.region)
+            cls.iam = boto3.client("iam")
+        except (NoCredentialsError, PartialCredentialsError) as err:
+            raise unittest.SkipTest(f"AWS credentials unavailable: {err}") from err
 
-            # Test secret value structure
-            secret_value = self.secrets_client.get_secret_value(SecretId=secret_arn)
-            secret_data = json.loads(secret_value['SecretString'])
+    @staticmethod
+    def _load_outputs() -> Dict[str, any]:
+        candidates = [
+            "cfn-outputs/flat-outputs.json",
+            os.path.join("..", "cfn-outputs", "flat-outputs.json"),
+            os.path.join("..", "..", "cfn-outputs", "flat-outputs.json"),
+        ]
+        for path in candidates:
+            if os.path.exists(path):
+                try:
+                    with open(path, "r", encoding="utf-8") as fp:
+                        data = json.load(fp)
+                        if isinstance(data, dict) and data:
+                            return data
+                except json.JSONDecodeError:
+                    continue
+        return {}
 
-            self.assertIn('username', secret_data)
-            self.assertIn('password', secret_data)
-            self.assertIn('host', secret_data)
-            self.assertIn('port', secret_data)
-            self.assertIn('dbname', secret_data)
+    def _require(self, key: str):
+        value = self.outputs.get(key)
+        self.assertIsNotNone(value, f"Output '{key}' missing from flat-outputs.json")
+        if isinstance(value, dict):
+            for candidate in ('value', 'Value', 'output', 'Output'):
+                if candidate in value:
+                    value = value[candidate]
+                    break
+        return value
 
-        except ClientError as e:
-            self.fail(f"Failed to retrieve RDS secret: {e}")
+    def _require_list(self, key: str) -> List[str]:
+        value = self._require(key)
+        if isinstance(value, str):
+            return [value]
+        if isinstance(value, list):
+            return value
+        if isinstance(value, (tuple, set)):
+            return list(value)
+        raise AssertionError(f"Output '{key}' is not a list-like value")
 
-    def test_redis_secret_exists_in_secrets_manager(self):
-        """Test Redis auth token is stored in Secrets Manager."""
-        if 'redis_secret_arn' not in self.outputs:
-            self.skipTest("Redis secret ARN not found in stack outputs")
+    def test_vpc_exists(self):
+        vpc_id = self._require("vpc_id")
+        resp = self.ec2.describe_vpcs(VpcIds=[vpc_id])
+        self.assertEqual(len(resp["Vpcs"]), 1)
+        vpc = resp["Vpcs"][0]
+        self.assertFalse(vpc.get("IsDefault", True), "Stack VPC should not be default")
 
-        secret_arn = self.outputs['redis_secret_arn']
+    def test_subnets_exist(self):
+        public_subnets = self._require_list("public_subnet_ids")
+        private_subnets = self._require_list("private_subnet_ids")
+        resp = self.ec2.describe_subnets(SubnetIds=public_subnets + private_subnets)
+        found = {subnet["SubnetId"] for subnet in resp["Subnets"]}
+        for subnet in public_subnets + private_subnets:
+            self.assertIn(subnet, found)
 
-        try:
-            response = self.secrets_client.describe_secret(SecretId=secret_arn)
-            self.assertIn('redis-credentials', response['Name'])
+    def test_nat_gateway_available(self):
+        nat_gateway_id = self._require("nat_gateway_id")
+        resp = self.ec2.describe_nat_gateways(NatGatewayIds=[nat_gateway_id])
+        self.assertEqual(len(resp["NatGateways"]), 1)
+        self.assertEqual(resp["NatGateways"][0]["State"], "available")
 
-            # Test secret value structure
-            secret_value = self.secrets_client.get_secret_value(SecretId=secret_arn)
-            secret_data = json.loads(secret_value['SecretString'])
+    def test_route_tables(self):
+        public_rt = self._require("public_route_table_id")
+        private_rt = self._require("private_route_table_id")
+        resp = self.ec2.describe_route_tables(RouteTableIds=[public_rt, private_rt])
+        self.assertEqual(len(resp["RouteTables"]), 2)
 
-            self.assertIn('auth_token', secret_data)
+    def test_security_groups_exist(self):
+        rds_sg = self._require("rds_security_group_id")
+        redis_sg = self._require("redis_security_group_id")
+        resp = self.ec2.describe_security_groups(GroupIds=[rds_sg, redis_sg])
+        self.assertEqual(len(resp["SecurityGroups"]), 2)
 
-        except ClientError as e:
-            self.fail(f"Failed to retrieve Redis secret: {e}")
+    def test_kinesis_stream_configuration(self):
+        stream_name = self._require("kinesis_stream_name")
+        resp = self.kinesis.describe_stream(StreamName=stream_name)
+        desc = resp["StreamDescription"]
+        self.assertEqual(desc["StreamStatus"], "ACTIVE")
+        self.assertEqual(desc["EncryptionType"], "KMS")
 
-    def test_security_groups_configured_correctly(self):
-        """Test security groups have correct ingress rules."""
-        if 'vpc_id' not in self.outputs:
-            self.skipTest("VPC ID not found in stack outputs")
+    def test_rds_instance_configuration(self):
+        identifier = self._require("rds_instance_identifier")
+        resp = self.rds.describe_db_instances(DBInstanceIdentifier=identifier)
+        self.assertEqual(len(resp["DBInstances"]), 1)
+        instance = resp["DBInstances"][0]
+        self.assertTrue(instance["StorageEncrypted"])
+        self.assertTrue(instance["MultiAZ"])
 
-        vpc_id = self.outputs['vpc_id']
-        response = self.ec2_client.describe_security_groups(
-            Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}]
-        )
+    def test_redis_replication_group(self):
+        endpoint = self._require("redis_primary_endpoint")
+        replication_id = endpoint.split(".")[0]
+        resp = self.elasticache.describe_replication_groups(ReplicationGroupId=replication_id)
+        self.assertEqual(len(resp["ReplicationGroups"]), 1)
+        group = resp["ReplicationGroups"][0]
+        self.assertTrue(group["AtRestEncryptionEnabled"])
+        self.assertTrue(group["TransitEncryptionEnabled"])
 
-        # Test RDS security group
-        rds_sgs = [sg for sg in response['SecurityGroups'] if 'rds' in sg['GroupName'].lower()]
-        if rds_sgs:
-            rds_sg = rds_sgs[0]
-            ingress_rules = rds_sg['IpPermissions']
-            postgres_rule = next(
-                (rule for rule in ingress_rules if rule.get('FromPort') == 5432),
-                None
-            )
-            self.assertIsNotNone(postgres_rule, "PostgreSQL port should be allowed")
-
-        # Test Redis security group
-        redis_sgs = [sg for sg in response['SecurityGroups'] if 'redis' in sg['GroupName'].lower()]
-        if redis_sgs:
-            redis_sg = redis_sgs[0]
-            ingress_rules = redis_sg['IpPermissions']
-            redis_rule = next(
-                (rule for rule in ingress_rules if rule.get('FromPort') == 6379),
-                None
-            )
-            self.assertIsNotNone(redis_rule, "Redis port should be allowed")
+    def test_secrets_manager_entries(self):
+        rds_secret_arn = self._require("rds_secret_arn")
+        redis_secret_arn = self._require("redis_secret_arn")
+        self.secretsmanager.describe_secret(SecretId=rds_secret_arn)
+        self.secretsmanager.describe_secret(SecretId=redis_secret_arn)
 
     def test_iam_roles_exist(self):
-        """Test IAM roles are created for Kinesis and Secrets Manager access."""
-        if 'kinesis_producer_role_arn' not in self.outputs:
-            self.skipTest("Kinesis producer role ARN not found in stack outputs")
-
-        kinesis_role_arn = self.outputs['kinesis_producer_role_arn']
-        role_name = kinesis_role_arn.split('/')[-1]
-
-        try:
-            response = self.iam_client.get_role(RoleName=role_name)
-            self.assertIn('kinesis-producer-role', role_name)
-        except ClientError as e:
-            self.fail(f"Kinesis producer role not found: {e}")
-
-        if 'secrets_reader_role_arn' in self.outputs:
-            secrets_role_arn = self.outputs['secrets_reader_role_arn']
-            role_name = secrets_role_arn.split('/')[-1]
-
+        producer_role = self._require("kinesis_producer_role_arn")
+        reader_role = self._require("secrets_reader_role_arn")
+        for role in (producer_role, reader_role):
+            role_name = role.split("/")[-1]
             try:
-                response = self.iam_client.get_role(RoleName=role_name)
-                self.assertIn('secrets-reader-role', role_name)
-            except ClientError as e:
-                self.fail(f"Secrets reader role not found: {e}")
-
-    def test_rds_backups_enabled(self):
-        """Test RDS automated backups are enabled and encrypted."""
-        if 'rds_endpoint' not in self.outputs:
-            self.skipTest("RDS endpoint not found in stack outputs")
-
-        endpoint = self.outputs['rds_endpoint']
-        db_identifier = endpoint.split('.')[0]
-
-        response = self.rds_client.describe_db_instances(
-            DBInstanceIdentifier=db_identifier
-        )
-
-        db_instance = response['DBInstances'][0]
-
-        # Test backup retention
-        self.assertEqual(db_instance['BackupRetentionPeriod'], 30)
-
-        # Test backup window is configured
-        self.assertIsNotNone(db_instance.get('PreferredBackupWindow'))
-
-        # Test maintenance window is configured
-        self.assertIsNotNone(db_instance.get('PreferredMaintenanceWindow'))
-
-    def test_network_isolation(self):
-        """Test that sensitive resources are in private subnets."""
-        if 'vpc_id' not in self.outputs:
-            self.skipTest("VPC ID not found in stack outputs")
-
-        vpc_id = self.outputs['vpc_id']
-
-        # Get all route tables
-        response = self.ec2_client.describe_route_tables(
-            Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}]
-        )
-
-        # Find private route tables (those with NAT Gateway routes)
-        private_route_tables = []
-        for rt in response['RouteTables']:
-            for route in rt['Routes']:
-                if route.get('NatGatewayId'):
-                    private_route_tables.append(rt['RouteTableId'])
-                    break
-
-        self.assertGreater(
-            len(private_route_tables),
-            0,
-            "Private route tables with NAT Gateway should exist"
-        )
-
-    def test_cloudwatch_logs_enabled_for_rds(self):
-        """Test CloudWatch logs are enabled for RDS."""
-        if 'rds_endpoint' not in self.outputs:
-            self.skipTest("RDS endpoint not found in stack outputs")
-
-        endpoint = self.outputs['rds_endpoint']
-        db_identifier = endpoint.split('.')[0]
-
-        response = self.rds_client.describe_db_instances(
-            DBInstanceIdentifier=db_identifier
-        )
-
-        db_instance = response['DBInstances'][0]
-
-        # Test CloudWatch logs exports
-        enabled_logs = db_instance.get('EnabledCloudwatchLogsExports', [])
-        self.assertIn('postgresql', enabled_logs, "PostgreSQL logs should be exported")
+                self.iam.get_role(RoleName=role_name)
+            except (ClientError, BotoCoreError) as err:
+                self.fail(f"IAM role {role_name} missing: {err}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

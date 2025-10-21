@@ -65,6 +65,9 @@ class TapStack(pulumi.ComponentResource):
         self.environment_suffix = args.environment_suffix
         self.tags = args.tags
 
+        region_info = aws.get_region()
+        self.region = region_info.name if hasattr(region_info, "name") else region_info.id
+
         # Create VPC
         self.vpc = aws.ec2.Vpc(
             f"medtech-vpc-{self.environment_suffix}",
@@ -491,18 +494,35 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Register outputs
-        self.register_outputs({
+        outputs = {
+            "region": self.region,
             "vpc_id": self.vpc.id,
+            "public_subnet_ids": [self.public_subnet_1.id, self.public_subnet_2.id],
             "private_subnet_ids": [self.private_subnet_1.id, self.private_subnet_2.id],
+            "nat_eip_id": self.nat_eip.id,
+            "nat_gateway_id": self.nat_gateway.id,
+            "public_route_table_id": self.public_route_table.id,
+            "private_route_table_id": self.private_route_table.id,
             "kinesis_stream_name": self.kinesis_stream.name,
             "kinesis_stream_arn": self.kinesis_stream.arn,
+            "rds_instance_identifier": self.rds_instance.identifier,
             "rds_endpoint": self.rds_instance.endpoint,
             "rds_port": self.rds_instance.port,
             "rds_secret_arn": self.rds_secret.arn,
-            "redis_endpoint": self.redis_cluster.primary_endpoint_address,
+            "rds_security_group_id": self.rds_security_group.id,
+            "redis_primary_endpoint": self.redis_cluster.primary_endpoint_address,
+            "redis_reader_endpoint": self.redis_cluster.reader_endpoint_address,
             "redis_port": self.redis_cluster.port,
             "redis_secret_arn": self.redis_secret.arn,
+            "redis_security_group_id": self.redis_security_group.id,
+            "db_subnet_group_name": self.db_subnet_group.name,
+            "elasticache_subnet_group_name": self.elasticache_subnet_group.name,
             "kinesis_producer_role_arn": self.kinesis_producer_role.arn,
-            "secrets_reader_role_arn": self.secrets_reader_role.arn
-        })
+            "secrets_reader_role_arn": self.secrets_reader_role.arn,
+        }
+
+        self.register_outputs(outputs)
+
+        if opts is None or getattr(opts, "parent", None) is None:
+            for key, value in outputs.items():
+                pulumi.export(key, value)

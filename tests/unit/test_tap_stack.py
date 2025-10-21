@@ -1,308 +1,192 @@
 """
-test_tap_stack.py
-
-Unit tests for the TapStack Pulumi component - HIPAA-compliant healthcare data pipeline
+Unit tests for tap_stack using Pulumi mocks.
 """
 
 import unittest
-from unittest.mock import patch, MagicMock
+from typing import Any, Dict
+
 import pulumi
+import pulumi.runtime as runtime
+from pulumi.runtime import mocks
 
-
-# Set Pulumi to use mocks
-pulumi.runtime.set_mocks(
-    pulumi.runtime.Mocks(
-        call=lambda args: {},
-        new_resource=lambda args: ("id123", {})
-    )
-)
-
-
-# Import after configuring mocks
 from lib.tap_stack import TapStack, TapStackArgs
 
 
-class TestTapStackArgs(unittest.TestCase):
-    """Test cases for TapStackArgs configuration class."""
-
-    def test_tap_stack_args_default_values(self):
-        """Test TapStackArgs with default values."""
-        args = TapStackArgs()
-
-        self.assertEqual(args.environment_suffix, 'dev')
-        self.assertEqual(args.tags, {})
-
-    def test_tap_stack_args_custom_values(self):
-        """Test TapStackArgs with custom values."""
-        custom_tags = {'Project': 'MedTech', 'Team': 'Healthcare'}
-        args = TapStackArgs(environment_suffix='prod', tags=custom_tags)
-
-        self.assertEqual(args.environment_suffix, 'prod')
-        self.assertEqual(args.tags, custom_tags)
-
-    def test_tap_stack_args_none_environment(self):
-        """Test TapStackArgs with None environment defaults to 'dev'."""
-        args = TapStackArgs(environment_suffix=None)
-
-        self.assertEqual(args.environment_suffix, 'dev')
-
-
-@pulumi.runtime.test
-def test_vpc_creation():
-    """Test VPC is created with correct CIDR and DNS settings."""
-
-    args = TapStackArgs(environment_suffix='test')
-    stack = TapStack('test-stack', args)
-
-    # Verify VPC is created
-    assert hasattr(stack, 'vpc'), "VPC should be created"
-    return pulumi.Output.from_input(True)
-
-
-@pulumi.runtime.test
-def test_kinesis_stream_encryption():
-    """Test Kinesis stream is created with encryption enabled."""
-
-    args = TapStackArgs(environment_suffix='test')
-    stack = TapStack('test-stack', args)
-
-    # Verify kinesis stream exists
-    assert hasattr(stack, 'kinesis_stream'), "Kinesis stream should be created"
-    return pulumi.Output.from_input(True)
-
-
-@pulumi.runtime.test
-def test_rds_instance_configuration():
-    """Test RDS instance is created with correct configuration."""
-
-    args = TapStackArgs(environment_suffix='test')
-    stack = TapStack('test-stack', args)
-
-    # Verify RDS instance exists
-    assert hasattr(stack, 'rds_instance'), "RDS instance should be created"
-    return pulumi.Output.from_input(True)
-
-
-@pulumi.runtime.test
-def test_redis_cluster_configuration():
-    """Test Redis cluster is created with correct configuration."""
-
-    args = TapStackArgs(environment_suffix='test')
-    stack = TapStack('test-stack', args)
-
-    # Verify Redis cluster exists
-    assert hasattr(stack, 'redis_cluster'), "Redis cluster should be created"
-    return pulumi.Output.from_input(True)
-
-
-@pulumi.runtime.test
-def test_private_subnets_created():
-    """Test private subnets are created in different AZs."""
-
-    args = TapStackArgs(environment_suffix='test')
-    stack = TapStack('test-stack', args)
-
-    # Verify private subnets exist
-    assert hasattr(stack, 'private_subnet_1'), "Private subnet 1 should be created"
-    assert hasattr(stack, 'private_subnet_2'), "Private subnet 2 should be created"
-    return pulumi.Output.from_input(True)
-
-
-@pulumi.runtime.test
-def test_security_groups_created():
-    """Test security groups are created for RDS and Redis."""
-
-    args = TapStackArgs(environment_suffix='test')
-    stack = TapStack('test-stack', args)
-
-    # Verify security groups exist
-    assert hasattr(stack, 'rds_security_group'), "RDS security group should be created"
-    assert hasattr(stack, 'redis_security_group'), "Redis security group should be created"
-    return pulumi.Output.from_input(True)
-
-
-@pulumi.runtime.test
-def test_secrets_manager_resources():
-    """Test Secrets Manager resources are created."""
-
-    args = TapStackArgs(environment_suffix='test')
-    stack = TapStack('test-stack', args)
-
-    # Verify secrets exist
-    assert hasattr(stack, 'rds_secret'), "RDS secret should be created"
-    assert hasattr(stack, 'redis_secret'), "Redis secret should be created"
-    return pulumi.Output.from_input(True)
-
-
-@pulumi.runtime.test
-def test_random_passwords_generated():
-    """Test random passwords are generated for RDS and Redis."""
-
-    args = TapStackArgs(environment_suffix='test')
-    stack = TapStack('test-stack', args)
-
-    # Verify password resources exist
-    assert hasattr(stack, 'rds_password'), "RDS password should be generated"
-    assert hasattr(stack, 'redis_auth_token'), "Redis auth token should be generated"
-    return pulumi.Output.from_input(True)
-
-
-@pulumi.runtime.test
-def test_iam_roles_created():
-    """Test IAM roles are created."""
-
-    args = TapStackArgs(environment_suffix='test')
-    stack = TapStack('test-stack', args)
-
-    # Verify IAM roles exist
-    assert hasattr(stack, 'kinesis_producer_role'), "Kinesis producer role should be created"
-    assert hasattr(stack, 'secrets_reader_role'), "Secrets reader role should be created"
-    return pulumi.Output.from_input(True)
-
-
-@pulumi.runtime.test
-def test_nat_gateway_created():
-    """Test NAT Gateway is created."""
-
-    args = TapStackArgs(environment_suffix='test')
-    stack = TapStack('test-stack', args)
-
-    # Verify NAT Gateway exists
-    assert hasattr(stack, 'nat_gateway'), "NAT Gateway should be created"
-    assert hasattr(stack, 'nat_eip'), "NAT Gateway EIP should be created"
-    return pulumi.Output.from_input(True)
-
-
-@pulumi.runtime.test
-def test_subnet_groups_created():
-    """Test subnet groups are created for RDS and ElastiCache."""
-
-    args = TapStackArgs(environment_suffix='test')
-    stack = TapStack('test-stack', args)
-
-    # Verify subnet groups exist
-    assert hasattr(stack, 'db_subnet_group'), "DB subnet group should be created"
-    assert hasattr(stack, 'elasticache_subnet_group'), "ElastiCache subnet group should be created"
-    return pulumi.Output.from_input(True)
-
-
-@pulumi.runtime.test
-def test_route_tables_created():
-    """Test route tables are created for public and private subnets."""
-
-    args = TapStackArgs(environment_suffix='test')
-    stack = TapStack('test-stack', args)
-
-    # Verify route tables exist
-    assert hasattr(stack, 'public_route_table'), "Public route table should be created"
-    assert hasattr(stack, 'private_route_table'), "Private route table should be created"
-    return pulumi.Output.from_input(True)
-
-
-@pulumi.runtime.test
-def test_internet_gateway_created():
-    """Test Internet Gateway is created."""
-
-    args = TapStackArgs(environment_suffix='test')
-    stack = TapStack('test-stack', args)
-
-    # Verify Internet Gateway exists
-    assert hasattr(stack, 'igw'), "Internet Gateway should be created"
-    return pulumi.Output.from_input(True)
-
-
-@pulumi.runtime.test
-def test_public_subnets_created():
-    """Test public subnets are created."""
-
-    args = TapStackArgs(environment_suffix='test')
-    stack = TapStack('test-stack', args)
-
-    # Verify public subnets exist
-    assert hasattr(stack, 'public_subnet_1'), "Public subnet 1 should be created"
-    assert hasattr(stack, 'public_subnet_2'), "Public subnet 2 should be created"
-    return pulumi.Output.from_input(True)
-
-
-@pulumi.runtime.test
-def test_environment_suffix_applied():
-    """Test environment suffix is correctly applied to resources."""
-
-    custom_suffix = 'qa123'
-    args = TapStackArgs(environment_suffix=custom_suffix)
-    stack = TapStack('test-stack', args)
-
-    # Verify environment suffix is stored
-    assert stack.environment_suffix == custom_suffix, \
-        f"Environment suffix should be {custom_suffix}"
-    return pulumi.Output.from_input(True)
-
-
-@pulumi.runtime.test
-def test_tags_applied():
-    """Test custom tags are stored."""
-
-    custom_tags = {'Environment': 'test', 'Owner': 'qa-team'}
-    args = TapStackArgs(tags=custom_tags)
-    stack = TapStack('test-stack', args)
-
-    # Verify tags are stored
-    assert stack.tags == custom_tags, "Custom tags should be stored"
-    return pulumi.Output.from_input(True)
-
-
-@pulumi.runtime.test
-def test_iam_policies_created():
-    """Test IAM policies are created for roles."""
-
-    args = TapStackArgs(environment_suffix='test')
-    stack = TapStack('test-stack', args)
-
-    # Verify IAM policies exist
-    assert hasattr(stack, 'kinesis_producer_policy'), "Kinesis producer policy should be created"
-    assert hasattr(stack, 'secrets_reader_policy'), "Secrets reader policy should be created"
-    return pulumi.Output.from_input(True)
-
-
-@pulumi.runtime.test
-def test_secret_versions_created():
-    """Test secret versions are created for RDS and Redis."""
-
-    args = TapStackArgs(environment_suffix='test')
-    stack = TapStack('test-stack', args)
-
-    # Verify secret versions exist
-    assert hasattr(stack, 'rds_secret_version'), "RDS secret version should be created"
-    assert hasattr(stack, 'redis_secret_version'), "Redis secret version should be created"
-    return pulumi.Output.from_input(True)
-
-
-@pulumi.runtime.test
-def test_all_required_resources_created():
-    """Test all required resources are created in the stack."""
-
-    args = TapStackArgs(environment_suffix='test')
-    stack = TapStack('test-stack', args)
-
-    # List of all required resources
-    required_resources = [
-        'vpc', 'igw', 'nat_gateway', 'nat_eip',
-        'public_subnet_1', 'public_subnet_2',
-        'private_subnet_1', 'private_subnet_2',
-        'public_route_table', 'private_route_table',
-        'kinesis_stream',
-        'rds_instance', 'rds_security_group', 'db_subnet_group',
-        'redis_cluster', 'redis_security_group', 'elasticache_subnet_group',
-        'rds_secret', 'redis_secret',
-        'rds_password', 'redis_auth_token',
-        'kinesis_producer_role', 'secrets_reader_role'
-    ]
-
-    for resource in required_resources:
-        assert hasattr(stack, resource), f"Resource {resource} should be created"
-
-    return pulumi.Output.from_input(True)
-
-
-if __name__ == '__main__':
+def _serialize(value: Any) -> Any:
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    if isinstance(value, (list, tuple, set)):
+        return [_serialize(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _serialize(v) for k, v in value.items()}
+    if hasattr(value, "__dict__"):
+        return {k: _serialize(v) for k, v in vars(value).items()}
+    return str(value)
+
+
+class AwsMocks(mocks.Mocks):
+    """Pulumi mocks that provide deterministic outputs for AWS resources."""
+
+    def new_resource(self, args: mocks.MockResourceArgs):
+        typ = args.typ
+        name = args.name
+        inputs = dict(args.inputs)
+        resource_id = getattr(args, "id", None) or getattr(args, "resource_id", None) or f"{name}-id"
+
+        outputs: Dict[str, Any] = {
+            "id": resource_id,
+            "arn": f"arn:aws:{typ.split(':')[1]}::123456789012:{name}",
+            "name": inputs.get("name", name),
+        }
+
+        for key, value in inputs.items():
+            outputs[key] = _serialize(value)
+
+        if typ == "aws:ec2/vpc:Vpc":
+            outputs.setdefault("cidr_block", inputs.get("cidr_block", "10.0.0.0/16"))
+        if typ == "aws:rds/subnetGroup:SubnetGroup":
+            outputs.setdefault("name", inputs.get("name", f"{name}-name"))
+        if typ == "aws:elasticache/subnetGroup:SubnetGroup":
+            outputs.setdefault("name", inputs.get("name", f"{name}-name"))
+        if typ == "aws:rds/instance:Instance":
+            outputs.setdefault("endpoint", "db.example.amazonaws.com:5432")
+            outputs.setdefault("port", 5432)
+            outputs.setdefault("identifier", inputs.get("identifier", name))
+        if typ == "aws:elasticache/replicationGroup:ReplicationGroup":
+            outputs.setdefault("primary_endpoint_address", "redis-primary.example.amazonaws.com")
+            outputs.setdefault("reader_endpoint_address", "redis-reader.example.amazonaws.com")
+            outputs.setdefault("port", 6379)
+        if typ == "aws:secretsmanager/secret:Secret":
+            outputs.setdefault("arn", f"arn:aws:secretsmanager:us-east-1:123456789012:secret:{name}")
+        if typ == "aws:iam/role:Role":
+            outputs.setdefault(
+                "arn", f"arn:aws:iam::123456789012:role/{inputs.get('name', name)}"
+            )
+
+        return resource_id, outputs
+
+    def call(self, args: mocks.MockCallArgs):
+        token = args.token
+        if token == "aws:index/getAvailabilityZones:getAvailabilityZones":
+            return {"names": ["us-east-1a", "us-east-1b"]}
+        if token == "aws:index/getRegion:getRegion":
+            return {"name": "us-east-1"}
+        return {}
+
+
+runtime.set_mocks(AwsMocks())
+
+
+class TestTapStack(unittest.TestCase):
+    """Unit tests that validate high-level configuration."""
+
+    def setUp(self):
+        self.args = TapStackArgs(environment_suffix="test")
+
+    @pulumi.runtime.test
+    def test_vpc_created_with_subnets(self):
+        stack = TapStack("unit-test-stack", self.args)
+
+        def check(values):
+            vpc_id, public_ids, private_ids = values
+            self.assertTrue(vpc_id.startswith("medtech-vpc"), "VPC id naming mismatch")
+            self.assertEqual(len(public_ids), 2)
+            self.assertEqual(len(private_ids), 2)
+            return True
+
+        return pulumi.Output.all(
+            stack.vpc.id,
+            [stack.public_subnet_1.id, stack.public_subnet_2.id],
+            [stack.private_subnet_1.id, stack.private_subnet_2.id],
+        ).apply(check)
+
+    @pulumi.runtime.test
+    def test_kinesis_stream_encrypted(self):
+        stack = TapStack("unit-test-stack-kinesis", self.args)
+
+        def check(values):
+            name, encryption, kms = values
+            self.assertIn("medtech-patient-records", name)
+            self.assertEqual(encryption, "KMS")
+            self.assertEqual(kms, "alias/aws/kinesis")
+            return True
+
+        return pulumi.Output.all(
+            stack.kinesis_stream.name,
+            stack.kinesis_stream.encryption_type,
+            stack.kinesis_stream.kms_key_id,
+        ).apply(check)
+
+    @pulumi.runtime.test
+    def test_rds_configuration(self):
+        stack = TapStack("unit-test-stack-rds", self.args)
+
+        def check(values):
+            storage_encrypted, multi_az, backups = values
+            self.assertTrue(storage_encrypted)
+            self.assertTrue(multi_az)
+            self.assertEqual(backups, 30)
+            return True
+
+        return pulumi.Output.all(
+            stack.rds_instance.storage_encrypted,
+            stack.rds_instance.multi_az,
+            stack.rds_instance.backup_retention_period,
+        ).apply(check)
+
+    @pulumi.runtime.test
+    def test_redis_configuration(self):
+        stack = TapStack("unit-test-stack-redis", self.args)
+
+        def check(values):
+            at_rest, transit, port = values
+            self.assertTrue(at_rest)
+            self.assertTrue(transit)
+            self.assertEqual(port, 6379)
+            return True
+
+        return pulumi.Output.all(
+            stack.redis_cluster.at_rest_encryption_enabled,
+            stack.redis_cluster.transit_encryption_enabled,
+            stack.redis_cluster.port,
+        ).apply(check)
+
+    @pulumi.runtime.test
+    def test_component_outputs_registered(self):
+        stack = TapStack("unit-test-stack-outputs", self.args)
+
+        def check(outputs):
+            expected_keys = {
+                'region',
+                'vpc_id',
+                'kinesis_stream_name',
+                'rds_endpoint',
+                'redis_primary_endpoint',
+            }
+            self.assertTrue(expected_keys.issubset(outputs.keys()))
+            for key in expected_keys:
+                value = outputs[key]
+                self.assertIsNotNone(value)
+                if isinstance(value, str):
+                    self.assertTrue(value)
+            return True
+
+        # Access internal outputs through a helper Output
+        combined = pulumi.Output.all(
+            stack.region,
+            stack.vpc.id,
+            stack.kinesis_stream.name,
+            stack.rds_instance.endpoint,
+            stack.redis_cluster.primary_endpoint_address,
+        )
+        return combined.apply(lambda values: check({
+            'region': values[0],
+            'vpc_id': values[1],
+            'kinesis_stream_name': values[2],
+            'rds_endpoint': values[3],
+            'redis_primary_endpoint': values[4],
+        }))
+
+
+if __name__ == "__main__":
     unittest.main()

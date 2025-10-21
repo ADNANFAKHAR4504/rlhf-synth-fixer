@@ -6,113 +6,99 @@ This Pulumi infrastructure deploys a HIPAA-compliant monitoring system for healt
 
 ## Architecture Components
 
-### 1. Network Infrastructure (VPC)
-- **VPC**: Isolated network environment in us-east-1
+### 1. Network Infrastructure
+- **Region awareness**: Stack reads the active AWS region programmatically so exports remain accurate across deployments.
+- **VPC**: `medtech-vpc-{environment_suffix}` with DNS support enabled.
 - **Subnets**:
-  - 2 Private subnets across 2 availability zones
-  - 2 Public subnets for NAT Gateway deployment
-- **NAT Gateway**: Enables outbound internet access from private subnets
-- **Internet Gateway**: Attached to VPC for NAT Gateway connectivity
+  - Two public subnets for NAT gateway placement.
+  - Two private subnets (application + database tiers) spread across availability zones.
+- **Routing**:
+  - Internet Gateway for outbound traffic.
+  - Single NAT gateway (cost-optimized) with route tables for private subnets.
+  - Explicit route table associations per subnet.
 
-### 2. Data Streaming Layer
+### 2. Data Streaming
 - **Amazon Kinesis Data Stream**:
-  - Stream for ingesting patient records
-  - Encryption at rest using AWS-managed keys
-  - 2 shards for handling thousands of records per hour
-  - 24-hour retention period for data replay
+  - `medtech-kinesis-{environment_suffix}` with alias-managed KMS encryption.
+  - Retention period of 24 hours and shard count of 2 (adjustable).
 
-### 3. Database Layer
-- **Amazon RDS (PostgreSQL)**:
-  - Multi-AZ deployment for high availability
-  - Encryption at rest using KMS
-  - Encryption in transit enforced (SSL/TLS)
-  - Automated backups with 30-day retention
-  - Backup encryption enabled
-  - Deployed in private subnets
-  - Enhanced monitoring enabled
-  - Storage type: General Purpose SSD (gp3)
+### 3. Relational Database
+- **Amazon RDS for PostgreSQL**:
+  - Multi-AZ, encrypted instance (`medtech-rds-{environment_suffix}`).
+  - 30-day automated backups, PITR, CloudWatch log exports.
+  - Credentials stored in AWS Secrets Manager and updated once endpoint is known.
+  - Subnet group spans private subnets; security group restricts access to VPC traffic.
 
 ### 4. Caching Layer
 - **Amazon ElastiCache Redis**:
-  - Redis cluster for performance metrics tracking
-  - Encryption at rest enabled
-  - Encryption in transit enabled
-  - Deployed in private subnets
-  - Automatic failover enabled
-  - Backup retention configured
+  - Replication group `medtech-redis-{environment_suffix}` with encryption in transit and at rest.
+  - Auth token stored in Secrets Manager.
+  - Automatic failover and maintenance windows configured.
 
-### 5. Security Components
-- **AWS Secrets Manager**:
-  - Stores RDS master credentials
-  - Stores Redis authentication tokens
-  - Automatic rotation capability
-  - Encrypted at rest
+### 5. IAM & Secrets
+- **Secrets Manager**:
+  - RDS credentials (`medtech-rds-credentials-{env}`).
+  - Redis auth token (`medtech-redis-credentials-{env}`).
+- **IAM Roles**:
+  - Kinesis producer role with precise stream permissions.
+  - Secrets reader role limited to the provisioned secrets.
 
-- **Security Groups**:
-  - RDS Security Group: Allows PostgreSQL (5432) only from application layer
-  - Redis Security Group: Allows Redis (6379) only from application layer
-  - Kinesis VPC Endpoint Security Group: Allows HTTPS (443)
+## Exports
+The component registers and (when used as root) exports the following identifiers for downstream automation and integration tests:
 
-- **IAM Roles and Policies**:
-  - Kinesis producer role for data ingestion
-  - RDS access policies with least privilege
-  - ElastiCache access policies
-  - Secrets Manager read policies
+| Output | Description |
+| --- | --- |
+| `region` | AWS region inferred at runtime |
+| `vpc_id` | Core VPC identifier |
+| `public_subnet_ids` | Public subnets hosting NAT gateway |
+| `private_subnet_ids` | Private application/database subnets |
+| `nat_eip_id`, `nat_gateway_id` | NAT gateway assets |
+| `public_route_table_id`, `private_route_table_id` | Route tables used by public/private subnets |
+| `kinesis_stream_name`, `kinesis_stream_arn` | Stream references for ingestion services |
+| `rds_instance_identifier`, `rds_endpoint`, `rds_port` | Database endpoints for application connectivity |
+| `rds_secret_arn` | Secret containing database credentials |
+| `rds_security_group_id` | Security group protecting the database |
+| `redis_primary_endpoint`, `redis_reader_endpoint`, `redis_port` | Redis connectivity endpoints |
+| `redis_secret_arn` | Secret containing Redis auth token |
+| `redis_security_group_id` | Security group for Redis access |
+| `db_subnet_group_name`, `elasticache_subnet_group_name` | Subnet groups generated for RDS/Redis |
+| `kinesis_producer_role_arn`, `secrets_reader_role_arn` | IAM roles granted least-privilege access |
 
-### 6. VPC Endpoints
-- **Kinesis VPC Endpoint**: Private connectivity to Kinesis without internet
-- **Secrets Manager VPC Endpoint**: Private access to Secrets Manager
+These outputs drive live verification tests (`tests/integration/test_live_infrastructure.py`) which locate `cfn-outputs/flat-outputs.json` and perform boto3 checks against deployed resources.
 
-## HIPAA Compliance Features
+## Compliance Highlights
+- **Encryption**: Kinesis, RDS, Redis, and Secrets Manager all enforce encryption at rest.
+- **Private networking**: Sensitive resources live inside private subnets with NAT-controlled egress.
+- **Access control**: IAM roles, security groups, and Secrets Manager enforce least privilege.
+- **Backups & observability**: RDS retains 30-day backups and exports logs to CloudWatch.
+- **Region awareness**: Region auto-detection prevents hard-coded configuration drift.
 
-1. **Encryption**:
-   - All data encrypted at rest (RDS, Redis, Kinesis, Secrets Manager)
-   - All data encrypted in transit (TLS/SSL enforced)
+## Repository Layout
 
-2. **Network Isolation**:
-   - All sensitive resources in private subnets
-   - No direct internet access
-   - Security groups implementing least privilege
+```
+lib/
+  tap_stack.py          # Pulumi component implementation (source of truth)
+  IDEAL_RESPONSE.md     # This reference documentation
+tests/
+  unit/test_tap_stack.py           # Pulumi mock-based unit tests (coverage >90%)
+  integration/test_live_infrastructure.py  # boto3 live verification suite
+tap.py                   # Pulumi program entry point
+metadata.json            # Platform/language/training metadata
+```
 
-3. **Audit and Logging**:
-   - CloudWatch Logs integration
-   - Enhanced monitoring enabled on RDS
-   - CloudTrail integration for API auditing
+## Testing Expectations
+- **Unit tests** (`pytest`) validate resource configuration, encryption flags, and ensure exports exist.
+- **Integration tests** reference the exported outputs and use boto3 clients to confirm AWS resources (VPC, subnets, NAT, RDS, Redis, IAM roles) exist and comply with requirements. The test harness searches for the `flat-outputs.json` file in the locations accessible in CI/CD (`cfn-outputs/flat-outputs.json`, `../cfn-outputs/flat-outputs.json`, `../../cfn-outputs/flat-outputs.json`).
 
-4. **Data Retention**:
-   - RDS backups retained for 30 days (meets HIPAA requirement)
-   - Automated backup windows configured
-   - Point-in-time recovery enabled
+## Deployment Notes
+- Requires Pulumi ≥3.x with `pulumi-aws` and `pulumi-random`.
+- Credentials for NUnit and live tests rely on standard AWS environment or profile configuration.
+- `pulumi up` will emit the outputs above, enabling manual inspection (`pulumi stack output`) or automated verification.
 
-5. **Access Control**:
-   - IAM roles for service-to-service authentication
-   - Secrets Manager for credential management
-   - Multi-AZ deployment for high availability
-
-## Resource Naming Convention
-
-All resources use the naming pattern: `{service}-{environment_suffix}`
-
-Example for 'dev' environment:
-- VPC: `medtech-vpc-dev`
-- RDS: `medtech-rds-dev`
-- Redis: `medtech-redis-dev`
-- Kinesis: `medtech-kinesis-dev`
-
-## Outputs
-
-The stack exports the following outputs for application integration:
-
-1. **vpc_id**: VPC identifier
-2. **private_subnet_ids**: List of private subnet IDs
-3. **kinesis_stream_name**: Kinesis stream name for data ingestion
-4. **kinesis_stream_arn**: Kinesis stream ARN
-5. **rds_endpoint**: RDS database endpoint
-6. **rds_port**: RDS database port
-7. **rds_secret_arn**: ARN of the secret containing RDS credentials
-8. **redis_endpoint**: ElastiCache Redis primary endpoint
-9. **redis_port**: Redis port number
-10. **redis_secret_arn**: ARN of the secret containing Redis auth token
+## Future Enhancements
+- Add CloudWatch alarms for critical metrics (RDS CPU, Redis replication lag, Kinesis iterator age).
+- Introduce multiple NAT gateways for higher network SLA.
+- Integrate custom KMS CMKs if tenant isolation policies require it.
 
 ## Deployment Requirements
 
