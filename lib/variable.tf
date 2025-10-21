@@ -10,6 +10,12 @@ variable "environment" {
   default = "production"
 }
 
+variable "environment_suffix" {
+  type        = string
+  description = "Environment suffix for resource naming to ensure uniqueness across deployments"
+  default     = "production"
+}
+
 variable "allowed_ips" {
   type    = list(string)
   default = ["10.0.0.0/8"]

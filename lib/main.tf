@@ -26,7 +26,7 @@ resource "aws_kms_key" "master" {
 }
 
 resource "aws_kms_custom_key_store" "cloudhsm" {
-  custom_key_store_name = "production-cloudhsm-keystore"
+  custom_key_store_name = "${var.environment_suffix}-cloudhsm-keystore"
   cloud_hsm_cluster_id  = var.cloudhsm_cluster_id
 
   trust_anchor_certificate = file("${path.module}/customerCA.crt")
@@ -39,7 +39,7 @@ resource "random_password" "keystore" {
 }
 
 resource "aws_kms_alias" "master" {
-  name          = "alias/production-master"
+  name          = "alias/${var.environment_suffix}-master"
   target_key_id = aws_kms_key.master.key_id
 }
 
@@ -51,7 +51,7 @@ resource "aws_vpc" "main" {
   assign_generated_ipv6_cidr_block = false
 
   tags = merge(local.tags, {
-    Name = "production-vpc"
+    Name = "${var.environment_suffix}-vpc"
   })
 }
 
@@ -63,7 +63,7 @@ resource "aws_subnet" "private" {
   map_public_ip_on_launch = false
 
   tags = merge(local.tags, {
-    Name = "production-private-${local.azs[count.index]}"
+    Name = "${var.environment_suffix}-private-${local.azs[count.index]}"
     Type = "Private"
   })
 }
@@ -76,7 +76,7 @@ resource "aws_vpc_endpoint" "s3" {
   route_table_ids     = aws_route_table.private[*].id
 
   tags = merge(local.tags, {
-    Name = "production-s3-endpoint"
+    Name = "${var.environment_suffix}-s3-endpoint"
   })
 }
 
@@ -97,12 +97,12 @@ resource "aws_vpc_endpoint" "interface_endpoints" {
   security_group_ids = [aws_security_group.vpc_endpoints.id]
 
   tags = merge(local.tags, {
-    Name = "production-${each.value}-endpoint"
+    Name = "${var.environment_suffix}-${each.value}-endpoint"
   })
 }
 
 resource "aws_security_group" "vpc_endpoints" {
-  name_prefix = "production-vpc-endpoints-"
+  name_prefix = "${var.environment_suffix}-vpc-endpoints-"
   vpc_id      = aws_vpc.main.id
   description = "Security group for VPC endpoints"
 
@@ -121,7 +121,7 @@ resource "aws_security_group" "vpc_endpoints" {
   }
 
   tags = merge(local.tags, {
-    Name = "production-vpc-endpoints-sg"
+    Name = "${var.environment_suffix}-vpc-endpoints-sg"
   })
 }
 
@@ -130,7 +130,7 @@ resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
 
   tags = merge(local.tags, {
-    Name = "production-private-rt-${local.azs[count.index]}"
+    Name = "${var.environment_suffix}-private-rt-${local.azs[count.index]}"
   })
 }
 
@@ -141,7 +141,7 @@ resource "aws_route_table_association" "private" {
 }
 
 resource "aws_networkfirewall_firewall_policy" "main" {
-  name = "production-firewall-policy"
+  name = "${var.environment_suffix}-firewall-policy"
 
   firewall_policy {
     stateless_default_actions          = ["aws:forward_to_sfe"]
@@ -166,7 +166,7 @@ resource "aws_networkfirewall_firewall_policy" "main" {
 }
 
 resource "aws_networkfirewall_rule_group" "domain_filter" {
-  name     = "production-domain-filter"
+  name     = "${var.environment_suffix}-domain-filter"
   type     = "STATEFUL"
   capacity = 100
 
@@ -193,7 +193,7 @@ resource "aws_networkfirewall_rule_group" "domain_filter" {
 }
 
 resource "aws_networkfirewall_rule_group" "suricata_rules" {
-  name     = "production-suricata-rules"
+  name     = "${var.environment_suffix}-suricata-rules"
   type     = "STATEFUL"
   capacity = 1000
 
@@ -233,7 +233,7 @@ resource "aws_networkfirewall_rule_group" "suricata_rules" {
 }
 
 resource "aws_networkfirewall_firewall" "main" {
-  name                = "production-firewall"
+  name                = "${var.environment_suffix}-firewall"
   firewall_policy_arn = aws_networkfirewall_firewall_policy.main.arn
   vpc_id              = aws_vpc.main.id
 
@@ -272,7 +272,7 @@ resource "aws_networkfirewall_logging_configuration" "main" {
 }
 
 resource "aws_s3_bucket" "logs" {
-  bucket = "production-logs-${data.aws_caller_identity.current.account_id}-${var.region}"
+  bucket = "${var.environment_suffix}-logs-${data.aws_caller_identity.current.account_id}-${var.region}"
 
   tags = local.tags
 }
@@ -323,7 +323,7 @@ resource "aws_s3_bucket_object_lock_configuration" "logs" {
   rule {
     default_retention {
       mode = "GOVERNANCE"
-      days = 2555
+      days = 7
     }
   }
 }
@@ -408,12 +408,12 @@ resource "aws_flow_log" "vpc" {
   }
 
   tags = merge(local.tags, {
-    Name = "production-vpc-flow-logs"
+    Name = "${var.environment_suffix}-vpc-flow-logs"
   })
 }
 
 resource "aws_iam_role" "flow_logs" {
-  name = "production-vpc-flow-logs-role"
+  name = "${var.environment_suffix}-vpc-flow-logs-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -432,7 +432,7 @@ resource "aws_iam_role" "flow_logs" {
 }
 
 resource "aws_iam_role_policy" "flow_logs" {
-  name = "production-vpc-flow-logs-policy"
+  name = "${var.environment_suffix}-vpc-flow-logs-policy"
   role = aws_iam_role.flow_logs.id
 
   policy = jsonencode({
@@ -456,7 +456,7 @@ resource "aws_iam_role_policy" "flow_logs" {
 }
 
 resource "aws_cloudtrail" "main" {
-  name                          = "production-trail"
+  name                          = "${var.environment_suffix}-trail"
   s3_bucket_name                = aws_s3_bucket.cloudtrail.id
   include_global_service_events = true
   is_multi_region_trail         = true
@@ -483,7 +483,7 @@ resource "aws_cloudtrail" "main" {
 }
 
 resource "aws_s3_bucket" "cloudtrail" {
-  bucket = "production-cloudtrail-${data.aws_caller_identity.current.account_id}-${var.region}"
+  bucket = "${var.environment_suffix}-cloudtrail-${data.aws_caller_identity.current.account_id}-${var.region}"
   
   tags = local.tags
 }
@@ -512,8 +512,8 @@ resource "aws_s3_bucket_object_lock_configuration" "cloudtrail" {
 
   rule {
     default_retention {
-      mode = "COMPLIANCE"
-      days = 2555
+      mode = "GOVERNANCE"
+      days = 7
     }
   }
 }
@@ -618,11 +618,11 @@ resource "aws_guardduty_threatintelset" "custom" {
   detector_id = aws_guardduty_detector.main.id
   format      = "TXT"
   location    = "s3://${aws_s3_bucket.threat_intel.id}/threatlist.txt"
-  name        = "production-threat-intel"
+  name        = "${var.environment_suffix}-threat-intel"
 }
 
 resource "aws_s3_bucket" "threat_intel" {
-  bucket = "production-threat-intel-${data.aws_caller_identity.current.account_id}"
+  bucket = "${var.environment_suffix}-threat-intel-${data.aws_caller_identity.current.account_id}"
 
   tags = local.tags
 }
@@ -648,7 +648,7 @@ resource "aws_securityhub_standards_subscription" "pci" {
 }
 
 resource "aws_config_configuration_recorder" "main" {
-  name     = "production-recorder"
+  name     = "${var.environment_suffix}-recorder"
   role_arn = aws_iam_role.config.arn
 
   recording_group {
@@ -658,7 +658,7 @@ resource "aws_config_configuration_recorder" "main" {
 }
 
 resource "aws_config_delivery_channel" "main" {
-  name           = "production-delivery-channel"
+  name           = "${var.environment_suffix}-delivery-channel"
   s3_bucket_name = aws_s3_bucket.config.bucket
 
   snapshot_delivery_properties {
@@ -674,7 +674,7 @@ resource "aws_config_configuration_recorder_status" "main" {
 }
 
 resource "aws_s3_bucket" "config" {
-  bucket = "production-config-${data.aws_caller_identity.current.account_id}-${var.region}"
+  bucket = "${var.environment_suffix}-config-${data.aws_caller_identity.current.account_id}-${var.region}"
 
   tags = local.tags
 }
@@ -708,7 +708,7 @@ resource "aws_s3_bucket_public_access_block" "config" {
 }
 
 resource "aws_iam_role" "config" {
-  name = "production-config-role"
+  name = "${var.environment_suffix}-config-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -732,7 +732,7 @@ resource "aws_iam_role_policy_attachment" "config" {
 }
 
 resource "aws_iam_role_policy" "config_s3" {
-  name = "production-config-s3-policy"
+  name = "${var.environment_suffix}-config-s3-policy"
   role = aws_iam_role.config.id
 
   policy = jsonencode({
@@ -825,7 +825,7 @@ resource "aws_config_config_rule" "root_account_mfa" {
 }
 
 resource "aws_cloudwatch_log_group" "main" {
-  name              = "/aws/production/main"
+  name              = "/aws/${var.environment_suffix}/main"
   retention_in_days = 365
   kms_key_id        = aws_kms_key.master.arn
 
@@ -839,7 +839,7 @@ resource "aws_macie2_account" "main" {
 
 resource "aws_macie2_classification_job" "s3_scan" {
   job_type = "ONE_TIME"
-  name     = "production-s3-scan"
+  name     = "${var.environment_suffix}-s3-scan"
 
   s3_job_definition {
     bucket_definitions {
@@ -850,7 +850,7 @@ resource "aws_macie2_classification_job" "s3_scan" {
 }
 
 resource "aws_sns_topic" "security_alerts" {
-  name              = "production-security-alerts"
+  name              = "${var.environment_suffix}-security-alerts"
   kms_master_key_id = aws_kms_key.master.arn
 
   tags = local.tags
@@ -863,7 +863,7 @@ resource "aws_sns_topic_subscription" "security_alerts" {
 }
 
 resource "aws_cloudwatch_event_rule" "guardduty_findings" {
-  name        = "production-guardduty-findings"
+  name        = "${var.environment_suffix}-guardduty-findings"
   description = "Capture GuardDuty findings"
 
   event_pattern = jsonencode({
@@ -895,7 +895,7 @@ resource "aws_cloudwatch_event_target" "lambda" {
 
 resource "aws_lambda_function" "security_response" {
   filename         = "security_response.zip"
-  function_name    = "production-security-response"
+  function_name    = "${var.environment_suffix}-security-response"
   role             = aws_iam_role.lambda_security.arn
   handler          = "index.handler"
   runtime          = "python3.9"
@@ -917,7 +917,7 @@ resource "aws_lambda_function" "security_response" {
 }
 
 resource "aws_sqs_queue" "dlq" {
-  name                       = "production-security-response-dlq"
+  name                       = "${var.environment_suffix}-security-response-dlq"
   kms_master_key_id          = aws_kms_key.master.arn
   message_retention_seconds  = 1209600
   visibility_timeout_seconds = 300
@@ -926,7 +926,7 @@ resource "aws_sqs_queue" "dlq" {
 }
 
 resource "aws_iam_role" "lambda_security" {
-  name = "production-lambda-security-role"
+  name = "${var.environment_suffix}-lambda-security-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -950,7 +950,7 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
 }
 
 resource "aws_iam_role_policy" "lambda_security" {
-  name = "production-lambda-security-policy"
+  name = "${var.environment_suffix}-lambda-security-policy"
   role = aws_iam_role.lambda_security.id
 
   policy = jsonencode({
@@ -1007,7 +1007,7 @@ resource "aws_iam_account_password_policy" "strict" {
 }
 
 resource "aws_iam_policy" "mfa_self_manage" {
-  name        = "production-mfa-self-manage"
+  name        = "${var.environment_suffix}-mfa-self-manage"
   description = "Allow users to self-manage MFA devices"
 
   policy = jsonencode({
@@ -1067,7 +1067,7 @@ resource "aws_iam_policy" "mfa_self_manage" {
 }
 
 resource "aws_iam_policy" "ip_restrict" {
-  name        = "production-ip-restriction"
+  name        = "${var.environment_suffix}-ip-restriction"
   description = "Restrict access to allowed IPs only"
 
   policy = jsonencode({
@@ -1088,7 +1088,7 @@ resource "aws_iam_policy" "ip_restrict" {
 }
 
 resource "aws_secretsmanager_secret" "rds_master" {
-  name                    = "production-rds-master-password"
+  name                    = "${var.environment_suffix}-rds-master-password"
   recovery_window_in_days = 30
   kms_key_id              = aws_kms_key.master.arn
 
@@ -1119,7 +1119,7 @@ resource "aws_secretsmanager_secret_rotation" "rds_master" {
 
 resource "aws_lambda_function" "rotate_secret" {
   filename         = "rotate_secret.zip"
-  function_name    = "production-rotate-secret"
+  function_name    = "${var.environment_suffix}-rotate-secret"
   role             = aws_iam_role.lambda_rotate.arn
   handler          = "lambda_function.lambda_handler"
   runtime          = "python3.9"
@@ -1136,7 +1136,7 @@ resource "aws_lambda_function" "rotate_secret" {
 }
 
 resource "aws_iam_role" "lambda_rotate" {
-  name = "production-lambda-rotate-role"
+  name = "${var.environment_suffix}-lambda-rotate-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -1155,7 +1155,7 @@ resource "aws_iam_role" "lambda_rotate" {
 }
 
 resource "aws_iam_role_policy" "lambda_rotate" {
-  name = "production-lambda-rotate-policy"
+  name = "${var.environment_suffix}-lambda-rotate-policy"
   role = aws_iam_role.lambda_rotate.id
 
   policy = jsonencode({
@@ -1198,7 +1198,7 @@ resource "aws_lambda_permission" "allow_secret_manager_rotation" {
 }
 
 resource "aws_s3_bucket" "data" {
-  bucket = "production-data-${data.aws_caller_identity.current.account_id}"
+  bucket = "${var.environment_suffix}-data-${data.aws_caller_identity.current.account_id}"
 
   tags = local.tags
 }
@@ -1221,12 +1221,12 @@ resource "aws_ec2_host" "main" {
   auto_placement      = "on"
 
   tags = merge(local.tags, {
-    Name = "production-dedicated-host-${count.index + 1}"
+    Name = "${var.environment_suffix}-dedicated-host-${count.index + 1}"
   })
 }
 
 resource "aws_launch_template" "secure" {
-  name_prefix = "production-secure-"
+  name_prefix = "${var.environment_suffix}-secure-"
 
   instance_type = "m5.large"
   
@@ -1268,14 +1268,14 @@ resource "aws_launch_template" "secure" {
   tag_specifications {
     resource_type = "instance"
     tags = merge(local.tags, {
-      Name = "production-secure-instance"
+      Name = "${var.environment_suffix}-secure-instance"
     })
   }
 
   tag_specifications {
     resource_type = "volume"
     tags = merge(local.tags, {
-      Name = "production-secure-volume"
+      Name = "${var.environment_suffix}-secure-volume"
     })
   }
 
@@ -1290,7 +1290,7 @@ resource "aws_launch_template" "secure" {
 }
 
 resource "aws_security_group" "ec2" {
-  name_prefix = "production-ec2-"
+  name_prefix = "${var.environment_suffix}-ec2-"
   vpc_id      = aws_vpc.main.id
   description = "Security group for EC2 instances"
 
@@ -1303,17 +1303,17 @@ resource "aws_security_group" "ec2" {
   }
 
   tags = merge(local.tags, {
-    Name = "production-ec2-sg"
+    Name = "${var.environment_suffix}-ec2-sg"
   })
 }
 
 resource "aws_iam_instance_profile" "ssm" {
-  name = "production-ssm-instance-profile"
+  name = "${var.environment_suffix}-ssm-instance-profile"
   role = aws_iam_role.ssm_instance.name
 }
 
 resource "aws_iam_role" "ssm_instance" {
-  name = "production-ssm-instance-role"
+  name = "${var.environment_suffix}-ssm-instance-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -1337,7 +1337,7 @@ resource "aws_iam_role_policy_attachment" "ssm_managed_instance" {
 }
 
 resource "aws_iam_role_policy" "ssm_instance_kms" {
-  name = "production-ssm-instance-kms"
+  name = "${var.environment_suffix}-ssm-instance-kms"
   role = aws_iam_role.ssm_instance.id
 
   policy = jsonencode({
@@ -1375,7 +1375,7 @@ resource "aws_ssm_document" "session_manager_prefs" {
 }
 
 resource "aws_cloudwatch_log_group" "session_manager" {
-  name              = "/aws/sessionmanager/production"
+  name              = "/aws/sessionmanager/${var.environment_suffix}"
   retention_in_days = 365
   kms_key_id        = aws_kms_key.master.arn
 
@@ -1397,12 +1397,12 @@ resource "aws_fsx_lustre_file_system" "main" {
   }
 
   tags = merge(local.tags, {
-    Name = "production-fsx-lustre"
+    Name = "${var.environment_suffix}-fsx-lustre"
   })
 }
 
 resource "aws_cloudwatch_log_group" "fsx" {
-  name              = "/aws/fsx/production-lustre"
+  name              = "/aws/fsx/${var.environment_suffix}-lustre"
   retention_in_days = 365
   kms_key_id        = aws_kms_key.master.arn
 
@@ -1410,7 +1410,7 @@ resource "aws_cloudwatch_log_group" "fsx" {
 }
 
 resource "aws_security_group" "fsx" {
-  name_prefix = "production-fsx-"
+  name_prefix = "${var.environment_suffix}-fsx-"
   vpc_id      = aws_vpc.main.id
   description = "Security group for FSx"
 
@@ -1436,15 +1436,15 @@ resource "aws_security_group" "fsx" {
   }
 
   tags = merge(local.tags, {
-    Name = "production-fsx-sg"
+    Name = "${var.environment_suffix}-fsx-sg"
   })
 }
 
 resource "aws_rds_cluster" "aurora" {
-  cluster_identifier              = "production-aurora-cluster"
+  cluster_identifier              = "${var.environment_suffix}-aurora-cluster"
   engine                          = "aurora-postgresql"
   engine_version                  = "14.9"
-  database_name                   = "production"
+  database_name                   = var.environment_suffix
   master_username                 = jsondecode(aws_secretsmanager_secret_version.rds_master.secret_string)["username"]
   master_password                 = jsondecode(aws_secretsmanager_secret_version.rds_master.secret_string)["password"]
   backup_retention_period         = 35
@@ -1455,25 +1455,24 @@ resource "aws_rds_cluster" "aurora" {
   vpc_security_group_ids          = [aws_security_group.aurora.id]
   db_subnet_group_name            = aws_db_subnet_group.aurora.name
   enabled_cloudwatch_logs_exports = ["postgresql"]
-  deletion_protection             = true
+  deletion_protection             = false
   apply_immediately               = false
-  skip_final_snapshot             = false
-  final_snapshot_identifier       = "production-aurora-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
+  skip_final_snapshot             = true
 
   tags = local.tags
 }
 
 resource "aws_db_subnet_group" "aurora" {
-  name       = "production-aurora-subnet-group"
+  name       = "${var.environment_suffix}-aurora-subnet-group"
   subnet_ids = aws_subnet.private[*].id
 
   tags = merge(local.tags, {
-    Name = "production-aurora-subnet-group"
+    Name = "${var.environment_suffix}-aurora-subnet-group"
   })
 }
 
 resource "aws_security_group" "aurora" {
-  name_prefix = "production-aurora-"
+  name_prefix = "${var.environment_suffix}-aurora-"
   vpc_id      = aws_vpc.main.id
   description = "Security group for Aurora"
 
@@ -1492,13 +1491,13 @@ resource "aws_security_group" "aurora" {
   }
 
   tags = merge(local.tags, {
-    Name = "production-aurora-sg"
+    Name = "${var.environment_suffix}-aurora-sg"
   })
 }
 
 resource "aws_rds_cluster_instance" "aurora" {
   count                = 2
-  identifier           = "production-aurora-instance-${count.index + 1}"
+  identifier           = "${var.environment_suffix}-aurora-instance-${count.index + 1}"
   cluster_identifier   = aws_rds_cluster.aurora.id
   instance_class       = "db.r6g.large"
   engine               = aws_rds_cluster.aurora.engine
@@ -1510,12 +1509,12 @@ resource "aws_rds_cluster_instance" "aurora" {
   performance_insights_kms_key_id = aws_kms_key.master.arn
 
   tags = merge(local.tags, {
-    Name = "production-aurora-instance-${count.index + 1}"
+    Name = "${var.environment_suffix}-aurora-instance-${count.index + 1}"
   })
 }
 
 resource "aws_iam_role" "rds_monitoring" {
-  name = "production-rds-monitoring-role"
+  name = "${var.environment_suffix}-rds-monitoring-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
