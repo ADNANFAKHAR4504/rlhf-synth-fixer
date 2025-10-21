@@ -216,6 +216,7 @@
             "Ref": "AuroraSecret"
           }
         },
+        "ManageMasterUserPassword": true,
         "DatabaseName": "reportingdb",
         "DBClusterParameterGroupName": "default-aurora-postgresql16",
         "StorageEncrypted": true,
