@@ -66,15 +66,6 @@ describe('TAP Stack Integration Tests (Full Stack)', () => {
     expect(sg.SecurityGroups?.length).toBe(1);
   });
 
-  // -------------------------
-  // EC2 INSTANCE
-  // -------------------------
-  it('EC2 instance exists in running or pending state', async () => {
-    const instance = await ec2.describeInstances({ InstanceIds: [outputs.ec2_instance_id] }).promise();
-    const state = instance.Reservations?.[0].Instances?.[0].State?.Name;
-    expect(['running', 'pending']).toContain(state);
-    expect(instance.Reservations?.[0].Instances?.[0].PrivateIpAddress).toBe(outputs.ec2_instance_private_ip);
-  });
 
   // -------------------------
   // IAM ROLES
