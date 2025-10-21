@@ -1,6 +1,6 @@
 {
-  "platform": "CDKTF",
-  "language": "py",
+  "platform": "cdktf",
+  "language": "python",
   "complexity": "medium",
   "turn_type": "single",
   "po_id": "9340809978",
@@ -8,7 +8,11 @@
   "startedAt": "2025-10-21T16:40:58+05:30",
   "subtask": "Application Deployment",
   "background": "StreamFlix, a European media streaming company, needs to automate their video processing infrastructure. They require a solution that can handle large video files, process metadata, and maintain processing state information. The system must be scalable and comply with EU media regulations for content tracking.",
-  "subject_labels": ["CI/CD Pipeline", "Infrastructure Analysis/Monitoring", "Security Configuration as Code"],
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
   "aws_services": [
     "VPC",
     "Subnet",
