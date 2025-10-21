@@ -141,10 +141,7 @@ export class TapStack extends cdk.Stack {
     personalizationFunction.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
-        actions: [
-          'xray:PutTraceSegments',
-          'xray:PutTelemetryRecords',
-        ],
+        actions: ['xray:PutTraceSegments', 'xray:PutTelemetryRecords'],
         resources: ['*'],
       })
     );
@@ -173,10 +170,7 @@ export class TapStack extends cdk.Stack {
     engagementTrackingFunction.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
-        actions: [
-          'xray:PutTraceSegments',
-          'xray:PutTelemetryRecords',
-        ],
+        actions: ['xray:PutTraceSegments', 'xray:PutTelemetryRecords'],
         resources: ['*'],
       })
     );
