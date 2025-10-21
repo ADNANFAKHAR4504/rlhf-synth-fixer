@@ -1,0 +1,18 @@
+{
+  "platform": "CDKTF",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "8805053057",
+  "team": "synth",
+  "startedAt": "2025-10-21T11:06:48+00:00",
+  "subtask": "Failure Recovery and High Availability",
+  "background": "Infrastructure task for CDKTF",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Failure Recovery Automation",
+    "Security Configuration as Code"
+  ],
+  "training_quality": 8.5,
+  "aws_services": "VPC, EC2, RDS Aurora PostgreSQL, RDS Global Cluster, S3, KMS, IAM, Secrets Manager, CloudWatch Logs, CloudWatch Alarms, CloudTrail, AWS Backup, SNS, NAT Gateway, Internet Gateway, VPC Endpoints"
+}
