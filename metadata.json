@@ -1,0 +1,26 @@
+{
+  "platform": "CDKTF",
+  "language": "TypeScript",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-10-21T10:52:26.189911+00:00",
+  "subtask": "Application Deployment",
+  "background": "HealthTech Solutions is launching a new patient portal that requires strict data compliance and high availability. The application needs to handle sensitive patient data while maintaining quick access to frequently requested information. The infrastructure must be deployed in a way that maintains HIPAA compliance while optimizing for performance.",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Failure Recovery Automation",
+    "IaC Optimization",
+    "Security Configuration as Code"
+  ],
+  "po_id": "8689293696",
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "ElastiCache",
+    "KMS",
+    "Secrets Manager"
+  ]
+}
