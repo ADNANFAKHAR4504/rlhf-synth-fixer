@@ -27,7 +27,21 @@ class TestTapStackIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up AWS clients and extract resource identifiers"""
-        cls.region = 'us-east-2'
+        # Get region from environment variables first, then from API endpoint, or default to us-east-2
+        cls.region = os.environ.get('AWS_REGION') or os.environ.get('AWS_DEFAULT_REGION')
+        
+        if not cls.region:
+            # Extract region from API endpoint if environment variables are not set
+            api_endpoint = flat_outputs.get('ApiEndpoint', '')
+            if api_endpoint and 'execute-api' in api_endpoint:
+                # Extract region from URL like https://xxx.execute-api.us-east-1.amazonaws.com/
+                import re
+                region_match = re.search(r'execute-api\.([^.]+)\.amazonaws\.com', api_endpoint)
+                cls.region = region_match.group(1) if region_match else 'us-east-2'
+            else:
+                cls.region = 'us-east-2'
+        
+        print(f"Using AWS region: {cls.region}")
         
         # Initialize AWS clients
         cls.lambda_client = boto3.client('lambda', region_name=cls.region)
