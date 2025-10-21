@@ -222,12 +222,13 @@ describe('TapStack CloudFormation Template', () => {
     test('EC2Role should have correct policies', () => {
       const ec2Role = template.Resources.EC2Role;
       expect(ec2Role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy');
-      expect(ec2Role.Properties.Policies).toHaveLength(3);
+      expect(ec2Role.Properties.Policies).toHaveLength(4);
 
       const policyNames = ec2Role.Properties.Policies.map((p: any) => p.PolicyName);
       expect(policyNames).toContain('SSMParameterAccess');
       expect(policyNames).toContain('LambdaInvokePolicy');
       expect(policyNames).toContain('SecretsManagerReadAccess');
+      expect(policyNames).toContain('KMSAccess');
     });
 
     test('should have EC2InstanceProfile', () => {
