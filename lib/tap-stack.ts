@@ -1,6 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
-import * as applicationautoscaling from 'aws-cdk-lib/aws-applicationautoscaling';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -23,7 +22,7 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-    // Create DynamoDB table with auto-scaling
+    // Create DynamoDB table
     const table = new dynamodb.Table(this, `ItemsTable${environmentSuffix}`, {
       tableName: `tap-api-items-${environmentSuffix}`,
       partitionKey: {
@@ -32,7 +31,9 @@ export class TapStack extends cdk.Stack {
       },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.DESTROY, // For development/testing only
-      pointInTimeRecovery: true,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: true,
+      },
     });
 
     // Add Global Secondary Index for potential query patterns
@@ -45,47 +46,8 @@ export class TapStack extends cdk.Stack {
       projectionType: dynamodb.ProjectionType.ALL,
     });
 
-    // Enable auto-scaling for read capacity
-    const readScaling = new applicationautoscaling.ScalableTarget(
-      this,
-      `DynamoReadScaling${environmentSuffix}`,
-      {
-        serviceNamespace: applicationautoscaling.ServiceNamespace.DYNAMODB,
-        resourceId: `table/${table.tableName}/index/*`,
-        scalableDimension: 'dynamodb:index:ReadCapacityUnits',
-        minCapacity: 5,
-        maxCapacity: 400,
-        role: undefined, // Use default role
-      }
-    );
-
-    readScaling.scaleToTrackMetric('DynamoReadScalingPolicy', {
-      targetValue: 70.0,
-      predefinedMetric:
-        applicationautoscaling.PredefinedMetric
-          .DYNAMODB_READ_CAPACITY_UTILIZATION,
-    });
-
-    // Enable auto-scaling for write capacity
-    const writeScaling = new applicationautoscaling.ScalableTarget(
-      this,
-      `DynamoWriteScaling${environmentSuffix}`,
-      {
-        serviceNamespace: applicationautoscaling.ServiceNamespace.DYNAMODB,
-        resourceId: `table/${table.tableName}/index/*`,
-        scalableDimension: 'dynamodb:index:WriteCapacityUnits',
-        minCapacity: 5,
-        maxCapacity: 400,
-        role: undefined, // Use default role
-      }
-    );
-
-    writeScaling.scaleToTrackMetric('DynamoWriteScalingPolicy', {
-      targetValue: 70.0,
-      predefinedMetric:
-        applicationautoscaling.PredefinedMetric
-          .DYNAMODB_WRITE_CAPACITY_UTILIZATION,
-    });
+    // Note: Auto-scaling is not supported for PAY_PER_REQUEST billing mode tables.
+    // DynamoDB automatically scales based on demand for on-demand tables.
 
     // Create Secrets Manager secret for API credentials
     const apiSecret = new secretsmanager.Secret(

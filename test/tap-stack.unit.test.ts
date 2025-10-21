@@ -61,25 +61,6 @@ describe('TapStack', () => {
       });
     });
 
-    test('should create DynamoDB auto-scaling policies', () => {
-      template.hasResourceProperties(
-        'AWS::ApplicationAutoScaling::ScalableTarget',
-        {
-          ScalableDimension: 'dynamodb:index:ReadCapacityUnits',
-          MinCapacity: 5,
-          MaxCapacity: 400,
-        }
-      );
-
-      template.hasResourceProperties(
-        'AWS::ApplicationAutoScaling::ScalableTarget',
-        {
-          ScalableDimension: 'dynamodb:index:WriteCapacityUnits',
-          MinCapacity: 5,
-          MaxCapacity: 400,
-        }
-      );
-    });
   });
 
   describe('Secrets Manager', () => {
