@@ -63,7 +63,7 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
 
     test('should have exactly two parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(2);
+      expect(parameterCount).toBe(3);
     });
   });
 

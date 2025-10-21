@@ -1,9 +1,4 @@
-# patient-portal-secure-foundation.yaml
-# CloudFormation template for HIPAA-compliant Healthcare Patient Portal infrastructure
-# All resources follow nova-prod-* naming convention for production environment
-
 ```yml
-
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure foundation for Healthcare Patient Portal with HIPAA compliance'
 
@@ -21,6 +16,10 @@ Parameters:
     Description: 'Email address for security alerts'
     AllowedPattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
     ConstraintDescription: 'Must be a valid email address'
+
+  ACMCertificateArn:
+    Type: String
+    Description: 'ACM certificate ARN for the ALB HTTPS listener'
 
 Mappings: 
   SubnetConfig:
@@ -50,7 +49,7 @@ Resources:
         SecretStringTemplate: '{"username": "admin"}'
         GenerateStringKey: 'password'
         PasswordLength: 32
-        ExcludeCharacters: '"@/\'
+        ExcludeCharacters: "\"@/\\"
       KmsKeyId: !Ref NovaEncryptionKey
       Tags:
         - Key: Name
@@ -571,6 +570,69 @@ Resources:
       Roles:
         - !Ref NovaEC2Role
 
+  # Launch Template for Application EC2 instances
+  NovaAppLaunchTemplate:
+    Type: 'AWS::EC2::LaunchTemplate'
+    Properties:
+      LaunchTemplateName: 'nova-prod-app-lt'
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt NovaEC2InstanceProfile.Arn
+        InstanceType: t3.small
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+        SecurityGroupIds:
+          - !Ref NovaApplicationSecurityGroup
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: 20
+              VolumeType: gp3
+              Encrypted: true
+              KmsKeyId: !Ref NovaEncryptionKey
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: 'nova-prod-app-instance'
+              - Key: team
+                Value: '2'
+              - Key: iac-rlhf-amazon
+                Value: 'true'
+          - ResourceType: volume
+            Tags:
+              - Key: Name
+                Value: 'nova-prod-app-volume'
+              - Key: team
+                Value: '2'
+              - Key: iac-rlhf-amazon
+                Value: 'true'
+
+  # Auto Scaling Group for Application
+  NovaAppAutoScalingGroup:
+    Type: 'AWS::AutoScaling::AutoScalingGroup'
+    Properties:
+      VPCZoneIdentifier:
+        - !Ref NovaPrivateSubnet1
+        - !Ref NovaPrivateSubnet2
+      MinSize: '2'
+      MaxSize: '4'
+      DesiredCapacity: '2'
+      LaunchTemplate:
+        LaunchTemplateId: !Ref NovaAppLaunchTemplate
+        Version: !GetAtt NovaAppLaunchTemplate.LatestVersionNumber
+      TargetGroupARNs:
+        - !Ref NovaALBTargetGroup
+      Tags:
+        - Key: Name
+          Value: 'nova-prod-app-asg'
+          PropagateAtLaunch: true
+        - Key: team
+          Value: '2'
+          PropagateAtLaunch: true
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+          PropagateAtLaunch: true
+
   # Application Load Balancer
   NovaApplicationLoadBalancer:
     Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
@@ -596,6 +658,42 @@ Resources:
     Properties:
       ResourceArn: !Ref NovaApplicationLoadBalancer
       WebACLArn: !GetAtt NovaWAFWebACL.Arn
+
+  # Target Group for application instances
+  NovaALBTargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      Name: 'nova-prod-app-tg'
+      TargetType: instance
+      Protocol: HTTP
+      Port: 80
+      VpcId: !Ref NovaVPC
+      HealthCheckEnabled: true
+      HealthCheckProtocol: HTTP
+      HealthCheckPort: '80'
+      HealthCheckPath: '/'
+      Matcher:
+        HttpCode: '200-399'
+      Tags:
+        - Key: Name
+          Value: 'nova-prod-app-tg'
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  # HTTPS Listener for ALB
+  NovaALBHTTPSListener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      LoadBalancerArn: !Ref NovaApplicationLoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref ACMCertificateArn
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref NovaALBTargetGroup
 
   # AWS WAF Configuration
   NovaWAFWebACL:
@@ -723,6 +821,38 @@ Resources:
         - Key: iac-rlhf-amazon
           Value: 'true'
 
+  # Bastion host in public subnet with encrypted EBS
+  NovaBastionInstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      InstanceProfileName: 'nova-prod-bastion-instance-profile'
+      Roles:
+        - !Ref NovaEC2Role
+
+  NovaBastionInstance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      SubnetId: !Ref NovaPublicSubnet1
+      InstanceType: t3.micro
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+      IamInstanceProfile: !Ref NovaBastionInstanceProfile
+      SecurityGroupIds:
+        - !Ref NovaBastionSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 8
+            VolumeType: gp3
+            Encrypted: true
+            KmsKeyId: !Ref NovaEncryptionKey
+      Tags:
+        - Key: Name
+          Value: 'nova-prod-bastion'
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
   NovaALBSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
@@ -735,6 +865,11 @@ Resources:
           ToPort: 443
           CidrIp: '0.0.0.0/0'
           Description: 'HTTPS from internet'
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTP for redirect/health checks if needed'
       Tags:
         - Key: Name
           Value: 'nova-prod-alb-sg'
@@ -762,10 +897,20 @@ Resources:
     Properties:
       GroupId: !Ref NovaApplicationSecurityGroup
       IpProtocol: tcp
-      FromPort: 443
-      ToPort: 443
+      FromPort: 80
+      ToPort: 80
       SourceSecurityGroupId: !Ref NovaALBSecurityGroup
-      Description: 'HTTPS from ALB'
+      Description: 'HTTP from ALB after TLS termination'
+
+  NovaApplicationSGHealthCheckFromALB:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !Ref NovaApplicationSecurityGroup
+      IpProtocol: tcp
+      FromPort: 1024
+      ToPort: 65535
+      SourceSecurityGroupId: !Ref NovaALBSecurityGroup
+      Description: 'Ephemeral ports for ALB health checks if needed'
 
   NovaApplicationSGIngressFromBastion:
     Type: 'AWS::EC2::SecurityGroupIngress'
@@ -851,6 +996,50 @@ Resources:
       SecretId: !Ref NovaRDSPasswordSecret
       TargetId: !Ref NovaRDSInstance
       TargetType: 'AWS::RDS::DBInstance'
+
+  # Security group for Secrets Manager Rotation Lambda
+  NovaSecretsRotationSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupName: 'nova-prod-secrets-rotation-sg'
+      GroupDescription: 'SG for secrets rotation lambda to access RDS'
+      VpcId: !Ref NovaVPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: '0.0.0.0/0'
+      Tags:
+        - Key: Name
+          Value: 'nova-prod-secrets-rotation-sg'
+        - Key: team
+          Value: '2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  # Allow rotation lambda SG to reach DB on 3306
+  NovaDBIngressFromRotation:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !Ref NovaDatabaseSecurityGroup
+      IpProtocol: tcp
+      FromPort: 3306
+      ToPort: 3306
+      SourceSecurityGroupId: !Ref NovaSecretsRotationSecurityGroup
+      Description: 'Allow Secrets Manager rotation to access RDS'
+
+  # Secrets Manager rotation schedule (hosted rotation for MySQL Single-User)
+  NovaRDSSecretRotation:
+    Type: 'AWS::SecretsManager::RotationSchedule'
+    Properties:
+      SecretId: !Ref NovaRDSPasswordSecret
+      RotationRules:
+        AutomaticallyAfterDays: 30
+      HostedRotationLambda:
+        RotationType: MySQLSingleUser
+        VpcSecurityGroupIds: !Ref NovaSecretsRotationSecurityGroup
+        VpcSubnetIds: !Join
+          - ','
+          - - !Ref NovaDatabaseSubnet1
+            - !Ref NovaDatabaseSubnet2
 
   # CloudWatch Log Group for VPC Flow Logs
   NovaVPCFlowLogsGroup:
@@ -1142,5 +1331,4 @@ Outputs:
     Value: !Ref NovaVPCFlowLogsGroup
     Export:
       Name: 'nova-prod-vpc-flow-logs-group'
-
 ```
