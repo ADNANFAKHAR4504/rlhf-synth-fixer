@@ -1,0 +1,30 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "7492345100",
+  "team": "synth",
+  "startedAt": "2025-10-21T08:11:50Z",
+  "subtask": "Application Deployment",
+  "background": "MedTech Solutions needs to modernize their patient records system. They require a secure infrastructure that processes sensitive healthcare data while maintaining HIPAA compliance. The system should handle patient data ingestion, secure storage, and controlled API access for authorized healthcare professionals.",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "InternetGateway",
+    "RouteTable",
+    "SecurityGroup",
+    "KMS",
+    "RDS",
+    "ECS",
+    "IAM",
+    "SecretsManager",
+    "APIGateway",
+    "Lambda",
+    "CloudWatchLogs"
+  ],
+  "training_quality": 9
+}
