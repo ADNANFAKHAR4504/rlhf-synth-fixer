@@ -31,3 +31,7 @@
 14. **Removed invalid rotation_rules block** - Removed `rotation_rules` block from `aws_secretsmanager_secret` resource. Rotation is configured via separate `aws_secretsmanager_secret_rotation` resource.
 
 15. **Fixed EC2 dedicated host resource type** - Changed `aws_ec2_dedicated_host` to `aws_ec2_host` (correct resource name).
+
+16. **Fixed Network Firewall rule_option blocks** - Changed all `rule_options` blocks to `rule_option` (singular) in the Network Firewall stateful rule configuration (4 instances).
+
+17. **Fixed EC2 host reference in launch template** - Changed `aws_ec2_dedicated_host.main[0].id` to `aws_ec2_host.main[0].id` to match the corrected resource type.

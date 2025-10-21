@@ -209,19 +209,19 @@ resource "aws_networkfirewall_rule_group" "suricata_rules" {
           destination = "$EXTERNAL_NET"
           destination_port = "ANY"
         }
-        rule_options {
+        rule_option {
           keyword  = "msg"
           settings = ["\"Detected data exfiltration attempt\""]
         }
-        rule_options {
+        rule_option {
           keyword  = "content"
           settings = ["\"password\""]
         }
-        rule_options {
+        rule_option {
           keyword  = "flow"
           settings = ["to_server,established"]
         }
-        rule_options {
+        rule_option {
           keyword  = "sid"
           settings = ["1000001"]
         }
@@ -1258,7 +1258,7 @@ resource "aws_launch_template" "secure" {
   placement {
     affinity    = "host"
     tenancy     = "host"
-    host_id     = aws_ec2_dedicated_host.main[0].id
+    host_id     = aws_ec2_host.main[0].id
   }
 
   iam_instance_profile {
