@@ -11,7 +11,7 @@
   "subject_labels": [
     "Cloud Environment Setup",
     "Security Configuration as Code",
-    "Web Application Deployment"
+    "Container Orchestration (ECS)"
   ],
   "aws_services": [
     "AWS::EC2::VPC",

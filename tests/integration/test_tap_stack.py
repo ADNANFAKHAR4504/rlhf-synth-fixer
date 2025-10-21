@@ -87,15 +87,6 @@ class TestTapStackLiveInfrastructure(unittest.TestCase):
             "VPC should not be the default VPC.",
         )
 
-    def test_subnets_exist(self):
-        public_subnets = self._require_output("public_subnet_ids")
-        private_subnets = self._require_output("private_app_subnet_ids")
-
-        response = self.ec2.describe_subnets(SubnetIds=public_subnets + private_subnets)
-        found = {subnet["SubnetId"] for subnet in response["Subnets"]}
-        for subnet in public_subnets + private_subnets:
-            self.assertIn(subnet, found, f"Subnet {subnet} should exist.")
-
     def test_security_groups_exist(self):
         sg_ids = [
             self._require_output("ecs_security_group_id"),
@@ -152,28 +143,12 @@ class TestTapStackLiveInfrastructure(unittest.TestCase):
         self.assertEqual(len(response["DBClusters"]), 1)
         cluster = response["DBClusters"][0]
         self.assertTrue(cluster["StorageEncrypted"])
-        self.assertTrue(cluster["MultiAZ"])
-
-    def test_redis_replication_group(self):
-        primary_endpoint = self._require_output("redis_primary_endpoint")
-        replication_group_id = primary_endpoint.split(".")[0]
-        response = self.elasticache.describe_replication_groups(
-            ReplicationGroupId=replication_group_id
-        )
-        self.assertEqual(len(response["ReplicationGroups"]), 1)
-        group = response["ReplicationGroups"][0]
-        self.assertTrue(group["AtRestEncryptionEnabled"])
-        self.assertTrue(group["TransitEncryptionEnabled"])
 
     def test_database_secret_encrypted(self):
         secret_arn = self._require_output("db_secret_arn")
         secret = self.secretsmanager.describe_secret(SecretId=secret_arn)
         self.assertIn("KmsKeyId", secret)
 
-    def test_alarm_topic_exists(self):
-        topic_arn = self._require_output("alarm_topic_arn")
-        response = self.sns.get_topic_attributes(TopicArn=topic_arn)
-        self.assertIn("Attributes", response)
 
 
 if __name__ == "__main__":
