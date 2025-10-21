@@ -22,5 +22,11 @@
     "EC2 Internet Gateway",
     "EC2 Route Tables"
   ],
-  "training_quality": 9.0
+  "training_quality": 9.0,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
