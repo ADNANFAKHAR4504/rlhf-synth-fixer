@@ -129,11 +129,11 @@ describe('Turn Around Prompt API Integration Tests', () => {
   beforeAll(async () => {
     // Get Auto Scaling Group name and fetch running instances
     const asgName = outputs.AutoScalingGroupName;
-    console.log(`Fetching instances from Auto Scaling Group: ${asgName}`);
+    // console.log(`Fetching instances from Auto Scaling Group: ${asgName}`);
 
     try {
       asgInstanceIds = await getASGInstances(asgName);
-      console.log(`Found ${asgInstanceIds.length} InService instances:`, asgInstanceIds);
+      // console.log(`Found ${asgInstanceIds.length} InService instances:`, asgInstanceIds);
     } catch (error: any) {
       console.error('Failed to fetch ASG instances:', error);
       throw error;
@@ -176,7 +176,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
           );
         } catch (error: any) {
           if (error.message?.includes('SSM Agent')) {
-            console.log('SSM Agent not configured. Skipping test.');
+            // console.log('SSM Agent not configured. Skipping test.');
             return;
           }
           throw error;
@@ -207,7 +207,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
           expect(result.StandardOutputContent?.trim()).toBe('active');
         } catch (error: any) {
           if (error.message?.includes('SSM Agent')) {
-            console.log('SSM Agent not configured. Skipping test.');
+            // console.log('SSM Agent not configured. Skipping test.');
             return;
           }
           throw error;
@@ -238,7 +238,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
           expect(result.StandardOutputContent).toContain('mysql');
         } catch (error: any) {
           if (error.message?.includes('SSM Agent')) {
-            console.log('SSM Agent not configured. Skipping test.');
+            // console.log('SSM Agent not configured. Skipping test.');
             return;
           }
           throw error;
@@ -317,7 +317,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
           expect(result.StandardOutputContent).toContain('RDS endpoint reachable');
         } catch (error: any) {
           if (error.message?.includes('SSM Agent')) {
-            console.log('SSM Agent not configured. Skipping test.');
+            // console.log('SSM Agent not configured. Skipping test.');
             return;
           }
           throw error;
@@ -414,7 +414,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
           );
         } catch (error: any) {
           if (error.message?.includes('SSM Agent')) {
-            console.log('SSM Agent not configured. Skipping test.');
+            // console.log('SSM Agent not configured. Skipping test.');
             return;
           }
           throw error;
@@ -479,7 +479,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
           );
         } catch (error: any) {
           if (error.message?.includes('SSM Agent')) {
-            console.log('SSM Agent not configured. Skipping test.');
+            // console.log('SSM Agent not configured. Skipping test.');
             return;
           }
           throw error;
@@ -530,7 +530,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
           );
         } catch (error: any) {
           if (error.message?.includes('SSM Agent')) {
-            console.log('SSM Agent not configured. Skipping test.');
+            // console.log('SSM Agent not configured. Skipping test.');
             return;
           }
           throw error;
@@ -578,7 +578,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
           );
         } catch (error: any) {
           if (error.message?.includes('SSM Agent')) {
-            console.log('SSM Agent not configured. Skipping test.');
+            // console.log('SSM Agent not configured. Skipping test.');
             return;
           }
           throw error;
@@ -662,7 +662,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
           );
         } catch (error: any) {
           if (error.message?.includes('SSM Agent')) {
-            console.log('SSM Agent not configured. Skipping E2E test.');
+            // console.log('SSM Agent not configured. Skipping E2E test.');
             return;
           }
           throw error;
@@ -750,7 +750,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
           );
         } catch (error: any) {
           if (error.message?.includes('SSM Agent')) {
-            console.log('SSM Agent not configured. Skipping E2E test.');
+            // console.log('SSM Agent not configured. Skipping E2E test.');
             return;
           }
           throw error;
@@ -816,7 +816,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
           );
         } catch (error: any) {
           if (error.message?.includes('SSM Agent')) {
-            console.log('SSM Agent not configured. Skipping E2E test.');
+            // console.log('SSM Agent not configured. Skipping E2E test.');
             return;
           }
           throw error;
@@ -853,7 +853,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
           expect(alarm.ComparisonOperator).toBe('GreaterThanThreshold');
           expect(alarm.StateValue).toBeDefined();
 
-          console.log(`CPU High Alarm state: ${alarm.StateValue}`);
+          // console.log(`CPU High Alarm state: ${alarm.StateValue}`);
         } catch (error: any) {
           console.error('CloudWatch Alarm test failed:', error);
           throw error;
@@ -882,7 +882,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
           expect(alarm.ComparisonOperator).toBe('LessThanThreshold');
           expect(alarm.StateValue).toBeDefined();
 
-          console.log(`CPU Low Alarm state: ${alarm.StateValue}`);
+          // console.log(`CPU Low Alarm state: ${alarm.StateValue}`);
         } catch (error: any) {
           console.error('CloudWatch Alarm test failed:', error);
           throw error;
@@ -914,7 +914,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
           expect(scaleUpPolicy!.AdjustmentType).toBe('ChangeInCapacity');
           expect(scaleUpPolicy!.ScalingAdjustment).toBe(1);
 
-          console.log(`Scale Up Policy: ${scaleUpPolicy!.PolicyName}`);
+          // console.log(`Scale Up Policy: ${scaleUpPolicy!.PolicyName}`);
         } catch (error: any) {
           console.error('Auto Scaling Policy test failed:', error);
           throw error;
@@ -944,7 +944,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
           expect(scaleDownPolicy!.AdjustmentType).toBe('ChangeInCapacity');
           expect(scaleDownPolicy!.ScalingAdjustment).toBe(-1);
 
-          console.log(`Scale Down Policy: ${scaleDownPolicy!.PolicyName}`);
+          // console.log(`Scale Down Policy: ${scaleDownPolicy!.PolicyName}`);
         } catch (error: any) {
           console.error('Auto Scaling Policy test failed:', error);
           throw error;
@@ -968,14 +968,14 @@ describe('Turn Around Prompt API Integration Tests', () => {
           expect(response.events).toBeDefined();
 
           if (response.events && response.events.length > 0) {
-            console.log(`Found ${response.events.length} flow log events`);
-            console.log('Sample flow log:', response.events[0].message);
+            // console.log(`Found ${response.events.length} flow log events`);
+            // console.log('Sample flow log:', response.events[0].message);
 
             // Verify flow log format (should contain VPC Flow Log fields)
             const sampleLog = response.events[0].message || '';
             expect(sampleLog.length).toBeGreaterThan(0);
           } else {
-            console.log('No flow log data yet (this is normal for new deployments)');
+            // console.log('No flow log data yet (this is normal for new deployments)');
           }
 
           // At minimum, verify we can query the log group
@@ -1003,8 +1003,8 @@ describe('Turn Around Prompt API Integration Tests', () => {
           expect(response.HostedZone!.Id).toContain(hostedZoneId);
           expect(response.HostedZone!.Config?.PrivateZone).toBe(false);
 
-          console.log(`Hosted Zone Name: ${response.HostedZone!.Name}`);
-          console.log(`Resource Record Set Count: ${response.HostedZone!.ResourceRecordSetCount}`);
+          // console.log(`Hosted Zone Name: ${response.HostedZone!.Name}`);
+          // console.log(`Resource Record Set Count: ${response.HostedZone!.ResourceRecordSetCount}`);
         } catch (error: any) {
           console.error('Route 53 Hosted Zone test failed:', error);
           throw error;
@@ -1036,7 +1036,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
           expect(nsRecord).toBeDefined();
           expect(soaRecord).toBeDefined();
 
-          console.log(`Found ${response.ResourceRecordSets!.length} DNS records`);
+          // console.log(`Found ${response.ResourceRecordSets!.length} DNS records`);
         } catch (error: any) {
           console.error('Route 53 Records test failed:', error);
           throw error;
@@ -1064,8 +1064,8 @@ describe('Turn Around Prompt API Integration Tests', () => {
           expect(vpc.State).toBe('available');
           expect(vpc.CidrBlock).toBeDefined();
 
-          console.log(`VPC CIDR: ${vpc.CidrBlock}`);
-          console.log(`VPC State: ${vpc.State}`);
+          // console.log(`VPC CIDR: ${vpc.CidrBlock}`);
+          // console.log(`VPC State: ${vpc.State}`);
         } catch (error: any) {
           console.error('VPC test failed:', error);
           throw error;
@@ -1105,7 +1105,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
           const azs = new Set(response.Subnets!.map((s) => s.AvailabilityZone));
           expect(azs.size).toBe(2); // Should be in 2 different AZs
 
-          console.log(`All 4 subnets are available across ${azs.size} AZs`);
+          // console.log(`All 4 subnets are available across ${azs.size} AZs`);
         } catch (error: any) {
           console.error('Subnets test failed:', error);
           throw error;
@@ -1135,7 +1135,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
           expect(attachment).toBeDefined();
           expect(attachment!.State).toBe('available');
 
-          console.log(`Internet Gateway ${igwId} is attached to VPC ${vpcId}`);
+          // console.log(`Internet Gateway ${igwId} is attached to VPC ${vpcId}`);
         } catch (error: any) {
           console.error('Internet Gateway test failed:', error);
           throw error;
@@ -1169,7 +1169,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
           const subnets = response.NatGateways!.map((n) => n.SubnetId);
           expect(new Set(subnets).size).toBe(2);
 
-          console.log('Both NAT Gateways are available in different subnets');
+          // console.log('Both NAT Gateways are available in different subnets');
         } catch (error: any) {
           console.error('NAT Gateways test failed:', error);
           throw error;
