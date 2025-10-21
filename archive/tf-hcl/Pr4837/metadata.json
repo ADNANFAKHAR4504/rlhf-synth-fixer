@@ -12,7 +12,7 @@
   ],
   "aws_services": [
     "VPC",
-    "EC2", 
+    "EC2",
     "ELB",
     "Auto Scaling",
     "RDS",
@@ -27,5 +27,6 @@
     "branches": 100
   },
   "author": "jpoola-turing",
-  "dockerS3Location": ""
+  "dockerS3Location": "",
+  "background": "Build a scalable web application infrastructure on AWS that is secure, highly available, and properly monitored for production-ready deployment in US East region"
 }
