@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+"""
+Find the next available task with hard or medium difficulty from tasks.csv
+Tasks with empty status, or status not in ['in_progress', 'done'] are considered available
+"""
+import csv
+import sys
+import json
+
+def find_next_task():
+    try:
+        with open('/Users/mayanksethi/Projects/turing/iac-test-automations/tasks.csv', 'r', newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+
+            for row in reader:
+                # Check status and difficulty
+                status = row.get('status', '').strip().lower()
+                difficulty = row.get('difficulty', '').strip().lower()
+
+                # Task is available if status is not in_progress or done
+                # Empty status is also considered available
+                is_available = status not in ['in_progress', 'done']
+                is_right_difficulty = difficulty in ['hard', 'medium']
+
+                if is_available and is_right_difficulty:
+                    # Print the task as JSON for easy parsing
+                    print(json.dumps(row, indent=2))
+                    return 0
+
+        print("ERROR: No available tasks with medium or hard difficulty found")
+        return 1
+
+    except Exception as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 1
+
+if __name__ == '__main__':
+    sys.exit(find_next_task())
