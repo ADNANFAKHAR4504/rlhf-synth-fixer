@@ -35,9 +35,14 @@ If `tasks.csv` is present:
 
 **Use the optimized task manager script** for all CSV operations. This script is faster, more reliable than Python alternatives, and **safe for parallel execution**.
 
-⚠️ **IMPORTANT FOR PARALLEL EXECUTION**: When running multiple Claude agents simultaneously, **ALWAYS use `select-and-update`** (not separate select/update calls). This ensures atomic task selection with proper file locking.
+⚠️ **CRITICAL FOR PARALLEL EXECUTION**: 
+- **ALWAYS use `select-and-update`** - This is the ONLY correct way to select tasks
+- **NEVER use separate `select` and `update` calls** - This will cause race conditions
+- **NEVER read tasks.csv directly** - Always go through task-manager.sh
+- The `select-and-update` command uses file locking with 120-second timeout
+- Multiple agents can run simultaneously without selecting duplicate tasks
 
-1. **Select and update task atomically** (recommended - required for parallel execution):
+1. **Select and update task atomically** (REQUIRED - thread-safe for parallel execution):
    ```bash
    # Select next pending task and mark as in_progress atomically
    # This is thread-safe and can be run from multiple agents simultaneously
@@ -53,27 +58,7 @@ If `tasks.csv` is present:
    echo "✅ Selected task $TASK_ID: $SUBTASK"
    ```
 
-2. **Alternative: Separate select and update** (⚠️ NOT recommended for parallel execution - race condition possible):
-   ```bash
-   # ⚠️ WARNING: Use this ONLY if running a single agent at a time
-   # In parallel scenarios, another agent could select the same task between these calls
-   
-   # Select next pending task (doesn't modify CSV)
-   TASK_JSON=$(./scripts/task-manager.sh select)
-   TASK_ID=$(echo "$TASK_JSON" | jq -r '.task_id')
-   
-   # Validate task or perform checks here...
-   
-   # Update status to in_progress (thread-safe update, but task may have been selected by another agent)
-   ./scripts/task-manager.sh update "$TASK_ID" "in_progress"
-   ```
-
-3. **Check task status distribution** (optional - for monitoring):
-   ```bash
-   ./scripts/task-manager.sh status
-   ```
-
-4. **Get full task details** (if you need all fields):
+2. **Get full task details** (if you need all fields):
    ```bash
    # Get complete task data including background, problem, constraints, etc.
    TASK_DETAILS=$(./scripts/task-manager.sh get "$TASK_ID")
@@ -82,7 +67,12 @@ If `tasks.csv` is present:
    echo "$TASK_DETAILS" > /tmp/task_${TASK_ID}.json
    ```
 
-5. **Create metadata.json and PROMPT.md**:
+3. **Check task status distribution** (optional - for monitoring):
+   ```bash
+   ./scripts/task-manager.sh status
+   ```
+
+4. **Create metadata.json and PROMPT.md**:
    ```bash
    # Use the optimized script to generate both files
    # This is much faster than Python equivalents
