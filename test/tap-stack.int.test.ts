@@ -967,15 +967,22 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
       
       console.log('✓ Key rotation implemented');
 
-      // Verify encryption context (if returned)
-      console.log('Verifying encryption context...');
-      if (decryptResponse.EncryptionContext) {
-        expect(decryptResponse.EncryptionContext['data-type']).toBe('patient-info');
-        expect(decryptResponse.EncryptionContext['compliance']).toBe('HIPAA');
-        console.log('✓ Encryption context verified');
-      } else {
-        console.warn('Encryption context not returned (may be stored internally by KMS)');
+      // Verify encryption context enforcement by attempting decrypt with wrong context
+      console.log('Verifying encryption context enforcement...');
+      let contextEnforced = false;
+      try {
+        await kmsClient.send(new DecryptCommand({
+          CiphertextBlob: encryptedData,
+          EncryptionContext: {
+            'data-type': 'wrong',
+            'compliance': 'HIPAA'
+          }
+        }));
+      } catch {
+        contextEnforced = true;
       }
+      expect(contextEnforced).toBe(true);
+      console.log('✓ Encryption context enforcement verified');
 
       console.log('✓ Complete encryption workflow executed successfully');
     });
