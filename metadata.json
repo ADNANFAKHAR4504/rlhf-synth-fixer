@@ -1,0 +1,40 @@
+{
+  "platform": "CDKTF",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "9489694839",
+  "team": "synth",
+  "startedAt": "2025-10-21T11:18:04Z",
+  "subtask": "Infrastructure Analysis/Monitoring",
+  "background": "FinTech Corp needs to deploy a secure database infrastructure for their payment processing system. The system must handle sensitive financial data with proper encryption, secrets management, and performance optimization through caching. The infrastructure must be compliant with PCI-DSS requirements.",
+  "subject_labels": [
+    "IaC Optimization",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "description": "Create a secure financial database infrastructure using CDKTF that includes an encrypted RDS instance with read replicas, SecretsManager integration, and ElastiCache for performance optimization. The solution must comply with PCI-DSS requirements for a financial services application.",
+  "constraints": "All database credentials must be stored in AWS Secrets Manager with automatic rotation enabled; RDS instance must be encrypted at rest using AWS KMS and configured with Multi-AZ deployment",
+  "environment": {
+    "required_setup": {
+      "python_version": ">=3.7",
+      "cdktf_version": ">=0.15.0",
+      "aws_provider": "ca-central-1",
+      "packages": [
+        "cdktf",
+        "cdktf-aws-provider"
+      ]
+    }
+  },
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "Secrets Manager",
+    "ElastiCache",
+    "KMS",
+    "IAM",
+    "CloudWatch"
+  ]
+}
