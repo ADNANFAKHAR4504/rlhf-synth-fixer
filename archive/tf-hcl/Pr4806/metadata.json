@@ -1,0 +1,36 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "4803",
+  "team": "5",
+  "training_quality": 10,
+  "background": "Cross-account S3 data sharing system with KMS encryption, DynamoDB access control, CloudTrail auditing, real-time monitoring, Lambda governance automation, and comprehensive security alerting for 10TB data distribution across 20 AWS accounts",
+  "startedAt": "2025-10-19T07:50:51.676Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Multi-Account Security",
+    "Data Governance",
+    "Compliance Automation"
+  ],
+  "aws_services": [
+    "S3",
+    "KMS",
+    "IAM",
+    "DynamoDB",
+    "Lambda",
+    "CloudTrail",
+    "EventBridge",
+    "CloudWatch",
+    "SNS",
+    "S3 Storage Lens"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raaj1021",
+  "dockerS3Location": ""
+}

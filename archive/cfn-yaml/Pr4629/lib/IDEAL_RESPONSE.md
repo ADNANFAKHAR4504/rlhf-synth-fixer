@@ -1,0 +1,1434 @@
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Security and Compliance CloudFormation Template with Multi-Region Support'
+
+# ===========================
+# Parameters
+# ===========================
+Parameters:
+  EnvironmentSuffix:
+    Description: Environment suffix for all resources and domain
+    Type: String
+    Default: dev
+  
+  DBInstanceClass:
+    Description: RDS instance type
+    Type: String
+    Default: db.t3.micro
+    AllowedValues:
+      - db.t3.micro
+      - db.t3.small
+      - db.t3.medium
+  
+  AllowedIPRange:
+    Description: IP range allowed for web access (CIDR notation)
+    Type: String
+    Default: 0.0.0.0/0
+    AllowedPattern: "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/([0-9]|[1-2][0-9]|3[0-2]))$"
+
+# ===========================
+# SSM Parameters for Latest AMI
+# ===========================
+
+# ===========================
+# Resources
+# ===========================
+Resources:
+
+  # ===========================
+  # KMS Keys with Rotation
+  # ===========================
+  MasterKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub 'Master KMS key for ${EnvironmentSuffix} environment'
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow AWS services to use the key
+            Effect: Allow
+            Principal:
+              Service:
+                - logs.amazonaws.com
+                - rds.amazonaws.com
+                - dynamodb.amazonaws.com
+                - s3.amazonaws.com
+                - ec2.amazonaws.com
+                - autoscaling.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+              - 'kms:GenerateDataKeyWithoutPlaintext'
+              - 'kms:CreateGrant'
+              - 'kms:DescribeKey'
+              - 'kms:ReEncrypt*'
+            Resource: '*'
+          - Sid: Allow service-linked roles for AutoScaling and EC2
+            Effect: Allow
+            Principal:
+              AWS: '*'
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+              - 'kms:GenerateDataKeyWithoutPlaintext'
+              - 'kms:CreateGrant'
+              - 'kms:DescribeKey'
+              - 'kms:ReEncrypt*'
+            Resource: '*'
+            Condition:
+              StringLike:
+                'aws:PrincipalArn':
+                  - 'arn:aws:iam::*:role/aws-service-role/autoscaling.amazonaws.com/*'
+                  - 'arn:aws:iam::*:role/aws-service-role/ec2.amazonaws.com/*'
+      EnableKeyRotation: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-MasterKey'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  MasterKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${EnvironmentSuffix}-master-key'
+      TargetKeyId: !Ref MasterKMSKey
+
+  # ===========================
+  # VPC and Networking
+  # ===========================
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-VPC'
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-Public-Subnet-1'
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.2.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-Public-Subnet-2'
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.10.0/24
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-Private-Subnet-1'
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.20.0/24
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-Private-Subnet-2'
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-IGW'
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-Public-Routes'
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  # ===========================
+  # NAT Gateways for Private Subnet Internet Access
+  # ===========================
+  NATGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-NAT1-EIP'
+
+  NATGateway2EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-NAT2-EIP'
+
+  NATGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-NAT-Gateway-1'
+
+  NATGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-NAT-Gateway-2'
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-Private-Routes-1'
+
+  PrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway1
+
+  PrivateSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable1
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-Private-Routes-2'
+
+  PrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway2
+
+  PrivateSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable2
+
+  # ===========================
+  # Security Groups
+  # ===========================
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Application Load Balancer
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !Ref AllowedIPRange
+          Description: HTTP access from allowed IP range
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref AllowedIPRange
+          Description: HTTPS access from allowed IP range
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 10.0.0.0/16
+          Description: Allow all outbound traffic within VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-ALB-SG'
+
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for web servers
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          Description: HTTP from ALB
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          Description: HTTPS from ALB
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-WebServer-SG'
+
+
+  # ===========================
+  # Secrets Manager
+  # ===========================
+  DbSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${EnvironmentSuffix}-db-credentials'
+      Description: RDS database credentials
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: password
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-db-secret'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  # ===========================
+  # S3 Buckets with Encryption
+  # ===========================
+  CentralizedLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${EnvironmentSuffix}-centralized-logs-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref MasterKMSKey
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+          - Id: TransitionToGlacier
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: GLACIER
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-CentralLogs'
+
+  CentralizedLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CentralizedLogsBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 's3:GetBucketAcl'
+            Resource: !GetAtt CentralizedLogsBucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 's3:PutObject'
+            Resource: !Sub '${CentralizedLogsBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': bucket-owner-full-control
+
+  ApplicationDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${EnvironmentSuffix}-app-data-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref MasterKMSKey
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToIA
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+          - Id: TransitionToGlacier
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 90
+                StorageClass: GLACIER
+          - Id: TransitionToDeepArchive
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 180
+                StorageClass: DEEP_ARCHIVE
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 365
+          - Id: DeleteIncompleteUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-AppData'
+
+  # ===========================
+  # CloudTrail
+  # ===========================
+  CloudTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn:
+      - CentralizedLogsBucketPolicy
+    Properties:
+      TrailName: !Sub '${EnvironmentSuffix}-trail'
+      S3BucketName: !Ref CentralizedLogsBucket
+      IncludeGlobalServiceEvents: true
+      IsLogging: true
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+          DataResources:
+            - Type: AWS::S3::Object
+              Values: 
+                - !Sub '${ApplicationDataBucket.Arn}/'
+      InsightSelectors:
+        - InsightType: ApiCallRateInsight
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-Trail'
+
+  # ===========================
+  # DynamoDB with Encryption
+  # ===========================
+  ApplicationTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${EnvironmentSuffix}-app-table'
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: N
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: false
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+        KMSMasterKeyId: !Ref MasterKMSKey
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-DynamoTable'
+
+  # ===========================
+  # RDS Multi-AZ with Encryption
+  # ===========================
+
+  DbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub '${EnvironmentSuffix}-db-subnet-group-new'
+      DBSubnetGroupDescription: Subnet group for RDS database
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-db-subnet-group'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  DbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for RDS database
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref WebServerSecurityGroup
+          Description: MySQL access from web servers
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-db-security-group'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  DbParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      DBParameterGroupName: !Sub '${EnvironmentSuffix}-db-params'
+      Description: Parameter group for MySQL database
+      Family: mysql8.0
+      Parameters:
+        innodb_buffer_pool_size: '{DBInstanceClassMemory*3/4}'
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-db-parameter-group'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  RDSMonitoringRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${EnvironmentSuffix}-rds-monitoring-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: monitoring.rds.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-rds-monitoring-role'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  DbInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    Properties:
+      DBInstanceIdentifier: !Sub '${EnvironmentSuffix}-db'
+      DBName: appdb
+      Engine: mysql
+      EngineVersion: 8.0.43
+      DBInstanceClass: !Ref DBInstanceClass
+      AllocatedStorage: 20
+      MaxAllocatedStorage: 100
+      StorageType: gp2
+      StorageEncrypted: true
+      BackupRetentionPeriod: 0
+      PreferredMaintenanceWindow: 'mon:04:00-mon:05:00'
+      MultiAZ: true
+      PubliclyAccessible: false
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DbSecurityGroup
+      DBParameterGroupName: !Ref DbParameterGroup
+      MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref DbSecret, ':SecretString:username}}' ]]
+      MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref DbSecret, ':SecretString:password}}' ]]
+      EnableIAMDatabaseAuthentication: true
+      MonitoringInterval: 60
+      MonitoringRoleArn: !GetAtt RDSMonitoringRole.Arn
+      DeletionProtection: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-db-instance'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  # ===========================
+  # Application Load Balancer
+  # ===========================
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${EnvironmentSuffix}-ALB'
+      Type: application
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-ALB'
+
+  HTTPSListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref Certificate
+      SslPolicy: ELBSecurityPolicy-TLS-1-2-2017-01
+
+  HTTPListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Sub '${EnvironmentSuffix}.ateulerlabs.com'
+      ValidationMethod: DNS
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-Certificate'
+
+  # ===========================
+  # AWS WAF
+  # ===========================
+  WebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub '${EnvironmentSuffix}-WebACL'
+      Scope: REGIONAL
+      Description: WAF WebACL for application protection
+      DefaultAction:
+        Allow: {}
+      Rules:
+        - Name: RateLimitRule
+          Priority: 1
+          Statement:
+            RateBasedStatement:
+              Limit: 2000
+              AggregateKeyType: IP
+          Action:
+            Block: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: RateLimitRule
+        - Name: SQLInjectionRule
+          Priority: 2
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesSQLiRuleSet
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: SQLInjectionRule
+        - Name: XSSProtectionRule
+          Priority: 3
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesKnownBadInputsRuleSet
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: XSSProtectionRule
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub '${EnvironmentSuffix}-WebACL'
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-WebACL'
+
+  WebACLAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      ResourceArn: !Ref ApplicationLoadBalancer
+      WebACLArn: !GetAtt WebACL.Arn
+
+  # ===========================
+  # Lambda Function for Security Monitoring
+  # ===========================
+  SecurityMonitoringRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${EnvironmentSuffix}-SecurityMonitoringRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SecurityMonitoringPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-LambdaRole'
+
+  SecurityMonitoringFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${EnvironmentSuffix}-SecurityMonitor'
+      Runtime: python3.11
+      Handler: index.handler
+      Role: !GetAtt SecurityMonitoringRole.Arn
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref EnvironmentSuffix
+      Code:
+        ZipFile: |
+          import json
+          import os
+          # import requests  # Uncomment for Resend integration
+
+          def handler(event, context):
+              environment = os.environ['ENVIRONMENT']
+              
+              # Parse EventBridge event
+              detail = event.get('detail', {})
+              event_name = detail.get('eventName', 'Unknown')
+              event_source = detail.get('eventSource', 'Unknown')
+              user_identity = detail.get('userIdentity', {})
+              
+              # Create alert message
+              alert_message = {
+                  'Environment': environment,
+                  'Event': event_name,
+                  'Source': event_source,
+                  'UserIdentity': user_identity,
+                  'Time': event.get('time', 'Unknown'),
+                  'Region': event.get('region', 'Unknown'),
+                  'Account': event.get('account', 'Unknown')
+              }
+              
+              # Format alert text
+              alert_text = f"""
+              🚨 SECURITY ALERT 🚨
+              
+              Event: {event_name}
+              Environment: {environment}
+              Source: {event_source}
+              Time: {alert_message['Time']}
+              Region: {alert_message['Region']}
+              Account: {alert_message['Account']}
+              
+              User Identity: {json.dumps(user_identity, indent=2)}
+              
+              Full Details:
+              {json.dumps(alert_message, indent=2)}
+              """
+              
+              # Print alert (visible in CloudWatch Logs)
+              print(alert_text)
+              
+              # Commented out Resend email logic (for demonstration)
+              send_email = False  # to email sending
+              if send_email:
+                  # resend_api_key = os.environ.get('RESEND_API_KEY')
+                  # if resend_api_key:
+                  #     try:
+                  #         response = requests.post(
+                  #             'https://api.resend.com/emails',
+                  #             headers={
+                  #                 'Authorization': f'Bearer {resend_api_key}',
+                  #                 'Content-Type': 'application/json'
+                  #             },
+                  #             json={
+                  #                 'from': 'security@yourdomain.com',
+                  #                 'to': ['admin@yourdomain.com'],
+                  #                 'subject': f'Security Alert: {event_name} in {environment}',
+                  #                 'text': alert_text
+                  #             }
+                  #         )
+                  #         print(f'Email sent successfully: {response.status_code}')
+                  #     except Exception as e:
+                  #         print(f'Failed to send email: {str(e)}')
+                  pass
+              
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps({
+                      'message': 'Security alert processed',
+                      'alert_details': alert_message,
+                      'alert_text': alert_text
+                  })
+              }
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-SecurityMonitor'
+
+
+  # ===========================
+  # EventBridge Rules for Security Monitoring
+  # ===========================
+  SecurityGroupChangeRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${EnvironmentSuffix}-SG-Changes'
+      Description: Detect Security Group changes
+      EventPattern:
+        source:
+          - aws.ec2
+        detail-type:
+          - AWS API Call via CloudTrail
+        detail:
+          eventSource:
+            - ec2.amazonaws.com
+          eventName:
+            - AuthorizeSecurityGroupIngress
+            - AuthorizeSecurityGroupEgress
+            - RevokeSecurityGroupIngress
+            - RevokeSecurityGroupEgress
+            - CreateSecurityGroup
+            - DeleteSecurityGroup
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt SecurityMonitoringFunction.Arn
+          Id: SecurityMonitoringTarget
+
+  NACLChangeRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${EnvironmentSuffix}-NACL-Changes'
+      Description: Detect Network ACL changes
+      EventPattern:
+        source:
+          - aws.ec2
+        detail-type:
+          - AWS API Call via CloudTrail
+        detail:
+          eventSource:
+            - ec2.amazonaws.com
+          eventName:
+            - CreateNetworkAcl
+            - DeleteNetworkAcl
+            - CreateNetworkAclEntry
+            - DeleteNetworkAclEntry
+            - ReplaceNetworkAclEntry
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt SecurityMonitoringFunction.Arn
+          Id: NACLMonitoringTarget
+
+  LambdaInvokePermissionForSGRule:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SecurityMonitoringFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt SecurityGroupChangeRule.Arn
+
+  LambdaInvokePermissionForNACLRule:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SecurityMonitoringFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt NACLChangeRule.Arn
+
+  # ===========================
+  # CloudWatch Alarms
+  # ===========================
+  HighCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${EnvironmentSuffix}-High-CPU'
+      AlarmDescription: Alert when RDS CPU exceeds 80%
+      MetricName: CPUUtilization
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref DbInstance
+      # AlarmActions:
+        # - !Ref SecurityAlertTopic  # Removed - using Lambda logging instead
+
+  UnauthorizedAPICallsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${EnvironmentSuffix}-Unauthorized-API-Calls'
+      AlarmDescription: Alert on unauthorized API calls
+      MetricName: UnauthorizedAPICalls
+      Namespace: CloudTrailMetrics
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      # AlarmActions:
+        # - !Ref SecurityAlertTopic  # Removed - using Lambda logging instead
+      TreatMissingData: notBreaching
+
+  # ===========================
+  # EC2 Launch Template
+  # ===========================
+  EC2LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${EnvironmentSuffix}-LaunchTemplate'
+      LaunchTemplateData:
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+        InstanceType: t3.micro
+        SecurityGroupIds:
+          - !Ref WebServerSecurityGroup
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: 20
+              VolumeType: gp3
+              Encrypted: true
+              KmsKeyId: !Ref MasterKMSKey
+              DeleteOnTermination: true
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            yum update -y
+            yum install -y python3 python3-pip mysql jq aws-cli openssl
+            pip3 install pymysql boto3 cryptography
+
+            # Get RDS endpoint and credentials
+            RDS_ENDPOINT="${DbInstance.Endpoint.Address}"
+            SECRET_ARN="${DbSecret}"
+            REGION="${AWS::Region}"
+            DYNAMODB_TABLE="${ApplicationTable}"
+            S3_BUCKET="${ApplicationDataBucket}"
+
+            # Create self-signed SSL certificate for HTTPS
+            mkdir -p /etc/ssl/certs
+            openssl req -x509 -newkey rsa:4096 -keyout /etc/ssl/certs/server.key -out /etc/ssl/certs/server.crt -days 365 -nodes -subj "/C=US/ST=State/L=City/O=Organization/CN=localhost"
+
+            # Create Python server script
+            cat > /home/ec2-user/server.py << 'EOFPYTHON'
+            #!/usr/bin/env python3
+            import pymysql
+            import json
+            import boto3
+            import ssl
+            from http.server import HTTPServer, BaseHTTPRequestHandler
+            import os
+            import time
+            from datetime import datetime
+
+            def test_rds_connection():
+                try:
+                    # Get credentials from Secrets Manager
+                    client = boto3.client('secretsmanager', region_name=os.environ.get('AWS_REGION'))
+                    secret_value = client.get_secret_value(SecretId=os.environ.get('SECRET_ARN'))
+                    secret = json.loads(secret_value['SecretString'])
+
+                    # Test connection
+                    connection = pymysql.connect(
+                        host=os.environ.get('RDS_ENDPOINT'),
+                        user=secret['username'],
+                        password=secret['password'],
+                        database='appdb',
+                        connect_timeout=5
+                    )
+
+                    # Get MySQL version
+                    with connection.cursor() as cursor:
+                        cursor.execute("SELECT VERSION()")
+                        version = cursor.fetchone()[0]
+
+                    connection.close()
+
+                    return {
+                        'status': 'SUCCESS',
+                        'message': 'Connected to RDS successfully',
+                        'mysql_version': version,
+                        'endpoint': os.environ.get('RDS_ENDPOINT')
+                    }
+                except Exception as e:
+                    return {
+                        'status': 'FAILED',
+                        'message': str(e),
+                        'endpoint': os.environ.get('RDS_ENDPOINT')
+                    }
+
+            def test_dynamodb_connection():
+                try:
+                    # Create DynamoDB client
+                    dynamodb = boto3.resource('dynamodb', region_name=os.environ.get('AWS_REGION'))
+                    table = dynamodb.Table(os.environ.get('DYNAMODB_TABLE'))
+
+                    # Test write - put a test item
+                    test_id = f"health-check-{int(time.time())}"
+                    test_item = {
+                        'id': test_id,
+                        'timestamp': int(time.time()),
+                        'test_data': 'Connection test',
+                        'datetime': datetime.utcnow().isoformat()
+                    }
+                    table.put_item(Item=test_item)
+
+                    # Test read - get the item back
+                    response = table.get_item(Key={'id': test_id, 'timestamp': test_item['timestamp']})
+
+                    # Test delete - clean up test item
+                    table.delete_item(Key={'id': test_id, 'timestamp': test_item['timestamp']})
+
+                    return {
+                        'status': 'SUCCESS',
+                        'message': 'Connected to DynamoDB successfully - Write/Read/Delete operations completed',
+                        'table_name': os.environ.get('DYNAMODB_TABLE'),
+                        'test_item_id': test_id
+                    }
+                except Exception as e:
+                    return {
+                        'status': 'FAILED',
+                        'message': str(e),
+                        'table_name': os.environ.get('DYNAMODB_TABLE')
+                    }
+
+            def test_s3_connection():
+                try:
+                    # Create S3 client
+                    s3_client = boto3.client('s3', region_name=os.environ.get('AWS_REGION'))
+                    bucket_name = os.environ.get('S3_BUCKET')
+
+                    # Test list bucket contents (read-only operation)
+                    response = s3_client.list_objects_v2(Bucket=bucket_name, MaxKeys=10)
+                    
+                    # Count objects
+                    object_count = response.get('KeyCount', 0)
+                    total_size = sum(obj.get('Size', 0) for obj in response.get('Contents', []))
+                    
+                    # Get bucket location
+                    location_response = s3_client.get_bucket_location(Bucket=bucket_name)
+                    bucket_region = location_response.get('LocationConstraint') or 'us-east-1'
+
+                    return {
+                        'status': 'SUCCESS',
+                        'message': f'Connected to S3 successfully - Listed bucket contents',
+                        'bucket_name': bucket_name,
+                        'object_count': object_count,
+                        'total_size_bytes': total_size,
+                        'bucket_region': bucket_region
+                    }
+                except Exception as e:
+                    return {
+                        'status': 'FAILED',
+                        'message': str(e),
+                        'bucket_name': os.environ.get('S3_BUCKET')
+                    }
+
+            class RequestHandler(BaseHTTPRequestHandler):
+                def do_GET(self):
+                    if self.path == '/health':
+                        # Health check endpoint
+                        rds_result = test_rds_connection()
+                        dynamodb_result = test_dynamodb_connection()
+                        s3_result = test_s3_connection()
+                        
+                        # All services must be healthy for overall health
+                        all_healthy = (rds_result['status'] == 'SUCCESS' and 
+                                     dynamodb_result['status'] == 'SUCCESS' and 
+                                     s3_result['status'] == 'SUCCESS')
+                        
+                        if all_healthy:
+                            self.send_response(200)
+                            self.send_header('Content-type', 'application/json')
+                            self.end_headers()
+                            self.wfile.write(json.dumps({
+                                'status': 'healthy', 
+                                'rds': 'connected', 
+                                'dynamodb': 'connected',
+                                's3': 'connected'
+                            }).encode())
+                        else:
+                            self.send_response(503)
+                            self.send_header('Content-type', 'application/json')
+                            self.end_headers()
+                            self.wfile.write(json.dumps({
+                                'status': 'unhealthy', 
+                                'rds': rds_result['status'].lower(), 
+                                'dynamodb': dynamodb_result['status'].lower(),
+                                's3': s3_result['status'].lower()
+                            }).encode())
+                    else:
+                        # Main application page
+                        rds_result = test_rds_connection()
+                        dynamodb_result = test_dynamodb_connection()
+                        s3_result = test_s3_connection()
+
+                        self.send_response(200)
+                        self.send_header('Content-type', 'text/html')
+                        self.end_headers()
+
+                        html = f"""
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <title>${EnvironmentSuffix} Environment</title>
+                            <style>
+                                body {{ font-family: Arial, sans-serif; margin: 40px; background-color: #f5f5f5; }}
+                                .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+                                .success {{ color: #28a745; font-weight: bold; }}
+                                .failed {{ color: #dc3545; font-weight: bold; }}
+                                .info {{ background: #f8f9fa; padding: 20px; border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #007bff; }}
+                                .status-badge {{ display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: bold; text-transform: uppercase; }}
+                                .status-success {{ background: #d4edda; color: #155724; }}
+                                .status-failed {{ background: #f8d7da; color: #721c24; }}
+                                h1 {{ color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; }}
+                                h2 {{ color: #555; }}
+                            </style>
+                        </head>
+                        <body>
+                            <div class="container">
+                                <h1>${EnvironmentSuffix} Environment - Secure Instance</h1>
+                                <p><strong>Instance Status:</strong> Running in Private Subnet</p>
+                                <p><strong>Security:</strong> HTTPS Enabled, WAF Protected</p>
+
+                                <h2>🗄️ RDS Database Connection Test</h2>
+                                <div class="info">
+                                    <p><strong>Status:</strong> 
+                                        <span class="status-badge status-{rds_result['status'].lower()}">{rds_result['status']}</span>
+                                    </p>
+                                    <p><strong>Message:</strong> {rds_result['message']}</p>
+                                    <p><strong>Endpoint:</strong> {rds_result.get('endpoint', 'N/A')}</p>
+                                    {f"<p><strong>MySQL Version:</strong> {rds_result.get('mysql_version', 'N/A')}</p>" if rds_result['status'] == 'SUCCESS' else ''}
+                                    <p><strong>Database:</strong> appdb</p>
+                                    <p><strong>Security:</strong> Credentials from AWS Secrets Manager</p>
+                                </div>
+
+                                <h2>⚡ DynamoDB Connection Test</h2>
+                                <div class="info">
+                                    <p><strong>Status:</strong> 
+                                        <span class="status-badge status-{dynamodb_result['status'].lower()}">{dynamodb_result['status']}</span>
+                                    </p>
+                                    <p><strong>Message:</strong> {dynamodb_result['message']}</p>
+                                    <p><strong>Table Name:</strong> {dynamodb_result.get('table_name', 'N/A')}</p>
+                                    {f"<p><strong>Test Item ID:</strong> {dynamodb_result.get('test_item_id', 'N/A')}</p>" if dynamodb_result['status'] == 'SUCCESS' else ''}
+                                    <p><strong>Operations:</strong> Write/Read/Delete tested</p>
+                                    <p><strong>Security:</strong> KMS encryption at rest</p>
+                                </div>
+
+                                <h2>🪣 S3 Storage Connection Test</h2>
+                                <div class="info">
+                                    <p><strong>Status:</strong> 
+                                        <span class="status-badge status-{s3_result['status'].lower()}">{s3_result['status']}</span>
+                                    </p>
+                                    <p><strong>Message:</strong> {s3_result['message']}</p>
+                                    <p><strong>Bucket Name:</strong> {s3_result.get('bucket_name', 'N/A')}</p>
+                                    {f"<p><strong>Object Count:</strong> {s3_result.get('object_count', 0)}</p>" if s3_result['status'] == 'SUCCESS' else ''}
+                                    {f"<p><strong>Total Size:</strong> {s3_result.get('total_size_bytes', 0)} bytes</p>" if s3_result['status'] == 'SUCCESS' else ''}
+                                    {f"<p><strong>Region:</strong> {s3_result.get('bucket_region', 'N/A')}</p>" if s3_result['status'] == 'SUCCESS' else ''}
+                                    <p><strong>Operations:</strong> List bucket contents (read-only)</p>
+                                    <p><strong>Security:</strong> KMS encryption, versioning enabled</p>
+                                </div>
+
+                                <h2>🔐 Security Features</h2>
+                                <div class="info">
+                                    <ul>
+                                        <li>✅ EC2 instance in private subnet</li>
+                                        <li>✅ Database credentials from Secrets Manager</li>
+                                        <li>✅ KMS encryption for data at rest (RDS + DynamoDB + S3)</li>
+                                        <li>✅ S3 bucket versioning and public access blocked</li>
+                                        <li>✅ VPC security groups for network isolation</li>
+                                        <li>✅ Multi-AZ RDS deployment</li>
+                                        <li>✅ SSL/TLS encryption in transit</li>
+                                        <li>✅ IAM least-privilege access</li>
+                                    </ul>
+                                </div>
+
+                                <p><small>Health check available at: <a href="/health">/health</a></small></p>
+                            </div>
+                        </body>
+                        </html>
+                        """
+                        
+                        self.wfile.write(html.encode())
+                
+                def log_message(self, format, *args):
+                    pass
+            
+            if __name__ == '__main__':
+                import threading
+                
+                def start_https_server():
+                    # Create SSL context
+                    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+                    context.load_cert_chain('/etc/ssl/certs/server.crt', '/etc/ssl/certs/server.key')
+                    
+                    # Create HTTPS server
+                    https_server = HTTPServer(('0.0.0.0', 443), RequestHandler)
+                    https_server.socket = context.wrap_socket(https_server.socket, server_side=True)
+                    
+                    print('HTTPS Server started on port 443')
+                    https_server.serve_forever()
+                
+                def start_http_server():
+                    # Create HTTP server
+                    http_server = HTTPServer(('0.0.0.0', 80), RequestHandler)
+                    print('HTTP Server started on port 80')
+                    http_server.serve_forever()
+                
+                # Start HTTPS server in a separate thread
+                https_thread = threading.Thread(target=start_https_server)
+                https_thread.daemon = True
+                https_thread.start()
+                
+                # Start HTTP server in main thread
+                start_http_server()
+            EOFPYTHON
+            
+            # Set environment variables and run server
+            export RDS_ENDPOINT="$RDS_ENDPOINT"
+            export SECRET_ARN="$SECRET_ARN"
+            export AWS_REGION="$REGION"
+            export DYNAMODB_TABLE="$DYNAMODB_TABLE"
+            export S3_BUCKET="$S3_BUCKET"
+
+            # Make script executable and run
+            chmod +x /home/ec2-user/server.py
+            
+            # Install CloudWatch agent
+            wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+            rpm -U ./amazon-cloudwatch-agent.rpm
+            
+            # Start the Python server
+            nohup python3 /home/ec2-user/server.py > /var/log/server.log 2>&1 &
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub '${EnvironmentSuffix}-Instance'
+              - Key: Environment
+                Value: !Ref EnvironmentSuffix
+
+  # ===========================
+  # EC2 Instance Profile
+  # ===========================
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${EnvironmentSuffix}-EC2Role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: EC2MinimalPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                Resource: !Sub '${ApplicationDataBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - 's3:ListBucket'
+                  - 's3:GetBucketLocation'
+                Resource: !GetAtt ApplicationDataBucket.Arn
+              - Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:GenerateDataKey'
+                  - 'kms:CreateGrant'
+                  - 'kms:DescribeKey'
+                Resource: !GetAtt MasterKMSKey.Arn
+              - Effect: Allow
+                Action:
+                  - 'secretsmanager:GetSecretValue'
+                Resource: !Ref DbSecret
+              - Effect: Allow
+                Action:
+                  - 'cloudwatch:PutMetricData'
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:DeleteItem'
+                  - 'dynamodb:Query'
+                  - 'dynamodb:Scan'
+                Resource: !GetAtt ApplicationTable.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-EC2Role'
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub '${EnvironmentSuffix}-EC2Profile'
+      Roles:
+        - !Ref EC2Role
+
+  # ===========================
+  # Auto Scaling Group
+  # ===========================
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${EnvironmentSuffix}-TG'
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      HealthCheckEnabled: true
+      HealthCheckPath: /health
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-TargetGroup'
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub '${EnvironmentSuffix}-ASG'
+      LaunchTemplate:
+        LaunchTemplateId: !Ref EC2LaunchTemplate
+        Version: !GetAtt EC2LaunchTemplate.LatestVersionNumber
+      MinSize: 1
+      MaxSize: 3
+      DesiredCapacity: 2
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      TargetGroupARNs:
+        - !Ref TargetGroup
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-Instance'
+          PropagateAtLaunch: true
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+          PropagateAtLaunch: true
+
+
+# ===========================
+# Outputs
+# ===========================
+Outputs:
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${EnvironmentSuffix}-VPC-ID'
+
+  ALBDNSName:
+    Description: Application Load Balancer DNS Name
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub '${EnvironmentSuffix}-ALB-DNS'
+
+  CentralizedLogsBucket:
+    Description: Centralized CloudTrail logs bucket
+    Value: !Ref CentralizedLogsBucket
+    Export:
+      Name: !Sub '${EnvironmentSuffix}-Logs-Bucket'
+
+  KMSKeyId:
+    Description: Master KMS Key ID
+    Value: !Ref MasterKMSKey
+    Export:
+      Name: !Sub '${EnvironmentSuffix}-KMS-Key'
+
+
+  RDSDatabaseEndpoint:
+    Description: RDS Database Endpoint
+    Value: !GetAtt DbInstance.Endpoint.Address
+    Export:
+      Name: !Sub '${EnvironmentSuffix}-DB-Endpoint'
+
+  DynamoDBTableName:
+    Description: DynamoDB Table Name
+    Value: !Ref ApplicationTable
+    Export:
+      Name: !Sub '${EnvironmentSuffix}-DynamoDB-Table'
+```

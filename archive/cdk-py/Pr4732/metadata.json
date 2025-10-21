@@ -1,0 +1,28 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349712",
+  "team": "3",
+  "startedAt": "2025-10-17T10:54:44.040Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "lambda",
+    "api-gateway",
+    "dynamodb",
+    "cloudwatch",
+    "iam"
+  ],
+  "background": "Production-ready serverless API with API Gateway, Lambda, DynamoDB for HTTP-based data operations with comprehensive logging and security",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "veera-turing",
+  "dockerS3Location": ""
+}

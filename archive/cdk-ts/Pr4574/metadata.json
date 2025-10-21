@@ -1,0 +1,38 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349681",
+  "team": "3",
+  "startedAt": "2025-10-16T03:51:57.094Z",
+  "subtask": "CI/CD Pipeline",
+  "background": "Build a complete CI/CD pipeline infrastructure using AWS CDK in TypeScript for automated web application deployment with blue/green strategy, notifications, and budget alerts",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "S3",
+    "CodePipeline",
+    "CodeBuild",
+    "CodeDeploy",
+    "EC2",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "VPC",
+    "Lambda",
+    "SNS",
+    "EventBridge",
+    "CloudWatch",
+    "Secrets Manager",
+    "Budgets",
+    "IAM"
+  ],
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-creator",
+  "dockerS3Location": ""
+}
