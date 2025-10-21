@@ -10,8 +10,15 @@ The stack created by this module uses environment suffixes to distinguish betwee
 different deployment environments (development, staging, production, etc.).
 """
 import os
+import sys
 import pulumi
 from pulumi import Config, ResourceOptions
+
+# Add current directory to Python path for lib imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.append(current_dir)
+
 from lib.tap_stack import TapStack, TapStackArgs
 
 # Initialize Pulumi configuration

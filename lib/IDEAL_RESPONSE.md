@@ -1490,6 +1490,68 @@ def finish_secret(secret_arn, token):
     print(f"Successfully moved AWSCURRENT stage to version {token}")
 ```
 
+### Main Entry Point (tap.py)
+
+```python
+#!/usr/bin/env python3
+"""
+Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
+
+This module defines the core Pulumi stack and instantiates the TapStack with appropriate
+configuration based on the deployment environment. It handles environment-specific settings,
+tagging, and deployment configuration for AWS resources.
+
+The stack created by this module uses environment suffixes to distinguish between
+different deployment environments (development, staging, production, etc.).
+"""
+import os
+import sys
+import pulumi
+from pulumi import Config, ResourceOptions
+
+# Add current directory to Python path for lib imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.append(current_dir)
+
+from lib.tap_stack import TapStack, TapStackArgs
+
+# Get Pulumi configuration
+config = Config()
+
+# Get stack configuration
+stack_name = pulumi.get_stack()
+environment_suffix = config.get('environment') or stack_name
+
+# Common tags for all resources
+common_tags = {
+    'Environment': environment_suffix,
+    'Project': 'GlobeCart',
+    'ManagedBy': 'Pulumi',
+    'Stack': stack_name
+}
+
+# Create the main infrastructure stack
+tap_stack = TapStack(
+    f'TapStack{environment_suffix}',
+    TapStackArgs(
+        environment_suffix=environment_suffix,
+        tags=common_tags
+    )
+)
+
+# Export stack outputs
+pulumi.export('vpc_id', tap_stack.vpc.vpc_id)
+pulumi.export('rds_cluster_endpoint', tap_stack.rds.cluster_endpoint)
+pulumi.export('rds_reader_endpoint', tap_stack.rds.reader_endpoint)
+pulumi.export('elasticache_configuration_endpoint', tap_stack.elasticache.configuration_endpoint)
+pulumi.export('ecs_cluster_name', tap_stack.ecs.cluster_name)
+pulumi.export('ecs_service_arn', tap_stack.ecs.service_arn)
+pulumi.export('alb_dns_name', tap_stack.ecs.alb_dns_name)
+pulumi.export('efs_file_system_id', tap_stack.efs.file_system_id)
+pulumi.export('db_secret_arn', tap_stack.secrets.db_secret_arn)
+```
+
 ## Deployment Notes
 
 This infrastructure implements:

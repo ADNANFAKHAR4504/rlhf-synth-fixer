@@ -6,6 +6,7 @@ and Pulumi's testing utilities.
 """
 
 import unittest
+import unittest.mock
 from unittest.mock import patch, MagicMock
 import pulumi
 
@@ -250,6 +251,19 @@ def test_ecs_stack_creates_cluster():
 class TestLambdaRotationHandler(unittest.TestCase):
     """Test cases for Lambda rotation handler."""
 
+    def setUp(self):
+        """Set up test fixtures."""
+        self.secret_arn = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test-secret'
+        self.token = 'test-token-123'
+        
+        self.current_secret = {
+            'username': 'testuser',
+            'password': 'current-password',
+            'host': 'test-host.rds.amazonaws.com',
+            'port': 5432,
+            'dbname': 'testdb'
+        }
+
     def test_lambda_handler_imports(self):
         """Test that lambda handler can be imported."""
         import importlib
@@ -264,6 +278,252 @@ class TestLambdaRotationHandler(unittest.TestCase):
         assert hasattr(rotation_handler, 'set_secret')
         assert hasattr(rotation_handler, 'test_secret')
         assert hasattr(rotation_handler, 'finish_secret')
+
+    @patch('lib.lambda.rotation_handler.secrets_client')
+    @patch('lib.lambda.rotation_handler.rds_client')
+    def test_lambda_handler_create_secret_step(self, mock_rds, mock_secrets):
+        """Test lambda_handler with createSecret step."""
+        import importlib
+        rotation_handler = importlib.import_module('lib.lambda.rotation_handler')
+        
+        event = {
+            'SecretId': self.secret_arn,
+            'ClientRequestToken': self.token,
+            'Step': 'createSecret'
+        }
+        
+        # Mock that version doesn't exist
+        from botocore.exceptions import ClientError
+        mock_secrets.get_secret_value.side_effect = [
+            ClientError(
+                error_response={'Error': {'Code': 'ResourceNotFoundException'}},
+                operation_name='GetSecretValue'
+            ),
+            {'SecretString': '{"username": "test", "password": "pass"}'}
+        ]
+        
+        # Mock random password generation
+        mock_secrets.get_random_password.return_value = {
+            'RandomPassword': 'new-random-password'
+        }
+        
+        # Call handler
+        rotation_handler.lambda_handler(event, {})
+        
+        # Verify calls were made
+        assert mock_secrets.get_secret_value.called
+        assert mock_secrets.put_secret_value.called
+
+    @patch('lib.lambda.rotation_handler.secrets_client')
+    @patch('lib.lambda.rotation_handler.rds_client')  
+    @patch('lib.lambda.rotation_handler.psycopg2')
+    def test_lambda_handler_set_secret_step(self, mock_psycopg2, mock_rds, mock_secrets):
+        """Test lambda_handler with setSecret step."""
+        import importlib
+        rotation_handler = importlib.import_module('lib.lambda.rotation_handler')
+        
+        event = {
+            'SecretId': self.secret_arn,
+            'ClientRequestToken': self.token,
+            'Step': 'setSecret'
+        }
+        
+        # Mock secret retrieval
+        mock_secrets.get_secret_value.side_effect = [
+            {'SecretString': '{"username": "testuser", "password": "newpass"}'},
+            {'SecretString': '{"username": "testuser", "password": "oldpass"}'}
+        ]
+        
+        # Mock database connection
+        mock_conn = unittest.mock.Mock()
+        mock_cursor = unittest.mock.Mock()
+        mock_context_manager = unittest.mock.MagicMock()
+        mock_context_manager.__enter__.return_value = mock_cursor
+        mock_context_manager.__exit__.return_value = None
+        mock_conn.cursor.return_value = mock_context_manager
+        mock_psycopg2.connect.return_value = mock_conn
+        
+        # Call handler
+        rotation_handler.lambda_handler(event, {})
+        
+        # Verify database operations
+        assert mock_psycopg2.connect.called
+        assert mock_cursor.execute.called
+        assert mock_conn.commit.called
+
+    @patch('lib.lambda.rotation_handler.secrets_client')
+    def test_lambda_handler_invalid_step(self, mock_secrets):
+        """Test lambda_handler with invalid step raises error."""
+        import importlib
+        rotation_handler = importlib.import_module('lib.lambda.rotation_handler')
+        
+        event = {
+            'SecretId': self.secret_arn,
+            'ClientRequestToken': self.token,
+            'Step': 'invalidStep'
+        }
+        
+        with self.assertRaises(ValueError) as context:
+            rotation_handler.lambda_handler(event, {})
+        
+        self.assertIn('Invalid step: invalidStep', str(context.exception))
+
+    @patch('lib.lambda.rotation_handler.secrets_client')
+    def test_create_secret_already_exists(self, mock_secrets):
+        """Test create_secret when version already exists."""
+        import importlib
+        rotation_handler = importlib.import_module('lib.lambda.rotation_handler')
+        
+        # Mock that version exists
+        mock_secrets.get_secret_value.return_value = {
+            'SecretString': '{"username": "test", "password": "pass"}'
+        }
+        
+        # Call function - should return early without creating
+        rotation_handler.create_secret(self.secret_arn, self.token)
+        
+        # Should not call put_secret_value
+        mock_secrets.put_secret_value.assert_not_called()
+
+    @patch('lib.lambda.rotation_handler.secrets_client')
+    @patch('lib.lambda.rotation_handler.psycopg2')
+    def test_set_secret_database_error_handling(self, mock_psycopg2, mock_secrets):
+        """Test set_secret handles database connection errors."""
+        import importlib
+        rotation_handler = importlib.import_module('lib.lambda.rotation_handler')
+        
+        # Mock secret retrieval
+        mock_secrets.get_secret_value.side_effect = [
+            {'SecretString': '{"username": "testuser", "password": "newpass"}'},
+            {'SecretString': '{"username": "testuser", "password": "oldpass"}'}
+        ]
+        
+        # Mock database connection error
+        mock_psycopg2.connect.side_effect = Exception('Database connection failed')
+        
+        with self.assertRaises(Exception) as context:
+            rotation_handler.set_secret(self.secret_arn, self.token)
+        
+        self.assertIn('Database connection failed', str(context.exception))
+
+    @patch('lib.lambda.rotation_handler.secrets_client')
+    @patch('lib.lambda.rotation_handler.psycopg2')
+    def test_test_secret_success(self, mock_psycopg2, mock_secrets):
+        """Test test_secret with successful connection."""
+        import importlib
+        rotation_handler = importlib.import_module('lib.lambda.rotation_handler')
+        
+        # Mock secret retrieval
+        mock_secrets.get_secret_value.return_value = {
+            'SecretString': '{"username": "testuser", "password": "newpass"}'
+        }
+        
+        # Mock successful database connection
+        mock_conn = unittest.mock.Mock()
+        mock_cursor = unittest.mock.Mock()
+        mock_cursor.fetchone.return_value = (1,)
+        mock_context_manager = unittest.mock.MagicMock()
+        mock_context_manager.__enter__.return_value = mock_cursor
+        mock_context_manager.__exit__.return_value = None
+        mock_conn.cursor.return_value = mock_context_manager
+        mock_psycopg2.connect.return_value = mock_conn
+        
+        # Should not raise exception
+        rotation_handler.test_secret(self.secret_arn, self.token)
+        
+        # Verify test query was executed
+        mock_cursor.execute.assert_called_with('SELECT 1')
+
+    @patch('lib.lambda.rotation_handler.secrets_client')
+    def test_finish_secret_already_current(self, mock_secrets):
+        """Test finish_secret when version is already current."""
+        import importlib
+        rotation_handler = importlib.import_module('lib.lambda.rotation_handler')
+        
+        # Mock describe_secret response where token is already current
+        mock_secrets.describe_secret.return_value = {
+            'VersionIdsToStages': {
+                self.token: ['AWSCURRENT'],
+                'old-version': ['AWSPENDING']
+            }
+        }
+        
+        # Call function
+        rotation_handler.finish_secret(self.secret_arn, self.token)
+        
+        # Should not update stages
+        mock_secrets.update_secret_version_stage.assert_not_called()
+
+    @patch('lib.lambda.rotation_handler.secrets_client')
+    def test_create_secret_other_client_error(self, mock_secrets):
+        """Test create_secret handles non-ResourceNotFound errors."""
+        import importlib
+        rotation_handler = importlib.import_module('lib.lambda.rotation_handler')
+        
+        # Mock that an unexpected error occurs
+        from botocore.exceptions import ClientError
+        mock_secrets.get_secret_value.side_effect = ClientError(
+            error_response={'Error': {'Code': 'AccessDenied'}},
+            operation_name='GetSecretValue'
+        )
+        
+        with self.assertRaises(ClientError):
+            rotation_handler.create_secret(self.secret_arn, self.token)
+
+    @patch('lib.lambda.rotation_handler.secrets_client')
+    @patch('lib.lambda.rotation_handler.psycopg2')
+    def test_test_secret_query_error(self, mock_psycopg2, mock_secrets):
+        """Test test_secret handles query errors gracefully."""
+        import importlib
+        rotation_handler = importlib.import_module('lib.lambda.rotation_handler')
+        
+        # Mock secret retrieval
+        mock_secrets.get_secret_value.return_value = {
+            'SecretString': '{"username": "testuser", "password": "newpass"}'
+        }
+        
+        # Mock database connection with query that raises exception
+        mock_conn = unittest.mock.Mock()
+        mock_cursor = unittest.mock.Mock()
+        mock_cursor.execute.side_effect = Exception('Query failed')
+        mock_context_manager = unittest.mock.MagicMock()
+        mock_context_manager.__enter__.return_value = mock_cursor
+        mock_context_manager.__exit__.return_value = None
+        mock_conn.cursor.return_value = mock_context_manager
+        mock_psycopg2.connect.return_value = mock_conn
+        
+        with self.assertRaises(Exception) as context:
+            rotation_handler.test_secret(self.secret_arn, self.token)
+        
+        self.assertIn('Query failed', str(context.exception))
+
+    @patch('lib.lambda.rotation_handler.secrets_client')
+    @patch('lib.lambda.rotation_handler.psycopg2')
+    def test_set_secret_cursor_error(self, mock_psycopg2, mock_secrets):
+        """Test set_secret handles cursor execution errors."""
+        import importlib
+        rotation_handler = importlib.import_module('lib.lambda.rotation_handler')
+        
+        # Mock secret retrieval
+        mock_secrets.get_secret_value.side_effect = [
+            {'SecretString': '{"username": "testuser", "password": "newpass"}'},
+            {'SecretString': '{"username": "testuser", "password": "oldpass"}'}
+        ]
+        
+        # Mock database connection with cursor error
+        mock_conn = unittest.mock.Mock()
+        mock_cursor = unittest.mock.Mock()
+        mock_cursor.execute.side_effect = Exception('Cursor error')
+        mock_context_manager = unittest.mock.MagicMock()
+        mock_context_manager.__enter__.return_value = mock_cursor
+        mock_context_manager.__exit__.return_value = None
+        mock_conn.cursor.return_value = mock_context_manager
+        mock_psycopg2.connect.return_value = mock_conn
+        
+        with self.assertRaises(Exception) as context:
+            rotation_handler.set_secret(self.secret_arn, self.token)
+        
+        self.assertIn('Cursor error', str(context.exception))
 
 
 if __name__ == '__main__':
