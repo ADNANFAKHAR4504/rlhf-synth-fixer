@@ -507,15 +507,25 @@ describe('Nova Clinical Trial Data Platform End-to-End Workflow Tests', () => {
         Tags: [{ Key: 'Name', Value: 'tap-int-test-snapshot' }]
       }));
 
-      // Step 3: Wait until snapshot is available (poll)
+      // Step 3: Wait until snapshot is available (poll with longer timeout)
       let available = false;
-      for (let i = 0; i < 30; i++) {
+      let lastStatus = 'unknown';
+      for (let i = 0; i < 60; i++) { // 60 iterations × 15 seconds = 15 minutes max
         const snaps = await rdsClient.send(new DescribeDBSnapshotsCommand({ DBSnapshotIdentifier: snapshotId }));
         const snap = snaps.DBSnapshots?.[0];
-        if (snap?.Status === 'available') { available = true; break; }
-        await new Promise(r => setTimeout(r, 10000));
+        lastStatus = snap?.Status || 'unknown';
+        console.log(`Snapshot ${snapshotId} status: ${lastStatus} (attempt ${i + 1}/60)`);
+        if (snap?.Status === 'available') { 
+          available = true; 
+          break; 
+        }
+        if (snap?.Status === 'error' || snap?.Status === 'failed') {
+          throw new Error(`Snapshot creation failed with status: ${snap.Status}`);
+        }
+        await new Promise(r => setTimeout(r, 15000)); // 15 seconds between checks
       }
       expect(available).toBe(true);
+      console.log(`Snapshot ${snapshotId} is now available`);
     }, testTimeout);
   });
 
