@@ -11,5 +11,25 @@
   "subject_labels": [
     "Failure Recovery Automation"
   ],
-  "aws_services": "VPC, EC2, Auto Scaling, ALB, IAM, CloudWatch, SNS, S3, Secrets Manager, SSM Parameter Store, NAT Gateway, Internet Gateway"
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "ALB",
+    "IAM",
+    "CloudWatch",
+    "SNS",
+    "S3",
+    "Secrets Manager",
+    "SSM Parameter Store",
+    "NAT Gateway",
+    "Internet Gateway"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
 }
