@@ -40,7 +40,7 @@ class TapStack(TerraformStack):
         super().__init__(scope, construct_id)
 
         # Extract configuration from kwargs
-        environment_suffix = kwargs.get('environment_suffix', 'dev')
+        environment_suffix = kwargs.get('environment_suffix', 'stage')
         aws_region = kwargs.get('aws_region', 'us-east-1')
         state_bucket_region = kwargs.get('state_bucket_region', 'us-east-1')
         state_bucket = kwargs.get('state_bucket', 'iac-rlhf-tf-states')
