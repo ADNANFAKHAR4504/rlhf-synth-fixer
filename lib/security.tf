@@ -274,7 +274,8 @@ resource "aws_security_group" "lambda" {
 
 # Data source for AZs
 data "aws_availability_zones" "available" {
-  state = "available"
+  provider = aws.primary
+  state    = "available"
 }
 
 # IAM policy for encryption - Not needed with AWS-managed encryption
@@ -420,4 +421,6 @@ resource "aws_wafv2_web_acl_logging_configuration" "api_protection" {
 }
 
 # Data source for current account
-data "aws_caller_identity" "current" {}
+data "aws_caller_identity" "current" {
+  provider = aws.global
+}

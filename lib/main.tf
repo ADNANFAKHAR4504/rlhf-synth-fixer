@@ -635,8 +635,9 @@ resource "aws_route53_health_check" "secondary" {
 
 # Route 53 Hosted Zone (optional - assuming it exists)
 data "aws_route53_zone" "main" {
-  count = var.enable_route53 ? 1 : 0
-  name  = var.domain_name
+  provider = aws.global
+  count    = var.enable_route53 ? 1 : 0
+  name     = var.domain_name
 }
 
 # Route 53 Latency-based routing records (optional)
