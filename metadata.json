@@ -10,5 +10,19 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC"
+  "aws_services": [
+    "Amazon Kinesis Data Streams",
+    "AWS Lambda",
+    "Amazon DynamoDB",
+    "Application Load Balancer",
+    "Amazon VPC",
+    "NAT Gateway",
+    "VPC Endpoints",
+    "AWS KMS",
+    "Amazon S3",
+    "Amazon SQS",
+    "Amazon CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 8
 }
