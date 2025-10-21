@@ -37,7 +37,7 @@ import { describe, test, beforeAll, expect } from '@jest/globals';
 // Test configuration 
 const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const STACK_NAME = `TapStack${ENVIRONMENT_SUFFIX}`;
-const PRIMARY_REGION = process.env.AWS_REGION || 'us-east-2';
+const PRIMARY_REGION = 'us-east-2';
 const TEST_TIMEOUT = 60000; // 60 seconds
 const EXTENDED_TIMEOUT = 120000; // 120 seconds for async processing tests
 
