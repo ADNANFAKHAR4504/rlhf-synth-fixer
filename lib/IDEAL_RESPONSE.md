@@ -1,3 +1,7 @@
+# TAP Stack - Complete Implementation (Ideal Response)
+
+This document contains the corrected and complete implementation of the TAP Serverless CI/CD Stack with all improvements and fixes applied.
+
 ## Main Stack Definition
 
 ### `lib/tap-stack.ts`
@@ -7,6 +11,9 @@ import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as codedeploy from 'aws-cdk-lib/aws-codedeploy';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as eventsTargets from 'aws-cdk-lib/aws-events-targets';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
@@ -20,24 +27,48 @@ import { SecureBucket } from './constructs/secure-bucket';
 
 export interface TapStackProps extends cdk.StackProps {
   pipelineSourceBucket?: s3.IBucket;
+  environmentSuffix: string;
 }
 
 export class TapStack extends cdk.Stack {
   public readonly applicationBucket: s3.Bucket;
   public readonly lambdaFunction: lambda.Function;
   public readonly pipelineSourceBucket: s3.IBucket;
+  public readonly vpc: ec2.Vpc;
 
-  constructor(scope: Construct, id: string, props?: TapStackProps) {
+  constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
+
+    const envSuffix = props.environmentSuffix;
+
+    // Create VPC for Lambda function
+    this.vpc = new ec2.Vpc(this, 'TapVpc', {
+      vpcName: `tap-vpc-${envSuffix}`,
+      maxAzs: 2,
+      natGateways: 1,
+      subnetConfiguration: [
+        {
+          cidrMask: 24,
+          name: `tap-public-${envSuffix}`,
+          subnetType: ec2.SubnetType.PUBLIC,
+        },
+        {
+          cidrMask: 24,
+          name: `tap-private-${envSuffix}`,
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+      ],
+    });
 
     // Create SNS topic for alarms
     const alarmTopic = new sns.Topic(this, 'TapAlarmTopic', {
-      displayName: 'TAP Application Alarms',
+      displayName: `TAP Application Alarms ${envSuffix}`,
+      topicName: `tap-alarm-topic-${envSuffix}`,
     });
 
     // Create secure application bucket with versioning and logging
     const loggingBucket = new s3.Bucket(this, 'TapLoggingBucket', {
-      bucketName: `tap-app-logs-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+      bucketName: `tap-app-logs-${envSuffix}-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       lifecycleRules: [
@@ -46,20 +77,22 @@ export class TapStack extends cdk.Stack {
           expiration: cdk.Duration.days(90),
         },
       ],
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
     });
 
     this.applicationBucket = new SecureBucket(this, 'TapApplicationBucket', {
-      bucketName: `tap-app-data-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+      bucketName: `tap-app-data-${envSuffix}-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
       serverAccessLogsBucket: loggingBucket,
       serverAccessLogsPrefix: 'app-bucket-logs/',
+      environmentSuffix: envSuffix,
     }).bucket;
 
     // Create source bucket for pipeline if not provided
     this.pipelineSourceBucket =
       props?.pipelineSourceBucket ||
       new s3.Bucket(this, 'TapPipelineSourceBucket', {
-        bucketName: `tap-pipeline-source-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+        bucketName: `tap-pipeline-source-${envSuffix}-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
         versioned: true,
         encryption: s3.BucketEncryption.S3_MANAGED,
         blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -69,15 +102,15 @@ export class TapStack extends cdk.Stack {
 
     // Create Dead Letter Queue
     const dlq = new sqs.Queue(this, 'TapLambdaDLQ', {
-      queueName: 'tap-lambda-dlq',
+      queueName: `tap-lambda-dlq-${envSuffix}`,
       retentionPeriod: cdk.Duration.days(14),
       encryption: sqs.QueueEncryption.KMS_MANAGED,
     });
 
     // Create Secrets Manager secret for sensitive data
     const appSecret = new secretsmanager.Secret(this, 'TapAppSecret', {
-      secretName: 'tap-app-secrets',
-      description: 'Secrets for TAP application',
+      secretName: `tap-app-secrets-${envSuffix}`,
+      description: `Secrets for TAP application ${envSuffix}`,
       generateSecretString: {
         secretStringTemplate: JSON.stringify({
           apiKey: 'placeholder',
@@ -85,6 +118,7 @@ export class TapStack extends cdk.Stack {
         generateStringKey: 'password',
         excludeCharacters: ' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
       },
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // Create Lambda execution role with least privilege
@@ -125,7 +159,7 @@ export class TapStack extends cdk.Stack {
 
     // Create Lambda with canary deployment
     const lambdaWithCanary = new LambdaWithCanary(this, 'TapLambda', {
-      functionName: 'tap-application-function',
+      functionName: `tap-application-function-${envSuffix}`,
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'handler.main',
       code: lambda.Code.fromAsset('lambda/serverless-ci-cd-function'),
@@ -134,19 +168,22 @@ export class TapStack extends cdk.Stack {
         APPLICATION_BUCKET: this.applicationBucket.bucketName,
         SECRET_ARN: appSecret.secretArn,
         NODE_ENV: 'production',
+        ENVIRONMENT: envSuffix,
       },
-      memorySize: 3008, // Maximum memory for better performance
+      memorySize: 3008,
       timeout: cdk.Duration.seconds(300),
-      // Note: Removed reservedConcurrentExecutions to use account-level unreserved capacity
-      // This allows Lambda to scale automatically while respecting account limits
       deadLetterQueue: dlq,
       logRetention: logs.RetentionDays.ONE_MONTH,
       tracing: lambda.Tracing.ACTIVE,
+      vpc: this.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
       canaryConfig: {
         deploymentConfig:
           codedeploy.LambdaDeploymentConfig.CANARY_10PERCENT_5MINUTES,
         alarmConfiguration: {
-          alarms: [], // Will be populated below
+          alarms: [],
           enabled: true,
         },
       },
@@ -154,8 +191,27 @@ export class TapStack extends cdk.Stack {
 
     this.lambdaFunction = lambdaWithCanary.lambdaFunction;
 
+    // Create EventBridge rule to trigger Lambda on S3 events
+    const eventRule = new events.Rule(this, 'TapS3EventRule', {
+      ruleName: `tap-s3-events-${envSuffix}`,
+      description: `Trigger Lambda on S3 events for ${envSuffix}`,
+      eventPattern: {
+        source: ['aws.s3'],
+        detailType: ['AWS API Call via CloudTrail'],
+        detail: {
+          eventName: ['PutObject', 'CompleteMultipartUpload'],
+          requestParameters: {
+            bucketName: [this.applicationBucket.bucketName],
+          },
+        },
+      },
+    });
+
+    eventRule.addTarget(new eventsTargets.LambdaFunction(this.lambdaFunction));
+
     // Create CloudWatch Alarms
     const errorAlarm = new cloudwatch.Alarm(this, 'TapLambdaErrorAlarm', {
+      alarmName: `tap-lambda-errors-${envSuffix}`,
       metric: this.lambdaFunction.metricErrors({
         statistic: 'Sum',
         period: cdk.Duration.minutes(1),
@@ -163,10 +219,11 @@ export class TapStack extends cdk.Stack {
       threshold: 10,
       evaluationPeriods: 2,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription: 'Lambda function error rate is too high',
+      alarmDescription: `Lambda function error rate is too high for ${envSuffix}`,
     });
 
     const throttleAlarm = new cloudwatch.Alarm(this, 'TapLambdaThrottleAlarm', {
+      alarmName: `tap-lambda-throttles-${envSuffix}`,
       metric: this.lambdaFunction.metricThrottles({
         statistic: 'Sum',
         period: cdk.Duration.minutes(1),
@@ -174,18 +231,19 @@ export class TapStack extends cdk.Stack {
       threshold: 5,
       evaluationPeriods: 1,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription: 'Lambda function is being throttled',
+      alarmDescription: `Lambda function is being throttled for ${envSuffix}`,
     });
 
     const durationAlarm = new cloudwatch.Alarm(this, 'TapLambdaDurationAlarm', {
+      alarmName: `tap-lambda-duration-${envSuffix}`,
       metric: this.lambdaFunction.metricDuration({
         statistic: 'Average',
         period: cdk.Duration.minutes(5),
       }),
-      threshold: 3000, // 3 seconds
+      threshold: 3000,
       evaluationPeriods: 2,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription: 'Lambda function duration is too high',
+      alarmDescription: `Lambda function duration is too high for ${envSuffix}`,
     });
 
     // Add alarm actions
@@ -300,219 +358,7 @@ export class TapStack extends cdk.Stack {
 }
 ```
 
-### `lib/pipeline-stack.ts`
-
-```typescript
-import * as cdk from 'aws-cdk-lib';
-import * as codebuild from 'aws-cdk-lib/aws-codebuild';
-import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
-import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import { Construct } from 'constructs';
-
-export interface PipelineStackProps extends cdk.StackProps {
-  sourceS3Bucket: s3.IBucket;
-  sourceS3Key: string;
-}
-
-export class PipelineStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props: PipelineStackProps) {
-    super(scope, id, props);
-
-    // Create artifact stores
-    const sourceOutput = new codepipeline.Artifact('SourceOutput');
-    const buildOutput = new codepipeline.Artifact('BuildOutput');
-    const testOutput = new codepipeline.Artifact('TestOutput');
-
-    // Create CodeBuild project for building
-    const buildProject = new codebuild.PipelineProject(
-      this,
-      'TapBuildProject',
-      {
-        projectName: 'tap-build',
-        environment: {
-          buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
-          computeType: codebuild.ComputeType.MEDIUM,
-          privileged: true,
-        },
-        environmentVariables: {
-          AWS_ACCOUNT_ID: {
-            value: cdk.Aws.ACCOUNT_ID,
-          },
-          AWS_DEFAULT_REGION: {
-            value: cdk.Aws.REGION,
-          },
-        },
-        cache: codebuild.Cache.local(codebuild.LocalCacheMode.SOURCE),
-      }
-    );
-
-    // Create CodeBuild project for testing
-    const testProject = new codebuild.PipelineProject(this, 'TapTestProject', {
-      projectName: 'tap-test',
-      environment: {
-        buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
-        computeType: codebuild.ComputeType.MEDIUM,
-      },
-      buildSpec: codebuild.BuildSpec.fromObject({
-        version: '0.2',
-        phases: {
-          install: {
-            'runtime-versions': {
-              nodejs: 18,
-            },
-            commands: ['npm ci'],
-          },
-          build: {
-            commands: [
-              'npm run test',
-              'npm run test:security', // Security compliance tests
-              'npm run test:integration', // Integration tests
-            ],
-          },
-        },
-        reports: {
-          'test-reports': {
-            files: ['test-results.xml'],
-            'file-format': 'JUNITXML',
-          },
-        },
-      }),
-    });
-
-    // Create deployment role for cross-region deployment
-    const deployRole = new iam.Role(this, 'TapDeployRole', {
-      assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com'),
-      inlinePolicies: {
-        DeployPolicy: new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: ['sts:AssumeRole'],
-              resources: ['arn:aws:iam::*:role/cdk-*'],
-            }),
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: [
-                'cloudformation:*',
-                'lambda:*',
-                'codedeploy:*',
-                's3:*',
-                'iam:*',
-                'sqs:*',
-                'secretsmanager:*',
-                'cloudwatch:*',
-                'sns:*',
-                'logs:*',
-              ],
-              resources: ['*'],
-            }),
-          ],
-        }),
-      },
-    });
-
-    // Create CodeBuild project for deployment
-    const deployProject = new codebuild.PipelineProject(
-      this,
-      'TapDeployProject',
-      {
-        projectName: 'tap-deploy',
-        role: deployRole,
-        environment: {
-          buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
-          computeType: codebuild.ComputeType.MEDIUM,
-        },
-        buildSpec: codebuild.BuildSpec.fromObject({
-          version: '0.2',
-          phases: {
-            install: {
-              'runtime-versions': {
-                nodejs: 18,
-              },
-              commands: ['npm install -g aws-cdk@latest', 'npm ci'],
-            },
-            build: {
-              commands: [
-                'npm run build',
-                'npm run cdk -- synth',
-                'npm run cdk -- deploy TapStack --require-approval never',
-              ],
-            },
-          },
-        }),
-      }
-    );
-
-    // Create Pipeline
-    const pipeline = new codepipeline.Pipeline(this, 'TapPipeline', {
-      pipelineName: 'tap-cicd-pipeline',
-      restartExecutionOnUpdate: true,
-      crossAccountKeys: true, // Enable cross-account deployment
-    });
-
-    // Source Stage
-    pipeline.addStage({
-      stageName: 'Source',
-      actions: [
-        new codepipeline_actions.S3SourceAction({
-          actionName: 'S3Source',
-          bucket: props.sourceS3Bucket,
-          bucketKey: props.sourceS3Key,
-          output: sourceOutput,
-          trigger: codepipeline_actions.S3Trigger.EVENTS, // Trigger on S3 events
-        }),
-      ],
-    });
-
-    // Build Stage
-    pipeline.addStage({
-      stageName: 'Build',
-      actions: [
-        new codepipeline_actions.CodeBuildAction({
-          actionName: 'BuildAction',
-          project: buildProject,
-          input: sourceOutput,
-          outputs: [buildOutput],
-        }),
-      ],
-    });
-
-    // Test Stage
-    pipeline.addStage({
-      stageName: 'Test',
-      actions: [
-        new codepipeline_actions.CodeBuildAction({
-          actionName: 'TestAction',
-          project: testProject,
-          input: buildOutput,
-          outputs: [testOutput],
-        }),
-      ],
-    });
-
-    // Deploy Stage (Multi-region deployment can be added here)
-    pipeline.addStage({
-      stageName: 'Deploy',
-      actions: [
-        new codepipeline_actions.CodeBuildAction({
-          actionName: 'DeployAction',
-          project: deployProject,
-          input: testOutput,
-          runOrder: 1,
-        }),
-      ],
-    });
-
-    // Output pipeline ARN
-    new cdk.CfnOutput(this, 'PipelineArn', {
-      value: pipeline.pipelineArn,
-      description: 'ARN of the CI/CD pipeline',
-    });
-  }
-}
-```
+## Custom Constructs
 
 ### `lib/constructs/secure-bucket.ts`
 
@@ -526,6 +372,7 @@ export interface SecureBucketProps {
   bucketName: string;
   serverAccessLogsBucket: s3.IBucket;
   serverAccessLogsPrefix: string;
+  environmentSuffix: string;
 }
 
 export class SecureBucket extends Construct {
@@ -537,7 +384,8 @@ export class SecureBucket extends Construct {
     // Create KMS key for encryption
     const encryptionKey = new kms.Key(this, 'BucketEncryptionKey', {
       enableKeyRotation: true,
-      description: `Encryption key for ${props.bucketName}`,
+      description: `Encryption key for ${props.bucketName} (${props.environmentSuffix})`,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // Create secure bucket
@@ -564,7 +412,8 @@ export class SecureBucket extends Construct {
           ],
         },
       ],
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
     });
 
     // Add bucket policy for secure access
@@ -589,9 +438,11 @@ export class SecureBucket extends Construct {
 ### `lib/constructs/lambda-with-canary.ts`
 
 ```typescript
+import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as codedeploy from 'aws-cdk-lib/aws-codedeploy';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
 
 export interface LambdaWithCanaryProps extends lambda.FunctionProps {
@@ -611,9 +462,22 @@ export class LambdaWithCanary extends Construct {
   constructor(scope: Construct, id: string, props: LambdaWithCanaryProps) {
     super(scope, id);
 
+    // Extract logRetention and create log group instead of using deprecated property
+    const { logRetention, ...lambdaProps } = props;
+
+    // Create CloudWatch Log Group with retention
+    const logGroup = logRetention
+      ? new logs.LogGroup(this, 'LogGroup', {
+          logGroupName: `/aws/lambda/${props.functionName}`,
+          retention: logRetention,
+          removalPolicy: cdk.RemovalPolicy.DESTROY,
+        })
+      : undefined;
+
     // Create Lambda function
     this.lambdaFunction = new lambda.Function(this, 'Function', {
-      ...props,
+      ...lambdaProps,
+      logGroup,
       // Enable active tracing for X-Ray
       tracing: lambda.Tracing.ACTIVE,
     });
@@ -652,6 +516,8 @@ export class LambdaWithCanary extends Construct {
   }
 }
 ```
+
+## Lambda Function Handler
 
 ### `lambda/serverless-ci-cd-function/handler.ts`
 
@@ -762,3 +628,4 @@ export async function main(event: any, context: Context): Promise<APIGatewayProx
   }
 }
 ```
+

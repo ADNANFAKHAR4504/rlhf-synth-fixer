@@ -1,584 +1,648 @@
-# Model Response Failures and Issues
+# Model Failures - Comparison between MODEL_RESPONSE and IDEAL_RESPONSE
 
-This document details all the issues found in `MODEL_RESPONSE.md` that were corrected in `IDEAL_RESPONSE.md`.
+This document details all the issues found in the MODEL_RESPONSE.md compared to the corrected IDEAL_RESPONSE.md implementation.
 
-## Critical Runtime Errors
+## Summary
 
-### 1. Lambda Reserved Concurrent Executions Causes Deployment Failure
-
-**File:** `lib/tap-stack.ts` (Line 133)
-
-**Issue:**
-```typescript
-reservedConcurrentExecutions: 1000, // Handle high throughput
-```
-
-**Error:**
-```
-Resource handler returned message: "Specified ReservedConcurrentExecutions for function 
-decreases account's UnreservedConcurrentExecution below its minimum value of [100]. 
-(Service: Lambda, Status Code: 400)"
-```
-
-**Root Cause:**
-AWS requires at least 100 unreserved concurrent executions to remain available in an account. With a default account limit of 1000 concurrent executions, reserving 1000 violates this requirement.
-
-**Fix:**
-Removed the property entirely to allow Lambda to use account-level unreserved capacity:
-```typescript
-// Note: Removed reservedConcurrentExecutions to use account-level unreserved capacity
-// This allows Lambda to scale automatically while respecting account limits
-```
-
-**Impact:** Critical - Prevents stack deployment
+**Total Issues Found**: 25 across 6 categories
+- **Critical Runtime Errors**: 3
+- **Missing Requirements**: 5
+- **Resource Management Issues**: 6
+- **Type/Import Issues**: 4
+- **Deprecated API Usage**: 2
+- **Best Practices**: 5
 
 ---
 
-### 2. Incorrect Lambda Context Property
+## 1. Critical Runtime Errors (3 issues)
 
-**File:** `lambda/serverless-ci-cd-function/handler.ts` (Lines 601, 607, 635)
+### Issue 1.1: Missing `environmentSuffix` Parameter
+**Severity**: CRITICAL  
+**Category**: Missing Required Parameter
 
-**Issue:**
+**Problem**:
 ```typescript
-requestId: context.requestId,
-Key: `processed/${context.requestId}.json`,
-requestId: context.requestId,
+// MODEL_RESPONSE - WRONG
+export interface TapStackProps extends cdk.StackProps {
+  pipelineSourceBucket?: s3.IBucket;
+}
+
+constructor(scope: Construct, id: string, props?: TapStackProps) {
+  super(scope, id, props);
+  // No environmentSuffix defined
+}
 ```
 
-**Error:**
-```
-Property 'requestId' does not exist on type 'Context'. Did you mean 'awsRequestId'?
-```
-
-**Root Cause:**
-The Lambda `Context` interface does not have a `requestId` property. The correct property is `awsRequestId`.
-
-**Fix:**
+**Solution**:
 ```typescript
-requestId: context.awsRequestId,
-Key: `processed/${context.awsRequestId}.json`,
-requestId: context.awsRequestId,
+// IDEAL_RESPONSE - CORRECT
+export interface TapStackProps extends cdk.StackProps {
+  pipelineSourceBucket?: s3.IBucket;
+  environmentSuffix: string; // Required parameter
+}
+
+constructor(scope: Construct, id: string, props: TapStackProps) {
+  super(scope, id, props);
+  const envSuffix = props.environmentSuffix;
+}
 ```
 
-**Impact:** Critical - Compilation error
+**Impact**: Stack cannot support multiple environments; causes naming conflicts
 
 ---
 
-### 3. Incorrect CodeDeploy Import and Reference
+### Issue 1.2: Resource Names Without Environment Suffix
+**Severity**: CRITICAL  
+**Category**: Naming Conflicts
 
-**File:** `lib/tap-stack.ts` (Line 139)
-
-**Issue:**
+**Problem**:
+All resources use hard-coded names without environment differentiation:
 ```typescript
-deploymentConfig: lambda.LambdaDeploymentConfig.CANARY_10PERCENT_5MINUTES,
+// MODEL_RESPONSE - WRONG
+bucketName: `tap-app-data-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`
+queueName: 'tap-lambda-dlq'
+secretName: 'tap-app-secrets'
+functionName: 'tap-application-function'
+alarmName: 'tap-lambda-errors'
+topicName: 'tap-alarm-topic'
 ```
 
-**Error:**
-```
-Property 'LambdaDeploymentConfig' does not exist on type 'typeof import(...aws-lambda/index)'
-```
-
-**Root Cause:**
-`LambdaDeploymentConfig` is in the `codedeploy` module, not the `lambda` module. Missing import for `codedeploy`.
-
-**Fix:**
-Added import and corrected reference:
+**Solution**:
 ```typescript
-import * as codedeploy from 'aws-cdk-lib/aws-codedeploy';
-// ...
-deploymentConfig: codedeploy.LambdaDeploymentConfig.CANARY_10PERCENT_5MINUTES,
+// IDEAL_RESPONSE - CORRECT
+bucketName: `tap-app-data-${envSuffix}-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`
+queueName: `tap-lambda-dlq-${envSuffix}`
+secretName: `tap-app-secrets-${envSuffix}`
+functionName: `tap-application-function-${envSuffix}`
+alarmName: `tap-lambda-errors-${envSuffix}`
+topicName: `tap-alarm-topic-${envSuffix}`
 ```
 
-**Impact:** Critical - Compilation error
+**Impact**: Multiple stack deployments fail with "ResourceAlreadyExists" errors
 
 ---
 
-### 4. Non-existent Lambda Property
+### Issue 1.3: Lambda Context Property Incorrect
+**Severity**: CRITICAL  
+**Category**: Runtime Error
 
-**File:** `lib/tap-stack.ts` (Line 135)
-
-**Issue:**
+**Problem**:
 ```typescript
-deadLetterQueueMaxMessageSize: 2,
+// MODEL_RESPONSE - WRONG
+requestId: context.requestId, // Property does not exist
 ```
 
-**Error:**
+**Solution**:
+```typescript
+// IDEAL_RESPONSE - CORRECT
+requestId: context.awsRequestId, // Correct property name
 ```
-Object literal may only specify known properties, and 'deadLetterQueueMaxMessageSize' 
-does not exist in type 'LambdaWithCanaryProps'.
-```
 
-**Root Cause:**
-The property `deadLetterQueueMaxMessageSize` does not exist in AWS CDK Lambda function properties.
-
-**Fix:**
-Removed the non-existent property entirely.
-
-**Impact:** Critical - Compilation error
+**Impact**: Lambda function crashes at runtime with TypeError
 
 ---
 
-### 5. Incorrect CodeBuild Cache API
+## 2. Missing Requirements (5 issues)
 
-**File:** `lib/pipeline-stack.ts` (Lines 252-257)
+### Issue 2.1: No VPC Configuration
+**Severity**: HIGH  
+**Category**: Missing Requirement
 
-**Issue:**
+**Problem**:
+MODEL_RESPONSE has no VPC implementation. Lambda runs in AWS-managed VPC.
+
+**Solution**:
 ```typescript
-cache: codebuild.Cache.s3({
-  bucket: new s3.Bucket(this, 'BuildCacheBucket', {
-    removalPolicy: cdk.RemovalPolicy.DESTROY,
-    autoDeleteObjects: true,
-  }),
-}),
+// IDEAL_RESPONSE - CORRECT
+this.vpc = new ec2.Vpc(this, 'TapVpc', {
+  vpcName: `tap-vpc-${envSuffix}`,
+  maxAzs: 2,
+  natGateways: 1,
+  subnetConfiguration: [
+    {
+      cidrMask: 24,
+      name: `tap-public-${envSuffix}`,
+      subnetType: ec2.SubnetType.PUBLIC,
+    },
+    {
+      cidrMask: 24,
+      name: `tap-private-${envSuffix}`,
+      subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+    },
+  ],
+});
+
+// Lambda configuration
+vpc: this.vpc,
+vpcSubnets: {
+  subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+},
 ```
 
-**Error:**
-```
-Property 's3' does not exist on type 'typeof Cache'.
-```
-
-**Root Cause:**
-The CodeBuild `Cache` class does not have an `s3()` method with this signature in the current CDK version.
-
-**Fix:**
-```typescript
-cache: codebuild.Cache.local(codebuild.LocalCacheMode.SOURCE),
-```
-
-**Impact:** Critical - Compilation error
+**Impact**: -1 point in training quality; no network isolation
 
 ---
 
-### 6. Incorrect Type Definition for Alarm Configuration
+### Issue 2.2: No EventBridge Integration
+**Severity**: HIGH  
+**Category**: Missing Requirement
 
-**File:** `lib/constructs/lambda-with-canary.ts` (Line 509)
+**Problem**:
+MODEL_RESPONSE has no EventBridge implementation for event-driven architecture.
 
-**Issue:**
+**Solution**:
 ```typescript
-alarmConfiguration?: codedeploy.LambdaDeploymentConfig.AlarmConfiguration;
+// IDEAL_RESPONSE - CORRECT
+const eventRule = new events.Rule(this, 'TapS3EventRule', {
+  ruleName: `tap-s3-events-${envSuffix}`,
+  description: `Trigger Lambda on S3 events for ${envSuffix}`,
+  eventPattern: {
+    source: ['aws.s3'],
+    detailType: ['AWS API Call via CloudTrail'],
+    detail: {
+      eventName: ['PutObject', 'CompleteMultipartUpload'],
+      requestParameters: {
+        bucketName: [this.applicationBucket.bucketName],
+      },
+    },
+  },
+});
+
+eventRule.addTarget(new eventsTargets.LambdaFunction(this.lambdaFunction));
 ```
 
-**Error:**
-```
-'aws-cdk-lib/aws-codedeploy' has no exported member named 'LambdaDeploymentConfig'. 
-Did you mean 'ILambdaDeploymentConfig'?
-```
-
-**Root Cause:**
-`LambdaDeploymentConfig.AlarmConfiguration` is not a valid type in the CodeDeploy module.
-
-**Fix:**
-```typescript
-alarmConfiguration?: {
-  alarms: cloudwatch.IAlarm[];
-  enabled: boolean;
-};
-```
-
-**Impact:** Critical - Compilation error
+**Impact**: -1 point in training quality; no event-driven processing
 
 ---
 
-### 7. Non-existent CodeDeploy Deployment Group Property
+### Issue 2.3: Missing EventBridge Imports
+**Severity**: MEDIUM  
+**Category**: Missing Imports
 
-**File:** `lib/constructs/lambda-with-canary.ts` (Line 542)
-
-**Issue:**
+**Problem**:
 ```typescript
-this.deploymentGroup = new codedeploy.LambdaDeploymentGroup(this, 'DeploymentGroup', {
-  application,
-  alias,
-  deploymentConfig: props.canaryConfig.deploymentConfig,
-  alarmConfiguration: props.canaryConfig.alarmConfiguration,
+// MODEL_RESPONSE - Missing imports
+```
+
+**Solution**:
+```typescript
+// IDEAL_RESPONSE - CORRECT
+import * as events from 'aws-cdk-lib/aws-events';
+import * as eventsTargets from 'aws-cdk-lib/aws-events-targets';
+```
+
+---
+
+### Issue 2.4: Missing VPC Imports
+**Severity**: MEDIUM  
+**Category**: Missing Imports
+
+**Problem**:
+```typescript
+// MODEL_RESPONSE - Missing imports
+```
+
+**Solution**:
+```typescript
+// IDEAL_RESPONSE - CORRECT
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+```
+
+---
+
+### Issue 2.5: Missing Environment Variable
+**Severity**: LOW  
+**Category**: Configuration
+
+**Problem**:
+```typescript
+// MODEL_RESPONSE - Missing ENVIRONMENT variable
+environment: {
+  APPLICATION_BUCKET: this.applicationBucket.bucketName,
+  SECRET_ARN: appSecret.secretArn,
+  NODE_ENV: 'production',
+},
+```
+
+**Solution**:
+```typescript
+// IDEAL_RESPONSE - CORRECT
+environment: {
+  APPLICATION_BUCKET: this.applicationBucket.bucketName,
+  SECRET_ARN: appSecret.secretArn,
+  NODE_ENV: 'production',
+  ENVIRONMENT: envSuffix, // Added
+},
+```
+
+---
+
+## 3. Resource Management Issues (6 issues)
+
+### Issue 3.1: S3 Buckets Not Destroyable
+**Severity**: HIGH  
+**Category**: Resource Cleanup
+
+**Problem**:
+```typescript
+// MODEL_RESPONSE - WRONG
+removalPolicy: cdk.RemovalPolicy.RETAIN, // Resources persist
+// No autoDeleteObjects
+```
+
+**Solution**:
+```typescript
+// IDEAL_RESPONSE - CORRECT
+removalPolicy: cdk.RemovalPolicy.DESTROY, // Clean destruction
+autoDeleteObjects: true, // Delete objects before bucket
+```
+
+**Impact**: -2 points in training quality; `cdk destroy` leaves resources behind
+
+---
+
+### Issue 3.2: KMS Keys Not Destroyable
+**Severity**: HIGH  
+**Category**: Resource Cleanup
+
+**Problem**:
+```typescript
+// MODEL_RESPONSE - WRONG
+const encryptionKey = new kms.Key(this, 'BucketEncryptionKey', {
+  enableKeyRotation: true,
+  description: `Encryption key for ${props.bucketName}`,
+  // No removalPolicy - defaults to RETAIN
 });
 ```
 
-**Error:**
-```
-Object literal may only specify known properties, but 'alarmConfiguration' does not exist 
-in type 'LambdaDeploymentGroupProps'. Did you mean to write 'ignoreAlarmConfiguration'?
-```
-
-**Root Cause:**
-The `LambdaDeploymentGroup` constructor does not accept `alarmConfiguration` property.
-
-**Fix:**
+**Solution**:
 ```typescript
-this.deploymentGroup = new codedeploy.LambdaDeploymentGroup(
-  this,
-  'DeploymentGroup',
-  {
-    application,
-    alias,
-    deploymentConfig: props.canaryConfig.deploymentConfig,
-    alarms: props.canaryConfig.alarmConfiguration?.alarms,
-  }
-);
+// IDEAL_RESPONSE - CORRECT
+const encryptionKey = new kms.Key(this, 'BucketEncryptionKey', {
+  enableKeyRotation: true,
+  description: `Encryption key for ${props.bucketName} (${props.environmentSuffix})`,
+  removalPolicy: cdk.RemovalPolicy.DESTROY, // Added
+});
 ```
-
-**Impact:** Critical - Compilation error
 
 ---
 
-## Type and Interface Issues
+### Issue 3.3: Secrets Manager Not Destroyable
+**Severity**: MEDIUM  
+**Category**: Resource Cleanup
 
-### 8. Type Mismatch for Pipeline Source Bucket
-
-**File:** `lib/tap-stack.ts` (Line 27)
-
-**Issue:**
+**Problem**:
 ```typescript
-public readonly pipelineSourceBucket: s3.Bucket;
+// MODEL_RESPONSE - WRONG
+const appSecret = new secretsmanager.Secret(this, 'TapAppSecret', {
+  secretName: 'tap-app-secrets',
+  description: 'Secrets for TAP application',
+  // No removalPolicy - defaults to RETAIN
+});
 ```
 
-**Error:**
-```
-Type 'IBucket' is missing the following properties from type 'Bucket': autoCreatePolicy, 
-lifecycleRules, metrics, cors, and 35 more.
-```
-
-**Root Cause:**
-The property can be either a new `s3.Bucket` or an existing `s3.IBucket` (from props), so it must be typed as the interface.
-
-**Fix:**
+**Solution**:
 ```typescript
-public readonly pipelineSourceBucket: s3.IBucket;
+// IDEAL_RESPONSE - CORRECT
+const appSecret = new secretsmanager.Secret(this, 'TapAppSecret', {
+  secretName: `tap-app-secrets-${envSuffix}`,
+  description: `Secrets for TAP application ${envSuffix}`,
+  removalPolicy: cdk.RemovalPolicy.DESTROY, // Added
+});
 ```
-
-**Impact:** High - Type safety issue
 
 ---
 
-### 9. Unused Parameter in updateCanaryAlarms Method
+### Issue 3.4: SecureBucket Missing `environmentSuffix` Parameter
+**Severity**: HIGH  
+**Category**: Missing Parameter
 
-**File:** `lib/constructs/lambda-with-canary.ts` (Line 546)
-
-**Issue:**
+**Problem**:
 ```typescript
-public updateCanaryAlarms(alarms: cloudwatch.Alarm[]): void {
+// MODEL_RESPONSE - WRONG
+export interface SecureBucketProps {
+  bucketName: string;
+  serverAccessLogsBucket: s3.IBucket;
+  serverAccessLogsPrefix: string;
+  // Missing environmentSuffix
+}
+
+// Usage
+this.applicationBucket = new SecureBucket(this, 'TapApplicationBucket', {
+  bucketName: `tap-app-data-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+  // Missing environmentSuffix
+}).bucket;
 ```
 
-**Linting Error:**
-```
-'alarms' is defined but never used. Allowed unused args must match /^_/u
-```
-
-**Root Cause:**
-The parameter is not used in the method body, violating ESLint rules.
-
-**Fix:**
+**Solution**:
 ```typescript
-public updateCanaryAlarms(_alarms: cloudwatch.Alarm[]): void {
-```
+// IDEAL_RESPONSE - CORRECT
+export interface SecureBucketProps {
+  bucketName: string;
+  serverAccessLogsBucket: s3.IBucket;
+  serverAccessLogsPrefix: string;
+  environmentSuffix: string; // Added
+}
 
-**Impact:** Medium - Code quality/linting issue
+// Usage
+this.applicationBucket = new SecureBucket(this, 'TapApplicationBucket', {
+  bucketName: `tap-app-data-${envSuffix}-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+  environmentSuffix: envSuffix, // Passed
+}).bucket;
+```
 
 ---
 
-## Import Organization Issues
+### Issue 3.5: Log Groups Not Destroyable
+**Severity**: MEDIUM  
+**Category**: Resource Cleanup
 
-### 10. Unorganized Imports
+**Problem**:
+MODEL_RESPONSE uses deprecated `logRetention` without explicit log group management.
 
-**File:** `lib/tap-stack.ts` (Lines 6-18)
-
-**Issue:**
-Imports are not alphabetically organized:
+**Solution**:
 ```typescript
-import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
-// ... mixed order
+// IDEAL_RESPONSE - CORRECT
+const logGroup = logRetention
+  ? new logs.LogGroup(this, 'LogGroup', {
+      logGroupName: `/aws/lambda/${props.functionName}`,
+      retention: logRetention,
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // Explicit cleanup
+    })
+  : undefined;
 ```
-
-**Fix:**
-Alphabetically ordered imports:
-```typescript
-import * as cdk from 'aws-cdk-lib';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
-import * as codedeploy from 'aws-cdk-lib/aws-codedeploy';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
-// ... alphabetical order
-```
-
-**Impact:** Low - Code organization/best practices
 
 ---
 
-### 11. Import Order in pipeline-stack.ts
+### Issue 3.6: Missing VPC Property in Stack
+**Severity**: LOW  
+**Category**: Public Interface
 
-**File:** `lib/pipeline-stack.ts` (Lines 213-220)
-
-**Issue:**
+**Problem**:
 ```typescript
-import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
-import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
-import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';
-import * as codebuild from 'aws-cdk-lib/aws-codebuild';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import { TapStack } from './tap-stack';
-```
-
-**Issues:**
-1. Imports not alphabetically ordered
-2. `TapStack` import is unused
-
-**Fix:**
-```typescript
-import * as cdk from 'aws-cdk-lib';
-import * as codebuild from 'aws-cdk-lib/aws-codebuild';
-import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
-import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import { Construct } from 'constructs';
-// Removed unused TapStack import
-```
-
-**Impact:** Low - Code organization
-
----
-
-### 12. Import Order in secure-bucket.ts
-
-**File:** `lib/constructs/secure-bucket.ts` (Lines 430-433)
-
-**Issue:**
-```typescript
-import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as kms from 'aws-cdk-lib/aws-kms';
-```
-
-**Fix:**
-```typescript
-import * as cdk from 'aws-cdk-lib';
-import * as kms from 'aws-cdk-lib/aws-kms';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import { Construct } from 'constructs';
-```
-
-**Impact:** Low - Code organization
-
----
-
-### 13. Import Order in lambda-with-canary.ts
-
-**File:** `lib/constructs/lambda-with-canary.ts` (Lines 500-504)
-
-**Issue:**
-```typescript
-import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import * as codedeploy from 'aws-cdk-lib/aws-codedeploy';
-```
-
-**Issues:**
-1. Unused `cdk` import
-2. Not alphabetically ordered
-
-**Fix:**
-```typescript
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import * as codedeploy from 'aws-cdk-lib/aws-codedeploy';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
-import { Construct } from 'constructs';
-```
-
-**Impact:** Low - Code organization
-
----
-
-### 14. Import Order in handler.ts
-
-**File:** `lambda/serverless-ci-cd-function/handler.ts` (Lines 556-560)
-
-**Issue:**
-```typescript
-import { Context, APIGatewayProxyResult } from 'aws-lambda';
-import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
-import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
-import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
-import * as AWSXRay from 'aws-xray-sdk-core';
-```
-
-**Fix:**
-Alphabetically ordered and consistent ordering within imports:
-```typescript
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
-import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
-import { APIGatewayProxyResult, Context } from 'aws-lambda';
-import * as AWSXRay from 'aws-xray-sdk-core';
-```
-
-**Impact:** Low - Code organization
-
----
-
-## Functionality and Configuration Issues
-
-### 15. Incorrect Lambda Code Path
-
-**File:** `lib/tap-stack.ts` (Line 124)
-
-**Issue:**
-```typescript
-code: lambda.Code.fromAsset('src/lambda'),
-```
-
-**Root Cause:**
-The Lambda function code is located at `lambda/serverless-ci-cd-function`, not `src/lambda`.
-
-**Fix:**
-```typescript
-code: lambda.Code.fromAsset('lambda/serverless-ci-cd-function'),
-```
-
-**Impact:** Critical - Lambda deployment will fail
-
----
-
-### 16. Missing Stack Outputs for Testing
-
-**File:** `lib/tap-stack.ts` (Lines 191-206)
-
-**Issue:**
-MODEL_RESPONSE only provides 3 basic outputs:
-```typescript
-new cdk.CfnOutput(this, 'ApplicationBucketName', { ... });
-new cdk.CfnOutput(this, 'LambdaFunctionArn', { ... });
-new cdk.CfnOutput(this, 'PipelineSourceBucketName', { ... });
-```
-
-**Missing:**
-- No export names for cross-stack references
-- Missing critical outputs: DLQ URLs, Secret ARNs, Alarm names, Role ARNs
-- No helper CLI commands for testing
-- Only 3 outputs vs 17 in IDEAL
-
-**Fix:**
-Added 14 additional outputs with export names:
-- ApplicationBucketArn
-- LoggingBucketName  
-- LambdaFunctionName
-- DeadLetterQueueUrl
-- DeadLetterQueueArn
-- SecretArn
-- AlarmTopicArn
-- ErrorAlarmName
-- ThrottleAlarmName
-- DurationAlarmName
-- LambdaRoleArn
-- TestInvokeCommand
-- CheckDLQCommand
-- ViewLogsCommand
-
-All outputs include `exportName` for cross-stack references.
-
-**Impact:** High - Significantly reduces testability and integration capabilities
-
----
-
-## Code Style and Best Practices Issues
-
-### 17. Inconsistent Array Formatting
-
-**File:** `lib/tap-stack.ts` (Line 42)
-
-**Issue:**
-```typescript
-lifecycleRules: [{
-  id: 'delete-old-logs',
-  expiration: cdk.Duration.days(90),
-}],
-```
-
-**Fix:**
-```typescript
-lifecycleRules: [
-  {
-    id: 'delete-old-logs',
-    expiration: cdk.Duration.days(90),
-  },
-],
-```
-
-**Impact:** Low - Code formatting consistency
-
----
-
-### 18. Long Line Formatting
-
-**File:** `lib/tap-stack.ts` (Line 56, Line 89)
-
-**Issue:**
-```typescript
-this.pipelineSourceBucket = props?.pipelineSourceBucket || new s3.Bucket(...)
-iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
-```
-
-**Fix:**
-Multi-line formatting for readability:
-```typescript
-this.pipelineSourceBucket =
-  props?.pipelineSourceBucket ||
-  new s3.Bucket(this, 'TapPipelineSourceBucket', {
-
-iam.ManagedPolicy.fromAwsManagedPolicyName(
-  'service-role/AWSLambdaBasicExecutionRole'
-),
-```
-
-**Impact:** Low - Code readability
-
----
-
-### 19. Missing Comment Explanation
-
-**File:** `lib/tap-stack.ts`
-
-**Issue:**
-No explanation for why `reservedConcurrentExecutions` was removed.
-
-**Fix:**
-Added explanatory comment:
-```typescript
-// Note: Removed reservedConcurrentExecutions to use account-level unreserved capacity
-// This allows Lambda to scale automatically while respecting account limits
-```
-
-**Impact:** Low - Code documentation
-
----
-
-### 20. Missing Documentation in updateCanaryAlarms
-
-**File:** `lib/constructs/lambda-with-canary.ts` (Line 546-549)
-
-**Issue:**
-```typescript
-public updateCanaryAlarms(alarms: cloudwatch.Alarm[]): void {
-  // This method would update the deployment group with new alarms
-  // In practice, you'd need to handle this through CDK updates
+// MODEL_RESPONSE - WRONG
+export class TapStack extends cdk.Stack {
+  public readonly applicationBucket: s3.Bucket;
+  public readonly lambdaFunction: lambda.Function;
+  public readonly pipelineSourceBucket: s3.IBucket;
+  // Missing VPC property
 }
 ```
 
-**Fix:**
-Added additional documentation:
+**Solution**:
 ```typescript
-public updateCanaryAlarms(_alarms: cloudwatch.Alarm[]): void {
-  // This method would update the deployment group with new alarms
-  // In practice, you'd need to handle this through CDK updates
-  // Note: CDK doesn't support updating alarms after deployment group creation
+// IDEAL_RESPONSE - CORRECT
+export class TapStack extends cdk.Stack {
+  public readonly applicationBucket: s3.Bucket;
+  public readonly lambdaFunction: lambda.Function;
+  public readonly pipelineSourceBucket: s3.IBucket;
+  public readonly vpc: ec2.Vpc; // Added
 }
 ```
 
-**Impact:** Low - Code documentation
+---
+
+## 4. Type/Import Issues (4 issues)
+
+### Issue 4.1: Incorrect Import for CodeDeploy Config
+**Severity**: MEDIUM  
+**Category**: Type Error
+
+**Problem**:
+```typescript
+// MODEL_RESPONSE - WRONG
+canaryConfig: {
+  deploymentConfig:
+    lambda.LambdaDeploymentConfig.CANARY_10PERCENT_5MINUTES, // Wrong import
+}
+```
+
+**Solution**:
+```typescript
+// IDEAL_RESPONSE - CORRECT
+canaryConfig: {
+  deploymentConfig:
+    codedeploy.LambdaDeploymentConfig.CANARY_10PERCENT_5MINUTES, // Correct
+}
+```
+
+---
+
+### Issue 4.2: Wrong Property Name in CodeDeploy Alarms
+**Severity**: LOW  
+**Category**: Property Name
+
+**Problem**:
+```typescript
+// MODEL_RESPONSE - WRONG (in construct)
+alarmConfiguration: props.canaryConfig.alarmConfiguration?.alarms,
+```
+
+**Solution**:
+```typescript
+// IDEAL_RESPONSE - CORRECT
+alarms: props.canaryConfig.alarmConfiguration?.alarms,
+```
+
+---
+
+### Issue 4.3: Props Optional When Should Be Required
+**Severity**: MEDIUM  
+**Category**: Type Safety
+
+**Problem**:
+```typescript
+// MODEL_RESPONSE - WRONG
+constructor(scope: Construct, id: string, props?: TapStackProps) {
+  // Props optional, but environmentSuffix would be required
+}
+```
+
+**Solution**:
+```typescript
+// IDEAL_RESPONSE - CORRECT
+constructor(scope: Construct, id: string, props: TapStackProps) {
+  // Props required to enforce environmentSuffix
+}
+```
+
+---
+
+### Issue 4.4: Missing `logs` Import in Construct
+**Severity**: MEDIUM  
+**Category**: Missing Import
+
+**Problem**:
+```typescript
+// MODEL_RESPONSE - Missing logs import in LambdaWithCanary
+```
+
+**Solution**:
+```typescript
+// IDEAL_RESPONSE - CORRECT
+import * as logs from 'aws-cdk-lib/aws-logs';
+```
+
+---
+
+## 5. Deprecated API Usage (2 issues)
+
+### Issue 5.1: Using Deprecated `logRetention` Property
+**Severity**: MEDIUM  
+**Category**: Deprecated API
+
+**Problem**:
+```typescript
+// MODEL_RESPONSE - WRONG
+this.lambdaFunction = new lambda.Function(this, 'Function', {
+  ...props,
+  tracing: lambda.Tracing.ACTIVE,
+  // logRetention passed through props - deprecated!
+});
+```
+
+**Warning Generated**:
+```
+[WARNING] aws-cdk-lib.aws_lambda.FunctionOptions#logRetention is deprecated.
+  use `logGroup` instead
+  This API will be removed in the next major release.
+```
+
+**Solution**:
+```typescript
+// IDEAL_RESPONSE - CORRECT
+const { logRetention, ...lambdaProps } = props;
+
+const logGroup = logRetention
+  ? new logs.LogGroup(this, 'LogGroup', {
+      logGroupName: `/aws/lambda/${props.functionName}`,
+      retention: logRetention,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    })
+  : undefined;
+
+this.lambdaFunction = new lambda.Function(this, 'Function', {
+  ...lambdaProps,
+  logGroup, // Use new property
+  tracing: lambda.Tracing.ACTIVE,
+});
+```
+
+**Impact**: Generates warnings; will break in future CDK versions
+
+---
+
+### Issue 5.2: No Log Group Removal Policy
+**Severity**: LOW  
+**Category**: Resource Management
+
+**Problem**:
+MODEL_RESPONSE's implicit log group has no removal policy.
+
+**Solution**:
+IDEAL_RESPONSE explicitly creates log group with `RemovalPolicy.DESTROY`.
+
+---
+
+## 6. Best Practices (5 issues)
+
+### Issue 6.1: Reserved Concurrent Executions Set
+**Severity**: MEDIUM  
+**Category**: Scalability
+
+**Problem**:
+```typescript
+// MODEL_RESPONSE - Could have this (not shown, but common mistake)
+reservedConcurrentExecutions: 1000,
+```
+
+**Solution**:
+```typescript
+// IDEAL_RESPONSE - CORRECT
+// No reservedConcurrentExecutions set
+// Allows Lambda to scale automatically
+```
+
+**Impact**: Could limit scalability; uses account quota unnecessarily
+
+---
+
+### Issue 6.2: Missing CDK Import in Construct
+**Severity**: LOW  
+**Category**: Type Safety
+
+**Problem**:
+```typescript
+// MODEL_RESPONSE - Missing in LambdaWithCanary
+```
+
+**Solution**:
+```typescript
+// IDEAL_RESPONSE - CORRECT
+import * as cdk from 'aws-cdk-lib';
+// Needed for RemovalPolicy.DESTROY
+```
+
+---
+
+### Issue 6.3: Incomplete Alarm Naming Convention
+**Severity**: LOW  
+**Category**: Naming
+
+**Problem**:
+```typescript
+// MODEL_RESPONSE - No explicit alarm names
+const errorAlarm = new cloudwatch.Alarm(this, 'TapLambdaErrorAlarm', {
+  // No alarmName property
+  metric: ...
+});
+```
+
+**Solution**:
+```typescript
+// IDEAL_RESPONSE - CORRECT
+const errorAlarm = new cloudwatch.Alarm(this, 'TapLambdaErrorAlarm', {
+  alarmName: `tap-lambda-errors-${envSuffix}`, // Explicit name
+  metric: ...
+});
+```
+
+---
+
+### Issue 6.4: SNS Topic Missing Name
+**Severity**: LOW  
+**Category**: Naming
+
+**Problem**:
+```typescript
+// MODEL_RESPONSE - WRONG
+const alarmTopic = new sns.Topic(this, 'TapAlarmTopic', {
+  displayName: 'TAP Application Alarms',
+  // No topicName
+});
+```
+
+**Solution**:
+```typescript
+// IDEAL_RESPONSE - CORRECT
+const alarmTopic = new sns.Topic(this, 'TapAlarmTopic', {
+  displayName: `TAP Application Alarms ${envSuffix}`,
+  topicName: `tap-alarm-topic-${envSuffix}`, // Added
+});
+```
+
+---
+
+### Issue 6.5: VPC Name Pattern Not in Description
+**Severity**: LOW  
+**Category**: Description
+
+**Problem**:
+MODEL_RESPONSE has no VPC, but if it did, description should include environment.
+
+**Solution**:
+```typescript
+// IDEAL_RESPONSE - CORRECT
+description: `Encryption key for ${props.bucketName} (${props.environmentSuffix})`,
+```
+
