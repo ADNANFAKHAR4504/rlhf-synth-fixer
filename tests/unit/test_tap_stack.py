@@ -63,6 +63,12 @@ class AwsMocks(Mocks):
             return {"region": MOCK_REGION, "name": MOCK_REGION}
         if args.token == "aws:index/getAvailabilityZones:getAvailabilityZones":
             return {"names": [f"{MOCK_REGION}a", f"{MOCK_REGION}b", f"{MOCK_REGION}c"]}
+        if args.token == "aws:iam/getCallerIdentity:getCallerIdentity":
+            return {
+                "accountId": "123456789012",
+                "arn": "arn:aws:iam::123456789012:role/TestRole",
+                "userId": "AROA1234567890EXAMPLE:bot",
+            }
         return {}
 
 

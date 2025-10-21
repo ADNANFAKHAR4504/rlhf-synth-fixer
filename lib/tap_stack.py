@@ -53,6 +53,12 @@ class TapStack(pulumi.ComponentResource):
             or region_info.id
         )
 
+        identity = aws.get_caller_identity()
+        self.account_id = identity.account_id
+
+        cloudtrail_bucket_name = f"fedramp-cloudtrail-{self.environment_suffix}".lower()
+        config_bucket_name = f"fedramp-config-{self.environment_suffix}".lower()
+
         # Create VPC
         vpc = aws.ec2.Vpc(
             f"fedramp-vpc-{self.environment_suffix}",
@@ -169,12 +175,74 @@ class TapStack(pulumi.ComponentResource):
                 opts=ResourceOptions(parent=self)
             )
 
+        kms_key_policy = json.dumps({
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Sid": "EnableRootAccess",
+                    "Effect": "Allow",
+                    "Principal": {"AWS": f"arn:aws:iam::{self.account_id}:root"},
+                    "Action": "kms:*",
+                    "Resource": "*"
+                },
+                {
+                    "Sid": "AllowCloudTrailService",
+                    "Effect": "Allow",
+                    "Principal": {"Service": "cloudtrail.amazonaws.com"},
+                    "Action": [
+                        "kms:DescribeKey",
+                        "kms:GenerateDataKey*",
+                        "kms:Decrypt"
+                    ],
+                    "Resource": "*",
+                    "Condition": {
+                        "StringEquals": {
+                            "kms:EncryptionContext:aws:cloudtrail:arn": f"arn:aws:cloudtrail:{self.region}:{self.account_id}:trail/fedramp-audit-{self.environment_suffix}"
+                        }
+                    }
+                },
+                {
+                    "Sid": "AllowConfigService",
+                    "Effect": "Allow",
+                    "Principal": {"Service": "config.amazonaws.com"},
+                    "Action": [
+                        "kms:DescribeKey",
+                        "kms:GenerateDataKey*",
+                        "kms:Decrypt"
+                    ],
+                    "Resource": "*"
+                },
+                {
+                    "Sid": "AllowS3UsageForServices",
+                    "Effect": "Allow",
+                    "Principal": {"Service": "s3.amazonaws.com"},
+                    "Action": [
+                        "kms:DescribeKey",
+                        "kms:GenerateDataKey*",
+                        "kms:Encrypt",
+                        "kms:Decrypt",
+                        "kms:ReEncrypt*"
+                    ],
+                    "Resource": "*",
+                    "Condition": {
+                        "StringLike": {
+                            "kms:EncryptionContext:aws:s3:arn": [
+                                f"arn:aws:s3:::{cloudtrail_bucket_name}/AWSLogs/{self.account_id}/*",
+                                f"arn:aws:s3:::{config_bucket_name}/AWSLogs/{self.account_id}/*"
+                            ]
+                        }
+                    }
+                }
+            ]
+        })
+
         # KMS Key for FIPS 140-2 encryption
         kms_key = aws.kms.Key(
             f"fedramp-kms-{self.environment_suffix}",
             description="FIPS 140-2 validated KMS key for FedRAMP High encryption",
             deletion_window_in_days=30,
             enable_key_rotation=True,
+            policy=kms_key_policy,
             tags={**self.tags, "Name": f"fedramp-kms-{self.environment_suffix}", "Compliance": "FIPS-140-2"},
             opts=ResourceOptions(parent=self)
         )
@@ -198,7 +266,7 @@ class TapStack(pulumi.ComponentResource):
         # S3 bucket for CloudTrail logs
         cloudtrail_bucket = aws.s3.Bucket(
             f"cloudtrail-logs-{self.environment_suffix}",
-            bucket=f"fedramp-cloudtrail-{self.environment_suffix}".lower(),
+            bucket=cloudtrail_bucket_name,
             force_destroy=True,
             tags={**self.tags, "Name": f"cloudtrail-logs-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
@@ -259,7 +327,7 @@ class TapStack(pulumi.ComponentResource):
                             "Effect": "Allow",
                             "Principal": {"Service": "cloudtrail.amazonaws.com"},
                             "Action": "s3:PutObject",
-                            "Resource": f"{args[0]}/AWSLogs/*",
+                            "Resource": f"{args[0]}/AWSLogs/{self.account_id}/*",
                             "Condition": {
                                 "StringEquals": {
                                     "s3:x-amz-acl": "bucket-owner-full-control"
@@ -1019,7 +1087,7 @@ class TapStack(pulumi.ComponentResource):
         # AWS Config for compliance monitoring
         config_bucket = aws.s3.Bucket(
             f"config-logs-{self.environment_suffix}",
-            bucket=f"fedramp-config-{self.environment_suffix}".lower(),
+            bucket=config_bucket_name,
             force_destroy=True,
             tags={**self.tags, "Name": f"config-logs-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
@@ -1035,6 +1103,36 @@ class TapStack(pulumi.ComponentResource):
             rules=[aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
                 apply_server_side_encryption_by_default=cfg_sse_args,
             )],
+            opts=ResourceOptions(parent=self)
+        )
+
+        aws.s3.BucketPolicy(
+            f"config-bucket-policy-{self.environment_suffix}",
+            bucket=config_bucket.id,
+            policy=config_bucket.arn.apply(lambda arn: json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Sid": "AWSConfigBucketPermissionsCheck",
+                        "Effect": "Allow",
+                        "Principal": {"Service": "config.amazonaws.com"},
+                        "Action": "s3:GetBucketAcl",
+                        "Resource": arn
+                    },
+                    {
+                        "Sid": "AWSConfigBucketDelivery",
+                        "Effect": "Allow",
+                        "Principal": {"Service": "config.amazonaws.com"},
+                        "Action": "s3:PutObject",
+                        "Resource": f"{arn}/AWSLogs/{self.account_id}/Config/*",
+                        "Condition": {
+                            "StringEquals": {
+                                "s3:x-amz-acl": "bucket-owner-full-control"
+                            }
+                        }
+                    }
+                ]
+            })),
             opts=ResourceOptions(parent=self)
         )
 
@@ -1074,6 +1172,8 @@ class TapStack(pulumi.ComponentResource):
             f"config-delivery-{self.environment_suffix}",
             name=f"fedramp-config-{self.environment_suffix}",
             s3_bucket_name=config_bucket.id,
+            s3_key_prefix=f"AWSLogs/{self.account_id}/Config",
+            s3_kms_key_arn=kms_key.arn,
             snapshot_delivery_properties=aws.cfg.DeliveryChannelSnapshotDeliveryPropertiesArgs(
                 delivery_frequency="TwentyFour_Hours",
             ),
