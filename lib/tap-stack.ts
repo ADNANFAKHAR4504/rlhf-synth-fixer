@@ -16,6 +16,10 @@ export interface VpcConfig {
   azCount: number;
 }
 
+interface SubnetMap {
+  [key: string]: aws.ec2.Subnet;
+}
+
 export class TapStack extends pulumi.ComponentResource {
   public readonly hubVpc: aws.ec2.Vpc;
   public readonly productionVpc: aws.ec2.Vpc;
@@ -29,7 +33,7 @@ export class TapStack extends pulumi.ComponentResource {
   private readonly region: string;
   private readonly environmentSuffix: string;
   private readonly commonTags: Record<string, string>;
-  private readonly availabilityZones: pulumi.Output<string[]>; // Fixed type
+  private readonly availabilityZones: pulumi.Output<string[]>;
   private hubIgw?: aws.ec2.InternetGateway;
 
   // Store subnet references
@@ -93,6 +97,8 @@ export class TapStack extends pulumi.ComponentResource {
     this.developmentVpc = this.createVpc(devConfig);
 
     this.transitGateway = this.createTransitGateway();
+    
+    // Wait for subnets to be created before creating TGW attachments
     const tgwAttachments = this.createTransitGatewayAttachments();
     this.configureTransitGatewayRouting(tgwAttachments);
 
@@ -214,61 +220,62 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   private createSubnets(vpc: aws.ec2.Vpc, config: VpcConfig): void {
-    // Use apply to work with the Output type
-    this.availabilityZones.apply(zones => {
-      zones.forEach((az: string, index: number) => {
-        const publicCidr = this.calculateSubnetCidr(config.cidr, index * 2);
-        const privateCidr = this.calculateSubnetCidr(config.cidr, index * 2 + 1);
+    // Create subnets immediately for each AZ
+    for (let index = 0; index < config.azCount; index++) {
+      const publicCidr = this.calculateSubnetCidr(config.cidr, index * 2);
+      const privateCidr = this.calculateSubnetCidr(config.cidr, index * 2 + 1);
 
-        if (config.hasPublicSubnets) {
-          const publicSubnet = new aws.ec2.Subnet(
-            `${config.name}-public-subnet-${index}-${this.environmentSuffix}`,
-            {
-              vpcId: vpc.id,
-              cidrBlock: publicCidr,
-              availabilityZone: az,
-              mapPublicIpOnLaunch: true,
-              tags: {
-                ...this.commonTags,
-                Environment: config.environment,
-                Name: `${config.name}-public-subnet-${index}-${this.environmentSuffix}`,
-                Type: "public",
-              },
-            },
-            { parent: this }
-          );
+      // Get the AZ for this index
+      const az = this.availabilityZones.apply(zones => zones[index]);
 
-          if (config.name === "hub") {
-            this.hubPublicSubnets.push(publicSubnet);
-          }
-        }
-
-        const privateSubnet = new aws.ec2.Subnet(
-          `${config.name}-private-subnet-${index}-${this.environmentSuffix}`,
+      if (config.hasPublicSubnets) {
+        const publicSubnet = new aws.ec2.Subnet(
+          `${config.name}-public-subnet-${index}-${this.environmentSuffix}`,
           {
             vpcId: vpc.id,
-            cidrBlock: config.hasPublicSubnets ? privateCidr : publicCidr,
+            cidrBlock: publicCidr,
             availabilityZone: az,
-            mapPublicIpOnLaunch: false,
+            mapPublicIpOnLaunch: true,
             tags: {
               ...this.commonTags,
               Environment: config.environment,
-              Name: `${config.name}-private-subnet-${index}-${this.environmentSuffix}`,
-              Type: "private",
+              Name: `${config.name}-public-subnet-${index}-${this.environmentSuffix}`,
+              Type: "public",
             },
           },
           { parent: this }
         );
 
         if (config.name === "hub") {
-          this.hubPrivateSubnets.push(privateSubnet);
-        } else if (config.name === "production") {
-          this.prodPrivateSubnets.push(privateSubnet);
-        } else if (config.name === "development") {
-          this.devPrivateSubnets.push(privateSubnet);
+          this.hubPublicSubnets.push(publicSubnet);
         }
-      });
-    });
+      }
+
+      const privateSubnet = new aws.ec2.Subnet(
+        `${config.name}-private-subnet-${index}-${this.environmentSuffix}`,
+        {
+          vpcId: vpc.id,
+          cidrBlock: config.hasPublicSubnets ? privateCidr : publicCidr,
+          availabilityZone: az,
+          mapPublicIpOnLaunch: false,
+          tags: {
+            ...this.commonTags,
+            Environment: config.environment,
+            Name: `${config.name}-private-subnet-${index}-${this.environmentSuffix}`,
+            Type: "private",
+          },
+        },
+        { parent: this }
+      );
+
+      if (config.name === "hub") {
+        this.hubPrivateSubnets.push(privateSubnet);
+      } else if (config.name === "production") {
+        this.prodPrivateSubnets.push(privateSubnet);
+      } else if (config.name === "development") {
+        this.devPrivateSubnets.push(privateSubnet);
+      }
+    }
   }
 
   private calculateSubnetCidr(vpcCidr: string, subnetIndex: number): string {
@@ -325,8 +332,9 @@ export class TapStack extends pulumi.ComponentResource {
       throw new Error(`Unknown VPC name: ${name}`);
     }
 
+    // Check should always pass now since we create subnets synchronously
     if (privateSubnets.length === 0) {
-      throw new Error(`No private subnets found for VPC ${name}`);
+      throw new Error(`No private subnets found for VPC ${name}. This shouldn't happen.`);
     }
 
     const subnetIds = privateSubnets.map(subnet => subnet.id);
