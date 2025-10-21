@@ -1,6 +1,6 @@
 # Healthcare SaaS Platform CI/CD Infrastructure
 
-I need to build infrastructure for a patient management system that handles Protected Health Information. The system must meet HIPAA compliance requirements and deploy containerized applications securely.
+I need to build infrastructure for a patient management system that handles Protected Health Information. The system must meet HIPAA compliance requirements and deploy containerized applications securely
 
 ## Infrastructure Requirements
 
