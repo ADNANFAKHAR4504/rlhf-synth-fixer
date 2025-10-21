@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
-import { ServerlessInfrastructureStack } from '../lib/serverless-infrastructure-stack';
+// We'll require the stack dynamically after ensuring CI/env vars are unset
+let ServerlessInfrastructureStack: any;
 
 // Mock aws-sdk used by the lambda handler
 // Create shared mocks so instances created inside the handler use them
@@ -22,10 +23,26 @@ jest.mock('aws-sdk', () => {
 // Import the handler after mocking aws-sdk
 const { handler } = require('../lib/lambda-handler/index.js');
 
+// Mock NodejsFunction globally so tests never attempt Docker bundling.
+// Note: we intentionally don't mock 'aws-cdk-lib/aws-lambda-nodejs' here to
+// avoid interfering with real lambda.Function behavior. The bundler path is
+// mocked only inside the dedicated bundler test using jest.isolateModules.
+
+// Preserve and set CI and USE_NODEJS_BUNDLER to explicit '0' to avoid bundling
+const ORIGINAL_USE_NODEJS_BUNDLER = process.env.USE_NODEJS_BUNDLER;
+const ORIGINAL_CI = process.env.CI;
+process.env.USE_NODEJS_BUNDLER = process.env.USE_NODEJS_BUNDLER || '0';
+process.env.CI = process.env.CI || '0';
+
+// Load stack after adjusting env to avoid bundling during module initialization
+beforeAll(() => {
+  ServerlessInfrastructureStack = require('../lib/serverless-infrastructure-stack').ServerlessInfrastructureStack;
+});
+
 describe('ServerlessInfrastructureStack and Lambda handler', () => {
   const uniqueSuffix = `test-${Date.now().toString().slice(-6)}`;
   let app: cdk.App;
-  let stack: ServerlessInfrastructureStack;
+  let stack: any;
   let template: Template;
 
   beforeAll(() => {
@@ -36,6 +53,14 @@ describe('ServerlessInfrastructureStack and Lambda handler', () => {
       env: { region: 'us-east-1' },
     });
     template = Template.fromStack(stack);
+  });
+
+  // Restore any env that should be present after these tests finish
+  afterAll(() => {
+    if (ORIGINAL_USE_NODEJS_BUNDLER === undefined) delete process.env.USE_NODEJS_BUNDLER;
+    else process.env.USE_NODEJS_BUNDLER = ORIGINAL_USE_NODEJS_BUNDLER;
+    if (ORIGINAL_CI === undefined) delete process.env.CI;
+    else process.env.CI = ORIGINAL_CI;
   });
 
   describe('Api url fallback branches', () => {
@@ -201,11 +226,59 @@ describe('stack env selection branches', () => {
   });
 });
 
-  // bundling selection branches: intentionally omitted in unit tests because
-  // NodejsFunction bundling may invoke Docker during asset bundling. The
-  // repository supports CI bundling (NodejsFunction) and local testing
-  // (lambda.Function with Code.fromAsset). Coverage for the stack's
-  // outputs and other branches is exercised elsewhere in this file.
+// bundling selection branches: intentionally omitted in unit tests because
+// NodejsFunction bundling may invoke Docker during asset bundling. The
+// repository supports CI bundling (NodejsFunction) and local testing
+// (lambda.Function with Code.fromAsset). Coverage for the stack's
+// outputs and other branches is exercised elsewhere in this file.
+
+describe('bundling selection branch (mocked)', () => {
+  test('uses NodejsFunction bundler when USE_NODEJS_BUNDLER is set (mocked)', () => {
+    // Use isolateModules so our mock is in place before the stack module loads
+    jest.isolateModules(() => {
+      // trigger bundler path for module load
+      process.env.USE_NODEJS_BUNDLER = '1';
+
+      // Mock aws-lambda-nodejs before requiring the stack module to avoid Docker
+      // Return a NodejsFunction that constructs a real lambda.Function so grants/metrics work
+      jest.doMock('aws-cdk-lib/aws-lambda-nodejs', () => ({
+        NodejsFunction: jest.fn().mockImplementation((scope: any, id: string, props: any) => {
+          const realLambda = require('aws-cdk-lib/aws-lambda');
+          // Create a small real Function with inline code to satisfy CDK grant operations
+          return new realLambda.Function(scope, `${id}-Stub`, {
+            functionName: props && props.functionName,
+            runtime: realLambda.Runtime.NODEJS_18_X,
+            code: realLambda.Code.fromInline('exports.handler = async () => ({ statusCode: 200, body: "ok" });'),
+            handler: 'index.handler',
+            role: props && props.role,
+            environment: props && props.environment,
+            deadLetterQueue: props && props.deadLetterQueue,
+            deadLetterQueueEnabled: props && props.deadLetterQueueEnabled,
+            tracing: realLambda.Tracing.ACTIVE,
+            reservedConcurrentExecutions: props && props.reservedConcurrentExecutions,
+            timeout: props && props.timeout,
+            memorySize: props && props.memorySize,
+          });
+        }),
+      }));
+
+      // Now require the stack module fresh so it picks up our mocked NodejsFunction
+      const { ServerlessInfrastructureStack: MockedStack } = require('../lib/serverless-infrastructure-stack');
+      const a = new cdk.App();
+      const s = new MockedStack(a, 'StackWithBundlerMock');
+      const t = Template.fromStack(s);
+      const json = t.toJSON();
+      expect(json.Outputs).toBeDefined();
+
+      // Cleanup the env we set inside isolateModules
+      delete process.env.USE_NODEJS_BUNDLER;
+      // Reset module registry so mocks and module cache do not affect later tests
+      jest.resetModules();
+      // Re-load the original ServerlessInfrastructureStack into the shared variable
+      ServerlessInfrastructureStack = require('../lib/serverless-infrastructure-stack').ServerlessInfrastructureStack;
+    });
+  });
+});
 
 describe('SNS subscription and alarms branches', () => {
   test('creates SNS subscription when EMAIL_ALERT_TOPIC_ADDRESS is set', () => {
