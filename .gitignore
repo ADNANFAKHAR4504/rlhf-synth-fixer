@@ -108,6 +108,7 @@ build
 tasks.csv
 tasks.csv.backup
 *.csv.backup
+tasks.csv.lock/
 .sherlock/data
 .sherlock/reports
 

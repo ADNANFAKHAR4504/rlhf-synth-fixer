@@ -11,8 +11,6 @@ require (
 	github.com/aws/jsii-runtime-go v1.113.0
 	github.com/cdklabs/cloud-assembly-schema-go/awscdkcloudassemblyschema/v48 v48.3.0 // indirect
 	github.com/hashicorp/terraform-cdk-go/cdktf v0.21.0
-	github.com/pulumi/pulumi-aws/sdk/v6 v6.83.0
-	github.com/pulumi/pulumi/sdk/v3 v3.191.0
 	github.com/stretchr/testify v1.11.1
 )
 
@@ -47,7 +45,6 @@ require (
 	golang.org/x/sys v0.34.0 // indirect
 	golang.org/x/tools v0.35.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	lukechampine.com/frand v1.5.1 // indirect
 )
 
 require (

@@ -1,0 +1,31 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "383545",
+  "team": "2",
+  "startedAt": "2025-10-16T14:24:50.369Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "RDS",
+    "cloudwatch",
+    "lambda",
+    "s3",
+    "vpc",
+    "ec2",
+    "alb",
+    "subnet"
+  ],
+  "training_quality": 9,
+  "background": "Cloud Infrastructure costing and performance optimization, through coding best practices",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "ayushj1-turing",
+  "dockerS3Location": ""
+}
