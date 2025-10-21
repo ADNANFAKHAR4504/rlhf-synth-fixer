@@ -135,7 +135,10 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
     // Use NodejsFunction bundling in CI to include runtime dependencies
     // (CI environments typically have Docker available for esbuild bundling).
     // For local unit tests we prefer a simple Code.fromAsset to avoid requiring Docker.
-    const useBundler = process.env.CI === '1' || process.env.CI === 'true' || process.env.USE_NODEJS_BUNDLER === '1';
+    const useBundler =
+      process.env.CI === '1' ||
+      process.env.CI === 'true' ||
+      process.env.USE_NODEJS_BUNDLER === '1';
     let lambdaFunction: lambda.Function;
     if (useBundler) {
       const nodefn = new NodejsFunction(this, 'ApplicationFunction', {
@@ -156,7 +159,16 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
         timeout: cdk.Duration.seconds(30),
         memorySize: 256,
         bundling: {
-          nodeModules: ['aws-sdk', 'uuid'],
+          // Bundle only the runtime modules we explicitly use in the handler.
+          // We avoid bundling the legacy aws-sdk v2 which is provided by the
+          // Lambda runtime to prevent conflicts. Use AWS SDK v3 modular
+          // packages if the handler depends on them and needs bundling.
+          nodeModules: [
+            '@aws-sdk/client-ssm',
+            '@aws-sdk/client-dynamodb',
+            '@aws-sdk/lib-dynamodb',
+            'uuid',
+          ],
         },
       });
       // NodejsFunction is a specialized construct but is a subclass of Function
@@ -331,9 +343,38 @@ export class TapStack extends cdk.Stack {
 
 ### lib/lambda-handler/index.js
 ```javascript
-const AWS = require('aws-sdk');
-const dynamo = new AWS.DynamoDB.DocumentClient();
-const ssm = new AWS.SSM();
+// AWS SDK v3 clients are required lazily so unit tests can inject mocks
+// via globalThis.__AWS_MOCKS__ without triggering dynamic imports that
+// Jest may not support in this environment.
+
+let ssmClient;
+let dynamo;
+
+function initAwsClientsIfNeeded() {
+  if (ssmClient && dynamo) return;
+  if (globalThis && globalThis.__AWS_MOCKS__) {
+    // Tests may provide stubbed clients here
+    ssmClient = globalThis.__AWS_MOCKS__.ssmClient;
+    dynamo = globalThis.__AWS_MOCKS__.dynamo;
+    // Allow tests to provide command constructors (or fall back to passthrough)
+  initAwsClientsIfNeeded.PutCommand = globalThis.__AWS_MOCKS__.PutCommand || function PutCommand(input) { this.input = input; };
+  initAwsClientsIfNeeded.GetCommand = globalThis.__AWS_MOCKS__.GetCommand || function GetCommand(input) { this.input = input; };
+  initAwsClientsIfNeeded.GetParameterCommand = globalThis.__AWS_MOCKS__.GetParameterCommand || function GetParameterCommand(input) { this.input = input; };
+    return;
+  }
+  // Lazily require the AWS SDK v3 modules only when running for real
+  const { SSMClient, GetParameterCommand } = require('@aws-sdk/client-ssm');
+  const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+  const { DynamoDBDocumentClient, PutCommand, GetCommand } = require('@aws-sdk/lib-dynamodb');
+
+  ssmClient = new SSMClient({});
+  const ddbClient = new DynamoDBClient({});
+  dynamo = DynamoDBDocumentClient.from(ddbClient);
+  // expose constructors for local use (not used in lambda flow)
+  initAwsClientsIfNeeded.PutCommand = PutCommand;
+  initAwsClientsIfNeeded.GetCommand = GetCommand;
+  initAwsClientsIfNeeded.GetParameterCommand = GetParameterCommand;
+}
 
 // Simple event processor: on POST /items this function writes an item to DynamoDB
 // and uses a configuration parameter from SSM to augment the item.
@@ -345,10 +386,12 @@ exports.handler = async (event) => {
   // Read config parameter (non-blocking if missing)
   let config = {};
   try {
+    initAwsClientsIfNeeded();
     const paramName = process.env.CONFIG_PARAMETER_NAME;
     if (paramName) {
-      const res = await ssm.getParameter({ Name: paramName }).promise();
-      config = JSON.parse(res.Parameter.Value || '{}');
+      const cmd = new (initAwsClientsIfNeeded.GetParameterCommand)({ Name: paramName });
+      const res = await ssmClient.send(cmd);
+      config = JSON.parse((res.Parameter && res.Parameter.Value) || '{}');
     }
   } catch (err) {
     console.warn('Unable to read config parameter:', err.message || err);
@@ -387,8 +430,10 @@ exports.handler = async (event) => {
     // Use a safe fallback table name in local/test environments so unit tests
     // that don't set the environment variable don't fail due to SDK param
     // validation. In real deployments TABLE_NAME must be set by the stack.
-    const tableName = process.env.TABLE_NAME || 'local-test-table';
-    await dynamo.put({ TableName: tableName, Item: item }).promise();
+  initAwsClientsIfNeeded();
+  const tableName = process.env.TABLE_NAME || 'local-test-table';
+  const put = new (initAwsClientsIfNeeded.PutCommand)({ TableName: tableName, Item: item });
+  await dynamo.send(put);
   } catch (err) {
     console.error('DynamoDB put error:', err);
     return {
@@ -404,6 +449,23 @@ exports.handler = async (event) => {
     body: JSON.stringify({ message: 'Item stored', item }),
   };
 };
+```
+
+### lib/lambda-handler/package.json
+```json
+{
+  "name": "lambda-handler",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Lambda handler dependencies for integration testing",
+  "license": "MIT",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.913.0",
+    "@aws-sdk/client-ssm": "^3.913.0",
+    "@aws-sdk/lib-dynamodb": "^3.913.0",
+    "uuid": "^11.1.0"
+  }
+}
 ```
 
 ---

@@ -139,7 +139,16 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
         timeout: cdk.Duration.seconds(30),
         memorySize: 256,
         bundling: {
-          nodeModules: ['aws-sdk', 'uuid'],
+          // Bundle only the runtime modules we explicitly use in the handler.
+          // We avoid bundling the legacy aws-sdk v2 which is provided by the
+          // Lambda runtime to prevent conflicts. Use AWS SDK v3 modular
+          // packages if the handler depends on them and needs bundling.
+          nodeModules: [
+            '@aws-sdk/client-ssm',
+            '@aws-sdk/client-dynamodb',
+            '@aws-sdk/lib-dynamodb',
+            'uuid',
+          ],
         },
       });
       // NodejsFunction is a specialized construct but is a subclass of Function

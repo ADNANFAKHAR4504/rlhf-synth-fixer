@@ -3,24 +3,30 @@ import { Template } from 'aws-cdk-lib/assertions';
 // We'll require the stack dynamically after ensuring CI/env vars are unset
 let ServerlessInfrastructureStack: any;
 
-// Mock aws-sdk used by the lambda handler
-// Create shared mocks so instances created inside the handler use them
-const getParameterMock = jest.fn();
-const putMock = jest.fn();
+// Provide a typed global so editors/TS don't show a red-squiggle at the
+// `globalThis.__AWS_MOCKS__` assignment below.
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  var __AWS_MOCKS__: {
+    ssmClient?: { send: (...args: any[]) => any };
+    dynamo?: { send: (...args: any[]) => any };
+    PutCommand?: any;
+    GetCommand?: any;
+    GetParameterCommand?: any;
+  } | undefined;
+}
 
-jest.mock('aws-sdk', () => {
-  const SSM = function () {
-    return { getParameter: getParameterMock };
-  } as any;
-  const DynamoDB = {
-    DocumentClient: function () {
-      return { put: putMock };
-    },
-  } as any;
-  return { SSM, DynamoDB };
-});
+// Create shared send mocks so instances created inside the handler use them
+const sendMockSSM = jest.fn();
+const sendMockDynamo = jest.fn();
 
-// Import the handler after mocking aws-sdk
+// Inject mocks via globalThis to avoid dynamic import issues in Jest
+(globalThis as any).__AWS_MOCKS__ = {
+  ssmClient: { send: (...args: any[]) => sendMockSSM(...args) },
+  dynamo: { send: (...args: any[]) => sendMockDynamo(...args) },
+};
+
+// Import the handler after installing global mocks
 const { handler } = require('../lib/lambda-handler/index.js');
 
 // Mock NodejsFunction globally so tests never attempt Docker bundling.
@@ -129,8 +135,8 @@ describe('ServerlessInfrastructureStack and Lambda handler', () => {
 
     test('writes item to DynamoDB and returns 201 on valid input', async () => {
       // Arrange: SSM returns config, DynamoDB put succeeds
-      getParameterMock.mockReturnValueOnce({ promise: () => Promise.resolve({ Parameter: { Value: JSON.stringify({ apiVersion: '1.0' }) } }) });
-      putMock.mockReturnValueOnce({ promise: () => Promise.resolve({}) });
+      sendMockSSM.mockResolvedValueOnce({ Parameter: { Value: JSON.stringify({ apiVersion: '1.0' }) } });
+      sendMockDynamo.mockResolvedValueOnce({});
 
       const event = { body: JSON.stringify({ id: 'abc-123', payload: { foo: 'bar' } }) };
       const res = await handler(event);
@@ -158,8 +164,8 @@ describe('ServerlessInfrastructureStack and Lambda handler', () => {
 
     test('handles SSM failure gracefully and still stores item', async () => {
       // SSM throws; DynamoDB put succeeds
-      getParameterMock.mockReturnValueOnce({ promise: () => Promise.reject(new Error('SSM failure')) });
-      putMock.mockReturnValueOnce({ promise: () => Promise.resolve({}) });
+      sendMockSSM.mockRejectedValueOnce(new Error('SSM failure'));
+      sendMockDynamo.mockResolvedValueOnce({});
 
       const event = { body: JSON.stringify({ id: 'xyz-789', payload: {} }) };
       const res = await handler(event);
@@ -172,8 +178,8 @@ describe('ServerlessInfrastructureStack and Lambda handler', () => {
 
     test('returns 500 when DynamoDB put fails', async () => {
       // SSM returns config, DynamoDB put fails
-      getParameterMock.mockReturnValueOnce({ promise: () => Promise.resolve({ Parameter: { Value: JSON.stringify({ apiVersion: '1.0' }) } }) });
-      putMock.mockReturnValueOnce({ promise: () => Promise.reject(new Error('Dynamo failed')) });
+      sendMockSSM.mockResolvedValueOnce({ Parameter: { Value: JSON.stringify({ apiVersion: '1.0' }) } });
+      sendMockDynamo.mockRejectedValueOnce(new Error('Dynamo failed'));
 
       const event = { body: JSON.stringify({ id: 'fail-1', payload: {} }) };
       const res = await handler(event);
@@ -185,7 +191,7 @@ describe('ServerlessInfrastructureStack and Lambda handler', () => {
     test('when CONFIG_PARAMETER_NAME is not set, configVersion is unknown', async () => {
       delete process.env.CONFIG_PARAMETER_NAME;
       // Dynamo put succeeds
-      putMock.mockReturnValueOnce({ promise: () => Promise.resolve({}) });
+      sendMockDynamo.mockResolvedValueOnce({});
 
       const event = { body: JSON.stringify({ id: 'nocfg-1', payload: {} }) };
       const res = await handler(event);
