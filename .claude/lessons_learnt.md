@@ -163,6 +163,33 @@ cat metadata.json | jq -r '"\(.platform) - \(.language)"'
 5. Implement AWS best practices from Well-Architected Framework
 6. Ensure ALL requirements from task description are implemented
 
+**Edge Case: Model Already Too Good (Task 5962726542)**:
+
+**Symptom**: Training quality score 5/10 despite production-ready code that meets all requirements
+
+**Scenario**: Generated infrastructure was 95% correct from MODEL_RESPONSE, resulting in:
+- Perfect code quality (10/10 pylint)
+- All AWS services implemented correctly
+- PCI DSS compliant
+- Multi-AZ high availability
+- All requirements met
+- Only 5 minor bugs fixed (duplicate URN, missing outputs, linting, env config)
+
+**Why Score Was Low**:
+- Minimal training value when model is already highly competent
+- Fixes were tactical (configuration), not strategic (architecture)
+- No new AWS service knowledge gained
+- Limited learning opportunity for model improvement
+
+**Decision**: Task marked as "error" per policy (training_quality < 8 = BLOCKED)
+
+**Lesson Learned**:
+- Training quality measures **learning value**, not code quality
+- Even production-ready code can have low training value if model was already correct
+- This is actually a POSITIVE signal about model capability
+- Policy correctly blocks tasks that don't provide sufficient training data
+- Consider this outcome as "model has mastered this pattern" rather than "task failed"
+
 ---
 
 ## Common Deployment Failures & Quick Fixes
