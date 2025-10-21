@@ -449,6 +449,7 @@ export class TapStack extends TerraformStack {
         {
           id: 'archive-old-versions',
           status: 'Enabled',
+          filter: [{}],
           noncurrentVersionTransition: [
             {
               noncurrentDays: 30,
@@ -468,6 +469,7 @@ export class TapStack extends TerraformStack {
         {
           id: 'abort-incomplete-multipart-upload',
           status: 'Enabled',
+          filter: [{}],
           abortIncompleteMultipartUpload: [
             {
               daysAfterInitiation: 7,
@@ -1041,9 +1043,9 @@ export class TapStack extends TerraformStack {
       ],
       advancedBackupSetting: [
         {
-          resourceType: 'RDS',
+          resourceType: 'EC2',
           backupOptions: {
-            WindowsVSS: 'disabled',
+            WindowsVSS: 'enabled',
           },
         },
       ],
