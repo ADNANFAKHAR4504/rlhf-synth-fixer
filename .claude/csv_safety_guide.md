@@ -154,13 +154,13 @@ Use the built-in validation tool to check CSV integrity:
 
 ```bash
 # Validate current CSV
-python3 scripts/validate-tasks-csv.py
+python3 .claude/scripts/validate-tasks-csv.py
 
 # Create a backup
-python3 scripts/validate-tasks-csv.py --create-backup
+python3 .claude/scripts/validate-tasks-csv.py --create-backup
 
 # Restore from backup
-python3 scripts/validate-tasks-csv.py --restore
+python3 .claude/scripts/validate-tasks-csv.py --restore
 ```
 
 ## Recovery Procedures
@@ -174,12 +174,12 @@ python3 scripts/validate-tasks-csv.py --restore
 
 2. **Validate the backup**:
    ```bash
-   python3 scripts/validate-tasks-csv.py
+   python3 .claude/scripts/validate-tasks-csv.py
    ```
 
 3. **Restore from backup**:
    ```bash
-   python3 scripts/validate-tasks-csv.py --restore
+   python3 .claude/scripts/validate-tasks-csv.py --restore
    ```
    
    Or manually:
@@ -216,7 +216,7 @@ python3 scripts/validate-tasks-csv.py --restore
    git show <commit-hash>:tasks.csv > tasks.csv.recovered
    
    # Validate recovered file
-   python3 scripts/validate-tasks-csv.py
+   python3 .claude/scripts/validate-tasks-csv.py
    ```
 
 ## Common Pitfalls
@@ -267,7 +267,7 @@ Before deploying any CSV modification code:
    wc -l tasks.csv.test
    
    # Validate structure
-   python3 scripts/validate-tasks-csv.py
+   python3 .claude/scripts/validate-tasks-csv.py
    
    # Compare with original
    diff tasks.csv tasks.csv.test
@@ -297,5 +297,5 @@ Before ANY CSV modification:
 
 - **Safe CSV Update Pattern**: See `lessons_learnt.md` → "CSV File Corruption Prevention"
 - **Agent Instructions**: See `iac-task-selector.md` and `task-coordinator.md`
-- **Validation Tool**: `scripts/validate-tasks-csv.py`
+- **Validation Tool**: `.claude/scripts/validate-tasks-csv.py`
 

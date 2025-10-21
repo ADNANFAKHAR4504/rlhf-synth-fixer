@@ -10,7 +10,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -26,7 +26,7 @@ echo ""
 echo "🔍 Checking tasks.csv integrity..."
 if ! python3 "$SCRIPT_DIR/validate-tasks-csv.py" > /dev/null 2>&1; then
     echo -e "${RED}❌ tasks.csv validation failed!${NC}"
-    echo "   Run: python3 scripts/validate-tasks-csv.py for details"
+    echo "   Run: python3 .claude/scripts/validate-tasks-csv.py for details"
     exit 1
 else
     echo -e "${GREEN}✅ tasks.csv is valid${NC}"

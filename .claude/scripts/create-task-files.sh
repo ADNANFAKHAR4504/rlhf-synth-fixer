@@ -105,7 +105,7 @@ elif [ -f "$INPUT" ]; then
     TASK_JSON=$(cat "$INPUT")
 else
     # Input is a task ID - fetch from CSV and convert to JSON
-    CSV_LINE=$(./scripts/task-manager.sh get "$INPUT")
+    CSV_LINE=$(./.claude/scripts/task-manager.sh get "$INPUT")
     if [ -z "$CSV_LINE" ]; then
         log_error "Task $INPUT not found"
         exit 1
