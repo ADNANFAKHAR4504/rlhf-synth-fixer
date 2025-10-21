@@ -7,7 +7,7 @@
   "team": "synth",
   "startedAt": "2025-10-21T08:11:50Z",
   "subtask": "Application Deployment",
-  "background": "MedTech Solutions needs to modernize their patient records system. They require a secure infrastructure that processes sensitive healthcare data while maintaining HIPAA compliance. The system should handle patient data ingestion, secure storage, and controlled API access for authorized healthcare professionals.",
+  "background": "Infrastructure task for CDKTF TypeScript.",
   "subject_labels": [
     "Security Configuration as Code"
   ],
@@ -26,5 +26,11 @@
     "Lambda",
     "CloudWatchLogs"
   ],
-  "training_quality": 9
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
