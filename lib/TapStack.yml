@@ -350,6 +350,20 @@ Resources:
                   - "ssm:GetParametersByPath"
                 Resource:
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/*"
+        - PolicyName: KMSAccessPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "kms:Decrypt"
+                  - "kms:Encrypt"
+                  - "kms:ReEncrypt*"
+                  - "kms:GenerateDataKey*"
+                  - "kms:DescribeKey"
+                  - "kms:CreateGrant"
+                Resource:
+                  - !GetAtt EBSKMSKey.Arn
       Tags:
         - Key: Name
           Value: !Sub "${AWS::StackName}-EC2-Role"
@@ -563,15 +577,16 @@ Resources:
   # =====================================
   # KMS Keys for Encryption
   # =====================================
-  # Note: EBS KMS Key is defined but not currently used in Launch Template
-  # EC2 instances use default AWS-managed encryption (aws/ebs) for simplicity
-  # To use this custom key, add "KmsKeyId: !GetAtt EBSKMSKey.Arn" to BlockDeviceMappings
+  # Note: EBS KMS Key is used for encrypting EBS volumes in the Launch Template
+  # This provides additional security and control over encryption keys
   EBSKMSKey:
     Type: AWS::KMS::Key
     Properties:
-      Description: KMS key for EBS volume encryption (available but not in use)
+      Description: KMS key for EBS volume encryption
       Enabled: true
       EnableKeyRotation: true
+      KeySpec: SYMMETRIC_DEFAULT
+      KeyUsage: ENCRYPT_DECRYPT
       KeyPolicy:
         Version: "2012-10-17"
         Id: ebs-key-policy
@@ -784,6 +799,9 @@ Resources:
   # =====================================
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
+    DependsOn:
+      - EBSKMSKey
+      - EBSKMSKeyAlias
     Properties:
       LaunchTemplateName: !Sub "${AWS::StackName}-LaunchTemplate"
       LaunchTemplateData:
@@ -800,6 +818,7 @@ Resources:
               VolumeSize: 8
               VolumeType: gp3
               Encrypted: true
+              KmsKeyId: !GetAtt EBSKMSKey.Arn
               DeleteOnTermination: true
         Monitoring:
           Enabled: true
