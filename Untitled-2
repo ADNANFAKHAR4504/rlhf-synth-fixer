@@ -1,0 +1,12 @@
+# E-commerce Platform Migration from MongoDB Atlas to DynamoDB
+
+We are in process of migrating our e-commerce platform from MongoDB Atlas to DynamoDB while maintaining real-time inventory accuracy throughout the migration process. The platform processes 89,000 daily orders. We need to setup the migration infrastructure in us-west-2 region and using AWS CDK. Below are the requirements for the migration infrastructure.
+
+**Requirements:**
+
+The deployment should include AWS Database Migration Service (DMS) with custom endpoints for MongoDB connectivity, DynamoDB configured with on-demand capacity mode during the migration phase, AWS Lambda functions for data transformation logic, Amazon Kinesis Data Streams for real-time synchronization, Amazon EventBridge for migration orchestration, AWS Step Functions for managing complex migration workflows, Amazon CloudWatch for migration metrics and monitoring, and a dual-write proxy layer to ensure data consistency.
+
+The implementation must enable a dual-write pattern with conflict resolution mechanisms. Transform MongoDB's nested document structures to DynamoDB's single-table design pattern. Implement compensating transactions to handle failed write operations gracefully. Monitor and configure alerts for data drift that exceeds a 0.05% threshold. Configure automatic migration pause functionality that triggers upon anomaly detection to prevent data corruption or inconsistencies. 
+
+The code should have a common stack class we can use in the bin/ to deploy the infrastructure.
+

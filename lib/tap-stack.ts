@@ -119,6 +119,9 @@ export class TapStack extends cdk.Stack {
         iam.ManagedPolicy.fromAwsManagedPolicyName(
           'service-role/AWSLambdaBasicExecutionRole'
         ),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSLambdaVPCAccessExecutionRole'
+        ),
       ],
       inlinePolicies: {
         TapLambdaPolicy: new iam.PolicyDocument({
