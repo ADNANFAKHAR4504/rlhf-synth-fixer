@@ -59,30 +59,17 @@ import path from 'path';
 const OUTPUTS_FILE = '../cfn-outputs/flat-outputs.json';
 const outputsPath = path.resolve(__dirname, OUTPUTS_FILE);
 
-// Mock outputs for local testing (will use real outputs in CI/CD)
-const getMockOutputs = () => ({
-  primary_alb_endpoint: 'mock-primary-alb.us-east-1.elb.amazonaws.com',
-  dr_alb_endpoint: 'mock-dr-alb.us-west-2.elb.amazonaws.com',
-  aurora_global_cluster_id: 'mock-global-cluster-id',
-  dynamodb_table_name: 'mock-session-data-table',
-  primary_vpc_id: 'vpc-mock-primary',
-  dr_vpc_id: 'vpc-mock-dr',
-  sns_topic_arn: 'arn:aws:sns:us-east-1:123456789012:mock-topic',
-});
-
 const getDeploymentOutputs = () => {
-  if (fs.existsSync(outputsPath)) {
-    try {
-      const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
-      console.log('✓ Using real deployment outputs from:', outputsPath);
-      return outputs;
-    } catch (error) {
-      console.warn('⚠ Failed to parse outputs file, using mock data:', error);
-      return getMockOutputs();
-    }
-  } else {
-    console.log('ℹ Outputs file not found, using mock data for local testing');
-    return getMockOutputs();
+  if (!fs.existsSync(outputsPath)) {
+    throw new Error(`Outputs file not found at ${outputsPath}. Integration tests require real deployment outputs from CI/CD.`);
+  }
+  
+  try {
+    const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+    console.log('✓ Using real deployment outputs from:', outputsPath);
+    return outputs;
+  } catch (error) {
+    throw new Error(`Failed to parse outputs file at ${outputsPath}: ${error}`);
   }
 };
 
@@ -192,7 +179,7 @@ describe('Disaster Recovery Infrastructure - Integration Tests', () => {
         expect(response.Vpcs?.[0].State).toMatch('available');
       } catch (error: any) {
         if (error.name === 'InvalidVpcID.NotFound') {
-          console.log('⊘ VPC not found - may be using mock data');
+          console.log('⊘ VPC not found');
         } else {
           throw error;
         }
@@ -217,7 +204,7 @@ describe('Disaster Recovery Infrastructure - Integration Tests', () => {
         expect(azs.size).toBeGreaterThanOrEqual(2);
       } catch (error: any) {
         if (error.name === 'InvalidVpcID.NotFound' || error.name === 'InvalidParameterValue') {
-          console.log('⊘ Subnets not found - may be using mock data');
+          console.log('⊘ Subnets not found');
         } else {
           throw error;
         }
@@ -243,7 +230,7 @@ describe('Disaster Recovery Infrastructure - Integration Tests', () => {
         expect(response.Vpcs?.[0].State).toBe('available');
       } catch (error: any) {
         if (error.name === 'InvalidVpcID.NotFound') {
-          console.log('⊘ DR VPC not found - may be using mock data');
+          console.log('⊘ DR VPC not found');
         } else {
           throw error;
         }
@@ -269,7 +256,7 @@ describe('Disaster Recovery Infrastructure - Integration Tests', () => {
         expect(response.GlobalClusters?.[0].Status).toBe('available');
       } catch (error: any) {
         if (error.name === 'GlobalClusterNotFoundFault') {
-          console.log('⊘ Aurora Global Cluster not found - may be using mock data');
+          console.log('⊘ Aurora Global Cluster not found');
         } else {
           throw error;
         }
@@ -351,7 +338,7 @@ describe('Disaster Recovery Infrastructure - Integration Tests', () => {
         expect(response.Table?.TableStatus).toBe('ACTIVE');
       } catch (error: any) {
         if (error.name === 'ResourceNotFoundException') {
-          console.log('⊘ DynamoDB table not found - may be using mock data');
+          console.log('⊘ DynamoDB table not found');
         } else {
           throw error;
         }
@@ -467,7 +454,7 @@ describe('Disaster Recovery Infrastructure - Integration Tests', () => {
         console.log('✓ S3 primary bucket is accessible');
       } catch (error: any) {
         if (error.name === 'NoSuchBucket') {
-          console.log('⊘ S3 bucket not found - may be using mock data');
+          console.log('⊘ S3 bucket not found');
         } else {
           throw error;
         }
