@@ -795,7 +795,6 @@ Resources:
     Type: AWS::ApiGateway::Stage
     DependsOn:
       - NovaApiGatewayAccount
-      - NovaApiGatewayDeployment
     Properties:
       RestApiId: !Ref NovaApiGateway
       DeploymentId: !Ref NovaApiGatewayDeployment
@@ -902,8 +901,6 @@ Resources:
         PassthroughBehavior: WHEN_NO_MATCH
         IntegrationResponses:
           - StatusCode: 200
-      MethodResponses:
-        - StatusCode: 200
       MethodResponses:
         - StatusCode: 200
 
