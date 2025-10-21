@@ -200,6 +200,15 @@ describe('TapStack Integration Tests', () => {
     });
   }
 
+  // Helper function to parse nested outputs
+  function parseOutputs(rawOutputs: any): any {
+    if (rawOutputs.stackOutputs && typeof rawOutputs.stackOutputs === 'string') {
+      const stackOutputs = JSON.parse(rawOutputs.stackOutputs);
+      return { ...rawOutputs, ...stackOutputs };
+    }
+    return rawOutputs;
+  }
+
   beforeAll(() => {
     console.log('Starting TapStack Integration Tests');
     console.log('Setting up environment variables...');
@@ -223,9 +232,10 @@ describe('TapStack Integration Tests', () => {
       if (fs.existsSync(outputFile)) {
         console.log(`Found output file: ${outputFile}`);
         const fileContent = fs.readFileSync(outputFile, 'utf8');
-        deployedOutputs = JSON.parse(fileContent);
+        const rawOutputs = JSON.parse(fileContent);
+        deployedOutputs = parseOutputs(rawOutputs);
         console.log('Successfully parsed output file');
-        console.log(`Total outputs found: ${Object.keys(deployedOutputs).length}`);
+        console.log(`Total outputs found: ${Object.keys(rawOutputs).length}`);
         
         expect(deployedOutputs).toBeDefined();
         expect(typeof deployedOutputs).toBe('object');
@@ -240,7 +250,8 @@ describe('TapStack Integration Tests', () => {
         
         if (fs.existsSync(outputFile)) {
           const fileContent = fs.readFileSync(outputFile, 'utf8');
-          deployedOutputs = JSON.parse(fileContent);
+          const rawOutputs = JSON.parse(fileContent);
+          deployedOutputs = parseOutputs(rawOutputs);
           console.log('Output file generated and read successfully');
         }
       }
@@ -251,7 +262,8 @@ describe('TapStack Integration Tests', () => {
       const outputFile = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
       
       if (fs.existsSync(outputFile)) {
-        const outputs = JSON.parse(fs.readFileSync(outputFile, 'utf8'));
+        const rawOutputs = JSON.parse(fs.readFileSync(outputFile, 'utf8'));
+        const outputs = parseOutputs(rawOutputs);
         
         console.log(`Hub VPC ID: ${outputs.hubVpcId}`);
         console.log(`Production VPC ID: ${outputs.productionVpcId}`);
@@ -269,7 +281,8 @@ describe('TapStack Integration Tests', () => {
       const outputFile = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
       
       if (fs.existsSync(outputFile)) {
-        const outputs = JSON.parse(fs.readFileSync(outputFile, 'utf8'));
+        const rawOutputs = JSON.parse(fs.readFileSync(outputFile, 'utf8'));
+        const outputs = parseOutputs(rawOutputs);
         
         console.log(`Hub VPC CIDR: ${outputs.hubVpcCidr}`);
         console.log(`Production VPC CIDR: ${outputs.productionVpcCidr}`);
@@ -287,7 +300,8 @@ describe('TapStack Integration Tests', () => {
       const outputFile = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
       
       if (fs.existsSync(outputFile)) {
-        const outputs = JSON.parse(fs.readFileSync(outputFile, 'utf8'));
+        const rawOutputs = JSON.parse(fs.readFileSync(outputFile, 'utf8'));
+        const outputs = parseOutputs(rawOutputs);
         
         console.log(`Transit Gateway ID: ${outputs.transitGatewayId}`);
         console.log(`Transit Gateway ARN: ${outputs.transitGatewayArn}`);
@@ -309,7 +323,8 @@ describe('TapStack Integration Tests', () => {
       const outputFile = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
       
       if (fs.existsSync(outputFile)) {
-        const outputs = JSON.parse(fs.readFileSync(outputFile, 'utf8'));
+        const rawOutputs = JSON.parse(fs.readFileSync(outputFile, 'utf8'));
+        const outputs = parseOutputs(rawOutputs);
         
         console.log(`Hub Zone ID: ${outputs.hubZoneId}`);
         console.log(`Hub Zone Name: ${outputs.hubZoneName}`);
@@ -333,7 +348,8 @@ describe('TapStack Integration Tests', () => {
       const outputFile = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
       
       if (fs.existsSync(outputFile)) {
-        const outputs = JSON.parse(fs.readFileSync(outputFile, 'utf8'));
+        const rawOutputs = JSON.parse(fs.readFileSync(outputFile, 'utf8'));
+        const outputs = parseOutputs(rawOutputs);
         
         console.log(`Flow Logs Bucket Name: ${outputs.flowLogsBucketName}`);
         console.log(`Flow Logs Bucket ARN: ${outputs.flowLogsBucketArn}`);
@@ -351,7 +367,8 @@ describe('TapStack Integration Tests', () => {
       const outputFile = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
       
       if (fs.existsSync(outputFile)) {
-        const outputs = JSON.parse(fs.readFileSync(outputFile, 'utf8'));
+        const rawOutputs = JSON.parse(fs.readFileSync(outputFile, 'utf8'));
+        const outputs = parseOutputs(rawOutputs);
         
         console.log(`Region: ${outputs.region}`);
         console.log(`Environment Suffix: ${outputs.environmentSuffix}`);
