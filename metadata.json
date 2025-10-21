@@ -1,0 +1,41 @@
+{
+  "platform": "CDKTF",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "7933703108",
+  "team": "synth",
+  "startedAt": "2025-10-21T14:41:42+05:30",
+  "subtask": "Failure Recovery and High Availability",
+  "background": "EduTech Solutions needs to modernize their assessment platform to support 100,000+ concurrent students. The solution must comply with educational data privacy regulations (FERPA), provide real-time analytics, and ensure high availability across multiple availability zones in Tokyo region.",
+  "subject_labels": [
+    "Failure Recovery Automation",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "AWS Fault Injection Service",
+    "Application Auto Scaling",
+    "Application Load Balancer",
+    "CloudTrail",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "ECS",
+    "ElastiCache",
+    "EventBridge Scheduler",
+    "IAM",
+    "KMS",
+    "Kinesis Data Streams",
+    "Kinesis Firehose",
+    "Lambda",
+    "RDS",
+    "RDS Aurora",
+    "S3",
+    "SQS",
+    "Secrets Manager",
+    "Security Groups",
+    "VPC"
+  ],
+  "training_quality": 9
+}
