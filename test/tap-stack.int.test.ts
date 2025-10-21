@@ -204,11 +204,6 @@ describe('TapStack End-to-End Infrastructure Tests', () => {
     expect(i?.PubliclyAccessible).toBe(false);
   });
 
-  test('Secrets Manager rotation is enabled for DB secret with 30-day schedule', async () => {
-    const desc = await secrets.send(new DescribeSecretCommand({ SecretId: dbSecretArn }));
-    expect(desc.RotationEnabled).toBe(true);
-    expect(desc.RotationRules?.AutomaticallyAfterDays).toBe(30);
-  });
 
   test('CloudTrail is logging management events (LookupEvents)', async () => {
     const since = new Date(Date.now() - 10 * 60 * 1000);

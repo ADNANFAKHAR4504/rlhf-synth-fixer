@@ -4,7 +4,6 @@
 
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure foundation for Healthcare Patient Portal with HIPAA compliance'
-Transform: AWS::SecretsManager-2020-07-23
 
 Parameters:
   TrustedIP:
@@ -1036,49 +1035,6 @@ Resources:
       TargetId: !Ref NovaRDSInstance
       TargetType: 'AWS::RDS::DBInstance'
 
-  # Security group for Secrets Manager Rotation Lambda
-  NovaSecretsRotationSecurityGroup:
-    Type: 'AWS::EC2::SecurityGroup'
-    Properties:
-      GroupName: 'nova-prod-secrets-rotation-sg'
-      GroupDescription: 'SG for secrets rotation lambda to access RDS'
-      VpcId: !Ref NovaVPC
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: '0.0.0.0/0'
-      Tags:
-        - Key: Name
-          Value: 'nova-prod-secrets-rotation-sg'
-        - Key: team
-          Value: '2'
-        - Key: iac-rlhf-amazon
-          Value: 'true'
-
-  # Allow rotation lambda SG to reach DB on 3306
-  NovaDBIngressFromRotation:
-    Type: 'AWS::EC2::SecurityGroupIngress'
-    Properties:
-      GroupId: !Ref NovaDatabaseSecurityGroup
-      IpProtocol: tcp
-      FromPort: 3306
-      ToPort: 3306
-      SourceSecurityGroupId: !Ref NovaSecretsRotationSecurityGroup
-      Description: 'Allow Secrets Manager rotation to access RDS'
-
-  # Secrets Manager rotation schedule (hosted rotation for MySQL Single-User)
-  NovaRDSSecretRotation:
-    Type: 'AWS::SecretsManager::RotationSchedule'
-    Properties:
-      SecretId: !Ref NovaRDSPasswordSecret
-      RotationRules:
-        AutomaticallyAfterDays: 30
-      HostedRotationLambda:
-        RotationType: MySQLSingleUser
-        VpcSecurityGroupIds: !Ref NovaSecretsRotationSecurityGroup
-        VpcSubnetIds: !Join
-          - ','
-          - - !Ref NovaDatabaseSubnet1
-            - !Ref NovaDatabaseSubnet2
 
   # CloudWatch Log Group for VPC Flow Logs
   NovaVPCFlowLogsGroup:
