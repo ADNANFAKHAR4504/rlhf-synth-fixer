@@ -1,39 +1,83 @@
-ROLE: You are an experienced cloud architect specializing in serverless APIs.
+Hey team,
 
-CONTEXT:
-Our mobile app serves around 1 million users daily and needs a production-ready secure API backend. We need to build this infrastructure from scratch using Terraform with proper authentication, global scalability, and observability baked in.
+We need to build a production-ready API backend for our mobile app using Terraform. The app has about 1 million daily active users, so we need to make sure everything is secure, scalable, and properly monitored from day one.
 
-CONSTRAINTS:
-- Use API Gateway REST API (not HTTP API) for the main endpoint
-- Implement Cognito User Pools for user authentication - no custom auth
-- All Lambda functions must be properly secured with least-privilege IAM roles
-- Write actual working Python code for the Lambda backend - this needs to be a real demo people can test
-- DynamoDB needs to be configured as Global Tables for multi-region support
-- CloudFront should sit in front of API Gateway for better global performance
-- Route 53 must handle the custom domain with health checks
-- CloudWatch dashboards and alarms are required for monitoring
-- Enable X-Ray tracing across the entire request path
-- Follow AWS best practices for production workloads
+The team has decided to go with a serverless architecture using API Gateway, Lambda, and Cognito for auth. We also need global scalability with DynamoDB Global Tables and CloudFront in front of everything for better performance worldwide.
 
-DELIVERABLES:
-1) main.tf - core infrastructure setup and resource orchestration
-2) variables.tf - all configurable parameters with sensible defaults
-3) outputs.tf - important values like API endpoint, user pool ID, etc.
-4) cognito.tf - user pool, client app, and auth configuration
-5) api_gateway.tf - REST API, resources, methods, authorizers, and deployment
-6) lambda.tf - function definitions with proper runtime and environment configs
-7) dynamodb.tf - global table setup with appropriate indexes
-8) cloudfront.tf - distribution config pointing to API Gateway
-9) route53.tf - hosted zone and DNS records
-10) monitoring.tf - CloudWatch dashboards, alarms, and X-Ray configuration
-11) iam.tf - all roles and policies with proper trust relationships
-12) lambda_function.py - actual Python code for the API backend with CRUD operations
-13) requirements.txt - Python dependencies for the Lambda function
-14) deployment-guide.md - step by step instructions to deploy this stack
-15) testing-guide.md - how to test authentication flow and API endpoints
+## What we're building
 
-OUTPUT FORMAT (IMPORTANT):
-- Each file should be in its own code block with the filename clearly marked at the top
-- Use meaningful resource names that reflect what they do
-- Add inline comments explaining complex configurations
-- Keep it practical - this should actually work when deployed
+A complete serverless API infrastructure with user authentication, global distribution, and comprehensive monitoring.
+
+### Core Requirements
+
+1. **User Authentication**
+   - Cognito User Pools for managing user sign-up and login
+   - Secure JWT token-based authentication
+   - No custom auth implementations - keep it standard
+
+2. **API Backend**
+   - API Gateway REST API (not HTTP API) as the main endpoint
+   - Lambda functions written in Python with actual working CRUD operations
+   - User profile management (create, read, update, delete)
+   - Proper request/response validation
+
+3. **Data Storage**
+   - DynamoDB table configured as Global Tables for multi-region replication
+   - Support for user profiles with session data
+   - Automatic backups and point-in-time recovery
+
+4. **Global Distribution**
+   - CloudFront distribution in front of API Gateway
+   - Route 53 for custom domain management with health checks
+   - Low latency access for users worldwide
+
+5. **Security**
+   - All Lambda functions use least-privilege IAM roles
+   - No wildcards in IAM policies
+   - Encryption at rest and in transit
+   - API requests must be authenticated via Cognito
+
+6. **Monitoring & Observability**
+   - CloudWatch dashboards showing key metrics
+   - Alarms for API errors, Lambda failures, and high latency
+   - X-Ray tracing enabled across the entire request path
+   - Logs for all Lambda invocations
+
+### Technical Stack
+
+- **Infrastructure**: Terraform (HCL)
+- **API Layer**: API Gateway REST API + Lambda (Python 3.11)
+- **Auth**: Amazon Cognito User Pools
+- **Database**: DynamoDB with Global Tables
+- **CDN**: CloudFront
+- **DNS**: Route 53
+- **Monitoring**: CloudWatch + X-Ray
+- **Security**: IAM roles and policies
+
+### Constraints
+
+- Must follow AWS best practices for production workloads
+- All configuration should be parameterized via Terraform variables
+- Include comprehensive outputs for CI/CD integration
+- Write actual working Python code - this needs to be testable
+- Proper error handling and logging throughout
+- Include both unit tests and end-to-end integration tests
+
+## Success Criteria
+
+- **Functionality**: Complete CRUD API with Cognito authentication working end-to-end
+- **Security**: Proper IAM roles, no hardcoded credentials, authenticated endpoints only
+- **Scalability**: DynamoDB Global Tables configured, CloudFront caching enabled
+- **Observability**: CloudWatch dashboards, alarms, and X-Ray tracing operational
+- **Code Quality**: Clean Terraform modules, working Python Lambda code, comprehensive tests
+- **Documentation**: Clear deployment guide and testing instructions
+
+## What to deliver
+
+- Complete Terraform infrastructure code (modular structure preferred)
+- Working Python Lambda functions with CRUD operations
+- Comprehensive test suite (unit + integration tests)
+- Deployment guide with step-by-step instructions
+- All necessary configuration files and documentation
+
+Make sure everything actually works when deployed - we need this to be production-ready, not just a proof of concept.
