@@ -2,7 +2,7 @@
 
 ---
 
-The user wants a comprehensive regulatory reporting platform built as a single CloudFormation JSON template. Let me break down the requirements:
+Comprehensive regulatory reporting platform built as a single CloudFormation JSON template
 
 1. Step Functions orchestrate the workflow: generate → validate → deliver → confirm
 2. Lambda functions for report rendering and jurisdiction rules
@@ -14,7 +14,7 @@ The user wants a comprehensive regulatory reporting platform built as a single C
 8. EventBridge for scheduling
 9. KMS for encryption
 
-I need to create:
+Create:
 
 - A complete CloudFormation template in JSON
 - Lambda function code samples
@@ -26,7 +26,7 @@ I need to create:
 - CloudWatch alarms
 - KMS key for encryption
 
-Let me structure this properly with all the components.
+Structure this properly with all the components.
 
 ### Answer
 
