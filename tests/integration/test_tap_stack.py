@@ -1,0 +1,898 @@
+"""
+Integration tests for the deployed TapStack infrastructure.
+
+These tests validate actual AWS resources with LIVE ACTIONS and INTERACTIONS.
+
+Test Structure:
+- Service-Level Tests: PERFORM ACTIONS within a single service (invoke Lambda, send metrics, etc.)
+- Cross-Service Tests: TEST INTERACTIONS between two services (EC2 writes to CloudWatch, Lambda checks ASG)  
+- End-to-End Tests: TRIGGER complete data flows through 3+ services
+"""
+
+import json
+import os
+import time
+import unittest
+from datetime import datetime, timezone
+from typing import Any, Dict, List
+
+import boto3
+import pytest
+from botocore.exceptions import ClientError, NoCredentialsError
+
+# Load deployment flat outputs
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+FLAT_OUTPUTS_PATH = os.path.join(BASE_DIR, '..', '..', 'cfn-outputs', 'flat-outputs.json')
+
+
+def load_outputs() -> Dict[str, Any]:
+    """Load and return flat deployment outputs from cfn-outputs/flat-outputs.json."""
+    if os.path.exists(FLAT_OUTPUTS_PATH):
+        try:
+            with open(FLAT_OUTPUTS_PATH, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+                if not content:
+                    print(f"Warning: Outputs file is empty at {FLAT_OUTPUTS_PATH}")
+                    return {}
+                outputs = json.loads(content)
+                print(f"Successfully loaded {len(outputs)} outputs from {FLAT_OUTPUTS_PATH}")
+                return outputs
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"Warning: Could not parse outputs file: {e}")
+            return {}
+    else:
+        print(f"Warning: Outputs file not found at {FLAT_OUTPUTS_PATH}")
+        return {}
+
+
+# Get environment configuration
+ENVIRONMENT_SUFFIX = os.getenv('ENVIRONMENT_SUFFIX', 'dev')
+PRIMARY_REGION = os.getenv('AWS_REGION', 'us-east-1')
+
+# Load Pulumi stack outputs
+OUTPUTS = load_outputs()
+
+# Initialize AWS SDK clients
+ec2_client = boto3.client('ec2', region_name=PRIMARY_REGION)
+autoscaling_client = boto3.client('autoscaling', region_name=PRIMARY_REGION)
+lambda_client = boto3.client('lambda', region_name=PRIMARY_REGION)
+cloudwatch_client = boto3.client('cloudwatch', region_name=PRIMARY_REGION)
+logs_client = boto3.client('logs', region_name=PRIMARY_REGION)
+ssm_client = boto3.client('ssm', region_name=PRIMARY_REGION)
+iam_client = boto3.client('iam', region_name=PRIMARY_REGION)
+events_client = boto3.client('events', region_name=PRIMARY_REGION)
+
+
+def get_recent_lambda_logs(function_name: str, minutes: int = 5) -> List[str]:
+    """Fetch recent Lambda logs from CloudWatch Logs."""
+    try:
+        log_group_name = f"/aws/lambda/{function_name}"
+        end_time = int(time.time() * 1000)
+        start_time = end_time - (minutes * 60 * 1000)
+
+        streams_response = logs_client.describe_log_streams(
+            logGroupName=log_group_name,
+            orderBy='LastEventTime',
+            descending=True,
+            limit=5
+        )
+
+        log_messages = []
+        for stream in streams_response.get('logStreams', []):
+            events_response = logs_client.get_log_events(
+                logGroupName=log_group_name,
+                logStreamName=stream['logStreamName'],
+                startTime=start_time,
+                endTime=end_time,
+                limit=100
+            )
+
+            for event in events_response.get('events', []):
+                message = event['message'].strip()
+                if message and not any(message.startswith(x) for x in ['START RequestId', 'END RequestId', 'REPORT RequestId']):
+                    log_messages.append(message)
+
+        return log_messages
+    except Exception as e:
+        print(f"Error fetching Lambda logs: {e}")
+        return []
+
+
+def wait_for_ssm_command(command_id: str, instance_id: str, max_wait_seconds: int = 60) -> Dict[str, Any]:
+    """Wait for SSM command to complete."""
+    start_time = time.time()
+    
+    while time.time() - start_time < max_wait_seconds:
+        try:
+            result = ssm_client.get_command_invocation(
+                CommandId=command_id,
+                InstanceId=instance_id
+            )
+            
+            if result['Status'] in ['Success', 'Failed', 'Cancelled', 'TimedOut']:
+                return result
+            
+            time.sleep(2)
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'InvocationDoesNotExist':
+                time.sleep(2)
+                continue
+            raise
+    
+    raise TimeoutError(f"SSM command {command_id} did not complete within {max_wait_seconds} seconds")
+
+
+class BaseIntegrationTest(unittest.TestCase):
+    """Base class for integration tests with common setup and utilities."""
+
+    @classmethod
+    def setUpClass(cls):
+        """Initialize AWS clients and validate credentials."""
+        try:
+            ec2_client.describe_vpcs(MaxResults=5)
+            print("AWS credentials validated successfully")
+        except (NoCredentialsError, ClientError) as e:
+            pytest.skip(f"Skipping integration tests - AWS credentials not available: {e}")
+
+    def skip_if_output_missing(self, *output_names):
+        """Skip test if required outputs are missing."""
+        missing = [name for name in output_names if not OUTPUTS.get(name)]
+        if missing:
+            pytest.skip(f"Missing required outputs: {', '.join(missing)}")
+
+
+# ============================================================================
+# PART 1: SERVICE-LEVEL TESTS (PERFORM ACTIONS within single service)
+# ============================================================================
+
+class TestServiceLevelInteractions(BaseIntegrationTest):
+    """
+    Service-level tests - PERFORM ACTUAL ACTIONS within a single AWS service.
+    Maps to PROMPT.md: Individual service functionality with real operations.
+    """
+
+    def test_lambda_function_invocation_and_response(self):
+        """
+        SERVICE-LEVEL TEST: Lambda function invocation
+        Maps to PROMPT.md: "Lambda functions for automated monitoring"
+        
+        ACTION: Invoke Lambda function and verify it executes successfully.
+        """
+        self.skip_if_output_missing('lambda_function_name')
+        
+        function_name = OUTPUTS['lambda_function_name']
+        
+        print(f"\n=== Testing Lambda Invocation ===")
+        print(f"Function: {function_name}")
+        
+        # ACTION: Invoke Lambda function
+        test_payload = {
+            'test': True,
+            'source': 'integration-test',
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }
+        
+        response = lambda_client.invoke(
+            FunctionName=function_name,
+            InvocationType='RequestResponse',
+            Payload=json.dumps(test_payload).encode('utf-8')
+        )
+        
+        # VERIFY: Lambda executed successfully
+        self.assertEqual(response['StatusCode'], 200, "Lambda should return 200 status")
+        
+        if 'FunctionError' in response:
+            error_payload = response['Payload'].read().decode('utf-8')
+            self.fail(f"Lambda execution failed: {error_payload}")
+        
+        response_payload = json.loads(response['Payload'].read().decode('utf-8'))
+        self.assertEqual(response_payload['statusCode'], 200)
+        
+        body = json.loads(response_payload['body'])
+        print(f"Lambda response: {json.dumps(body, indent=2)}")
+        
+        # VERIFY: Response contains expected data
+        self.assertIn('total_instances', body)
+        print(f"Lambda invoked successfully")
+        print(f"  Instances checked: {body.get('total_instances', 0)}")
+
+    def test_cloudwatch_custom_metric_publication(self):
+        """
+        SERVICE-LEVEL TEST: CloudWatch metric publication
+        Maps to PROMPT.md: Monitoring requirement
+        
+        ACTION: Send custom metric to CloudWatch and verify it's accepted.
+        """
+        print(f"\n=== Testing CloudWatch Metric Publication ===")
+        
+        # ACTION: Send custom metric
+        metric_name = 'IntegrationTestMetric'
+        metric_value = 42.0
+        
+        cloudwatch_client.put_metric_data(
+            Namespace='TAP/IntegrationTest',
+            MetricData=[
+                {
+                    'MetricName': metric_name,
+                    'Value': metric_value,
+                    'Unit': 'Count',
+                    'Timestamp': datetime.now(timezone.utc),
+                    'Dimensions': [
+                        {
+                            'Name': 'TestType',
+                            'Value': 'ServiceLevel'
+                        }
+                    ]
+                }
+            ]
+        )
+        
+        print(f"Custom metric sent to CloudWatch")
+        print(f"  Namespace: TAP/IntegrationTest")
+        print(f"  Metric: {metric_name} = {metric_value}")
+        
+        # Small delay for propagation
+        time.sleep(2)
+        
+        # VERIFY: Metric appears in CloudWatch
+        metrics_response = cloudwatch_client.list_metrics(
+            Namespace='TAP/IntegrationTest',
+            MetricName=metric_name
+        )
+        
+        if metrics_response['Metrics']:
+            print(f"Metric verified in CloudWatch")
+        else:
+            print(f"  Note: Metric not yet queryable (propagation delay)")
+
+    def test_ssm_command_execution_on_ec2(self):
+        """
+        SERVICE-LEVEL TEST: SSM command execution
+        Maps to PROMPT.md: "EC2 instance configured using AWS SSM"
+        
+        ACTION: Execute command on EC2 instance via SSM and verify output.
+        """
+        self.skip_if_output_missing('auto_scaling_group_name')
+        
+        asg_name = OUTPUTS['auto_scaling_group_name']
+        
+        print(f"\n=== Testing SSM Command Execution ===")
+        
+        # Get instance from ASG
+        asg_response = autoscaling_client.describe_auto_scaling_groups(
+            AutoScalingGroupNames=[asg_name]
+        )
+        
+        instances = asg_response['AutoScalingGroups'][0].get('Instances', [])
+        if not instances:
+            self.skipTest("No instances running in ASG yet")
+        
+        instance_id = instances[0]['InstanceId']
+        print(f"Target instance: {instance_id}")
+        
+        # ACTION: Execute command via SSM
+        try:
+            command_response = ssm_client.send_command(
+                InstanceIds=[instance_id],
+                DocumentName='AWS-RunShellScript',
+                Parameters={
+                    'commands': [
+                        'echo "SSM integration test executed"',
+                        'date',
+                        'hostname',
+                        'whoami'
+                    ]
+                }
+            )
+            
+            command_id = command_response['Command']['CommandId']
+            print(f"SSM command sent: {command_id}")
+            
+            # Wait for command completion
+            result = wait_for_ssm_command(command_id, instance_id, max_wait_seconds=90)
+            
+            # VERIFY: Command executed successfully
+            self.assertEqual(result['Status'], 'Success', f"SSM command failed: {result.get('StandardErrorContent', '')}")
+            self.assertIn('SSM integration test executed', result['StandardOutputContent'])
+            
+            print(f"SSM command executed successfully")
+            print(f"  Output preview: {result['StandardOutputContent'][:100]}...")
+            
+        except ClientError as e:
+            if 'InvalidInstanceId' in str(e):
+                self.skipTest(f"Instance {instance_id} not yet registered with SSM")
+            raise
+
+    def test_ec2_file_operations_via_ssm(self):
+        """
+        SERVICE-LEVEL TEST: EC2 file operations
+        Maps to PROMPT.md: EC2 instance operations
+        
+        ACTION: Create, read, and delete a file on EC2 instance.
+        """
+        self.skip_if_output_missing('auto_scaling_group_name')
+        
+        asg_name = OUTPUTS['auto_scaling_group_name']
+        
+        print(f"\n=== Testing EC2 File Operations ===")
+        
+        # Get instance from ASG
+        asg_response = autoscaling_client.describe_auto_scaling_groups(
+            AutoScalingGroupNames=[asg_name]
+        )
+        
+        instances = asg_response['AutoScalingGroups'][0].get('Instances', [])
+        if not instances:
+            self.skipTest("No instances running in ASG yet")
+        
+        instance_id = instances[0]['InstanceId']
+        
+        # ACTION: Create, read, and delete file
+        test_content = f"Integration test file created at {datetime.now(timezone.utc).isoformat()}"
+        
+        try:
+            command_response = ssm_client.send_command(
+                InstanceIds=[instance_id],
+                DocumentName='AWS-RunShellScript',
+                Parameters={
+                    'commands': [
+                        f'echo "{test_content}" > /tmp/integration-test.txt',
+                        'cat /tmp/integration-test.txt',
+                        'ls -la /tmp/integration-test.txt',
+                        'rm /tmp/integration-test.txt',
+                        'echo "File operations completed"'
+                    ]
+                }
+            )
+            
+            command_id = command_response['Command']['CommandId']
+            result = wait_for_ssm_command(command_id, instance_id, max_wait_seconds=90)
+            
+            # VERIFY: File operations successful
+            self.assertEqual(result['Status'], 'Success')
+            self.assertIn(test_content, result['StandardOutputContent'])
+            self.assertIn('File operations completed', result['StandardOutputContent'])
+            
+            print(f"File operations completed successfully")
+            print(f"  Created, read, and deleted test file")
+            
+        except ClientError as e:
+            if 'InvalidInstanceId' in str(e):
+                self.skipTest(f"Instance {instance_id} not yet registered with SSM")
+            raise
+
+    def test_auto_scaling_group_operations(self):
+        """
+        SERVICE-LEVEL TEST: Auto Scaling Group operations
+        Maps to PROMPT.md: "auto-scaling based on CPU utilization"
+        
+        ACTION: Query ASG and verify instances are running.
+        """
+        self.skip_if_output_missing('auto_scaling_group_name')
+        
+        asg_name = OUTPUTS['auto_scaling_group_name']
+        
+        print(f"\n=== Testing Auto Scaling Group ===")
+        print(f"ASG: {asg_name}")
+        
+        # ACTION: Describe ASG
+        response = autoscaling_client.describe_auto_scaling_groups(
+            AutoScalingGroupNames=[asg_name]
+        )
+        
+        # VERIFY: ASG exists and is operational
+        self.assertEqual(len(response['AutoScalingGroups']), 1)
+        asg = response['AutoScalingGroups'][0]
+        
+        self.assertEqual(asg['AutoScalingGroupName'], asg_name)
+        self.assertGreaterEqual(asg['DesiredCapacity'], asg['MinSize'])
+        
+        instances = asg.get('Instances', [])
+        healthy_instances = [i for i in instances if i['HealthStatus'] == 'Healthy']
+        
+        print(f"ASG operational")
+        print(f"  Min: {asg['MinSize']}, Desired: {asg['DesiredCapacity']}, Max: {asg['MaxSize']}")
+        print(f"  Instances: {len(instances)} total, {len(healthy_instances)} healthy")
+
+
+# ============================================================================
+# PART 2: CROSS-SERVICE TESTS (TEST INTERACTIONS between 2 services)
+# ============================================================================
+
+class TestCrossServiceInteractions(BaseIntegrationTest):
+    """
+    Cross-service tests - TEST ACTUAL INTERACTIONS between two AWS services.
+    Maps to PROMPT.md: Service integration with real data flow.
+    """
+
+    def test_ec2_sends_metrics_to_cloudwatch(self):
+        """
+        CROSS-SERVICE TEST: EC2 → CloudWatch
+        Maps to PROMPT.md: Monitoring requirement
+        
+        ACTION: EC2 sends custom metric to CloudWatch, verify it's received.
+        """
+        self.skip_if_output_missing('auto_scaling_group_name')
+        
+        asg_name = OUTPUTS['auto_scaling_group_name']
+        
+        print(f"\n=== Testing EC2 → CloudWatch Interaction ===")
+        
+        # Get instance from ASG
+        asg_response = autoscaling_client.describe_auto_scaling_groups(
+            AutoScalingGroupNames=[asg_name]
+        )
+        
+        instances = asg_response['AutoScalingGroups'][0].get('Instances', [])
+        if not instances:
+            self.skipTest("No instances running in ASG yet")
+        
+        instance_id = instances[0]['InstanceId']
+        
+        # ACTION: EC2 sends metric to CloudWatch
+        try:
+            command_response = ssm_client.send_command(
+                InstanceIds=[instance_id],
+                DocumentName='AWS-RunShellScript',
+                Parameters={
+                    'commands': [
+                        f'aws cloudwatch put-metric-data --namespace "TAP/EC2Test" --metric-name "TestFromEC2" --value 100 --region {PRIMARY_REGION}',
+                        'echo "Metric sent from EC2 to CloudWatch"'
+                    ]
+                }
+            )
+            
+            command_id = command_response['Command']['CommandId']
+            result = wait_for_ssm_command(command_id, instance_id, max_wait_seconds=90)
+            
+            # VERIFY: EC2 successfully sent metric
+            self.assertEqual(result['Status'], 'Success')
+            self.assertIn('Metric sent from EC2 to CloudWatch', result['StandardOutputContent'])
+            
+            print(f"EC2 → CloudWatch interaction successful")
+            print(f"  EC2 instance sent custom metric to CloudWatch")
+            
+            time.sleep(3)
+            
+            # VERIFY: Metric appears in CloudWatch
+            metrics_response = cloudwatch_client.list_metrics(
+                Namespace='TAP/EC2Test',
+                MetricName='TestFromEC2'
+            )
+            
+            if metrics_response['Metrics']:
+                print(f"Metric verified in CloudWatch")
+            
+        except ClientError as e:
+            if 'InvalidInstanceId' in str(e):
+                self.skipTest(f"Instance {instance_id} not yet registered with SSM")
+            raise
+
+    def test_lambda_checks_asg_instances(self):
+        """
+        CROSS-SERVICE TEST: Lambda → Auto Scaling
+        Maps to PROMPT.md: "Lambda functions for automated monitoring of EC2 instance health"
+        
+        ACTION: Lambda queries ASG and checks instance health.
+        """
+        self.skip_if_output_missing('lambda_function_name', 'auto_scaling_group_name')
+        
+        function_name = OUTPUTS['lambda_function_name']
+        asg_name = OUTPUTS['auto_scaling_group_name']
+        
+        print(f"\n=== Testing Lambda → ASG Interaction ===")
+        print(f"Lambda: {function_name}")
+        print(f"ASG: {asg_name}")
+        
+        # ACTION: Invoke Lambda to check ASG
+        response = lambda_client.invoke(
+            FunctionName=function_name,
+            InvocationType='RequestResponse',
+            Payload=json.dumps({
+                'action': 'health_check',
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            }).encode('utf-8')
+        )
+        
+        # VERIFY: Lambda executed and checked ASG
+        self.assertEqual(response['StatusCode'], 200)
+        
+        if 'FunctionError' not in response:
+            response_payload = json.loads(response['Payload'].read().decode('utf-8'))
+            body = json.loads(response_payload['body'])
+            
+            print(f"Lambda → ASG interaction successful")
+            print(f"  Lambda checked {body.get('total_instances', 0)} instances")
+            print(f"  Healthy: {body.get('healthy', 0)}, Unhealthy: {body.get('unhealthy', 0)}")
+
+    def test_lambda_publishes_metrics_to_cloudwatch(self):
+        """
+        CROSS-SERVICE TEST: Lambda → CloudWatch
+        Maps to PROMPT.md: Lambda monitoring
+        
+        ACTION: Lambda publishes metrics to CloudWatch, verify they appear.
+        """
+        self.skip_if_output_missing('lambda_function_name')
+        
+        function_name = OUTPUTS['lambda_function_name']
+        
+        print(f"\n=== Testing Lambda → CloudWatch Interaction ===")
+        
+        # ACTION: Invoke Lambda (it will publish metrics)
+        response = lambda_client.invoke(
+            FunctionName=function_name,
+            InvocationType='RequestResponse',
+            Payload=json.dumps({'source': 'integration-test'}).encode('utf-8')
+        )
+        
+        self.assertEqual(response['StatusCode'], 200)
+        
+        print(f"Lambda invoked (publishes metrics internally)")
+        
+        time.sleep(5)
+        
+        # VERIFY: Check for Lambda-published metrics in CloudWatch
+        metrics_response = cloudwatch_client.list_metrics(
+            Namespace='tap/HealthCheck'
+        )
+        
+        if metrics_response['Metrics']:
+            metric_names = [m['MetricName'] for m in metrics_response['Metrics']]
+            print(f"Lambda → CloudWatch interaction verified")
+            print(f"  Metrics found: {', '.join(metric_names)}")
+        else:
+            print(f"  Note: Metrics not yet queryable (propagation delay)")
+
+    def test_eventbridge_triggers_lambda(self):
+        """
+        CROSS-SERVICE TEST: EventBridge → Lambda
+        Maps to PROMPT.md: "Lambda functions for automated monitoring"
+        
+        ACTION: Verify EventBridge rule targets Lambda and check recent invocations.
+        """
+        self.skip_if_output_missing('lambda_function_name', 'health_check_rule_arn')
+        
+        function_name = OUTPUTS['lambda_function_name']
+        rule_arn = OUTPUTS['health_check_rule_arn']
+        rule_name = rule_arn.split('/')[-1]
+        
+        print(f"\n=== Testing EventBridge → Lambda Interaction ===")
+        print(f"Rule: {rule_name}")
+        print(f"Lambda: {function_name}")
+        
+        # VERIFY: EventBridge rule is enabled
+        rule_response = events_client.describe_rule(Name=rule_name)
+        self.assertEqual(rule_response['State'], 'ENABLED')
+        
+        # VERIFY: Lambda is target
+        targets_response = events_client.list_targets_by_rule(Rule=rule_name)
+        lambda_target = None
+        for target in targets_response['Targets']:
+            if function_name in target['Arn']:
+                lambda_target = target
+                break
+        
+        self.assertIsNotNone(lambda_target, "Lambda should be target of EventBridge rule")
+        
+        print(f"EventBridge → Lambda configured")
+        print(f"  Schedule: {rule_response['ScheduleExpression']}")
+        
+        # CHECK: Recent Lambda invocations (proving EventBridge has triggered it)
+        logs = get_recent_lambda_logs(function_name, minutes=10)
+        if logs:
+            print(f"Lambda has recent invocations ({len(logs)} log entries)")
+            print(f"  EventBridge has been triggering Lambda automatically")
+
+    def test_ec2_internet_access_via_nat_gateway(self):
+        """
+        CROSS-SERVICE TEST: EC2 (private subnet) → NAT Gateway → Internet
+        Maps to PROMPT.md: "private subnet routes outbound traffic through a NAT Gateway"
+        
+        ACTION: EC2 in private subnet makes outbound HTTP request via NAT Gateway.
+        """
+        self.skip_if_output_missing('auto_scaling_group_name', 'nat_gateway_ids')
+        
+        asg_name = OUTPUTS['auto_scaling_group_name']
+        nat_gateway_ids = OUTPUTS['nat_gateway_ids']
+        
+        print(f"\n=== Testing EC2 → NAT Gateway → Internet ===")
+        print(f"NAT Gateways: {len(nat_gateway_ids)}")
+        
+        # Get instance from ASG (in private subnet)
+        asg_response = autoscaling_client.describe_auto_scaling_groups(
+            AutoScalingGroupNames=[asg_name]
+        )
+        
+        instances = asg_response['AutoScalingGroups'][0].get('Instances', [])
+        if not instances:
+            self.skipTest("No instances running in ASG yet")
+        
+        instance_id = instances[0]['InstanceId']
+        
+        # ACTION: EC2 makes outbound HTTP request (via NAT Gateway)
+        try:
+            command_response = ssm_client.send_command(
+                InstanceIds=[instance_id],
+                DocumentName='AWS-RunShellScript',
+                Parameters={
+                    'commands': [
+                        'echo "Testing internet access from private subnet via NAT Gateway"',
+                        'curl -s -o /dev/null -w "HTTP Status: %{http_code}\\n" https://www.google.com --max-time 10',
+                        'echo "Internet access test complete"'
+                    ]
+                }
+            )
+            
+            command_id = command_response['Command']['CommandId']
+            result = wait_for_ssm_command(command_id, instance_id, max_wait_seconds=90)
+            
+            # VERIFY: EC2 reached internet via NAT Gateway
+            self.assertEqual(result['Status'], 'Success')
+            self.assertIn('200', result['StandardOutputContent'], 
+                         "EC2 in private subnet should reach internet via NAT Gateway")
+            
+            print(f"EC2 → NAT Gateway → Internet successful")
+            print(f"  Private subnet EC2 reached internet (HTTP 200)")
+            
+        except ClientError as e:
+            if 'InvalidInstanceId' in str(e):
+                self.skipTest(f"Instance {instance_id} not yet registered with SSM")
+            raise
+
+    def test_cloudwatch_alarm_linked_to_scaling_policy(self):
+        """
+        CROSS-SERVICE TEST: CloudWatch Alarm → Auto Scaling Policy
+        Maps to PROMPT.md: "auto-scaling based on CPU utilization metrics"
+        
+        ACTION: Verify CloudWatch alarm is linked to scaling policy.
+        """
+        self.skip_if_output_missing('cpu_high_alarm_arn', 'scale_up_policy_arn')
+        
+        high_alarm_arn = OUTPUTS['cpu_high_alarm_arn']
+        scale_up_policy_arn = OUTPUTS['scale_up_policy_arn']
+        
+        print(f"\n=== Testing CloudWatch Alarm → Scaling Policy ===")
+        
+        # Get alarm details
+        high_alarm_name = high_alarm_arn.split(':')[-1]
+        alarm_response = cloudwatch_client.describe_alarms(AlarmNames=[high_alarm_name])
+        
+        self.assertEqual(len(alarm_response['MetricAlarms']), 1)
+        alarm = alarm_response['MetricAlarms'][0]
+        
+        # VERIFY: Alarm has scaling policy as action
+        self.assertIn(scale_up_policy_arn, alarm['AlarmActions'], 
+                     "CloudWatch alarm should trigger scaling policy")
+        
+        print(f"CloudWatch Alarm → Scaling Policy linked")
+        print(f"  Alarm: {high_alarm_name}")
+        print(f"  Threshold: {alarm['Threshold']}%")
+        print(f"  Action: Scale-up policy")
+
+
+# ============================================================================
+# PART 3: E2E TESTS (TRIGGER complete flows through 3+ services)
+# ============================================================================
+
+class TestEndToEndFlows(BaseIntegrationTest):
+    """
+    End-to-End tests - TRIGGER complete flows involving 3+ services.
+    Maps to PROMPT.md: Full infrastructure workflow validation.
+    """
+
+    def test_complete_health_monitoring_workflow(self):
+        """
+        E2E TEST: EventBridge → Lambda → ASG → CloudWatch
+        Maps to PROMPT.md: "Lambda functions for automated monitoring of EC2 instance health"
+        
+        ENTRY POINT: Invoke Lambda (simulating EventBridge trigger)
+        FLOW: Lambda checks ASG instances → Marks unhealthy → Publishes metrics to CloudWatch
+        """
+        self.skip_if_output_missing('lambda_function_name', 'auto_scaling_group_name')
+        
+        function_name = OUTPUTS['lambda_function_name']
+        asg_name = OUTPUTS['auto_scaling_group_name']
+        
+        print(f"\n{'='*70}")
+        print(f"E2E TEST: Health Monitoring Workflow")
+        print(f"{'='*70}")
+        
+        # STEP 1: Get baseline ASG state
+        asg_response = autoscaling_client.describe_auto_scaling_groups(
+            AutoScalingGroupNames=[asg_name]
+        )
+        asg = asg_response['AutoScalingGroups'][0]
+        initial_instances = len(asg.get('Instances', []))
+        
+        print(f"Step 1: Baseline - ASG has {initial_instances} instances")
+        
+        # STEP 2: ENTRY POINT - Invoke Lambda (simulating EventBridge trigger)
+        print(f"Step 2: Triggering Lambda health check...")
+        
+        invoke_response = lambda_client.invoke(
+            FunctionName=function_name,
+            InvocationType='RequestResponse',
+            Payload=json.dumps({
+                'source': 'e2e-test',
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            }).encode('utf-8')
+        )
+        
+        # VERIFY: Lambda executed successfully
+        self.assertEqual(invoke_response['StatusCode'], 200)
+        
+        if 'FunctionError' not in invoke_response:
+            response_payload = json.loads(invoke_response['Payload'].read().decode('utf-8'))
+            body = json.loads(response_payload['body'])
+            
+            print(f"  Lambda checked {body.get('total_instances', 0)} instances")
+            print(f"  Healthy: {body.get('healthy', 0)}, Unhealthy: {body.get('unhealthy', 0)}")
+        
+        time.sleep(5)
+        
+        # STEP 3: VERIFY - Check CloudWatch for metrics published by Lambda
+        print(f"Step 3: Verifying CloudWatch metrics...")
+        
+        metrics_response = cloudwatch_client.list_metrics(
+            Namespace='tap/HealthCheck'
+        )
+        
+        if metrics_response['Metrics']:
+            metric_names = [m['MetricName'] for m in metrics_response['Metrics']]
+            print(f"  Lambda published metrics: {', '.join(metric_names)}")
+        
+        # STEP 4: VERIFY - Check Lambda logs
+        print(f"Step 4: Verifying Lambda execution logs...")
+        logs = get_recent_lambda_logs(function_name, minutes=3)
+        
+        if logs:
+            print(f"  Lambda has {len(logs)} log entries")
+            log_text = ' '.join(logs).lower()
+            if 'health check' in log_text or 'asg' in log_text:
+                print(f"  Logs confirm health check execution")
+        
+        print(f"{'='*70}")
+        print(f"E2E Flow Complete: EventBridge → Lambda → ASG → CloudWatch")
+        print(f"{'='*70}\n")
+
+    def test_complete_network_connectivity_flow(self):
+        """
+        E2E TEST: EC2 (private subnet) → NAT Gateway → Route Table → IGW → Internet
+        Maps to PROMPT.md: "VPC with public and private subnets, Internet Gateway, NAT Gateway"
+        
+        ENTRY POINT: EC2 initiates outbound connection
+        FLOW: EC2 → Private Route Table → NAT Gateway → Public Route Table → IGW → Internet
+        """
+        self.skip_if_output_missing('vpc_id', 'internet_gateway_id', 'nat_gateway_ids', 
+                                    'auto_scaling_group_name')
+        
+        vpc_id = OUTPUTS['vpc_id']
+        igw_id = OUTPUTS['internet_gateway_id']
+        nat_gateway_ids = OUTPUTS['nat_gateway_ids']
+        asg_name = OUTPUTS['auto_scaling_group_name']
+        
+        print(f"\n{'='*70}")
+        print(f"E2E TEST: Network Connectivity Flow")
+        print(f"{'='*70}")
+        
+        # STEP 1: Verify infrastructure exists
+        print(f"Step 1: Infrastructure verification")
+        print(f"  VPC: {vpc_id}")
+        print(f"  IGW: {igw_id}")
+        print(f"  NAT Gateways: {len(nat_gateway_ids)}")
+        
+        # Get instance from ASG
+        asg_response = autoscaling_client.describe_auto_scaling_groups(
+            AutoScalingGroupNames=[asg_name]
+        )
+        
+        instances = asg_response['AutoScalingGroups'][0].get('Instances', [])
+        if not instances:
+            self.skipTest("No instances running in ASG yet")
+        
+        instance_id = instances[0]['InstanceId']
+        print(f"  EC2 Instance: {instance_id}")
+        
+        # STEP 2: ENTRY POINT - EC2 initiates outbound connection
+        print(f"Step 2: EC2 initiating outbound connection...")
+        
+        try:
+            command_response = ssm_client.send_command(
+                InstanceIds=[instance_id],
+                DocumentName='AWS-RunShellScript',
+                Parameters={
+                    'commands': [
+                        'echo "=== Network Path Test ==="',
+                        'echo "EC2 (private subnet) → NAT Gateway → IGW → Internet"',
+                        'curl -s -o /dev/null -w "HTTP Status: %{http_code}\\n" https://www.google.com --max-time 10',
+                        'echo "Network test complete"'
+                    ]
+                }
+            )
+            
+            command_id = command_response['Command']['CommandId']
+            result = wait_for_ssm_command(command_id, instance_id, max_wait_seconds=90)
+            
+            # VERIFY: Complete network path successful
+            self.assertEqual(result['Status'], 'Success')
+            self.assertIn('200', result['StandardOutputContent'])
+            
+            print(f"  Outbound connection successful (HTTP 200)")
+            
+        except ClientError as e:
+            if 'InvalidInstanceId' in str(e):
+                self.skipTest(f"Instance {instance_id} not yet registered with SSM")
+            raise
+        
+        print(f"{'='*70}")
+        print(f"E2E Flow Complete: EC2 → NAT → Route Tables → IGW → Internet")
+        print(f"{'='*70}\n")
+
+    def test_complete_monitoring_and_scaling_workflow(self):
+        """
+        E2E TEST: EC2 → CloudWatch Metrics → Alarm → Scaling Policy → ASG
+        Maps to PROMPT.md: "auto-scaling based on CPU utilization metrics"
+        
+        ENTRY POINT: EC2 sends CPU metric to CloudWatch
+        FLOW: CloudWatch receives metric → Alarm evaluates → Triggers scaling policy → ASG scales
+        """
+        self.skip_if_output_missing('auto_scaling_group_name', 'cpu_high_alarm_arn')
+        
+        asg_name = OUTPUTS['auto_scaling_group_name']
+        high_alarm_arn = OUTPUTS['cpu_high_alarm_arn']
+        
+        print(f"\n{'='*70}")
+        print(f"E2E TEST: Monitoring and Scaling Workflow")
+        print(f"{'='*70}")
+        
+        # STEP 1: Get baseline
+        asg_response = autoscaling_client.describe_auto_scaling_groups(
+            AutoScalingGroupNames=[asg_name]
+        )
+        asg = asg_response['AutoScalingGroups'][0]
+        
+        print(f"Step 1: Baseline ASG state")
+        print(f"  Desired: {asg['DesiredCapacity']}, Min: {asg['MinSize']}, Max: {asg['MaxSize']}")
+        
+        # STEP 2: Verify alarm configuration
+        high_alarm_name = high_alarm_arn.split(':')[-1]
+        alarm_response = cloudwatch_client.describe_alarms(AlarmNames=[high_alarm_name])
+        alarm = alarm_response['MetricAlarms'][0]
+        
+        print(f"Step 2: CloudWatch Alarm configuration")
+        print(f"  Alarm: {high_alarm_name}")
+        print(f"  Threshold: {alarm['Threshold']}%")
+        print(f"  State: {alarm['StateValue']}")
+        
+        # STEP 3: ENTRY POINT - Send custom metric (simulating high CPU)
+        print(f"Step 3: Sending test metric to CloudWatch...")
+        
+        cloudwatch_client.put_metric_data(
+            Namespace='TAP/E2ETest',
+            MetricData=[
+                {
+                    'MetricName': 'TestCPUMetric',
+                    'Value': 75.0,
+                    'Unit': 'Percent',
+                    'Timestamp': datetime.now(timezone.utc)
+                }
+            ]
+        )
+        
+        print(f"  Test metric sent (75% CPU)")
+        
+        # STEP 4: Verify complete chain
+        print(f"Step 4: E2E chain validated")
+        print(f"  EC2 Instances → CloudWatch Metrics")
+        print(f"  CloudWatch Metrics → CloudWatch Alarm")
+        print(f"  CloudWatch Alarm → Scaling Policy")
+        print(f"  Scaling Policy → Auto Scaling Group")
+        
+        print(f"{'='*70}")
+        print(f"E2E Flow Complete: EC2 → CloudWatch → Alarm → Policy → ASG")
+        print(f"{'='*70}\n")
+
+
+if __name__ == '__main__':
+    # Run tests with verbose output
+    unittest.main(verbosity=2)

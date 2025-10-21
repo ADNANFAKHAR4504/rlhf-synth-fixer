@@ -1,0 +1,15 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349104",
+  "team": "6",
+  "startedAt": "2025-10-21T09:10:33.401Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "In the given task, you are expected to use AWS Cloud Development Kit (CDK) with Python to define and provision AWS cloud infrastructure using familiar programming constructs. The challenge ensures a practical grasp of real-world AWS service integration needed for scalable, secure, and well-monitored cloud environments.",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "VPC, EC2, Auto Scaling Group, Lambda, CloudWatch (Alarms, Logs, Metrics), EventBridge, IAM (Roles, Policies, Instance Profiles), SSM (Systems Manager), NAT Gateway, Internet Gateway, Route Tables, Security Groups, Launch Template"
+}
