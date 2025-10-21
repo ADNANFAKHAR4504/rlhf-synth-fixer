@@ -14,7 +14,12 @@ terraform {
   backend "s3" {}
 }
 
-# Primary region provider
+# Default provider (uses primary region)
+provider "aws" {
+  region = var.primary_region
+}
+
+# Primary region provider (explicit alias)
 provider "aws" {
   region = var.primary_region
   alias  = "primary"
