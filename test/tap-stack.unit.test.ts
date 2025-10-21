@@ -19,7 +19,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'Regulatory Reporting Platform (Single-Stack JSON) - Orchestrates ~2000 daily reports with validation, audit, and 10-year S3 retention. Uses Aurora Serverless V2 and Secrets Manager.'
+        'Regulatory Reporting Platform - Orchestrates ~2000 daily reports with validation, audit, and 10-year S3 retention. Uses Aurora Serverless V2 and Secrets Manager.'
       );
     });
   });
@@ -390,10 +390,14 @@ describe('TapStack CloudFormation Template', () => {
         const resource = template.Resources.AuditTrailBucketPolicy;
         expect(resource).toBeDefined();
         expect(resource.Type).toBe('AWS::S3::BucketPolicy');
-        const statement1 = resource.Properties.PolicyDocument.Statement[0];
+        const policy = resource.Properties.PolicyDocument;
+        expect(policy.Statement).toHaveLength(3);
+        const statement1 = policy.Statement[0];
         expect(statement1.Action).toBe('s3:GetBucketAcl');
-        const statement2 = resource.Properties.PolicyDocument.Statement[1];
-        expect(statement2.Action).toBe('s3:PutObject');
+        const statement2 = policy.Statement[1];
+        expect(statement2.Action).toBe('s3:ListBucket');
+        const statement3 = policy.Statement[2];
+        expect(statement3.Action).toBe('s3:PutObject');
       });
     });
 
