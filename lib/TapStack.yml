@@ -23,6 +23,9 @@ Parameters:
   ACMCertificateArn:
     Type: String
     Description: 'ACM certificate ARN for the ALB HTTPS listener'
+    Default: ''
+    AllowedPattern: '^$|arn:aws:acm:[a-z0-9-]+:\d{12}:certificate\/[A-Za-z0-9-]+'
+    ConstraintDescription: 'Provide a valid ACM certificate ARN or leave empty'
 
 Mappings: 
   SubnetConfig:
@@ -40,6 +43,10 @@ Mappings:
       CIDR: '10.0.20.0/24'
     DatabaseSubnet2:
       CIDR: '10.0.21.0/24'
+
+Conditions:
+  HasACMCertificateArn: !Not [ !Equals [ !Ref ACMCertificateArn, '' ] ]
+  NoACMCertificateArn: !Equals [ !Ref ACMCertificateArn, '' ]
 
 Resources:
   # Secrets Manager Secret for RDS password
@@ -688,12 +695,40 @@ Resources:
   # HTTPS Listener for ALB
   NovaALBHTTPSListener:
     Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Condition: HasACMCertificateArn
     Properties:
       LoadBalancerArn: !Ref NovaApplicationLoadBalancer
       Port: 443
       Protocol: HTTPS
       Certificates:
         - CertificateArn: !Ref ACMCertificateArn
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref NovaALBTargetGroup
+
+  # HTTP listener that redirects to HTTPS when ACM cert is provided
+  NovaALBHTTPRedirectListener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Condition: HasACMCertificateArn
+    Properties:
+      LoadBalancerArn: !Ref NovaApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: redirect
+          RedirectConfig:
+            Protocol: HTTPS
+            Port: '443'
+            StatusCode: HTTP_301
+
+  # HTTP listener that forwards to target group when ACM cert isn't provided
+  NovaALBHTTPForwardListener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Condition: NoACMCertificateArn
+    Properties:
+      LoadBalancerArn: !Ref NovaApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref NovaALBTargetGroup
