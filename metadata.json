@@ -1,6 +1,6 @@
 {
-  "platform": "CDKTF",
-  "language": "py",
+  "platform": "cdktf",
+  "language": "python",
   "complexity": "medium",
   "team": "synth",
   "turn_type": "single",
