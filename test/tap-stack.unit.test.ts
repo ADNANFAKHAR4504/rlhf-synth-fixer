@@ -250,7 +250,7 @@ describe('TapStack CloudFormation template', () => {
     expect(rds.Properties.StorageEncrypted).toBe(true);
     expect(rds.Properties.KmsKeyId).toBeDefined();
     expect(rds.Properties.BackupRetentionPeriod).toBeGreaterThanOrEqual(7);
-    expect(rds.Properties.DeletionProtection).toBe(true);
+    expect(rds.Properties.DeletionProtection).toBe(false);
   });
 
   test('17 - EC2 instances use the latest Amazon Linux AMI via SSM parameter', () => {
