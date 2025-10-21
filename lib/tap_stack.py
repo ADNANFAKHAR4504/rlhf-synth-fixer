@@ -45,15 +45,27 @@ class TapStack(TerraformStack):
         state_bucket_region = kwargs.get('state_bucket_region', 'us-east-1')
         state_bucket = kwargs.get('state_bucket', 'iac-rlhf-tf-states')
         default_tags = kwargs.get('default_tags', {})
+        
         # Allow callers (or CI) to disable creating an Internet-facing NAT + EIP
         # by passing `create_nat_gateway=False`. Default behavior: disable for
         # pull-request style environments (environment_suffix matching 'pr' + digits),
         # otherwise enabled.
         import re
+        import time
         is_pr_environment = re.match(r'^pr\d+$', str(environment_suffix).lower())
         create_nat_gateway = kwargs.get(
             'create_nat_gateway', False if is_pr_environment else True
         )
+        
+        # Add unique suffix for PR environments to avoid resource conflicts in CI
+        # Use timestamp-based suffix for PR environments, nothing for others
+        unique_suffix = ""
+        if is_pr_environment:
+            # Add last 6 digits of current timestamp for uniqueness
+            unique_suffix = f"-{int(time.time()) % 1000000}"
+        
+        # Create effective environment name with uniqueness for CI
+        effective_env = f"{environment_suffix}{unique_suffix}"
 
         # Configure AWS Provider
         AwsProvider(
@@ -87,7 +99,7 @@ class TapStack(TerraformStack):
             enable_dns_hostnames=True,
             enable_dns_support=True,
             tags={
-                "Name": f"lms-vpc-{environment_suffix}"
+                "Name": f"lms-vpc-{effective_env}"
             }
         )
 
@@ -97,7 +109,7 @@ class TapStack(TerraformStack):
             "lms_igw",
             vpc_id=vpc.id,
             tags={
-                "Name": f"lms-igw-{environment_suffix}"
+                "Name": f"lms-igw-{effective_env}"
             }
         )
 
@@ -110,7 +122,7 @@ class TapStack(TerraformStack):
             availability_zone=Fn.element(azs.names, 0),
             map_public_ip_on_launch=True,
             tags={
-                "Name": f"lms-public-subnet-1-{environment_suffix}"
+                "Name": f"lms-public-subnet-1-{effective_env}"
             }
         )
 
@@ -122,7 +134,7 @@ class TapStack(TerraformStack):
             availability_zone=Fn.element(azs.names, 1),
             map_public_ip_on_launch=True,
             tags={
-                "Name": f"lms-public-subnet-2-{environment_suffix}"
+                "Name": f"lms-public-subnet-2-{effective_env}"
             }
         )
 
@@ -134,7 +146,7 @@ class TapStack(TerraformStack):
             cidr_block="10.0.11.0/24",
             availability_zone=Fn.element(azs.names, 0),
             tags={
-                "Name": f"lms-private-subnet-1-{environment_suffix}"
+                "Name": f"lms-private-subnet-1-{effective_env}"
             }
         )
 
@@ -145,7 +157,7 @@ class TapStack(TerraformStack):
             cidr_block="10.0.12.0/24",
             availability_zone=Fn.element(azs.names, 1),
             tags={
-                "Name": f"lms-private-subnet-2-{environment_suffix}"
+                "Name": f"lms-private-subnet-2-{effective_env}"
             }
         )
 
@@ -158,7 +170,7 @@ class TapStack(TerraformStack):
                 "nat_eip",
                 domain="vpc",
                 tags={
-                    "Name": f"lms-nat-eip-{environment_suffix}"
+                    "Name": f"lms-nat-eip-{effective_env}"
                 }
             )
 
@@ -169,7 +181,7 @@ class TapStack(TerraformStack):
                 allocation_id=eip_nat.id,
                 subnet_id=public_subnet_1.id,
                 tags={
-                    "Name": f"lms-nat-{environment_suffix}"
+                    "Name": f"lms-nat-{effective_env}"
                 }
             )
 
@@ -185,7 +197,7 @@ class TapStack(TerraformStack):
                 )
             ],
             tags={
-                "Name": f"lms-public-rt-{environment_suffix}"
+                "Name": f"lms-public-rt-{effective_env}"
             }
         )
 
@@ -218,7 +230,7 @@ class TapStack(TerraformStack):
                     )
                 ],
                 tags={
-                    "Name": f"lms-private-rt-{environment_suffix}"
+                    "Name": f"lms-private-rt-{effective_env}"
                 }
             )
         else:
@@ -228,7 +240,7 @@ class TapStack(TerraformStack):
                 "private_rt",
                 vpc_id=vpc.id,
                 tags={
-                    "Name": f"lms-private-rt-{environment_suffix}"
+                    "Name": f"lms-private-rt-{effective_env}"
                 }
             )
 
@@ -251,7 +263,7 @@ class TapStack(TerraformStack):
         alb_sg = SecurityGroup(
             self,
             "alb_sg",
-            name=f"lms-alb-sg-{environment_suffix}",
+            name=f"lms-alb-sg-{effective_env}",
             description="Security group for LMS Application Load Balancer",
             vpc_id=vpc.id,
             ingress=[
@@ -280,7 +292,7 @@ class TapStack(TerraformStack):
                 )
             ],
             tags={
-                "Name": f"lms-alb-sg-{environment_suffix}"
+                "Name": f"lms-alb-sg-{effective_env}"
             }
         )
 
@@ -288,7 +300,7 @@ class TapStack(TerraformStack):
         ecs_sg = SecurityGroup(
             self,
             "ecs_sg",
-            name=f"lms-ecs-sg-{environment_suffix}",
+            name=f"lms-ecs-sg-{effective_env}",
             description="Security group for LMS ECS tasks",
             vpc_id=vpc.id,
             ingress=[
@@ -310,7 +322,7 @@ class TapStack(TerraformStack):
                 )
             ],
             tags={
-                "Name": f"lms-ecs-sg-{environment_suffix}"
+                "Name": f"lms-ecs-sg-{effective_env}"
             }
         )
 
@@ -318,7 +330,7 @@ class TapStack(TerraformStack):
         redis_sg = SecurityGroup(
             self,
             "redis_sg",
-            name=f"lms-redis-sg-{environment_suffix}",
+            name=f"lms-redis-sg-{effective_env}",
             description="Security group for LMS Redis cluster",
             vpc_id=vpc.id,
             ingress=[
@@ -340,7 +352,7 @@ class TapStack(TerraformStack):
                 )
             ],
             tags={
-                "Name": f"lms-redis-sg-{environment_suffix}"
+                "Name": f"lms-redis-sg-{effective_env}"
             }
         )
 
@@ -348,11 +360,11 @@ class TapStack(TerraformStack):
         db_secret = SecretsmanagerSecret(
             self,
             "db_credentials",
-            name=f"lms-db-credentials-{environment_suffix}",
+            name=f"lms-db-credentials-{effective_env}",
             description="Database credentials for LMS application",
             recovery_window_in_days=0,
             tags={
-                "Name": f"lms-db-credentials-{environment_suffix}"
+                "Name": f"lms-db-credentials-{effective_env}"
             }
         )
 
@@ -382,11 +394,11 @@ class TapStack(TerraformStack):
             self,
             "lms_redis",
             engine="redis",
-            name=f"lms-redis-{environment_suffix}",
+            name=f"lms-redis-{effective_env}",
             security_group_ids=[redis_sg.id],
             subnet_ids=[private_subnet_1.id, private_subnet_2.id],
             tags={
-                "Name": f"lms-redis-{environment_suffix}"
+                "Name": f"lms-redis-{effective_env}"
             }
         )
 
@@ -394,11 +406,11 @@ class TapStack(TerraformStack):
         redis_secret = SecretsmanagerSecret(
             self,
             "redis_connection",
-            name=f"lms-redis-connection-{environment_suffix}",
+            name=f"lms-redis-connection-{effective_env}",
             description="Redis connection details for LMS application",
             recovery_window_in_days=0,
             tags={
-                "Name": f"lms-redis-connection-{environment_suffix}"
+                "Name": f"lms-redis-connection-{effective_env}"
             }
         )
 
@@ -420,10 +432,10 @@ class TapStack(TerraformStack):
         log_group = CloudwatchLogGroup(
             self,
             "ecs_log_group",
-            name=f"/ecs/lms-{environment_suffix}",
+            name=f"/ecs/lms-{effective_env}",
             retention_in_days=7,
             tags={
-                "Name": f"lms-ecs-logs-{environment_suffix}"
+                "Name": f"lms-ecs-logs-{effective_env}"
             }
         )
 
@@ -431,7 +443,7 @@ class TapStack(TerraformStack):
         ecs_task_execution_role = IamRole(
             self,
             "ecs_task_execution_role",
-            name=f"lms-ecs-task-execution-role-{environment_suffix}",
+            name=f"lms-ecs-task-execution-role-{effective_env}",
             assume_role_policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [
@@ -445,7 +457,7 @@ class TapStack(TerraformStack):
                 ]
             }),
             tags={
-                "Name": f"lms-ecs-task-execution-role-{environment_suffix}"
+                "Name": f"lms-ecs-task-execution-role-{effective_env}"
             }
         )
 
@@ -461,7 +473,7 @@ class TapStack(TerraformStack):
         ecs_task_role = IamRole(
             self,
             "ecs_task_role",
-            name=f"lms-ecs-task-role-{environment_suffix}",
+            name=f"lms-ecs-task-role-{effective_env}",
             assume_role_policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [
@@ -495,7 +507,7 @@ class TapStack(TerraformStack):
                 }
             ],
             tags={
-                "Name": f"lms-ecs-task-role-{environment_suffix}"
+                "Name": f"lms-ecs-task-role-{effective_env}"
             }
         )
 
@@ -503,9 +515,9 @@ class TapStack(TerraformStack):
         ecs_cluster = EcsCluster(
             self,
             "lms_cluster",
-            name=f"lms-cluster-{environment_suffix}",
+            name=f"lms-cluster-{effective_env}",
             tags={
-                "Name": f"lms-cluster-{environment_suffix}"
+                "Name": f"lms-cluster-{effective_env}"
             }
         )
 
@@ -513,7 +525,7 @@ class TapStack(TerraformStack):
         task_definition = EcsTaskDefinition(
             self,
             "lms_task",
-            family=f"lms-task-{environment_suffix}",
+            family=f"lms-task-{effective_env}",
             network_mode="awsvpc",
             requires_compatibilities=["FARGATE"],
             cpu="256",
@@ -552,7 +564,7 @@ class TapStack(TerraformStack):
                 }
             ]),
             tags={
-                "Name": f"lms-task-{environment_suffix}"
+                "Name": f"lms-task-{effective_env}"
             }
         )
 
@@ -560,14 +572,14 @@ class TapStack(TerraformStack):
         alb = Lb(
             self,
             "lms_alb",
-            name=f"lms-alb-{environment_suffix}",
+            name=f"lms-alb-{effective_env}",
             internal=False,
             load_balancer_type="application",
             security_groups=[alb_sg.id],
             subnets=[public_subnet_1.id, public_subnet_2.id],
             enable_deletion_protection=False,
             tags={
-                "Name": f"lms-alb-{environment_suffix}"
+                "Name": f"lms-alb-{effective_env}"
             }
         )
 
@@ -575,7 +587,7 @@ class TapStack(TerraformStack):
         target_group = LbTargetGroup(
             self,
             "lms_tg",
-            name=f"lms-tg-{environment_suffix}",
+            name=f"lms-tg-{effective_env}",
             port=8080,
             protocol="HTTP",
             target_type="ip",
@@ -592,7 +604,7 @@ class TapStack(TerraformStack):
                 "unhealthy_threshold": 2
             },
             tags={
-                "Name": f"lms-tg-{environment_suffix}"
+                "Name": f"lms-tg-{effective_env}"
             }
         )
 
@@ -615,7 +627,7 @@ class TapStack(TerraformStack):
         EcsService(
             self,
             "lms_service",
-            name=f"lms-service-{environment_suffix}",
+            name=f"lms-service-{effective_env}",
             cluster=ecs_cluster.id,
             task_definition=task_definition.arn,
             desired_count=2,
@@ -634,7 +646,7 @@ class TapStack(TerraformStack):
             ],
             depends_on=[target_group],
             tags={
-                "Name": f"lms-service-{environment_suffix}"
+                "Name": f"lms-service-{effective_env}"
             }
         )
 
@@ -663,7 +675,7 @@ class TapStack(TerraformStack):
         TerraformOutput(
             self,
             "ecs_service_name",
-            value=f"lms-service-{environment_suffix}",
+            value=f"lms-service-{effective_env}",
             description="ECS Service name"
         )
 

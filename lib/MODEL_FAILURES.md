@@ -516,3 +516,33 @@ The model-generated code had several critical issues that prevented successful s
 5. **Code quality**: Minor linting issues with unused imports
 
 All issues were resolved, and the infrastructure now successfully synthesizes and deploys to AWS in the ca-central-1 region.
+
+### 14. Resource name conflicts in CI environments
+
+**Symptom (CI failure)**:
+```
+Error: creating CloudWatch Logs Log Group (/ecs/lms-pr4892): ResourceAlreadyExistsException: The specified log group already exists
+Error: creating ElastiCache Serverless Cache: ServerlessCacheAlreadyExistsFault: Serverless Cache already exists  
+Error: creating IAM Role (lms-ecs-task-execution-role-pr4892): EntityAlreadyExists: Role with name lms-ecs-task-execution-role-pr4892 already exists
+Error: ELBv2 Load Balancer (lms-alb-pr4892) already exists
+Error: creating Secrets Manager Secret (lms-db-credentials-pr4892): ResourceExistsException: The operation failed because the secret lms-db-credentials-pr4892 already exists
+```
+
+**Root cause analysis**:
+- CI environments often don't properly clean up resources between runs, leading to
+  name conflicts when the same PR number is reused or when resources persist
+  from previous failed deployments.
+- Resource names were deterministic based only on environment suffix (e.g., `pr4892`),
+  causing conflicts when multiple deployments use the same PR number.
+
+**Remediation applied**:
+- Added timestamp-based unique suffix for PR environments: `pr4892` becomes `pr4892-123456`
+- Used regex pattern `^pr\d+$` to detect PR environments and append 6-digit timestamp
+- Only affects PR environments - production, staging, and dev environments remain unchanged  
+- Example: `lms-cluster-pr4892` becomes `lms-cluster-pr4892-123456`
+
+**Benefits of this approach**:
+1. Avoids resource conflicts in CI without affecting production deployments
+2. Allows multiple concurrent PR deployments without interference  
+3. Easy to identify and clean up resources by timestamp
+4. Maintains readable resource names with clear PR association
