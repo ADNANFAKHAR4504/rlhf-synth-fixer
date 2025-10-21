@@ -22,7 +22,8 @@ import {
   ListBucketsCommand,
   GetObjectLockConfigurationCommand,
   GetBucketVersioningCommand,
-  ListObjectVersionsCommand
+  ListObjectVersionsCommand,
+  GetBucketLocationCommand
 } from '@aws-sdk/client-s3';
 import { 
   RDSClient, 
@@ -336,6 +337,13 @@ describe('TapStack Integration Tests - End-to-End Workflow Execution', () => {
   describe('Patient Data Upload Workflow', () => {
     test('S3 Upload → KMS Encryption → CloudTrail Audit → SNS Notification workflow', async () => {
       const patientDocumentsBucket = getOutput('PatientDocumentsBucketName', 'nova-prod-patient-documents-bucket');
+      // Validate the bucket exists and is in the current region/account
+      try {
+        const loc = await s3Client.send(new GetBucketLocationCommand({ Bucket: patientDocumentsBucket }));
+        console.log(`S3 PatientDocuments bucket location: ${loc.LocationConstraint || 'us-east-1'}`);
+      } catch (e) {
+        throw new Error(`PatientDocuments bucket not accessible: ${patientDocumentsBucket}. ${e}`);
+      }
       const kmsKeyId = getOutput('KMSKeyId', 'nova-prod-kms-key-id');
 
       // Generate encryption key for patient data
@@ -798,6 +806,12 @@ mysql -h ${endpoint} -u ${credentials.username} -p'${credentials.password}' -e "
   describe('Data Backup and Recovery Workflow', () => {
     test('S3 Data → Versioning → Lifecycle → Recovery → Validation workflow', async () => {
       const appDataBucket = getOutput('AppDataBucket', 'nova-prod-app-data-bucket');
+      try {
+        const loc = await s3Client.send(new GetBucketLocationCommand({ Bucket: appDataBucket }));
+        console.log(`S3 AppData bucket location: ${loc.LocationConstraint || 'us-east-1'}`);
+      } catch (e) {
+        throw new Error(`AppData bucket not accessible: ${appDataBucket}. ${e}`);
+      }
 
       // Upload initial data version
       console.log('Uploading initial data version...');
