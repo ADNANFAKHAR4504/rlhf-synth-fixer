@@ -1,0 +1,11 @@
+{
+  "language": "python",
+  "app": "python tap.py",
+  "projectId": "tap-cdktf-project",
+  "sendCrashReports": "false",
+  "terraformProviders": [
+    "aws@~> 6.0"
+  ],
+  "terraformModules": [],
+  "context": {}
+}

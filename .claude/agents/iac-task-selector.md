@@ -38,29 +38,48 @@ If `tasks.csv` is present:
 ⚠️ **CRITICAL FOR PARALLEL EXECUTION**: 
 - **ALWAYS use `select-and-update`** - This is the ONLY correct way to select tasks
 - **NEVER use separate `select` and `update` calls** - This will cause race conditions
-- **NEVER read tasks.csv directly** - Always go through task-manager.sh
+- **NEVER read tasks.csv directly** using `cat`, `grep`, `awk`, or any file read tool
+- **NEVER use find-next-task.py** - This Python script lacks locking and causes race conditions
+- **NEVER use jq to parse tasks.csv** - Always go through task-manager.sh
 - The `select-and-update` command uses file locking with 120-second timeout
 - Multiple agents can run simultaneously without selecting duplicate tasks
+- The lock uses atomic `mkdir` operation which is safe across all processes
 
 1. **Select and update task atomically** (REQUIRED - thread-safe for parallel execution):
    ```bash
    # Select next pending task and mark as in_progress atomically
    # This is thread-safe and can be run from multiple agents simultaneously
+   echo "🔍 Selecting next available task..."
    TASK_JSON=$(./.claude/scripts/task-manager.sh select-and-update)
    
-   # Extract task_id and other fields
-   TASK_ID=$(echo "$TASK_JSON" | jq -r '.task_id')
-   SUBTASK=$(echo "$TASK_JSON" | jq -r '.subtask')
-   PLATFORM=$(echo "$TASK_JSON" | jq -r '.platform')
-   LANGUAGE=$(echo "$TASK_JSON" | jq -r '.language')
-   DIFFICULTY=$(echo "$TASK_JSON" | jq -r '.difficulty')
+   # Verify selection was successful
+   if [ $? -ne 0 ] || [ -z "$TASK_JSON" ]; then
+       echo "❌ ERROR: Task selection failed"
+       exit 1
+   fi
    
-   echo "✅ Selected task $TASK_ID: $SUBTASK"
+   # Extract task_id and other fields
+   TASK_ID=$(echo "$TASK_JSON" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
+   SUBTASK=$(echo "$TASK_JSON" | grep -o '"subtask":"[^"]*"' | cut -d'"' -f4)
+   PLATFORM=$(echo "$TASK_JSON" | grep -o '"platform":"[^"]*"' | cut -d'"' -f4)
+   LANGUAGE=$(echo "$TASK_JSON" | grep -o '"language":"[^"]*"' | cut -d'"' -f4)
+   DIFFICULTY=$(echo "$TASK_JSON" | grep -o '"difficulty":"[^"]*"' | cut -d'"' -f4)
+   
+   echo "✅ Selected and locked task: $TASK_ID ($PLATFORM-$LANGUAGE, $DIFFICULTY)"
+   echo "📋 Subtask: $SUBTASK"
+   echo "🔒 Task status updated to 'in_progress' - other agents will skip this task"
+   
+   # Verify task was actually marked as in_progress in CSV
+   VERIFY_STATUS=$(grep "^$TASK_ID," tasks.csv | cut -d',' -f2)
+   if [ "$VERIFY_STATUS" != "in_progress" ]; then
+       echo "⚠️ WARNING: Task $TASK_ID status verification failed! Current status: '$VERIFY_STATUS'"
+       echo "⚠️ This may indicate a race condition or CSV corruption"
+   fi
    ```
 
 2. **Get full task details** (if you need all fields):
    ```bash
-   # Get complete task data including background, problem, constraints, etc.
+   # Get complete task data including all available fields
    TASK_DETAILS=$(./.claude/scripts/task-manager.sh get "$TASK_ID")
    
    # Save to temporary file for create-task-files.sh
@@ -109,3 +128,50 @@ If `tasks.csv` is not present:
 - If any step fails, report specific BLOCKED status with resolution steps
 - Maintain clean worktree state - cleanup on failures
 - Provide clear handoff status to coordinator for next agent
+
+## Debugging Parallel Execution Issues
+
+If you suspect duplicate task selection in parallel execution:
+
+1. **Check for stale locks**:
+   ```bash
+   # Check if lock directory exists and is stale
+   ls -la tasks.csv.lock 2>/dev/null && echo "Lock exists!" || echo "No lock"
+   
+   # If lock is stale (older than 5 minutes), remove it
+   find tasks.csv.lock -type d -mmin +5 -exec rm -rf {} \; 2>/dev/null
+   ```
+
+2. **Verify task status distribution**:
+   ```bash
+   # Check how many tasks are in each status
+   ./.claude/scripts/task-manager.sh status
+   ```
+
+3. **Check which tasks are currently in_progress**:
+   ```bash
+   # List all in_progress tasks
+   awk -F',' 'NR>1 && tolower($2) == "in_progress" {print $1, $5}' tasks.csv
+   ```
+
+4. **Test lock mechanism**:
+   ```bash
+   # Run 3 agents simultaneously and verify different tasks selected
+   echo "Testing parallel selection..."
+   (./.claude/scripts/task-manager.sh select-and-update | grep task_id &)
+   (./.claude/scripts/task-manager.sh select-and-update | grep task_id &)
+   (./.claude/scripts/task-manager.sh select-and-update | grep task_id &)
+   wait
+   echo "Check above - should show 3 different task IDs"
+   ```
+
+5. **Verify this agent is NOT using deprecated methods**:
+   - Confirm you executed `select-and-update` (not just `select`)
+   - Confirm you did NOT read tasks.csv directly
+   - Confirm you did NOT call find-next-task.py
+
+**If duplicate selection still occurs**, capture these details and report:
+- Which task ID was selected by multiple agents
+- Timestamps of when each agent selected it
+- Whether the verification step (line 70-74) showed any warnings
+- Contents of tasks.csv.lock directory during the duplicate selection

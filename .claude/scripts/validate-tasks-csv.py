@@ -46,7 +46,7 @@ def validate_csv(csv_path):
             
             # Check for required fieldnames
             required_fields = ['task_id', 'status', 'platform', 'difficulty', 'subtask', 
-                             'background', 'problem', 'language', 'environment', 
+                             'problem', 'language', 'environment', 
                              'constraints', 'subject_labels']
             
             if not fieldnames:
