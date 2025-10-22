@@ -1,19 +1,14 @@
 {
   "platform": "pulumi",
-  "language": "python",
+  "language": "py",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "5962726542",
-  "task_id": "5962726542",
   "team": "synth",
-  "region": "ca-central-1",
-  "environment_suffix": "synth5962726542",
   "startedAt": "2025-10-21T13:25:14.641150+05:30",
   "subtask": "Failure Recovery and High Availability",
-  "background": "GlobeCart, a rapidly growing e-commerce platform, needs to handle increasing transaction loads while maintaining PCI DSS compliance. They require a robust database infrastructure that can scale horizontally and provide fast access to product catalogs and user sessions across multiple availability zones.",
   "subject_labels": [
-    "Failure Recovery Automation",
-    "Security Configuration as Code"
+    "Failure Recovery Automation"
   ],
   "aws_services": [
     "VPC",
@@ -28,6 +23,5 @@
     "Application Load Balancer",
     "NAT Gateway",
     "Internet Gateway"
-  ],
-  "training_quality": 8
+  ]
 }
