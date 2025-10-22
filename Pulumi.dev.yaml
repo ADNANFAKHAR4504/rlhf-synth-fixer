@@ -1,5 +1,0 @@
-encryptionsalt: v1:Ngsi0MB/Uzc=:v1:3AJ5/TpdqvJLnMI1:gyr7behMHbUuowSYnMdE6mtrVq+9nQ==
-config:
-  aws:region: us-east-1
-  TapStack:po_id: "5596902889"
-  TapStack:environmentSuffix: synth5596902889
