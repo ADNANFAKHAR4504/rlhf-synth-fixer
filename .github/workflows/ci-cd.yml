@@ -541,109 +541,90 @@ jobs:
           name: updated-metadata
           path: metadata.json
           if-no-files-found: warn
+
   claude-well-architected-qa:
-    name: "Claude Well-Architected QA Review"
-    runs-on: ubuntu-24.04
-    needs: [claude-code-action]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
-    permissions:
-      contents: write
-      pull-requests: write
-    steps:
-      - name: Checkout PR branch
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: refs/pull/${{ github.event.pull_request.number }}/head
+      name: "Claude Well-Architected QA Review"
+      runs-on: ubuntu-24.04
+      needs: [detect-metadata, build]
+      if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+      permissions:
+        contents: write
+        pull-requests: write
+        actions: read
+      steps:
+        - name: Checkout PR branch
+          uses: actions/checkout@v4
+          with:
+            fetch-depth: 0
+            ref: refs/pull/${{ github.event.pull_request.number }}/head
 
-      - name: Verify input files
-        run: |
-          REQUIRED_FILES=("lib/IDEAL_RESPONSE.md" "lib/MODEL_RESPONSE.md" "lib/MODEL_FAILURES.md")
-          for file in "${REQUIRED_FILES[@]}"; do
-            if [ ! -f "$file" ]; then
-              echo "❌ Missing $file"
-              exit 1
-            fi
-          done
-          echo "✅ All required input files exist."
+        - name: Verify input files
+          run: |
+            REQUIRED_FILES=("lib/IDEAL_RESPONSE.md" "lib/MODEL_RESPONSE.md" "lib/MODEL_FAILURES.md")
+            for file in "${REQUIRED_FILES[@]}"; do
+              if [ ! -f "$file" ]; then
+                echo "❌ Missing $file"
+                exit 1
+              fi
+            done
+            echo "✅ All required input files exist."
 
-      - name: Install dependencies
-        run: |
-          python3 -m venv venv
-          source venv/bin/activate
-          pip install anthropic
+        - name: Run Claude Well-Architected QA Action
+          uses: anthropics/claude-code-action@beta
+          with:
+            anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+            github_token: ${{ secrets.GITHUB_TOKEN }}
+            allowed_tools: 'Read,Write,Edit,Glob'
+            trigger_phrase: ''
+            custom_instructions: |
+              You are performing an **AWS Well-Architected QA Review** of Infrastructure-as-Code (IaC) files.
 
-      - name: Generate QA_REPORT.md using Claude
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: |
-          python <<'EOF'
-          import os, anthropic
+              Your task:
+              1. Read the following files in the PR:
+                - lib/IDEAL_RESPONSE.md
+                - lib/MODEL_RESPONSE.md
+                - lib/MODEL_FAILURES.md
 
-          client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+              2. Compare the MODEL_RESPONSE.md with the IDEAL_RESPONSE.md and analyze failures from MODEL_FAILURES.md.
 
-          def read(path):
-              with open(path, "r", encoding="utf-8") as f:
-                  return f.read()
+              3. Evaluate the implementation using the **AWS Well-Architected Framework**, which has six pillars:
+                - Operational Excellence
+                - Security
+                - Reliability
+                - Performance Efficiency
+                - Cost Optimization
+                - Sustainability
 
-          rubric = """
-          Evaluate MODEL_RESPONSE.md against IDEAL_RESPONSE.md and MODEL_FAILURES.md using the AWS Well-Architected Framework pillars:
-          - Operational Excellence
-          - Security
-          - Reliability
-          - Performance Efficiency
-          - Cost Optimization
-          - Sustainability
+              4. Generate a Markdown file named **lib/QA_REPORT.md** with the following structure:
 
-          Produce a detailed report (QA_REPORT.md) with:
-          1. Executive Summary
-          2. Pillar-Wise Analysis
-          3. Consolidated Summary Table
-          4. Root Cause Insights
-          5. Final Recommendations
-          Output in markdown.
-          """
+                # QA Report: AWS Well-Architected Evaluation
+                ## 1. Executive Summary
+                - Summarize what the IaC aims to build.
+                - Summarize how compliant it is overall with AWS Well-Architected principles.
 
-          data = f"""
-          IDEAL_RESPONSE.md:
-          {read("lib/IDEAL_RESPONSE.md")}
+                ## 2. Pillar-Wise Analysis
+                For each pillar, include:
+                - Overview
+                - Findings (with examples from the files)
+                - Comparison with IDEAL_RESPONSE.md
+                - Score (0–10)
+                - Recommendations
 
-          MODEL_RESPONSE.md:
-          {read("lib/MODEL_RESPONSE.md")}
+                ## 3. Consolidated Summary Table
+                | AWS Pillar | Score (0–10) | Key Issues Found | Recommendations |
+                |-------------|--------------|------------------|------------------|
 
-          MODEL_FAILURES.md:
-          {read("lib/MODEL_FAILURES.md")}
-          """
+                ## 4. Root Cause Insights
+                - Link failures in MODEL_FAILURES.md to the specific pillars affected.
 
-          print("🚀 Running Claude Well-Architected Evaluation...")
-          response = client.messages.create(
-              model="claude-3-5-sonnet-latest",
-              max_tokens=4000,
-              temperature=0,
-              messages=[{"role": "user", "content": data + rubric}],
-          )
+                ## 5. Final Recommendations
+                - Steps to bring MODEL_RESPONSE.md closer to IDEAL_RESPONSE.md.
 
-          report = response.content[0].text
+              5. Save the QA report as **lib/QA_REPORT.md** in the repository and commit it back to the same PR branch.
+              
+              Do not post a comment — just write the file in Markdown format.
 
-          with open("lib/QA_REPORT.md", "w", encoding="utf-8") as f:
-              f.write(report)
-
-          print("✅ QA_REPORT.md created in lib/ folder.")
-          EOF
-
-      - name: Commit QA_REPORT.md to PR branch
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          
-          if git diff --quiet lib/QA_REPORT.md; then
-            echo "No changes to commit."
-          else
-            git add lib/QA_REPORT.md
-            git commit -m "chore: add QA_REPORT.md (Claude Well-Architected QA Review)" || echo "No diff to commit."
-            git push origin HEAD:${{ github.head_ref }}
-            echo "✅ QA_REPORT.md committed to PR branch."
-          fi
+              Be precise, technical, and actionable. Avoid generic commentary.
 
   cleanup:
     name: Cleanup (Destroy Resources)
