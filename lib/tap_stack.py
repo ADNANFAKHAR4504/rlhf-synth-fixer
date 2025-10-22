@@ -1258,7 +1258,12 @@ class TapStack(TerraformStack):
         )
 
         # CloudTrail bucket policy for CloudTrail service
+        # Get current account ID for CloudTrail policy
+        from cdktf_cdktf_provider_aws.data_aws_caller_identity import \
+            DataAwsCallerIdentity
         from cdktf_cdktf_provider_aws.s3_bucket_policy import S3BucketPolicy
+        
+        current_account = DataAwsCallerIdentity(self, "current_account")
         
         cloudtrail_bucket_policy = S3BucketPolicy(
             self,
@@ -1268,21 +1273,29 @@ class TapStack(TerraformStack):
                 "Version": "2012-10-17",
                 "Statement": [
                     {
+                        "Sid": "AWSCloudTrailAclCheck",
                         "Effect": "Allow",
                         "Principal": {"Service": "cloudtrail.amazonaws.com"},
-                        "Action": "s3:PutObject",
-                        "Resource": f"{cloudtrail_bucket.arn}/*",
+                        "Action": "s3:GetBucketAcl",
+                        "Resource": f"arn:aws:s3:::{cloudtrail_bucket.bucket}",
                         "Condition": {
                             "StringEquals": {
-                                "s3:x-amz-acl": "bucket-owner-full-control"
+                                "AWS:SourceArn": f"arn:aws:cloudtrail:{aws_region}:{current_account.account_id}:trail/assessment-trail-{environment_suffix}"
                             }
                         }
                     },
                     {
+                        "Sid": "AWSCloudTrailWrite",
                         "Effect": "Allow",
                         "Principal": {"Service": "cloudtrail.amazonaws.com"},
-                        "Action": "s3:GetBucketAcl",
-                        "Resource": cloudtrail_bucket.arn
+                        "Action": "s3:PutObject",
+                        "Resource": f"arn:aws:s3:::{cloudtrail_bucket.bucket}/*",
+                        "Condition": {
+                            "StringEquals": {
+                                "s3:x-amz-acl": "bucket-owner-full-control",
+                                "AWS:SourceArn": f"arn:aws:cloudtrail:{aws_region}:{current_account.account_id}:trail/assessment-trail-{environment_suffix}"
+                            }
+                        }
                     }
                 ]
             })
@@ -1370,7 +1383,7 @@ class TapStack(TerraformStack):
                 mode="OFF"
             ),
             target=SchedulerScheduleTarget(
-                arn=f"{ecs_cluster.arn}:task-definition/{task_definition.family}:*",
+                arn=ecs_cluster.arn,
                 role_arn=scheduler_role.arn,
                 ecs_parameters=SchedulerScheduleTargetEcsParameters(
                     task_definition_arn=task_definition.arn,
