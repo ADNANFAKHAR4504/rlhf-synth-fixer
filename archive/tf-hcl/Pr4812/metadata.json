@@ -1,0 +1,37 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "4800",
+  "team": "synth",
+  "startedAt": "2025-10-19T05:12:39.449Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "background": "Secure VPC infrastructure for financial application with private service access",
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Table",
+    "Security Group",
+    "VPC Endpoint",
+    "KMS",
+    "CloudWatch Logs",
+    "VPC Flow Logs",
+    "IAM Role",
+    "IAM Policy",
+    "Lambda",
+    "SNS"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sivakumar-turing",
+  "dockerS3Location": ""
+}
