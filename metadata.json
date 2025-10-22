@@ -23,5 +23,5 @@
     "CloudWatch",
     "Secrets Manager",
     "Elastic Load Balancing"
-  ],
+  ]
 }
