@@ -14,7 +14,6 @@ turn_type: single | multi
 po_id: <task_id>
 team: synth
 subtask: <task_category>
-background: <business_context>
 subject_labels: <array>
 startedAt: <ISO_timestamp>
 aws_services: <string>

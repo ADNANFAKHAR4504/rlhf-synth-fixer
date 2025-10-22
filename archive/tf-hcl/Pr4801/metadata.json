@@ -1,0 +1,31 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350215",
+  "team": "4",
+  "startedAt": "2025-10-19T03:44:29.578Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "S3 Bucket, EC2, IAM, Security Groups, CloudWatch Logs",
+  "testDependencies": [
+    "@aws-sdk/client-s3",
+    "@aws-sdk/client-ec2",
+    "@aws-sdk/client-iam",
+    "@aws-sdk/client-cloudwatch-logs",
+    "jest",
+    "@types/jest",
+    "ts-jest"
+  ],
+  "training_quality": 9,
+  "background": "Production-grade AWS infrastructure deployment in us-west-2 using Terraform. Implements S3 bucket with versioning and encryption, EC2 t3.micro instance with IMDSv2, IAM role with least-privilege S3 read access, Security Group with restricted SSH access, and CloudWatch Logs. All resources follow 'Prod' naming convention and Environment=Production tagging. Single-file architecture (tap_stack.tf) with comprehensive testing (55 unit + 40 integration tests). Enhanced security features include encrypted EBS volumes, public access blocking, and detailed monitoring. Solution aligns with AWS Well-Architected Framework principles for Security, Reliability, Operational Excellence, Performance Efficiency, and Cost Optimization.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}
