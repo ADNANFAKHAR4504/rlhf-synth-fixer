@@ -1,0 +1,3 @@
+config:
+  aws:region: sa-east-1
+encryptionsalt: v1:qsl6W5HpLe8=:v1:JKdn9dy9Mi8t7F95:XhRBPshgmLF0doSefWRa5C3fvyoAfw==
