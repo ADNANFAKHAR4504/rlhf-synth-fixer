@@ -37,7 +37,7 @@ import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric
 class RegionalInfra extends Construct {
   public readonly albDnsName: string;
   public readonly albZoneId: string;
-  public readonly albArn: string; // <-- Added for testing
+  public readonly albArn: string;
   public readonly vpc: Vpc;
   public readonly dbCluster?: RdsCluster;
   public readonly healthCheck: Route53HealthCheck;
@@ -247,6 +247,7 @@ class RegionalInfra extends Construct {
       }
     );
 
+    // FIX: Use single quotes for the echo command to avoid conflicts
     const userData = `#!/bin/bash
 yum update -y
 yum install -y httpd
@@ -276,7 +277,10 @@ echo 'OK from ${region}' > /var/www/html/index.html
       desiredCapacity: 1,
       vpcZoneIdentifier: [subnetPrivA.id, subnetPrivB.id], // Use private subnets
       launchTemplate: { id: lt.id },
-      healthCheckType: 'EC2',
+      // --- FIX 1: Change to ELB health check and add grace period ---
+      healthCheckType: 'ELB',
+      healthCheckGracePeriod: 300,
+      // --- FIX 2: Change 'tags' property to 'tag' ---
       tag: [
         {
           key: 'Name',
@@ -322,7 +326,7 @@ echo 'OK from ${region}' > /var/www/html/index.html
 
     this.albDnsName = alb.dnsName;
     this.albZoneId = alb.zoneId;
-    this.albArn = alb.arn; // <-- Export ARN for testing
+    this.albArn = alb.arn;
     this.asgName = asg.name;
 
     // Database (optional)
@@ -346,14 +350,15 @@ echo 'OK from ${region}' > /var/www/html/index.html
       // DB subnet group
       const dbSubnetGroup = new DbSubnetGroup(this, `${id}-db-subnet-group`, {
         provider: providerAlias,
-        name: `${id}-db-subnet-${randomSuffix}`,
+        // --- FIX 3: Force name to lowercase ---
+        name: `${id.toLowerCase()}-db-subnet-${randomSuffix}`,
         subnetIds: [subnetPrivA.id, subnetPrivB.id], // Use private subnets
         tags: { ...tags },
       });
 
       this.dbCluster = new RdsCluster(this, `${id}-rds-cluster`, {
         provider: providerAlias,
-        clusterIdentifier: `${id}-cluster-${randomSuffix}`,
+        clusterIdentifier: `${id.toLowerCase()}-cluster-${randomSuffix}`, // Also force cluster ID to lowercase
         engine: 'aurora-postgresql',
         engineVersion: '13.9',
         databaseName: 'appdb',
@@ -453,7 +458,7 @@ export class TapStack extends TerraformStack {
       createDatabase: true,
       kmsKey: primaryKms,
       dbUsername: dbUser,
-      dbPassword: dbPassword.result,
+      dbPassword: dbPassword.result, // Pass the direct password string
       tags,
     });
 
@@ -462,15 +467,16 @@ export class TapStack extends TerraformStack {
       region: 'us-west-2',
       vpcCidr: '10.20.0.0/16',
       randomSuffix,
-      createDatabase: true, // create independent DR DB (no automatic replication)
+      createDatabase: true,
       kmsKey: drKms,
       dbUsername: dbUser,
-      dbPassword: dbPassword.result,
+      dbPassword: dbPassword.result, // Pass the direct password string
       tags,
     });
 
-    // Route53 global DNS zone (hosted in primary account/region; Route53 is global)
-    const domainName = `trading-${randomSuffix}.example.com`;
+    // Route53 global DNS zone
+    // --- FIX 4: Change from 'example.com' to a non-reserved domain ---
+    const domainName = `trading-${randomSuffix}.internal-test.com`;
     const zone = new Route53Zone(this, 'zone', {
       provider: primaryProvider,
       name: domainName,
