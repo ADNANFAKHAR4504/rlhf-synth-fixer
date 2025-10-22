@@ -8,3 +8,4 @@ Finally, make sure your CDK app in Python can fully synthesize into a working **
 
 When you’re done, your output should be a deployable AWS CDK Python project that defines the full infrastructure for this REST API — Lambda, API Gateway, DynamoDB, IAM, CloudWatch — all wired up cleanly and ready to launch.
 
+
