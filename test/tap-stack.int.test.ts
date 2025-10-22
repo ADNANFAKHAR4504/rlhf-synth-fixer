@@ -121,6 +121,8 @@ describe('TapStack End-to-End Integration Tests', () => {
     // Note: Daily Trigger Test for EventBridge schedule is difficult to automate in an E2E suite.
     // This is typically verified through infrastructure-as-code tests or manual inspection post-deployment.
 
+    test('Success Path Validation: should successfully execute the State Machine from start to finish', async () => {
+      if (!cfnOutputs.StateMachineArn) {
         console.warn('⚠️ State Machine ARN not available, skipping test');
         return;
       }
@@ -456,6 +458,9 @@ describe('TapStack End-to-End Integration Tests', () => {
             expect(details.sesMessageId).toMatch(/^[\w-]+$/);
             expect(details.s3ReportPath).toContain(reportId);
           }
+        } else {
+          console.warn('⚠️ No audit records found for report delivery');
+        }
       } catch (error) {
         if (error instanceof Error) {
           console.error('Database query failed:', error.message);
@@ -723,15 +728,15 @@ describe('TapStack Comprehensive End-to-End Integration Test Scenarios', () => {
       const result = await pollExecutionDetailed(executionArn!, 5);
 
       enhancedReportId = result.output.reportId;
-      enhancedS3Key = result.output.s3Url.split(`${cfnOutputs.ReportsBucketName}/`)[1];
-      createdS3Keys.push(enhancedS3Key);
       enhancedS3Key = result.output?.s3Url
         ? result.output.s3Url.split(`${cfnOutputs.ReportsBucketName}/`)[1]
         : undefined;
 
-      // Then check before using
-      if (!enhancedS3Key) {
-        console.error('S3 key could not be extracted from the output, ');
+      // Add to cleanup list if key exists
+      if (enhancedS3Key) {
+        createdS3Keys.push(enhancedS3Key);
+      } else {
+        console.error('S3 key could not be extracted from the output');
       }
       expect(enhancedReportId).toBeDefined();
       expect(enhancedS3Key).toBeDefined();
