@@ -138,7 +138,7 @@ export class TapStack extends TerraformStack {
     // Create public subnets
     const publicSubnet1 = new Subnet(this, 'public-subnet-1', {
       vpcId: vpc.id,
-      cidrBlock: '10.0.1.0/24',
+      cidrBlock: '10.0.21.0/24',
       availabilityZone: Fn.element(azs.names, 0),
       mapPublicIpOnLaunch: true,
       tags: {
@@ -157,7 +157,7 @@ export class TapStack extends TerraformStack {
 
     const publicSubnet2 = new Subnet(this, 'public-subnet-2', {
       vpcId: vpc.id,
-      cidrBlock: '10.0.2.0/24',
+      cidrBlock: '10.0.22.0/24',
       availabilityZone: Fn.element(azs.names, 1),
       mapPublicIpOnLaunch: true,
       tags: {
@@ -176,7 +176,7 @@ export class TapStack extends TerraformStack {
     // Create private subnets
     const privateSubnet1 = new Subnet(this, 'private-subnet-1', {
       vpcId: vpc.id,
-      cidrBlock: '10.0.10.0/24',
+      cidrBlock: '10.0.31.0/24',
       availabilityZone: Fn.element(azs.names, 0),
       tags: {
         Name: `hipaa-private-subnet-1-${environmentSuffix}`,
@@ -193,7 +193,7 @@ export class TapStack extends TerraformStack {
 
     const privateSubnet2 = new Subnet(this, 'private-subnet-2', {
       vpcId: vpc.id,
-      cidrBlock: '10.0.11.0/24',
+      cidrBlock: '10.0.32.0/24',
       availabilityZone: Fn.element(azs.names, 1),
       tags: {
         Name: `hipaa-private-subnet-2-${environmentSuffix}`,
@@ -296,7 +296,7 @@ export class TapStack extends TerraformStack {
     });
 
     // Create VPC Endpoints for S3 and Secrets Manager
-    new VpcEndpoint(this, 's3-endpoint', {
+    const s3Endpoint = new VpcEndpoint(this, 's3-endpoint', {
       vpcId: vpc.id,
       serviceName: `com.amazonaws.${awsRegion}.s3`,
       vpcEndpointType: 'Gateway',
@@ -308,6 +308,7 @@ export class TapStack extends TerraformStack {
       dependsOn: [vpc, privateRouteTable],
       provider: primaryProvider,
     });
+    s3Endpoint.overrideLogicalId('s3-endpoint-main');
 
     // === ENCRYPTION ===
     // Create KMS key policy
@@ -613,47 +614,51 @@ export class TapStack extends TerraformStack {
     });
 
     // Configure S3 replication
-    const replicationConfig = new S3BucketReplicationConfigurationA(this, 'data-bucket-replication', {
-      bucket: dataBucket.id,
-      role: replicationRole.arn,
-      rule: [
-        {
-          id: 'replicate-all',
-          status: 'Enabled',
-          priority: 1,
-          deleteMarkerReplication: {
+    const replicationConfig = new S3BucketReplicationConfigurationA(
+      this,
+      'data-bucket-replication',
+      {
+        bucket: dataBucket.id,
+        role: replicationRole.arn,
+        rule: [
+          {
+            id: 'replicate-all',
             status: 'Enabled',
-          },
-          filter: {},
-          sourceSelectionCriteria: {
-            sseKmsEncryptedObjects: {
+            priority: 1,
+            deleteMarkerReplication: {
               status: 'Enabled',
             },
-          },
-          destination: {
-            bucket: dataBucketDr.arn,
-            storageClass: 'STANDARD',
-            encryptionConfiguration: {
-              replicaKmsKeyId: kmsKeyDr.arn,
-            },
-            metrics: {
-              status: 'Enabled',
-              eventThreshold: {
-                minutes: 15,
+            filter: {},
+            sourceSelectionCriteria: {
+              sseKmsEncryptedObjects: {
+                status: 'Enabled',
               },
             },
-            replicationTime: {
-              status: 'Enabled',
-              time: {
-                minutes: 15,
+            destination: {
+              bucket: dataBucketDr.arn,
+              storageClass: 'STANDARD',
+              encryptionConfiguration: {
+                replicaKmsKeyId: kmsKeyDr.arn,
+              },
+              metrics: {
+                status: 'Enabled',
+                eventThreshold: {
+                  minutes: 15,
+                },
+              },
+              replicationTime: {
+                status: 'Enabled',
+                time: {
+                  minutes: 15,
+                },
               },
             },
           },
-        },
-      ],
-      dependsOn: [replicationPolicy, dataBucketDr, kmsKeyDr, dataBucket],
-      provider: primaryProvider,
-    });
+        ],
+        dependsOn: [replicationPolicy, dataBucketDr, kmsKeyDr, dataBucket],
+        provider: primaryProvider,
+      }
+    );
     replicationConfig.overrideLogicalId('data-bucket-replication-main');
 
     // === DATABASE ===
