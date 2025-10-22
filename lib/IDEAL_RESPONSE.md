@@ -21,16 +21,13 @@ interface TapStackProps {
   defaultTags?: AwsProviderDefaultTags;
 }
 
-const AWS_REGION_OVERRIDE = '';
-
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
-    const awsRegion = AWS_REGION_OVERRIDE
-      ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'us-east-1';
+    const awsRegion =
+      process.env.AWS_REGION_OVERRIDE || props?.awsRegion || 'us-east-1';
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
@@ -47,8 +44,6 @@ export class TapStack extends TerraformStack {
       encrypt: true,
     });
 
-    this.addOverride('terraform.backend.s3.use_lockfile', true);
-
     new HealthcareInfrastructureStack(this, 'HealthcareInfra', {
       environmentSuffix,
       awsRegion,
@@ -56,31 +51,30 @@ export class TapStack extends TerraformStack {
   }
 }
 ```
-
 ## File: lib/healthcare-infrastructure-stack.ts
 
 ```typescript
-import { Construct } from 'constructs';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
-import { Eip } from '@cdktf/provider-aws/lib/eip';
-import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
-import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
-import { Route } from '@cdktf/provider-aws/lib/route';
-import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
-import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
-import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
-import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
-import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
+import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
-import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
-import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
+import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
+import { Eip } from '@cdktf/provider-aws/lib/eip';
 import { ElasticacheServerlessCache } from '@cdktf/provider-aws/lib/elasticache-serverless-cache';
 import { ElasticacheSubnetGroup } from '@cdktf/provider-aws/lib/elasticache-subnet-group';
-import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
+import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
+import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
+import { Route } from '@cdktf/provider-aws/lib/route';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
+import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
+import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Fn } from 'cdktf';
+import { Construct } from 'constructs';
 
 export interface HealthcareInfrastructureStackProps {
   environmentSuffix: string;
@@ -95,7 +89,7 @@ export class HealthcareInfrastructureStack extends Construct {
   ) {
     super(scope, id);
 
-    const { environmentSuffix, awsRegion } = props;
+    const { environmentSuffix } = props;
 
     // Get available AZs
     const azs = new DataAwsAvailabilityZones(this, 'available-azs', {
@@ -333,7 +327,8 @@ export class HealthcareInfrastructureStack extends Construct {
       },
     });
 
-    const dbPassword = Fn.base64encode(Fn.uuid());
+    // Generate a password that's under 41 characters for MySQL
+    const dbPassword = Fn.substr(Fn.replace(Fn.uuid(), '-', ''), 0, 32);
 
     new SecretsmanagerSecretVersion(this, 'db-secret-version', {
       secretId: dbSecret.id,
@@ -357,7 +352,7 @@ export class HealthcareInfrastructureStack extends Construct {
     });
 
     // RDS MySQL Instance
-    const rdsInstance = new DbInstance(this, 'rds-instance', {
+    new DbInstance(this, 'rds-instance', {
       identifier: `healthcare-db-${environmentSuffix}`,
       engine: 'mysql',
       engineVersion: '8.0',
@@ -376,8 +371,6 @@ export class HealthcareInfrastructureStack extends Construct {
       backupWindow: '03:00-04:00',
       maintenanceWindow: 'mon:04:00-mon:05:00',
       skipFinalSnapshot: true,
-      performanceInsightsEnabled: true,
-      performanceInsightsKmsKeyId: rdsKmsKey.arn,
       enabledCloudwatchLogsExports: ['error', 'general', 'slowquery'],
       tags: {
         Name: `healthcare-db-${environmentSuffix}`,
@@ -385,17 +378,13 @@ export class HealthcareInfrastructureStack extends Construct {
     });
 
     // ElastiCache Subnet Group
-    const elasticacheSubnetGroup = new ElasticacheSubnetGroup(
-      this,
-      'elasticache-subnet-group',
-      {
-        name: `healthcare-elasticache-subnet-${environmentSuffix}`,
-        subnetIds: [privateSubnet1.id, privateSubnet2.id],
-        tags: {
-          Name: `healthcare-elasticache-subnet-${environmentSuffix}`,
-        },
-      }
-    );
+    new ElasticacheSubnetGroup(this, 'elasticache-subnet-group', {
+      name: `healthcare-elasticache-subnet-${environmentSuffix}`,
+      subnetIds: [privateSubnet1.id, privateSubnet2.id],
+      tags: {
+        Name: `healthcare-elasticache-subnet-${environmentSuffix}`,
+      },
+    });
 
     // ElastiCache Serverless
     new ElasticacheServerlessCache(this, 'elasticache-serverless', {
@@ -403,15 +392,21 @@ export class HealthcareInfrastructureStack extends Construct {
       engine: 'redis',
       securityGroupIds: [elasticacheSecurityGroup.id],
       subnetIds: [privateSubnet1.id, privateSubnet2.id],
-      cacheUsageLimits: {
-        dataStorage: {
-          maximum: 10,
-          unit: 'GB',
+      cacheUsageLimits: [
+        {
+          dataStorage: [
+            {
+              maximum: 10,
+              unit: 'GB',
+            },
+          ],
+          ecpuPerSecond: [
+            {
+              maximum: 5000,
+            },
+          ],
         },
-        ecpuPerSecond: {
-          maximum: 5000,
-        },
-      },
+      ],
       dailySnapshotTime: '03:00',
       snapshotRetentionLimit: 7,
       kmsKeyId: elasticacheKmsKey.arn,
