@@ -88,7 +88,11 @@ export interface HealthcareInfrastructureStackProps {
 }
 
 export class HealthcareInfrastructureStack extends Construct {
-  constructor(scope: Construct, id: string, props: HealthcareInfrastructureStackProps) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props: HealthcareInfrastructureStackProps
+  ) {
     super(scope, id);
 
     const { environmentSuffix, awsRegion } = props;
@@ -381,13 +385,17 @@ export class HealthcareInfrastructureStack extends Construct {
     });
 
     // ElastiCache Subnet Group
-    const elasticacheSubnetGroup = new ElasticacheSubnetGroup(this, 'elasticache-subnet-group', {
-      name: `healthcare-elasticache-subnet-${environmentSuffix}`,
-      subnetIds: [privateSubnet1.id, privateSubnet2.id],
-      tags: {
-        Name: `healthcare-elasticache-subnet-${environmentSuffix}`,
-      },
-    });
+    const elasticacheSubnetGroup = new ElasticacheSubnetGroup(
+      this,
+      'elasticache-subnet-group',
+      {
+        name: `healthcare-elasticache-subnet-${environmentSuffix}`,
+        subnetIds: [privateSubnet1.id, privateSubnet2.id],
+        tags: {
+          Name: `healthcare-elasticache-subnet-${environmentSuffix}`,
+        },
+      }
+    );
 
     // ElastiCache Serverless
     new ElasticacheServerlessCache(this, 'elasticache-serverless', {

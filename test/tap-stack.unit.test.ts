@@ -103,8 +103,9 @@ describe('Healthcare Infrastructure Stack Unit Tests', () => {
 
     test('Public subnets are created in different AZs', () => {
       const subnets = Object.values(synthesized.resource.aws_subnet || {});
-      const publicSubnets = subnets.filter((s: any) =>
-        s.cidr_block === '10.0.1.0/24' || s.cidr_block === '10.0.2.0/24'
+      const publicSubnets = subnets.filter(
+        (s: any) =>
+          s.cidr_block === '10.0.1.0/24' || s.cidr_block === '10.0.2.0/24'
       );
       expect(publicSubnets.length).toBe(2);
       publicSubnets.forEach((subnet: any) => {
@@ -114,20 +115,25 @@ describe('Healthcare Infrastructure Stack Unit Tests', () => {
 
     test('Private subnets are created in different AZs', () => {
       const subnets = Object.values(synthesized.resource.aws_subnet || {});
-      const privateSubnets = subnets.filter((s: any) =>
-        s.cidr_block === '10.0.11.0/24' || s.cidr_block === '10.0.12.0/24'
+      const privateSubnets = subnets.filter(
+        (s: any) =>
+          s.cidr_block === '10.0.11.0/24' || s.cidr_block === '10.0.12.0/24'
       );
       expect(privateSubnets.length).toBe(2);
     });
 
     test('Internet Gateway is created and attached to VPC', () => {
-      const igw = Object.values(synthesized.resource.aws_internet_gateway || {})[0] as any;
+      const igw = Object.values(
+        synthesized.resource.aws_internet_gateway || {}
+      )[0] as any;
       expect(igw).toBeDefined();
       expect(igw).toHaveProperty('vpc_id');
     });
 
     test('NAT Gateway is created with EIP', () => {
-      const natGateway = Object.values(synthesized.resource.aws_nat_gateway || {})[0] as any;
+      const natGateway = Object.values(
+        synthesized.resource.aws_nat_gateway || {}
+      )[0] as any;
       const eip = Object.values(synthesized.resource.aws_eip || {})[0] as any;
 
       expect(natGateway).toBeDefined();
@@ -136,7 +142,9 @@ describe('Healthcare Infrastructure Stack Unit Tests', () => {
     });
 
     test('Route tables are configured correctly', () => {
-      const routeTables = Object.values(synthesized.resource.aws_route_table || {});
+      const routeTables = Object.values(
+        synthesized.resource.aws_route_table || {}
+      );
       expect(routeTables.length).toBeGreaterThanOrEqual(2);
 
       const routes = Object.values(synthesized.resource.aws_route || {});
@@ -164,7 +172,9 @@ describe('Healthcare Infrastructure Stack Unit Tests', () => {
     });
 
     test('KMS aliases are created for all keys', () => {
-      const kmsAliases = Object.values(synthesized.resource.aws_kms_alias || {});
+      const kmsAliases = Object.values(
+        synthesized.resource.aws_kms_alias || {}
+      );
       expect(kmsAliases.length).toBeGreaterThanOrEqual(3);
 
       const aliasNames = kmsAliases.map((alias: any) => alias.name);
@@ -184,7 +194,9 @@ describe('Healthcare Infrastructure Stack Unit Tests', () => {
     });
 
     test('RDS security group is created with correct configuration', () => {
-      const securityGroups = Object.values(synthesized.resource.aws_security_group || {});
+      const securityGroups = Object.values(
+        synthesized.resource.aws_security_group || {}
+      );
       const rdsSg = securityGroups.find((sg: any) =>
         sg.description?.includes('RDS MySQL')
       );
@@ -192,7 +204,9 @@ describe('Healthcare Infrastructure Stack Unit Tests', () => {
     });
 
     test('ElastiCache security group is created', () => {
-      const securityGroups = Object.values(synthesized.resource.aws_security_group || {});
+      const securityGroups = Object.values(
+        synthesized.resource.aws_security_group || {}
+      );
       const cacheSg = securityGroups.find((sg: any) =>
         sg.description?.includes('ElastiCache')
       );
@@ -200,16 +214,18 @@ describe('Healthcare Infrastructure Stack Unit Tests', () => {
     });
 
     test('Security group rules are configured with proper ports', () => {
-      const rules = Object.values(synthesized.resource.aws_security_group_rule || {});
+      const rules = Object.values(
+        synthesized.resource.aws_security_group_rule || {}
+      );
 
-      const mysqlRule = rules.find((rule: any) =>
-        rule.from_port === 3306 && rule.type === 'ingress'
+      const mysqlRule = rules.find(
+        (rule: any) => rule.from_port === 3306 && rule.type === 'ingress'
       );
       expect(mysqlRule).toBeDefined();
       expect(mysqlRule).toHaveProperty('protocol', 'tcp');
 
-      const redisRule = rules.find((rule: any) =>
-        rule.from_port === 6379 && rule.type === 'ingress'
+      const redisRule = rules.find(
+        (rule: any) => rule.from_port === 6379 && rule.type === 'ingress'
       );
       expect(redisRule).toBeDefined();
       expect(redisRule).toHaveProperty('protocol', 'tcp');
@@ -226,42 +242,56 @@ describe('Healthcare Infrastructure Stack Unit Tests', () => {
     });
 
     test('RDS instance is created with correct engine', () => {
-      const rdsInstance = Object.values(synthesized.resource.aws_db_instance || {})[0] as any;
+      const rdsInstance = Object.values(
+        synthesized.resource.aws_db_instance || {}
+      )[0] as any;
       expect(rdsInstance).toBeDefined();
       expect(rdsInstance).toHaveProperty('engine', 'mysql');
       expect(rdsInstance).toHaveProperty('engine_version', '8.0');
     });
 
     test('RDS instance has encryption enabled', () => {
-      const rdsInstance = Object.values(synthesized.resource.aws_db_instance || {})[0] as any;
+      const rdsInstance = Object.values(
+        synthesized.resource.aws_db_instance || {}
+      )[0] as any;
       expect(rdsInstance).toHaveProperty('storage_encrypted', true);
       expect(rdsInstance).toHaveProperty('kms_key_id');
     });
 
     test('RDS instance is configured for high availability', () => {
-      const rdsInstance = Object.values(synthesized.resource.aws_db_instance || {})[0] as any;
+      const rdsInstance = Object.values(
+        synthesized.resource.aws_db_instance || {}
+      )[0] as any;
       expect(rdsInstance).toHaveProperty('multi_az', true);
     });
 
     test('RDS instance has automated backups configured', () => {
-      const rdsInstance = Object.values(synthesized.resource.aws_db_instance || {})[0] as any;
+      const rdsInstance = Object.values(
+        synthesized.resource.aws_db_instance || {}
+      )[0] as any;
       expect(rdsInstance).toHaveProperty('backup_retention_period', 7);
       expect(rdsInstance).toHaveProperty('backup_window');
     });
 
     test('RDS instance is properly configured without Performance Insights', () => {
-      const rdsInstance = Object.values(synthesized.resource.aws_db_instance || {})[0] as any;
+      const rdsInstance = Object.values(
+        synthesized.resource.aws_db_instance || {}
+      )[0] as any;
       expect(rdsInstance).not.toHaveProperty('performance_insights_enabled');
       expect(rdsInstance).not.toHaveProperty('performance_insights_kms_key_id');
     });
 
     test('RDS instance uses correct instance class', () => {
-      const rdsInstance = Object.values(synthesized.resource.aws_db_instance || {})[0] as any;
+      const rdsInstance = Object.values(
+        synthesized.resource.aws_db_instance || {}
+      )[0] as any;
       expect(rdsInstance).toHaveProperty('instance_class', 'db.t3.micro');
     });
 
     test('DB subnet group is created', () => {
-      const dbSubnetGroup = Object.values(synthesized.resource.aws_db_subnet_group || {})[0] as any;
+      const dbSubnetGroup = Object.values(
+        synthesized.resource.aws_db_subnet_group || {}
+      )[0] as any;
       expect(dbSubnetGroup).toBeDefined();
       expect(dbSubnetGroup.subnet_ids).toHaveLength(2);
     });
@@ -277,14 +307,18 @@ describe('Healthcare Infrastructure Stack Unit Tests', () => {
     });
 
     test('Secrets Manager secret is created for database credentials', () => {
-      const secret = Object.values(synthesized.resource.aws_secretsmanager_secret || {})[0] as any;
+      const secret = Object.values(
+        synthesized.resource.aws_secretsmanager_secret || {}
+      )[0] as any;
       expect(secret).toBeDefined();
       expect(secret).toHaveProperty('description');
       expect(secret).toHaveProperty('kms_key_id');
     });
 
     test('Secret version is created with proper structure', () => {
-      const secretVersion = Object.values(synthesized.resource.aws_secretsmanager_secret_version || {})[0] as any;
+      const secretVersion = Object.values(
+        synthesized.resource.aws_secretsmanager_secret_version || {}
+      )[0] as any;
       expect(secretVersion).toBeDefined();
       expect(secretVersion).toHaveProperty('secret_id');
       expect(secretVersion).toHaveProperty('secret_string');
@@ -301,35 +335,47 @@ describe('Healthcare Infrastructure Stack Unit Tests', () => {
     });
 
     test('ElastiCache Serverless cache is created', () => {
-      const cache = Object.values(synthesized.resource.aws_elasticache_serverless_cache || {})[0] as any;
+      const cache = Object.values(
+        synthesized.resource.aws_elasticache_serverless_cache || {}
+      )[0] as any;
       expect(cache).toBeDefined();
       expect(cache).toHaveProperty('engine', 'redis');
     });
 
     test('ElastiCache has encryption enabled', () => {
-      const cache = Object.values(synthesized.resource.aws_elasticache_serverless_cache || {})[0] as any;
+      const cache = Object.values(
+        synthesized.resource.aws_elasticache_serverless_cache || {}
+      )[0] as any;
       expect(cache).toHaveProperty('kms_key_id');
     });
 
     test('ElastiCache has snapshots configured', () => {
-      const cache = Object.values(synthesized.resource.aws_elasticache_serverless_cache || {})[0] as any;
+      const cache = Object.values(
+        synthesized.resource.aws_elasticache_serverless_cache || {}
+      )[0] as any;
       expect(cache).toHaveProperty('daily_snapshot_time', '03:00');
       expect(cache).toHaveProperty('snapshot_retention_limit', 7);
     });
 
     test('ElastiCache is configured in multiple subnets', () => {
-      const cache = Object.values(synthesized.resource.aws_elasticache_serverless_cache || {})[0] as any;
+      const cache = Object.values(
+        synthesized.resource.aws_elasticache_serverless_cache || {}
+      )[0] as any;
       expect(cache.subnet_ids).toHaveLength(2);
     });
 
     test('ElastiCache subnet group is created', () => {
-      const subnetGroup = Object.values(synthesized.resource.aws_elasticache_subnet_group || {})[0] as any;
+      const subnetGroup = Object.values(
+        synthesized.resource.aws_elasticache_subnet_group || {}
+      )[0] as any;
       expect(subnetGroup).toBeDefined();
       expect(subnetGroup.subnet_ids).toHaveLength(2);
     });
 
     test('ElastiCache has usage limits configured', () => {
-      const cache = Object.values(synthesized.resource.aws_elasticache_serverless_cache || {})[0] as any;
+      const cache = Object.values(
+        synthesized.resource.aws_elasticache_serverless_cache || {}
+      )[0] as any;
       expect(cache).toHaveProperty('cache_usage_limits');
       expect(Array.isArray(cache.cache_usage_limits)).toBe(true);
       expect(cache.cache_usage_limits[0]).toHaveProperty('data_storage');
@@ -350,10 +396,14 @@ describe('Healthcare Infrastructure Stack Unit Tests', () => {
       const vpc = Object.values(synthesized.resource.aws_vpc || {})[0] as any;
       expect(vpc.tags.Name).toContain('prod');
 
-      const rds = Object.values(synthesized.resource.aws_db_instance || {})[0] as any;
+      const rds = Object.values(
+        synthesized.resource.aws_db_instance || {}
+      )[0] as any;
       expect(rds.identifier).toContain('prod');
 
-      const cache = Object.values(synthesized.resource.aws_elasticache_serverless_cache || {})[0] as any;
+      const cache = Object.values(
+        synthesized.resource.aws_elasticache_serverless_cache || {}
+      )[0] as any;
       expect(cache.name).toContain('prod');
     });
   });
@@ -368,26 +418,38 @@ describe('Healthcare Infrastructure Stack Unit Tests', () => {
     });
 
     test('All encryption requirements are met', () => {
-      const rds = Object.values(synthesized.resource.aws_db_instance || {})[0] as any;
+      const rds = Object.values(
+        synthesized.resource.aws_db_instance || {}
+      )[0] as any;
       expect(rds.storage_encrypted).toBe(true);
 
-      const cache = Object.values(synthesized.resource.aws_elasticache_serverless_cache || {})[0] as any;
+      const cache = Object.values(
+        synthesized.resource.aws_elasticache_serverless_cache || {}
+      )[0] as any;
       expect(cache.kms_key_id).toBeDefined();
 
-      const secret = Object.values(synthesized.resource.aws_secretsmanager_secret || {})[0] as any;
+      const secret = Object.values(
+        synthesized.resource.aws_secretsmanager_secret || {}
+      )[0] as any;
       expect(secret.kms_key_id).toBeDefined();
     });
 
     test('High availability is configured', () => {
-      const rds = Object.values(synthesized.resource.aws_db_instance || {})[0] as any;
+      const rds = Object.values(
+        synthesized.resource.aws_db_instance || {}
+      )[0] as any;
       expect(rds.multi_az).toBe(true);
 
-      const cache = Object.values(synthesized.resource.aws_elasticache_serverless_cache || {})[0] as any;
+      const cache = Object.values(
+        synthesized.resource.aws_elasticache_serverless_cache || {}
+      )[0] as any;
       expect(cache.subnet_ids.length).toBeGreaterThan(1);
     });
 
     test('Audit logging is enabled', () => {
-      const rds = Object.values(synthesized.resource.aws_db_instance || {})[0] as any;
+      const rds = Object.values(
+        synthesized.resource.aws_db_instance || {}
+      )[0] as any;
       expect(rds.enabled_cloudwatch_logs_exports).toBeDefined();
       expect(rds.enabled_cloudwatch_logs_exports.length).toBeGreaterThan(0);
     });

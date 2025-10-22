@@ -5,7 +5,10 @@ describe('Healthcare Infrastructure Integration Tests', () => {
   let outputs: any;
 
   beforeAll(() => {
-    const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
+    const outputsPath = path.join(
+      __dirname,
+      '../cfn-outputs/flat-outputs.json'
+    );
     if (fs.existsSync(outputsPath)) {
       const outputsContent = fs.readFileSync(outputsPath, 'utf8');
       outputs = JSON.parse(outputsContent);
@@ -14,7 +17,10 @@ describe('Healthcare Infrastructure Integration Tests', () => {
 
   describe('Infrastructure Deployment Validation', () => {
     test('Outputs file should exist after deployment', () => {
-      const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
+      const outputsPath = path.join(
+        __dirname,
+        '../cfn-outputs/flat-outputs.json'
+      );
       expect(fs.existsSync(outputsPath)).toBe(true);
     });
 
@@ -26,15 +32,15 @@ describe('Healthcare Infrastructure Integration Tests', () => {
 
   describe('VPC Integration', () => {
     test('VPC should be created successfully', () => {
-      const vpcKeys = Object.keys(outputs || {}).filter(key =>
-        key.includes('vpc') && key.includes('id')
+      const vpcKeys = Object.keys(outputs || {}).filter(
+        key => key.includes('vpc') && key.includes('id')
       );
       expect(vpcKeys.length).toBeGreaterThan(0);
     });
 
     test('Subnets should be created in correct AZs', () => {
-      const subnetKeys = Object.keys(outputs || {}).filter(key =>
-        key.includes('subnet') && key.includes('id')
+      const subnetKeys = Object.keys(outputs || {}).filter(
+        key => key.includes('subnet') && key.includes('id')
       );
       expect(subnetKeys.length).toBeGreaterThanOrEqual(4);
     });
@@ -56,15 +62,15 @@ describe('Healthcare Infrastructure Integration Tests', () => {
 
   describe('RDS Integration', () => {
     test('RDS instance should be created', () => {
-      const rdsKeys = Object.keys(outputs || {}).filter(key =>
-        key.includes('db_instance') && key.includes('id')
+      const rdsKeys = Object.keys(outputs || {}).filter(
+        key => key.includes('db_instance') && key.includes('id')
       );
       expect(rdsKeys.length).toBeGreaterThan(0);
     });
 
     test('RDS endpoint should be available', () => {
-      const endpointKeys = Object.keys(outputs || {}).filter(key =>
-        key.includes('db_instance') && key.includes('endpoint')
+      const endpointKeys = Object.keys(outputs || {}).filter(
+        key => key.includes('db_instance') && key.includes('endpoint')
       );
       if (endpointKeys.length > 0) {
         const endpoint = outputs[endpointKeys[0]];
@@ -75,8 +81,8 @@ describe('Healthcare Infrastructure Integration Tests', () => {
     });
 
     test('RDS should be in available state', () => {
-      const statusKeys = Object.keys(outputs || {}).filter(key =>
-        key.includes('db_instance') && key.includes('status')
+      const statusKeys = Object.keys(outputs || {}).filter(
+        key => key.includes('db_instance') && key.includes('status')
       );
       if (statusKeys.length > 0) {
         const status = outputs[statusKeys[0]];
@@ -85,8 +91,8 @@ describe('Healthcare Infrastructure Integration Tests', () => {
     });
 
     test('RDS ARN should be valid', () => {
-      const arnKeys = Object.keys(outputs || {}).filter(key =>
-        key.includes('db_instance') && key.includes('arn')
+      const arnKeys = Object.keys(outputs || {}).filter(
+        key => key.includes('db_instance') && key.includes('arn')
       );
       if (arnKeys.length > 0) {
         const arn = outputs[arnKeys[0]];
@@ -104,8 +110,8 @@ describe('Healthcare Infrastructure Integration Tests', () => {
     });
 
     test('ElastiCache endpoint should be available', () => {
-      const endpointKeys = Object.keys(outputs || {}).filter(key =>
-        key.includes('elasticache') && key.includes('endpoint')
+      const endpointKeys = Object.keys(outputs || {}).filter(
+        key => key.includes('elasticache') && key.includes('endpoint')
       );
       if (endpointKeys.length > 0) {
         const endpoint = outputs[endpointKeys[0]];
@@ -114,8 +120,8 @@ describe('Healthcare Infrastructure Integration Tests', () => {
     });
 
     test('ElastiCache ARN should be valid', () => {
-      const arnKeys = Object.keys(outputs || {}).filter(key =>
-        key.includes('elasticache') && key.includes('arn')
+      const arnKeys = Object.keys(outputs || {}).filter(
+        key => key.includes('elasticache') && key.includes('arn')
       );
       if (arnKeys.length > 0) {
         const arn = outputs[arnKeys[0]];
@@ -124,8 +130,8 @@ describe('Healthcare Infrastructure Integration Tests', () => {
     });
 
     test('ElastiCache should be in available status', () => {
-      const statusKeys = Object.keys(outputs || {}).filter(key =>
-        key.includes('elasticache') && key.includes('status')
+      const statusKeys = Object.keys(outputs || {}).filter(
+        key => key.includes('elasticache') && key.includes('status')
       );
       if (statusKeys.length > 0) {
         const status = outputs[statusKeys[0]];
@@ -136,15 +142,15 @@ describe('Healthcare Infrastructure Integration Tests', () => {
 
   describe('KMS Integration', () => {
     test('KMS keys should be created', () => {
-      const kmsKeys = Object.keys(outputs || {}).filter(key =>
-        key.includes('kms_key') && key.includes('id')
+      const kmsKeys = Object.keys(outputs || {}).filter(
+        key => key.includes('kms_key') && key.includes('id')
       );
       expect(kmsKeys.length).toBeGreaterThanOrEqual(3);
     });
 
     test('KMS key ARNs should be valid', () => {
-      const arnKeys = Object.keys(outputs || {}).filter(key =>
-        key.includes('kms_key') && key.includes('arn')
+      const arnKeys = Object.keys(outputs || {}).filter(
+        key => key.includes('kms_key') && key.includes('arn')
       );
       arnKeys.forEach(key => {
         const arn = outputs[key];
@@ -162,15 +168,15 @@ describe('Healthcare Infrastructure Integration Tests', () => {
 
   describe('Secrets Manager Integration', () => {
     test('Database secret should be created', () => {
-      const secretKeys = Object.keys(outputs || {}).filter(key =>
-        key.includes('secretsmanager_secret') && key.includes('id')
+      const secretKeys = Object.keys(outputs || {}).filter(
+        key => key.includes('secretsmanager_secret') && key.includes('id')
       );
       expect(secretKeys.length).toBeGreaterThan(0);
     });
 
     test('Secret ARN should be valid', () => {
-      const arnKeys = Object.keys(outputs || {}).filter(key =>
-        key.includes('secretsmanager_secret') && key.includes('arn')
+      const arnKeys = Object.keys(outputs || {}).filter(
+        key => key.includes('secretsmanager_secret') && key.includes('arn')
       );
       if (arnKeys.length > 0) {
         const arn = outputs[arnKeys[0]];
@@ -188,22 +194,22 @@ describe('Healthcare Infrastructure Integration Tests', () => {
 
   describe('Security Groups Integration', () => {
     test('RDS security group should exist', () => {
-      const sgKeys = Object.keys(outputs || {}).filter(key =>
-        key.includes('security_group') && key.includes('rds')
+      const sgKeys = Object.keys(outputs || {}).filter(
+        key => key.includes('security_group') && key.includes('rds')
       );
       expect(sgKeys.length).toBeGreaterThan(0);
     });
 
     test('ElastiCache security group should exist', () => {
-      const sgKeys = Object.keys(outputs || {}).filter(key =>
-        key.includes('security_group') && key.includes('elasticache')
+      const sgKeys = Object.keys(outputs || {}).filter(
+        key => key.includes('security_group') && key.includes('elasticache')
       );
       expect(sgKeys.length).toBeGreaterThan(0);
     });
 
     test('Security group IDs should be valid', () => {
-      const sgIdKeys = Object.keys(outputs || {}).filter(key =>
-        key.includes('security_group') && key.includes('id')
+      const sgIdKeys = Object.keys(outputs || {}).filter(
+        key => key.includes('security_group') && key.includes('id')
       );
       sgIdKeys.forEach(key => {
         const sgId = outputs[key];
@@ -230,8 +236,8 @@ describe('Healthcare Infrastructure Integration Tests', () => {
 
   describe('Resource Naming Consistency', () => {
     test('All resource names should include environment suffix', () => {
-      const nameKeys = Object.keys(outputs || {}).filter(key =>
-        key.includes('_name') || key.includes('identifier')
+      const nameKeys = Object.keys(outputs || {}).filter(
+        key => key.includes('_name') || key.includes('identifier')
       );
 
       nameKeys.forEach(key => {
@@ -253,8 +259,8 @@ describe('Healthcare Infrastructure Integration Tests', () => {
 
   describe('High Availability Validation', () => {
     test('RDS multi-AZ should be enabled', () => {
-      const multiAzKeys = Object.keys(outputs || {}).filter(key =>
-        key.includes('db_instance') && key.includes('multi_az')
+      const multiAzKeys = Object.keys(outputs || {}).filter(
+        key => key.includes('db_instance') && key.includes('multi_az')
       );
       if (multiAzKeys.length > 0) {
         const multiAz = outputs[multiAzKeys[0]];
@@ -273,8 +279,8 @@ describe('Healthcare Infrastructure Integration Tests', () => {
 
   describe('Encryption Validation', () => {
     test('RDS encryption should be enabled', () => {
-      const encryptionKeys = Object.keys(outputs || {}).filter(key =>
-        key.includes('db_instance') && key.includes('storage_encrypted')
+      const encryptionKeys = Object.keys(outputs || {}).filter(
+        key => key.includes('db_instance') && key.includes('storage_encrypted')
       );
       if (encryptionKeys.length > 0) {
         const encrypted = outputs[encryptionKeys[0]];
@@ -283,8 +289,8 @@ describe('Healthcare Infrastructure Integration Tests', () => {
     });
 
     test('RDS should have KMS key configured', () => {
-      const kmsKeys = Object.keys(outputs || {}).filter(key =>
-        key.includes('db_instance') && key.includes('kms_key_id')
+      const kmsKeys = Object.keys(outputs || {}).filter(
+        key => key.includes('db_instance') && key.includes('kms_key_id')
       );
       if (kmsKeys.length > 0) {
         const kmsKeyId = outputs[kmsKeys[0]];
@@ -294,8 +300,8 @@ describe('Healthcare Infrastructure Integration Tests', () => {
     });
 
     test('ElastiCache should have KMS key configured', () => {
-      const kmsKeys = Object.keys(outputs || {}).filter(key =>
-        key.includes('elasticache') && key.includes('kms_key_id')
+      const kmsKeys = Object.keys(outputs || {}).filter(
+        key => key.includes('elasticache') && key.includes('kms_key_id')
       );
       if (kmsKeys.length > 0) {
         const kmsKeyId = outputs[kmsKeys[0]];
