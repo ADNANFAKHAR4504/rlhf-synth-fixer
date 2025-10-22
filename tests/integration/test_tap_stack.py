@@ -50,8 +50,16 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         vpc = response['Vpcs'][0]
         self.assertEqual(vpc['State'], 'available')
         self.assertEqual(vpc['CidrBlock'], '10.0.0.0/16')
-        self.assertTrue(vpc['EnableDnsSupport'])
-        self.assertTrue(vpc['EnableDnsHostnames'])
+        
+        # Test VPC DNS settings using proper AWS API calls
+        dns_support = self.ec2_client.describe_vpc_attribute(
+            VpcId=vpc_id, Attribute='enableDnsSupport'
+        )
+        dns_hostnames = self.ec2_client.describe_vpc_attribute(
+            VpcId=vpc_id, Attribute='enableDnsHostnames'
+        )
+        self.assertTrue(dns_support['EnableDnsSupport']['Value'])
+        self.assertTrue(dns_hostnames['EnableDnsHostnames']['Value'])
 
     def test_rds_instance_accessible(self):
         """Test that RDS instance exists and is accessible."""
