@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/apigateway"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/appautoscaling"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/cloudwatch"
@@ -31,7 +32,7 @@ func main() {
 			}
 		}
 
-		region := "eu-west-2"
+		region := "eu-west-1"
 
 		// Get account ID
 		caller, err := aws.GetCallerIdentity(ctx, nil, nil)
