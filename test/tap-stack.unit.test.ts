@@ -546,7 +546,7 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
       expect(param.Type).toBe('String');
       expect(param.NoEcho).toBe(true);
       expect(param.MinLength).toBe(8);
-      expect(param.Default).toBe('TempPassword123!');
+      expect(param.Default).toBe('NewPassword2024!');
       expect(param.Description).toContain('Master password for Aurora database');
     });
 
