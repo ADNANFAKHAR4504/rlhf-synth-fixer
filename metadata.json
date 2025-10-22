@@ -7,13 +7,11 @@
   "team": "synth",
   "startedAt": "2025-10-21T11:18:04Z",
   "subtask": "Infrastructure Analysis/Monitoring",
-  "background": "FinTech Corp needs to deploy a secure database infrastructure for their payment processing system. The system must handle sensitive financial data with proper encryption, secrets management, and performance optimization through caching. The infrastructure must be compliant with PCI-DSS requirements.",
   "subject_labels": [
     "IaC Optimization",
     "Infrastructure Analysis/Monitoring",
     "Security Configuration as Code"
   ],
-  "training_quality": 9,
   "aws_services": [
     "VPC",
     "EC2",
