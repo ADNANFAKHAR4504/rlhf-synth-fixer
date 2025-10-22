@@ -3,41 +3,38 @@ I'll help you set up the infrastructure for the university LMS using CDKTF with 
 ## lib/lms-stack.ts
 
 ```typescript
-import { Construct } from 'constructs';
-import { TerraformStack, Fn } from 'cdktf';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
-import { EipAssociation } from '@cdktf/provider-aws/lib/eip-association';
-import { Eip } from '@cdktf/provider-aws/lib/eip';
-import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
-import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
-import { Route } from '@cdktf/provider-aws/lib/route';
-import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
-import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
-import { EcsCluster } from '@cdktf/provider-aws/lib/ecs-cluster';
-import { EcsTaskDefinition } from '@cdktf/provider-aws/lib/ecs-task-definition';
-import { EcsService } from '@cdktf/provider-aws/lib/ecs-service';
-import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
-import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
+import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
+import { EcsCluster } from '@cdktf/provider-aws/lib/ecs-cluster';
+import { EcsService } from '@cdktf/provider-aws/lib/ecs-service';
+import { EcsTaskDefinition } from '@cdktf/provider-aws/lib/ecs-task-definition';
+import { Eip } from '@cdktf/provider-aws/lib/eip';
+import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { Lb } from '@cdktf/provider-aws/lib/lb';
+import { LbListener } from '@cdktf/provider-aws/lib/lb-listener';
+import { LbTargetGroup } from '@cdktf/provider-aws/lib/lb-target-group';
+import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
+import { Route } from '@cdktf/provider-aws/lib/route';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
 import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
 import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
-import { SecretsmanagerSecretRotation } from '@cdktf/provider-aws/lib/secretsmanager-secret-rotation';
-import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
-import { Lb } from '@cdktf/provider-aws/lib/lb';
-import { LbTargetGroup } from '@cdktf/provider-aws/lib/lb-target-group';
-import { LbListener } from '@cdktf/provider-aws/lib/lb-listener';
-import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { Fn, TerraformOutput } from 'cdktf';
+import { Construct } from 'constructs';
 
 interface LmsStackProps {
   environmentSuffix: string;
 }
 
-export class LmsStack extends TerraformStack {
+export class LmsStack extends Construct {
   constructor(scope: Construct, id: string, props: LmsStackProps) {
     super(scope, id);
 
@@ -300,24 +297,16 @@ export class LmsStack extends TerraformStack {
       },
     });
 
+    // Database credentials
+    const dbUsername = 'lmsadmin';
+    const dbName = 'lmsdb';
+
     // Generate random password for database
     const dbPassword = Fn.join('', [
       'P',
       Fn.substr(Fn.base64encode(Fn.timestamp()), 0, 16),
       '!aA1',
     ]);
-
-    new SecretsmanagerSecretVersion(this, 'db-secret-version', {
-      secretId: dbSecret.id,
-      secretString: Fn.jsonencode({
-        username: 'lmsadmin',
-        password: dbPassword,
-        engine: 'postgres',
-        host: '',
-        port: 5432,
-        dbname: 'lmsdb',
-      }),
-    });
 
     // DB Subnet Group
     const dbSubnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
@@ -329,27 +318,17 @@ export class LmsStack extends TerraformStack {
       },
     });
 
-    // Data source to read the secret
-    const dbSecretData = new DataAwsSecretsmanagerSecretVersion(
-      this,
-      'db-secret-data',
-      {
-        secretId: dbSecret.id,
-        dependsOn: [dbSecret],
-      }
-    );
-
     // RDS Instance with encryption and SSL
     const rdsInstance = new DbInstance(this, 'rds-instance', {
       identifier: `lms-db-${props.environmentSuffix}`,
       engine: 'postgres',
-      engineVersion: '15.4',
+      engineVersion: '16.3',
       instanceClass: 'db.t3.micro',
       allocatedStorage: 20,
       storageType: 'gp3',
-      dbName: 'lmsdb',
-      username: Fn.jsondecode(dbSecretData.secretString).username,
-      password: Fn.jsondecode(dbSecretData.secretString).password,
+      dbName: dbName,
+      username: dbUsername,
+      password: dbPassword,
       dbSubnetGroupName: dbSubnetGroup.name,
       vpcSecurityGroupIds: [rdsSg.id],
       skipFinalSnapshot: true,
@@ -358,11 +337,24 @@ export class LmsStack extends TerraformStack {
       multiAz: true,
       backupRetentionPeriod: 7,
       enabledCloudwatchLogsExports: ['postgresql', 'upgrade'],
-      parameterGroupName: 'default.postgres15',
+      parameterGroupName: 'default.postgres16',
       caCertIdentifier: 'rds-ca-rsa2048-g1',
       tags: {
         Name: `lms-db-${props.environmentSuffix}`,
       },
+    });
+
+    // Store DB credentials in Secrets Manager after RDS is created
+    new SecretsmanagerSecretVersion(this, 'db-secret-version', {
+      secretId: dbSecret.id,
+      secretString: Fn.jsonencode({
+        username: dbUsername,
+        password: dbPassword,
+        engine: 'postgres',
+        host: rdsInstance.address,
+        port: 5432,
+        dbname: dbName,
+      }),
     });
 
     // IAM Role for ECS Task Execution
@@ -538,7 +530,7 @@ export class LmsStack extends TerraformStack {
       protocol: 'HTTP',
       vpcId: vpc.id,
       targetType: 'ip',
-      deregistrationDelay: 30,
+      deregistrationDelay: '30',
       healthCheck: {
         enabled: true,
         path: '/',
@@ -572,7 +564,7 @@ export class LmsStack extends TerraformStack {
     });
 
     // ECS Service
-    const ecsService = new EcsService(this, 'ecs-service', {
+    new EcsService(this, 'ecs-service', {
       name: `lms-service-${props.environmentSuffix}`,
       cluster: ecsCluster.id,
       taskDefinition: taskDefinition.arn,
@@ -597,6 +589,32 @@ export class LmsStack extends TerraformStack {
         Name: `lms-service-${props.environmentSuffix}`,
       },
     });
+
+    // Outputs
+    new TerraformOutput(this, 'vpc-id', {
+      value: vpc.id,
+      description: 'VPC ID',
+    });
+
+    new TerraformOutput(this, 'alb-dns-name', {
+      value: alb.dnsName,
+      description: 'ALB DNS Name',
+    });
+
+    new TerraformOutput(this, 'rds-endpoint', {
+      value: rdsInstance.endpoint,
+      description: 'RDS Endpoint',
+    });
+
+    new TerraformOutput(this, 'db-secret-arn', {
+      value: dbSecret.arn,
+      description: 'Database Secret ARN',
+    });
+
+    new TerraformOutput(this, 'ecs-cluster-name', {
+      value: ecsCluster.name,
+      description: 'ECS Cluster Name',
+    });
   }
 }
 ```
@@ -620,16 +638,12 @@ interface TapStackProps {
   defaultTags?: AwsProviderDefaultTags;
 }
 
-const AWS_REGION_OVERRIDE = '';
-
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
-    const awsRegion = AWS_REGION_OVERRIDE
-      ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'us-east-1';
+    const awsRegion = props?.awsRegion || 'us-east-1';
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
@@ -646,13 +660,12 @@ export class TapStack extends TerraformStack {
       encrypt: true,
     });
 
-    this.addOverride('terraform.backend.s3.use_lockfile', true);
-
     new LmsStack(this, `lms-stack-${environmentSuffix}`, {
       environmentSuffix: environmentSuffix,
     });
   }
 }
+
 ```
 
 This infrastructure includes:
