@@ -62,64 +62,6 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   echo "🚀 Running CDKTF destroy..."
   npm run cdktf:destroy || echo "No resources to destroy or destruction failed"
 
-  # Force cleanup of orphaned resources that might not be tracked in state
-  echo "🔧 Cleaning up any orphaned AWS resources..."
-
-  # Temporarily disable exit-on-error for cleanup
-  set +e
-
-  # Get the environment suffix for resource names
-  CLEANUP_SUFFIX="${ENVIRONMENT_SUFFIX:-dev}"
-  echo "Looking for orphaned resources with suffix: $CLEANUP_SUFFIX"
-
-  # Check if this is a PR environment (pr followed by numbers)
-  if [[ "$CLEANUP_SUFFIX" =~ ^pr[0-9]+$ ]]; then
-    echo "PR environment detected, performing aggressive cleanup..."
-
-    # Force delete RDS instances if they exist
-    echo "  Checking for RDS instances..."
-    for instance in "streamflix-aurora-instance-1-${CLEANUP_SUFFIX}" "streamflix-aurora-instance-2-${CLEANUP_SUFFIX}"; do
-      if aws rds describe-db-instances --db-instance-identifier "$instance" --region eu-west-2 >/dev/null 2>&1; then
-        echo "  ⚠️ Found orphaned RDS instance: $instance"
-        echo "  🗑️ Deleting RDS instance: $instance"
-        aws rds delete-db-instance --db-instance-identifier "$instance" --skip-final-snapshot --delete-automated-backups --region eu-west-2 >/dev/null 2>&1 || true
-        echo "  ✅ Deletion initiated for: $instance"
-      fi
-    done
-
-    # Force delete ElastiCache replication group
-    echo "  Checking for ElastiCache replication group..."
-    REDIS_GROUP="streamflix-redis-${CLEANUP_SUFFIX}"
-    if aws elasticache describe-replication-groups --replication-group-id "$REDIS_GROUP" --region eu-west-2 >/dev/null 2>&1; then
-      echo "  ⚠️ Found orphaned ElastiCache group: $REDIS_GROUP"
-      echo "  🗑️ Deleting ElastiCache replication group: $REDIS_GROUP"
-      aws elasticache delete-replication-group --replication-group-id "$REDIS_GROUP" --no-retain-primary-cluster --region eu-west-2 >/dev/null 2>&1 || true
-      echo "  ✅ Deletion initiated for: $REDIS_GROUP"
-    fi
-
-    # Get EFS file system ID and delete mount targets
-    echo "  Checking for EFS mount targets..."
-    EFS_ID=$(aws efs describe-file-systems --region eu-west-2 --query "FileSystems[?Name=='streamflix-efs-${CLEANUP_SUFFIX}'].FileSystemId" --output text 2>/dev/null || echo "")
-    if [ -n "$EFS_ID" ] && [ "$EFS_ID" != "None" ]; then
-      echo "  ⚠️ Found EFS file system: $EFS_ID"
-      # Get and delete all mount targets for this file system
-      MOUNT_TARGETS=$(aws efs describe-mount-targets --file-system-id "$EFS_ID" --region eu-west-2 --query "MountTargets[].MountTargetId" --output text 2>/dev/null || echo "")
-      if [ -n "$MOUNT_TARGETS" ]; then
-        for mt in $MOUNT_TARGETS; do
-          echo "  🗑️ Deleting mount target: $mt"
-          aws efs delete-mount-target --mount-target-id "$mt" --region eu-west-2 >/dev/null 2>&1 || true
-          echo "  ✅ Deletion initiated for mount target: $mt"
-        done
-      fi
-    fi
-
-    echo "⏳ Waiting 10 seconds for resources to be deleted..."
-    sleep 10
-  fi
-
-  # Re-enable exit-on-error
-  set -e
-
 elif [ "$PLATFORM" = "cfn" ]; then
   echo "✅ CloudFormation project detected, running CloudFormation destroy..."
   npm run cfn:destroy || echo "No resources to destroy or destruction failed"

@@ -11,15 +11,5 @@
     "CI/CD Pipeline",
     "Infrastructure Analysis/Monitoring",
     "Security Configuration as Code"
-  ],
-  "aws_services": [
-    "ECS Fargate",
-    "RDS Aurora PostgreSQL Serverless v2",
-    "ElastiCache Redis",
-    "EFS",
-    "Kinesis Data Streams",
-    "API Gateway",
-    "Secrets Manager"
-  ],
-  "training_quality": "9"
+  ]
 }
