@@ -13,21 +13,5 @@
     "Failure Recovery Automation",
     "Infrastructure Analysis/Monitoring",
     "Security Configuration as Code"
-  ],
-  "aws_services": [
-    "Amazon Kinesis",
-    "Amazon ECS Fargate",
-    "Amazon RDS",
-    "Amazon ElastiCache",
-    "AWS Secrets Manager",
-    "Amazon API Gateway",
-    "Amazon EFS",
-    "AWS KMS",
-    "AWS CloudTrail",
-    "Amazon VPC",
-    "AWS Config",
-    "Amazon CloudWatch",
-    "Elastic Load Balancing"
-  ],
-  "training_quality": 9
+  ]
 }
