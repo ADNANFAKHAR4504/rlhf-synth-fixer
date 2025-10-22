@@ -49,5 +49,11 @@
   },
   "review_status": "APPROVED",
   "review_date": "2025-10-21",
-  "reviewer": "iac-code-reviewer"
+  "reviewer": "iac-code-reviewer",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
