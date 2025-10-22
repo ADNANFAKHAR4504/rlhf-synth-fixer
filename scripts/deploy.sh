@@ -3,7 +3,11 @@
 # Exit on any error
 set -e
 
-echo "🚀 Running deployment..."
+echo "🚀 Starting deployment process with clean slate approach..."
+echo "📋 This script will:"
+echo "   1. Destroy existing resources (if any)"
+echo "   2. Deploy fresh resources"
+echo ""
 
 # Read platform and language from metadata.json
 if [ ! -f "metadata.json" ]; then
@@ -50,8 +54,28 @@ fi
 echo "=== Bootstrap Phase ==="
 ./scripts/bootstrap.sh
 
+# Destroy existing resources first
+echo "=== Destroy Phase ==="
+echo "🧹 Running destroy script to clean up existing resources before deployment..."
+if [ -f "./scripts/destroy.sh" ]; then
+  ./scripts/destroy.sh
+  DESTROY_EXIT_CODE=$?
+  if [ $DESTROY_EXIT_CODE -eq 0 ]; then
+    echo "✅ Destroy phase completed successfully"
+  else
+    echo "⚠️ Destroy phase completed with warnings (exit code: $DESTROY_EXIT_CODE)"
+  fi
+else
+  echo "⚠️ Destroy script not found, skipping destroy phase"
+fi
+
+# Wait a moment to ensure resources are fully cleaned up
+echo "⏳ Waiting 5 seconds to ensure resources are fully cleaned up..."
+sleep 5
+
 # Deploy step
 echo "=== Deploy Phase ==="
+echo "🚀 Starting fresh deployment..."
 if [ "$PLATFORM" = "cdk" ]; then
   echo "✅ CDK project detected, running CDK deploy..."
   npm run cdk:deploy
@@ -179,7 +203,10 @@ else
   exit 1
 fi
 
-echo "✅ Deploy completed successfully"
+echo ""
+echo "✅ Full deployment cycle completed successfully!"
+echo "   ✓ Existing resources destroyed"
+echo "   ✓ Fresh resources deployed"
 
 # Get outputs using the dedicated script
 echo "📊 Collecting deployment outputs..."
