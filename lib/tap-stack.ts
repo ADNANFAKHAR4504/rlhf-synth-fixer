@@ -115,6 +115,10 @@ export class TapStack extends TerraformStack {
         CostCenter: 'Healthcare',
       },
       provider: primaryProvider,
+      lifecycle: {
+        createBeforeDestroy: true,
+        preventDestroy: false,
+      },
     });
 
     // Create Internet Gateway
@@ -124,6 +128,7 @@ export class TapStack extends TerraformStack {
         Name: `hipaa-igw-${environmentSuffix}`,
         Environment: environmentSuffix,
       },
+      dependsOn: [vpc],
       provider: primaryProvider,
     });
 
@@ -138,7 +143,10 @@ export class TapStack extends TerraformStack {
         Type: 'Public',
         Environment: environmentSuffix,
       },
-      dependsOn: [vpc],
+      dependsOn: [vpc, igw],
+      lifecycle: {
+        createBeforeDestroy: true,
+      },
       provider: primaryProvider,
     });
 
@@ -152,7 +160,10 @@ export class TapStack extends TerraformStack {
         Type: 'Public',
         Environment: environmentSuffix,
       },
-      dependsOn: [vpc],
+      dependsOn: [vpc, igw],
+      lifecycle: {
+        createBeforeDestroy: true,
+      },
       provider: primaryProvider,
     });
 
@@ -166,7 +177,10 @@ export class TapStack extends TerraformStack {
         Type: 'Private',
         Environment: environmentSuffix,
       },
-      dependsOn: [vpc],
+      dependsOn: [vpc, igw],
+      lifecycle: {
+        createBeforeDestroy: true,
+      },
       provider: primaryProvider,
     });
 
@@ -179,7 +193,10 @@ export class TapStack extends TerraformStack {
         Type: 'Private',
         Environment: environmentSuffix,
       },
-      dependsOn: [vpc],
+      dependsOn: [vpc, igw],
+      lifecycle: {
+        createBeforeDestroy: true,
+      },
       provider: primaryProvider,
     });
 
@@ -190,6 +207,7 @@ export class TapStack extends TerraformStack {
         Name: `hipaa-nat-eip-${environmentSuffix}`,
         Environment: environmentSuffix,
       },
+      dependsOn: [vpc],
       provider: primaryProvider,
     });
 
@@ -201,6 +219,7 @@ export class TapStack extends TerraformStack {
         Name: `hipaa-nat-gw-${environmentSuffix}`,
         Environment: environmentSuffix,
       },
+      dependsOn: [vpc, publicSubnet1, natEip],
       provider: primaryProvider,
     });
 
@@ -211,6 +230,7 @@ export class TapStack extends TerraformStack {
         Name: `hipaa-public-rt-${environmentSuffix}`,
         Environment: environmentSuffix,
       },
+      dependsOn: [vpc],
       provider: primaryProvider,
     });
 
@@ -617,7 +637,7 @@ export class TapStack extends TerraformStack {
           },
         },
       ],
-      dependsOn: [replicationPolicy],
+      dependsOn: [replicationPolicy, dataBucketDr, kmsKeyDr],
       provider: primaryProvider,
     });
 
