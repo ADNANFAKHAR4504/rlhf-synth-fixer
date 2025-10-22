@@ -768,7 +768,7 @@ class ComputeStack extends Stack {
                 .functionName("social-platform-" + environmentSuffix + "-routing")
                 .runtime(Runtime.JAVA_17)
                 .handler("com.social.platform.routing.RoutingHandler::handleRequest")
-                .code(Code.fromAsset("lambda/target/routing.jar"))
+                .code(Code.fromAsset("lib/src/lambda/src/target/lambda-functions.jar"))
                 .memorySize(512)
                 .timeout(Duration.seconds(30))
                 .role(lambdaRole)
