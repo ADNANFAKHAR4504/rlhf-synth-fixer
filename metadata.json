@@ -23,5 +23,9 @@
     "Application Load Balancer",
     "NAT Gateway",
     "Internet Gateway"
-  ]
+  ],
+  "training_quality": 8,
+  "task_id": "5962726542",
+  "region": "ca-central-1",
+  "environment_suffix": "dev"
 }
