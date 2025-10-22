@@ -628,6 +628,7 @@ class TapStack(cdk.Stack):
                 )
                 
                 # Create RDS instance with encryption
+                # Performance Insights requires t3.medium or larger
                 self.database = rds.DatabaseInstance(
                     self,
                     f"Database-{props.environment_suffix}",
@@ -636,9 +637,9 @@ class TapStack(cdk.Stack):
                     ),
                     instance_type=ec2.InstanceType.of(
                         ec2.InstanceClass.T3,
-                        (ec2.InstanceSize.MICRO
+                        (ec2.InstanceSize.SMALL
                          if props.environment_suffix == "dev"
-                         else ec2.InstanceSize.SMALL)
+                         else ec2.InstanceSize.MEDIUM)
                     ),
                     vpc=props.vpc,
                     vpc_subnets=ec2.SubnetSelection(
