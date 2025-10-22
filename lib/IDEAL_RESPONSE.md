@@ -1641,3 +1641,128 @@ output "fsx_dns_name" {
   value = aws_fsx_lustre_file_system.main.dns_name
 }
 ```
+
+## Lambda Functions
+
+### security-response/index.py
+```python
+# Lambda function for automated security incident response
+# Triggered by GuardDuty findings (severity >= 4)
+# Processes findings and sends SNS alerts
+
+import json
+import os
+import boto3
+
+sns = boto3.client('sns')
+
+def handler(event, context):
+    """
+    Process GuardDuty findings and send alerts
+    """
+    try:
+        detail = event.get('detail', {})
+        severity = detail.get('severity', 0)
+        finding_type = detail.get('type', 'Unknown')
+        
+        message = {
+            'severity': severity,
+            'type': finding_type,
+            'description': detail.get('description', 'No description'),
+            'region': event.get('region', 'unknown')
+        }
+        
+        sns_topic = os.environ.get('SNS_TOPIC_ARN')
+        if sns_topic:
+            sns.publish(
+                TopicArn=sns_topic,
+                Message=json.dumps(message, indent=2),
+                Subject=f'Security Alert: {finding_type}'
+            )
+        
+        return {
+            'statusCode': 200,
+            'body': json.dumps('Alert processed successfully')
+        }
+    except Exception as e:
+        print(f'Error: {str(e)}')
+        raise
+```
+
+### rotate-secret/lambda_function.py
+```python
+# Lambda function for automatic secret rotation in AWS Secrets Manager
+# Implements AWS Secrets Manager rotation strategy for RDS credentials
+# Rotation steps: createSecret -> setSecret -> testSecret -> finishSecret
+
+import json
+import boto3
+import os
+
+secrets_client = boto3.client('secretsmanager')
+
+def lambda_handler(event, context):
+    """
+    Rotate RDS master password
+    """
+    secret_arn = event['SecretId']
+    token = event['ClientRequestToken']
+    step = event['Step']
+    
+    metadata = secrets_client.describe_secret(SecretId=secret_arn)
+    
+    if step == 'createSecret':
+        create_secret(secret_arn, token)
+    elif step == 'setSecret':
+        set_secret(secret_arn, token)
+    elif step == 'testSecret':
+        test_secret(secret_arn, token)
+    elif step == 'finishSecret':
+        finish_secret(secret_arn, token)
+    else:
+        raise ValueError(f'Invalid step: {step}')
+    
+    return {'statusCode': 200}
+
+def create_secret(secret_arn, token):
+    """Create new secret version"""
+    password = secrets_client.get_random_password(
+        PasswordLength=32,
+        ExcludeCharacters='/@"\'\\'
+    )
+    
+    current = secrets_client.get_secret_value(SecretId=secret_arn)
+    secret = json.loads(current['SecretString'])
+    secret['password'] = password['RandomPassword']
+    
+    secrets_client.put_secret_value(
+        SecretId=secret_arn,
+        ClientRequestToken=token,
+        SecretString=json.dumps(secret),
+        VersionStages=['AWSPENDING']
+    )
+
+def set_secret(secret_arn, token):
+    """Set the secret in the database"""
+    pass
+
+def test_secret(secret_arn, token):
+    """Test the new secret"""
+    pass
+
+def finish_secret(secret_arn, token):
+    """Finalize the rotation"""
+    metadata = secrets_client.describe_secret(SecretId=secret_arn)
+    current_version = None
+    for version in metadata['VersionIdsToStages']:
+        if 'AWSCURRENT' in metadata['VersionIdsToStages'][version]:
+            current_version = version
+            break
+    
+    secrets_client.update_secret_version_stage(
+        SecretId=secret_arn,
+        VersionStage='AWSCURRENT',
+        MoveToVersionId=token,
+        RemoveFromVersionId=current_version
+    )
+```
