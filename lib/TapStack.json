@@ -12,12 +12,62 @@
   },
 
   "Resources": {
-    "CarbonCreditLedger": {
-      "Type": "AWS::QLDB::Ledger",
+    "LedgerTable": {
+      "Type": "AWS::DynamoDB::Table",
       "Properties": {
-        "Name": "CarbonCreditLedger",
-        "DeletionProtection": true,
-        "PermissionsMode": "STANDARD",
+        "TableName": { "Fn::Sub": "CarbonCreditLedger-${Environment}" },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "RecordID",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "TransactionTime",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "Version",
+            "AttributeType": "N"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "RecordID",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "Version",
+            "KeyType": "RANGE"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "TransactionTimeIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "TransactionTime",
+                "KeyType": "HASH"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            },
+            "ProvisionedThroughput": {
+              "ReadCapacityUnits": 5,
+              "WriteCapacityUnits": 5
+            }
+          }
+        ],
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "ProvisionedThroughput": {
+          "ReadCapacityUnits": 5,
+          "WriteCapacityUnits": 5
+        },
         "Tags": [
           {
             "Key": "Environment",
@@ -262,11 +312,14 @@
                   "Action": [
                     "dynamodb:GetItem",
                     "dynamodb:PutItem",
-                    "dynamodb:Query"
+                    "dynamodb:Query",
+                    "dynamodb:UpdateItem"
                   ],
                   "Resource": [
                     { "Fn::GetAtt": ["TradeTable", "Arn"] },
-                    { "Fn::Sub": "${TradeTable.Arn}/index/*" }
+                    { "Fn::GetAtt": ["LedgerTable", "Arn"] },
+                    { "Fn::Sub": "${TradeTable.Arn}/index/*" },
+                    { "Fn::Sub": "${LedgerTable.Arn}/index/*" }
                   ]
                 },
                 {
@@ -394,9 +447,13 @@
       "Description": "Name of the certificate DynamoDB table",
       "Value": { "Ref": "CertificateTable" }
     },
-    "LedgerName": {
-      "Description": "Name of the QLDB ledger",
-      "Value": { "Ref": "CarbonCreditLedger" }
+    "LedgerTableName": {
+      "Description": "Name of the immutable ledger DynamoDB table",
+      "Value": { "Ref": "LedgerTable" }
+    },
+    "LedgerTableArn": {
+      "Description": "ARN of the immutable ledger DynamoDB table",
+      "Value": { "Fn::GetAtt": ["LedgerTable", "Arn"] }
     }
   }
 }
