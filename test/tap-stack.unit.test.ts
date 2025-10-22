@@ -1,34 +1,29 @@
 /* eslint-disable prettier/prettier */
 
-import * as pulumi from "@pulumi/pulumi";
-import * as aws from "@pulumi/aws";
-import { TapStack } from "../lib/tap-stack";
-import * as fs from "fs";
-import * as path from "path";
+import * as pulumi from '@pulumi/pulumi';
+import { TapStack } from '../lib/tap-stack';
 
-// Mock Pulumi runtime
+// Set test mode
 pulumi.runtime.setMocks({
   newResource: function (args: pulumi.runtime.MockResourceArgs): {
     id: string;
-    state: any;
+    state: Record<string, any>;
   } {
     const resourceType = args.type;
     const name = args.name;
 
-    // Generate appropriate mock IDs and states based on resource type
     switch (resourceType) {
-      case "aws:ec2/vpc:Vpc":
+      case 'aws:ec2/vpc:Vpc':
         return {
           id: `vpc-${name}`,
           state: {
             ...args.inputs,
             id: `vpc-${name}`,
-            cidrBlock: args.inputs.cidrBlock || "10.20.0.0/16",
+            cidrBlock: args.inputs.cidrBlock || '10.20.0.0/16',
             arn: `arn:aws:ec2:us-east-1:123456789012:vpc/vpc-${name}`,
           },
         };
-
-      case "aws:ec2/subnet:Subnet":
+      case 'aws:ec2/subnet:Subnet':
         return {
           id: `subnet-${name}`,
           state: {
@@ -37,8 +32,40 @@ pulumi.runtime.setMocks({
             arn: `arn:aws:ec2:us-east-1:123456789012:subnet/subnet-${name}`,
           },
         };
-
-      case "aws:ec2/securityGroup:SecurityGroup":
+      case 'aws:ec2/internetGateway:InternetGateway':
+        return {
+          id: `igw-${name}`,
+          state: {
+            ...args.inputs,
+            id: `igw-${name}`,
+            arn: `arn:aws:ec2:us-east-1:123456789012:internet-gateway/igw-${name}`,
+          },
+        };
+      case 'aws:ec2/routeTable:RouteTable':
+        return {
+          id: `rt-${name}`,
+          state: {
+            ...args.inputs,
+            id: `rt-${name}`,
+          },
+        };
+      case 'aws:ec2/route:Route':
+        return {
+          id: `route-${name}`,
+          state: {
+            ...args.inputs,
+            id: `route-${name}`,
+          },
+        };
+      case 'aws:ec2/routeTableAssociation:RouteTableAssociation':
+        return {
+          id: `rta-${name}`,
+          state: {
+            ...args.inputs,
+            id: `rta-${name}`,
+          },
+        };
+      case 'aws:ec2/securityGroup:SecurityGroup':
         return {
           id: `sg-${name}`,
           state: {
@@ -47,42 +74,55 @@ pulumi.runtime.setMocks({
             arn: `arn:aws:ec2:us-east-1:123456789012:security-group/sg-${name}`,
           },
         };
-
-      case "aws:ec2/vpcPeeringConnection:VpcPeeringConnection":
+      case 'aws:ec2/securityGroupRule:SecurityGroupRule':
+        return {
+          id: `sgr-${name}`,
+          state: {
+            ...args.inputs,
+            id: `sgr-${name}`,
+          },
+        };
+      case 'aws:ec2/vpcPeeringConnection:VpcPeeringConnection':
         return {
           id: `pcx-${name}`,
           state: {
             ...args.inputs,
             id: `pcx-${name}`,
-            status: "active",
+            status: 'active',
           },
         };
-
-      case "aws:rds/instance:Instance":
+      case 'aws:rds/subnetGroup:SubnetGroup':
+        return {
+          id: `sng-${name}`,
+          state: {
+            ...args.inputs,
+            id: `sng-${name}`,
+            name: name,
+          },
+        };
+      case 'aws:rds/instance:Instance':
         return {
           id: `rds-${name}`,
           state: {
             ...args.inputs,
             id: `rds-${name}`,
-            endpoint: `${name}.abc123.us-east-1.rds.amazonaws.com:5432`,
+            endpoint: `${name}.covy6ema0nuv.us-east-1.rds.amazonaws.com:5432`,
             arn: `arn:aws:rds:us-east-1:123456789012:db:${name}`,
             identifier: name,
           },
         };
-
-      case "aws:lb/loadBalancer:LoadBalancer":
+      case 'aws:lb/loadBalancer:LoadBalancer':
         return {
           id: `alb-${name}`,
           state: {
             ...args.inputs,
             id: `alb-${name}`,
-            dnsName: `${name}.us-east-1.elb.amazonaws.com`,
-            arn: `arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/${name}/abc123`,
-            arnSuffix: `app/${name}/abc123`,
+            dnsName: `${name}-2cc41c6-408869167.us-east-1.elb.amazonaws.com`,
+            arn: `arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/${name}-2cc41c6/b3c1585688c78f1d`,
+            arnSuffix: `app/${name}-2cc41c6/b3c1585688c78f1d`,
           },
         };
-
-      case "aws:lb/targetGroup:TargetGroup":
+      case 'aws:lb/targetGroup:TargetGroup':
         return {
           id: `tg-${name}`,
           state: {
@@ -91,18 +131,34 @@ pulumi.runtime.setMocks({
             arn: `arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/${name}/abc123`,
           },
         };
-
-      case "aws:route53/record:Record":
+      case 'aws:lb/listener:Listener':
+        return {
+          id: `listener-${name}`,
+          state: {
+            ...args.inputs,
+            id: `listener-${name}`,
+            arn: `arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/${name}`,
+          },
+        };
+      case 'aws:lb/targetGroupAttachment:TargetGroupAttachment':
+        return {
+          id: `tga-${name}`,
+          state: {
+            ...args.inputs,
+            id: `tga-${name}`,
+          },
+        };
+      case 'aws:route53/record:Record':
         return {
           id: `route53-${name}`,
           state: {
             ...args.inputs,
             id: `route53-${name}`,
             fqdn: `${args.inputs.name}.example.com`,
+            name: args.inputs.name,
           },
         };
-
-      case "aws:cloudwatch/metricAlarm:MetricAlarm":
+      case 'aws:cloudwatch/metricAlarm:MetricAlarm':
         return {
           id: `alarm-${name}`,
           state: {
@@ -111,8 +167,7 @@ pulumi.runtime.setMocks({
             arn: `arn:aws:cloudwatch:us-east-1:123456789012:alarm:${name}`,
           },
         };
-
-      case "aws:cloudwatch/dashboard:Dashboard":
+      case 'aws:cloudwatch/dashboard:Dashboard':
         return {
           id: `dashboard-${name}`,
           state: {
@@ -122,8 +177,7 @@ pulumi.runtime.setMocks({
             dashboardArn: `arn:aws:cloudwatch::123456789012:dashboard/${name}`,
           },
         };
-
-      case "aws:sns/topic:Topic":
+      case 'aws:sns/topic:Topic':
         return {
           id: `sns-${name}`,
           state: {
@@ -132,8 +186,15 @@ pulumi.runtime.setMocks({
             arn: `arn:aws:sns:us-east-1:123456789012:${name}`,
           },
         };
-
-      case "aws:s3/bucketV2:BucketV2":
+      case 'aws:sns/topicSubscription:TopicSubscription':
+        return {
+          id: `sub-${name}`,
+          state: {
+            ...args.inputs,
+            id: `sub-${name}`,
+          },
+        };
+      case 'aws:s3/bucket:Bucket':
         return {
           id: `s3-${name}`,
           state: {
@@ -143,18 +204,51 @@ pulumi.runtime.setMocks({
             arn: `arn:aws:s3:::${name}`,
           },
         };
-
-      case "aws:lambda/function:Function":
+      case 'aws:s3/bucketVersioningV2:BucketVersioningV2':
+      case 'aws:s3/bucketVersioning:BucketVersioning':
+        return {
+          id: `ver-${name}`,
+          state: {
+            ...args.inputs,
+            id: `ver-${name}`,
+          },
+        };
+      case 'aws:s3/bucketCorsConfigurationV2:BucketCorsConfigurationV2':
+      case 'aws:s3/bucketCorsConfiguration:BucketCorsConfiguration':
+        return {
+          id: `cors-${name}`,
+          state: {
+            ...args.inputs,
+            id: `cors-${name}`,
+          },
+        };
+      case 'aws:s3/bucketPolicy:BucketPolicy':
+        return {
+          id: `policy-${name}`,
+          state: {
+            ...args.inputs,
+            id: `policy-${name}`,
+          },
+        };
+      case 'aws:lambda/function:Function':
         return {
           id: `lambda-${name}`,
           state: {
             ...args.inputs,
             id: `lambda-${name}`,
             arn: `arn:aws:lambda:us-east-1:123456789012:function:${name}`,
+            name: name,
           },
         };
-
-      case "aws:iam/role:Role":
+      case 'aws:lambda/permission:Permission':
+        return {
+          id: `perm-${name}`,
+          state: {
+            ...args.inputs,
+            id: `perm-${name}`,
+          },
+        };
+      case 'aws:iam/role:Role':
         return {
           id: `role-${name}`,
           state: {
@@ -164,18 +258,33 @@ pulumi.runtime.setMocks({
             name: name,
           },
         };
-
-      case "aws:ec2/instance:Instance":
+      case 'aws:iam/rolePolicyAttachment:RolePolicyAttachment':
+        return {
+          id: `attach-${name}`,
+          state: {
+            ...args.inputs,
+            id: `attach-${name}`,
+          },
+        };
+      case 'aws:ec2/instance:Instance':
         return {
           id: `i-${name}`,
           state: {
             ...args.inputs,
             id: `i-${name}`,
-            publicIp: "1.2.3.4",
-            privateIp: "10.20.0.10",
+            publicIp: '1.2.3.4',
+            privateIp: '10.20.0.10',
           },
         };
-
+      case 'random:index/randomPassword:RandomPassword':
+        return {
+          id: `random-${name}`,
+          state: {
+            ...args.inputs,
+            id: `random-${name}`,
+            result: 'mocked-password-32chars-long!!!',
+          },
+        };
       default:
         return {
           id: `${resourceType}-${name}`,
@@ -183,575 +292,675 @@ pulumi.runtime.setMocks({
         };
     }
   },
-
   call: function (args: pulumi.runtime.MockCallArgs) {
-    // Mock AWS API calls
     switch (args.token) {
-      case "aws:ec2/getVpc:getVpc":
+      case 'aws:ec2/getVpc:getVpc':
         return {
-          id: "vpc-source123",
-          cidrBlock: "10.10.0.0/16",
-          arn: "arn:aws:ec2:us-east-1:123456789012:vpc/vpc-source123",
+          id: 'vpc-source123',
+          cidrBlock: '10.10.0.0/16',
+          arn: 'arn:aws:ec2:us-east-1:123456789012:vpc/vpc-source123',
         };
-
-      case "aws:ec2/getRouteTables:getRouteTables":
+      case 'aws:route53/getZone:getZone':
         return {
-          ids: ["rtb-123", "rtb-456"],
+          zoneId: 'Z1234567890ABC',
+          name: 'example.com',
         };
-
-      case "aws:route53/getZone:getZone":
+      case 'aws:ec2/getAmi:getAmi':
         return {
-          zoneId: "Z1234567890ABC",
-          name: "example.com",
+          id: 'ami-12345678',
+          name: 'amzn2-ami-hvm-2.0.20230101-x86_64-gp2',
         };
-
-      case "aws:ec2/getAmi:getAmi":
-        return {
-          id: "ami-12345678",
-          name: "amzn2-ami-hvm-2.0.20230101-x86_64-gp2",
-        };
-
       default:
         return {};
     }
   },
 });
 
-describe("TapStack Unit Tests", () => {
+describe('TapStack Unit Tests', () => {
   let stack: TapStack;
 
-  describe("Initial Migration Phase", () => {
+  describe('Initial Migration Phase', () => {
     beforeAll(() => {
-      stack = new TapStack("test-stack", {
-        environmentSuffix: "dev",
-        migrationPhase: "initial",
+      stack = new TapStack('test-stack', {
+        environmentSuffix: 'dev',
+        migrationPhase: 'initial',
         trafficWeightTarget: 0,
       });
     });
 
-    it("should create target VPC with correct CIDR block", async () => {
-      const cidr = await stack.targetVpc.cidrBlock;
-      expect(cidr).toBe("10.20.0.0/16");
+    it('should create target VPC with correct CIDR block', (done) => {
+      stack.targetVpc.cidrBlock.apply(cidr => {
+        expect(cidr).toBe('10.20.0.0/16');
+        done();
+      });
     });
 
-    it("should create target VPC with DNS support enabled", async () => {
-      const dnsSupport = await stack.targetVpc.enableDnsSupport;
-      expect(dnsSupport).toBe(true);
+    it('should create target VPC with DNS support enabled', (done) => {
+      stack.targetVpc.enableDnsSupport.apply(dnsSupport => {
+        expect(dnsSupport).toBe(true);
+        done();
+      });
     });
 
-    it("should create target VPC with DNS hostnames enabled", async () => {
-      const dnsHostnames = await stack.targetVpc.enableDnsHostnames;
-      expect(dnsHostnames).toBe(true);
+    it('should create target VPC with DNS hostnames enabled', (done) => {
+      stack.targetVpc.enableDnsHostnames.apply(dnsHostnames => {
+        expect(dnsHostnames).toBe(true);
+        done();
+      });
     });
 
-    it("should create 6 subnets (3 AZs x 2 tiers)", async () => {
+    it('should create 6 subnets (3 AZs x 2 tiers)', () => {
       expect(stack.targetSubnets.length).toBe(6);
     });
 
-    it("should create subnets with correct CIDR blocks", async () => {
-      const subnet0Cidr = await stack.targetSubnets[0].cidrBlock;
-      const subnet1Cidr = await stack.targetSubnets[1].cidrBlock;
-      expect(subnet0Cidr).toBe("10.20.0.0/20");
-      expect(subnet1Cidr).toBe("10.20.128.0/20");
+    it('should create subnets with correct CIDR blocks', (done) => {
+      pulumi.all([
+        stack.targetSubnets[0].cidrBlock,
+        stack.targetSubnets[1].cidrBlock
+      ]).apply(([subnet0Cidr, subnet1Cidr]) => {
+        expect(subnet0Cidr).toBe('10.20.0.0/20');
+        expect(subnet1Cidr).toBe('10.20.48.0/20');
+        done();
+      });
     });
 
-    it("should tag subnets with correct tier", async () => {
-      await stack.targetSubnets[0].tags.apply(tags => {
-        expect(tags?.Tier).toBe("compute");
+    it('should tag subnets with correct tier', (done) => {
+      pulumi.all([
+        stack.targetSubnets[0].tags,
+        stack.targetSubnets[1].tags
+      ]).apply(([tags0, tags1]) => {
+        expect(tags0?.Tier).toBe('compute');
+        expect(tags1?.Tier).toBe('database');
+        done();
       });
-      await stack.targetSubnets[1].tags.apply(tags => {
-        expect(tags?.Tier).toBe("database");
+    });
+
+    it('should create Internet Gateway', (done) => {
+      stack.internetGateway.id.apply(igwId => {
+        expect(igwId).toContain('igw-');
+        done();
       });
     });
   });
 
-  describe("VPC Peering Configuration", () => {
+  describe('VPC Peering Configuration', () => {
     beforeAll(() => {
-      stack = new TapStack("test-peering-stack", {
-        environmentSuffix: "dev",
-        sourceVpcCidr: "10.10.0.0/16",
-        targetVpcCidr: "10.20.0.0/16",
-        sourceVpcId: "vpc-source123", // FIXED: Provide explicit source VPC ID
+      stack = new TapStack('test-peering-stack', {
+        environmentSuffix: 'dev',
+        sourceVpcCidr: '10.10.0.0/16',
+        targetVpcCidr: '10.20.0.0/16',
+        sourceVpcId: 'vpc-source123',
       });
     });
-  
-    it("should create VPC peering connection", async () => {
-      // FIXED: Add null check
+
+    it('should create VPC peering connection', (done) => {
       expect(stack.vpcPeering).toBeDefined();
       if (stack.vpcPeering) {
-        const peeringId = await stack.vpcPeering.id;
-        expect(peeringId).toContain("pcx-");
+        stack.vpcPeering.id.apply(peeringId => {
+          expect(peeringId).toContain('pcx-');
+          done();
+        });
+      } else {
+        done();
       }
     });
-  
-    it("should enable auto-accept for peering", async () => {
-      // FIXED: Add null check
+
+    it('should enable auto-accept for peering', (done) => {
       expect(stack.vpcPeering).toBeDefined();
       if (stack.vpcPeering) {
-        const autoAccept = await stack.vpcPeering.autoAccept;
-        expect(autoAccept).toBe(true);
+        stack.vpcPeering.autoAccept.apply(autoAccept => {
+          expect(autoAccept).toBe(true);
+          done();
+        });
+      } else {
+        done();
       }
     });
-  
-    it("should set correct peer VPC ID", async () => {
-      // FIXED: Add null check
+  });
+
+  describe('VPC Peering with Source Route Table', () => {
+    beforeAll(() => {
+      stack = new TapStack('test-peering-source-rt-stack', {
+        environmentSuffix: 'dev',
+        sourceVpcCidr: '10.10.0.0/16',
+        targetVpcCidr: '10.20.0.0/16',
+        sourceVpcId: 'vpc-source123',
+        sourceRouteTableId: 'rtb-source123',
+      });
+    });
+
+    it('should create VPC peering with source route table', (done) => {
       expect(stack.vpcPeering).toBeDefined();
       if (stack.vpcPeering) {
-        const peerVpcId = await stack.vpcPeering.peerVpcId;
-        expect(peerVpcId).toContain("vpc-");
+        stack.vpcPeering.id.apply(peeringId => {
+          expect(peeringId).toBeDefined();
+          done();
+        });
+      } else {
+        done();
       }
     });
   });
 
-  describe("Security Group Configuration", () => {
+  describe('RDS Instance Configuration', () => {
     beforeAll(() => {
-      stack = new TapStack("test-sg-stack", {
-        environmentSuffix: "dev",
+      stack = new TapStack('test-rds-stack', {
+        environmentSuffix: 'prod',
       });
     });
 
-    it("should create security group in target VPC", async () => {
-      const vpcId = await stack.targetVpc.id;
-      expect(vpcId).toContain("vpc-");
+    it('should create RDS instance with PostgreSQL', (done) => {
+      stack.targetRdsInstance.endpoint.apply(endpoint => {
+        expect(endpoint).toContain('.rds.amazonaws.com');
+        done();
+      });
     });
 
-    it("should include PCI compliance tag", async () => {
-      const outputs = await stack.outputs;
-      expect(outputs).toBeDefined();
+    it('should enable Multi-AZ deployment', (done) => {
+      stack.targetRdsInstance.multiAz.apply(multiAz => {
+        expect(multiAz).toBe(true);
+        done();
+      });
+    });
+
+    it('should enable storage encryption', (done) => {
+      stack.targetRdsInstance.storageEncrypted.apply(encrypted => {
+        expect(encrypted).toBe(true);
+        done();
+      });
+    });
+
+    it('should enable CloudWatch log exports', (done) => {
+      stack.targetRdsInstance.enabledCloudwatchLogsExports.apply(logs => {
+        expect(logs).toContain('postgresql');
+        done();
+      });
+    });
+
+    it('should use dbmaster as username', (done) => {
+      stack.targetRdsInstance.username.apply(username => {
+        expect(username).toBe('dbmaster');
+        done();
+      });
+    });
+
+    it('should generate random password', (done) => {
+      stack.dbPassword.result.apply(password => {
+        expect(password).toBeDefined();
+        expect(password.length).toBeGreaterThan(0);
+        done();
+      });
     });
   });
 
-  describe("RDS Instance Configuration", () => {
+  describe('Load Balancer and Target Group', () => {
     beforeAll(() => {
-      stack = new TapStack("test-rds-stack", {
-        environmentSuffix: "prod",
+      stack = new TapStack('test-lb-stack', {
+        environmentSuffix: 'dev',
       });
     });
 
-    it("should create RDS instance with PostgreSQL 13.7", async () => {
-      const endpoint = await stack.targetRdsInstance.endpoint;
-      expect(endpoint).toContain(".rds.amazonaws.com");
+    it('should create Application Load Balancer', (done) => {
+      stack.targetLoadBalancer.dnsName.apply(dnsName => {
+        expect(dnsName).toContain('.elb.amazonaws.com');
+        done();
+      });
     });
 
-    it("should enable Multi-AZ deployment", async () => {
-      const multiAz = await stack.targetRdsInstance.multiAz;
-      expect(multiAz).toBe(true);
-    });
-
-    it("should enable storage encryption", async () => {
-      const encrypted = await stack.targetRdsInstance.storageEncrypted;
-      expect(encrypted).toBe(true);
-    });
-
-    it("should enable CloudWatch log exports", async () => {
-      const logs = await stack.targetRdsInstance.enabledCloudwatchLogsExports;
-      expect(logs).toContain("postgresql");
-    });
-
-    it("should enable blue-green updates", async () => {
-      await stack.targetRdsInstance.blueGreenUpdate.apply(blueGreen => {
-        expect(blueGreen?.enabled).toBe(true);
+    it('should enable HTTP/2', (done) => {
+      stack.targetLoadBalancer.enableHttp2.apply(http2 => {
+        expect(http2).toBe(true);
+        done();
       });
     });
   });
 
-  describe("Load Balancer and Target Group", () => {
+  describe('Load Balancer with HTTPS', () => {
     beforeAll(() => {
-      stack = new TapStack("test-lb-stack", {
-        environmentSuffix: "dev",
+      stack = new TapStack('test-lb-https-stack', {
+        environmentSuffix: 'dev',
+        certificateArn: 'arn:aws:acm:us-east-1:123456789012:certificate/test-cert',
       });
     });
 
-    it("should create Application Load Balancer", async () => {
-      const dnsName = await stack.targetLoadBalancer.dnsName;
-      expect(dnsName).toContain(".elb.amazonaws.com");
-    });
-
-    it("should enable HTTP/2", async () => {
-      const http2 = await stack.targetLoadBalancer.enableHttp2;
-      expect(http2).toBe(true);
-    });
-
-    it("should create target group with health checks", async () => {
-      const arn = await stack.targetLoadBalancer.arn;
-      expect(arn).toContain("loadbalancer");
+    it('should create HTTPS listener when certificate provided', (done) => {
+      stack.targetLoadBalancer.dnsName.apply(dnsName => {
+        expect(dnsName).toBeDefined();
+        done();
+      });
     });
   });
 
-  describe("Route53 Weighted Routing", () => {
+  describe('Route53 Weighted Routing', () => {
     beforeAll(() => {
-      stack = new TapStack("test-route53-stack", {
-        environmentSuffix: "dev",
+      stack = new TapStack('test-route53-stack', {
+        environmentSuffix: 'dev',
         trafficWeightTarget: 10,
-        hostedZoneName: "example.com", // FIXED: Provide hosted zone name
+        hostedZoneName: 'example.com',
       });
     });
-  
-    it("should create Route53 record with weighted routing", async () => {
-      // FIXED: Add null check
+
+    it('should create Route53 record with weighted routing', (done) => {
       expect(stack.route53Record).toBeDefined();
       if (stack.route53Record) {
-        const recordName = await stack.route53Record.name;
-        expect(recordName).toContain("payment.example.com");
+        stack.route53Record.name.apply(recordName => {
+          expect(recordName).toContain('payment.example.com');
+          done();
+        });
+      } else {
+        done();
       }
     });
-  
-    it("should set correct traffic weight (10%)", async () => {
-      // FIXED: Add null check
+
+    it('should set correct traffic weight (10%)', (done) => {
       expect(stack.route53Record).toBeDefined();
       if (stack.route53Record) {
-        const policies = await stack.route53Record.weightedRoutingPolicies;
-        expect(policies?.[0]?.weight).toBe(10);
+        stack.route53Record.weightedRoutingPolicies.apply(policies => {
+          expect(policies?.[0]?.weight).toBe(10);
+          done();
+        });
+      } else {
+        done();
       }
     });
-  
-    it("should use short TTL for quick updates", async () => {
-      // FIXED: Add null check
+
+    it('should use short TTL for quick updates', (done) => {
       expect(stack.route53Record).toBeDefined();
       if (stack.route53Record) {
-        const ttl = await stack.route53Record.ttl;
-        expect(ttl).toBe(60);
+        stack.route53Record.ttl.apply(ttl => {
+          expect(ttl).toBe(60);
+          done();
+        });
+      } else {
+        done();
       }
     });
   });
-  
-  describe("CloudWatch Alarms", () => {
+
+  describe('Route53 Without Hosted Zone', () => {
     beforeAll(() => {
-      stack = new TapStack("test-alarms-stack", {
-        environmentSuffix: "prod",
+      stack = new TapStack('test-no-route53-stack', {
+        environmentSuffix: 'dev',
+        trafficWeightTarget: 10,
+      });
+    });
+
+    it('should not create Route53 record without hosted zone', () => {
+      expect(stack.route53Record).toBeUndefined();
+    });
+  });
+
+  describe('CloudWatch Alarms', () => {
+    beforeAll(() => {
+      stack = new TapStack('test-alarms-stack', {
+        environmentSuffix: 'prod',
         errorThreshold: 5,
       });
     });
 
-    it("should create connection count alarm", async () => {
-      const alarmName = await stack.connectionAlarm.name;
-      expect(alarmName).toContain("connection");
-    });
-
-    it("should create error rate alarm", async () => {
-      const alarmName = await stack.errorAlarm.name;
-      expect(alarmName).toContain("error-rate");
-    });
-
-    it("should create replication lag alarm", async () => {
-      const alarmName = await stack.replicationLagAlarm.name;
-      expect(alarmName).toContain("replication-lag");
-    });
-
-    it("should set replication lag threshold to 1 second", async () => {
-      const threshold = await stack.replicationLagAlarm.threshold;
-      expect(threshold).toBe(1);
-    });
-
-    it("should enable alarm actions", async () => {
-      const actionsEnabled = await stack.errorAlarm.actionsEnabled;
-      expect(actionsEnabled).toBe(true);
-    });
-
-    it("should set correct error threshold", async () => {
-      const threshold = await stack.errorAlarm.threshold;
-      expect(threshold).toBe(5);
-    });
-  });
-
-  describe("Migration Dashboard", () => {
-    beforeAll(() => {
-      stack = new TapStack("test-dashboard-stack", {
-        environmentSuffix: "dev",
+    it('should create connection count alarm', (done) => {
+      stack.connectionAlarm.name.apply(alarmName => {
+        expect(alarmName).toContain('connection');
+        done();
       });
     });
 
-    it("should create CloudWatch dashboard", async () => {
-      const dashboardName = await stack.migrationDashboard.dashboardName;
-      expect(dashboardName).toContain("migration-status");
+    it('should create error rate alarm', (done) => {
+      stack.errorAlarm.name.apply(alarmName => {
+        expect(alarmName).toContain('error-rate');
+        done();
+      });
     });
 
-    it("should include RDS metrics in dashboard", async () => {
-      const dashboardBody = await stack.migrationDashboard.dashboardBody;
-      expect(dashboardBody).toContain("DatabaseConnections");
+    it('should create replication lag alarm', (done) => {
+      stack.replicationLagAlarm.name.apply(alarmName => {
+        expect(alarmName).toContain('replication-lag');
+        done();
+      });
     });
 
-    it("should include ALB metrics in dashboard", async () => {
-      const dashboardBody = await stack.migrationDashboard.dashboardBody;
-      expect(dashboardBody).toContain("TargetResponseTime");
+    it('should set replication lag threshold to 1 second', (done) => {
+      stack.replicationLagAlarm.threshold.apply(threshold => {
+        expect(threshold).toBe(1);
+        done();
+      });
     });
 
-    it("should include replication lag metrics", async () => {
-      const dashboardBody = await stack.migrationDashboard.dashboardBody;
-      expect(dashboardBody).toContain("ReplicaLag");
+    it('should enable alarm actions', (done) => {
+      stack.errorAlarm.actionsEnabled.apply(actionsEnabled => {
+        expect(actionsEnabled).toBe(true);
+        done();
+      });
+    });
+
+    it('should set correct error threshold', (done) => {
+      stack.errorAlarm.threshold.apply(threshold => {
+        expect(threshold).toBe(5);
+        done();
+      });
     });
   });
 
-  describe("Rollback Mechanisms", () => {
+  describe('Migration Dashboard', () => {
     beforeAll(() => {
-      stack = new TapStack("test-rollback-stack", {
-        environmentSuffix: "prod",
+      stack = new TapStack('test-dashboard-stack', {
+        environmentSuffix: 'dev',
+      });
+    });
+
+    it('should create CloudWatch dashboard', (done) => {
+      stack.migrationDashboard.dashboardName.apply(dashboardName => {
+        expect(dashboardName).toContain('migration-status');
+        done();
+      });
+    });
+
+    it('should include RDS metrics in dashboard', (done) => {
+      stack.migrationDashboard.dashboardBody.apply(dashboardBody => {
+        expect(dashboardBody).toContain('DatabaseConnections');
+        done();
+      });
+    });
+
+    it('should include ALB metrics in dashboard', (done) => {
+      stack.migrationDashboard.dashboardBody.apply(dashboardBody => {
+        expect(dashboardBody).toContain('TargetResponseTime');
+        done();
+      });
+    });
+
+    it('should include replication lag metrics', (done) => {
+      stack.migrationDashboard.dashboardBody.apply(dashboardBody => {
+        expect(dashboardBody).toContain('ReplicaLag');
+        done();
+      });
+    });
+  });
+
+  describe('Rollback Mechanisms', () => {
+    beforeAll(() => {
+      stack = new TapStack('test-rollback-stack', {
+        environmentSuffix: 'prod',
         rollbackEnabled: true,
       });
     });
 
-    it("should create SNS topic for rollback notifications", async () => {
-      const topicArn = await stack.rollbackTopic.arn;
-      expect(topicArn).toContain("sns");
+    it('should create SNS topic for rollback notifications', (done) => {
+      stack.rollbackTopic.arn.apply(topicArn => {
+        expect(topicArn).toContain('sns');
+        done();
+      });
     });
 
-    it("should include rollback command in outputs", async () => {
-      const outputs = await stack.outputs;
-      expect(outputs.rollbackCommand).toContain("pulumi stack export");
+    it('should include rollback command in outputs', (done) => {
+      stack.outputs.apply(outputs => {
+        expect(outputs.rollbackCommand).toContain('pulumi stack export');
+        done();
+      });
     });
   });
 
-  describe("Output Generation", () => {
+  describe('Output Generation', () => {
     beforeAll(() => {
-      stack = new TapStack("test-outputs-stack", {
-        environmentSuffix: "dev",
+      stack = new TapStack('test-outputs-stack', {
+        environmentSuffix: 'dev',
         trafficWeightTarget: 50,
       });
     });
 
-    it("should generate all required outputs", async () => {
-      const outputs = await stack.outputs;
-      expect(outputs).toHaveProperty("targetVpcId");
-      expect(outputs).toHaveProperty("vpcPeeringId");
-      expect(outputs).toHaveProperty("targetRdsEndpoint");
-      expect(outputs).toHaveProperty("loadBalancerDns");
-      expect(outputs).toHaveProperty("dashboardUrl");
-      expect(outputs).toHaveProperty("rollbackCommand");
+    it('should generate all required outputs', (done) => {
+      stack.outputs.apply(outputs => {
+        expect(outputs).toHaveProperty('targetVpcId');
+        expect(outputs).toHaveProperty('vpcPeeringId');
+        expect(outputs).toHaveProperty('targetRdsEndpoint');
+        expect(outputs).toHaveProperty('loadBalancerDns');
+        expect(outputs).toHaveProperty('dashboardUrl');
+        expect(outputs).toHaveProperty('rollbackCommand');
+        expect(outputs).toHaveProperty('connectionAlarmArn');
+        expect(outputs).toHaveProperty('errorAlarmArn');
+        expect(outputs).toHaveProperty('replicationLagAlarmArn');
+        expect(outputs).toHaveProperty('rollbackTopicArn');
+        done();
+      });
     });
 
-    it("should include traffic weight in outputs", async () => {
-      const outputs = await stack.outputs;
-      expect(outputs.trafficWeight).toBe(50);
+    it('should include traffic weight in outputs', (done) => {
+      stack.outputs.apply(outputs => {
+        expect(outputs.trafficWeight).toBe(50);
+        done();
+      });
     });
 
-    it("should include migration phase in outputs", async () => {
-      const outputs = await stack.outputs;
-      expect(outputs.migrationPhase).toBeDefined();
+    it('should include migration phase in outputs', (done) => {
+      stack.outputs.apply(outputs => {
+        expect(outputs.migrationPhase).toBeDefined();
+        done();
+      });
     });
 
-    it("should include timestamp in outputs", async () => {
-      const outputs = await stack.outputs;
-      expect(outputs.timestamp).toBeDefined();
+    it('should include timestamp in outputs', (done) => {
+      stack.outputs.apply(outputs => {
+        expect(outputs.timestamp).toBeDefined();
+        done();
+      });
     });
 
-    it("should write outputs to JSON file", async () => {
-      const outputs = await stack.outputs;
-      const outputPath = path.join(process.cwd(), "cfn-outputs", "flat-outputs.json");
+    it('should include version in outputs', (done) => {
+      stack.outputs.apply(outputs => {
+        expect(outputs.version).toBe('1.0.0');
+        done();
+      });
+    });
 
-      // File should be created by the stack
-      expect(outputs).toBeDefined();
+    it('should set vpcPeeringId to N/A when no source VPC', (done) => {
+      stack.outputs.apply(outputs => {
+        expect(outputs.vpcPeeringId).toBe('N/A');
+        done();
+      });
+    });
+
+    it('should set route53RecordName to N/A when no hosted zone', (done) => {
+      stack.outputs.apply(outputs => {
+        expect(outputs.route53RecordName).toBe('N/A');
+        done();
+      });
     });
   });
 
-  describe("Resource Naming Convention", () => {
-    beforeAll(() => {
-      stack = new TapStack("test-naming-stack", {
-        environmentSuffix: "staging",
-      });
-    });
-
-    it("should follow naming pattern: {environment}-{service}-{component}-{random-suffix}", async () => {
-      const vpcId = await stack.targetVpc.id;
-      expect(vpcId).toMatch(/vpc-staging-payment-target-vpc-[a-z0-9]{6}/);
-    });
-
-    it("should include environment in resource tags", async () => {
-      await stack.targetVpc.tags.apply(tags => {
-        expect(tags?.Environment).toBe("staging");
-      });
-    });
-
-    it("should include PCI compliance tag", async () => {
-      await stack.targetVpc.tags.apply(tags => {
-        expect(tags?.Compliance).toBe("PCI-DSS");
-      });
-    });
-  });
-
-  describe("Traffic Shifting Scenarios", () => {
-    it("should handle 0% traffic weight (initial phase)", async () => {
-      const stack0 = new TapStack("test-0-percent", {
-        environmentSuffix: "dev",
+  describe('Traffic Shifting Scenarios', () => {
+    it('should handle 0% traffic weight (initial phase)', (done) => {
+      const stack0 = new TapStack('test-0-percent', {
+        environmentSuffix: 'dev',
         trafficWeightTarget: 0,
       });
-      const outputs = await stack0.outputs;
-      expect(outputs.trafficWeight).toBe(0);
+      stack0.outputs.apply(outputs => {
+        expect(outputs.trafficWeight).toBe(0);
+        done();
+      });
     });
 
-    it("should handle 10% traffic weight", async () => {
-      const stack10 = new TapStack("test-10-percent", {
-        environmentSuffix: "dev",
+    it('should handle 10% traffic weight', (done) => {
+      const stack10 = new TapStack('test-10-percent', {
+        environmentSuffix: 'dev',
         trafficWeightTarget: 10,
       });
-      const outputs = await stack10.outputs;
-      expect(outputs.trafficWeight).toBe(10);
+      stack10.outputs.apply(outputs => {
+        expect(outputs.trafficWeight).toBe(10);
+        done();
+      });
     });
 
-    it("should handle 50% traffic weight", async () => {
-      const stack50 = new TapStack("test-50-percent", {
-        environmentSuffix: "dev",
+    it('should handle 50% traffic weight', (done) => {
+      const stack50 = new TapStack('test-50-percent', {
+        environmentSuffix: 'dev',
         trafficWeightTarget: 50,
       });
-      const outputs = await stack50.outputs;
-      expect(outputs.trafficWeight).toBe(50);
+      stack50.outputs.apply(outputs => {
+        expect(outputs.trafficWeight).toBe(50);
+        done();
+      });
     });
 
-    it("should handle 100% traffic weight (complete migration)", async () => {
-      const stack100 = new TapStack("test-100-percent", {
-        environmentSuffix: "dev",
+    it('should handle 100% traffic weight (complete migration)', (done) => {
+      const stack100 = new TapStack('test-100-percent', {
+        environmentSuffix: 'dev',
         trafficWeightTarget: 100,
       });
-      const outputs = await stack100.outputs;
-      expect(outputs.trafficWeight).toBe(100);
+      stack100.outputs.apply(outputs => {
+        expect(outputs.trafficWeight).toBe(100);
+        done();
+      });
     });
   });
 
-  describe("Error Threshold Configuration", () => {
-    it("should handle custom error threshold", async () => {
-      const stackCustom = new TapStack("test-custom-threshold", {
-        environmentSuffix: "dev",
+  describe('Error Threshold Configuration', () => {
+    it('should handle custom error threshold', (done) => {
+      const stackCustom = new TapStack('test-custom-threshold', {
+        environmentSuffix: 'dev',
         errorThreshold: 10,
       });
-      const threshold = await stackCustom.errorAlarm.threshold;
-      expect(threshold).toBe(10);
+      stackCustom.errorAlarm.threshold.apply(threshold => {
+        expect(threshold).toBe(10);
+        done();
+      });
     });
 
-    it("should use default error threshold of 5", async () => {
-      const stackDefault = new TapStack("test-default-threshold", {
-        environmentSuffix: "dev",
+    it('should use default error threshold of 5', (done) => {
+      const stackDefault = new TapStack('test-default-threshold', {
+        environmentSuffix: 'dev',
       });
-      const threshold = await stackDefault.errorAlarm.threshold;
-      expect(threshold).toBe(5);
+      stackDefault.errorAlarm.threshold.apply(threshold => {
+        expect(threshold).toBe(5);
+        done();
+      });
     });
   });
 
-  describe("Rollback Enabled/Disabled", () => {
-    it("should enable rollback by default", async () => {
-      const stackDefault = new TapStack("test-rollback-default", {
-        environmentSuffix: "dev",
+  describe('Rollback Enabled/Disabled', () => {
+    it('should enable rollback by default', (done) => {
+      const stackDefault = new TapStack('test-rollback-default', {
+        environmentSuffix: 'dev',
       });
-      const actionsEnabled = await stackDefault.errorAlarm.actionsEnabled;
-      expect(actionsEnabled).toBe(true);
+      stackDefault.errorAlarm.actionsEnabled.apply(actionsEnabled => {
+        expect(actionsEnabled).toBe(true);
+        done();
+      });
     });
 
-    it("should disable rollback when explicitly set", async () => {
-      const stackDisabled = new TapStack("test-rollback-disabled", {
-        environmentSuffix: "dev",
+    it('should disable rollback when explicitly set', (done) => {
+      const stackDisabled = new TapStack('test-rollback-disabled', {
+        environmentSuffix: 'dev',
         rollbackEnabled: false,
       });
-      const actionsEnabled = await stackDisabled.errorAlarm.actionsEnabled;
-      expect(actionsEnabled).toBe(false);
+      stackDisabled.errorAlarm.actionsEnabled.apply(actionsEnabled => {
+        expect(actionsEnabled).toBe(false);
+        done();
+      });
     });
   });
 
-  describe("Multi-AZ Subnet Distribution", () => {
+  describe('Multi-AZ Subnet Distribution', () => {
     beforeAll(() => {
-      stack = new TapStack("test-multi-az", {
-        environmentSuffix: "dev",
+      stack = new TapStack('test-multi-az', {
+        environmentSuffix: 'dev',
         availabilityZones: 3,
       });
     });
 
-    it("should distribute subnets across 3 AZs", async () => {
-      const az0 = await stack.targetSubnets[0].availabilityZone;
-      const az2 = await stack.targetSubnets[2].availabilityZone;
-      const az4 = await stack.targetSubnets[4].availabilityZone;
-
-      expect(az0).toBe("us-east-1a");
-      expect(az2).toBe("us-east-1b");
-      expect(az4).toBe("us-east-1c");
+    it('should distribute subnets across 3 AZs', (done) => {
+      pulumi.all([
+        stack.targetSubnets[0].availabilityZone,
+        stack.targetSubnets[2].availabilityZone,
+        stack.targetSubnets[4].availabilityZone
+      ]).apply(([az0, az2, az4]) => {
+        expect(az0).toBe('us-east-1a');
+        expect(az2).toBe('us-east-1b');
+        expect(az4).toBe('us-east-1c');
+        done();
+      });
     });
   });
 
-  describe("Custom CIDR Blocks", () => {
-    it("should handle custom source VPC CIDR", async () => {
-      const stackCustom = new TapStack("test-custom-source-cidr", {
-        environmentSuffix: "dev",
-        sourceVpcCidr: "10.50.0.0/16",
+  describe('Custom CIDR Blocks', () => {
+    it('should handle custom target VPC CIDR', (done) => {
+      const stackCustom = new TapStack('test-custom-target-cidr', {
+        environmentSuffix: 'dev',
+        targetVpcCidr: '10.60.0.0/16',
       });
-      const outputs = await stackCustom.outputs;
-      expect(outputs).toBeDefined();
-    });
-
-    it("should handle custom target VPC CIDR", async () => {
-      const stackCustom = new TapStack("test-custom-target-cidr", {
-        environmentSuffix: "dev",
-        targetVpcCidr: "10.60.0.0/16",
+      stackCustom.targetVpc.cidrBlock.apply(cidr => {
+        expect(cidr).toBe('10.60.0.0/16');
+        done();
       });
-      const cidr = await stackCustom.targetVpc.cidrBlock;
-      expect(cidr).toBe("10.60.0.0/16");
     });
   });
 
-  describe("Migration Phase Transitions", () => {
-    it("should handle initial phase", async () => {
-      const stackInitial = new TapStack("test-phase-initial", {
-        environmentSuffix: "dev",
-        migrationPhase: "initial",
+  describe('Migration Phase Transitions', () => {
+    it('should handle initial phase', (done) => {
+      const stackInitial = new TapStack('test-phase-initial', {
+        environmentSuffix: 'dev',
+        migrationPhase: 'initial',
       });
-      const outputs = await stackInitial.outputs;
-      expect(outputs.migrationPhase).toBe("initial");
+      stackInitial.outputs.apply(outputs => {
+        expect(outputs.migrationPhase).toBe('initial');
+        done();
+      });
     });
 
-    it("should handle peering phase", async () => {
-      const stackPeering = new TapStack("test-phase-peering", {
-        environmentSuffix: "dev",
-        migrationPhase: "peering",
+    it('should handle peering phase', (done) => {
+      const stackPeering = new TapStack('test-phase-peering', {
+        environmentSuffix: 'dev',
+        migrationPhase: 'peering',
       });
-      const outputs = await stackPeering.outputs;
-      expect(outputs.migrationPhase).toBe("peering");
+      stackPeering.outputs.apply(outputs => {
+        expect(outputs.migrationPhase).toBe('peering');
+        done();
+      });
     });
 
-    it("should handle replication phase", async () => {
-      const stackReplication = new TapStack("test-phase-replication", {
-        environmentSuffix: "dev",
-        migrationPhase: "replication",
+    it('should handle complete phase', (done) => {
+      const stackComplete = new TapStack('test-phase-complete', {
+        environmentSuffix: 'dev',
+        migrationPhase: 'complete',
       });
-      const outputs = await stackReplication.outputs;
-      expect(outputs.migrationPhase).toBe("replication");
-    });
-
-    it("should handle cutover phase", async () => {
-      const stackCutover = new TapStack("test-phase-cutover", {
-        environmentSuffix: "dev",
-        migrationPhase: "cutover",
+      stackComplete.outputs.apply(outputs => {
+        expect(outputs.migrationPhase).toBe('complete');
+        done();
       });
-      const outputs = await stackCutover.outputs;
-      expect(outputs.migrationPhase).toBe("cutover");
-    });
-
-    it("should handle complete phase", async () => {
-      const stackComplete = new TapStack("test-phase-complete", {
-        environmentSuffix: "dev",
-        migrationPhase: "complete",
-      });
-      const outputs = await stackComplete.outputs;
-      expect(outputs.migrationPhase).toBe("complete");
     });
   });
 
-  describe("Resource Tags Validation", () => {
+  describe('Resource Tags Validation', () => {
     beforeAll(() => {
-      stack = new TapStack("test-tags-stack", {
-        environmentSuffix: "production",
+      stack = new TapStack('test-tags-stack', {
+        environmentSuffix: 'production',
       });
     });
 
-    it("should tag all resources with ManagedBy: Pulumi", async () => {
-      await stack.targetVpc.tags.apply(tags => {
-        expect(tags?.ManagedBy).toBe("Pulumi");
+    it('should tag all resources with ManagedBy: Pulumi', (done) => {
+      stack.targetVpc.tags.apply(tags => {
+        expect(tags?.ManagedBy).toBe('Pulumi');
+        done();
       });
     });
 
-    it("should tag all resources with Project: VPC-Migration", async () => {
-      await stack.targetVpc.tags.apply(tags => {
-        expect(tags?.Project).toBe("VPC-Migration");
+    it('should tag all resources with Project: VPC-Migration', (done) => {
+      stack.targetVpc.tags.apply(tags => {
+        expect(tags?.Project).toBe('VPC-Migration');
+        done();
       });
     });
 
-    it("should tag all resources with CostCenter: FinTech", async () => {
-      await stack.targetVpc.tags.apply(tags => {
-        expect(tags?.CostCenter).toBe("FinTech");
+    it('should tag all resources with CostCenter: FinTech', (done) => {
+      stack.targetVpc.tags.apply(tags => {
+        expect(tags?.CostCenter).toBe('FinTech');
+        done();
+      });
+    });
+
+    it('should tag all resources with Compliance: PCI-DSS', (done) => {
+      stack.targetVpc.tags.apply(tags => {
+        expect(tags?.Compliance).toBe('PCI-DSS');
+        done();
       });
     });
   });

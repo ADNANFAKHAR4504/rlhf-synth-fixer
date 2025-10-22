@@ -39,13 +39,11 @@ const stack = new TapStack('pulumi-infra', {
 
 export const targetVpcId = stack.targetVpc.id;
 export const targetVpcCidr = stack.targetVpc.cidrBlock;
-export const vpcPeeringId = stack.vpcPeering?.id || pulumi.output("N/A - No source VPC configured");
+export const vpcPeeringId = stack.vpcPeering?.id || pulumi.output('N/A - No source VPC configured');
 export const targetRdsEndpoint = stack.targetRdsInstance.endpoint;
 export const loadBalancerDns = stack.targetLoadBalancer.dnsName;
-export const route53RecordName = stack.route53Record?.name || pulumi.output("N/A - No hosted zone configured");
+export const route53RecordName = stack.route53Record?.name || pulumi.output('N/A - No hosted zone configured');
 export const dashboardUrl = pulumi.interpolate`https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=${stack.migrationDashboard.dashboardName}`;
 export const rollbackTopicArn = stack.rollbackTopic.arn;
 export const stackOutputs = stack.outputs;
-
-// Export the password as a secret (encrypted in state)
 export const dbPassword = stack.dbPassword.result;

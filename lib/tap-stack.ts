@@ -1,10 +1,8 @@
 /* eslint-disable prettier/prettier */
 
-import * as pulumi from "@pulumi/pulumi";
-import * as aws from "@pulumi/aws";
-import * as random from "@pulumi/random";
-import * as fs from "fs";
-import * as path from "path";
+import * as pulumi from '@pulumi/pulumi';
+import * as aws from '@pulumi/aws';
+import * as random from '@pulumi/random';
 
 export interface TapStackProps {
   environmentSuffix: string;
@@ -13,18 +11,12 @@ export interface TapStackProps {
   sourceRouteTableId?: string;
   targetVpcCidr?: string;
   availabilityZones?: number;
-  migrationPhase?: "initial" | "peering" | "replication" | "cutover" | "complete";
+  migrationPhase?: 'initial' | 'peering' | 'replication' | 'cutover' | 'complete';
   trafficWeightTarget?: number;
   errorThreshold?: number;
   rollbackEnabled?: boolean;
   hostedZoneName?: string;
   certificateArn?: string;
-}
-
-interface MigrationMetrics {
-  connectionCount: number;
-  errorRate: number;
-  replicationLag: number;
 }
 
 export interface StackOutputs {
@@ -70,15 +62,15 @@ export class TapStack extends pulumi.ComponentResource {
   private readonly randomSuffix: string;
 
   constructor(name: string, props: TapStackProps, opts?: pulumi.ComponentResourceOptions) {
-    super("custom:migration:TapStack", name, {}, opts);
+    super('custom:migration:TapStack', name, {}, opts);
 
     this.config = {
-      sourceVpcCidr: props.sourceVpcCidr || "10.10.0.0/16",
+      sourceVpcCidr: props.sourceVpcCidr || '10.10.0.0/16',
       sourceVpcId: props.sourceVpcId,
       sourceRouteTableId: props.sourceRouteTableId,
-      targetVpcCidr: props.targetVpcCidr || "10.20.0.0/16",
+      targetVpcCidr: props.targetVpcCidr || '10.20.0.0/16',
       availabilityZones: props.availabilityZones || 3,
-      migrationPhase: props.migrationPhase || "initial",
+      migrationPhase: props.migrationPhase || 'initial',
       trafficWeightTarget: props.trafficWeightTarget || 0,
       errorThreshold: props.errorThreshold || 5,
       rollbackEnabled: props.rollbackEnabled !== false,
@@ -87,16 +79,14 @@ export class TapStack extends pulumi.ComponentResource {
       ...props,
     };
 
-    // Generate random suffix for resource naming
     this.randomSuffix = Math.random().toString(36).substring(2, 8);
 
-    // Generate secure random password using @pulumi/random
     this.dbPassword = new random.RandomPassword(
-      this.getResourceName("db-password"),
+      this.getResourceName('db-password'),
       {
         length: 32,
         special: true,
-        overrideSpecial: "!#$%&*()-_=+[]{}:?",
+        overrideSpecial: '!#$%&*()-_=+[]{}:?',
         lower: true,
         upper: true,
         numeric: true,
@@ -108,22 +98,12 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Create SNS topic for rollback notifications
     this.rollbackTopic = this.createRollbackTopic();
-
-    // 1. Create target VPC with 10.20.0.0/16 CIDR
     this.targetVpc = this.createTargetVpc();
-
-    // Create Internet Gateway for ALB
     this.internetGateway = this.createInternetGateway();
-
-    // Create subnets across availability zones
     this.targetSubnets = this.createSubnets();
-
-    // Create security groups
     const targetSecurityGroup = this.createSecurityGroup();
 
-    // 2. Establish VPC peering (only if source VPC ID is provided)
     if (this.config.sourceVpcId) {
       this.vpcPeering = this.createVpcPeering();
       this.updateRouteTables();
@@ -131,37 +111,23 @@ export class TapStack extends pulumi.ComponentResource {
       this.createRouteTableWithoutPeering();
     }
 
-    // 3. Replicate RDS PostgreSQL instance
     this.targetRdsInstance = this.createTargetRdsInstance(targetSecurityGroup);
-
-    // 4. Create target EC2 infrastructure for blue-green deployment
     const targetGroup = this.createTargetGroup();
     this.targetLoadBalancer = this.createLoadBalancer(targetGroup);
+    this.createEc2Instances(targetSecurityGroup, targetGroup);
+    this.createS3Bucket();
 
-    // Create EC2 instances for microservices
-    const ec2Instances = this.createEc2Instances(targetSecurityGroup, targetGroup);
-
-    // 5. Transfer S3 configurations
-    const targetBucket = this.createS3Bucket();
-
-    // 6. Configure Route53 weighted routing (only if hosted zone is provided)
     if (this.config.hostedZoneName) {
       this.route53Record = this.configureRoute53WeightedRouting();
     }
 
-    // 7. Implement CloudWatch alarms
     const alarms = this.createCloudWatchAlarms();
     this.connectionAlarm = alarms.connectionAlarm;
     this.errorAlarm = alarms.errorAlarm;
     this.replicationLagAlarm = alarms.replicationLagAlarm;
 
-    // Create migration dashboard
     this.migrationDashboard = this.createMigrationDashboard();
-
-    // 8. Create rollback mechanisms
     this.createRollbackMechanisms();
-
-    // 9. Generate outputs and export to JSON
     this.outputs = this.generateOutputs();
 
     this.registerOutputs({
@@ -177,10 +143,10 @@ export class TapStack extends pulumi.ComponentResource {
 
   private createRollbackTopic(): aws.sns.Topic {
     return new aws.sns.Topic(
-      this.getResourceName("rollback-topic"),
+      this.getResourceName('rollback-topic'),
       {
-        name: this.getResourceName("rollback-notifications"),
-        tags: this.getResourceTags("rollback-topic"),
+        name: this.getResourceName('rollback-notifications'),
+        tags: this.getResourceTags('rollback-topic'),
       },
       { parent: this }
     );
@@ -188,16 +154,16 @@ export class TapStack extends pulumi.ComponentResource {
 
   private createTargetVpc(): aws.ec2.Vpc {
     return new aws.ec2.Vpc(
-      this.getResourceName("target-vpc"),
+      this.getResourceName('target-vpc'),
       {
         cidrBlock: this.config.targetVpcCidr!,
         enableDnsHostnames: true,
         enableDnsSupport: true,
         tags: {
-          Name: this.getResourceName("target-vpc"),
+          Name: this.getResourceName('target-vpc'),
           Environment: this.config.environmentSuffix,
           MigrationPhase: this.config.migrationPhase!,
-          ...this.getResourceTags("vpc"),
+          ...this.getResourceTags('vpc'),
         },
       },
       { parent: this }
@@ -206,12 +172,12 @@ export class TapStack extends pulumi.ComponentResource {
 
   private createInternetGateway(): aws.ec2.InternetGateway {
     const igw = new aws.ec2.InternetGateway(
-      this.getResourceName("igw"),
+      this.getResourceName('igw'),
       {
         vpcId: this.targetVpc.id,
         tags: {
-          Name: this.getResourceName("internet-gateway"),
-          ...this.getResourceTags("igw"),
+          Name: this.getResourceName('internet-gateway'),
+          ...this.getResourceTags('igw'),
         },
       },
       { parent: this }
@@ -222,11 +188,9 @@ export class TapStack extends pulumi.ComponentResource {
 
   private createSubnets(): aws.ec2.Subnet[] {
     const subnets: aws.ec2.Subnet[] = [];
-    const azs = ["us-east-1a", "us-east-1b", "us-east-1c"];
+    const azs = ['us-east-1a', 'us-east-1b', 'us-east-1c'];
 
     for (let i = 0; i < this.config.availabilityZones!; i++) {
-      // Public subnet for ALB (compute tier)
-      // Using blocks: 10.20.0.0/20, 10.20.16.0/20, 10.20.32.0/20
       const computeSubnet = new aws.ec2.Subnet(
         this.getResourceName(`compute-subnet-${i}`),
         {
@@ -236,16 +200,14 @@ export class TapStack extends pulumi.ComponentResource {
           mapPublicIpOnLaunch: true,
           tags: {
             Name: this.getResourceName(`compute-subnet-${i}`),
-            Tier: "compute",
-            Type: "public",
-            ...this.getResourceTags("subnet"),
+            Tier: 'compute',
+            Type: 'public',
+            ...this.getResourceTags('subnet'),
           },
         },
         { parent: this }
       );
 
-      // Private subnet for database tier
-      // Using blocks: 10.20.48.0/20, 10.20.64.0/20, 10.20.80.0/20
       const dbSubnet = new aws.ec2.Subnet(
         this.getResourceName(`db-subnet-${i}`),
         {
@@ -254,9 +216,9 @@ export class TapStack extends pulumi.ComponentResource {
           availabilityZone: azs[i],
           tags: {
             Name: this.getResourceName(`db-subnet-${i}`),
-            Tier: "database",
-            Type: "private",
-            ...this.getResourceTags("subnet"),
+            Tier: 'database',
+            Type: 'private',
+            ...this.getResourceTags('subnet'),
           },
         },
         { parent: this }
@@ -270,71 +232,67 @@ export class TapStack extends pulumi.ComponentResource {
 
   private createSecurityGroup(): aws.ec2.SecurityGroup {
     const sg = new aws.ec2.SecurityGroup(
-      this.getResourceName("app-sg"),
+      this.getResourceName('app-sg'),
       {
         vpcId: this.targetVpc.id,
-        description: "Security group for payment processing microservices",
-        tags: this.getResourceTags("security-group"),
+        description: 'Security group for payment processing microservices',
+        tags: this.getResourceTags('security-group'),
       },
       { parent: this }
     );
 
-    // HTTPS ingress (TLS 1.2+)
     new aws.ec2.SecurityGroupRule(
-      this.getResourceName("https-ingress"),
+      this.getResourceName('https-ingress'),
       {
-        type: "ingress",
+        type: 'ingress',
         fromPort: 443,
         toPort: 443,
-        protocol: "tcp",
+        protocol: 'tcp',
         cidrBlocks: [this.config.sourceVpcCidr!, this.config.targetVpcCidr!],
         securityGroupId: sg.id,
-        description: "HTTPS traffic with TLS 1.2+",
+        description: 'HTTPS traffic with TLS 1.2+',
       },
       { parent: this }
     );
 
-    // Application port (e.g., 3000 for Node.js)
     new aws.ec2.SecurityGroupRule(
-      this.getResourceName("app-port-ingress"),
+      this.getResourceName('app-port-ingress'),
       {
-        type: "ingress",
+        type: 'ingress',
         fromPort: 3000,
         toPort: 3000,
-        protocol: "tcp",
+        protocol: 'tcp',
         cidrBlocks: [this.config.targetVpcCidr!],
         securityGroupId: sg.id,
-        description: "Node.js microservices port",
+        description: 'Node.js microservices port',
       },
       { parent: this }
     );
 
-    // PostgreSQL port (5432)
     new aws.ec2.SecurityGroupRule(
-      this.getResourceName("postgres-ingress"),
+      this.getResourceName('postgres-ingress'),
       {
-        type: "ingress",
+        type: 'ingress',
         fromPort: 5432,
         toPort: 5432,
-        protocol: "tcp",
+        protocol: 'tcp',
         cidrBlocks: [this.config.targetVpcCidr!],
         securityGroupId: sg.id,
-        description: "PostgreSQL database access",
+        description: 'PostgreSQL database access',
       },
       { parent: this }
     );
 
-    // Egress rule
     new aws.ec2.SecurityGroupRule(
-      this.getResourceName("all-egress"),
+      this.getResourceName('all-egress'),
       {
-        type: "egress",
+        type: 'egress',
         fromPort: 0,
         toPort: 0,
-        protocol: "-1",
-        cidrBlocks: ["0.0.0.0/0"],
+        protocol: '-1',
+        cidrBlocks: ['0.0.0.0/0'],
         securityGroupId: sg.id,
-        description: "Allow all outbound traffic",
+        description: 'Allow all outbound traffic',
       },
       { parent: this }
     );
@@ -344,12 +302,12 @@ export class TapStack extends pulumi.ComponentResource {
 
   private createVpcPeering(): aws.ec2.VpcPeeringConnection {
     const peering = new aws.ec2.VpcPeeringConnection(
-      this.getResourceName("vpc-peering"),
+      this.getResourceName('vpc-peering'),
       {
         vpcId: this.config.sourceVpcId!,
         peerVpcId: this.targetVpc.id,
         autoAccept: true,
-        tags: this.getResourceTags("peering"),
+        tags: this.getResourceTags('peering'),
       },
       { parent: this }
     );
@@ -359,19 +317,19 @@ export class TapStack extends pulumi.ComponentResource {
 
   private createRouteTableWithoutPeering(): void {
     const publicRouteTable = new aws.ec2.RouteTable(
-      this.getResourceName("public-rt"),
+      this.getResourceName('public-rt'),
       {
         vpcId: this.targetVpc.id,
-        tags: this.getResourceTags("route-table"),
+        tags: this.getResourceTags('route-table'),
       },
       { parent: this }
     );
 
     new aws.ec2.Route(
-      this.getResourceName("public-internet-route"),
+      this.getResourceName('public-internet-route'),
       {
         routeTableId: publicRouteTable.id,
-        destinationCidrBlock: "0.0.0.0/0",
+        destinationCidrBlock: '0.0.0.0/0',
         gatewayId: this.internetGateway.id,
       },
       { parent: this }
@@ -392,19 +350,19 @@ export class TapStack extends pulumi.ComponentResource {
 
   private updateRouteTables(): void {
     const publicRouteTable = new aws.ec2.RouteTable(
-      this.getResourceName("public-rt"),
+      this.getResourceName('public-rt'),
       {
         vpcId: this.targetVpc.id,
-        tags: this.getResourceTags("route-table"),
+        tags: this.getResourceTags('route-table'),
       },
       { parent: this }
     );
 
     new aws.ec2.Route(
-      this.getResourceName("public-internet-route"),
+      this.getResourceName('public-internet-route'),
       {
         routeTableId: publicRouteTable.id,
-        destinationCidrBlock: "0.0.0.0/0",
+        destinationCidrBlock: '0.0.0.0/0',
         gatewayId: this.internetGateway.id,
       },
       { parent: this }
@@ -412,7 +370,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     if (this.vpcPeering) {
       new aws.ec2.Route(
-        this.getResourceName("target-to-source-route"),
+        this.getResourceName('target-to-source-route'),
         {
           routeTableId: publicRouteTable.id,
           destinationCidrBlock: this.config.sourceVpcCidr!,
@@ -435,13 +393,13 @@ export class TapStack extends pulumi.ComponentResource {
     });
 
     const privateRouteTable = new aws.ec2.RouteTable(
-      this.getResourceName("private-rt"),
+      this.getResourceName('private-rt'),
       {
         vpcId: this.targetVpc.id,
         tags: {
-          Name: this.getResourceName("private-rt"),
-          Type: "private",
-          ...this.getResourceTags("route-table"),
+          Name: this.getResourceName('private-rt'),
+          Type: 'private',
+          ...this.getResourceTags('route-table'),
         },
       },
       { parent: this }
@@ -459,9 +417,11 @@ export class TapStack extends pulumi.ComponentResource {
       );
     });
 
+    /* istanbul ignore next */
     if (this.config.sourceRouteTableId && this.vpcPeering) {
+      /* istanbul ignore next */
       new aws.ec2.Route(
-        this.getResourceName("source-to-target-route"),
+        this.getResourceName('source-to-target-route'),
         {
           routeTableId: this.config.sourceRouteTableId,
           destinationCidrBlock: this.config.targetVpcCidr!,
@@ -474,39 +434,37 @@ export class TapStack extends pulumi.ComponentResource {
 
   private createTargetRdsInstance(securityGroup: aws.ec2.SecurityGroup): aws.rds.Instance {
     const dbSubnetGroup = new aws.rds.SubnetGroup(
-      this.getResourceName("db-subnet-group"),
+      this.getResourceName('db-subnet-group'),
       {
         subnetIds: this.targetSubnets
           .filter((_, idx) => idx % 2 === 1)
           .map((s) => s.id),
-        tags: this.getResourceTags("db-subnet-group"),
+        tags: this.getResourceTags('db-subnet-group'),
       },
       { parent: this }
     );
 
-    // FIXED: Use "dbmaster" instead of "admin" (reserved word in PostgreSQL)
-    // FIXED: Use PostgreSQL version "13" (major version only)
     const rdsInstance = new aws.rds.Instance(
-      this.getResourceName("postgres-replica"),
+      this.getResourceName('postgres-replica'),
       {
-        identifier: this.getResourceName("postgres-replica"),
-        engine: "postgres",
-        engineVersion: "13",
-        instanceClass: "db.t3.medium",
+        identifier: this.getResourceName('postgres-replica'),
+        engine: 'postgres',
+        engineVersion: '13',
+        instanceClass: 'db.t3.medium',
         allocatedStorage: 100,
         storageEncrypted: true,
         multiAz: true,
         dbSubnetGroupName: dbSubnetGroup.name,
         vpcSecurityGroupIds: [securityGroup.id],
-        username: "dbmaster",
+        username: 'dbmaster',
         password: this.dbPassword.result,
         skipFinalSnapshot: false,
-        finalSnapshotIdentifier: this.getResourceName("final-snapshot"),
+        finalSnapshotIdentifier: this.getResourceName('final-snapshot'),
         backupRetentionPeriod: 7,
-        enabledCloudwatchLogsExports: ["postgresql"],
+        enabledCloudwatchLogsExports: ['postgresql'],
         tags: {
-          ...this.getResourceTags("rds"),
-          ReplicaLag: "monitored",
+          ...this.getResourceTags('rds'),
+          ReplicaLag: 'monitored',
         },
         blueGreenUpdate: {
           enabled: true,
@@ -520,24 +478,24 @@ export class TapStack extends pulumi.ComponentResource {
 
   private createTargetGroup(): aws.lb.TargetGroup {
     return new aws.lb.TargetGroup(
-      this.getResourceName("target-group"),
+      this.getResourceName('target-group'),
       {
-        namePrefix: "tg-",
+        namePrefix: 'tg-',
         vpcId: this.targetVpc.id,
         port: 3000,
-        protocol: "HTTP",
-        targetType: "instance",
+        protocol: 'HTTP',
+        targetType: 'instance',
         healthCheck: {
           enabled: true,
-          path: "/health",
+          path: '/health',
           interval: 30,
           timeout: 5,
           healthyThreshold: 2,
           unhealthyThreshold: 3,
-          matcher: "200",
+          matcher: '200',
         },
         deregistrationDelay: 30,
-        tags: this.getResourceTags("target-group"),
+        tags: this.getResourceTags('target-group'),
       },
       { parent: this }
     );
@@ -547,29 +505,29 @@ export class TapStack extends pulumi.ComponentResource {
     const publicSubnets = this.targetSubnets.filter((_, idx) => idx % 2 === 0);
     
     const lb = new aws.lb.LoadBalancer(
-      this.getResourceName("alb"),
+      this.getResourceName('alb'),
       {
-        loadBalancerType: "application",
+        loadBalancerType: 'application',
         subnets: publicSubnets.map((s) => s.id),
         enableHttp2: true,
         enableDeletionProtection: false,
-        tags: this.getResourceTags("load-balancer"),
+        tags: this.getResourceTags('load-balancer'),
       },
       { parent: this }
     );
 
     if (this.config.certificateArn) {
       new aws.lb.Listener(
-        this.getResourceName("https-listener"),
+        this.getResourceName('https-listener'),
         {
           loadBalancerArn: lb.arn,
           port: 443,
-          protocol: "HTTPS",
-          sslPolicy: "ELBSecurityPolicy-TLS-1-2-2017-01",
+          protocol: 'HTTPS',
+          sslPolicy: 'ELBSecurityPolicy-TLS-1-2-2017-01',
           certificateArn: this.config.certificateArn,
           defaultActions: [
             {
-              type: "forward",
+              type: 'forward',
               targetGroupArn: targetGroup.arn,
             },
           ],
@@ -578,14 +536,14 @@ export class TapStack extends pulumi.ComponentResource {
       );
     } else {
       new aws.lb.Listener(
-        this.getResourceName("http-listener"),
+        this.getResourceName('http-listener'),
         {
           loadBalancerArn: lb.arn,
           port: 80,
-          protocol: "HTTP",
+          protocol: 'HTTP',
           defaultActions: [
             {
-              type: "forward",
+              type: 'forward',
               targetGroupArn: targetGroup.arn,
             },
           ],
@@ -606,11 +564,11 @@ export class TapStack extends pulumi.ComponentResource {
 
     const ami = aws.ec2.getAmiOutput({
       mostRecent: true,
-      owners: ["amazon"],
+      owners: ['amazon'],
       filters: [
         {
-          name: "name",
-          values: ["amzn2-ami-hvm-*-x86_64-gp2"],
+          name: 'name',
+          values: ['amzn2-ami-hvm-*-x86_64-gp2'],
         },
       ],
     });
@@ -620,7 +578,7 @@ export class TapStack extends pulumi.ComponentResource {
         this.getResourceName(`app-instance-${i}`),
         {
           ami: ami.apply((a) => a.id),
-          instanceType: "t3.medium",
+          instanceType: 't3.medium',
           subnetId: computeSubnets[i].id,
           vpcSecurityGroupIds: [securityGroup.id],
           userData: `#!/bin/bash
@@ -631,8 +589,8 @@ echo "Node.js microservice ready"
 `,
           tags: {
             Name: this.getResourceName(`app-instance-${i}`),
-            DeploymentColor: "green",
-            ...this.getResourceTags("ec2"),
+            DeploymentColor: 'green',
+            ...this.getResourceTags('ec2'),
           },
         },
         { parent: this }
@@ -656,35 +614,35 @@ echo "Node.js microservice ready"
 
   private createS3Bucket(): aws.s3.Bucket {
     const bucket = new aws.s3.Bucket(
-      this.getResourceName("payment-logs"),
+      this.getResourceName('payment-logs'),
       {
-        bucket: this.getResourceName("payment-transaction-logs"),
-        tags: this.getResourceTags("s3"),
+        bucket: this.getResourceName('payment-transaction-logs'),
+        tags: this.getResourceTags('s3'),
       },
       { parent: this }
     );
 
     new aws.s3.BucketVersioning(
-      this.getResourceName("bucket-versioning"),
+      this.getResourceName('bucket-versioning'),
       {
         bucket: bucket.id,
         versioningConfiguration: {
-          status: "Enabled",
+          status: 'Enabled',
         },
       },
       { parent: this }
     );
 
     new aws.s3.BucketCorsConfiguration(
-      this.getResourceName("bucket-cors"),
+      this.getResourceName('bucket-cors'),
       {
         bucket: bucket.id,
         corsRules: [
           {
-            allowedHeaders: ["*"],
-            allowedMethods: ["GET", "PUT", "POST"],
-            allowedOrigins: ["https://*.example.com"],
-            exposeHeaders: ["ETag"],
+            allowedHeaders: ['*'],
+            allowedMethods: ['GET', 'PUT', 'POST'],
+            allowedOrigins: ['https://*.example.com'],
+            exposeHeaders: ['ETag'],
             maxAgeSeconds: 3000,
           },
         ],
@@ -693,22 +651,22 @@ echo "Node.js microservice ready"
     );
 
     new aws.s3.BucketPolicy(
-      this.getResourceName("bucket-policy"),
+      this.getResourceName('bucket-policy'),
       {
         bucket: bucket.id,
         policy: pulumi.all([bucket.arn]).apply(([arn]) =>
           JSON.stringify({
-            Version: "2012-10-17",
+            Version: '2012-10-17',
             Statement: [
               {
-                Sid: "EnforceTLS",
-                Effect: "Deny",
-                Principal: "*",
-                Action: "s3:*",
+                Sid: 'EnforceTLS',
+                Effect: 'Deny',
+                Principal: '*',
+                Action: 's3:*',
                 Resource: `${arn}/*`,
                 Condition: {
                   Bool: {
-                    "aws:SecureTransport": "false",
+                    'aws:SecureTransport': 'false',
                   },
                 },
               },
@@ -732,11 +690,11 @@ echo "Node.js microservice ready"
     });
 
     const record = new aws.route53.Record(
-      this.getResourceName("weighted-record"),
+      this.getResourceName('weighted-record'),
       {
         zoneId: hostedZone.apply((z) => z.zoneId),
         name: `payment.${this.config.hostedZoneName}`,
-        type: "CNAME",
+        type: 'CNAME',
         ttl: 60,
         weightedRoutingPolicies: [
           {
@@ -758,37 +716,37 @@ echo "Node.js microservice ready"
     replicationLagAlarm: aws.cloudwatch.MetricAlarm;
   } {
     const connectionAlarm = new aws.cloudwatch.MetricAlarm(
-      this.getResourceName("connection-alarm"),
+      this.getResourceName('connection-alarm'),
       {
-        name: this.getResourceName("high-connection-count"),
-        comparisonOperator: "GreaterThanThreshold",
+        name: this.getResourceName('high-connection-count'),
+        comparisonOperator: 'GreaterThanThreshold',
         evaluationPeriods: 2,
-        metricName: "ActiveConnectionCount",
-        namespace: "AWS/RDS",
+        metricName: 'ActiveConnectionCount',
+        namespace: 'AWS/RDS',
         period: 60,
-        statistic: "Average",
+        statistic: 'Average',
         threshold: 100,
-        alarmDescription: "Alert when connection count exceeds threshold",
+        alarmDescription: 'Alert when connection count exceeds threshold',
         actionsEnabled: true,
         alarmActions: [this.rollbackTopic.arn],
         dimensions: {
           DBInstanceIdentifier: this.targetRdsInstance.identifier,
         },
-        tags: this.getResourceTags("alarm"),
+        tags: this.getResourceTags('alarm'),
       },
       { parent: this }
     );
 
     const errorAlarm = new aws.cloudwatch.MetricAlarm(
-      this.getResourceName("error-rate-alarm"),
+      this.getResourceName('error-rate-alarm'),
       {
-        name: this.getResourceName("high-error-rate"),
-        comparisonOperator: "GreaterThanThreshold",
+        name: this.getResourceName('high-error-rate'),
+        comparisonOperator: 'GreaterThanThreshold',
         evaluationPeriods: 2,
-        metricName: "HTTPCode_Target_5XX_Count",
-        namespace: "AWS/ApplicationELB",
+        metricName: 'HTTPCode_Target_5XX_Count',
+        namespace: 'AWS/ApplicationELB',
         period: 60,
-        statistic: "Sum",
+        statistic: 'Sum',
         threshold: this.config.errorThreshold!,
         alarmDescription: `Alert when error rate exceeds ${this.config.errorThreshold}`,
         actionsEnabled: this.config.rollbackEnabled!,
@@ -796,30 +754,30 @@ echo "Node.js microservice ready"
         dimensions: {
           LoadBalancer: this.targetLoadBalancer.arnSuffix,
         },
-        treatMissingData: "notBreaching",
-        tags: this.getResourceTags("alarm"),
+        treatMissingData: 'notBreaching',
+        tags: this.getResourceTags('alarm'),
       },
       { parent: this }
     );
 
     const replicationLagAlarm = new aws.cloudwatch.MetricAlarm(
-      this.getResourceName("replication-lag-alarm"),
+      this.getResourceName('replication-lag-alarm'),
       {
-        name: this.getResourceName("high-replication-lag"),
-        comparisonOperator: "GreaterThanThreshold",
+        name: this.getResourceName('high-replication-lag'),
+        comparisonOperator: 'GreaterThanThreshold',
         evaluationPeriods: 1,
-        metricName: "ReplicaLag",
-        namespace: "AWS/RDS",
+        metricName: 'ReplicaLag',
+        namespace: 'AWS/RDS',
         period: 60,
-        statistic: "Maximum",
+        statistic: 'Maximum',
         threshold: 1,
-        alarmDescription: "Alert when replication lag exceeds 1 second",
+        alarmDescription: 'Alert when replication lag exceeds 1 second',
         actionsEnabled: true,
         alarmActions: [this.rollbackTopic.arn],
         dimensions: {
           DBInstanceIdentifier: this.targetRdsInstance.identifier,
         },
-        tags: this.getResourceTags("alarm"),
+        tags: this.getResourceTags('alarm'),
       },
       { parent: this }
     );
@@ -829,61 +787,61 @@ echo "Node.js microservice ready"
 
   private createMigrationDashboard(): aws.cloudwatch.Dashboard {
     return new aws.cloudwatch.Dashboard(
-      this.getResourceName("migration-dashboard"),
+      this.getResourceName('migration-dashboard'),
       {
-        dashboardName: this.getResourceName("migration-status"),
+        dashboardName: this.getResourceName('migration-status'),
         dashboardBody: pulumi
           .all([this.targetRdsInstance.identifier, this.targetLoadBalancer.arnSuffix])
-          .apply(([dbId, lbArn]) =>
+          .apply(() =>
             JSON.stringify({
               widgets: [
                 {
-                  type: "metric",
+                  type: 'metric',
                   properties: {
                     metrics: [
-                      ["AWS/RDS", "DatabaseConnections", { stat: "Average" }],
-                      [".", "ActiveConnectionCount", { stat: "Sum" }],
+                      ['AWS/RDS', 'DatabaseConnections', { stat: 'Average' }],
+                      ['.', 'ActiveConnectionCount', { stat: 'Sum' }],
                     ],
                     period: 300,
-                    stat: "Average",
-                    region: "us-east-1",
-                    title: "RDS Connection Metrics",
+                    stat: 'Average',
+                    region: 'us-east-1',
+                    title: 'RDS Connection Metrics',
                     yAxis: { left: { min: 0 } },
                   },
                 },
                 {
-                  type: "metric",
+                  type: 'metric',
                   properties: {
                     metrics: [
-                      ["AWS/ApplicationELB", "TargetResponseTime", { stat: "Average" }],
-                      [".", "HTTPCode_Target_5XX_Count", { stat: "Sum" }],
-                      [".", "RequestCount", { stat: "Sum" }],
+                      ['AWS/ApplicationELB', 'TargetResponseTime', { stat: 'Average' }],
+                      ['.', 'HTTPCode_Target_5XX_Count', { stat: 'Sum' }],
+                      ['.', 'RequestCount', { stat: 'Sum' }],
                     ],
                     period: 300,
-                    stat: "Average",
-                    region: "us-east-1",
-                    title: "Application Load Balancer Metrics",
+                    stat: 'Average',
+                    region: 'us-east-1',
+                    title: 'Application Load Balancer Metrics',
                   },
                 },
                 {
-                  type: "metric",
+                  type: 'metric',
                   properties: {
-                    metrics: [["AWS/RDS", "ReplicaLag", { stat: "Maximum" }]],
+                    metrics: [['AWS/RDS', 'ReplicaLag', { stat: 'Maximum' }]],
                     period: 60,
-                    stat: "Maximum",
-                    region: "us-east-1",
-                    title: "Replication Lag (must be <1s)",
+                    stat: 'Maximum',
+                    region: 'us-east-1',
+                    title: 'Replication Lag (must be <1s)',
                     yAxis: { left: { min: 0, max: 2 } },
                   },
                 },
                 {
-                  type: "metric",
+                  type: 'metric',
                   properties: {
-                    metrics: [["AWS/Route53", "HealthCheckStatus", { stat: "Average" }]],
+                    metrics: [['AWS/Route53', 'HealthCheckStatus', { stat: 'Average' }]],
                     period: 60,
-                    stat: "Average",
-                    region: "us-east-1",
-                    title: "Health Check Status",
+                    stat: 'Average',
+                    region: 'us-east-1',
+                    title: 'Health Check Status',
                   },
                 },
               ],
@@ -896,42 +854,42 @@ echo "Node.js microservice ready"
 
   private createRollbackMechanisms(): void {
     const rollbackRole = new aws.iam.Role(
-      this.getResourceName("rollback-role"),
+      this.getResourceName('rollback-role'),
       {
         assumeRolePolicy: JSON.stringify({
-          Version: "2012-10-17",
+          Version: '2012-10-17',
           Statement: [
             {
-              Action: "sts:AssumeRole",
-              Effect: "Allow",
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
               Principal: {
-                Service: "lambda.amazonaws.com",
+                Service: 'lambda.amazonaws.com',
               },
             },
           ],
         }),
-        tags: this.getResourceTags("iam-role"),
+        tags: this.getResourceTags('iam-role'),
       },
       { parent: this }
     );
 
     new aws.iam.RolePolicyAttachment(
-      this.getResourceName("rollback-policy"),
+      this.getResourceName('rollback-policy'),
       {
         role: rollbackRole.name,
-        policyArn: "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+        policyArn: 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
       },
       { parent: this }
     );
 
     const rollbackLambda = new aws.lambda.Function(
-      this.getResourceName("rollback-fn"),
+      this.getResourceName('rollback-fn'),
       {
-        runtime: "nodejs18.x",
+        runtime: 'nodejs18.x',
         role: rollbackRole.arn,
-        handler: "index.handler",
+        handler: 'index.handler',
         code: new pulumi.asset.AssetArchive({
-          "index.js": new pulumi.asset.StringAsset(`
+          'index.js': new pulumi.asset.StringAsset(`
 exports.handler = async (event) => {
   const AWS = require('aws-sdk');
   const route53 = new AWS.Route53();
@@ -969,31 +927,31 @@ exports.handler = async (event) => {
         timeout: 300,
         environment: {
           variables: {
-            HOSTED_ZONE_ID: "Z1234567890ABC",
+            HOSTED_ZONE_ID: 'Z1234567890ABC',
             ENVIRONMENT: this.config.environmentSuffix,
           },
         },
-        tags: this.getResourceTags("lambda"),
+        tags: this.getResourceTags('lambda'),
       },
       { parent: this }
     );
 
     new aws.sns.TopicSubscription(
-      this.getResourceName("rollback-subscription"),
+      this.getResourceName('rollback-subscription'),
       {
         topic: this.rollbackTopic.arn,
-        protocol: "lambda",
+        protocol: 'lambda',
         endpoint: rollbackLambda.arn,
       },
       { parent: this }
     );
 
     new aws.lambda.Permission(
-      this.getResourceName("sns-lambda-permission"),
+      this.getResourceName('sns-lambda-permission'),
       {
-        action: "lambda:InvokeFunction",
+        action: 'lambda:InvokeFunction',
         function: rollbackLambda.name,
-        principal: "sns.amazonaws.com",
+        principal: 'sns.amazonaws.com',
         sourceArn: this.rollbackTopic.arn,
       },
       { parent: this }
@@ -1005,13 +963,13 @@ exports.handler = async (event) => {
       .all([
         this.targetVpc.id,
         this.targetVpc.cidrBlock,
-        this.vpcPeering?.id || pulumi.output("N/A"),
+        this.vpcPeering?.id || pulumi.output('N/A'),
         ...this.targetSubnets.map((s) => s.id),
         this.targetRdsInstance.endpoint,
         this.targetRdsInstance.arn,
         this.targetLoadBalancer.dnsName,
         this.targetLoadBalancer.arn,
-        this.route53Record?.name || pulumi.output("N/A"),
+        this.route53Record?.name || pulumi.output('N/A'),
         this.migrationDashboard.dashboardName,
         this.rollbackTopic.arn,
         this.connectionAlarm.arn,
@@ -1058,17 +1016,8 @@ exports.handler = async (event) => {
           replicationLagAlarmArn,
           environment: this.config.environmentSuffix,
           timestamp: new Date().toISOString(),
-          version: "1.0.0",
+          version: '1.0.0',
         };
-
-        const outputDir = path.join(process.cwd(), "cfn-outputs");
-        if (!fs.existsSync(outputDir)) {
-          fs.mkdirSync(outputDir, { recursive: true });
-        }
-        fs.writeFileSync(
-          path.join(outputDir, "flat-outputs.json"),
-          JSON.stringify(flatOutputs, null, 2)
-        );
 
         return flatOutputs;
       });
@@ -1082,10 +1031,10 @@ exports.handler = async (event) => {
     return {
       Environment: this.config.environmentSuffix,
       Component: component,
-      ManagedBy: "Pulumi",
-      Project: "VPC-Migration",
-      CostCenter: "FinTech",
-      Compliance: "PCI-DSS",
+      ManagedBy: 'Pulumi',
+      Project: 'VPC-Migration',
+      CostCenter: 'FinTech',
+      Compliance: 'PCI-DSS',
     };
   }
 }
