@@ -1,0 +1,14 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349819",
+  "team": "6",
+  "startedAt": "2025-10-17T05:46:37.087Z",
+  "subtask": "CI/CD Pipeline",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": "CodePipeline, Lambda, CodeBuild, Elasic Beanstalk, Secrets Manager, S3, CloudWatch"
+}
