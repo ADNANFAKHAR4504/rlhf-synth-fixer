@@ -71,7 +71,7 @@ jobs:
           download-artifacts: 'false'
 
       - name: Validate commit message
-        run: npx commitlint --from=${{ github.event.pull_request.base.sha }} --to=HEAD
+        run: npx commitlint --last
 
   build:
     name: Build
@@ -494,12 +494,13 @@ jobs:
           fi
 
       - name: Run Claude PR Review Action
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@beta
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          trigger_phrase: ""
-          prompt: |
+          allowed_tools: 'Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite'
+          trigger_phrase: ''
+          custom_instructions: |
             CRITICAL: you MUST validate the latest PROMPT file format, and add a github comment if it appears to be AI-generated rather than human-written:
             1. Identify all the PROMPT file (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.) - always use the highest numbered one
             2. Read the PROMPT files
@@ -533,8 +534,6 @@ jobs:
             This validation is mandatory and must be completed before any other review activities.
 
             Once the above is done Follow instructions in .claude/agents/iac-code-reviewer.md
-          claude_args: |
-            --allowedTools Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite
 
       - name: Upload updated metadata.json
         uses: actions/upload-artifact@v4
