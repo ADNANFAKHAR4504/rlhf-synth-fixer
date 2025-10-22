@@ -33,6 +33,54 @@ describe('Healthcare Infrastructure Stack Unit Tests', () => {
       expect(stack).toBeDefined();
       expect(synthesized).toBeDefined();
     });
+
+    test('TapStack handles defaultTags configuration', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestTapStackWithTags', {
+        environmentSuffix: 'dev',
+        defaultTags: {
+          tags: {
+            Environment: 'development',
+            Project: 'healthcare',
+          },
+        },
+      });
+      synthesized = JSON.parse(Testing.synth(stack));
+
+      const awsProvider = synthesized.provider?.aws?.[0];
+      expect(awsProvider).toBeDefined();
+      expect(awsProvider.default_tags).toBeDefined();
+      expect(awsProvider.default_tags).toHaveLength(1);
+      expect(awsProvider.default_tags[0].tags).toEqual({
+        Environment: 'development',
+        Project: 'healthcare',
+      });
+    });
+
+    test('TapStack uses correct region when AWS_REGION_OVERRIDE is set', () => {
+      // Store the original AWS_REGION_OVERRIDE value
+      const originalAwsRegionOverride = process.env.AWS_REGION_OVERRIDE;
+
+      try {
+        // Set AWS_REGION_OVERRIDE
+        process.env.AWS_REGION_OVERRIDE = 'eu-west-1';
+
+        app = new App();
+        stack = new TapStack(app, 'TestTapStackWithRegionOverride');
+        synthesized = JSON.parse(Testing.synth(stack));
+
+        const awsProvider = synthesized.provider?.aws?.[0];
+        expect(awsProvider).toBeDefined();
+        expect(awsProvider.region).toBe(process.env.AWS_REGION_OVERRIDE);
+      } finally {
+        // Restore the original value
+        if (originalAwsRegionOverride === undefined) {
+          delete process.env.AWS_REGION_OVERRIDE;
+        } else {
+          process.env.AWS_REGION_OVERRIDE = originalAwsRegionOverride;
+        }
+      }
+    });
   });
 
   describe('VPC Configuration', () => {
@@ -201,10 +249,10 @@ describe('Healthcare Infrastructure Stack Unit Tests', () => {
       expect(rdsInstance).toHaveProperty('backup_window');
     });
 
-    test('RDS instance has Performance Insights enabled', () => {
+    test('RDS instance is properly configured without Performance Insights', () => {
       const rdsInstance = Object.values(synthesized.resource.aws_db_instance || {})[0] as any;
-      expect(rdsInstance).toHaveProperty('performance_insights_enabled', true);
-      expect(rdsInstance).toHaveProperty('performance_insights_kms_key_id');
+      expect(rdsInstance).not.toHaveProperty('performance_insights_enabled');
+      expect(rdsInstance).not.toHaveProperty('performance_insights_kms_key_id');
     });
 
     test('RDS instance uses correct instance class', () => {
