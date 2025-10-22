@@ -219,13 +219,38 @@ export class TapStack extends pulumi.ComponentResource {
   private validateCidrRanges(sourceCidr: string, targetCidr: string): void {
     const parseIp = (cidr: string) => {
       const [ip, bits] = cidr.split("/");
-      return { ip, bits: parseInt(bits) };
+      const octets = ip.split(".").map(Number);
+      return { 
+        ip, 
+        bits: parseInt(bits),
+        octets,
+        // Convert IP to 32-bit integer for comparison
+        ipInt: (octets[0] << 24) | (octets[1] << 16) | (octets[2] << 8) | octets[3]
+      };
     };
 
     const source = parseIp(sourceCidr);
     const target = parseIp(targetCidr);
 
-    if (source.ip.split(".")[0] === target.ip.split(".")[0] && source.bits === target.bits) {
+    // Calculate network masks
+    const sourceMask = (0xFFFFFFFF << (32 - source.bits)) >>> 0;
+    const targetMask = (0xFFFFFFFF << (32 - target.bits)) >>> 0;
+
+    // Get network addresses
+    const sourceNetwork = (source.ipInt & sourceMask) >>> 0;
+    const targetNetwork = (target.ipInt & targetMask) >>> 0;
+
+    // Check if networks overlap
+    // Two networks overlap if one network address falls within the other's range
+    const sourceEnd = (sourceNetwork | (~sourceMask >>> 0)) >>> 0;
+    const targetEnd = (targetNetwork | (~targetMask >>> 0)) >>> 0;
+
+    const overlaps = (
+      (targetNetwork >= sourceNetwork && targetNetwork <= sourceEnd) ||
+      (sourceNetwork >= targetNetwork && sourceNetwork <= targetEnd)
+    );
+
+    if (overlaps) {
       throw new Error(
         `VPC CIDR ranges overlap: ${sourceCidr} and ${targetCidr}. This violates constraint requirements.`
       );
@@ -691,7 +716,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this, provider: this.sourceProvider, dependsOn: [replicationRole] }
     );
 
-    // Configure replication on source bucket using BucketReplicationConfig (not V2)
+    // Configure replication on source bucket using BucketReplicationConfig
     new aws.s3.BucketReplicationConfig(
       `${name}-s3-replication`,
       {
@@ -951,7 +976,6 @@ export class TapStack extends pulumi.ComponentResource {
   ): aws.route53.Record {
     const zone = aws.route53.getZoneOutput({ name: "example.com" });
 
-    // Fixed: Changed fullyQualifiedDomainName to fqdn
     const healthCheck = new aws.route53.HealthCheck(
       `${name}-health-check`,
       {
