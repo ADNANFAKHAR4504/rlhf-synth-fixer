@@ -776,7 +776,7 @@ class ComputeStack extends Stack {
                         .command(Arrays.asList(
                                 "/bin/sh", "-c",
                                 "mvn clean package && " 
-                                + "cp /asset-input/target/lambda-functions-1.0.0-SNAPSHOT-shaded.jar "
+                                + "cp /asset-input/target/lambda-functions.jar "
                                 + "/asset-output/routing.jar"
                         ))
                         .build())
@@ -1077,7 +1077,7 @@ class RealTimeStack extends Stack {
                                 .command(Arrays.asList(
                                         "/bin/sh", "-c",
                                         "mvn clean package && "  
-                                        + "cp /asset-input/target/lambda-functions-1.0.0-SNAPSHOT-shaded.jar "
+                                        + "cp /asset-input/target/lambda-functions.jar "
                                         + "/asset-output/" + functionType.toLowerCase() + ".jar"
                                 ))
                                 .build())
@@ -1119,7 +1119,7 @@ class RealTimeStack extends Stack {
                                 .command(Arrays.asList(
                                         "/bin/sh", "-c",
                                         "mvn clean package && " 
-                                        + "cp /asset-input/target/lambda-functions-1.0.0-SNAPSHOT-shaded.jar " 
+                                        + "cp /asset-input/target/lambda-functions.jar " 
                                         + "/asset-output/notification.jar"
                                 ))
                                 .build())
