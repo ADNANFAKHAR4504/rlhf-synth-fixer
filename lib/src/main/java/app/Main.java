@@ -1239,28 +1239,32 @@ class MLStack extends Stack {
 
     private CfnEndpointConfig createEndpointConfig(final String modelType, final String environmentSuffix,
                                                     final CfnModel model) {
-        return CfnEndpointConfig.Builder.create(this, modelType + "EndpointConfig")
+        CfnEndpointConfig config = CfnEndpointConfig.Builder.create(this, modelType + "EndpointConfig")
                 .endpointConfigName("social-platform-" + environmentSuffix + "-"
                                    + modelType.toLowerCase() + "-config")
                 .productionVariants(Arrays.asList(
                         CfnEndpointConfig.ProductionVariantProperty.builder()
                                 .variantName("AllTraffic")
                                 .modelName(model.getModelName())
-                                .initialInstanceCount(3)
+                                .initialInstanceCount(1)
                                 .instanceType("ml.m5.xlarge")
                                 .initialVariantWeight(1.0)
                                 .build()
                 ))
                 .build();
+        config.addDependency(model);
+        return config;
     }
 
     private CfnEndpoint createEndpoint(final String modelType, final String environmentSuffix,
                                        final CfnEndpointConfig endpointConfig) {
-        return CfnEndpoint.Builder.create(this, modelType + "Endpoint")
+        CfnEndpoint endpoint = CfnEndpoint.Builder.create(this, modelType + "Endpoint")
                 .endpointName("social-platform-" + environmentSuffix + "-"
                              + modelType.toLowerCase() + "-endpoint")
                 .endpointConfigName(endpointConfig.getEndpointConfigName())
                 .build();
+        endpoint.addDependency(endpointConfig);
+        return endpoint;
     }
 
     public CfnEndpoint getFeedRankingEndpoint() {
