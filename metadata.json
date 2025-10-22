@@ -2,7 +2,15 @@
   "platform": "pulumi",
   "language": "py",
   "complexity": "medium",
-  "training_quality": 8,
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-10-22T09:17:04+05:30",
+  "po_id": "7855388917",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Failure Recovery Automation"
+  ],
   "aws_services": [
     "VPC",
     "EC2",
@@ -15,5 +23,6 @@
     "CloudWatch",
     "Secrets Manager",
     "Elastic Load Balancing"
-  ]
+  ],
+  "training_quality": 8
 }
