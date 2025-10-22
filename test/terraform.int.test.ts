@@ -157,7 +157,7 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
       
       const nameTag = vpc.Tags?.find(tag => tag.Key === 'Name');
       expect(nameTag).toBeDefined();
-      expect(nameTag?.Value).toBe('main-vpc');
+      expect(nameTag?.Value).toBe('main-vpc-dev');
     });
   });
 
@@ -584,7 +584,7 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
       expect(response.SecurityGroups?.length).toBe(1);
 
       const sg = response.SecurityGroups![0];
-      expect(sg.GroupName).toBe('ec2-security-group');
+      expect(sg.GroupName).toBe('ec2-security-group-dev');
       expect(sg.VpcId).toBe(outputs.vpc_id);
     });
 
