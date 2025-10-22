@@ -63,6 +63,8 @@ export class TapStack extends TerraformStack {
     const stateBucketRegion = props?.stateBucketRegion || 'eu-central-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
+    // Add version suffix to force complete resource replacement in CI/CD
+    const deployVersion = 'v3';
     const drRegion = 'eu-west-1';
 
     // Configure AWS Provider for primary region
@@ -371,12 +373,13 @@ export class TapStack extends TerraformStack {
       deletionWindowInDays: 30,
       policy: kmsKeyPolicyDoc.json,
       tags: {
-        Name: `hipaa-kms-key-${environmentSuffix}`,
+        Name: `hipaa-kms-key-${deployVersion}-${environmentSuffix}`,
         Compliance: 'HIPAA',
         Environment: environmentSuffix,
       },
       provider: primaryProvider,
     });
+    kmsKey.overrideLogicalId(`kms-key-${deployVersion}`);
 
     new KmsAlias(this, 'kms-alias', {
       name: `alias/hipaa-${environmentSuffix}`,
@@ -390,13 +393,13 @@ export class TapStack extends TerraformStack {
       enableKeyRotation: true,
       deletionWindowInDays: 30,
       tags: {
-        Name: `hipaa-kms-key-dr-${environmentSuffix}`,
+        Name: `hipaa-kms-key-dr-${deployVersion}-${environmentSuffix}`,
         Compliance: 'HIPAA',
         Environment: environmentSuffix,
       },
       provider: drProvider,
     });
-    kmsKeyDr.overrideLogicalId('kms-key-dr-main');
+    kmsKeyDr.overrideLogicalId(`kms-key-dr-${deployVersion}`);
 
     // === ALERTING ===
     // Create SNS topic for alerts
@@ -628,7 +631,6 @@ export class TapStack extends TerraformStack {
             deleteMarkerReplication: {
               status: 'Enabled',
             },
-            filter: {},
             sourceSelectionCriteria: {
               sseKmsEncryptedObjects: {
                 status: 'Enabled',
@@ -739,18 +741,18 @@ export class TapStack extends TerraformStack {
 
     // Create RDS Global Cluster for cross-region replication
     const globalCluster = new RdsGlobalCluster(this, 'aurora-global', {
-      globalClusterIdentifier: `hipaa-aurora-global-v2-${environmentSuffix}`,
+      globalClusterIdentifier: `hipaa-aurora-global-${deployVersion}-${environmentSuffix}`,
       engine: 'aurora-postgresql',
       engineVersion: '15.4',
       databaseName: 'patientdb',
       storageEncrypted: true,
       provider: primaryProvider,
     });
-    globalCluster.overrideLogicalId('aurora-global-main');
+    globalCluster.overrideLogicalId(`aurora-global-${deployVersion}`);
 
     // Create Aurora cluster in primary region
     const auroraCluster = new RdsCluster(this, 'aurora-cluster', {
-      clusterIdentifier: `hipaa-aurora-${environmentSuffix}`,
+      clusterIdentifier: `hipaa-aurora-${deployVersion}-${environmentSuffix}`,
       engine: 'aurora-postgresql',
       engineVersion: '15.4',
       databaseName: 'patientdb',
@@ -777,7 +779,7 @@ export class TapStack extends TerraformStack {
       dependsOn: [globalCluster, kmsKey, dbSubnetGroup],
       provider: primaryProvider,
     });
-    auroraCluster.overrideLogicalId('aurora-cluster-main');
+    auroraCluster.overrideLogicalId(`aurora-cluster-${deployVersion}`);
 
     const instance1 = new RdsClusterInstance(this, 'aurora-instance-1', {
       identifier: `hipaa-aurora-instance-1-${environmentSuffix}`,
