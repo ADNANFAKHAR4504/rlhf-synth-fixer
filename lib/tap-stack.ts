@@ -53,8 +53,6 @@ interface TapStackProps {
   defaultTags?: AwsProviderDefaultTags;
 }
 
-const AWS_REGION_OVERRIDE = process.env.AWS_REGION_OVERRIDE;
-
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
@@ -102,7 +100,7 @@ export class TapStack extends TerraformStack {
     });
 
     // === NETWORKING ===
-    // Create VPC
+    // Create VPC (Force creation priority with explicit naming)
     const vpc = new Vpc(this, 'vpc', {
       cidrBlock: '10.0.0.0/16',
       enableDnsHostnames: true,
@@ -120,7 +118,10 @@ export class TapStack extends TerraformStack {
       },
     });
 
-    // Create Internet Gateway
+    // Force VPC to be created first by overriding logical ID
+    vpc.overrideLogicalId('vpc-main');
+
+    // Create Internet Gateway (depends on VPC)
     const igw = new InternetGateway(this, 'igw', {
       vpcId: vpc.id,
       tags: {
@@ -130,6 +131,9 @@ export class TapStack extends TerraformStack {
       dependsOn: [vpc],
       provider: primaryProvider,
     });
+
+    // Force dependency order with explicit ID
+    igw.overrideLogicalId('igw-main');
 
     // Create public subnets
     const publicSubnet1 = new Subnet(this, 'public-subnet-1', {
