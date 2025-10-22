@@ -27,7 +27,7 @@
       "Type": "String",
       "NoEcho": true,
       "MinLength": 8,
-      "Default": "SecurePassword2025!",
+      "Default": "UpdatedPassword2025!",
       "Description": "Master password for Aurora database."
     },
     "DailyScheduleExpression": {
