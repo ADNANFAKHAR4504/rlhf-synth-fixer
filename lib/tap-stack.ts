@@ -153,6 +153,7 @@ export class TapStack extends TerraformStack {
       },
       provider: primaryProvider,
     });
+    publicSubnet1.overrideLogicalId('public-subnet-1-main');
 
     const publicSubnet2 = new Subnet(this, 'public-subnet-2', {
       vpcId: vpc.id,
@@ -170,6 +171,7 @@ export class TapStack extends TerraformStack {
       },
       provider: primaryProvider,
     });
+    publicSubnet2.overrideLogicalId('public-subnet-2-main');
 
     // Create private subnets
     const privateSubnet1 = new Subnet(this, 'private-subnet-1', {
@@ -187,6 +189,7 @@ export class TapStack extends TerraformStack {
       },
       provider: primaryProvider,
     });
+    privateSubnet1.overrideLogicalId('private-subnet-1-main');
 
     const privateSubnet2 = new Subnet(this, 'private-subnet-2', {
       vpcId: vpc.id,
@@ -203,6 +206,7 @@ export class TapStack extends TerraformStack {
       },
       provider: primaryProvider,
     });
+    privateSubnet2.overrideLogicalId('private-subnet-2-main');
 
     // Create EIP for NAT Gateway
     const natEip = new Eip(this, 'nat-eip', {
@@ -214,6 +218,7 @@ export class TapStack extends TerraformStack {
       dependsOn: [vpc],
       provider: primaryProvider,
     });
+    natEip.overrideLogicalId('nat-eip-main');
 
     // Create NAT Gateway
     const natGw = new NatGateway(this, 'nat-gw', {
@@ -223,9 +228,10 @@ export class TapStack extends TerraformStack {
         Name: `hipaa-nat-gw-${environmentSuffix}`,
         Environment: environmentSuffix,
       },
-      dependsOn: [vpc, publicSubnet1, natEip],
+      dependsOn: [vpc, publicSubnet1, natEip, igw],
       provider: primaryProvider,
     });
+    natGw.overrideLogicalId('nat-gw-main');
 
     // Create route table for public subnets
     const publicRouteTable = new RouteTable(this, 'public-rt', {
@@ -237,6 +243,7 @@ export class TapStack extends TerraformStack {
       dependsOn: [vpc],
       provider: primaryProvider,
     });
+    publicRouteTable.overrideLogicalId('public-rt-main');
 
     new Route(this, 'public-route', {
       routeTableId: publicRouteTable.id,
@@ -267,6 +274,7 @@ export class TapStack extends TerraformStack {
       dependsOn: [vpc],
       provider: primaryProvider,
     });
+    privateRouteTable.overrideLogicalId('private-rt-main');
 
     new Route(this, 'private-route', {
       routeTableId: privateRouteTable.id,
@@ -387,6 +395,7 @@ export class TapStack extends TerraformStack {
       },
       provider: drProvider,
     });
+    kmsKeyDr.overrideLogicalId('kms-key-dr-main');
 
     // === ALERTING ===
     // Create SNS topic for alerts
@@ -522,6 +531,7 @@ export class TapStack extends TerraformStack {
       },
       provider: drProvider,
     });
+    dataBucketDr.overrideLogicalId('data-bucket-dr-main');
 
     new S3BucketVersioningA(this, 'data-bucket-dr-versioning', {
       bucket: dataBucketDr.id,
@@ -603,7 +613,7 @@ export class TapStack extends TerraformStack {
     });
 
     // Configure S3 replication
-    new S3BucketReplicationConfigurationA(this, 'data-bucket-replication', {
+    const replicationConfig = new S3BucketReplicationConfigurationA(this, 'data-bucket-replication', {
       bucket: dataBucket.id,
       role: replicationRole.arn,
       rule: [
@@ -641,9 +651,10 @@ export class TapStack extends TerraformStack {
           },
         },
       ],
-      dependsOn: [replicationPolicy, dataBucketDr, kmsKeyDr],
+      dependsOn: [replicationPolicy, dataBucketDr, kmsKeyDr, dataBucket],
       provider: primaryProvider,
     });
+    replicationConfig.overrideLogicalId('data-bucket-replication-main');
 
     // === DATABASE ===
     // Create security group for database
@@ -689,8 +700,10 @@ export class TapStack extends TerraformStack {
         Name: `hipaa-db-subnet-group-${environmentSuffix}`,
         Environment: environmentSuffix,
       },
+      dependsOn: [privateSubnet1, privateSubnet2, vpc],
       provider: primaryProvider,
     });
+    dbSubnetGroup.overrideLogicalId('db-subnet-group-main');
 
     // Create database master password secret
     const dbSecret = new SecretsmanagerSecret(this, 'db-secret', {
