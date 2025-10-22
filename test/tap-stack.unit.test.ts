@@ -574,7 +574,7 @@ describe('Student Analytics Platform Infrastructure', () => {
         synthesized.resource.aws_lb_target_group
       )[0] as any;
       expect(targetGroup).toBeDefined();
-      expect(targetGroup.port).toBe(8080);
+      expect(targetGroup.port).toBe(80);
       expect(targetGroup.protocol).toBe('HTTP');
       expect(targetGroup.target_type).toBe('ip');
     });
