@@ -27,7 +27,7 @@
       "Type": "String",
       "NoEcho": true,
       "MinLength": 8,
-      "Default": "NewPassword2024!",
+      "Default": "SecurePassword2025!",
       "Description": "Master password for Aurora database."
     },
     "DailyScheduleExpression": {
@@ -220,7 +220,7 @@
         },
         "ManageMasterUserPassword": true,
         "DatabaseName": "reportingdb",
-        "DBClusterParameterGroupName": "default.aurora-postgresql17",
+        "DBClusterParameterGroupName": "default.aurora-postgresql16",
         "StorageEncrypted": true,
         "KmsKeyId": {
           "Fn::GetAtt": [
