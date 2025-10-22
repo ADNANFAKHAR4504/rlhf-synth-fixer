@@ -64,7 +64,7 @@ export class TapStack extends TerraformStack {
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
     // Add version suffix to force complete resource replacement in CI/CD
-    const deployVersion = 'v3';
+    const deployVersion = 'v4';
     const drRegion = 'eu-west-1';
 
     // Configure AWS Provider for primary region
@@ -381,11 +381,12 @@ export class TapStack extends TerraformStack {
     });
     kmsKey.overrideLogicalId(`kms-key-${deployVersion}`);
 
-    new KmsAlias(this, 'kms-alias', {
-      name: `alias/hipaa-${environmentSuffix}`,
+    const kmsAlias = new KmsAlias(this, 'kms-alias', {
+      name: `alias/hipaa-${deployVersion}-${environmentSuffix}`,
       targetKeyId: kmsKey.keyId,
       provider: primaryProvider,
     });
+    kmsAlias.overrideLogicalId(`kms-alias-${deployVersion}`);
 
     // Create KMS key for DR region
     const kmsKeyDr = new KmsKey(this, 'kms-key-dr', {
@@ -404,13 +405,42 @@ export class TapStack extends TerraformStack {
     // === ALERTING ===
     // Create SNS topic for alerts
     const alertTopic = new SnsTopic(this, 'alert-topic', {
-      name: `hipaa-alerts-${environmentSuffix}`,
+      name: `hipaa-alerts-${deployVersion}-${environmentSuffix}`,
       displayName: 'HIPAA Infrastructure Alerts',
       kmsMasterKeyId: kmsKey.id,
       tags: {
-        Name: `hipaa-alerts-${environmentSuffix}`,
+        Name: `hipaa-alerts-${deployVersion}-${environmentSuffix}`,
         Environment: environmentSuffix,
       },
+      provider: primaryProvider,
+    });
+
+    // Create IAM role for RDS enhanced monitoring
+    const rdsMonitoringRole = new IamRole(this, 'rds-monitoring-role', {
+      name: `hipaa-rds-monitoring-role-${deployVersion}-${environmentSuffix}`,
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: {
+              Service: 'monitoring.rds.amazonaws.com',
+            },
+            Action: 'sts:AssumeRole',
+          },
+        ],
+      }),
+      tags: {
+        Name: `hipaa-rds-monitoring-role-${deployVersion}-${environmentSuffix}`,
+        Environment: environmentSuffix,
+      },
+      provider: primaryProvider,
+    });
+    rdsMonitoringRole.overrideLogicalId(`rds-monitoring-role-${deployVersion}`);
+
+    new IamRolePolicyAttachment(this, 'rds-monitoring-policy', {
+      role: rdsMonitoringRole.name,
+      policyArn: 'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole',
       provider: primaryProvider,
     });
 
@@ -628,9 +658,6 @@ export class TapStack extends TerraformStack {
             id: 'replicate-all',
             status: 'Enabled',
             priority: 1,
-            deleteMarkerReplication: {
-              status: 'Enabled',
-            },
             sourceSelectionCriteria: {
               sseKmsEncryptedObjects: {
                 status: 'Enabled',
@@ -714,23 +741,24 @@ export class TapStack extends TerraformStack {
 
     // Create database master password secret
     const dbSecret = new SecretsmanagerSecret(this, 'db-secret', {
-      name: `hipaa-db-master-password-${environmentSuffix}`,
+      name: `hipaa-db-master-password-${deployVersion}-${environmentSuffix}`,
       description: 'Master password for Aurora database',
-      kmsKeyId: kmsKey.keyId,
+      kmsKeyId: kmsKey.arn,
       recoveryWindowInDays: 30,
       tags: {
-        Name: `hipaa-db-secret-${environmentSuffix}`,
+        Name: `hipaa-db-secret-${deployVersion}-${environmentSuffix}`,
         Compliance: 'HIPAA',
         Environment: environmentSuffix,
       },
       provider: primaryProvider,
     });
+    dbSecret.overrideLogicalId(`db-secret-${deployVersion}`);
 
-    new SecretsmanagerSecretVersion(this, 'db-secret-version', {
+    const dbSecretVersion = new SecretsmanagerSecretVersion(this, 'db-secret-version', {
       secretId: dbSecret.id,
       secretString: JSON.stringify({
-        username: 'admin',
-        password: 'ChangeMe123!ComplexP@ssw0rd',
+        username: 'dbadmin',
+        password: 'TempPassword123!Complex9',
         engine: 'postgres',
         host: 'placeholder',
         port: 5432,
@@ -738,6 +766,7 @@ export class TapStack extends TerraformStack {
       }),
       provider: primaryProvider,
     });
+    dbSecretVersion.overrideLogicalId(`db-secret-version-${deployVersion}`);
 
     // Create RDS Global Cluster for cross-region replication
     const globalCluster = new RdsGlobalCluster(this, 'aurora-global', {
@@ -791,11 +820,12 @@ export class TapStack extends TerraformStack {
       performanceInsightsKmsKeyId: kmsKey.arn,
       performanceInsightsRetentionPeriod: 7,
       monitoringInterval: 60,
+      monitoringRoleArn: rdsMonitoringRole.arn,
       tags: {
         Name: `hipaa-aurora-instance-1-${environmentSuffix}`,
         Environment: environmentSuffix,
       },
-      dependsOn: [auroraCluster],
+      dependsOn: [auroraCluster, rdsMonitoringRole],
       provider: primaryProvider,
     });
     instance1.overrideLogicalId('aurora-instance-1-main');
@@ -810,40 +840,43 @@ export class TapStack extends TerraformStack {
       performanceInsightsKmsKeyId: kmsKey.arn,
       performanceInsightsRetentionPeriod: 7,
       monitoringInterval: 60,
+      monitoringRoleArn: rdsMonitoringRole.arn,
       tags: {
         Name: `hipaa-aurora-instance-2-${environmentSuffix}`,
         Environment: environmentSuffix,
       },
-      dependsOn: [auroraCluster],
+      dependsOn: [auroraCluster, rdsMonitoringRole],
       provider: primaryProvider,
     });
     instance2.overrideLogicalId('aurora-instance-2-main');
 
     // === LOGGING ===
     // Create CloudWatch Log Groups
-    new CloudwatchLogGroup(this, 'app-log-group', {
-      name: `/aws/hipaa/application-${environmentSuffix}`,
+    const appLogGroup = new CloudwatchLogGroup(this, 'app-log-group', {
+      name: `/aws/hipaa/application-${deployVersion}-${environmentSuffix}`,
       retentionInDays: 365,
       kmsKeyId: kmsKey.arn,
       tags: {
-        Name: `hipaa-app-logs-${environmentSuffix}`,
+        Name: `hipaa-app-logs-${deployVersion}-${environmentSuffix}`,
         Compliance: 'HIPAA',
         Environment: environmentSuffix,
       },
       provider: primaryProvider,
     });
+    appLogGroup.overrideLogicalId(`app-log-group-${deployVersion}`);
 
-    new CloudwatchLogGroup(this, 'db-log-group', {
-      name: `/aws/rds/cluster/hipaa-aurora-${environmentSuffix}/postgresql`,
+    const dbLogGroup = new CloudwatchLogGroup(this, 'db-log-group', {
+      name: `/aws/rds/cluster/hipaa-aurora-${deployVersion}-${environmentSuffix}/postgresql`,
       retentionInDays: 365,
       kmsKeyId: kmsKey.arn,
       tags: {
-        Name: `hipaa-db-logs-${environmentSuffix}`,
+        Name: `hipaa-db-logs-${deployVersion}-${environmentSuffix}`,
         Compliance: 'HIPAA',
         Environment: environmentSuffix,
       },
       provider: primaryProvider,
     });
+    dbLogGroup.overrideLogicalId(`db-log-group-${deployVersion}`);
 
     // Create CloudTrail S3 bucket for logging
     const cloudtrailLogBucket = new S3Bucket(this, 'cloudtrail-log-bucket', {
@@ -963,8 +996,8 @@ export class TapStack extends TerraformStack {
     });
 
     // Create CloudTrail
-    new Cloudtrail(this, 'cloudtrail', {
-      name: `hipaa-trail-${environmentSuffix}`,
+    const cloudtrail = new Cloudtrail(this, 'cloudtrail', {
+      name: `hipaa-trail-${deployVersion}-${environmentSuffix}`,
       s3BucketName: cloudtrailBucket.id,
       enableLogFileValidation: true,
       isMultiRegionTrail: true,
@@ -985,12 +1018,13 @@ export class TapStack extends TerraformStack {
         },
       ],
       tags: {
-        Name: `hipaa-trail-${environmentSuffix}`,
+        Name: `hipaa-trail-${deployVersion}-${environmentSuffix}`,
         Compliance: 'HIPAA',
         Environment: environmentSuffix,
       },
       provider: primaryProvider,
     });
+    cloudtrail.overrideLogicalId(`cloudtrail-${deployVersion}`);
 
     // === BACKUP ===
     // Create IAM role for AWS Backup
@@ -1131,13 +1165,14 @@ export class TapStack extends TerraformStack {
           value: 'HIPAA',
         },
       ],
+      dependsOn: [backupPlan, backupRole, auroraCluster],
       provider: primaryProvider,
     });
 
     // === MONITORING ===
     // Create CloudWatch Alarms
-    new CloudwatchMetricAlarm(this, 'backup-job-failed-alarm', {
-      alarmName: `hipaa-backup-job-failed-${environmentSuffix}`,
+    const backupAlarm = new CloudwatchMetricAlarm(this, 'backup-job-failed-alarm', {
+      alarmName: `hipaa-backup-job-failed-${deployVersion}-${environmentSuffix}`,
       comparisonOperator: 'GreaterThanThreshold',
       evaluationPeriods: 1,
       metricName: 'NumberOfBackupJobsFailed',
@@ -1149,14 +1184,15 @@ export class TapStack extends TerraformStack {
       alarmActions: [alertTopic.arn],
       treatMissingData: 'notBreaching',
       tags: {
-        Name: `hipaa-backup-failed-alarm-${environmentSuffix}`,
+        Name: `hipaa-backup-failed-alarm-${deployVersion}-${environmentSuffix}`,
         Environment: environmentSuffix,
       },
       provider: primaryProvider,
     });
+    backupAlarm.overrideLogicalId(`backup-job-failed-alarm-${deployVersion}`);
 
-    new CloudwatchMetricAlarm(this, 'db-cpu-alarm', {
-      alarmName: `hipaa-db-cpu-high-${environmentSuffix}`,
+    const dbCpuAlarm = new CloudwatchMetricAlarm(this, 'db-cpu-alarm', {
+      alarmName: `hipaa-db-cpu-high-${deployVersion}-${environmentSuffix}`,
       comparisonOperator: 'GreaterThanThreshold',
       evaluationPeriods: 2,
       metricName: 'CPUUtilization',
@@ -1171,14 +1207,15 @@ export class TapStack extends TerraformStack {
       },
       treatMissingData: 'notBreaching',
       tags: {
-        Name: `hipaa-db-cpu-alarm-${environmentSuffix}`,
+        Name: `hipaa-db-cpu-alarm-${deployVersion}-${environmentSuffix}`,
         Environment: environmentSuffix,
       },
       provider: primaryProvider,
     });
+    dbCpuAlarm.overrideLogicalId(`db-cpu-alarm-${deployVersion}`);
 
-    new CloudwatchMetricAlarm(this, 'db-connection-alarm', {
-      alarmName: `hipaa-db-connections-high-${environmentSuffix}`,
+    const dbConnectionAlarm = new CloudwatchMetricAlarm(this, 'db-connection-alarm', {
+      alarmName: `hipaa-db-connections-high-${deployVersion}-${environmentSuffix}`,
       comparisonOperator: 'GreaterThanThreshold',
       evaluationPeriods: 2,
       metricName: 'DatabaseConnections',
@@ -1193,11 +1230,12 @@ export class TapStack extends TerraformStack {
       },
       treatMissingData: 'notBreaching',
       tags: {
-        Name: `hipaa-db-connections-alarm-${environmentSuffix}`,
+        Name: `hipaa-db-connections-alarm-${deployVersion}-${environmentSuffix}`,
         Environment: environmentSuffix,
       },
       provider: primaryProvider,
     });
+    dbConnectionAlarm.overrideLogicalId(`db-connection-alarm-${deployVersion}`);
 
     new CloudwatchMetricAlarm(this, 's3-replication-latency-alarm', {
       alarmName: `hipaa-s3-replication-latency-${environmentSuffix}`,
