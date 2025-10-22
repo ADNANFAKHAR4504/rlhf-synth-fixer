@@ -8,16 +8,16 @@ import * as path from "path";
 export interface TapStackProps {
   environmentSuffix: string;
   sourceVpcCidr?: string;
-  sourceVpcId?: string; // NEW: Add explicit VPC ID
-  sourceRouteTableId?: string; // NEW: Add explicit route table ID
+  sourceVpcId?: string;
+  sourceRouteTableId?: string;
   targetVpcCidr?: string;
   availabilityZones?: number;
   migrationPhase?: "initial" | "peering" | "replication" | "cutover" | "complete";
   trafficWeightTarget?: number;
   errorThreshold?: number;
   rollbackEnabled?: boolean;
-  hostedZoneName?: string; // NEW: Make hosted zone optional
-  certificateArn?: string; // NEW: Make certificate ARN configurable
+  hostedZoneName?: string;
+  certificateArn?: string;
 }
 
 interface MigrationMetrics {
@@ -52,10 +52,10 @@ export interface StackOutputs {
 export class TapStack extends pulumi.ComponentResource {
   public readonly targetVpc: aws.ec2.Vpc;
   public readonly targetSubnets: aws.ec2.Subnet[];
-  public readonly vpcPeering?: aws.ec2.VpcPeeringConnection; // Make optional
+  public readonly vpcPeering?: aws.ec2.VpcPeeringConnection;
   public readonly targetRdsInstance: aws.rds.Instance;
   public readonly targetLoadBalancer: aws.lb.LoadBalancer;
-  public readonly route53Record?: aws.route53.Record; // Make optional
+  public readonly route53Record?: aws.route53.Record;
   public readonly migrationDashboard: aws.cloudwatch.Dashboard;
   public readonly connectionAlarm: aws.cloudwatch.MetricAlarm;
   public readonly errorAlarm: aws.cloudwatch.MetricAlarm;
@@ -184,13 +184,18 @@ export class TapStack extends pulumi.ComponentResource {
     const subnets: aws.ec2.Subnet[] = [];
     const azs = ["us-east-1a", "us-east-1b", "us-east-1c"];
 
+    // FIXED: Calculate CIDR blocks correctly for /20 subnets
+    // For /20 subnets, each block is 16 addresses in the third octet
+    // We need to ensure proper alignment
+    
     for (let i = 0; i < this.config.availabilityZones!; i++) {
       // Private subnet for compute tier
+      // Using blocks: 10.20.0.0/20, 10.20.16.0/20, 10.20.32.0/20
       const computeSubnet = new aws.ec2.Subnet(
         this.getResourceName(`compute-subnet-${i}`),
         {
           vpcId: this.targetVpc.id,
-          cidrBlock: `10.20.${i + 16}.0/20`,
+          cidrBlock: `10.20.${i * 16}.0/20`,
           availabilityZone: azs[i],
           tags: {
             Name: this.getResourceName(`compute-subnet-${i}`),
@@ -202,11 +207,13 @@ export class TapStack extends pulumi.ComponentResource {
       );
 
       // Private subnet for database tier
+      // Using blocks: 10.20.48.0/20, 10.20.64.0/20, 10.20.80.0/20
+      // Starting at offset 48 to avoid overlap with compute subnets (0-47)
       const dbSubnet = new aws.ec2.Subnet(
         this.getResourceName(`db-subnet-${i}`),
         {
           vpcId: this.targetVpc.id,
-          cidrBlock: `10.20.${i + 16 + 128}.0/20`,
+          cidrBlock: `10.20.${48 + (i * 16)}.0/20`,
           availabilityZone: azs[i],
           tags: {
             Name: this.getResourceName(`db-subnet-${i}`),
