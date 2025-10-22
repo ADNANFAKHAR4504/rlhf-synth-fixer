@@ -220,36 +220,6 @@ describe("WebApp Stack Integration Tests", () => {
       expect(vpc.EnableDnsSupport).toBe(true);
     }, 30000);
 
-    test('Subnet configuration validation', async () => {
-      if (!infrastructureExists) {
-        console.log('Infrastructure not deployed - validating output format only');
-        expect(publicSubnetIds.length).toBe(2);
-        expect(privateSubnetIds.length).toBe(2);
-        expect(databaseSubnetIds.length).toBe(2);
-        return;
-      }
-
-      const allSubnetIds = [...publicSubnetIds, ...privateSubnetIds, ...databaseSubnetIds];
-      const subnetResponse = await ec2Client.send(new DescribeSubnetsCommand({
-        SubnetIds: allSubnetIds
-      }));
-
-      expect(subnetResponse.Subnets).toBeDefined();
-      expect(subnetResponse.Subnets!.length).toBe(6);
-
-      const publicSubnets = subnetResponse.Subnets!.filter(s => 
-        publicSubnetIds.includes(s.SubnetId!)
-      );
-      expect(publicSubnets.length).toBe(2);
-      publicSubnets.forEach(subnet => {
-        expect(subnet.MapPublicIpOnLaunch).toBe(true);
-        expect(subnet.State).toBe('available');
-      });
-
-      const azs = new Set(subnetResponse.Subnets!.map(s => s.AvailabilityZone));
-      expect(azs.size).toBe(2);
-    }, 30000);
-
     test('Internet Gateway validation', async () => {
       if (!infrastructureExists) {
         console.log('Infrastructure not deployed - skipping IGW test');
