@@ -27,6 +27,10 @@ export interface TapStackArgs {
     maxDowntimeMinutes: number;
     enableRollback: boolean;
   };
+  route53Config?: {
+    hostedZoneName?: string;
+    createNewZone?: boolean;
+  };
   tags?: { [key: string]: string };
 }
 
@@ -974,7 +978,46 @@ export class TapStack extends pulumi.ComponentResource {
     alb: aws.lb.LoadBalancer,
     cloudfront: aws.cloudfront.Distribution
   ): aws.route53.Record {
-    const zone = aws.route53.getZoneOutput({ name: "example.com" });
+    let zoneId: pulumi.Output<string>;
+    let zoneName: string;
+
+    // Check if we should create a new zone or use existing
+    if (this.config.route53Config?.createNewZone !== false) {
+      // Create a new hosted zone
+      zoneName = this.config.route53Config?.hostedZoneName || 
+                 `${name}-${this.config.environmentSuffix}.internal`;
+      
+      const zone = new aws.route53.Zone(
+        `${name}-zone`,
+        {
+          name: zoneName,
+          comment: `Hosted zone for ${name} migration stack`,
+          tags: this.getMigrationTags("Route53 Hosted Zone"),
+        },
+        { parent: this }
+      );
+      zoneId = zone.zoneId;
+    } else if (this.config.route53Config?.hostedZoneName) {
+      // Use existing zone
+      zoneName = this.config.route53Config.hostedZoneName;
+      const existingZone = aws.route53.getZoneOutput({ 
+        name: zoneName,
+      });
+      zoneId = existingZone.zoneId;
+    } else {
+      // Default: create internal zone
+      zoneName = `${name}-${this.config.environmentSuffix}.internal`;
+      const zone = new aws.route53.Zone(
+        `${name}-zone`,
+        {
+          name: zoneName,
+          comment: `Hosted zone for ${name} migration stack`,
+          tags: this.getMigrationTags("Route53 Hosted Zone"),
+        },
+        { parent: this }
+      );
+      zoneId = zone.zoneId;
+    }
 
     const healthCheck = new aws.route53.HealthCheck(
       `${name}-health-check`,
@@ -993,8 +1036,8 @@ export class TapStack extends pulumi.ComponentResource {
     return new aws.route53.Record(
       `${name}-route53-record`,
       {
-        zoneId: zone.zoneId,
-        name: `${name}-${this.config.environmentSuffix}.example.com`,
+        zoneId: zoneId,
+        name: `app.${zoneName}`,
         type: "A",
         aliases: [
           {
