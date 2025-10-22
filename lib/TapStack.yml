@@ -637,7 +637,7 @@ Resources:
     UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub '${EnvironmentName}-db-instance'
-      DBName: finsecure_db
+      DBName: finsecuredb
       Engine: mysql
       EngineVersion: '8.0.43'
       DBInstanceClass: db.t3.medium
