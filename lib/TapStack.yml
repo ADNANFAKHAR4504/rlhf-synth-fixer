@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "Secure AWS Foundation - Single Stack with WAF, KMS, S3, Lambda, API Gateway (lint/runtime fixes applied)"
+Description: "Secure AWS Foundation - Single Stack with WAF, KMS, S3, Lambda, API Gateway (lint/runtime + delete-path fixes)"
 
 Parameters:
   ProjectPrefix:
@@ -536,6 +536,7 @@ Resources:
             Action:
               - s3:CreateBucket
               - s3:PutBucketPolicy
+              - s3:DeleteBucketPolicy
               - s3:PutBucketEncryption
               - s3:PutBucketVersioning
               - s3:PutBucketLogging
@@ -545,9 +546,12 @@ Resources:
               - s3:GetBucketVersioning
               - s3:ListAllMyBuckets
               - s3:ListBucket
+              - s3:ListBucketVersions
+              - s3:ListBucketMultipartUploads
               - s3:DeleteBucket
               - s3:DeleteObject
               - s3:DeleteObjectVersion
+              - s3:AbortMultipartUpload
             Resource: "*"
 
   CustomResourceLambda:
@@ -566,6 +570,7 @@ Resources:
           import boto3
           import logging
           import traceback
+          import time
           import urllib.request
           from botocore.exceptions import ClientError
 
@@ -771,24 +776,105 @@ Resources:
 
           def delete_resources(bucket_name):
               s3 = boto3.client('s3')
+
+              # 1) Remove policy & disable logging (best-effort)
               try:
-                  paginator = s3.get_paginator('list_object_versions')
-                  for page in paginator.paginate(Bucket=bucket_name):
-                      objects = []
-                      for obj in page.get('Versions', []):
-                          objects.append({'Key': obj['Key'], 'VersionId': obj['VersionId']})
-                      for obj in page.get('DeleteMarkers', []):
-                          objects.append({'Key': obj['Key'], 'VersionId': obj['VersionId']})
-                      if objects:
-                          s3.delete_objects(Bucket=bucket_name, Delete={'Objects': objects})
-                  s3.delete_bucket(Bucket=bucket_name)
-                  logger.info(f"Deleted bucket {bucket_name}")
+                  s3.delete_bucket_policy(Bucket=bucket_name)
+                  logger.info("Deleted bucket policy")
+              except ClientError as e:
+                  if e.response['Error']['Code'] not in ('NoSuchBucket', 'NoSuchBucketPolicy', 'NoSuchBucketPolicyExists'):
+                      logger.warning(f"delete_bucket_policy warning: {e}")
+
+              try:
+                  s3.put_bucket_logging(Bucket=bucket_name, BucketLoggingStatus={})
+                  logger.info("Disabled bucket logging")
+              except ClientError as e:
+                  if e.response['Error']['Code'] != 'NoSuchBucket':
+                      logger.warning(f"disable logging warning: {e}")
+
+              # 2) Determine versioning status
+              versioning_status = None
+              try:
+                  vr = s3.get_bucket_versioning(Bucket=bucket_name)
+                  versioning_status = vr.get('Status')
               except ClientError as e:
                   if e.response['Error']['Code'] == 'NoSuchBucket':
-                      logger.info(f"Bucket {bucket_name} does not exist")
+                      return {'Status': 'Absent'}
+                  logger.warning(f"get_bucket_versioning warning: {e}")
+
+              # 3) Abort multipart uploads
+              try:
+                  mp = s3.list_multipart_uploads(Bucket=bucket_name)
+                  uploads = mp.get('Uploads', [])
+                  while uploads:
+                      for u in uploads:
+                          try:
+                              s3.abort_multipart_upload(Bucket=bucket_name, Key=u['Key'], UploadId=u['UploadId'])
+                          except ClientError as e:
+                              logger.warning(f"abort MPU {u['Key']} warn: {e}")
+                      if mp.get('IsTruncated'):
+                          mp = s3.list_multipart_uploads(
+                              Bucket=bucket_name,
+                              KeyMarker=mp.get('NextKeyMarker'),
+                              UploadIdMarker=mp.get('NextUploadIdMarker')
+                          )
+                          uploads = mp.get('Uploads', [])
+                      else:
+                          break
+              except ClientError as e:
+                  if e.response['Error']['Code'] not in ('NoSuchUpload', 'NoSuchBucket', 'MethodNotAllowed'):
+                      logger.warning(f"list/abort MPU warning: {e}")
+
+              # 4) Delete objects (versioned or not)
+              def _batch_delete(objs):
+                  if not objs:
+                      return
+                  s3.delete_objects(Bucket=bucket_name, Delete={'Objects': objs})
+
+              try:
+                  if versioning_status in ('Enabled', 'Suspended'):
+                      paginator = s3.get_paginator('list_object_versions')
+                      for page in paginator.paginate(Bucket=bucket_name):
+                          objs = []
+                          for v in page.get('Versions', []):
+                              objs.append({'Key': v['Key'], 'VersionId': v['VersionId']})
+                              if len(objs) == 1000:
+                                  _batch_delete(objs); objs = []
+                          for m in page.get('DeleteMarkers', []):
+                              objs.append({'Key': m['Key'], 'VersionId': m['VersionId']})
+                              if len(objs) == 1000:
+                                  _batch_delete(objs); objs = []
+                          _batch_delete(objs)
                   else:
+                      paginator = s3.get_paginator('list_objects_v2')
+                      for page in paginator.paginate(Bucket=bucket_name):
+                          objs = [{'Key': o['Key']} for o in page.get('Contents', [])]
+                          while objs:
+                              _batch_delete(objs[:1000])
+                              objs = objs[1000:]
+              except ClientError as e:
+                  if e.response['Error']['Code'] == 'NoSuchBucket':
+                      return {'Status': 'Absent'}
+                  logger.warning(f"object deletion warning: {e}")
+
+              # 5) Retry delete bucket with backoff
+              for attempt in range(7):
+                  try:
+                      s3.delete_bucket(Bucket=bucket_name)
+                      logger.info(f"Deleted bucket {bucket_name}")
+                      return {'Status': 'Deleted'}
+                  except ClientError as e:
+                      code = e.response['Error']['Code']
+                      if code in ('NoSuchBucket'):
+                          return {'Status': 'Absent'}
+                      if code in ('BucketNotEmpty', 'OperationAborted', 'InternalError'):
+                          sleep = min(2 ** attempt, 30)
+                          logger.info(f"Retry delete bucket (attempt {attempt+1}) due to {code}; sleeping {sleep}s")
+                          time.sleep(sleep)
+                          continue
                       raise
-              return {'Status': 'Deleted'}
+
+              return {'Status': 'DeleteAttemptedButBucketMayRemain'}
       Tags:
         - Key: Project
           Value: !Ref ProjectPrefix
@@ -845,7 +931,6 @@ Resources:
             Action:
               - s3:GetObject
               - s3:PutObject
-            # Keep broad per your request; alternatively scope with a variable map to the bucket ARN.
             Resource: "*"
           - Effect: Allow
             Action:
