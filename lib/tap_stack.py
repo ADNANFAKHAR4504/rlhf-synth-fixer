@@ -284,7 +284,7 @@ class TapStack(TerraformStack):
             engine_version="16.6",
             database_name="streamflixdb",
             master_username="streamflix_admin",
-            manage_master_user_password_in_secrets_manager=True,
+            master_password="TempPassword123!ChangeMeInProduction",
             db_subnet_group_name=db_subnet_group.name,
             vpc_security_group_ids=[rds_sg.id],
             backup_retention_period=7,

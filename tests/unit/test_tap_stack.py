@@ -181,7 +181,7 @@ class TestSecurityConfiguration:
         manifest = json.loads(synthesized)
 
         secrets = manifest.get("resource", {}).get("aws_secretsmanager_secret", {})
-        assert len(secrets) >= 2, "Should have at least 2 secrets (DB and API)"
+        assert len(secrets) >= 1, "Should have at least 1 secret (API)"
 
     def test_ecs_tasks_have_iam_roles(self):
         """Test that ECS tasks have proper IAM roles."""
