@@ -754,7 +754,7 @@ export class TapStack extends TerraformStack {
       engineVersion: '15.4',
       databaseName: 'patientdb',
       masterUsername: 'dbadmin',
-      masterPassword: 'ChangeMe123!ComplexP@ssw0rd',
+      masterPassword: 'TempPassword123!Complex9',
       dbSubnetGroupName: dbSubnetGroup.name,
       vpcSecurityGroupIds: [dbSecurityGroup.id],
       storageEncrypted: true,
