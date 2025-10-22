@@ -1,57 +1,89 @@
 """TAP Stack module for CDKTF Python infrastructure."""
 
-from cdktf import TerraformStack, S3Backend, Fn, TerraformOutput
-from constructs import Construct
-from cdktf_cdktf_provider_aws.provider import AwsProvider
-from cdktf_cdktf_provider_aws.vpc import Vpc
-from cdktf_cdktf_provider_aws.subnet import Subnet
-from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
-from cdktf_cdktf_provider_aws.route_table import RouteTable, RouteTableRoute
-from cdktf_cdktf_provider_aws.route_table_association import RouteTableAssociation
-from cdktf_cdktf_provider_aws.security_group import SecurityGroup, SecurityGroupIngress, SecurityGroupEgress
-from cdktf_cdktf_provider_aws.kms_key import KmsKey
-from cdktf_cdktf_provider_aws.kms_alias import KmsAlias
-from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
-from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import S3BucketServerSideEncryptionConfigurationA, S3BucketServerSideEncryptionConfigurationRuleA, S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA
-from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
-from cdktf_cdktf_provider_aws.s3_bucket_public_access_block import S3BucketPublicAccessBlock
-from cdktf_cdktf_provider_aws.rds_cluster import RdsCluster
-from cdktf_cdktf_provider_aws.rds_cluster_instance import RdsClusterInstance
+import json
+
+from cdktf import Fn, S3Backend, TerraformOutput, TerraformStack
+from cdktf_cdktf_provider_aws.api_gateway_deployment import \
+    ApiGatewayDeployment
+from cdktf_cdktf_provider_aws.api_gateway_integration import \
+    ApiGatewayIntegration
+from cdktf_cdktf_provider_aws.api_gateway_method import ApiGatewayMethod
+from cdktf_cdktf_provider_aws.api_gateway_method_settings import (
+    ApiGatewayMethodSettings, ApiGatewayMethodSettingsSettings)
+from cdktf_cdktf_provider_aws.api_gateway_resource import ApiGatewayResource
+from cdktf_cdktf_provider_aws.api_gateway_rest_api import ApiGatewayRestApi
+from cdktf_cdktf_provider_aws.api_gateway_stage import ApiGatewayStage
+from cdktf_cdktf_provider_aws.appautoscaling_policy import (
+    AppautoscalingPolicy,
+    AppautoscalingPolicyTargetTrackingScalingPolicyConfiguration,
+    AppautoscalingPolicyTargetTrackingScalingPolicyConfigurationPredefinedMetricSpecification)
+from cdktf_cdktf_provider_aws.appautoscaling_target import AppautoscalingTarget
+from cdktf_cdktf_provider_aws.cloudtrail import Cloudtrail
+from cdktf_cdktf_provider_aws.cloudwatch_dashboard import CloudwatchDashboard
+from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
+from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import \
+    CloudwatchMetricAlarm
 from cdktf_cdktf_provider_aws.db_subnet_group import DbSubnetGroup
-from cdktf_cdktf_provider_aws.elasticache_replication_group import ElasticacheReplicationGroup
-from cdktf_cdktf_provider_aws.elasticache_subnet_group import ElasticacheSubnetGroup
-from cdktf_cdktf_provider_aws.kinesis_stream import KinesisStream
-from cdktf_cdktf_provider_aws.kinesis_firehose_delivery_stream import KinesisFirehoseDeliveryStream, KinesisFirehoseDeliveryStreamExtendedS3Configuration, KinesisFirehoseDeliveryStreamKinesisSourceConfiguration
+from cdktf_cdktf_provider_aws.ecs_cluster import EcsCluster
+from cdktf_cdktf_provider_aws.ecs_service import (
+    EcsService, EcsServiceLoadBalancer, EcsServiceNetworkConfiguration)
+from cdktf_cdktf_provider_aws.ecs_task_definition import EcsTaskDefinition
+from cdktf_cdktf_provider_aws.elasticache_replication_group import \
+    ElasticacheReplicationGroup
+from cdktf_cdktf_provider_aws.elasticache_subnet_group import \
+    ElasticacheSubnetGroup
+from cdktf_cdktf_provider_aws.fis_experiment_template import (
+    FisExperimentTemplate, FisExperimentTemplateAction,
+    FisExperimentTemplateActionTarget, FisExperimentTemplateStopCondition,
+    FisExperimentTemplateTarget, FisExperimentTemplateTargetFilter,
+    FisExperimentTemplateTargetResourceTag)
 from cdktf_cdktf_provider_aws.iam_role import IamRole
 from cdktf_cdktf_provider_aws.iam_role_policy import IamRolePolicy
-from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
-from cdktf_cdktf_provider_aws.ecs_cluster import EcsCluster
-from cdktf_cdktf_provider_aws.ecs_task_definition import EcsTaskDefinition
-from cdktf_cdktf_provider_aws.ecs_service import EcsService, EcsServiceLoadBalancer, EcsServiceNetworkConfiguration
-from cdktf_cdktf_provider_aws.lb import Lb
-from cdktf_cdktf_provider_aws.lb_target_group import LbTargetGroup, LbTargetGroupHealthCheck
-from cdktf_cdktf_provider_aws.lb_listener import LbListener, LbListenerDefaultAction
-from cdktf_cdktf_provider_aws.appautoscaling_target import AppautoscalingTarget
-from cdktf_cdktf_provider_aws.appautoscaling_policy import AppautoscalingPolicy, AppautoscalingPolicyTargetTrackingScalingPolicyConfiguration, AppautoscalingPolicyTargetTrackingScalingPolicyConfigurationPredefinedMetricSpecification
-from cdktf_cdktf_provider_aws.api_gateway_rest_api import ApiGatewayRestApi
-from cdktf_cdktf_provider_aws.api_gateway_resource import ApiGatewayResource
-from cdktf_cdktf_provider_aws.api_gateway_method import ApiGatewayMethod
-from cdktf_cdktf_provider_aws.api_gateway_integration import ApiGatewayIntegration
-from cdktf_cdktf_provider_aws.api_gateway_deployment import ApiGatewayDeployment
-from cdktf_cdktf_provider_aws.api_gateway_stage import ApiGatewayStage
-from cdktf_cdktf_provider_aws.api_gateway_method_settings import ApiGatewayMethodSettings, ApiGatewayMethodSettingsSettings
-from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
-from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import CloudwatchMetricAlarm
-from cdktf_cdktf_provider_aws.cloudwatch_dashboard import CloudwatchDashboard
-from cdktf_cdktf_provider_aws.secretsmanager_secret import SecretsmanagerSecret
-from cdktf_cdktf_provider_aws.secretsmanager_secret_version import SecretsmanagerSecretVersion
-from cdktf_cdktf_provider_aws.secretsmanager_secret_rotation import SecretsmanagerSecretRotation
+from cdktf_cdktf_provider_aws.iam_role_policy_attachment import \
+    IamRolePolicyAttachment
+from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
+from cdktf_cdktf_provider_aws.kinesis_firehose_delivery_stream import (
+    KinesisFirehoseDeliveryStream,
+    KinesisFirehoseDeliveryStreamExtendedS3Configuration,
+    KinesisFirehoseDeliveryStreamKinesisSourceConfiguration)
+from cdktf_cdktf_provider_aws.kinesis_stream import KinesisStream
+from cdktf_cdktf_provider_aws.kms_alias import KmsAlias
+from cdktf_cdktf_provider_aws.kms_key import KmsKey
 from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction
-from cdktf_cdktf_provider_aws.cloudtrail import Cloudtrail
-from cdktf_cdktf_provider_aws.scheduler_schedule import SchedulerSchedule, SchedulerScheduleTarget, SchedulerScheduleFlexibleTimeWindow, SchedulerScheduleTargetRetryPolicy
-from cdktf_cdktf_provider_aws.fis_experiment_template import FisExperimentTemplate, FisExperimentTemplateStopCondition, FisExperimentTemplateAction, FisExperimentTemplateActionTarget, FisExperimentTemplateTarget, FisExperimentTemplateTargetResourceTag, FisExperimentTemplateTargetFilter
+from cdktf_cdktf_provider_aws.lb import Lb
+from cdktf_cdktf_provider_aws.lb_listener import (LbListener,
+                                                  LbListenerDefaultAction)
+from cdktf_cdktf_provider_aws.lb_target_group import (LbTargetGroup,
+                                                      LbTargetGroupHealthCheck)
+from cdktf_cdktf_provider_aws.provider import AwsProvider
+from cdktf_cdktf_provider_aws.rds_cluster import RdsCluster
+from cdktf_cdktf_provider_aws.rds_cluster_instance import RdsClusterInstance
+from cdktf_cdktf_provider_aws.route_table import RouteTable, RouteTableRoute
+from cdktf_cdktf_provider_aws.route_table_association import \
+    RouteTableAssociation
+from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
+from cdktf_cdktf_provider_aws.s3_bucket_public_access_block import \
+    S3BucketPublicAccessBlock
+from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
+    S3BucketServerSideEncryptionConfigurationA,
+    S3BucketServerSideEncryptionConfigurationRuleA,
+    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA)
+from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
+from cdktf_cdktf_provider_aws.scheduler_schedule import (
+    SchedulerSchedule, SchedulerScheduleFlexibleTimeWindow,
+    SchedulerScheduleTarget, SchedulerScheduleTargetRetryPolicy)
+from cdktf_cdktf_provider_aws.secretsmanager_secret import SecretsmanagerSecret
+from cdktf_cdktf_provider_aws.secretsmanager_secret_rotation import \
+    SecretsmanagerSecretRotation
+from cdktf_cdktf_provider_aws.secretsmanager_secret_version import \
+    SecretsmanagerSecretVersion
+from cdktf_cdktf_provider_aws.security_group import (SecurityGroup,
+                                                     SecurityGroupEgress,
+                                                     SecurityGroupIngress)
 from cdktf_cdktf_provider_aws.sqs_queue import SqsQueue
-import json
+from cdktf_cdktf_provider_aws.subnet import Subnet
+from cdktf_cdktf_provider_aws.vpc import Vpc
+from constructs import Construct
 
 
 class TapStack(TerraformStack):
@@ -68,8 +100,8 @@ class TapStack(TerraformStack):
 
         # Extract configuration from kwargs
         environment_suffix = kwargs.get('environment_suffix', 'dev')
-        aws_region = kwargs.get('aws_region', 'us-east-1')
-        state_bucket_region = kwargs.get('state_bucket_region', 'us-east-1')
+        aws_region = kwargs.get('aws_region', 'eu-west-2')
+        state_bucket_region = kwargs.get('state_bucket_region', 'eu-west-2')
         state_bucket = kwargs.get('state_bucket', 'iac-rlhf-tf-states')
         default_tags = kwargs.get('default_tags', {})
 

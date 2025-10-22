@@ -88,12 +88,12 @@ class TestTapStackBasic:
         import os
 
         # Test default region handling
-        aws_region = os.getenv('AWS_REGION', 'us-east-1')
+        aws_region = os.getenv('AWS_REGION', 'eu-west-2')
         assert isinstance(aws_region, str)
         assert len(aws_region) > 0
         
         # Should be a valid AWS region format
-        assert '-' in aws_region or aws_region == 'us-east-1'
+        assert '-' in aws_region or aws_region == 'eu-west-2'
 
     def test_project_structure(self):
         """Test that project has expected structure."""
@@ -139,7 +139,7 @@ class TestStackConfiguration:
         """Test default parameter handling."""
         # Test that default values work
         default_env = 'dev'
-        default_region = 'us-east-1'
+        default_region = 'eu-west-2'
         
         assert isinstance(default_env, str)
         assert isinstance(default_region, str)
@@ -157,7 +157,7 @@ class TestStackConfiguration:
 
     def test_aws_region_validation(self):
         """Test AWS region format validation."""
-        valid_regions = ['us-east-1', 'us-west-2', 'ap-northeast-1', 'eu-west-1']
+        valid_regions = ['us-east-1', 'us-west-2', 'ap-northeast-1', 'eu-west-1', 'eu-west-2']
         
         for region in valid_regions:
             assert isinstance(region, str)
@@ -230,8 +230,8 @@ class TestStackIntegration:
         """Test configuration parameter validation."""
         # Test valid configurations
         valid_configs = [
-            {"environment_suffix": "dev", "aws_region": "us-east-1"},
-            {"environment_suffix": "test", "aws_region": "ap-northeast-1"},
+            {"environment_suffix": "dev", "aws_region": "eu-west-2"},
+            {"environment_suffix": "test", "aws_region": "eu-west-2"},
             {"environment_suffix": "prod", "aws_region": "us-west-2"}
         ]
         

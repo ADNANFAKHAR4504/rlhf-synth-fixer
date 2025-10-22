@@ -10,8 +10,8 @@ This solution provides a complete, production-ready infrastructure for EduTech S
 
 1. **VPC and Networking (Multi-AZ)**
    - VPC with CIDR 10.0.0.0/16
-   - Public subnets (2) in ap-northeast-1a and ap-northeast-1c for ALB
-   - Private subnets (2) in ap-northeast-1a and ap-northeast-1c for ECS, RDS, and ElastiCache
+   - Public subnets (2) in eu-west-2a and eu-west-2c for ALB
+   - Private subnets (2) in eu-west-2a and eu-west-2c for ECS, RDS, and ElastiCache
    - Internet Gateway for public subnet access
    - Route tables configured for proper traffic routing
 
@@ -69,6 +69,7 @@ This solution provides a complete, production-ready infrastructure for EduTech S
 ## How It Meets Requirements
 
 ### 100,000+ Concurrent Users
+
 - **ECS Auto-scaling**: 4-50 Fargate tasks (1 vCPU, 2GB each) = 50+ concurrent vCPUs
 - **Aurora Serverless v2**: Auto-scales to 16 ACUs for read-heavy queries
 - **ElastiCache Redis**: cache.r6g.large handles 100k+ concurrent sessions
@@ -76,6 +77,7 @@ This solution provides a complete, production-ready infrastructure for EduTech S
 - **Kinesis**: 10 shards support 10MB/sec write throughput
 
 ### FERPA Compliance
+
 - **Encryption at Rest**: KMS customer-managed keys for all data stores
 - **Encryption in Transit**: TLS 1.2+ for all communications
 - **Access Controls**: Least-privilege IAM roles and security groups
@@ -84,6 +86,7 @@ This solution provides a complete, production-ready infrastructure for EduTech S
 - **Data Classification**: Resources tagged with DataClassification
 
 ### High Availability (99.99%)
+
 - **Multi-AZ Deployment**: RDS, Redis, ECS span 2 AZs
 - **Automatic Failover**: RDS and Redis configured for failover
 - **Load Balancing**: ALB distributes traffic across AZs
@@ -91,6 +94,7 @@ This solution provides a complete, production-ready infrastructure for EduTech S
 - **Chaos Engineering**: FIS experiments validate resilience
 
 ### Real-Time Analytics
+
 - **Kinesis Data Stream**: Captures student interactions in real-time
 - **Kinesis Firehose**: Delivers to S3 every 5 minutes
 - **Partitioned Storage**: Date-based partitions in S3 for efficient queries
@@ -110,7 +114,7 @@ pip install -r requirements.txt
 # Configure AWS credentials
 export AWS_ACCESS_KEY_ID=your_key
 export AWS_SECRET_ACCESS_KEY=your_secret
-export AWS_REGION=ap-northeast-1
+export AWS_REGION=eu-west-2
 
 # Set environment suffix
 export ENVIRONMENT_SUFFIX=prod  # or dev, test, etc.

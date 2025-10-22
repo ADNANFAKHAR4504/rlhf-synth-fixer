@@ -1,7 +1,7 @@
 """Simple integration tests for TapStack - Passing tests only."""
+import json
 import os
 import sys
-import json
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -38,7 +38,7 @@ class TestTapStackIntegration:
         with open('lib/AWS_REGION', 'r') as f:
             region = f.read().strip()
         
-        assert region == 'ap-northeast-1'
+        assert region == 'eu-west-2'
         
         # Also check environment variable handling
         env_region = os.getenv('AWS_REGION', region)
@@ -172,7 +172,7 @@ class TestDeploymentReadiness:
         # Test that we can handle missing environment variables gracefully
         test_vars = [
             ('ENVIRONMENT_SUFFIX', 'dev'),
-            ('AWS_REGION', 'us-east-1'),
+            ('AWS_REGION', 'eu-west-2'),
             ('REPOSITORY', 'test-repo')
         ]
         
@@ -204,7 +204,7 @@ class TestSimpleHealthChecks:
         import json
         import os
         import sys
-        
+
         # These should never fail
         assert json is not None
         assert os is not None
