@@ -361,6 +361,13 @@ class TapStack(pulumi.ComponentResource):
                             "Principal": {"AWS": f"arn:aws:iam::{elb_account}:root"},
                             "Action": "s3:PutObject",
                             "Resource": f"{args[0]}/alb-logs/*"
+                        },
+                        {
+                            "Sid": "AWSALBAccessLogAclCheck",
+                            "Effect": "Allow",
+                            "Principal": {"AWS": f"arn:aws:iam::{elb_account}:root"},
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": args[0]
                         }
                     ]
                 })
@@ -941,7 +948,7 @@ class TapStack(pulumi.ComponentResource):
                 prefix="alb-logs",
             ),
             tags={**self.tags, "Name": f"app-alb-{self.environment_suffix}"},
-            opts=ResourceOptions(parent=self)
+            opts=ResourceOptions(parent=self, depends_on=[cloudtrail_bucket_policy])
         )
 
         target_group = aws.lb.TargetGroup(
