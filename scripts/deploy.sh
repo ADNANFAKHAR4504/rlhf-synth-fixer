@@ -75,6 +75,61 @@ fi
 echo "⏳ Waiting 5 seconds to ensure resources are fully cleaned up..."
 sleep 5
 
+# Force cleanup of specific problematic resources
+echo "=== Force Cleanup of Orphaned Resources ==="
+echo "🔧 Checking for and removing orphaned AWS resources..."
+
+# Temporarily disable exit-on-error for cleanup
+set +e
+
+# Get the environment suffix for resource names
+if [ -n "$ENVIRONMENT_SUFFIX" ]; then
+  CLEANUP_SUFFIX="$ENVIRONMENT_SUFFIX"
+else
+  CLEANUP_SUFFIX="dev"
+fi
+
+echo "Cleaning up resources with suffix: $CLEANUP_SUFFIX"
+
+# Force delete RDS instances if they exist
+echo "🗑️ Checking for RDS instances..."
+for instance in "streamflix-aurora-instance-1-${CLEANUP_SUFFIX}" "streamflix-aurora-instance-2-${CLEANUP_SUFFIX}"; do
+  if aws rds describe-db-instances --db-instance-identifier "$instance" --region eu-west-2 >/dev/null 2>&1; then
+    echo "  Deleting RDS instance: $instance"
+    aws rds delete-db-instance --db-instance-identifier "$instance" --skip-final-snapshot --delete-automated-backups --region eu-west-2 >/dev/null 2>&1 || true
+  fi
+done
+
+# Force delete ElastiCache replication group
+echo "🗑️ Checking for ElastiCache replication group..."
+REDIS_GROUP="streamflix-redis-${CLEANUP_SUFFIX}"
+if aws elasticache describe-replication-groups --replication-group-id "$REDIS_GROUP" --region eu-west-2 >/dev/null 2>&1; then
+  echo "  Deleting ElastiCache replication group: $REDIS_GROUP"
+  aws elasticache delete-replication-group --replication-group-id "$REDIS_GROUP" --no-retain-primary-cluster --region eu-west-2 >/dev/null 2>&1 || true
+fi
+
+# Get EFS file system ID and delete mount targets
+echo "🗑️ Checking for EFS mount targets..."
+EFS_ID=$(aws efs describe-file-systems --region eu-west-2 --query "FileSystems[?Name=='streamflix-efs-${CLEANUP_SUFFIX}'].FileSystemId" --output text 2>/dev/null || echo "")
+if [ -n "$EFS_ID" ] && [ "$EFS_ID" != "None" ]; then
+  echo "  Found EFS file system: $EFS_ID"
+  # Get and delete all mount targets for this file system
+  MOUNT_TARGETS=$(aws efs describe-mount-targets --file-system-id "$EFS_ID" --region eu-west-2 --query "MountTargets[].MountTargetId" --output text 2>/dev/null || echo "")
+  if [ -n "$MOUNT_TARGETS" ]; then
+    for mt in $MOUNT_TARGETS; do
+      echo "  Deleting mount target: $mt"
+      aws efs delete-mount-target --mount-target-id "$mt" --region eu-west-2 >/dev/null 2>&1 || true
+    done
+  fi
+fi
+
+# Wait for resources to be deleted
+echo "⏳ Waiting 10 seconds for AWS resources to be fully deleted..."
+sleep 10
+
+# Re-enable exit-on-error
+set -e
+
 # Clean up any Secrets Manager secrets that might be in deletion state
 echo "=== Aggressive Secrets Cleanup Phase ==="
 echo "🔥 FORCEFULLY REMOVING ALL AWS SECRETS MANAGER SECRETS..."
