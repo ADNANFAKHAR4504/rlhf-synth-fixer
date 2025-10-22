@@ -1,29 +1,29 @@
-import { Construct } from 'constructs';
-import { Fn, TerraformOutput } from 'cdktf';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
-import { Eip } from '@cdktf/provider-aws/lib/eip';
-import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
-import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
-import { Route } from '@cdktf/provider-aws/lib/route';
-import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
-import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
-import { EcsCluster } from '@cdktf/provider-aws/lib/ecs-cluster';
-import { EcsTaskDefinition } from '@cdktf/provider-aws/lib/ecs-task-definition';
-import { EcsService } from '@cdktf/provider-aws/lib/ecs-service';
-import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
-import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
+import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
+import { EcsCluster } from '@cdktf/provider-aws/lib/ecs-cluster';
+import { EcsService } from '@cdktf/provider-aws/lib/ecs-service';
+import { EcsTaskDefinition } from '@cdktf/provider-aws/lib/ecs-task-definition';
+import { Eip } from '@cdktf/provider-aws/lib/eip';
+import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { Lb } from '@cdktf/provider-aws/lib/lb';
+import { LbListener } from '@cdktf/provider-aws/lib/lb-listener';
+import { LbTargetGroup } from '@cdktf/provider-aws/lib/lb-target-group';
+import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
+import { Route } from '@cdktf/provider-aws/lib/route';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
 import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
 import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
-import { Lb } from '@cdktf/provider-aws/lib/lb';
-import { LbTargetGroup } from '@cdktf/provider-aws/lib/lb-target-group';
-import { LbListener } from '@cdktf/provider-aws/lib/lb-listener';
-import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { Fn, TerraformOutput } from 'cdktf';
+import { Construct } from 'constructs';
 
 interface LmsStackProps {
   environmentSuffix: string;
@@ -317,7 +317,7 @@ export class LmsStack extends Construct {
     const rdsInstance = new DbInstance(this, 'rds-instance', {
       identifier: `lms-db-${props.environmentSuffix}`,
       engine: 'postgres',
-      engineVersion: '15.4',
+      engineVersion: '16.3',
       instanceClass: 'db.t3.micro',
       allocatedStorage: 20,
       storageType: 'gp3',
@@ -332,7 +332,7 @@ export class LmsStack extends Construct {
       multiAz: true,
       backupRetentionPeriod: 7,
       enabledCloudwatchLogsExports: ['postgresql', 'upgrade'],
-      parameterGroupName: 'default.postgres15',
+      parameterGroupName: 'default.postgres16',
       caCertIdentifier: 'rds-ca-rsa2048-g1',
       tags: {
         Name: `lms-db-${props.environmentSuffix}`,
