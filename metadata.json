@@ -1,6 +1,6 @@
 {
-  "platform": "CDKTF",
-  "language": "TypeScript",
+  "platform": "cdktf",
+  "language": "ts",
   "complexity": "medium",
   "team": "synth",
   "turn_type": "single",
