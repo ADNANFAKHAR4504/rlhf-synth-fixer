@@ -68,7 +68,6 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly targetAlb: aws.lb.LoadBalancer;
   public readonly targetRds: aws.rds.Instance;
   public readonly migrationTable: aws.dynamodb.Table;
-
   private sourceProvider: aws.Provider;
   private targetProvider: aws.Provider;
   private config: TapStackArgs;
@@ -80,7 +79,6 @@ export class TapStack extends pulumi.ComponentResource {
     opts?: pulumi.ComponentResourceOptions
   ) {
     super("custom:infrastructure:TapStack", name, {}, opts);
-
     this.config = args;
     this.migrationTimestamp = new Date().toISOString();
 
@@ -207,7 +205,6 @@ export class TapStack extends pulumi.ComponentResource {
 
           // Write outputs to file
           this.writeOutputsToFile(outputs);
-
           return outputs;
         }
       );
@@ -224,8 +221,8 @@ export class TapStack extends pulumi.ComponentResource {
     const parseIp = (cidr: string) => {
       const [ip, bits] = cidr.split("/");
       const octets = ip.split(".").map(Number);
-      return { 
-        ip, 
+      return {
+        ip,
         bits: parseInt(bits),
         octets,
         ipInt: (octets[0] << 24) | (octets[1] << 16) | (octets[2] << 8) | octets[3]
@@ -237,10 +234,8 @@ export class TapStack extends pulumi.ComponentResource {
 
     const sourceMask = (0xFFFFFFFF << (32 - source.bits)) >>> 0;
     const targetMask = (0xFFFFFFFF << (32 - target.bits)) >>> 0;
-
     const sourceNetwork = (source.ipInt & sourceMask) >>> 0;
     const targetNetwork = (target.ipInt & targetMask) >>> 0;
-
     const sourceEnd = (sourceNetwork | (~sourceMask >>> 0)) >>> 0;
     const targetEnd = (targetNetwork | (~targetMask >>> 0)) >>> 0;
 
@@ -382,6 +377,7 @@ export class TapStack extends pulumi.ComponentResource {
 
   /**
    * Creates target subnets across 2 AZs with proper routing
+   * FIXED: Removed duplicate Internet Gateway creation that was causing the conflict
    */
   private createTargetSubnets(
     name: string,
@@ -392,6 +388,7 @@ export class TapStack extends pulumi.ComponentResource {
     database: aws.ec2.Subnet[];
   } {
     // Create Internet Gateway ONCE for the VPC
+    // FIXED: Removed the duplicate igw-subnets that was causing the conflict
     const igw = new aws.ec2.InternetGateway(
       `${name}-target-igw`,
       {
@@ -1016,9 +1013,9 @@ export class TapStack extends pulumi.ComponentResource {
     let zoneName: string;
 
     if (this.config.route53Config?.createNewZone !== false) {
-      zoneName = this.config.route53Config?.hostedZoneName || 
-                 `${name}-${this.config.environmentSuffix}.internal`;
-      
+      zoneName = this.config.route53Config?.hostedZoneName ||
+        `${name}-${this.config.environmentSuffix}.internal`;
+
       const zone = new aws.route53.Zone(
         `${name}-zone`,
         {
@@ -1031,7 +1028,7 @@ export class TapStack extends pulumi.ComponentResource {
       zoneId = zone.zoneId;
     } else if (this.config.route53Config?.hostedZoneName) {
       zoneName = this.config.route53Config.hostedZoneName;
-      const existingZone = aws.route53.getZoneOutput({ 
+      const existingZone = aws.route53.getZoneOutput({
         name: zoneName,
       });
       zoneId = existingZone.zoneId;
@@ -1203,7 +1200,7 @@ echo "Checking RDS connectivity: ${rdsEndpoint}"
 echo "Checking ALB health: ${albDns}"
 echo "Checking S3 bucket: ${bucketName}"
 exit 0
-      `;
+`;
 
       const postCheckScript = `
 #!/bin/bash
@@ -1212,7 +1209,7 @@ echo "Validating target infrastructure..."
 curl -f http://${albDns}/health || exit 1
 echo "All checks passed"
 exit 0
-      `;
+`;
 
       fs.mkdirSync("scripts", { recursive: true });
       fs.writeFileSync("scripts/pre-migration-validation.sh", preCheckScript);
@@ -1311,8 +1308,8 @@ yum update -y
 yum install -y httpd
 systemctl start httpd
 systemctl enable httpd
-echo "<h1>Migration Target Instance</h1>" > /var/www/html/index.html
+echo "Migration Target Instance" > /var/www/html/index.html
 echo "OK" > /var/www/html/health
-    `;
+`;
   }
 }
