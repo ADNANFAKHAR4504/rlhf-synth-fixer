@@ -79,7 +79,7 @@ export class TapStack extends pulumi.ComponentResource {
       ...props,
     };
 
-    this.randomSuffix = Math.random().toString(36).substring(2, 8);
+    this.randomSuffix = props.environmentSuffix;
 
     this.dbPassword = new random.RandomPassword(
       this.getResourceName('db-password'),
