@@ -1227,8 +1227,7 @@ class MLStack extends Stack {
                 .executionRoleArn(sagemakerRole.getRoleArn())
                 .primaryContainer(CfnModel.ContainerDefinitionProperty.builder()
                         .image("763104351884.dkr.ecr.us-west-2.amazonaws.com/pytorch-inference:2.0.0-cpu-py310")
-                        .modelDataUrl("s3://sagemaker-models-" + this.getAccount() + "/"
-                                     + modelType.toLowerCase() + "/model.tar.gz")
+                        .modelDataUrl("s3://sagemaker-sample-files/datasets/tabular/synthetic/model.tar.gz")
                         .environment(Map.of(
                                 "SAGEMAKER_PROGRAM", "inference.py",
                                 "SAGEMAKER_SUBMIT_DIRECTORY", "/opt/ml/model/code"
