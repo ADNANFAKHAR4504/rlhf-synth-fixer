@@ -64,7 +64,7 @@ export class TapStack extends TerraformStack {
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
     // Add version suffix to force complete resource replacement in CI/CD
-    const deployVersion = 'v4';
+    const deployVersion = 'v5';
     const drRegion = 'eu-west-1';
 
     // Configure AWS Provider for primary region
@@ -412,6 +412,7 @@ export class TapStack extends TerraformStack {
         Name: `hipaa-alerts-${deployVersion}-${environmentSuffix}`,
         Environment: environmentSuffix,
       },
+      dependsOn: [kmsKey],
       provider: primaryProvider,
     });
     alertTopic.overrideLogicalId(`alert-topic-${deployVersion}`);
@@ -867,6 +868,7 @@ export class TapStack extends TerraformStack {
         Compliance: 'HIPAA',
         Environment: environmentSuffix,
       },
+      dependsOn: [kmsKey],
       provider: primaryProvider,
     });
     appLogGroup.overrideLogicalId(`app-log-group-${deployVersion}`);
@@ -880,6 +882,7 @@ export class TapStack extends TerraformStack {
         Compliance: 'HIPAA',
         Environment: environmentSuffix,
       },
+      dependsOn: [kmsKey],
       provider: primaryProvider,
     });
     dbLogGroup.overrideLogicalId(`db-log-group-${deployVersion}`);
@@ -1078,6 +1081,7 @@ export class TapStack extends TerraformStack {
         Compliance: 'HIPAA',
         Environment: environmentSuffix,
       },
+      dependsOn: [kmsKey],
       provider: primaryProvider,
     });
     backupVault.overrideLogicalId(`backup-vault-${deployVersion}`);
