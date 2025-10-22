@@ -228,7 +228,6 @@ export class TapStack extends pulumi.ComponentResource {
         ip, 
         bits: parseInt(bits),
         octets,
-        // Convert IP to 32-bit integer for comparison
         ipInt: (octets[0] << 24) | (octets[1] << 16) | (octets[2] << 8) | octets[3]
       };
     };
@@ -236,15 +235,12 @@ export class TapStack extends pulumi.ComponentResource {
     const source = parseIp(sourceCidr);
     const target = parseIp(targetCidr);
 
-    // Calculate network masks
     const sourceMask = (0xFFFFFFFF << (32 - source.bits)) >>> 0;
     const targetMask = (0xFFFFFFFF << (32 - target.bits)) >>> 0;
 
-    // Get network addresses
     const sourceNetwork = (source.ipInt & sourceMask) >>> 0;
     const targetNetwork = (target.ipInt & targetMask) >>> 0;
 
-    // Check if networks overlap
     const sourceEnd = (sourceNetwork | (~sourceMask >>> 0)) >>> 0;
     const targetEnd = (targetNetwork | (~targetMask >>> 0)) >>> 0;
 
@@ -279,10 +275,10 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-   * Gets or creates source VPC with Internet Gateway
+   * Gets or creates source VPC
    */
   private getOrCreateSourceVpc(name: string): aws.ec2.Vpc {
-    const vpc = new aws.ec2.Vpc(
+    return new aws.ec2.Vpc(
       `${name}-source-vpc`,
       {
         cidrBlock: this.config.vpcConfig.sourceCidr,
@@ -292,18 +288,6 @@ export class TapStack extends pulumi.ComponentResource {
       },
       { parent: this, provider: this.sourceProvider }
     );
-
-    // Create Internet Gateway for public subnets
-    new aws.ec2.InternetGateway(
-      `${name}-source-igw`,
-      {
-        vpcId: vpc.id,
-        tags: this.getMigrationTags("Source Internet Gateway"),
-      },
-      { parent: this, provider: this.sourceProvider, dependsOn: [vpc] }
-    );
-
-    return vpc;
   }
 
   /**
@@ -381,10 +365,10 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-   * Creates target VPC with non-overlapping CIDR and Internet Gateway
+   * Creates target VPC with non-overlapping CIDR
    */
   private createTargetVpc(name: string): aws.ec2.Vpc {
-    const vpc = new aws.ec2.Vpc(
+    return new aws.ec2.Vpc(
       `${name}-target-vpc`,
       {
         cidrBlock: this.config.vpcConfig.targetCidr,
@@ -394,18 +378,6 @@ export class TapStack extends pulumi.ComponentResource {
       },
       { parent: this, provider: this.targetProvider }
     );
-
-    // Create Internet Gateway for public subnets
-    new aws.ec2.InternetGateway(
-      `${name}-target-igw`,
-      {
-        vpcId: vpc.id,
-        tags: this.getMigrationTags("Target Internet Gateway"),
-      },
-      { parent: this, provider: this.targetProvider, dependsOn: [vpc] }
-    );
-
-    return vpc;
   }
 
   /**
@@ -419,12 +391,12 @@ export class TapStack extends pulumi.ComponentResource {
     private: aws.ec2.Subnet[];
     database: aws.ec2.Subnet[];
   } {
-    // Create Internet Gateway
+    // Create Internet Gateway ONCE for the VPC
     const igw = new aws.ec2.InternetGateway(
-      `${name}-target-igw-subnets`,
+      `${name}-target-igw`,
       {
         vpcId: vpc.id,
-        tags: this.getMigrationTags("Target Internet Gateway for Subnets"),
+        tags: this.getMigrationTags("Target Internet Gateway"),
       },
       { parent: this, provider: this.targetProvider }
     );
@@ -684,7 +656,6 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this, provider: this.targetProvider }
     );
 
-    // Create read replica
     const replica = new aws.rds.Instance(
       `${name}-target-rds-replica`,
       {
@@ -727,7 +698,6 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this, provider: this.targetProvider }
     );
 
-    // IAM role for replication
     const replicationRole = new aws.iam.Role(
       `${name}-s3-replication-role`,
       {
@@ -785,7 +755,6 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this, provider: this.sourceProvider, dependsOn: [replicationRole] }
     );
 
-    // Configure replication on source bucket using BucketReplicationConfig
     new aws.s3.BucketReplicationConfig(
       `${name}-s3-replication`,
       {
@@ -1046,9 +1015,7 @@ export class TapStack extends pulumi.ComponentResource {
     let zoneId: pulumi.Output<string>;
     let zoneName: string;
 
-    // Check if we should create a new zone or use existing
     if (this.config.route53Config?.createNewZone !== false) {
-      // Create a new hosted zone
       zoneName = this.config.route53Config?.hostedZoneName || 
                  `${name}-${this.config.environmentSuffix}.internal`;
       
@@ -1063,14 +1030,12 @@ export class TapStack extends pulumi.ComponentResource {
       );
       zoneId = zone.zoneId;
     } else if (this.config.route53Config?.hostedZoneName) {
-      // Use existing zone
       zoneName = this.config.route53Config.hostedZoneName;
       const existingZone = aws.route53.getZoneOutput({ 
         name: zoneName,
       });
       zoneId = existingZone.zoneId;
     } else {
-      // Default: create internal zone
       zoneName = `${name}-${this.config.environmentSuffix}.internal`;
       const zone = new aws.route53.Zone(
         `${name}-zone`,
@@ -1129,7 +1094,6 @@ export class TapStack extends pulumi.ComponentResource {
   ): aws.cloudwatch.MetricAlarm[] {
     const alarms: aws.cloudwatch.MetricAlarm[] = [];
 
-    // RDS CPU alarm
     const rdsCpuAlarm = new aws.cloudwatch.MetricAlarm(
       `${name}-rds-cpu-alarm`,
       {
@@ -1149,7 +1113,6 @@ export class TapStack extends pulumi.ComponentResource {
     );
     alarms.push(rdsCpuAlarm);
 
-    // RDS Replica Lag alarm
     const rdsReplicaLagAlarm = new aws.cloudwatch.MetricAlarm(
       `${name}-rds-replica-lag-alarm`,
       {
@@ -1160,7 +1123,7 @@ export class TapStack extends pulumi.ComponentResource {
         namespace: "AWS/RDS",
         period: 60,
         statistic: "Average",
-        threshold: 900, // 15 minutes in seconds
+        threshold: 900,
         dimensions: { DBInstanceIdentifier: rds.identifier },
         alarmDescription: "RDS replica lag exceeds 15 minutes",
         tags: this.getMigrationTags("RDS Replica Lag Alarm"),
@@ -1169,7 +1132,6 @@ export class TapStack extends pulumi.ComponentResource {
     );
     alarms.push(rdsReplicaLagAlarm);
 
-    // ALB Target Health alarm
     const albHealthAlarm = new aws.cloudwatch.MetricAlarm(
       `${name}-alb-unhealthy-hosts`,
       {
@@ -1208,14 +1170,13 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this, provider: this.targetProvider }
     );
 
-    // Create SNS topic subscriptions for alarm notifications
     alarms.forEach((alarm, i) => {
       new aws.sns.TopicSubscription(
         `${name}-alarm-subscription-${i}`,
         {
           topic: topic.arn,
           protocol: "email",
-          endpoint: "alerts@example.com", // Replace with actual email
+          endpoint: "alerts@example.com",
         },
         { parent: this, provider: this.targetProvider, dependsOn: [topic] }
       );
