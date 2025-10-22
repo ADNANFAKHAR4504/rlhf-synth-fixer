@@ -348,6 +348,9 @@ def lambda_handler(event, context):
             retry_attempts=2,
             description=f"Handles REST API requests for serverless application - {environment_suffix}"
         )
+        
+        self.items_table.grant_read_write_data(self.api_handler)
+
 
         # ============================================================
         # API GATEWAY
