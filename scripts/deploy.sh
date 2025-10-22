@@ -80,6 +80,9 @@ echo "=== Aggressive Secrets Cleanup Phase ==="
 echo "🔥 FORCEFULLY REMOVING ALL AWS SECRETS MANAGER SECRETS..."
 echo "   This will use multiple strategies to ensure complete deletion"
 
+# Temporarily disable exit-on-error for secret cleanup
+set +e
+
 # Determine the suffix to use for secrets
 if [ -f "metadata.json" ]; then
   TASK_ID=$(jq -r '.task_id // ""' metadata.json 2>/dev/null || echo "")
@@ -111,7 +114,7 @@ force_delete_secret() {
     # Check if the secret exists
     SECRET_EXISTS=$(aws secretsmanager describe-secret \
       --secret-id "$secret_name" \
-      --region "$AWS_REGION" 2>&1)
+      --region "$AWS_REGION" 2>&1 || echo "ResourceNotFoundException")
 
     if echo "$SECRET_EXISTS" | grep -q "ResourceNotFoundException"; then
       echo "  ✅ Secret does not exist or is fully deleted"
@@ -125,7 +128,7 @@ force_delete_secret() {
     DELETE_RESULT=$(aws secretsmanager delete-secret \
       --secret-id "$secret_name" \
       --force-delete-without-recovery \
-      --region "$AWS_REGION" 2>&1)
+      --region "$AWS_REGION" 2>&1 || echo "DeleteFailed")
 
     if echo "$DELETE_RESULT" | grep -q "DeletionDate"; then
       echo "  ✅ Secret marked for immediate deletion"
@@ -184,7 +187,9 @@ SECRETS_TO_DELETE=(
 # Force delete each specific secret
 echo "Force deleting specific secrets..."
 for secret in "${SECRETS_TO_DELETE[@]}"; do
-  force_delete_secret "$secret"
+  force_delete_secret "$secret" || {
+    echo "  ⚠️  Failed to process $secret, continuing..."
+  }
 done
 
 # Also search for and delete any other secrets with our suffix
@@ -207,7 +212,9 @@ if [ -n "$MATCHING_SECRETS" ]; then
 
   echo "$MATCHING_SECRETS" | while IFS= read -r secret; do
     if [ -n "$secret" ]; then
-      force_delete_secret "$secret"
+      force_delete_secret "$secret" || {
+        echo "  ⚠️  Failed to process $secret, continuing..."
+      }
     fi
   done
 else
@@ -221,7 +228,7 @@ FAILED_COUNT=0
 for secret in "${SECRETS_TO_DELETE[@]}"; do
   SECRET_CHECK=$(aws secretsmanager describe-secret \
     --secret-id "$secret" \
-    --region "$AWS_REGION" 2>&1 || true)
+    --region "$AWS_REGION" 2>&1 || echo "ResourceNotFoundException")
 
   if echo "$SECRET_CHECK" | grep -q "ResourceNotFoundException"; then
     echo "  ✅ Confirmed deleted: $secret"
@@ -254,6 +261,9 @@ fi
 
 echo "⏳ Waiting 5 seconds to ensure AWS propagation..."
 sleep 5
+
+# Re-enable exit-on-error for deployment phase
+set -e
 
 # Deploy step
 echo "=== Deploy Phase ==="
