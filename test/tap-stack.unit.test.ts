@@ -699,27 +699,27 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
 
   // ==================== Outputs Validation ====================
   describe('Outputs', () => {
-    test('should have exactly 5 outputs', () => {
+    test('should have exactly 8 outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(5);
+      expect(outputCount).toBe(8);
     });
 
     test('should have all required outputs', () => {
-      const expectedOutputs = ['VPCId', 'ALBDNSName', 'CloudFrontDistributionDomainName', 'S3BucketName', 'RDSEndpoint'];
+      const expectedOutputs = ['VpcId', 'AlbDnsName', 'CloudFrontDistributionDomainName', 'CloudFrontDistributionId', 'S3BucketName', 'LoggingBucketName', 'RdsEndpoint', 'KmsKeyId'];
       expectedOutputs.forEach(outputName => {
         expect(template.Outputs[outputName]).toBeDefined();
       });
     });
 
-    test('VPCId output should export stack name', () => {
-      const output = template.Outputs.VPCId;
+    test('VpcId output should export stack name', () => {
+      const output = template.Outputs.VpcId;
       expect(output.Description).toBe('VPC ID');
       expect(output.Value).toEqual({ Ref: 'VPC' });
       expect(output.Export.Name).toEqual({ 'Fn::Sub': '${AWS::StackName}-VPC' });
     });
 
-    test('ALBDNSName output should have correct value', () => {
-      const output = template.Outputs.ALBDNSName;
+    test('AlbDnsName output should have correct value', () => {
+      const output = template.Outputs.AlbDnsName;
       expect(output.Description).toBe('Application Load Balancer DNS Name');
       expect(output.Value).toEqual({ 'Fn::GetAtt': ['ApplicationLoadBalancer', 'DNSName'] });
     });
@@ -730,16 +730,34 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(output.Value).toEqual({ 'Fn::GetAtt': ['CloudFrontDistribution', 'DomainName'] });
     });
 
+    test('CloudFrontDistributionId output should have correct value', () => {
+      const output = template.Outputs.CloudFrontDistributionId;
+      expect(output.Description).toBe('CloudFront Distribution ID');
+      expect(output.Value).toEqual({ Ref: 'CloudFrontDistribution' });
+    });
+
     test('S3BucketName output should have correct value', () => {
       const output = template.Outputs.S3BucketName;
       expect(output.Description).toBe('S3 Bucket Name for Web Content');
       expect(output.Value).toEqual({ Ref: 'S3Bucket' });
     });
 
-    test('RDSEndpoint output should have correct value', () => {
-      const output = template.Outputs.RDSEndpoint;
+    test('LoggingBucketName output should have correct value', () => {
+      const output = template.Outputs.LoggingBucketName;
+      expect(output.Description).toBe('Logging Bucket Name');
+      expect(output.Value).toEqual({ Ref: 'LoggingBucket' });
+    });
+
+    test('RdsEndpoint output should have correct value', () => {
+      const output = template.Outputs.RdsEndpoint;
       expect(output.Description).toBe('RDS Instance Endpoint');
       expect(output.Value).toEqual({ 'Fn::GetAtt': ['DBInstance', 'Endpoint.Address'] });
+    });
+
+    test('KmsKeyId output should have correct value', () => {
+      const output = template.Outputs.KmsKeyId;
+      expect(output.Description).toBe('KMS Key ID for RDS Encryption');
+      expect(output.Value).toEqual({ Ref: 'DBKMSKey' });
     });
 
     test('all outputs should have descriptions', () => {
