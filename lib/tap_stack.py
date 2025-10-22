@@ -21,7 +21,7 @@ class TapStackArgs:
     """
 
     def __init__(self, environment_suffix: Optional[str] = None, tags: Optional[dict] = None):
-        self.environment_suffix = environment_suffix or 'dev'
+        self.environment_suffix = environment_suffix if environment_suffix and environment_suffix.strip() else 'dev'
         self.tags = tags or {}
 
 
@@ -894,11 +894,11 @@ class TapStack(pulumi.ComponentResource):
 
         # API Gateway Stage
         self.api_stage = aws.apigateway.Stage(
-            f"student-api-stage-{self.environment_suffix}",
+            f"student-api-env-{self.environment_suffix}",
             rest_api=self.api_gateway.id,
             deployment=self.api_deployment.id,
-            stage_name="prod",
-            tags={**self.tags, 'Name': f'student-api-stage-{self.environment_suffix}'},
+            stage_name=self.environment_suffix,
+            tags={**self.tags, 'Name': f'student-api-env-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self.api_deployment)
         )
 
