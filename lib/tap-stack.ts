@@ -64,7 +64,7 @@ export class TapStack extends TerraformStack {
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
     // Add version suffix to force complete resource replacement in CI/CD
-    const deployVersion = 'v5';
+    const deployVersion = 'v6';
     const drRegion = 'eu-west-1';
 
     // Configure AWS Provider for primary region
@@ -377,6 +377,9 @@ export class TapStack extends TerraformStack {
         Compliance: 'HIPAA',
         Environment: environmentSuffix,
       },
+      lifecycle: {
+        createBeforeDestroy: true,
+      },
       provider: primaryProvider,
     });
     kmsKey.overrideLogicalId(`kms-key-${deployVersion}`);
@@ -397,6 +400,9 @@ export class TapStack extends TerraformStack {
         Name: `hipaa-kms-key-dr-${deployVersion}-${environmentSuffix}`,
         Compliance: 'HIPAA',
         Environment: environmentSuffix,
+      },
+      lifecycle: {
+        createBeforeDestroy: true,
       },
       provider: drProvider,
     });
