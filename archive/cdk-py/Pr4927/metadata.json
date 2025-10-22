@@ -1,0 +1,28 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349678",
+  "team": "3",
+  "startedAt": "2025-10-21T07:58:07.711Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "lambda",
+    "s3",
+    "cloudwatch",
+    "apigateway",
+    "iam"
+  ],
+  "training_quality": 9,
+  "background": "Serverless CSV processing system using S3 event triggers and API Gateway for manual invocation, with comprehensive security controls including IAM least privilege, S3 encryption, IP whitelisting, and CloudWatch monitoring",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "veera-turing",
+  "dockerS3Location": ""
+}
