@@ -247,7 +247,6 @@ class RegionalInfra extends Construct {
       }
     );
 
-    // FIX: Use single quotes for the echo command to avoid conflicts
     const userData = `#!/bin/bash
 yum update -y
 yum install -y httpd
@@ -277,10 +276,8 @@ echo 'OK from ${region}' > /var/www/html/index.html
       desiredCapacity: 1,
       vpcZoneIdentifier: [subnetPrivA.id, subnetPrivB.id], // Use private subnets
       launchTemplate: { id: lt.id },
-      // --- FIX 1: Change to ELB health check and add grace period ---
-      healthCheckType: 'ELB',
-      healthCheckGracePeriod: 300,
-      // --- FIX 2: Change 'tags' property to 'tag' ---
+      healthCheckType: 'ELB', // Corrected
+      healthCheckGracePeriod: 300, // Added
       tag: [
         {
           key: 'Name',
@@ -350,24 +347,24 @@ echo 'OK from ${region}' > /var/www/html/index.html
       // DB subnet group
       const dbSubnetGroup = new DbSubnetGroup(this, `${id}-db-subnet-group`, {
         provider: providerAlias,
-        // --- FIX 3: Force name to lowercase ---
-        name: `${id.toLowerCase()}-db-subnet-${randomSuffix}`,
+        name: `${id.toLowerCase()}-db-subnet-${randomSuffix}`, // Forced lowercase
         subnetIds: [subnetPrivA.id, subnetPrivB.id], // Use private subnets
         tags: { ...tags },
       });
 
       this.dbCluster = new RdsCluster(this, `${id}-rds-cluster`, {
         provider: providerAlias,
-        clusterIdentifier: `${id.toLowerCase()}-cluster-${randomSuffix}`, // Also force cluster ID to lowercase
+        clusterIdentifier: `${id.toLowerCase()}-cluster-${randomSuffix}`, // Forced lowercase
         engine: 'aurora-postgresql',
         engineVersion: '13.9',
         databaseName: 'appdb',
         masterUsername: dbUsername,
         masterPassword: dbPassword,
         dbSubnetGroupName: dbSubnetGroup.name,
-        vpcSecurityGroupIds: [dbSg.id], // Use dedicated DB SG
+        vpcSecurityGroupIds: [dbSg.id],
         storageEncrypted: true,
-        kmsKeyId: kmsKey?.id,
+        // --- THIS IS THE FIX: Use .arn instead of .id ---
+        kmsKeyId: kmsKey?.arn,
         skipFinalSnapshot: true,
         tags: { ...tags },
       });
@@ -458,7 +455,7 @@ export class TapStack extends TerraformStack {
       createDatabase: true,
       kmsKey: primaryKms,
       dbUsername: dbUser,
-      dbPassword: dbPassword.result, // Pass the direct password string
+      dbPassword: dbPassword.result,
       tags,
     });
 
@@ -467,16 +464,15 @@ export class TapStack extends TerraformStack {
       region: 'us-west-2',
       vpcCidr: '10.20.0.0/16',
       randomSuffix,
-      createDatabase: true,
+      createDatabase: true, // create independent DR DB (no automatic replication)
       kmsKey: drKms,
       dbUsername: dbUser,
-      dbPassword: dbPassword.result, // Pass the direct password string
+      dbPassword: dbPassword.result,
       tags,
     });
 
     // Route53 global DNS zone
-    // --- FIX 4: Change from 'example.com' to a non-reserved domain ---
-    const domainName = `trading-${randomSuffix}.internal-test.com`;
+    const domainName = `trading-${randomSuffix}.internal-test.com`; // Corrected domain
     const zone = new Route53Zone(this, 'zone', {
       provider: primaryProvider,
       name: domainName,
