@@ -7,6 +7,7 @@ import java.util.Map;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.CfnOutput;
 import software.amazon.awscdk.Duration;
+import software.amazon.awscdk.BundlingOptions;
 import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.Stack;
@@ -18,6 +19,7 @@ import software.amazon.awscdk.services.autoscaling.AutoScalingGroup;
 import software.amazon.awscdk.services.autoscaling.CpuUtilizationScalingProps;
 import software.amazon.awscdk.services.autoscaling.NetworkUtilizationScalingProps;
 import software.amazon.awscdk.services.cloudfront.AllowedMethods;
+import software.amazon.awscdk.services.s3.assets.AssetOptions;
 import software.amazon.awscdk.services.cloudfront.BehaviorOptions;
 import software.amazon.awscdk.services.cloudfront.CachePolicy;
 import software.amazon.awscdk.services.cloudfront.Distribution;
@@ -768,7 +770,15 @@ class ComputeStack extends Stack {
                 .functionName("social-platform-" + environmentSuffix + "-routing")
                 .runtime(Runtime.JAVA_17)
                 .handler("com.social.platform.routing.RoutingHandler::handleRequest")
-                .code(Code.fromAsset("lib/src/lambda/src/target/lambda-functions.jar"))
+                .code(Code.fromAsset("lib/src/lambda/src", AssetOptions.builder()
+                    .bundling(BundlingOptions.builder()
+                        .image(Runtime.JAVA_17.getBundlingImage())
+                        .command(Arrays.asList(
+                                "/bin/sh", "-c",
+                                "mvn clean package && cp target/*.jar /asset-output/"
+                        ))
+                        .build())
+                    .build()))
                 .memorySize(512)
                 .timeout(Duration.seconds(30))
                 .role(lambdaRole)
