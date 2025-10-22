@@ -41,6 +41,13 @@ Parameters:
     Default: 3306
     MinValue: 1150
     MaxValue: 65535
+    
+  ACMCertificateArn:
+    Description: ARN of the ACM certificate for HTTPS listeners
+    Type: String
+    Default: ''
+    AllowedPattern: '^arn:aws:acm:.*:.*:certificate/.*$|^$'
+    ConstraintDescription: Must be a valid ACM certificate ARN
 
 
 
@@ -322,10 +329,10 @@ Resources:
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
+          FromPort: 443
+          ToPort: 443
           CidrIp: !Ref CorporateIPRange
-          Description: HTTP from corporate network
+          Description: HTTPS from corporate network
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentName}-ALB-SG'
@@ -342,10 +349,10 @@ Resources:
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
+          FromPort: 443
+          ToPort: 443
           SourceSecurityGroupId: !Ref ALBSecurityGroup
-          Description: HTTP traffic from ALB
+          Description: HTTPS traffic from ALB
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
@@ -852,14 +859,14 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Name: !Sub '${EnvironmentName}-TG'
-      Port: 80
-      Protocol: HTTP
+      Port: 443
+      Protocol: HTTPS
       VpcId: !Ref VPC
       TargetType: instance
       HealthCheckEnabled: true
       HealthCheckIntervalSeconds: 30
       HealthCheckPath: /health
-      HealthCheckProtocol: HTTP
+      HealthCheckProtocol: HTTPS
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 3
@@ -873,16 +880,19 @@ Resources:
         - Key: iac-rlhf-amazon
           Value: 'true'
 
-  # HTTP Listener (simplified - no HTTPS redirect)
-  ALBHTTPListener:
+  # HTTPS Listener
+  ALBHTTPSListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref ALBTargetGroup
       LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Port: 80
-      Protocol: HTTP
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref ACMCertificateArn
+      SslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
