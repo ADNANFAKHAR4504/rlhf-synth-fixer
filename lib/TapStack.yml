@@ -1482,7 +1482,7 @@ Resources:
   DefaultVPCCleanupFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${EnvironmentName}-default-vpc-cleanup'
+      FunctionName: !Sub '${EnvironmentName}-default-vpc-cleanup-${AWS::AccountId}'
       Runtime: python3.9
       Handler: index.handler
       Role: !GetAtt DefaultVPCCleanupRole.Arn
