@@ -263,6 +263,37 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
       value: processingQueue.queueUrl,
       description: 'SQS queue URL for processing messages from DynamoDB stream',
     });
+
+    // Helpful diagnostic outputs for integration tests and debugging
+    new cdk.CfnOutput(this, 'ApiHandlerFunctionName', {
+      value: apiHandler.functionName,
+      description: 'Name of the API Lambda function',
+    });
+
+    new cdk.CfnOutput(this, 'ApiHandlerLogGroupName', {
+      value: `/aws/lambda/${apiHandler.functionName}`,
+      description: 'CloudWatch log group name for the API Lambda',
+    });
+
+    new cdk.CfnOutput(this, 'StreamProcessorFunctionName', {
+      value: streamProcessorFn.functionName,
+      description: 'Name of the stream processor Lambda function',
+    });
+
+    new cdk.CfnOutput(this, 'DeadLetterQueueUrl', {
+      value: deadLetterQueue.queueUrl,
+      description: 'Dead-letter queue URL for Lambda failures',
+    });
+
+    new cdk.CfnOutput(this, 'ApiGatewayLogGroupName', {
+      value: apiLogGroup.logGroupName,
+      description: 'Log group name for API Gateway access logs',
+    });
+
+    new cdk.CfnOutput(this, 'ApiRestApiId', {
+      value: api.restApiId,
+      description: 'RestApi id for API Gateway',
+    });
   }
 }
 
