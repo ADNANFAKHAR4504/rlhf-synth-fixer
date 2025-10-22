@@ -6,7 +6,34 @@ Simplified unit tests for TapStack that achieve high coverage efficiently.
 
 import unittest
 from unittest.mock import patch, MagicMock
+import pulumi
 from lib.tap_stack import TapStackArgs, TapStack
+
+
+class MockOutput:
+    """Mock Pulumi Output that has an apply method."""
+    def __init__(self, value):
+        self.value = value
+    
+    def apply(self, func):
+        return MockOutput(func(self.value))
+
+class MockResource(pulumi.Resource):
+    """Mock resource that behaves like a Pulumi Resource."""
+    def __init__(self, resource_type="mock:resource", name="mock", props=None, opts=None):
+        # Don't call super().__init__ to avoid Pulumi engine issues in tests
+        self.id = "mock-id"
+        self.arn = "arn:aws:mock:us-east-1:123456789012:mock/mock-resource"
+        self.endpoint = "mock-endpoint" 
+        self.reader_endpoint = "mock-reader-endpoint"
+        self.dns_name = MockOutput("mock-dns")
+        self.name = "mock-name"
+        self.primary_endpoint_address = "mock-address"
+        self.address = "mock-address"
+        self.hosted_zone_id = "mock-zone-id"
+        self.root_resource_id = "mock-root-resource-id"
+        self.http_method = "GET"
+        self.invoke_url = "mock-invoke-url"
 
 
 class TestTapStackSimplified(unittest.TestCase):
@@ -14,17 +41,16 @@ class TestTapStackSimplified(unittest.TestCase):
 
     def setUp(self):
         """Set up common test fixtures."""
-        self.mock_resource = MagicMock()
-        self.mock_resource.id = "mock-id"
-        self.mock_resource.endpoint = "mock-endpoint"
-        self.mock_resource.dns_name = "mock-dns"
-        self.mock_resource.name = "mock-name"
-        self.mock_resource.primary_endpoint_address = "mock-address"
+        self.mock_resource = MockResource()
         
+    @patch('lib.tap_stack.ResourceOptions')
     @patch('pulumi.ComponentResource.register_outputs')
     @patch('pulumi.ComponentResource.__init__', return_value=None)
-    def test_tap_stack_full_initialization_basic(self, mock_init, mock_register):
+    def test_tap_stack_full_initialization_basic(self, mock_init, mock_register, mock_resource_options):
         """Test TapStack full initialization with basic configuration."""
+        # Mock ResourceOptions to return a simple mock
+        mock_resource_options.return_value = MagicMock()
+        
         with patch('lib.tap_stack.aws') as mock_aws:
             # Setup availability zones mock
             mock_azs = MagicMock()
@@ -37,6 +63,9 @@ class TestTapStackSimplified(unittest.TestCase):
                 'kinesis', 'efs', 'iam', 'ecs', 'lb', 'apigateway'
             ]
             
+            def create_mock_constructor():
+                return lambda *args, **kwargs: self.mock_resource
+            
             for service in services:
                 service_obj = getattr(mock_aws, service)
                 # Mock all methods/constructors in each service
@@ -48,8 +77,7 @@ class TestTapStackSimplified(unittest.TestCase):
                            'RolePolicyAttachment', 'TaskDefinition', 'Service', 'LoadBalancer',
                            'TargetGroup', 'Listener', 'RestApi', 'Resource', 'Method',
                            'Integration', 'Deployment', 'Stage']:
-                    if hasattr(service_obj, attr):
-                        setattr(service_obj, attr, MagicMock(return_value=self.mock_resource))
+                    setattr(service_obj, attr, create_mock_constructor())
             
             # Test basic initialization
             args = TapStackArgs()
@@ -65,10 +93,14 @@ class TestTapStackSimplified(unittest.TestCase):
             mock_init.assert_called_once_with('tap:stack:TapStack', 'test-stack', None, None)
             mock_register.assert_called_once()
 
+    @patch('lib.tap_stack.ResourceOptions')
     @patch('pulumi.ComponentResource.register_outputs')
     @patch('pulumi.ComponentResource.__init__', return_value=None) 
-    def test_tap_stack_custom_configuration_full(self, mock_init, mock_register):
+    def test_tap_stack_custom_configuration_full(self, mock_init, mock_register, mock_resource_options):
         """Test TapStack with custom configuration and full initialization."""
+        # Mock ResourceOptions to return a simple mock
+        mock_resource_options.return_value = MagicMock()
+        
         with patch('lib.tap_stack.aws') as mock_aws:
             # Setup availability zones mock
             mock_azs = MagicMock()

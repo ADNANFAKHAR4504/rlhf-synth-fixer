@@ -22,7 +22,7 @@ class TapStackArgs:
 
     def __init__(self, environment_suffix: Optional[str] = None, tags: Optional[dict] = None):
         self.environment_suffix = environment_suffix if environment_suffix and environment_suffix.strip() else 'dev'
-        self.tags = tags or {}
+        self.tags = dict(tags) if tags else {}
 
 
 class TapStack(pulumi.ComponentResource):
