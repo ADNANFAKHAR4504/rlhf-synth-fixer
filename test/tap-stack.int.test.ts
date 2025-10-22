@@ -30,7 +30,6 @@ const loadCfnOutputs = () => {
     console.log(' cfn-outputs/flat-outputs.json not found, using fallback values');
   }
 
-  // Fallback to environment variables or construct expected resource names
   const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || process.env.AWS_BRANCH || 'dev';
   const region = process.env.AWS_REGION || 'us-east-1';
   const accountId = process.env.AWS_ACCOUNT_ID || '123456789012';
@@ -403,7 +402,7 @@ describe('TapStack End-to-End Integration Tests', () => {
       }
 
       try {
-        // Run a successful execution to ensure there's an audit trail
+        // successful execution to ensure there's an audit trail
         const testRunId = `audit-test-${Date.now()}`;
         const input = { "testRunId": testRunId, "entityName": "AuditTestEntity" };
         const startCmd = new StartExecutionCommand({
