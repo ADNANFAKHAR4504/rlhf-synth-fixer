@@ -377,7 +377,7 @@ export class TapStack extends pulumi.ComponentResource {
 
   /**
    * Creates target subnets across 2 AZs with proper routing
-   * FIXED: Removed duplicate Internet Gateway creation that was causing the conflict
+   * FIXED: Added replaceOnChanges to force IGW replacement instead of update when vpcId changes
    */
   private createTargetSubnets(
     name: string,
@@ -387,15 +387,19 @@ export class TapStack extends pulumi.ComponentResource {
     private: aws.ec2.Subnet[];
     database: aws.ec2.Subnet[];
   } {
-    // Create Internet Gateway ONCE for the VPC
-    // FIXED: Removed the duplicate igw-subnets that was causing the conflict
+    // Create Internet Gateway with replaceOnChanges to force replacement when vpcId changes
+    // This prevents the "already has an internet gateway attached" error
     const igw = new aws.ec2.InternetGateway(
       `${name}-target-igw`,
       {
         vpcId: vpc.id,
         tags: this.getMigrationTags("Target Internet Gateway"),
       },
-      { parent: this, provider: this.targetProvider }
+      { 
+        parent: this, 
+        provider: this.targetProvider,
+        replaceOnChanges: ["vpcId"]  // Force replacement if VPC ID changes
+      }
     );
 
     const publicSubnets = [
