@@ -177,7 +177,6 @@ If fails: Return to Phase 4, improve implementation, re-validate
 # Extract metadata
 TASK_ID=$(jq -r '.po_id' metadata.json)
 SUBTASK=$(jq -r '.subtask' metadata.json)
-BACKGROUND=$(jq -r '.background' metadata.json)
 PLATFORM=$(jq -r '.platform' metadata.json)
 LANGUAGE=$(jq -r '.language' metadata.json)
 COMPLEXITY=$(jq -r '.complexity' metadata.json)
@@ -374,7 +373,6 @@ If `metadata.json` not present:
 - Set `startedAt` = current timestamp: `date -Iseconds` (REQUIRED)
 - **Extract from tasks.csv** (REQUIRED):
   - `subtask` from subtask column
-  - `background` from background column (REQUIRED for PR title in Phase 5)
   - `subject_labels` from subject_labels column (parse as JSON array)
 - Do not add more fields than shown in example
 - Validate `templates/` directory exists with required platform template
@@ -393,7 +391,6 @@ Example metadata.json:
   "team": "synth",
   "startedAt": "2025-08-12T13:19:10-05:00",
   "subtask": "Application Deployment",
-  "background": "A manufacturing company needs to modernize...",
   "subject_labels": ["CI/CD Pipeline", "Security Configuration"]
 }
 ```
@@ -403,9 +400,7 @@ Example metadata.json:
 bash scripts/detect-metadata.sh
 ```
 
-If fails, fix before proceeding. Common errors: missing team, startedAt, subtask, background, subject_labels, using "difficulty" instead of "complexity"
-
-**CRITICAL**: `background` field REQUIRED for PR title in Phase 5
+If fails, fix before proceeding. Common errors: missing team, startedAt, subtask, subject_labels, using "difficulty" instead of "complexity"
 
 **Region setup** (if needed):
 ```bash
