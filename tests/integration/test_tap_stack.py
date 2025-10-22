@@ -17,6 +17,7 @@ import time
 import unittest
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 import boto3
@@ -456,7 +457,8 @@ class CrossServiceTests(BaseIntegrationTest):
             self.assertEqual(response_payload['statusCode'], 200)
             body = json.loads(response_payload['body'])
             created_item = body['item']
-            timestamp = int(created_item['timestamp'])
+            # Use Decimal to match DynamoDB's storage format exactly
+            timestamp = Decimal(str(created_item['timestamp']))
             
             print(f"   Lambda returned timestamp: {timestamp}")
             
@@ -701,7 +703,8 @@ class EndToEndTests(BaseIntegrationTest):
         # Parse response to get timestamp
         response_body = response.json()
         created_item = response_body['item']
-        timestamp = int(created_item['timestamp'])
+        # Use Decimal to match DynamoDB's storage format exactly
+        timestamp = Decimal(str(created_item['timestamp']))
         
         # Wait for downstream processing
         time.sleep(5)
