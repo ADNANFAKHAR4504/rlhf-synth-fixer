@@ -682,7 +682,7 @@ Here's a complete CloudFormation template for your regulatory reporting platform
               import base64
 
               s3 = boto3.client('s3')
-              ses = boto3.client('ses', region_name='us-west-2')
+              ses = boto3.client('ses', region_name='us-east-1')
               secrets = boto3.client('secretsmanager')
 
               def get_db_connection():
@@ -1509,7 +1509,7 @@ Here's a complete CloudFormation template for your regulatory reporting platform
 # - VPC-PrivateSubnet1
 # - VPC-PrivateSubnet2
 
-# Verify SES domain/email is verified in us-west-2
+# Verify SES domain/email is verified in us-east-1
 aws ses verify-email-identity --email-address regulatory-reports@example.com
 ```
 
@@ -1525,7 +1525,7 @@ aws cloudformation create-stack \
     ParameterKey=NotificationEmail,ParameterValue=compliance-team@example.com \
     ParameterKey=DatabaseMasterPassword,ParameterValue=YourSecurePassword123! \
   --capabilities CAPABILITY_IAM \
-  --region us-west-2
+  --region us-east-1
 ```
 
 ### 3. Initialize Database
@@ -1534,7 +1534,7 @@ aws cloudformation create-stack \
 # After stack creation, invoke the DB initialization function
 aws lambda invoke \
   --function-name regulatory-db-init-prod \
-  --region us-west-2 \
+  --region us-east-1 \
   response.json
 ```
 
@@ -1543,9 +1543,9 @@ aws lambda invoke \
 ```bash
 # Test with a single report generation
 aws stepfunctions start-execution \
-  --state-machine-arn arn:aws:states:us-west-2:ACCOUNT:stateMachine:regulatory-reporting-workflow-prod \
+  --state-machine-arn arn:aws:states:us-east-1:ACCOUNT:stateMachine:regulatory-reporting-workflow-prod \
   --input '{"jurisdiction":"EU","report_type":"TRANSACTION"}' \
-  --region us-west-2
+  --region us-east-1
 ```
 
 ## Architecture Highlights

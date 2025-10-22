@@ -1,4 +1,4 @@
-Build a single-stack JSON (prod, us-west-2) regulatory reporting platform that generates ~2,000 reports/day across jurisdictions. Use only essential services:
+Build a single-stack JSON (prod, us-east-1) regulatory reporting platform that generates ~2,000 reports/day across jurisdictions. Use only essential services:
 Step Functions to orchestrate: generate → validate → deliver → confirm
 Lambda to render reports & apply rules per jurisdiction
 Aurora Serverless v2 as the central reporting DB
