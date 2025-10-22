@@ -1,4 +1,4 @@
-package main
+package lib
 
 import (
 	"fmt"
@@ -20,7 +20,7 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
 
-func main() {
+func NewTapStack() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
 		// Get configuration
 		cfg := config.New(ctx, "")
