@@ -9,14 +9,9 @@ model: sonnet
 
 QA expert that ensures IaC meets quality standards and requirements.
 
-## Working Directory Context
+## Working Directory
 
-**Location**: Inside worktree at `worktree/synth-{task_id}/`
-
-**Verification**:
-```bash
-pwd  # Must end with: /worktree/synth-{task_id}
-```
+Inside worktree at `worktree/synth-{task_id}/` (verify with `pwd`)
 
 **After review completion, hand off to task-coordinator for Phase 5 (PR creation).**
 
@@ -26,388 +21,259 @@ pwd  # Must end with: /worktree/synth-{task_id}
 
 ### Phase 1: Prerequisites Check
 
-- Verify latest PROMPT file (e.g., `lib/PROMPT.md`, `lib/PROMPT2.md`, `lib/PROMPT3.md`, etc.) and `lib/IDEAL_RESPONSE.md` exist
-- Confirm integration tests in `test/` folder
+- Verify latest PROMPT file (lib/PROMPT.md, lib/PROMPT2.md, or lib/PROMPT3.md) exists
+- Verify lib/IDEAL_RESPONSE.md exists
+- Confirm integration tests in test/ folder
 - Return "PR is not ready" if missing
 
 ### Phase 1.5: Metadata Enhancement & Deep Compliance Validation
 
 #### Step 1: Identify Latest Files
 
-```
-Read lib/ directory for all PROMPT and MODEL_RESPONSE files:
-- If PROMPT3.md exists, use that (most recent iteration)
-- If only PROMPT2.md exists, use that
-- If only PROMPT.md exists, use that
-- Same logic for MODEL_RESPONSE files
-
-Report: "Using PROMPT file: {FILENAME}"
-Report: "Using MODEL_RESPONSE file: {FILENAME}"
+```bash
+# Find most recent iteration
+ls -t lib/PROMPT*.md | head -1
+ls -t lib/MODEL_RESPONSE*.md | head -1
 ```
 
-#### Step 2: Metadata Required Fields Validation
+Report: "Using PROMPT file: {FILENAME}" and "Using MODEL_RESPONSE file: {FILENAME}"
 
-```
-Verify metadata.json contains fields from task setup:
-✓ subtask (task category)
-✓ background (business context)
-✓ subject_labels (array)
-✓ platform
-✓ language
-✓ complexity
-✓ po_id
-✓ team (must be "synth")
-✓ startedAt
+#### Step 2: Metadata Validation
 
-If ANY required field missing:
-- Report: "❌ BLOCKED: metadata.json missing required field: {FIELD}"
-- Explain: "These must be set from tasks.csv during task setup"
-- Do NOT proceed - task-coordinator must fix this
-```
+**Validation**: Run Checkpoint A: Metadata Completeness
+- See `docs/references/validation-checkpoints.md` for validation logic
+- On failure, see `docs/references/error-handling.md` Standard Error Response
 
-#### Step 3: PROMPT.md Human-Style Validation
+#### Step 3: PROMPT.md Style Validation
 
-**Goal**: Ensure PROMPT.md follows CLI tool pattern, not AI-generated format.
+**Validation**: Run Checkpoint D: PROMPT.md Style Validation
+- See `docs/references/validation-checkpoints.md` for style requirements
+- See `docs/references/shared-validations.md` for pass/fail patterns
 
-```
-Read the latest PROMPT file and validate:
-
-❌ FAIL CONDITIONS (AI-generated style):
-1. Starts with "ROLE:" or "CONTEXT:" or "CONSTRAINTS:"
-2. Contains emojis or special symbols (✨ 🚀 📊 etc.)
-3. Has "Here is a comprehensive prompt..." phrasing
-4. Overly formal template-like structure
-5. Perfect formatting that suggests AI assistance
-
-✅ PASS CONDITIONS (Human conversational style):
-1. Opens naturally: "Hey team" or "Hi" or "We need to build"
-2. Casual business language
-3. Clear sections but conversational tone
-4. No emojis or special formatting
-5. Reads like a colleague briefing another colleague
-
-If FAIL conditions detected:
-- Document in training_quality penalty: -2 points
+If FAIL:
+- Training quality penalty: -2 points
 - Note: "PROMPT.md appears AI-generated rather than human-written"
-- Reference: archive/cdk-ts/Pr4133/lib/PROMPT.md for correct style
+
+#### Step 4: Platform/Language Compliance Validation
+
+**CRITICAL** - Catches major training data quality issues.
+
+**Validation**: Run Checkpoint E: Platform Code Compliance
+- See `docs/references/validation-checkpoints.md` for platform detection patterns
+- See `docs/references/shared-validations.md` for detailed platform requirements
+
+**Mismatch Detection**:
+```
+If platform OR language mismatch:
+- CRITICAL QUALITY FAILURE
+- Report: "❌ CRITICAL: Platform/Language Mismatch
+  Expected: {platform}-{language} from metadata.json
+  Found: {actual_platform}-{actual_language} in IDEAL_RESPONSE.md"
+- Training quality penalty: -5 (minimum)
+- If score < 8 after penalty: Report BLOCKED, recommend regeneration
 ```
 
-#### Step 4: CRITICAL Platform/Language Compliance Validation
+#### Step 5: AWS Services Completeness
 
-**This is the most important validation - catches major training data quality issues.**
+```bash
+# Extract expected services from metadata.json
+AWS_SERVICES=$(jq -r '.aws_services' metadata.json)
 
+# Scan IDEAL_RESPONSE.md for service implementation
+# Report coverage: X/Y services (Z%)
 ```
-Extract from metadata.json:
-- expected_platform = metadata.json.platform
-- expected_language = metadata.json.language
-
-Analyze IDEAL_RESPONSE.md code blocks:
-
-Check for platform-specific patterns:
-
-IF expected_platform == "cdk":
-  ✓ Must have: "import * as cdk from 'aws-cdk-lib'"
-  ✓ Must have: "new cdk.Stack" or "extends cdk.Stack"
-  ✗ Must NOT have: Terraform/Pulumi/CDKTF imports
-
-IF expected_platform == "pulumi":
-  ✓ Must have: Pulumi imports (language-specific)
-  ✓ For Go: "package main" + "pulumi.Run()"
-  ✓ For TypeScript: "import * as pulumi"
-  ✗ Must NOT have: CDK/Terraform/CDKTF code
-
-IF expected_platform == "tf":
-  ✓ Must have: "provider \"aws\"" and "resource \"aws_"
-  ✓ Must be HCL syntax
-  ✗ Must NOT have: imports from other IaC tools
-
-IF expected_platform == "cdktf":
-  ✓ Must have: "from cdktf import" (Python) or "import { TerraformStack }" (TS)
-  ✗ Must NOT have: Pure CDK or Terraform code
-
-IF expected_platform == "cfn":
-  ✓ Must have: "AWSTemplateFormatVersion" or similar CFN structure
-  ✓ Must have: "Resources:" with "Type: AWS::"
-  ✗ Must NOT have: IaC tool code
-
-Check for language-specific patterns:
-
-IF expected_language == "ts":
-  ✓ Must have: TypeScript syntax, imports
-  ✗ Must NOT have: Python syntax (def, :, import statements)
-
-IF expected_language == "py":
-  ✓ Must have: Python syntax, def, imports
-  ✗ Must NOT have: TypeScript syntax
-
-IF expected_language == "go":
-  ✓ Must have: "package main", Go imports
-  ✗ Must NOT have: Python/TypeScript syntax
-
-IF expected_language == "java":
-  ✓ Must have: Java class syntax, public class
-  ✗ Must NOT have: Python/TypeScript/Go syntax
-
-IF expected_language == "hcl":
-  ✓ Must be HCL syntax (resource blocks)
-  ✗ Must NOT have: programming language imports
-
-IF expected_language == "yaml" or "json":
-  ✓ Must be CloudFormation template format
-  ✗ Must NOT have: code in programming languages
-
-**MISMATCH DETECTION**:
-
-If platform OR language mismatch detected:
-- This is a CRITICAL QUALITY FAILURE
-- Document clearly:
-  "❌ CRITICAL: Platform/Language Mismatch Detected
-   Expected: {expected_platform}-{expected_language}
-   Found in IDEAL_RESPONSE.md: {actual_platform}-{actual_language}
-   
-   This means the task does not match CLI tool expectations.
-   The generated code is for the wrong IaC tool or language."
-
-- Apply penalty: training_quality -= 5 (minimum)
-- If training_quality < 8 after penalty:
-  Report: "BLOCKED - Quality below threshold due to platform/language mismatch"
-  Recommend: "Return to iac-infra-generator to regenerate with correct platform"
-
-Example failures to catch:
-- metadata: "pulumi + go" but code is CDK TypeScript
-- metadata: "terraform + hcl" but code is Pulumi Python
-- metadata: "cdk + py" but code is CDK TypeScript
-- metadata: "cfn + yaml" but code has Python imports
-
-Report result:
-"✅ Platform/language validation PASSED - code matches metadata.json"
-or
-"❌ Platform/language validation FAILED - mismatch detected"
-```
-
-#### Step 5: AWS Services Completeness Check
-
-```
-If metadata.json has aws_services field:
-- Extract expected services
-- Scan IDEAL_RESPONSE.md for these services
-- Report coverage:
-  "AWS Services Coverage:
-   ✓ Service1 - implemented
-   ✓ Service2 - implemented
-   ✗ Service3 - MISSING
-   
-   Coverage: X/Y services (Z%)"
 
 If coverage < 80%:
-- Document in training_quality: penalty based on missing services
-- Note which services from requirements were not implemented
-```
+- Training quality penalty based on missing services
+- Document which requirements were not implemented
 
-#### Step 6: environmentSuffix Usage Validation
+#### Step 6: environmentSuffix Validation
 
-```
-Scan IDEAL_RESPONSE.md code for resource naming:
+**Validation**: Run Checkpoint F: environmentSuffix Usage
+- See `docs/references/validation-checkpoints.md` for suffix patterns
+- See `docs/references/shared-validations.md` for language-specific examples
 
-Look for patterns:
-- TypeScript/JavaScript: `${environmentSuffix}` or `${props.environmentSuffix}`
-- Python: f"{environment_suffix}" or f"-{environment_suffix}"
-- Go: fmt.Sprintf("...-{%s}", environmentSuffix)
-- HCL: "${var.environment_suffix}"
-- CloudFormation: !Sub "...-${EnvironmentSuffix}"
+If < 80% resources have suffix:
+- Document: "⚠️ environmentSuffix not consistently used"
+- Training quality penalty: -1
 
-Count resources with suffix vs without suffix.
+#### Step 7: Training Quality Scoring
 
-If < 80% of named resources have suffix:
-- Document: "⚠️ environmentSuffix not consistently used in resource names"
-- Penalty: -1 to training_quality
-- Note: "Resource naming doesn't follow CLI tool pattern"
-```
+**Use simplified scoring system from `docs/policies/training-quality-guide.md`**
 
-#### Step 7: Training Quality Scoring (Enhanced)
+**Step-by-step**:
 
-**Calculate training_quality score (0-10) with detailed rubric:**
+1. **Check Critical Blockers**:
+   - Platform/language mismatch? → Score = 3, STOP
+   - Wrong region (if specified)? → Score = 5, STOP
+   - Wrong AWS account? → Score = 3, STOP
+   - Missing ≥50% required services? → Score = 4, STOP
 
-```
-START with base score: 10
+2. **Start with Base Score: 8**
 
-AUTOMATIC PENALTIES:
-- Platform/language mismatch: -5 points (CRITICAL)
-- Missing AWS service from requirements: -2 per service
-- Wrong region deployment: -3 points
-- PROMPT.md AI-generated style: -2 points
-- Inconsistent environmentSuffix usage (<80%): -1 point
-- Missing destroyability (has Retain policies): -1 point
+3. **Review MODEL_FAILURES.md** and categorize fixes:
+   - **Category A** (Significant): Security, architecture, complete features, complex integrations → +1 to +2
+   - **Category B** (Moderate): Configuration, standard patterns, best practices, minor services → ±0
+   - **Category C** (Minor): Linting, bugs, config tweaks, outputs (if 4+ fixes) → -1 to -2
+   - **Category D** (Minimal): <5 total fixes, trivial changes only → -2 to -4
 
-QUALITY ASSESSMENT:
+4. **Review IDEAL_RESPONSE.md** complexity:
+   - Single service, basic config → -1
+   - Multiple services (3+) with integrations → +1
+   - Security best practices (KMS, IAM, encryption) → +1
+   - High availability (multi-AZ, auto-scaling) → +1
+   - Advanced patterns (event-driven, serverless) → +1
+   - **Max complexity bonus: +2**
 
-Review MODEL_FAILURES.md:
-- Significant fixes (security, architecture, integrations): +0 (maintain score)
-- Moderate fixes (configuration, standard patterns): subtract 1-2
-- Minor fixes (typos, formatting, simple errors): subtract 2-4
-- Minimal fixes (almost no changes): subtract 4-6
+5. **Calculate**: Base (8) + MODEL_FAILURES adjustment + Complexity adjustment (capped 0-10)
 
-Review IDEAL_RESPONSE.md:
-- Complex multi-service integration: +0 (maintain)
-- Security best practices implemented: +0 (maintain)
-- Monitoring/observability included: +0 (maintain)
-- Basic single-service setup: subtract 1-2
-- Missing error handling: subtract 1
-- Missing logging/monitoring: subtract 1
+**Examples**:
+- Significant security + architecture fixes, multi-service: 8 + 2 + 2 = 12 → 10
+- Moderate config fixes, standard setup: 8 + 0 + 0 = 8
+- Minor linting only (6 fixes), basic setup: 8 - 2 - 1 = 5
 
-FINAL SCORE INTERPRETATION:
-- 9-10: Excellent training value, complex, secure, best practices
-- 8: Good training value, meets all requirements, solid implementation
-- 6-7: Fair training value, some missing elements, basic implementation
-- 4-5: Poor training value, minimal complexity, missing requirements
-- 0-3: Insufficient for training, major issues, consider excluding
-
-**CRITICAL THRESHOLD: Must be ≥ 8 for PR creation**
-
-If score < 8:
+**If score < 8**:
 - Report: "❌ Training quality below threshold: {SCORE}/10"
-- Provide specific recommendations:
-  "To improve to ≥8, consider:
-   1. [Specific recommendation based on penalties]
-   2. [Specific recommendation based on gaps]
-   3. [Specific recommendation based on MODEL_FAILURES]"
-- Do NOT report "Ready" status
+- Provide specific improvements needed (see training-quality-guide.md)
 - Do NOT proceed to PR creation
 
-If score ≥ 8:
+**If score ≥ 8**:
 - Report: "✅ Training quality meets threshold: {SCORE}/10"
-- Provide justification for the score
 - Proceed with review
-```
+
+**CRITICAL THRESHOLD: ≥8 for PR creation**
 
 #### Step 8: Add Enhanced Fields to metadata.json
 
+```bash
+# Update metadata.json with training quality and AWS services
+jq --arg tq "$TRAINING_QUALITY" --argjson services "$AWS_SERVICES_ARRAY" \
+  '.training_quality = ($tq | tonumber) | .aws_services = $services' \
+  metadata.json > metadata.json.tmp && mv metadata.json.tmp metadata.json
 ```
-Add or update:
-1. training_quality: {CALCULATED_SCORE}
-2. aws_services: [array of AWS services from IDEAL_RESPONSE.md]
 
-Report:
-"✅ metadata.json enhanced with training_quality: {SCORE}/10"
-"AWS services identified: {COUNT} services"
-```
+Report: "✅ metadata.json enhanced with training_quality: {SCORE}/10"
 
 #### Step 9: Final Quality Gate
 
-**Before reporting "Ready" status:**
+**Before reporting "Ready" status**:
 
 ```
 FINAL CHECKLIST:
 ☐ training_quality ≥ 8
 ☐ Platform matches metadata.json
 ☐ Language matches metadata.json
-☐ PROMPT.md is human-style (not AI-generated)
+☐ PROMPT.md is human-style
 ☐ environmentSuffix used in resource names
 ☐ All required metadata fields present
-☐ AWS services from task are implemented
-☐ No Retain policies (destroyable)
+☐ AWS services implemented
+☐ No Retain policies
 ☐ Tests exist and pass
-☐ Background field exists (for PR title)
 
-If ALL boxes checked:
+If ALL checked:
 - Report: "✅ READY for PR creation"
-- Provide summary of quality validation
 - Hand off to task-coordinator Phase 5
 
-If ANY box unchecked:
-- Report: "❌ NOT READY - Quality gates not met"
-- List specific issues
-- Provide recommendations
-- Do NOT proceed to PR creation
+If ANY unchecked:
+- Report: "❌ NOT READY"
+- List issues and recommendations
+- Do NOT proceed
 ```
 
-**Quality Validation Report Template:**
+**Quality Validation Report Template**:
 
 ```markdown
 ## Code Review Summary
 
 ### Validation Results
-- ✅/❌ Platform/Language Compliance: {PLATFORM}-{LANGUAGE}
+- ✅/❌ Platform/Language: {PLATFORM}-{LANGUAGE}
 - ✅/❌ PROMPT Style: {human/ai-generated}
-- ✅/❌ environmentSuffix Usage: {X}%
-- ✅/❌ AWS Services Coverage: {Y}/{Z} services
+- ✅/❌ environmentSuffix: {X}%
+- ✅/❌ AWS Services: {Y}/{Z} services
 - ✅/❌ Training Quality: {SCORE}/10
 
-### Training Quality Analysis
-**Score: {SCORE}/10**
+### Training Quality Assessment
+**Final Score: {SCORE}/10**
 
-Justification:
-- {Reason 1}
-- {Reason 2}
-- {Reason 3}
+**Scoring Breakdown**:
+- Base Score: 8
+- MODEL_FAILURES Adjustment: {+X or -Y} ({Category A/B/C/D})
+- Complexity Adjustment: {+X or -Y}
+- Critical Blockers: {None or BLOCKER_TYPE}
 
-{If < 8: Recommendations for improvement}
+**Justification**:
+{2-3 sentences explaining score, referencing fix categories and complexity}
 
-### Status: {READY / NOT READY}
+**Category A Fixes (Significant)**:
+- {List if any, or "None"}
+
+**Category B Fixes (Moderate)**:
+- {List if any, or "None"}
+
+**Category C/D Fixes (Minor/Minimal)**:
+- {List if any, or "None"}
+
+{If < 8: Specific recommendations to reach ≥8 per training-quality-guide.md}
+
+### Status: {✅ READY / ❌ NOT READY}
 
 {Next steps or blocking issues}
 ```
 
 ### Phase 2: Compliance Analysis
 
-**Cost Optimization**: Focus on meaningful differences only to reduce token usage.
+**Cost Optimization**: Focus on meaningful differences only.
 
 - Generate compliance report: Requirement | Status (✅/⚠️/❌) | Action
-- Compare `lib/IDEAL_RESPONSE.md` with `lib/TapStack.*` implementation (Note: The code in both files should be identical)
-  - **Skip detailed file-by-file comparison if files are identical** (check file hashes or timestamps first)
-  - Only report on actual differences
+- Compare lib/IDEAL_RESPONSE.md with lib/TapStack.* implementation
+  - **Skip detailed comparison if files are identical** (check hashes first: `md5sum`)
+  - Only report actual differences
 - Calculate compliance percentage
-- Compare `lib/IDEAL_RESPONSE.md` and the latest MODEL_RESPONSE file. Highlight the differences in terms
- of infrastructure and validate the value added.
-  - **Focus on significant infrastructure differences**: resource additions/removals, configuration changes, security improvements
-  - Avoid listing trivial formatting or comment differences
+- Compare lib/IDEAL_RESPONSE.md and latest MODEL_RESPONSE file
+  - **Focus on infrastructure differences**: resources, configuration, security
+  - Avoid listing trivial formatting/comment differences
 
 ### Phase 3: Test Coverage
 
-**Cost Optimization**: Focus coverage report on gaps rather than comprehensive listings.
+**Cost Optimization**: Focus on gaps rather than comprehensive listings.
 
-- Analyze integration test coverage for all resources (Note: Integration should use stack output file to
-test live resource and it should not use any mocks)
-- Generate coverage report focusing on gaps: Requirement | Covered? | Test Name | Notes
-  - **Prioritize uncovered resources** - list what's missing first
-  - Only briefly summarize what's already covered
+- Analyze integration test coverage (must use cfn-outputs, no mocks)
+- Generate coverage report focusing on gaps: Requirement | Covered? | Test | Notes
+  - **Prioritize uncovered resources** - list missing first
+  - Briefly summarize what's covered
 - Provide Ready/Pending recommendation
 
 ### Phase 4: Final Training Quality Gate
 
-**CRITICAL: Training Quality Validation Before Handoff**
+**CRITICAL**: Validate before reporting "Ready"
 
-Before reporting "Ready" status, perform final training quality validation:
+**Validation**: Run Checkpoint J: Training Quality Threshold
+- See `docs/references/validation-checkpoints.md` for threshold check
+- Minimum: 8, Target: 9
 
-```bash
-# Validate training quality meets minimum threshold
-TRAINING_QUALITY=$(jq -r '.training_quality // 0' metadata.json)
+If training_quality < 8:
+- Report: "NOT READY - Training quality below threshold"
+- **Apply iteration-policy.md decision logic**:
 
-if [ "$TRAINING_QUALITY" -lt 8 ]; then
-  echo "❌ BLOCKED: Training quality ($TRAINING_QUALITY) below minimum threshold of 8"
-  echo "⚠️ Task is NOT ready for PR creation"
-  exit 1
-fi
+  ```
+  If score 6-7 AND first iteration AND can add significant features:
+    - Recommend specific features to add (1-2 AWS services or patterns)
+    - Examples: CloudWatch monitoring, KMS encryption, multi-AZ, error handling
+    - Expected post-iteration score: ≥8
+    - Hand off to task-coordinator for iteration
 
-echo "✅ Training quality validated: $TRAINING_QUALITY/10"
-```
+  If score <6 OR already iterated OR only minor fixes possible:
+    - Recommend: Mark as ERROR
+    - Reason: "Insufficient training value" OR "Max iteration reached" OR "Model already competent"
+    - Do NOT iterate
+  ```
 
-**If training_quality < 8**:
-- Report status: "NOT READY - Training quality below threshold"
-- Provide specific recommendations to improve:
-  1. Review MODEL_FAILURES.md - are the improvements significant?
-  2. Consider adding AWS services or features mentioned in task but not implemented
-  3. Implement additional security best practices (KMS, IAM least privilege, encryption)
-  4. Add monitoring/observability features (CloudWatch, X-Ray, logging)
-  5. Implement error handling, retry logic, or resilience patterns
-  6. Add cost optimization features (auto-scaling, resource tagging)
-- Suggest returning to iac-infra-generator or iac-infra-qa-trainer to enhance the implementation
-- Do NOT proceed to Phase 5 (PR creation) until training_quality ≥ 8
+- Do NOT proceed to Phase 5 until training_quality ≥ 8 after any iteration
 
-**Only report "Ready" when**:
+**Report "Ready" only when**:
 - All phases passed
-- Training quality ≥ 8 (target: 9)
-- All metadata fields validated (including `background`)
+- Training quality ≥ 8
+- All metadata fields validated
 - Tests passing
 - Requirements met
 
