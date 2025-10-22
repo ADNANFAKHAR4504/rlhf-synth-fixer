@@ -1285,7 +1285,7 @@ Resources:
               Service: config.amazonaws.com
             Action: 'sts:AssumeRole'
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSConfigRole
+        - arn:aws:iam::aws:policy/service-role/ConfigRole
       Policies:
         - PolicyName: ConfigBucketAccess
           PolicyDocument:
