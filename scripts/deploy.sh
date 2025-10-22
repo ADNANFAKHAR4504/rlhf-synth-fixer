@@ -5,8 +5,10 @@ set -e
 
 echo "🚀 Starting deployment process with clean slate approach..."
 echo "📋 This script will:"
-echo "   1. Destroy existing resources (if any)"
-echo "   2. Deploy fresh resources"
+echo "   1. Bootstrap prerequisites"
+echo "   2. Destroy existing resources (if any)"
+echo "   3. Clean up Secrets Manager secrets in deletion state"
+echo "   4. Deploy fresh resources"
 echo ""
 
 # Read platform and language from metadata.json
@@ -72,6 +74,65 @@ fi
 # Wait a moment to ensure resources are fully cleaned up
 echo "⏳ Waiting 5 seconds to ensure resources are fully cleaned up..."
 sleep 5
+
+# Clean up any Secrets Manager secrets that might be in deletion state
+echo "=== Secrets Cleanup Phase ==="
+echo "🔐 Checking for AWS Secrets Manager secrets in deletion state..."
+
+# Determine the suffix to use for secrets
+if [ -f "metadata.json" ]; then
+  TASK_ID=$(jq -r '.task_id // ""' metadata.json 2>/dev/null || echo "")
+else
+  TASK_ID=""
+fi
+
+if [ -n "$TASK_ID" ]; then
+  SECRET_SUFFIX="pr${TASK_ID}"
+elif [ -n "$ENVIRONMENT_SUFFIX" ]; then
+  SECRET_SUFFIX="$ENVIRONMENT_SUFFIX"
+else
+  SECRET_SUFFIX="dev"
+fi
+
+echo "Checking secrets with suffix: $SECRET_SUFFIX in region: $AWS_REGION"
+
+# Function to force delete a secret if it's scheduled for deletion
+cleanup_secret() {
+  local secret_name=$1
+
+  # Check if secret exists and get its status
+  if aws secretsmanager describe-secret --secret-id "$secret_name" --region "$AWS_REGION" 2>/dev/null > /dev/null; then
+    DELETION_DATE=$(aws secretsmanager describe-secret --secret-id "$secret_name" --region "$AWS_REGION" 2>/dev/null | jq -r '.DeletionDate // "none"')
+
+    if [ "$DELETION_DATE" != "none" ]; then
+      echo "  ⚠️  Found secret $secret_name scheduled for deletion"
+      echo "  🔄 Force deleting to allow recreation..."
+      aws secretsmanager delete-secret \
+        --secret-id "$secret_name" \
+        --force-delete-without-recovery \
+        --region "$AWS_REGION" 2>/dev/null || true
+      echo "  ✅ Secret cleaned up"
+    fi
+  fi
+}
+
+# Check and clean up common secret patterns
+cleanup_secret "streamflix/api/keys-${SECRET_SUFFIX}"
+cleanup_secret "streamflix/db/credentials-${SECRET_SUFFIX}"
+cleanup_secret "streamflix-api-secret-${SECRET_SUFFIX}"
+cleanup_secret "streamflix-db-secret-${SECRET_SUFFIX}"
+
+# Also clean up any other secrets with our suffix
+echo "Checking for other secrets with suffix: ${SECRET_SUFFIX}..."
+aws secretsmanager list-secrets --region "$AWS_REGION" 2>/dev/null | \
+  jq -r ".SecretList[] | select(.Name | contains(\"${SECRET_SUFFIX}\")) | .Name" | \
+  while read -r secret; do
+    if [ -n "$secret" ]; then
+      cleanup_secret "$secret"
+    fi
+  done || true
+
+echo "✅ Secrets cleanup completed"
 
 # Deploy step
 echo "=== Deploy Phase ==="
@@ -205,7 +266,9 @@ fi
 
 echo ""
 echo "✅ Full deployment cycle completed successfully!"
+echo "   ✓ Prerequisites bootstrapped"
 echo "   ✓ Existing resources destroyed"
+echo "   ✓ Secrets cleaned up"
 echo "   ✓ Fresh resources deployed"
 
 # Get outputs using the dedicated script
