@@ -16,8 +16,8 @@ describe('Stack Structure', () => {
     stack = new TapStack(app, 'TestTapStackWithProps', {
       environmentSuffix: 'prod',
       stateBucket: 'custom-state-bucket',
-      stateBucketRegion: 'us-west-2',
-      awsRegion: 'us-west-2',
+      stateBucketRegion: 'eu-west-2',
+      awsRegion: 'eu-west-2',
     });
     synthesized = Testing.synth(stack);
 

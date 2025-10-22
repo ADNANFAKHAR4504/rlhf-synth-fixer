@@ -211,7 +211,7 @@ All components are properly encrypted using a customer-managed KMS key with auto
 
 ```bash
 export ENVIRONMENT_SUFFIX="your-environment"
-export AWS_REGION="ap-southeast-1"
+export AWS_REGION="eu-west-2"
 
 # Synthesize
 npm run cdktf:synth

@@ -14,6 +14,7 @@
     "Security Configuration as Code"
   ],
   "training_quality": 9,
+  "aws_region": "eu-west-2",
   "aws_services": [
     "VPC",
     "Subnet",

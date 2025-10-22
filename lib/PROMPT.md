@@ -16,7 +16,7 @@ Our factories have IoT sensors on manufacturing equipment that send data continu
 
 ## Technical Requirements
 
-We're using CDKTF with TypeScript, and everything needs to be deployed in the ap-southeast-1 region. Here are the specific requirements:
+We're using CDKTF with TypeScript, and everything needs to be deployed in the eu-west-2 (London) region. Here are the specific requirements:
 
 - Use Kinesis Data Streams with on-demand mode for ingesting the sensor data (this automatically scales with traffic)
 - Deploy containerized processing applications using ECS Fargate

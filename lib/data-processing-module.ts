@@ -198,7 +198,7 @@ export class DataProcessingModule extends Construct {
             logDriver: 'awslogs',
             options: {
               'awslogs-group': logGroup.name,
-              'awslogs-region': 'ap-southeast-1',
+              'awslogs-region': 'eu-west-2',
               'awslogs-stream-prefix': 'ecs',
             },
           },

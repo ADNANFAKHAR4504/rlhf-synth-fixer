@@ -52,8 +52,8 @@ export class TapStack extends TerraformStack {
     const environmentSuffix = props?.environmentSuffix || 'dev';
     const awsRegion = AWS_REGION_OVERRIDE
       ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'ap-southeast-1';
-    const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
+      : props?.awsRegion || 'eu-west-2';
+    const stateBucketRegion = props?.stateBucketRegion || 'eu-west-2';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
@@ -942,7 +942,7 @@ export class DataProcessingModule extends Construct {
             logDriver: 'awslogs',
             options: {
               'awslogs-group': logGroup.name,
-              'awslogs-region': 'ap-southeast-1',
+              'awslogs-region': 'eu-west-2',
               'awslogs-stream-prefix': 'ecs',
             },
           },
