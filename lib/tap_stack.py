@@ -246,26 +246,6 @@ class TapStack(TerraformStack):
             tags={"Name": f"streamflix-efs-sg-{environment_suffix}"}
         )
 
-        # AWS Secrets Manager - Database credentials
-        db_secret = SecretsmanagerSecret(
-            self,
-            f"streamflix-db-secret-{environment_suffix}",
-            name=f"streamflix/db/credentials-{environment_suffix}",
-            description="Database credentials for Aurora cluster",
-            recovery_window_in_days=7,
-            tags={"Name": f"streamflix-db-secret-{environment_suffix}"}
-        )
-
-        db_secret_value = SecretsmanagerSecretVersion(
-            self,
-            f"streamflix-db-secret-version-{environment_suffix}",
-            secret_id=db_secret.id,
-            secret_string=json.dumps({
-                "username": "streamflix_admin",
-                "password": "ChangeMe123!Secure"
-            })
-        )
-
         # API Keys Secret
         api_secret = SecretsmanagerSecret(
             self,
@@ -304,7 +284,7 @@ class TapStack(TerraformStack):
             engine_version="16.6",
             database_name="streamflixdb",
             master_username="streamflix_admin",
-            master_password="ChangeMe123!Secure",
+            manage_master_user_password_in_secrets_manager=True,
             db_subnet_group_name=db_subnet_group.name,
             vpc_security_group_ids=[rds_sg.id],
             backup_retention_period=7,
@@ -496,7 +476,7 @@ class TapStack(TerraformStack):
                             "secretsmanager:DescribeSecret"
                         ],
                         "Resource": [
-                            db_secret.arn,
+                            f"{aurora_cluster.arn}-*",
                             api_secret.arn
                         ]
                     },
@@ -577,8 +557,8 @@ class TapStack(TerraformStack):
                 },
                 "environment": [
                     {
-                        "name": "DB_SECRET_ARN",
-                        "value": db_secret.arn
+                        "name": "DB_CLUSTER_ARN",
+                        "value": aurora_cluster.arn
                     },
                     {
                         "name": "API_SECRET_ARN",
