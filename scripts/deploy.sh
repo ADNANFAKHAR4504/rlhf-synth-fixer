@@ -76,8 +76,9 @@ echo "⏳ Waiting 5 seconds to ensure resources are fully cleaned up..."
 sleep 5
 
 # Clean up any Secrets Manager secrets that might be in deletion state
-echo "=== Secrets Cleanup Phase ==="
-echo "🔐 Force cleaning AWS Secrets Manager secrets..."
+echo "=== Aggressive Secrets Cleanup Phase ==="
+echo "🔥 FORCEFULLY REMOVING ALL AWS SECRETS MANAGER SECRETS..."
+echo "   This will use multiple strategies to ensure complete deletion"
 
 # Determine the suffix to use for secrets
 if [ -f "metadata.json" ]; then
@@ -96,45 +97,80 @@ fi
 
 echo "Force deleting ALL secrets with suffix: $SECRET_SUFFIX in region: $AWS_REGION"
 
-# Function to forcefully delete a secret immediately
+# Function to aggressively delete a secret with multiple strategies
 force_delete_secret() {
   local secret_name=$1
-  local max_retries=3
+  local max_retries=5
   local retry_count=0
 
   echo "  🔍 Processing secret: $secret_name"
 
   while [ $retry_count -lt $max_retries ]; do
+    retry_count=$((retry_count + 1))
+
     # Check if the secret exists
-    if aws secretsmanager describe-secret --secret-id "$secret_name" --region "$AWS_REGION" 2>/dev/null > /dev/null; then
-      echo "  ⚠️  Secret exists: $secret_name"
+    SECRET_EXISTS=$(aws secretsmanager describe-secret \
+      --secret-id "$secret_name" \
+      --region "$AWS_REGION" 2>&1)
 
-      # Get the current state
-      SECRET_INFO=$(aws secretsmanager describe-secret --secret-id "$secret_name" --region "$AWS_REGION" 2>/dev/null || echo "{}")
-      DELETION_DATE=$(echo "$SECRET_INFO" | jq -r '.DeletionDate // "none"')
+    if echo "$SECRET_EXISTS" | grep -q "ResourceNotFoundException"; then
+      echo "  ✅ Secret does not exist or is fully deleted"
+      return 0
+    fi
 
-      # Force delete regardless of state
-      echo "  🔄 Force deleting secret (attempt $((retry_count + 1))/$max_retries)..."
-      if aws secretsmanager delete-secret \
+    echo "  ⚠️  Secret exists: $secret_name (attempt $retry_count/$max_retries)"
+
+    # Strategy 1: Direct force delete
+    echo "  🔄 Attempting force delete..."
+    DELETE_RESULT=$(aws secretsmanager delete-secret \
+      --secret-id "$secret_name" \
+      --force-delete-without-recovery \
+      --region "$AWS_REGION" 2>&1)
+
+    if echo "$DELETE_RESULT" | grep -q "DeletionDate"; then
+      echo "  ✅ Secret marked for immediate deletion"
+      return 0
+    fi
+
+    # Strategy 2: If already scheduled for deletion, try restore then delete
+    if echo "$DELETE_RESULT" | grep -q "InvalidRequestException"; then
+      echo "  🔄 Secret already scheduled, trying restore-delete strategy..."
+
+      # Try to restore the secret first
+      aws secretsmanager restore-secret \
+        --secret-id "$secret_name" \
+        --region "$AWS_REGION" 2>/dev/null || true
+
+      sleep 1
+
+      # Then immediately delete it
+      aws secretsmanager delete-secret \
         --secret-id "$secret_name" \
         --force-delete-without-recovery \
-        --region "$AWS_REGION" 2>&1; then
-        echo "  ✅ Secret force deleted successfully"
-        break
-      else
-        echo "  ⚠️  Deletion attempt failed, retrying..."
-        retry_count=$((retry_count + 1))
-        sleep 2
-      fi
-    else
-      echo "  ℹ️  Secret does not exist or already deleted"
-      break
+        --region "$AWS_REGION" 2>/dev/null || true
     fi
+
+    # Strategy 3: Update the secret then delete (sometimes works)
+    if [ $retry_count -eq 3 ]; then
+      echo "  🔄 Trying update-delete strategy..."
+      aws secretsmanager put-secret-value \
+        --secret-id "$secret_name" \
+        --secret-string "dummy" \
+        --region "$AWS_REGION" 2>/dev/null || true
+
+      sleep 1
+
+      aws secretsmanager delete-secret \
+        --secret-id "$secret_name" \
+        --force-delete-without-recovery \
+        --region "$AWS_REGION" 2>/dev/null || true
+    fi
+
+    sleep 2
   done
 
-  if [ $retry_count -eq $max_retries ]; then
-    echo "  ❌ Failed to delete secret after $max_retries attempts"
-  fi
+  echo "  ❌ Failed to delete secret after $max_retries attempts"
+  return 1
 }
 
 # List of specific secret patterns to force delete
@@ -153,13 +189,22 @@ done
 
 # Also search for and delete any other secrets with our suffix
 echo ""
-echo "Searching for any other secrets with suffix: ${SECRET_SUFFIX}..."
+echo "Searching for ALL secrets with suffix: ${SECRET_SUFFIX}..."
 
-# Get all secrets and filter by our suffix
-ALL_SECRETS=$(aws secretsmanager list-secrets --region "$AWS_REGION" 2>/dev/null || echo '{"SecretList": []}')
+# Get all secrets including those scheduled for deletion
+ALL_SECRETS=$(aws secretsmanager list-secrets \
+  --include-planned-deletion \
+  --region "$AWS_REGION" 2>/dev/null || echo '{"SecretList": []}')
+
 MATCHING_SECRETS=$(echo "$ALL_SECRETS" | jq -r ".SecretList[] | select(.Name | contains(\"${SECRET_SUFFIX}\")) | .Name")
 
 if [ -n "$MATCHING_SECRETS" ]; then
+  echo "Found the following secrets to delete:"
+  echo "$MATCHING_SECRETS" | while IFS= read -r secret; do
+    echo "  • $secret"
+  done
+  echo ""
+
   echo "$MATCHING_SECRETS" | while IFS= read -r secret; do
     if [ -n "$secret" ]; then
       force_delete_secret "$secret"
@@ -171,24 +216,44 @@ fi
 
 # Double-check that problematic secrets are gone
 echo ""
-echo "🔍 Final verification of secret deletion..."
+echo "🔍 Final verification of critical secrets..."
+FAILED_COUNT=0
 for secret in "${SECRETS_TO_DELETE[@]}"; do
-  if aws secretsmanager describe-secret --secret-id "$secret" --region "$AWS_REGION" 2>/dev/null > /dev/null; then
-    echo "  ⚠️  WARNING: Secret still exists: $secret"
-    echo "  Attempting final force deletion..."
-    aws secretsmanager delete-secret \
-      --secret-id "$secret" \
-      --force-delete-without-recovery \
-      --region "$AWS_REGION" 2>/dev/null || true
-  else
+  SECRET_CHECK=$(aws secretsmanager describe-secret \
+    --secret-id "$secret" \
+    --region "$AWS_REGION" 2>&1 || true)
+
+  if echo "$SECRET_CHECK" | grep -q "ResourceNotFoundException"; then
     echo "  ✅ Confirmed deleted: $secret"
+  else
+    echo "  ⚠️  WARNING: Secret may still exist: $secret"
+    echo "  🔥 FINAL AGGRESSIVE DELETION ATTEMPT..."
+
+    # Try multiple strategies in rapid succession
+    aws secretsmanager restore-secret --secret-id "$secret" --region "$AWS_REGION" 2>/dev/null || true
+    sleep 0.5
+    aws secretsmanager delete-secret --secret-id "$secret" --force-delete-without-recovery --region "$AWS_REGION" 2>/dev/null || true
+    sleep 0.5
+    aws secretsmanager put-secret-value --secret-id "$secret" --secret-string "DELETE_ME" --region "$AWS_REGION" 2>/dev/null || true
+    sleep 0.5
+    aws secretsmanager delete-secret --secret-id "$secret" --force-delete-without-recovery --region "$AWS_REGION" 2>/dev/null || true
+
+    FAILED_COUNT=$((FAILED_COUNT + 1))
   fi
 done
 
 echo ""
-echo "✅ Secrets cleanup phase completed"
-echo "⏳ Waiting 3 seconds to ensure AWS propagation..."
-sleep 3
+if [ $FAILED_COUNT -eq 0 ]; then
+  echo "✅ Secrets cleanup phase completed successfully!"
+  echo "   All critical secrets have been removed."
+else
+  echo "⚠️  Secrets cleanup completed with warnings"
+  echo "   $FAILED_COUNT secret(s) may still be in deletion state"
+  echo "   Deployment will proceed, but may encounter issues"
+fi
+
+echo "⏳ Waiting 5 seconds to ensure AWS propagation..."
+sleep 5
 
 # Deploy step
 echo "=== Deploy Phase ==="
