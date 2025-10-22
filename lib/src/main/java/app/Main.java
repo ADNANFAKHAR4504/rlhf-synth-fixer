@@ -1405,7 +1405,7 @@ class TapStack extends Stack {
         networkStack.addDependency(securityStack);
         databaseStack.addDependency(networkStack);
         cacheStack.addDependency(networkStack);
-        storageStack.addDependency(securityStack);
+        // storageStack.addDependency(securityStack);
         computeStack.addDependency(networkStack);
         realTimeStack.addDependency(securityStack);
         mlStack.addDependency(securityStack);
