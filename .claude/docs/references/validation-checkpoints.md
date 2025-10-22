@@ -10,7 +10,7 @@ Standardized validation checkpoints used across all phases. Reference by name to
 **Validation**:
 ```bash
 # Verify all required fields exist in metadata.json
-jq -e '.platform, .language, .complexity, .turn_type, .po_id, .team, .subtask, .background, .subject_labels, .startedAt, .aws_services' metadata.json
+jq -e '.platform, .language, .complexity, .turn_type, .po_id, .team, .subtask, .subject_labels, .startedAt, .aws_services' metadata.json
 ```
 
 **Pass criteria**: All fields present and non-null
