@@ -63,14 +63,8 @@ elif [ "$PLATFORM" = "pulumi" ]; then
   echo "Pulumi backend URL: $PULUMI_BACKEND_URL"
   echo "Pulumi organization: $PULUMI_ORG"
   
-  # Login to Pulumi S3 backend - handle both Go and Python projects
-  if [ "$LANGUAGE" = "go" ]; then
-    echo "🔧 Go Pulumi project detected"
-    pulumi login "$PULUMI_BACKEND_URL"
-  else
-    echo "🔧 Python Pulumi project detected"
-    pipenv run pulumi-login
-  fi
+  # Login to Pulumi S3 backend
+  pipenv run pulumi-login
   echo "✅ Pulumi bootstrap completed"
 
 elif [ "$PLATFORM" = "tf" ]; then
