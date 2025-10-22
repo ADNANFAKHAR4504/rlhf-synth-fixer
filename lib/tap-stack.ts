@@ -64,7 +64,7 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly replicationLagAlarm: aws.cloudwatch.MetricAlarm;
   public readonly rollbackTopic: aws.sns.Topic;
   public readonly outputs: pulumi.Output<StackOutputs>;
-  public readonly dbPassword: random.RandomPassword; // Expose for reference
+  public readonly dbPassword: random.RandomPassword;
 
   private readonly config: TapStackProps;
   private readonly randomSuffix: string;
@@ -90,13 +90,13 @@ export class TapStack extends pulumi.ComponentResource {
     // Generate random suffix for resource naming
     this.randomSuffix = Math.random().toString(36).substring(2, 8);
 
-    // FIXED: Generate secure random password using @pulumi/random
+    // Generate secure random password using @pulumi/random
     this.dbPassword = new random.RandomPassword(
       this.getResourceName("db-password"),
       {
         length: 32,
         special: true,
-        overrideSpecial: "!#$%&*()-_=+[]{}:?", // Removed <> to avoid RDS issues
+        overrideSpecial: "!#$%&*()-_=+[]{}:?",
         lower: true,
         upper: true,
         numeric: true,
@@ -126,10 +126,8 @@ export class TapStack extends pulumi.ComponentResource {
     // 2. Establish VPC peering (only if source VPC ID is provided)
     if (this.config.sourceVpcId) {
       this.vpcPeering = this.createVpcPeering();
-      // Update route tables for peering
       this.updateRouteTables();
     } else {
-      // Create route table without peering
       this.createRouteTableWithoutPeering();
     }
 
@@ -163,9 +161,7 @@ export class TapStack extends pulumi.ComponentResource {
     // 8. Create rollback mechanisms
     this.createRollbackMechanisms();
 
-    // 9. Preserve security group rules (handled in createSecurityGroup)
-
-    // 10. Generate outputs and export to JSON
+    // 9. Generate outputs and export to JSON
     this.outputs = this.generateOutputs();
 
     this.registerOutputs({
@@ -175,6 +171,7 @@ export class TapStack extends pulumi.ComponentResource {
       loadBalancerDns: this.targetLoadBalancer.dnsName,
       dashboardUrl: pulumi.interpolate`https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=${this.migrationDashboard.dashboardName}`,
       rollbackCommand: pulumi.interpolate`pulumi stack export && pulumi stack import --stack rollback-${this.randomSuffix}`,
+      dbPassword: this.dbPassword.result,
     });
   }
 
@@ -229,6 +226,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     for (let i = 0; i < this.config.availabilityZones!; i++) {
       // Public subnet for ALB (compute tier)
+      // Using blocks: 10.20.0.0/20, 10.20.16.0/20, 10.20.32.0/20
       const computeSubnet = new aws.ec2.Subnet(
         this.getResourceName(`compute-subnet-${i}`),
         {
@@ -247,6 +245,7 @@ export class TapStack extends pulumi.ComponentResource {
       );
 
       // Private subnet for database tier
+      // Using blocks: 10.20.48.0/20, 10.20.64.0/20, 10.20.80.0/20
       const dbSubnet = new aws.ec2.Subnet(
         this.getResourceName(`db-subnet-${i}`),
         {
@@ -485,7 +484,8 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // FIXED: Use generated random password
+    // FIXED: Use "dbmaster" instead of "admin" (reserved word in PostgreSQL)
+    // FIXED: Use PostgreSQL version "13" (major version only)
     const rdsInstance = new aws.rds.Instance(
       this.getResourceName("postgres-replica"),
       {
@@ -498,8 +498,8 @@ export class TapStack extends pulumi.ComponentResource {
         multiAz: true,
         dbSubnetGroupName: dbSubnetGroup.name,
         vpcSecurityGroupIds: [securityGroup.id],
-        username: "admin",
-        password: this.dbPassword.result, // Use random password
+        username: "dbmaster",
+        password: this.dbPassword.result,
         skipFinalSnapshot: false,
         finalSnapshotIdentifier: this.getResourceName("final-snapshot"),
         backupRetentionPeriod: 7,
