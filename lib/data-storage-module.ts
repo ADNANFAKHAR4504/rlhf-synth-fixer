@@ -189,7 +189,7 @@ export class DataStorageModule extends Construct {
         numNodeGroups: 2,
         replicasPerNodeGroup: 1,
         automaticFailoverEnabled: true,
-        atRestEncryptionEnabled: 'yes',
+        atRestEncryptionEnabled: true,
         kmsKeyId: kmsKeyArn,
         subnetGroupName: cacheSubnetGroup.name,
         securityGroupIds: [cacheSecurityGroupId],
