@@ -86,9 +86,6 @@ elif [ "$PLATFORM" = "cdktf" ]; then
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
   echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
-  aws iam attach-user-policy \
-  --user-name mohammad.n1@turing.com \
-  --policy-arn arn:aws:iam::aws:policy/AdministratorAccess
   npm run cfn:deploy-yaml
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then

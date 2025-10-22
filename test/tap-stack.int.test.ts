@@ -1529,7 +1529,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
         );
         expect(privateSubnetsResponse.Subnets!.length).toBe(2);
         privateSubnetsResponse.Subnets!.forEach(subnet => {
-          expect(subnet.MapPublicIpOnLaunch).toBeUndefined();
+          expect(subnet.MapPublicIpOnLaunch).toBe(false);
         });
         console.log('✓ Private subnets do not auto-assign public IPs');
 

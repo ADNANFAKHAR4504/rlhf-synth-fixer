@@ -541,34 +541,14 @@ Resources:
                 "aws:SecureTransport": "false"
 
   # =====================================
-  # Database Password Secret
-  # =====================================
-  DBPasswordSecret:
-    Type: AWS::SecretsManager::Secret
-    DeletionPolicy: Delete
-    Properties:
-      Name: !Sub "tapstack-db-password-${AWS::AccountId}-${AWS::Region}"
-      Description: Auto-generated RDS Master User Password
-      GenerateSecretString:
-        SecretStringTemplate: !Sub '{"username": "${DBMasterUsername}"}'
-        GenerateStringKey: password
-        PasswordLength: 32
-        ExcludeCharacters: '"@/\'
-      Tags:
-        - Key: Name
-          Value: !Sub "${AWS::StackName}-DBPassword"
-        - Key: Environment
-          Value: Prod
-
-  # =====================================
-  # KMS Key for RDS Encryption
+  # KMS Key for RDS and Secrets Manager Encryption
   # =====================================
   # Note: EC2 instances use AWS-managed encryption (aws/ebs)
-  # RDS database uses custom KMS key for enhanced security
+  # RDS database and Secrets Manager use custom KMS key for enhanced security
   RDSKMSKey:
     Type: AWS::KMS::Key
     Properties:
-      Description: KMS key for RDS encryption
+      Description: KMS key for RDS and Secrets Manager encryption
       KeyPolicy:
         Version: "2012-10-17"
         Id: rds-key-policy
@@ -591,6 +571,18 @@ Resources:
               - "kms:CreateGrant"
               - "kms:DescribeKey"
             Resource: "*"
+          - Sid: Allow Secrets Manager to use the key
+            Effect: Allow
+            Principal:
+              Service: secretsmanager.amazonaws.com
+            Action:
+              - "kms:Decrypt"
+              - "kms:Encrypt"
+              - "kms:ReEncrypt*"
+              - "kms:GenerateDataKey*"
+              - "kms:CreateGrant"
+              - "kms:DescribeKey"
+            Resource: "*"
       Tags:
         - Key: Name
           Value: !Sub "${AWS::StackName}-RDS-KMS-Key"
@@ -602,6 +594,27 @@ Resources:
     Properties:
       AliasName: !Sub "alias/${AWS::StackName}-rds-key"
       TargetKeyId: !Ref RDSKMSKey
+
+  # =====================================
+  # Database Password Secret
+  # =====================================
+  DBPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Delete
+    Properties:
+      Name: !Sub "tapstack-db-password-${AWS::AccountId}-${AWS::Region}"
+      Description: Auto-generated RDS Master User Password
+      KmsKeyId: !Ref RDSKMSKey
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBMasterUsername}"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-DBPassword"
+        - Key: Environment
+          Value: Prod
 
   # =====================================
   # RDS Database
