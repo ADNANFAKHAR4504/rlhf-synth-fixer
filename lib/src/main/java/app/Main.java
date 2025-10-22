@@ -775,7 +775,7 @@ class ComputeStack extends Stack {
                         .image(Runtime.JAVA_17.getBundlingImage())
                         .command(Arrays.asList(
                                 "/bin/sh", "-c",
-                                "mvn clean package && cp target/*.jar /asset-output/"
+                                "mvn clean package && cp target/lambda-functions-1.0.0-SNAPSHOT-shaded.jar /asset-output/routing.jar"
                         ))
                         .build())
                     .build()))
@@ -1069,7 +1069,16 @@ class RealTimeStack extends Stack {
                 .functionName("social-platform-" + environmentSuffix + "-ws-" + functionType.toLowerCase())
                 .runtime(Runtime.JAVA_17)
                 .handler("com.social.platform.websocket." + functionType + "Handler::handleRequest")
-                .code(Code.fromAsset("lambda/target/websocket.jar"))
+                .code(Code.fromAsset("lib/src/lambda/src", AssetOptions.builder()
+                        .bundling(BundlingOptions.builder()
+                                .image(Runtime.JAVA_17.getBundlingImage())
+                                .command(Arrays.asList(
+                                        "/bin/sh", "-c",
+                                        "mvn clean package && cp target/lambda-functions-1.0.0-SNAPSHOT-shaded.jar /asset-output/" 
+                                        + functionType.toLowerCase() + ".jar"
+                                ))
+                                .build())
+                        .build()))
                 .memorySize(512)
                 .timeout(Duration.seconds(30))
                 .role(lambdaRole)
@@ -1101,7 +1110,15 @@ class RealTimeStack extends Stack {
                 .functionName("social-platform-" + environmentSuffix + "-notification")
                 .runtime(Runtime.JAVA_17)
                 .handler("com.social.platform.notification.NotificationHandler::handleRequest")
-                .code(Code.fromAsset("lambda/target/notification.jar"))
+                .code(Code.fromAsset("lib/src/lambda/src", AssetOptions.builder()
+                        .bundling(BundlingOptions.builder()
+                                .image(Runtime.JAVA_17.getBundlingImage())
+                                .command(Arrays.asList(
+                                        "/bin/sh", "-c",
+                                        "mvn clean package && cp target/lambda-functions-1.0.0-SNAPSHOT-shaded.jar /asset-output/notification.jar"
+                                ))
+                                .build())
+                        .build()))
                 .memorySize(1024)
                 .timeout(Duration.seconds(60))
                 .role(lambdaRole)
