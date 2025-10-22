@@ -553,8 +553,8 @@ class TapStack(TerraformStack):
             role=rotation_lambda_role.arn,
             handler="index.handler",
             runtime="python3.11",
-            filename="lambda_placeholder.zip",
-            source_code_hash=Fn.filebase64sha256("lambda_placeholder.zip"),
+            filename="../../../lambda_placeholder.zip",
+            source_code_hash=Fn.filebase64sha256("../../../lambda_placeholder.zip"),
             timeout=30,
             environment={
                 "variables": {
