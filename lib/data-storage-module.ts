@@ -40,7 +40,6 @@ export class DataStorageModule extends Construct {
       databaseSecurityGroupId,
       cacheSecurityGroupId,
       efsSecurityGroupId,
-      kmsKeyId,
       kmsKeyArn,
     } = props;
 
