@@ -1,0 +1,22 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "4809",
+  "team": "5",
+  "startedAt": "2025-10-19T12:27:11.216Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "CloudTrail, S3, KMS, Glue Data Catalog, Athena, DynamoDB, Lambda, EventBridge, SNS, CloudWatch, IAM",
+  "background": "CloudTrail log analytics platform for 100 AWS accounts with centralized logging, automated processing, real-time security alerting, compliance reporting, and QuickSight dashboard support. Implements organization-wide trail with multi-region support, data events tracking, Glue Data Catalog for schema discovery, Athena for querying, 5-Lambda processing pipeline, DynamoDB for security findings, 3-tier SNS alerting system, and comprehensive monitoring.",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raaj1021",
+  "dockerS3Location": ""
+}
