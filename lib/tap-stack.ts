@@ -20,7 +20,7 @@ interface MigrationMetrics {
   replicationLag: number;
 }
 
-interface StackOutputs {
+export interface StackOutputs {
   targetVpcId: string;
   targetVpcCidr: string;
   vpcPeeringId: string;
