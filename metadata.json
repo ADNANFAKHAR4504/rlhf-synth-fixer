@@ -1,0 +1,18 @@
+{
+  "platform": "Pulumi",
+  "language": "py",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-10-22T07:21:49+05:30",
+  "po_id": "6981431077",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "aws_services": "apigatewayv2, kinesis, rds, elasticache, secretsmanager, kms, ec2, iam, cloudwatch, sns",
+  "training_quality": 9.6,
+  "completedAt": "2025-10-22T07:52:00+05:30"
+}

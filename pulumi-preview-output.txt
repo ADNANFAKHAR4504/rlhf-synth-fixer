@@ -1,0 +1,23 @@
+Previewing update (TapStacksynth6981431077):
+
+    pulumi:pulumi:Stack pulumi-infra-TapStacksynth6981431077  Traceback (most recent call last):
+    pulumi:pulumi:Stack pulumi-infra-TapStacksynth6981431077    File "/opt/homebrew/bin/pulumi-language-python-exec", line 17, in <module>
+    pulumi:pulumi:Stack pulumi-infra-TapStacksynth6981431077      import pulumi
+    pulumi:pulumi:Stack pulumi-infra-TapStacksynth6981431077  ModuleNotFoundError: No module named 'pulumi'
+    pulumi:pulumi:Stack pulumi-infra-TapStacksynth6981431077  It looks like the Pulumi SDK has not been installed. Have you run pip install?
+    pulumi:pulumi:Stack pulumi-infra-TapStacksynth6981431077  If you are running in a virtualenv, you must run pip install -r requirements.txt from inside the virtualenv.
+    pulumi:pulumi:Stack pulumi-infra-TapStacksynth6981431077  error: an unhandled error occurred: program exited with non-zero exit code: 1
+    pulumi:pulumi:Stack pulumi-infra-TapStacksynth6981431077  1 error; 6 messages
+Diagnostics:
+  pulumi:pulumi:Stack (pulumi-infra-TapStacksynth6981431077):
+    Traceback (most recent call last):
+      File "/opt/homebrew/bin/pulumi-language-python-exec", line 17, in <module>
+        import pulumi
+    ModuleNotFoundError: No module named 'pulumi'
+    It looks like the Pulumi SDK has not been installed. Have you run pip install?
+    If you are running in a virtualenv, you must run pip install -r requirements.txt from inside the virtualenv.
+
+    error: an unhandled error occurred: program exited with non-zero exit code: 1
+
+Resources:
+

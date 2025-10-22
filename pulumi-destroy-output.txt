@@ -1,0 +1,186 @@
+Previewing destroy (TapStacksynth6981431077):
+
+ -  aws:cloudwatch:MetricAlarm rds-high-cpu-synth6981431077 delete 
+ -  aws:cloudwatch:MetricAlarm redis-high-memory-synth6981431077 delete 
+ -  aws:iam:RolePolicyAttachment api-kinesis-policy-attachment-synth6981431077 delete 
+ -  aws:apigatewayv2:Route assessment-submit-route-synth6981431077 delete 
+ -  aws:elasticache:Cluster assessment-redis-synth6981431077 delete 
+ -  aws:rds:Instance assessment-db-synth6981431077 delete 
+ -  aws:ec2:RouteTableAssociation assessment-private-rta-2-synth6981431077 delete 
+ -  aws:ec2:Route assessment-public-route-synth6981431077 delete 
+ -  aws:iam:Policy api-kinesis-policy-synth6981431077 delete 
+ -  aws:secretsmanager:SecretVersion assessment-db-secret-version-synth6981431077 delete 
+ -  aws:ec2:RouteTableAssociation assessment-public-rta-1-synth6981431077 delete 
+ -  aws:ec2:RouteTableAssociation assessment-private-rta-1-synth6981431077 delete 
+ -  aws:rds:SubnetGroup assessment-db-subnet-group-synth6981431077 delete 
+ -  aws:ec2:RouteTableAssociation assessment-public-rta-2-synth6981431077 delete 
+ -  aws:apigatewayv2:Integration assessment-kinesis-integration-synth6981431077 delete 
+ -  aws:cloudwatch:MetricAlarm kinesis-iterator-age-synth6981431077 delete 
+ -  aws:elasticache:SubnetGroup assessment-redis-subnet-group-synth6981431077 delete 
+ -  aws:ec2:RouteTable assessment-private-rt-synth6981431077 delete 
+ -  aws:ec2:Subnet assessment-private-subnet-1-synth6981431077 delete 
+ -  aws:cloudwatch:MetricAlarm api-throttled-requests-synth6981431077 delete 
+ -  aws:secretsmanager:Secret assessment-db-secret-synth6981431077 delete 
+ -  aws:kms:Alias assessment-key-alias-synth6981431077 delete 
+ -  aws:cloudwatch:MetricAlarm api-high-error-rate-synth6981431077 delete 
+ -  aws:ec2:Subnet assessment-public-subnet-1-synth6981431077 delete 
+ -  aws:kinesis:Stream assessment-submissions-synth6981431077 delete 
+ -  aws:ec2:Subnet assessment-public-subnet-2-synth6981431077 delete 
+ -  aws:ec2:Subnet assessment-private-subnet-2-synth6981431077 delete 
+ -  aws:ec2:RouteTable assessment-public-rt-synth6981431077 delete 
+ -  aws:apigatewayv2:Stage assessment-api-stage-synth6981431077 delete 
+ -  aws:ec2:InternetGateway assessment-igw-synth6981431077 delete 
+ -  aws:ec2:SecurityGroup assessment-redis-sg-synth6981431077 delete 
+ -  aws:ec2:SecurityGroup assessment-rds-sg-synth6981431077 delete 
+ -  aws:cloudwatch:LogGroup api-gateway-logs-synth6981431077 delete 
+ -  aws:ec2:Vpc assessment-vpc-synth6981431077 delete 
+ -  aws:iam:Role api-kinesis-role-synth6981431077 delete 
+ -  aws:kms:Key assessment-key-synth6981431077 delete 
+ -  aws:elasticache:ParameterGroup assessment-redis-params-synth6981431077 delete 
+ -  aws:sns:Topic assessment-alarms-synth6981431077 delete 
+ -  aws:rds:ParameterGroup assessment-db-params-synth6981431077 delete 
+ -  aws:apigatewayv2:Api assessment-api-synth6981431077 delete 
+ -  tap:stack:TapStack pulumi-infra delete 
+ -  pulumi:pulumi:Stack pulumi-infra-TapStacksynth6981431077 delete 
+ -  pulumi:pulumi:Stack pulumi-infra-TapStacksynth6981431077 delete 
+Outputs:
+  - APIGatewayEndpoint     : "https://pi6csshdn7.execute-api.us-east-1.amazonaws.com"
+  - APIGatewayId           : "pi6csshdn7"
+  - KMSKeyArn              : "arn:aws:kms:us-east-1:342597974367:key/0a0ce0a1-e12d-49ce-aae8-f5f492c89865"
+  - KMSKeyId               : "0a0ce0a1-e12d-49ce-aae8-f5f492c89865"
+  - KinesisStreamArn       : "arn:aws:kinesis:us-east-1:342597974367:stream/assessment-submissions-synth6981431077"
+  - KinesisStreamName      : "assessment-submissions-synth6981431077"
+  - RDSEndpoint            : "assessment-db-synth6981431077.covy6ema0nuv.us-east-1.rds.amazonaws.com:5432"
+  - RDSInstanceId          : "db-5VKB6GAVHX23UX5MJWK73SP4R4"
+  - RedisClusterId         : "assessment-redis-synth6981431077"
+  - RedisEndpoint          : "assessment-redis-synth6981431077.rjrima.0001.use1.cache.amazonaws.com"
+  - SNSTopicArn            : "arn:aws:sns:us-east-1:342597974367:assessment-alarms-synth6981431077"
+  - SecretsManagerSecretArn: "arn:aws:secretsmanager:us-east-1:342597974367:secret:assessment-db-secret-synth6981431077-fs7feM"
+  - VPCId                  : "vpc-0dd3b40113aa2781b"
+
+Resources:
+    - 42 to delete
+
+Destroying (TapStacksynth6981431077):
+
+ -  aws:cloudwatch:MetricAlarm rds-high-cpu-synth6981431077 deleting (0s) 
+ -  aws:cloudwatch:MetricAlarm redis-high-memory-synth6981431077 deleting (0s) 
+@ destroying......
+ -  aws:cloudwatch:MetricAlarm redis-high-memory-synth6981431077 deleted (3s) 
+ -  aws:cloudwatch:MetricAlarm rds-high-cpu-synth6981431077 deleted (3s) 
+@ destroying....
+ -  aws:iam:RolePolicyAttachment api-kinesis-policy-attachment-synth6981431077 deleting (0s) 
+ -  aws:apigatewayv2:Route assessment-submit-route-synth6981431077 deleting (0s) 
+ -  aws:elasticache:Cluster assessment-redis-synth6981431077 deleting (0s) 
+ -  aws:rds:Instance assessment-db-synth6981431077 deleting (0s) 
+@ destroying....
+ -  aws:apigatewayv2:Route assessment-submit-route-synth6981431077 deleted (1s) 
+ -  aws:iam:RolePolicyAttachment api-kinesis-policy-attachment-synth6981431077 deleted (1s) 
+@ destroying........................................................................................................................................................................
+ -  aws:elasticache:Cluster assessment-redis-synth6981431077 deleted (166s) 
+@ destroying........................................................................................
+ -  aws:rds:Instance assessment-db-synth6981431077 deleted (251s) 
+@ destroying....
+ -  aws:ec2:RouteTableAssociation assessment-private-rta-2-synth6981431077 deleting (0s) 
+ -  aws:apigatewayv2:Integration assessment-kinesis-integration-synth6981431077 deleting (0s) 
+ -  aws:rds:SubnetGroup assessment-db-subnet-group-synth6981431077 deleting (0s) 
+ -  aws:ec2:RouteTableAssociation assessment-public-rta-1-synth6981431077 deleting (0s) 
+ -  aws:cloudwatch:MetricAlarm kinesis-iterator-age-synth6981431077 deleting (0s) 
+ -  aws:elasticache:SubnetGroup assessment-redis-subnet-group-synth6981431077 deleting (0s) 
+ -  aws:iam:Policy api-kinesis-policy-synth6981431077 deleting (0s) 
+ -  aws:ec2:RouteTableAssociation assessment-public-rta-2-synth6981431077 deleting (0s) 
+ -  aws:ec2:RouteTableAssociation assessment-private-rta-1-synth6981431077 deleting (0s) 
+ -  aws:secretsmanager:SecretVersion assessment-db-secret-version-synth6981431077 deleting (0s) 
+ -  aws:ec2:Route assessment-public-route-synth6981431077 deleting (0s) 
+ -  aws:rds:SubnetGroup assessment-db-subnet-group-synth6981431077 deleted (0.76s) 
+@ destroying....
+ -  aws:secretsmanager:SecretVersion assessment-db-secret-version-synth6981431077 deleted (1s) 
+ -  aws:apigatewayv2:Integration assessment-kinesis-integration-synth6981431077 deleted (1s) 
+ -  aws:cloudwatch:MetricAlarm kinesis-iterator-age-synth6981431077 deleted (1s) 
+ -  aws:elasticache:SubnetGroup assessment-redis-subnet-group-synth6981431077 deleted (1s) 
+ -  aws:iam:Policy api-kinesis-policy-synth6981431077 deleted (1s) 
+@ destroying....
+ -  aws:ec2:RouteTableAssociation assessment-public-rta-1-synth6981431077 deleted (2s) 
+ -  aws:ec2:RouteTableAssociation assessment-private-rta-2-synth6981431077 deleted (2s) 
+ -  aws:ec2:RouteTableAssociation assessment-public-rta-2-synth6981431077 deleted (2s) 
+ -  aws:ec2:RouteTableAssociation assessment-private-rta-1-synth6981431077 deleted (2s) 
+ -  aws:ec2:Route assessment-public-route-synth6981431077 deleted (2s) 
+ -  aws:ec2:Subnet assessment-private-subnet-2-synth6981431077 deleting (0s) 
+ -  aws:cloudwatch:MetricAlarm api-throttled-requests-synth6981431077 deleting (0s) 
+ -  aws:ec2:Subnet assessment-public-subnet-2-synth6981431077 deleting (0s) 
+ -  aws:ec2:SecurityGroup assessment-rds-sg-synth6981431077 deleting (0s) 
+ -  aws:ec2:Subnet assessment-private-subnet-1-synth6981431077 deleting (0s) 
+ -  aws:ec2:Subnet assessment-public-subnet-1-synth6981431077 deleting (0s) 
+ -  aws:ec2:RouteTable assessment-public-rt-synth6981431077 deleting (0s) 
+ -  aws:ec2:InternetGateway assessment-igw-synth6981431077 deleting (0s) 
+ -  aws:secretsmanager:Secret assessment-db-secret-synth6981431077 deleting (0s) 
+ -  aws:apigatewayv2:Stage assessment-api-stage-synth6981431077 deleting (0s) 
+ -  aws:ec2:RouteTable assessment-private-rt-synth6981431077 deleting (0s) 
+ -  aws:ec2:SecurityGroup assessment-redis-sg-synth6981431077 deleting (0s) 
+ -  aws:kms:Alias assessment-key-alias-synth6981431077 deleting (0s) 
+ -  aws:cloudwatch:MetricAlarm api-high-error-rate-synth6981431077 deleting (0s) 
+ -  aws:kinesis:Stream assessment-submissions-synth6981431077 deleting (0s) 
+@ destroying....
+ -  aws:cloudwatch:MetricAlarm api-throttled-requests-synth6981431077 deleted (0.49s) 
+ -  aws:apigatewayv2:Stage assessment-api-stage-synth6981431077 deleted (0.77s) 
+ -  aws:secretsmanager:Secret assessment-db-secret-synth6981431077 deleted (0.78s) 
+ -  aws:cloudwatch:MetricAlarm api-high-error-rate-synth6981431077 deleted (0.95s) 
+ -  aws:kms:Alias assessment-key-alias-synth6981431077 deleted (1s) 
+@ destroying....
+ -  aws:ec2:Subnet assessment-private-subnet-1-synth6981431077 deleted (1s) 
+ -  aws:ec2:Subnet assessment-public-subnet-1-synth6981431077 deleted (1s) 
+ -  aws:ec2:Subnet assessment-public-subnet-2-synth6981431077 deleted (1s) 
+ -  aws:ec2:SecurityGroup assessment-rds-sg-synth6981431077 deleted (1s) 
+ -  aws:ec2:InternetGateway assessment-igw-synth6981431077 deleted (2s) 
+@ destroying....
+ -  aws:ec2:RouteTable assessment-public-rt-synth6981431077 deleted (2s) 
+ -  aws:ec2:RouteTable assessment-private-rt-synth6981431077 deleted (2s) 
+@ destroying.......
+ -  aws:ec2:Subnet assessment-private-subnet-2-synth6981431077 deleted (6s) 
+@ destroying....
+ -  aws:ec2:SecurityGroup assessment-redis-sg-synth6981431077 deleted (7s) 
+@ destroying........
+ -  aws:kinesis:Stream assessment-submissions-synth6981431077 deleted (12s) 
+ -  aws:cloudwatch:LogGroup api-gateway-logs-synth6981431077 deleting (0s) 
+ -  aws:iam:Role api-kinesis-role-synth6981431077 deleting (0s) 
+ -  aws:ec2:Vpc assessment-vpc-synth6981431077 deleting (0s) 
+ -  aws:kms:Key assessment-key-synth6981431077 deleting (0s) 
+ -  aws:elasticache:ParameterGroup assessment-redis-params-synth6981431077 deleting (0s) 
+ -  aws:rds:ParameterGroup assessment-db-params-synth6981431077 deleting (0s) 
+ -  aws:apigatewayv2:Api assessment-api-synth6981431077 deleting (0s) 
+ -  aws:sns:Topic assessment-alarms-synth6981431077 deleting (0s) 
+@ destroying....
+ -  aws:rds:ParameterGroup assessment-db-params-synth6981431077 deleted (0.45s) 
+ -  aws:elasticache:ParameterGroup assessment-redis-params-synth6981431077 deleted (0.62s) 
+ -  aws:iam:Role api-kinesis-role-synth6981431077 deleted (0.78s) 
+ -  aws:apigatewayv2:Api assessment-api-synth6981431077 deleted (0.79s) 
+ -  aws:ec2:Vpc assessment-vpc-synth6981431077 deleted (1s) 
+ -  aws:kms:Key assessment-key-synth6981431077 deleted (1s) 
+ -  aws:cloudwatch:LogGroup api-gateway-logs-synth6981431077 deleted (1s) 
+@ destroying....
+ -  aws:sns:Topic assessment-alarms-synth6981431077 deleted (1s) 
+ -  tap:stack:TapStack pulumi-infra deleting (0s) 
+ -  pulumi:pulumi:Stack pulumi-infra-TapStacksynth6981431077 deleting (0s) 
+ -  pulumi:pulumi:Stack pulumi-infra-TapStacksynth6981431077 deleted (0.01s) 
+Outputs:
+  - APIGatewayEndpoint     : "https://pi6csshdn7.execute-api.us-east-1.amazonaws.com"
+  - APIGatewayId           : "pi6csshdn7"
+  - KMSKeyArn              : "arn:aws:kms:us-east-1:342597974367:key/0a0ce0a1-e12d-49ce-aae8-f5f492c89865"
+  - KMSKeyId               : "0a0ce0a1-e12d-49ce-aae8-f5f492c89865"
+  - KinesisStreamArn       : "arn:aws:kinesis:us-east-1:342597974367:stream/assessment-submissions-synth6981431077"
+  - KinesisStreamName      : "assessment-submissions-synth6981431077"
+  - RDSEndpoint            : "assessment-db-synth6981431077.covy6ema0nuv.us-east-1.rds.amazonaws.com:5432"
+  - RDSInstanceId          : "db-5VKB6GAVHX23UX5MJWK73SP4R4"
+  - RedisClusterId         : "assessment-redis-synth6981431077"
+  - RedisEndpoint          : "assessment-redis-synth6981431077.rjrima.0001.use1.cache.amazonaws.com"
+  - SNSTopicArn            : "arn:aws:sns:us-east-1:342597974367:assessment-alarms-synth6981431077"
+  - SecretsManagerSecretArn: "arn:aws:secretsmanager:us-east-1:342597974367:secret:assessment-db-secret-synth6981431077-fs7feM"
+  - VPCId                  : "vpc-0dd3b40113aa2781b"
+
+Resources:
+    - 42 deleted
+
+Duration: 4m34s
+
+The resources in the stack have been deleted, but the history and configuration associated with the stack are still maintained. 
+If you want to remove the stack completely, run `pulumi stack rm TapStacksynth6981431077`.

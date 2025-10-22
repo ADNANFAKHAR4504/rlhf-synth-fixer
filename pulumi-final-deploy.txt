@@ -1,0 +1,43 @@
+Previewing update (TapStacksynth6981431077):
+
+@ previewing update.........
+ +  aws:apigatewayv2:Integration assessment-kinesis-integration-synth6981431077 create 
+ +  aws:iam:RolePolicyAttachment api-kinesis-policy-attachment-synth6981431077 create 
+ +  aws:apigatewayv2:Route assessment-submit-route-synth6981431077 create 
+ +  aws:cloudwatch:MetricAlarm rds-high-cpu-synth6981431077 create 
+    pulumi:pulumi:Stack pulumi-infra-TapStacksynth6981431077  
+Resources:
+    + 4 to create
+    38 unchanged
+
+Updating (TapStacksynth6981431077):
+
+@ updating........
+ +  aws:apigatewayv2:Integration assessment-kinesis-integration-synth6981431077 creating (0s) 
+ +  aws:iam:RolePolicyAttachment api-kinesis-policy-attachment-synth6981431077 creating (0s) 
+ +  aws:cloudwatch:MetricAlarm rds-high-cpu-synth6981431077 creating (0s) 
+@ updating....
+ +  aws:apigatewayv2:Integration assessment-kinesis-integration-synth6981431077 creating (1s) error:   sdk-v2/provider2.go:572: sdk.helper_schema: creating API Gateway v2 Integration: operation error ApiGatewayV2: CreateIntegration, https response error StatusCode: 400, RequestID: a696f535-4971-4034-a7ab-16bfb574cf0c, BadRequestException: Operation: Kinesis-PutRecord requires enabling passthrough, or defining all of the following parameters in the parameter mapping: [StreamName, Data, PartitionKey]: provider=aws@7.8.0
+ +  aws:apigatewayv2:Integration assessment-kinesis-integration-synth6981431077 creating (1s) error: 1 error occurred:
+ +  aws:apigatewayv2:Integration assessment-kinesis-integration-synth6981431077 **creating failed** error: 1 error occurred:
+@ updating....
+ +  aws:iam:RolePolicyAttachment api-kinesis-policy-attachment-synth6981431077 created (1s) 
+ +  aws:cloudwatch:MetricAlarm rds-high-cpu-synth6981431077 created (2s) 
+    pulumi:pulumi:Stack pulumi-infra-TapStacksynth6981431077 running error: update failed
+@ updating........
+    pulumi:pulumi:Stack pulumi-infra-TapStacksynth6981431077 **failed** 1 error
+Diagnostics:
+  aws:apigatewayv2:Integration (assessment-kinesis-integration-synth6981431077):
+    error:   sdk-v2/provider2.go:572: sdk.helper_schema: creating API Gateway v2 Integration: operation error ApiGatewayV2: CreateIntegration, https response error StatusCode: 400, RequestID: a696f535-4971-4034-a7ab-16bfb574cf0c, BadRequestException: Operation: Kinesis-PutRecord requires enabling passthrough, or defining all of the following parameters in the parameter mapping: [StreamName, Data, PartitionKey]: provider=aws@7.8.0
+    error: 1 error occurred:
+    	* creating API Gateway v2 Integration: operation error ApiGatewayV2: CreateIntegration, https response error StatusCode: 400, RequestID: a696f535-4971-4034-a7ab-16bfb574cf0c, BadRequestException: Operation: Kinesis-PutRecord requires enabling passthrough, or defining all of the following parameters in the parameter mapping: [StreamName, Data, PartitionKey]
+
+  pulumi:pulumi:Stack (pulumi-infra-TapStacksynth6981431077):
+    error: update failed
+
+Resources:
+    + 2 created
+    38 unchanged
+
+Duration: 8s
+
