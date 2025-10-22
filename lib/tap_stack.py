@@ -1378,7 +1378,7 @@ class TapStack(TerraformStack):
                     network_configuration={
                         "subnets": [private_subnet_1.id, private_subnet_2.id],
                         "security_groups": [ecs_sg.id],
-                        "assign_public_ip": "DISABLED"
+                        "assign_public_ip": False
                     }
                 ),
                 retry_policy=SchedulerScheduleTargetRetryPolicy(
