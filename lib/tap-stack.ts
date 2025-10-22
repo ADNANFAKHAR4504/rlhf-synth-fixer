@@ -928,7 +928,12 @@ def lambda_handler(event, context):
       },
     });
 
-    new LbListener(this, 'alb-listener', {
+    // Add lifecycle management to handle replacement properly
+    targetGroup.addOverride('lifecycle', {
+      create_before_destroy: true
+    });
+
+    const albListener = new LbListener(this, 'alb-listener', {
       loadBalancerArn: alb.arn,
       port: 80,
       protocol: 'HTTP',
@@ -938,6 +943,7 @@ def lambda_handler(event, context):
           targetGroupArn: targetGroup.arn,
         },
       ],
+      dependsOn: [targetGroup],
       tags: {
         Name: `edu-alb-listener-${environmentSuffix}`,
         Environment: environmentSuffix,
@@ -966,6 +972,7 @@ def lambda_handler(event, context):
       ],
       healthCheckGracePeriodSeconds: 60,
       enableExecuteCommand: true,
+      dependsOn: [targetGroup, albListener],
       tags: {
         Name: `edu-ecs-service-${environmentSuffix}`,
         Environment: environmentSuffix,
