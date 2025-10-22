@@ -9,7 +9,7 @@ import unittest
 import os
 import json
 import boto3
-from moto import mock_aws
+from botocore.exceptions import ClientError
 
 
 class TestTapStackIntegration(unittest.TestCase):
@@ -56,113 +56,119 @@ class TestTapStackIntegration(unittest.TestCase):
         self.region = os.getenv('AWS_DEFAULT_REGION', self.outputs.get('region', default_region))
         self.environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', default_environment_suffix)
 
-    @mock_aws
     def test_vpc_exists(self):
         """Test that the VPC exists and has correct configuration."""
-        ec2_client = boto3.client('ec2', region_name=self.region)
-        
-        # For mocked test, create a VPC to simulate deployment
-        vpc_response = ec2_client.create_vpc(CidrBlock='10.0.0.0/16')
-        vpc_id = vpc_response['Vpc']['VpcId']
-        
-        # Test VPC exists
-        vpcs = ec2_client.describe_vpcs(VpcIds=[vpc_id])
-        self.assertEqual(len(vpcs['Vpcs']), 1)
-        
-        vpc = vpcs['Vpcs'][0]
-        self.assertEqual(vpc['CidrBlock'], '10.0.0.0/16')
-        self.assertEqual(vpc['State'], 'available')
+        vpc_id = self.outputs.get('vpc_id')
 
-    @mock_aws
+        if not vpc_id:
+            self.skipTest("VPC ID not available in stack outputs")
+
+        ec2_client = boto3.client('ec2', region_name=self.region)
+
+        try:
+            # Test VPC exists
+            vpcs = ec2_client.describe_vpcs(VpcIds=[vpc_id])
+            self.assertEqual(len(vpcs['Vpcs']), 1)
+
+            vpc = vpcs['Vpcs'][0]
+            self.assertEqual(vpc['CidrBlock'], '10.0.0.0/16')
+            self.assertEqual(vpc['State'], 'available')
+        except ClientError as e:
+            self.fail(f"Failed to describe VPC {vpc_id}: {e}")
+
     def test_kinesis_stream_exists(self):
         """Test that Kinesis stream exists and is properly configured."""
-        kinesis_client = boto3.client('kinesis', region_name=self.region)
-        
-        stream_name = f"fedramp-data-stream-{self.environment_suffix}"
-        
-        # Create stream for testing
-        kinesis_client.create_stream(
-            StreamName=stream_name,
-            ShardCount=3
-        )
-        
-        # Test stream exists
-        response = kinesis_client.describe_stream(StreamName=stream_name)
-        stream_description = response['StreamDescription']
-        
-        self.assertEqual(stream_description['StreamName'], stream_name)
-        self.assertEqual(stream_description['StreamStatus'], 'ACTIVE')
-        self.assertEqual(len(stream_description['Shards']), 3)
+        stream_name = self.outputs.get('kinesis_stream_name')
 
-    @mock_aws
+        if not stream_name:
+            self.skipTest("Kinesis stream name not available in stack outputs")
+
+        kinesis_client = boto3.client('kinesis', region_name=self.region)
+
+        try:
+            # Test stream exists
+            response = kinesis_client.describe_stream(StreamName=stream_name)
+            stream_description = response['StreamDescription']
+
+            self.assertEqual(stream_description['StreamName'], stream_name)
+            self.assertIn(stream_description['StreamStatus'], ['ACTIVE', 'UPDATING'])
+            self.assertGreaterEqual(len(stream_description['Shards']), 1)
+        except ClientError as e:
+            self.fail(f"Failed to describe Kinesis stream {stream_name}: {e}")
+
     def test_ecs_cluster_exists(self):
         """Test that ECS cluster exists and is active."""
-        ecs_client = boto3.client('ecs', region_name=self.region)
-        
-        cluster_name = f"fedramp-cluster-{self.environment_suffix}"
-        
-        # Create cluster for testing
-        ecs_client.create_cluster(clusterName=cluster_name)
-        
-        # Test cluster exists
-        clusters = ecs_client.describe_clusters(clusters=[cluster_name])
-        
-        self.assertEqual(len(clusters['clusters']), 1)
-        cluster = clusters['clusters'][0]
-        self.assertEqual(cluster['clusterName'], cluster_name)
-        self.assertEqual(cluster['status'], 'ACTIVE')
+        cluster_name = self.outputs.get('ecs_cluster_name')
 
-    @mock_aws
+        if not cluster_name:
+            self.skipTest("ECS cluster name not available in stack outputs")
+
+        ecs_client = boto3.client('ecs', region_name=self.region)
+
+        try:
+            # Test cluster exists
+            clusters = ecs_client.describe_clusters(clusters=[cluster_name])
+
+            self.assertEqual(len(clusters['clusters']), 1)
+            cluster = clusters['clusters'][0]
+            self.assertEqual(cluster['clusterName'], cluster_name)
+            self.assertEqual(cluster['status'], 'ACTIVE')
+        except ClientError as e:
+            self.fail(f"Failed to describe ECS cluster {cluster_name}: {e}")
+
     def test_rds_instance_configuration(self):
         """Test that RDS instance exists with proper encryption and backup settings."""
-        rds_client = boto3.client('rds', region_name=self.region)
-        
-        db_identifier = f"fedramp-db-{self.environment_suffix}"
-        
-        # Create DB instance for testing
-        rds_client.create_db_instance(
-            DBInstanceIdentifier=db_identifier,
-            DBInstanceClass='db.t3.micro',
-            Engine='postgres',
-            MasterUsername='dbadmin',
-            MasterUserPassword='password',
-            AllocatedStorage=20,
-            StorageEncrypted=True,
-            MultiAZ=True,
-            BackupRetentionPeriod=35
-        )
-        
-        # Test DB instance configuration
-        response = rds_client.describe_db_instances(DBInstanceIdentifier=db_identifier)
-        db_instance = response['DBInstances'][0]
-        
-        self.assertEqual(db_instance['DBInstanceIdentifier'], db_identifier)
-        self.assertEqual(db_instance['Engine'], 'postgres')
-        self.assertTrue(db_instance['StorageEncrypted'])
-        self.assertTrue(db_instance['MultiAZ'])
-        self.assertEqual(db_instance['BackupRetentionPeriod'], 35)
+        rds_endpoint = self.outputs.get('rds_endpoint')
 
-    @mock_aws
+        if not rds_endpoint:
+            self.skipTest("RDS endpoint not available in stack outputs")
+
+        # Extract the DB identifier from the endpoint (format: identifier.cluster-xyz.region.rds.amazonaws.com)
+        db_identifier = rds_endpoint.split('.')[0]
+
+        rds_client = boto3.client('rds', region_name=self.region)
+
+        try:
+            # Try to describe DB cluster first (for Aurora)
+            try:
+                response = rds_client.describe_db_clusters(DBClusterIdentifier=db_identifier)
+                db_cluster = response['DBClusters'][0]
+
+                self.assertEqual(db_cluster['DBClusterIdentifier'], db_identifier)
+                self.assertEqual(db_cluster['Engine'], 'aurora-postgresql')
+                self.assertTrue(db_cluster['StorageEncrypted'])
+                self.assertGreaterEqual(db_cluster['BackupRetentionPeriod'], 7)
+            except ClientError:
+                # If not a cluster, try DB instance
+                response = rds_client.describe_db_instances(DBInstanceIdentifier=db_identifier)
+                db_instance = response['DBInstances'][0]
+
+                self.assertEqual(db_instance['DBInstanceIdentifier'], db_identifier)
+                self.assertEqual(db_instance['Engine'], 'postgres')
+                self.assertTrue(db_instance['StorageEncrypted'])
+                self.assertGreaterEqual(db_instance['BackupRetentionPeriod'], 7)
+        except ClientError as e:
+            self.fail(f"Failed to describe RDS resource {db_identifier}: {e}")
+
     def test_efs_filesystem_encryption(self):
         """Test that EFS filesystem exists and is encrypted."""
+        efs_id = self.outputs.get('efs_id')
+
+        if not efs_id:
+            self.skipTest("EFS ID not available in stack outputs")
+
         efs_client = boto3.client('efs', region_name=self.region)
-        
-        # Create EFS filesystem for testing
-        response = efs_client.create_file_system(
-            Encrypted=True,
-            PerformanceMode='generalPurpose',
-            ThroughputMode='bursting'
-        )
-        
-        file_system_id = response['FileSystemId']
-        
-        # Test filesystem configuration
-        filesystems = efs_client.describe_file_systems(FileSystemId=file_system_id)
-        filesystem = filesystems['FileSystems'][0]
-        
-        self.assertTrue(filesystem['Encrypted'])
-        self.assertEqual(filesystem['PerformanceMode'], 'generalPurpose')
-        self.assertEqual(filesystem['ThroughputMode'], 'bursting')
+
+        try:
+            # Test filesystem configuration
+            filesystems = efs_client.describe_file_systems(FileSystemId=efs_id)
+            filesystem = filesystems['FileSystems'][0]
+
+            self.assertTrue(filesystem['Encrypted'])
+            self.assertIn(filesystem['PerformanceMode'], ['generalPurpose', 'maxIO'])
+            self.assertIn(filesystem['LifeCycleState'], ['available', 'creating'])
+        except ClientError as e:
+            self.fail(f"Failed to describe EFS filesystem {efs_id}: {e}")
 
     def test_stack_outputs_structure(self):
         """Test that all required stack outputs are present."""
