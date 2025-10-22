@@ -20,7 +20,11 @@ const loadCfnOutputs = () => {
       cfnOutputs = JSON.parse(outputsContent);
       console.log('✅ Loaded CloudFormation outputs from file');
     } catch (error) {
-      console.error('Could not parse cfn-outputs/flat-outputs.json:', error);
+      if (error instanceof Error) {
+        console.error('Could not parse cfn-outputs/flat-outputs.json:', error.message);
+      } else {
+        console.error('Could not parse cfn-outputs/flat-outputs.json:', error);
+      }
     }
   } else {
     console.log('⚠️ cfn-outputs/flat-outputs.json not found, using fallback values');
@@ -73,7 +77,11 @@ const pollExecution = async (executionArn: string) => {
       }
       await new Promise(resolve => setTimeout(resolve, 5000));
     } catch (error) {
-      console.error(`Polling attempt ${i + 1} failed:`, error);
+      if (error instanceof Error) {
+        console.error(`Polling attempt ${i + 1} failed:`, error.message);
+      } else {
+        console.error(`Polling attempt ${i + 1} failed:`, error);
+      }
       if (i === 29) throw error; // Re-throw on last attempt
       await new Promise(resolve => setTimeout(resolve, 5000));
     }
@@ -150,10 +158,14 @@ describe('TapStack End-to-End Integration Tests', () => {
           expect(output.s3Location || output.s3Url).toBeDefined();
         }
       } catch (error) {
-        console.error('Success path validation failed:', error);
-        if (error.name === 'AccessDeniedException') {
-          console.warn('⚠️ Skipping test due to insufficient AWS permissions');
-          return;
+        if (error instanceof Error) {
+          console.error('Success path validation failed:', error.message);
+          if (error.name === 'AccessDeniedException') {
+            console.warn('⚠️ Skipping test due to insufficient AWS permissions');
+            return;
+          }
+        } else {
+          console.error('Success path validation failed:', error);
         }
         throw error;
       }
@@ -196,10 +208,14 @@ describe('TapStack End-to-End Integration Tests', () => {
           }
         }
       } catch (error) {
-        console.error('Failure path validation failed:', error);
-        if (error.name === 'AccessDeniedException') {
-          console.warn('⚠️ Skipping test due to insufficient AWS permissions');
-          return;
+        if (error instanceof Error) {
+          console.error('Failure path validation failed:', error.message);
+          if (error.name === 'AccessDeniedException') {
+            console.warn('⚠️ Skipping test due to insufficient AWS permissions');
+            return;
+          }
+        } else {
+          console.error('Failure path validation failed:', error);
         }
         throw error;
       }
@@ -233,10 +249,14 @@ describe('TapStack End-to-End Integration Tests', () => {
 
         expect(status).toBe('FAILED');
       } catch (error) {
-        console.error('Delivery failure validation failed:', error);
-        if (error.name === 'AccessDeniedException') {
-          console.warn('⚠️ Skipping test due to insufficient AWS permissions');
-          return;
+        if (error instanceof Error) {
+          console.error('Delivery failure validation failed:', error.message);
+          if (error.name === 'AccessDeniedException') {
+            console.warn('⚠️ Skipping test due to insufficient AWS permissions');
+            return;
+          }
+        } else {
+          console.error('Delivery failure validation failed:', error);
         }
         throw error;
       }
@@ -273,9 +293,13 @@ describe('TapStack End-to-End Integration Tests', () => {
         }
         console.log('✅ Data integrity test setup completed');
       } catch (error) {
-        console.error('Failed to setup data integrity tests:', error);
-        if (error.name === 'AccessDeniedException') {
-          console.warn('⚠️ Insufficient AWS permissions for test setup');
+        if (error instanceof Error) {
+          console.error('Failed to setup data integrity tests:', error.message);
+          if (error.name === 'AccessDeniedException') {
+            console.warn('⚠️ Insufficient AWS permissions for test setup');
+          }
+        } else {
+          console.error('Failed to setup data integrity tests:', error);
         }
       }
     }, 200000);
@@ -291,7 +315,11 @@ describe('TapStack End-to-End Integration Tests', () => {
           await s3Client.send(deleteObjectCommand);
           console.log('✅ Cleaned up S3 test objects');
         } catch (error) {
-          console.error('Failed to cleanup S3 objects:', error);
+          if (error instanceof Error) {
+            console.error('Failed to cleanup S3 objects:', error.message);
+          } else {
+            console.error('Failed to cleanup S3 objects:', error);
+          }
         }
       }
     });
@@ -321,10 +349,14 @@ describe('TapStack End-to-End Integration Tests', () => {
           expect(s3Content).toHaveProperty('jurisdiction');
         }
       } catch (error) {
-        console.error('Report generation test failed - S3 object may not exist:', error);
-        if (error.name === 'NoSuchKey' || error.name === 'AccessDenied') {
-          console.warn('⚠️ S3 object not accessible, skipping test');
-          return;
+        if (error instanceof Error) {
+          console.error('Report generation test failed - S3 object may not exist:', error.message);
+          if (error.name === 'NoSuchKey' || error.name === 'AccessDenied') {
+            console.warn('⚠️ S3 object not accessible, skipping test');
+            return;
+          }
+        } else {
+          console.error('Report generation test failed - S3 object may not exist:', error);
         }
         throw error;
       }
@@ -347,10 +379,14 @@ describe('TapStack End-to-End Integration Tests', () => {
         // KMS Encryption Check
         expect(s3Object.ServerSideEncryption).toBe('aws:kms');
       } catch (error) {
-        console.error('S3 versioning test failed - object may not exist:', error);
-        if (error.name === 'NoSuchKey' || error.name === 'AccessDenied') {
-          console.warn('⚠️ S3 object not accessible, skipping test');
-          return;
+        if (error instanceof Error) {
+          console.error('S3 versioning test failed - object may not exist:', error.message);
+          if (error.name === 'NoSuchKey' || error.name === 'AccessDenied') {
+            console.warn('⚠️ S3 object not accessible, skipping test');
+            return;
+          }
+        } else {
+          console.error('S3 versioning test failed - object may not exist:', error);
         }
         throw error;
       }
@@ -380,9 +416,13 @@ describe('TapStack End-to-End Integration Tests', () => {
         reportId = output.reportId;
         console.log('✅ Audit test setup completed');
       } catch (error) {
-        console.error('Failed to setup audit tests:', error);
-        if (error.name === 'AccessDeniedException') {
-          console.warn('⚠️ Insufficient AWS permissions for audit test setup');
+        if (error instanceof Error) {
+          console.error('Failed to setup audit tests:', error.message);
+          if (error.name === 'AccessDeniedException') {
+            console.warn('⚠️ Insufficient AWS permissions for audit test setup');
+          }
+        } else {
+          console.error('Failed to setup audit tests:', error);
         }
       }
     }, 200000);
@@ -418,14 +458,15 @@ describe('TapStack End-to-End Integration Tests', () => {
             expect(details.sesMessageId).toMatch(/^[\w-]+$/);
             expect(details.s3ReportPath).toContain(reportId);
           }
-        } else {
-          console.warn('⚠️ No audit records found for report:', reportId);
-        }
       } catch (error) {
-        console.error('Database query failed:', error);
-        if (error.message?.includes('not available')) {
-          console.warn('⚠️ Skipping test due to database unavailability');
-          return;
+        if (error instanceof Error) {
+          console.error('Database query failed:', error.message);
+          if (error.message?.includes('not available')) {
+            console.warn('⚠️ Skipping test due to database unavailability');
+            return;
+          }
+        } else {
+          console.error('Database query failed:', error);
         }
         throw error;
       }
@@ -451,10 +492,14 @@ describe('TapStack End-to-End Integration Tests', () => {
           console.warn('⚠️ No status records found for report:', reportId);
         }
       } catch (error) {
-        console.error('Database query failed:', error);
-        if (error.message?.includes('not available')) {
-          console.warn('⚠️ Skipping test due to database unavailability');
-          return;
+        if (error instanceof Error) {
+          console.error('Database query failed:', error.message);
+          if (error.message?.includes('not available')) {
+            console.warn('⚠️ Skipping test due to database unavailability');
+            return;
+          }
+        } else {
+          console.error('Database query failed:', error);
         }
         throw error;
       }
@@ -485,7 +530,11 @@ describe('TapStack End-to-End Integration Tests', () => {
 
         console.log(`CloudWatch alarm test completed. Found ${MetricAlarms?.length || 0} matching alarms`);
       } catch (error) {
-        console.error('CloudWatch alarm test - alarm may not exist yet or insufficient permissions:', error);
+        if (error instanceof Error) {
+          console.error('CloudWatch alarm test - alarm may not exist yet or insufficient permissions:', error.message);
+        } else {
+          console.error('CloudWatch alarm test - alarm may not exist yet or insufficient permissions:', error);
+        }
       }
     }, 60000);
   });
@@ -533,7 +582,11 @@ describe('TapStack Comprehensive End-to-End Integration Test Scenarios', () => {
           Key: key
         }));
       } catch (error) {
-        console.error(`Failed to cleanup S3 object ${key}:`, error);
+        if (error instanceof Error) {
+          console.error(`Failed to cleanup S3 object ${key}:`, error.message);
+        } else {
+          console.error(`Failed to cleanup S3 object ${key}:`, error);
+        }
       }
     }
   };
@@ -569,7 +622,11 @@ describe('TapStack Comprehensive End-to-End Integration Test Scenarios', () => {
 
         console.log(`Daily trigger test completed. Found ${rulesResponse.Rules?.length || 0} EventBridge rules`);
       } catch (error) {
-        console.error('EventBridge test - rules may not exist yet or insufficient permissions:', error);
+        if (error instanceof Error) {
+          console.error('EventBridge test - rules may not exist yet or insufficient permissions:', error.message);
+        } else {
+          console.error('EventBridge test - rules may not exist yet or insufficient permissions:', error);
+        }
         // Don't fail the test if rules don't exist, as this is a configuration test
       }
     }, 30000);
@@ -748,7 +805,11 @@ describe('TapStack Comprehensive End-to-End Integration Test Scenarios', () => {
 
         console.log('Enhanced S3 lifecycle policy validation completed');
       } catch (error) {
-        console.error('S3 lifecycle policy test - bucket may not exist yet or insufficient permissions:', error);
+        if (error instanceof Error) {
+          console.error('S3 lifecycle policy test - bucket may not exist yet or insufficient permissions:', error.message);
+        } else {
+          console.error('S3 lifecycle policy test - bucket may not exist yet or insufficient permissions:', error);
+        }
       }
     }, 30000);
 
@@ -846,7 +907,11 @@ describe('TapStack Comprehensive End-to-End Integration Test Scenarios', () => {
 
         console.log(`Enhanced CloudTrail auditing test completed. Found ${reportsBucketEvents?.length || 0} PutObject events`);
       } catch (error) {
-        console.error('CloudTrail auditing test - may not have sufficient permissions or events:', error);
+        if (error instanceof Error) {
+          console.error('CloudTrail auditing test - may not have sufficient permissions or events:', error.message);
+        } else {
+          console.error('CloudTrail auditing test - may not have sufficient permissions or events:', error);
+        }
       }
     }, 60000);
 
@@ -882,7 +947,11 @@ describe('TapStack Comprehensive End-to-End Integration Test Scenarios', () => {
           console.log('Enhanced CloudWatch alarm test - no matching alarms found');
         }
       } catch (error) {
-        console.error('Enhanced CloudWatch alarm test - alarm may not exist yet or insufficient permissions:', error);
+        if (error instanceof Error) {
+          console.error('Enhanced CloudWatch alarm test - alarm may not exist yet or insufficient permissions:', error.message);
+        } else {
+          console.error('Enhanced CloudWatch alarm test - alarm may not exist yet or insufficient permissions:', error);
+        }
       }
     }, 30000);
 
@@ -919,7 +988,11 @@ describe('TapStack Comprehensive End-to-End Integration Test Scenarios', () => {
 
         console.log(`Enhanced monthly export query completed in ${queryDuration}ms with ${exportResult.records?.length || 0} result rows`);
       } catch (error) {
-        console.error('Enhanced monthly summary export test skipped - may require larger dataset:', error);
+        if (error instanceof Error) {
+          console.error('Enhanced monthly summary export test skipped - may require larger dataset:', error.message);
+        } else {
+          console.error('Enhanced monthly summary export test skipped - may require larger dataset:', error);
+        }
         // This test may fail in new environments without sufficient test data
       }
     }, 30000);
@@ -956,7 +1029,11 @@ describe('TapStack Comprehensive End-to-End Integration Test Scenarios', () => {
 
         console.log('Enhanced Secrets Manager integration test passed');
       } catch (error) {
-        console.error('Secrets Manager test - secret may not exist yet or insufficient permissions:', error);
+        if (error instanceof Error) {
+          console.error('Secrets Manager test - secret may not exist yet or insufficient permissions:', error.message);
+        } else {
+          console.error('Secrets Manager test - secret may not exist yet or insufficient permissions:', error);
+        }
       }
     }, 30000);
 
@@ -973,7 +1050,11 @@ describe('TapStack Comprehensive End-to-End Integration Test Scenarios', () => {
         await queryDatabase("SELECT 'enhanced_network_test' as test_result", []);
         console.log('Enhanced network security test passed - Lambda can access Aurora in VPC');
       } catch (error) {
-        console.error(`Enhanced network security test - database may not be accessible: ${error}`);
+        if (error instanceof Error) {
+          console.error(`Enhanced network security test - database may not be accessible: ${error.message}`);
+        } else {
+          console.error(`Enhanced network security test - database may not be accessible: ${error}`);
+        }
       }
     }, 30000);
 
