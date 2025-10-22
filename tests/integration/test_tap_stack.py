@@ -10,7 +10,7 @@ import os
 import json
 import boto3
 import requests
-from moto import mock_ec2, mock_rds, mock_ecs, mock_elasticache, mock_apigatewayv2
+from moto import mock_aws
 
 
 class TestTapStackLiveIntegration(unittest.TestCase):
