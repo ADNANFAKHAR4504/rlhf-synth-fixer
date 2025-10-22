@@ -630,7 +630,6 @@ describe('TapStack Comprehensive End-to-End Integration Test Scenarios', () => {
         } else {
           console.error('EventBridge test - rules may not exist yet or insufficient permissions:', error);
         }
-        // Don't fail the test if rules don't exist, as this is a configuration test
       }
     }, 30000);
 
