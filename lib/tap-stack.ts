@@ -753,7 +753,7 @@ export class TapStack extends TerraformStack {
       engine: 'aurora-postgresql',
       engineVersion: '15.4',
       databaseName: 'patientdb',
-      masterUsername: 'admin',
+      masterUsername: 'dbadmin',
       masterPassword: 'ChangeMe123!ComplexP@ssw0rd',
       dbSubnetGroupName: dbSubnetGroup.name,
       vpcSecurityGroupIds: [dbSecurityGroup.id],
