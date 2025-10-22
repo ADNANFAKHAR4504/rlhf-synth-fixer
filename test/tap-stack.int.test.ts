@@ -130,11 +130,12 @@ describeIf(cfnOutputsExist)('Multi-Region Independent Cluster Live Tests', () =>
 
     beforeAll(async () => {
       console.log(`Fetching record sets from Zone ID: ${outputs.HostedZoneId}`);
+      // --- FIX: Remove StartRecordName and StartRecordType to fetch all records ---
       const response = await route53.listResourceRecordSets({
         HostedZoneId: outputs.HostedZoneId,
-        StartRecordName: outputs.Route53FailoverDNS,
-        StartRecordType: 'A',
       }).promise();
+      // --- END FIX ---
+
       // Filter just the 'A' records for our app
       recordSets = response.ResourceRecordSets.filter(
         r => r.Name === `${outputs.Route53FailoverDNS}.` && r.Type === 'A'
