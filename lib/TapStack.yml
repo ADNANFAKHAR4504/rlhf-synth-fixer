@@ -1124,10 +1124,6 @@ Resources:
           CloudFrontDefaultCertificate: true
         HttpVersion: http2
         IPV6Enabled: true
-        Logging:
-          IncludeCookies: false
-          Bucket: !GetAtt StaticContentBucket.DomainName
-          Prefix: cloudfront-logs/
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentName}-CloudFront'
