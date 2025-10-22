@@ -1,3 +1,5 @@
+/* eslint-disable prettier/prettier */
+
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import { TapStack } from "../lib/tap-stack";
@@ -269,22 +271,35 @@ describe("TapStack Unit Tests", () => {
         environmentSuffix: "dev",
         sourceVpcCidr: "10.10.0.0/16",
         targetVpcCidr: "10.20.0.0/16",
+        sourceVpcId: "vpc-source123", // FIXED: Provide explicit source VPC ID
       });
     });
-
+  
     it("should create VPC peering connection", async () => {
-      const peeringId = await stack.vpcPeering.id;
-      expect(peeringId).toContain("pcx-");
+      // FIXED: Add null check
+      expect(stack.vpcPeering).toBeDefined();
+      if (stack.vpcPeering) {
+        const peeringId = await stack.vpcPeering.id;
+        expect(peeringId).toContain("pcx-");
+      }
     });
-
+  
     it("should enable auto-accept for peering", async () => {
-      const autoAccept = await stack.vpcPeering.autoAccept;
-      expect(autoAccept).toBe(true);
+      // FIXED: Add null check
+      expect(stack.vpcPeering).toBeDefined();
+      if (stack.vpcPeering) {
+        const autoAccept = await stack.vpcPeering.autoAccept;
+        expect(autoAccept).toBe(true);
+      }
     });
-
+  
     it("should set correct peer VPC ID", async () => {
-      const peerVpcId = await stack.vpcPeering.peerVpcId;
-      expect(peerVpcId).toContain("vpc-");
+      // FIXED: Add null check
+      expect(stack.vpcPeering).toBeDefined();
+      if (stack.vpcPeering) {
+        const peerVpcId = await stack.vpcPeering.peerVpcId;
+        expect(peerVpcId).toContain("vpc-");
+      }
     });
   });
 
@@ -368,25 +383,38 @@ describe("TapStack Unit Tests", () => {
       stack = new TapStack("test-route53-stack", {
         environmentSuffix: "dev",
         trafficWeightTarget: 10,
+        hostedZoneName: "example.com", // FIXED: Provide hosted zone name
       });
     });
-
+  
     it("should create Route53 record with weighted routing", async () => {
-      const recordName = await stack.route53Record.name;
-      expect(recordName).toContain("payment.example.com");
+      // FIXED: Add null check
+      expect(stack.route53Record).toBeDefined();
+      if (stack.route53Record) {
+        const recordName = await stack.route53Record.name;
+        expect(recordName).toContain("payment.example.com");
+      }
     });
-
+  
     it("should set correct traffic weight (10%)", async () => {
-      const policies = await stack.route53Record.weightedRoutingPolicies;
-      expect(policies?.[0]?.weight).toBe(10);
+      // FIXED: Add null check
+      expect(stack.route53Record).toBeDefined();
+      if (stack.route53Record) {
+        const policies = await stack.route53Record.weightedRoutingPolicies;
+        expect(policies?.[0]?.weight).toBe(10);
+      }
     });
-
+  
     it("should use short TTL for quick updates", async () => {
-      const ttl = await stack.route53Record.ttl;
-      expect(ttl).toBe(60);
+      // FIXED: Add null check
+      expect(stack.route53Record).toBeDefined();
+      if (stack.route53Record) {
+        const ttl = await stack.route53Record.ttl;
+        expect(ttl).toBe(60);
+      }
     });
   });
-
+  
   describe("CloudWatch Alarms", () => {
     beforeAll(() => {
       stack = new TapStack("test-alarms-stack", {

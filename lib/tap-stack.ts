@@ -1,3 +1,5 @@
+/* eslint-disable prettier/prettier */
+
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as fs from "fs";
@@ -6,12 +8,16 @@ import * as path from "path";
 export interface TapStackProps {
   environmentSuffix: string;
   sourceVpcCidr?: string;
+  sourceVpcId?: string; // NEW: Add explicit VPC ID
+  sourceRouteTableId?: string; // NEW: Add explicit route table ID
   targetVpcCidr?: string;
   availabilityZones?: number;
   migrationPhase?: "initial" | "peering" | "replication" | "cutover" | "complete";
   trafficWeightTarget?: number;
   errorThreshold?: number;
   rollbackEnabled?: boolean;
+  hostedZoneName?: string; // NEW: Make hosted zone optional
+  certificateArn?: string; // NEW: Make certificate ARN configurable
 }
 
 interface MigrationMetrics {
@@ -46,16 +52,17 @@ export interface StackOutputs {
 export class TapStack extends pulumi.ComponentResource {
   public readonly targetVpc: aws.ec2.Vpc;
   public readonly targetSubnets: aws.ec2.Subnet[];
-  public readonly vpcPeering: aws.ec2.VpcPeeringConnection;
+  public readonly vpcPeering?: aws.ec2.VpcPeeringConnection; // Make optional
   public readonly targetRdsInstance: aws.rds.Instance;
   public readonly targetLoadBalancer: aws.lb.LoadBalancer;
-  public readonly route53Record: aws.route53.Record;
+  public readonly route53Record?: aws.route53.Record; // Make optional
   public readonly migrationDashboard: aws.cloudwatch.Dashboard;
   public readonly connectionAlarm: aws.cloudwatch.MetricAlarm;
   public readonly errorAlarm: aws.cloudwatch.MetricAlarm;
   public readonly replicationLagAlarm: aws.cloudwatch.MetricAlarm;
   public readonly rollbackTopic: aws.sns.Topic;
   public readonly outputs: pulumi.Output<StackOutputs>;
+
   private readonly config: TapStackProps;
   private readonly randomSuffix: string;
 
@@ -64,12 +71,16 @@ export class TapStack extends pulumi.ComponentResource {
 
     this.config = {
       sourceVpcCidr: props.sourceVpcCidr || "10.10.0.0/16",
+      sourceVpcId: props.sourceVpcId,
+      sourceRouteTableId: props.sourceRouteTableId,
       targetVpcCidr: props.targetVpcCidr || "10.20.0.0/16",
       availabilityZones: props.availabilityZones || 3,
       migrationPhase: props.migrationPhase || "initial",
       trafficWeightTarget: props.trafficWeightTarget || 0,
       errorThreshold: props.errorThreshold || 5,
       rollbackEnabled: props.rollbackEnabled !== false,
+      hostedZoneName: props.hostedZoneName,
+      certificateArn: props.certificateArn,
       ...props,
     };
 
@@ -88,11 +99,12 @@ export class TapStack extends pulumi.ComponentResource {
     // Create security groups
     const targetSecurityGroup = this.createSecurityGroup();
 
-    // 2. Establish VPC peering
-    this.vpcPeering = this.createVpcPeering();
-
-    // Update route tables for peering
-    this.updateRouteTables();
+    // 2. Establish VPC peering (only if source VPC ID is provided)
+    if (this.config.sourceVpcId) {
+      this.vpcPeering = this.createVpcPeering();
+      // Update route tables for peering
+      this.updateRouteTables();
+    }
 
     // 3. Replicate RDS PostgreSQL instance
     this.targetRdsInstance = this.createTargetRdsInstance(targetSecurityGroup);
@@ -107,8 +119,10 @@ export class TapStack extends pulumi.ComponentResource {
     // 5. Transfer S3 configurations
     const targetBucket = this.createS3Bucket();
 
-    // 6. Configure Route53 weighted routing
-    this.route53Record = this.configureRoute53WeightedRouting();
+    // 6. Configure Route53 weighted routing (only if hosted zone is provided)
+    if (this.config.hostedZoneName) {
+      this.route53Record = this.configureRoute53WeightedRouting();
+    }
 
     // 7. Implement CloudWatch alarms
     const alarms = this.createCloudWatchAlarms();
@@ -129,11 +143,11 @@ export class TapStack extends pulumi.ComponentResource {
 
     this.registerOutputs({
       targetVpcId: this.targetVpc.id,
-      vpcPeeringId: this.vpcPeering.id,
+      vpcPeeringId: this.vpcPeering?.id,
       targetRdsEndpoint: this.targetRdsInstance.endpoint,
       loadBalancerDns: this.targetLoadBalancer.dnsName,
       dashboardUrl: pulumi.interpolate`https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=${this.migrationDashboard.dashboardName}`,
-      rollbackCommand: pulumi.interpolate`pulumi stack export | pulumi stack import --stack rollback-${this.randomSuffix}`,
+      rollbackCommand: pulumi.interpolate`pulumi stack export && pulumi stack import --stack rollback-${this.randomSuffix}`,
     });
   }
 
@@ -176,7 +190,7 @@ export class TapStack extends pulumi.ComponentResource {
         this.getResourceName(`compute-subnet-${i}`),
         {
           vpcId: this.targetVpc.id,
-          cidrBlock: `10.20.${i * 16}.0/20`,
+          cidrBlock: `10.20.${i + 16}.0/20`,
           availabilityZone: azs[i],
           tags: {
             Name: this.getResourceName(`compute-subnet-${i}`),
@@ -192,7 +206,7 @@ export class TapStack extends pulumi.ComponentResource {
         this.getResourceName(`db-subnet-${i}`),
         {
           vpcId: this.targetVpc.id,
-          cidrBlock: `10.20.${i * 16 + 128}.0/20`,
+          cidrBlock: `10.20.${i + 16 + 128}.0/20`,
           availabilityZone: azs[i],
           tags: {
             Name: this.getResourceName(`db-subnet-${i}`),
@@ -284,47 +298,22 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   private createVpcPeering(): aws.ec2.VpcPeeringConnection {
-    // This assumes source VPC exists - in production, you'd reference it
-    const sourceVpc = aws.ec2.getVpcOutput({
-      filters: [
-        {
-          name: "cidr",
-          values: [this.config.sourceVpcCidr!],
-        },
-      ],
-    });
-
+    // FIXED: Use explicit VPC ID instead of getVpc lookup
     const peering = new aws.ec2.VpcPeeringConnection(
       this.getResourceName("vpc-peering"),
       {
-        vpcId: sourceVpc.apply((v) => v.id),
+        vpcId: this.config.sourceVpcId!,
         peerVpcId: this.targetVpc.id,
         autoAccept: true,
         tags: this.getResourceTags("peering"),
       },
-      { parent: this, ignoreChanges: sourceVpc ? [] : ["vpcId"] }
+      { parent: this }
     );
 
     return peering;
   }
 
   private updateRouteTables(): void {
-    // Get source VPC route tables
-    const sourceRouteTables = aws.ec2.getRouteTablesOutput({
-      filters: [
-        {
-          name: "vpc-id",
-          values: [
-            aws.ec2
-              .getVpcOutput({
-                filters: [{ name: "cidr", values: [this.config.sourceVpcCidr!] }],
-              })
-              .apply((v) => v.id),
-          ],
-        },
-      ],
-    });
-
     // Create route table for target VPC
     const targetRouteTable = new aws.ec2.RouteTable(
       this.getResourceName("target-rt"),
@@ -336,15 +325,17 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Add route to source VPC through peering connection
-    new aws.ec2.Route(
-      this.getResourceName("target-to-source-route"),
-      {
-        routeTableId: targetRouteTable.id,
-        destinationCidrBlock: this.config.sourceVpcCidr!,
-        vpcPeeringConnectionId: this.vpcPeering.id,
-      },
-      { parent: this }
-    );
+    if (this.vpcPeering) {
+      new aws.ec2.Route(
+        this.getResourceName("target-to-source-route"),
+        {
+          routeTableId: targetRouteTable.id,
+          destinationCidrBlock: this.config.sourceVpcCidr!,
+          vpcPeeringConnectionId: this.vpcPeering.id,
+        },
+        { parent: this }
+      );
+    }
 
     // Associate route table with subnets
     this.targetSubnets.forEach((subnet, idx) => {
@@ -357,6 +348,19 @@ export class TapStack extends pulumi.ComponentResource {
         { parent: this }
       );
     });
+
+    // FIXED: Only create source route if source route table ID is provided
+    if (this.config.sourceRouteTableId && this.vpcPeering) {
+      new aws.ec2.Route(
+        this.getResourceName("source-to-target-route"),
+        {
+          routeTableId: this.config.sourceRouteTableId,
+          destinationCidrBlock: this.config.targetVpcCidr!,
+          vpcPeeringConnectionId: this.vpcPeering.id,
+        },
+        { parent: this }
+      );
+    }
   }
 
   private createTargetRdsInstance(securityGroup: aws.ec2.SecurityGroup): aws.rds.Instance {
@@ -443,24 +447,44 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Create HTTPS listener
-    new aws.lb.Listener(
-      this.getResourceName("https-listener"),
-      {
-        loadBalancerArn: lb.arn,
-        port: 443,
-        protocol: "HTTPS",
-        sslPolicy: "ELBSecurityPolicy-TLS-1-2-2017-01", // TLS 1.2+
-        certificateArn: "arn:aws:acm:us-east-1:123456789012:certificate/example", // Replace with actual cert
-        defaultActions: [
-          {
-            type: "forward",
-            targetGroupArn: targetGroup.arn,
-          },
-        ],
-      },
-      { parent: this }
-    );
+    // FIXED: Make HTTPS listener conditional on certificate ARN
+    if (this.config.certificateArn) {
+      // Create HTTPS listener
+      new aws.lb.Listener(
+        this.getResourceName("https-listener"),
+        {
+          loadBalancerArn: lb.arn,
+          port: 443,
+          protocol: "HTTPS",
+          sslPolicy: "ELBSecurityPolicy-TLS-1-2-2017-01", // TLS 1.2+
+          certificateArn: this.config.certificateArn,
+          defaultActions: [
+            {
+              type: "forward",
+              targetGroupArn: targetGroup.arn,
+            },
+          ],
+        },
+        { parent: this }
+      );
+    } else {
+      // Create HTTP listener as fallback
+      new aws.lb.Listener(
+        this.getResourceName("http-listener"),
+        {
+          loadBalancerArn: lb.arn,
+          port: 80,
+          protocol: "HTTP",
+          defaultActions: [
+            {
+              type: "forward",
+              targetGroupArn: targetGroup.arn,
+            },
+          ],
+        },
+        { parent: this }
+      );
+    }
 
     return lb;
   }
@@ -496,7 +520,8 @@ export class TapStack extends pulumi.ComponentResource {
 echo "Installing Node.js 18..."
 curl -fsSL https://rpm.nodesource.com/setup_18.x | bash -
 yum install -y nodejs
-echo "Node.js microservice ready"`,
+echo "Node.js microservice ready"
+`,
           tags: {
             Name: this.getResourceName(`app-instance-${i}`),
             DeploymentColor: "green",
@@ -523,8 +548,9 @@ echo "Node.js microservice ready"`,
     return instances;
   }
 
-  private createS3Bucket(): aws.s3.BucketV2 {
-    const bucket = new aws.s3.BucketV2(
+  private createS3Bucket(): aws.s3.Bucket {
+    // FIXED: Use non-deprecated Bucket resource
+    const bucket = new aws.s3.Bucket(
       this.getResourceName("payment-logs"),
       {
         bucket: this.getResourceName("payment-transaction-logs"),
@@ -533,8 +559,8 @@ echo "Node.js microservice ready"`,
       { parent: this }
     );
 
-    // Enable versioning
-    new aws.s3.BucketVersioningV2(
+    // FIXED: Use non-deprecated BucketVersioning
+    new aws.s3.BucketVersioning(
       this.getResourceName("bucket-versioning"),
       {
         bucket: bucket.id,
@@ -545,8 +571,8 @@ echo "Node.js microservice ready"`,
       { parent: this }
     );
 
-    // CORS configuration
-    new aws.s3.BucketCorsConfigurationV2(
+    // FIXED: Use non-deprecated BucketCorsConfiguration
+    new aws.s3.BucketCorsConfiguration(
       this.getResourceName("bucket-cors"),
       {
         bucket: bucket.id,
@@ -568,27 +594,25 @@ echo "Node.js microservice ready"`,
       this.getResourceName("bucket-policy"),
       {
         bucket: bucket.id,
-        policy: pulumi
-          .all([bucket.arn])
-          .apply(([arn]) =>
-            JSON.stringify({
-              Version: "2012-10-17",
-              Statement: [
-                {
-                  Sid: "EnforceTLS",
-                  Effect: "Deny",
-                  Principal: "*",
-                  Action: "s3:*",
-                  Resource: [`${arn}/*`],
-                  Condition: {
-                    Bool: {
-                      "aws:SecureTransport": "false",
-                    },
+        policy: pulumi.all([bucket.arn]).apply(([arn]) =>
+          JSON.stringify({
+            Version: "2012-10-17",
+            Statement: [
+              {
+                Sid: "EnforceTLS",
+                Effect: "Deny",
+                Principal: "*",
+                Action: "s3:*",
+                Resource: `${arn}/*`,
+                Condition: {
+                  Bool: {
+                    "aws:SecureTransport": "false",
                   },
                 },
-              ],
-            })
-          ),
+              },
+            ],
+          })
+        ),
       },
       { parent: this }
     );
@@ -596,10 +620,15 @@ echo "Node.js microservice ready"`,
     return bucket;
   }
 
-  private configureRoute53WeightedRouting(): aws.route53.Record {
+  private configureRoute53WeightedRouting(): aws.route53.Record | undefined {
+    // FIXED: Make Route53 operations conditional
+    if (!this.config.hostedZoneName) {
+      return undefined;
+    }
+
     // Get or create hosted zone
     const hostedZone = aws.route53.getZoneOutput({
-      name: "example.com",
+      name: this.config.hostedZoneName,
     });
 
     // Create weighted routing record for gradual traffic shift
@@ -607,7 +636,7 @@ echo "Node.js microservice ready"`,
       this.getResourceName("weighted-record"),
       {
         zoneId: hostedZone.apply((z) => z.zoneId),
-        name: `payment.example.com`,
+        name: `payment.${this.config.hostedZoneName}`,
         type: "CNAME",
         ttl: 60,
         weightedRoutingPolicies: [
@@ -618,7 +647,7 @@ echo "Node.js microservice ready"`,
         setIdentifier: `target-${this.config.environmentSuffix}`,
         records: [this.targetLoadBalancer.dnsName],
       },
-      { parent: this, ignoreChanges: hostedZone ? [] : ["zoneId"] }
+      { parent: this }
     );
 
     return record;
@@ -664,7 +693,7 @@ echo "Node.js microservice ready"`,
         period: 60,
         statistic: "Sum",
         threshold: this.config.errorThreshold!,
-        alarmDescription: `Alert when error rate exceeds ${this.config.errorThreshold}%`,
+        alarmDescription: `Alert when error rate exceeds ${this.config.errorThreshold}`,
         actionsEnabled: this.config.rollbackEnabled!,
         alarmActions: [this.rollbackTopic.arn],
         dimensions: {
@@ -708,10 +737,7 @@ echo "Node.js microservice ready"`,
       {
         dashboardName: this.getResourceName("migration-status"),
         dashboardBody: pulumi
-          .all([
-            this.targetRdsInstance.identifier,
-            this.targetLoadBalancer.arnSuffix,
-          ])
+          .all([this.targetRdsInstance.identifier, this.targetLoadBalancer.arnSuffix])
           .apply(([dbId, lbArn]) =>
             JSON.stringify({
               widgets: [
@@ -733,11 +759,7 @@ echo "Node.js microservice ready"`,
                   type: "metric",
                   properties: {
                     metrics: [
-                      [
-                        "AWS/ApplicationELB",
-                        "TargetResponseTime",
-                        { stat: "Average" },
-                      ],
+                      ["AWS/ApplicationELB", "TargetResponseTime", { stat: "Average" }],
                       [".", "HTTPCode_Target_5XX_Count", { stat: "Sum" }],
                       [".", "RequestCount", { stat: "Sum" }],
                     ],
@@ -754,16 +776,14 @@ echo "Node.js microservice ready"`,
                     period: 60,
                     stat: "Maximum",
                     region: "us-east-1",
-                    title: "Replication Lag (must be < 1s)",
+                    title: "Replication Lag (must be <1s)",
                     yAxis: { left: { min: 0, max: 2 } },
                   },
                 },
                 {
                   type: "metric",
                   properties: {
-                    metrics: [
-                      ["AWS/Route53", "HealthCheckStatus", { stat: "Average" }],
-                    ],
+                    metrics: [["AWS/Route53", "HealthCheckStatus", { stat: "Average" }]],
                     period: 60,
                     stat: "Average",
                     region: "us-east-1",
@@ -895,78 +915,75 @@ exports.handler = async (event) => {
       .all([
         this.targetVpc.id,
         this.targetVpc.cidrBlock,
-        this.vpcPeering.id,
+        this.vpcPeering?.id || pulumi.output("N/A"),
         ...this.targetSubnets.map((s) => s.id),
         this.targetRdsInstance.endpoint,
         this.targetRdsInstance.arn,
         this.targetLoadBalancer.dnsName,
         this.targetLoadBalancer.arn,
-        this.route53Record.name,
+        this.route53Record?.name || pulumi.output("N/A"),
         this.migrationDashboard.dashboardName,
         this.rollbackTopic.arn,
         this.connectionAlarm.arn,
         this.errorAlarm.arn,
         this.replicationLagAlarm.arn,
       ])
-      .apply(
-        (values) => {
-          const [
-            targetVpcId,
-            targetVpcCidr,
-            vpcPeeringId,
-            ...subnetIds
-          ] = values.slice(0, 3);
-          const targetSubnetIds = values.slice(3, 3 + this.targetSubnets.length);
-          const [
-            targetRdsEndpoint,
-            targetRdsArn,
-            loadBalancerDns,
-            loadBalancerArn,
-            route53RecordName,
-            dashboardName,
-            rollbackTopicArn,
-            connectionAlarmArn,
-            errorAlarmArn,
-            replicationLagAlarmArn,
-          ] = values.slice(3 + this.targetSubnets.length);
+      .apply((values) => {
+        const [
+          targetVpcId,
+          targetVpcCidr,
+          vpcPeeringId,
+          ...subnetIds
+        ] = values.slice(0, 3);
+        const targetSubnetIds = values.slice(3, 3 + this.targetSubnets.length);
+        const [
+          targetRdsEndpoint,
+          targetRdsArn,
+          loadBalancerDns,
+          loadBalancerArn,
+          route53RecordName,
+          dashboardName,
+          rollbackTopicArn,
+          connectionAlarmArn,
+          errorAlarmArn,
+          replicationLagAlarmArn,
+        ] = values.slice(3 + this.targetSubnets.length);
 
-          const flatOutputs: StackOutputs = {
-            targetVpcId,
-            targetVpcCidr,
-            vpcPeeringId,
-            targetSubnetIds,
-            targetRdsEndpoint,
-            targetRdsArn,
-            loadBalancerDns,
-            loadBalancerArn,
-            route53RecordName,
-            trafficWeight: this.config.trafficWeightTarget!,
-            migrationPhase: this.config.migrationPhase!,
-            dashboardUrl: `https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=${dashboardName}`,
-            rollbackCommand: `pulumi stack export | pulumi stack import --stack rollback-${this.randomSuffix}`,
-            rollbackTopicArn,
-            connectionAlarmArn,
-            errorAlarmArn,
-            replicationLagAlarmArn,
-            environment: this.config.environmentSuffix,
-            timestamp: new Date().toISOString(),
-            version: "1.0.0",
-          };
+        const flatOutputs: StackOutputs = {
+          targetVpcId,
+          targetVpcCidr,
+          vpcPeeringId,
+          targetSubnetIds,
+          targetRdsEndpoint,
+          targetRdsArn,
+          loadBalancerDns,
+          loadBalancerArn,
+          route53RecordName,
+          trafficWeight: this.config.trafficWeightTarget!,
+          migrationPhase: this.config.migrationPhase!,
+          dashboardUrl: `https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=${dashboardName}`,
+          rollbackCommand: `pulumi stack export && pulumi stack import --stack rollback-${this.randomSuffix}`,
+          rollbackTopicArn,
+          connectionAlarmArn,
+          errorAlarmArn,
+          replicationLagAlarmArn,
+          environment: this.config.environmentSuffix,
+          timestamp: new Date().toISOString(),
+          version: "1.0.0",
+        };
 
-          // Write outputs to JSON file
-          const outputDir = path.join(process.cwd(), "cfn-outputs");
-          if (!fs.existsSync(outputDir)) {
-            fs.mkdirSync(outputDir, { recursive: true });
-          }
-
-          fs.writeFileSync(
-            path.join(outputDir, "flat-outputs.json"),
-            JSON.stringify(flatOutputs, null, 2)
-          );
-
-          return flatOutputs;
+        // Write outputs to JSON file
+        const outputDir = path.join(process.cwd(), "cfn-outputs");
+        if (!fs.existsSync(outputDir)) {
+          fs.mkdirSync(outputDir, { recursive: true });
         }
-      );
+        fs.writeFileSync(
+          path.join(outputDir, "flat-outputs.json"),
+          JSON.stringify(flatOutputs, null, 2)
+        );
+
+        return flatOutputs;
+      });
   }
 
   private getResourceName(component: string): string {
