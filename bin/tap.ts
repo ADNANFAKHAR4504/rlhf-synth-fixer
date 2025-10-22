@@ -35,15 +35,21 @@ const instanceCount = config.getNumber('instanceCount') || 3;
 const amiId = config.get('amiId') || 'ami-0abcdef1234567890';
 
 // RDS configuration
+// Note: PostgreSQL versions in RDS use format like 13.13, 14.10, 15.5, etc.
+// Always use the latest minor version for the major version you want
 const dbInstanceClass = config.get('dbInstanceClass') || 'db.t3.medium';
 const dbEngine = config.get('dbEngine') || 'postgres';
-const dbEngineVersion = config.get('dbEngineVersion') || '13.7';
+const dbEngineVersion = config.get('dbEngineVersion') || '16.1'; // Latest stable PostgreSQL version
 const dbUsername = config.get('dbUsername') || 'admin';
 const dbAllocatedStorage = config.getNumber('dbAllocatedStorage') || 100;
 
 // Migration configuration
 const maxDowntimeMinutes = config.getNumber('maxDowntimeMinutes') || 15;
 const enableRollback = config.getBoolean('enableRollback') ?? true;
+
+// Route53 configuration
+const hostedZoneName = config.get('hostedZoneName');
+const createNewZone = config.getBoolean('createNewZone') ?? true;
 
 // Define a set of default tags to apply to all resources.
 const defaultTags = {
@@ -77,6 +83,10 @@ const stack = new TapStack('pulumi-infra', {
   migrationConfig: {
     maxDowntimeMinutes,
     enableRollback,
+  },
+  route53Config: {
+    hostedZoneName,
+    createNewZone,
   },
   tags: defaultTags,
 });
