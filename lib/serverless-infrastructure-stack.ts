@@ -8,6 +8,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as lambdaEventSources from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 
 interface ServerlessInfrastructureStackProps extends cdk.StackProps {
@@ -56,12 +57,22 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       pointInTimeRecovery: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
+      // enable stream so downstream processors can react to writes
+      stream: dynamodb.StreamViewType.NEW_IMAGE,
     });
 
     // Dead-letter queue
     const deadLetterQueue = new sqs.Queue(this, 'LambdaDeadLetterQueue', {
       queueName: `lambda-dlq${suffix}`,
       retentionPeriod: cdk.Duration.days(14),
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    // Processing queue for DynamoDB stream -> SQS flow
+    const processingQueue = new sqs.Queue(this, 'ProcessingQueue', {
+      queueName: `processing-queue${suffix}`,
+      visibilityTimeout: cdk.Duration.seconds(30),
+      retentionPeriod: cdk.Duration.days(4),
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
@@ -136,6 +147,35 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
       maxEventAge: cdk.Duration.hours(1),
       retryAttempts: 2,
     });
+
+    // Stream processor Lambda: reads DynamoDB stream records and forwards messages to SQS
+    const streamProcessorFn = new lambda.Function(this, 'StreamProcessor', {
+      functionName: `stream-processor${suffix}`,
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset(
+        path.join(__dirname, 'lambda', 'stream-processor')
+      ),
+      environment: {
+        QUEUE_URL: processingQueue.queueUrl,
+      },
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 256,
+      tracing: lambda.Tracing.ACTIVE,
+    });
+
+    // Grant permissions for the processor to send messages to SQS
+    processingQueue.grantSendMessages(streamProcessorFn);
+
+    // Add DynamoDB stream as event source for the processor
+    streamProcessorFn.addEventSource(
+      new lambdaEventSources.DynamoEventSource(dynamoTable, {
+        startingPosition: lambda.StartingPosition.LATEST,
+        batchSize: 10,
+        bisectBatchOnError: true,
+        retryAttempts: 2,
+      })
+    );
 
     // Create API Gateway REST API
     const api = new apigateway.RestApi(this, 'RestApi', {
@@ -217,6 +257,11 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'LogsBucketName', {
       value: apiLogsBucket.bucketName,
       description: 'Name of the S3 bucket for API logs',
+    });
+
+    new cdk.CfnOutput(this, 'SqsQueueUrl', {
+      value: processingQueue.queueUrl,
+      description: 'SQS queue URL for processing messages from DynamoDB stream',
     });
   }
 }
