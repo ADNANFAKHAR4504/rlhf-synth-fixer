@@ -1,0 +1,40 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "6504518772",
+  "team": "synth",
+  "startedAt": "2025-10-21T12:58:24+05:30",
+  "completedAt": "2025-10-21T09:55:00Z",
+  "subtask": "Application Deployment",
+  "background": "A federal agency needs to process sensitive citizen data across multiple departments with FedRAMP High compliance requirements including secure data pipeline, real-time processing, strict access controls and comprehensive audit capabilities.",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Failure Recovery Automation",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "Kinesis",
+    "ECS",
+    "RDS",
+    "ElastiCache",
+    "Secrets Manager",
+    "API Gateway",
+    "EFS",
+    "CloudTrail",
+    "CloudWatch",
+    "KMS",
+    "Config",
+    "VPC",
+    "ALB"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
