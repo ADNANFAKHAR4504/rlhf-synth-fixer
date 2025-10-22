@@ -636,8 +636,7 @@ class StorageStack extends Stack {
         // Create S3 bucket for media storage
         this.mediaBucket = Bucket.Builder.create(this, "MediaBucket")
                 .bucketName("social-platform-media-" + environmentSuffix + "-" + this.getAccount())
-                .encryption(BucketEncryption.KMS)
-                .encryptionKey(kmsKey)
+                .encryption(BucketEncryption.S3_MANAGED)
                 .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
                 .versioned(true)
                 .lifecycleRules(List.of(
@@ -660,8 +659,7 @@ class StorageStack extends Stack {
         // Create S3 bucket for backups
         this.backupBucket = Bucket.Builder.create(this, "BackupBucket")
                 .bucketName("social-platform-backups-" + environmentSuffix + "-" + this.getAccount())
-                .encryption(BucketEncryption.KMS)
-                .encryptionKey(kmsKey)
+                .encryption(BucketEncryption.S3_MANAGED)
                 .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
                 .versioned(true)
                 .lifecycleRules(List.of(
