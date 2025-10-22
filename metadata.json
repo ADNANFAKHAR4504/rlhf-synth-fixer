@@ -1,0 +1,25 @@
+{
+  "po_id": "7196603919",
+  "platform": "Pulumi",
+  "language": "py",
+  "team": "synth",
+  "turn_type": "single",
+  "complexity": "medium",
+  "region": "eu-central-1",
+  "startedAt": "2025-10-22T00:00:00Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Kinesis Data Streams",
+    "ElastiCache Serverless",
+    "RDS PostgreSQL",
+    "Secrets Manager"
+  ]
+}
