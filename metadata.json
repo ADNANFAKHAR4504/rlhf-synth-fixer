@@ -8,18 +8,26 @@
   "startedAt": "2025-10-21T12:58:24+05:30",
   "completedAt": "2025-10-21T09:55:00Z",
   "subtask": "Application Deployment",
-  "background": "A federal agency needs to process sensitive citizen data across multiple departments. The solution must implement a secure data pipeline that includes data ingestion, processing, and storage while maintaining FedRAMP High compliance requirements. The infrastructure must support real-time data processing with strict access controls and audit capabilities.",
-  "subject_labels": ["CI/CD Pipeline", "Failure Recovery Automation", "Infrastructure Analysis/Monitoring", "Security Configuration as Code"],
-  "aws_services": ["Amazon Kinesis", "Amazon ECS Fargate", "Amazon RDS", "Amazon ElastiCache", "AWS Secrets Manager", "Amazon API Gateway", "Amazon EFS", "AWS KMS", "AWS CloudTrail", "Amazon VPC", "AWS Config", "Amazon CloudWatch", "Elastic Load Balancing"],
-  "training_quality": 9,
-  "deployment_status": "fixed",
-  "fixes_applied": [
-    "Updated deprecated S3 resources to non-deprecated versions",
-    "Fixed environment suffix handling in tap.py",
-    "Added proper stack outputs for integration testing",
-    "Corrected Pulumi stack configuration",
-    "Ensured all resources use environment_suffix for naming"
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Failure Recovery Automation",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
   ],
-  "test_coverage": "100%",
-  "lint_status": "passed_with_warnings"
+  "aws_services": [
+    "Amazon Kinesis",
+    "Amazon ECS Fargate",
+    "Amazon RDS",
+    "Amazon ElastiCache",
+    "AWS Secrets Manager",
+    "Amazon API Gateway",
+    "Amazon EFS",
+    "AWS KMS",
+    "AWS CloudTrail",
+    "Amazon VPC",
+    "AWS Config",
+    "Amazon CloudWatch",
+    "Elastic Load Balancing"
+  ],
+  "training_quality": 9
 }
