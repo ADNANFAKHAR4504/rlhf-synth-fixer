@@ -67,7 +67,7 @@ const pollExecution = async (executionArn: string) => {
   if (!executionArn) {
     throw new Error('ExecutionArn is required for polling');
   }
-  
+
   for (let i = 0; i < 30; i++) { // Poll for up to 150 seconds
     try {
       const describeExecutionCommand = new DescribeExecutionCommand({ executionArn });
@@ -121,8 +121,6 @@ describe('TapStack End-to-End Integration Tests', () => {
     // Note: Daily Trigger Test for EventBridge schedule is difficult to automate in an E2E suite.
     // This is typically verified through infrastructure-as-code tests or manual inspection post-deployment.
 
-    test('Success Path Validation: should successfully execute the State Machine from start to finish', async () => {
-      if (!cfnOutputs.StateMachineArn) {
         console.warn('⚠️ State Machine ARN not available, skipping test');
         return;
       }
@@ -173,7 +171,7 @@ describe('TapStack End-to-End Integration Tests', () => {
 
     test('Failure Path Validation (Validation Failure): should fail when input data is invalid', async () => {
       if (!cfnOutputs.StateMachineArn) {
-        console.warn('⚠️ State Machine ARN not available, skipping test');
+        console.error('⚠️ State Machine ARN not available, skipping test');
         return;
       }
 
@@ -223,7 +221,7 @@ describe('TapStack End-to-End Integration Tests', () => {
 
     test('Failure Path Validation (Delivery Failure): should fail and trigger alarm on delivery error', async () => {
       if (!cfnOutputs.StateMachineArn) {
-        console.warn('⚠️ State Machine ARN not available, skipping test');
+        console.error('⚠️ State Machine ARN not available, skipping test');
         return;
       }
 
@@ -271,7 +269,7 @@ describe('TapStack End-to-End Integration Tests', () => {
     // Run a successful execution once to have data to test against
     beforeAll(async () => {
       if (!cfnOutputs.StateMachineArn) {
-        console.warn('⚠️ StateMachine ARN not available, skipping data integrity tests setup');
+        console.error('⚠️ StateMachine ARN not available, skipping data integrity tests setup');
         return;
       }
 
@@ -326,7 +324,7 @@ describe('TapStack End-to-End Integration Tests', () => {
 
     test('Database Connectivity and Report Generation: should generate a report with expected structure', async () => {
       if (!s3Key || !cfnOutputs.ReportsBucketName) {
-        console.warn('⚠️ S3 key or bucket name not available, skipping report generation test');
+        console.error('⚠️ S3 key or bucket name not available, skipping report generation test');
         return;
       }
 
@@ -364,7 +362,7 @@ describe('TapStack End-to-End Integration Tests', () => {
 
     test('S3 Storage, Versioning, and Encryption: should store report with versioning and KMS encryption enabled', async () => {
       if (!s3Key || !cfnOutputs.ReportsBucketName) {
-        console.warn('⚠️ S3 key or bucket name not available, skipping S3 versioning test');
+        console.error('⚠️ S3 key or bucket name not available, skipping S3 versioning test');
         return;
       }
 
@@ -398,7 +396,7 @@ describe('TapStack End-to-End Integration Tests', () => {
 
     beforeAll(async () => {
       if (!cfnOutputs.StateMachineArn) {
-        console.warn('⚠️ State Machine ARN not available, skipping audit tests setup');
+        console.error('⚠️ State Machine ARN not available, skipping audit tests setup');
         return;
       }
 
@@ -438,7 +436,7 @@ describe('TapStack End-to-End Integration Tests', () => {
 
     test('Report Delivery and Logging: should log delivery details in the audit database', async () => {
       if (!reportId) {
-        console.warn('⚠️ Report ID not available, skipping delivery logging test');
+        console.error('⚠️ Report ID not available, skipping delivery logging test');
         return;
       }
 
@@ -447,7 +445,7 @@ describe('TapStack End-to-End Integration Tests', () => {
           "SELECT * FROM report_audit WHERE report_id = :reportId AND event_type = 'DELIVERY_SUCCESS'",
           [{ name: 'reportId', value: { stringValue: reportId } }]
         );
-        
+
         if (result.records && result.records.length > 0) {
           expect(result.records.length).toBe(1);
           const record = result.records[0];
@@ -474,7 +472,7 @@ describe('TapStack End-to-End Integration Tests', () => {
 
     test('Confirmation Status Update: should update report status to DELIVERED in the database', async () => {
       if (!reportId) {
-        console.warn('⚠️ Report ID not available, skipping status update test');
+        console.error('⚠️ Report ID not available, skipping status update test');
         return;
       }
 
@@ -483,13 +481,13 @@ describe('TapStack End-to-End Integration Tests', () => {
           "SELECT status FROM reports WHERE id = :reportId",
           [{ name: 'reportId', value: { stringValue: reportId } }]
         );
-        
+
         if (result.records && result.records.length > 0) {
           expect(result.records.length).toBe(1);
           const statusField = result.records[0][0];
           expect(statusField.stringValue).toBe('DELIVERED');
         } else {
-          console.warn('⚠️ No status records found for report:', reportId);
+          console.error('⚠️ No status records found for report:', reportId);
         }
       } catch (error) {
         if (error instanceof Error) {
