@@ -564,6 +564,18 @@ class TapStack(TerraformStack):
             tags={"Name": f"assessment-db-rotation-{environment_suffix}"}
         )
 
+        # Add permission for Secrets Manager to invoke the Lambda function
+        from cdktf_cdktf_provider_aws.lambda_permission import LambdaPermission
+        
+        LambdaPermission(
+            self,
+            "secrets_manager_lambda_permission",
+            statement_id="AllowSecretsManagerInvoke",
+            action="lambda:InvokeFunction",
+            function_name=rotation_lambda.function_name,
+            principal="secretsmanager.amazonaws.com"
+        )
+
         # Enable automatic rotation (30 days)
         SecretsmanagerSecretRotation(
             self,
@@ -617,7 +629,7 @@ class TapStack(TerraformStack):
             "redis_secret_version",
             secret_id=redis_secret.id,
             secret_string=json.dumps({
-                "endpoint": redis_cluster.configuration_endpoint_address,
+                "endpoint": redis_cluster.primary_endpoint_address,
                 "port": "6379"
             })
         )
@@ -1032,8 +1044,9 @@ class TapStack(TerraformStack):
             authorization="NONE"
         )
 
-        # API Gateway integration with ALB
-        ApiGatewayIntegration(
+
+        # API Gateway integration with ALB first
+        api_integration = ApiGatewayIntegration(
             self,
             "api_integration",
             rest_api_id=api.id,
@@ -1041,19 +1054,16 @@ class TapStack(TerraformStack):
             http_method=api_method.http_method,
             integration_http_method="ANY",
             type="HTTP_PROXY",
-            uri=f"http://{alb.dns_name}/{{proxy}}",
-            connection_type="INTERNET",
-            request_parameters={
-                "integration.request.path.proxy": "method.request.path.proxy"
-            }
+            uri=f"http://{alb.dns_name}/assessments",
+            connection_type="INTERNET"
         )
 
-        # API Gateway deployment
+        # API Gateway deployment - depends on integration
         api_deployment = ApiGatewayDeployment(
             self,
             "api_deployment",
             rest_api_id=api.id,
-            depends_on=[api_method],
+            depends_on=[api_method, api_integration],
             lifecycle={
                 "create_before_destroy": True
             }
@@ -1247,6 +1257,37 @@ class TapStack(TerraformStack):
             restrict_public_buckets=True
         )
 
+        # CloudTrail bucket policy for CloudTrail service
+        from cdktf_cdktf_provider_aws.s3_bucket_policy import S3BucketPolicy
+        
+        cloudtrail_bucket_policy = S3BucketPolicy(
+            self,
+            "cloudtrail_bucket_policy",
+            bucket=cloudtrail_bucket.id,
+            policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Principal": {"Service": "cloudtrail.amazonaws.com"},
+                        "Action": "s3:PutObject",
+                        "Resource": f"{cloudtrail_bucket.arn}/*",
+                        "Condition": {
+                            "StringEquals": {
+                                "s3:x-amz-acl": "bucket-owner-full-control"
+                            }
+                        }
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Principal": {"Service": "cloudtrail.amazonaws.com"},
+                        "Action": "s3:GetBucketAcl",
+                        "Resource": cloudtrail_bucket.arn
+                    }
+                ]
+            })
+        )
+
         # CloudTrail
         Cloudtrail(
             self,
@@ -1316,6 +1357,8 @@ class TapStack(TerraformStack):
         )
 
         # EventBridge Scheduler for health checks every 5 minutes
+        from cdktf_cdktf_provider_aws.scheduler_schedule import SchedulerScheduleTargetEcsParameters
+        
         SchedulerSchedule(
             self,
             "health_check_schedule",
@@ -1326,8 +1369,17 @@ class TapStack(TerraformStack):
                 mode="OFF"
             ),
             target=SchedulerScheduleTarget(
-                arn=ecs_cluster.arn,
+                arn=f"{ecs_cluster.arn}:task-definition/{task_definition.family}:*",
                 role_arn=scheduler_role.arn,
+                ecs_parameters=SchedulerScheduleTargetEcsParameters(
+                    task_definition_arn=task_definition.arn,
+                    launch_type="FARGATE",
+                    network_configuration={
+                        "subnets": [private_subnet_1.id, private_subnet_2.id],
+                        "security_groups": [ecs_sg.id],
+                        "assign_public_ip": "DISABLED"
+                    }
+                ),
                 retry_policy=SchedulerScheduleTargetRetryPolicy(
                     maximum_retry_attempts=3,
                     maximum_event_age_in_seconds=3600
