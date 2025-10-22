@@ -1,6 +1,6 @@
 {
   "platform": "cdktf",
-  "language": "python",
+  "language": "py",
   "complexity": "medium",
   "team": "synth",
   "turn_type": "single",
@@ -12,30 +12,7 @@
     "Failure Recovery Automation",
     "Security Configuration as Code"
   ],
-  "environment": {
-    "setup_requirements": {
-      "cdktf_version": ">=0.15.0",
-      "python_version": ">=3.7",
-      "aws_provider": "eu-central-1",
-      "required_packages": [
-        "cdktf",
-        "cdktf-aws-provider"
-      ]
-    }
-  },
-  "region": "eu-central-1",
   "aws_services": [
-    "RDS",
-    "Secrets Manager",
-    "KMS",
-    "VPC",
-    "Security Groups"
-  ],
-  "training_quality": 9,
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "mayanksethi-turing",
-  "dockerS3Location": ""
+    "RDS, Secrets Manager, KMS, VPC, Security Groups"
+  ]
 }
