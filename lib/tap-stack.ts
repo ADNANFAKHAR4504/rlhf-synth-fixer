@@ -491,7 +491,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         identifier: this.getResourceName("postgres-replica"),
         engine: "postgres",
-        engineVersion: "13.7",
+        engineVersion: "13",
         instanceClass: "db.t3.medium",
         allocatedStorage: 100,
         storageEncrypted: true,
