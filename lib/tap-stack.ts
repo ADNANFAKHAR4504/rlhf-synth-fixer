@@ -13,6 +13,7 @@ import { EcsService } from '@cdktf/provider-aws/lib/ecs-service';
 import { EcsTaskDefinition } from '@cdktf/provider-aws/lib/ecs-task-definition';
 import { EfsFileSystem } from '@cdktf/provider-aws/lib/efs-file-system';
 import { EfsMountTarget } from '@cdktf/provider-aws/lib/efs-mount-target';
+import { Eip } from '@cdktf/provider-aws/lib/eip';
 import { ElasticacheReplicationGroup } from '@cdktf/provider-aws/lib/elasticache-replication-group';
 import { ElasticacheSubnetGroup } from '@cdktf/provider-aws/lib/elasticache-subnet-group';
 import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
@@ -27,6 +28,7 @@ import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
 import { Lb } from '@cdktf/provider-aws/lib/lb';
 import { LbListener } from '@cdktf/provider-aws/lib/lb-listener';
 import { LbTargetGroup } from '@cdktf/provider-aws/lib/lb-target-group';
+import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -63,9 +65,9 @@ export class TapStack extends TerraformStack {
     const environmentSuffix = props?.environmentSuffix || 'dev';
     const awsRegion = AWS_REGION_OVERRIDE
       ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'ap-northeast-1';
+      : props?.awsRegion || 'us-east-1';
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
-    const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
+    const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states-342597974367';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
     // Configure AWS Provider
@@ -174,6 +176,52 @@ export class TapStack extends TerraformStack {
       routeTableId: publicRouteTable.id,
     });
 
+    // Create EIP for NAT Gateway
+    const natEip = new Eip(this, 'nat-eip', {
+      domain: 'vpc',
+      tags: {
+        Name: `edu-nat-eip-${environmentSuffix}`,
+        Environment: environmentSuffix,
+      },
+    });
+
+    // Create NAT Gateway in public subnet
+    const natGateway = new NatGateway(this, 'nat-gateway', {
+      allocationId: natEip.id,
+      subnetId: publicSubnet1.id,
+      tags: {
+        Name: `edu-nat-gateway-${environmentSuffix}`,
+        Environment: environmentSuffix,
+      },
+    });
+
+    // Create Route Table for Private Subnets
+    const privateRouteTable = new RouteTable(this, 'private-route-table', {
+      vpcId: vpc.id,
+      tags: {
+        Name: `edu-private-rt-${environmentSuffix}`,
+        Environment: environmentSuffix,
+      },
+    });
+
+    // Route private subnet traffic through NAT Gateway
+    new Route(this, 'private-route', {
+      routeTableId: privateRouteTable.id,
+      destinationCidrBlock: '0.0.0.0/0',
+      natGatewayId: natGateway.id,
+    });
+
+    // Associate private subnets with private route table
+    new RouteTableAssociation(this, 'private-rta-1', {
+      subnetId: privateSubnet1.id,
+      routeTableId: privateRouteTable.id,
+    });
+
+    new RouteTableAssociation(this, 'private-rta-2', {
+      subnetId: privateSubnet2.id,
+      routeTableId: privateRouteTable.id,
+    });
+
     // Create KMS Keys for encryption
     const kmsKey = new KmsKey(this, 'edu-kms-key', {
       description: `EduTech encryption key for ${environmentSuffix}`,
@@ -240,8 +288,8 @@ export class TapStack extends TerraformStack {
 
     new SecurityGroupRule(this, 'ecs-ingress-alb', {
       type: 'ingress',
-      fromPort: 8080,
-      toPort: 8080,
+      fromPort: 80,
+      toPort: 80,
       protocol: 'tcp',
       sourceSecurityGroupId: albSecurityGroup.id,
       securityGroupId: ecsSecurityGroup.id,
@@ -773,14 +821,21 @@ def lambda_handler(event, context):
       containerDefinitions: JSON.stringify([
         {
           name: 'analytics-processor',
-          image: 'nginx:latest',
+          image: 'httpd:alpine',
           essential: true,
           portMappings: [
             {
-              containerPort: 8080,
+              containerPort: 80,
               protocol: 'tcp',
             },
           ],
+          healthCheck: {
+            command: ['CMD-SHELL', 'curl -f http://localhost/ || exit 1'],
+            interval: 30,
+            timeout: 5,
+            retries: 3,
+            startPeriod: 60,
+          },
           environment: [
             {
               name: 'AWS_REGION',
@@ -853,7 +908,7 @@ def lambda_handler(event, context):
 
     const targetGroup = new LbTargetGroup(this, 'ecs-target-group', {
       name: `edu-tg-${environmentSuffix}`,
-      port: 8080,
+      port: 80,
       protocol: 'HTTP',
       vpcId: vpc.id,
       targetType: 'ip',
@@ -906,7 +961,7 @@ def lambda_handler(event, context):
         {
           targetGroupArn: targetGroup.arn,
           containerName: 'analytics-processor',
-          containerPort: 8080,
+          containerPort: 80,
         },
       ],
       healthCheckGracePeriodSeconds: 60,
