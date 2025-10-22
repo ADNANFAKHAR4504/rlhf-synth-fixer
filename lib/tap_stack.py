@@ -616,7 +616,7 @@ class TapStack(pulumi.ComponentResource):
             f"postgres-db-{self.environment_suffix}",
             identifier=f"fedramp-db-{self.environment_suffix}",
             engine="postgres",
-            engine_version="15.3",
+            engine_version="15",
             instance_class="db.t3.micro",
             allocated_storage=20,
             storage_encrypted=True,
@@ -944,7 +944,7 @@ class TapStack(pulumi.ComponentResource):
             drop_invalid_header_fields=True,
             access_logs=aws.lb.LoadBalancerAccessLogsArgs(
                 bucket=cloudtrail_bucket.id,
-                enabled=True,
+                enabled=False,
                 prefix="alb-logs",
             ),
             tags={**self.tags, "Name": f"app-alb-{self.environment_suffix}"},
