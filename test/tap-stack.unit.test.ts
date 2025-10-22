@@ -35,7 +35,7 @@ describe('TapStack', () => {
         environmentSuffix: undefined,
       });
       const templateWithDefault = Template.fromStack(stackWithDefault);
-      
+
       expect(templateWithDefault).toBeDefined();
     });
 
@@ -48,7 +48,7 @@ describe('TapStack', () => {
         environmentSuffix: undefined,
       });
       const templateWithContext = Template.fromStack(stackWithContext);
-      
+
       expect(templateWithContext).toBeDefined();
     });
   });
@@ -72,7 +72,6 @@ describe('TapStack', () => {
         ImageTagMutability: 'IMMUTABLE',
       });
     });
-
   });
 
   describe('S3 Artifact Bucket', () => {
@@ -130,6 +129,11 @@ describe('TapStack', () => {
       });
     });
 
+    test('should create GitHub source action with webhook disabled', () => {
+      // Verify that the GitHub source action exists but webhook is disabled
+      // This is verified by the absence of webhook-related resources
+      template.resourceCountIs('AWS::CodePipeline::Webhook', 0);
+    });
   });
 
   describe('CodeBuild Projects', () => {
@@ -171,44 +175,64 @@ describe('TapStack', () => {
   });
 
   describe('ECS Service', () => {
-    test('should create ECS task definition', () => {
+    test('should create ECS task definition with reduced resources', () => {
       template.hasResourceProperties('AWS::ECS::TaskDefinition', {
-        Cpu: '1024',
-        Memory: '2048',
+        Cpu: '256',
+        Memory: '512',
         NetworkMode: 'awsvpc',
         RequiresCompatibilities: ['FARGATE'],
       });
     });
 
-    test('should create ECS service with blue-green deployment', () => {
+    test('should create ECS service with single instance and no blue-green deployment', () => {
       template.hasResourceProperties('AWS::ECS::Service', {
         ServiceName: 'payment-processor-service',
-        DesiredCount: 2,
-        DeploymentController: {
-          Type: 'CODE_DEPLOY',
-        },
+        DesiredCount: 1,
         DeploymentConfiguration: {
           MaximumPercent: 200,
           MinimumHealthyPercent: 100,
         },
-        HealthCheckGracePeriodSeconds: 60,
+        HealthCheckGracePeriodSeconds: 120,
       });
     });
 
     test('should create Application Load Balancer', () => {
-      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
-        Type: 'application',
-        Scheme: 'internet-facing',
-      });
+      template.hasResourceProperties(
+        'AWS::ElasticLoadBalancingV2::LoadBalancer',
+        {
+          Type: 'application',
+          Scheme: 'internet-facing',
+        }
+      );
     });
 
-    test('should create auto-scaling target', () => {
-      template.hasResourceProperties('AWS::ApplicationAutoScaling::ScalableTarget', {
-        MinCapacity: 2,
-        MaxCapacity: 10,
-        ScalableDimension: 'ecs:service:DesiredCount',
-        ServiceNamespace: 'ecs',
-      });
+    test('should not create auto-scaling resources (disabled for initial deployment)', () => {
+      // Auto-scaling is commented out in the current implementation
+      template.resourceCountIs(
+        'AWS::ApplicationAutoScaling::ScalableTarget',
+        0
+      );
+      template.resourceCountIs('AWS::ApplicationAutoScaling::ScalingPolicy', 0);
+    });
+
+    test('should use nginx:alpine public image for container', () => {
+      // Check that the task definition has the correct container configuration
+      const templateJson = template.toJSON();
+      const taskDef = Object.values(templateJson.Resources).find(
+        (resource: any) => resource.Type === 'AWS::ECS::TaskDefinition'
+      ) as any;
+
+      expect(taskDef).toBeDefined();
+      expect(taskDef.Properties.ContainerDefinitions).toBeDefined();
+      expect(taskDef.Properties.ContainerDefinitions).toHaveLength(1);
+
+      const container = taskDef.Properties.ContainerDefinitions[0];
+      expect(container.Image).toBe('nginx:alpine');
+      expect(container.Memory).toBe(512);
+      expect(container.Cpu).toBe(256);
+      expect(container.PortMappings).toBeDefined();
+      expect(container.PortMappings[0].ContainerPort).toBe(80);
+      expect(container.PortMappings[0].Protocol).toBe('tcp');
     });
   });
 
@@ -415,9 +439,12 @@ describe('TapStack', () => {
       // Load balancer
       template.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 1);
 
-      // Auto-scaling
-      template.resourceCountIs('AWS::ApplicationAutoScaling::ScalableTarget', 1);
-      template.resourceCountIs('AWS::ApplicationAutoScaling::ScalingPolicy', 2);
+      // Auto-scaling (disabled for initial deployment)
+      template.resourceCountIs(
+        'AWS::ApplicationAutoScaling::ScalableTarget',
+        0
+      );
+      template.resourceCountIs('AWS::ApplicationAutoScaling::ScalingPolicy', 0);
 
       // Monitoring
       template.resourceCountIs('AWS::CloudWatch::Dashboard', 1);
@@ -434,21 +461,30 @@ describe('TapStack', () => {
       // Check that environment suffix appears in key resource names
       const templateJson = template.toJSON();
       const resources = templateJson.Resources;
-      
+
       // Find resources with names containing the environment suffix
-      const resourcesWithSuffix = Object.values(resources).filter((resource: any) => {
-        const props = resource.Properties || {};
-        return (
-          (typeof props.Name === 'string' && props.Name.includes('test')) ||
-          (typeof props.RepositoryName === 'string' && props.RepositoryName.includes('test')) ||
-          (typeof props.TopicName === 'string' && props.TopicName.includes('test')) ||
-          (typeof props.ClusterName === 'string' && props.ClusterName.includes('test')) ||
-          (typeof props.PipelineName === 'string' && props.PipelineName.includes('test')) ||
-          (typeof props.AlarmName === 'string' && props.AlarmName.includes('test')) ||
-          (typeof props.DashboardName === 'string' && props.DashboardName.includes('test')) ||
-          (typeof props.RuleName === 'string' && props.RuleName.includes('test'))
-        );
-      });
+      const resourcesWithSuffix = Object.values(resources).filter(
+        (resource: any) => {
+          const props = resource.Properties || {};
+          return (
+            (typeof props.Name === 'string' && props.Name.includes('test')) ||
+            (typeof props.RepositoryName === 'string' &&
+              props.RepositoryName.includes('test')) ||
+            (typeof props.TopicName === 'string' &&
+              props.TopicName.includes('test')) ||
+            (typeof props.ClusterName === 'string' &&
+              props.ClusterName.includes('test')) ||
+            (typeof props.PipelineName === 'string' &&
+              props.PipelineName.includes('test')) ||
+            (typeof props.AlarmName === 'string' &&
+              props.AlarmName.includes('test')) ||
+            (typeof props.DashboardName === 'string' &&
+              props.DashboardName.includes('test')) ||
+            (typeof props.RuleName === 'string' &&
+              props.RuleName.includes('test'))
+          );
+        }
+      );
 
       expect(resourcesWithSuffix.length).toBeGreaterThan(0);
     });

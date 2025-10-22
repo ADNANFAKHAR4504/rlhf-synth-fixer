@@ -19,9 +19,9 @@ Tags.of(app).add('Author', commitAuthor);
 // Stack configuration for CI/CD pipeline
 const stackConfig = {
   applicationName: 'payment-processor',
-  githubOwner: process.env.GITHUB_OWNER || 'your-org',
-  githubRepo: process.env.GITHUB_REPO || 'payment-processor',
-  githubBranch: process.env.GITHUB_BRANCH || 'main',
+  githubOwner: process.env.GITHUB_OWNER || 'octocat',
+  githubRepo: process.env.GITHUB_REPO || 'Hello-World',
+  githubBranch: process.env.GITHUB_BRANCH || 'master',
   nodeVersions: ['16', '18', '20'],
   retentionDays: 30,
   maxProdImages: 10,
