@@ -27,5 +27,11 @@
   "training_quality": 8,
   "task_id": "5962726542",
   "region": "ca-central-1",
-  "environment_suffix": "dev"
+  "environment_suffix": "dev",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
