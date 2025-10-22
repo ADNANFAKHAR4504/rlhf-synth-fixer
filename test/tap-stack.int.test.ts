@@ -354,8 +354,9 @@ describe('TapStack CloudFormation Integration Tests', () => {
         const inlinePolicies = policiesResponse.PolicyNames || [];
         expect(inlinePolicies).toContain('S3LoggingPolicy');
         expect(inlinePolicies).toContain('SSMAccessPolicy');
+        expect(inlinePolicies).not.toContain('KMSAccessPolicy'); // No KMS policy for AWS-managed EBS encryption
 
-        console.log('✓ EC2 Instance Role configured correctly');
+        console.log('✓ EC2 Instance Role configured correctly (no KMS policy needed)');
       },
       TEST_TIMEOUT
     );
@@ -444,6 +445,18 @@ describe('TapStack CloudFormation Integration Tests', () => {
         expect(keyResponse.KeyMetadata?.KeyUsage).toBe('ENCRYPT_DECRYPT');
 
         console.log('✓ RDS KMS key is enabled');
+      },
+      TEST_TIMEOUT
+    );
+
+    test(
+      'should NOT have EBS KMS key outputs (EC2 uses AWS-managed encryption)',
+      async () => {
+        // Verify EBS KMS key outputs don't exist
+        expect(outputs.EBSKMSKeyId).toBeUndefined();
+        expect(outputs.EBSKMSKeyArn).toBeUndefined();
+
+        console.log('✓ EBS uses AWS-managed encryption (no custom KMS key)');
       },
       TEST_TIMEOUT
     );
@@ -1025,7 +1038,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
         );
 
         console.log('\n✓✓✓ Complete E2E Encryption Pipeline validated ✓✓✓');
-        console.log('Encryption verified: S3 (AES256) + RDS (KMS)');
+        console.log('Encryption verified: S3 (AES256) + RDS (Custom KMS) + EC2 EBS (AWS-managed)');
       },
       TEST_TIMEOUT * 2
     );
@@ -1221,7 +1234,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
 
         console.log('\n✓✓✓ Complete Security and Compliance posture validated ✓✓✓');
         console.log(
-          'Security verified: Encryption (S3+RDS+KMS) + Secrets Manager + IAM + Network Isolation'
+          'Security verified: Encryption (S3 AES256 + RDS Custom KMS + EC2 AWS-managed) + Secrets Manager + IAM + Network Isolation'
         );
       },
       TEST_TIMEOUT * 2

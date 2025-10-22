@@ -226,6 +226,14 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(putObjectStatement).toBeDefined();
     });
 
+    test('should NOT have EC2 Role with KMS policy (using AWS-managed EBS encryption)', () => {
+      const role = template.Resources.EC2InstanceRole;
+      const policies = role.Properties.Policies;
+
+      const kmsPolicy = policies.find((p: any) => p.PolicyName === 'KMSAccessPolicy');
+      expect(kmsPolicy).toBeUndefined();
+    });
+
     test('should have EC2 Instance Profile', () => {
       const profile = template.Resources.EC2InstanceProfile;
       expect(profile).toBeDefined();
@@ -384,6 +392,11 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(alias).toBeDefined();
       expect(alias.Type).toBe('AWS::KMS::Alias');
     });
+
+    test('should NOT have EBS KMS key (using AWS-managed encryption)', () => {
+      const ebsKey = template.Resources.EBSKMSKey;
+      expect(ebsKey).toBeUndefined();
+    });
   });
 
   // ==========================================
@@ -487,6 +500,20 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(userData).toBeDefined();
     });
 
+    test('should have launch template with EBS encryption but no custom KMS key', () => {
+      const lt = template.Resources.LaunchTemplate;
+      const blockDevices = lt.Properties.LaunchTemplateData.BlockDeviceMappings;
+
+      expect(blockDevices).toBeDefined();
+      expect(blockDevices).toHaveLength(1);
+
+      const ebsConfig = blockDevices[0].Ebs;
+      expect(ebsConfig.Encrypted).toBe(true);
+      expect(ebsConfig.KmsKeyId).toBeUndefined(); // Uses AWS-managed encryption
+      expect(ebsConfig.VolumeType).toBe('gp3');
+      expect(ebsConfig.DeleteOnTermination).toBe(true);
+    });
+
     test('should have Auto Scaling Group with proper configuration', () => {
       const asg = template.Resources.AutoScalingGroup;
       expect(asg).toBeDefined();
@@ -588,6 +615,11 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(template.Outputs.DBPasswordSecretArn).toBeDefined();
       expect(template.Outputs.RDSKMSKeyId).toBeDefined();
       expect(template.Outputs.RDSKMSKeyArn).toBeDefined();
+    });
+
+    test('should NOT have EBS KMS outputs (using AWS-managed encryption)', () => {
+      expect(template.Outputs.EBSKMSKeyId).toBeUndefined();
+      expect(template.Outputs.EBSKMSKeyArn).toBeUndefined();
     });
 
     test('should have RDS outputs', () => {
