@@ -739,7 +739,7 @@ export class TapStack extends TerraformStack {
 
     // Create RDS Global Cluster for cross-region replication
     const globalCluster = new RdsGlobalCluster(this, 'aurora-global', {
-      globalClusterIdentifier: `hipaa-aurora-global-${environmentSuffix}`,
+      globalClusterIdentifier: `hipaa-aurora-global-v2-${environmentSuffix}`,
       engine: 'aurora-postgresql',
       engineVersion: '15.4',
       databaseName: 'patientdb',
