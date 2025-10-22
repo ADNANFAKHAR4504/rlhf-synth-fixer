@@ -424,14 +424,18 @@ describe('TAP Serverless CI/CD Stack - Integration Tests', () => {
     test('Secrets Manager secret exists', async () => {
       expect(outputs.SecretArn).toBeDefined();
 
-      // Use secret name instead of ARN to avoid *** issue
-      const secretName = 'tap-app-secrets';
+      // Extract secret name from ARN and remove the random 6-char suffix added by Secrets Manager
+      // ARN format: arn:aws:secretsmanager:region:account:secret:secret-name-XXXXXX
+      // We want just "tap-app-secrets-pr4747" without the "-XXXXXX" suffix
+      const fullSecretName = outputs.SecretArn!.split(':secret:')[1];
+      const secretName = fullSecretName.slice(0, -7); // Remove last 7 chars (-XXXXXX)
 
       const secret = await secretsClient.send(new DescribeSecretCommand({
         SecretId: secretName,
       }));
 
-      expect(secret.Name).toBe(secretName);
+      // Verify secret name contains the expected prefix
+      expect(secret.Name).toContain('tap-app-secrets');
       // ARN will have *** but that's OK
       expect(secret.ARN).toContain('tap-app-secrets');
 
@@ -439,8 +443,11 @@ describe('TAP Serverless CI/CD Stack - Integration Tests', () => {
     }, 30000);
 
     test('Secret can be retrieved by Lambda', async () => {
-      // Use secret name instead of ARN
-      const secretName = 'tap-app-secrets';
+      // Extract secret name from ARN and remove the random 6-char suffix added by Secrets Manager
+      // ARN format: arn:aws:secretsmanager:region:account:secret:secret-name-XXXXXX
+      // We want just "tap-app-secrets-pr4747" without the "-XXXXXX" suffix
+      const fullSecretName = outputs.SecretArn!.split(':secret:')[1];
+      const secretName = fullSecretName.slice(0, -7); // Remove last 7 chars (-XXXXXX)
 
       const secretValue = await secretsClient.send(new GetSecretValueCommand({
         SecretId: secretName,
