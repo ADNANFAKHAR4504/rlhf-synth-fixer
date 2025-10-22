@@ -233,6 +233,7 @@
           "MinCapacity": 0.5,
           "MaxCapacity": 4.0
         },
+        "EnableHttpEndpoint": true,
         "VpcSecurityGroupIds": [
           {
             "Ref": "AuroraSecurityGroup"
