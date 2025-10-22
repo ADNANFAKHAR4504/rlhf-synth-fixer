@@ -612,7 +612,7 @@ func CreateStack(ctx *pulumi.Context) error {
 	// })
 	ctx.Log.Info("Secret rotation is configured to be set up manually with a Lambda function", nil)
 
-	// Create CloudWatch Log Group for ECS
+	// Create or import CloudWatch Log Group for ECS
 	ecsLogGroup, err := cloudwatch.NewLogGroup(ctx, fmt.Sprintf("ecs-log-group-%s", environmentSuffix), &cloudwatch.LogGroupArgs{
 		Name:            pulumi.String("/ecs/iot-processor"),
 		RetentionInDays: pulumi.Int(7),
@@ -620,7 +620,7 @@ func CreateStack(ctx *pulumi.Context) error {
 			"Name":        pulumi.String(fmt.Sprintf("ecs-log-group-%s", environmentSuffix)),
 			"Environment": pulumi.String(environmentSuffix),
 		},
-	})
+	}, pulumi.Import(pulumi.ID("/ecs/iot-processor")))
 	if err != nil {
 		return err
 	}
