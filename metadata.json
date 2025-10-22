@@ -1,6 +1,6 @@
 {
   "platform": "Pulumi",
-  "language": "Python",
+  "language": "py",
   "complexity": "medium",
   "team": "synth",
   "turn_type": "single",
@@ -11,6 +11,18 @@
     "Cloud Environment Setup",
     "Failure Recovery Automation"
   ],
-  "aws_services": "VPC, EC2, API Gateway, ECS, ElastiCache, RDS, ECR, IAM, CloudWatch, Secrets Manager, Elastic Load Balancing",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "API Gateway",
+    "ECS",
+    "ElastiCache",
+    "RDS",
+    "ECR",
+    "IAM",
+    "CloudWatch",
+    "Secrets Manager",
+    "Elastic Load Balancing"
+  ],
   "training_quality": 8
 }
