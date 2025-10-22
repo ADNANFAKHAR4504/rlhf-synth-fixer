@@ -746,6 +746,7 @@ export class TapStack extends TerraformStack {
       storageEncrypted: true,
       provider: primaryProvider,
     });
+    globalCluster.overrideLogicalId('aurora-global-main');
 
     // Create Aurora cluster in primary region
     const auroraCluster = new RdsCluster(this, 'aurora-cluster', {
@@ -773,10 +774,12 @@ export class TapStack extends TerraformStack {
         Environment: environmentSuffix,
         CostCenter: 'Healthcare',
       },
+      dependsOn: [globalCluster, kmsKey, dbSubnetGroup],
       provider: primaryProvider,
     });
+    auroraCluster.overrideLogicalId('aurora-cluster-main');
 
-    new RdsClusterInstance(this, 'aurora-instance-1', {
+    const instance1 = new RdsClusterInstance(this, 'aurora-instance-1', {
       identifier: `hipaa-aurora-instance-1-${environmentSuffix}`,
       clusterIdentifier: auroraCluster.id,
       instanceClass: 'db.r6g.large',
@@ -790,10 +793,12 @@ export class TapStack extends TerraformStack {
         Name: `hipaa-aurora-instance-1-${environmentSuffix}`,
         Environment: environmentSuffix,
       },
+      dependsOn: [auroraCluster],
       provider: primaryProvider,
     });
+    instance1.overrideLogicalId('aurora-instance-1-main');
 
-    new RdsClusterInstance(this, 'aurora-instance-2', {
+    const instance2 = new RdsClusterInstance(this, 'aurora-instance-2', {
       identifier: `hipaa-aurora-instance-2-${environmentSuffix}`,
       clusterIdentifier: auroraCluster.id,
       instanceClass: 'db.r6g.large',
@@ -807,8 +812,10 @@ export class TapStack extends TerraformStack {
         Name: `hipaa-aurora-instance-2-${environmentSuffix}`,
         Environment: environmentSuffix,
       },
+      dependsOn: [auroraCluster],
       provider: primaryProvider,
     });
+    instance2.overrideLogicalId('aurora-instance-2-main');
 
     // === LOGGING ===
     // Create CloudWatch Log Groups
