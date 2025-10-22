@@ -1,14 +1,17 @@
 {
-  "task_id": "7709030832",
-  "po_id": "7709030832",
   "platform": "cdktf",
   "language": "py",
   "complexity": "medium",
   "turn_type": "single",
+  "po_id": "7709030832",
   "team": "synth",
   "startedAt": "2025-10-21T13:25:14.641150+05:30",
   "subtask": "Failure Recovery and High Availability",
-  "background": "FastShop, a growing e-commerce platform in Brazil, needs to implement a scalable product catalog system that can handle high-traffic periods like Black Friday. The system must maintain fast response times and comply with Brazilian e-commerce regulations (LGPD).",
+  "subject_labels": [
+    "Failure Recovery Automation",
+    "IaC Optimization",
+    "Security Configuration as Code"
+  ],
   "aws_services": [
     "Amazon VPC",
     "Amazon ECS Fargate",
@@ -23,17 +26,5 @@
     "AWS IAM",
     "AWS Cloud Map (Service Discovery)",
     "Amazon EC2 (NAT Gateway, Internet Gateway, Security Groups)"
-  ],
-  "subject_labels": [
-    "Failure Recovery Automation",
-    "IaC Optimization",
-    "Security Configuration as Code"
-  ],
-  "training_quality": 9,
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "mayanksethi-turing",
-  "dockerS3Location": ""
+  ]
 }
