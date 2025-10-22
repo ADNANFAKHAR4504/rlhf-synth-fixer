@@ -27,7 +27,6 @@ provider "aws" {
       Environment = var.environment
       Project     = "content-management-platform"
       ManagedBy   = "terraform"
-      CreatedAt   = timestamp()
     }
   }
 }
