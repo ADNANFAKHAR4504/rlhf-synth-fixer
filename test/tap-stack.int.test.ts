@@ -18,7 +18,7 @@ const loadCfnOutputs = () => {
     try {
       const outputsContent = fs.readFileSync(outputsFilePath, 'utf-8');
       cfnOutputs = JSON.parse(outputsContent);
-      console.log('✅ Loaded CloudFormation outputs from file');
+      console.log('Loaded CloudFormation outputs from file');
     } catch (error) {
       if (error instanceof Error) {
         console.error('Could not parse cfn-outputs/flat-outputs.json:', error.message);
@@ -27,7 +27,7 @@ const loadCfnOutputs = () => {
       }
     }
   } else {
-    console.log('⚠️ cfn-outputs/flat-outputs.json not found, using fallback values');
+    console.log(' cfn-outputs/flat-outputs.json not found, using fallback values');
   }
 
   // Fallback to environment variables or construct expected resource names

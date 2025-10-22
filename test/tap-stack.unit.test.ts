@@ -47,7 +47,7 @@ describe('TapStack CloudFormation Template', () => {
         Type: 'String',
         NoEcho: true,
         MinLength: 8,
-        Default: 'TempPassword123!',
+        Default: 'NewPassword2024!',
         Description: 'Master password for Aurora database.',
       },
       DailyScheduleExpression: {
