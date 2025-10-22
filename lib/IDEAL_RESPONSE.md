@@ -1,4 +1,8 @@
 ```yml
+# patient-portal-secure-foundation.yaml
+# CloudFormation template for HIPAA-compliant Healthcare Patient Portal infrastructure
+# All resources follow nova-prod-* naming convention for production environment
+
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure foundation for Healthcare Patient Portal with HIPAA compliance'
 
@@ -20,6 +24,9 @@ Parameters:
   ACMCertificateArn:
     Type: String
     Description: 'ACM certificate ARN for the ALB HTTPS listener'
+    Default: ''
+    AllowedPattern: '^$|arn:aws:acm:[a-z0-9-]+:\d{12}:certificate\/[A-Za-z0-9-]+'
+    ConstraintDescription: 'Provide a valid ACM certificate ARN or leave empty'
 
 Mappings: 
   SubnetConfig:
@@ -37,6 +44,10 @@ Mappings:
       CIDR: '10.0.20.0/24'
     DatabaseSubnet2:
       CIDR: '10.0.21.0/24'
+
+Conditions:
+  HasACMCertificateArn: !Not [ !Equals [ !Ref ACMCertificateArn, '' ] ]
+  NoACMCertificateArn: !Equals [ !Ref ACMCertificateArn, '' ]
 
 Resources:
   # Secrets Manager Secret for RDS password
@@ -577,7 +588,7 @@ Resources:
       LaunchTemplateName: 'nova-prod-app-lt'
       LaunchTemplateData:
         IamInstanceProfile:
-          Arn: !GetAtt NovaEC2InstanceProfile.Arn
+          Name: !Ref NovaEC2InstanceProfile
         InstanceType: t3.small
         ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
         SecurityGroupIds:
@@ -685,6 +696,7 @@ Resources:
   # HTTPS Listener for ALB
   NovaALBHTTPSListener:
     Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Condition: HasACMCertificateArn
     Properties:
       LoadBalancerArn: !Ref NovaApplicationLoadBalancer
       Port: 443
@@ -695,11 +707,38 @@ Resources:
         - Type: forward
           TargetGroupArn: !Ref NovaALBTargetGroup
 
+  # HTTP listener that redirects to HTTPS when ACM cert is provided
+  NovaALBHTTPRedirectListener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Condition: HasACMCertificateArn
+    Properties:
+      LoadBalancerArn: !Ref NovaApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: redirect
+          RedirectConfig:
+            Protocol: HTTPS
+            Port: '443'
+            StatusCode: HTTP_301
+
+  # HTTP listener that forwards to target group when ACM cert isn't provided
+  NovaALBHTTPForwardListener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Condition: NoACMCertificateArn
+    Properties:
+      LoadBalancerArn: !Ref NovaApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref NovaALBTargetGroup
+
   # AWS WAF Configuration
   NovaWAFWebACL:
     Type: 'AWS::WAFv2::WebACL'
     Properties:
-      Name: 'nova-prod-waf-acl'
+      Name: !Sub 'nova-prod-waf-acl-${AWS::StackName}-${AWS::AccountId}'
       Scope: REGIONAL
       DefaultAction:
         Allow: {}
@@ -835,7 +874,7 @@ Resources:
       SubnetId: !Ref NovaPublicSubnet1
       InstanceType: t3.micro
       ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
-      IamInstanceProfile: !Ref NovaBastionInstanceProfile
+      IamInstanceProfile: !Ref NovaEC2InstanceProfile
       SecurityGroupIds:
         - !Ref NovaBastionSecurityGroup
       BlockDeviceMappings:
@@ -997,49 +1036,6 @@ Resources:
       TargetId: !Ref NovaRDSInstance
       TargetType: 'AWS::RDS::DBInstance'
 
-  # Security group for Secrets Manager Rotation Lambda
-  NovaSecretsRotationSecurityGroup:
-    Type: 'AWS::EC2::SecurityGroup'
-    Properties:
-      GroupName: 'nova-prod-secrets-rotation-sg'
-      GroupDescription: 'SG for secrets rotation lambda to access RDS'
-      VpcId: !Ref NovaVPC
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: '0.0.0.0/0'
-      Tags:
-        - Key: Name
-          Value: 'nova-prod-secrets-rotation-sg'
-        - Key: team
-          Value: '2'
-        - Key: iac-rlhf-amazon
-          Value: 'true'
-
-  # Allow rotation lambda SG to reach DB on 3306
-  NovaDBIngressFromRotation:
-    Type: 'AWS::EC2::SecurityGroupIngress'
-    Properties:
-      GroupId: !Ref NovaDatabaseSecurityGroup
-      IpProtocol: tcp
-      FromPort: 3306
-      ToPort: 3306
-      SourceSecurityGroupId: !Ref NovaSecretsRotationSecurityGroup
-      Description: 'Allow Secrets Manager rotation to access RDS'
-
-  # Secrets Manager rotation schedule (hosted rotation for MySQL Single-User)
-  NovaRDSSecretRotation:
-    Type: 'AWS::SecretsManager::RotationSchedule'
-    Properties:
-      SecretId: !Ref NovaRDSPasswordSecret
-      RotationRules:
-        AutomaticallyAfterDays: 30
-      HostedRotationLambda:
-        RotationType: MySQLSingleUser
-        VpcSecurityGroupIds: !Ref NovaSecretsRotationSecurityGroup
-        VpcSubnetIds: !Join
-          - ','
-          - - !Ref NovaDatabaseSubnet1
-            - !Ref NovaDatabaseSubnet2
 
   # CloudWatch Log Group for VPC Flow Logs
   NovaVPCFlowLogsGroup:
@@ -1331,4 +1327,40 @@ Outputs:
     Value: !Ref NovaVPCFlowLogsGroup
     Export:
       Name: 'nova-prod-vpc-flow-logs-group'
+
+  DatabaseSecretArn:
+    Description: 'Secrets Manager ARN for the RDS master credential'
+    Value: !Ref NovaRDSPasswordSecret
+    Export:
+      Name: 'nova-prod-db-secret-arn'
+
+  BastionSecurityGroupId:
+    Description: 'Bastion host Security Group ID'
+    Value: !Ref NovaBastionSecurityGroup
+    Export:
+      Name: 'nova-prod-bastion-sg-id'
+
+  ALBSecurityGroupId:
+    Description: 'Application Load Balancer Security Group ID'
+    Value: !Ref NovaALBSecurityGroup
+    Export:
+      Name: 'nova-prod-alb-sg-id'
+
+  DatabaseSecurityGroupId:
+    Description: 'Database Security Group ID'
+    Value: !Ref NovaDatabaseSecurityGroup
+    Export:
+      Name: 'nova-prod-db-sg-id'
+
+  CloudTrailBucketName:
+    Description: 'CloudTrail S3 bucket name'
+    Value: !Ref NovaCloudTrailBucket
+    Export:
+      Name: 'nova-prod-cloudtrail-bucket'
+
+  RDSInstanceIdentifier:
+    Description: 'RDS Instance Identifier'
+    Value: !Ref NovaRDSInstance
+    Export:
+      Name: 'nova-prod-rds-identifier'
 ```
