@@ -414,6 +414,7 @@ export class TapStack extends TerraformStack {
       },
       provider: primaryProvider,
     });
+    alertTopic.overrideLogicalId(`alert-topic-${deployVersion}`);
 
     // Create IAM role for RDS enhanced monitoring
     const rdsMonitoringRole = new IamRole(this, 'rds-monitoring-role', {
@@ -440,7 +441,8 @@ export class TapStack extends TerraformStack {
 
     new IamRolePolicyAttachment(this, 'rds-monitoring-policy', {
       role: rdsMonitoringRole.name,
-      policyArn: 'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole',
+      policyArn:
+        'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole',
       provider: primaryProvider,
     });
 
@@ -754,18 +756,22 @@ export class TapStack extends TerraformStack {
     });
     dbSecret.overrideLogicalId(`db-secret-${deployVersion}`);
 
-    const dbSecretVersion = new SecretsmanagerSecretVersion(this, 'db-secret-version', {
-      secretId: dbSecret.id,
-      secretString: JSON.stringify({
-        username: 'dbadmin',
-        password: 'TempPassword123!Complex9',
-        engine: 'postgres',
-        host: 'placeholder',
-        port: 5432,
-        dbname: 'patientdb',
-      }),
-      provider: primaryProvider,
-    });
+    const dbSecretVersion = new SecretsmanagerSecretVersion(
+      this,
+      'db-secret-version',
+      {
+        secretId: dbSecret.id,
+        secretString: JSON.stringify({
+          username: 'dbadmin',
+          password: 'TempPassword123!Complex9',
+          engine: 'postgres',
+          host: 'placeholder',
+          port: 5432,
+          dbname: 'patientdb',
+        }),
+        provider: primaryProvider,
+      }
+    );
     dbSecretVersion.overrideLogicalId(`db-secret-version-${deployVersion}`);
 
     // Create RDS Global Cluster for cross-region replication
@@ -1065,19 +1071,20 @@ export class TapStack extends TerraformStack {
 
     // Create backup vault
     const backupVault = new BackupVault(this, 'backup-vault', {
-      name: `hipaa-backup-vault-${environmentSuffix}`,
+      name: `hipaa-backup-vault-${deployVersion}-${environmentSuffix}`,
       kmsKeyArn: kmsKey.arn,
       tags: {
-        Name: `hipaa-backup-vault-${environmentSuffix}`,
+        Name: `hipaa-backup-vault-${deployVersion}-${environmentSuffix}`,
         Compliance: 'HIPAA',
         Environment: environmentSuffix,
       },
       provider: primaryProvider,
     });
+    backupVault.overrideLogicalId(`backup-vault-${deployVersion}`);
 
     // Create backup plan with multiple retention rules
     const backupPlan = new BackupPlan(this, 'backup-plan', {
-      name: `hipaa-backup-plan-${environmentSuffix}`,
+      name: `hipaa-backup-plan-${deployVersion}-${environmentSuffix}`,
       rule: [
         {
           ruleName: 'hourly-backup',
@@ -1146,15 +1153,16 @@ export class TapStack extends TerraformStack {
         },
       ],
       tags: {
-        Name: `hipaa-backup-plan-${environmentSuffix}`,
+        Name: `hipaa-backup-plan-${deployVersion}-${environmentSuffix}`,
         Compliance: 'HIPAA',
         Environment: environmentSuffix,
       },
       provider: primaryProvider,
     });
+    backupPlan.overrideLogicalId(`backup-plan-${deployVersion}`);
 
-    new BackupSelection(this, 'backup-selection', {
-      name: `hipaa-backup-selection-${environmentSuffix}`,
+    const backupSelection = new BackupSelection(this, 'backup-selection', {
+      name: `hipaa-backup-selection-${deployVersion}-${environmentSuffix}`,
       planId: backupPlan.id,
       iamRoleArn: backupRole.arn,
       resources: [auroraCluster.arn],
@@ -1168,27 +1176,32 @@ export class TapStack extends TerraformStack {
       dependsOn: [backupPlan, backupRole, auroraCluster],
       provider: primaryProvider,
     });
+    backupSelection.overrideLogicalId(`backup-selection-${deployVersion}`);
 
     // === MONITORING ===
     // Create CloudWatch Alarms
-    const backupAlarm = new CloudwatchMetricAlarm(this, 'backup-job-failed-alarm', {
-      alarmName: `hipaa-backup-job-failed-${deployVersion}-${environmentSuffix}`,
-      comparisonOperator: 'GreaterThanThreshold',
-      evaluationPeriods: 1,
-      metricName: 'NumberOfBackupJobsFailed',
-      namespace: 'AWS/Backup',
-      period: 300,
-      statistic: 'Sum',
-      threshold: 0,
-      alarmDescription: 'Alert when backup job fails',
-      alarmActions: [alertTopic.arn],
-      treatMissingData: 'notBreaching',
-      tags: {
-        Name: `hipaa-backup-failed-alarm-${deployVersion}-${environmentSuffix}`,
-        Environment: environmentSuffix,
-      },
-      provider: primaryProvider,
-    });
+    const backupAlarm = new CloudwatchMetricAlarm(
+      this,
+      'backup-job-failed-alarm',
+      {
+        alarmName: `hipaa-backup-job-failed-${deployVersion}-${environmentSuffix}`,
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 1,
+        metricName: 'NumberOfBackupJobsFailed',
+        namespace: 'AWS/Backup',
+        period: 300,
+        statistic: 'Sum',
+        threshold: 0,
+        alarmDescription: 'Alert when backup job fails',
+        alarmActions: [alertTopic.arn],
+        treatMissingData: 'notBreaching',
+        tags: {
+          Name: `hipaa-backup-failed-alarm-${deployVersion}-${environmentSuffix}`,
+          Environment: environmentSuffix,
+        },
+        provider: primaryProvider,
+      }
+    );
     backupAlarm.overrideLogicalId(`backup-job-failed-alarm-${deployVersion}`);
 
     const dbCpuAlarm = new CloudwatchMetricAlarm(this, 'db-cpu-alarm', {
@@ -1214,27 +1227,31 @@ export class TapStack extends TerraformStack {
     });
     dbCpuAlarm.overrideLogicalId(`db-cpu-alarm-${deployVersion}`);
 
-    const dbConnectionAlarm = new CloudwatchMetricAlarm(this, 'db-connection-alarm', {
-      alarmName: `hipaa-db-connections-high-${deployVersion}-${environmentSuffix}`,
-      comparisonOperator: 'GreaterThanThreshold',
-      evaluationPeriods: 2,
-      metricName: 'DatabaseConnections',
-      namespace: 'AWS/RDS',
-      period: 300,
-      statistic: 'Average',
-      threshold: 80,
-      alarmDescription: 'Alert when database connections are high',
-      alarmActions: [alertTopic.arn],
-      dimensions: {
-        DBClusterIdentifier: auroraCluster.id,
-      },
-      treatMissingData: 'notBreaching',
-      tags: {
-        Name: `hipaa-db-connections-alarm-${deployVersion}-${environmentSuffix}`,
-        Environment: environmentSuffix,
-      },
-      provider: primaryProvider,
-    });
+    const dbConnectionAlarm = new CloudwatchMetricAlarm(
+      this,
+      'db-connection-alarm',
+      {
+        alarmName: `hipaa-db-connections-high-${deployVersion}-${environmentSuffix}`,
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 2,
+        metricName: 'DatabaseConnections',
+        namespace: 'AWS/RDS',
+        period: 300,
+        statistic: 'Average',
+        threshold: 80,
+        alarmDescription: 'Alert when database connections are high',
+        alarmActions: [alertTopic.arn],
+        dimensions: {
+          DBClusterIdentifier: auroraCluster.id,
+        },
+        treatMissingData: 'notBreaching',
+        tags: {
+          Name: `hipaa-db-connections-alarm-${deployVersion}-${environmentSuffix}`,
+          Environment: environmentSuffix,
+        },
+        provider: primaryProvider,
+      }
+    );
     dbConnectionAlarm.overrideLogicalId(`db-connection-alarm-${deployVersion}`);
 
     new CloudwatchMetricAlarm(this, 's3-replication-latency-alarm', {
