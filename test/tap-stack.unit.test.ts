@@ -35,6 +35,24 @@ describe('Stack Structure', () => {
     expect(stack).toBeDefined();
     expect(synthesized).toBeDefined();
   });
+
+  test('TapStack instantiates with default tags', () => {
+    app = new App();
+    stack = new TapStack(app, 'TestTapStackWithTags', {
+      environmentSuffix: 'test',
+      defaultTags: {
+        tags: {
+          Environment: 'test',
+          Project: 'manufacturing'
+        }
+      }
+    });
+    synthesized = Testing.synth(stack);
+
+    // Verify that TapStack instantiates without errors with default tags
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+  });
 });
 
 // add more test suites and cases as needed

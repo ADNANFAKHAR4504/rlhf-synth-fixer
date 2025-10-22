@@ -1,8 +1,6 @@
 import { Construct } from 'constructs';
 import { Apigatewayv2Api } from '@cdktf/provider-aws/lib/apigatewayv2-api';
 import { Apigatewayv2Stage } from '@cdktf/provider-aws/lib/apigatewayv2-stage';
-import { Apigatewayv2Integration } from '@cdktf/provider-aws/lib/apigatewayv2-integration';
-import { Apigatewayv2Route } from '@cdktf/provider-aws/lib/apigatewayv2-route';
 import { Apigatewayv2VpcLink } from '@cdktf/provider-aws/lib/apigatewayv2-vpc-link';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { TerraformOutput } from 'cdktf';
@@ -32,7 +30,7 @@ export class ApiGatewayModule extends Construct {
     });
 
     // Create VPC Link for private integration
-    const vpcLink = new Apigatewayv2VpcLink(this, 'vpc-link', {
+    new Apigatewayv2VpcLink(this, 'vpc-link', {
       name: `manufacturing-vpc-link-${environmentSuffix}`,
       subnetIds: vpcLinkSubnetIds,
       securityGroupIds: [],
