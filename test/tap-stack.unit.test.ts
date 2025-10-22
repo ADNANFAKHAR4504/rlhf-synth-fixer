@@ -59,7 +59,9 @@ describe('Student Analytics Platform Infrastructure', () => {
       synthesized = JSON.parse(Testing.synth(stack));
 
       expect(synthesized.provider.aws[0].default_tags).toBeDefined();
-      expect(synthesized.provider.aws[0].default_tags.length).toBeGreaterThan(0);
+      expect(synthesized.provider.aws[0].default_tags.length).toBeGreaterThan(
+        0
+      );
     });
   });
 
@@ -82,7 +84,9 @@ describe('Student Analytics Platform Infrastructure', () => {
     });
 
     test('Creates Internet Gateway', () => {
-      const igw = Object.values(synthesized.resource.aws_internet_gateway)[0] as any;
+      const igw = Object.values(
+        synthesized.resource.aws_internet_gateway
+      )[0] as any;
       expect(igw).toBeDefined();
       expect(igw.vpc_id).toBeDefined();
       expect(igw.tags.Name).toContain('edu-igw-');
@@ -109,8 +113,8 @@ describe('Student Analytics Platform Infrastructure', () => {
       expect(routeTables.length).toBeGreaterThan(0);
 
       const routes = Object.values(synthesized.resource.aws_route);
-      const internetRoute = routes.find((r: any) =>
-        r.destination_cidr_block === '0.0.0.0/0'
+      const internetRoute = routes.find(
+        (r: any) => r.destination_cidr_block === '0.0.0.0/0'
       );
       expect(internetRoute).toBeDefined();
     });
@@ -127,7 +131,9 @@ describe('Student Analytics Platform Infrastructure', () => {
     });
 
     test('Creates ALB security group with proper rules', () => {
-      const securityGroups = Object.values(synthesized.resource.aws_security_group);
+      const securityGroups = Object.values(
+        synthesized.resource.aws_security_group
+      );
       const albSG = securityGroups.find((sg: any) =>
         sg.name?.includes('alb-sg')
       ) as any;
@@ -136,7 +142,9 @@ describe('Student Analytics Platform Infrastructure', () => {
     });
 
     test('Creates ECS security group', () => {
-      const securityGroups = Object.values(synthesized.resource.aws_security_group);
+      const securityGroups = Object.values(
+        synthesized.resource.aws_security_group
+      );
       const ecsSG = securityGroups.find((sg: any) =>
         sg.name?.includes('ecs-sg')
       ) as any;
@@ -144,7 +152,9 @@ describe('Student Analytics Platform Infrastructure', () => {
     });
 
     test('Creates RDS security group', () => {
-      const securityGroups = Object.values(synthesized.resource.aws_security_group);
+      const securityGroups = Object.values(
+        synthesized.resource.aws_security_group
+      );
       const rdsSG = securityGroups.find((sg: any) =>
         sg.name?.includes('rds-sg')
       ) as any;
@@ -152,7 +162,9 @@ describe('Student Analytics Platform Infrastructure', () => {
     });
 
     test('Creates Redis security group', () => {
-      const securityGroups = Object.values(synthesized.resource.aws_security_group);
+      const securityGroups = Object.values(
+        synthesized.resource.aws_security_group
+      );
       const redisSG = securityGroups.find((sg: any) =>
         sg.name?.includes('redis-sg')
       ) as any;
@@ -160,7 +172,9 @@ describe('Student Analytics Platform Infrastructure', () => {
     });
 
     test('Creates EFS security group', () => {
-      const securityGroups = Object.values(synthesized.resource.aws_security_group);
+      const securityGroups = Object.values(
+        synthesized.resource.aws_security_group
+      );
       const efsSG = securityGroups.find((sg: any) =>
         sg.name?.includes('efs-sg')
       ) as any;
@@ -191,7 +205,9 @@ describe('Student Analytics Platform Infrastructure', () => {
     });
 
     test('Creates KMS alias', () => {
-      const kmsAlias = Object.values(synthesized.resource.aws_kms_alias)[0] as any;
+      const kmsAlias = Object.values(
+        synthesized.resource.aws_kms_alias
+      )[0] as any;
       expect(kmsAlias).toBeDefined();
       expect(kmsAlias.name).toContain('edutech');
     });
@@ -208,7 +224,9 @@ describe('Student Analytics Platform Infrastructure', () => {
     });
 
     test('Creates Kinesis stream with encryption', () => {
-      const stream = Object.values(synthesized.resource.aws_kinesis_stream)[0] as any;
+      const stream = Object.values(
+        synthesized.resource.aws_kinesis_stream
+      )[0] as any;
       expect(stream).toBeDefined();
       expect(stream.name).toContain('edu-analytics-stream');
       expect(stream.shard_count).toBe(2);
@@ -217,13 +235,17 @@ describe('Student Analytics Platform Infrastructure', () => {
     });
 
     test('Configures shard level metrics', () => {
-      const stream = Object.values(synthesized.resource.aws_kinesis_stream)[0] as any;
+      const stream = Object.values(
+        synthesized.resource.aws_kinesis_stream
+      )[0] as any;
       expect(stream.shard_level_metrics).toBeDefined();
       expect(stream.shard_level_metrics.length).toBeGreaterThan(0);
     });
 
     test('Uses environment suffix in stream name', () => {
-      const stream = Object.values(synthesized.resource.aws_kinesis_stream)[0] as any;
+      const stream = Object.values(
+        synthesized.resource.aws_kinesis_stream
+      )[0] as any;
       expect(stream.name).toMatch(/.*-dev$/);
     });
   });
@@ -292,7 +314,9 @@ describe('Student Analytics Platform Infrastructure', () => {
     });
 
     test('Creates Aurora PostgreSQL cluster', () => {
-      const cluster = Object.values(synthesized.resource.aws_rds_cluster)[0] as any;
+      const cluster = Object.values(
+        synthesized.resource.aws_rds_cluster
+      )[0] as any;
       expect(cluster).toBeDefined();
       expect(cluster.cluster_identifier).toContain('edu-aurora');
       expect(cluster.engine).toBe('aurora-postgresql');
@@ -300,15 +324,21 @@ describe('Student Analytics Platform Infrastructure', () => {
     });
 
     test('Enables storage encryption with KMS', () => {
-      const cluster = Object.values(synthesized.resource.aws_rds_cluster)[0] as any;
+      const cluster = Object.values(
+        synthesized.resource.aws_rds_cluster
+      )[0] as any;
       expect(cluster.storage_encrypted).toBe(true);
       expect(cluster.kms_key_id).toBeDefined();
     });
 
     test('Configures Serverless v2 scaling', () => {
-      const cluster = Object.values(synthesized.resource.aws_rds_cluster)[0] as any;
+      const cluster = Object.values(
+        synthesized.resource.aws_rds_cluster
+      )[0] as any;
       expect(cluster.serverlessv2_scaling_configuration).toBeDefined();
-      const scalingConfig = Array.isArray(cluster.serverlessv2_scaling_configuration)
+      const scalingConfig = Array.isArray(
+        cluster.serverlessv2_scaling_configuration
+      )
         ? cluster.serverlessv2_scaling_configuration[0]
         : cluster.serverlessv2_scaling_configuration;
       expect(scalingConfig.min_capacity).toBe(0.5);
@@ -316,24 +346,32 @@ describe('Student Analytics Platform Infrastructure', () => {
     });
 
     test('Creates Aurora cluster instance', () => {
-      const instance = Object.values(synthesized.resource.aws_rds_cluster_instance)[0] as any;
+      const instance = Object.values(
+        synthesized.resource.aws_rds_cluster_instance
+      )[0] as any;
       expect(instance).toBeDefined();
       expect(instance.instance_class).toBe('db.serverless');
     });
 
     test('Creates DB subnet group', () => {
-      const subnetGroup = Object.values(synthesized.resource.aws_db_subnet_group)[0] as any;
+      const subnetGroup = Object.values(
+        synthesized.resource.aws_db_subnet_group
+      )[0] as any;
       expect(subnetGroup).toBeDefined();
       expect(subnetGroup.name).toContain('db-subnet-group');
     });
 
     test('Enables CloudWatch log exports', () => {
-      const cluster = Object.values(synthesized.resource.aws_rds_cluster)[0] as any;
+      const cluster = Object.values(
+        synthesized.resource.aws_rds_cluster
+      )[0] as any;
       expect(cluster.enabled_cloudwatch_logs_exports).toContain('postgresql');
     });
 
     test('Sets skip final snapshot for destroyability', () => {
-      const cluster = Object.values(synthesized.resource.aws_rds_cluster)[0] as any;
+      const cluster = Object.values(
+        synthesized.resource.aws_rds_cluster
+      )[0] as any;
       expect(cluster.skip_final_snapshot).toBe(true);
     });
   });
@@ -349,25 +387,33 @@ describe('Student Analytics Platform Infrastructure', () => {
     });
 
     test('Creates EFS file system with encryption', () => {
-      const efs = Object.values(synthesized.resource.aws_efs_file_system)[0] as any;
+      const efs = Object.values(
+        synthesized.resource.aws_efs_file_system
+      )[0] as any;
       expect(efs).toBeDefined();
       expect(efs.encrypted).toBe(true);
       expect(efs.kms_key_id).toBeDefined();
     });
 
     test('Configures performance and throughput modes', () => {
-      const efs = Object.values(synthesized.resource.aws_efs_file_system)[0] as any;
+      const efs = Object.values(
+        synthesized.resource.aws_efs_file_system
+      )[0] as any;
       expect(efs.performance_mode).toBe('generalPurpose');
       expect(efs.throughput_mode).toBe('bursting');
     });
 
     test('Creates mount targets in multiple AZs', () => {
-      const mountTargets = Object.values(synthesized.resource.aws_efs_mount_target);
+      const mountTargets = Object.values(
+        synthesized.resource.aws_efs_mount_target
+      );
       expect(mountTargets.length).toBeGreaterThanOrEqual(2);
     });
 
     test('Configures lifecycle policy', () => {
-      const efs = Object.values(synthesized.resource.aws_efs_file_system)[0] as any;
+      const efs = Object.values(
+        synthesized.resource.aws_efs_file_system
+      )[0] as any;
       expect(efs.lifecycle_policy).toBeDefined();
     });
   });
@@ -383,7 +429,9 @@ describe('Student Analytics Platform Infrastructure', () => {
     });
 
     test('Creates database credentials secret', () => {
-      const secrets = Object.values(synthesized.resource.aws_secretsmanager_secret);
+      const secrets = Object.values(
+        synthesized.resource.aws_secretsmanager_secret
+      );
       const dbSecret = secrets.find((s: any) =>
         s.name?.includes('db-credentials')
       ) as any;
@@ -392,7 +440,9 @@ describe('Student Analytics Platform Infrastructure', () => {
     });
 
     test('Creates Redis configuration secret', () => {
-      const secrets = Object.values(synthesized.resource.aws_secretsmanager_secret);
+      const secrets = Object.values(
+        synthesized.resource.aws_secretsmanager_secret
+      );
       const redisSecret = secrets.find((s: any) =>
         s.name?.includes('redis-config')
       ) as any;
@@ -400,12 +450,16 @@ describe('Student Analytics Platform Infrastructure', () => {
     });
 
     test('Creates secret versions', () => {
-      const versions = Object.values(synthesized.resource.aws_secretsmanager_secret_version);
+      const versions = Object.values(
+        synthesized.resource.aws_secretsmanager_secret_version
+      );
       expect(versions.length).toBeGreaterThanOrEqual(2);
     });
 
     test('Configures secret rotation', () => {
-      const rotation = Object.values(synthesized.resource.aws_secretsmanager_secret_rotation)[0] as any;
+      const rotation = Object.values(
+        synthesized.resource.aws_secretsmanager_secret_rotation
+      )[0] as any;
       expect(rotation).toBeDefined();
       expect(rotation.rotation_rules).toBeDefined();
       const rotationRules = Array.isArray(rotation.rotation_rules)
@@ -435,14 +489,18 @@ describe('Student Analytics Platform Infrastructure', () => {
     });
 
     test('Creates ECS cluster with container insights', () => {
-      const cluster = Object.values(synthesized.resource.aws_ecs_cluster)[0] as any;
+      const cluster = Object.values(
+        synthesized.resource.aws_ecs_cluster
+      )[0] as any;
       expect(cluster).toBeDefined();
       expect(cluster.name).toContain('edu-ecs-cluster');
       expect(cluster.setting).toBeDefined();
     });
 
     test('Creates ECS task definition for Fargate', () => {
-      const taskDef = Object.values(synthesized.resource.aws_ecs_task_definition)[0] as any;
+      const taskDef = Object.values(
+        synthesized.resource.aws_ecs_task_definition
+      )[0] as any;
       expect(taskDef).toBeDefined();
       expect(taskDef.family).toContain('edu-analytics-task');
       expect(taskDef.network_mode).toBe('awsvpc');
@@ -450,7 +508,9 @@ describe('Student Analytics Platform Infrastructure', () => {
     });
 
     test('Configures task with appropriate CPU and memory', () => {
-      const taskDef = Object.values(synthesized.resource.aws_ecs_task_definition)[0] as any;
+      const taskDef = Object.values(
+        synthesized.resource.aws_ecs_task_definition
+      )[0] as any;
       expect(taskDef.cpu).toBe('512');
       expect(taskDef.memory).toBe('1024');
     });
@@ -465,14 +525,17 @@ describe('Student Analytics Platform Infrastructure', () => {
 
     test('Creates IAM role for task', () => {
       const roles = Object.values(synthesized.resource.aws_iam_role);
-      const taskRole = roles.find((r: any) =>
-        r.name?.includes('task-role') && !r.name?.includes('execution')
+      const taskRole = roles.find(
+        (r: any) =>
+          r.name?.includes('task-role') && !r.name?.includes('execution')
       ) as any;
       expect(taskRole).toBeDefined();
     });
 
     test('Creates ECS service with desired count', () => {
-      const service = Object.values(synthesized.resource.aws_ecs_service)[0] as any;
+      const service = Object.values(
+        synthesized.resource.aws_ecs_service
+      )[0] as any;
       expect(service).toBeDefined();
       expect(service.name).toContain('edu-analytics-service');
       expect(service.desired_count).toBe(2);
@@ -480,13 +543,17 @@ describe('Student Analytics Platform Infrastructure', () => {
     });
 
     test('Configures ECS service with load balancer', () => {
-      const service = Object.values(synthesized.resource.aws_ecs_service)[0] as any;
+      const service = Object.values(
+        synthesized.resource.aws_ecs_service
+      )[0] as any;
       expect(service.load_balancer).toBeDefined();
       expect(service.load_balancer.length).toBeGreaterThan(0);
     });
 
     test('Creates CloudWatch log group for ECS', () => {
-      const logGroups = Object.values(synthesized.resource.aws_cloudwatch_log_group);
+      const logGroups = Object.values(
+        synthesized.resource.aws_cloudwatch_log_group
+      );
       const ecsLogGroup = logGroups.find((lg: any) =>
         lg.name?.includes('/ecs/')
       ) as any;
@@ -503,7 +570,9 @@ describe('Student Analytics Platform Infrastructure', () => {
     });
 
     test('Creates target group for ECS service', () => {
-      const targetGroup = Object.values(synthesized.resource.aws_lb_target_group)[0] as any;
+      const targetGroup = Object.values(
+        synthesized.resource.aws_lb_target_group
+      )[0] as any;
       expect(targetGroup).toBeDefined();
       expect(targetGroup.port).toBe(8080);
       expect(targetGroup.protocol).toBe('HTTP');
@@ -511,7 +580,9 @@ describe('Student Analytics Platform Infrastructure', () => {
     });
 
     test('Creates ALB listener', () => {
-      const listener = Object.values(synthesized.resource.aws_lb_listener)[0] as any;
+      const listener = Object.values(
+        synthesized.resource.aws_lb_listener
+      )[0] as any;
       expect(listener).toBeDefined();
       expect(listener.port).toBe(80);
       expect(listener.protocol).toBe('HTTP');
@@ -529,41 +600,55 @@ describe('Student Analytics Platform Infrastructure', () => {
     });
 
     test('Creates REST API Gateway', () => {
-      const api = Object.values(synthesized.resource.aws_api_gateway_rest_api)[0] as any;
+      const api = Object.values(
+        synthesized.resource.aws_api_gateway_rest_api
+      )[0] as any;
       expect(api).toBeDefined();
       expect(api.name).toContain('edu-analytics-api');
       expect(api.description).toContain('student analytics');
     });
 
     test('Creates API resources', () => {
-      const resources = Object.values(synthesized.resource.aws_api_gateway_resource);
+      const resources = Object.values(
+        synthesized.resource.aws_api_gateway_resource
+      );
       expect(resources.length).toBeGreaterThanOrEqual(2);
     });
 
     test('Creates API methods', () => {
-      const methods = Object.values(synthesized.resource.aws_api_gateway_method);
+      const methods = Object.values(
+        synthesized.resource.aws_api_gateway_method
+      );
       expect(methods.length).toBeGreaterThanOrEqual(2);
     });
 
     test('Configures API integrations', () => {
-      const integrations = Object.values(synthesized.resource.aws_api_gateway_integration);
+      const integrations = Object.values(
+        synthesized.resource.aws_api_gateway_integration
+      );
       expect(integrations.length).toBeGreaterThanOrEqual(2);
     });
 
     test('Creates API deployment', () => {
-      const deployment = Object.values(synthesized.resource.aws_api_gateway_deployment)[0] as any;
+      const deployment = Object.values(
+        synthesized.resource.aws_api_gateway_deployment
+      )[0] as any;
       expect(deployment).toBeDefined();
     });
 
     test('Creates API stage with logging', () => {
-      const stage = Object.values(synthesized.resource.aws_api_gateway_stage)[0] as any;
+      const stage = Object.values(
+        synthesized.resource.aws_api_gateway_stage
+      )[0] as any;
       expect(stage).toBeDefined();
       expect(stage.xray_tracing_enabled).toBe(true);
       expect(stage.access_log_settings).toBeDefined();
     });
 
     test('Creates CloudWatch log group for API Gateway', () => {
-      const logGroups = Object.values(synthesized.resource.aws_cloudwatch_log_group);
+      const logGroups = Object.values(
+        synthesized.resource.aws_cloudwatch_log_group
+      );
       const apiLogGroup = logGroups.find((lg: any) =>
         lg.name?.includes('/aws/apigateway/')
       ) as any;
@@ -587,14 +672,18 @@ describe('Student Analytics Platform Infrastructure', () => {
     });
 
     test('All security groups include environment suffix', () => {
-      const securityGroups = Object.values(synthesized.resource.aws_security_group);
+      const securityGroups = Object.values(
+        synthesized.resource.aws_security_group
+      );
       securityGroups.forEach((sg: any) => {
         expect(sg.name).toContain('staging');
       });
     });
 
     test('Kinesis stream includes environment suffix', () => {
-      const stream = Object.values(synthesized.resource.aws_kinesis_stream)[0] as any;
+      const stream = Object.values(
+        synthesized.resource.aws_kinesis_stream
+      )[0] as any;
       expect(stream.name).toContain('staging');
     });
 
@@ -606,17 +695,23 @@ describe('Student Analytics Platform Infrastructure', () => {
     });
 
     test('Aurora cluster includes environment suffix', () => {
-      const cluster = Object.values(synthesized.resource.aws_rds_cluster)[0] as any;
+      const cluster = Object.values(
+        synthesized.resource.aws_rds_cluster
+      )[0] as any;
       expect(cluster.cluster_identifier).toContain('staging');
     });
 
     test('ECS cluster includes environment suffix', () => {
-      const cluster = Object.values(synthesized.resource.aws_ecs_cluster)[0] as any;
+      const cluster = Object.values(
+        synthesized.resource.aws_ecs_cluster
+      )[0] as any;
       expect(cluster.name).toContain('staging');
     });
 
     test('API Gateway includes environment suffix', () => {
-      const api = Object.values(synthesized.resource.aws_api_gateway_rest_api)[0] as any;
+      const api = Object.values(
+        synthesized.resource.aws_api_gateway_rest_api
+      )[0] as any;
       expect(api.name).toContain('staging');
     });
   });
@@ -637,7 +732,9 @@ describe('Student Analytics Platform Infrastructure', () => {
     });
 
     test('Kinesis stream uses KMS encryption', () => {
-      const stream = Object.values(synthesized.resource.aws_kinesis_stream)[0] as any;
+      const stream = Object.values(
+        synthesized.resource.aws_kinesis_stream
+      )[0] as any;
       expect(stream.encryption_type).toBe('KMS');
     });
 
@@ -650,24 +747,32 @@ describe('Student Analytics Platform Infrastructure', () => {
     });
 
     test('Aurora uses storage encryption', () => {
-      const cluster = Object.values(synthesized.resource.aws_rds_cluster)[0] as any;
+      const cluster = Object.values(
+        synthesized.resource.aws_rds_cluster
+      )[0] as any;
       expect(cluster.storage_encrypted).toBe(true);
     });
 
     test('EFS uses encryption', () => {
-      const efs = Object.values(synthesized.resource.aws_efs_file_system)[0] as any;
+      const efs = Object.values(
+        synthesized.resource.aws_efs_file_system
+      )[0] as any;
       expect(efs.encrypted).toBe(true);
     });
 
     test('Secrets Manager secrets use KMS encryption', () => {
-      const secrets = Object.values(synthesized.resource.aws_secretsmanager_secret);
+      const secrets = Object.values(
+        synthesized.resource.aws_secretsmanager_secret
+      );
       secrets.forEach((secret: any) => {
         expect(secret.kms_key_id).toBeDefined();
       });
     });
 
     test('CloudWatch log groups use KMS encryption', () => {
-      const logGroups = Object.values(synthesized.resource.aws_cloudwatch_log_group);
+      const logGroups = Object.values(
+        synthesized.resource.aws_cloudwatch_log_group
+      );
       logGroups.forEach((lg: any) => {
         expect(lg.kms_key_id).toBeDefined();
       });
@@ -698,7 +803,9 @@ describe('Student Analytics Platform Infrastructure', () => {
     });
 
     test('ECS service runs in multiple subnets', () => {
-      const service = Object.values(synthesized.resource.aws_ecs_service)[0] as any;
+      const service = Object.values(
+        synthesized.resource.aws_ecs_service
+      )[0] as any;
       expect(service.network_configuration).toBeDefined();
     });
 
@@ -708,7 +815,9 @@ describe('Student Analytics Platform Infrastructure', () => {
     });
 
     test('EFS has mount targets in multiple AZs', () => {
-      const mountTargets = Object.values(synthesized.resource.aws_efs_mount_target);
+      const mountTargets = Object.values(
+        synthesized.resource.aws_efs_mount_target
+      );
       expect(mountTargets.length).toBeGreaterThanOrEqual(2);
     });
   });
@@ -727,7 +836,9 @@ describe('Student Analytics Platform Infrastructure', () => {
       const kmsKey = Object.values(synthesized.resource.aws_kms_key)[0] as any;
       expect(kmsKey).toBeDefined();
 
-      const efs = Object.values(synthesized.resource.aws_efs_file_system)[0] as any;
+      const efs = Object.values(
+        synthesized.resource.aws_efs_file_system
+      )[0] as any;
       expect(efs.encrypted).toBe(true);
 
       const rds = Object.values(synthesized.resource.aws_rds_cluster)[0] as any;
@@ -742,12 +853,16 @@ describe('Student Analytics Platform Infrastructure', () => {
     });
 
     test('CloudWatch logging is enabled for audit trails', () => {
-      const logGroups = Object.values(synthesized.resource.aws_cloudwatch_log_group);
+      const logGroups = Object.values(
+        synthesized.resource.aws_cloudwatch_log_group
+      );
       expect(logGroups.length).toBeGreaterThan(0);
     });
 
     test('API Gateway has X-Ray tracing enabled', () => {
-      const stage = Object.values(synthesized.resource.aws_api_gateway_stage)[0] as any;
+      const stage = Object.values(
+        synthesized.resource.aws_api_gateway_stage
+      )[0] as any;
       expect(stage.xray_tracing_enabled).toBe(true);
     });
   });

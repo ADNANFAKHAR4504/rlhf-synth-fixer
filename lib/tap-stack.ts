@@ -1,4 +1,5 @@
 import { DataArchiveFile } from '@cdktf/provider-archive/lib/data-archive-file';
+import { ArchiveProvider } from '@cdktf/provider-archive/lib/provider';
 import { ApiGatewayDeployment } from '@cdktf/provider-aws/lib/api-gateway-deployment';
 import { ApiGatewayIntegration } from '@cdktf/provider-aws/lib/api-gateway-integration';
 import { ApiGatewayMethod } from '@cdktf/provider-aws/lib/api-gateway-method';
@@ -72,6 +73,9 @@ export class TapStack extends TerraformStack {
       region: awsRegion,
       defaultTags: defaultTags,
     });
+
+    // Configure Archive Provider for Lambda packages
+    new ArchiveProvider(this, 'archive');
 
     // Configure S3 Backend
     new S3Backend(this, {
@@ -552,8 +556,9 @@ export class TapStack extends TerraformStack {
     const lambdaArchive = new DataArchiveFile(this, 'rotation-lambda-zip', {
       type: 'zip',
       outputPath: `/tmp/rotation-lambda-${environmentSuffix}.zip`,
-      source: [{
-        content: `import json
+      source: [
+        {
+          content: `import json
 import boto3
 import logging
 import os
@@ -586,8 +591,9 @@ def lambda_handler(event, context):
         logger.error(f"Rotation failed: {str(e)}")
         raise e
 `,
-        filename: 'lambda_function.py'
-      }]
+          filename: 'lambda_function.py',
+        },
+      ],
     });
 
     const rotationLambda = new LambdaFunction(this, 'rotation-lambda', {

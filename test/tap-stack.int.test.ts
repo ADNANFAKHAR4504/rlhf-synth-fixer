@@ -58,10 +58,7 @@ const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // Helper function to load outputs
 function loadOutputs(): any {
-  const outputPath = path.join(
-    process.cwd(),
-    'terraform-outputs.json'
-  );
+  const outputPath = path.join(process.cwd(), 'terraform-outputs.json');
 
   if (fs.existsSync(outputPath)) {
     const content = fs.readFileSync(outputPath, 'utf-8');
@@ -144,7 +141,7 @@ describe('Student Analytics Platform Integration Tests', () => {
       expect(response.Subnets).toBeDefined();
       expect(response.Subnets!.length).toBeGreaterThanOrEqual(2);
 
-      const azs = new Set(response.Subnets!.map((s) => s.AvailabilityZone));
+      const azs = new Set(response.Subnets!.map(s => s.AvailabilityZone));
       expect(azs.size).toBeGreaterThanOrEqual(2);
     });
 
@@ -217,7 +214,9 @@ describe('Student Analytics Platform Integration Tests', () => {
 
       const response = await kinesisClient.send(command);
       expect(response.StreamDescription!.Shards).toBeDefined();
-      expect(response.StreamDescription!.Shards!.length).toBeGreaterThanOrEqual(2);
+      expect(response.StreamDescription!.Shards!.length).toBeGreaterThanOrEqual(
+        2
+      );
     }, 30000);
 
     test('Can write data to Kinesis stream', async () => {
@@ -353,7 +352,7 @@ describe('Student Analytics Platform Integration Tests', () => {
 
       const response = await efsClient.send(command);
       const efsSystem = response.FileSystems!.find(
-        (fs) => fs.Name === `edu-efs-${ENVIRONMENT_SUFFIX}`
+        fs => fs.Name === `edu-efs-${ENVIRONMENT_SUFFIX}`
       );
 
       expect(efsSystem).toBeDefined();
@@ -365,7 +364,7 @@ describe('Student Analytics Platform Integration Tests', () => {
       const describeCommand = new DescribeFileSystemsCommand({});
       const fsResponse = await efsClient.send(describeCommand);
       const efsSystem = fsResponse.FileSystems!.find(
-        (fs) => fs.Name === `edu-efs-${ENVIRONMENT_SUFFIX}`
+        fs => fs.Name === `edu-efs-${ENVIRONMENT_SUFFIX}`
       );
 
       if (efsSystem && efsSystem.FileSystemId) {
@@ -377,7 +376,9 @@ describe('Student Analytics Platform Integration Tests', () => {
         expect(mountResponse.MountTargets).toBeDefined();
         expect(mountResponse.MountTargets!.length).toBeGreaterThanOrEqual(2);
 
-        const azs = new Set(mountResponse.MountTargets!.map((mt) => mt.AvailabilityZoneName));
+        const azs = new Set(
+          mountResponse.MountTargets!.map(mt => mt.AvailabilityZoneName)
+        );
         expect(azs.size).toBeGreaterThanOrEqual(2);
       }
     }, 30000);
@@ -480,7 +481,9 @@ describe('Student Analytics Platform Integration Tests', () => {
       expect(response.taskDefinition).toBeDefined();
       expect(response.taskDefinition!.family).toBe(taskFamily);
       expect(response.taskDefinition!.networkMode).toBe('awsvpc');
-      expect(response.taskDefinition!.requiresCompatibilities).toContain('FARGATE');
+      expect(response.taskDefinition!.requiresCompatibilities).toContain(
+        'FARGATE'
+      );
     }, 30000);
 
     test('Application Load Balancer exists and is active', async () => {
@@ -536,7 +539,7 @@ describe('Student Analytics Platform Integration Tests', () => {
 
       const response = await apiGatewayClient.send(command);
       const api = response.items!.find(
-        (a) => a.name === `edu-analytics-api-${ENVIRONMENT_SUFFIX}`
+        a => a.name === `edu-analytics-api-${ENVIRONMENT_SUFFIX}`
       );
 
       expect(api).toBeDefined();
@@ -547,7 +550,7 @@ describe('Student Analytics Platform Integration Tests', () => {
       const listCommand = new GetRestApisCommand({});
       const listResponse = await apiGatewayClient.send(listCommand);
       const api = listResponse.items!.find(
-        (a) => a.name === `edu-analytics-api-${ENVIRONMENT_SUFFIX}`
+        a => a.name === `edu-analytics-api-${ENVIRONMENT_SUFFIX}`
       );
 
       if (api && api.id) {
@@ -612,7 +615,9 @@ describe('Student Analytics Platform Integration Tests', () => {
         ReplicationGroupId: `edu-redis-${ENVIRONMENT_SUFFIX}`,
       });
       const redisResponse = await elasticacheClient.send(redisCommand);
-      expect(redisResponse.ReplicationGroups![0].AtRestEncryptionEnabled).toBe(true);
+      expect(redisResponse.ReplicationGroups![0].AtRestEncryptionEnabled).toBe(
+        true
+      );
     }, 30000);
 
     test('Secrets are encrypted with KMS', async () => {
@@ -649,7 +654,7 @@ describe('Student Analytics Platform Integration Tests', () => {
 
       const results = await Promise.all(promises);
       expect(results.length).toBe(10);
-      results.forEach((result) => {
+      results.forEach(result => {
         expect(result.SequenceNumber).toBeDefined();
       });
     }, 30000);
