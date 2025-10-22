@@ -76,9 +76,9 @@ func main() {
 		var publicSubnets []*ec2.Subnet
 		for i := 0; i < 2; i++ {
 			subnet, err := ec2.NewSubnet(ctx, fmt.Sprintf("public-subnet-%d-%s", i, environmentSuffix), &ec2.SubnetArgs{
-				VpcId:            vpc.ID(),
-				CidrBlock:        pulumi.String(fmt.Sprintf("10.0.%d.0/24", i)),
-				AvailabilityZone: pulumi.String(azs.Names[i]),
+				VpcId:               vpc.ID(),
+				CidrBlock:           pulumi.String(fmt.Sprintf("10.0.%d.0/24", i)),
+				AvailabilityZone:    pulumi.String(azs.Names[i]),
 				MapPublicIpOnLaunch: pulumi.Bool(true),
 				Tags: pulumi.StringMap{
 					"Name": pulumi.String(fmt.Sprintf("healthcare-public-subnet-%d-%s", i, environmentSuffix)),

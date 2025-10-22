@@ -93,7 +93,7 @@ func TestECSClusterExists(t *testing.T) {
 		cluster := describeResult.Clusters[0]
 		containerInsightsEnabled := false
 		for _, setting := range cluster.Settings {
-			if *setting.Name == "containerInsights" && (*setting.Value == "enhanced" || *setting.Value == "enabled") {
+			if string(setting.Name) == "containerInsights" && setting.Value != nil && (*setting.Value == "enhanced" || *setting.Value == "enabled") {
 				containerInsightsEnabled = true
 				break
 			}
@@ -123,7 +123,7 @@ func TestElastiCacheClusterExists(t *testing.T) {
 		group := result.ReplicationGroups[0]
 		assert.True(t, *group.AtRestEncryptionEnabled, "Encryption at rest should be enabled")
 		assert.True(t, *group.TransitEncryptionEnabled, "Encryption in transit should be enabled")
-		assert.True(t, *group.AutomaticFailover != "disabled", "Automatic failover should be enabled")
+		assert.True(t, string(group.AutomaticFailover) != "disabled", "Automatic failover should be enabled")
 	}
 }
 
