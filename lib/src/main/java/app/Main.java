@@ -775,7 +775,7 @@ class ComputeStack extends Stack {
                         .image(Runtime.JAVA_17.getBundlingImage())
                         .command(Arrays.asList(
                                 "/bin/sh", "-c",
-                                "mvn clean package && cp target/*-shaded.jar /asset-output/routing.jar"
+                                "mvn clean package && cp /asset-input/target/*-shaded.jar /asset-output/routing.jar"
                         ))
                         .build())
                     .build()))
@@ -1074,7 +1074,7 @@ class RealTimeStack extends Stack {
                                 .image(Runtime.JAVA_17.getBundlingImage())
                                 .command(Arrays.asList(
                                         "/bin/sh", "-c",
-                                        "mvn clean package && cp target/*-shaded.jar /asset-output/" + functionType.toLowerCase() + ".jar" 
+                                        "mvn clean package && cp /asset-input/target/*-shaded.jar /asset-output/" + functionType.toLowerCase() + ".jar"
                                 ))
                                 .build())
                         .build()))
@@ -1114,7 +1114,7 @@ class RealTimeStack extends Stack {
                                 .image(Runtime.JAVA_17.getBundlingImage())
                                 .command(Arrays.asList(
                                         "/bin/sh", "-c",
-                                        "mvn clean package && cp target/*-shaded.jar /asset-output/notification.jar"
+                                        "mvn clean package && cp /asset-input/target/*-shaded.jar /asset-output/notification.jar"
                                 ))
                                 .build())
                         .build()))
