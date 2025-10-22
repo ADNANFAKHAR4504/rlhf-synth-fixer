@@ -276,22 +276,26 @@ class TapStack(TerraformStack):
         )
 
         # AWS Secrets Manager - Database credentials
+        # Note: The Aurora cluster will create and manage its own secret when manage_master_user_password=True
+        # This secret is for application-level credentials or other sensitive data
         db_secret = SecretsmanagerSecret(
             self,
             f"streamflix-db-secret-{environment_suffix}",
             name=f"streamflix/db/credentials-{environment_suffix}",
-            description="Database credentials for Aurora cluster",
+            description="Application credentials and connection info for Aurora cluster",
             recovery_window_in_days=7,
             tags={"Name": f"streamflix-db-secret-{environment_suffix}"}
         )
 
+        # Store application-specific database connection info (not the master password)
         db_secret_value = SecretsmanagerSecretVersion(
             self,
             f"streamflix-db-secret-version-{environment_suffix}",
             secret_id=db_secret.id,
             secret_string=json.dumps({
                 "username": "streamflix_admin",
-                "password": "ChangeMe123!Secure"
+                "database": "streamflixdb",
+                "note": "Master password is managed automatically by AWS"
             })
         )
 
@@ -333,7 +337,7 @@ class TapStack(TerraformStack):
             engine_version="16.6",
             database_name="streamflixdb",
             master_username="streamflix_admin",
-            master_password="ChangeMe123!Secure",
+            manage_master_user_password=True,  # AWS auto-generates and manages the password
             db_subnet_group_name=db_subnet_group.name,
             vpc_security_group_ids=[rds_sg.id],
             backup_retention_period=7,
@@ -777,3 +781,67 @@ The infrastructure meets MPAA compliance requirements:
 - IAM roles with minimal required permissions
 
 The infrastructure leverages the latest AWS features including Aurora Serverless v2 for cost-effective scaling and the improved Secrets Manager API limits for high-throughput secret retrieval.
+
+## Additional Configuration Files
+
+### cdktf.json
+```json
+{
+  "language": "python",
+  "app": "pipenv run python tap.py",
+  "projectId": "18754d04-9786-40f1-92a2-6ec8b0ebc00a",
+  "sendCrashReports": "false",
+  "terraformProviders": [
+    "aws@~> 6.0"
+  ],
+  "terraformModules": [],
+  "context": {}
+}
+```
+
+### tap.py
+```python
+#!/usr/bin/env python
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from cdktf import App
+from lib.tap_stack import TapStack
+
+# Get environment variables from the environment or use defaults
+environment_suffix = os.getenv("ENVIRONMENT_SUFFIX", "dev")
+state_bucket = os.getenv("TERRAFORM_STATE_BUCKET", "iac-rlhf-tf-states")
+state_bucket_region = os.getenv("TERRAFORM_STATE_BUCKET_REGION", "us-east-1")
+aws_region = os.getenv("AWS_REGION", "us-east-1")
+repository_name = os.getenv("REPOSITORY", "unknown")
+commit_author = os.getenv("COMMIT_AUTHOR", "unknown")
+
+# Calculate the stack name
+stack_name = f"TapStack{environment_suffix}"
+
+# default_tags is structured in adherence to the AwsProvider default_tags interface
+default_tags = {
+    "tags": {
+        "Environment": environment_suffix,
+        "Repository": repository_name,
+        "Author": commit_author,
+    }
+}
+
+app = App()
+
+# Create the TapStack with the calculated properties
+TapStack(
+    app,
+    stack_name,
+    environment_suffix=environment_suffix,
+    state_bucket=state_bucket,
+    state_bucket_region=state_bucket_region,
+    aws_region=aws_region,
+    default_tags=default_tags,
+)
+
+# Synthesize the app to generate the Terraform configuration
+app.synth()
+```

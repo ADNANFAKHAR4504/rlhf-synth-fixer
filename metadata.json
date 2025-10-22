@@ -20,5 +20,6 @@
     "Kinesis Data Streams",
     "API Gateway",
     "Secrets Manager"
-  ]
+  ],
+  "training_quality": "9"
 }

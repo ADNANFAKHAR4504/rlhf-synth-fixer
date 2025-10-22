@@ -247,22 +247,26 @@ class TapStack(TerraformStack):
         )
 
         # AWS Secrets Manager - Database credentials
+        # Note: The Aurora cluster will create and manage its own secret when manage_master_user_password=True
+        # This secret is for application-level credentials or other sensitive data
         db_secret = SecretsmanagerSecret(
             self,
             f"streamflix-db-secret-{environment_suffix}",
             name=f"streamflix/db/credentials-{environment_suffix}",
-            description="Database credentials for Aurora cluster",
+            description="Application credentials and connection info for Aurora cluster",
             recovery_window_in_days=7,
             tags={"Name": f"streamflix-db-secret-{environment_suffix}"}
         )
 
+        # Store application-specific database connection info (not the master password)
         db_secret_value = SecretsmanagerSecretVersion(
             self,
             f"streamflix-db-secret-version-{environment_suffix}",
             secret_id=db_secret.id,
             secret_string=json.dumps({
                 "username": "streamflix_admin",
-                "password": "ChangeMe123!Secure"
+                "database": "streamflixdb",
+                "note": "Master password is managed automatically by AWS"
             })
         )
 
@@ -304,7 +308,7 @@ class TapStack(TerraformStack):
             engine_version="16.6",
             database_name="streamflixdb",
             master_username="streamflix_admin",
-            master_password="ChangeMe123!Secure",
+            manage_master_user_password=True,  # AWS auto-generates and manages the password
             db_subnet_group_name=db_subnet_group.name,
             vpc_security_group_ids=[rds_sg.id],
             backup_retention_period=7,
