@@ -7,7 +7,6 @@
   "team": "synth",
   "startedAt": "2025-10-21T08:11:50Z",
   "subtask": "Application Deployment",
-  "background": "Infrastructure task for CDKTF TypeScript.",
   "subject_labels": [
     "Security Configuration as Code"
   ],
