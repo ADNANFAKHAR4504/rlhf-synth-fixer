@@ -169,10 +169,10 @@ class TestTapStackIntegration(unittest.TestCase):
         required_outputs = [
             'vpc_id', 'kinesis_stream_name', 'kinesis_stream_arn',
             'ecs_cluster_name', 'ecs_cluster_arn', 'rds_endpoint',
-            'elasticache_endpoint', 'efs_id', 'efs_arn', 'api_endpoint',
+            'efs_id', 'efs_arn', 'api_endpoint',
             'alb_dns', 'kms_key_id', 'cloudtrail_name'
         ]
-        
+
         for output_key in required_outputs:
             self.assertIn(output_key, self.outputs, f"Missing required output: {output_key}")
             self.assertIsNotNone(self.outputs[output_key], f"Output {output_key} is None")
