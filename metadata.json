@@ -1,0 +1,37 @@
+{
+  "platform": "Pulumi",
+  "language": "Go",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "7854510149",
+  "team": "synth",
+  "startedAt": "2025-10-22T09:02:00-07:00",
+  "subtask": "Application Deployment",
+  "training_quality": 9,
+  "region": "eu-central-2",
+  "aws_services": [
+    "Amazon Kinesis for real-time data ingestion",
+    "Amazon ECS Fargate for transaction processing",
+    "Amazon RDS (Multi-AZ) with encryption for transaction storage",
+    "Amazon ElastiCache Redis cluster for temporary data caching",
+    "AWS Secrets Manager for credential management",
+    "API Gateway for transaction endpoints",
+    "EFS for shared storage between ECS tasks"
+  ],
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Cloud Environment Setup",
+    "Failure Recovery Automation",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "background": "A Brazilian fintech company needs to process credit card transactions in real-time while maintaining PCI-DSS compliance. The solution must handle peak loads of 10,000 transactions per second, store encrypted transaction data, and provide audit trails for compliance purposes.",
+  "problem": "Design and implement a PCI-DSS compliant real-time financial transaction processing pipeline using Pulumi with Go. The system must handle credit card transaction data, encrypt it in transit and at rest, and provide scalable processing capabilities with high availability in the sa-east-1 region.",
+  "constraints": "All resources must be deployed in eu-central-2 region; All data must be encrypted at rest using KMS keys and in transit using TLS 1.2 or higher; System must maintain high availability with multi-AZ deployment and automatic failover; Infrastructure must be compliant with PCI-DSS requirements for network segmentation and access controls",
+  "setup_requirements": [
+    "Initialize Pulumi project with Go",
+    "Configure AWS provider for sa-east-1",
+    "Set up networking with proper segmentation",
+    "Implement encryption at rest and in transit"
+  ]
+}
