@@ -154,6 +154,16 @@ if (!outputs || Object.keys(outputs).length === 0) {
                   const str = Buffer.from(lambdaResp.Payload as Uint8Array).toString();
                   // eslint-disable-next-line no-console
                   console.log('Lambda fallback payload (truncated):', str.slice(0, 2000));
+
+                  // Detect common runtime ImportModuleError like missing 'aws-sdk'
+                  if (/ImportModuleError/i.test(str) && /aws-sdk/i.test(str)) {
+                    // eslint-disable-next-line no-console
+                    console.error('Lambda runtime ImportModuleError detected: function appears to be packaged expecting the older "aws-sdk" v2.');
+                    // Provide actionable guidance in the test failure path by setting lastErr so the outer handler can print it
+                    lastErr = new Error('Lambda runtime ImportModuleError: missing "aws-sdk". Repackage the function to include required dependencies or provide INTEGRATION_API_KEY to bypass API Gateway.');
+                    continue;
+                  }
+
                   try {
                     const parsed = JSON.parse(str);
                     if (parsed && parsed.body) {
