@@ -20,19 +20,19 @@ import (
 )
 
 type OutputValues struct {
-	VpcId              string `json:"vpcId"`
-	KinesisStreamName  string `json:"kinesisStreamName"`
-	KinesisStreamArn   string `json:"kinesisStreamArn"`
-	EcsClusterName     string `json:"ecsClusterName"`
-	EcsClusterArn      string `json:"ecsClusterArn"`
-	RdsEndpoint        string `json:"rdsEndpoint"`
-	RdsDbName          string `json:"rdsDbName"`
-	RedisEndpoint      string `json:"redisEndpoint"`
-	EfsFileSystemId    string `json:"efsFileSystemId"`
-	AlbDnsName         string `json:"albDnsName"`
-	ApiGatewayUrl      string `json:"apiGatewayUrl"`
-	EcrRepositoryUrl   string `json:"ecrRepositoryUrl"`
-	SecretArn          string `json:"secretArn"`
+	VpcId             string `json:"vpcId"`
+	KinesisStreamName string `json:"kinesisStreamName"`
+	KinesisStreamArn  string `json:"kinesisStreamArn"`
+	EcsClusterName    string `json:"ecsClusterName"`
+	EcsClusterArn     string `json:"ecsClusterArn"`
+	RdsEndpoint       string `json:"rdsEndpoint"`
+	RdsDbName         string `json:"rdsDbName"`
+	RedisEndpoint     string `json:"redisEndpoint"`
+	EfsFileSystemId   string `json:"efsFileSystemId"`
+	AlbDnsName        string `json:"albDnsName"`
+	ApiGatewayUrl     string `json:"apiGatewayUrl"`
+	EcrRepositoryUrl  string `json:"ecrRepositoryUrl"`
+	SecretArn         string `json:"secretArn"`
 }
 
 func loadOutputs(t *testing.T) *OutputValues {
