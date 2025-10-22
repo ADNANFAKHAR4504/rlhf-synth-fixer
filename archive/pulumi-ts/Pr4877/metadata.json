@@ -10,5 +10,11 @@
   "subject_labels": [
     "Web Application Deployment"
   ],
-  "aws_services": "vpc, transit gateway, global accelerator, alb, route53, ecs fargate, aurora global database"
+  "aws_services": "vpc, transit gateway, global accelerator, alb, route53, ecs fargate, aurora global database",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "okorie-turing",
+  "dockerS3Location": ""
 }
