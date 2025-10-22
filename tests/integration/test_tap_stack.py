@@ -20,7 +20,7 @@ class TestTapStackIntegration(unittest.TestCase):
         self.outputs_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'cfn-outputs', 'flat-outputs.json')
 
         default_environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'synth6504518772')
-        default_region = os.getenv('AWS_DEFAULT_REGION', 'ap-southeast-2')
+        default_region = os.getenv('AWS_DEFAULT_REGION', 'eu-west-2')
 
         def _mock_outputs(env_suffix: str, region: str) -> dict:
             """Generate representative outputs when live stack outputs are unavailable."""

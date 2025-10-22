@@ -307,6 +307,27 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
+        # ELB service account IDs per region for access logs
+        elb_service_accounts = {
+            "us-east-1": "127311923021",
+            "us-east-2": "033677994240",
+            "us-west-1": "027434742980",
+            "us-west-2": "797873946194",
+            "eu-west-1": "156460612806",
+            "eu-west-2": "652711504416",
+            "eu-west-3": "009996457667",
+            "eu-central-1": "054676820928",
+            "eu-north-1": "897822967062",
+            "ap-southeast-1": "114774131450",
+            "ap-southeast-2": "783225319266",
+            "ap-northeast-1": "582318560864",
+            "ap-northeast-2": "600734575887",
+            "ap-south-1": "718504428378",
+            "ca-central-1": "985666609251",
+            "sa-east-1": "507241528517"
+        }
+        elb_account = elb_service_accounts.get(self.region, "127311923021")
+
         # CloudTrail bucket policy
         cloudtrail_bucket_policy = aws.s3.BucketPolicy(
             f"cloudtrail-bucket-policy-{self.environment_suffix}",
@@ -337,16 +358,9 @@ class TapStack(pulumi.ComponentResource):
                         {
                             "Sid": "AWSALBAccessLogWrite",
                             "Effect": "Allow",
-                            "Principal": {"Service": "elasticloadbalancing.amazonaws.com"},
+                            "Principal": {"AWS": f"arn:aws:iam::{elb_account}:root"},
                             "Action": "s3:PutObject",
                             "Resource": f"{args[0]}/alb-logs/*"
-                        },
-                        {
-                            "Sid": "AWSALBAccessLogAclCheck",
-                            "Effect": "Allow",
-                            "Principal": {"Service": "elasticloadbalancing.amazonaws.com"},
-                            "Action": "s3:GetBucketAcl",
-                            "Resource": args[0]
                         }
                     ]
                 })
@@ -367,12 +381,6 @@ class TapStack(pulumi.ComponentResource):
             event_selectors=[aws.cloudtrail.TrailEventSelectorArgs(
                 read_write_type="All",
                 include_management_events=True,
-                data_resources=[
-                    aws.cloudtrail.TrailEventSelectorDataResourceArgs(
-                        type="AWS::S3::Object",
-                        values=["arn:aws:s3:::*/*"],
-                    ),
-                ],
             )],
             tags={**self.tags, "Name": f"fedramp-audit-trail-{self.environment_suffix}", "Compliance": "FedRAMP-High"},
             opts=ResourceOptions(parent=self, depends_on=[cloudtrail_bucket_policy])

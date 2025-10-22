@@ -8,7 +8,7 @@ from pulumi.runtime import Mocks, set_mocks
 
 from lib.tap_stack import TapStack, TapStackArgs
 
-MOCK_REGION = "ap-southeast-2"
+MOCK_REGION = "eu-west-2"
 
 
 class TapStackArgsTests(unittest.TestCase):
