@@ -531,11 +531,11 @@
           "DisableApiTermination": { "Ref": "DisableApiTermination" },
           "BlockDeviceMappings": [
             {
-              "DeviceName": "/dev/xvda", 
+              "DeviceName": "/dev/xvda",
               "Ebs": {
                 "DeleteOnTermination": true,
-                "VolumeSize": 16, 
-                "VolumeType": "gp3", 
+                "VolumeSize": 16,
+                "VolumeType": "gp3",
                 "Encrypted": false
               }
             }
@@ -1132,14 +1132,14 @@
   },
 
   "Outputs": {
-    "VPCId": {
+    "VpcId": {
       "Description": "VPC ID",
       "Value": { "Ref": "VPC" },
       "Export": {
         "Name": { "Fn::Sub": "${AWS::StackName}-VPC" }
       }
     },
-    "ALBDNSName": {
+    "AlbDnsName": {
       "Description": "Application Load Balancer DNS Name",
       "Value": { "Fn::GetAtt": ["ApplicationLoadBalancer", "DNSName"] }
     },
@@ -1147,13 +1147,25 @@
       "Description": "CloudFront Distribution Domain Name",
       "Value": { "Fn::GetAtt": ["CloudFrontDistribution", "DomainName"] }
     },
+    "CloudFrontDistributionId": {
+      "Description": "CloudFront Distribution ID",
+      "Value": { "Ref": "CloudFrontDistribution" }
+    },
     "S3BucketName": {
       "Description": "S3 Bucket Name for Web Content",
       "Value": { "Ref": "S3Bucket" }
     },
-    "RDSEndpoint": {
+    "LoggingBucketName": {
+      "Description": "Logging Bucket Name",
+      "Value": { "Ref": "LoggingBucket" }
+    },
+    "RdsEndpoint": {
       "Description": "RDS Instance Endpoint",
       "Value": { "Fn::GetAtt": ["DBInstance", "Endpoint.Address"] }
+    },
+    "KmsKeyId": {
+      "Description": "KMS Key ID for RDS Encryption",
+      "Value": { "Ref": "DBKMSKey" }
     }
   }
 }
