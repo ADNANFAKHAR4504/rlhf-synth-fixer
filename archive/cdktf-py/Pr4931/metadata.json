@@ -14,11 +14,17 @@
   ],
   "aws_services": [
     "RDS",
-    "Secrets Manager", 
+    "Secrets Manager",
     "KMS",
     "VPC",
     "Security Groups"
   ],
   "training_quality": 9,
-  "region": "eu-central-1"
+  "region": "eu-central-1",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
