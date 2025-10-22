@@ -204,7 +204,7 @@ case "$PLATFORM" in
   cfn)
     # Validate CloudFormation template syntax (basic check)
     if [ "$LANGUAGE" == "yaml" ] || [ "$LANGUAGE" == "yml" ]; then
-      for template in lib/*.yaml lib/*.yml; do
+      for template in lib/*.yaml lib/*.yml 2>/dev/null; do
         if [ -f "$template" ]; then
           if ! python3 -c "import yaml; yaml.safe_load(open('$template'))" 2>/dev/null; then
             echo "❌ ERROR: Invalid YAML syntax in $template"
@@ -213,7 +213,7 @@ case "$PLATFORM" in
         fi
       done
     elif [ "$LANGUAGE" == "json" ]; then
-      for template in lib/*.json; do
+      for template in lib/*.json 2>/dev/null; do
         if [ -f "$template" ]; then
           if ! jq empty "$template" 2>/dev/null; then
             echo "❌ ERROR: Invalid JSON syntax in $template"
