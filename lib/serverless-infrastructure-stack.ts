@@ -149,6 +149,23 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
     });
 
     // Stream processor Lambda: reads DynamoDB stream records and forwards messages to SQS
+
+    // Create an explicit IAM role for the stream processor Lambda to stabilize updates
+    // (prevents CFN race where an inline policy references a role name that doesn't exist yet)
+    const streamProcessorRole = new iam.Role(
+      this,
+      'StreamProcessorServiceRole',
+      {
+        assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+        managedPolicies: [
+          iam.ManagedPolicy.fromAwsManagedPolicyName(
+            'service-role/AWSLambdaBasicExecutionRole'
+          ),
+        ],
+      }
+    );
+
+    // Stream processor Lambda: reads DynamoDB stream records and forwards messages to SQS
     const streamProcessorFn = new lambda.Function(this, 'StreamProcessor', {
       functionName: `stream-processor${suffix}`,
       runtime: lambda.Runtime.NODEJS_18_X,
@@ -162,9 +179,10 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
       tracing: lambda.Tracing.ACTIVE,
+      role: streamProcessorRole,
     });
 
-    // Grant permissions for the processor to send messages to SQS
+    // Grant permissions for the processor to send messages to SQS (attach to the function/role)
     processingQueue.grantSendMessages(streamProcessorFn);
 
     // Add DynamoDB stream as event source for the processor
