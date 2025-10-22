@@ -599,6 +599,16 @@ Resources:
               VolumeType: gp3
               Encrypted: true
               KmsKeyId: !Ref NovaEncryptionKey
+        UserData:
+          Fn::Base64: |
+            #!/bin/bash
+            yum update -y
+            yum install -y httpd
+            systemctl start httpd
+            systemctl enable httpd
+            echo "<h1>Nova Healthcare Portal - Instance $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</h1>" > /var/www/html/index.html
+            # Health check endpoint
+            echo "OK" > /var/www/html/health
         TagSpecifications:
           - ResourceType: instance
             Tags:
@@ -681,7 +691,7 @@ Resources:
       HealthCheckEnabled: true
       HealthCheckProtocol: HTTP
       HealthCheckPort: '80'
-      HealthCheckPath: '/'
+      HealthCheckPath: '/health'
       Matcher:
         HttpCode: '200-399'
       Tags:
