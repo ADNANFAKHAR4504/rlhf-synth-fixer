@@ -42,93 +42,33 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
   // in the same CDK app can reference them without requiring manual
   // CloudFormation exports/imports.
   public readonly vpcId!: string;
-  public readonly apiUrl!: string;
-  public readonly lambdaFunctionArn!: string;
-  public readonly rdsEndpoint!: string;
-  public readonly s3BucketName!: string;
-  public readonly sqsQueueUrl!: string;
-  public readonly cloudFrontDomainName!: string;
-  public readonly hostedZoneId!: string;
-  public readonly databaseSecretArn!: string;
-  public readonly lambdaRoleArn!: string;
-  public readonly databaseSecurityGroupId!: string;
-  public readonly lambdaSecurityGroupId!: string;
-  public readonly lambdaLogGroupName!: string;
+  ### lib/multi-component-stack.ts (current highlights)
 
-  // Expose a small helper to compute the sanitized suffix used for Lambda names.
-  // This is intentionally simple and useful to call from unit tests to exercise
-  // the branches (defined vs falsy suffix).
-  public computeSafeSuffixForLambda(input?: string): string | cdk.Aws {
-    return input
-      ? input.toLowerCase().replace(/[^a-z0-9-_]/g, '-')
-      : cdk.Aws.NO_VALUE;
-  }
+  This project uses a single nested stack `MultiComponentApplicationStack` that
+  creates VPC, RDS, Lambda (packaged as an asset), API Gateway, S3, SQS,
+  CloudFront, WAF (optional), and monitoring resources. Below are the current
+  implementation highlights relevant to recent fixes and test failures.
 
-  constructor(scope: Construct, id: string, props?: cdk.NestedStackProps) {
-    // Respect props by passing them directly to the NestedStack constructor
-    super(scope, id, props);
+  - Lambda packaging: `ApiLambda` is now packaged as an asset under
+    `lib/lambda/api` and uses `lambda.Code.fromAsset(path.join(__dirname,'lambda','api'))`.
+    This was done to include `aws-sdk` v2 in the artifact so direct Lambda
+    invocation (used as a test fallback) does not fail with ImportModuleError.
 
-    // Generate unique string suffix
-    this.stringSuffix = cdk.Fn.select(2, cdk.Fn.split('-', cdk.Aws.STACK_ID));
+  - VPC Flow Logs: instead of relying on a generated implicit role for the
+    flow log, an explicit IAM role `VpcFlowLogRole` is created and passed to
+    the FlowLog destination. This prevents CloudFormation from attempting to
+    resolve a generated role name/ARN during stack updates which caused
+    "Unable to retrieve Arn attribute for AWS::IAM::Role" errors.
 
-    // ========================================
-    // VPC Configuration
-    // ========================================
-    const vpc = new ec2.Vpc(this, 'AppVpc', {
-      vpcName: `prod-vpc-app-${this.stringSuffix}`,
-      cidr: '10.0.0.0/16',
-      maxAzs: 2,
-      natGateways: 2,
-      enableDnsHostnames: true,
-      enableDnsSupport: true,
-      subnetConfiguration: [
-        {
-          name: 'prod-public-subnet',
-          subnetType: ec2.SubnetType.PUBLIC,
-          cidrMask: 24,
-        },
-        {
-          name: 'prod-private-subnet',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-          cidrMask: 24,
-        },
-      ],
-    });
+  - Outputs: the nested stack exposes runtime tokens (VpcId, ApiGatewayUrl,
+    LambdaFunctionArn, RdsEndpoint, S3BucketName, SqsQueueUrl, CloudFrontDomainName,
+    HostedZoneId, DatabaseSecretArn, LambdaRoleArn, DatabaseSecurityGroupId,
+    LambdaSecurityGroupId, LambdaLogGroupName) as `CfnOutput`s from the
+    nested stack.
 
-    // ========================================
-    // Secrets Manager - RDS Credentials
-    // ========================================
-    const databaseSecret = new secretsmanager.Secret(this, 'DatabaseSecret', {
-      secretName: `prod-secretsmanager-db-${this.stringSuffix.toLowerCase().replace(/[^a-zA-Z0-9\-_+=.@!]/g, '')}`,
-      description: 'RDS PostgreSQL database credentials',
-      generateSecretString: {
-        secretStringTemplate: JSON.stringify({
-          username: 'dbadmin',
-        }),
-        generateStringKey: 'password',
-        excludeCharacters: ' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
-        passwordLength: 32,
-      },
-    });
-
-    // ========================================
-    // RDS PostgreSQL Database
-    // ========================================
-    const databaseSecurityGroup = new ec2.SecurityGroup(
-      this,
-      'DatabaseSecurityGroup',
-      {
-        securityGroupName: `prod-ec2-sg-db-${this.stringSuffix}`,
-        vpc,
-        description: 'Security group for RDS PostgreSQL',
-        allowAllOutbound: false,
-      }
-    );
-
-    // Use a generally-available Postgres engine version. Some regions may not have
-    // older minor versions (e.g. 13.7). Prefer Postgres 15.x which has wider availability.
-    // Allow reusing an existing DB subnet group to avoid hitting account quotas
-    // (provide either env var RDS_SUBNET_GROUP_NAME or CDK context key
+  For the authoritative, up-to-date TypeScript source, see
+  `lib/multi-component-stack.ts` in the repository. The two key changes to be
+  aware of are the Lambda asset packaging and the explicit VPC Flow Log role.
     // `rdsSubnetGroupName` to import an existing group). If not provided,
     // CDK will create a new SubnetGroup automatically.
     const importedSubnetGroupName =

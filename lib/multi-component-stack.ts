@@ -332,9 +332,30 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
       removalPolicy: RemovalPolicy.DESTROY,
     });
 
+    // Explicitly create the IAM Role that VPC Flow Logs will assume when
+    // publishing to CloudWatch Logs. Relying on the L2 construct to generate
+    // a role name can lead to CloudFormation lookup issues during updates.
+    const vpcFlowLogRole = new iam.Role(this, 'VpcFlowLogRole', {
+      assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
+      description: 'Role allowing VPC Flow Logs to publish to CloudWatch Logs',
+    });
+
+    // Allow the Flow Logs service to create streams and put events into the
+    // selected log group.
+    vpcFlowLogRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['logs:CreateLogStream', 'logs:PutLogEvents'],
+        resources: [vpcFlowLogGroup.logGroupArn],
+      })
+    );
+
     new ec2.FlowLog(this, 'VpcFlowLog', {
       resourceType: ec2.FlowLogResourceType.fromVpc(vpc),
-      destination: ec2.FlowLogDestination.toCloudWatchLogs(vpcFlowLogGroup),
+      destination: ec2.FlowLogDestination.toCloudWatchLogs(
+        vpcFlowLogGroup,
+        vpcFlowLogRole
+      ),
       trafficType: ec2.FlowLogTrafficType.ALL,
     });
 
