@@ -47,7 +47,7 @@ describe('TapStack CloudFormation Template', () => {
         Type: 'String',
         NoEcho: true,
         MinLength: 8,
-        Default: 'NewPassword2024!',
+        Default: 'UpdatedPassword2025!',
         Description: 'Master password for Aurora database.',
       },
       DailyScheduleExpression: {
@@ -546,7 +546,7 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
       expect(param.Type).toBe('String');
       expect(param.NoEcho).toBe(true);
       expect(param.MinLength).toBe(8);
-      expect(param.Default).toBe('NewPassword2024!');
+      expect(param.Default).toBe('UpdatedPassword2025!');
       expect(param.Description).toContain('Master password for Aurora database');
     });
 
@@ -630,7 +630,7 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
       // Engine configuration
       expect(cluster.Properties.Engine).toBe('aurora-postgresql');
       expect(cluster.Properties.EngineMode).toBe('provisioned');
-      expect(cluster.Properties.DBClusterParameterGroupName).toBe('default.aurora-postgresql17');
+      expect(cluster.Properties.DBClusterParameterGroupName).toBe('default.aurora-postgresql15');
 
       // Master user configuration
       expect(cluster.Properties.MasterUsername).toEqual({ Ref: 'DatabaseMasterUsername' });
