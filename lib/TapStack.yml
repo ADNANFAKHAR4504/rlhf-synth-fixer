@@ -537,12 +537,12 @@ Resources:
               - s3:CreateBucket
               - s3:PutBucketPolicy
               - s3:DeleteBucketPolicy
-              - s3:PutBucketEncryption
+              - s3:PutEncryptionConfiguration # <-- renamed for W3037
               - s3:PutBucketVersioning
               - s3:PutBucketLogging
               - s3:PutBucketPublicAccessBlock
               - s3:GetBucketLocation
-              - s3:GetBucketEncryption
+              - s3:GetEncryptionConfiguration # <-- renamed for W3037
               - s3:GetBucketVersioning
               - s3:ListAllMyBuckets
               - s3:ListBucket
@@ -1136,7 +1136,7 @@ Resources:
     Condition: CreateWAF
     Properties:
       WebACLArn: !GetAtt WAFWebACL.Arn
-      # Implicit dependency via Ref avoids W3005
+      # Implicit dependency via Refs (avoids W3005)
       ResourceArn: !Sub "arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGatewayRestApi}/stages/${ApiGatewayStage}"
 
   # ===== CLOUDTRAIL =====
