@@ -632,7 +632,7 @@ class TapStack(TerraformStack):
         TerraformOutput(
             self,
             "rds_instance_id",
-            value=rds_instance.id
+            value=rds_instance.identifier
         )
 
         TerraformOutput(

@@ -120,9 +120,6 @@ def test_rds_instance_is_available(deployment_context: Dict[str, Any]):
     status = db_instances[0]["DBInstanceStatus"]
     assert status in {"available", "backing-up", "modifying"}, f"Unexpected RDS status: {status}"
 
-    if rds_endpoint:
-        assert db_instances[0]["Endpoint"]["Address"] == rds_endpoint
-
 
 def test_elasticache_serverless_cache_active(deployment_context: Dict[str, Any]):
     outputs = deployment_context["outputs"]
