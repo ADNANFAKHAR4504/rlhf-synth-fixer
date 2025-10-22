@@ -26,5 +26,11 @@
     "RDS (MySQL/Postgres)",
     "Secrets Manager",
     "DynamoDB"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
 }
