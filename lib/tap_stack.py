@@ -246,12 +246,12 @@ class TapStack(TerraformStack):
             tags={"Name": f"streamflix-efs-sg-{environment_suffix}"}
         )
 
-        # Database Secret
+        # AWS Secrets Manager - Database credentials
         db_secret = SecretsmanagerSecret(
             self,
             f"streamflix-db-secret-{environment_suffix}",
             name=f"streamflix/db/credentials-{environment_suffix}",
-            description="Database credentials for RDS Aurora",
+            description="Database credentials for Aurora cluster",
             recovery_window_in_days=7,
             tags={"Name": f"streamflix-db-secret-{environment_suffix}"}
         )
@@ -262,11 +262,7 @@ class TapStack(TerraformStack):
             secret_id=db_secret.id,
             secret_string=json.dumps({
                 "username": "streamflix_admin",
-                "password": "TempPassword123!ChangeMeInProduction",
-                "engine": "postgres",
-                "host": "placeholder",
-                "port": 5432,
-                "dbname": "streamflixdb"
+                "password": "ChangeMe123!Secure"
             })
         )
 
@@ -308,7 +304,7 @@ class TapStack(TerraformStack):
             engine_version="16.6",
             database_name="streamflixdb",
             master_username="streamflix_admin",
-            master_password="TempPassword123!ChangeMeInProduction",
+            master_password="ChangeMe123!Secure",
             db_subnet_group_name=db_subnet_group.name,
             vpc_security_group_ids=[rds_sg.id],
             backup_retention_period=7,
@@ -580,10 +576,6 @@ class TapStack(TerraformStack):
                     }
                 },
                 "environment": [
-                    {
-                        "name": "DB_CLUSTER_ARN",
-                        "value": aurora_cluster.arn
-                    },
                     {
                         "name": "DB_SECRET_ARN",
                         "value": db_secret.arn

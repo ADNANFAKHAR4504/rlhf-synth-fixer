@@ -275,6 +275,26 @@ class TapStack(TerraformStack):
             tags={"Name": f"streamflix-efs-sg-{environment_suffix}"}
         )
 
+        # AWS Secrets Manager - Database credentials
+        db_secret = SecretsmanagerSecret(
+            self,
+            f"streamflix-db-secret-{environment_suffix}",
+            name=f"streamflix/db/credentials-{environment_suffix}",
+            description="Database credentials for Aurora cluster",
+            recovery_window_in_days=7,
+            tags={"Name": f"streamflix-db-secret-{environment_suffix}"}
+        )
+
+        db_secret_value = SecretsmanagerSecretVersion(
+            self,
+            f"streamflix-db-secret-version-{environment_suffix}",
+            secret_id=db_secret.id,
+            secret_string=json.dumps({
+                "username": "streamflix_admin",
+                "password": "ChangeMe123!Secure"
+            })
+        )
+
         # API Keys Secret
         api_secret = SecretsmanagerSecret(
             self,
@@ -313,7 +333,7 @@ class TapStack(TerraformStack):
             engine_version="16.6",
             database_name="streamflixdb",
             master_username="streamflix_admin",
-            manage_master_user_password_in_secrets_manager=True,
+            master_password="ChangeMe123!Secure",
             db_subnet_group_name=db_subnet_group.name,
             vpc_security_group_ids=[rds_sg.id],
             backup_retention_period=7,
@@ -505,7 +525,7 @@ class TapStack(TerraformStack):
                             "secretsmanager:DescribeSecret"
                         ],
                         "Resource": [
-                            f"{aurora_cluster.arn}-*",
+                            db_secret.arn,
                             api_secret.arn
                         ]
                     },
@@ -586,8 +606,8 @@ class TapStack(TerraformStack):
                 },
                 "environment": [
                     {
-                        "name": "DB_CLUSTER_ARN",
-                        "value": aurora_cluster.arn
+                        "name": "DB_SECRET_ARN",
+                        "value": db_secret.arn
                     },
                     {
                         "name": "API_SECRET_ARN",
@@ -729,74 +749,10 @@ class TapStack(TerraformStack):
         )
 ```
 
-## lib/__init__.py
+## lib/**init**.py
 
 ```python
 """StreamFlix infrastructure module."""
-```
-
-## cdktf.json
-
-```json
-{
-  "language": "python",
-  "app": "pipenv run python tap.py",
-  "projectId": "18754d04-9786-40f1-92a2-6ec8b0ebc00a",
-  "sendCrashReports": "false",
-  "terraformProviders": [
-    "aws@~> 6.0"
-  ],
-  "terraformModules": [],
-  "context": {}
-}
-```
-
-## tap.py
-
-```python
-#!/usr/bin/env python
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-from cdktf import App
-from lib.tap_stack import TapStack
-
-# Get environment variables from the environment or use defaults
-environment_suffix = os.getenv("ENVIRONMENT_SUFFIX", "dev")
-state_bucket = os.getenv("TERRAFORM_STATE_BUCKET", "iac-rlhf-tf-states")
-state_bucket_region = os.getenv("TERRAFORM_STATE_BUCKET_REGION", "us-east-1")
-aws_region = os.getenv("AWS_REGION", "us-east-1")
-repository_name = os.getenv("REPOSITORY", "unknown")
-commit_author = os.getenv("COMMIT_AUTHOR", "unknown")
-
-# Calculate the stack name
-stack_name = f"TapStack{environment_suffix}"
-
-# default_tags is structured in adherence to the AwsProvider default_tags interface
-default_tags = {
-    "tags": {
-        "Environment": environment_suffix,
-        "Repository": repository_name,
-        "Author": commit_author,
-    }
-}
-
-app = App()
-
-# Create the TapStack with the calculated properties
-TapStack(
-    app,
-    stack_name,
-    environment_suffix=environment_suffix,
-    state_bucket=state_bucket,
-    state_bucket_region=state_bucket_region,
-    aws_region=aws_region,
-    default_tags=default_tags,
-)
-
-# Synthesize the app to generate the Terraform configuration
-app.synth()
 ```
 
 ## MPAA Compliance
@@ -805,8 +761,7 @@ The infrastructure meets MPAA compliance requirements:
 
 - All data encrypted at rest (RDS, ElastiCache, EFS)
 - All data encrypted in transit (TLS/SSL)
-- Database passwords automatically generated and managed by AWS Secrets Manager
-- API keys stored in AWS Secrets Manager
+- Secrets stored in AWS Secrets Manager (not hardcoded)
 - Network isolation with private subnets
 - IAM policies following least privilege
 - CloudWatch logging for audit trails
