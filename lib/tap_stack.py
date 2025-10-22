@@ -206,27 +206,6 @@ class TapStack(pulumi.ComponentResource):
         import string
         password = ''.join(random.choices(string.ascii_letters + string.digits, k=20))
 
-        self.db_secret_version = aws.secretsmanager.SecretVersion(
-            f"iot-db-secret-version-{self.environment_suffix}",
-            secret_id=self.db_password.id,
-            secret_string=pulumi.Output.all(
-                username=db_username,
-                password=password,
-                dbname=db_name,
-                engine="postgres",
-                host="",
-                port=5432
-            ).apply(lambda args: json.dumps({
-                "username": args["username"],
-                "password": args["password"],
-                "dbname": args["dbname"],
-                "engine": args["engine"],
-                "host": args["host"],
-                "port": args["port"]
-            })),
-            opts=ResourceOptions(parent=self.db_password)
-        )
-
         # Create RDS PostgreSQL instance
         self.rds_instance = aws.rds.Instance(
             f"iot-postgres-{self.environment_suffix}",
@@ -250,9 +229,10 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Update secret with RDS endpoint
-        self.db_secret_update = aws.secretsmanager.SecretVersion(
-            f"iot-db-secret-update-{self.environment_suffix}",
+        # Create secret version with complete RDS connection details
+        # Note: Only one SecretVersion should be created to avoid staging label conflicts
+        self.db_secret_version = aws.secretsmanager.SecretVersion(
+            f"iot-db-secret-version-{self.environment_suffix}",
             secret_id=self.db_password.id,
             secret_string=pulumi.Output.all(
                 username=db_username,
@@ -268,7 +248,7 @@ class TapStack(pulumi.ComponentResource):
                 "host": args["host"],
                 "port": args["port"]
             })),
-            opts=ResourceOptions(parent=self.db_password, depends_on=[self.rds_instance], delete_before_replace=True)
+            opts=ResourceOptions(parent=self.db_password, depends_on=[self.rds_instance])
         )
 
         # Create ElastiCache Serverless Redis cache
