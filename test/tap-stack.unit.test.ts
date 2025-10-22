@@ -491,7 +491,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      expect(outputCount).toBe(7);
     });
   });
 });
@@ -526,9 +526,9 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
       expect(parameterCount).toBe(7);
     });
 
-    test('should have exactly 4 outputs defined', () => {
+    test('should have exactly 7 outputs defined', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      expect(outputCount).toBe(7);
     });
   });
 
@@ -576,19 +576,19 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
     test('ReportsBucket should have regulatory compliance configuration', () => {
       const bucket = template.Resources.ReportsBucket;
       expect(bucket.Type).toBe('AWS::S3::Bucket');
-      
+
       // Bucket naming
       expect(bucket.Properties.BucketName['Fn::Sub']).toBe('${BucketNamePrefix}-reports-${Environment}-${AWS::AccountId}');
-      
+
       // Encryption configuration
       expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
       expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.KMSMasterKeyID).toEqual({
         'Fn::GetAtt': ['KMSKey', 'Arn']
       });
-      
+
       // Versioning
       expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
-      
+
       // Lifecycle - 10 year retention (3650 days)
       const lifecycleRule = bucket.Properties.LifecycleConfiguration.Rules[0];
       expect(lifecycleRule.Id).toBe('RetentionRule');
@@ -596,7 +596,7 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
       expect(lifecycleRule.ExpirationInDays).toBe(3650);
       expect(lifecycleRule.NoncurrentVersionExpirationInDays).toBe(3650);
       expect(lifecycleRule.AbortIncompleteMultipartUpload.DaysAfterInitiation).toBe(7);
-      
+
       // Security
       expect(bucket.Properties.PublicAccessBlockConfiguration).toEqual({
         BlockPublicAcls: true,
@@ -604,7 +604,7 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
         BlockPublicPolicy: true,
         RestrictPublicBuckets: true
       });
-      
+
       // Ownership
       expect(bucket.Properties.OwnershipControls.Rules[0].ObjectOwnership).toBe('BucketOwnerEnforced');
     });
@@ -626,35 +626,35 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
     test('AuroraCluster should have Serverless V2 and security configuration', () => {
       const cluster = template.Resources.AuroraCluster;
       expect(cluster.Type).toBe('AWS::RDS::DBCluster');
-      
+
       // Engine configuration
       expect(cluster.Properties.Engine).toBe('aurora-postgresql');
       expect(cluster.Properties.EngineMode).toBe('provisioned');
       expect(cluster.Properties.DBClusterParameterGroupName).toBe('default.aurora-postgresql17');
-      
+
       // Master user configuration
       expect(cluster.Properties.MasterUsername).toEqual({ Ref: 'DatabaseMasterUsername' });
       expect(cluster.Properties.MasterUserSecret).toEqual({
         SecretArn: { Ref: 'AuroraSecret' }
       });
       expect(cluster.Properties.ManageMasterUserPassword).toBe(true);
-      
+
       // Database
       expect(cluster.Properties.DatabaseName).toBe('reportingdb');
-      
+
       // Serverless V2 scaling
       expect(cluster.Properties.ServerlessV2ScalingConfiguration).toEqual({
         MinCapacity: 0.5,
         MaxCapacity: 4.0
       });
-      
+
       // Security
       expect(cluster.Properties.StorageEncrypted).toBe(true);
       expect(cluster.Properties.KmsKeyId).toEqual({
         'Fn::GetAtt': ['KMSKey', 'Arn']
       });
       expect(cluster.Properties.BackupRetentionPeriod).toBe(7);
-      
+
       // Networking
       expect(cluster.Properties.VpcSecurityGroupIds).toEqual([{ Ref: 'AuroraSecurityGroup' }]);
       expect(cluster.Properties.DBSubnetGroupName).toEqual({ Ref: 'AuroraDBSubnetGroup' });
@@ -677,21 +677,21 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
     test('Subnets should be in different AZs with correct CIDR blocks', () => {
       const subnetA = template.Resources.SubnetA;
       const subnetB = template.Resources.SubnetB;
-      
+
       // SubnetA configuration
       expect(subnetA.Type).toBe('AWS::EC2::Subnet');
       expect(subnetA.Properties.CidrBlock).toBe('10.0.1.0/24');
       expect(subnetA.Properties.AvailabilityZone).toEqual({
         'Fn::Select': [0, { 'Fn::GetAZs': '' }]
       });
-      
+
       // SubnetB configuration
       expect(subnetB.Type).toBe('AWS::EC2::Subnet');
       expect(subnetB.Properties.CidrBlock).toBe('10.0.2.0/24');
       expect(subnetB.Properties.AvailabilityZone).toEqual({
         'Fn::Select': [1, { 'Fn::GetAZs': '' }]
       });
-      
+
       // Both should reference the VPC
       expect(subnetA.Properties.VpcId).toEqual({ Ref: 'VPC' });
       expect(subnetB.Properties.VpcId).toEqual({ Ref: 'VPC' });
@@ -700,18 +700,18 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
     test('Security groups should have proper ingress rules', () => {
       const auroraSecurityGroup = template.Resources.AuroraSecurityGroup;
       const lambdaSecurityGroup = template.Resources.LambdaSecurityGroup;
-      
+
       // Aurora security group
       expect(auroraSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
       expect(auroraSecurityGroup.Properties.GroupDescription).toBe('Security group for Aurora');
       expect(auroraSecurityGroup.Properties.VpcId).toEqual({ Ref: 'VPC' });
-      
+
       const auroraIngressRule = auroraSecurityGroup.Properties.SecurityGroupIngress[0];
       expect(auroraIngressRule.IpProtocol).toBe('tcp');
       expect(auroraIngressRule.FromPort).toBe(5432);
       expect(auroraIngressRule.ToPort).toBe(5432);
       expect(auroraIngressRule.SourceSecurityGroupId).toEqual({ Ref: 'LambdaSecurityGroup' });
-      
+
       // Lambda security group
       expect(lambdaSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
       expect(lambdaSecurityGroup.Properties.GroupDescription).toBe('Security group for Lambda functions (to access Aurora)');
@@ -730,11 +730,11 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
       expect(lambda.Properties.Role).toEqual({
         'Fn::GetAtt': ['LambdaExecutionRole', 'Arn']
       });
-      
+
       // VPC Configuration
       expect(lambda.Properties.VpcConfig.SecurityGroupIds).toEqual([{ Ref: 'LambdaSecurityGroup' }]);
       expect(lambda.Properties.VpcConfig.SubnetIds).toEqual([{ Ref: 'SubnetA' }, { Ref: 'SubnetB' }]);
-      
+
       // Code should be defined
       expect(lambda.Properties.Code.ZipFile).toBeDefined();
       expect(lambda.Properties.Code.ZipFile.length).toBeGreaterThan(0);
@@ -742,7 +742,7 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
 
     test('GenerateReportLambda should have correct configuration', () => {
       testLambdaFunction('GenerateReportLambda', 'lambda_generate_report.handler');
-      
+
       // Verify code contains key functionality
       const code = template.Resources.GenerateReportLambda.Properties.Code.ZipFile;
       expect(code).toContain('report_id');
@@ -752,7 +752,7 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
 
     test('ValidateReportLambda should have correct configuration', () => {
       testLambdaFunction('ValidateReportLambda', 'lambda_validate_report.handler');
-      
+
       // Verify code contains validation logic
       const code = template.Resources.ValidateReportLambda.Properties.Code.ZipFile;
       expect(code).toContain('validation_errors');
@@ -763,9 +763,9 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
 
     test('DeliverReportLambda should have correct configuration and environment variables', () => {
       testLambdaFunction('DeliverReportLambda', 'lambda_deliver_report.handler');
-      
+
       const lambda = template.Resources.DeliverReportLambda;
-      
+
       // Environment variables
       const envVars = lambda.Properties.Environment.Variables;
       expect(envVars.REPORTS_BUCKET_NAME).toEqual({ Ref: 'ReportsBucket' });
@@ -775,7 +775,7 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
       });
       expect(envVars.DB_SECRET_ARN).toEqual({ Ref: 'AuroraSecret' });
       expect(envVars.DB_NAME).toBe('reportingdb');
-      
+
       // Verify code contains delivery logic
       const code = lambda.Properties.Code.ZipFile;
       expect(code).toContain('s3.put_object');
@@ -788,10 +788,10 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
     test('State machine definition should have correct workflow structure', () => {
       const definitionString = template.Resources.ReportingStateMachine.Properties.DefinitionString['Fn::Sub'][0];
       const definition = JSON.parse(definitionString.replace(/\n/g, ''));
-      
+
       expect(definition.Comment).toBe('Regulatory Report Generation and Delivery Workflow');
       expect(definition.StartAt).toBe('GenerateReport');
-      
+
       // Verify all required states exist
       const expectedStates = [
         'GenerateReport',
@@ -802,11 +802,11 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
         'DeliveryFailedNotification',
         'ReportGenerationSuccess'
       ];
-      
+
       expectedStates.forEach(stateName => {
         expect(definition.States).toHaveProperty(stateName);
       });
-      
+
       // Verify state types
       expect(definition.States.GenerateReport.Type).toBe('Task');
       expect(definition.States.ValidateReport.Type).toBe('Task');
@@ -815,15 +815,15 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
       expect(definition.States.ValidationFailedNotification.Type).toBe('Fail');
       expect(definition.States.DeliveryFailedNotification.Type).toBe('Fail');
       expect(definition.States.ReportGenerationSuccess.Type).toBe('Succeed');
-      
+
       // Verify retry configuration
       expect(definition.States.GenerateReport.Retry).toHaveLength(1);
       expect(definition.States.GenerateReport.Retry[0].MaxAttempts).toBe(6);
-      
+
       // Verify choice logic
       expect(definition.States.ValidationChoice.Choices[0].Variable).toBe('$.validationResult.isValid');
       expect(definition.States.ValidationChoice.Choices[0].BooleanEquals).toBe(true);
-      
+
       // Verify error handling
       expect(definition.States.DeliverReport.Catch).toHaveLength(1);
       expect(definition.States.DeliverReport.Catch[0].ErrorEquals).toEqual(['States.ALL']);
@@ -837,7 +837,7 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
       expect(scheduler.Properties.Description).toBe('Triggers the regulatory reporting state machine daily.');
       expect(scheduler.Properties.ScheduleExpression).toEqual({ Ref: 'DailyScheduleExpression' });
       expect(scheduler.Properties.State).toBe('ENABLED');
-      
+
       // Target configuration
       const target = scheduler.Properties.Targets[0];
       expect(target.Arn).toEqual({ Ref: 'ReportingStateMachine' });
@@ -858,12 +858,12 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
       expect(alarm.Properties.EvaluationPeriods).toBe(1);
       expect(alarm.Properties.Threshold).toBe('200'); // 10% of 2000
       expect(alarm.Properties.ComparisonOperator).toBe('GreaterThanOrEqualToThreshold');
-      
+
       // Dimension configuration
       const dimension = alarm.Properties.Dimensions[0];
       expect(dimension.Name).toBe('StateMachineArn');
       expect(dimension.Value).toEqual({ Ref: 'ReportingStateMachine' });
-      
+
       // Alarm actions
       expect(alarm.Properties.AlarmActions).toEqual([{ Ref: 'SNSTopic' }]);
     });
@@ -876,7 +876,7 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
       expect(bucket.Properties.BucketName).toEqual({
         'Fn::Sub': '${BucketNamePrefix}-cloudtrail-logs-${AWS::AccountId}'
       });
-      
+
       // Security configuration
       expect(bucket.Properties.PublicAccessBlockConfiguration).toEqual({
         BlockPublicAcls: true,
@@ -884,7 +884,7 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
         BlockPublicPolicy: true,
         RestrictPublicBuckets: true
       });
-      
+
       // Ownership
       expect(bucket.Properties.OwnershipControls.Rules[0].ObjectOwnership).toBe('BucketOwnerPreferred');
     });
@@ -902,7 +902,7 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
   describe('Resource Dependencies and References Validation', () => {
     test('All resource references should be valid', () => {
       const resourceNames = Object.keys(template.Resources);
-      
+
       // Function to check if a reference exists
       const checkRef = (ref: any) => {
         if (ref && typeof ref === 'object') {
@@ -933,7 +933,7 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
 
     test('Lambda functions should reference correct execution role', () => {
       const lambdaFunctions = ['GenerateReportLambda', 'ValidateReportLambda', 'DeliverReportLambda'];
-      
+
       lambdaFunctions.forEach(functionName => {
         const lambda = template.Resources[functionName];
         expect(lambda.Properties.Role).toEqual({
@@ -944,7 +944,7 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
 
     test('Aurora cluster should reference all required resources', () => {
       const cluster = template.Resources.AuroraCluster;
-      
+
       // Should reference security group, subnet group, KMS key, and secret
       expect(cluster.Properties.VpcSecurityGroupIds).toEqual([{ Ref: 'AuroraSecurityGroup' }]);
       expect(cluster.Properties.DBSubnetGroupName).toEqual({ Ref: 'AuroraDBSubnetGroup' });
@@ -958,7 +958,7 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
   describe('CloudFormation Template Advanced Validation', () => {
     test('Resource logical IDs should follow naming conventions', () => {
       const resourceNames = Object.keys(template.Resources);
-      
+
       resourceNames.forEach(name => {
         // Should not contain spaces or special characters except for allowed ones
         expect(name).toMatch(/^[a-zA-Z0-9]+$/);
