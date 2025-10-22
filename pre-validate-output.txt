@@ -1,9 +1,0 @@
-🔍 Starting Pre-Deployment IaC Validation...
-  Platform: Pulumi
-  Language: py
-  Environment Suffix: dev
-
-📋 1. Checking for hardcoded values...
-⚠️  WARNING: Potential hardcoded value found: stage-
-lib/tap_stack.py:599:            f"assessment-api-stage-{self.environment_suffix}",
-lib/tap_stack.py:623:                "Name": f"assessment-api-stage-{self.environment_suffix}",
