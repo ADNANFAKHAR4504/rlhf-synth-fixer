@@ -1,6 +1,5 @@
 #############################################
-# tap_stack.tf — Single-file Terraform (EC2 + S3 + DynamoDB + API GW + Lambda)
-# EC2 and Lambda are ALWAYS created (no flags)
+# tap_stack.tf
 #############################################
 
 #############################################
@@ -13,6 +12,14 @@ variable "ProjectName" {
   validation {
     condition     = can(regex("^[a-z0-9-]+$", var.ProjectName))
     error_message = "Must contain only lowercase letters, numbers, and hyphens."
+  }
+}
+variable "aws_region" {
+  description = "AWS region (e.g., us-east-1)"
+  type        = string
+  validation {
+    condition     = can(regex("^([a-z]{2}-[a-z]+-\\d)$", var.aws_region))
+    error_message = "Use a valid AWS region like us-east-1 or eu-west-1."
   }
 }
 
