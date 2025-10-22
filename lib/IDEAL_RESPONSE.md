@@ -628,7 +628,7 @@ class TapStack(TerraformStack):
             depends_on=[target_group]
         )
 
-        # Outputs for integration tests
+        # Stack outputs
         TerraformOutput(
             self,
             "VpcId",
