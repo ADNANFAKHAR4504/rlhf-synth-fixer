@@ -1,13 +1,13 @@
 {
-  "platform": "CDKTF",
-  "language": "py",
+  "platform": "cdktf",
+  "language": "python",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "7933703108",
   "team": "synth",
   "startedAt": "2025-10-21T14:41:42+05:30",
   "subtask": "Failure Recovery and High Availability",
-  "background": "EduTech Solutions needs to modernize their assessment platform to support 100,000+ concurrent students. The solution must comply with educational data privacy regulations (FERPA), provide real-time analytics, and ensure high availability across multiple availability zones in Tokyo region.",
+  "background": "Infrastructure task for CDKTF",
   "subject_labels": [
     "Failure Recovery Automation",
     "Infrastructure Analysis/Monitoring",
