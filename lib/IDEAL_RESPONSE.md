@@ -9,7 +9,7 @@ I'll create a comprehensive infrastructure for your digital assessment platform 
 tap_stack.py
 
 This module defines the TapStack class for the digital assessment platform infrastructure.
-Implements FERPA-compliant infrastructure with encryption, monitoring, and high availability.
+Implements FERPA-compliant infrastructure with encryption, monitoring, and high availability
 """
 
 import json
