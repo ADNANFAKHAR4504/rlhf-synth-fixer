@@ -110,7 +110,7 @@ const queryDatabase = async (sql: string, parameters: SqlParameter[] = []) => {
 describe('TapStack End-to-End Integration Tests', () => {
 
   beforeAll(() => {
-    console.log('🚀 Starting TapStack Integration Tests');
+    console.log(' Starting TapStack Integration Tests');
     console.log('Environment Suffix:', cfnOutputs.environmentSuffix);
     console.log('AWS Region:', cfnOutputs.region);
     console.log('State Machine ARN:', cfnOutputs.StateMachineArn || 'Not available');
@@ -123,7 +123,7 @@ describe('TapStack End-to-End Integration Tests', () => {
 
     test('Success Path Validation: should successfully execute the State Machine from start to finish', async () => {
       if (!cfnOutputs.StateMachineArn) {
-        console.warn('⚠️ State Machine ARN not available, skipping test');
+        console.warn(' State Machine ARN not available, skipping test');
         return;
       }
 
@@ -161,7 +161,7 @@ describe('TapStack End-to-End Integration Tests', () => {
         if (error instanceof Error) {
           console.error('Success path validation failed:', error.message);
           if (error.name === 'AccessDeniedException') {
-            console.warn('⚠️ Skipping test due to insufficient AWS permissions');
+            console.warn(' Skipping test due to insufficient AWS permissions');
             return;
           }
         } else {
@@ -173,7 +173,7 @@ describe('TapStack End-to-End Integration Tests', () => {
 
     test('Failure Path Validation (Validation Failure): should fail when input data is invalid', async () => {
       if (!cfnOutputs.StateMachineArn) {
-        console.error('⚠️ State Machine ARN not available, skipping test');
+        console.error('State Machine ARN not available, skipping test');
         return;
       }
 
@@ -211,7 +211,7 @@ describe('TapStack End-to-End Integration Tests', () => {
         if (error instanceof Error) {
           console.error('Failure path validation failed:', error.message);
           if (error.name === 'AccessDeniedException') {
-            console.warn('⚠️ Skipping test due to insufficient AWS permissions');
+            console.warn(' Skipping test due to insufficient AWS permissions');
             return;
           }
         } else {
@@ -223,7 +223,7 @@ describe('TapStack End-to-End Integration Tests', () => {
 
     test('Failure Path Validation (Delivery Failure): should fail and trigger alarm on delivery error', async () => {
       if (!cfnOutputs.StateMachineArn) {
-        console.error('⚠️ State Machine ARN not available, skipping test');
+        console.error(' State Machine ARN not available, skipping test');
         return;
       }
 
@@ -252,7 +252,7 @@ describe('TapStack End-to-End Integration Tests', () => {
         if (error instanceof Error) {
           console.error('Delivery failure validation failed:', error.message);
           if (error.name === 'AccessDeniedException') {
-            console.warn('⚠️ Skipping test due to insufficient AWS permissions');
+            console.warn(' Skipping test due to insufficient AWS permissions');
             return;
           }
         } else {
@@ -271,7 +271,7 @@ describe('TapStack End-to-End Integration Tests', () => {
     // Run a successful execution once to have data to test against
     beforeAll(async () => {
       if (!cfnOutputs.StateMachineArn) {
-        console.error('⚠️ StateMachine ARN not available, skipping data integrity tests setup');
+        console.error(' StateMachine ARN not available, skipping data integrity tests setup');
         return;
       }
 
@@ -291,12 +291,12 @@ describe('TapStack End-to-End Integration Tests', () => {
         if (s3Location && cfnOutputs.ReportsBucketName) {
           s3Key = s3Location.split(`${cfnOutputs.ReportsBucketName}/`)[1];
         }
-        console.log('✅ Data integrity test setup completed');
+        console.log(' Data integrity test setup completed');
       } catch (error) {
         if (error instanceof Error) {
           console.error('Failed to setup data integrity tests:', error.message);
           if (error.name === 'AccessDeniedException') {
-            console.warn('⚠️ Insufficient AWS permissions for test setup');
+            console.warn(' Insufficient AWS permissions for test setup');
           }
         } else {
           console.error('Failed to setup data integrity tests:', error);
@@ -313,7 +313,7 @@ describe('TapStack End-to-End Integration Tests', () => {
             Key: s3Key,
           });
           await s3Client.send(deleteObjectCommand);
-          console.log('✅ Cleaned up S3 test objects');
+          console.log(' Cleaned up S3 test objects');
         } catch (error) {
           if (error instanceof Error) {
             console.error('Failed to cleanup S3 objects:', error.message);
@@ -326,7 +326,7 @@ describe('TapStack End-to-End Integration Tests', () => {
 
     test('Database Connectivity and Report Generation: should generate a report with expected structure', async () => {
       if (!s3Key || !cfnOutputs.ReportsBucketName) {
-        console.error('⚠️ S3 key or bucket name not available, skipping report generation test');
+        console.error(' S3 key or bucket name not available, skipping report generation test');
         return;
       }
 
@@ -352,7 +352,7 @@ describe('TapStack End-to-End Integration Tests', () => {
         if (error instanceof Error) {
           console.error('Report generation test failed - S3 object may not exist:', error.message);
           if (error.name === 'NoSuchKey' || error.name === 'AccessDenied') {
-            console.warn('⚠️ S3 object not accessible, skipping test');
+            console.warn(' S3 object not accessible, skipping test');
             return;
           }
         } else {
@@ -364,7 +364,7 @@ describe('TapStack End-to-End Integration Tests', () => {
 
     test('S3 Storage, Versioning, and Encryption: should store report with versioning and KMS encryption enabled', async () => {
       if (!s3Key || !cfnOutputs.ReportsBucketName) {
-        console.error('⚠️ S3 key or bucket name not available, skipping S3 versioning test');
+        console.error(' S3 key or bucket name not available, skipping S3 versioning test');
         return;
       }
 
@@ -382,7 +382,7 @@ describe('TapStack End-to-End Integration Tests', () => {
         if (error instanceof Error) {
           console.error('S3 versioning test failed - object may not exist:', error.message);
           if (error.name === 'NoSuchKey' || error.name === 'AccessDenied') {
-            console.warn('⚠️ S3 object not accessible, skipping test');
+            console.warn(' S3 object not accessible, skipping test');
             return;
           }
         } else {
@@ -398,7 +398,7 @@ describe('TapStack End-to-End Integration Tests', () => {
 
     beforeAll(async () => {
       if (!cfnOutputs.StateMachineArn) {
-        console.error('⚠️ State Machine ARN not available, skipping audit tests setup');
+        console.error(' State Machine ARN not available, skipping audit tests setup');
         return;
       }
 
@@ -414,12 +414,12 @@ describe('TapStack End-to-End Integration Tests', () => {
         const { executionArn } = await sfnClient.send(startCmd);
         const { output } = await pollExecution(executionArn!);
         reportId = output.reportId;
-        console.log('✅ Audit test setup completed');
+        console.log(' Audit test setup completed');
       } catch (error) {
         if (error instanceof Error) {
           console.error('Failed to setup audit tests:', error.message);
           if (error.name === 'AccessDeniedException') {
-            console.warn('⚠️ Insufficient AWS permissions for audit test setup');
+            console.warn(' Insufficient AWS permissions for audit test setup');
           }
         } else {
           console.error('Failed to setup audit tests:', error);
@@ -438,7 +438,7 @@ describe('TapStack End-to-End Integration Tests', () => {
 
     test('Report Delivery and Logging: should log delivery details in the audit database', async () => {
       if (!reportId) {
-        console.error('⚠️ Report ID not available, skipping delivery logging test');
+        console.error(' Report ID not available, skipping delivery logging test');
         return;
       }
 
@@ -459,13 +459,13 @@ describe('TapStack End-to-End Integration Tests', () => {
             expect(details.s3ReportPath).toContain(reportId);
           }
         } else {
-          console.warn('⚠️ No audit records found for report delivery');
+          console.warn(' No audit records found for report delivery');
         }
       } catch (error) {
         if (error instanceof Error) {
           console.error('Database query failed:', error.message);
           if (error.message?.includes('not available')) {
-            console.warn('⚠️ Skipping test due to database unavailability');
+            console.warn(' Skipping test due to database unavailability');
             return;
           }
         } else {
@@ -477,7 +477,7 @@ describe('TapStack End-to-End Integration Tests', () => {
 
     test('Confirmation Status Update: should update report status to DELIVERED in the database', async () => {
       if (!reportId) {
-        console.error('⚠️ Report ID not available, skipping status update test');
+        console.error(' Report ID not available, skipping status update test');
         return;
       }
 
@@ -492,13 +492,13 @@ describe('TapStack End-to-End Integration Tests', () => {
           const statusField = result.records[0][0];
           expect(statusField.stringValue).toBe('DELIVERED');
         } else {
-          console.error('⚠️ No status records found for report:', reportId);
+          console.error(' No status records found for report:', reportId);
         }
       } catch (error) {
         if (error instanceof Error) {
           console.error('Database query failed:', error.message);
           if (error.message?.includes('not available')) {
-            console.warn('⚠️ Skipping test due to database unavailability');
+            console.warn(' Skipping test due to database unavailability');
             return;
           }
         } else {
