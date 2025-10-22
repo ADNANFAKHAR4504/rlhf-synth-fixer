@@ -1,0 +1,26 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "999000",
+  "team": "1",
+  "startedAt": "2025-10-22T08:52:45.291Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "VPC",
+    "ALB",
+    "EC2",
+    "RDS",
+    "Lambda",
+    "CloudWatch",
+    "KMS",
+    "IAM"
+  ],
+  "task_config": {
+    "deploy_env": "dev.tfvars"
+  }
+}
