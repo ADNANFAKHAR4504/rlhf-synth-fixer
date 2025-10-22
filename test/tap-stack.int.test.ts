@@ -32,6 +32,7 @@ import * as lambda from '@aws-sdk/client-lambda';
 import * as cloudwatchlogs from '@aws-sdk/client-cloudwatch-logs';
 import * as sfn from '@aws-sdk/client-sfn';
 import axios from 'axios';
+import * as sts from '@aws-sdk/client-sts';
 import { describe, test, beforeAll, expect } from '@jest/globals';
 
 // Test configuration 
@@ -96,6 +97,7 @@ let apiGatewayClient: apigateway.APIGatewayClient;
 let lambdaClient: lambda.LambdaClient;
 let cloudwatchLogsClient: cloudwatchlogs.CloudWatchLogsClient;
 let sfnClient: sfn.SFNClient;
+let awsAccountId: string;
 
 /**
  * Get stack outputs using Pulumi CLI
@@ -270,6 +272,15 @@ beforeAll(async () => {
   lambdaClient = new lambda.LambdaClient({ region: PRIMARY_REGION });
   cloudwatchLogsClient = new cloudwatchlogs.CloudWatchLogsClient({ region: PRIMARY_REGION });
   sfnClient = new sfn.SFNClient({ region: PRIMARY_REGION });
+  //  ADD STS CLIENT AND ACCOUNT ID RETRIEVAL
+  const stsClient = new sts.STSClient({ region: PRIMARY_REGION });
+  const identity = await stsClient.send(new sts.GetCallerIdentityCommand({}));
+  if (!identity.Account) {
+    throw new Error('Unable to retrieve AWS Account ID from STS');
+  }
+  awsAccountId = identity.Account;
+  console.log(`   AWS Account ID: ${awsAccountId}`);
+
 }, TEST_TIMEOUT);
 
 describe('TapStack Integration Tests', () => {
@@ -755,7 +766,7 @@ describe('TapStack Integration Tests', () => {
       timestamp: new Date().toISOString(),
     };
 
-    console.log(`📤 Publishing test record to Kinesis: ${transactionId}`);
+    console.log(` Publishing test record to Kinesis: ${transactionId}`);
     
     // Put record to Kinesis
     const putResponse = await kinesisClient.send(new kinesis.PutRecordCommand({
@@ -785,7 +796,7 @@ describe('TapStack Integration Tests', () => {
       const eventSourceMappings = await lambdaClient.send(
         new lambda.ListEventSourceMappingsCommand({
           FunctionName: transactionProcessorName,
-          EventSourceArn: `arn:aws:kinesis:${PRIMARY_REGION}:*:stream/${stackOutputs.kinesisStreamName}`,
+          EventSourceArn: `arn:aws:kinesis:${PRIMARY_REGION}:${awsAccountId}:stream/${stackOutputs.kinesisStreamName}`,
         })
       );
 
@@ -793,7 +804,7 @@ describe('TapStack Integration Tests', () => {
         console.log(` Found ${eventSourceMappings.EventSourceMappings.length} event source mapping(s)`);
         
         // Wait for Lambda to process the message
-        console.log('⏳ Waiting for Lambda to process the Kinesis record...');
+        console.log(' Waiting for Lambda to process the Kinesis record...');
         
         const wasInvoked = await waitForCondition(
           async () => wasLambdaInvoked(transactionProcessorName, testStartTime, transactionId),
