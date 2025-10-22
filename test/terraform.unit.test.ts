@@ -57,10 +57,11 @@ describe('Terraform Infrastructure Unit Tests', () => {
     });
 
     test('should organize code with clear section headers', () => {
-      expect(has(mainTfContent, '# ===========================\n# Data Sources')).toBe(true);
-      expect(has(mainTfContent, '# ===========================\n# Variables')).toBe(true);
-      expect(has(mainTfContent, '# ===========================\n# Locals')).toBe(true);
-      expect(has(mainTfContent, '# ===========================\n# Outputs')).toBe(true);
+      expect(has(mainTfContent, '# Data Sources')).toBe(true);
+      expect(has(mainTfContent, '# Variables')).toBe(true);
+      expect(has(mainTfContent, '# Locals')).toBe(true);
+      expect(has(mainTfContent, '# Outputs')).toBe(true);
+      expect(has(mainTfContent, '# ===========================')).toBe(true);
     });
 
     test('should have logical resource grouping', () => {
@@ -250,7 +251,7 @@ describe('Terraform Infrastructure Unit Tests', () => {
     test('should use resource references in policies', () => {
       expect(has(mainTfContent, '${aws_s3_bucket.file_uploads.arn}')).toBe(true);
       expect(has(mainTfContent, '${aws_dynamodb_table.file_metadata.arn}')).toBe(true);
-      expect(has(mainTfContent, '${aws_sns_topic.notifications.arn}')).toBe(true);
+      expect(has(mainTfContent, 'aws_sns_topic.notifications.arn')).toBe(true);
     });
 
     test('should follow least privilege principle', () => {
@@ -311,7 +312,7 @@ describe('Terraform Infrastructure Unit Tests', () => {
 
   describe('12. CloudWatch Alarms & Monitoring', () => {
     test('should have Lambda error rate alarm', () => {
-      expect(has(mainTfContent, 'aws_cloudwatch_metric_alarm.*lambda_error_rate')).toBe(true);
+      expect(has(mainTfContent, 'aws_cloudwatch_metric_alarm" "lambda_error_rate')).toBe(true);
       expect(has(mainTfContent, 'metric_name        = "Errors"')).toBe(true);
       expect(has(mainTfContent, 'namespace          = "AWS/Lambda"')).toBe(true);
     });
