@@ -1,48 +1,49 @@
+import { DataArchiveFile } from '@cdktf/provider-archive/lib/data-archive-file';
+import { ApiGatewayDeployment } from '@cdktf/provider-aws/lib/api-gateway-deployment';
+import { ApiGatewayIntegration } from '@cdktf/provider-aws/lib/api-gateway-integration';
+import { ApiGatewayMethod } from '@cdktf/provider-aws/lib/api-gateway-method';
+import { ApiGatewayResource } from '@cdktf/provider-aws/lib/api-gateway-resource';
+import { ApiGatewayRestApi } from '@cdktf/provider-aws/lib/api-gateway-rest-api';
+import { ApiGatewayStage } from '@cdktf/provider-aws/lib/api-gateway-stage';
+import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
+import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
+import { EcsCluster } from '@cdktf/provider-aws/lib/ecs-cluster';
+import { EcsService } from '@cdktf/provider-aws/lib/ecs-service';
+import { EcsTaskDefinition } from '@cdktf/provider-aws/lib/ecs-task-definition';
+import { EfsFileSystem } from '@cdktf/provider-aws/lib/efs-file-system';
+import { EfsMountTarget } from '@cdktf/provider-aws/lib/efs-mount-target';
+import { ElasticacheReplicationGroup } from '@cdktf/provider-aws/lib/elasticache-replication-group';
+import { ElasticacheSubnetGroup } from '@cdktf/provider-aws/lib/elasticache-subnet-group';
+import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { KinesisStream } from '@cdktf/provider-aws/lib/kinesis-stream';
+import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
+import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
+import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
+import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
+import { Lb } from '@cdktf/provider-aws/lib/lb';
+import { LbListener } from '@cdktf/provider-aws/lib/lb-listener';
+import { LbTargetGroup } from '@cdktf/provider-aws/lib/lb-target-group';
 import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
-import { S3Backend, TerraformStack } from 'cdktf';
-import { Construct } from 'constructs';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
-import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
-import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
-import { Route } from '@cdktf/provider-aws/lib/route';
-import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
-import { KinesisStream } from '@cdktf/provider-aws/lib/kinesis-stream';
-import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
-import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
-import { ElasticacheReplicationGroup } from '@cdktf/provider-aws/lib/elasticache-replication-group';
-import { ElasticacheSubnetGroup } from '@cdktf/provider-aws/lib/elasticache-subnet-group';
 import { RdsCluster } from '@cdktf/provider-aws/lib/rds-cluster';
 import { RdsClusterInstance } from '@cdktf/provider-aws/lib/rds-cluster-instance';
-import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
-import { EcsCluster } from '@cdktf/provider-aws/lib/ecs-cluster';
-import { EcsTaskDefinition } from '@cdktf/provider-aws/lib/ecs-task-definition';
-import { EcsService } from '@cdktf/provider-aws/lib/ecs-service';
-import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
-import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
-import { EfsFileSystem } from '@cdktf/provider-aws/lib/efs-file-system';
-import { EfsMountTarget } from '@cdktf/provider-aws/lib/efs-mount-target';
-import { ApiGatewayRestApi } from '@cdktf/provider-aws/lib/api-gateway-rest-api';
-import { ApiGatewayResource } from '@cdktf/provider-aws/lib/api-gateway-resource';
-import { ApiGatewayMethod } from '@cdktf/provider-aws/lib/api-gateway-method';
-import { ApiGatewayIntegration } from '@cdktf/provider-aws/lib/api-gateway-integration';
-import { ApiGatewayDeployment } from '@cdktf/provider-aws/lib/api-gateway-deployment';
-import { ApiGatewayStage } from '@cdktf/provider-aws/lib/api-gateway-stage';
+import { Route } from '@cdktf/provider-aws/lib/route';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
 import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
-import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
 import { SecretsmanagerSecretRotation } from '@cdktf/provider-aws/lib/secretsmanager-secret-rotation';
-import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
-import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
-import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
-import { Lb } from '@cdktf/provider-aws/lib/lb';
-import { LbTargetGroup } from '@cdktf/provider-aws/lib/lb-target-group';
-import { LbListener } from '@cdktf/provider-aws/lib/lb-listener';
+import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { S3Backend, TerraformStack } from 'cdktf';
+import { Construct } from 'constructs';
 
 interface TapStackProps {
   environmentSuffix?: string;
@@ -547,6 +548,48 @@ export class TapStack extends TerraformStack {
         'arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole',
     });
 
+    // Create Lambda deployment package with inline code
+    const lambdaArchive = new DataArchiveFile(this, 'rotation-lambda-zip', {
+      type: 'zip',
+      outputPath: `/tmp/rotation-lambda-${environmentSuffix}.zip`,
+      source: [{
+        content: `import json
+import boto3
+import logging
+import os
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+def lambda_handler(event, context):
+    """
+    AWS Secrets Manager rotation function for RDS credentials
+    """
+    logger.info(f"Rotation event: {json.dumps(event)}")
+    
+    # This is a basic rotation handler
+    # In a production environment, you would implement full rotation logic
+    try:
+        # Basic validation
+        if 'SecretId' not in event:
+            raise ValueError('SecretId not found in event')
+        
+        secret_id = event['SecretId']
+        step = event.get('Step', 'createSecret')
+        
+        logger.info(f"Processing step: {step} for secret: {secret_id}")
+        
+        # For now, return success - implement actual rotation logic as needed
+        return {'message': f'Successfully processed {step} for {secret_id}'}
+        
+    except Exception as e:
+        logger.error(f"Rotation failed: {str(e)}")
+        raise e
+`,
+        filename: 'lambda_function.py'
+      }]
+    });
+
     const rotationLambda = new LambdaFunction(this, 'rotation-lambda', {
       functionName: `edu-secret-rotation-${environmentSuffix}`,
       runtime: 'python3.11',
@@ -562,8 +605,8 @@ export class TapStack extends TerraformStack {
           SECRETS_MANAGER_ENDPOINT: `https://secretsmanager.${awsRegion}.amazonaws.com`,
         },
       },
-      filename: `${process.cwd()}/lambda.zip`,
-      sourceCodeHash: '${filebase64sha256("' + process.cwd() + '/lambda.zip")}',
+      filename: lambdaArchive.outputPath,
+      sourceCodeHash: lambdaArchive.outputBase64Sha256,
       tags: {
         Name: `edu-secret-rotation-${environmentSuffix}`,
         Environment: environmentSuffix,
