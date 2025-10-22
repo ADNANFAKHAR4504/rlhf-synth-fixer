@@ -50,7 +50,7 @@
         },
         "DBInstanceClass": {
             "Type": "String",
-            "Default": "db.t3.micro",
+            "Default": "db.t3.medium",
             "Description": "RDS instance class",
             "AllowedValues": [
                 "db.t3.micro",
