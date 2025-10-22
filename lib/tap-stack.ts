@@ -906,8 +906,8 @@ def lambda_handler(event, context):
       },
     });
 
-    const targetGroup = new LbTargetGroup(this, 'ecs-target-group', {
-      name: `edu-tg-${environmentSuffix}`,
+    const targetGroup = new LbTargetGroup(this, 'ecs-target-group-v2', {
+      name: `edu-tg-v2-${environmentSuffix}`,
       port: 80,
       protocol: 'HTTP',
       vpcId: vpc.id,
