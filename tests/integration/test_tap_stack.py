@@ -72,10 +72,21 @@ def wait_for_lambda_logs(logs_client, log_group_name: str, start_time: int,
     Returns:
         True if log found, False otherwise
     """
+    print(f"\n[SEARCH] Searching CloudWatch Logs:")
+    print(f"   Log Group: {log_group_name}")
+    print(f"   Search String: '{search_string}'")
+    print(f"   Start Time: {start_time} ({datetime.fromtimestamp(start_time/1000, tz=timezone.utc).isoformat()})")
+    print(f"   Max Wait: {max_wait}s")
+    
     end_time = time.time() + max_wait
     wait_interval = 2
+    attempt = 0
     
     while time.time() < end_time:
+        attempt += 1
+        remaining = int(end_time - time.time())
+        print(f"   Attempt {attempt} (remaining: {remaining}s)...", end=" ")
+        
         try:
             # Get recent log streams
             streams_response = logs_client.describe_log_streams(
@@ -84,6 +95,9 @@ def wait_for_lambda_logs(logs_client, log_group_name: str, start_time: int,
                 descending=True,
                 limit=5
             )
+            
+            stream_count = len(streams_response.get('logStreams', []))
+            print(f"found {stream_count} streams")
             
             # Search through log streams
             for stream in streams_response.get('logStreams', []):
@@ -97,25 +111,33 @@ def wait_for_lambda_logs(logs_client, log_group_name: str, start_time: int,
                         limit=100
                     )
                     
-                    for event in events_response.get('events', []):
+                    events = events_response.get('events', [])
+                    for event in events:
                         if search_string in event.get('message', ''):
-                            print(f"Found log message containing '{search_string}'")
+                            print(f"\n[FOUND] Log message containing '{search_string}'")
+                            print(f"   Stream: {stream_name}")
+                            print(f"   Message: {event.get('message', '')[:200]}")
                             return True
                             
                 except ClientError as e:
                     if e.response['Error']['Code'] != 'ResourceNotFoundException':
-                        print(f"Error reading log stream {stream_name}: {e}")
+                        print(f"\n[WARNING] Error reading log stream {stream_name}: {e}")
                         
         except ClientError as e:
             if e.response['Error']['Code'] == 'ResourceNotFoundException':
-                print(f"Log group {log_group_name} not found yet, waiting...")
+                print(f"log group not found yet")
             else:
-                print(f"Error checking logs: {e}")
+                print(f"\n[WARNING] Error checking logs: {e}")
         
         time.sleep(wait_interval)
         wait_interval = min(wait_interval * 1.5, 10)
     
-    print(f"Log message containing '{search_string}' not found within {max_wait} seconds")
+    print(f"\n[ERROR] Log message containing '{search_string}' not found within {max_wait} seconds")
+    print(f"   This could indicate:")
+    print(f"   - Lambda did not execute")
+    print(f"   - S3 event notification delay")
+    print(f"   - CloudWatch log ingestion delay")
+    print(f"   - Lambda execution error (check AWS Console)")
     return False
 
 
@@ -146,6 +168,18 @@ class BaseIntegrationTest(unittest.TestCase):
             print(f"Expected outputs file at: {FLAT_OUTPUTS_PATH}")
         else:
             print(f"Loaded outputs: {list(OUTPUTS.keys())}")
+        
+        # Wait for IAM role propagation (AWS can take up to 10-15 seconds)
+        print("\n" + "="*80)
+        print("IAM PROPAGATION WAIT")
+        print("="*80)
+        print(f"[WAIT] Waiting 15 seconds for IAM role propagation...")
+        print(f"   Current time: {datetime.now(timezone.utc).isoformat()}")
+        print(f"   AWS Region: {os.environ.get('AWS_REGION', 'not set')}")
+        print(f"   Account ID: {os.environ.get('CURRENT_ACCOUNT_ID', 'not set')}")
+        time.sleep(15)
+        print(f"[DONE] IAM propagation wait complete at: {datetime.now(timezone.utc).isoformat()}")
+        print("="*80 + "\n")
     
     def setUp(self):
         """Set up individual test."""
@@ -190,6 +224,7 @@ class ServiceLevelTests(BaseIntegrationTest):
         Tests: Lambda execution with DynamoDB write and SNS notification.
         """
         function_name = self.get_output('api_handler_name')
+        role_arn = self.get_output('api_handler_role_arn')
         
         # Prepare test payload
         payload = {
@@ -202,31 +237,55 @@ class ServiceLevelTests(BaseIntegrationTest):
             })
         }
         
-        print(f"Invoking Lambda function: {function_name}")
+        print(f"\n[INVOKE] Invoking Lambda function:")
+        print(f"   Function: {function_name}")
+        print(f"   Role ARN: {role_arn}")
+        print(f"   Payload: {json.dumps(payload, indent=2)}")
         
-        # Invoke Lambda
-        response = lambda_client.invoke(
-            FunctionName=function_name,
-            InvocationType='RequestResponse',
-            Payload=json.dumps(payload)
-        )
-        
-        # Verify response
-        self.assertEqual(response['StatusCode'], 200)
-        
-        # Parse response payload
-        response_payload = json.loads(response['Payload'].read())
-        print(f"Lambda response: {response_payload}")
-        
-        self.assertEqual(response_payload['statusCode'], 200)
-        
-        # Parse body
-        body = json.loads(response_payload['body'])
-        self.assertEqual(body['message'], 'Item created successfully')
-        self.assertIn('item', body)
-        self.assertEqual(body['item']['item_id'], f'test-{self.test_id}')
-        
-        print(f"Successfully invoked Lambda and created item: test-{self.test_id}")
+        try:
+            # Invoke Lambda
+            response = lambda_client.invoke(
+                FunctionName=function_name,
+                InvocationType='RequestResponse',
+                Payload=json.dumps(payload)
+            )
+            
+            print(f"[SUCCESS] Lambda invocation successful (StatusCode: {response['StatusCode']})")
+            
+            # Verify response
+            self.assertEqual(response['StatusCode'], 200)
+            
+            # Parse response payload
+            response_payload = json.loads(response['Payload'].read())
+            print(f"   Response payload: {json.dumps(response_payload, indent=2)[:500]}")
+            
+            self.assertEqual(response_payload['statusCode'], 200)
+            
+            # Parse body
+            body = json.loads(response_payload['body'])
+            self.assertEqual(body['message'], 'Item created successfully')
+            self.assertIn('item', body)
+            self.assertEqual(body['item']['item_id'], f'test-{self.test_id}')
+            
+            print(f"[SUCCESS] Successfully invoked Lambda and created item: test-{self.test_id}")
+            
+        except ClientError as e:
+            error_code = e.response['Error']['Code']
+            error_msg = e.response['Error']['Message']
+            print(f"\n[ERROR] Lambda invocation failed:")
+            print(f"   Error Code: {error_code}")
+            print(f"   Error Message: {error_msg}")
+            print(f"   Function: {function_name}")
+            print(f"   Role: {role_arn}")
+            
+            if error_code == 'AccessDeniedException':
+                print(f"\n[WARNING] IAM PROPAGATION ISSUE DETECTED:")
+                print(f"   - The Lambda role may not be fully propagated yet")
+                print(f"   - AWS IAM can take up to 60 seconds to propagate globally")
+                print(f"   - Current wait time: 15 seconds")
+                print(f"   - Recommendation: Increase wait time to 30-45 seconds")
+            
+            raise
     
     def test_dynamodb_put_and_get_item(self):
         """
@@ -237,14 +296,15 @@ class ServiceLevelTests(BaseIntegrationTest):
         table_name = self.get_output('dynamodb_table_name')
         table = dynamodb_resource.Table(table_name)
         
-        # Create test item
+        # Create test item with composite key (item_id + timestamp)
         item_id = f'direct-test-{self.test_id}'
+        timestamp = int(time.time())
         test_item = {
             'item_id': item_id,
-            'timestamp': int(time.time()),
+            'timestamp': timestamp,
             'status': 'testing',
             'data': {'source': 'integration_test'},
-            'created_at': int(time.time())
+            'created_at': timestamp
         }
         
         print(f"Putting item in DynamoDB table: {table_name}")
@@ -252,13 +312,17 @@ class ServiceLevelTests(BaseIntegrationTest):
         # Put item
         table.put_item(Item=test_item)
         
-        # Get item back
-        response = table.get_item(Key={'item_id': item_id})
+        # Get item back using composite key
+        response = table.get_item(Key={
+            'item_id': item_id,
+            'timestamp': timestamp
+        })
         
         # Verify item
         self.assertIn('Item', response)
         retrieved_item = response['Item']
         self.assertEqual(retrieved_item['item_id'], item_id)
+        self.assertEqual(retrieved_item['timestamp'], timestamp)
         self.assertEqual(retrieved_item['status'], 'testing')
         self.assertIn('data', retrieved_item)
         
@@ -302,6 +366,36 @@ class ServiceLevelTests(BaseIntegrationTest):
             print(f"Cleaned up test file: {file_key}")
         except Exception as e:
             print(f"Warning: Could not delete test file: {e}")
+    
+    def test_sns_topic_attributes(self):
+        """
+        Service-Level Test: Verify SNS topic exists and has correct attributes.
+        
+        Tests: SNS topic operations (get_topic_attributes).
+        """
+        sns_topic_arn = self.get_output('sns_topic_arn')
+        
+        print(f"Verifying SNS topic: {sns_topic_arn}")
+        
+        # Get topic attributes
+        response = sns_client.get_topic_attributes(TopicArn=sns_topic_arn)
+        
+        # Verify topic exists and has attributes
+        self.assertIn('Attributes', response)
+        attributes = response['Attributes']
+        
+        # Verify topic ARN matches
+        self.assertEqual(attributes['TopicArn'], sns_topic_arn)
+        
+        # Verify topic has a display name or owner
+        self.assertIn('Owner', attributes)
+        self.assertIsNotNone(attributes['Owner'])
+        
+        # Verify subscriptions confirmed count exists (even if 0)
+        self.assertIn('SubscriptionsConfirmed', attributes)
+        
+        print(f"Successfully verified SNS topic with {attributes['SubscriptionsConfirmed']} confirmed subscriptions")
+        print(f"Topic owner: {attributes['Owner']}")
 
 
 # ============================================================================
@@ -342,29 +436,62 @@ class CrossServiceTests(BaseIntegrationTest):
             })
         }
         
-        print(f"Invoking Lambda to write to DynamoDB: {function_name}")
+        print(f"\n[CROSS-SERVICE] Lambda -> DynamoDB Test")
+        print(f"   Lambda Function: {function_name}")
+        print(f"   DynamoDB Table: {table_name}")
+        print(f"   Item ID: {item_id}")
         
-        response = lambda_client.invoke(
-            FunctionName=function_name,
-            InvocationType='RequestResponse',
-            Payload=json.dumps(payload)
-        )
-        
-        self.assertEqual(response['StatusCode'], 200)
-        
-        # Wait a moment for consistency
-        time.sleep(2)
-        
-        # Verify item exists in DynamoDB
-        print(f"Verifying item in DynamoDB: {item_id}")
-        db_response = table.get_item(Key={'item_id': item_id})
-        
-        self.assertIn('Item', db_response)
-        item = db_response['Item']
-        self.assertEqual(item['item_id'], item_id)
-        self.assertEqual(item['status'], 'cross-service-test')
-        
-        print(f"Successfully verified Lambda -> DynamoDB interaction for item: {item_id}")
+        try:
+            response = lambda_client.invoke(
+                FunctionName=function_name,
+                InvocationType='RequestResponse',
+                Payload=json.dumps(payload)
+            )
+            
+            print(f"[SUCCESS] Lambda invoked (StatusCode: {response['StatusCode']})")
+            self.assertEqual(response['StatusCode'], 200)
+            
+            # Parse Lambda response to get the timestamp it used
+            response_payload = json.loads(response['Payload'].read())
+            self.assertEqual(response_payload['statusCode'], 200)
+            body = json.loads(response_payload['body'])
+            created_item = body['item']
+            timestamp = int(created_item['timestamp'])
+            
+            print(f"   Lambda returned timestamp: {timestamp}")
+            
+            # Wait a moment for consistency
+            time.sleep(2)
+            
+            # Verify item exists in DynamoDB using composite key
+            print(f"[VERIFY] Checking DynamoDB for item: {item_id}")
+            db_response = table.get_item(Key={
+                'item_id': item_id,
+                'timestamp': timestamp
+            })
+            
+            self.assertIn('Item', db_response)
+            item = db_response['Item']
+            self.assertEqual(item['item_id'], item_id)
+            self.assertEqual(item['status'], 'cross-service-test')
+            
+            print(f"[SUCCESS] Verified Lambda -> DynamoDB interaction for item: {item_id}")
+            
+        except ClientError as e:
+            error_code = e.response['Error']['Code']
+            error_msg = e.response['Error']['Message']
+            print(f"\n[ERROR] Cross-service test failed:")
+            print(f"   Error Code: {error_code}")
+            print(f"   Error Message: {error_msg}")
+            
+            if error_code == 'AccessDeniedException':
+                print(f"\n[WARNING] IAM PROPAGATION ISSUE - Lambda role not ready")
+                print(f"   Recommendation: Increase IAM propagation wait time")
+            elif error_code == 'ValidationException':
+                print(f"\n[WARNING] DYNAMODB SCHEMA ISSUE - Check composite key usage")
+                print(f"   Table requires both 'item_id' and 'timestamp' keys")
+            
+            raise
     
     def test_s3_upload_triggers_lambda(self):
         """
@@ -384,7 +511,11 @@ class CrossServiceTests(BaseIntegrationTest):
             'timestamp': time.time()
         })
         
-        print(f"Uploading file to trigger Lambda: s3://{bucket_name}/{file_key}")
+        print(f"\n[CROSS-SERVICE] S3 -> Lambda Trigger Test")
+        print(f"   S3 Bucket: {bucket_name}")
+        print(f"   File Key: {file_key}")
+        print(f"   Lambda Function: {function_name}")
+        print(f"   Log Group: {log_group_name}")
         
         # Upload file to S3 (this should trigger Lambda)
         s3_client.put_object(
@@ -394,20 +525,32 @@ class CrossServiceTests(BaseIntegrationTest):
             ContentType='application/json'
         )
         
+        print(f"[SUCCESS] File uploaded to S3")
+        
         # Wait for Lambda to process (check CloudWatch Logs)
-        print(f"Waiting for Lambda execution logs in {log_group_name}")
+        # S3 notifications can take a few seconds to trigger Lambda
+        print(f"[WAIT] Waiting 5 seconds for S3 notification to trigger Lambda...")
+        time.sleep(5)  # Give S3 notification time to trigger
         
         log_found = wait_for_lambda_logs(
             logs_client,
             log_group_name,
             self.start_time,
             file_key,
-            max_wait=60
+            max_wait=90  # Increased from 60 to 90 seconds
         )
+        
+        if not log_found:
+            print(f"\n[ERROR] S3 -> Lambda trigger test failed")
+            print(f"   Possible causes:")
+            print(f"   - S3 event notification not configured properly")
+            print(f"   - Lambda permission for S3 invocation missing")
+            print(f"   - S3 notification delay (can take 30-90 seconds in CI/CD)")
+            print(f"   - Lambda execution error (check AWS Console)")
         
         self.assertTrue(log_found, f"Lambda did not process file {file_key} within timeout")
         
-        print(f"Successfully verified S3 -> Lambda trigger for file: {file_key}")
+        print(f"[SUCCESS] Verified S3 -> Lambda trigger for file: {file_key}")
         
         # Cleanup
         time.sleep(2)
@@ -442,26 +585,37 @@ class CrossServiceTests(BaseIntegrationTest):
         )
         
         # Wait for Lambda to process and write to DynamoDB
+        # S3 notifications can take a few seconds to trigger Lambda
         print("Waiting for file processor to write metadata to DynamoDB")
-        time.sleep(10)
+        time.sleep(15)  # Increased from 10 to 15 seconds for S3 notification delay
         
-        # Check DynamoDB for metadata record
+        # Check DynamoDB for metadata record using query on item_id
         expected_item_id = f"file-{file_key.replace('/', '-')}"
         
         # Try multiple times with exponential backoff
         max_attempts = 5
+        db_record_found = False
+        
         for attempt in range(max_attempts):
             try:
-                db_response = table.get_item(Key={'item_id': expected_item_id})
+                # Query by partition key only (we don't know the exact timestamp)
+                db_response = table.query(
+                    KeyConditionExpression='item_id = :item_id',
+                    ExpressionAttributeValues={
+                        ':item_id': expected_item_id
+                    },
+                    Limit=1
+                )
                 
-                if 'Item' in db_response:
-                    item = db_response['Item']
+                if db_response.get('Items') and len(db_response['Items']) > 0:
+                    item = db_response['Items'][0]
                     self.assertEqual(item['status'], 'processed')
                     self.assertIn('data', item)
                     self.assertEqual(item['data']['key'], file_key)
                     self.assertEqual(item['data']['bucket'], bucket_name)
                     
                     print(f"Successfully verified file processor -> DynamoDB for: {expected_item_id}")
+                    db_record_found = True
                     break
             except Exception as e:
                 if attempt < max_attempts - 1:
@@ -469,7 +623,9 @@ class CrossServiceTests(BaseIntegrationTest):
                     print(f"Attempt {attempt + 1}/{max_attempts} failed, waiting {wait_time}s: {e}")
                     time.sleep(wait_time)
                 else:
-                    raise
+                    print(f"Failed to find DB record after {max_attempts} attempts: {e}")
+        
+        self.assertTrue(db_record_found, f"DynamoDB record not found for {expected_item_id}")
         
         # Cleanup
         time.sleep(2)
@@ -542,13 +698,21 @@ class EndToEndTests(BaseIntegrationTest):
         
         print(f"API Gateway responded successfully")
         
+        # Parse response to get timestamp
+        response_body = response.json()
+        created_item = response_body['item']
+        timestamp = int(created_item['timestamp'])
+        
         # Wait for downstream processing
         time.sleep(5)
         
         # VERIFY DOWNSTREAM EFFECT 1: DynamoDB record exists
         print(f"Verifying DynamoDB record for item: {item_id}")
         table = dynamodb_resource.Table(table_name)
-        db_response = table.get_item(Key={'item_id': item_id})
+        db_response = table.get_item(Key={
+            'item_id': item_id,
+            'timestamp': timestamp
+        })
         
         self.assertIn('Item', db_response)
         item = db_response['Item']
@@ -609,7 +773,8 @@ class EndToEndTests(BaseIntegrationTest):
         print(f"File uploaded to S3")
         
         # Wait for downstream processing
-        time.sleep(10)
+        # S3 notifications can take a few seconds to trigger Lambda
+        time.sleep(15)  # Increased for S3 notification delay
         
         # VERIFY DOWNSTREAM EFFECT 1: Lambda execution logs
         print(f"Verifying CloudWatch logs for file processor Lambda")
@@ -618,7 +783,7 @@ class EndToEndTests(BaseIntegrationTest):
             log_group_name,
             self.start_time,
             file_key,
-            max_wait=60
+            max_wait=90  # Increased from 60 to 90 seconds
         )
         
         self.assertTrue(log_found, f"File processor Lambda did not execute for {file_key}")
@@ -635,10 +800,17 @@ class EndToEndTests(BaseIntegrationTest):
         
         for attempt in range(max_attempts):
             try:
-                db_response = table.get_item(Key={'item_id': expected_item_id})
+                # Query by partition key only (we don't know the exact timestamp)
+                db_response = table.query(
+                    KeyConditionExpression='item_id = :item_id',
+                    ExpressionAttributeValues={
+                        ':item_id': expected_item_id
+                    },
+                    Limit=1
+                )
                 
-                if 'Item' in db_response:
-                    item = db_response['Item']
+                if db_response.get('Items') and len(db_response['Items']) > 0:
+                    item = db_response['Items'][0]
                     self.assertEqual(item['status'], 'processed')
                     self.assertIn('data', item)
                     self.assertEqual(item['data']['key'], file_key)
