@@ -51,7 +51,8 @@ const url = new URL(apiUrl);
 const apiHostParts = url.hostname.split('.');
 const restApiId = apiHostParts[0];
 const regionFromApi = apiHostParts[2];
-const region = regionFromKms || regionFromApi || process.env.AWS_REGION || 'eu-central-1';
+const region =
+  regionFromKms || regionFromApi || process.env.AWS_REGION || 'eu-central-1';
 const stageName = url.pathname.split('/').filter(Boolean)[0]; // e.g. 'prod'
 const apiStageArn = `arn:aws:apigateway:${region}::/restapis/${restApiId}/stages/${stageName}`;
 
@@ -82,19 +83,30 @@ const cw = new CloudWatchClient({ region });
 const ec2 = new EC2Client({ region });
 const wafv2 = new WAFV2Client({ region });
 
-// ---- Small https GET helper (no external deps) ----
-const httpsGet = (targetUrl: string): Promise<{ status: number; body: string }> =>
+// ---- HTTPS GET helper with minimal headers (to avoid WAF "NoUserAgent" block) ----
+const httpsGet = (
+  targetUrl: string
+): Promise<{ status: number; body: string }> =>
   new Promise((resolve, reject) => {
-    const req = https.get(targetUrl, res => {
-      const chunks: Uint8Array[] = [];
-      res.on('data', d => chunks.push(d));
-      res.on('end', () =>
-        resolve({
-          status: res.statusCode || 0,
-          body: Buffer.concat(chunks).toString('utf8'),
-        })
-      );
-    });
+    const req = https.get(
+      targetUrl,
+      {
+        headers: {
+          'User-Agent': 'TapStackIntegrationTest/1.0',
+          Accept: 'application/json',
+        },
+      },
+      res => {
+        const chunks: Uint8Array[] = [];
+        res.on('data', d => chunks.push(d));
+        res.on('end', () =>
+          resolve({
+            status: res.statusCode || 0,
+            body: Buffer.concat(chunks).toString('utf8'),
+          })
+        );
+      }
+    );
     req.on('error', reject);
     req.end();
   });
@@ -109,46 +121,65 @@ describe('Turn Around Prompt API Integration Tests', () => {
     });
 
     test('Versioning is enabled', async () => {
-      const out = await s3.send(new GetBucketVersioningCommand({ Bucket: appBucket }));
+      const out = await s3.send(
+        new GetBucketVersioningCommand({ Bucket: appBucket })
+      );
       expect(out.Status).toBe('Enabled');
     });
 
     test('Default encryption is SSE-KMS with expected KMS key', async () => {
-      const out = await s3.send(new GetBucketEncryptionCommand({ Bucket: appBucket }));
+      const out = await s3.send(
+        new GetBucketEncryptionCommand({ Bucket: appBucket })
+      );
       const rule = out.ServerSideEncryptionConfiguration?.Rules?.[0];
       const def = rule?.ApplyServerSideEncryptionByDefault;
       expect(def?.SSEAlgorithm).toBe('aws:kms');
-      // Accept either full key ARN or KeyId — SDK returns KeyId as either form
       const keyId = (def?.KMSMasterKeyID || '').split('/').pop();
       expect(keyId).toBe(kmsKeyIdFromArn);
     });
 
     test('Server access logging targets the central log bucket', async () => {
-      const out = await s3.send(new GetBucketLoggingCommand({ Bucket: appBucket }));
+      const out = await s3.send(
+        new GetBucketLoggingCommand({ Bucket: appBucket })
+      );
       const target = out.LoggingEnabled?.TargetBucket;
       expect(target).toBe(centralLogBucket);
     });
 
     test('Bucket policy enforces encryption (DenyUnEncryptedObjectUploads)', async () => {
-      const out = await s3.send(new GetBucketPolicyCommand({ Bucket: appBucket }));
+      const out = await s3.send(
+        new GetBucketPolicyCommand({ Bucket: appBucket })
+      );
       const policy = JSON.parse(out.Policy || '{}');
       const sids = (policy.Statement || []).map((s: any) => s.Sid);
-      expect(sids).toEqual(expect.arrayContaining(['DenyUnEncryptedObjectUploads', 'DenyIncorrectEncryptionKey']));
+      expect(sids).toEqual(
+        expect.arrayContaining([
+          'DenyUnEncryptedObjectUploads',
+          'DenyIncorrectEncryptionKey',
+        ])
+      );
     });
   });
 
   describe('S3 – Central logging bucket configuration', () => {
     test('Central log bucket exists and has CloudTrail/server-access statements', async () => {
-      const head = await s3.send(new HeadBucketCommand({ Bucket: centralLogBucket }));
+      const head = await s3.send(
+        new HeadBucketCommand({ Bucket: centralLogBucket })
+      );
       expect(head.$metadata.httpStatusCode).toBe(200);
 
-      const pol = await s3.send(new GetBucketPolicyCommand({ Bucket: centralLogBucket }));
+      const pol = await s3.send(
+        new GetBucketPolicyCommand({ Bucket: centralLogBucket })
+      );
       const policy = JSON.parse(pol.Policy || '{}');
       const sids = (policy.Statement || []).map((s: any) => s.Sid);
-      // Allow either/both Trail + S3 server access statements to exist
       expect(
         sids.some((sid: string) =>
-          ['AWSCloudTrailAclCheck', 'AWSCloudTrailWrite', 'S3ServerAccessLogsPolicy'].includes(sid)
+          [
+            'AWSCloudTrailAclCheck',
+            'AWSCloudTrailWrite',
+            'S3ServerAccessLogsPolicy',
+          ].includes(sid)
         )
       ).toBe(true);
     });
@@ -159,7 +190,9 @@ describe('Turn Around Prompt API Integration Tests', () => {
       const out = await kms.send(new DescribeKeyCommand({ KeyId: kmsArn }));
       expect(out.KeyMetadata?.Arn).toBe(kmsArn);
       expect(out.KeyMetadata?.KeyState).toBe('Enabled');
-      expect(['AWS', 'CUSTOMER']).toContain(out.KeyMetadata?.KeyManager as string);
+      expect(['AWS', 'CUSTOMER']).toContain(
+        out.KeyMetadata?.KeyManager as string
+      );
     });
   });
 
@@ -169,7 +202,9 @@ describe('Turn Around Prompt API Integration Tests', () => {
       expect(res.status).toBe(200);
       const body = JSON.parse(res.body);
       expect(body.message).toContain('Hello from secure Lambda!');
-      expect(typeof body.request_id === 'string' || body.request_id === undefined).toBe(true);
+      expect(
+        typeof body.request_id === 'string' || body.request_id === undefined
+      ).toBe(true);
     });
 
     test('Region derived from URL matches region from KMS ARN', async () => {
@@ -179,7 +214,6 @@ describe('Turn Around Prompt API Integration Tests', () => {
 
   describe('WAFv2 – Web ACL and API association', () => {
     test('Web ACL ARN resolves via GetWebACL', async () => {
-      // arn:aws:wafv2:<region>:<acct>:regional/webacl/<name>/<id>
       const parts = wafWebAclArn.split('/');
       const webAclId = parts[parts.length - 1];
       const webAclName = parts[parts.length - 2];
@@ -203,12 +237,17 @@ describe('Turn Around Prompt API Integration Tests', () => {
   describe('CloudTrail – Trail & destinations', () => {
     test('Trail exists and targets central S3 + CloudWatch Logs', async () => {
       const out = await ct.send(
-        new DescribeTrailsCommand({ trailNameList: [trailName], includeShadowTrails: false })
+        new DescribeTrailsCommand({ includeShadowTrails: true })
       );
-      const trail = (out.trailList || [])[0];
-      expect(trail.Name).toBe(trailName);
-      expect(trail.S3BucketName).toBe(centralLogBucket);
-      expect(trail.CloudWatchLogsLogGroupArn?.endsWith(`:${trailLogGroupName}`)).toBe(true);
+      const trails = out.trailList || [];
+      const trail =
+        trails.find(t => t.Name === trailName) ||
+        trails.find(t => (t.TrailARN || '').endsWith(`:${trailName}`));
+      expect(trail?.Name).toBe(trailName);
+      expect(trail?.S3BucketName).toBe(centralLogBucket);
+      expect(
+        (trail?.CloudWatchLogsLogGroupArn || '').endsWith(`:${trailLogGroupName}`)
+      ).toBe(true);
     });
   });
 
@@ -237,7 +276,6 @@ describe('Turn Around Prompt API Integration Tests', () => {
         'DeleteLoginProfile',
         'ConsoleLoginNoMFA',
       ];
-      // Validate a representative subset in a single API call sequence
       for (const name of mustHave) {
         const resp = await logs.send(
           new DescribeMetricFiltersCommand({
@@ -245,7 +283,9 @@ describe('Turn Around Prompt API Integration Tests', () => {
             filterNamePrefix: name,
           })
         );
-        const anyMatch = (resp.metricFilters || []).some(mf => mf.filterName?.startsWith(name));
+        const anyMatch = (resp.metricFilters || []).some(mf =>
+          (mf.filterName || '').startsWith(name)
+        );
         expect(anyMatch).toBe(true);
       }
     });
