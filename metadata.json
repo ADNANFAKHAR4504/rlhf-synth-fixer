@@ -1,5 +1,5 @@
 {
-  "platform": "Pulumi",
+  "platform": "pulumi",
   "language": "py",
   "complexity": "medium",
   "team": "synth",
@@ -13,6 +13,5 @@
     "Security Configuration as Code"
   ],
   "aws_services": "apigatewayv2, kinesis, rds, elasticache, secretsmanager, kms, ec2, iam, cloudwatch, sns",
-  "training_quality": 9.6,
   "completedAt": "2025-10-22T07:52:00+05:30"
 }
