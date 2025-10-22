@@ -333,6 +333,20 @@ class TapStack(pulumi.ComponentResource):
                                     "s3:x-amz-acl": "bucket-owner-full-control"
                                 }
                             }
+                        },
+                        {
+                            "Sid": "AWSALBAccessLogWrite",
+                            "Effect": "Allow",
+                            "Principal": {"Service": "elasticloadbalancing.amazonaws.com"},
+                            "Action": "s3:PutObject",
+                            "Resource": f"{args[0]}/alb-logs/*"
+                        },
+                        {
+                            "Sid": "AWSALBAccessLogAclCheck",
+                            "Effect": "Allow",
+                            "Principal": {"Service": "elasticloadbalancing.amazonaws.com"},
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": args[0]
                         }
                     ]
                 })
@@ -356,7 +370,7 @@ class TapStack(pulumi.ComponentResource):
                 data_resources=[
                     aws.cloudtrail.TrailEventSelectorDataResourceArgs(
                         type="AWS::S3::Object",
-                        values=["arn:aws:s3:::*/"],
+                        values=["arn:aws:s3:::*/*"],
                     ),
                 ],
             )],
@@ -1124,7 +1138,7 @@ class TapStack(pulumi.ComponentResource):
                         "Effect": "Allow",
                         "Principal": {"Service": "config.amazonaws.com"},
                         "Action": "s3:PutObject",
-                        "Resource": f"{arn}/AWSLogs/{self.account_id}/Config/*",
+                        "Resource": f"{arn}/*",
                         "Condition": {
                             "StringEquals": {
                                 "s3:x-amz-acl": "bucket-owner-full-control"
@@ -1172,7 +1186,6 @@ class TapStack(pulumi.ComponentResource):
             f"config-delivery-{self.environment_suffix}",
             name=f"fedramp-config-{self.environment_suffix}",
             s3_bucket_name=config_bucket.id,
-            s3_key_prefix=f"AWSLogs/{self.account_id}/Config",
             s3_kms_key_arn=kms_key.arn,
             snapshot_delivery_properties=aws.cfg.DeliveryChannelSnapshotDeliveryPropertiesArgs(
                 delivery_frequency="TwentyFour_Hours",
