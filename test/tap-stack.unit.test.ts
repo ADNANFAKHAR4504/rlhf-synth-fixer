@@ -741,7 +741,7 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
     };
 
     test('GenerateReportLambda should have correct configuration', () => {
-      testLambdaFunction('GenerateReportLambda', 'lambda_generate_report.handler');
+      testLambdaFunction('GenerateReportLambda', 'index.handler');
 
       // Verify code contains key functionality
       const code = template.Resources.GenerateReportLambda.Properties.Code.ZipFile;
@@ -751,7 +751,7 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
     });
 
     test('ValidateReportLambda should have correct configuration', () => {
-      testLambdaFunction('ValidateReportLambda', 'lambda_validate_report.handler');
+      testLambdaFunction('ValidateReportLambda', 'index.handler');
 
       // Verify code contains validation logic
       const code = template.Resources.ValidateReportLambda.Properties.Code.ZipFile;
@@ -762,7 +762,7 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
     });
 
     test('DeliverReportLambda should have correct configuration and environment variables', () => {
-      testLambdaFunction('DeliverReportLambda', 'lambda_deliver_report.handler');
+      testLambdaFunction('DeliverReportLambda', 'index.handler');
 
       const lambda = template.Resources.DeliverReportLambda;
 
