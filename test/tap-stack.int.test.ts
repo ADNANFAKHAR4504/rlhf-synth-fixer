@@ -515,7 +515,14 @@ describe('TapStack Comprehensive End-to-End Integration Test Scenarios', () => {
       enhancedReportId = result.output.reportId;
       enhancedS3Key = result.output.s3Url.split(`${cfnOutputs.ReportsBucketName}/`)[1];
       createdS3Keys.push(enhancedS3Key);
+      enhancedS3Key = result.output?.s3Url
+        ? result.output.s3Url.split(`${cfnOutputs.ReportsBucketName}/`)[1]
+        : undefined;
 
+      // Then check before using
+      if (!enhancedS3Key) {
+        console.error('S3 key could not be extracted from the output, ');
+      }
       expect(enhancedReportId).toBeDefined();
       expect(enhancedS3Key).toBeDefined();
     }, 300000);

@@ -939,6 +939,37 @@
           "Fn::Sub": "${AWS::StackName}-SNSTopicArn"
         }
       }
+    },
+    "DatabaseClusterArn": {
+      "Description": "ARN of the Aurora Serverless v2 cluster",
+      "Value": {
+        "Fn::Sub": "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraCluster}"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBClusterArn"
+        }
+      }
+    },
+    "DatabaseSecretArn": {
+      "Description": "ARN of the Secrets Manager secret for the Aurora master user",
+      "Value": {
+        "Ref": "AuroraSecret"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBSecretArn"
+        }
+      }
+    },
+    "DatabaseName": {
+      "Description": "Name of the reporting database in Aurora",
+      "Value": "reportingdb",
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBName"
+        }
+      }
     }
   }
 }
