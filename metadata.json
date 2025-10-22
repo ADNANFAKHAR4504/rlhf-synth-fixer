@@ -13,19 +13,6 @@
     "Infrastructure Analysis/Monitoring",
     "Security Configuration as Code"
   ],
-  "description": "Create a secure financial database infrastructure using CDKTF that includes an encrypted RDS instance with read replicas, SecretsManager integration, and ElastiCache for performance optimization. The solution must comply with PCI-DSS requirements for a financial services application.",
-  "constraints": "All database credentials must be stored in AWS Secrets Manager with automatic rotation enabled; RDS instance must be encrypted at rest using AWS KMS and configured with Multi-AZ deployment",
-  "environment": {
-    "required_setup": {
-      "python_version": ">=3.7",
-      "cdktf_version": ">=0.15.0",
-      "aws_provider": "ca-central-1",
-      "packages": [
-        "cdktf",
-        "cdktf-aws-provider"
-      ]
-    }
-  },
   "training_quality": 9,
   "aws_services": [
     "VPC",
@@ -36,36 +23,5 @@
     "KMS",
     "IAM",
     "CloudWatch"
-  ],
-  "regions": [
-    "us-east-1"
-  ],
-  "frameworks": [
-    "cdktf"
-  ],
-  "artifacts": [
-    "cfn-outputs/flat-outputs.json"
-  ],
-  "entrypoints": [
-    "./scripts/unit-tests.sh",
-    "./scripts/integration-tests.sh"
-  ],
-  "env_vars": [
-    "AWS_REGION",
-    "AWS_PROFILE",
-    "CDKTF_DEFAULT_ACCOUNT",
-    "CDKTF_DEFAULT_REGION"
-  ],
-  "test_coverage_targets": ">=90% unit",
-  "ci_jobs": [
-    "integration-tests-live"
-  ],
-  "tags": [
-    "pci-dss",
-    "fintech",
-    "secure-database"
-  ],
-  "owners": [
-    "team-synth"
   ]
 }
