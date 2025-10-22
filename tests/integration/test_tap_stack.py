@@ -233,7 +233,7 @@ class ServiceLevelTests(BaseIntegrationTest):
             'body': json.dumps({
                 'item_id': f'test-{self.test_id}',
                 'status': 'active',
-                'data': {'test': True, 'timestamp': time.time()}
+                'data': {'test': True, 'timestamp': int(time.time())}
             })
         }
         
@@ -508,7 +508,7 @@ class CrossServiceTests(BaseIntegrationTest):
         file_content = json.dumps({
             'test_id': self.test_id,
             'test_type': 'cross_service_s3_lambda',
-            'timestamp': time.time()
+            'timestamp': int(time.time())
         })
         
         print(f"\n[CROSS-SERVICE] S3 -> Lambda Trigger Test")
@@ -661,7 +661,7 @@ class EndToEndTests(BaseIntegrationTest):
         - DynamoDB record creation
         - CloudWatch logs
         
-        This is a TRUE E2E test: only trigger API Gateway, verify all downstream effects.
+         only trigger API Gateway, verify all downstream effects.
         """
         api_url = self.get_output('api_gateway_url')
         table_name = self.get_output('dynamodb_table_name')
@@ -676,7 +676,7 @@ class EndToEndTests(BaseIntegrationTest):
             'data': {
                 'test_type': 'end_to_end',
                 'entry_point': 'api_gateway',
-                'timestamp': time.time()
+                'timestamp': int(time.time())
             }
         }
         
@@ -745,7 +745,7 @@ class EndToEndTests(BaseIntegrationTest):
         - DynamoDB metadata record
         - CloudWatch logs
         
-        This is a TRUE E2E test: only upload to S3, verify all downstream effects.
+       only upload to S3, verify all downstream effects.
         """
         bucket_name = self.get_output('s3_bucket_name')
         table_name = self.get_output('dynamodb_table_name')
@@ -756,7 +756,7 @@ class EndToEndTests(BaseIntegrationTest):
             'test_id': self.test_id,
             'test_type': 'end_to_end',
             'entry_point': 's3_upload',
-            'timestamp': time.time()
+            'timestamp': int(time.time())
         })
         
         print(f"Triggering E2E workflow via S3 upload: s3://{bucket_name}/{file_key}")
@@ -849,7 +849,7 @@ class EndToEndTests(BaseIntegrationTest):
         - Lambda (stream processor) execution
         - CloudWatch logs
         
-        This is a TRUE E2E test: only write to DynamoDB, verify stream processing.
+         only write to DynamoDB, verify stream processing.
         """
         table_name = self.get_output('dynamodb_table_name')
         log_group_name = self.get_output('stream_processor_log_group_name')
