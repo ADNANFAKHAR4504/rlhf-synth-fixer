@@ -1357,7 +1357,8 @@ class TapStack(TerraformStack):
         )
 
         # EventBridge Scheduler for health checks every 5 minutes
-        from cdktf_cdktf_provider_aws.scheduler_schedule import SchedulerScheduleTargetEcsParameters
+        from cdktf_cdktf_provider_aws.scheduler_schedule import \
+            SchedulerScheduleTargetEcsParameters
         
         SchedulerSchedule(
             self,
