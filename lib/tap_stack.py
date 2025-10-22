@@ -408,7 +408,7 @@ class TapStack(pulumi.ComponentResource):
         db_parameter_group = rds.ParameterGroup(
             f"assessment-db-params-{self.environment_suffix}",
             name=f"assessment-db-params-{self.environment_suffix}",
-            family="postgres15",
+            family="postgres16",
             description="Custom parameter group for assessment platform",
             parameters=[
                 rds.ParameterGroupParameterArgs(
@@ -433,7 +433,7 @@ class TapStack(pulumi.ComponentResource):
             f"assessment-db-{self.environment_suffix}",
             identifier=f"assessment-db-{self.environment_suffix}",
             engine="postgres",
-            engine_version="15.8",
+            engine_version="16.4",
             instance_class="db.t3.micro",
             allocated_storage=20,
             storage_type="gp3",
