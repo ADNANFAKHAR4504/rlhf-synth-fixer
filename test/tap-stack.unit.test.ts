@@ -360,6 +360,12 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(genConfig.GenerateStringKey).toBe('password');
     });
 
+    test('should have DB password secret encrypted with KMS', () => {
+      const secret = template.Resources.DBPasswordSecret;
+      expect(secret.Properties.KmsKeyId).toBeDefined();
+      expect(secret.Properties.KmsKeyId.Ref).toBe('RDSKMSKey');
+    });
+
     test('should have secret target attachment for RDS', () => {
       const attachment = template.Resources.DBSecretAttachment;
       expect(attachment).toBeDefined();
@@ -378,13 +384,19 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(key.Type).toBe('AWS::KMS::Key');
 
       const keyPolicy = key.Properties.KeyPolicy;
-      expect(keyPolicy.Statement).toHaveLength(2);
+      expect(keyPolicy.Statement).toHaveLength(3);
 
       const rdsStatement = keyPolicy.Statement.find(
         (s: any) => s.Sid === 'Allow RDS to use the key'
       );
       expect(rdsStatement).toBeDefined();
       expect(rdsStatement.Principal.Service).toBe('rds.amazonaws.com');
+
+      const secretsManagerStatement = keyPolicy.Statement.find(
+        (s: any) => s.Sid === 'Allow Secrets Manager to use the key'
+      );
+      expect(secretsManagerStatement).toBeDefined();
+      expect(secretsManagerStatement.Principal.Service).toBe('secretsmanager.amazonaws.com');
     });
 
     test('should have KMS key alias for RDS key', () => {
