@@ -36,5 +36,36 @@
     "KMS",
     "IAM",
     "CloudWatch"
+  ],
+  "regions": [
+    "us-east-1"
+  ],
+  "frameworks": [
+    "cdktf"
+  ],
+  "artifacts": [
+    "cfn-outputs/flat-outputs.json"
+  ],
+  "entrypoints": [
+    "./scripts/unit-tests.sh",
+    "./scripts/integration-tests.sh"
+  ],
+  "env_vars": [
+    "AWS_REGION",
+    "AWS_PROFILE",
+    "CDKTF_DEFAULT_ACCOUNT",
+    "CDKTF_DEFAULT_REGION"
+  ],
+  "test_coverage_targets": ">=90% unit",
+  "ci_jobs": [
+    "integration-tests-live"
+  ],
+  "tags": [
+    "pci-dss",
+    "fintech",
+    "secure-database"
+  ],
+  "owners": [
+    "team-synth"
   ]
 }

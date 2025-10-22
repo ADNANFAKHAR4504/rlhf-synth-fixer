@@ -1,13 +1,15 @@
-# Financial Database Infrastructure with CDKTF Python - Production Ready
+# IDEAL_RESPONSE
 
-I'll create a comprehensive secure financial database infrastructure using CDKTF with Python that meets all PCI-DSS requirements. Here's the complete solution:
+## lib/__init__.py
+```python
+
+```
 
 ## lib/tap_stack.py
-
 ```python
 """TAP Stack module for CDKTF Python infrastructure."""
 
-from cdktf import TerraformStack, S3Backend, Fn, Token
+from cdktf import TerraformStack, S3Backend, Fn, TerraformOutput
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.vpc import Vpc
@@ -27,14 +29,22 @@ from cdktf_cdktf_provider_aws.db_parameter_group import DbParameterGroup, DbPara
 from cdktf_cdktf_provider_aws.secretsmanager_secret import SecretsmanagerSecret
 from cdktf_cdktf_provider_aws.secretsmanager_secret_version import SecretsmanagerSecretVersion
 from cdktf_cdktf_provider_aws.secretsmanager_secret_rotation import SecretsmanagerSecretRotation
-from cdktf_cdktf_provider_aws.elasticache_serverless_cache import ElasticacheServerlessCache, ElasticacheServerlessCacheCacheUsageLimits, ElasticacheServerlessCacheCacheUsageLimitsDataStorage, ElasticacheServerlessCacheCacheUsageLimitsEcpuPerSecond
+from cdktf_cdktf_provider_aws.elasticache_serverless_cache import (
+    ElasticacheServerlessCache,
+    ElasticacheServerlessCacheCacheUsageLimits,
+    ElasticacheServerlessCacheCacheUsageLimitsDataStorage,
+    ElasticacheServerlessCacheCacheUsageLimitsEcpuPerSecond
+)
 from cdktf_cdktf_provider_aws.elasticache_subnet_group import ElasticacheSubnetGroup
 from cdktf_cdktf_provider_aws.iam_role import IamRole
 from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
 from cdktf_cdktf_provider_aws.iam_policy import IamPolicy
 from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction
 from cdktf_cdktf_provider_aws.lambda_permission import LambdaPermission
-from cdktf_cdktf_provider_aws.data_aws_iam_policy_document import DataAwsIamPolicyDocument, DataAwsIamPolicyDocumentStatement
+from cdktf_cdktf_provider_aws.data_aws_iam_policy_document import (
+    DataAwsIamPolicyDocument,
+    DataAwsIamPolicyDocumentStatement
+)
 import json
 
 
@@ -73,9 +83,6 @@ class TapStack(TerraformStack):
             region=state_bucket_region,
             encrypt=True,
         )
-
-        # Add S3 state locking using escape hatch
-        self.add_override("terraform.backend.s3.use_lockfile", True)
 
         # Create VPC
         vpc = Vpc(
@@ -507,7 +514,7 @@ class TapStack(TerraformStack):
 
         # Update secret with actual RDS endpoint
         self.add_override(
-            f"resource.aws_secretsmanager_secret_version.db_secret_version.secret_string",
+            "resource.aws_secretsmanager_secret_version.db_secret_version.secret_string",
             Fn.jsonencode({
                 "username": db_credentials["username"],
                 "password": db_credentials["password"],
@@ -522,7 +529,7 @@ class TapStack(TerraformStack):
         elasticache_subnet_group = ElasticacheSubnetGroup(
             self,
             "elasticache_subnet_group",
-            subnet_group_name=f"fintech-cache-subnet-{environment_suffix}",
+            name=f"fintech-cache-subnet-{environment_suffix}",
             subnet_ids=[private_subnet_1.id, private_subnet_2.id],
             description="Subnet group for ElastiCache Serverless",
             tags={"Name": f"fintech-cache-subnet-{environment_suffix}"}
@@ -535,15 +542,15 @@ class TapStack(TerraformStack):
             engine="redis",
             name=f"fintech-cache-{environment_suffix}",
             description="ElastiCache Serverless for FinTech application",
-            cache_usage_limits=ElasticacheServerlessCacheCacheUsageLimits(
-                data_storage=ElasticacheServerlessCacheCacheUsageLimitsDataStorage(
+            cache_usage_limits=[ElasticacheServerlessCacheCacheUsageLimits(
+                data_storage=[ElasticacheServerlessCacheCacheUsageLimitsDataStorage(
                     maximum=10,
                     unit="GB"
-                ),
-                ecpu_per_second=ElasticacheServerlessCacheCacheUsageLimitsEcpuPerSecond(
+                )],
+                ecpu_per_second=[ElasticacheServerlessCacheCacheUsageLimitsEcpuPerSecond(
                     maximum=5000
-                )
-            ),
+                )]
+            )],
             daily_snapshot_time="03:00",
             kms_key_id=kms_key.arn,
             major_engine_version="7",
@@ -552,52 +559,149 @@ class TapStack(TerraformStack):
             subnet_ids=[private_subnet_1.id, private_subnet_2.id],
             tags={"Name": f"fintech-cache-{environment_suffix}"}
         )
+
+        TerraformOutput(
+            self,
+            "environment_suffix",
+            value=environment_suffix
+        )
+
+        TerraformOutput(
+            self,
+            "aws_region",
+            value=aws_region
+        )
+
+        TerraformOutput(
+            self,
+            "vpc_id",
+            value=vpc.id
+        )
+
+        TerraformOutput(
+            self,
+            "internet_gateway_id",
+            value=igw.id
+        )
+
+        TerraformOutput(
+            self,
+            "public_subnet_ids",
+            value=[public_subnet_1.id, public_subnet_2.id]
+        )
+
+        TerraformOutput(
+            self,
+            "private_subnet_ids",
+            value=[private_subnet_1.id, private_subnet_2.id]
+        )
+
+        TerraformOutput(
+            self,
+            "nat_gateway_ids",
+            value=[nat_gw_1.id, nat_gw_2.id]
+        )
+
+        TerraformOutput(
+            self,
+            "public_route_table_id",
+            value=public_rt.id
+        )
+
+        TerraformOutput(
+            self,
+            "private_route_table_ids",
+            value=[private_rt_1.id, private_rt_2.id]
+        )
+
+        TerraformOutput(
+            self,
+            "kms_key_arn",
+            value=kms_key.arn
+        )
+
+        TerraformOutput(
+            self,
+            "db_secret_arn",
+            value=db_secret.arn
+        )
+
+        TerraformOutput(
+            self,
+            "db_subnet_group_name",
+            value=db_subnet_group.name
+        )
+
+        TerraformOutput(
+            self,
+            "db_parameter_group_name",
+            value=db_parameter_group.name
+        )
+
+        TerraformOutput(
+            self,
+            "rds_instance_id",
+            value=rds_instance.id
+        )
+
+        TerraformOutput(
+            self,
+            "rds_read_replica_id",
+            value=rds_read_replica.id
+        )
+
+        TerraformOutput(
+            self,
+            "rds_endpoint_address",
+            value=rds_instance.address
+        )
+
+        TerraformOutput(
+            self,
+            "rds_endpoint",
+            value=Fn.join("", [rds_instance.address, ":5432"])
+        )
+
+        TerraformOutput(
+            self,
+            "rds_security_group_id",
+            value=rds_sg.id
+        )
+
+        TerraformOutput(
+            self,
+            "elasticache_name",
+            value=elasticache.name
+        )
+
+        TerraformOutput(
+            self,
+            "elasticache_arn",
+            value=elasticache.arn
+        )
+
+        TerraformOutput(
+            self,
+            "elasticache_endpoint",
+            value=elasticache.endpoint
+        )
+
+        TerraformOutput(
+            self,
+            "elasticache_reader_endpoint",
+            value=elasticache.reader_endpoint
+        )
+
+        TerraformOutput(
+            self,
+            "elasticache_security_group_id",
+            value=elasticache_sg.id
+        )
+
+        TerraformOutput(
+            self,
+            "rds_secret_name",
+            value=db_secret.name
+        )
+
 ```
-
-This production-ready solution provides:
-
-1. **Network Architecture**
-   - VPC with public and private subnets across two AZs
-   - NAT Gateways for private subnet internet access
-   - Proper routing tables for public and private subnets
-
-2. **Security**
-   - KMS encryption key with rotation enabled
-   - Security groups with separate rules for better management
-   - RDS parameter group enforcing SSL connections and comprehensive logging
-   - Database in private subnets only
-
-3. **RDS Configuration**
-   - PostgreSQL 14.13 with Multi-AZ deployment
-   - Encryption at rest using customer-managed KMS key
-   - Read replica for scaling read operations
-   - Performance Insights enabled for monitoring
-   - Automated backups with 7-day retention
-   - CloudWatch logs export enabled
-   - SSL/TLS enforced for all connections
-
-4. **Secrets Management**
-   - AWS Secrets Manager storing database credentials
-   - IAM roles and policies for rotation function
-   - Secret structured with all connection details
-
-5. **Caching Layer**
-   - ElastiCache Serverless for Redis
-   - Automatic scaling with ECPU limits
-   - Encrypted at rest using KMS
-   - Daily snapshots enabled
-   - Deployed in private subnets
-
-6. **Compliance**
-   - PCI-DSS compliant configuration
-   - Encryption at rest and in transit
-   - Comprehensive audit logging
-   - Network isolation
-   - No public access to databases
-
-7. **Resource Management**
-   - All resources tagged and named with environment suffix
-   - No deletion protection for easy testing
-   - Skip final snapshot for clean teardown
-
-The infrastructure is ready for deployment to ca-central-1 and meets all security and compliance requirements.

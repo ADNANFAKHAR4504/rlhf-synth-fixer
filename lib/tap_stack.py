@@ -1,6 +1,6 @@
 """TAP Stack module for CDKTF Python infrastructure."""
 
-from cdktf import TerraformStack, S3Backend, Fn, Token
+from cdktf import TerraformStack, S3Backend, Fn, TerraformOutput
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.vpc import Vpc
@@ -549,4 +549,148 @@ class TapStack(TerraformStack):
             snapshot_retention_limit=1,
             subnet_ids=[private_subnet_1.id, private_subnet_2.id],
             tags={"Name": f"fintech-cache-{environment_suffix}"}
+        )
+
+        TerraformOutput(
+            self,
+            "environment_suffix",
+            value=environment_suffix
+        )
+
+        TerraformOutput(
+            self,
+            "aws_region",
+            value=aws_region
+        )
+
+        TerraformOutput(
+            self,
+            "vpc_id",
+            value=vpc.id
+        )
+
+        TerraformOutput(
+            self,
+            "internet_gateway_id",
+            value=igw.id
+        )
+
+        TerraformOutput(
+            self,
+            "public_subnet_ids",
+            value=[public_subnet_1.id, public_subnet_2.id]
+        )
+
+        TerraformOutput(
+            self,
+            "private_subnet_ids",
+            value=[private_subnet_1.id, private_subnet_2.id]
+        )
+
+        TerraformOutput(
+            self,
+            "nat_gateway_ids",
+            value=[nat_gw_1.id, nat_gw_2.id]
+        )
+
+        TerraformOutput(
+            self,
+            "public_route_table_id",
+            value=public_rt.id
+        )
+
+        TerraformOutput(
+            self,
+            "private_route_table_ids",
+            value=[private_rt_1.id, private_rt_2.id]
+        )
+
+        TerraformOutput(
+            self,
+            "kms_key_arn",
+            value=kms_key.arn
+        )
+
+        TerraformOutput(
+            self,
+            "db_secret_arn",
+            value=db_secret.arn
+        )
+
+        TerraformOutput(
+            self,
+            "db_subnet_group_name",
+            value=db_subnet_group.name
+        )
+
+        TerraformOutput(
+            self,
+            "db_parameter_group_name",
+            value=db_parameter_group.name
+        )
+
+        TerraformOutput(
+            self,
+            "rds_instance_id",
+            value=rds_instance.id
+        )
+
+        TerraformOutput(
+            self,
+            "rds_read_replica_id",
+            value=rds_read_replica.id
+        )
+
+        TerraformOutput(
+            self,
+            "rds_endpoint_address",
+            value=rds_instance.address
+        )
+
+        TerraformOutput(
+            self,
+            "rds_endpoint",
+            value=Fn.join("", [rds_instance.address, ":5432"])
+        )
+
+        TerraformOutput(
+            self,
+            "rds_security_group_id",
+            value=rds_sg.id
+        )
+
+        TerraformOutput(
+            self,
+            "elasticache_name",
+            value=elasticache.name
+        )
+
+        TerraformOutput(
+            self,
+            "elasticache_arn",
+            value=elasticache.arn
+        )
+
+        TerraformOutput(
+            self,
+            "elasticache_endpoint",
+            value=elasticache.endpoint
+        )
+
+        TerraformOutput(
+            self,
+            "elasticache_reader_endpoint",
+            value=elasticache.reader_endpoint
+        )
+
+        TerraformOutput(
+            self,
+            "elasticache_security_group_id",
+            value=elasticache_sg.id
+        )
+
+        TerraformOutput(
+            self,
+            "rds_secret_name",
+            value=db_secret.name
         )

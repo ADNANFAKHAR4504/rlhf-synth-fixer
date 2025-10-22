@@ -1,6 +1,8 @@
 """Unit tests for TAP Stack."""
+import json
 import os
 import sys
+
 from cdktf import App, Testing
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -8,41 +10,57 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 from lib.tap_stack import TapStack
 
 
+def synthesize_stack(**overrides):
+    """Synthesize the TapStack and return the Terraform JSON as a dictionary."""
+    app = App()
+    stack = TapStack(app, "UnitTestStack", **overrides)
+    return json.loads(Testing.synth(stack))
+
+
 class TestStackStructure:
-    """Test suite for Stack Structure."""
+    """Test suite validating generated infrastructure."""
 
-    def setup_method(self):
-        """Reset mocks before each test."""
-        # Clear any previous test state if needed
+    def test_stack_exports_required_outputs(self):
+        """Stack exports key infrastructure identifiers for CI consumers."""
+        synth = synthesize_stack(environment_suffix="prod", aws_region="us-west-2")
+        outputs = synth.get("output", {})
 
-    def test_tap_stack_instantiates_successfully_via_props(self):
-        """TapStack instantiates successfully via props."""
-        app = App()
-        stack = TapStack(
-            app,
-            "TestTapStackWithProps",
-            environment_suffix="prod",
-            state_bucket="custom-state-bucket",
-            state_bucket_region="us-west-2",
-            aws_region="us-west-2",
-        )
+        required_keys = {
+            "environment_suffix",
+            "aws_region",
+            "vpc_id",
+            "public_subnet_ids",
+            "private_subnet_ids",
+            "kms_key_arn",
+            "db_secret_arn",
+            "rds_endpoint",
+            "elasticache_endpoint",
+        }
 
-        # Verify that TapStack instantiates without errors via props
-        assert stack is not None
-        assert hasattr(stack, 'bucket')
-        assert hasattr(stack, 'bucket_versioning')
-        assert hasattr(stack, 'bucket_encryption')
+        missing = required_keys.difference(outputs.keys())
+        assert not missing, f"Missing expected outputs: {sorted(missing)}"
 
-    def test_tap_stack_uses_default_values_when_no_props_provided(self):
-        """TapStack uses default values when no props provided."""
-        app = App()
-        stack = TapStack(app, "TestTapStackDefault")
+        assert outputs["environment_suffix"]["value"] == "prod"
+        assert outputs["aws_region"]["value"] == "us-west-2"
+        assert isinstance(outputs["public_subnet_ids"]["value"], list)
+        assert isinstance(outputs["private_subnet_ids"]["value"], list)
 
-        # Verify that TapStack instantiates without errors when no props provided
-        assert stack is not None
-        assert hasattr(stack, 'bucket')
-        assert hasattr(stack, 'bucket_versioning')
-        assert hasattr(stack, 'bucket_encryption')
+    def test_stack_creates_network_and_database_resources(self):
+        """Terraform plan contains critical network, security, and data resources."""
+        synth = synthesize_stack()
+        resources = synth["resource"]
 
+        # Network resources
+        assert "fintech_vpc" in resources["aws_vpc"]
+        assert len(resources["aws_subnet"]) == 4, "Expected two public and two private subnets"
+        assert len(resources["aws_nat_gateway"]) == 2
+        assert len(resources["aws_route_table"]) >= 3  # one public, two private
 
-# add more test suites and cases as needed
+        # Security resources
+        for sg_name in ("rds_sg", "elasticache_sg"):
+            assert sg_name in resources["aws_security_group"]
+
+        # Data layer resources
+        assert "rds_instance" in resources["aws_db_instance"]
+        assert "rds_read_replica" in resources["aws_db_instance"]
+        assert "elasticache" in resources["aws_elasticache_serverless_cache"]
