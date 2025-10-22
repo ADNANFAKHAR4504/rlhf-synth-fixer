@@ -231,6 +231,8 @@ class TapStack(pulumi.ComponentResource):
 
         # Create secret version with complete RDS connection details
         # Note: Only one SecretVersion should be created to avoid staging label conflicts
+        # ignore_changes on version_stages prevents Pulumi from managing staging labels,
+        # letting AWS Secrets Manager handle them automatically
         self.db_secret_version = aws.secretsmanager.SecretVersion(
             f"iot-db-secret-version-{self.environment_suffix}",
             secret_id=self.db_password.id,
@@ -248,7 +250,11 @@ class TapStack(pulumi.ComponentResource):
                 "host": args["host"],
                 "port": args["port"]
             })),
-            opts=ResourceOptions(parent=self.db_password, depends_on=[self.rds_instance])
+            opts=ResourceOptions(
+                parent=self.db_password,
+                depends_on=[self.rds_instance],
+                ignore_changes=["versionStages"]
+            )
         )
 
         # Create ElastiCache Serverless Redis cache
@@ -308,7 +314,11 @@ class TapStack(pulumi.ComponentResource):
                 "port": args["endpoints"][0]["port"] if args["endpoints"] else 6379,
                 "ttl_hours": 24
             })),
-            opts=ResourceOptions(parent=self.redis_secret, depends_on=[self.redis_cache])
+            opts=ResourceOptions(
+                parent=self.redis_secret,
+                depends_on=[self.redis_cache],
+                ignore_changes=["versionStages"]
+            )
         )
 
         # Register outputs
