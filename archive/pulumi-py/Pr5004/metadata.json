@@ -11,5 +11,13 @@
     "Failure Recovery Automation",
     "Infrastructure Analysis/Monitoring",
     "Security Configuration as Code"
-  ]
+  ],
+  "training_quality": 9.6,
+  "aws_services": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
