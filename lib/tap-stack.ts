@@ -1,49 +1,49 @@
+import { BackupPlan } from '@cdktf/provider-aws/lib/backup-plan';
+import { BackupSelection } from '@cdktf/provider-aws/lib/backup-selection';
+import { BackupVault } from '@cdktf/provider-aws/lib/backup-vault';
+import { Cloudtrail } from '@cdktf/provider-aws/lib/cloudtrail';
+import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
+import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
+import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
+import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
+import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-policy-document';
+import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
+import { Eip } from '@cdktf/provider-aws/lib/eip';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
+import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
+import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
+import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
 import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
-import { S3Backend, TerraformStack, Fn } from 'cdktf';
-import { Construct } from 'constructs';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
-import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
-import { Eip } from '@cdktf/provider-aws/lib/eip';
-import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
-import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
-import { Route } from '@cdktf/provider-aws/lib/route';
-import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
-import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
-import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
-import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
-import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
-import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
-import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
-import { S3BucketReplicationConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-replication-configuration';
-import { S3BucketLifecycleConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-lifecycle-configuration';
-import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
-import { S3BucketLoggingA } from '@cdktf/provider-aws/lib/s3-bucket-logging';
 import { RdsCluster } from '@cdktf/provider-aws/lib/rds-cluster';
 import { RdsClusterInstance } from '@cdktf/provider-aws/lib/rds-cluster-instance';
 import { RdsGlobalCluster } from '@cdktf/provider-aws/lib/rds-global-cluster';
-import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
+import { Route } from '@cdktf/provider-aws/lib/route';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
+import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { S3BucketLifecycleConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-lifecycle-configuration';
+import { S3BucketLoggingA } from '@cdktf/provider-aws/lib/s3-bucket-logging';
+import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
+import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
+import { S3BucketReplicationConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-replication-configuration';
+import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
+import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
 import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
 import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
-import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
-import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
-import { Cloudtrail } from '@cdktf/provider-aws/lib/cloudtrail';
-import { BackupVault } from '@cdktf/provider-aws/lib/backup-vault';
-import { BackupPlan } from '@cdktf/provider-aws/lib/backup-plan';
-import { BackupSelection } from '@cdktf/provider-aws/lib/backup-selection';
-import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
-import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
 import { SnsTopic } from '@cdktf/provider-aws/lib/sns-topic';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { VpcEndpoint } from '@cdktf/provider-aws/lib/vpc-endpoint';
-import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
-import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-policy-document';
-import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
+import { Fn, S3Backend, TerraformStack } from 'cdktf';
+import { Construct } from 'constructs';
 
 interface TapStackProps {
   environmentSuffix?: string;
@@ -53,7 +53,7 @@ interface TapStackProps {
   defaultTags?: AwsProviderDefaultTags;
 }
 
-const AWS_REGION_OVERRIDE = 'eu-central-1';
+const AWS_REGION_OVERRIDE = process.env.AWS_REGION_OVERRIDE;
 
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
@@ -138,6 +138,7 @@ export class TapStack extends TerraformStack {
         Type: 'Public',
         Environment: environmentSuffix,
       },
+      dependsOn: [vpc],
       provider: primaryProvider,
     });
 
@@ -151,6 +152,7 @@ export class TapStack extends TerraformStack {
         Type: 'Public',
         Environment: environmentSuffix,
       },
+      dependsOn: [vpc],
       provider: primaryProvider,
     });
 
@@ -164,6 +166,7 @@ export class TapStack extends TerraformStack {
         Type: 'Private',
         Environment: environmentSuffix,
       },
+      dependsOn: [vpc],
       provider: primaryProvider,
     });
 
@@ -176,6 +179,7 @@ export class TapStack extends TerraformStack {
         Type: 'Private',
         Environment: environmentSuffix,
       },
+      dependsOn: [vpc],
       provider: primaryProvider,
     });
 
@@ -236,6 +240,7 @@ export class TapStack extends TerraformStack {
         Name: `hipaa-private-rt-${environmentSuffix}`,
         Environment: environmentSuffix,
       },
+      dependsOn: [vpc],
       provider: primaryProvider,
     });
 
@@ -268,6 +273,7 @@ export class TapStack extends TerraformStack {
         Name: `hipaa-s3-endpoint-${environmentSuffix}`,
         Environment: environmentSuffix,
       },
+      dependsOn: [vpc, privateRouteTable],
       provider: primaryProvider,
     });
 
@@ -585,6 +591,11 @@ export class TapStack extends TerraformStack {
             status: 'Enabled',
           },
           filter: {},
+          sourceSelectionCriteria: {
+            sseKmsEncryptedObjects: {
+              status: 'Enabled',
+            },
+          },
           destination: {
             bucket: dataBucketDr.arn,
             storageClass: 'STANDARD',

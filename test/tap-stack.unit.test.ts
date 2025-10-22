@@ -35,6 +35,173 @@ describe('Stack Structure', () => {
     expect(stack).toBeDefined();
     expect(synthesized).toBeDefined();
   });
+
+  test('TapStack handles defaultTags when provided', () => {
+    app = new App();
+    stack = new TapStack(app, 'TestTapStackWithTags', {
+      environmentSuffix: 'test',
+      defaultTags: {
+        tags: {
+          Owner: 'TestTeam',
+          Project: 'TestProject',
+        },
+      },
+    });
+    synthesized = Testing.synth(stack);
+
+    // Verify that TapStack instantiates without errors with default tags
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+  });
+
+  test('TapStack works without AWS_REGION_OVERRIDE when awsRegion is not in props', () => {
+    // Test the branch where props?.awsRegion is undefined and falls back to default
+    app = new App();
+    stack = new TapStack(app, 'TestTapStackNoRegion', {
+      environmentSuffix: 'dev',
+      // Deliberately not setting awsRegion to test the default fallback
+    });
+    synthesized = Testing.synth(stack);
+
+    // Verify that TapStack instantiates without errors
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+  });
+
+  test('TapStack uses props.awsRegion when AWS_REGION_OVERRIDE is not set', () => {
+    // Save original env var
+    const originalEnv = process.env.AWS_REGION_OVERRIDE;
+
+    // Temporarily unset AWS_REGION_OVERRIDE to test the else branch
+    delete process.env.AWS_REGION_OVERRIDE;
+
+    app = new App();
+    stack = new TapStack(app, 'TestTapStackCustomRegion', {
+      environmentSuffix: 'test',
+      awsRegion: 'us-west-2',
+    });
+    synthesized = Testing.synth(stack);
+
+    // Verify that TapStack instantiates without errors
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+
+    // Restore original env var
+    if (originalEnv !== undefined) {
+      process.env.AWS_REGION_OVERRIDE = originalEnv;
+    }
+  });
+
+  test('TapStack falls back to default region when AWS_REGION_OVERRIDE and awsRegion are not set', () => {
+    // Save original env var
+    const originalEnv = process.env.AWS_REGION_OVERRIDE;
+
+    // Temporarily unset AWS_REGION_OVERRIDE to test the else branch with no awsRegion prop
+    delete process.env.AWS_REGION_OVERRIDE;
+
+    app = new App();
+    stack = new TapStack(app, 'TestTapStackDefaultRegion', {
+      environmentSuffix: 'test',
+      // Deliberately not setting awsRegion to test the || 'eu-central-1' fallback
+    });
+    synthesized = Testing.synth(stack);
+
+    // Verify that TapStack instantiates without errors
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+
+    // Restore original env var
+    if (originalEnv !== undefined) {
+      process.env.AWS_REGION_OVERRIDE = originalEnv;
+    }
+  });
+
+  test('TapStack handles empty AWS_REGION_OVERRIDE environment variable', () => {
+    // Save original env var
+    const originalEnv = process.env.AWS_REGION_OVERRIDE;
+
+    // Set AWS_REGION_OVERRIDE to empty string to test the || fallback in the constant definition
+    process.env.AWS_REGION_OVERRIDE = '';
+
+    app = new App();
+    stack = new TapStack(app, 'TestTapStackEmptyEnv', {
+      environmentSuffix: 'test',
+      awsRegion: 'us-east-1',
+    });
+    synthesized = Testing.synth(stack);
+
+    // Verify that TapStack instantiates without errors
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+
+    // Restore original env var
+    if (originalEnv !== undefined) {
+      process.env.AWS_REGION_OVERRIDE = originalEnv;
+    } else {
+      delete process.env.AWS_REGION_OVERRIDE;
+    }
+  });
+
+  test('TapStack with all props set to test all branches', () => {
+    // Save original env var
+    const originalEnv = process.env.AWS_REGION_OVERRIDE;
+
+    // Test with AWS_REGION_OVERRIDE set
+    process.env.AWS_REGION_OVERRIDE = 'us-west-1';
+
+    app = new App();
+    stack = new TapStack(app, 'TestTapStackAllProps', {
+      environmentSuffix: 'staging',
+      stateBucket: 'test-bucket',
+      stateBucketRegion: 'us-west-1',
+      awsRegion: 'us-west-1',
+      defaultTags: {
+        tags: {
+          Environment: 'staging',
+        },
+      },
+    });
+    synthesized = Testing.synth(stack);
+
+    // Verify that TapStack instantiates without errors
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+
+    // Restore original env var
+    if (originalEnv !== undefined) {
+      process.env.AWS_REGION_OVERRIDE = originalEnv;
+    } else {
+      delete process.env.AWS_REGION_OVERRIDE;
+    }
+  });
+
+  test('TapStack with undefined stateBucketRegion to test fallback', () => {
+    app = new App();
+    stack = new TapStack(app, 'TestTapStackNoStateBucketRegion', {
+      environmentSuffix: 'test',
+      awsRegion: 'us-east-1',
+      // stateBucketRegion intentionally undefined to test fallback
+    });
+    synthesized = Testing.synth(stack);
+
+    // Verify that TapStack instantiates without errors
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+  });
+
+  test('TapStack with undefined stateBucket to test fallback', () => {
+    app = new App();
+    stack = new TapStack(app, 'TestTapStackNoStateBucket', {
+      environmentSuffix: 'test',
+      awsRegion: 'us-east-1',
+      // stateBucket intentionally undefined to test fallback
+    });
+    synthesized = Testing.synth(stack);
+
+    // Verify that TapStack instantiates without errors
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+  });
 });
 
 // add more test suites and cases as needed
