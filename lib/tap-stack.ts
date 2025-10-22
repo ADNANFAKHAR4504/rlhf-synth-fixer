@@ -245,7 +245,6 @@ export class TapStack extends pulumi.ComponentResource {
     const targetNetwork = (target.ipInt & targetMask) >>> 0;
 
     // Check if networks overlap
-    // Two networks overlap if one network address falls within the other's range
     const sourceEnd = (sourceNetwork | (~sourceMask >>> 0)) >>> 0;
     const targetEnd = (targetNetwork | (~targetMask >>> 0)) >>> 0;
 
@@ -280,10 +279,10 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-   * Gets or creates source VPC
+   * Gets or creates source VPC with Internet Gateway
    */
   private getOrCreateSourceVpc(name: string): aws.ec2.Vpc {
-    return new aws.ec2.Vpc(
+    const vpc = new aws.ec2.Vpc(
       `${name}-source-vpc`,
       {
         cidrBlock: this.config.vpcConfig.sourceCidr,
@@ -293,6 +292,18 @@ export class TapStack extends pulumi.ComponentResource {
       },
       { parent: this, provider: this.sourceProvider }
     );
+
+    // Create Internet Gateway for public subnets
+    new aws.ec2.InternetGateway(
+      `${name}-source-igw`,
+      {
+        vpcId: vpc.id,
+        tags: this.getMigrationTags("Source Internet Gateway"),
+      },
+      { parent: this, provider: this.sourceProvider, dependsOn: [vpc] }
+    );
+
+    return vpc;
   }
 
   /**
@@ -370,10 +381,10 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-   * Creates target VPC with non-overlapping CIDR
+   * Creates target VPC with non-overlapping CIDR and Internet Gateway
    */
   private createTargetVpc(name: string): aws.ec2.Vpc {
-    return new aws.ec2.Vpc(
+    const vpc = new aws.ec2.Vpc(
       `${name}-target-vpc`,
       {
         cidrBlock: this.config.vpcConfig.targetCidr,
@@ -383,10 +394,22 @@ export class TapStack extends pulumi.ComponentResource {
       },
       { parent: this, provider: this.targetProvider }
     );
+
+    // Create Internet Gateway for public subnets
+    new aws.ec2.InternetGateway(
+      `${name}-target-igw`,
+      {
+        vpcId: vpc.id,
+        tags: this.getMigrationTags("Target Internet Gateway"),
+      },
+      { parent: this, provider: this.targetProvider, dependsOn: [vpc] }
+    );
+
+    return vpc;
   }
 
   /**
-   * Creates target subnets across 2 AZs
+   * Creates target subnets across 2 AZs with proper routing
    */
   private createTargetSubnets(
     name: string,
@@ -396,6 +419,16 @@ export class TapStack extends pulumi.ComponentResource {
     private: aws.ec2.Subnet[];
     database: aws.ec2.Subnet[];
   } {
+    // Create Internet Gateway
+    const igw = new aws.ec2.InternetGateway(
+      `${name}-target-igw-subnets`,
+      {
+        vpcId: vpc.id,
+        tags: this.getMigrationTags("Target Internet Gateway for Subnets"),
+      },
+      { parent: this, provider: this.targetProvider }
+    );
+
     const publicSubnets = [
       new aws.ec2.Subnet(
         `${name}-target-public-1`,
@@ -420,6 +453,38 @@ export class TapStack extends pulumi.ComponentResource {
         { parent: this, provider: this.targetProvider }
       ),
     ];
+
+    // Create route table for public subnets with route to Internet Gateway
+    const publicRouteTable = new aws.ec2.RouteTable(
+      `${name}-target-public-rt`,
+      {
+        vpcId: vpc.id,
+        tags: this.getMigrationTags("Target Public Route Table"),
+      },
+      { parent: this, provider: this.targetProvider }
+    );
+
+    new aws.ec2.Route(
+      `${name}-target-public-route`,
+      {
+        routeTableId: publicRouteTable.id,
+        destinationCidrBlock: "0.0.0.0/0",
+        gatewayId: igw.id,
+      },
+      { parent: this, provider: this.targetProvider, dependsOn: [publicRouteTable, igw] }
+    );
+
+    // Associate public subnets with route table
+    publicSubnets.forEach((subnet, i) => {
+      new aws.ec2.RouteTableAssociation(
+        `${name}-target-public-rta-${i}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: publicRouteTable.id,
+        },
+        { parent: this, provider: this.targetProvider, dependsOn: [subnet, publicRouteTable] }
+      );
+    });
 
     const privateSubnets = [
       new aws.ec2.Subnet(

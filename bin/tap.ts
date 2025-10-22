@@ -35,11 +35,10 @@ const instanceCount = config.getNumber('instanceCount') || 3;
 const amiId = config.get('amiId') || 'ami-0abcdef1234567890';
 
 // RDS configuration
-// Note: PostgreSQL versions in RDS use format like 13.13, 14.10, 15.5, etc.
-// Always use the latest minor version for the major version you want
+// Note: AWS RDS supports using just major version (e.g., "16") to auto-select latest minor version
 const dbInstanceClass = config.get('dbInstanceClass') || 'db.t3.medium';
 const dbEngine = config.get('dbEngine') || 'postgres';
-const dbEngineVersion = config.get('dbEngineVersion') || '16.1'; // Latest stable PostgreSQL version
+const dbEngineVersion = config.get('dbEngineVersion') || '16'; // Use major version only
 const dbUsername = config.get('dbUsername') || 'admin';
 const dbAllocatedStorage = config.getNumber('dbAllocatedStorage') || 100;
 
