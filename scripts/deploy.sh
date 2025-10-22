@@ -77,7 +77,7 @@ sleep 5
 
 # Clean up any Secrets Manager secrets that might be in deletion state
 echo "=== Secrets Cleanup Phase ==="
-echo "🔐 Checking for AWS Secrets Manager secrets in deletion state..."
+echo "🔐 Force cleaning AWS Secrets Manager secrets..."
 
 # Determine the suffix to use for secrets
 if [ -f "metadata.json" ]; then
@@ -94,45 +94,101 @@ else
   SECRET_SUFFIX="dev"
 fi
 
-echo "Checking secrets with suffix: $SECRET_SUFFIX in region: $AWS_REGION"
+echo "Force deleting ALL secrets with suffix: $SECRET_SUFFIX in region: $AWS_REGION"
 
-# Function to force delete a secret if it's scheduled for deletion
-cleanup_secret() {
+# Function to forcefully delete a secret immediately
+force_delete_secret() {
   local secret_name=$1
+  local max_retries=3
+  local retry_count=0
 
-  # Check if secret exists and get its status
-  if aws secretsmanager describe-secret --secret-id "$secret_name" --region "$AWS_REGION" 2>/dev/null > /dev/null; then
-    DELETION_DATE=$(aws secretsmanager describe-secret --secret-id "$secret_name" --region "$AWS_REGION" 2>/dev/null | jq -r '.DeletionDate // "none"')
+  echo "  🔍 Processing secret: $secret_name"
 
-    if [ "$DELETION_DATE" != "none" ]; then
-      echo "  ⚠️  Found secret $secret_name scheduled for deletion"
-      echo "  🔄 Force deleting to allow recreation..."
-      aws secretsmanager delete-secret \
+  while [ $retry_count -lt $max_retries ]; do
+    # Check if the secret exists
+    if aws secretsmanager describe-secret --secret-id "$secret_name" --region "$AWS_REGION" 2>/dev/null > /dev/null; then
+      echo "  ⚠️  Secret exists: $secret_name"
+
+      # Get the current state
+      SECRET_INFO=$(aws secretsmanager describe-secret --secret-id "$secret_name" --region "$AWS_REGION" 2>/dev/null || echo "{}")
+      DELETION_DATE=$(echo "$SECRET_INFO" | jq -r '.DeletionDate // "none"')
+
+      # Force delete regardless of state
+      echo "  🔄 Force deleting secret (attempt $((retry_count + 1))/$max_retries)..."
+      if aws secretsmanager delete-secret \
         --secret-id "$secret_name" \
         --force-delete-without-recovery \
-        --region "$AWS_REGION" 2>/dev/null || true
-      echo "  ✅ Secret cleaned up"
+        --region "$AWS_REGION" 2>&1; then
+        echo "  ✅ Secret force deleted successfully"
+        break
+      else
+        echo "  ⚠️  Deletion attempt failed, retrying..."
+        retry_count=$((retry_count + 1))
+        sleep 2
+      fi
+    else
+      echo "  ℹ️  Secret does not exist or already deleted"
+      break
     fi
+  done
+
+  if [ $retry_count -eq $max_retries ]; then
+    echo "  ❌ Failed to delete secret after $max_retries attempts"
   fi
 }
 
-# Check and clean up common secret patterns
-cleanup_secret "streamflix/api/keys-${SECRET_SUFFIX}"
-cleanup_secret "streamflix/db/credentials-${SECRET_SUFFIX}"
-cleanup_secret "streamflix-api-secret-${SECRET_SUFFIX}"
-cleanup_secret "streamflix-db-secret-${SECRET_SUFFIX}"
+# List of specific secret patterns to force delete
+SECRETS_TO_DELETE=(
+  "streamflix/api/keys-${SECRET_SUFFIX}"
+  "streamflix/db/credentials-${SECRET_SUFFIX}"
+  "streamflix-api-secret-${SECRET_SUFFIX}"
+  "streamflix-db-secret-${SECRET_SUFFIX}"
+)
 
-# Also clean up any other secrets with our suffix
-echo "Checking for other secrets with suffix: ${SECRET_SUFFIX}..."
-aws secretsmanager list-secrets --region "$AWS_REGION" 2>/dev/null | \
-  jq -r ".SecretList[] | select(.Name | contains(\"${SECRET_SUFFIX}\")) | .Name" | \
-  while read -r secret; do
+# Force delete each specific secret
+echo "Force deleting specific secrets..."
+for secret in "${SECRETS_TO_DELETE[@]}"; do
+  force_delete_secret "$secret"
+done
+
+# Also search for and delete any other secrets with our suffix
+echo ""
+echo "Searching for any other secrets with suffix: ${SECRET_SUFFIX}..."
+
+# Get all secrets and filter by our suffix
+ALL_SECRETS=$(aws secretsmanager list-secrets --region "$AWS_REGION" 2>/dev/null || echo '{"SecretList": []}')
+MATCHING_SECRETS=$(echo "$ALL_SECRETS" | jq -r ".SecretList[] | select(.Name | contains(\"${SECRET_SUFFIX}\")) | .Name")
+
+if [ -n "$MATCHING_SECRETS" ]; then
+  echo "$MATCHING_SECRETS" | while IFS= read -r secret; do
     if [ -n "$secret" ]; then
-      cleanup_secret "$secret"
+      force_delete_secret "$secret"
     fi
-  done || true
+  done
+else
+  echo "No additional secrets found with suffix: ${SECRET_SUFFIX}"
+fi
 
-echo "✅ Secrets cleanup completed"
+# Double-check that problematic secrets are gone
+echo ""
+echo "🔍 Final verification of secret deletion..."
+for secret in "${SECRETS_TO_DELETE[@]}"; do
+  if aws secretsmanager describe-secret --secret-id "$secret" --region "$AWS_REGION" 2>/dev/null > /dev/null; then
+    echo "  ⚠️  WARNING: Secret still exists: $secret"
+    echo "  Attempting final force deletion..."
+    aws secretsmanager delete-secret \
+      --secret-id "$secret" \
+      --force-delete-without-recovery \
+      --region "$AWS_REGION" 2>/dev/null || true
+  else
+    echo "  ✅ Confirmed deleted: $secret"
+  fi
+done
+
+echo ""
+echo "✅ Secrets cleanup phase completed"
+echo "⏳ Waiting 3 seconds to ensure AWS propagation..."
+sleep 3
 
 # Deploy step
 echo "=== Deploy Phase ==="
