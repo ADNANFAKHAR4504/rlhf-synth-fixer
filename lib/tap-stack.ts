@@ -3,7 +3,7 @@ import { Construct } from 'constructs';
 import { TerraformStack, TerraformOutput, Fn } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { RandomProvider } from '@cdktf/provider-random/lib/provider';
-import { Password } from '@cdktf/provider-random/lib/password';
+import { Password } from '@cdktf/provider-random/lib/password'; // Correct import path
 
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
@@ -276,8 +276,8 @@ echo 'OK from ${region}' > /var/www/html/index.html
       desiredCapacity: 1,
       vpcZoneIdentifier: [subnetPrivA.id, subnetPrivB.id], // Use private subnets
       launchTemplate: { id: lt.id },
-      healthCheckType: 'ELB', // Corrected
-      healthCheckGracePeriod: 300, // Added
+      healthCheckType: 'ELB',
+      healthCheckGracePeriod: 300,
       tag: [
         {
           key: 'Name',
@@ -347,14 +347,14 @@ echo 'OK from ${region}' > /var/www/html/index.html
       // DB subnet group
       const dbSubnetGroup = new DbSubnetGroup(this, `${id}-db-subnet-group`, {
         provider: providerAlias,
-        name: `${id.toLowerCase()}-db-subnet-${randomSuffix}`, // Forced lowercase
+        name: `${id.toLowerCase()}-db-subnet-${randomSuffix}`,
         subnetIds: [subnetPrivA.id, subnetPrivB.id], // Use private subnets
         tags: { ...tags },
       });
 
       this.dbCluster = new RdsCluster(this, `${id}-rds-cluster`, {
         provider: providerAlias,
-        clusterIdentifier: `${id.toLowerCase()}-cluster-${randomSuffix}`, // Forced lowercase
+        clusterIdentifier: `${id.toLowerCase()}-cluster-${randomSuffix}`,
         engine: 'aurora-postgresql',
         engineVersion: '13.9',
         databaseName: 'appdb',
@@ -363,8 +363,7 @@ echo 'OK from ${region}' > /var/www/html/index.html
         dbSubnetGroupName: dbSubnetGroup.name,
         vpcSecurityGroupIds: [dbSg.id],
         storageEncrypted: true,
-        // --- THIS IS THE FIX: Use .arn instead of .id ---
-        kmsKeyId: kmsKey?.arn,
+        kmsKeyId: kmsKey?.arn, // Correctly use ARN
         skipFinalSnapshot: true,
         tags: { ...tags },
       });
@@ -411,9 +410,11 @@ export class TapStack extends TerraformStack {
 
     // Random & password providers
     new RandomProvider(this, 'random');
+    // --- THIS IS THE FIX: Specify allowed special characters ---
     const dbPassword = new Password(this, 'db_password', {
       length: 16,
       special: true,
+      overrideSpecial: '_%+-', // Only allow these special characters
     });
 
     // KMS keys for encryption in both regions
@@ -464,7 +465,7 @@ export class TapStack extends TerraformStack {
       region: 'us-west-2',
       vpcCidr: '10.20.0.0/16',
       randomSuffix,
-      createDatabase: true, // create independent DR DB (no automatic replication)
+      createDatabase: true,
       kmsKey: drKms,
       dbUsername: dbUser,
       dbPassword: dbPassword.result,
@@ -472,7 +473,7 @@ export class TapStack extends TerraformStack {
     });
 
     // Route53 global DNS zone
-    const domainName = `trading-${randomSuffix}.internal-test.com`; // Corrected domain
+    const domainName = `trading-${randomSuffix}.internal-test.com`;
     const zone = new Route53Zone(this, 'zone', {
       provider: primaryProvider,
       name: domainName,

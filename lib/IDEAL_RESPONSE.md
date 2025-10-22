@@ -4,7 +4,7 @@ import { Construct } from 'constructs';
 import { TerraformStack, TerraformOutput, Fn } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { RandomProvider } from '@cdktf/provider-random/lib/provider';
-import { Password } from '@cdktf/provider-random/lib/password';
+import { Password } from '@cdktf/provider-random/lib/password'; // Correct import path
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
@@ -37,7 +37,7 @@ import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric
 class RegionalInfra extends Construct {
   public readonly albDnsName: string;
   public readonly albZoneId: string;
-  public readonly albArn: string; // <-- Added for testing
+  public readonly albArn: string;
   public readonly vpc: Vpc;
   public readonly dbCluster?: RdsCluster;
   public readonly healthCheck: Route53HealthCheck;
@@ -276,7 +276,8 @@ echo 'OK from ${region}' > /var/www/html/index.html
       desiredCapacity: 1,
       vpcZoneIdentifier: [subnetPrivA.id, subnetPrivB.id], // Use private subnets
       launchTemplate: { id: lt.id },
-      healthCheckType: 'EC2',
+      healthCheckType: 'ELB',
+      healthCheckGracePeriod: 300,
       tag: [
         {
           key: 'Name',
@@ -322,7 +323,7 @@ echo 'OK from ${region}' > /var/www/html/index.html
 
     this.albDnsName = alb.dnsName;
     this.albZoneId = alb.zoneId;
-    this.albArn = alb.arn; // <-- Export ARN for testing
+    this.albArn = alb.arn;
     this.asgName = asg.name;
 
     // Database (optional)
@@ -346,23 +347,23 @@ echo 'OK from ${region}' > /var/www/html/index.html
       // DB subnet group
       const dbSubnetGroup = new DbSubnetGroup(this, `${id}-db-subnet-group`, {
         provider: providerAlias,
-        name: `${id}-db-subnet-${randomSuffix}`,
+        name: `${id.toLowerCase()}-db-subnet-${randomSuffix}`,
         subnetIds: [subnetPrivA.id, subnetPrivB.id], // Use private subnets
         tags: { ...tags },
       });
 
       this.dbCluster = new RdsCluster(this, `${id}-rds-cluster`, {
         provider: providerAlias,
-        clusterIdentifier: `${id}-cluster-${randomSuffix}`,
+        clusterIdentifier: `${id.toLowerCase()}-cluster-${randomSuffix}`,
         engine: 'aurora-postgresql',
         engineVersion: '13.9',
         databaseName: 'appdb',
         masterUsername: dbUsername,
         masterPassword: dbPassword,
         dbSubnetGroupName: dbSubnetGroup.name,
-        vpcSecurityGroupIds: [dbSg.id], // Use dedicated DB SG
+        vpcSecurityGroupIds: [dbSg.id],
         storageEncrypted: true,
-        kmsKeyId: kmsKey?.id,
+        kmsKeyId: kmsKey?.arn, // Correctly use ARN
         skipFinalSnapshot: true,
         tags: { ...tags },
       });
@@ -409,9 +410,11 @@ export class TapStack extends TerraformStack {
 
     // Random & password providers
     new RandomProvider(this, 'random');
+    // --- THIS IS THE FIX: Specify allowed special characters ---
     const dbPassword = new Password(this, 'db_password', {
       length: 16,
       special: true,
+      overrideSpecial: '_%+-', // Only allow these special characters
     });
 
     // KMS keys for encryption in both regions
@@ -462,15 +465,15 @@ export class TapStack extends TerraformStack {
       region: 'us-west-2',
       vpcCidr: '10.20.0.0/16',
       randomSuffix,
-      createDatabase: true, // create independent DR DB (no automatic replication)
+      createDatabase: true,
       kmsKey: drKms,
       dbUsername: dbUser,
       dbPassword: dbPassword.result,
       tags,
     });
 
-    // Route53 global DNS zone (hosted in primary account/region; Route53 is global)
-    const domainName = `trading-${randomSuffix}.example.com`;
+    // Route53 global DNS zone
+    const domainName = `trading-${randomSuffix}.internal-test.com`;
     const zone = new Route53Zone(this, 'zone', {
       provider: primaryProvider,
       name: domainName,
