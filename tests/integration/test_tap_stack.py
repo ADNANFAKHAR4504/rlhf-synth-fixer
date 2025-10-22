@@ -853,7 +853,7 @@ class TestEndToEndFlows(BaseIntegrationTest):
                 
                 # Verify Lambda processed our API request
                 if unique_id in log_text:
-                    print(f"  ✓ VERIFIED: Lambda processed our API Gateway request")
+                    print(f"   VERIFIED: Lambda processed our API Gateway request")
                 else:
                     print(f"  - Unique ID not found in logs")
                 
@@ -862,14 +862,14 @@ class TestEndToEndFlows(BaseIntegrationTest):
                 sns_mentioned = any(indicator in log_text.lower() for indicator in sns_indicators)
                 
                 if sns_mentioned:
-                    print(f"  ✓ VERIFIED: Lambda logs show SNS interaction")
+                    print(f"   VERIFIED: Lambda logs show SNS interaction")
                     print(f"    This proves Lambda → SNS flow in the E2E chain")
                 else:
                     print(f"  - No SNS interaction found in logs")
                     print(f"    Lambda may not have triggered SNS notification")
                 
                 # Verify CloudWatch received logs (proves final step)
-                print(f"  ✓ VERIFIED: CloudWatch received Lambda logs")
+                print(f"   VERIFIED: CloudWatch received Lambda logs")
                 print(f"    This proves Lambda → CloudWatch flow")
                 
                 print(f"\n  E2E Flow Evidence in Logs:")
@@ -879,9 +879,9 @@ class TestEndToEndFlows(BaseIntegrationTest):
                 # Assert E2E flow
                 self.assertGreater(len(logs), 0, "CloudWatch should have Lambda logs")
                 if unique_id in log_text and sns_mentioned:
-                    print(f"\n  ✓ E2E FLOW COMPLETE: API Gateway → Lambda → SNS → CloudWatch")
+                    print(f"\n   E2E FLOW COMPLETE: API Gateway → Lambda → SNS → CloudWatch")
                 else:
-                    print(f"\n  ⚠ E2E FLOW PARTIAL: Some steps verified, check logs for details")
+                    print(f"\n   E2E FLOW PARTIAL: Some steps verified, check logs for details")
             else:
                 print(f"  No recent logs (CloudWatch propagation delay)")
                 print(f"  Cannot fully verify E2E flow without logs")
