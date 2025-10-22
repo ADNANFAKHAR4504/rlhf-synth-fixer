@@ -658,12 +658,6 @@ Resources:
       TargetId: !Ref RDSDatabase
       TargetType: AWS::RDS::DBInstance
 
-  AdminUserPolicy:
-    Type: AWS::IAM::UserPolicyAttachment
-    Properties:
-      UserName: mohammad.n1@turing.com
-      PolicyArn: arn:aws:iam::aws:policy/AdministratorAccess
-
   # =====================================
   # Application Load Balancer
   # =====================================
