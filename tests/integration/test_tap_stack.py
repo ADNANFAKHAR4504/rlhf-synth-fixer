@@ -1,13 +1,13 @@
 import json
+import logging
 import os
+import time
 import unittest
+from typing import Any, Dict
+
 import boto3
 import requests
-import time
-import logging
-from typing import Dict, Any
 from botocore.exceptions import ClientError
-
 from pytest import mark
 
 # Configure logging

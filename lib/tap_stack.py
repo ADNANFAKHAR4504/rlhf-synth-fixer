@@ -9,17 +9,13 @@ import os
 from typing import Optional
 
 import aws_cdk as cdk
-from aws_cdk import (
-    Duration,
-    RemovalPolicy,
-    CfnOutput,
-    aws_s3 as s3,
-    aws_lambda as lambda_,
-    aws_iam as iam,
-    aws_apigateway as apigateway,
-    aws_s3_notifications as s3_notifications,
-    aws_logs as logs,
-)
+from aws_cdk import CfnOutput, Duration, RemovalPolicy
+from aws_cdk import aws_apigateway as apigateway
+from aws_cdk import aws_iam as iam
+from aws_cdk import aws_lambda as lambda_
+from aws_cdk import aws_logs as logs
+from aws_cdk import aws_s3 as s3
+from aws_cdk import aws_s3_notifications as s3_notifications
 from constructs import Construct
 
 
