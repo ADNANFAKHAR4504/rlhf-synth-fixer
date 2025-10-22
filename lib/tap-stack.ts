@@ -56,7 +56,6 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly replicationLagAlarm: aws.cloudwatch.MetricAlarm;
   public readonly rollbackTopic: aws.sns.Topic;
   public readonly outputs: pulumi.Output<StackOutputs>;
-
   private readonly config: TapStackProps;
   private readonly randomSuffix: string;
 
@@ -409,6 +408,8 @@ export class TapStack extends pulumi.ComponentResource {
     return new aws.lb.TargetGroup(
       this.getResourceName("target-group"),
       {
+        // FIXED: Use namePrefix to avoid exceeding 32 character limit
+        namePrefix: "tg-",
         vpcId: this.targetVpc.id,
         port: 3000,
         protocol: "HTTP",
@@ -821,7 +822,6 @@ echo "Node.js microservice ready"`,
 exports.handler = async (event) => {
   const AWS = require('aws-sdk');
   const route53 = new AWS.Route53();
-  
   console.log('Executing rollback due to alarm:', event);
   
   // Update Route53 to shift traffic back to source (0% to target)
@@ -852,7 +852,7 @@ exports.handler = async (event) => {
     throw error;
   }
 };
-          `),
+`),
         }),
         timeout: 300,
         environment: {
@@ -896,7 +896,7 @@ exports.handler = async (event) => {
         this.targetVpc.id,
         this.targetVpc.cidrBlock,
         this.vpcPeering.id,
-        ...this.targetSubnets.map((s) => s.id),  // FIXED: Spread the array
+        ...this.targetSubnets.map((s) => s.id),
         this.targetRdsInstance.endpoint,
         this.targetRdsInstance.arn,
         this.targetLoadBalancer.dnsName,
@@ -909,14 +909,13 @@ exports.handler = async (event) => {
         this.replicationLagAlarm.arn,
       ])
       .apply(
-        (values) => {  // FIXED: Use simple parameter instead of destructuring
+        (values) => {
           const [
             targetVpcId,
             targetVpcCidr,
             vpcPeeringId,
-            ...subnetIds  // Collect remaining subnet IDs
+            ...subnetIds
           ] = values.slice(0, 3);
-          
           const targetSubnetIds = values.slice(3, 3 + this.targetSubnets.length);
           const [
             targetRdsEndpoint,
@@ -930,7 +929,7 @@ exports.handler = async (event) => {
             errorAlarmArn,
             replicationLagAlarmArn,
           ] = values.slice(3 + this.targetSubnets.length);
-  
+
           const flatOutputs: StackOutputs = {
             targetVpcId,
             targetVpcCidr,
@@ -953,23 +952,22 @@ exports.handler = async (event) => {
             timestamp: new Date().toISOString(),
             version: "1.0.0",
           };
-  
+
           // Write outputs to JSON file
           const outputDir = path.join(process.cwd(), "cfn-outputs");
           if (!fs.existsSync(outputDir)) {
             fs.mkdirSync(outputDir, { recursive: true });
           }
-  
+
           fs.writeFileSync(
             path.join(outputDir, "flat-outputs.json"),
             JSON.stringify(flatOutputs, null, 2)
           );
-  
+
           return flatOutputs;
         }
       );
   }
-  
 
   private getResourceName(component: string): string {
     return `${this.config.environmentSuffix}-payment-${component}-${this.randomSuffix}`;
