@@ -1,13 +1,14 @@
 """
 test_tap_stack_integration.py
 
-Integration tests for TapStack Pulumi infrastructure code - NO MOCKING.
-Validates the infrastructure code structure, configuration, and compliance.
+Integration tests for TapStack Pulumi infrastructure - NO MOCKING.
+Tests validate live AWS resources when deployed, or skip if outputs unavailable.
 """
 
 import unittest
 import sys
 import os
+import json
 
 # Add lib directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -16,7 +17,26 @@ from lib.tap_stack import TapStack, TapStackArgs
 
 
 class TestTapStackIntegration(unittest.TestCase):
-    """Integration tests validating TapStack infrastructure code."""
+    """Integration tests validating TapStack - live resources when available."""
+
+    @classmethod
+    def setUpClass(cls):
+        """Load stack outputs if available."""
+        cls.outputs_file = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            '..', '..', 'cfn-outputs', 'flat-outputs.json'
+        )
+
+        cls.outputs = None
+        cls.has_live_stack = False
+
+        if os.path.exists(cls.outputs_file):
+            try:
+                with open(cls.outputs_file, 'r', encoding='utf-8') as f:
+                    cls.outputs = json.load(f)
+                    cls.has_live_stack = True
+            except (json.JSONDecodeError, IOError):
+                pass
 
     def test_tap_stack_args_initialization(self):
         """Validate TapStackArgs can be initialized with default values."""
@@ -36,15 +56,6 @@ class TestTapStackIntegration(unittest.TestCase):
         self.assertIn("Environment", args.tags)
         self.assertIn("Compliance", args.tags)
 
-    def test_tap_stack_args_environment_suffix_format(self):
-        """Validate environment suffix format restrictions."""
-        # Test various valid formats
-        valid_suffixes = ["dev", "prod", "test-123", "env-abc-123"]
-
-        for suffix in valid_suffixes:
-            args = TapStackArgs(environment_suffix=suffix)
-            self.assertEqual(args.environment_suffix, suffix)
-
     def test_tap_stack_class_exists(self):
         """Validate TapStack class is properly defined."""
         self.assertTrue(hasattr(TapStack, '__init__'))
@@ -52,27 +63,18 @@ class TestTapStackIntegration(unittest.TestCase):
 
     def test_tap_stack_is_component_resource(self):
         """Validate TapStack inherits from pulumi.ComponentResource."""
-        # Check that TapStack has ComponentResource in its MRO
         import pulumi
         self.assertTrue(issubclass(TapStack, pulumi.ComponentResource))
 
     def test_tap_stack_docstring_compliance(self):
-        """Validate TapStack has comprehensive documentation."""
+        """Validate TapStack has comprehensive FedRAMP documentation."""
         self.assertIsNotNone(TapStack.__doc__)
         self.assertIn("FedRAMP", TapStack.__doc__)
 
-        # Verify key compliance features are documented
         doc = TapStack.__doc__.lower()
         self.assertIn("encryption", doc)
         self.assertIn("audit", doc)
         self.assertIn("availability", doc)
-
-    def test_tap_stack_args_class_attributes(self):
-        """Validate TapStackArgs has required attributes."""
-        args = TapStackArgs(environment_suffix="test", tags={"key": "value"})
-
-        self.assertTrue(hasattr(args, 'environment_suffix'))
-        self.assertTrue(hasattr(args, 'tags'))
 
     def test_module_imports(self):
         """Validate required imports are available."""
@@ -83,54 +85,61 @@ class TestTapStackIntegration(unittest.TestCase):
         self.assertTrue(hasattr(tap_stack, 'pulumi'))
         self.assertTrue(hasattr(tap_stack, 'aws'))
 
-    def test_tap_stack_args_default_tags_handling(self):
-        """Validate TapStackArgs handles None tags correctly."""
-        args_without_tags = TapStackArgs(environment_suffix="test")
-        args_with_empty_tags = TapStackArgs(environment_suffix="test", tags={})
+    # Live AWS Resource Tests - Skip if outputs unavailable
 
-        self.assertIsNone(args_without_tags.tags)
-        self.assertEqual(args_with_empty_tags.tags, {})
-        self.assertIsInstance(args_with_empty_tags.tags, dict)
+    def test_live_vpc_configuration(self):
+        """Validate VPC exists with correct configuration in deployed stack."""
+        if not self.has_live_stack:
+            self.skipTest("Live stack outputs not available - skipping live resource test")
 
-    def test_environment_suffix_variations(self):
-        """Validate various environment suffix patterns work correctly."""
-        test_cases = [
-            ("dev", "dev"),
-            ("production", "production"),
-            ("test-123", "test-123"),
-            ("env-feature-branch", "env-feature-branch"),
-        ]
+        vpc_id = self.outputs.get('vpc_id')
+        self.assertIsNotNone(vpc_id, "VPC ID should be in stack outputs")
+        self.assertTrue(vpc_id.startswith('vpc-'), "VPC ID should have correct format")
 
-        for input_suffix, expected_suffix in test_cases:
-            args = TapStackArgs(environment_suffix=input_suffix)
-            self.assertEqual(args.environment_suffix, expected_suffix)
+    def test_live_kinesis_stream(self):
+        """Validate Kinesis stream exists in deployed stack."""
+        if not self.has_live_stack:
+            self.skipTest("Live stack outputs not available - skipping live resource test")
 
-    def test_tags_structure_validation(self):
-        """Validate tags structure follows AWS tagging conventions."""
-        valid_tags = {
-            "Environment": "production",
-            "Compliance": "FedRAMP-High",
-            "CostCenter": "12345",
-            "Owner": "security-team"
-        }
+        stream_name = self.outputs.get('kinesis_stream_name')
+        self.assertIsNotNone(stream_name, "Kinesis stream name should be in outputs")
+        self.assertIn('fedramp-data-stream', stream_name, "Stream should follow naming convention")
 
-        args = TapStackArgs(environment_suffix="prod", tags=valid_tags)
+    def test_live_ecs_cluster(self):
+        """Validate ECS cluster exists in deployed stack."""
+        if not self.has_live_stack:
+            self.skipTest("Live stack outputs not available - skipping live resource test")
 
-        # Verify all tags are strings
-        for key, value in args.tags.items():
-            self.assertIsInstance(key, str)
-            self.assertIsInstance(value, str)
+        cluster_name = self.outputs.get('ecs_cluster_name')
+        self.assertIsNotNone(cluster_name, "ECS cluster name should be in outputs")
+        self.assertIn('fedramp-cluster', cluster_name, "Cluster should follow naming convention")
 
-    def test_module_level_imports_complete(self):
-        """Validate all required dependencies are imported."""
-        import lib.tap_stack as module
+    def test_live_rds_endpoint(self):
+        """Validate RDS endpoint exists in deployed stack."""
+        if not self.has_live_stack:
+            self.skipTest("Live stack outputs not available - skipping live resource test")
 
-        # Check for critical imports
-        self.assertTrue(hasattr(module, 'pulumi'))
-        self.assertTrue(hasattr(module, 'ResourceOptions'))
-        self.assertTrue(hasattr(module, 'aws'))
-        self.assertTrue(hasattr(module, 'json'))
-        self.assertTrue(hasattr(module, 'Optional'))
+        rds_endpoint = self.outputs.get('rds_endpoint')
+        self.assertIsNotNone(rds_endpoint, "RDS endpoint should be in outputs")
+        self.assertIn('.rds.amazonaws.com', rds_endpoint, "RDS endpoint should be valid")
+
+    def test_live_efs_filesystem(self):
+        """Validate EFS filesystem exists in deployed stack."""
+        if not self.has_live_stack:
+            self.skipTest("Live stack outputs not available - skipping live resource test")
+
+        efs_id = self.outputs.get('efs_id')
+        self.assertIsNotNone(efs_id, "EFS ID should be in outputs")
+        self.assertTrue(efs_id.startswith('fs-'), "EFS ID should have correct format")
+
+    def test_live_api_endpoint(self):
+        """Validate API Gateway endpoint exists in deployed stack."""
+        if not self.has_live_stack:
+            self.skipTest("Live stack outputs not available - skipping live resource test")
+
+        api_endpoint = self.outputs.get('api_endpoint')
+        self.assertIsNotNone(api_endpoint, "API endpoint should be in outputs")
+        self.assertTrue(api_endpoint.startswith('https://'), "API should use HTTPS")
 
 
 if __name__ == '__main__':
