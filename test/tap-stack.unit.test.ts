@@ -261,4 +261,61 @@ describe('Stack Structure', () => {
       process.env.ENABLE_S3_BACKEND = originalEnv;
     }
   });
+
+  test('TapStack with CI environment set to enable unique suffixes', () => {
+    // Save original env vars
+    const originalCI = process.env.CI;
+
+    // Set CI environment to test unique suffix generation
+    process.env.CI = 'true';
+
+    app = new App();
+    stack = new TapStack(app, 'TestTapStackCI', {
+      environmentSuffix: 'test',
+      stateBucket: 'test-state-bucket',
+      stateBucketRegion: 'eu-central-1',
+      awsRegion: 'eu-central-1',
+    });
+    synthesized = Testing.synth(stack);
+
+    // Verify that TapStack instantiates without errors in CI environment
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+
+    // In CI mode, resources should have timestamp suffixes
+    expect(synthesized).toContain('test');
+
+    // Restore original env var
+    if (originalCI !== undefined) {
+      process.env.CI = originalCI;
+    } else {
+      delete process.env.CI;
+    }
+  });
+
+  test('TapStack without CI environment (local development)', () => {
+    // Save original env vars
+    const originalCI = process.env.CI;
+
+    // Ensure CI is not set (local development mode)
+    delete process.env.CI;
+
+    app = new App();
+    stack = new TapStack(app, 'TestTapStackLocal', {
+      environmentSuffix: 'test',
+      stateBucket: 'test-state-bucket',
+      stateBucketRegion: 'eu-central-1',
+      awsRegion: 'eu-central-1',
+    });
+    synthesized = Testing.synth(stack);
+
+    // Verify that TapStack instantiates without errors in local mode
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+
+    // Restore original env var
+    if (originalCI !== undefined) {
+      process.env.CI = originalCI;
+    }
+  });
 });

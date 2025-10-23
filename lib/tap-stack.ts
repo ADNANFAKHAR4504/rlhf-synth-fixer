@@ -65,6 +65,9 @@ export class TapStack extends TerraformStack {
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
     // Add version suffix to force complete resource replacement in CI/CD
     const deployVersion = 'v6';
+    // Add timestamp for CI/CD to ensure unique names
+    const timestamp = process.env.CI ? Date.now().toString().slice(-8) : '';
+    const uniqueSuffix = timestamp ? `-${timestamp}` : '';
     const drRegion = 'eu-west-1';
 
     // Configure AWS Provider for primary region
@@ -459,7 +462,7 @@ export class TapStack extends TerraformStack {
     // === STORAGE ===
     // Create IAM role for S3 replication
     const replicationRole = new IamRole(this, 's3-replication-role', {
-      name: `hipaa-s3-replication-role-${environmentSuffix}`,
+      name: `hipaa-s3-replication-role-${environmentSuffix}${uniqueSuffix}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -473,7 +476,7 @@ export class TapStack extends TerraformStack {
         ],
       }),
       tags: {
-        Name: `hipaa-s3-replication-role-${environmentSuffix}`,
+        Name: `hipaa-s3-replication-role-${environmentSuffix}${uniqueSuffix}`,
         Environment: environmentSuffix,
       },
       provider: primaryProvider,
@@ -481,10 +484,10 @@ export class TapStack extends TerraformStack {
 
     // Create S3 bucket for patient data in primary region
     const dataBucket = new S3Bucket(this, 'data-bucket', {
-      bucket: `hipaa-patient-data-${environmentSuffix}-${awsRegion}`,
+      bucket: `hipaa-patient-data-${environmentSuffix}${uniqueSuffix}-${awsRegion}`,
       forceDestroy: true,
       tags: {
-        Name: `hipaa-patient-data-${environmentSuffix}`,
+        Name: `hipaa-patient-data-${environmentSuffix}${uniqueSuffix}`,
         Compliance: 'HIPAA',
         Environment: environmentSuffix,
         CostCenter: 'Healthcare',
@@ -567,10 +570,10 @@ export class TapStack extends TerraformStack {
 
     // Create DR S3 bucket
     const dataBucketDr = new S3Bucket(this, 'data-bucket-dr', {
-      bucket: `hipaa-patient-data-${environmentSuffix}-${drRegion}`,
+      bucket: `hipaa-patient-data-${environmentSuffix}${uniqueSuffix}-${drRegion}`,
       forceDestroy: true,
       tags: {
-        Name: `hipaa-patient-data-dr-${environmentSuffix}`,
+        Name: `hipaa-patient-data-dr-${environmentSuffix}${uniqueSuffix}`,
         Compliance: 'HIPAA',
         Environment: environmentSuffix,
         CostCenter: 'Healthcare',
@@ -728,10 +731,10 @@ export class TapStack extends TerraformStack {
 
     // Create DB subnet group
     const dbSubnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
-      name: `hipaa-db-subnet-group-${environmentSuffix}`,
+      name: `hipaa-db-subnet-group-${environmentSuffix}${uniqueSuffix}`,
       subnetIds: [privateSubnet1.id, privateSubnet2.id],
       tags: {
-        Name: `hipaa-db-subnet-group-${environmentSuffix}`,
+        Name: `hipaa-db-subnet-group-${environmentSuffix}${uniqueSuffix}`,
         Environment: environmentSuffix,
       },
       dependsOn: [privateSubnet1, privateSubnet2, vpc],
@@ -886,10 +889,10 @@ export class TapStack extends TerraformStack {
 
     // Create CloudTrail S3 bucket for logging
     const cloudtrailLogBucket = new S3Bucket(this, 'cloudtrail-log-bucket', {
-      bucket: `hipaa-cloudtrail-logs-${environmentSuffix}`,
+      bucket: `hipaa-cloudtrail-logs-${environmentSuffix}${uniqueSuffix}`,
       forceDestroy: true,
       tags: {
-        Name: `hipaa-cloudtrail-logs-${environmentSuffix}`,
+        Name: `hipaa-cloudtrail-logs-${environmentSuffix}${uniqueSuffix}`,
         Compliance: 'HIPAA',
         Environment: environmentSuffix,
       },
@@ -897,10 +900,10 @@ export class TapStack extends TerraformStack {
     });
 
     const cloudtrailBucket = new S3Bucket(this, 'cloudtrail-bucket', {
-      bucket: `hipaa-cloudtrail-${environmentSuffix}`,
+      bucket: `hipaa-cloudtrail-${environmentSuffix}${uniqueSuffix}`,
       forceDestroy: true,
       tags: {
-        Name: `hipaa-cloudtrail-${environmentSuffix}`,
+        Name: `hipaa-cloudtrail-${environmentSuffix}${uniqueSuffix}`,
         Compliance: 'HIPAA',
         Environment: environmentSuffix,
       },
@@ -1035,7 +1038,7 @@ export class TapStack extends TerraformStack {
     // === BACKUP ===
     // Create IAM role for AWS Backup
     const backupRole = new IamRole(this, 'backup-role', {
-      name: `hipaa-backup-role-${environmentSuffix}`,
+      name: `hipaa-backup-role-${environmentSuffix}${uniqueSuffix}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -1049,7 +1052,7 @@ export class TapStack extends TerraformStack {
         ],
       }),
       tags: {
-        Name: `hipaa-backup-role-${environmentSuffix}`,
+        Name: `hipaa-backup-role-${environmentSuffix}${uniqueSuffix}`,
         Environment: environmentSuffix,
       },
       provider: primaryProvider,
