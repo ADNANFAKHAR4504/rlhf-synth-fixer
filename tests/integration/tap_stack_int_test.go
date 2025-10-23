@@ -300,7 +300,6 @@ func TestElastiCacheConnectivity(t *testing.T) {
 	t.Logf("Redis endpoint format verified: %s", outputs.RedisEndpoint)
 }
 
-
 func TestNetworkIsolation(t *testing.T) {
 	outputs := loadOutputs(t)
 	cfg := getAWSConfig(t)
