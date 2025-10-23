@@ -1,0 +1,29 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350074",
+  "team": "2",
+  "startedAt": "2025-10-20T05:39:50.297Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "CloudFormation",
+    "VPC",
+    "Subnets",
+    "EC2",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "RDS",
+    "S3",
+    "CloudFront",
+    "IAM",
+    "Systems Manager Parameter Store",
+    "CloudWatch",
+    "CodePipeline"
+  ],
+  "training_quality": "9"
+}
