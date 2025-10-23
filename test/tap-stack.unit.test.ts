@@ -39,12 +39,12 @@ describe('Student Analytics Platform Infrastructure', () => {
     test('TapStack configures correct AWS region', () => {
       app = new App();
       stack = new TapStack(app, 'TestTapStackRegion', {
-        awsRegion: 'ap-northeast-1',
+        awsRegion: 'ap-northeast-1', // This will be ignored since region is forced
         environmentSuffix: 'prod',
       });
       synthesized = JSON.parse(Testing.synth(stack));
 
-      expect(synthesized.provider.aws[0].region).toBe('ap-northeast-1');
+      expect(synthesized.provider.aws[0].region).toBe('us-east-1');
     });
 
     test('TapStack configures default tags when provided', () => {

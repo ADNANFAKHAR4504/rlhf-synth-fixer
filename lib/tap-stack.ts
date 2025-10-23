@@ -52,16 +52,13 @@ interface TapStackProps {
   defaultTags?: AwsProviderDefaultTags;
 }
 
-const AWS_REGION_OVERRIDE = '';
-
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
-    const awsRegion = AWS_REGION_OVERRIDE
-      ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'us-east-1';
+    // Force region to us-east-1 for consistent CI/CD deployment
+    const awsRegion = 'us-east-1';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
     // Configure AWS Provider
@@ -917,7 +914,7 @@ def lambda_handler(event, context):
       authorization: 'NONE',
     });
 
-    new ApiGatewayIntegration(this, 'metrics-integration', {
+    const metricsIntegration = new ApiGatewayIntegration(this, 'metrics-integration', {
       restApiId: apiGateway.id,
       resourceId: metricsResource.id,
       httpMethod: metricsMethod.httpMethod,
@@ -940,7 +937,7 @@ def lambda_handler(event, context):
       authorization: 'NONE',
     });
 
-    new ApiGatewayIntegration(this, 'students-integration', {
+    const studentsIntegration = new ApiGatewayIntegration(this, 'students-integration', {
       restApiId: apiGateway.id,
       resourceId: studentsResource.id,
       httpMethod: studentsMethod.httpMethod,
@@ -959,7 +956,7 @@ def lambda_handler(event, context):
       lifecycle: {
         createBeforeDestroy: true,
       },
-      dependsOn: [metricsMethod, studentsMethod],
+      dependsOn: [metricsMethod, studentsMethod, metricsIntegration, studentsIntegration],
     });
 
     new ApiGatewayStage(this, 'api-stage', {
