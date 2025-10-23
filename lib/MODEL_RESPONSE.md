@@ -52,37 +52,34 @@ func main() {
 			return err
 		}
 
-		// Create VPC for database and cache
-		vpc, err := ec2.NewVpc(ctx, fmt.Sprintf("patient-api-vpc-%s", environmentSuffix), &ec2.VpcArgs{
-			CidrBlock:          pulumi.String("10.0.0.0/16"),
-			EnableDnsHostnames: pulumi.Bool(true),
-			EnableDnsSupport:   pulumi.Bool(true),
-			Tags: pulumi.StringMap{
-				"Name":        pulumi.String(fmt.Sprintf("patient-api-vpc-%s", environmentSuffix)),
-				"Environment": pulumi.String(environmentSuffix),
+		// Use default VPC to avoid VPC quota limits
+		defaultVpc, err := ec2.LookupVpc(ctx, &ec2.LookupVpcArgs{
+			Default: pulumi.BoolRef(true),
+		})
+		if err != nil {
+			return err
+		}
+		vpcId := pulumi.String(defaultVpc.Id)
+
+		// Get default internet gateway
+		defaultIgw, err := ec2.LookupInternetGateway(ctx, &ec2.LookupInternetGatewayArgs{
+			Filters: []ec2.GetInternetGatewayFilter{
+				{
+					Name:   "attachment.vpc-id",
+					Values: []string{defaultVpc.Id},
+				},
 			},
 		})
 		if err != nil {
 			return err
 		}
+		igwId := pulumi.String(defaultIgw.Id)
 
-		// Create Internet Gateway
-		igw, err := ec2.NewInternetGateway(ctx, fmt.Sprintf("patient-api-igw-%s", environmentSuffix), &ec2.InternetGatewayArgs{
-			VpcId: vpc.ID(),
-			Tags: pulumi.StringMap{
-				"Name":        pulumi.String(fmt.Sprintf("patient-api-igw-%s", environmentSuffix)),
-				"Environment": pulumi.String(environmentSuffix),
-			},
-		})
-		if err != nil {
-			return err
-		}
-
-		// Create public subnets in different AZs
+		// Create public subnets in different AZs within default VPC CIDR
 		publicSubnet1, err := ec2.NewSubnet(ctx, fmt.Sprintf("patient-api-public-subnet-1-%s", environmentSuffix), &ec2.SubnetArgs{
-			VpcId:               vpc.ID(),
-			CidrBlock:           pulumi.String("10.0.1.0/24"),
-			AvailabilityZone:    pulumi.String("sa-east-1a"),
+			VpcId:               vpcId,
+			CidrBlock:           pulumi.String("172.31.128.0/24"),
+			AvailabilityZone:    pulumi.String("us-east-1a"),
 			MapPublicIpOnLaunch: pulumi.Bool(true),
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String(fmt.Sprintf("patient-api-public-subnet-1-%s", environmentSuffix)),
@@ -94,9 +91,9 @@ func main() {
 		}
 
 		publicSubnet2, err := ec2.NewSubnet(ctx, fmt.Sprintf("patient-api-public-subnet-2-%s", environmentSuffix), &ec2.SubnetArgs{
-			VpcId:               vpc.ID(),
-			CidrBlock:           pulumi.String("10.0.2.0/24"),
-			AvailabilityZone:    pulumi.String("sa-east-1b"),
+			VpcId:               vpcId,
+			CidrBlock:           pulumi.String("172.31.129.0/24"),
+			AvailabilityZone:    pulumi.String("us-east-1b"),
 			MapPublicIpOnLaunch: pulumi.Bool(true),
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String(fmt.Sprintf("patient-api-public-subnet-2-%s", environmentSuffix)),
@@ -109,9 +106,9 @@ func main() {
 
 		// Create private subnets for database and cache
 		privateSubnet1, err := ec2.NewSubnet(ctx, fmt.Sprintf("patient-api-private-subnet-1-%s", environmentSuffix), &ec2.SubnetArgs{
-			VpcId:            vpc.ID(),
-			CidrBlock:        pulumi.String("10.0.11.0/24"),
-			AvailabilityZone: pulumi.String("sa-east-1a"),
+			VpcId:            vpcId,
+			CidrBlock:        pulumi.String("172.31.130.0/24"),
+			AvailabilityZone: pulumi.String("us-east-1a"),
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String(fmt.Sprintf("patient-api-private-subnet-1-%s", environmentSuffix)),
 				"Environment": pulumi.String(environmentSuffix),
@@ -122,9 +119,9 @@ func main() {
 		}
 
 		privateSubnet2, err := ec2.NewSubnet(ctx, fmt.Sprintf("patient-api-private-subnet-2-%s", environmentSuffix), &ec2.SubnetArgs{
-			VpcId:            vpc.ID(),
-			CidrBlock:        pulumi.String("10.0.12.0/24"),
-			AvailabilityZone: pulumi.String("sa-east-1b"),
+			VpcId:            vpcId,
+			CidrBlock:        pulumi.String("172.31.131.0/24"),
+			AvailabilityZone: pulumi.String("us-east-1b"),
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String(fmt.Sprintf("patient-api-private-subnet-2-%s", environmentSuffix)),
 				"Environment": pulumi.String(environmentSuffix),
@@ -136,11 +133,11 @@ func main() {
 
 		// Create route table for public subnets
 		publicRouteTable, err := ec2.NewRouteTable(ctx, fmt.Sprintf("patient-api-public-rt-%s", environmentSuffix), &ec2.RouteTableArgs{
-			VpcId: vpc.ID(),
+			VpcId: vpcId,
 			Routes: ec2.RouteTableRouteArray{
 				&ec2.RouteTableRouteArgs{
 					CidrBlock: pulumi.String("0.0.0.0/0"),
-					GatewayId: igw.ID(),
+					GatewayId: igwId,
 				},
 			},
 			Tags: pulumi.StringMap{
@@ -172,13 +169,13 @@ func main() {
 		// Create security group for RDS
 		rdsSecurityGroup, err := ec2.NewSecurityGroup(ctx, fmt.Sprintf("patient-rds-sg-%s", environmentSuffix), &ec2.SecurityGroupArgs{
 			Description: pulumi.String("Security group for patient records RDS"),
-			VpcId:       vpc.ID(),
+			VpcId:       vpcId,
 			Ingress: ec2.SecurityGroupIngressArray{
 				&ec2.SecurityGroupIngressArgs{
 					Protocol:   pulumi.String("tcp"),
 					FromPort:   pulumi.Int(5432),
 					ToPort:     pulumi.Int(5432),
-					CidrBlocks: pulumi.StringArray{pulumi.String("10.0.0.0/16")},
+					CidrBlocks: pulumi.StringArray{pulumi.String("172.31.0.0/16")},
 				},
 			},
 			Egress: ec2.SecurityGroupEgressArray{
@@ -201,13 +198,13 @@ func main() {
 		// Create security group for ElastiCache
 		cacheSecurityGroup, err := ec2.NewSecurityGroup(ctx, fmt.Sprintf("patient-cache-sg-%s", environmentSuffix), &ec2.SecurityGroupArgs{
 			Description: pulumi.String("Security group for patient session cache"),
-			VpcId:       vpc.ID(),
+			VpcId:       vpcId,
 			Ingress: ec2.SecurityGroupIngressArray{
 				&ec2.SecurityGroupIngressArgs{
 					Protocol:   pulumi.String("tcp"),
 					FromPort:   pulumi.Int(6379),
 					ToPort:     pulumi.Int(6379),
-					CidrBlocks: pulumi.StringArray{pulumi.String("10.0.0.0/16")},
+					CidrBlocks: pulumi.StringArray{pulumi.String("172.31.0.0/16")},
 				},
 			},
 			Egress: ec2.SecurityGroupEgressArray{
@@ -379,30 +376,23 @@ func main() {
 
 		// Create ElastiCache Redis cluster
 		redisCluster, err := elasticache.NewReplicationGroup(ctx, fmt.Sprintf("patient-redis-cluster-%s", environmentSuffix), &elasticache.ReplicationGroupArgs{
-			ReplicationGroupId:          pulumi.String(fmt.Sprintf("patient-redis-%s", environmentSuffix)),
-			ReplicationGroupDescription: pulumi.String("Patient session management cache"),
-			Engine:                      pulumi.String("redis"),
-			EngineVersion:               pulumi.String("7.0"),
-			NodeType:                    pulumi.String("cache.t3.micro"),
-			NumCacheClusters:            pulumi.Int(2),
-			ParameterGroupName:          cacheParamGroup.Name,
-			SubnetGroupName:             cacheSubnetGroup.Name,
-			SecurityGroupIds:            pulumi.StringArray{cacheSecurityGroup.ID()},
-			AtRestEncryptionEnabled:     pulumi.Bool(true),
-			TransitEncryptionEnabled:    pulumi.Bool(true),
-			KmsKeyId:                    kmsKey.Arn,
-			AutomaticFailoverEnabled:    pulumi.Bool(true),
-			MultiAzEnabled:              pulumi.Bool(true),
-			SnapshotRetentionLimit:      pulumi.Int(5),
-			SnapshotWindow:              pulumi.String("03:00-05:00"),
-			MaintenanceWindow:           pulumi.String("mon:05:00-mon:07:00"),
-			LogDeliveryConfigurations: elasticache.ReplicationGroupLogDeliveryConfigurationArray{
-				&elasticache.ReplicationGroupLogDeliveryConfigurationArgs{
-					DestinationType: pulumi.String("cloudwatch-logs"),
-					LogFormat:       pulumi.String("json"),
-					LogType:         pulumi.String("slow-log"),
-				},
-			},
+			ReplicationGroupId:       pulumi.String(fmt.Sprintf("patient-redis-%s", environmentSuffix)),
+			Description:              pulumi.String("Patient session management cache"),
+			Engine:                   pulumi.String("redis"),
+			EngineVersion:            pulumi.String("7.0"),
+			NodeType:                 pulumi.String("cache.t3.micro"),
+			NumCacheClusters:         pulumi.Int(2),
+			ParameterGroupName:       cacheParamGroup.Name,
+			SubnetGroupName:          cacheSubnetGroup.Name,
+			SecurityGroupIds:         pulumi.StringArray{cacheSecurityGroup.ID()},
+			AtRestEncryptionEnabled:  pulumi.Bool(true),
+			TransitEncryptionEnabled: pulumi.Bool(true),
+			KmsKeyId:                 kmsKey.Arn,
+			AutomaticFailoverEnabled: pulumi.Bool(true),
+			MultiAzEnabled:           pulumi.Bool(true),
+			SnapshotRetentionLimit:   pulumi.Int(5),
+			SnapshotWindow:           pulumi.String("03:00-05:00"),
+			MaintenanceWindow:        pulumi.String("mon:05:00-mon:07:00"),
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String(fmt.Sprintf("patient-redis-cluster-%s", environmentSuffix)),
 				"Environment": pulumi.String(environmentSuffix),
@@ -450,7 +440,7 @@ func main() {
 		}
 
 		// Create mock integration for GET patients
-		_, err = apigateway.NewIntegration(ctx, fmt.Sprintf("get-patients-integration-%s", environmentSuffix), &apigateway.IntegrationArgs{
+		getPatientsIntegration, err := apigateway.NewIntegration(ctx, fmt.Sprintf("get-patients-integration-%s", environmentSuffix), &apigateway.IntegrationArgs{
 			RestApi:    api.ID(),
 			ResourceId: patientsResource.ID(),
 			HttpMethod: getPatientsMethod.HttpMethod,
@@ -464,7 +454,7 @@ func main() {
 		}
 
 		// Create method response
-		_, err = apigateway.NewMethodResponse(ctx, fmt.Sprintf("get-patients-response-%s", environmentSuffix), &apigateway.MethodResponseArgs{
+		getPatientsMethodResponse, err := apigateway.NewMethodResponse(ctx, fmt.Sprintf("get-patients-response-%s", environmentSuffix), &apigateway.MethodResponseArgs{
 			RestApi:    api.ID(),
 			ResourceId: patientsResource.ID(),
 			HttpMethod: getPatientsMethod.HttpMethod,
@@ -478,7 +468,7 @@ func main() {
 		}
 
 		// Create integration response
-		_, err = apigateway.NewIntegrationResponse(ctx, fmt.Sprintf("get-patients-integration-response-%s", environmentSuffix), &apigateway.IntegrationResponseArgs{
+		getPatientsIntegrationResponse, err := apigateway.NewIntegrationResponse(ctx, fmt.Sprintf("get-patients-integration-response-%s", environmentSuffix), &apigateway.IntegrationResponseArgs{
 			RestApi:    api.ID(),
 			ResourceId: patientsResource.ID(),
 			HttpMethod: getPatientsMethod.HttpMethod,
@@ -486,33 +476,7 @@ func main() {
 			ResponseTemplates: pulumi.StringMap{
 				"application/json": pulumi.String(`{"message": "Patient records retrieved"}`),
 			},
-		})
-		if err != nil {
-			return err
-		}
-
-		// Create usage plan for rate limiting
-		usagePlan, err := apigateway.NewUsagePlan(ctx, fmt.Sprintf("patient-api-usage-plan-%s", environmentSuffix), &apigateway.UsagePlanArgs{
-			Description: pulumi.String("Rate limiting for patient API - 100 requests per minute"),
-			ApiStages: apigateway.UsagePlanApiStageArray{
-				&apigateway.UsagePlanApiStageArgs{
-					ApiId: api.ID(),
-					Stage: pulumi.String("prod"),
-				},
-			},
-			ThrottleSettings: &apigateway.UsagePlanThrottleSettingsArgs{
-				RateLimit:  pulumi.Float64(100),
-				BurstLimit: pulumi.Int(200),
-			},
-			QuotaSettings: &apigateway.UsagePlanQuotaSettingsArgs{
-				Limit:  pulumi.Int(10000),
-				Period: pulumi.String("DAY"),
-			},
-			Tags: pulumi.StringMap{
-				"Name":        pulumi.String(fmt.Sprintf("patient-api-usage-plan-%s", environmentSuffix)),
-				"Environment": pulumi.String(environmentSuffix),
-			},
-		})
+		}, pulumi.DependsOn([]pulumi.Resource{getPatientsIntegration, getPatientsMethodResponse}))
 		if err != nil {
 			return err
 		}
@@ -521,7 +485,7 @@ func main() {
 		deployment, err := apigateway.NewDeployment(ctx, fmt.Sprintf("patient-api-deployment-%s", environmentSuffix), &apigateway.DeploymentArgs{
 			RestApi:     api.ID(),
 			Description: pulumi.String("Patient API deployment"),
-		}, pulumi.DependsOn([]pulumi.Resource{getPatientsMethod}))
+		}, pulumi.DependsOn([]pulumi.Resource{getPatientsMethod, getPatientsIntegration, getPatientsIntegrationResponse}))
 		if err != nil {
 			return err
 		}
@@ -542,8 +506,34 @@ func main() {
 			return err
 		}
 
+		// Create usage plan for rate limiting (must be created after stage)
+		usagePlan, err := apigateway.NewUsagePlan(ctx, fmt.Sprintf("patient-api-usage-plan-%s", environmentSuffix), &apigateway.UsagePlanArgs{
+			Description: pulumi.String("Rate limiting for patient API - 100 requests per minute"),
+			ApiStages: apigateway.UsagePlanApiStageArray{
+				&apigateway.UsagePlanApiStageArgs{
+					ApiId: api.ID(),
+					Stage: stage.StageName,
+				},
+			},
+			ThrottleSettings: &apigateway.UsagePlanThrottleSettingsArgs{
+				RateLimit:  pulumi.Float64(100),
+				BurstLimit: pulumi.Int(200),
+			},
+			QuotaSettings: &apigateway.UsagePlanQuotaSettingsArgs{
+				Limit:  pulumi.Int(10000),
+				Period: pulumi.String("DAY"),
+			},
+			Tags: pulumi.StringMap{
+				"Name":        pulumi.String(fmt.Sprintf("patient-api-usage-plan-%s", environmentSuffix)),
+				"Environment": pulumi.String(environmentSuffix),
+			},
+		}, pulumi.DependsOn([]pulumi.Resource{stage}))
+		if err != nil {
+			return err
+		}
+
 		// Export outputs
-		ctx.Export("vpcId", vpc.ID())
+		ctx.Export("vpcId", vpcId)
 		ctx.Export("kmsKeyId", kmsKey.ID())
 		ctx.Export("kmsKeyArn", kmsKey.Arn)
 		ctx.Export("auroraClusterEndpoint", auroraCluster.Endpoint)
@@ -551,7 +541,7 @@ func main() {
 		ctx.Export("redisClusterEndpoint", redisCluster.PrimaryEndpointAddress)
 		ctx.Export("redisClusterPort", redisCluster.Port)
 		ctx.Export("dbSecretArn", dbSecret.Arn)
-		ctx.Export("apiGatewayUrl", pulumi.Sprintf("https://%s.execute-api.sa-east-1.amazonaws.com/%s", api.ID(), stage.StageName))
+		ctx.Export("apiGatewayUrl", pulumi.Sprintf("https://%s.execute-api.us-east-1.amazonaws.com/%s", api.ID(), stage.StageName))
 		ctx.Export("apiGatewayId", api.ID())
 		ctx.Export("usagePlanId", usagePlan.ID())
 
@@ -559,7 +549,6 @@ func main() {
 	})
 }
 ```
-
 This implementation provides a complete HIPAA-compliant infrastructure with all required AWS services. The code includes:
 
 1. KMS encryption for all data at rest and in transit

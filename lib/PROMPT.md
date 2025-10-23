@@ -7,7 +7,7 @@ MedTech Solutions needs to build a HIPAA-compliant API system for handling patie
 Design and implement a secure API infrastructure for a healthcare provider's patient records system using Pulumi with Go. The system needs to handle patient data securely with proper encryption, caching, and audit logging capabilities.
 
 ## Environment
-{'required_services': ['API Gateway for REST endpoints', 'ElastiCache Redis for session management', 'RDS Aurora (encrypted) for patient records', 'SecretsManager for credential management'], 'setup_steps': ['Initialize Pulumi project with Go', 'Configure AWS provider for sa-east-1 region', 'Set up networking components', 'Deploy required services with encryption']}
+{'required_services': ['API Gateway for REST endpoints', 'ElastiCache Redis for session management', 'RDS Aurora (encrypted) for patient records', 'SecretsManager for credential management'], 'setup_steps': ['Initialize Pulumi project with Go', 'Configure AWS provider for us-east-1 region', 'Set up networking components', 'Deploy required services with encryption']}
 
 ## Constraints
 All data must be encrypted at rest and in transit using AWS KMS; API endpoints must implement rate limiting of 100 requests per minute per client; Cache TTL must not exceed 1 hour for any patient data
