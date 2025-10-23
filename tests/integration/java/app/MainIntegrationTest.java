@@ -1,95 +1,941 @@
 package app;
 
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import software.amazon.awscdk.App;
-import software.amazon.awscdk.assertions.Template;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.cloudformation.CloudFormationClient;
+import software.amazon.awssdk.services.cloudformation.model.DescribeStacksRequest;
+import software.amazon.awssdk.services.cloudformation.model.DescribeStacksResponse;
+import software.amazon.awssdk.services.cloudformation.model.Output;
+import software.amazon.awssdk.services.cloudformation.model.Stack;
+import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
+import software.amazon.awssdk.services.dynamodb.model.*;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.*;
+import software.amazon.awssdk.services.elasticache.ElastiCacheClient;
+import software.amazon.awssdk.services.elasticache.model.DescribeReplicationGroupsRequest;
+import software.amazon.awssdk.services.elasticache.model.DescribeReplicationGroupsResponse;
+import software.amazon.awssdk.services.rds.RdsClient;
+import software.amazon.awssdk.services.sagemaker.SageMakerClient;
+import software.amazon.awssdk.services.sagemaker.model.DescribeEndpointRequest;
+import software.amazon.awssdk.services.sagemaker.model.DescribeEndpointResponse;
+import software.amazon.awssdk.services.elasticloadbalancingv2.ElasticLoadBalancingV2Client;
+import software.amazon.awssdk.services.elasticloadbalancingv2.model.DescribeLoadBalancersRequest;
+import software.amazon.awssdk.services.elasticloadbalancingv2.model.DescribeTargetHealthRequest;
+import software.amazon.awssdk.services.cloudfront.CloudFrontClient;
+import software.amazon.awssdk.services.cloudfront.model.GetDistributionRequest;
+import software.amazon.awssdk.core.sync.RequestBody;
+
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.JedisPoolConfig;
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Statement;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 
 /**
- * Integration tests for the Main CDK application.
- *
- * These tests verify the integration between different components of the TapStack
- * and may involve more complex scenarios than unit tests.
- *
- * Note: These tests still use synthetic AWS resources and do not require
- * actual AWS credentials or resources to be created.
+ * Real end-to-end integration tests for TapStack deployed infrastructure.
+ * 
+ * These tests connect to actual AWS resources and verify functionality.
+ * Requires deployed infrastructure and valid AWS credentials.
+ * 
+ * Environment Variables Required:
+ * - AWS_ACCESS_KEY_ID
+ * - AWS_SECRET_ACCESS_KEY
+ * - ENVIRONMENT_SUFFIX (default: dev)
  */
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class MainIntegrationTest {
 
-    /**
-     * Integration test for full stack deployment simulation.
-     *
-     * This test verifies that the complete stack can be synthesized
-     * with all its components working together.
-     */
-    @Test
-    public void testFullStackDeployment() {
-        App app = new App();
-
-        // Create stack with production-like configuration
-        TapStack stack = new TapStack(app, "TapStackProd", TapStackProps.builder()
-                .environmentSuffix("prod")
-                .build(), null);
-
-        // Create template and verify it can be synthesized
-        Template template = Template.fromStack(stack);
-
-        // Verify stack configuration
-        assertThat(stack).isNotNull();
-        assertThat(stack.getEnvironmentSuffix()).isEqualTo("prod");
-        assertThat(template).isNotNull();
+    private static final Region REGION = Region.US_WEST_2;
+    private String environmentSuffix;
+    private String stackName;
+    
+    // AWS Clients
+    private CloudFormationClient cfnClient;
+    private DynamoDbClient dynamoDbClient;
+    private S3Client s3Client;
+    private ElastiCacheClient elastiCacheClient;
+    private RdsClient rdsClient;
+    private SageMakerClient sageMakerClient;
+    private ElasticLoadBalancingV2Client elbClient;
+    private CloudFrontClient cloudFrontClient;
+    
+    // Stack Outputs
+    private Map<String, String> stackOutputs;
+    private String albDnsName;
+    private String webSocketApiUrl;
+    private String cloudFrontDomain;
+    private String mediaBucketName;
+    private String auroraWriteEndpoint;
+    private String auroraReadEndpoint;
+    private String userGraphTableName;
+    private String postTableName;
+    private String redisEndpoint;
+    private String feedRankingEndpointName;
+    private String viralDetectionEndpointName;
+    
+    // Redis connection
+    private JedisPool jedisPool;
+    
+    @BeforeAll
+    public void setUp() {
+        // Get environment suffix
+        environmentSuffix = System.getenv().getOrDefault("ENVIRONMENT_SUFFIX", "dev");
+        stackName = "TapStack" + environmentSuffix;
+        
+        // Get AWS credentials from environment
+        String awsAccessKey = System.getenv("AWS_ACCESS_KEY_ID");
+        String awsSecretKey = System.getenv("AWS_SECRET_ACCESS_KEY");
+        
+        assertThat(awsAccessKey).as("AWS_ACCESS_KEY_ID must be set").isNotNull();
+        assertThat(awsSecretKey).as("AWS_SECRET_ACCESS_KEY must be set").isNotNull();
+        
+        AwsBasicCredentials credentials = AwsBasicCredentials.create(awsAccessKey, awsSecretKey);
+        StaticCredentialsProvider credentialsProvider = StaticCredentialsProvider.create(credentials);
+        
+        // Initialize AWS clients
+        cfnClient = CloudFormationClient.builder()
+                .region(REGION)
+                .credentialsProvider(credentialsProvider)
+                .build();
+                
+        dynamoDbClient = DynamoDbClient.builder()
+                .region(REGION)
+                .credentialsProvider(credentialsProvider)
+                .build();
+                
+        s3Client = S3Client.builder()
+                .region(REGION)
+                .credentialsProvider(credentialsProvider)
+                .build();
+                
+        elastiCacheClient = ElastiCacheClient.builder()
+                .region(REGION)
+                .credentialsProvider(credentialsProvider)
+                .build();
+                
+        rdsClient = RdsClient.builder()
+                .region(REGION)
+                .credentialsProvider(credentialsProvider)
+                .build();
+                
+        sageMakerClient = SageMakerClient.builder()
+                .region(REGION)
+                .credentialsProvider(credentialsProvider)
+                .build();
+                
+        elbClient = ElasticLoadBalancingV2Client.builder()
+                .region(REGION)
+                .credentialsProvider(credentialsProvider)
+                .build();
+                
+        cloudFrontClient = CloudFrontClient.builder()
+                .region(REGION)
+                .credentialsProvider(credentialsProvider)
+                .build();
+        
+        // Load stack outputs
+        loadStackOutputs();
+        
+        // Initialize Redis connection
+        initializeRedis();
     }
-
-    /**
-     * Integration test for multiple environment configurations.
-     *
-     * This test verifies that the stack can be configured for different
-     * environments (dev, staging, prod) with appropriate settings.
-     */
-    @Test
-    public void testMultiEnvironmentConfiguration() {
-        // Test different environment configurations
-        String[] environments = {"dev", "staging", "prod"};
-
-        for (String env : environments) {
-            // Create a new app for each environment to avoid synthesis conflicts
-            App app = new App();
-            TapStack stack = new TapStack(app, "TapStack" + env, TapStackProps.builder()
-                    .environmentSuffix(env)
-                    .build(), null);
-
-            // Verify each environment configuration
-            assertThat(stack.getEnvironmentSuffix()).isEqualTo(env);
-
-            // Verify template can be created for each environment
-            Template template = Template.fromStack(stack);
-            assertThat(template).isNotNull();
+    
+    private void loadStackOutputs() {
+        DescribeStacksResponse response = cfnClient.describeStacks(
+            DescribeStacksRequest.builder()
+                .stackName(stackName)
+                .build()
+        );
+        
+        Stack stack = response.stacks().get(0);
+        stackOutputs = new HashMap<>();
+        
+        for (Output output : stack.outputs()) {
+            stackOutputs.put(output.outputKey(), output.outputValue());
+        }
+        
+        // Extract outputs
+        albDnsName = stackOutputs.get("AlbDnsName");
+        webSocketApiUrl = stackOutputs.get("WebSocketApiUrl");
+        cloudFrontDomain = stackOutputs.get("CloudFrontDomain");
+        mediaBucketName = stackOutputs.get("MediaBucketName");
+        auroraWriteEndpoint = stackOutputs.get("AuroraClusterEndpoint");
+        auroraReadEndpoint = stackOutputs.get("AuroraReaderEndpoint");
+        userGraphTableName = stackOutputs.get("UserGraphTableName");
+        postTableName = stackOutputs.get("PostTableName");
+        redisEndpoint = stackOutputs.get("RedisEndpoint");
+        feedRankingEndpointName = stackOutputs.get("FeedRankingEndpoint");
+        viralDetectionEndpointName = stackOutputs.get("ViralDetectionEndpoint");
+        
+        System.out.println("Loaded stack outputs for: " + stackName);
+    }
+    
+    private void initializeRedis() {
+        if (redisEndpoint != null && !redisEndpoint.isEmpty()) {
+            JedisPoolConfig poolConfig = new JedisPoolConfig();
+            poolConfig.setMaxTotal(10);
+            jedisPool = new JedisPool(poolConfig, redisEndpoint, 6379);
         }
     }
 
-    /**
-     * Integration test for stack with nested components.
-     *
-     * This test would verify the integration between the main stack
-     * and any nested stacks or components that might be added in the future.
-     */
+    // ==================== DynamoDB Integration Tests ====================
+    
     @Test
-    public void testStackWithNestedComponents() {
-        App app = new App();
+    public void testDynamoDBUserGraphTableExists() {
+        DescribeTableResponse response = dynamoDbClient.describeTable(
+            DescribeTableRequest.builder()
+                .tableName(userGraphTableName)
+                .build()
+        );
+        
+        assertThat(response.table().tableName()).isEqualTo(userGraphTableName);
+        assertThat(response.table().tableStatus()).isEqualTo(TableStatus.ACTIVE);
+    }
+    
+    @Test
+    public void testDynamoDBPostTableExists() {
+        DescribeTableResponse response = dynamoDbClient.describeTable(
+            DescribeTableRequest.builder()
+                .tableName(postTableName)
+                .build()
+        );
+        
+        assertThat(response.table().tableName()).isEqualTo(postTableName);
+        assertThat(response.table().tableStatus()).isEqualTo(TableStatus.ACTIVE);
+    }
+    
+    @Test
+    public void testPutUserGraphConnection() {
+        String testUserId = "test-user-" + System.currentTimeMillis();
+        String friendId = "friend-" + System.currentTimeMillis();
+        
+        Map<String, AttributeValue> item = new HashMap<>();
+        item.put("userId", AttributeValue.builder().s(testUserId).build());
+        item.put("friendId", AttributeValue.builder().s(friendId).build());
+        item.put("connectionType", AttributeValue.builder().s("friend").build());
+        item.put("timestamp", AttributeValue.builder().n(String.valueOf(System.currentTimeMillis())).build());
+        
+        PutItemResponse response = dynamoDbClient.putItem(
+            PutItemRequest.builder()
+                .tableName(userGraphTableName)
+                .item(item)
+                .build()
+        );
+        
+        assertThat(response.sdkHttpResponse().isSuccessful()).isTrue();
+    }
+    
+    @Test
+    public void testGetUserGraphConnection() {
+        // First put an item
+        String testUserId = "test-user-get-" + System.currentTimeMillis();
+        
+        Map<String, AttributeValue> item = new HashMap<>();
+        item.put("userId", AttributeValue.builder().s(testUserId).build());
+        item.put("friendId", AttributeValue.builder().s("friend-123").build());
+        
+        dynamoDbClient.putItem(
+            PutItemRequest.builder()
+                .tableName(userGraphTableName)
+                .item(item)
+                .build()
+        );
+        
+        // Now get it
+        Map<String, AttributeValue> key = new HashMap<>();
+        key.put("userId", AttributeValue.builder().s(testUserId).build());
+        
+        GetItemResponse response = dynamoDbClient.getItem(
+            GetItemRequest.builder()
+                .tableName(userGraphTableName)
+                .key(key)
+                .build()
+        );
+        
+        assertThat(response.hasItem()).isTrue();
+        assertThat(response.item().get("userId").s()).isEqualTo(testUserId);
+    }
+    
+    @Test
+    public void testPutPostItem() {
+        String postId = "post-" + System.currentTimeMillis();
+        long timestamp = System.currentTimeMillis();
+        
+        Map<String, AttributeValue> item = new HashMap<>();
+        item.put("postId", AttributeValue.builder().s(postId).build());
+        item.put("timestamp", AttributeValue.builder().n(String.valueOf(timestamp)).build());
+        item.put("userId", AttributeValue.builder().s("user-123").build());
+        item.put("content", AttributeValue.builder().s("This is a test post").build());
+        item.put("likes", AttributeValue.builder().n("0").build());
+        
+        PutItemResponse response = dynamoDbClient.putItem(
+            PutItemRequest.builder()
+                .tableName(postTableName)
+                .item(item)
+                .build()
+        );
+        
+        assertThat(response.sdkHttpResponse().isSuccessful()).isTrue();
+    }
+    
+    @Test
+    public void testQueryPostsByTimestamp() {
+        // Put multiple posts first
+        String userId = "user-query-test";
+        for (int i = 0; i < 3; i++) {
+            Map<String, AttributeValue> item = new HashMap<>();
+            item.put("postId", AttributeValue.builder().s("post-" + i).build());
+            item.put("timestamp", AttributeValue.builder().n(String.valueOf(System.currentTimeMillis() + i)).build());
+            item.put("userId", AttributeValue.builder().s(userId).build());
+            
+            dynamoDbClient.putItem(
+                PutItemRequest.builder()
+                    .tableName(postTableName)
+                    .item(item)
+                    .build()
+            );
+        }
+        
+        // Query using GSI
+        QueryResponse response = dynamoDbClient.query(
+            QueryRequest.builder()
+                .tableName(postTableName)
+                .indexName("UserPostsIndex")
+                .keyConditionExpression("userId = :userId")
+                .expressionAttributeValues(Map.of(
+                    ":userId", AttributeValue.builder().s(userId).build()
+                ))
+                .build()
+        );
+        
+        assertThat(response.count()).isGreaterThanOrEqualTo(3);
+    }
+    
+    @Test
+    public void testBatchWriteToUserGraph() {
+        List<WriteRequest> writeRequests = new ArrayList<>();
+        
+        for (int i = 0; i < 10; i++) {
+            Map<String, AttributeValue> item = new HashMap<>();
+            item.put("userId", AttributeValue.builder().s("batch-user-" + i).build());
+            item.put("friendId", AttributeValue.builder().s("friend-" + i).build());
+            
+            writeRequests.add(WriteRequest.builder()
+                .putRequest(PutRequest.builder().item(item).build())
+                .build());
+        }
+        
+        BatchWriteItemResponse response = dynamoDbClient.batchWriteItem(
+            BatchWriteItemRequest.builder()
+                .requestItems(Map.of(userGraphTableName, writeRequests))
+                .build()
+        );
+        
+        assertThat(response.sdkHttpResponse().isSuccessful()).isTrue();
+    }
+    
+    @Test
+    public void testUpdatePostLikes() {
+        String postId = "post-likes-" + System.currentTimeMillis();
+        long timestamp = System.currentTimeMillis();
+        
+        // Create post
+        Map<String, AttributeValue> item = new HashMap<>();
+        item.put("postId", AttributeValue.builder().s(postId).build());
+        item.put("timestamp", AttributeValue.builder().n(String.valueOf(timestamp)).build());
+        item.put("likes", AttributeValue.builder().n("0").build());
+        
+        dynamoDbClient.putItem(
+            PutItemRequest.builder()
+                .tableName(postTableName)
+                .item(item)
+                .build()
+        );
+        
+        // Update likes
+        Map<String, AttributeValue> key = new HashMap<>();
+        key.put("postId", AttributeValue.builder().s(postId).build());
+        key.put("timestamp", AttributeValue.builder().n(String.valueOf(timestamp)).build());
+        
+        UpdateItemResponse response = dynamoDbClient.updateItem(
+            UpdateItemRequest.builder()
+                .tableName(postTableName)
+                .key(key)
+                .updateExpression("SET likes = likes + :inc")
+                .expressionAttributeValues(Map.of(
+                    ":inc", AttributeValue.builder().n("1").build()
+                ))
+                .returnValues(ReturnValue.ALL_NEW)
+                .build()
+        );
+        
+        assertThat(response.attributes().get("likes").n()).isEqualTo("1");
+    }
+    
+    @Test
+    public void testScanUserGraphTable() {
+        ScanResponse response = dynamoDbClient.scan(
+            ScanRequest.builder()
+                .tableName(userGraphTableName)
+                .limit(10)
+                .build()
+        );
+        
+        assertThat(response.sdkHttpResponse().isSuccessful()).isTrue();
+        assertThat(response.items()).isNotNull();
+    }
 
-        TapStack stack = new TapStack(app, "TapStackIntegration", TapStackProps.builder()
-                .environmentSuffix("integration")
-                .build(), null);
+    // ==================== S3 Integration Tests ====================
+    
+    @Test
+    public void testS3MediaBucketExists() {
+        HeadBucketResponse response = s3Client.headBucket(
+            HeadBucketRequest.builder()
+                .bucket(mediaBucketName)
+                .build()
+        );
+        
+        assertThat(response.sdkHttpResponse().isSuccessful()).isTrue();
+    }
+    
+    @Test
+    public void testUploadImageToS3() {
+        String key = "test-images/test-" + System.currentTimeMillis() + ".jpg";
+        String content = "fake image data";
+        
+        PutObjectResponse response = s3Client.putObject(
+            PutObjectRequest.builder()
+                .bucket(mediaBucketName)
+                .key(key)
+                .contentType("image/jpeg")
+                .build(),
+            RequestBody.fromString(content)
+        );
+        
+        assertThat(response.sdkHttpResponse().isSuccessful()).isTrue();
+        assertThat(response.eTag()).isNotNull();
+    }
+    
+    @Test
+    public void testUploadVideoToS3() {
+        String key = "test-videos/test-" + System.currentTimeMillis() + ".mp4";
+        byte[] videoData = new byte[1024]; // Fake video data
+        
+        PutObjectResponse response = s3Client.putObject(
+            PutObjectRequest.builder()
+                .bucket(mediaBucketName)
+                .key(key)
+                .contentType("video/mp4")
+                .build(),
+            RequestBody.fromBytes(videoData)
+        );
+        
+        assertThat(response.sdkHttpResponse().isSuccessful()).isTrue();
+    }
+    
+    @Test
+    public void testGetObjectFromS3() throws Exception {
+        // First upload
+        String key = "test-get/test-" + System.currentTimeMillis() + ".txt";
+        String content = "test content for retrieval";
+        
+        s3Client.putObject(
+            PutObjectRequest.builder()
+                .bucket(mediaBucketName)
+                .key(key)
+                .build(),
+            RequestBody.fromString(content)
+        );
+        
+        // Now get it
+        GetObjectResponse response = s3Client.getObject(
+            GetObjectRequest.builder()
+                .bucket(mediaBucketName)
+                .key(key)
+                .build()
+        ).response();
+        
+        assertThat(response.sdkHttpResponse().isSuccessful()).isTrue();
+        assertThat(response.contentLength()).isGreaterThan(0L);
+    }
+    
+    @Test
+    public void testListObjectsInS3() {
+        ListObjectsV2Response response = s3Client.listObjectsV2(
+            ListObjectsV2Request.builder()
+                .bucket(mediaBucketName)
+                .maxKeys(10)
+                .build()
+        );
+        
+        assertThat(response.sdkHttpResponse().isSuccessful()).isTrue();
+        assertThat(response.contents()).isNotNull();
+    }
+    
+    @Test
+    public void testDeleteObjectFromS3() {
+        // First upload
+        String key = "test-delete/test-" + System.currentTimeMillis() + ".txt";
+        
+        s3Client.putObject(
+            PutObjectRequest.builder()
+                .bucket(mediaBucketName)
+                .key(key)
+                .build(),
+            RequestBody.fromString("to be deleted")
+        );
+        
+        // Now delete
+        DeleteObjectResponse response = s3Client.deleteObject(
+            DeleteObjectRequest.builder()
+                .bucket(mediaBucketName)
+                .key(key)
+                .build()
+        );
+        
+        assertThat(response.sdkHttpResponse().isSuccessful()).isTrue();
+    }
+    
+    @Test
+    public void testS3BucketVersioning() {
+        GetBucketVersioningResponse response = s3Client.getBucketVersioning(
+            GetBucketVersioningRequest.builder()
+                .bucket(mediaBucketName)
+                .build()
+        );
+        
+        assertThat(response.status()).isEqualTo(BucketVersioningStatus.ENABLED);
+    }
+    
+    @Test
+    public void testS3BucketEncryption() {
+        GetBucketEncryptionResponse response = s3Client.getBucketEncryption(
+            GetBucketEncryptionRequest.builder()
+                .bucket(mediaBucketName)
+                .build()
+        );
+        
+        assertThat(response.serverSideEncryptionConfiguration()).isNotNull();
+    }
 
-        Template template = Template.fromStack(stack);
+    // ==================== Redis/ElastiCache Integration Tests ====================
+    
+    @Test
+    public void testRedisClusterExists() {
+        DescribeReplicationGroupsResponse response = elastiCacheClient.describeReplicationGroups(
+            DescribeReplicationGroupsRequest.builder()
+                .replicationGroupId("social-platform-redis")
+                .build()
+        );
+        
+        assertThat(response.replicationGroups()).isNotEmpty();
+        assertThat(response.replicationGroups().get(0).status()).isEqualTo("available");
+    }
+    
+    @Test
+    public void testRedisSetAndGet() {
+        try (Jedis jedis = jedisPool.getResource()) {
+            String key = "test-key-" + System.currentTimeMillis();
+            String value = "test-value";
+            
+            String setResult = jedis.set(key, value);
+            assertThat(setResult).isEqualTo("OK");
+            
+            String getValue = jedis.get(key);
+            assertThat(getValue).isEqualTo(value);
+        }
+    }
+    
+    @Test
+    public void testRedisCacheFeedData() {
+        try (Jedis jedis = jedisPool.getResource()) {
+            String userId = "user-123";
+            String feedKey = "feed:" + userId;
+            String feedData = "{\"posts\": [\"post1\", \"post2\", \"post3\"]}";
+            
+            jedis.setex(feedKey, 300, feedData); // 5 minute TTL
+            
+            String cached = jedis.get(feedKey);
+            assertThat(cached).isEqualTo(feedData);
+            
+            Long ttl = jedis.ttl(feedKey);
+            assertThat(ttl).isGreaterThan(0L);
+        }
+    }
+    
+    @Test
+    public void testRedisHashOperations() {
+        try (Jedis jedis = jedisPool.getResource()) {
+            String hashKey = "user:session:" + System.currentTimeMillis();
+            
+            jedis.hset(hashKey, "userId", "user-456");
+            jedis.hset(hashKey, "sessionToken", "token-xyz");
+            jedis.hset(hashKey, "loginTime", String.valueOf(System.currentTimeMillis()));
+            
+            Map<String, String> session = jedis.hgetAll(hashKey);
+            assertThat(session).hasSize(3);
+            assertThat(session.get("userId")).isEqualTo("user-456");
+        }
+    }
+    
+    @Test
+    public void testRedisListOperations() {
+        try (Jedis jedis = jedisPool.getResource()) {
+            String listKey = "notifications:" + System.currentTimeMillis();
+            
+            jedis.lpush(listKey, "notification1", "notification2", "notification3");
+            
+            Long length = jedis.llen(listKey);
+            assertThat(length).isEqualTo(3L);
+            
+            String firstItem = jedis.rpop(listKey);
+            assertThat(firstItem).isEqualTo("notification1");
+        }
+    }
+    
+    @Test
+    public void testRedisSortedSetForLeaderboard() {
+        try (Jedis jedis = jedisPool.getResource()) {
+            String leaderboardKey = "leaderboard:" + System.currentTimeMillis();
+            
+            jedis.zadd(leaderboardKey, 100, "user1");
+            jedis.zadd(leaderboardKey, 250, "user2");
+            jedis.zadd(leaderboardKey, 175, "user3");
+            
+            List<String> topUsers = jedis.zrevrange(leaderboardKey, 0, 2);
+            assertThat(topUsers).hasSize(3);
+            assertThat(topUsers.get(0)).isEqualTo("user2"); // Highest score
+        }
+    }
+    
+    @Test
+    public void testRedisExpiration() throws InterruptedException {
+        try (Jedis jedis = jedisPool.getResource()) {
+            String key = "expire-test-" + System.currentTimeMillis();
+            
+            jedis.setex(key, 2, "expires soon");
+            assertThat(jedis.exists(key)).isTrue();
+            
+            TimeUnit.SECONDS.sleep(3);
+            
+            assertThat(jedis.exists(key)).isFalse();
+        }
+    }
 
-        // Verify basic stack structure
-        assertThat(stack).isNotNull();
-        assertThat(template).isNotNull();
+    // Load Balancer Integration Tests 
+    
+    @Test
+    public void testALBExists() {
+        var response = elbClient.describeLoadBalancers(
+            DescribeLoadBalancersRequest.builder().build()
+        );
+        
+        boolean albFound = response.loadBalancers().stream()
+            .anyMatch(lb -> lb.loadBalancerName().contains(environmentSuffix));
+        
+        assertThat(albFound).isTrue();
+    }
+    
+    @Test
+    public void testALBHealthCheck() throws Exception {
+        HttpClient client = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .build();
+            
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("http://" + albDnsName))
+            .timeout(Duration.ofSeconds(10))
+            .GET()
+            .build();
+        
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        
+        // Should get some response (even if 503 initially during warmup)
+        assertThat(response.statusCode()).isIn(200, 503, 504);
+    }
 
-        // When nested stacks are added, additional assertions would go here
-        // For example:
-        // template.hasResourceProperties("AWS::CloudFormation::Stack", Map.of(...));
+    // ==================== CloudFront Integration Tests ====================
+    
+    @Test
+    public void testCloudFrontDistributionExists() {
+        assertThat(cloudFrontDomain).isNotNull();
+        assertThat(cloudFrontDomain).contains("cloudfront.net");
+    }
+    
+    @Test
+    public void testCloudFrontDistributionStatus() throws Exception {
+        HttpClient client = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .build();
+            
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://" + cloudFrontDomain))
+            .timeout(Duration.ofSeconds(10))
+            .GET()
+            .build();
+        
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        
+        // CloudFront should be accessible
+        assertThat(response.statusCode()).isIn(200, 403, 404); // 403 if no default object
+    }
+
+    // ==================== SageMaker Integration Tests ====================
+    
+    @Test
+    public void testFeedRankingEndpointExists() {
+        DescribeEndpointResponse response = sageMakerClient.describeEndpoint(
+            DescribeEndpointRequest.builder()
+                .endpointName(feedRankingEndpointName)
+                .build()
+        );
+        
+        assertThat(response.endpointName()).isEqualTo(feedRankingEndpointName);
+        assertThat(response.endpointStatus().toString()).isIn("InService", "Creating", "Updating");
+    }
+    
+    @Test
+    public void testViralDetectionEndpointExists() {
+        DescribeEndpointResponse response = sageMakerClient.describeEndpoint(
+            DescribeEndpointRequest.builder()
+                .endpointName(viralDetectionEndpointName)
+                .build()
+        );
+        
+        assertThat(response.endpointName()).isEqualTo(viralDetectionEndpointName);
+        assertThat(response.endpointStatus().toString()).isIn("InService", "Creating", "Updating");
+    }
+
+    // ==================== WebSocket API Integration Tests ====================
+    
+    @Test
+    public void testWebSocketApiEndpointExists() {
+        assertThat(webSocketApiUrl).isNotNull();
+        assertThat(webSocketApiUrl).contains("amazonaws.com");
+    }
+
+    // ==================== Cross-Service Integration Tests ====================
+    
+    @Test
+    public void testCompletePostWorkflow() {
+        // 1. Create post in DynamoDB
+        String postId = "workflow-post-" + System.currentTimeMillis();
+        long timestamp = System.currentTimeMillis();
+        
+        Map<String, AttributeValue> item = new HashMap<>();
+        item.put("postId", AttributeValue.builder().s(postId).build());
+        item.put("timestamp", AttributeValue.builder().n(String.valueOf(timestamp)).build());
+        item.put("userId", AttributeValue.builder().s("workflow-user").build());
+        item.put("content", AttributeValue.builder().s("Complete workflow test").build());
+        item.put("imageUrl", AttributeValue.builder().s("test-images/post.jpg").build());
+        
+        dynamoDbClient.putItem(
+            PutItemRequest.builder()
+                .tableName(postTableName)
+                .item(item)
+                .build()
+        );
+        
+        // 2. Upload associated image to S3
+        s3Client.putObject(
+            PutObjectRequest.builder()
+                .bucket(mediaBucketName)
+                .key("test-images/post.jpg")
+                .contentType("image/jpeg")
+                .build(),
+            RequestBody.fromString("fake image data")
+        );
+        
+        // 3. Cache post in Redis
+        try (Jedis jedis = jedisPool.getResource()) {
+            String cacheKey = "post:" + postId;
+            jedis.setex(cacheKey, 300, postId);
+            
+            assertThat(jedis.exists(cacheKey)).isTrue();
+        }
+        
+        // 4. Verify post retrieval
+        Map<String, AttributeValue> key = new HashMap<>();
+        key.put("postId", AttributeValue.builder().s(postId).build());
+        key.put("timestamp", AttributeValue.builder().n(String.valueOf(timestamp)).build());
+        
+        GetItemResponse getResponse = dynamoDbClient.getItem(
+            GetItemRequest.builder()
+                .tableName(postTableName)
+                .key(key)
+                .build()
+        );
+        
+        assertThat(getResponse.hasItem()).isTrue();
+    }
+    
+    @Test
+    public void testSocialGraphTraversal() {
+        String userId = "graph-user-" + System.currentTimeMillis();
+        
+        // Create multiple friend connections
+        for (int i = 0; i < 5; i++) {
+            Map<String, AttributeValue> item = new HashMap<>();
+            item.put("userId", AttributeValue.builder().s(userId).build());
+            item.put("friendId", AttributeValue.builder().s("friend-" + i).build());
+            item.put("connectionType", AttributeValue.builder().s("friend").build());
+            
+            dynamoDbClient.putItem(
+                PutItemRequest.builder()
+                    .tableName(userGraphTableName)
+                    .item(item)
+                    .build()
+            );
+        }
+        
+        // Query all friends
+        Map<String, AttributeValue> key = new HashMap<>();
+        key.put("userId", AttributeValue.builder().s(userId).build());
+        
+        QueryResponse response = dynamoDbClient.query(
+            QueryRequest.builder()
+                .tableName(userGraphTableName)
+                .keyConditionExpression("userId = :userId")
+                .expressionAttributeValues(Map.of(
+                    ":userId", AttributeValue.builder().s(userId).build()
+                ))
+                .build()
+        );
+        
+        assertThat(response.count()).isEqualTo(5);
+    }
+    
+    @Test
+    public void testFeedGenerationPipeline() {
+        String userId = "feed-user-" + System.currentTimeMillis();
+        
+        // 1. Get user's friends from graph
+        // 2. Query posts from friends
+        // 3. Cache feed in Redis
+        
+        try (Jedis jedis = jedisPool.getResource()) {
+            String feedKey = "feed:" + userId;
+            List<String> feedPosts = Arrays.asList("post1", "post2", "post3");
+            
+            // Cache feed
+            jedis.rpush(feedKey, feedPosts.toArray(new String[0]));
+            jedis.expire(feedKey, 300);
+            
+            // Verify cached feed
+            List<String> cachedFeed = jedis.lrange(feedKey, 0, -1);
+            assertThat(cachedFeed).hasSize(3);
+        }
+    }
+    
+    @Test
+    public void testMediaProcessingPipeline() {
+        String originalKey = "uploads/" + System.currentTimeMillis() + ".jpg";
+        String processedKey = "processed/" + System.currentTimeMillis() + ".jpg";
+        
+        // 1. Upload original
+        s3Client.putObject(
+            PutObjectRequest.builder()
+                .bucket(mediaBucketName)
+                .key(originalKey)
+                .build(),
+            RequestBody.fromString("original image")
+        );
+        
+        // 2. Simulate processing (in real system, Lambda would do this)
+        // 3. Upload processed version
+        s3Client.putObject(
+            PutObjectRequest.builder()
+                .bucket(mediaBucketName)
+                .key(processedKey)
+                .build(),
+            RequestBody.fromString("processed image")
+        );
+        
+        // 4. Verify both exist
+        HeadObjectResponse original = s3Client.headObject(
+            HeadObjectRequest.builder()
+                .bucket(mediaBucketName)
+                .key(originalKey)
+                .build()
+        );
+        
+        HeadObjectResponse processed = s3Client.headObject(
+            HeadObjectRequest.builder()
+                .bucket(mediaBucketName)
+                .key(processedKey)
+                .build()
+        );
+        
+        assertThat(original.sdkHttpResponse().isSuccessful()).isTrue();
+        assertThat(processed.sdkHttpResponse().isSuccessful()).isTrue();
+    }
+    
+    @Test
+    public void testHighVolumePostIngestion() {
+        String userId = "bulk-user-" + System.currentTimeMillis();
+        int postCount = 100;
+        
+        // Simulate high volume post creation
+        for (int i = 0; i < postCount; i++) {
+            Map<String, AttributeValue> item = new HashMap<>();
+            item.put("postId", AttributeValue.builder().s("bulk-post-" + i).build());
+            item.put("timestamp", AttributeValue.builder().n(String.valueOf(System.currentTimeMillis() + i)).build());
+            item.put("userId", AttributeValue.builder().s(userId).build());
+            item.put("content", AttributeValue.builder().s("Bulk post " + i).build());
+            
+            dynamoDbClient.putItem(
+                PutItemRequest.builder()
+                    .tableName(postTableName)
+                    .item(item)
+                    .build()
+            );
+        }
+        
+        // Verify posts were created
+        QueryResponse response = dynamoDbClient.query(
+            QueryRequest.builder()
+                .tableName(postTableName)
+                .indexName("UserPostsIndex")
+                .keyConditionExpression("userId = :userId")
+                .expressionAttributeValues(Map.of(
+                    ":userId", AttributeValue.builder().s(userId).build()
+                ))
+                .build()
+        );
+        
+        assertThat(response.count()).isGreaterThanOrEqualTo(postCount);
+    }
+    
+    @Test
+    public void testStackOutputsCompleteness() {
+        assertThat(stackOutputs).isNotEmpty();
+        assertThat(albDnsName).isNotNull();
+        assertThat(webSocketApiUrl).isNotNull();
+        assertThat(cloudFrontDomain).isNotNull();
+        assertThat(mediaBucketName).isNotNull();
+        assertThat(auroraWriteEndpoint).isNotNull();
+        assertThat(auroraReadEndpoint).isNotNull();
+        assertThat(userGraphTableName).isNotNull();
+        assertThat(postTableName).isNotNull();
+        assertThat(redisEndpoint).isNotNull();
+        assertThat(feedRankingEndpointName).isNotNull();
+        assertThat(viralDetectionEndpointName).isNotNull();
     }
 }

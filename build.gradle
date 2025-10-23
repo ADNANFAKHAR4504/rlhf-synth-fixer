@@ -186,6 +186,16 @@ dependencies {
     integrationTestImplementation 'software.amazon.awssdk:ecs'
     integrationTestImplementation 'software.amazon.awssdk:servicediscovery'
     integrationTestImplementation 'software.amazon.awssdk:kinesis'
+    // ElastiCache for Redis cluster testing
+    integrationTestImplementation 'software.amazon.awssdk:elasticache'
+    // SageMaker for ML endpoint testing
+    integrationTestImplementation 'software.amazon.awssdk:sagemaker'
+    // CloudFront for CDN testing
+    integrationTestImplementation 'software.amazon.awssdk:cloudfront'
+    // Jedis - Redis client library for ElastiCache integration testing
+    // This is NOT an AWS SDK - it's a Java Redis client
+    integrationTestImplementation 'redis.clients:jedis:5.0.0'
+    
 
     // Additional AWS SDK dependencies for comprehensive integration tests
     integrationTestImplementation 'software.amazon.awssdk:kendra'
