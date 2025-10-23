@@ -9,11 +9,34 @@ terraform {
   }
 }
 
+# Provider aliases for multi-region deployment
+provider "aws" {
+  alias  = "us_east_1"
+  region = var.us_east_1_region
+}
+
+provider "aws" {
+  alias  = "us_west_2"
+  region = var.us_west_2_region
+}
+
 # Variables
 variable "aws_region" {
   description = "Primary AWS region (used by provider.tf)"
   type        = string
   default     = "us-east-1"
+}
+
+variable "us_east_1_region" {
+  description = "Region for aliased provider aws.us_east_1"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "us_west_2_region" {
+  description = "Region for aliased provider aws.us_west_2"
+  type        = string
+  default     = "us-west-2"
 }
 
 variable "app_name" {

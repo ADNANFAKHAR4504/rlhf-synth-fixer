@@ -1,14 +1,3 @@
-# Provider aliases for multi-region deployment
-provider "aws" {
-  alias  = "us_east_1"
-  region = var.us_east_1_region
-}
-
-provider "aws" {
-  alias  = "us_west_2"
-  region = var.us_west_2_region
-}
-
 # Variables
 variable "aws_region" {
   description = "Primary AWS region (used by provider.tf)"
