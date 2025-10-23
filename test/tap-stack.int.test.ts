@@ -8,7 +8,7 @@ import { DescribeExecutionCommand, SFNClient, StartExecutionCommand } from "@aws
 import * as fs from 'fs';
 import { TextDecoder } from 'util';
 
-// Function to load CloudFormation outputs from file or environment variables
+// Load CloudFormation outputs from file or environment variables
 const loadCfnOutputs = () => {
   let cfnOutputs: any = {};
 

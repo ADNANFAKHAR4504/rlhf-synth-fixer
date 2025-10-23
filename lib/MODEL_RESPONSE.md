@@ -1540,7 +1540,6 @@ aws lambda invoke \
 ### 4. Test the Workflow
 
 ```bash
-# Test with a single report generation
 aws stepfunctions start-execution \
   --state-machine-arn arn:aws:states:us-east-1:ACCOUNT:stateMachine:regulatory-reporting-workflow-prod \
   --input '{"jurisdiction":"EU","report_type":"TRANSACTION"}' \
