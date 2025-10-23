@@ -273,8 +273,8 @@ describe('Stack Structure', () => {
     stack = new TapStack(app, 'TestTapStackCI', {
       environmentSuffix: 'test',
       stateBucket: 'test-state-bucket',
-      stateBucketRegion: 'eu-central-1',
-      awsRegion: 'eu-central-1',
+      stateBucketRegion: 'us-east-1',
+      awsRegion: 'us-east-1',
     });
     synthesized = Testing.synth(stack);
 
@@ -282,8 +282,10 @@ describe('Stack Structure', () => {
     expect(stack).toBeDefined();
     expect(synthesized).toBeDefined();
 
-    // In CI mode, resources should have timestamp suffixes
+    // In CI mode, resources should have timestamp suffixes and CloudTrail should be skipped
     expect(synthesized).toContain('test');
+    // CloudTrail should not be created in CI mode (to avoid trail limits)
+    expect(synthesized).not.toContain('aws_cloudtrail');
 
     // Restore original env var
     if (originalCI !== undefined) {
@@ -304,8 +306,8 @@ describe('Stack Structure', () => {
     stack = new TapStack(app, 'TestTapStackLocal', {
       environmentSuffix: 'test',
       stateBucket: 'test-state-bucket',
-      stateBucketRegion: 'eu-central-1',
-      awsRegion: 'eu-central-1',
+      stateBucketRegion: 'us-east-1',
+      awsRegion: 'us-east-1',
     });
     synthesized = Testing.synth(stack);
 
@@ -313,7 +315,8 @@ describe('Stack Structure', () => {
     expect(stack).toBeDefined();
     expect(synthesized).toBeDefined();
 
-    // Restore original env var
+    // In local mode, CloudTrail should be created
+    expect(synthesized).toContain('aws_cloudtrail');    // Restore original env var
     if (originalCI !== undefined) {
       process.env.CI = originalCI;
     }

@@ -1004,36 +1004,38 @@ export class TapStack extends TerraformStack {
       provider: primaryProvider,
     });
 
-    // Create CloudTrail
-    const cloudtrail = new Cloudtrail(this, 'cloudtrail', {
-      name: `hipaa-trail-${deployVersion}-${environmentSuffix}${uniqueSuffix}`,
-      s3BucketName: cloudtrailBucket.id,
-      enableLogFileValidation: true,
-      isMultiRegionTrail: true,
-      includeGlobalServiceEvents: true,
-      kmsKeyId: kmsKey.arn,
-      enableLogging: true,
-      isOrganizationTrail: false,
-      eventSelector: [
-        {
-          readWriteType: 'All',
-          includeManagementEvents: true,
-          dataResource: [
-            {
-              type: 'AWS::S3::Object',
-              values: [`${dataBucket.arn}/*`],
-            },
-          ],
+    // Create CloudTrail (skip in CI to avoid trail limit)
+    if (!process.env.CI) {
+      const cloudtrail = new Cloudtrail(this, 'cloudtrail', {
+        name: `hipaa-trail-${deployVersion}-${environmentSuffix}${uniqueSuffix}`,
+        s3BucketName: cloudtrailBucket.id,
+        enableLogFileValidation: true,
+        isMultiRegionTrail: true,
+        includeGlobalServiceEvents: true,
+        kmsKeyId: kmsKey.arn,
+        enableLogging: true,
+        isOrganizationTrail: false,
+        eventSelector: [
+          {
+            readWriteType: 'All',
+            includeManagementEvents: true,
+            dataResource: [
+              {
+                type: 'AWS::S3::Object',
+                values: [`${dataBucket.arn}/*`],
+              },
+            ],
+          },
+        ],
+        tags: {
+          Name: `hipaa-trail-${deployVersion}-${environmentSuffix}${uniqueSuffix}`,
+          Compliance: 'HIPAA',
+          Environment: environmentSuffix,
         },
-      ],
-      tags: {
-        Name: `hipaa-trail-${deployVersion}-${environmentSuffix}${uniqueSuffix}`,
-        Compliance: 'HIPAA',
-        Environment: environmentSuffix,
-      },
-      provider: primaryProvider,
-    });
-    cloudtrail.overrideLogicalId(`cloudtrail-${deployVersion}`);
+        provider: primaryProvider,
+      });
+      cloudtrail.overrideLogicalId(`cloudtrail-${deployVersion}`);
+    }
 
     // === BACKUP ===
     // Create IAM role for AWS Backup
