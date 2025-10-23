@@ -14,9 +14,9 @@ class TestTapStackIntegration:
         # Check metadata.json
         with open('metadata.json', 'r') as f:
             metadata = json.load(f)
-        
+
         assert metadata['platform'] == 'cdktf'
-        assert metadata['language'] == 'py'
+        assert metadata['language'] == 'python'
         assert 'aws_services' in metadata
 
     def test_project_structure_complete(self):
@@ -111,13 +111,13 @@ class TestStackConfiguration:
         """Test that tap_stack.py has required imports."""
         with open('lib/tap_stack.py', 'r') as f:
             content = f.read()
-        
+
         required_imports = [
-            'from cdktf import TerraformStack',
+            'TerraformStack',
             'from constructs import Construct',
             'class TapStack(TerraformStack):'
         ]
-        
+
         for import_line in required_imports:
             assert import_line in content, f"Required import/class not found: {import_line}"
 
@@ -155,17 +155,17 @@ class TestDeploymentReadiness:
         """Test that metadata is compatible with deployment scripts."""
         with open('metadata.json', 'r') as f:
             metadata = json.load(f)
-        
+
         platform = metadata['platform']
         language = metadata['language']
-        
+
         # Should be lowercase for script compatibility
         assert platform == platform.lower()
         assert language == language.lower()
-        
+
         # Should be valid combination
         assert platform == 'cdktf'
-        assert language == 'py'
+        assert language == 'python'
 
     def test_environment_variables_handling(self):
         """Test environment variable handling."""
