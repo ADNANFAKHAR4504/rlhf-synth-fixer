@@ -65,6 +65,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/apigateway v1.35.7 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.258.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/kms v1.46.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/rds v1.108.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/charmbracelet/bubbles v0.16.1 // indirect
