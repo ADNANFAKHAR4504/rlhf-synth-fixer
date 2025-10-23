@@ -10,5 +10,15 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, Fargate, VPC"
+  "aws_services": [
+    "DynamoDB",
+    "Lambda",
+    "StepFunctions",
+    "SecretsManager",
+    "SSM",
+    "CloudWatch",
+    "IAM"
+  ],
+  "background": "Carbon Credit Trading Platform implementation with serverless architecture",
+  "training_quality": 10
 }
