@@ -72,7 +72,7 @@ func main() {
 		publicSubnet1, err := ec2.NewSubnet(ctx, fmt.Sprintf("patient-api-public-subnet-1-%s", environmentSuffix), &ec2.SubnetArgs{
 			VpcId:               vpcId,
 			CidrBlock:           pulumi.String("172.31.80.0/24"),
-			AvailabilityZone:    pulumi.String("sa-east-1a"),
+			AvailabilityZone:    pulumi.String("us-east-1a"),
 			MapPublicIpOnLaunch: pulumi.Bool(true),
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String(fmt.Sprintf("patient-api-public-subnet-1-%s", environmentSuffix)),
@@ -86,7 +86,7 @@ func main() {
 		publicSubnet2, err := ec2.NewSubnet(ctx, fmt.Sprintf("patient-api-public-subnet-2-%s", environmentSuffix), &ec2.SubnetArgs{
 			VpcId:               vpcId,
 			CidrBlock:           pulumi.String("172.31.81.0/24"),
-			AvailabilityZone:    pulumi.String("sa-east-1b"),
+			AvailabilityZone:    pulumi.String("us-east-1b"),
 			MapPublicIpOnLaunch: pulumi.Bool(true),
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String(fmt.Sprintf("patient-api-public-subnet-2-%s", environmentSuffix)),
@@ -101,7 +101,7 @@ func main() {
 		privateSubnet1, err := ec2.NewSubnet(ctx, fmt.Sprintf("patient-api-private-subnet-1-%s", environmentSuffix), &ec2.SubnetArgs{
 			VpcId:            vpcId,
 			CidrBlock:        pulumi.String("172.31.90.0/24"),
-			AvailabilityZone: pulumi.String("sa-east-1a"),
+			AvailabilityZone: pulumi.String("us-east-1a"),
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String(fmt.Sprintf("patient-api-private-subnet-1-%s", environmentSuffix)),
 				"Environment": pulumi.String(environmentSuffix),
@@ -114,7 +114,7 @@ func main() {
 		privateSubnet2, err := ec2.NewSubnet(ctx, fmt.Sprintf("patient-api-private-subnet-2-%s", environmentSuffix), &ec2.SubnetArgs{
 			VpcId:            vpcId,
 			CidrBlock:        pulumi.String("172.31.91.0/24"),
-			AvailabilityZone: pulumi.String("sa-east-1b"),
+			AvailabilityZone: pulumi.String("us-east-1b"),
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String(fmt.Sprintf("patient-api-private-subnet-2-%s", environmentSuffix)),
 				"Environment": pulumi.String(environmentSuffix),
@@ -369,23 +369,23 @@ func main() {
 
 		// Create ElastiCache Redis cluster
 		redisCluster, err := elasticache.NewReplicationGroup(ctx, fmt.Sprintf("patient-redis-cluster-%s", environmentSuffix), &elasticache.ReplicationGroupArgs{
-			ReplicationGroupId: pulumi.String(fmt.Sprintf("patient-redis-%s", environmentSuffix)),
-			Description:        pulumi.String("Patient session management cache"),
-			Engine:                      pulumi.String("redis"),
-			EngineVersion:               pulumi.String("7.0"),
-			NodeType:                    pulumi.String("cache.t3.micro"),
-			NumCacheClusters:            pulumi.Int(2),
-			ParameterGroupName:          cacheParamGroup.Name,
-			SubnetGroupName:             cacheSubnetGroup.Name,
-			SecurityGroupIds:            pulumi.StringArray{cacheSecurityGroup.ID()},
-			AtRestEncryptionEnabled:     pulumi.Bool(true),
-			TransitEncryptionEnabled:    pulumi.Bool(true),
-			KmsKeyId:                    kmsKey.Arn,
-			AutomaticFailoverEnabled:    pulumi.Bool(true),
-			MultiAzEnabled:         pulumi.Bool(true),
-			SnapshotRetentionLimit: pulumi.Int(5),
-			SnapshotWindow:         pulumi.String("03:00-05:00"),
-			MaintenanceWindow:      pulumi.String("mon:05:00-mon:07:00"),
+			ReplicationGroupId:       pulumi.String(fmt.Sprintf("patient-redis-%s", environmentSuffix)),
+			Description:              pulumi.String("Patient session management cache"),
+			Engine:                   pulumi.String("redis"),
+			EngineVersion:            pulumi.String("7.0"),
+			NodeType:                 pulumi.String("cache.t3.micro"),
+			NumCacheClusters:         pulumi.Int(2),
+			ParameterGroupName:       cacheParamGroup.Name,
+			SubnetGroupName:          cacheSubnetGroup.Name,
+			SecurityGroupIds:         pulumi.StringArray{cacheSecurityGroup.ID()},
+			AtRestEncryptionEnabled:  pulumi.Bool(true),
+			TransitEncryptionEnabled: pulumi.Bool(true),
+			KmsKeyId:                 kmsKey.Arn,
+			AutomaticFailoverEnabled: pulumi.Bool(true),
+			MultiAzEnabled:           pulumi.Bool(true),
+			SnapshotRetentionLimit:   pulumi.Int(5),
+			SnapshotWindow:           pulumi.String("03:00-05:00"),
+			MaintenanceWindow:        pulumi.String("mon:05:00-mon:07:00"),
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String(fmt.Sprintf("patient-redis-cluster-%s", environmentSuffix)),
 				"Environment": pulumi.String(environmentSuffix),
@@ -534,7 +534,7 @@ func main() {
 		ctx.Export("redisClusterEndpoint", redisCluster.PrimaryEndpointAddress)
 		ctx.Export("redisClusterPort", redisCluster.Port)
 		ctx.Export("dbSecretArn", dbSecret.Arn)
-		ctx.Export("apiGatewayUrl", pulumi.Sprintf("https://%s.execute-api.sa-east-1.amazonaws.com/%s", api.ID(), stage.StageName))
+		ctx.Export("apiGatewayUrl", pulumi.Sprintf("https://%s.execute-api.us-east-1.amazonaws.com/%s", api.ID(), stage.StageName))
 		ctx.Export("apiGatewayId", api.ID())
 		ctx.Export("usagePlanId", usagePlan.ID())
 
