@@ -1,6 +1,11 @@
 #!/bin/bash
 set -e
 
+DOCKER_IMAGE="motoserver/moto:latest"
+DOCKER_PORT="5001"
+SCRIPT_PATH=""
+SCRIPT_TYPE=""
+
 # Cleanup function to ensure moto-server container is stopped
 cleanup() {
   echo "Cleaning up Moto server Docker container..."
@@ -15,26 +20,27 @@ echo "=== IaC Analysis Job ==="
 
 # Start Moto server using Docker
 echo "Starting Moto server with Docker..."
-docker run --rm -d -p 5001:5000 --name moto-server motoserver/moto:latest
+docker run --rm -d -p $DOCKER_PORT:5000 --name moto-server $DOCKER_IMAGE
+
+# Function to check server readiness
+check_server_ready() {
+  for i in {1..30}; do
+    if curl -s http://127.0.0.1:$DOCKER_PORT/ >/dev/null 2>&1; then
+      echo "✅ Moto server is ready (attempt $i)"
+      return 0
+    else
+      echo "⏳ Waiting for Moto server... (attempt $i/30)"
+      sleep 1
+    fi
+  done
+  return 1
+}
 
 # Wait for server to be ready
 echo "Waiting for Moto server to start..."
-for i in {1..30}; do
-  if curl -s http://127.0.0.1:5001/ >/dev/null 2>&1; then
-    echo "✅ Moto server is ready (attempt $i)"
-    break
-  else
-    echo "⏳ Waiting for Moto server... (attempt $i/30)"
-    sleep 1
-  fi
-done
-
-# Verify server is actually running
-if ! curl -s http://127.0.0.1:5001/ >/dev/null 2>&1; then
+if ! check_server_ready; then
   echo "❌ Moto server failed to start!"
-  echo "Docker container logs:"
   docker logs moto-server || echo "No container logs found"
-  echo "Docker container status:"
   docker ps -a --filter name=moto-server || echo "No container found"
   exit 1
 fi
@@ -55,18 +61,16 @@ fi
 
 echo "Found analysis script: $SCRIPT_PATH (type: $SCRIPT_TYPE)"
 
-# Run tests
-echo "Verifying Moto server is still running..."
-if ! curl -s http://127.0.0.1:5001/ >/dev/null 2>&1; then
+# Verify server is still running
+if ! curl -s http://127.0.0.1:$DOCKER_PORT/ >/dev/null 2>&1; then
   echo "❌ Moto server is not responding before tests!"
-  echo "Docker container logs:"
   docker logs moto-server || echo "No container logs found"
-  echo "Docker container status:"
   docker ps -a --filter name=moto-server || echo "No container found"
   exit 1
 fi
 echo "✅ Moto server is responsive"
 
+# Run tests
 echo "Running analysis tests..."
 python -m pytest test/test-analysis-*.py -v --tb=short --no-cov
 
@@ -80,6 +84,5 @@ else
 fi
 
 echo "✅ Analysis completed. Output saved to lib/analysis-results.txt"
-
 echo "=== Analysis job completed successfully ==="
 
