@@ -1,5 +1,5 @@
 {
-  "platform": "Pulumi",
+  "platform": "pulumi",
   "language": "go",
   "complexity": "medium",
   "turn_type": "single",
