@@ -1541,8 +1541,8 @@ class TapStack(TerraformStack):
         TerraformOutput(
             self,
             "redis_endpoint",
-            value=redis_cluster.configuration_endpoint_address,
-            description="ElastiCache Redis endpoint"
+            value=redis_cluster.primary_endpoint_address,
+            description="ElastiCache Redis primary endpoint"
         )
 
         TerraformOutput(
