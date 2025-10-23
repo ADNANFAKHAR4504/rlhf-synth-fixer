@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { describe, expect, test } from '@jest/globals';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
@@ -14,11 +15,7 @@ describe('TapStack CloudFormation Template', () => {
     template = JSON.parse(templateContent);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
-  });
+  // Integration tests are in a separate file
 
   describe('Template Structure', () => {
     test('should have valid CloudFormation format version', () => {
@@ -28,88 +25,120 @@ describe('TapStack CloudFormation Template', () => {
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
+        'Carbon Credit Trading Platform - Serverless Architecture with QLDB'
       );
-    });
-
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
     });
   });
 
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+    test('should have Environment parameter', () => {
+      expect(template.Parameters.Environment).toBeDefined();
     });
 
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    test('Environment parameter should have correct properties', () => {
+      const envParam = template.Parameters.Environment;
+      expect(envParam.Type).toBe('String');
+      expect(envParam.Default).toBe('dev');
+      expect(envParam.Description).toBe(
+        'Environment type for conditional resource configuration'
       );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
+      expect(envParam.AllowedValues).toEqual(['dev', 'staging', 'prod']);
     });
   });
 
   describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
-    });
-
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
-    });
-
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
-    });
-
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+    describe('LedgerTable', () => {
+      test('should have correct base configuration', () => {
+        const table = template.Resources.LedgerTable;
+        expect(table).toBeDefined();
+        expect(table.Type).toBe('AWS::DynamoDB::Table');
+        expect(table.Properties.TableName).toEqual({
+          'Fn::Sub': 'CarbonCreditLedger-${Environment}'
+        });
       });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
+
+      test('should have correct key schema and indexes', () => {
+        const table = template.Resources.LedgerTable;
+        const properties = table.Properties;
+
+        expect(properties.KeySchema).toEqual([
+          { AttributeName: 'RecordID', KeyType: 'HASH' },
+          { AttributeName: 'Version', KeyType: 'RANGE' }
+        ]);
+
+        expect(properties.GlobalSecondaryIndexes).toHaveLength(1);
+        expect(properties.GlobalSecondaryIndexes[0].IndexName).toBe('TransactionTimeIndex');
+      });
+
+      test('should have point-in-time recovery and streams enabled', () => {
+        const table = template.Resources.LedgerTable;
+        expect(table.Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled).toBe(true);
+        expect(table.Properties.StreamSpecification.StreamViewType).toBe('NEW_AND_OLD_IMAGES');
+      });
     });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
+    describe('DynamoDB Tables', () => {
+      test('TradeTable should have correct configuration', () => {
+        const table = template.Resources.TradeTable;
+        expect(table).toBeDefined();
+        expect(table.Properties.TableName).toEqual({
+          'Fn::Sub': 'CarbonCreditTradeTable-${Environment}'
+        });
+        expect(table.Properties.GlobalSecondaryIndexes).toHaveLength(2);
+      });
 
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
+      test('CertificateTable should have correct configuration', () => {
+        const table = template.Resources.CertificateTable;
+        expect(table).toBeDefined();
+        expect(table.Properties.TableName).toEqual({
+          'Fn::Sub': 'CarbonCreditCertificateTable-${Environment}'
+        });
+        expect(table.Properties.GlobalSecondaryIndexes).toHaveLength(2);
+      });
     });
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
+    describe('State Machines', () => {
+      test('should have initial and verification state machines', () => {
+        expect(template.Resources.InitialStateMachine).toBeDefined();
+        expect(template.Resources.VerificationStateMachine).toBeDefined();
+      });
 
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+      test('should have correct IAM role', () => {
+        const role = template.Resources.StateMachineRole;
+        expect(role).toBeDefined();
+        expect(role.Type).toBe('AWS::IAM::Role');
+        expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service)
+          .toBe('states.amazonaws.com');
+      });
+    });
+
+    describe('Lambda Function', () => {
+      test('should have API Gateway handler function', () => {
+        const func = template.Resources.ApiGatewayHandlerFunction;
+        expect(func).toBeDefined();
+        expect(func.Type).toBe('AWS::Lambda::Function');
+        expect(func.Properties.Runtime).toBe('nodejs20.x');
+      });
+
+      test('should have correct IAM role', () => {
+        const role = template.Resources.ApiGatewayHandlerRole;
+        expect(role).toBeDefined();
+        expect(role.Type).toBe('AWS::IAM::Role');
+        expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service)
+          .toBe('lambda.amazonaws.com');
+      });
     });
   });
 
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
+        'ApiGatewayHandlerArn',
+        'VerificationStateMachineArn',
+        'TradeTableName',
+        'CertificateTableName',
+        'LedgerTableName',
+        'LedgerTableArn'
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -117,43 +146,39 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
+    test('Lambda outputs should be correct', () => {
+      const output = template.Outputs.ApiGatewayHandlerArn;
+      expect(output.Description).toBe('ARN of the API Gateway handler Lambda function');
+      expect(output.Value).toEqual({ 
+        'Fn::GetAtt': ['ApiGatewayHandlerFunction', 'Arn'] 
       });
     });
 
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
-      expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
+    test('State Machine output should be correct', () => {
+      const output = template.Outputs.VerificationStateMachineArn;
+      expect(output.Description).toBe('ARN of the verification state machine');
+      expect(output.Value).toEqual({ 
+        'Ref': 'VerificationStateMachine'
       });
     });
 
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
-      });
-    });
+    test('DynamoDB table outputs should be correct', () => {
+      const tradeOutput = template.Outputs.TradeTableName;
+      expect(tradeOutput.Description).toBe('Name of the trade DynamoDB table');
+      expect(tradeOutput.Value).toEqual({ Ref: 'TradeTable' });
 
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
+      const certOutput = template.Outputs.CertificateTableName;
+      expect(certOutput.Description).toBe('Name of the certificate DynamoDB table');
+      expect(certOutput.Value).toEqual({ Ref: 'CertificateTable' });
+
+      const ledgerTableName = template.Outputs.LedgerTableName;
+      expect(ledgerTableName.Description).toBe('Name of the immutable ledger DynamoDB table');
+      expect(ledgerTableName.Value).toEqual({ Ref: 'LedgerTable' });
+
+      const ledgerTableArn = template.Outputs.LedgerTableArn;
+      expect(ledgerTableArn.Description).toBe('ARN of the immutable ledger DynamoDB table');
+      expect(ledgerTableArn.Value).toEqual({ 
+        'Fn::GetAtt': ['LedgerTable', 'Arn'] 
       });
     });
   });
@@ -172,38 +197,84 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have exactly one resource', () => {
+    test('should have correct resource count', () => {
+      const expectedResources = [
+        'LedgerTable',
+        'TradeTable',
+        'CertificateTable',
+        'AdminCredentials',
+        'StateMachineLogGroup',
+        'StateMachineRole',
+        'ApiGatewayHandlerRole',
+        'ApiGatewayHandlerFunction',
+        'InitialStateMachine',
+        'VerificationStateMachine',
+        'StateMachineArnParameter'
+      ];
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
+      expect(resourceCount).toBe(expectedResources.length);
+      expectedResources.forEach(resource => {
+        expect(template.Resources[resource]).toBeDefined();
+      });
     });
 
     test('should have exactly one parameter', () => {
       const parameterCount = Object.keys(template.Parameters).length;
       expect(parameterCount).toBe(1);
+      expect(template.Parameters.Environment).toBeDefined();
     });
 
-    test('should have exactly four outputs', () => {
+    test('should have correct outputs count', () => {
+      const expectedOutputs = [
+        'ApiGatewayHandlerArn',
+        'VerificationStateMachineArn',
+        'TradeTableName',
+        'CertificateTableName',
+        'LedgerTableName',
+        'LedgerTableArn'
+      ];
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      expect(outputCount).toBe(expectedOutputs.length);
+      expectedOutputs.forEach(output => {
+        expect(template.Outputs[output]).toBeDefined();
+      });
     });
   });
 
   describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
+    test('table names should follow naming convention with environment parameter', () => {
+      const tables = {
+        LedgerTable: 'CarbonCreditLedger',
+        TradeTable: 'CarbonCreditTradeTable',
+        CertificateTable: 'CarbonCreditCertificateTable'
+      };
 
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+      Object.entries(tables).forEach(([resourceName, tablePrefix]) => {
+        const table = template.Resources[resourceName];
+        expect(table.Properties.TableName).toEqual({
+          'Fn::Sub': `${tablePrefix}-\${Environment}`
+        });
       });
     });
 
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
+    test('state machine names should follow naming convention', () => {
+      const stateMachines = {
+        InitialStateMachine: 'CarbonCreditVerification-Initial',
+        VerificationStateMachine: 'CarbonCreditVerification'
+      };
+
+      Object.entries(stateMachines).forEach(([resourceName, namePrefix]) => {
+        const machine = template.Resources[resourceName];
+        expect(machine.Properties.StateMachineName).toEqual({
+          'Fn::Sub': `${namePrefix}-\${Environment}`
         });
+      });
+    });
+
+    test('Lambda function should follow naming convention', () => {
+      const func = template.Resources.ApiGatewayHandlerFunction;
+      expect(func.Properties.FunctionName).toEqual({
+        'Fn::Sub': 'ApiGatewayHandler-${Environment}'
       });
     });
   });
