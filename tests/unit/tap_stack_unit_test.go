@@ -1,13 +1,12 @@
 //go:build !integration
 // +build !integration
 
-package test
+package lib
 
 import (
 	"sync"
 	"testing"
 
-	"github.com/TuringGpt/iac-test-automations/lib"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/resource"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/stretchr/testify/assert"
@@ -48,70 +47,70 @@ func (mocks) Call(args pulumi.MockCallArgs) (resource.PropertyMap, error) {
 
 func TestVPCCreation(t *testing.T) {
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
-		return lib.CreateStack(ctx)
+		return CreateStack(ctx)
 	}, pulumi.WithMocks("project", "stack", mocks(0)))
 	assert.NoError(t, err)
 }
 
 func TestKinesisStreamCreation(t *testing.T) {
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
-		return lib.CreateStack(ctx)
+		return CreateStack(ctx)
 	}, pulumi.WithMocks("project", "stack", mocks(0)))
 	assert.NoError(t, err)
 }
 
 func TestRDSInstanceCreation(t *testing.T) {
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
-		return lib.CreateStack(ctx)
+		return CreateStack(ctx)
 	}, pulumi.WithMocks("project", "stack", mocks(0)))
 	assert.NoError(t, err)
 }
 
 func TestECSClusterCreation(t *testing.T) {
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
-		return lib.CreateStack(ctx)
+		return CreateStack(ctx)
 	}, pulumi.WithMocks("project", "stack", mocks(0)))
 	assert.NoError(t, err)
 }
 
 func TestSecretsManagerIntegration(t *testing.T) {
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
-		return lib.CreateStack(ctx)
+		return CreateStack(ctx)
 	}, pulumi.WithMocks("project", "stack", mocks(0)))
 	assert.NoError(t, err)
 }
 
 func TestSecurityGroupConfiguration(t *testing.T) {
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
-		return lib.CreateStack(ctx)
+		return CreateStack(ctx)
 	}, pulumi.WithMocks("project", "stack", mocks(0)))
 	assert.NoError(t, err)
 }
 
 func TestIAMRolesCreation(t *testing.T) {
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
-		return lib.CreateStack(ctx)
+		return CreateStack(ctx)
 	}, pulumi.WithMocks("project", "stack", mocks(0)))
 	assert.NoError(t, err)
 }
 
 func TestCloudWatchAlarmsCreation(t *testing.T) {
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
-		return lib.CreateStack(ctx)
+		return CreateStack(ctx)
 	}, pulumi.WithMocks("project", "stack", mocks(0)))
 	assert.NoError(t, err)
 }
 
 func TestAutoScalingConfiguration(t *testing.T) {
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
-		return lib.CreateStack(ctx)
+		return CreateStack(ctx)
 	}, pulumi.WithMocks("project", "stack", mocks(0)))
 	assert.NoError(t, err)
 }
 
 func TestVPCFlowLogsSetup(t *testing.T) {
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
-		return lib.CreateStack(ctx)
+		return CreateStack(ctx)
 	}, pulumi.WithMocks("project", "stack", mocks(0)))
 	assert.NoError(t, err)
 }
@@ -122,7 +121,7 @@ func TestStackExports(t *testing.T) {
 	wg.Add(1)
 
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
-		err := lib.CreateStack(ctx)
+		err := CreateStack(ctx)
 		if err != nil {
 			return err
 		}
@@ -136,7 +135,7 @@ func TestStackExports(t *testing.T) {
 
 func TestRegionConfiguration(t *testing.T) {
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
-		return lib.CreateStack(ctx)
+		return CreateStack(ctx)
 	}, pulumi.WithMocks("project", "stack", mocks(0)))
 	assert.NoError(t, err)
 }

@@ -1,13 +1,12 @@
 //go:build integration
 // +build integration
 
-package test
+package lib
 
 import (
 	"os"
 	"testing"
 
-	"github.com/TuringGpt/iac-test-automations/lib"
 	"github.com/pulumi/pulumi/sdk/v3/go/auto"
 	"github.com/pulumi/pulumi/sdk/v3/go/auto/optup"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
@@ -24,7 +23,7 @@ func TestIntegrationVPCDeployment(t *testing.T) {
 
 	// Create or select stack
 	stack, err := auto.UpsertStackInlineSource(ctx, stackName, "test", func(ctx *pulumi.Context) error {
-		return lib.CreateStack(ctx)
+		return CreateStack(ctx)
 	})
 	assert.NoError(t, err)
 
