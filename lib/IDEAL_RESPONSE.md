@@ -1,21 +1,10 @@
-# IoT Manufacturing Data Processing Pipeline - Pulumi Go Implementation
+# IDEAL_RESPONSE
+## lib/AWS_REGION
+```
+eu-west-1
+```
 
-This implementation creates a complete containerized data processing pipeline for an IoT manufacturing system with the following components:
-
-## Architecture Overview
-
-1. **VPC Infrastructure**: Custom VPC with public and private subnets across 2 availability zones
-2. **ECS Cluster**: Fargate-based cluster for running containerized data processing tasks
-3. **ElastiCache Redis**: Encrypted Redis cluster for real-time metrics caching
-4. **RDS PostgreSQL**: Encrypted PostgreSQL database for historical data storage
-5. **Secrets Manager**: Secure storage for database credentials
-6. **Security Groups**: Properly configured security groups for all components
-7. **NAT Gateway**: Enables private subnet instances to access internet
-
-## Implementation
-
-### lib/tap_stack.go
-
+## lib/tap_stack.go
 ```go
 package main
 
@@ -303,7 +292,7 @@ func main() {
 		rdsInstance, err := rds.NewInstance(ctx, fmt.Sprintf("iot-postgres-%s", environmentSuffix), &rds.InstanceArgs{
 			Identifier:            pulumi.String(fmt.Sprintf("iot-postgres-%s", environmentSuffix)),
 			Engine:                pulumi.String("postgres"),
-			EngineVersion:         pulumi.String("16.3"),
+			EngineVersion:         pulumi.String("16.8"),
 			InstanceClass:         pulumi.String("db.t3.micro"),
 			AllocatedStorage:      pulumi.Int(20),
 			StorageType:           pulumi.String("gp3"),
@@ -580,38 +569,3 @@ func main() {
 }
 ```
 
-## Key Features Implemented
-
-1. **Complete VPC Setup**: VPC with 2 public and 2 private subnets across 2 availability zones
-2. **Internet Connectivity**: Internet Gateway for public subnets, NAT Gateway for private subnet outbound access
-3. **RDS PostgreSQL**: Encrypted database with proper subnet group and security group configuration
-4. **ElastiCache Redis**: Multi-AZ Redis replication group with encryption at rest and in transit
-5. **ECS Fargate**: Cluster and task definition ready for deployment in private subnets
-6. **Secrets Manager**: Secure storage for database credentials
-7. **IAM Roles**: Proper execution and task roles with minimal required permissions
-8. **Security Groups**: Properly configured for each service with minimal access
-9. **Environment Suffix**: Applied to all named resources for environment isolation
-
-## Resource Naming Pattern
-
-All resources follow the pattern: `{service}-{component}-{environmentSuffix}` ensuring proper environment isolation and easy identification.
-
-## Security Considerations
-
-- All databases encrypted at rest
-- Redis with both at-rest and in-transit encryption
-- Database credentials stored in Secrets Manager
-- ECS tasks run in private subnets
-- Security groups follow principle of least privilege
-- NAT Gateway for secure outbound internet access
-
-## Deployment
-
-To deploy this infrastructure:
-
-```bash
-pulumi config set environmentSuffix dev
-pulumi up
-```
-
-The stack will output important endpoints and IDs needed for application deployment.

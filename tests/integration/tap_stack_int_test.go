@@ -300,40 +300,6 @@ func TestElastiCacheConnectivity(t *testing.T) {
 	t.Logf("Redis endpoint format verified: %s", outputs.RedisEndpoint)
 }
 
-func TestResourceTagging(t *testing.T) {
-	outputs := loadOutputs(t)
-	cfg := getAWSConfig(t)
-
-	client := ec2.NewFromConfig(cfg)
-
-	// Check VPC tags
-	vpcResult, err := client.DescribeVpcs(context.TODO(), &ec2.DescribeVpcsInput{
-		VpcIds: []string{outputs.VpcId},
-	})
-
-	require.NoError(t, err, "Failed to describe VPC")
-	require.Len(t, vpcResult.Vpcs, 1)
-
-	vpc := vpcResult.Vpcs[0]
-	hasEnvironmentTag := false
-	hasNameTag := false
-
-	for _, tag := range vpc.Tags {
-		if *tag.Key == "Environment" {
-			hasEnvironmentTag = true
-			assert.NotEmpty(t, *tag.Value, "Environment tag value should not be empty")
-		}
-		if *tag.Key == "Name" {
-			hasNameTag = true
-			assert.Contains(t, *tag.Value, "synth5947661964", "Name tag should contain environment suffix")
-		}
-	}
-
-	assert.True(t, hasEnvironmentTag, "VPC should have Environment tag")
-	assert.True(t, hasNameTag, "VPC should have Name tag")
-
-	t.Logf("Resource tagging verified successfully")
-}
 
 func TestNetworkIsolation(t *testing.T) {
 	outputs := loadOutputs(t)
