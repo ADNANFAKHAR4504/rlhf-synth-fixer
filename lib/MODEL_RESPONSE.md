@@ -1,24 +1,20 @@
-
-
 ### Main Stack (tap-stack.ts)
 
 ```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as iot from 'aws-cdk-lib/aws-iot';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as kinesis from 'aws-cdk-lib/aws-kinesis';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as stepfunctions from 'aws-cdk-lib/aws-stepfunctions';
 import * as sfnTasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
-import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as kinesis from 'aws-cdk-lib/aws-kinesis';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as eventsTargets from 'aws-cdk-lib/aws-events-targets';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
-import * as timestream from 'aws-cdk-lib/aws-timestream';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as logs from 'aws-cdk-lib/aws-logs';
+import * as iot from 'aws-cdk-lib/aws-iot';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Construct } from 'constructs';
 import * as path from 'path';
@@ -27,254 +23,260 @@ export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    // S3 bucket for archived IoT data
+    // S3 Bucket for archived IoT data
     const archiveBucket = new s3.Bucket(this, 'IoTArchiveBucket', {
       bucketName: `iot-archive-${this.account}-${this.region}`,
       versioned: true,
       lifecycleRules: [{
-        id: 'archive-old-data',
+        id: 'archive-rule',
         transitions: [{
           storageClass: s3.StorageClass.GLACIER,
-          transitionAfter: cdk.Duration.days(30)
-        }]
-      }]
+          transitionAfter: cdk.Duration.days(90),
+        }],
+      }],
     });
 
-    // DynamoDB table for device metadata and recovery state
-    const deviceTable = new dynamodb.Table(this, 'DeviceRecoveryTable', {
-      tableName: 'iot-device-recovery',
+    // DynamoDB table for IoT time-series data
+    const timeSeriesTable = new dynamodb.Table(this, 'IoTTimeSeriesTable', {
+      tableName: 'IoTTimeSeries',
       partitionKey: { name: 'deviceId', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      billingMode: dynamodb.BillingMode.ON_DEMAND,
       pointInTimeRecovery: true,
-      stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES
+      stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
     });
 
-    // Global Secondary Index for device type queries
-    deviceTable.addGlobalSecondaryIndex({
-      indexName: 'deviceType-index',
-      partitionKey: { name: 'deviceType', type: dynamodb.AttributeType.STRING },
-      sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER }
+    // Global Secondary Index for time-based queries
+    timeSeriesTable.addGlobalSecondaryIndex({
+      indexName: 'TimestampIndex',
+      partitionKey: { name: 'hour', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
+      projectionType: dynamodb.ProjectionType.ALL,
     });
 
-    // Kinesis streams for message replay (partitioned for scale)
-    const kinesisStreams: kinesis.Stream[] = [];
-    for (let i = 0; i < 10; i++) {
-      kinesisStreams.push(new kinesis.Stream(this, `IoTReplayStream${i}`, {
-        streamName: `iot-replay-stream-${i}`,
-        shardCount: 100, // 1000 shards total for 45M messages
-        retentionPeriod: cdk.Duration.hours(24)
-      }));
-    }
+    // Kinesis Stream for message replay
+    const recoveryStream = new kinesis.Stream(this, 'RecoveryStream', {
+      streamName: 'iot-recovery-stream',
+      shardCount: 100, // Handle 45M messages
+      retentionPeriod: cdk.Duration.days(7),
+    });
 
     // SQS Dead Letter Queues by device type
     const deviceTypes = ['sensor', 'actuator', 'gateway', 'edge'];
     const dlQueues: { [key: string]: sqs.Queue } = {};
     
     deviceTypes.forEach(type => {
-      dlQueues[type] = new sqs.Queue(this, `${type}DLQ`, {
-        queueName: `iot-recovery-dlq-${type}`,
+      dlQueues[type] = new sqs.Queue(this, `${type}DLQueue`, {
+        queueName: `iot-${type}-dlq`,
         visibilityTimeout: cdk.Duration.minutes(15),
         retentionPeriod: cdk.Duration.days(14),
-        deadLetterQueue: {
-          maxReceiveCount: 3,
-          queue: new sqs.Queue(this, `${type}DLQ-Secondary`, {
-            queueName: `iot-recovery-dlq-${type}-secondary`
-          })
-        }
       });
     });
 
-    // Timestream database and table for validation
-    const timestreamDatabase = new timestream.CfnDatabase(this, 'IoTMetricsDB', {
-      databaseName: 'iot-recovery-metrics'
-    });
-
-    const timestreamTable = new timestream.CfnTable(this, 'IoTMetricsTable', {
-      databaseName: timestreamDatabase.databaseName!,
-      tableName: 'recovery-validation',
-      retentionProperties: {
-        memoryStoreRetentionPeriodInHours: 24,
-        magneticStoreRetentionPeriodInDays: 7
-      }
-    });
-    timestreamTable.addDependency(timestreamDatabase);
-
-    // Lambda function for shadow state analysis
-    const shadowAnalysisLambda = new NodejsFunction(this, 'ShadowAnalysisLambda', {
-      functionName: 'iot-shadow-analysis',
-      entry: path.join(__dirname, '../lambda/shadow-analysis.ts'),
-      handler: 'handler',
+    // Lambda function to analyze IoT shadow states
+    const shadowAnalyzerLambda = new NodejsFunction(this, 'ShadowAnalyzerLambda', {
       runtime: lambda.Runtime.NODEJS_18_X,
-      memorySize: 3008, // Max memory for handling 2.3M devices
+      handler: 'handler',
+      entry: path.join(__dirname, '../lambda/shadow-analyzer.ts'),
       timeout: cdk.Duration.minutes(15),
-      environment: {
-        DEVICE_TABLE_NAME: deviceTable.tableName,
-        BUCKET_NAME: archiveBucket.bucketName
-      },
-      reservedConcurrentExecutions: 1000
-    });
-
-    // Lambda function for Kinesis republishing
-    const kinesisRepublishLambda = new NodejsFunction(this, 'KinesisRepublishLambda', {
-      functionName: 'iot-kinesis-republish',
-      entry: path.join(__dirname, '../lambda/kinesis-republish.ts'),
-      handler: 'handler',
-      runtime: lambda.Runtime.NODEJS_18_X,
       memorySize: 3008,
-      timeout: cdk.Duration.minutes(15),
+      reservedConcurrentExecutions: 100,
       environment: {
-        KINESIS_STREAMS: JSON.stringify(kinesisStreams.map(s => s.streamName))
+        REGION: this.region,
       },
-      reservedConcurrentExecutions: 1000
     });
 
-    // Lambda function for Timestream validation
-    const timestreamValidationLambda = new NodejsFunction(this, 'TimestreamValidationLambda', {
-      functionName: 'iot-timestream-validation',
-      entry: path.join(__dirname, '../lambda/timestream-validation.ts'),
-      handler: 'handler',
-      runtime: lambda.Runtime.NODEJS_18_X,
-      memorySize: 3008,
-      timeout: cdk.Duration.minutes(5),
-      environment: {
-        DATABASE_NAME: timestreamDatabase.databaseName!,
-        TABLE_NAME: timestreamTable.tableName!
-      }
-    });
-
-    // Grant permissions
-    deviceTable.grantReadWriteData(shadowAnalysisLambda);
-    archiveBucket.grantRead(shadowAnalysisLambda);
-    archiveBucket.grantRead(kinesisRepublishLambda);
-    kinesisStreams.forEach(stream => stream.grantWrite(kinesisRepublishLambda));
-
-    // IAM role for IoT shadow access
-    shadowAnalysisLambda.addToRolePolicy(new iam.PolicyStatement({
+    // Grant IoT shadow read permissions
+    shadowAnalyzerLambda.addToRolePolicy(new iam.PolicyStatement({
       actions: ['iot:GetThingShadow', 'iot:ListThings'],
-      resources: ['*']
+      resources: ['*'],
     }));
 
-    // IAM role for Timestream access
-    timestreamValidationLambda.addToRolePolicy(new iam.PolicyStatement({
-      actions: [
-        'timestream:DescribeEndpoints',
-        'timestream:SelectValues',
-        'timestream:DescribeTable',
-        'timestream:WriteRecords'
-      ],
-      resources: ['*']
-    }));
+    // Lambda function for Kinesis publishing
+    const kinesisPublisherLambda = new NodejsFunction(this, 'KinesisPublisherLambda', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'handler',
+      entry: path.join(__dirname, '../lambda/kinesis-publisher.ts'),
+      timeout: cdk.Duration.minutes(15),
+      memorySize: 3008,
+      reservedConcurrentExecutions: 500,
+      environment: {
+        STREAM_NAME: recoveryStream.streamName,
+        BUCKET_NAME: archiveBucket.bucketName,
+      },
+    });
+
+    recoveryStream.grantWrite(kinesisPublisherLambda);
+    archiveBucket.grantRead(kinesisPublisherLambda);
+
+    // Lambda function for data validation
+    const validatorLambda = new NodejsFunction(this, 'ValidatorLambda', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'handler',
+      entry: path.join(__dirname, '../lambda/validator.ts'),
+      timeout: cdk.Duration.minutes(5),
+      memorySize: 1024,
+      environment: {
+        TABLE_NAME: timeSeriesTable.tableName,
+        INDEX_NAME: 'TimestampIndex',
+      },
+    });
+
+    timeSeriesTable.grantReadData(validatorLambda);
 
     // Step Functions for orchestration
-    const backfillTask = new sfnTasks.LambdaInvoke(this, 'BackfillTask', {
-      lambdaFunction: shadowAnalysisLambda,
-      outputPath: '$.Payload'
+    const backfillTask = new sfnTasks.DynamoUpdateItem(this, 'BackfillData', {
+      table: timeSeriesTable,
+      key: {
+        deviceId: sfnTasks.DynamoAttributeValue.fromString(
+          stepfunctions.JsonPath.stringAt('$.deviceId')
+        ),
+        timestamp: sfnTasks.DynamoAttributeValue.fromNumber(
+          stepfunctions.JsonPath.numberAt('$.timestamp')
+        ),
+      },
+      updateExpression: 'SET #data = :data, #hour = :hour',
+      expressionAttributeNames: {
+        '#data': 'data',
+        '#hour': 'hour',
+      },
+      expressionAttributeValues: {
+        ':data': sfnTasks.DynamoAttributeValue.fromString(
+          stepfunctions.JsonPath.stringAt('$.data')
+        ),
+        ':hour': sfnTasks.DynamoAttributeValue.fromString(
+          stepfunctions.JsonPath.stringAt('$.hour')
+        ),
+      },
     });
 
-    const republishTask = new sfnTasks.LambdaInvoke(this, 'RepublishTask', {
-      lambdaFunction: kinesisRepublishLambda,
-      outputPath: '$.Payload'
+    const publishTask = new sfnTasks.LambdaInvoke(this, 'PublishToKinesis', {
+      lambdaFunction: kinesisPublisherLambda,
+      outputPath: '$.Payload',
     });
 
-    const validationTask = new sfnTasks.LambdaInvoke(this, 'ValidationTask', {
-      lambdaFunction: timestreamValidationLambda,
-      outputPath: '$.Payload'
+    const validateTask = new sfnTasks.LambdaInvoke(this, 'ValidateRecovery', {
+      lambdaFunction: validatorLambda,
+      outputPath: '$.Payload',
     });
 
-    // Parallel execution for faster recovery
-    const parallelBackfill = new stepfunctions.Parallel(this, 'ParallelBackfill', {
-      comment: 'Parallel backfill and republish'
+    // Parallel execution for backfill and publish
+    const parallel = new stepfunctions.Parallel(this, 'ParallelRecovery');
+    parallel.branch(backfillTask);
+    parallel.branch(publishTask);
+
+    // Step Function definition
+    const recoveryStateMachine = new stepfunctions.StateMachine(this, 'RecoveryStateMachine', {
+      definition: parallel.next(validateTask),
+      timeout: cdk.Duration.hours(1),
     });
 
-    parallelBackfill
-      .branch(backfillTask)
-      .branch(republishTask);
-
-    const definition = parallelBackfill
-      .next(validationTask)
-      .next(new stepfunctions.Succeed(this, 'RecoveryComplete'));
-
-    const stateMachine = new stepfunctions.StateMachine(this, 'RecoveryStateMachine', {
-      stateMachineName: 'iot-recovery-orchestration',
-      definition,
-      timeout: cdk.Duration.hours(2)
+    // CloudWatch Alarms for IoT Core rule failures
+    const ruleFailureAlarm = new cloudwatch.Alarm(this, 'IoTRuleFailureAlarm', {
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/IoT',
+        metricName: 'RuleMessageThrottled',
+        statistic: 'Sum',
+      }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      datapointsToAlarm: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmDescription: 'IoT Core rule failures detected',
     });
 
-    // EventBridge rules for routing recovery events
+    // Lambda to start Step Functions
+    const orchestratorLambda = new NodejsFunction(this, 'OrchestratorLambda', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'handler',
+      entry: path.join(__dirname, '../lambda/orchestrator.ts'),
+      timeout: cdk.Duration.minutes(5),
+      environment: {
+        STATE_MACHINE_ARN: recoveryStateMachine.stateMachineArn,
+        SHADOW_ANALYZER_ARN: shadowAnalyzerLambda.functionArn,
+      },
+    });
+
+    recoveryStateMachine.grantStartExecution(orchestratorLambda);
+    shadowAnalyzerLambda.grantInvoke(orchestratorLambda);
+
+    // Connect alarm to orchestrator
+    ruleFailureAlarm.addAlarmAction(
+      new cloudwatchActions.LambdaAction(orchestratorLambda)
+    );
+
+    // EventBridge rules for routing by device type
     const eventBus = new events.EventBus(this, 'RecoveryEventBus', {
-      eventBusName: 'iot-recovery-events'
+      eventBusName: 'iot-recovery-bus',
     });
 
     deviceTypes.forEach(type => {
       new events.Rule(this, `${type}RecoveryRule`, {
-        ruleName: `iot-recovery-${type}`,
-        eventBus,
+        eventBus: eventBus,
+        ruleName: `${type}-recovery-rule`,
         eventPattern: {
           source: ['iot.recovery'],
-          detailType: ['Device Recovery Event'],
+          detailType: ['Device Recovery'],
           detail: {
-            deviceType: [type]
-          }
+            deviceType: [type],
+          },
         },
-        targets: [new eventsTargets.SqsQueue(dlQueues[type])]
+        targets: [new eventsTargets.SqsQueue(dlQueues[type])],
       });
     });
 
-    // CloudWatch Alarms for IoT Rule failures
-    const ruleFailureAlarm = new cloudwatch.Alarm(this, 'IoTRuleFailureAlarm', {
-      alarmName: 'iot-rule-failures',
-      metric: new cloudwatch.Metric({
-        namespace: 'AWS/IoT',
-        metricName: 'RuleMessageThrottled',
-        dimensionsMap: {
-          RuleName: '*'
-        },
-        statistic: 'Sum',
-        period: cdk.Duration.seconds(15) // 15-second detection window
-      }),
-      threshold: 1,
-      evaluationPeriods: 1,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING
-    });
-
-    // Trigger Step Functions on alarm
-    ruleFailureAlarm.addAlarmAction(
-      new cloudwatchActions.LambdaAction(shadowAnalysisLambda)
-    );
-
-    // Lambda to trigger Step Functions
-    const triggerStateMachineLambda = new NodejsFunction(this, 'TriggerStateMachineLambda', {
-      functionName: 'iot-trigger-recovery',
-      entry: path.join(__dirname, '../lambda/trigger-recovery.ts'),
-      handler: 'handler',
+    // Lambda for processing Kinesis records and sending to EventBridge
+    const eventRouterLambda = new NodejsFunction(this, 'EventRouterLambda', {
       runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'handler',
+      entry: path.join(__dirname, '../lambda/event-router.ts'),
+      timeout: cdk.Duration.minutes(5),
+      memorySize: 512,
       environment: {
-        STATE_MACHINE_ARN: stateMachine.stateMachineArn
-      }
+        EVENT_BUS_NAME: eventBus.eventBusName,
+      },
     });
 
-    stateMachine.grantStartExecution(triggerStateMachineLambda);
+    eventBus.grantPutEventsTo(eventRouterLambda);
+    
+    // Kinesis event source for Lambda
+    recoveryStream.grantRead(eventRouterLambda);
+    eventRouterLambda.addEventSource(new lambda.EventSourceMapping(this, 'KinesisEventSource', {
+      eventSourceArn: recoveryStream.streamArn,
+      startingPosition: lambda.StartingPosition.TRIM_HORIZON,
+      batchSize: 100,
+      parallelizationFactor: 10,
+      maxBatchingWindow: cdk.Duration.seconds(5),
+    }));
 
-    // CloudWatch Dashboard for monitoring
+    // CloudWatch Dashboard
     new cloudwatch.Dashboard(this, 'RecoveryDashboard', {
-      dashboardName: 'iot-recovery-monitoring',
+      dashboardName: 'iot-recovery-dashboard',
       widgets: [
         [
           new cloudwatch.GraphWidget({
             title: 'Rule Failures',
-            left: [ruleFailureAlarm.metric]
+            left: [ruleFailureAlarm.metric],
+            period: cdk.Duration.seconds(60),
           }),
           new cloudwatch.GraphWidget({
-            title: 'Recovery Progress',
-            left: [new cloudwatch.Metric({
-              namespace: 'IoTRecovery',
-              metricName: 'DevicesRecovered',
-              statistic: 'Sum'
-            })]
-          })
-        ]
-      ]
+            title: 'Recovery Executions',
+            left: [recoveryStateMachine.metricSucceeded()],
+            right: [recoveryStateMachine.metricFailed()],
+          }),
+        ],
+        [
+          new cloudwatch.GraphWidget({
+            title: 'Kinesis Throughput',
+            left: [recoveryStream.metricIncomingRecords()],
+            right: [recoveryStream.metricIncomingBytes()],
+          }),
+          new cloudwatch.GraphWidget({
+            title: 'DLQ Messages',
+            left: Object.values(dlQueues).map(q => q.metricApproximateNumberOfMessagesVisible()),
+          }),
+        ],
+      ],
     });
   }
 }
@@ -282,346 +284,335 @@ export class TapStack extends cdk.Stack {
 
 ### Lambda Functions
 
-#### shadow-analysis.ts
+#### shadow-analyzer.ts
 ```typescript
 import { IoTClient, GetThingShadowCommand, ListThingsCommand } from '@aws-sdk/client-iot';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand, BatchWriteCommand } from '@aws-sdk/lib-dynamodb';
-import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { IoTDataPlaneClient, GetThingShadowCommand as GetShadowCommand } from '@aws-sdk/client-iot-data-plane';
 
-const iot = new IoTClient({});
-const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
-const s3 = new S3Client({});
-
-interface DeviceState {
-  deviceId: string;
-  deviceType: string;
-  lastSeen: number;
-  needsRecovery: boolean;
-}
+const iotClient = new IoTClient({ region: process.env.REGION });
+const iotDataClient = new IoTDataPlaneClient({ region: process.env.REGION });
 
 export const handler = async (event: any) => {
-  const tableName = process.env.DEVICE_TABLE_NAME!;
-  const bucketName = process.env.BUCKET_NAME!;
-  
-  // Batch process devices
+  const affectedDevices = [];
   const batchSize = 1000;
   let nextToken: string | undefined;
-  let processedDevices = 0;
-  const failedDevices: DeviceState[] = [];
 
+  // List all things in batches
   do {
-    // List devices
     const listCommand = new ListThingsCommand({
       maxResults: batchSize,
-      nextToken
+      nextToken,
     });
     
-    const response = await iot.send(listCommand);
-    const things = response.things || [];
+    const response = await iotClient.send(listCommand);
     
-    // Process shadows in parallel
-    const shadowPromises = things.map(async (thing) => {
+    // Check shadows in parallel
+    const shadowPromises = response.things?.map(async (thing) => {
       try {
-        const shadowCommand = new GetThingShadowCommand({
-          thingName: thing.thingName!
+        const shadowCommand = new GetShadowCommand({
+          thingName: thing.thingName,
         });
         
-        const shadowResponse = await iot.send(shadowCommand);
+        const shadowResponse = await iotDataClient.send(shadowCommand);
         const shadow = JSON.parse(new TextDecoder().decode(shadowResponse.payload));
         
-        // Analyze shadow state
-        const reported = shadow.state?.reported || {};
-        const lastActivity = reported.timestamp || 0;
-        const currentTime = Date.now();
-        const timeSinceLastActivity = currentTime - lastActivity;
-        
-        // If device hasn't reported in 1 hour, mark for recovery
-        if (timeSinceLastActivity > 3600000) {
-          failedDevices.push({
-            deviceId: thing.thingName!,
-            deviceType: thing.thingTypeName || 'unknown',
-            lastSeen: lastActivity,
-            needsRecovery: true
-          });
+        // Check if device is in error state
+        if (shadow.state?.reported?.status === 'error') {
+          return {
+            deviceId: thing.thingName,
+            deviceType: thing.thingTypeName || 'sensor',
+            lastActivity: shadow.state?.reported?.timestamp,
+          };
         }
       } catch (error) {
-        console.error(`Error processing device ${thing.thingName}:`, error);
+        console.error(`Error getting shadow for ${thing.thingName}:`, error);
       }
-    });
+      return null;
+    }) || [];
+
+    const results = await Promise.all(shadowPromises);
+    affectedDevices.push(...results.filter(Boolean));
     
-    await Promise.all(shadowPromises);
-    processedDevices += things.length;
     nextToken = response.nextToken;
-    
-  } while (nextToken && processedDevices < 2300000); // Process up to 2.3M devices
-
-  // Store failed devices in DynamoDB
-  if (failedDevices.length > 0) {
-    const chunks = [];
-    for (let i = 0; i < failedDevices.length; i += 25) {
-      chunks.push(failedDevices.slice(i, i + 25));
-    }
-    
-    for (const chunk of chunks) {
-      const putRequests = chunk.map(device => ({
-        PutRequest: {
-          Item: {
-            ...device,
-            timestamp: Date.now(),
-            recoveryStatus: 'pending'
-          }
-        }
-      }));
-      
-      await docClient.send(new BatchWriteCommand({
-        RequestItems: {
-          [tableName]: putRequests
-        }
-      }));
-    }
-  }
-
-  // Identify S3 archives for backfill (last 12 hours)
-  const twelveHoursAgo = Date.now() - (12 * 60 * 60 * 1000);
-  const archives: string[] = [];
-  
-  const listObjectsCommand = new ListObjectsV2Command({
-    Bucket: bucketName,
-    Prefix: 'iot-data/'
-  });
-  
-  const s3Response = await s3.send(listObjectsCommand);
-  const objects = s3Response.Contents || [];
-  
-  objects.forEach(obj => {
-    if (obj.LastModified && obj.LastModified.getTime() >= twelveHoursAgo) {
-      archives.push(obj.Key!);
-    }
-  });
+  } while (nextToken);
 
   return {
-    processedDevices,
-    failedDevices: failedDevices.length,
-    archivesToProcess: archives
+    statusCode: 200,
+    affectedDevices,
+    totalChecked: affectedDevices.length,
   };
 };
 ```
 
-#### kinesis-republish.ts
+#### kinesis-publisher.ts
 ```typescript
 import { KinesisClient, PutRecordsCommand } from '@aws-sdk/client-kinesis';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
-import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
+import { Readable } from 'stream';
+import * as zlib from 'zlib';
+import { promisify } from 'util';
 
-const kinesis = new KinesisClient({});
-const s3 = new S3Client({});
-const eventbridge = new EventBridgeClient({});
-
-interface IoTMessage {
-  deviceId: string;
-  deviceType: string;
-  timestamp: number;
-  data: any;
-}
+const kinesisClient = new KinesisClient({});
+const s3Client = new S3Client({});
+const gunzip = promisify(zlib.gunzip);
 
 export const handler = async (event: any) => {
-  const kinesisStreams = JSON.parse(process.env.KINESIS_STREAMS!);
-  const archives = event.archivesToProcess || [];
+  const streamName = process.env.STREAM_NAME!;
+  const bucketName = process.env.BUCKET_NAME!;
   
-  let totalMessagesReplayed = 0;
-  const batchSize = 500; // Kinesis max batch size
-  
-  for (const archiveKey of archives) {
-    // Get archived data from S3
-    const getObjectCommand = new GetObjectCommand({
-      Bucket: event.bucketName,
-      Key: archiveKey
-    });
+  let totalPublished = 0;
+  const batchSize = 500; // Kinesis limit
+
+  // Process each device's archived data
+  for (const device of event.devices || []) {
+    const key = `archive/${device.deviceId}/${event.startTime}-${event.endTime}.gz`;
     
-    const s3Response = await s3.send(getObjectCommand);
-    const archiveData = await s3Response.Body!.transformToString();
-    const messages: IoTMessage[] = JSON.parse(archiveData);
-    
-    // Sort messages by timestamp to maintain ordering
-    messages.sort((a, b) => a.timestamp - b.timestamp);
-    
-    // Distribute messages across Kinesis streams
-    const messagesByStream: { [key: string]: any[] } = {};
-    kinesisStreams.forEach((stream: string) => {
-      messagesByStream[stream] = [];
-    });
-    
-    messages.forEach((message, index) => {
-      const streamIndex = index % kinesisStreams.length;
-      const streamName = kinesisStreams[streamIndex];
-      
-      messagesByStream[streamName].push({
-        Data: JSON.stringify(message),
-        PartitionKey: message.deviceId
+    try {
+      // Get archived data from S3
+      const getCommand = new GetObjectCommand({
+        Bucket: bucketName,
+        Key: key,
       });
-    });
-    
-    // Republish to Kinesis in batches
-    for (const [streamName, streamMessages] of Object.entries(messagesByStream)) {
-      for (let i = 0; i < streamMessages.length; i += batchSize) {
-        const batch = streamMessages.slice(i, i + batchSize);
+      
+      const response = await s3Client.send(getCommand);
+      const body = await streamToBuffer(response.Body as Readable);
+      const data = await gunzip(body);
+      const messages = JSON.parse(data.toString()).messages;
+      
+      // Sort by timestamp to maintain order
+      messages.sort((a: any, b: any) => a.timestamp - b.timestamp);
+      
+      // Publish in batches
+      for (let i = 0; i < messages.length; i += batchSize) {
+        const batch = messages.slice(i, i + batchSize);
         
-        const putRecordsCommand = new PutRecordsCommand({
+        const records = batch.map((msg: any) => ({
+          Data: Buffer.from(JSON.stringify(msg)),
+          PartitionKey: device.deviceId,
+        }));
+        
+        const putCommand = new PutRecordsCommand({
           StreamName: streamName,
-          Records: batch
+          Records: records,
         });
         
-        const response = await kinesis.send(putRecordsCommand);
+        const result = await kinesisClient.send(putCommand);
+        totalPublished += result.Records?.length || 0;
         
         // Handle failed records
-        if (response.FailedRecordCount && response.FailedRecordCount > 0) {
-          const failedRecords = batch.filter((_, index) => 
-            response.Records![index].ErrorCode
-          );
-          
-          // Send failed records to EventBridge for DLQ routing
-          await sendToEventBridge(failedRecords);
+        if (result.FailedRecordCount && result.FailedRecordCount > 0) {
+          console.error(`Failed to publish ${result.FailedRecordCount} records`);
+          // Retry logic here
         }
-        
-        totalMessagesReplayed += batch.length - (response.FailedRecordCount || 0);
       }
+    } catch (error) {
+      console.error(`Error processing device ${device.deviceId}:`, error);
     }
   }
-  
+
   return {
-    totalMessagesReplayed,
-    targetMessageCount: 45000000,
-    completionPercentage: (totalMessagesReplayed / 45000000) * 100
+    statusCode: 200,
+    totalPublished,
   };
 };
 
-async function sendToEventBridge(failedRecords: any[]) {
-  const events = failedRecords.map(record => {
-    const message = JSON.parse(record.Data);
-    return {
-      Source: 'iot.recovery',
-      DetailType: 'Device Recovery Event',
-      Detail: JSON.stringify({
-        deviceId: message.deviceId,
-        deviceType: message.deviceType,
-        timestamp: message.timestamp,
-        reason: 'kinesis_republish_failed'
-      })
-    };
-  });
-  
-  const putEventsCommand = new PutEventsCommand({
-    Entries: events
-  });
-  
-  await eventbridge.send(putEventsCommand);
+async function streamToBuffer(stream: Readable): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) {
+    chunks.push(chunk as Buffer);
+  }
+  return Buffer.concat(chunks);
 }
 ```
 
-#### timestream-validation.ts
+#### validator.ts
 ```typescript
-import { TimestreamQueryClient, QueryCommand } from '@aws-sdk/client-timestream-query';
-import { TimestreamWriteClient, WriteRecordsCommand } from '@aws-sdk/client-timestream-write';
-import { CloudWatchClient, PutMetricDataCommand } from '@aws-sdk/client-cloudwatch';
+import { DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
+import { unmarshall } from '@aws-sdk/util-dynamodb';
 
-const queryClient = new TimestreamQueryClient({});
-const writeClient = new TimestreamWriteClient({});
-const cloudwatch = new CloudWatchClient({});
+const dynamoClient = new DynamoDBClient({});
 
 export const handler = async (event: any) => {
-  const databaseName = process.env.DATABASE_NAME!;
   const tableName = process.env.TABLE_NAME!;
+  const indexName = process.env.INDEX_NAME!;
   
-  // Query for data continuity over the last 12 hours
-  const query = `
-    WITH recovery_stats AS (
-      SELECT 
-        device_id,
-        COUNT(*) as record_count,
-        MIN(time) as first_record,
-        MAX(time) as last_record,
-        COUNT(DISTINCT DATE_TRUNC('hour', time)) as hours_with_data
-      FROM "${databaseName}"."${tableName}"
-      WHERE time >= ago(12h)
-      GROUP BY device_id
-    )
-    SELECT 
-      COUNT(DISTINCT device_id) as recovered_devices,
-      AVG(record_count) as avg_records_per_device,
-      COUNT(CASE WHEN hours_with_data >= 12 THEN 1 END) as fully_recovered_devices
-    FROM recovery_stats
-  `;
+  const validationResults = [];
+  const gapThreshold = 60000; // 1 minute in milliseconds
+
+  for (const device of event.devices || []) {
+    const startTime = event.startTime;
+    const endTime = event.endTime;
+    const hour = new Date(startTime).toISOString().substring(0, 13);
+    
+    try {
+      // Query time-series data
+      const queryCommand = new QueryCommand({
+        TableName: tableName,
+        IndexName: indexName,
+        KeyConditionExpression: '#hour = :hour AND #timestamp BETWEEN :start AND :end',
+        ExpressionAttributeNames: {
+          '#hour': 'hour',
+          '#timestamp': 'timestamp',
+        },
+        ExpressionAttributeValues: {
+          ':hour': { S: hour },
+          ':start': { N: startTime.toString() },
+          ':end': { N: endTime.toString() },
+        },
+        FilterExpression: 'deviceId = :deviceId',
+        ExpressionAttributeValues: {
+          ...queryCommand.input.ExpressionAttributeValues,
+          ':deviceId': { S: device.deviceId },
+        },
+      });
+      
+      const response = await dynamoClient.send(queryCommand);
+      const items = response.Items?.map(item => unmarshall(item)) || [];
+      
+      // Sort by timestamp
+      items.sort((a, b) => a.timestamp - b.timestamp);
+      
+      // Check for gaps
+      const gaps = [];
+      for (let i = 1; i < items.length; i++) {
+        const gap = items[i].timestamp - items[i-1].timestamp;
+        if (gap > gapThreshold) {
+          gaps.push({
+            start: items[i-1].timestamp,
+            end: items[i].timestamp,
+            duration: gap,
+          });
+        }
+      }
+      
+      const recoveryRate = items.length > 0 
+        ? ((endTime - startTime - gaps.reduce((sum, gap) => sum + gap.duration, 0)) / (endTime - startTime)) * 100
+        : 0;
+      
+      validationResults.push({
+        deviceId: device.deviceId,
+        recordsFound: items.length,
+        gaps: gaps.length,
+        recoveryRate: recoveryRate.toFixed(2),
+        status: recoveryRate >= 99.9 ? 'SUCCESS' : 'PARTIAL',
+      });
+      
+    } catch (error) {
+      console.error(`Validation error for device ${device.deviceId}:`, error);
+      validationResults.push({
+        deviceId: device.deviceId,
+        status: 'ERROR',
+        error: error.message,
+      });
+    }
+  }
+
+  const overallRecoveryRate = validationResults
+    .filter(r => r.status === 'SUCCESS')
+    .length / validationResults.length * 100;
+
+  return {
+    statusCode: 200,
+    validationResults,
+    overallRecoveryRate: overallRecoveryRate.toFixed(2),
+    meetsTarget: overallRecoveryRate >= 99.9,
+  };
+};
+```
+
+#### event-router.ts
+```typescript
+import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
+
+const eventBridgeClient = new EventBridgeClient({});
+
+export const handler = async (event: any) => {
+  const eventBusName = process.env.EVENT_BUS_NAME!;
+  const entries = [];
+
+  for (const record of event.Records) {
+    const data = JSON.parse(
+      Buffer.from(record.kinesis.data, 'base64').toString()
+    );
+
+    entries.push({
+      Source: 'iot.recovery',
+      DetailType: 'Device Recovery',
+      Detail: JSON.stringify({
+        deviceId: data.deviceId,
+        deviceType: data.deviceType || 'sensor',
+        timestamp: data.timestamp,
+        recoveryTime: new Date().toISOString(),
+        data: data,
+      }),
+      EventBusName: eventBusName,
+    });
+  }
+
+  // Send events in batches (EventBridge limit is 10)
+  for (let i = 0; i < entries.length; i += 10) {
+    const batch = entries.slice(i, i + 10);
+    
+    const command = new PutEventsCommand({
+      Entries: batch,
+    });
+    
+    await eventBridgeClient.send(command);
+  }
+
+  return {
+    statusCode: 200,
+    processed: entries.length,
+  };
+};
+```
+
+#### orchestrator.ts
+```typescript
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
+import { SFNClient, StartExecutionCommand } from '@aws-sdk/client-sfn';
+
+const lambdaClient = new LambdaClient({});
+const sfnClient = new SFNClient({});
+
+export const handler = async (event: any) => {
+  const stateMachineArn = process.env.STATE_MACHINE_ARN!;
+  const shadowAnalyzerArn = process.env.SHADOW_ANALYZER_ARN!;
   
-  const queryCommand = new QueryCommand({
-    QueryString: query
+  // First, analyze affected devices
+  const analyzeCommand = new InvokeCommand({
+    FunctionName: shadowAnalyzerArn,
+    InvocationType: 'RequestResponse',
   });
   
-  const response = await queryClient.send(queryCommand);
-  const rows = response.Rows || [];
+  const analysisResult = await lambdaClient.send(analyzeCommand);
+  const analysis = JSON.parse(new TextDecoder().decode(analysisResult.Payload));
   
-  if (rows.length > 0) {
-    const stats = rows[0].Data!;
-    const recoveredDevices = parseInt(stats[0].ScalarValue || '0');
-    const fullyRecoveredDevices = parseInt(stats[2].ScalarValue || '0');
+  // Start recovery for affected devices
+  const executions = [];
+  const batchSize = 100;
+  
+  for (let i = 0; i < analysis.affectedDevices.length; i += batchSize) {
+    const batch = analysis.affectedDevices.slice(i, i + batchSize);
     
-    // Calculate recovery percentage
-    const targetDevices = event.failedDevices || 2300000;
-    const recoveryPercentage = (fullyRecoveredDevices / targetDevices) * 100;
+    const executionCommand = new StartExecutionCommand({
+      stateMachineArn,
+      name: `recovery-${Date.now()}-${i}`,
+      input: JSON.stringify({
+        devices: batch,
+        startTime: Date.now() - 12 * 60 * 60 * 1000, // 12 hours ago
+        endTime: Date.now(),
+      }),
+    });
     
-    // Write validation metrics to Timestream
-    const validationRecord = {
-      MeasureName: 'recovery_validation',
-      MeasureValue: recoveryPercentage.toString(),
-      MeasureValueType: 'DOUBLE',
-      Time: Date.now().toString(),
-      TimeUnit: 'MILLISECONDS',
-      Dimensions: [
-        { Name: 'metric_type', Value: 'recovery_percentage' },
-        { Name: 'validation_run', Value: new Date().toISOString() }
-      ]
-    };
-    
-    await writeClient.send(new WriteRecordsCommand({
-      DatabaseName: databaseName,
-      TableName: tableName,
-      Records: [validationRecord]
-    }));
-    
-    // Send metrics to CloudWatch
-    await cloudwatch.send(new PutMetricDataCommand({
-      Namespace: 'IoTRecovery',
-      MetricData: [
-        {
-          MetricName: 'RecoveryPercentage',
-          Value: recoveryPercentage,
-          Unit: 'Percent',
-          Timestamp: new Date()
-        },
-        {
-          MetricName: 'DevicesRecovered',
-          Value: recoveredDevices,
-          Unit: 'Count',
-          Timestamp: new Date()
-        }
-      ]
-    }));
-    
-    // Check if 99.9% recovery target is met
-    const targetMet = recoveryPercentage >= 99.9;
-    
-    return {
-      recoveryPercentage,
-      recoveredDevices,
-      fullyRecoveredDevices,
-      targetMet,
-      validationTime: new Date().toISOString()
-    };
+    const execution = await sfnClient.send(executionCommand);
+    executions.push(execution.executionArn);
   }
-  
+
   return {
-    error: 'No validation data available'
+    statusCode: 200,
+    affectedDevices: analysis.affectedDevices.length,
+    executions: executions.length,
   };
 };
 ```

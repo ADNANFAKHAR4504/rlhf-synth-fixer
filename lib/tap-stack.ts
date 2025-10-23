@@ -12,7 +12,6 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as stepfunctions from 'aws-cdk-lib/aws-stepfunctions';
 import * as sfnTasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
-import * as timestream from 'aws-cdk-lib/aws-timestream';
 import { Construct } from 'constructs';
 import * as path from 'path';
 
@@ -32,6 +31,8 @@ export class TapStack extends cdk.Stack {
     const archiveBucket = new s3.Bucket(this, 'IoTArchiveBucket', {
       bucketName: `iot-archive-${this.environmentSuffix}-${this.account}-${this.region}`,
       versioned: true,
+      removalPolicy: this.environmentSuffix === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: this.environmentSuffix !== 'prod',
       lifecycleRules: [{
         id: 'archive-old-data',
         transitions: [{
@@ -50,7 +51,8 @@ export class TapStack extends cdk.Stack {
       pointInTimeRecoverySpecification: {
         pointInTimeRecoveryEnabled: true
       },
-      stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES
+      stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
+      removalPolicy: this.environmentSuffix === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY
     });
 
     // Global Secondary Index for device type queries
@@ -66,7 +68,8 @@ export class TapStack extends cdk.Stack {
       kinesisStreams.push(new kinesis.Stream(this, `IoTReplayStream${i}`, {
         streamName: `iot-replay-stream-${this.environmentSuffix}-${i}`,
         shardCount: 100, // 1000 shards total for 45M messages
-        retentionPeriod: cdk.Duration.hours(24)
+        retentionPeriod: cdk.Duration.hours(24),
+        removalPolicy: this.environmentSuffix === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY
       }));
     }
 
@@ -79,29 +82,37 @@ export class TapStack extends cdk.Stack {
         queueName: `iot-recovery-dlq-${this.environmentSuffix}-${type}`,
         visibilityTimeout: cdk.Duration.minutes(15),
         retentionPeriod: cdk.Duration.days(14),
+        removalPolicy: this.environmentSuffix === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
         deadLetterQueue: {
           maxReceiveCount: 3,
           queue: new sqs.Queue(this, `${type}DLQ-Secondary`, {
-            queueName: `iot-recovery-dlq-${this.environmentSuffix}-${type}-secondary`
+            queueName: `iot-recovery-dlq-${this.environmentSuffix}-${type}-secondary`,
+            removalPolicy: this.environmentSuffix === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY
           })
         }
       });
     });
 
-    // Timestream database and table for validation
-    const timestreamDatabase = new timestream.CfnDatabase(this, 'IoTMetricsDB', {
-      databaseName: `iot-recovery-metrics-${this.environmentSuffix}`
+    // DynamoDB table for recovery validation with time-series data
+    const validationTable = new dynamodb.Table(this, 'RecoveryValidationTable', {
+      tableName: `iot-recovery-validation-${this.environmentSuffix}`,
+      partitionKey: { name: 'deviceId', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: true
+      },
+      timeToLiveAttribute: 'ttl', // Auto-delete old validation records
+      removalPolicy: this.environmentSuffix === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY
     });
 
-    const timestreamTable = new timestream.CfnTable(this, 'IoTMetricsTable', {
-      databaseName: timestreamDatabase.databaseName!,
-      tableName: `recovery-validation-${this.environmentSuffix}`,
-      retentionProperties: {
-        memoryStoreRetentionPeriodInHours: 24,
-        magneticStoreRetentionPeriodInDays: 7
-      }
+    // Global Secondary Index for time-range queries
+    validationTable.addGlobalSecondaryIndex({
+      indexName: `timestamp-index-${this.environmentSuffix}`,
+      partitionKey: { name: 'validationType', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
+      projectionType: dynamodb.ProjectionType.ALL
     });
-    timestreamTable.addDependency(timestreamDatabase);
 
     // Lambda function for shadow state analysis
     const shadowAnalysisLambda = new NodejsFunction(this, 'ShadowAnalysisLambda', {
@@ -134,17 +145,17 @@ export class TapStack extends cdk.Stack {
       reservedConcurrentExecutions: 1000
     });
 
-    // Lambda function for Timestream validation
-    const timestreamValidationLambda = new NodejsFunction(this, 'TimestreamValidationLambda', {
-      functionName: `iot-timestream-validation-${this.environmentSuffix}`,
-      entry: path.join(__dirname, '../lambda/timestream-validation.ts'),
+    // Lambda function for DynamoDB validation
+    const dynamodbValidationLambda = new NodejsFunction(this, 'DynamoDBValidationLambda', {
+      functionName: `iot-dynamodb-validation-${this.environmentSuffix}`,
+      entry: path.join(__dirname, '../lambda/dynamodb-validation.ts'),
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_18_X,
       memorySize: 3008,
       timeout: cdk.Duration.minutes(5),
       environment: {
-        DATABASE_NAME: timestreamDatabase.databaseName!,
-        TABLE_NAME: timestreamTable.tableName!,
+        VALIDATION_TABLE_NAME: validationTable.tableName,
+        DEVICE_TABLE_NAME: deviceTable.tableName,
         ENVIRONMENT: this.environmentSuffix
       }
     });
@@ -154,6 +165,8 @@ export class TapStack extends cdk.Stack {
     archiveBucket.grantRead(shadowAnalysisLambda);
     archiveBucket.grantRead(kinesisRepublishLambda);
     kinesisStreams.forEach(stream => stream.grantWrite(kinesisRepublishLambda));
+    validationTable.grantReadWriteData(dynamodbValidationLambda);
+    deviceTable.grantReadData(dynamodbValidationLambda);
 
     // IAM role for IoT shadow access
     shadowAnalysisLambda.addToRolePolicy(new iam.PolicyStatement({
@@ -161,13 +174,11 @@ export class TapStack extends cdk.Stack {
       resources: ['*']
     }));
 
-    // IAM role for Timestream access
-    timestreamValidationLambda.addToRolePolicy(new iam.PolicyStatement({
+    // IAM role for CloudWatch metrics access
+    dynamodbValidationLambda.addToRolePolicy(new iam.PolicyStatement({
       actions: [
-        'timestream:DescribeEndpoints',
-        'timestream:SelectValues',
-        'timestream:DescribeTable',
-        'timestream:WriteRecords'
+        'cloudwatch:PutMetricData',
+        'cloudwatch:GetMetricStatistics'
       ],
       resources: ['*']
     }));
@@ -184,7 +195,7 @@ export class TapStack extends cdk.Stack {
     });
 
     const validationTask = new sfnTasks.LambdaInvoke(this, 'ValidationTask', {
-      lambdaFunction: timestreamValidationLambda,
+      lambdaFunction: dynamodbValidationLambda,
       outputPath: '$.Payload'
     });
 
@@ -204,7 +215,8 @@ export class TapStack extends cdk.Stack {
     const stateMachine = new stepfunctions.StateMachine(this, 'RecoveryStateMachine', {
       stateMachineName: `iot-recovery-orchestration-${this.environmentSuffix}`,
       definitionBody: stepfunctions.DefinitionBody.fromChainable(definition),
-      timeout: cdk.Duration.hours(2)
+      timeout: cdk.Duration.hours(2),
+      removalPolicy: this.environmentSuffix === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY
     });
 
     // EventBridge rules for routing recovery events
