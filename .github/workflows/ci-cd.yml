@@ -11,6 +11,17 @@ on:
     branches: [main]
     types: [opened, synchronize, reopened, closed]
   workflow_dispatch:
+    inputs:
+      environment_suffix:
+        description: 'Environment suffix for resource naming (e.g., pr123, dev, test)'
+        required: false
+        default: 'manual'
+        type: string
+      skip_cleanup:
+        description: 'Skip cleanup/destroy step after deployment'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -18,9 +29,9 @@ permissions:
 env:
   NODE_VERSION: "22.17.0"
   GO_VERSION: "1.23.12"
-  # Use PR number for resource isolation, fallback to 'dev' for main branch
+  # Use PR number for resource isolation, manual input, or fallback to 'dev' for main branch
   # Prefix with 'pr' to ensure AWS resource names start with a letter
-  ENVIRONMENT_SUFFIX: ${{ github.event.number && format('pr{0}', github.event.number) || 'dev' }}
+  ENVIRONMENT_SUFFIX: ${{ github.event.inputs.environment_suffix || (github.event.number && format('pr{0}', github.event.number)) || 'dev' }}
   S3_RELEASE_BUCKET_NAME: "iac-rlhf-aws-release-342597974367-us-east-1"
   TERRAFORM_STATE_BUCKET: "iac-rlhf-tf-states-342597974367"
   TERRAFORM_STATE_BUCKET_REGION: "us-east-1"
@@ -42,7 +53,7 @@ jobs:
   detect-metadata:
     name: Detect Project Files
     runs-on: ubuntu-24.04
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     outputs:
       platform: ${{ steps.metadata.outputs.platform }}
       language: ${{ steps.metadata.outputs.language }}
@@ -77,7 +88,7 @@ jobs:
     name: Build
     runs-on: ubuntu-24.04
     needs: detect-metadata
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: dev
 
     steps:
@@ -100,7 +111,7 @@ jobs:
     name: Synth
     runs-on: ubuntu-24.04
     needs: [detect-metadata, build]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch' }}
     environment: dev
     permissions:
       contents: read
@@ -234,7 +245,7 @@ jobs:
     name: Deploy
     runs-on: ubuntu-24.04
     needs: [detect-metadata, synth]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: dev
 
     steps:
@@ -298,7 +309,7 @@ jobs:
     name: Lint
     runs-on: ubuntu-24.04
     needs: [detect-metadata, build]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: qa
     outputs:
       platform: ${{ needs.detect-metadata.outputs.platform }}
@@ -325,7 +336,7 @@ jobs:
     name: Unit Testing
     runs-on: ubuntu-24.04
     needs: [detect-metadata, lint]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: qa
 
     steps:
@@ -418,7 +429,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [detect-metadata, lint, unit-tests, deploy]
     environment: qa
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
 
     steps:
       - name: Checkout code
@@ -546,7 +557,7 @@ jobs:
     name: Cleanup (Destroy Resources)
     runs-on: ubuntu-24.04
     needs: [detect-metadata, integration-tests-live]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ ((github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch' && !inputs.skip_cleanup)) && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: stage
 
     steps:
@@ -583,7 +594,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [detect-metadata, cleanup]
     environment: release
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     permissions:
       contents: write
 
