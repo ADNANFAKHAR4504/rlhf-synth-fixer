@@ -391,7 +391,7 @@ export class TapStack extends TerraformStack {
     kmsKey.overrideLogicalId(`kms-key-${deployVersion}`);
 
     const kmsAlias = new KmsAlias(this, 'kms-alias', {
-      name: `alias/hipaa-${deployVersion}-${environmentSuffix}`,
+      name: `alias/hipaa-${deployVersion}-${environmentSuffix}${uniqueSuffix}`,
       targetKeyId: kmsKey.keyId,
       provider: primaryProvider,
     });
@@ -431,7 +431,7 @@ export class TapStack extends TerraformStack {
 
     // Create IAM role for RDS enhanced monitoring
     const rdsMonitoringRole = new IamRole(this, 'rds-monitoring-role', {
-      name: `hipaa-rds-monitoring-role-${deployVersion}-${environmentSuffix}`,
+      name: `hipaa-rds-monitoring-role-${deployVersion}-${environmentSuffix}${uniqueSuffix}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -445,7 +445,7 @@ export class TapStack extends TerraformStack {
         ],
       }),
       tags: {
-        Name: `hipaa-rds-monitoring-role-${deployVersion}-${environmentSuffix}`,
+        Name: `hipaa-rds-monitoring-role-${deployVersion}-${environmentSuffix}${uniqueSuffix}`,
         Environment: environmentSuffix,
       },
       provider: primaryProvider,
@@ -744,12 +744,12 @@ export class TapStack extends TerraformStack {
 
     // Create database master password secret
     const dbSecret = new SecretsmanagerSecret(this, 'db-secret', {
-      name: `hipaa-db-master-password-${deployVersion}-${environmentSuffix}`,
+      name: `hipaa-db-master-password-${deployVersion}-${environmentSuffix}${uniqueSuffix}`,
       description: 'Master password for Aurora database',
       kmsKeyId: kmsKey.arn,
       recoveryWindowInDays: 30,
       tags: {
-        Name: `hipaa-db-secret-${deployVersion}-${environmentSuffix}`,
+        Name: `hipaa-db-secret-${deployVersion}-${environmentSuffix}${uniqueSuffix}`,
         Compliance: 'HIPAA',
         Environment: environmentSuffix,
       },
@@ -777,7 +777,7 @@ export class TapStack extends TerraformStack {
 
     // Create RDS Global Cluster for cross-region replication
     const globalCluster = new RdsGlobalCluster(this, 'aurora-global', {
-      globalClusterIdentifier: `hipaa-aurora-global-${deployVersion}-${environmentSuffix}`,
+      globalClusterIdentifier: `hipaa-aurora-global-${deployVersion}-${environmentSuffix}${uniqueSuffix}`,
       engine: 'aurora-postgresql',
       engineVersion: '15.4',
       databaseName: 'patientdb',
@@ -788,7 +788,7 @@ export class TapStack extends TerraformStack {
 
     // Create Aurora cluster in primary region
     const auroraCluster = new RdsCluster(this, 'aurora-cluster', {
-      clusterIdentifier: `hipaa-aurora-${deployVersion}-${environmentSuffix}`,
+      clusterIdentifier: `hipaa-aurora-${deployVersion}-${environmentSuffix}${uniqueSuffix}`,
       engine: 'aurora-postgresql',
       engineVersion: '15.4',
       databaseName: 'patientdb',
@@ -818,7 +818,7 @@ export class TapStack extends TerraformStack {
     auroraCluster.overrideLogicalId(`aurora-cluster-${deployVersion}`);
 
     const instance1 = new RdsClusterInstance(this, 'aurora-instance-1', {
-      identifier: `hipaa-aurora-instance-1-${environmentSuffix}`,
+      identifier: `hipaa-aurora-instance-1-${environmentSuffix}${uniqueSuffix}`,
       clusterIdentifier: auroraCluster.id,
       instanceClass: 'db.r6g.large',
       engine: 'aurora-postgresql',
@@ -829,7 +829,7 @@ export class TapStack extends TerraformStack {
       monitoringInterval: 60,
       monitoringRoleArn: rdsMonitoringRole.arn,
       tags: {
-        Name: `hipaa-aurora-instance-1-${environmentSuffix}`,
+        Name: `hipaa-aurora-instance-1-${environmentSuffix}${uniqueSuffix}`,
         Environment: environmentSuffix,
       },
       dependsOn: [auroraCluster, rdsMonitoringRole],
@@ -838,7 +838,7 @@ export class TapStack extends TerraformStack {
     instance1.overrideLogicalId('aurora-instance-1-main');
 
     const instance2 = new RdsClusterInstance(this, 'aurora-instance-2', {
-      identifier: `hipaa-aurora-instance-2-${environmentSuffix}`,
+      identifier: `hipaa-aurora-instance-2-${environmentSuffix}${uniqueSuffix}`,
       clusterIdentifier: auroraCluster.id,
       instanceClass: 'db.r6g.large',
       engine: 'aurora-postgresql',
@@ -849,7 +849,7 @@ export class TapStack extends TerraformStack {
       monitoringInterval: 60,
       monitoringRoleArn: rdsMonitoringRole.arn,
       tags: {
-        Name: `hipaa-aurora-instance-2-${environmentSuffix}`,
+        Name: `hipaa-aurora-instance-2-${environmentSuffix}${uniqueSuffix}`,
         Environment: environmentSuffix,
       },
       dependsOn: [auroraCluster, rdsMonitoringRole],
@@ -860,11 +860,11 @@ export class TapStack extends TerraformStack {
     // === LOGGING ===
     // Create CloudWatch Log Groups
     const appLogGroup = new CloudwatchLogGroup(this, 'app-log-group', {
-      name: `/aws/hipaa/application-${deployVersion}-${environmentSuffix}`,
+      name: `/aws/hipaa/application-${deployVersion}-${environmentSuffix}${uniqueSuffix}`,
       retentionInDays: 365,
       kmsKeyId: kmsKey.arn,
       tags: {
-        Name: `hipaa-app-logs-${deployVersion}-${environmentSuffix}`,
+        Name: `hipaa-app-logs-${deployVersion}-${environmentSuffix}${uniqueSuffix}`,
         Compliance: 'HIPAA',
         Environment: environmentSuffix,
       },
@@ -874,7 +874,7 @@ export class TapStack extends TerraformStack {
     appLogGroup.overrideLogicalId(`app-log-group-${deployVersion}`);
 
     const dbLogGroup = new CloudwatchLogGroup(this, 'db-log-group', {
-      name: `/aws/rds/cluster/hipaa-aurora-${deployVersion}-${environmentSuffix}/postgresql`,
+      name: `/aws/rds/cluster/hipaa-aurora-${deployVersion}-${environmentSuffix}${uniqueSuffix}/postgresql`,
       retentionInDays: 365,
       kmsKeyId: kmsKey.arn,
       tags: {
@@ -1074,10 +1074,10 @@ export class TapStack extends TerraformStack {
 
     // Create backup vault
     const backupVault = new BackupVault(this, 'backup-vault', {
-      name: `hipaa-backup-vault-${deployVersion}-${environmentSuffix}`,
+      name: `hipaa-backup-vault-${deployVersion}-${environmentSuffix}${uniqueSuffix}`,
       kmsKeyArn: kmsKey.arn,
       tags: {
-        Name: `hipaa-backup-vault-${deployVersion}-${environmentSuffix}`,
+        Name: `hipaa-backup-vault-${deployVersion}-${environmentSuffix}${uniqueSuffix}`,
         Compliance: 'HIPAA',
         Environment: environmentSuffix,
       },
