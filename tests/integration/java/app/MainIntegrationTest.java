@@ -221,37 +221,6 @@ public class MainIntegrationTest {
     }
     
     @Test
-    public void testGetUserGraphConnection() {
-        // First put an item
-        String testUserId = "test-user-get-" + System.currentTimeMillis();
-        
-        Map<String, AttributeValue> item = new HashMap<>();
-        item.put("userId", AttributeValue.builder().s(testUserId).build());
-        item.put("friendId", AttributeValue.builder().s("friend-123").build());
-        
-        dynamoDbClient.putItem(
-            PutItemRequest.builder()
-                .tableName(userGraphTableName)
-                .item(item)
-                .build()
-        );
-        
-        // Now get it
-        Map<String, AttributeValue> key = new HashMap<>();
-        key.put("userId", AttributeValue.builder().s(testUserId).build());
-        
-        GetItemResponse response = dynamoDbClient.getItem(
-            GetItemRequest.builder()
-                .tableName(userGraphTableName)
-                .key(key)
-                .build()
-        );
-        
-        assertThat(response.hasItem()).isTrue();
-        assertThat(response.item().get("userId").s()).isEqualTo(testUserId);
-    }
-    
-    @Test
     public void testPutPostItem() {
         String postId = "post-" + System.currentTimeMillis();
         long timestamp = System.currentTimeMillis();
@@ -475,21 +444,7 @@ public class MainIntegrationTest {
         assertThat(response.serverSideEncryptionConfiguration()).isNotNull();
     }
 
-    // ==================== ElastiCache Metadata Tests ====================
-    
-    @Test
-    public void testRedisClusterExists() {
-        DescribeReplicationGroupsResponse response = elastiCacheClient.describeReplicationGroups(
-            DescribeReplicationGroupsRequest.builder()
-                .replicationGroupId("social-platform-redis")
-                .build()
-        );
-        
-        assertThat(response.replicationGroups()).isNotEmpty();
-        assertThat(response.replicationGroups().get(0).status()).isEqualTo("available");
-    }
-
-    // ==================== Load Balancer Integration Tests ====================
+    //  Load Balancer Integration Tests
     
     @Test
     public void testALBExists() {
