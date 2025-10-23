@@ -191,10 +191,11 @@ describe('Stack Structure', () => {
 
   test('TapStack with undefined stateBucket to test fallback', () => {
     app = new App();
-    stack = new TapStack(app, 'TestTapStackNoStateBucket', {
+    stack = new TapStack(app, 'TestTapStackUndefinedStateBucket', {
       environmentSuffix: 'test',
-      awsRegion: 'us-east-1',
-      // stateBucket intentionally undefined to test fallback
+      stateBucket: undefined,
+      stateBucketRegion: 'eu-central-1',
+      awsRegion: 'eu-central-1',
     });
     synthesized = Testing.synth(stack);
 
@@ -202,6 +203,62 @@ describe('Stack Structure', () => {
     expect(stack).toBeDefined();
     expect(synthesized).toBeDefined();
   });
-});
 
-// add more test suites and cases as needed
+  test('TapStack with S3 backend enabled via environment variable', () => {
+    // Save original env var
+    const originalEnv = process.env.ENABLE_S3_BACKEND;
+
+    // Set environment variable to enable S3 backend
+    process.env.ENABLE_S3_BACKEND = 'true';
+
+    app = new App();
+    stack = new TapStack(app, 'TestTapStackS3Backend', {
+      environmentSuffix: 'test',
+      stateBucket: 'test-state-bucket',
+      stateBucketRegion: 'eu-central-1',
+      awsRegion: 'eu-central-1',
+    });
+    synthesized = Testing.synth(stack);
+
+    // Verify that TapStack instantiates without errors with S3 backend enabled
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+
+    // Verify S3 backend configuration is present in synthesized output
+    expect(synthesized).toContain('terraform');
+    expect(synthesized).toContain('backend');
+
+    // Restore original env var
+    if (originalEnv !== undefined) {
+      process.env.ENABLE_S3_BACKEND = originalEnv;
+    } else {
+      delete process.env.ENABLE_S3_BACKEND;
+    }
+  });
+
+  test('TapStack with S3 backend disabled (default behavior)', () => {
+    // Save original env var
+    const originalEnv = process.env.ENABLE_S3_BACKEND;
+
+    // Ensure S3 backend is not enabled (default)
+    delete process.env.ENABLE_S3_BACKEND;
+
+    app = new App();
+    stack = new TapStack(app, 'TestTapStackNoS3Backend', {
+      environmentSuffix: 'test',
+      stateBucket: 'test-state-bucket',
+      stateBucketRegion: 'eu-central-1',
+      awsRegion: 'eu-central-1',
+    });
+    synthesized = Testing.synth(stack);
+
+    // Verify that TapStack instantiates without errors
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+
+    // Restore original env var
+    if (originalEnv !== undefined) {
+      process.env.ENABLE_S3_BACKEND = originalEnv;
+    }
+  });
+});

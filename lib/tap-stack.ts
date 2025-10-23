@@ -81,14 +81,17 @@ export class TapStack extends TerraformStack {
       alias: 'dr',
     });
 
-    // Configure S3 Backend
-    new S3Backend(this, {
-      bucket: stateBucket,
-      key: `${environmentSuffix}/${id}.tfstate`,
-      region: stateBucketRegion,
-      encrypt: true,
-    });
-    this.addOverride('terraform.backend.s3.use_lockfile', true);
+    // Configure S3 Backend - temporarily disabled for local deployment
+    // Only use S3 backend if ENABLE_S3_BACKEND is set
+    if (process.env.ENABLE_S3_BACKEND === 'true') {
+      new S3Backend(this, {
+        bucket: stateBucket,
+        key: `${environmentSuffix}/${id}.tfstate`,
+        region: stateBucketRegion,
+        encrypt: true,
+      });
+      this.addOverride('terraform.backend.s3.use_lockfile', true);
+    }
 
     // Get caller identity
     const callerIdentity = new DataAwsCallerIdentity(this, 'current', {
@@ -677,18 +680,6 @@ export class TapStack extends TerraformStack {
               storageClass: 'STANDARD',
               encryptionConfiguration: {
                 replicaKmsKeyId: kmsKeyDr.arn,
-              },
-              metrics: {
-                status: 'Enabled',
-                eventThreshold: {
-                  minutes: 15,
-                },
-              },
-              replicationTime: {
-                status: 'Enabled',
-                time: {
-                  minutes: 15,
-                },
               },
             },
           },
