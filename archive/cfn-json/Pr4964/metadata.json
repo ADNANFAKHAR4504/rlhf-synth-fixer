@@ -20,5 +20,11 @@
     "IAM"
   ],
   "background": "Carbon Credit Trading Platform implementation with serverless architecture",
-  "training_quality": 10
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "matkadturing",
+  "dockerS3Location": ""
 }
