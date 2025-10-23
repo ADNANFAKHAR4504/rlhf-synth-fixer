@@ -1,3 +1,74 @@
+"""
+REQUIRED Mock Configuration Setup for AWS Shell Script Analysis Testing
+====================================================================
+
+This setup is MANDATORY for running and testing AWS resource analysis shell scripts.
+All new resource analysis implementations must follow this testing framework
+to ensure consistent mocking and validation of AWS resources.
+
+Required Setup Steps:
+-------------------
+
+1. Environment Configuration (REQUIRED):
+   - Ensure boto3 is configured with proper credentials
+   - Set required environment variables:
+     - AWS_ENDPOINT_URL
+     - AWS_DEFAULT_REGION
+     - AWS_ACCESS_KEY_ID 
+     - AWS_SECRET_ACCESS_KEY
+
+2. Create Mock Resource Setup (REQUIRED):
+   a. Create a setup function (e.g., setup_your_resource()):
+      - Use boto_client(service_name) to get AWS service client
+      - Create your mock resources using boto3 API calls
+      - Handle idempotency to avoid duplicate resources
+      - Add error handling for existing resources
+
+3. Create Test Function (REQUIRED):
+   a. Define test function (e.g., test_your_resource_analysis(tmp_path)):
+      - Include tmp_path fixture for temporary script location
+      - Call your setup function to create mock resources
+      - Call run_analysis_script(tmp_path) to execute shell script
+      - Assert expected results in the script output:
+        - Check for section headers in output
+        - Verify resource information is present
+        - Validate specific metrics or counts
+        - Test for expected string patterns
+
+Standard Implementation Template:
+------------------------------
+```python
+def setup_your_resource():
+    client = boto_client("your-service")
+    # Create mock resources
+    # Handle existing resources
+    # Add configurations
+
+def test_your_resource_analysis(tmp_path):
+    # Setup resources
+    setup_your_resource()
+    
+    # Run analysis script
+    output = run_analysis_script(tmp_path)
+    
+    # Validate output
+    assert "Your Section Header" in output
+    assert "Expected Resource Info" in output
+    # Add more specific assertions
+```
+
+Reference Implementations:
+-----------------------
+See existing implementations for detailed examples:
+- EBS volumes (setup_ebs_volumes, test_ebs_volumes_analysis)
+- Security groups (setup_security_groups, test_security_groups_analysis)
+- CloudWatch logs (setup_log_group_and_streams, test_log_streams_analysis)
+
+Note: Without this mock configuration setup, shell script analysis tests will not 
+function correctly and may produce invalid results. The tmp_path fixture is 
+required for proper script execution in the test environment.
+"""
+
 import json
 import os
 import re

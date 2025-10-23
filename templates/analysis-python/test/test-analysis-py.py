@@ -1,3 +1,72 @@
+"""
+REQUIRED Mock Configuration Setup for AWS Resource Analysis Testing
+================================================================
+
+This setup is MANDATORY for running and testing AWS resource analysis tasks.
+All new resource analysis implementations must follow this testing framework
+to ensure consistent mocking and validation of AWS resources.
+
+Required Setup Steps:
+-------------------
+
+1. Environment Configuration (REQUIRED):
+   - Ensure boto3 is configured with proper credentials
+   - Set required environment variables:
+     - AWS_ENDPOINT_URL
+     - AWS_DEFAULT_REGION
+     - AWS_ACCESS_KEY_ID 
+     - AWS_SECRET_ACCESS_KEY
+
+2. Create Mock Resource Setup (REQUIRED):
+   a. Create a setup function (e.g., setup_your_resource()):
+      - Use boto_client(service_name) to get AWS service client
+      - Create your mock resources using boto3 API calls
+      - Handle idempotency to avoid duplicate resources
+      - Add error handling for existing resources
+
+3. Create Test Function (REQUIRED):
+   a. Define test function (e.g., test_your_resource_analysis())
+   b. Call your setup function to create mock resources
+   c. Call run_analysis_script() to execute analysis
+   d. Assert expected results in the JSON output:
+      - Check for correct section in results
+      - Validate structure and required fields
+      - Verify resource counts and metrics
+      - Test specific resource attributes
+
+Standard Implementation Template:
+------------------------------
+```python
+def setup_your_resource():
+    client = boto_client("your-service")
+    # Create mock resources
+    # Handle existing resources
+    # Add configurations
+
+def test_your_resource_analysis():
+    # Setup resources
+    setup_your_resource()
+    
+    # Run analysis
+    results = run_analysis_script()
+    
+    # Validate results
+    assert "YourSection" in results
+    assert "ExpectedField" in results["YourSection"]
+    # Add more specific assertions
+```
+
+Reference Implementations:
+-----------------------
+See existing implementations for detailed examples:
+- EBS volumes (setup_ebs_volumes)
+- Security groups (setup_security_groups)
+- CloudWatch logs (setup_log_group_and_streams)
+
+Note: Without this mock configuration setup, resource analysis tests will not 
+function correctly and may produce invalid results.
+"""
+
 import json
 import os
 import subprocess
