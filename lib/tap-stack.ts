@@ -150,12 +150,15 @@ class StorageStack extends cdk.NestedStack {
 
     // Data bucket for incoming files
     this.dataBucket = new s3.Bucket(this, 'MigrationDataBucket', {
-      bucketName: `migration-data-${props.environmentSuffix}-${this.account}`,
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       eventBridgeEnabled: true, // Enable EventBridge for S3 events
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy:
+        props.environmentSuffix === 'prod'
+          ? cdk.RemovalPolicy.RETAIN
+          : cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: props.environmentSuffix !== 'prod',
       lifecycleRules: [
         {
           id: 'DeleteOldVersions',
@@ -167,11 +170,14 @@ class StorageStack extends cdk.NestedStack {
 
     // Script bucket for Glue scripts
     this.scriptBucket = new s3.Bucket(this, 'ScriptBucket', {
-      bucketName: `migration-scripts-${props.environmentSuffix}-${this.account}`,
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy:
+        props.environmentSuffix === 'prod'
+          ? cdk.RemovalPolicy.RETAIN
+          : cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: props.environmentSuffix !== 'prod',
     });
   }
 }
@@ -226,7 +232,6 @@ class DatabaseStack extends cdk.NestedStack {
         preferredWindow: '03:00-04:00',
       },
       cloudwatchLogsExports: ['error', 'general', 'slowquery', 'audit'],
-      clusterIdentifier: `migration-aurora-${props.environmentSuffix}`,
       defaultDatabaseName: 'migrationdb',
     });
   }
@@ -1025,7 +1030,6 @@ class LoggingStack extends cdk.NestedStack {
     // Create OpenSearch domain
     this.openSearchDomain = new opensearch.Domain(this, 'AuditLogDomain', {
       version: opensearch.EngineVersion.OPENSEARCH_2_11,
-      domainName: `migration-audit-logs-${props.environmentSuffix}`,
       capacity: {
         dataNodes: 2,
         dataNodeInstanceType: 'r6g.large.search',
@@ -1053,24 +1057,30 @@ class LoggingStack extends cdk.NestedStack {
         appLogEnabled: true,
         slowIndexLogEnabled: true,
       },
-      accessPolicies: [
-        new iam.PolicyStatement({
-          effect: iam.Effect.ALLOW,
-          principals: [new iam.AnyPrincipal()],
-          actions: ['es:*'],
-          resources: [
-            `arn:aws:es:${this.region}:${this.account}:domain/migration-audit-logs-${props.environmentSuffix}/*`,
-          ],
-        }),
-      ],
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy:
+        props.environmentSuffix === 'prod'
+          ? cdk.RemovalPolicy.RETAIN
+          : cdk.RemovalPolicy.DESTROY,
     });
 
+    this.openSearchDomain.addAccessPolicies(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.AnyPrincipal()],
+        actions: ['es:*'],
+        resources: [
+          `${this.openSearchDomain.domainArn}/*`,
+          this.openSearchDomain.domainArn,
+        ],
+      })
+    );
     // Create log group for centralized logging
     new logs.LogGroup(this, 'CentralLogGroup', {
-      logGroupName: `/aws/migration/pipeline-${props.environmentSuffix}`,
       retention: logs.RetentionDays.ONE_MONTH,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy:
+        props.environmentSuffix === 'prod'
+          ? cdk.RemovalPolicy.RETAIN
+          : cdk.RemovalPolicy.DESTROY,
     });
   }
 }
