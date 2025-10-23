@@ -883,6 +883,84 @@
         ]
       }
     },
+    "DatabaseInitLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Handler": "index.handler",
+        "Runtime": "python3.12",
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport urllib3\nimport os\nfrom datetime import datetime, timezone\n\ndef send_response(event, context, response_status, response_data=None, physical_resource_id=None):\n    response_url = event['ResponseURL']\n    response_body = {\n        'Status': response_status,\n        'Reason': f'See CloudWatch Log Stream: {context.log_stream_name}',\n        'PhysicalResourceId': physical_resource_id or context.log_stream_name,\n        'StackId': event['StackId'],\n        'RequestId': event['RequestId'],\n        'LogicalResourceId': event['LogicalResourceId'],\n        'Data': response_data or {}\n    }\n    \n    json_response_body = json.dumps(response_body)\n    headers = {\n        'content-type': '',\n        'content-length': str(len(json_response_body))\n    }\n    \n    http = urllib3.PoolManager()\n    try:\n        response = http.request('PUT', response_url, body=json_response_body, headers=headers)\n        print(f\"Status code: {response.status}\")\n    except Exception as e:\n        print(f\"send_response failed: {e}\")\n\ndef handler(event, context):\n    print(f\"Event: {json.dumps(event)}\")\n    \n    request_type = event.get('RequestType')\n    if request_type == 'Delete':\n        send_response(event, context, 'SUCCESS')\n        return\n    \n    if request_type not in ['Create', 'Update']:\n        send_response(event, context, 'FAILED', {'Error': 'Unsupported RequestType'})\n        return\n    \n    try:\n        # Initialize RDS Data API client\n        rds_data = boto3.client('rds-data')\n        \n        # Get database connection details from environment variables\n        db_cluster_arn = os.environ.get('DB_CLUSTER_ARN')\n        db_secret_arn = os.environ.get('DB_SECRET_ARN')\n        db_name = os.environ.get('DB_NAME')\n        \n        if not all([db_cluster_arn, db_secret_arn, db_name]):\n            raise ValueError(\"Missing required database environment variables\")\n        \n        # Create audit_log table\n        create_table_sql = \"\"\"\n        CREATE TABLE IF NOT EXISTS audit_log (\n            id SERIAL PRIMARY KEY,\n            report_id VARCHAR(100) NOT NULL,\n            delivery_status VARCHAR(50) NOT NULL,\n            delivery_timestamp TIMESTAMP WITH TIME ZONE NOT NULL,\n            s3_url TEXT NOT NULL,\n            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP\n        )\n        \"\"\"\n        \n        print(f\"Creating audit_log table...\")\n        response = rds_data.execute_statement(\n            resourceArn=db_cluster_arn,\n            secretArn=db_secret_arn,\n            database=db_name,\n            sql=create_table_sql\n        )\n        \n        print(f\"Table created successfully: {response}\")\n        \n        # Create an index on report_id for better query performance\n        create_index_sql = \"\"\"\n        CREATE INDEX IF NOT EXISTS idx_audit_log_report_id ON audit_log(report_id)\n        \"\"\"\n        \n        print(f\"Creating index on report_id...\")\n        rds_data.execute_statement(\n            resourceArn=db_cluster_arn,\n            secretArn=db_secret_arn,\n            database=db_name,\n            sql=create_index_sql\n        )\n        \n        print(f\"Database initialization completed successfully\")\n        send_response(event, context, 'SUCCESS', {'Message': 'Database initialized successfully'})\n        \n    except Exception as e:\n        print(f\"Database initialization failed: {str(e)}\")\n        send_response(event, context, 'FAILED', {'Error': str(e)})\n"
+        },
+        "Timeout": 180,
+        "MemorySize": 256,
+        "Environment": {
+          "Variables": {
+            "DB_CLUSTER_ARN": {
+              "Fn::Sub": "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraCluster}"
+            },
+            "DB_SECRET_ARN": {
+              "Fn::GetAtt": [
+                "AuroraCluster",
+                "MasterUserSecret.SecretArn"
+              ]
+            },
+            "DB_NAME": "reportingdb"
+          }
+        },
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "VpcConfig": {
+          "SecurityGroupIds": [
+            {
+              "Ref": "LambdaSecurityGroup"
+            }
+          ],
+          "SubnetIds": [
+            {
+              "Ref": "SubnetA"
+            },
+            {
+              "Ref": "SubnetB"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Function",
+            "Value": "DatabaseInit"
+          }
+        ]
+      }
+    },
+    "DatabaseInitLambdaPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "DatabaseInitLambda"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "cloudformation.amazonaws.com"
+      }
+    },
+    "DatabaseInitCustomResource": {
+      "Type": "AWS::CloudFormation::CustomResource",
+      "DependsOn": ["AuroraCluster", "AuroraInstance", "DatabaseInitLambdaPermission"],
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "DatabaseInitLambda",
+            "Arn"
+          ]
+        },
+        "DatabaseClusterArn": {
+          "Fn::Sub": "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraCluster}"
+        }
+      }
+    },
     "ReportingStateMachine": {
       "Type": "AWS::StepFunctions::StateMachine",
       "Properties": {
