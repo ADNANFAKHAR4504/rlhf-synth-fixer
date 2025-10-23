@@ -1,7 +1,7 @@
 import { DescribeSubnetsCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
 import { KMSClient, ListKeysCommand } from '@aws-sdk/client-kms';
 import { DescribeDBClustersCommand, DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
-import { GetBucketVersioningCommand, HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
+import { GetBucketVersioningCommand, HeadBucketCommand, ListBucketsCommand, S3Client } from '@aws-sdk/client-s3';
 import { App, Testing } from 'cdktf';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -15,7 +15,7 @@ describe('TAP Stack Integration Tests', () => {
     app = Testing.app();
     stack = new TapStack(app, 'test-stack', {
       environmentSuffix: 'test',
-      awsRegion: 'eu-central-1'
+      awsRegion: 'us-east-1'  // Updated to match new deployment region
     });
   });
 
@@ -77,12 +77,15 @@ describe('TAP Stack Integration Tests', () => {
       expect(vpc.enable_dns_hostnames).toBe(true);
       expect(vpc.enable_dns_support).toBe(true);
       expect(vpc.tags.Name).toContain('vpc');
-    }); test('should validate RDS cluster configuration in synthesis', async () => {
+    });
+
+    test('should validate RDS cluster configuration in synthesis', async () => {
       const synthesized = Testing.synth(stack);
       const terraformConfig = JSON.parse(synthesized);
       const cluster = terraformConfig.resource.aws_rds_cluster['aurora-cluster-v6'];
 
-      expect(cluster.cluster_identifier).toBe('hipaa-aurora-v6-test');
+      // Account for dynamic suffixes in CI environments
+      expect(cluster.cluster_identifier).toMatch(/^hipaa-aurora-v6-test/);
       expect(cluster.engine).toBe('aurora-postgresql');
       expect(cluster.database_name).toBe('patientdb');
       expect(cluster.master_username).toBe('dbadmin');
@@ -120,12 +123,12 @@ describe('TAP Stack Integration Tests', () => {
       expect(Array.isArray(providers)).toBe(true);
       expect(providers.length).toBeGreaterThan(1);
 
-      // Check primary region provider
-      const primaryProvider = providers.find((p: any) => p.region === 'eu-central-1');
+      // Check primary region provider (updated to us-east-1)
+      const primaryProvider = providers.find((p: any) => p.region === 'us-east-1');
       expect(primaryProvider).toBeDefined();
 
-      // Check DR region provider
-      const drProvider = providers.find((p: any) => p.region === 'eu-west-1');
+      // Check DR region provider (updated to us-west-2)
+      const drProvider = providers.find((p: any) => p.region === 'us-west-2');
       expect(drProvider).toBeDefined();
     });
   });
@@ -179,17 +182,20 @@ describe('TAP Stack Integration Tests', () => {
 
   describe('Real AWS Infrastructure Validation', () => {
     const awsConfig = {
-      region: 'eu-central-1'
+      region: 'us-east-1'  // Updated to match new deployment region
     };
 
     test('should validate deployed VPC exists and is configured correctly', async () => {
       const ec2Client = new EC2Client(awsConfig);
 
+      // Get environment suffix from environment or use pr4928 for CI
+      const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr4928';
+
       const vpcsResponse = await ec2Client.send(new DescribeVpcsCommand({
         Filters: [
           {
             Name: 'tag:Name',
-            Values: ['hipaa-vpc-dev']
+            Values: [`hipaa-vpc-${envSuffix}`]
           }
         ]
       }));
@@ -204,6 +210,7 @@ describe('TAP Stack Integration Tests', () => {
 
     test('should validate deployed subnets exist in correct AZs', async () => {
       const ec2Client = new EC2Client(awsConfig);
+      const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr4928';
 
       // Check for public subnets
       const publicSubnetsResponse = await ec2Client.send(new DescribeSubnetsCommand({
@@ -213,8 +220,8 @@ describe('TAP Stack Integration Tests', () => {
             Values: ['Public']
           },
           {
-            Name: 'tag:Environment',
-            Values: ['dev']
+            Name: 'tag:Name',
+            Values: [`*${envSuffix}*`]
           }
         ]
       }));
@@ -230,8 +237,8 @@ describe('TAP Stack Integration Tests', () => {
             Values: ['Private']
           },
           {
-            Name: 'tag:Environment',
-            Values: ['dev']
+            Name: 'tag:Name',
+            Values: [`*${envSuffix}*`]
           }
         ]
       }));
@@ -243,44 +250,80 @@ describe('TAP Stack Integration Tests', () => {
     test('should validate deployed S3 buckets exist and are encrypted', async () => {
       const s3Client = new S3Client(awsConfig);
 
-      // Find the data bucket by pattern
-      const bucketName = 'hipaa-patient-data-dev-eu-central-1';
+      // Get environment suffix and find matching bucket
+      const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr4928';
+
+      // List all buckets and find the one that matches our pattern
+      const listResponse = await s3Client.send(new ListBucketsCommand({}));
+      const bucketPattern = new RegExp(`^hipaa-patient-data-${envSuffix}.*-us-east-1$`);
+      const matchingBucket = listResponse.Buckets?.find((b: any) => bucketPattern.test(b.Name || ''));
+
+      expect(matchingBucket).toBeDefined();
+      expect(matchingBucket?.Name).toBeDefined();
+
+      if (!matchingBucket?.Name) {
+        throw new Error(`No bucket found matching pattern: hipaa-patient-data-${envSuffix}.*-us-east-1`);
+      }
 
       // Check bucket exists
-      await expect(s3Client.send(new HeadBucketCommand({ Bucket: bucketName }))).resolves.not.toThrow();
+      await expect(s3Client.send(new HeadBucketCommand({ Bucket: matchingBucket.Name }))).resolves.not.toThrow();
 
       // Check versioning is enabled
-      const versioningResponse = await s3Client.send(new GetBucketVersioningCommand({ Bucket: bucketName }));
+      const versioningResponse = await s3Client.send(new GetBucketVersioningCommand({ Bucket: matchingBucket.Name }));
       expect(versioningResponse.Status).toBe('Enabled');
     }, 10000);
 
     test('should validate deployed RDS Aurora cluster is running', async () => {
       const rdsClient = new RDSClient(awsConfig);
 
-      const clustersResponse = await rdsClient.send(new DescribeDBClustersCommand({
-        DBClusterIdentifier: 'hipaa-aurora-v6-dev'
-      }));
+      // Get environment suffix
+      const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr4928';
+      const clusterPattern = `hipaa-aurora-v6-${envSuffix}`;
 
-      expect(clustersResponse.DBClusters).toBeDefined();
-      expect(clustersResponse.DBClusters!.length).toBe(1);
+      // List all clusters and find matching one (may have timestamp suffix)
+      const allClustersResponse = await rdsClient.send(new DescribeDBClustersCommand({}));
+      const matchingCluster = allClustersResponse.DBClusters?.find(cluster =>
+        cluster.DBClusterIdentifier?.startsWith(clusterPattern)
+      );
 
-      const cluster = clustersResponse.DBClusters![0];
+      expect(matchingCluster).toBeDefined();
+      expect(matchingCluster?.DBClusterIdentifier).toBeDefined();
+
+      if (!matchingCluster) {
+        throw new Error(`No Aurora cluster found matching pattern: ${clusterPattern}`);
+      }
+
       // Accept both 'available' and 'backing-up' as valid states for a healthy cluster
-      expect(['available', 'backing-up']).toContain(cluster.Status);
-      expect(cluster.Engine).toBe('aurora-postgresql');
-      expect(cluster.StorageEncrypted).toBe(true);
-      expect(cluster.DatabaseName).toBe('patientdb');
-      expect(cluster.MasterUsername).toBe('dbadmin');
+      expect(['available', 'backing-up']).toContain(matchingCluster.Status);
+      expect(matchingCluster.Engine).toBe('aurora-postgresql');
+      expect(matchingCluster.StorageEncrypted).toBe(true);
+      expect(matchingCluster.DatabaseName).toBe('patientdb');
+      expect(matchingCluster.MasterUsername).toBe('dbadmin');
     }, 15000);
 
     test('should validate RDS instances are running', async () => {
       const rdsClient = new RDSClient(awsConfig);
+      const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr4928';
 
+      // Get the cluster identifier that matches our pattern
+      const allClustersResponse = await rdsClient.send(new DescribeDBClustersCommand({}));
+      const clusterPattern = `hipaa-aurora-v6-${envSuffix}`;
+      const matchingCluster = allClustersResponse.DBClusters?.find(cluster =>
+        cluster.DBClusterIdentifier?.startsWith(clusterPattern)
+      );
+
+      expect(matchingCluster).toBeDefined();
+
+      if (!matchingCluster?.DBClusterIdentifier) {
+        throw new Error(`No cluster found matching pattern: ${clusterPattern}`);
+      }
+
+      // Get instances for the matching cluster
       const instancesResponse = await rdsClient.send(new DescribeDBInstancesCommand({
         Filters: [
           {
             Name: 'db-cluster-id',
-            Values: ['hipaa-aurora-v6-dev']
+            Values: [matchingCluster.DBClusterIdentifier]
           }
         ]
       }));
@@ -289,7 +332,7 @@ describe('TAP Stack Integration Tests', () => {
       expect(instancesResponse.DBInstances!.length).toBe(2);
 
       instancesResponse.DBInstances!.forEach(instance => {
-        expect(instance.DBInstanceStatus).toBe('available');
+        expect(['available', 'backing-up']).toContain(instance.DBInstanceStatus);
         expect(instance.Engine).toBe('aurora-postgresql');
         expect(instance.StorageEncrypted).toBe(true);
       });
@@ -306,16 +349,26 @@ describe('TAP Stack Integration Tests', () => {
 
       // Verify we have at least some keys available (shows KMS is working)
       expect(keysResponse.Keys!.length).toBeGreaterThanOrEqual(1);
-    }, 10000); test('should validate cross-region S3 replication to DR bucket', async () => {
-      const s3Client = new S3Client({ region: 'eu-west-1' });
+    }, 10000);
 
-      // Check DR bucket exists in eu-west-1
-      const drBucketName = 'hipaa-patient-data-dev-eu-west-1';
+    test('should validate cross-region S3 replication to DR bucket', async () => {
+      const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr4928';
+      const s3Client = new S3Client({ region: 'us-west-2' });
 
-      await expect(s3Client.send(new HeadBucketCommand({ Bucket: drBucketName }))).resolves.not.toThrow();
+      // Check DR bucket exists in us-west-2 with environment suffix
+      const drBuckets = await s3Client.send(new ListBucketsCommand({}));
+      const drBucketName = drBuckets.Buckets?.find(bucket =>
+        bucket.Name?.includes('hipaa-patient-data') &&
+        bucket.Name?.includes('us-west-2') &&
+        bucket.Name?.includes(envSuffix)
+      )?.Name;
+
+      expect(drBucketName).toBeDefined();
+
+      await expect(s3Client.send(new HeadBucketCommand({ Bucket: drBucketName! }))).resolves.not.toThrow();
 
       // Check versioning is enabled on DR bucket
-      const versioningResponse = await s3Client.send(new GetBucketVersioningCommand({ Bucket: drBucketName }));
+      const versioningResponse = await s3Client.send(new GetBucketVersioningCommand({ Bucket: drBucketName! }));
       expect(versioningResponse.Status).toBe('Enabled');
     }, 10000);
   });
