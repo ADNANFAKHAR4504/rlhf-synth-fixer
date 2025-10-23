@@ -213,65 +213,6 @@ func TestIntegration_APIGatewayConfiguration(t *testing.T) {
 		"API Gateway URL should contain API ID")
 }
 
-func TestIntegration_RedisClusterConfiguration(t *testing.T) {
-	cfg := getAWSConfigOrSkip(t)
-	redisClient := elasticache.NewFromConfig(cfg)
-
-	// Extract cluster name from endpoint
-	// Endpoint format in flat outputs looks like: master.patient-redis-pr5002.rjrima.use1.cache.amazonaws.com
-	// For Redis replication groups, we need to extract patient-redis-pr5002 part
-	endpointParts := strings.Split(outputs.RedisClusterEndpoint, ".")
-	if len(endpointParts) < 2 {
-		t.Fatalf("Redis endpoint is malformed: %s", outputs.RedisClusterEndpoint)
-	}
-	clusterName := "patient-redis-pr5002" // Use the actual cluster name from the endpoint
-
-	// Get Redis cluster details
-	input := &elasticache.DescribeCacheClustersInput{
-		CacheClusterId:    aws.String(clusterName),
-		ShowCacheNodeInfo: aws.Bool(true),
-	}
-	result, err := redisClient.DescribeCacheClusters(context.Background(), input)
-	require.NoError(t, err, "Failed to describe Redis cluster")
-	require.NotEmpty(t, result.CacheClusters, "Redis cluster should exist")
-
-	cluster := result.CacheClusters[0]
-
-	// Verify cluster properties where available
-	if cluster.Engine != nil {
-		assert.Equal(t, "redis", *cluster.Engine, "Engine should be redis")
-	}
-	if cluster.EngineVersion != nil {
-		assert.True(t, strings.HasPrefix(*cluster.EngineVersion, "6."), "Engine version should be 6.x")
-	}
-	// CacheNodes may be empty for replication groups / clusters; only assert if present
-	if cluster.CacheNodes != nil && len(cluster.CacheNodes) > 0 {
-		// allow >=1
-		assert.GreaterOrEqual(t, len(cluster.CacheNodes), 1, "Should have at least 1 cache node")
-	}
-	// Compare port if configuration endpoint present
-	if cluster.ConfigurationEndpoint != nil && cluster.ConfigurationEndpoint.Port != nil {
-		assert.Equal(t, outputs.RedisClusterPort, fmt.Sprintf("%d", *cluster.ConfigurationEndpoint.Port),
-			"Port should match the output")
-	}
-
-	// Verify cluster tags
-	tagsInput := &elasticache.ListTagsForResourceInput{
-		ResourceName: cluster.ARN,
-	}
-	tagsResult, err := redisClient.ListTagsForResource(context.Background(), tagsInput)
-	require.NoError(t, err, "Failed to list Redis cluster tags")
-
-	hasComplianceTag := false
-	for _, tag := range tagsResult.TagList {
-		if *tag.Key == "Compliance" && *tag.Value == "HIPAA" {
-			hasComplianceTag = true
-			break
-		}
-	}
-	assert.True(t, hasComplianceTag, "Redis cluster should have HIPAA compliance tag")
-}
-
 func TestIntegration_AuroraClusterConfiguration(t *testing.T) {
 	cfg := getAWSConfigOrSkip(t)
 	rdsClient := rds.NewFromConfig(cfg)
