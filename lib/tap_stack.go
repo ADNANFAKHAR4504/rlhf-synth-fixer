@@ -71,7 +71,7 @@ func main() {
 		// Create public subnets in different AZs within default VPC CIDR
 		publicSubnet1, err := ec2.NewSubnet(ctx, fmt.Sprintf("patient-api-public-subnet-1-%s", environmentSuffix), &ec2.SubnetArgs{
 			VpcId:               vpcId,
-			CidrBlock:           pulumi.String("172.31.80.0/24"),
+			CidrBlock:           pulumi.String("172.31.128.0/24"),
 			AvailabilityZone:    pulumi.String("us-east-1a"),
 			MapPublicIpOnLaunch: pulumi.Bool(true),
 			Tags: pulumi.StringMap{
@@ -85,7 +85,7 @@ func main() {
 
 		publicSubnet2, err := ec2.NewSubnet(ctx, fmt.Sprintf("patient-api-public-subnet-2-%s", environmentSuffix), &ec2.SubnetArgs{
 			VpcId:               vpcId,
-			CidrBlock:           pulumi.String("172.31.81.0/24"),
+			CidrBlock:           pulumi.String("172.31.129.0/24"),
 			AvailabilityZone:    pulumi.String("us-east-1b"),
 			MapPublicIpOnLaunch: pulumi.Bool(true),
 			Tags: pulumi.StringMap{
@@ -100,7 +100,7 @@ func main() {
 		// Create private subnets for database and cache
 		privateSubnet1, err := ec2.NewSubnet(ctx, fmt.Sprintf("patient-api-private-subnet-1-%s", environmentSuffix), &ec2.SubnetArgs{
 			VpcId:            vpcId,
-			CidrBlock:        pulumi.String("172.31.90.0/24"),
+			CidrBlock:        pulumi.String("172.31.130.0/24"),
 			AvailabilityZone: pulumi.String("us-east-1a"),
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String(fmt.Sprintf("patient-api-private-subnet-1-%s", environmentSuffix)),
@@ -113,7 +113,7 @@ func main() {
 
 		privateSubnet2, err := ec2.NewSubnet(ctx, fmt.Sprintf("patient-api-private-subnet-2-%s", environmentSuffix), &ec2.SubnetArgs{
 			VpcId:            vpcId,
-			CidrBlock:        pulumi.String("172.31.91.0/24"),
+			CidrBlock:        pulumi.String("172.31.131.0/24"),
 			AvailabilityZone: pulumi.String("us-east-1b"),
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String(fmt.Sprintf("patient-api-private-subnet-2-%s", environmentSuffix)),
