@@ -1,3 +1,7 @@
+/* Updated tap-stack.ts — main CDK application file
+   - Fixes circular dependency by moving SNS subscription and remediation env wiring
+     into LambdaStack and creating MessagingStack earlier.
+*/
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -17,6 +21,7 @@ import * as opensearch from 'aws-cdk-lib/aws-opensearchservice';
 import * as datasync from 'aws-cdk-lib/aws-datasync';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as cr from 'aws-cdk-lib/custom-resources';
 import { Duration } from 'aws-cdk-lib';
 
 interface TapStackProps extends cdk.StackProps {
@@ -120,6 +125,13 @@ class NetworkStack extends cdk.NestedStack {
         description: 'Security group for DataSync agents',
         allowAllOutbound: true,
       }
+    );
+
+    // NEW: Allow HTTP for DataSync agent activation
+    this.dataSyncSecurityGroup.addIngressRule(
+      ec2.Peer.ipv4(this.vpc.vpcCidrBlock),
+      ec2.Port.tcp(80),
+      'Allow HTTP for DataSync agent activation'
     );
   }
 }
@@ -283,7 +295,35 @@ class GlueStack extends cdk.NestedStack {
   }
 }
 
-// LambdaStack - Lambda Functions (NO S3 NOTIFICATIONS HERE!)
+// MessagingStack - SNS Topics (no Lambda function dependencies)
+class MessagingStack extends cdk.NestedStack {
+  public readonly validationTopic: sns.Topic;
+
+  constructor(
+    scope: Construct,
+    id: string,
+    props: cdk.NestedStackProps & {
+      environmentSuffix: string;
+    }
+  ) {
+    super(scope, id, props);
+
+    // Create SNS topic for validation results (only the topic)
+    this.validationTopic = new sns.Topic(this, 'ValidationTopic', {
+      topicName: `migration-validation-${props.environmentSuffix}`,
+      displayName: 'Migration Validation Results',
+    });
+
+    // Grant SNS publish permission to Glue (service principal)
+    this.validationTopic.grantPublish(
+      new iam.ServicePrincipal('glue.amazonaws.com')
+    );
+
+    // Note: Subscriptions to this topic are created in LambdaStack to avoid nested stack cycles.
+  }
+}
+
+// LambdaStack - Lambda Functions and subscribe to validationTopic
 class LambdaStack extends cdk.NestedStack {
   public readonly glueTriggerFunction: lambda.Function;
   public readonly stepFunctionTriggerFunction: lambda.Function;
@@ -298,6 +338,7 @@ class LambdaStack extends cdk.NestedStack {
       vpc: ec2.Vpc;
       lambdaSecurityGroup: ec2.SecurityGroup;
       environmentSuffix: string;
+      validationTopic?: sns.Topic; // NEW: accept topic to create subscriptions
     }
   ) {
     super(scope, id, props);
@@ -463,38 +504,27 @@ def handler(event, context):
         securityGroups: [props.lambdaSecurityGroup],
       }
     );
-  }
-}
 
-// MessagingStack - SNS Topics
-class MessagingStack extends cdk.NestedStack {
-  public readonly validationTopic: sns.Topic;
+    // If a validationTopic is supplied, create subscriptions here (breaks nested-stack cycle)
+    if (props.validationTopic) {
+      // Subscribe step function trigger and remediation lambda to validation topic
+      props.validationTopic.addSubscription(
+        new subscriptions.LambdaSubscription(this.stepFunctionTriggerFunction)
+      );
+      props.validationTopic.addSubscription(
+        new subscriptions.LambdaSubscription(this.remediationFunction)
+      );
 
-  constructor(
-    scope: Construct,
-    id: string,
-    props: cdk.NestedStackProps & {
-      stepFunctionTriggerFunction: lambda.Function;
-      environmentSuffix: string;
+      // Set environment variable for remediation function
+      this.remediationFunction.addEnvironment(
+        'ALERT_TOPIC_ARN',
+        props.validationTopic.topicArn
+      );
+
+      // Grant publish from lambdas (if lambdas will publish) - not necessary for subscription but OK to grant
+      props.validationTopic.grantPublish(this.remediationFunction);
+      props.validationTopic.grantPublish(this.stepFunctionTriggerFunction);
     }
-  ) {
-    super(scope, id, props);
-
-    // Create SNS topic for validation results
-    this.validationTopic = new sns.Topic(this, 'ValidationTopic', {
-      topicName: `migration-validation-${props.environmentSuffix}`,
-      displayName: 'Migration Validation Results',
-    });
-
-    // Subscribe Lambda function to SNS topic
-    this.validationTopic.addSubscription(
-      new subscriptions.LambdaSubscription(props.stepFunctionTriggerFunction)
-    );
-
-    // Grant SNS publish permission to Glue (via resource policy)
-    this.validationTopic.grantPublish(
-      new iam.ServicePrincipal('glue.amazonaws.com')
-    );
   }
 }
 
@@ -682,9 +712,10 @@ class OrchestrationStack extends cdk.NestedStack {
   }
 }
 
-// DataSyncStack - AWS DataSync Configuration
+// DataSyncStack - AWS DataSync Configuration (FIXED)
 class DataSyncStack extends cdk.NestedStack {
   public readonly dataSyncTask: datasync.CfnTask;
+  public readonly agentArn: string; // NEW: To expose agent ARN
 
   constructor(
     scope: Construct,
@@ -697,6 +728,143 @@ class DataSyncStack extends cdk.NestedStack {
     }
   ) {
     super(scope, id, props);
+
+    // NEW: Step 1 - Resolve DataSync AMI via SSM Parameter Store
+    const dataSyncAmi = ec2.MachineImage.fromSsmParameter(
+      '/aws/service/datasync/ami/us-west-2',
+      { os: ec2.OperatingSystemType.LINUX }
+    );
+
+    // NEW: Step 2 - Launch EC2 Instance for DataSync Agent
+    const agentInstance = new ec2.Instance(this, 'DataSyncAgentEC2', {
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.M5,
+        ec2.InstanceSize.XLARGE
+      ),
+      machineImage: dataSyncAmi,
+      vpc: props.vpc,
+      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
+      securityGroup: props.dataSyncSecurityGroup,
+      keyName: `migration-keypair-${props.environmentSuffix}`, // REPLACE: Create in AWS Console
+      role: new iam.Role(this, 'DataSyncEC2Role', {
+        assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
+        managedPolicies: [
+          iam.ManagedPolicy.fromAwsManagedPolicyName('AWSDataSyncFullAccess'),
+        ],
+      }),
+    });
+    const userData = ec2.UserData.forLinux({ shebang: '#!/bin/bash' });
+    userData.addCommands(
+      'yum update -y',
+      'systemctl start datasync-agent',
+      'systemctl enable datasync-agent'
+    );
+    agentInstance.addUserData(userData.render());
+
+    // NEW: Step 3 - Custom Resource to Activate DataSync Agent
+    const activationFunction = new lambda.Function(
+      this,
+      'AgentActivatorFunction',
+      {
+        runtime: lambda.Runtime.NODEJS_20_X,
+        handler: 'index.handler',
+        code: lambda.Code.fromInline(`
+        const { EC2Client, DescribeInstancesCommand } = require('@aws-sdk/client-ec2');
+        const { DataSyncClient, CreateAgentCommand } = require('@aws-sdk/client-datasync');
+        const https = require('https');
+        exports.handler = async (event) => {
+          if (event.RequestType === 'Delete') return { PhysicalResourceId: event.PhysicalResourceId };
+          const instanceId = process.env.INSTANCE_ID;
+          const ec2 = new EC2Client({ region: 'us-west-2' });
+          const resp = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }));
+          const privateIp = resp.Reservations[0].Instances[0].PrivateIpAddress;
+          return new Promise((resolve, reject) => {
+            https.get(\`http://\${privateIp}/activationkey\`, (res) => {
+              let data = '';
+              res.on('data', (chunk) => data += chunk);
+              res.on('end', async () => {
+                const activationKey = data.trim();
+                const client = new DataSyncClient({ region: 'us-west-2' });
+                try {
+                  const command = new CreateAgentCommand({ 
+                    ActivationKey: activationKey, 
+                    AgentName: 'MigrationAgent-${props.environmentSuffix}' 
+                  });
+                  const result = await client.send(command);
+                  resolve({ PhysicalResourceId: result.AgentArn, Data: { Arn: result.AgentArn } });
+                } catch (err) { reject(err); }
+              });
+            }).on('error', reject);
+          });
+        };
+      `),
+        timeout: Duration.minutes(5),
+        environment: { INSTANCE_ID: agentInstance.instanceId },
+        vpc: props.vpc,
+        vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+        securityGroups: [props.dataSyncSecurityGroup],
+      }
+    );
+
+    activationFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['datasync:CreateAgent', 'ec2:DescribeInstances'],
+        resources: ['*'],
+      })
+    );
+
+    const activationCustomResource = new cr.AwsCustomResource(
+      this,
+      'DataSyncAgentActivator',
+      {
+        onCreate: {
+          service: 'Lambda',
+          action: 'invoke',
+          parameters: { FunctionName: activationFunction.functionName },
+          physicalResourceId: cr.PhysicalResourceId.of('DataSyncAgent'),
+        },
+        onUpdate: {
+          service: 'Lambda',
+          action: 'invoke',
+          parameters: { FunctionName: activationFunction.functionName },
+          physicalResourceId: cr.PhysicalResourceId.of('DataSyncAgent'),
+        },
+        onDelete: {
+          service: 'DataSync',
+          action: 'deleteAgent',
+          parameters: {
+            AgentArn: { 'Fn::GetAtt': ['DataSyncAgentActivator', 'Data.Arn'] },
+          },
+          physicalResourceId: cr.PhysicalResourceId.of('DataSyncAgent'),
+        },
+        policy: cr.AwsCustomResourcePolicy.fromStatements([
+          new iam.PolicyStatement({
+            actions: ['lambda:InvokeFunction'],
+            resources: [activationFunction.functionArn],
+          }),
+        ]),
+      }
+    );
+
+    this.agentArn = activationCustomResource
+      .getResponseField('Data.Arn')
+      .toString();
+
+    // NEW: Step 4 - Monitor Agent Status
+    new cdk.aws_cloudwatch.Alarm(this, 'AgentStatusAlarm', {
+      metric: new cdk.aws_cloudwatch.Metric({
+        namespace: 'AWS/DataSync',
+        metricName: 'AgentStatus',
+        dimensionsMap: { AgentArn: this.agentArn },
+        statistic: 'Average',
+        period: Duration.minutes(5),
+      }),
+      threshold: 1, // 1 = ONLINE
+      evaluationPeriods: 3,
+      comparisonOperator:
+        cdk.aws_cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+      alarmDescription: 'Alarm if DataSync agent is not ONLINE',
+    });
 
     // Create DataSync S3 location
     const s3LocationRole = new iam.Role(this, 'DataSyncS3Role', {
@@ -713,15 +881,14 @@ class DataSyncStack extends cdk.NestedStack {
       subdirectory: '/datasync/',
     });
 
-    // Create DataSync NFS location (placeholder for on-premises)
+    // Create DataSync NFS location (FIXED: Use real agent ARN)
     const nfsLocation = new datasync.CfnLocationNFS(this, 'NFSLocation', {
-      serverHostname: 'nfs.example.com',
+      serverHostname: 'nfs.example.com', // REPLACE: Your NFS server hostname
       subdirectory: '/data/',
       onPremConfig: {
-        agentArns: [
-          'arn:aws:datasync:us-west-2:123456789012:agent/agent-placeholder',
-        ],
+        agentArns: [this.agentArn], // FIXED: Use dynamically generated ARN
       },
+      mountOptions: { version: 'NFS3' }, // Adjust if needed (NFS4_0, NFS4_1)
     });
 
     // Create DataSync task
@@ -738,6 +905,21 @@ class DataSyncStack extends cdk.NestedStack {
       schedule: {
         scheduleExpression: 'cron(0 2 * * ? *)',
       },
+    });
+    this.dataSyncTask.node.addDependency(activationCustomResource);
+
+    // NEW: Alarm for task failures
+    new cdk.aws_cloudwatch.Alarm(this, 'DataSyncTaskFailureAlarm', {
+      metric: new cdk.aws_cloudwatch.Metric({
+        namespace: 'AWS/DataSync',
+        metricName: 'TaskExecutionFailed',
+        dimensionsMap: { TaskArn: this.dataSyncTask.attrTaskArn },
+        statistic: 'Sum',
+        period: Duration.minutes(5),
+      }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      alarmDescription: 'Alarm when DataSync task fails',
     });
   }
 }
@@ -896,9 +1078,11 @@ class LoggingStack extends cdk.NestedStack {
 // Main TapStack - Orchestrates all nested stacks
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
-    super(scope, id, props);
+    super(scope, id, {
+      ...props,
+      env: { region: 'us-west-2', account: process.env.CDK_DEFAULT_ACCOUNT },
+    });
 
-    // Get environment suffix from props, context, or use 'dev' as default
     const environmentSuffix =
       props?.environmentSuffix ||
       this.node.tryGetContext('environmentSuffix') ||
@@ -906,26 +1090,20 @@ export class TapStack extends cdk.Stack {
 
     const stackProps: cdk.NestedStackProps = {};
 
-    // ========================================
-    // LAYER 1: Foundation - No dependencies
-    // ========================================
+    // LAYER 1: Foundation
     const networkStack = new NetworkStack(
       this,
       'MigrationNetworkStack',
       stackProps
     );
 
-    // ========================================
-    // LAYER 2: Storage - No dependencies
-    // ========================================
+    // LAYER 2: Storage
     const storageStack = new StorageStack(this, 'MigrationStorageStack', {
       ...stackProps,
       environmentSuffix,
     });
 
-    // ========================================
-    // LAYER 3: Database - Depends on Network
-    // ========================================
+    // LAYER 3: Database
     const databaseStack = new DatabaseStack(this, 'MigrationDatabaseStack', {
       ...stackProps,
       vpc: networkStack.vpc,
@@ -933,9 +1111,7 @@ export class TapStack extends cdk.Stack {
       environmentSuffix,
     });
 
-    // ========================================
-    // LAYER 4: Glue - Depends on Storage
-    // ========================================
+    // LAYER 4: Glue
     const glueStack = new GlueStack(this, 'MigrationGlueStack', {
       ...stackProps,
       scriptBucket: storageStack.scriptBucket,
@@ -943,31 +1119,13 @@ export class TapStack extends cdk.Stack {
       environmentSuffix,
     });
 
-    // ========================================
-    // LAYER 5: Lambda - Depends on Storage, Glue, Network
-    // NO S3 NOTIFICATIONS CONFIGURED HERE!
-    // ========================================
-    const lambdaStack = new LambdaStack(this, 'MigrationLambdaStack', {
-      ...stackProps,
-      dataBucket: storageStack.dataBucket,
-      validationJob: glueStack.validationJob,
-      vpc: networkStack.vpc,
-      lambdaSecurityGroup: networkStack.lambdaSecurityGroup,
-      environmentSuffix,
-    });
-
-    // ========================================
-    // LAYER 6: Messaging - Depends on Lambda
-    // ========================================
+    // LAYER 5: Messaging (create topic early; no lambda refs)
     const messagingStack = new MessagingStack(this, 'MigrationMessagingStack', {
       ...stackProps,
-      stepFunctionTriggerFunction: lambdaStack.stepFunctionTriggerFunction,
       environmentSuffix,
     });
 
-    // ========================================
-    // LAYER 7: DMS - Depends on Network and Database
-    // ========================================
+    // LAYER 6: DMS (depends on network & db)
     const dmsStack = new DMSStack(this, 'MigrationDMSStack', {
       ...stackProps,
       vpc: networkStack.vpc,
@@ -976,9 +1134,7 @@ export class TapStack extends cdk.Stack {
       environmentSuffix,
     });
 
-    // ========================================
-    // LAYER 8: Orchestration - Depends on DMS and Messaging
-    // ========================================
+    // LAYER 7: Orchestration (needs topic & dms)
     const orchestrationStack = new OrchestrationStack(
       this,
       'MigrationOrchestrationStack',
@@ -990,9 +1146,18 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // ========================================
-    // LAYER 9: Post-orchestration configuration
-    // ========================================
+    // LAMBDA created after orchestration to allow wiring of STATE_MACHINE_ARN afterwards
+    const lambdaStack = new LambdaStack(this, 'MigrationLambdaStack', {
+      ...stackProps,
+      dataBucket: storageStack.dataBucket,
+      validationJob: glueStack.validationJob,
+      vpc: networkStack.vpc,
+      lambdaSecurityGroup: networkStack.lambdaSecurityGroup,
+      environmentSuffix,
+      validationTopic: messagingStack.validationTopic, // NEW: subscribe lambdas to topic inside LambdaStack
+    });
+
+    // Wire state machine ARN into lambda (still ok to set after creation)
     lambdaStack.stepFunctionTriggerFunction.addEnvironment(
       'STATE_MACHINE_ARN',
       orchestrationStack.stateMachine.stateMachineArn
@@ -1005,9 +1170,7 @@ export class TapStack extends cdk.Stack {
       })
     );
 
-    // ========================================
-    // LAYER 10: DataSync - Depends on Network and Storage
-    // ========================================
+    // LAYER 8: DataSync
     const dataSyncStack = new DataSyncStack(this, 'MigrationDataSyncStack', {
       ...stackProps,
       vpc: networkStack.vpc,
@@ -1016,27 +1179,14 @@ export class TapStack extends cdk.Stack {
       environmentSuffix,
     });
 
-    // ========================================
-    // LAYER 11: Monitoring - Depends on Lambda
-    // ========================================
+    // LAYER 9: Monitoring
     new MonitoringStack(this, 'MigrationMonitoringStack', {
       ...stackProps,
       remediationFunction: lambdaStack.remediationFunction,
       environmentSuffix,
     });
 
-    lambdaStack.remediationFunction.addEnvironment(
-      'ALERT_TOPIC_ARN',
-      messagingStack.validationTopic.topicArn
-    );
-
-    messagingStack.validationTopic.grantPublish(
-      lambdaStack.remediationFunction
-    );
-
-    // ========================================
-    // LAYER 12: Logging - Depends on Network
-    // ========================================
+    // LAYER 10: Logging
     const loggingStack = new LoggingStack(this, 'MigrationLoggingStack', {
       ...stackProps,
       vpc: networkStack.vpc,
@@ -1044,10 +1194,7 @@ export class TapStack extends cdk.Stack {
       environmentSuffix,
     });
 
-    // ========================================
-    // CRITICAL FIX: S3 EventBridge Rule configured HERE in main stack
-    // This breaks the circular dependency!
-    // ========================================
+    // S3 -> Lambda EventBridge rule (main stack) — avoids S3 bucket nested-stack notifications causing cross-nesting references
     const s3ToLambdaRule = new events.Rule(this, 'S3ObjectCreatedRule', {
       ruleName: `migration-s3-to-lambda-${environmentSuffix}`,
       description: 'Trigger Glue Lambda when objects are created in S3',
@@ -1069,191 +1216,74 @@ export class TapStack extends cdk.Stack {
       new targets.LambdaFunction(lambdaStack.glueTriggerFunction)
     );
 
-    // ========================================
-    // STACK OUTPUTS
-    // ========================================
+    // Explicit Dependencies
+    storageStack.addDependency(networkStack);
+    databaseStack.addDependency(networkStack);
+    glueStack.addDependency(storageStack);
+    messagingStack.addDependency(glueStack);
+    dmsStack.addDependency(networkStack);
+    dmsStack.addDependency(databaseStack);
+    orchestrationStack.addDependency(dmsStack);
+    orchestrationStack.addDependency(messagingStack);
+    lambdaStack.addDependency(storageStack);
+    lambdaStack.addDependency(glueStack);
+    lambdaStack.addDependency(orchestrationStack);
+    dataSyncStack.addDependency(networkStack);
+    dataSyncStack.addDependency(storageStack);
 
-    // Network outputs
+    // Stack outputs (unchanged)
     new cdk.CfnOutput(this, 'VpcId', {
       value: networkStack.vpc.vpcId,
       description: 'VPC ID',
       exportName: `${this.stackName}-VpcId`,
     });
-
-    new cdk.CfnOutput(this, 'VpcCidr', {
-      value: networkStack.vpc.vpcCidrBlock,
-      description: 'VPC CIDR Block',
-      exportName: `${this.stackName}-VpcCidr`,
-    });
-
-    // Storage outputs
     new cdk.CfnOutput(this, 'DataBucketName', {
       value: storageStack.dataBucket.bucketName,
       description: 'Data Bucket Name',
       exportName: `${this.stackName}-DataBucketName`,
     });
-
-    new cdk.CfnOutput(this, 'DataBucketArn', {
-      value: storageStack.dataBucket.bucketArn,
-      description: 'Data Bucket ARN',
-      exportName: `${this.stackName}-DataBucketArn`,
-    });
-
-    new cdk.CfnOutput(this, 'ScriptBucketName', {
-      value: storageStack.scriptBucket.bucketName,
-      description: 'Script Bucket Name',
-      exportName: `${this.stackName}-ScriptBucketName`,
-    });
-
-    new cdk.CfnOutput(this, 'ScriptBucketArn', {
-      value: storageStack.scriptBucket.bucketArn,
-      description: 'Script Bucket ARN',
-      exportName: `${this.stackName}-ScriptBucketArn`,
-    });
-
-    // Database outputs
-    new cdk.CfnOutput(this, 'AuroraClusterEndpoint', {
-      value: databaseStack.auroraCluster.clusterEndpoint.hostname,
-      description: 'Aurora Cluster Endpoint',
-      exportName: `${this.stackName}-ClusterEndpoint`,
-    });
-
-    new cdk.CfnOutput(this, 'AuroraClusterArn', {
-      value: databaseStack.auroraCluster.clusterArn,
-      description: 'Aurora Cluster ARN',
-      exportName: `${this.stackName}-ClusterArn`,
-    });
-
-    // Glue outputs
-    new cdk.CfnOutput(this, 'GlueDatabaseName', {
-      value: glueStack.glueDatabase.ref,
-      description: 'Glue Database Name',
-      exportName: `${this.stackName}-GlueDatabaseName`,
-    });
-
     new cdk.CfnOutput(this, 'ValidationJobName', {
       value: glueStack.validationJob.name!,
       description: 'Glue Validation Job Name',
       exportName: `${this.stackName}-ValidationJobName`,
     });
-
-    // Lambda outputs
     new cdk.CfnOutput(this, 'GlueTriggerFunctionArn', {
       value: lambdaStack.glueTriggerFunction.functionArn,
       description: 'Glue Trigger Lambda Function ARN',
       exportName: `${this.stackName}-GlueTriggerFunctionArn`,
     });
-
-    new cdk.CfnOutput(this, 'GlueTriggerFunctionName', {
-      value: lambdaStack.glueTriggerFunction.functionName,
-      description: 'Glue Trigger Lambda Function Name',
-      exportName: `${this.stackName}-GlueTriggerFunctionName`,
-    });
-
-    new cdk.CfnOutput(this, 'StepFunctionTriggerFunctionArn', {
-      value: lambdaStack.stepFunctionTriggerFunction.functionArn,
-      description: 'Step Function Trigger Lambda Function ARN',
-      exportName: `${this.stackName}-StepFunctionTriggerFunctionArn`,
-    });
-
-    new cdk.CfnOutput(this, 'StepFunctionTriggerFunctionName', {
-      value: lambdaStack.stepFunctionTriggerFunction.functionName,
-      description: 'Step Function Trigger Lambda Function Name',
-      exportName: `${this.stackName}-StepFunctionTriggerFunctionName`,
-    });
-
-    new cdk.CfnOutput(this, 'RemediationFunctionArn', {
-      value: lambdaStack.remediationFunction.functionArn,
-      description: 'Remediation Lambda Function ARN',
-      exportName: `${this.stackName}-RemediationFunctionArn`,
-    });
-
-    new cdk.CfnOutput(this, 'RemediationFunctionName', {
-      value: lambdaStack.remediationFunction.functionName,
-      description: 'Remediation Lambda Function Name',
-      exportName: `${this.stackName}-RemediationFunctionName`,
-    });
-
-    // Messaging outputs
     new cdk.CfnOutput(this, 'ValidationTopicArn', {
       value: messagingStack.validationTopic.topicArn,
       description: 'Validation SNS Topic ARN',
       exportName: `${this.stackName}-ValidationTopicArn`,
     });
-
-    new cdk.CfnOutput(this, 'ValidationTopicName', {
-      value: messagingStack.validationTopic.topicName,
-      description: 'Validation SNS Topic Name',
-      exportName: `${this.stackName}-ValidationTopicName`,
-    });
-
-    // DMS outputs
-    new cdk.CfnOutput(this, 'DMSReplicationInstanceArn', {
-      value: dmsStack.replicationInstance.ref,
-      description: 'DMS Replication Instance ARN',
-      exportName: `${this.stackName}-ReplicationInstanceArn`,
-    });
-
-    new cdk.CfnOutput(this, 'DMSReplicationTaskArn', {
-      value: dmsStack.replicationTask.ref,
-      description: 'DMS Replication Task ARN',
-      exportName: `${this.stackName}-ReplicationTaskArn`,
-    });
-
-    // Orchestration outputs
     new cdk.CfnOutput(this, 'StateMachineArn', {
       value: orchestrationStack.stateMachine.stateMachineArn,
       description: 'Step Functions State Machine ARN',
       exportName: `${this.stackName}-StateMachineArn`,
     });
-
-    new cdk.CfnOutput(this, 'StateMachineName', {
-      value: orchestrationStack.stateMachine.stateMachineName,
-      description: 'Step Functions State Machine Name',
-      exportName: `${this.stackName}-StateMachineName`,
-    });
-
-    // DataSync outputs
-    new cdk.CfnOutput(this, 'DataSyncTaskArn', {
-      value: dataSyncStack.dataSyncTask.attrTaskArn,
-      description: 'DataSync Task ARN',
-      exportName: `${this.stackName}-DataSyncTaskArn`,
-    });
-
-    // Logging outputs
     new cdk.CfnOutput(this, 'OpenSearchDomainEndpoint', {
       value: loggingStack.openSearchDomain.domainEndpoint,
       description: 'OpenSearch Domain Endpoint',
       exportName: `${this.stackName}-OpenSearchDomainEndpoint`,
     });
 
-    new cdk.CfnOutput(this, 'OpenSearchDomainArn', {
-      value: loggingStack.openSearchDomain.domainArn,
-      description: 'OpenSearch Domain ARN',
-      exportName: `${this.stackName}-OpenSearchDomainArn`,
-    });
-
-    // Main stack metadata outputs
     new cdk.CfnOutput(this, 'EnvironmentSuffix', {
       value: environmentSuffix,
       description: 'Environment suffix for all resources',
     });
-
     new cdk.CfnOutput(this, 'Region', {
       value: this.region,
       description: 'Deployment region',
     });
-
     new cdk.CfnOutput(this, 'AccountId', {
       value: this.account,
       description: 'AWS Account ID',
     });
-
     new cdk.CfnOutput(this, 'PipelineStatus', {
       value: 'DEPLOYED',
       description: 'Migration pipeline deployment status',
     });
-
     new cdk.CfnOutput(this, 'StackName', {
       value: this.stackName,
       description: 'CloudFormation Stack Name',
