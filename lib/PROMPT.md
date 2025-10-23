@@ -71,4 +71,3 @@ Build a secure, scalable AWS foundation for a web app using **one and only one C
 
 * Don’t add unrelated services.
 * Don’t output secrets.
-* Don’t create multiple templates or nested stacks—**one stack file only**.
