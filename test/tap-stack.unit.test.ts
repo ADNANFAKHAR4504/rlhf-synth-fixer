@@ -11,306 +11,306 @@ describe('TapStack CloudFormation Template', () => {
     template = JSON.parse(templateContent);
   });
 
-  // Additional tests for enhanced coverage, focusing on missing validations, edge cases, and deeper property checks
+  // focusing on missing validations, edge cases, and deeper property checks
   describe('TapStack CloudFormation Template - Extended Coverage', () => {
 
-      describe('Resource Tagging and Metadata - Extended', () => {
-        test('Resources with tags should have appropriate tagging', () => {
-          const resourcesWithTags = ['VPC', 'SubnetA', 'SubnetB', 'AuroraCluster', 'AuroraInstance', 'ReportsBucket', 'AuditTrailBucket'];
-          resourcesWithTags.forEach(resourceName => {
-            const resource = template.Resources[resourceName];
-            if (resource.Properties.Tags) {
-              expect(Array.isArray(resource.Properties.Tags)).toBe(true);
-              expect(resource.Properties.Tags.length).toBeGreaterThan(0);
-            }
-          });
-        });
-
-        test('Lambda functions with environment variables should have AWS account ID', () => {
-          const lambdaFunctionsWithEnv = ['GenerateReportLambda', 'DeliverReportLambda'];
-          lambdaFunctionsWithEnv.forEach(functionName => {
-            const lambda = template.Resources[functionName];
-            expect(lambda.Properties.Environment?.Variables).toBeDefined();
-            if (functionName === 'GenerateReportLambda') {
-              expect(lambda.Properties.Environment.Variables.AWS_ACCOUNT_ID).toEqual({ Ref: 'AWS::AccountId' });
-            }
-            if (functionName === 'DeliverReportLambda') {
-              expect(lambda.Properties.Environment.Variables.REPORTS_BUCKET_NAME).toEqual({ Ref: 'ReportsBucket' });
-            }
-          });
-        });
-      });
-
-      describe('Security and Compliance Checks - Extended', () => {
-        test('S3 buckets should have CORS configuration for web access if needed', () => {
-          const buckets = ['ReportsBucket', 'AuditTrailBucket'];
-          buckets.forEach(bucketName => {
-            const bucket = template.Resources[bucketName];
-            // Assuming no CORS for security, but test if present
-            if (bucket.Properties.CorsConfiguration) {
-              expect(bucket.Properties.CorsConfiguration.CorsRules).toBeDefined();
-            }
-          });
-        });
-
-        test('IAM roles should have AssumeRolePolicyDocument allowing correct services', () => {
-          const roles = ['LambdaExecutionRole', 'StepFunctionsExecutionRole', 'EventBridgeRole'];
-          roles.forEach(roleName => {
-            const role = template.Resources[roleName];
-            expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Effect).toBe('Allow');
-            expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service).toBeDefined();
-          });
-        });
-
-        test('Aurora cluster should have backup configuration', () => {
-          const cluster = template.Resources.AuroraCluster;
-          expect(cluster.Properties.BackupRetentionPeriod).toBeGreaterThan(0);
-        });
-      });
-
-      describe('Performance and Scalability - Extended', () => {
-        test('Lambda functions should have reserved concurrency for throttling', () => {
-          const lambdaFunctions = ['GenerateReportLambda', 'ValidateReportLambda', 'DeliverReportLambda'];
-          lambdaFunctions.forEach(functionName => {
-            const lambda = template.Resources[functionName];
-            if (lambda.Properties.ReservedConcurrentExecutions) {
-              expect(lambda.Properties.ReservedConcurrentExecutions).toBeGreaterThan(0);
-            }
-          });
-        });
-
-        test('Aurora cluster should have basic monitoring configuration', () => {
-          const cluster = template.Resources.AuroraCluster;
-          // Check that cluster has basic properties defined
-          expect(cluster.Properties.Engine).toBe('aurora-postgresql');
-          expect(cluster.Properties.StorageEncrypted).toBe(true);
-        });
-      });
-
-      describe('Error Handling and Resilience - Extended', () => {
-        test('Step Functions should have timeout configurations', () => {
-          const stateMachine = template.Resources.ReportingStateMachine;
-          expect(stateMachine.Properties.DefinitionString).toBeDefined();
-          // Parse and check for TimeoutSeconds in states
-          const definitionString = stateMachine.Properties.DefinitionString['Fn::Sub'][0];
-          const definition = JSON.parse(definitionString.replace(/\n/g, ''));
-          Object.values(definition.States).forEach((state: any) => {
-            if (state.Type === 'Task') {
-              expect(state.TimeoutSeconds).toBeDefined();
-            }
-          });
-        });
-
-        test('CloudWatch alarms should have alarm actions', () => {
-          const alarm = template.Resources.FailureAlarm;
-          expect(alarm.Properties.AlarmActions).toBeDefined();
-          expect(alarm.Properties.AlarmActions.length).toBeGreaterThan(0);
-        });
-      });
-
-      describe('Cost Optimization - Extended', () => {
-        test('S3 lifecycle rules should have retention policy', () => {
-          const bucket = template.Resources.ReportsBucket;
-          const lifecycleRules = bucket.Properties.LifecycleConfiguration.Rules;
-          expect(lifecycleRules.some((rule: any) => rule.ExpirationInDays)).toBe(true);
-          const retentionRule = lifecycleRules.find((rule: any) => rule.ExpirationInDays);
-          expect(retentionRule.ExpirationInDays).toBe(3650); // 10 years
-        });
-
-        test('Aurora instance should use on-demand or reserved pricing model', () => {
-          const instance = template.Resources.AuroraInstance;
-          // Assuming no specific pricing, but check for absence of spot or other
-          expect(instance.Properties).not.toHaveProperty('SpotPrice');
-        });
-      });
-
-      describe('Integration and Dependencies - Extended', () => {
-        test('EventBridge rule should have proper permissions via role', () => {
-          const rule = template.Resources.DailyScheduler;
-          const role = template.Resources.EventBridgeRole;
-          expect(role.Properties.Policies[0].PolicyDocument.Statement[0].Resource).toEqual({ Ref: 'ReportingStateMachine' });
-        });
-
-        test('SNS topic should have subscriptions for email notifications', () => {
-          const topic = template.Resources.SNSTopic;
-          if (topic.Properties.Subscription) {
-            expect(topic.Properties.Subscription[0].Endpoint).toEqual({ Ref: 'NotificationEmail' });
-            expect(topic.Properties.Subscription[0].Protocol).toBe('email');
+    describe('Resource Tagging and Metadata - Extended', () => {
+      test('Resources with tags should have appropriate tagging', () => {
+        const resourcesWithTags = ['VPC', 'SubnetA', 'SubnetB', 'AuroraCluster', 'AuroraInstance', 'ReportsBucket', 'AuditTrailBucket'];
+        resourcesWithTags.forEach(resourceName => {
+          const resource = template.Resources[resourceName];
+          if (resource.Properties.Tags) {
+            expect(Array.isArray(resource.Properties.Tags)).toBe(true);
+            expect(resource.Properties.Tags.length).toBeGreaterThan(0);
           }
         });
       });
 
-      describe('Outputs - Extended', () => {
-        test('All outputs should have Export names for cross-stack references', () => {
-          Object.values(template.Outputs).forEach((output: any) => {
-            expect(output.Export).toBeDefined();
-            expect(output.Export.Name).toBeDefined();
-          });
-        });
-
-        test('Database-related outputs should be present', () => {
-          expect(template.Outputs.DatabaseClusterArn).toBeDefined();
-          expect(template.Outputs.DatabaseSecretArn).toBeDefined();
-          expect(template.Outputs.DatabaseName).toBeDefined();
-        });
-      });
-
-      describe('Template Validation - Extended', () => {
-        test('should not have any circular dependencies in resources', () => {
-          // Basic check: ensure no resource depends on itself
-          Object.entries(template.Resources).forEach(([name, resource]: [string, any]) => {
-            if (resource.DependsOn) {
-              expect(resource.DependsOn).not.toContain(name);
-            }
-          });
-        });
-
-        test('should have valid intrinsic functions usage', () => {
-          // Check for common intrinsic functions
-          const templateString = JSON.stringify(template);
-          expect(templateString).toMatch(/"Ref":/);
-          expect(templateString).toMatch(/"Fn::Sub":/);
-          expect(templateString).toMatch(/"Fn::GetAtt":/);
-        });
-
-        test('should have metadata if present', () => {
-          if (template.Metadata) {
-            expect(template.Metadata).toBeDefined();
+      test('Lambda functions with environment variables should have AWS account ID', () => {
+        const lambdaFunctionsWithEnv = ['GenerateReportLambda', 'DeliverReportLambda'];
+        lambdaFunctionsWithEnv.forEach(functionName => {
+          const lambda = template.Resources[functionName];
+          expect(lambda.Properties.Environment?.Variables).toBeDefined();
+          if (functionName === 'GenerateReportLambda') {
+            expect(lambda.Properties.Environment.Variables.AWS_ACCOUNT_ID).toEqual({ Ref: 'AWS::AccountId' });
           }
-        });
-      });
-
-      describe('Edge Cases and Error Conditions', () => {
-        test('Parameters should handle default values correctly', () => {
-          const params = template.Parameters;
-          Object.values(params).forEach((param: any) => {
-            if (param.Default) {
-              expect(typeof param.Default).toBe('string');
-            }
-          });
-        });
-
-        test('Resources should not have conflicting property names', () => {
-          Object.values(template.Resources).forEach((resource: any) => {
-            const props = Object.keys(resource.Properties || {});
-            expect(new Set(props).size).toBe(props.length); // No duplicates
-          });
+          if (functionName === 'DeliverReportLambda') {
+            expect(lambda.Properties.Environment.Variables.REPORTS_BUCKET_NAME).toEqual({ Ref: 'ReportsBucket' });
+          }
         });
       });
     });
+
+    describe('Security and Compliance Checks - Extended', () => {
+      test('S3 buckets should have CORS configuration for web access if needed', () => {
+        const buckets = ['ReportsBucket', 'AuditTrailBucket'];
+        buckets.forEach(bucketName => {
+          const bucket = template.Resources[bucketName];
+          // Assuming no CORS for security, but test if present
+          if (bucket.Properties.CorsConfiguration) {
+            expect(bucket.Properties.CorsConfiguration.CorsRules).toBeDefined();
+          }
+        });
+      });
+
+      test('IAM roles should have AssumeRolePolicyDocument allowing correct services', () => {
+        const roles = ['LambdaExecutionRole', 'StepFunctionsExecutionRole', 'EventBridgeRole'];
+        roles.forEach(roleName => {
+          const role = template.Resources[roleName];
+          expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Effect).toBe('Allow');
+          expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service).toBeDefined();
+        });
+      });
+
+      test('Aurora cluster should have backup configuration', () => {
+        const cluster = template.Resources.AuroraCluster;
+        expect(cluster.Properties.BackupRetentionPeriod).toBeGreaterThan(0);
+      });
+    });
+
+    describe('Performance and Scalability - Extended', () => {
+      test('Lambda functions should have reserved concurrency for throttling', () => {
+        const lambdaFunctions = ['GenerateReportLambda', 'ValidateReportLambda', 'DeliverReportLambda'];
+        lambdaFunctions.forEach(functionName => {
+          const lambda = template.Resources[functionName];
+          if (lambda.Properties.ReservedConcurrentExecutions) {
+            expect(lambda.Properties.ReservedConcurrentExecutions).toBeGreaterThan(0);
+          }
+        });
+      });
+
+      test('Aurora cluster should have basic monitoring configuration', () => {
+        const cluster = template.Resources.AuroraCluster;
+        // Check that cluster has basic properties defined
+        expect(cluster.Properties.Engine).toBe('aurora-postgresql');
+        expect(cluster.Properties.StorageEncrypted).toBe(true);
+      });
+    });
+
+    describe('Error Handling and Resilience - Extended', () => {
+      test('Step Functions should have timeout configurations', () => {
+        const stateMachine = template.Resources.ReportingStateMachine;
+        expect(stateMachine.Properties.DefinitionString).toBeDefined();
+        // Parse and check for TimeoutSeconds in states
+        const definitionString = stateMachine.Properties.DefinitionString['Fn::Sub'][0];
+        const definition = JSON.parse(definitionString.replace(/\n/g, ''));
+        Object.values(definition.States).forEach((state: any) => {
+          if (state.Type === 'Task') {
+            expect(state.TimeoutSeconds).toBeDefined();
+          }
+        });
+      });
+
+      test('CloudWatch alarms should have alarm actions', () => {
+        const alarm = template.Resources.FailureAlarm;
+        expect(alarm.Properties.AlarmActions).toBeDefined();
+        expect(alarm.Properties.AlarmActions.length).toBeGreaterThan(0);
+      });
+    });
+
+    describe('Cost Optimization - Extended', () => {
+      test('S3 lifecycle rules should have retention policy', () => {
+        const bucket = template.Resources.ReportsBucket;
+        const lifecycleRules = bucket.Properties.LifecycleConfiguration.Rules;
+        expect(lifecycleRules.some((rule: any) => rule.ExpirationInDays)).toBe(true);
+        const retentionRule = lifecycleRules.find((rule: any) => rule.ExpirationInDays);
+        expect(retentionRule.ExpirationInDays).toBe(3650); // 10 years
+      });
+
+      test('Aurora instance should use on-demand or reserved pricing model', () => {
+        const instance = template.Resources.AuroraInstance;
+        // Assuming no specific pricing, but check for absence of spot or other
+        expect(instance.Properties).not.toHaveProperty('SpotPrice');
+      });
+    });
+
+    describe('Integration and Dependencies - Extended', () => {
+      test('EventBridge rule should have proper permissions via role', () => {
+        const rule = template.Resources.DailyScheduler;
+        const role = template.Resources.EventBridgeRole;
+        expect(role.Properties.Policies[0].PolicyDocument.Statement[0].Resource).toEqual({ Ref: 'ReportingStateMachine' });
+      });
+
+      test('SNS topic should have subscriptions for email notifications', () => {
+        const topic = template.Resources.SNSTopic;
+        if (topic.Properties.Subscription) {
+          expect(topic.Properties.Subscription[0].Endpoint).toEqual({ Ref: 'NotificationEmail' });
+          expect(topic.Properties.Subscription[0].Protocol).toBe('email');
+        }
+      });
+    });
+
+    describe('Outputs - Extended', () => {
+      test('All outputs should have Export names for cross-stack references', () => {
+        Object.values(template.Outputs).forEach((output: any) => {
+          expect(output.Export).toBeDefined();
+          expect(output.Export.Name).toBeDefined();
+        });
+      });
+
+      test('Database-related outputs should be present', () => {
+        expect(template.Outputs.DatabaseClusterArn).toBeDefined();
+        expect(template.Outputs.DatabaseSecretArn).toBeDefined();
+        expect(template.Outputs.DatabaseName).toBeDefined();
+      });
+    });
+
+    describe('Template Validation - Extended', () => {
+      test('should not have any circular dependencies in resources', () => {
+        // Basic check: ensure no resource depends on itself
+        Object.entries(template.Resources).forEach(([name, resource]: [string, any]) => {
+          if (resource.DependsOn) {
+            expect(resource.DependsOn).not.toContain(name);
+          }
+        });
+      });
+
+      test('should have valid intrinsic functions usage', () => {
+        // Check for common intrinsic functions
+        const templateString = JSON.stringify(template);
+        expect(templateString).toMatch(/"Ref":/);
+        expect(templateString).toMatch(/"Fn::Sub":/);
+        expect(templateString).toMatch(/"Fn::GetAtt":/);
+      });
+
+      test('should have metadata if present', () => {
+        if (template.Metadata) {
+          expect(template.Metadata).toBeDefined();
+        }
+      });
+    });
+
+    describe('Edge Cases and Error Conditions', () => {
+      test('Parameters should handle default values correctly', () => {
+        const params = template.Parameters;
+        Object.values(params).forEach((param: any) => {
+          if (param.Default) {
+            expect(typeof param.Default).toBe('string');
+          }
+        });
+      });
+
+      test('Resources should not have conflicting property names', () => {
+        Object.values(template.Resources).forEach((resource: any) => {
+          const props = Object.keys(resource.Properties || {});
+          expect(new Set(props).size).toBe(props.length); // No duplicates
+        });
+      });
+    });
+  });
   // Additional tests for enhanced coverage of TapStack CloudFormation Template
   describe('TapStack CloudFormation Template - Advanced Validation', () => {
 
-      describe('Resource Tagging and Metadata', () => {
-        test('Tagged resources should have Name tags', () => {
-          const resourcesWithTags = ['VPC', 'SubnetA', 'SubnetB', 'AuroraCluster', 'AuroraInstance', 'ReportsBucket', 'AuditTrailBucket'];
-          resourcesWithTags.forEach(resourceName => {
-            const resource = template.Resources[resourceName];
-            if (resource.Properties.Tags) {
-              expect(Array.isArray(resource.Properties.Tags)).toBe(true);
-              expect(resource.Properties.Tags.length).toBeGreaterThan(0);
-              const nameTag = resource.Properties.Tags.find((tag: any) => tag.Key === 'Name');
-              if (nameTag) {
-                expect(nameTag.Value).toBeDefined();
-              }
+    describe('Resource Tagging and Metadata', () => {
+      test('Tagged resources should have Name tags', () => {
+        const resourcesWithTags = ['VPC', 'SubnetA', 'SubnetB', 'AuroraCluster', 'AuroraInstance', 'ReportsBucket', 'AuditTrailBucket'];
+        resourcesWithTags.forEach(resourceName => {
+          const resource = template.Resources[resourceName];
+          if (resource.Properties.Tags) {
+            expect(Array.isArray(resource.Properties.Tags)).toBe(true);
+            expect(resource.Properties.Tags.length).toBeGreaterThan(0);
+            const nameTag = resource.Properties.Tags.find((tag: any) => tag.Key === 'Name');
+            if (nameTag) {
+              expect(nameTag.Value).toBeDefined();
             }
-          });
-        });
-
-        test('GenerateReportLambda should have AWS account ID environment variable', () => {
-          const lambda = template.Resources.GenerateReportLambda;
-          expect(lambda.Properties.Environment.Variables.AWS_ACCOUNT_ID).toEqual({ Ref: 'AWS::AccountId' });
+          }
         });
       });
 
-      describe('Security and Compliance Checks', () => {
-        test('S3 buckets should have security configurations', () => {
-          const buckets = ['ReportsBucket', 'AuditTrailBucket'];
-          buckets.forEach(bucketName => {
-            const bucket = template.Resources[bucketName];
-            expect(bucket.Properties.PublicAccessBlockConfiguration).toBeDefined();
-            expect(bucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
-          });
-        });
+      test('GenerateReportLambda should have AWS account ID environment variable', () => {
+        const lambda = template.Resources.GenerateReportLambda;
+        expect(lambda.Properties.Environment.Variables.AWS_ACCOUNT_ID).toEqual({ Ref: 'AWS::AccountId' });
+      });
+    });
 
-        test('IAM roles should have least privilege policies', () => {
-          const roles = ['LambdaExecutionRole', 'StepFunctionsExecutionRole', 'EventBridgeRole'];
-          roles.forEach(roleName => {
-            const role = template.Resources[roleName];
-            expect(role.Properties.Policies).toBeDefined();
-            role.Properties.Policies.forEach((policy: any) => {
-              expect(policy.PolicyDocument.Statement).toBeDefined();
-              policy.PolicyDocument.Statement.forEach((statement: any) => {
-                expect(statement.Effect).toBe('Allow'); // Ensure no overly permissive denies
-              });
+    describe('Security and Compliance Checks', () => {
+      test('S3 buckets should have security configurations', () => {
+        const buckets = ['ReportsBucket', 'AuditTrailBucket'];
+        buckets.forEach(bucketName => {
+          const bucket = template.Resources[bucketName];
+          expect(bucket.Properties.PublicAccessBlockConfiguration).toBeDefined();
+          expect(bucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
+        });
+      });
+
+      test('IAM roles should have least privilege policies', () => {
+        const roles = ['LambdaExecutionRole', 'StepFunctionsExecutionRole', 'EventBridgeRole'];
+        roles.forEach(roleName => {
+          const role = template.Resources[roleName];
+          expect(role.Properties.Policies).toBeDefined();
+          role.Properties.Policies.forEach((policy: any) => {
+            expect(policy.PolicyDocument.Statement).toBeDefined();
+            policy.PolicyDocument.Statement.forEach((statement: any) => {
+              expect(statement.Effect).toBe('Allow'); // Ensure no overly permissive denies
             });
           });
         });
-
-        test('Database should have storage encryption enabled', () => {
-          const cluster = template.Resources.AuroraCluster;
-          expect(cluster.Properties.StorageEncrypted).toBe(true);
-        });
       });
 
-      describe('Performance and Scalability', () => {
-        test('Lambda functions should have optimal memory and timeout', () => {
-          const lambdaFunctions = ['GenerateReportLambda', 'ValidateReportLambda', 'DeliverReportLambda'];
-          lambdaFunctions.forEach(functionName => {
-            const lambda = template.Resources[functionName];
-            expect(lambda.Properties.MemorySize).toBeGreaterThanOrEqual(256);
-            expect(lambda.Properties.Timeout).toBeLessThanOrEqual(300); // 5 minutes max
-          });
-        });
-
-        test('Aurora cluster should have serverless configuration', () => {
-          const cluster = template.Resources.AuroraCluster;
-          expect(cluster.Properties.ServerlessV2ScalingConfiguration).toBeDefined();
-          expect(cluster.Properties.ServerlessV2ScalingConfiguration.MinCapacity).toBeGreaterThan(0);
-        });
-      });
-
-      describe('Error Handling and Resilience', () => {
-        test('Step Functions should have valid state machine definition', () => {
-          const definitionString = template.Resources.ReportingStateMachine.Properties.DefinitionString['Fn::Sub'][0];
-          const definition = JSON.parse(definitionString.replace(/\n/g, ''));
-          expect(definition.StartAt).toBeDefined();
-          expect(definition.States).toBeDefined();
-          expect(Object.keys(definition.States).length).toBeGreaterThan(0);
-        });
-
-        test('CloudWatch alarms should have appropriate actions', () => {
-          const alarm = template.Resources.FailureAlarm;
-          expect(alarm.Properties.AlarmActions).toBeDefined();
-          expect(alarm.Properties.AlarmActions.length).toBeGreaterThan(0);
-        });
-      });
-
-      describe('Cost Optimization', () => {
-        test('Resources should use appropriate instance types and configurations', () => {
-          const instance = template.Resources.AuroraInstance;
-          expect(instance.Properties.DBInstanceClass).toBe('db.serverless'); // Ensure serverless for cost
-        });
-
-        test('S3 lifecycle rules should be configured for cost savings', () => {
-          const bucket = template.Resources.ReportsBucket;
-          const lifecycleRules = bucket.Properties.LifecycleConfiguration.Rules;
-          expect(lifecycleRules.some((rule: any) => rule.ExpirationInDays)).toBe(true);
-        });
-      });
-
-      describe('Integration and Dependencies', () => {
-        test('EventBridge rule should target the correct state machine', () => {
-          const rule = template.Resources.DailyScheduler;
-          expect(rule.Properties.Targets[0].Arn).toEqual({ Ref: 'ReportingStateMachine' });
-        });
-
-        test('SNS topic should be subscribed for notifications', () => {
-          const topic = template.Resources.SNSTopic;
-          expect(topic.Properties.Subscription).toBeDefined(); // Assuming subscriptions are added
-        });
+      test('Database should have storage encryption enabled', () => {
+        const cluster = template.Resources.AuroraCluster;
+        expect(cluster.Properties.StorageEncrypted).toBe(true);
       });
     });
+
+    describe('Performance and Scalability', () => {
+      test('Lambda functions should have optimal memory and timeout', () => {
+        const lambdaFunctions = ['GenerateReportLambda', 'ValidateReportLambda', 'DeliverReportLambda'];
+        lambdaFunctions.forEach(functionName => {
+          const lambda = template.Resources[functionName];
+          expect(lambda.Properties.MemorySize).toBeGreaterThanOrEqual(256);
+          expect(lambda.Properties.Timeout).toBeLessThanOrEqual(300); // 5 minutes max
+        });
+      });
+
+      test('Aurora cluster should have serverless configuration', () => {
+        const cluster = template.Resources.AuroraCluster;
+        expect(cluster.Properties.ServerlessV2ScalingConfiguration).toBeDefined();
+        expect(cluster.Properties.ServerlessV2ScalingConfiguration.MinCapacity).toBeGreaterThan(0);
+      });
+    });
+
+    describe('Error Handling and Resilience', () => {
+      test('Step Functions should have valid state machine definition', () => {
+        const definitionString = template.Resources.ReportingStateMachine.Properties.DefinitionString['Fn::Sub'][0];
+        const definition = JSON.parse(definitionString.replace(/\n/g, ''));
+        expect(definition.StartAt).toBeDefined();
+        expect(definition.States).toBeDefined();
+        expect(Object.keys(definition.States).length).toBeGreaterThan(0);
+      });
+
+      test('CloudWatch alarms should have appropriate actions', () => {
+        const alarm = template.Resources.FailureAlarm;
+        expect(alarm.Properties.AlarmActions).toBeDefined();
+        expect(alarm.Properties.AlarmActions.length).toBeGreaterThan(0);
+      });
+    });
+
+    describe('Cost Optimization', () => {
+      test('Resources should use appropriate instance types and configurations', () => {
+        const instance = template.Resources.AuroraInstance;
+        expect(instance.Properties.DBInstanceClass).toBe('db.serverless'); // Ensure serverless for cost
+      });
+
+      test('S3 lifecycle rules should be configured for cost savings', () => {
+        const bucket = template.Resources.ReportsBucket;
+        const lifecycleRules = bucket.Properties.LifecycleConfiguration.Rules;
+        expect(lifecycleRules.some((rule: any) => rule.ExpirationInDays)).toBe(true);
+      });
+    });
+
+    describe('Integration and Dependencies', () => {
+      test('EventBridge rule should target the correct state machine', () => {
+        const rule = template.Resources.DailyScheduler;
+        expect(rule.Properties.Targets[0].Arn).toEqual({ Ref: 'ReportingStateMachine' });
+      });
+
+      test('SNS topic should be subscribed for notifications', () => {
+        const topic = template.Resources.SNSTopic;
+        expect(topic.Properties.Subscription).toBeDefined(); // Assuming subscriptions are added
+      });
+    });
+  });
 
   describe('Template Structure', () => {
     test('should have valid CloudFormation format version', () => {
@@ -796,494 +796,494 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
-// Additional Comprehensive Unit Tests
-describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
-  let template: any;
+  // Additional Comprehensive Unit Tests
+  describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
+    let template: any;
 
-  beforeAll(() => {
-    const templatePath = path.join(__dirname, '../lib/TapStack.json');
-    const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = JSON.parse(templateContent);
-  });
-
-  describe('Template Metadata and Structure Validation', () => {
-    test('should have regulatory reporting description with key requirements', () => {
-      const description = template.Description;
-      expect(description).toContain('Regulatory Reporting Platform');
-      expect(description).toContain('~2000 daily reports');
-      expect(description).toContain('10-year S3 retention');
-      expect(description).toContain('Aurora Serverless V2');
-      expect(description).toContain('Secrets Manager');
+    beforeAll(() => {
+      const templatePath = path.join(__dirname, '../lib/TapStack.json');
+      const templateContent = fs.readFileSync(templatePath, 'utf8');
+      template = JSON.parse(templateContent);
     });
 
-    test('should have exactly 41 resources defined', () => {
-      const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(41);
-    });
-
-    test('should have exactly 7 parameters defined', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(7);
-    });
-
-    test('should have exactly 7 outputs defined', () => {
-      const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(7);
-    });
-  });
-
-  describe('Enhanced Parameters Validation', () => {
-    test('Environment parameter should have correct configuration', () => {
-      const param = template.Parameters.Environment;
-      expect(param.Type).toBe('String');
-      expect(param.Default).toBe('prod');
-      expect(param.AllowedValues).toEqual(['prod', 'staging', 'dev']);
-      expect(param.Description).toContain('Deployment environment');
-    });
-
-    test('DatabaseMasterPassword parameter should have security and validation', () => {
-      const param = template.Parameters.DatabaseMasterPassword;
-      expect(param.Type).toBe('String');
-      expect(param.NoEcho).toBe(true);
-      expect(param.MinLength).toBe(8);
-      expect(param.Default).toBe('SecurePassword2025!');
-      expect(param.Description).toContain('Master password for Aurora database');
-    });
-
-    test('DailyScheduleExpression parameter should have cron configuration', () => {
-      const param = template.Parameters.DailyScheduleExpression;
-      expect(param.Type).toBe('String');
-      expect(param.Default).toBe('cron(0 10 * * ? *)');
-      expect(param.Description).toContain('10:00 AM UTC');
-    });
-
-    test('SenderEmailAddress parameter should have SES configuration', () => {
-      const param = template.Parameters.SenderEmailAddress;
-      expect(param.Type).toBe('String');
-      expect(param.Default).toBe('govardhan.y@turing.com');
-      expect(param.Description).toContain('SES verified email address');
-    });
-
-    test('BucketNamePrefix parameter should have S3 naming rules', () => {
-      const param = template.Parameters.BucketNamePrefix;
-      expect(param.Type).toBe('String');
-      expect(param.Default).toBe('tap-stack');
-      expect(param.Description).toContain('lowercase');
-    });
-  });
-
-  describe('Enhanced S3 Storage Resources', () => {
-    test('ReportsBucket should have regulatory compliance configuration', () => {
-      const bucket = template.Resources.ReportsBucket;
-      expect(bucket.Type).toBe('AWS::S3::Bucket');
-
-      // Bucket naming
-      expect(bucket.Properties.BucketName['Fn::Sub']).toBe('${BucketNamePrefix}-reports-${Environment}-${AWS::AccountId}');
-
-      // Encryption configuration
-      expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
-      expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.KMSMasterKeyID).toEqual({
-        'Fn::GetAtt': ['KMSKey', 'Arn']
+    describe('Template Metadata and Structure Validation', () => {
+      test('should have regulatory reporting description with key requirements', () => {
+        const description = template.Description;
+        expect(description).toContain('Regulatory Reporting Platform');
+        expect(description).toContain('~2000 daily reports');
+        expect(description).toContain('10-year S3 retention');
+        expect(description).toContain('Aurora Serverless V2');
+        expect(description).toContain('Secrets Manager');
       });
 
-      // Versioning
-      expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
-
-      // Lifecycle - 10 year retention (3650 days)
-      const lifecycleRule = bucket.Properties.LifecycleConfiguration.Rules[0];
-      expect(lifecycleRule.Id).toBe('RetentionRule');
-      expect(lifecycleRule.Status).toBe('Enabled');
-      expect(lifecycleRule.ExpirationInDays).toBe(3650);
-      expect(lifecycleRule.NoncurrentVersionExpirationInDays).toBe(3650);
-      expect(lifecycleRule.AbortIncompleteMultipartUpload.DaysAfterInitiation).toBe(7);
-
-      // Security
-      expect(bucket.Properties.PublicAccessBlockConfiguration).toEqual({
-        BlockPublicAcls: true,
-        IgnorePublicAcls: true,
-        BlockPublicPolicy: true,
-        RestrictPublicBuckets: true
+      test('should have exactly 41 resources defined', () => {
+        const resourceCount = Object.keys(template.Resources).length;
+        expect(resourceCount).toBe(41);
       });
 
-      // Ownership
-      expect(bucket.Properties.OwnershipControls.Rules[0].ObjectOwnership).toBe('BucketOwnerEnforced');
-    });
-  });
-
-  describe('Enhanced Database Resources', () => {
-    test('AuroraSecret should be properly configured with KMS encryption', () => {
-      const secret = template.Resources.AuroraSecret;
-      expect(secret.Type).toBe('AWS::SecretsManager::Secret');
-      expect(secret.Properties.Description).toEqual({
-        'Fn::Sub': '${AWS::StackName}-Aurora-Master-Credentials'
-      });
-      expect(secret.Properties.SecretString).toEqual({
-        'Fn::Sub': '{"username":"${DatabaseMasterUsername}","password":"${DatabaseMasterPassword}"}'
-      });
-      expect(secret.Properties.KmsKeyId).toEqual({ Ref: 'KMSKey' });
-    });
-
-    test('AuroraCluster should have Serverless V2 and security configuration', () => {
-      const cluster = template.Resources.AuroraCluster;
-      expect(cluster.Type).toBe('AWS::RDS::DBCluster');
-
-      // Engine configuration
-      expect(cluster.Properties.Engine).toBe('aurora-postgresql');
-      expect(cluster.Properties.EngineMode).toBe('provisioned');
-      expect(cluster.Properties.DBClusterParameterGroupName).toBe('default.aurora-postgresql17');
-
-      // Master user configuration
-      expect(cluster.Properties.MasterUsername).toEqual({ Ref: 'DatabaseMasterUsername' });
-      expect(cluster.Properties.MasterUserSecret).toEqual({
-        SecretArn: { Ref: 'AuroraSecret' }
-      });
-      expect(cluster.Properties.ManageMasterUserPassword).toBe(true);
-
-      // Database
-      expect(cluster.Properties.DatabaseName).toBe('reportingdb');
-
-      // Serverless V2 scaling
-      expect(cluster.Properties.ServerlessV2ScalingConfiguration).toEqual({
-        MinCapacity: 0.5,
-        MaxCapacity: 4.0
+      test('should have exactly 7 parameters defined', () => {
+        const parameterCount = Object.keys(template.Parameters).length;
+        expect(parameterCount).toBe(7);
       });
 
-      // Security
-      expect(cluster.Properties.StorageEncrypted).toBe(true);
-      expect(cluster.Properties.KmsKeyId).toEqual({
-        'Fn::GetAtt': ['KMSKey', 'Arn']
-      });
-      expect(cluster.Properties.BackupRetentionPeriod).toBe(7);
-
-      // Networking
-      expect(cluster.Properties.VpcSecurityGroupIds).toEqual([{ Ref: 'AuroraSecurityGroup' }]);
-      expect(cluster.Properties.DBSubnetGroupName).toEqual({ Ref: 'AuroraDBSubnetGroup' });
-    });
-  });
-
-  describe('Enhanced Networking Resources', () => {
-    test('VPC should have DNS support and hostnames enabled', () => {
-      const vpc = template.Resources.VPC;
-      expect(vpc.Type).toBe('AWS::EC2::VPC');
-      expect(vpc.Properties.CidrBlock).toBe('10.0.0.0/16');
-      expect(vpc.Properties.EnableDnsSupport).toBe(true);
-      expect(vpc.Properties.EnableDnsHostnames).toBe(true);
-      expect(vpc.Properties.Tags[0].Key).toBe('Name');
-      expect(vpc.Properties.Tags[0].Value).toEqual({
-        'Fn::Sub': '${AWS::StackName}-VPC'
+      test('should have exactly 7 outputs defined', () => {
+        const outputCount = Object.keys(template.Outputs).length;
+        expect(outputCount).toBe(7);
       });
     });
 
-    test('Subnets should be in different AZs with correct CIDR blocks', () => {
-      const subnetA = template.Resources.SubnetA;
-      const subnetB = template.Resources.SubnetB;
-
-      // SubnetA configuration
-      expect(subnetA.Type).toBe('AWS::EC2::Subnet');
-      expect(subnetA.Properties.CidrBlock).toBe('10.0.1.0/24');
-      expect(subnetA.Properties.AvailabilityZone).toEqual({
-        'Fn::Select': [0, { 'Fn::GetAZs': '' }]
+    describe('Enhanced Parameters Validation', () => {
+      test('Environment parameter should have correct configuration', () => {
+        const param = template.Parameters.Environment;
+        expect(param.Type).toBe('String');
+        expect(param.Default).toBe('prod');
+        expect(param.AllowedValues).toEqual(['prod', 'staging', 'dev']);
+        expect(param.Description).toContain('Deployment environment');
       });
 
-      // SubnetB configuration
-      expect(subnetB.Type).toBe('AWS::EC2::Subnet');
-      expect(subnetB.Properties.CidrBlock).toBe('10.0.2.0/24');
-      expect(subnetB.Properties.AvailabilityZone).toEqual({
-        'Fn::Select': [1, { 'Fn::GetAZs': '' }]
+      test('DatabaseMasterPassword parameter should have security and validation', () => {
+        const param = template.Parameters.DatabaseMasterPassword;
+        expect(param.Type).toBe('String');
+        expect(param.NoEcho).toBe(true);
+        expect(param.MinLength).toBe(8);
+        expect(param.Default).toBe('SecurePassword2025!');
+        expect(param.Description).toContain('Master password for Aurora database');
       });
 
-      // Both should reference the VPC
-      expect(subnetA.Properties.VpcId).toEqual({ Ref: 'VPC' });
-      expect(subnetB.Properties.VpcId).toEqual({ Ref: 'VPC' });
-    });
-
-    test('Security groups should have proper ingress rules', () => {
-      const auroraSecurityGroup = template.Resources.AuroraSecurityGroup;
-      const lambdaSecurityGroup = template.Resources.LambdaSecurityGroup;
-
-      // Aurora security group
-      expect(auroraSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
-      expect(auroraSecurityGroup.Properties.GroupDescription).toBe('Security group for Aurora');
-      expect(auroraSecurityGroup.Properties.VpcId).toEqual({ Ref: 'VPC' });
-
-      const auroraIngressRule = auroraSecurityGroup.Properties.SecurityGroupIngress[0];
-      expect(auroraIngressRule.IpProtocol).toBe('tcp');
-      expect(auroraIngressRule.FromPort).toBe(5432);
-      expect(auroraIngressRule.ToPort).toBe(5432);
-      expect(auroraIngressRule.SourceSecurityGroupId).toEqual({ Ref: 'LambdaSecurityGroup' });
-
-      // Lambda security group
-      expect(lambdaSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
-      expect(lambdaSecurityGroup.Properties.GroupDescription).toBe('Security group for Lambda functions (to access Aurora)');
-      expect(lambdaSecurityGroup.Properties.VpcId).toEqual({ Ref: 'VPC' });
-    });
-  });
-
-  describe('Enhanced Lambda Functions', () => {
-    const testLambdaFunction = (resourceName: string, handler: string) => {
-      const lambda = template.Resources[resourceName];
-      expect(lambda.Type).toBe('AWS::Lambda::Function');
-      expect(lambda.Properties.Handler).toBe(handler);
-      expect(lambda.Properties.Runtime).toBe('python3.12');
-      expect(lambda.Properties.Timeout).toBe(180);
-      expect(lambda.Properties.MemorySize).toBe(256);
-      expect(lambda.Properties.Role).toEqual({
-        'Fn::GetAtt': ['LambdaExecutionRole', 'Arn']
+      test('DailyScheduleExpression parameter should have cron configuration', () => {
+        const param = template.Parameters.DailyScheduleExpression;
+        expect(param.Type).toBe('String');
+        expect(param.Default).toBe('cron(0 10 * * ? *)');
+        expect(param.Description).toContain('10:00 AM UTC');
       });
 
-      // VPC Configuration
-      expect(lambda.Properties.VpcConfig.SecurityGroupIds).toEqual([{ Ref: 'LambdaSecurityGroup' }]);
-      expect(lambda.Properties.VpcConfig.SubnetIds).toEqual([{ Ref: 'SubnetA' }, { Ref: 'SubnetB' }]);
-
-      // Code should be defined
-      expect(lambda.Properties.Code.ZipFile).toBeDefined();
-      expect(lambda.Properties.Code.ZipFile.length).toBeGreaterThan(0);
-    };
-
-    test('GenerateReportLambda should have correct configuration', () => {
-      testLambdaFunction('GenerateReportLambda', 'index.handler');
-
-      // Verify code contains key functionality
-      const code = template.Resources.GenerateReportLambda.Properties.Code.ZipFile;
-      expect(code).toContain('report_id');
-      expect(code).toContain('jurisdiction');
-      expect(code).toContain('REG_FORM_49');
-    });
-
-    test('ValidateReportLambda should have correct configuration', () => {
-      testLambdaFunction('ValidateReportLambda', 'index.handler');
-
-      // Verify code contains validation logic
-      const code = template.Resources.ValidateReportLambda.Properties.Code.ZipFile;
-      expect(code).toContain('validation_errors');
-      expect(code).toContain('entity_name');
-      expect(code).toContain('transaction_count');
-      expect(code).toContain('total_value');
-    });
-
-    test('DeliverReportLambda should have correct configuration and environment variables', () => {
-      testLambdaFunction('DeliverReportLambda', 'index.handler');
-
-      const lambda = template.Resources.DeliverReportLambda;
-
-      // Environment variables
-      const envVars = lambda.Properties.Environment.Variables;
-      expect(envVars.REPORTS_BUCKET_NAME).toEqual({ Ref: 'ReportsBucket' });
-      expect(envVars.SENDER_EMAIL).toEqual({ Ref: 'SenderEmailAddress' });
-      expect(envVars.DB_CLUSTER_ARN).toEqual({
-        'Fn::Sub': 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraCluster}'
-      });
-      expect(envVars.DB_SECRET_ARN).toEqual({
-        'Fn::GetAtt': ['AuroraCluster', 'MasterUserSecret.SecretArn']
-      });
-      expect(envVars.DB_NAME).toBe('reportingdb');
-
-      // Verify code contains delivery logic
-      const code = lambda.Properties.Code.ZipFile;
-      expect(code).toContain('s3.put_object');
-      expect(code).toContain('ses.send_email');
-      expect(code).toContain('rds_data');
-    });
-  });
-
-  describe('Enhanced Step Functions State Machine', () => {
-    test('State machine definition should have correct workflow structure', () => {
-      const definitionString = template.Resources.ReportingStateMachine.Properties.DefinitionString['Fn::Sub'][0];
-      const definition = JSON.parse(definitionString.replace(/\n/g, ''));
-
-      expect(definition.Comment).toBe('Regulatory Report Generation and Delivery Workflow');
-      expect(definition.StartAt).toBe('GenerateReport');
-
-      // Verify all required states exist
-      const expectedStates = [
-        'GenerateReport',
-        'ValidateReport',
-        'ValidationChoice',
-        'DeliverReport',
-        'ValidationFailedNotification',
-        'DeliveryFailedNotification',
-        'ReportGenerationSuccess'
-      ];
-
-      expectedStates.forEach(stateName => {
-        expect(definition.States).toHaveProperty(stateName);
+      test('SenderEmailAddress parameter should have SES configuration', () => {
+        const param = template.Parameters.SenderEmailAddress;
+        expect(param.Type).toBe('String');
+        expect(param.Default).toBe('govardhan.y@turing.com');
+        expect(param.Description).toContain('SES verified email address');
       });
 
-      // Verify state types
-      expect(definition.States.GenerateReport.Type).toBe('Task');
-      expect(definition.States.ValidateReport.Type).toBe('Task');
-      expect(definition.States.ValidationChoice.Type).toBe('Choice');
-      expect(definition.States.DeliverReport.Type).toBe('Task');
-      expect(definition.States.ValidationFailedNotification.Type).toBe('Fail');
-      expect(definition.States.DeliveryFailedNotification.Type).toBe('Fail');
-      expect(definition.States.ReportGenerationSuccess.Type).toBe('Succeed');
-
-      // Verify retry configuration
-      expect(definition.States.GenerateReport.Retry).toHaveLength(1);
-      expect(definition.States.GenerateReport.Retry[0].MaxAttempts).toBe(3);
-
-      // Verify choice logic
-      expect(definition.States.ValidationChoice.Choices[0].Variable).toBe('$.validationResult.isValid');
-      expect(definition.States.ValidationChoice.Choices[0].BooleanEquals).toBe(true);
-
-      // Verify error handling
-      expect(definition.States.DeliverReport.Catch).toHaveLength(1);
-      expect(definition.States.DeliverReport.Catch[0].ErrorEquals).toEqual(['States.ALL']);
-    });
-  });
-
-  describe('Enhanced Event Scheduling and Monitoring', () => {
-    test('DailyScheduler should have correct EventBridge configuration', () => {
-      const scheduler = template.Resources.DailyScheduler;
-      expect(scheduler.Type).toBe('AWS::Events::Rule');
-      expect(scheduler.Properties.Description).toBe('Triggers the regulatory reporting state machine daily.');
-      expect(scheduler.Properties.ScheduleExpression).toEqual({ Ref: 'DailyScheduleExpression' });
-      expect(scheduler.Properties.State).toBe('ENABLED');
-
-      // Target configuration
-      const target = scheduler.Properties.Targets[0];
-      expect(target.Arn).toEqual({ Ref: 'ReportingStateMachine' });
-      expect(target.Id).toBe('StepFunctionsTarget');
-      expect(target.RoleArn).toEqual({
-        'Fn::GetAtt': ['EventBridgeRole', 'Arn']
+      test('BucketNamePrefix parameter should have S3 naming rules', () => {
+        const param = template.Parameters.BucketNamePrefix;
+        expect(param.Type).toBe('String');
+        expect(param.Default).toBe('tap-stack');
+        expect(param.Description).toContain('lowercase');
       });
     });
 
-    test('FailureAlarm should have correct CloudWatch configuration', () => {
-      const alarm = template.Resources.FailureAlarm;
-      expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
-      expect(alarm.Properties.AlarmDescription).toBe('Alarm when 10% or more of daily reports fail.');
-      expect(alarm.Properties.Namespace).toBe('AWS/States');
-      expect(alarm.Properties.MetricName).toBe('ExecutionsFailed');
-      expect(alarm.Properties.Statistic).toBe('Sum');
-      expect(alarm.Properties.Period).toBe(86400); // 24 hours
-      expect(alarm.Properties.EvaluationPeriods).toBe(1);
-      expect(alarm.Properties.Threshold).toBe('200'); // 10% of 2000
-      expect(alarm.Properties.ComparisonOperator).toBe('GreaterThanOrEqualToThreshold');
+    describe('Enhanced S3 Storage Resources', () => {
+      test('ReportsBucket should have regulatory compliance configuration', () => {
+        const bucket = template.Resources.ReportsBucket;
+        expect(bucket.Type).toBe('AWS::S3::Bucket');
 
-      // Dimension configuration
-      const dimension = alarm.Properties.Dimensions[0];
-      expect(dimension.Name).toBe('StateMachineArn');
-      expect(dimension.Value).toEqual({ Ref: 'ReportingStateMachine' });
+        // Bucket naming
+        expect(bucket.Properties.BucketName['Fn::Sub']).toBe('${BucketNamePrefix}-reports-${Environment}-${AWS::AccountId}');
 
-      // Alarm actions
-      expect(alarm.Properties.AlarmActions).toEqual([{ Ref: 'SNSTopic' }]);
+        // Encryption configuration
+        expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+        expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.KMSMasterKeyID).toEqual({
+          'Fn::GetAtt': ['KMSKey', 'Arn']
+        });
+
+        // Versioning
+        expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
+
+        // Lifecycle - 10 year retention (3650 days)
+        const lifecycleRule = bucket.Properties.LifecycleConfiguration.Rules[0];
+        expect(lifecycleRule.Id).toBe('RetentionRule');
+        expect(lifecycleRule.Status).toBe('Enabled');
+        expect(lifecycleRule.ExpirationInDays).toBe(3650);
+        expect(lifecycleRule.NoncurrentVersionExpirationInDays).toBe(3650);
+        expect(lifecycleRule.AbortIncompleteMultipartUpload.DaysAfterInitiation).toBe(7);
+
+        // Security
+        expect(bucket.Properties.PublicAccessBlockConfiguration).toEqual({
+          BlockPublicAcls: true,
+          IgnorePublicAcls: true,
+          BlockPublicPolicy: true,
+          RestrictPublicBuckets: true
+        });
+
+        // Ownership
+        expect(bucket.Properties.OwnershipControls.Rules[0].ObjectOwnership).toBe('BucketOwnerEnforced');
+      });
     });
-  });
 
-  describe('Enhanced Audit Trail Resources', () => {
-    test('AuditTrailBucket should have proper configuration', () => {
-      const bucket = template.Resources.AuditTrailBucket;
-      expect(bucket.Type).toBe('AWS::S3::Bucket');
-      expect(bucket.Properties.BucketName).toEqual({
-        'Fn::Sub': '${BucketNamePrefix}-cloudtrail-logs-${AWS::AccountId}'
+    describe('Enhanced Database Resources', () => {
+      test('AuroraSecret should be properly configured with KMS encryption', () => {
+        const secret = template.Resources.AuroraSecret;
+        expect(secret.Type).toBe('AWS::SecretsManager::Secret');
+        expect(secret.Properties.Description).toEqual({
+          'Fn::Sub': '${AWS::StackName}-Aurora-Master-Credentials'
+        });
+        expect(secret.Properties.SecretString).toEqual({
+          'Fn::Sub': '{"username":"${DatabaseMasterUsername}","password":"${DatabaseMasterPassword}"}'
+        });
+        expect(secret.Properties.KmsKeyId).toEqual({ Ref: 'KMSKey' });
       });
 
-      // Security configuration
-      expect(bucket.Properties.PublicAccessBlockConfiguration).toEqual({
-        BlockPublicAcls: true,
-        IgnorePublicAcls: true,
-        BlockPublicPolicy: true,
-        RestrictPublicBuckets: true
+      test('AuroraCluster should have Serverless V2 and security configuration', () => {
+        const cluster = template.Resources.AuroraCluster;
+        expect(cluster.Type).toBe('AWS::RDS::DBCluster');
+
+        // Engine configuration
+        expect(cluster.Properties.Engine).toBe('aurora-postgresql');
+        expect(cluster.Properties.EngineMode).toBe('provisioned');
+        expect(cluster.Properties.DBClusterParameterGroupName).toBe('default.aurora-postgresql17');
+
+        // Master user configuration
+        expect(cluster.Properties.MasterUsername).toEqual({ Ref: 'DatabaseMasterUsername' });
+        expect(cluster.Properties.MasterUserSecret).toEqual({
+          SecretArn: { Ref: 'AuroraSecret' }
+        });
+        expect(cluster.Properties.ManageMasterUserPassword).toBe(true);
+
+        // Database
+        expect(cluster.Properties.DatabaseName).toBe('reportingdb');
+
+        // Serverless V2 scaling
+        expect(cluster.Properties.ServerlessV2ScalingConfiguration).toEqual({
+          MinCapacity: 0.5,
+          MaxCapacity: 4.0
+        });
+
+        // Security
+        expect(cluster.Properties.StorageEncrypted).toBe(true);
+        expect(cluster.Properties.KmsKeyId).toEqual({
+          'Fn::GetAtt': ['KMSKey', 'Arn']
+        });
+        expect(cluster.Properties.BackupRetentionPeriod).toBe(7);
+
+        // Networking
+        expect(cluster.Properties.VpcSecurityGroupIds).toEqual([{ Ref: 'AuroraSecurityGroup' }]);
+        expect(cluster.Properties.DBSubnetGroupName).toEqual({ Ref: 'AuroraDBSubnetGroup' });
+      });
+    });
+
+    describe('Enhanced Networking Resources', () => {
+      test('VPC should have DNS support and hostnames enabled', () => {
+        const vpc = template.Resources.VPC;
+        expect(vpc.Type).toBe('AWS::EC2::VPC');
+        expect(vpc.Properties.CidrBlock).toBe('10.0.0.0/16');
+        expect(vpc.Properties.EnableDnsSupport).toBe(true);
+        expect(vpc.Properties.EnableDnsHostnames).toBe(true);
+        expect(vpc.Properties.Tags[0].Key).toBe('Name');
+        expect(vpc.Properties.Tags[0].Value).toEqual({
+          'Fn::Sub': '${AWS::StackName}-VPC'
+        });
       });
 
-      // Ownership
-      expect(bucket.Properties.OwnershipControls.Rules[0].ObjectOwnership).toBe('BucketOwnerPreferred');
+      test('Subnets should be in different AZs with correct CIDR blocks', () => {
+        const subnetA = template.Resources.SubnetA;
+        const subnetB = template.Resources.SubnetB;
+
+        // SubnetA configuration
+        expect(subnetA.Type).toBe('AWS::EC2::Subnet');
+        expect(subnetA.Properties.CidrBlock).toBe('10.0.1.0/24');
+        expect(subnetA.Properties.AvailabilityZone).toEqual({
+          'Fn::Select': [0, { 'Fn::GetAZs': '' }]
+        });
+
+        // SubnetB configuration
+        expect(subnetB.Type).toBe('AWS::EC2::Subnet');
+        expect(subnetB.Properties.CidrBlock).toBe('10.0.2.0/24');
+        expect(subnetB.Properties.AvailabilityZone).toEqual({
+          'Fn::Select': [1, { 'Fn::GetAZs': '' }]
+        });
+
+        // Both should reference the VPC
+        expect(subnetA.Properties.VpcId).toEqual({ Ref: 'VPC' });
+        expect(subnetB.Properties.VpcId).toEqual({ Ref: 'VPC' });
+      });
+
+      test('Security groups should have proper ingress rules', () => {
+        const auroraSecurityGroup = template.Resources.AuroraSecurityGroup;
+        const lambdaSecurityGroup = template.Resources.LambdaSecurityGroup;
+
+        // Aurora security group
+        expect(auroraSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
+        expect(auroraSecurityGroup.Properties.GroupDescription).toBe('Security group for Aurora');
+        expect(auroraSecurityGroup.Properties.VpcId).toEqual({ Ref: 'VPC' });
+
+        const auroraIngressRule = auroraSecurityGroup.Properties.SecurityGroupIngress[0];
+        expect(auroraIngressRule.IpProtocol).toBe('tcp');
+        expect(auroraIngressRule.FromPort).toBe(5432);
+        expect(auroraIngressRule.ToPort).toBe(5432);
+        expect(auroraIngressRule.SourceSecurityGroupId).toEqual({ Ref: 'LambdaSecurityGroup' });
+
+        // Lambda security group
+        expect(lambdaSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
+        expect(lambdaSecurityGroup.Properties.GroupDescription).toBe('Security group for Lambda functions (to access Aurora)');
+        expect(lambdaSecurityGroup.Properties.VpcId).toEqual({ Ref: 'VPC' });
+      });
     });
 
-    test('AuditingTrail should have proper CloudTrail configuration', () => {
-      const trail = template.Resources.AuditingTrail;
-      expect(trail.Type).toBe('AWS::CloudTrail::Trail');
-      expect(trail.DependsOn).toBe('AuditTrailBucketPolicy');
-      expect(trail.Properties.S3BucketName).toEqual({ Ref: 'AuditTrailBucket' });
-      expect(trail.Properties.IsLogging).toBe(true);
-      expect(trail.Properties.IncludeGlobalServiceEvents).toBe(true);
-    });
-  });
-
-  describe('Resource Dependencies and References Validation', () => {
-    test('All resource references should be valid', () => {
-      const resourceNames = Object.keys(template.Resources);
-
-      // Function to check if a reference exists
-      const checkRef = (ref: any) => {
-        if (ref && typeof ref === 'object') {
-          if (ref.Ref && !template.Parameters[ref.Ref] && !resourceNames.includes(ref.Ref) && !ref.Ref.startsWith('AWS::')) {
-            throw new Error(`Invalid Ref: ${ref.Ref}`);
-          }
-          if (ref['Fn::GetAtt'] && Array.isArray(ref['Fn::GetAtt'])) {
-            const resourceName = ref['Fn::GetAtt'][0];
-            if (!resourceNames.includes(resourceName)) {
-              throw new Error(`Invalid Fn::GetAtt reference: ${resourceName}`);
-            }
-          }
-        }
-      };
-
-      // Recursively check all references in the template
-      const checkReferences = (obj: any) => {
-        if (Array.isArray(obj)) {
-          obj.forEach(checkReferences);
-        } else if (obj && typeof obj === 'object') {
-          checkRef(obj);
-          Object.values(obj).forEach(checkReferences);
-        }
-      };
-
-      checkReferences(template.Resources);
-    });
-
-    test('Lambda functions should reference correct execution role', () => {
-      const lambdaFunctions = ['GenerateReportLambda', 'ValidateReportLambda', 'DeliverReportLambda'];
-
-      lambdaFunctions.forEach(functionName => {
-        const lambda = template.Resources[functionName];
+    describe('Enhanced Lambda Functions', () => {
+      const testLambdaFunction = (resourceName: string, handler: string) => {
+        const lambda = template.Resources[resourceName];
+        expect(lambda.Type).toBe('AWS::Lambda::Function');
+        expect(lambda.Properties.Handler).toBe(handler);
+        expect(lambda.Properties.Runtime).toBe('python3.12');
+        expect(lambda.Properties.Timeout).toBe(180);
+        expect(lambda.Properties.MemorySize).toBe(256);
         expect(lambda.Properties.Role).toEqual({
           'Fn::GetAtt': ['LambdaExecutionRole', 'Arn']
         });
+
+        // VPC Configuration
+        expect(lambda.Properties.VpcConfig.SecurityGroupIds).toEqual([{ Ref: 'LambdaSecurityGroup' }]);
+        expect(lambda.Properties.VpcConfig.SubnetIds).toEqual([{ Ref: 'SubnetA' }, { Ref: 'SubnetB' }]);
+
+        // Code should be defined
+        expect(lambda.Properties.Code.ZipFile).toBeDefined();
+        expect(lambda.Properties.Code.ZipFile.length).toBeGreaterThan(0);
+      };
+
+      test('GenerateReportLambda should have correct configuration', () => {
+        testLambdaFunction('GenerateReportLambda', 'index.handler');
+
+        // Verify code contains key functionality
+        const code = template.Resources.GenerateReportLambda.Properties.Code.ZipFile;
+        expect(code).toContain('report_id');
+        expect(code).toContain('jurisdiction');
+        expect(code).toContain('REG_FORM_49');
+      });
+
+      test('ValidateReportLambda should have correct configuration', () => {
+        testLambdaFunction('ValidateReportLambda', 'index.handler');
+
+        // Verify code contains validation logic
+        const code = template.Resources.ValidateReportLambda.Properties.Code.ZipFile;
+        expect(code).toContain('validation_errors');
+        expect(code).toContain('entity_name');
+        expect(code).toContain('transaction_count');
+        expect(code).toContain('total_value');
+      });
+
+      test('DeliverReportLambda should have correct configuration and environment variables', () => {
+        testLambdaFunction('DeliverReportLambda', 'index.handler');
+
+        const lambda = template.Resources.DeliverReportLambda;
+
+        // Environment variables
+        const envVars = lambda.Properties.Environment.Variables;
+        expect(envVars.REPORTS_BUCKET_NAME).toEqual({ Ref: 'ReportsBucket' });
+        expect(envVars.SENDER_EMAIL).toEqual({ Ref: 'SenderEmailAddress' });
+        expect(envVars.DB_CLUSTER_ARN).toEqual({
+          'Fn::Sub': 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraCluster}'
+        });
+        expect(envVars.DB_SECRET_ARN).toEqual({
+          'Fn::GetAtt': ['AuroraCluster', 'MasterUserSecret.SecretArn']
+        });
+        expect(envVars.DB_NAME).toBe('reportingdb');
+
+        // Verify code contains delivery logic
+        const code = lambda.Properties.Code.ZipFile;
+        expect(code).toContain('s3.put_object');
+        expect(code).toContain('ses.send_email');
+        expect(code).toContain('rds_data');
       });
     });
 
-    test('Aurora cluster should reference all required resources', () => {
-      const cluster = template.Resources.AuroraCluster;
+    describe('Enhanced Step Functions State Machine', () => {
+      test('State machine definition should have correct workflow structure', () => {
+        const definitionString = template.Resources.ReportingStateMachine.Properties.DefinitionString['Fn::Sub'][0];
+        const definition = JSON.parse(definitionString.replace(/\n/g, ''));
 
-      // Should reference security group, subnet group, KMS key, and secret
-      expect(cluster.Properties.VpcSecurityGroupIds).toEqual([{ Ref: 'AuroraSecurityGroup' }]);
-      expect(cluster.Properties.DBSubnetGroupName).toEqual({ Ref: 'AuroraDBSubnetGroup' });
-      expect(cluster.Properties.KmsKeyId).toEqual({
-        'Fn::GetAtt': ['KMSKey', 'Arn']
+        expect(definition.Comment).toBe('Regulatory Report Generation and Delivery Workflow');
+        expect(definition.StartAt).toBe('GenerateReport');
+
+        // Verify all required states exist
+        const expectedStates = [
+          'GenerateReport',
+          'ValidateReport',
+          'ValidationChoice',
+          'DeliverReport',
+          'ValidationFailedNotification',
+          'DeliveryFailedNotification',
+          'ReportGenerationSuccess'
+        ];
+
+        expectedStates.forEach(stateName => {
+          expect(definition.States).toHaveProperty(stateName);
+        });
+
+        // Verify state types
+        expect(definition.States.GenerateReport.Type).toBe('Task');
+        expect(definition.States.ValidateReport.Type).toBe('Task');
+        expect(definition.States.ValidationChoice.Type).toBe('Choice');
+        expect(definition.States.DeliverReport.Type).toBe('Task');
+        expect(definition.States.ValidationFailedNotification.Type).toBe('Fail');
+        expect(definition.States.DeliveryFailedNotification.Type).toBe('Fail');
+        expect(definition.States.ReportGenerationSuccess.Type).toBe('Succeed');
+
+        // Verify retry configuration
+        expect(definition.States.GenerateReport.Retry).toHaveLength(1);
+        expect(definition.States.GenerateReport.Retry[0].MaxAttempts).toBe(3);
+
+        // Verify choice logic
+        expect(definition.States.ValidationChoice.Choices[0].Variable).toBe('$.validationResult.isValid');
+        expect(definition.States.ValidationChoice.Choices[0].BooleanEquals).toBe(true);
+
+        // Verify error handling
+        expect(definition.States.DeliverReport.Catch).toHaveLength(1);
+        expect(definition.States.DeliverReport.Catch[0].ErrorEquals).toEqual(['States.ALL']);
       });
-      expect(cluster.Properties.MasterUserSecret.SecretArn).toEqual({ Ref: 'AuroraSecret' });
+    });
+
+    describe('Enhanced Event Scheduling and Monitoring', () => {
+      test('DailyScheduler should have correct EventBridge configuration', () => {
+        const scheduler = template.Resources.DailyScheduler;
+        expect(scheduler.Type).toBe('AWS::Events::Rule');
+        expect(scheduler.Properties.Description).toBe('Triggers the regulatory reporting state machine daily.');
+        expect(scheduler.Properties.ScheduleExpression).toEqual({ Ref: 'DailyScheduleExpression' });
+        expect(scheduler.Properties.State).toBe('ENABLED');
+
+        // Target configuration
+        const target = scheduler.Properties.Targets[0];
+        expect(target.Arn).toEqual({ Ref: 'ReportingStateMachine' });
+        expect(target.Id).toBe('StepFunctionsTarget');
+        expect(target.RoleArn).toEqual({
+          'Fn::GetAtt': ['EventBridgeRole', 'Arn']
+        });
+      });
+
+      test('FailureAlarm should have correct CloudWatch configuration', () => {
+        const alarm = template.Resources.FailureAlarm;
+        expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
+        expect(alarm.Properties.AlarmDescription).toBe('Alarm when 10% or more of daily reports fail.');
+        expect(alarm.Properties.Namespace).toBe('AWS/States');
+        expect(alarm.Properties.MetricName).toBe('ExecutionsFailed');
+        expect(alarm.Properties.Statistic).toBe('Sum');
+        expect(alarm.Properties.Period).toBe(86400); // 24 hours
+        expect(alarm.Properties.EvaluationPeriods).toBe(1);
+        expect(alarm.Properties.Threshold).toBe('200'); // 10% of 2000
+        expect(alarm.Properties.ComparisonOperator).toBe('GreaterThanOrEqualToThreshold');
+
+        // Dimension configuration
+        const dimension = alarm.Properties.Dimensions[0];
+        expect(dimension.Name).toBe('StateMachineArn');
+        expect(dimension.Value).toEqual({ Ref: 'ReportingStateMachine' });
+
+        // Alarm actions
+        expect(alarm.Properties.AlarmActions).toEqual([{ Ref: 'SNSTopic' }]);
+      });
+    });
+
+    describe('Enhanced Audit Trail Resources', () => {
+      test('AuditTrailBucket should have proper configuration', () => {
+        const bucket = template.Resources.AuditTrailBucket;
+        expect(bucket.Type).toBe('AWS::S3::Bucket');
+        expect(bucket.Properties.BucketName).toEqual({
+          'Fn::Sub': '${BucketNamePrefix}-cloudtrail-logs-${AWS::AccountId}'
+        });
+
+        // Security configuration
+        expect(bucket.Properties.PublicAccessBlockConfiguration).toEqual({
+          BlockPublicAcls: true,
+          IgnorePublicAcls: true,
+          BlockPublicPolicy: true,
+          RestrictPublicBuckets: true
+        });
+
+        // Ownership
+        expect(bucket.Properties.OwnershipControls.Rules[0].ObjectOwnership).toBe('BucketOwnerPreferred');
+      });
+
+      test('AuditingTrail should have proper CloudTrail configuration', () => {
+        const trail = template.Resources.AuditingTrail;
+        expect(trail.Type).toBe('AWS::CloudTrail::Trail');
+        expect(trail.DependsOn).toBe('AuditTrailBucketPolicy');
+        expect(trail.Properties.S3BucketName).toEqual({ Ref: 'AuditTrailBucket' });
+        expect(trail.Properties.IsLogging).toBe(true);
+        expect(trail.Properties.IncludeGlobalServiceEvents).toBe(true);
+      });
+    });
+
+    describe('Resource Dependencies and References Validation', () => {
+      test('All resource references should be valid', () => {
+        const resourceNames = Object.keys(template.Resources);
+
+        // Function to check if a reference exists
+        const checkRef = (ref: any) => {
+          if (ref && typeof ref === 'object') {
+            if (ref.Ref && !template.Parameters[ref.Ref] && !resourceNames.includes(ref.Ref) && !ref.Ref.startsWith('AWS::')) {
+              throw new Error(`Invalid Ref: ${ref.Ref}`);
+            }
+            if (ref['Fn::GetAtt'] && Array.isArray(ref['Fn::GetAtt'])) {
+              const resourceName = ref['Fn::GetAtt'][0];
+              if (!resourceNames.includes(resourceName)) {
+                throw new Error(`Invalid Fn::GetAtt reference: ${resourceName}`);
+              }
+            }
+          }
+        };
+
+        // Recursively check all references in the template
+        const checkReferences = (obj: any) => {
+          if (Array.isArray(obj)) {
+            obj.forEach(checkReferences);
+          } else if (obj && typeof obj === 'object') {
+            checkRef(obj);
+            Object.values(obj).forEach(checkReferences);
+          }
+        };
+
+        checkReferences(template.Resources);
+      });
+
+      test('Lambda functions should reference correct execution role', () => {
+        const lambdaFunctions = ['GenerateReportLambda', 'ValidateReportLambda', 'DeliverReportLambda'];
+
+        lambdaFunctions.forEach(functionName => {
+          const lambda = template.Resources[functionName];
+          expect(lambda.Properties.Role).toEqual({
+            'Fn::GetAtt': ['LambdaExecutionRole', 'Arn']
+          });
+        });
+      });
+
+      test('Aurora cluster should reference all required resources', () => {
+        const cluster = template.Resources.AuroraCluster;
+
+        // Should reference security group, subnet group, KMS key, and secret
+        expect(cluster.Properties.VpcSecurityGroupIds).toEqual([{ Ref: 'AuroraSecurityGroup' }]);
+        expect(cluster.Properties.DBSubnetGroupName).toEqual({ Ref: 'AuroraDBSubnetGroup' });
+        expect(cluster.Properties.KmsKeyId).toEqual({
+          'Fn::GetAtt': ['KMSKey', 'Arn']
+        });
+        expect(cluster.Properties.MasterUserSecret.SecretArn).toEqual({ Ref: 'AuroraSecret' });
+      });
+    });
+
+    describe('CloudFormation Template Advanced Validation', () => {
+      test('Resource logical IDs should follow naming conventions', () => {
+        const resourceNames = Object.keys(template.Resources);
+
+        resourceNames.forEach(name => {
+          // Should not contain spaces or special characters except for allowed ones
+          expect(name).toMatch(/^[a-zA-Z0-9]+$/);
+          // Should start with capital letter
+          expect(name).toMatch(/^[A-Z]/);
+        });
+      });
+
+      test('All string parameters should have descriptions', () => {
+        Object.entries(template.Parameters).forEach(([paramName, param]: [string, any]) => {
+          if (param.Type === 'String') {
+            expect(param.Description).toBeDefined();
+            expect(param.Description.length).toBeGreaterThan(0);
+          }
+        });
+      });
+
+      test('All outputs should have descriptions', () => {
+        Object.entries(template.Outputs).forEach(([outputName, output]: [string, any]) => {
+          expect(output.Description).toBeDefined();
+          expect(output.Description.length).toBeGreaterThan(0);
+        });
+      });
     });
   });
-
-  describe('CloudFormation Template Advanced Validation', () => {
-    test('Resource logical IDs should follow naming conventions', () => {
-      const resourceNames = Object.keys(template.Resources);
-
-      resourceNames.forEach(name => {
-        // Should not contain spaces or special characters except for allowed ones
-        expect(name).toMatch(/^[a-zA-Z0-9]+$/);
-        // Should start with capital letter
-        expect(name).toMatch(/^[A-Z]/);
-      });
-    });
-
-    test('All string parameters should have descriptions', () => {
-      Object.entries(template.Parameters).forEach(([paramName, param]: [string, any]) => {
-        if (param.Type === 'String') {
-          expect(param.Description).toBeDefined();
-          expect(param.Description.length).toBeGreaterThan(0);
-        }
-      });
-    });
-
-    test('All outputs should have descriptions', () => {
-      Object.entries(template.Outputs).forEach(([outputName, output]: [string, any]) => {
-        expect(output.Description).toBeDefined();
-        expect(output.Description.length).toBeGreaterThan(0);
-      });
-    });
-  });
-});
 });
