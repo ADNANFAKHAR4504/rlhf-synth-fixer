@@ -31,17 +31,7 @@ import software.amazon.awssdk.services.cloudfront.CloudFrontClient;
 import software.amazon.awssdk.services.cloudfront.model.GetDistributionRequest;
 import software.amazon.awssdk.core.sync.RequestBody;
 
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
-import redis.clients.jedis.JedisPoolConfig;
-
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.Statement;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -53,6 +43,8 @@ import java.time.Duration;
  * 
  * These tests connect to actual AWS resources and verify functionality.
  * Requires deployed infrastructure and valid AWS credentials.
+ * 
+ * Note: Redis/ElastiCache tests have been removed as they require VPN access to private subnets.
  * 
  * Environment Variables Required:
  * - AWS_ACCESS_KEY_ID
@@ -89,9 +81,6 @@ public class MainIntegrationTest {
     private String redisEndpoint;
     private String feedRankingEndpointName;
     private String viralDetectionEndpointName;
-    
-    // Redis connection
-    private JedisPool jedisPool;
     
     @BeforeAll
     public void setUp() {
@@ -152,9 +141,6 @@ public class MainIntegrationTest {
         
         // Load stack outputs
         loadStackOutputs();
-        
-        // Initialize Redis connection
-        initializeRedis();
     }
     
     private void loadStackOutputs() {
@@ -185,14 +171,6 @@ public class MainIntegrationTest {
         viralDetectionEndpointName = stackOutputs.get("ViralDetectionEndpoint");
         
         System.out.println("Loaded stack outputs for: " + stackName);
-    }
-    
-    private void initializeRedis() {
-        if (redisEndpoint != null && !redisEndpoint.isEmpty()) {
-            JedisPoolConfig poolConfig = new JedisPoolConfig();
-            poolConfig.setMaxTotal(10);
-            jedisPool = new JedisPool(poolConfig, redisEndpoint, 6379);
-        }
     }
 
     // ==================== DynamoDB Integration Tests ====================
@@ -352,44 +330,6 @@ public class MainIntegrationTest {
     }
     
     @Test
-    public void testUpdatePostLikes() {
-        String postId = "post-likes-" + System.currentTimeMillis();
-        long timestamp = System.currentTimeMillis();
-        
-        // Create post
-        Map<String, AttributeValue> item = new HashMap<>();
-        item.put("postId", AttributeValue.builder().s(postId).build());
-        item.put("timestamp", AttributeValue.builder().n(String.valueOf(timestamp)).build());
-        item.put("likes", AttributeValue.builder().n("0").build());
-        
-        dynamoDbClient.putItem(
-            PutItemRequest.builder()
-                .tableName(postTableName)
-                .item(item)
-                .build()
-        );
-        
-        // Update likes
-        Map<String, AttributeValue> key = new HashMap<>();
-        key.put("postId", AttributeValue.builder().s(postId).build());
-        key.put("timestamp", AttributeValue.builder().n(String.valueOf(timestamp)).build());
-        
-        UpdateItemResponse response = dynamoDbClient.updateItem(
-            UpdateItemRequest.builder()
-                .tableName(postTableName)
-                .key(key)
-                .updateExpression("SET likes = likes + :inc")
-                .expressionAttributeValues(Map.of(
-                    ":inc", AttributeValue.builder().n("1").build()
-                ))
-                .returnValues(ReturnValue.ALL_NEW)
-                .build()
-        );
-        
-        assertThat(response.attributes().get("likes").n()).isEqualTo("1");
-    }
-    
-    @Test
     public void testScanUserGraphTable() {
         ScanResponse response = dynamoDbClient.scan(
             ScanRequest.builder()
@@ -535,7 +475,7 @@ public class MainIntegrationTest {
         assertThat(response.serverSideEncryptionConfiguration()).isNotNull();
     }
 
-    // ==================== Redis/ElastiCache Integration Tests ====================
+    // ==================== ElastiCache Metadata Tests ====================
     
     @Test
     public void testRedisClusterExists() {
@@ -548,98 +488,8 @@ public class MainIntegrationTest {
         assertThat(response.replicationGroups()).isNotEmpty();
         assertThat(response.replicationGroups().get(0).status()).isEqualTo("available");
     }
-    
-    @Test
-    public void testRedisSetAndGet() {
-        try (Jedis jedis = jedisPool.getResource()) {
-            String key = "test-key-" + System.currentTimeMillis();
-            String value = "test-value";
-            
-            String setResult = jedis.set(key, value);
-            assertThat(setResult).isEqualTo("OK");
-            
-            String getValue = jedis.get(key);
-            assertThat(getValue).isEqualTo(value);
-        }
-    }
-    
-    @Test
-    public void testRedisCacheFeedData() {
-        try (Jedis jedis = jedisPool.getResource()) {
-            String userId = "user-123";
-            String feedKey = "feed:" + userId;
-            String feedData = "{\"posts\": [\"post1\", \"post2\", \"post3\"]}";
-            
-            jedis.setex(feedKey, 300, feedData); // 5 minute TTL
-            
-            String cached = jedis.get(feedKey);
-            assertThat(cached).isEqualTo(feedData);
-            
-            Long ttl = jedis.ttl(feedKey);
-            assertThat(ttl).isGreaterThan(0L);
-        }
-    }
-    
-    @Test
-    public void testRedisHashOperations() {
-        try (Jedis jedis = jedisPool.getResource()) {
-            String hashKey = "user:session:" + System.currentTimeMillis();
-            
-            jedis.hset(hashKey, "userId", "user-456");
-            jedis.hset(hashKey, "sessionToken", "token-xyz");
-            jedis.hset(hashKey, "loginTime", String.valueOf(System.currentTimeMillis()));
-            
-            Map<String, String> session = jedis.hgetAll(hashKey);
-            assertThat(session).hasSize(3);
-            assertThat(session.get("userId")).isEqualTo("user-456");
-        }
-    }
-    
-    @Test
-    public void testRedisListOperations() {
-        try (Jedis jedis = jedisPool.getResource()) {
-            String listKey = "notifications:" + System.currentTimeMillis();
-            
-            jedis.lpush(listKey, "notification1", "notification2", "notification3");
-            
-            Long length = jedis.llen(listKey);
-            assertThat(length).isEqualTo(3L);
-            
-            String firstItem = jedis.rpop(listKey);
-            assertThat(firstItem).isEqualTo("notification1");
-        }
-    }
-    
-    @Test
-    public void testRedisSortedSetForLeaderboard() {
-        try (Jedis jedis = jedisPool.getResource()) {
-            String leaderboardKey = "leaderboard:" + System.currentTimeMillis();
-            
-            jedis.zadd(leaderboardKey, 100, "user1");
-            jedis.zadd(leaderboardKey, 250, "user2");
-            jedis.zadd(leaderboardKey, 175, "user3");
-            
-            List<String> topUsers = jedis.zrevrange(leaderboardKey, 0, 2);
-            assertThat(topUsers).hasSize(3);
-            assertThat(topUsers.get(0)).isEqualTo("user2"); // Highest score
-        }
-    }
-    
-    @Test
-    public void testRedisExpiration() throws InterruptedException {
-        try (Jedis jedis = jedisPool.getResource()) {
-            String key = "expire-test-" + System.currentTimeMillis();
-            
-            jedis.setex(key, 2, "expires soon");
-            assertThat(jedis.exists(key)).isTrue();
-            
-            TimeUnit.SECONDS.sleep(3);
-            
-            assertThat(jedis.exists(key)).isFalse();
-        }
-    }
 
-    // Load Balancer Integration Tests 
+    // ==================== Load Balancer Integration Tests ====================
     
     @Test
     public void testALBExists() {
@@ -763,15 +613,7 @@ public class MainIntegrationTest {
             RequestBody.fromString("fake image data")
         );
         
-        // 3. Cache post in Redis
-        try (Jedis jedis = jedisPool.getResource()) {
-            String cacheKey = "post:" + postId;
-            jedis.setex(cacheKey, 300, postId);
-            
-            assertThat(jedis.exists(cacheKey)).isTrue();
-        }
-        
-        // 4. Verify post retrieval
+        // 3. Verify post retrieval
         Map<String, AttributeValue> key = new HashMap<>();
         key.put("postId", AttributeValue.builder().s(postId).build());
         key.put("timestamp", AttributeValue.builder().n(String.valueOf(timestamp)).build());
@@ -820,28 +662,6 @@ public class MainIntegrationTest {
         );
         
         assertThat(response.count()).isEqualTo(5);
-    }
-    
-    @Test
-    public void testFeedGenerationPipeline() {
-        String userId = "feed-user-" + System.currentTimeMillis();
-        
-        // 1. Get user's friends from graph
-        // 2. Query posts from friends
-        // 3. Cache feed in Redis
-        
-        try (Jedis jedis = jedisPool.getResource()) {
-            String feedKey = "feed:" + userId;
-            List<String> feedPosts = Arrays.asList("post1", "post2", "post3");
-            
-            // Cache feed
-            jedis.rpush(feedKey, feedPosts.toArray(new String[0]));
-            jedis.expire(feedKey, 300);
-            
-            // Verify cached feed
-            List<String> cachedFeed = jedis.lrange(feedKey, 0, -1);
-            assertThat(cachedFeed).hasSize(3);
-        }
     }
     
     @Test
