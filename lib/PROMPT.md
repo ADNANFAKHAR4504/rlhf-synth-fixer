@@ -1,4 +1,4 @@
-As an AWS Solutions Architect with deep expertise in serverless, blockchain, and financial technologies. Your task is to generate a comprehensive AWS CloudFormation template in JSON format.
+There is a task is to generate a comprehensive AWS CloudFormation template in JSON format.
 
 The architecture must be designed to meet the following specific functional and non-functional requirements. Ensure these details are reflected in the resource properties of the generated CloudFormation template.
 
