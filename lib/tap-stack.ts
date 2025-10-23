@@ -9,6 +9,7 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as rds from 'aws-cdk-lib/aws-rds';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as dms from 'aws-cdk-lib/aws-dms';
 import * as glue from 'aws-cdk-lib/aws-glue';
 import * as sns from 'aws-cdk-lib/aws-sns';
@@ -735,10 +736,9 @@ class DataSyncStack extends cdk.NestedStack {
     super(scope, id, props);
 
     // NEW: Step 1 - Resolve DataSync AMI via SSM Parameter Store
-    const dataSyncAmi = ec2.MachineImage.fromSsmParameter(
-      '/aws/service/datasync/ami/us-west-2',
-      { os: ec2.OperatingSystemType.LINUX }
-    );
+    const dataSyncAmi = ec2.MachineImage.genericLinux({
+      'us-west-2': 'ami-0f508ba5fd9db6606', // aws-datasync-2.0.1761217057.1-x86_64-gp2
+    });
 
     // NEW: Step 2 - Launch EC2 Instance for DataSync Agent
     const agentInstance = new ec2.Instance(this, 'DataSyncAgentEC2', {
@@ -750,7 +750,7 @@ class DataSyncStack extends cdk.NestedStack {
       vpc: props.vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       securityGroup: props.dataSyncSecurityGroup,
-      keyName: `migration-keypair-${props.environmentSuffix}`, // REPLACE: Create in AWS Console
+      // keyName: `migration-keypair-${props.environmentSuffix}`, // REPLACE: Create in AWS Console
       role: new iam.Role(this, 'DataSyncEC2Role', {
         assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
         managedPolicies: [
@@ -776,7 +776,7 @@ class DataSyncStack extends cdk.NestedStack {
         code: lambda.Code.fromInline(`
         const { EC2Client, DescribeInstancesCommand } = require('@aws-sdk/client-ec2');
         const { DataSyncClient, CreateAgentCommand } = require('@aws-sdk/client-datasync');
-        const https = require('https');
+        const http = require('http');
         exports.handler = async (event) => {
           if (event.RequestType === 'Delete') return { PhysicalResourceId: event.PhysicalResourceId };
           const instanceId = process.env.INSTANCE_ID;
@@ -784,7 +784,7 @@ class DataSyncStack extends cdk.NestedStack {
           const resp = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }));
           const privateIp = resp.Reservations[0].Instances[0].PrivateIpAddress;
           return new Promise((resolve, reject) => {
-            https.get(\`http://\${privateIp}/activationkey\`, (res) => {
+            http.get(\`http://\${privateIp}/activationkey\`, (res) => {
               let data = '';
               res.on('data', (chunk) => data += chunk);
               res.on('end', async () => {
@@ -856,7 +856,7 @@ class DataSyncStack extends cdk.NestedStack {
       .toString();
 
     // NEW: Step 4 - Monitor Agent Status
-    new cdk.aws_cloudwatch.Alarm(this, 'AgentStatusAlarm', {
+    new cloudwatch.Alarm(this, 'AgentStatusAlarm', {
       metric: new cdk.aws_cloudwatch.Metric({
         namespace: 'AWS/DataSync',
         metricName: 'AgentStatus',
@@ -888,7 +888,7 @@ class DataSyncStack extends cdk.NestedStack {
 
     // Create DataSync NFS location (FIXED: Use real agent ARN)
     const nfsLocation = new datasync.CfnLocationNFS(this, 'NFSLocation', {
-      serverHostname: 'nfs.example.com', // REPLACE: Your NFS server hostname
+      serverHostname: '10.0.0.100', // REPLACE: Your NFS server hostname
       subdirectory: '/data/',
       onPremConfig: {
         agentArns: [this.agentArn], // FIXED: Use dynamically generated ARN
@@ -914,7 +914,7 @@ class DataSyncStack extends cdk.NestedStack {
     this.dataSyncTask.node.addDependency(activationCustomResource);
 
     // NEW: Alarm for task failures
-    new cdk.aws_cloudwatch.Alarm(this, 'DataSyncTaskFailureAlarm', {
+    new cloudwatch.Alarm(this, 'DataSyncTaskFailureAlarm', {
       metric: new cdk.aws_cloudwatch.Metric({
         namespace: 'AWS/DataSync',
         metricName: 'TaskExecutionFailed',
