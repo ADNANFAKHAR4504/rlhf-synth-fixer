@@ -612,15 +612,15 @@ func CreateStack(ctx *pulumi.Context) error {
 	// })
 	ctx.Log.Info("Secret rotation is configured to be set up manually with a Lambda function", nil)
 
-	// Create or import CloudWatch Log Group for ECS
+	// Create CloudWatch Log Group for ECS
 	ecsLogGroup, err := cloudwatch.NewLogGroup(ctx, fmt.Sprintf("ecs-log-group-%s", environmentSuffix), &cloudwatch.LogGroupArgs{
-		Name:            pulumi.String("/ecs/iot-processor"),
+		Name:            pulumi.String(fmt.Sprintf("/ecs/iot-processor-%s", environmentSuffix)),
 		RetentionInDays: pulumi.Int(7),
 		Tags: pulumi.StringMap{
 			"Name":        pulumi.String(fmt.Sprintf("ecs-log-group-%s", environmentSuffix)),
 			"Environment": pulumi.String(environmentSuffix),
 		},
-	}, pulumi.Import(pulumi.ID("/ecs/iot-processor")))
+	})
 	if err != nil {
 		return err
 	}
@@ -757,30 +757,32 @@ func CreateStack(ctx *pulumi.Context) error {
 		Memory:                  pulumi.String("512"),
 		ExecutionRoleArn:        ecsExecutionRole.Arn,
 		TaskRoleArn:             ecsTaskRole.Arn,
-		ContainerDefinitions: pulumi.String(`[{
-			"name": "iot-processor",
-			"image": "nginx:latest",
-			"cpu": 256,
-			"memory": 512,
-			"essential": true,
-			"logConfiguration": {
-				"logDriver": "awslogs",
-				"options": {
-					"awslogs-group": "/ecs/iot-processor",
-					"awslogs-region": "eu-central-2",
-					"awslogs-stream-prefix": "ecs",
-					"mode": "non-blocking",
-					"max-buffer-size": "25m"
+		ContainerDefinitions: ecsLogGroup.Name.ApplyT(func(logGroupName string) (string, error) {
+			return fmt.Sprintf(`[{
+				"name": "iot-processor",
+				"image": "nginx:latest",
+				"cpu": 256,
+				"memory": 512,
+				"essential": true,
+				"logConfiguration": {
+					"logDriver": "awslogs",
+					"options": {
+						"awslogs-group": "%s",
+						"awslogs-region": "%s",
+						"awslogs-stream-prefix": "ecs",
+						"mode": "non-blocking",
+						"max-buffer-size": "25m"
+					}
+				},
+				"healthCheck": {
+					"command": ["CMD-SHELL", "curl -f http://localhost/ || exit 1"],
+					"interval": 30,
+					"timeout": 5,
+					"retries": 3,
+					"startPeriod": 60
 				}
-			},
-			"healthCheck": {
-				"command": ["CMD-SHELL", "curl -f http://localhost/ || exit 1"],
-				"interval": 30,
-				"timeout": 5,
-				"retries": 3,
-				"startPeriod": 60
-			}
-		}]`),
+			}]`, logGroupName, region), nil
+		}).(pulumi.StringOutput),
 		Tags: pulumi.StringMap{
 			"Name":        pulumi.String(fmt.Sprintf("ecs-task-def-%s", environmentSuffix)),
 			"Environment": pulumi.String(environmentSuffix),

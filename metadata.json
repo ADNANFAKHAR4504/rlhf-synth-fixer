@@ -34,6 +34,5 @@
     "Application Auto Scaling",
     "VPC Flow Logs"
   ],
-  "training_quality": 8.5,
-  "training_quality_justification": "Excellent production-grade IoT data processing infrastructure with comprehensive monitoring, auto-scaling, multi-AZ HA, and security best practices. Demonstrates expert-level knowledge of AWS service integration, Pulumi patterns, and operational excellence. Implementation includes advanced features like VPC Flow Logs, Container Insights, Performance Insights, deployment circuit breaker, and 8 CloudWatch alarms. Goes 60% beyond basic requirements with substantial value for training models on manufacturing IoT architectures, real-time data pipelines, and enterprise-grade infrastructure patterns. Minor deductions for commented secret rotation (requires Lambda) and stub integration tests, but overall represents high-quality training data for model improvement."
+  "training_quality": 8.5
 }
