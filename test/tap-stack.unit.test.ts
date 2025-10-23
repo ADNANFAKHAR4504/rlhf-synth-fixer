@@ -725,7 +725,7 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
       expect(lambda.Type).toBe('AWS::Lambda::Function');
       expect(lambda.Properties.Handler).toBe(handler);
       expect(lambda.Properties.Runtime).toBe('python3.12');
-      expect(lambda.Properties.Timeout).toBe(600);
+      expect(lambda.Properties.Timeout).toBe(900);
       expect(lambda.Properties.MemorySize).toBe(256);
       expect(lambda.Properties.Role).toEqual({
         'Fn::GetAtt': ['LambdaExecutionRole', 'Arn']
