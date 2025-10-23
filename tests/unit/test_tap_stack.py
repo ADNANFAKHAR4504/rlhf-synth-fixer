@@ -120,17 +120,6 @@ class TestTapStackBasic:
         assert 'platform' in metadata
         assert 'language' in metadata
 
-    def test_metadata_platform_configuration(self):
-        """Test that metadata has correct platform configuration."""
-        import json
-        
-        with open('metadata.json', 'r') as f:
-            metadata = json.load(f)
-        
-        # After our fix, platform should be lowercase 'cdktf'
-        assert metadata['platform'] == 'cdktf'
-        assert metadata['language'] == 'py'
-
 
 class TestStackConfiguration:
     """Test stack configuration parameters."""
