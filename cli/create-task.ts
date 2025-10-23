@@ -259,6 +259,7 @@ async function main(): Promise<void> {
         { name: '5', value: '5' },
         { name: '6', value: '6' },
         { name: 'synth', value: 'synth' },
+        { name: 'stf', value: 'stf' },
       ],
     });
 
