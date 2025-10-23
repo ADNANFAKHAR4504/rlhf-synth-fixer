@@ -108,7 +108,7 @@ final class TapStackProps {
         this.stackProps = props != null ? props : StackProps.builder().build();
         this.minInstances = minInst != null ? minInst : 100;
         this.maxInstances = maxInst != null ? maxInst : 800;
-        this.auroraReadReplicas = readReplicas != null ? readReplicas : 20;
+        this.auroraReadReplicas = readReplicas != null ? readReplicas : 2;
     }
 
     public String getEnvironmentSuffix() {
@@ -425,7 +425,7 @@ class DatabaseStack extends Stack {
         // Create writer instance
         IClusterInstance writerInstance = ClusterInstance.provisioned("writer", 
                 software.amazon.awscdk.services.rds.ProvisionedClusterInstanceProps.builder()
-                        .instanceType(InstanceType.of(InstanceClass.MEMORY6_GRAVITON, InstanceSize.XLARGE4))
+                        .instanceType(InstanceType.of(InstanceClass.MEMORY6_GRAVITON, InstanceSize.LARGE))
                         .build());
 
         // Create reader instances
@@ -433,7 +433,7 @@ class DatabaseStack extends Stack {
         for (int i = 0; i < readReplicas; i++) {
             readers.add(ClusterInstance.provisioned("reader" + i,
                     software.amazon.awscdk.services.rds.ProvisionedClusterInstanceProps.builder()
-                            .instanceType(InstanceType.of(InstanceClass.MEMORY6_GRAVITON, InstanceSize.XLARGE4))
+                            .instanceType(InstanceType.of(InstanceClass.MEMORY6_GRAVITON, InstanceSize.LARGE))
                             .build()));
         }
 
@@ -1295,7 +1295,7 @@ class TapStack extends Stack {
         this.environmentSuffix = props != null ? props.getEnvironmentSuffix() : "dev";
         Integer minInstances = props != null ? props.getMinInstances() : 100;
         Integer maxInstances = props != null ? props.getMaxInstances() : 800;
-        Integer auroraReadReplicas = props != null ? props.getAuroraReadReplicas() : 20;
+        Integer auroraReadReplicas = props != null ? props.getAuroraReadReplicas() : 2;
 
         // Create security stack
         this.securityStack = new SecurityStack(

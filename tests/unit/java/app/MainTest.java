@@ -114,14 +114,14 @@ public class MainTest {
                 .stackProps(stackProps)
                 .minInstances(200)
                 .maxInstances(1000)
-                .auroraReadReplicas(30)
+                .auroraReadReplicas(10)
                 .build();
 
         assertThat(props.getEnvironmentSuffix()).isEqualTo("prod");
         assertThat(props.getStackProps()).isEqualTo(stackProps);
         assertThat(props.getMinInstances()).isEqualTo(200);
         assertThat(props.getMaxInstances()).isEqualTo(1000);
-        assertThat(props.getAuroraReadReplicas()).isEqualTo(30);
+        assertThat(props.getAuroraReadReplicas()).isEqualTo(10);
     }
 
     /**
@@ -137,7 +137,7 @@ public class MainTest {
         assertThat(props.getStackProps()).isNotNull();
         assertThat(props.getMinInstances()).isEqualTo(100);
         assertThat(props.getMaxInstances()).isEqualTo(800);
-        assertThat(props.getAuroraReadReplicas()).isEqualTo(20);
+        assertThat(props.getAuroraReadReplicas()).isEqualTo(2);
     }
 
     /**
@@ -793,7 +793,7 @@ public class MainTest {
                     .environmentSuffix("prod")
                     .minInstances(200)
                     .maxInstances(1000)
-                    .auroraReadReplicas(30)
+                    .auroraReadReplicas(14)
                     .build());
 
             assertThat(stack.getEnvironmentSuffix()).isEqualTo("prod");
@@ -896,7 +896,7 @@ public class MainTest {
                     .environmentSuffix("test")
                     .minInstances(1000)
                     .maxInstances(5000)
-                    .auroraReadReplicas(50)
+                    .auroraReadReplicas(14)
                     .build());
 
             assertThat(stack.getComputeStack()).isNotNull();
@@ -904,7 +904,7 @@ public class MainTest {
         }).doesNotThrowAnyException();
     }
 
-    // ==================== Main Class Tests ====================
+    //Main Class Tests 
 
     /**
      * Test Main class constructor is private.
@@ -979,7 +979,7 @@ public class MainTest {
                     .environmentSuffix("integration")
                     .minInstances(150)
                     .maxInstances(900)
-                    .auroraReadReplicas(25)
+                    .auroraReadReplicas(10)
                     .stackProps(StackProps.builder()
                             .description("Complex integration test stack")
                             .build())
