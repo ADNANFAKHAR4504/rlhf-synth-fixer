@@ -22,7 +22,7 @@ constructs = "*"
 
 [dev-packages]
 boto3 = "*"
-moto = "*"
+moto = {extras = ["server"], version = "*"}
 pytest-testdox = "*"
 pytest-env = "*"
 pylint = "*"
