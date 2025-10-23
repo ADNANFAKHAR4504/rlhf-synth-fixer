@@ -1518,7 +1518,7 @@ class TapStack extends Stack {
                 .build();
 
         CfnOutput.Builder.create(this, "RedisEndpoint")
-                .value(cacheStack.getRedisCluster().getAttrConfigurationEndPointAddress())
+                .value(cacheStack.getRedisCluster().getAttrPrimaryEndPointAddress())
                 .description("ElastiCache Redis Configuration Endpoint")
                 .exportName("SocialPlatform-RedisEndpoint-" + environmentSuffix)
                 .build();
