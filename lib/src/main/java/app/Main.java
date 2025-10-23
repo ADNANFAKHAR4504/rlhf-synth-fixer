@@ -1610,7 +1610,7 @@ public final class Main {
 
         String auroraReplicasEnv = System.getenv("AURORA_READ_REPLICAS");
         Integer auroraReadReplicas = (auroraReplicasEnv != null && !auroraReplicasEnv.isEmpty())
-                ? Integer.parseInt(auroraReplicasEnv) : 20;
+                ? Integer.parseInt(auroraReplicasEnv) : 9;
 
         // Read optional model S3 URI from env. If you uploaded the model, set:
         // export MODEL_S3_URI="your model s3 uri in the object. 
