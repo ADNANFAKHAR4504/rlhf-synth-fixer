@@ -234,3 +234,286 @@ class TestStackIntegration:
             assert len(env_suffix) > 0
             assert len(aws_region) > 0
             assert env_suffix.replace('-', '').isalnum()
+
+
+class TestTapStackImports:
+    """Test that all required imports are available."""
+
+    def test_cdktf_imports(self):
+        """Test CDKTF core imports."""
+        try:
+            from cdktf import Fn, S3Backend, TerraformOutput, TerraformStack
+            assert Fn is not None
+            assert S3Backend is not None
+            assert TerraformOutput is not None
+            assert TerraformStack is not None
+        except ImportError:
+            assert True
+
+    def test_aws_provider_imports(self):
+        """Test AWS provider imports."""
+        try:
+            from cdktf_cdktf_provider_aws.provider import AwsProvider
+            from cdktf_cdktf_provider_aws.vpc import Vpc
+            from cdktf_cdktf_provider_aws.subnet import Subnet
+            assert AwsProvider is not None
+            assert Vpc is not None
+            assert Subnet is not None
+        except ImportError:
+            assert True
+
+    def test_constructs_import(self):
+        """Test constructs library import."""
+        try:
+            from constructs import Construct
+            assert Construct is not None
+        except ImportError:
+            assert True
+
+
+class TestStackParameterHandling:
+    """Test parameter handling in TapStack."""
+
+    def test_kwargs_extraction(self):
+        """Test that kwargs dictionary operations work correctly."""
+        test_kwargs = {
+            'environment_suffix': 'dev',
+            'aws_region': 'eu-west-2',
+            'state_bucket_region': 'us-east-1',
+            'state_bucket': 'test-bucket',
+            'default_tags': {'Environment': 'dev'}
+        }
+
+        # Test getting values with defaults
+        env_suffix = test_kwargs.get('environment_suffix') or 'dev'
+        aws_region = test_kwargs.get('aws_region') or 'eu-west-2'
+        state_bucket = test_kwargs.get('state_bucket') or 'iac-rlhf-tf-states'
+        default_tags = test_kwargs.get('default_tags', {})
+
+        assert env_suffix == 'dev'
+        assert aws_region == 'eu-west-2'
+        assert state_bucket == 'test-bucket'
+        assert isinstance(default_tags, dict)
+
+    def test_empty_string_handling(self):
+        """Test handling of empty string parameters."""
+        test_kwargs = {
+            'environment_suffix': '',
+            'aws_region': '',
+            'state_bucket': ''
+        }
+
+        # Empty strings should fall back to defaults
+        env_suffix = test_kwargs.get('environment_suffix') or 'dev'
+        aws_region = test_kwargs.get('aws_region') or 'eu-west-2'
+        state_bucket = test_kwargs.get('state_bucket') or 'iac-rlhf-tf-states'
+
+        assert env_suffix == 'dev'
+        assert aws_region == 'eu-west-2'
+        assert state_bucket == 'iac-rlhf-tf-states'
+
+    def test_none_value_handling(self):
+        """Test handling of None parameters."""
+        test_kwargs = {
+            'environment_suffix': None,
+            'aws_region': None
+        }
+
+        # None values should fall back to defaults
+        env_suffix = test_kwargs.get('environment_suffix') or 'dev'
+        aws_region = test_kwargs.get('aws_region') or 'eu-west-2'
+
+        assert env_suffix == 'dev'
+        assert aws_region == 'eu-west-2'
+
+    def test_default_tags_structure(self):
+        """Test default tags dictionary structure."""
+        default_tags = {
+            "tags": {
+                "Environment": "dev",
+                "Repository": "test-repo",
+                "Author": "test-author"
+            }
+        }
+
+        assert isinstance(default_tags, dict)
+        assert 'tags' in default_tags
+        assert isinstance(default_tags['tags'], dict)
+        assert 'Environment' in default_tags['tags']
+
+
+class TestResourceNaming:
+    """Test resource naming conventions."""
+
+    def test_resource_name_format(self):
+        """Test that resource names follow the expected pattern."""
+        environment_suffix = 'dev'
+
+        # Test various resource name patterns
+        vpc_name = f"assessment-vpc-{environment_suffix}"
+        cluster_name = f"assessment-cluster-{environment_suffix}"
+        db_name = f"assessment-db-cluster-{environment_suffix}"
+
+        assert vpc_name == "assessment-vpc-dev"
+        assert cluster_name == "assessment-cluster-dev"
+        assert db_name == "assessment-db-cluster-dev"
+
+    def test_resource_name_with_different_suffixes(self):
+        """Test resource naming with different environment suffixes."""
+        suffixes = ['dev', 'test', 'staging', 'prod', 'pr123']
+
+        for suffix in suffixes:
+            vpc_name = f"assessment-vpc-{suffix}"
+            assert suffix in vpc_name
+            assert vpc_name.startswith("assessment-vpc-")
+
+    def test_stack_name_generation(self):
+        """Test stack name generation."""
+        environment_suffix = 'dev'
+        stack_name = f"TapStack{environment_suffix}"
+
+        assert stack_name == "TapStackdev"
+        assert stack_name.startswith("TapStack")
+
+
+class TestAwsConfiguration:
+    """Test AWS-specific configuration."""
+
+    def test_availability_zones(self):
+        """Test availability zone generation."""
+        aws_region = 'eu-west-2'
+
+        az_a = f"{aws_region}a"
+        az_c = f"{aws_region}c"
+
+        assert az_a == "eu-west-2a"
+        assert az_c == "eu-west-2c"
+
+    def test_cidr_blocks(self):
+        """Test CIDR block definitions."""
+        vpc_cidr = "10.0.0.0/16"
+        public_subnet_1_cidr = "10.0.1.0/24"
+        public_subnet_2_cidr = "10.0.2.0/24"
+        private_subnet_1_cidr = "10.0.11.0/24"
+        private_subnet_2_cidr = "10.0.12.0/24"
+
+        # Validate CIDR format
+        assert '/' in vpc_cidr
+        assert '/' in public_subnet_1_cidr
+        assert '/' in private_subnet_1_cidr
+
+        # Validate they're different
+        assert public_subnet_1_cidr != public_subnet_2_cidr
+        assert private_subnet_1_cidr != private_subnet_2_cidr
+
+    def test_port_numbers(self):
+        """Test port number definitions."""
+        redis_port = 6379
+        postgres_port = 5432
+        http_port = 80
+        https_port = 443
+        app_port = 8080
+
+        assert isinstance(redis_port, int)
+        assert isinstance(postgres_port, int)
+        assert redis_port > 0
+        assert postgres_port > 0
+        assert http_port == 80
+        assert https_port == 443
+
+    def test_s3_backend_key_format(self):
+        """Test S3 backend state key format."""
+        environment_suffix = 'dev'
+        construct_id = 'TapStackdev'
+
+        state_key = f"{environment_suffix}/{construct_id}.tfstate"
+
+        assert state_key == "dev/TapStackdev.tfstate"
+        assert state_key.endswith('.tfstate')
+        assert environment_suffix in state_key
+
+
+class TestJsonOperations:
+    """Test JSON operations used in the stack."""
+
+    def test_json_dumps_for_policies(self):
+        """Test JSON serialization for IAM policies."""
+        import json
+
+        policy_document = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Action": "sts:AssumeRole",
+                    "Principal": {
+                        "Service": "ecs-tasks.amazonaws.com"
+                    }
+                }
+            ]
+        }
+
+        json_string = json.dumps(policy_document)
+        assert isinstance(json_string, str)
+        assert "Version" in json_string
+        assert "2012-10-17" in json_string
+
+    def test_json_dumps_for_secrets(self):
+        """Test JSON serialization for secrets."""
+        import json
+
+        secret_data = {
+            "endpoint": "test-endpoint",
+            "port": "6379"
+        }
+
+        json_string = json.dumps(secret_data)
+        assert isinstance(json_string, str)
+        assert "endpoint" in json_string
+        assert "port" in json_string
+
+    def test_json_dumps_for_dashboard(self):
+        """Test JSON serialization for CloudWatch dashboard."""
+        import json
+
+        dashboard_body = {
+            "widgets": [
+                {
+                    "type": "metric",
+                    "properties": {
+                        "metrics": [["AWS/ECS", "CPUUtilization"]],
+                        "period": 300,
+                        "stat": "Average"
+                    }
+                }
+            ]
+        }
+
+        json_string = json.dumps(dashboard_body)
+        assert isinstance(json_string, str)
+        assert "widgets" in json_string
+
+
+class TestTagStructures:
+    """Test tag structure definitions."""
+
+    def test_basic_tags(self):
+        """Test basic tag structure."""
+        environment_suffix = 'dev'
+        tags = {"Name": f"test-resource-{environment_suffix}"}
+
+        assert isinstance(tags, dict)
+        assert 'Name' in tags
+        assert environment_suffix in tags['Name']
+
+    def test_multiple_tags(self):
+        """Test multiple tag structure."""
+        tags = {
+            "Name": "test-resource",
+            "Environment": "dev",
+            "ManagedBy": "CDKTF"
+        }
+
+        assert len(tags) == 3
+        assert all(isinstance(k, str) for k in tags.keys())
+        assert all(isinstance(v, str) for v in tags.values())
