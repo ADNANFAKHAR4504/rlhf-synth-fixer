@@ -244,10 +244,44 @@
             }
           ]
         },
-        "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/service-role/AWSStepFunctionsBasicExecutionRole"
-        ],
         "Policies": [
+          {
+            "PolicyName": "StepFunctionsBasicExecution",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "xray:PutTraceSegments",
+                    "xray:PutTelemetryRecords",
+                    "xray:GetSamplingRules",
+                    "xray:GetSamplingTargets"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogDelivery",
+                    "logs:GetLogDelivery",
+                    "logs:UpdateLogDelivery",
+                    "logs:DeleteLogDelivery",
+                    "logs:ListLogDeliveries",
+                    "logs:PutResourcePolicy",
+                    "logs:DescribeResourcePolicies",
+                    "logs:DescribeLogGroups",
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                    "logs:PutMetricFilter",
+                    "logs:PutRetentionPolicy"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          },
           {
             "PolicyName": "StateMachineExecutionPolicy",
             "PolicyDocument": {
@@ -261,20 +295,6 @@
                   "Resource": [
                     { "Fn::GetAtt": ["ApiGatewayHandlerFunction", "Arn"] }
                   ]
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "logs:CreateLogDelivery",
-                    "logs:GetLogDelivery",
-                    "logs:UpdateLogDelivery",
-                    "logs:DeleteLogDelivery",
-                    "logs:ListLogDeliveries",
-                    "logs:PutResourcePolicy",
-                    "logs:DescribeResourcePolicies",
-                    "logs:DescribeLogGroups"
-                  ],
-                  "Resource": "*"
                 }
               ]
             }
