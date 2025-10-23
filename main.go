@@ -1,12 +1,13 @@
+// In main.go
 package main
 
 import (
 	"github.com/TuringGpt/iac-test-automations/lib"
-	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+	"github.com/hashicorp/terraform-cdk-go/cdktf"
 )
 
 func main() {
-	pulumi.Run(func(ctx *pulumi.Context) error {
-		return lib.CreateStack(ctx)
-	})
+	app := cdktf.NewApp(nil)
+	lib.NewTapStack(app, "tap-iac-stack")
+	app.Synth()
 }
