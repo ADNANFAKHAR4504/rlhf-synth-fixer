@@ -29,30 +29,15 @@ Solution: Corrected case-sensitive property name to `RoleARN` as per AWS spec. (
 Affected area: AWS Config, CloudFormation Syntax
 
 — Failure 7
-Problem: `DBSecret` failed — secret `mystack-db-secret` already exists.
-Solution: Made secret names globally unique using `${AWS::StackName}-db-secret-${AWS::AccountId}-${AWS::Region}` format. (Fixed)
-Affected area: Secrets Manager, Resource Naming
-
-— Failure 8
-Problem: `CloudTrailBucket` failed — bucket name already exists globally.
-Solution: Added `ResourceSuffix` parameter; updated all bucket names to `${AWS::StackName}-cloudtrail-${AWS::AccountId}-${AWS::Region}${ResourceSuffix}`; deploy script accepts `RESOURCE_SUFFIX` env var for uniqueness. (Fixed)
-Affected area: S3 Buckets, Resource Naming, CloudFormation Parameters
-
-— Failure 9
-Problem: `DBSubnetGroup` failed — “Resource ... already exists.”
-Solution: Appended `ResourceSuffix` to `DBSubnetGroupName` and `DBInstanceIdentifier` for uniqueness. (Fixed)
-Affected area: RDS, Resource Naming, Database Configuration
-
-— Failure 10
 Problem: ASG EC2 launch failed — “Client.InvalidKMSKey.InvalidState.”
 Solution: Expanded `KMSKey` policy to include EC2 and S3 permissions; allowed `ApplicationRole` usage; used `!GetAtt KMSKey.Arn`; added `DependsOn: KMSKey`. Enabled key rotation. (Fixed)
 Affected area: KMS, EC2 Launch Template, Auto Scaling Group
 
 Summary
-- Total issues: 10
+- Total issues: 7
 - Severity breakdown (qualitative):
-  - Critical: 4 (Failures 1, 3, 8, 10)
+  - Critical: 3 (Failures 1, 3, 7)
   - High: 2 (Failures 2, 4)
-  - Medium: 3 (Failures 5, 7, 9)
-  - Low: 1 (Failures 6)
+  - Medium: 1 (Failure 5)
+  - Low: 1 (Failure 6)
 - All fixed
