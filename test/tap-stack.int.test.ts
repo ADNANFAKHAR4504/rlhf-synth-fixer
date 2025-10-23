@@ -243,11 +243,15 @@ describe('Turn Around Prompt API Integration Tests', () => {
       const trail =
         trails.find(t => t.Name === trailName) ||
         trails.find(t => (t.TrailARN || '').endsWith(`:${trailName}`));
+
       expect(trail?.Name).toBe(trailName);
       expect(trail?.S3BucketName).toBe(centralLogBucket);
-      expect(
-        (trail?.CloudWatchLogsLogGroupArn || '').endsWith(`:${trailLogGroupName}`)
-      ).toBe(true);
+
+      // --- Robust check: extract log group name from ARN (handles optional ':*' suffix)
+      const cwArn = trail?.CloudWatchLogsLogGroupArn ?? '';
+      const match = cwArn.match(/:log-group:(.*?)(?::\*$|$)/);
+      const logGroupFromArn = match?.[1];
+      expect(logGroupFromArn).toBe(trailLogGroupName);
     });
   });
 
