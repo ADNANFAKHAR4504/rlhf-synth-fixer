@@ -1,16 +1,26 @@
 #!/bin/bash
 set -e
 
+# Cleanup function to ensure moto-server container is stopped
+cleanup() {
+  echo "Cleaning up Moto server Docker container..."
+  docker stop moto-server 2>/dev/null || echo "Container already stopped or not found"
+  echo "✅ Cleanup completed"
+}
+
+# Set trap to run cleanup on script exit (success or failure)
+trap cleanup EXIT
+
 echo "=== IaC Analysis Job ==="
 
 # Start Moto server using Docker
 echo "Starting Moto server with Docker..."
-docker run --rm -d -p 5000:5000 --name moto-server motoserver/moto:latest
+docker run --rm -d -p 5001:5000 --name moto-server motoserver/moto:latest
 
 # Wait for server to be ready
 echo "Waiting for Moto server to start..."
 for i in {1..30}; do
-  if curl -s http://127.0.0.1:5000/ >/dev/null 2>&1; then
+  if curl -s http://127.0.0.1:5001/ >/dev/null 2>&1; then
     echo "✅ Moto server is ready (attempt $i)"
     break
   else
@@ -20,7 +30,7 @@ for i in {1..30}; do
 done
 
 # Verify server is actually running
-if ! curl -s http://127.0.0.1:5000/ >/dev/null 2>&1; then
+if ! curl -s http://127.0.0.1:5001/ >/dev/null 2>&1; then
   echo "❌ Moto server failed to start!"
   echo "Docker container logs:"
   docker logs moto-server || echo "No container logs found"
@@ -40,7 +50,6 @@ elif [ -f "lib/analyse.sh" ]; then
   SCRIPT_TYPE="shell"
 else
   echo "❌ No analysis script found (lib/analyse.py or lib/analyse.sh)"
-  docker stop moto-server || echo "Container already stopped"
   exit 1
 fi
 
@@ -48,13 +57,12 @@ echo "Found analysis script: $SCRIPT_PATH (type: $SCRIPT_TYPE)"
 
 # Run tests
 echo "Verifying Moto server is still running..."
-if ! curl -s http://127.0.0.1:5000/ >/dev/null 2>&1; then
+if ! curl -s http://127.0.0.1:5001/ >/dev/null 2>&1; then
   echo "❌ Moto server is not responding before tests!"
   echo "Docker container logs:"
   docker logs moto-server || echo "No container logs found"
   echo "Docker container status:"
   docker ps -a --filter name=moto-server || echo "No container found"
-  docker stop moto-server || echo "Container already stopped"
   exit 1
 fi
 echo "✅ Moto server is responsive"
@@ -72,11 +80,6 @@ else
 fi
 
 echo "✅ Analysis completed. Output saved to lib/analysis-results.txt"
-
-# Stop Moto server
-echo "Stopping Moto server Docker container..."
-docker stop moto-server || echo "Container already stopped or not found"
-echo "✅ Moto server stopped"
 
 echo "=== Analysis job completed successfully ==="
 

@@ -10,11 +10,7 @@ import pytest
 
 def boto_client(service: str):
     return boto3.client(
-        service,
-        endpoint_url=os.environ.get("AWS_ENDPOINT_URL"),
-        region_name=os.environ.get("AWS_DEFAULT_REGION"),
-        aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
-        aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
+        service
     )
 
 

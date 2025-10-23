@@ -1,3 +1,4 @@
+```python
 #!/usr/bin/env python3
 """
 AWS Resource Audit Script
@@ -251,3 +252,5 @@ def main():
 
 if __name__ == "__main__":
     exit(main())
+
+```

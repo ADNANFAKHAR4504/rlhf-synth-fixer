@@ -249,7 +249,7 @@ jobs:
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.subtask == 'IaC Program Optimization' }}
     environment: dev
     env:
-      AWS_ENDPOINT_URL: http://127.0.0.1:5000
+      AWS_ENDPOINT_URL: http://127.0.0.1:5001
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
       AWS_DEFAULT_REGION: us-east-1
@@ -509,7 +509,8 @@ jobs:
   claude-code-action:
     runs-on: ubuntu-24.04
     name: "Claude Review"
-    needs: [integration-tests-live]
+    needs: [integration-tests-live, analysis]
+    if: always() && !cancelled() && (needs.analysis.result == 'success' || needs.integration-tests-live.result == 'success')
     permissions:
       contents: write
       pull-requests: write
@@ -525,7 +526,6 @@ jobs:
 
       - name: Check for required documentation files
         id: docs-check
-        if: ${{ needs.detect-metadata.outputs.subtask != env.IAC_ANALYSIS_CATEGORY }}
         run: |
           if [ ! -f "lib/PROMPT.md" ]; then
             echo "❌ lib/PROMPT.md not found, exiting with failure"
@@ -556,7 +556,6 @@ jobs:
           fi
 
       - name: Run Claude PR Review Action
-        if: ${{ needs.detect-metadata.outputs.subtask != env.IAC_ANALYSIS_CATEGORY }}
         uses: anthropics/claude-code-action@beta
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -599,7 +598,6 @@ jobs:
             Once the above is done Follow instructions in .claude/agents/iac-code-reviewer.md
 
       - name: Upload updated metadata.json
-        if: ${{ needs.detect-metadata.outputs.subtask != env.IAC_ANALYSIS_CATEGORY }}
         uses: actions/upload-artifact@v4
         with:
           name: updated-metadata

@@ -1,3 +1,4 @@
+```python
 #!/usr/bin/env python3
 """
 AWS Resource Audit Script
@@ -5,11 +6,9 @@ Identifies unused and misconfigured resources in AWS environment.
 """
 
 import json
-from datetime import datetime
-from typing import Any, Dict, List
-
 import boto3
-from botocore.exceptions import BotoCoreError, ClientError
+from typing import Dict, List, Any
+from botocore.exceptions import ClientError, BotoCoreError
 
 
 class AWSResourceAuditor:
@@ -206,7 +205,7 @@ class AWSResourceAuditor:
         
         # Compile results
         results = {
-            'AuditTimestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'AuditTimestamp': boto3.datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'Region': self.region_name or 'default',
             'UnusedEBSVolumes': {
                 'Count': len(unused_volumes),
@@ -251,3 +250,132 @@ def main():
 
 if __name__ == "__main__":
     exit(main())
+```
+
+## Key Features of the Script:
+
+### 1. **Unused EBS Volumes Detection**
+- Identifies volumes with state 'available' (not attached to any instance)
+- Provides details like volume ID, size, type, creation time, and tags
+- Calculates total unused storage
+
+### 2. **Public Security Groups Detection**
+- Finds security groups with ingress rules allowing access from 0.0.0.0/0 or ::/0
+- Lists specific rules that make the security group public
+- Includes both IPv4 and IPv6 public access detection
+
+### 3. **CloudWatch Log Stream Metrics**
+- Calculates average log stream size across all log groups
+- Provides both overall metrics and per-log-group breakdown
+- Handles pagination for large numbers of log groups and streams
+
+### 4. **Error Handling**
+- Graceful handling of AWS API errors
+- Continues execution even if some resources fail to load
+
+### 5. **JSON Output Format**
+The script outputs results in a structured JSON format with:
+- Audit timestamp
+- AWS region
+- Detailed findings for each resource type
+- Summary statistics
+
+## Usage Example:
+
+```bash
+# Make the script executable
+chmod +x lib/analyse.py
+
+# Run the script
+python lib/analyse.py
+```
+
+## Sample Output:
+
+```json
+{
+  "AuditTimestamp": "2024-01-15 10:30:45",
+  "Region": "us-east-1",
+  "UnusedEBSVolumes": {
+    "Count": 3,
+    "TotalSize": 150,
+    "Volumes": [
+      {
+        "VolumeId": "vol-0123456789abcdef",
+        "Size": 50,
+        "VolumeType": "gp3",
+        "CreateTime": "2023-12-01 08:00:00",
+        "AvailabilityZone": "us-east-1a",
+        "Encrypted": true,
+        "Tags": {
+          "Name": "old-database-volume"
+        }
+      }
+    ]
+  },
+  "PublicSecurityGroups": {
+    "Count": 2,
+    "SecurityGroups": [
+      {
+        "GroupId": "sg-0123456789",
+        "GroupName": "web-server-sg",
+        "Description": "Security group for web servers",
+        "VpcId": "vpc-12345",
+        "PublicIngressRules": [
+          {
+            "Protocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "Source": "0.0.0.0/0"
+          }
+        ],
+        "Tags": {}
+      }
+    ]
+  },
+  "CloudWatchLogMetrics": {
+    "TotalLogStreams": 125,
+    "TotalSize": 5242880000,
+    "AverageStreamSize": 41943040,
+    "LogGroupMetrics": [
+      {
+        "LogGroupName": "/aws/lambda/my-function",
+        "StreamCount": 10,
+        "TotalSize": 104857600,
+        "AverageStreamSize": 10485760
+      }
+    ]
+  }
+}
+```
+
+## Prerequisites:
+
+1. **AWS Credentials**: Configure AWS credentials using one of:
+   - AWS CLI: `aws configure`
+   - Environment variables: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+   - IAM role (for EC2 instances)
+
+2. **Required IAM Permissions**:
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [
+       {
+         "Effect": "Allow",
+         "Action": [
+           "ec2:DescribeVolumes",
+           "ec2:DescribeSecurityGroups",
+           "logs:DescribeLogGroups",
+           "logs:DescribeLogStreams"
+         ],
+         "Resource": "*"
+       }
+     ]
+   }
+   ```
+
+3. **Python Dependencies**:
+   ```bash
+   pip install boto3
+   ```
