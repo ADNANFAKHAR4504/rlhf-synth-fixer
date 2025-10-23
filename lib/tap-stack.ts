@@ -194,7 +194,7 @@ class DatabaseStack extends cdk.NestedStack {
     // Create Aurora MySQL cluster
     this.auroraCluster = new rds.DatabaseCluster(this, 'AuroraCluster', {
       engine: rds.DatabaseClusterEngine.auroraMysql({
-        version: rds.AuroraMysqlEngineVersion.VER_3_05_2,
+        version: rds.AuroraMysqlEngineVersion.VER_3_09_0,
       }),
       credentials: rds.Credentials.fromGeneratedSecret('admin', {
         secretName: `migration-aurora-secret-${props.environmentSuffix}`,
