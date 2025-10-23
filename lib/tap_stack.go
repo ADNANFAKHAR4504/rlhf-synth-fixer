@@ -551,6 +551,7 @@ func main() {
 		ctx.Export("rdsEndpoint", rdsInstance.Endpoint)
 		ctx.Export("redisEndpoint", redisCluster.PrimaryEndpointAddress)
 		ctx.Export("taskDefinitionArn", taskDefinition.Arn)
+		ctx.Export("dbSecretArn", dbSecret.Arn)
 		ctx.Export("privateSubnet1Id", privateSubnet1.ID())
 		ctx.Export("privateSubnet2Id", privateSubnet2.ID())
 		ctx.Export("ecsTaskSecurityGroupId", ecsTaskSecurityGroup.ID())

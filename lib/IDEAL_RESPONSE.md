@@ -288,8 +288,8 @@ func main() {
 
 		// Create DB subnet group
 		dbSubnetGroup, err := rds.NewSubnetGroup(ctx, fmt.Sprintf("iot-db-subnet-group-%s", environmentSuffix), &rds.SubnetGroupArgs{
-			Name:       pulumi.String(fmt.Sprintf("iot-db-subnet-group-%s", environmentSuffix)),
-			SubnetIds:  pulumi.StringArray{privateSubnet1.ID(), privateSubnet2.ID()},
+			Name:      pulumi.String(fmt.Sprintf("iot-db-subnet-group-%s", environmentSuffix)),
+			SubnetIds: pulumi.StringArray{privateSubnet1.ID(), privateSubnet2.ID()},
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String(fmt.Sprintf("iot-db-subnet-group-%s", environmentSuffix)),
 				"Environment": pulumi.String(environmentSuffix),
@@ -301,22 +301,22 @@ func main() {
 
 		// Create RDS PostgreSQL instance
 		rdsInstance, err := rds.NewInstance(ctx, fmt.Sprintf("iot-postgres-%s", environmentSuffix), &rds.InstanceArgs{
-			Identifier:           pulumi.String(fmt.Sprintf("iot-postgres-%s", environmentSuffix)),
-			Engine:               pulumi.String("postgres"),
-			EngineVersion:        pulumi.String("16.3"),
-			InstanceClass:        pulumi.String("db.t3.micro"),
-			AllocatedStorage:     pulumi.Int(20),
-			StorageType:          pulumi.String("gp3"),
-			StorageEncrypted:     pulumi.Bool(true),
-			DbName:               pulumi.String("iotmanufacturing"),
-			Username:             pulumi.String("iotadmin"),
-			Password:             pulumi.String("ChangeMe12345!"),
-			DbSubnetGroupName:    dbSubnetGroup.Name,
-			VpcSecurityGroupIds:  pulumi.StringArray{rdsSecurityGroup.ID()},
-			PubliclyAccessible:   pulumi.Bool(false),
-			SkipFinalSnapshot:    pulumi.Bool(true),
+			Identifier:            pulumi.String(fmt.Sprintf("iot-postgres-%s", environmentSuffix)),
+			Engine:                pulumi.String("postgres"),
+			EngineVersion:         pulumi.String("16.3"),
+			InstanceClass:         pulumi.String("db.t3.micro"),
+			AllocatedStorage:      pulumi.Int(20),
+			StorageType:           pulumi.String("gp3"),
+			StorageEncrypted:      pulumi.Bool(true),
+			DbName:                pulumi.String("iotmanufacturing"),
+			Username:              pulumi.String("iotadmin"),
+			Password:              pulumi.String("ChangeMe12345!"),
+			DbSubnetGroupName:     dbSubnetGroup.Name,
+			VpcSecurityGroupIds:   pulumi.StringArray{rdsSecurityGroup.ID()},
+			PubliclyAccessible:    pulumi.Bool(false),
+			SkipFinalSnapshot:     pulumi.Bool(true),
 			BackupRetentionPeriod: pulumi.Int(7),
-			MultiAz:              pulumi.Bool(false),
+			MultiAz:               pulumi.Bool(false),
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String(fmt.Sprintf("iot-postgres-%s", environmentSuffix)),
 				"Environment": pulumi.String(environmentSuffix),
@@ -358,8 +358,8 @@ func main() {
 
 		// Create ElastiCache subnet group
 		elasticacheSubnetGroup, err := elasticache.NewSubnetGroup(ctx, fmt.Sprintf("iot-cache-subnet-group-%s", environmentSuffix), &elasticache.SubnetGroupArgs{
-			Name:       pulumi.String(fmt.Sprintf("iot-cache-subnet-group-%s", environmentSuffix)),
-			SubnetIds:  pulumi.StringArray{privateSubnet1.ID(), privateSubnet2.ID()},
+			Name:      pulumi.String(fmt.Sprintf("iot-cache-subnet-group-%s", environmentSuffix)),
+			SubnetIds: pulumi.StringArray{privateSubnet1.ID(), privateSubnet2.ID()},
 			Tags: pulumi.StringMap{
 				"Environment": pulumi.String(environmentSuffix),
 			},
@@ -368,7 +368,7 @@ func main() {
 			return err
 		}
 
-		// Create ElastiCache Redis replication group
+		// Create ElastiCache Redis cluster
 		redisCluster, err := elasticache.NewReplicationGroup(ctx, fmt.Sprintf("iot-redis-%s", environmentSuffix), &elasticache.ReplicationGroupArgs{
 			ReplicationGroupId:       pulumi.String(fmt.Sprintf("iot-redis-%s", environmentSuffix)),
 			Description:              pulumi.String("Redis cluster for IoT manufacturing metrics"),
@@ -521,8 +521,8 @@ func main() {
 
 					containerDef := []map[string]interface{}{
 						{
-							"name":  "data-processor",
-							"image": "public.ecr.aws/docker/library/busybox:latest",
+							"name":      "data-processor",
+							"image":     "public.ecr.aws/docker/library/busybox:latest",
 							"essential": true,
 							"command": []string{
 								"sh",
@@ -570,6 +570,7 @@ func main() {
 		ctx.Export("rdsEndpoint", rdsInstance.Endpoint)
 		ctx.Export("redisEndpoint", redisCluster.PrimaryEndpointAddress)
 		ctx.Export("taskDefinitionArn", taskDefinition.Arn)
+		ctx.Export("dbSecretArn", dbSecret.Arn)
 		ctx.Export("privateSubnet1Id", privateSubnet1.ID())
 		ctx.Export("privateSubnet2Id", privateSubnet2.ID())
 		ctx.Export("ecsTaskSecurityGroupId", ecsTaskSecurityGroup.ID())

@@ -26,6 +26,7 @@ import (
 type Outputs struct {
 	EcsClusterName         string `json:"ecsClusterName"`
 	EcsTaskSecurityGroupId string `json:"ecsTaskSecurityGroupId"`
+	DbSecretArn            string `json:"dbSecretArn"`
 	PrivateSubnet1Id       string `json:"privateSubnet1Id"`
 	PrivateSubnet2Id       string `json:"privateSubnet2Id"`
 	RdsEndpoint            string `json:"rdsEndpoint"`
@@ -35,8 +36,30 @@ type Outputs struct {
 }
 
 func loadOutputs(t *testing.T) Outputs {
-	data, err := os.ReadFile("../../cfn-outputs/flat-outputs.json")
-	require.NoError(t, err, "Failed to read outputs file")
+	paths := []string{
+		"cfn-outputs/flat-outputs.json",
+		"../cfn-outputs/flat-outputs.json",
+		"../../cfn-outputs/flat-outputs.json",
+	}
+
+	var (
+		data []byte
+		err  error
+		ok   bool
+	)
+
+	for _, path := range paths {
+		data, err = os.ReadFile(path)
+		if err == nil {
+			ok = true
+			break
+		}
+		if os.IsNotExist(err) {
+			continue
+		}
+		require.NoErrorf(t, err, "failed to read outputs file %s", path)
+	}
+	require.Truef(t, ok, "outputs file not found in expected paths: %v", paths)
 
 	var outputs Outputs
 	err = json.Unmarshal(data, &outputs)
@@ -230,28 +253,21 @@ func TestECSTaskDefinitionExists(t *testing.T) {
 }
 
 func TestSecretsManagerSecretExists(t *testing.T) {
+	outputs := loadOutputs(t)
+	require.NotEmpty(t, outputs.DbSecretArn, "dbSecretArn output should not be empty")
+
 	cfg := getAWSConfig(t)
 	client := secretsmanager.NewFromConfig(cfg)
 
-	// List secrets to find our DB secret
-	result, err := client.ListSecrets(context.TODO(), &secretsmanager.ListSecretsInput{})
-	require.NoError(t, err, "Failed to list secrets")
-
-	var dbSecret *string
-	for _, secret := range result.SecretList {
-		if strings.Contains(*secret.Name, "iot-db-secret-synth5947661964") {
-			dbSecret = secret.ARN
-			break
-		}
-	}
-
-	require.NotNil(t, dbSecret, "DB secret should exist")
-
-	// Verify secret value can be retrieved
-	secretValue, err := client.GetSecretValue(context.TODO(), &secretsmanager.GetSecretValueInput{
-		SecretId: dbSecret,
+	secret, err := client.DescribeSecret(context.TODO(), &secretsmanager.DescribeSecretInput{
+		SecretId: aws.String(outputs.DbSecretArn),
 	})
+	require.NoError(t, err, "Failed to describe secret")
+	assert.Equal(t, outputs.DbSecretArn, aws.ToString(secret.ARN))
 
+	secretValue, err := client.GetSecretValue(context.TODO(), &secretsmanager.GetSecretValueInput{
+		SecretId: aws.String(outputs.DbSecretArn),
+	})
 	require.NoError(t, err, "Failed to retrieve secret value")
 	assert.NotEmpty(t, *secretValue.SecretString, "Secret value should not be empty")
 
@@ -350,6 +366,7 @@ func TestInfrastructureReadiness(t *testing.T) {
 	assert.NotEmpty(t, outputs.PrivateSubnet1Id, "Private subnet 1 ID should be present")
 	assert.NotEmpty(t, outputs.PrivateSubnet2Id, "Private subnet 2 ID should be present")
 	assert.NotEmpty(t, outputs.EcsTaskSecurityGroupId, "ECS task security group ID should be present")
+	assert.NotEmpty(t, outputs.DbSecretArn, "DB secret ARN should be present")
 
 	t.Log("All infrastructure components are ready")
 }
