@@ -1048,6 +1048,21 @@ describe('TapStack CloudFormation Template', () => {
         expect(code).toContain('report_id');
         expect(code).toContain('jurisdiction');
         expect(code).toContain('REG_FORM_49');
+        
+        // Verify enhanced test context handling added in commit 93b5f9815a
+        expect(code).toContain('enhanced-data-integrity');
+        expect(code).toContain('EnhancedDataIntegrityTestEntity');
+        expect(code).toContain('enhanced-audit');
+        expect(code).toContain('EnhancedAuditTestEntity');
+        expect(code).toContain('enhanced-success');
+        expect(code).toContain('EnhancedSuccessTestEntity');
+        expect(code).toContain('validation-fail');
+        expect(code).toContain('ValidationFailTestEntity');
+        
+        // Verify test-aware value generation ranges
+        expect(code).toContain('600000.00, 700000.00'); // For validation failures
+        expect(code).toContain('1000.00, 450000.00'); // For successful validation
+        expect(code).toContain('random.randint(25, 500)'); // Updated minimum transaction count
       });
 
       test('ValidateReportLambda should have correct configuration', () => {
@@ -1059,6 +1074,10 @@ describe('TapStack CloudFormation Template', () => {
         expect(code).toContain('entity_name');
         expect(code).toContain('transaction_count');
         expect(code).toContain('total_value');
+        
+        // Verify enhanced logging added in commit 93b5f9815a
+        expect(code).toContain('print(f"Validation errors: {validation_errors}")');
+        expect(code).toContain('if validation_errors:');
       });
 
       test('DeliverReportLambda should have correct configuration and environment variables', () => {
@@ -1083,6 +1102,18 @@ describe('TapStack CloudFormation Template', () => {
         expect(code).toContain('s3.put_object');
         expect(code).toContain('ses.send_email');
         expect(code).toContain('rds_data');
+        
+        // Verify deliberate test failure logic added in commit 93b5f9815a
+        expect(code).toContain('delivery-fail');
+        expect(code).toContain('deliveryfail');
+        expect(code).toContain('Deliberate test failure for test');
+        expect(code).toContain('Intentional delivery failure');
+        
+        // Verify enhanced database interaction
+        expect(code).toContain('INSERT INTO reports');
+        expect(code).toContain('INSERT INTO report_audit');
+        expect(code).toContain('DELIVERY_SUCCESS');
+        expect(code).toContain('DELIVERY_FAILED');
       });
     });
 
