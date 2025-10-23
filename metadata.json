@@ -5,7 +5,7 @@
   "turn_type": "single",
   "po_id": "8120486147",
   "team": "synth",
-  "startedAt": "2025-10-22T10:22:18+05:30",
+  "startedat": "2025-01-23T10:22:48Z",
   "subtask": "Application Deployment",
   "subject_labels": [
     "CI/CD Pipeline",
