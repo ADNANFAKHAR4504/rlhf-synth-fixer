@@ -47,7 +47,9 @@ export class TapStack extends cdk.Stack {
       partitionKey: { name: 'deviceId', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecovery: true,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: true
+      },
       stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES
     });
 
@@ -201,7 +203,7 @@ export class TapStack extends cdk.Stack {
 
     const stateMachine = new stepfunctions.StateMachine(this, 'RecoveryStateMachine', {
       stateMachineName: `iot-recovery-orchestration-${this.environmentSuffix}`,
-      definition,
+      definitionBody: stepfunctions.DefinitionBody.fromChainable(definition),
       timeout: cdk.Duration.hours(2)
     });
 
@@ -235,7 +237,7 @@ export class TapStack extends cdk.Stack {
           RuleName: '*'
         },
         statistic: 'Sum',
-        period: cdk.Duration.seconds(15) // 15-second detection window
+        period: cdk.Duration.minutes(1) // 1-minute detection window
       }),
       threshold: 1,
       evaluationPeriods: 1,
