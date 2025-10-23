@@ -18,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/elasticache"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
+	"github.com/aws/aws-sdk-go-v2/service/rds/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -193,10 +194,10 @@ func TestIntegration_RedisClusterConfiguration(t *testing.T) {
 	cluster := result.CacheClusters[0]
 
 	// Verify cluster properties
-	assert.Equal(t, "redis", string(cluster.Engine), "Engine should be redis")
-	assert.True(t, strings.HasPrefix(string(cluster.EngineVersion), "6."), "Engine version should be 6.x")
+	assert.Equal(t, "redis", *cluster.Engine, "Engine should be redis")
+	assert.True(t, strings.HasPrefix(*cluster.EngineVersion, "6."), "Engine version should be 6.x")
 	assert.Equal(t, 3, len(cluster.CacheNodes), "Should have 3 cache nodes")
-	assert.Equal(t, outputs.RedisClusterPort, fmt.Sprintf("%d", cluster.ConfigurationEndpoint.Port),
+	assert.Equal(t, outputs.RedisClusterPort, fmt.Sprintf("%d", *cluster.ConfigurationEndpoint.Port),
 		"Port should match the output")
 
 	// Verify cluster tags
@@ -208,7 +209,7 @@ func TestIntegration_RedisClusterConfiguration(t *testing.T) {
 
 	hasComplianceTag := false
 	for _, tag := range tagsResult.TagList {
-		if string(tag.Key) == "Compliance" && string(tag.Value) == "HIPAA" {
+		if *tag.Key == "Compliance" && *tag.Value == "HIPAA" {
 			hasComplianceTag = true
 			break
 		}
@@ -240,17 +241,17 @@ func TestIntegration_AuroraClusterConfiguration(t *testing.T) {
 	cluster := result.DBClusters[0]
 
 	// Verify cluster properties
-	assert.Equal(t, "aurora-postgresql", string(cluster.Engine), "Engine should be aurora-postgresql")
-	assert.True(t, strings.HasPrefix(string(cluster.EngineVersion), "13."), "Engine version should be 13.x")
+	assert.Equal(t, "aurora-postgresql", *cluster.Engine, "Engine should be aurora-postgresql")
+	assert.True(t, strings.HasPrefix(*cluster.EngineVersion, "13."), "Engine version should be 13.x")
 	assert.Equal(t, "patient_records", *cluster.DatabaseName, "Database name should be patient_records")
-	assert.True(t, cluster.StorageEncrypted, "Storage should be encrypted")
-	assert.Equal(t, int32(7), cluster.BackupRetentionPeriod, "Backup retention should be 7 days")
+	assert.True(t, *cluster.StorageEncrypted, "Storage should be encrypted")
+	assert.Equal(t, int32(7), *cluster.BackupRetentionPeriod, "Backup retention should be 7 days")
 	assert.Equal(t, outputs.AuroraClusterEndpoint, *cluster.Endpoint, "Writer endpoint should match")
 	assert.Equal(t, outputs.AuroraClusterReaderEndpoint, *cluster.ReaderEndpoint, "Reader endpoint should match")
 
 	// Verify instances
 	instanceInput := &rds.DescribeDBInstancesInput{
-		Filters: []rds.Filter{
+		Filters: []types.Filter{
 			{
 				Name:   aws.String("db-cluster-id"),
 				Values: []string{clusterIdentifier},
@@ -265,7 +266,7 @@ func TestIntegration_AuroraClusterConfiguration(t *testing.T) {
 
 	// Verify instance properties
 	for _, instance := range instanceResult.DBInstances {
-		assert.Equal(t, "db.r5.large", string(instance.DBInstanceClass), "Instance class should be db.r5.large")
+		assert.Equal(t, "db.r5.large", *instance.DBInstanceClass, "Instance class should be db.r5.large")
 		assert.False(t, *instance.PubliclyAccessible, "Instance should not be publicly accessible")
 	}
 
