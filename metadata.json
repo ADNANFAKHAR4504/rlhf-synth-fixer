@@ -6,12 +6,21 @@
   "po_id": "9586377746",
   "team": "synth",
   "subtask": "Application Deployment",
-  "background": "EdTech Solutions Inc. needs to deploy a scalable learning management system (LMS) for a university. The system needs to handle student records securely while maintaining high availability. The application is already containerized and needs infrastructure setup.",
   "subject_labels": [
     "Failure Recovery Automation",
     "Security Configuration as Code"
   ],
   "startedAt": "2025-10-21T11:23:06.776222Z",
-  "aws_services": ["VPC", "ECS", "RDS", "Secrets Manager", "Application Load Balancer", "NAT Gateway", "Internet Gateway", "CloudWatch Logs", "IAM"],
+  "aws_services": [
+    "VPC",
+    "ECS",
+    "RDS",
+    "Secrets Manager",
+    "Application Load Balancer",
+    "NAT Gateway",
+    "Internet Gateway",
+    "CloudWatch Logs",
+    "IAM"
+  ],
   "training_quality": 10
 }
