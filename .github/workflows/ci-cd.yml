@@ -48,6 +48,7 @@ env:
   # Go caching optimization
   GOCACHE: ${{ github.workspace }}/.cache/go-build
   GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
+  IAC_ANALYSIS_SUBTASK: 'IaC Program Optimization'
 
 jobs:
   detect-metadata:
@@ -58,6 +59,7 @@ jobs:
       platform: ${{ steps.metadata.outputs.platform }}
       language: ${{ steps.metadata.outputs.language }}
       po_id: ${{ steps.metadata.outputs.po_id }}
+      subtask: ${{ steps.metadata.outputs.subtask }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -88,7 +90,7 @@ jobs:
     name: Build
     runs-on: ubuntu-24.04
     needs: detect-metadata
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.subtask != 'IaC Program Optimization'}}
     environment: dev
 
     steps:
@@ -111,7 +113,7 @@ jobs:
     name: Synth
     runs-on: ubuntu-24.04
     needs: [detect-metadata, build]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch' && needs.detect-metadata.outputs.subtask != 'IaC Program Optimization' }}
     environment: dev
     permissions:
       contents: read
@@ -240,12 +242,52 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ env.AWS_REGION || 'us-east-1' }}
+  analysis:
+    name: Analysis
+    runs-on: ubuntu-24.04
+    needs: detect-metadata
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.subtask == 'IaC Program Optimization' }}
+    environment: dev
+    env:
+      AWS_ENDPOINT_URL: http://127.0.0.1:5001
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          ref: ${{ github.head_ref }}
 
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          download-artifacts: 'false'
+          is-analysis: 'true'
+
+      - name: Run analysis
+        run: ./scripts/analysis.sh
+        env:
+          IAC_ANALYSIS_SUBTASK: ${{ env.IAC_ANALYSIS_SUBTASK }}
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
+
+      - name: Upload analysis results as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: analysis-results
+          path: lib/analysis-results.txt
+          if-no-files-found: warn
   deploy:
     name: Deploy
     runs-on: ubuntu-24.04
     needs: [detect-metadata, synth]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.subtask != 'IaC Program Optimization'}}
     environment: dev
 
     steps:
@@ -309,7 +351,7 @@ jobs:
     name: Lint
     runs-on: ubuntu-24.04
     needs: [detect-metadata, build]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.subtask != 'IaC Program Optimization'}}
     environment: qa
     outputs:
       platform: ${{ needs.detect-metadata.outputs.platform }}
@@ -336,7 +378,7 @@ jobs:
     name: Unit Testing
     runs-on: ubuntu-24.04
     needs: [detect-metadata, lint]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.subtask != 'IaC Program Optimization' }}
     environment: qa
 
     steps:
@@ -429,7 +471,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [detect-metadata, lint, unit-tests, deploy]
     environment: qa
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.subtask != 'IaC Program Optimization'}}
 
     steps:
       - name: Checkout code
@@ -467,7 +509,8 @@ jobs:
   claude-code-action:
     runs-on: ubuntu-24.04
     name: "Claude Review"
-    needs: [integration-tests-live]
+    needs: [integration-tests-live, analysis]
+    if: always() && !cancelled() && (needs.analysis.result == 'success' || needs.integration-tests-live.result == 'success')
     permissions:
       contents: write
       pull-requests: write
@@ -501,6 +544,14 @@ jobs:
 
           if [ ! -f "lib/MODEL_FAILURES.md" ]; then
             echo "❌ lib/MODEL_FAILURES.md not found, exiting with failure"
+            exit 1
+          fi
+      
+      - name: Verify analysis script exists when Analysis/Monitoring
+        if: ${{ needs.detect-metadata.outputs.subtask == env.IAC_ANALYSIS_CATEGORY }}
+        run: |
+          if [ ! -f "lib/analyse.py" ] && [ ! -f "lib/analyse.sh" ]; then
+            echo "❌ Expected lib/analyse.py or lib/analyse.sh for IaC Program Optimization task"
             exit 1
           fi
 
@@ -557,7 +608,7 @@ jobs:
     name: Cleanup (Destroy Resources)
     runs-on: ubuntu-24.04
     needs: [detect-metadata, integration-tests-live]
-    if: ${{ ((github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch' && !inputs.skip_cleanup)) && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ ((github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch' && !inputs.skip_cleanup)) && !contains(github.event.head_commit.message, '[skip-jobs]')&& needs.detect-metadata.outputs.subtask != 'IaC Program Optimization' }}
     environment: stage
 
     steps:
@@ -618,6 +669,13 @@ jobs:
         with:
           name: updated-metadata
           path: .
+
+      - name: Download analysis results
+        if: ${{ needs.detect-metadata.outputs.subtask == 'IaC Program Optimization' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: analysis-results
+          path: lib/
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
