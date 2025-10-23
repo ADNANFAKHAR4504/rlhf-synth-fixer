@@ -948,7 +948,7 @@
     },
     "DatabaseInitCustomResource": {
       "Type": "AWS::CloudFormation::CustomResource",
-      "DependsOn": ["AuroraCluster", "AuroraInstance", "DatabaseInitLambdaPermission"],
+      "DependsOn": ["AuroraInstance", "DatabaseInitLambdaPermission"],
       "Properties": {
         "ServiceToken": {
           "Fn::GetAtt": [
