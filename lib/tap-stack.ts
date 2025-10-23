@@ -612,7 +612,6 @@ def lambda_handler(event, context):
     const ecsLogGroup = new CloudwatchLogGroup(this, 'ecs-log-group', {
       name: `/ecs/edu-analytics-${environmentSuffix}`,
       retentionInDays: 7,
-      kmsKeyId: kmsKey.arn,
       tags: {
         Name: `edu-ecs-logs-${environmentSuffix}`,
         Environment: environmentSuffix,
@@ -893,7 +892,6 @@ def lambda_handler(event, context):
     const apiLogGroup = new CloudwatchLogGroup(this, 'api-log-group', {
       name: `/aws/apigateway/edu-analytics-${environmentSuffix}`,
       retentionInDays: 7,
-      kmsKeyId: kmsKey.arn,
       tags: {
         Name: `edu-api-logs-${environmentSuffix}`,
         Environment: environmentSuffix,
@@ -914,15 +912,19 @@ def lambda_handler(event, context):
       authorization: 'NONE',
     });
 
-    const metricsIntegration = new ApiGatewayIntegration(this, 'metrics-integration', {
-      restApiId: apiGateway.id,
-      resourceId: metricsResource.id,
-      httpMethod: metricsMethod.httpMethod,
-      type: 'HTTP_PROXY',
-      integrationHttpMethod: 'GET',
-      uri: `http://${alb.dnsName}/metrics`,
-      connectionType: 'INTERNET',
-    });
+    const metricsIntegration = new ApiGatewayIntegration(
+      this,
+      'metrics-integration',
+      {
+        restApiId: apiGateway.id,
+        resourceId: metricsResource.id,
+        httpMethod: metricsMethod.httpMethod,
+        type: 'HTTP_PROXY',
+        integrationHttpMethod: 'GET',
+        uri: `http://${alb.dnsName}/metrics`,
+        connectionType: 'INTERNET',
+      }
+    );
 
     const studentsResource = new ApiGatewayResource(this, 'students-resource', {
       restApiId: apiGateway.id,
@@ -937,15 +939,19 @@ def lambda_handler(event, context):
       authorization: 'NONE',
     });
 
-    const studentsIntegration = new ApiGatewayIntegration(this, 'students-integration', {
-      restApiId: apiGateway.id,
-      resourceId: studentsResource.id,
-      httpMethod: studentsMethod.httpMethod,
-      type: 'HTTP_PROXY',
-      integrationHttpMethod: 'POST',
-      uri: `http://${alb.dnsName}/students`,
-      connectionType: 'INTERNET',
-    });
+    const studentsIntegration = new ApiGatewayIntegration(
+      this,
+      'students-integration',
+      {
+        restApiId: apiGateway.id,
+        resourceId: studentsResource.id,
+        httpMethod: studentsMethod.httpMethod,
+        type: 'HTTP_PROXY',
+        integrationHttpMethod: 'POST',
+        uri: `http://${alb.dnsName}/students`,
+        connectionType: 'INTERNET',
+      }
+    );
 
     // API Deployment and Stage
     const apiDeployment = new ApiGatewayDeployment(this, 'api-deployment', {
@@ -956,7 +962,12 @@ def lambda_handler(event, context):
       lifecycle: {
         createBeforeDestroy: true,
       },
-      dependsOn: [metricsMethod, studentsMethod, metricsIntegration, studentsIntegration],
+      dependsOn: [
+        metricsMethod,
+        studentsMethod,
+        metricsIntegration,
+        studentsIntegration,
+      ],
     });
 
     new ApiGatewayStage(this, 'api-stage', {
