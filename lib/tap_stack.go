@@ -284,7 +284,7 @@ func main() {
 		rdsInstance, err := rds.NewInstance(ctx, fmt.Sprintf("iot-postgres-%s", environmentSuffix), &rds.InstanceArgs{
 			Identifier:            pulumi.String(fmt.Sprintf("iot-postgres-%s", environmentSuffix)),
 			Engine:                pulumi.String("postgres"),
-			EngineVersion:         pulumi.String("14.13"),
+			EngineVersion:         pulumi.String("16.8"),
 			InstanceClass:         pulumi.String("db.t3.micro"),
 			AllocatedStorage:      pulumi.Int(20),
 			StorageType:           pulumi.String("gp3"),
