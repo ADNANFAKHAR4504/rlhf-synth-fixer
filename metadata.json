@@ -17,6 +17,7 @@
     "API Gateway for transaction endpoints",
     "EFS for shared storage between ECS tasks"
   ],
+  "training_quality": 10,
   "subject_labels": [
     "CI/CD Pipeline",
     "Cloud Environment Setup",
