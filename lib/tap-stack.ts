@@ -56,7 +56,11 @@ export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
 
-    const environmentSuffix = props?.environmentSuffix || 'dev';
+    // Add timestamp to PR environments to avoid resource conflicts
+    const baseSuffix = props?.environmentSuffix || 'dev';
+    const environmentSuffix = baseSuffix.startsWith('pr')
+      ? `${baseSuffix}-${Date.now().toString().slice(-6)}`
+      : baseSuffix;
     // Force region to us-east-1 for consistent CI/CD deployment
     const awsRegion = 'us-east-1';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
