@@ -137,18 +137,18 @@ variable "masking_rules" {
   }
 }
 
-variable "prod_account_id" {
-  description = "Production AWS account ID"
+variable "source_account_id" {
+  description = "Source AWS account ID for data refresh (e.g., production account when running in test)"
   type        = string
 }
 
-variable "prod_data_bucket" {
-  description = "Production data bucket name"
+variable "source_data_bucket" {
+  description = "Source data bucket name for S3 sync operations"
   type        = string
 }
 
-variable "prod_cluster_identifier" {
-  description = "Production Aurora cluster identifier"
+variable "source_cluster_identifier" {
+  description = "Source Aurora cluster identifier for snapshot operations"
   type        = string
 }
 
@@ -182,22 +182,22 @@ locals {
   private_subnet_count = length(var.private_subnet_cidrs)
   account_id           = data.aws_caller_identity.current.account_id
   nat_count            = var.enable_nat ? var.nat_gateway_count : 0
-  
+
   # Aurora parameter family based on engine and version
   aurora_family = startswith(var.aurora_engine, "aurora-postgresql") ? "aurora-postgresql14" : "aurora-mysql8.0"
-  
+
   kms_aliases = {
     data = "alias/${local.name_prefix}-data"
     logs = "alias/${local.name_prefix}-logs"
     ssm  = "alias/${local.name_prefix}-ssm"
     s3   = "alias/${local.name_prefix}-s3"
   }
-  
+
   service_kms_aliases = {
     for service in var.service_names :
     service => "alias/app-${service}-${var.environment}"
   }
-  
+
   lambda_functions = {
     masking_handler = {
       name    = "${local.name_prefix}-masking"
@@ -230,12 +230,12 @@ locals {
       timeout = 300
     }
   }
-  
+
   # Separate tables with and without range keys
   tables_with_range_key = {
     for k, v in var.ddb_tables : k => v if v.range_key != null
   }
-  
+
   tables_without_range_key = {
     for k, v in var.ddb_tables : k => v if v.range_key == null
   }
@@ -765,26 +765,26 @@ resource "aws_dynamodb_table" "with_range_key" {
   range_key      = each.value.range_key
   read_capacity  = each.value.billing_mode == "PROVISIONED" ? coalesce(each.value.read_capacity, 5) : null
   write_capacity = each.value.billing_mode == "PROVISIONED" ? coalesce(each.value.write_capacity, 5) : null
-  
+
   attribute {
     name = each.value.hash_key
     type = "S"
   }
-  
+
   attribute {
     name = each.value.range_key
     type = "S"
   }
-  
+
   point_in_time_recovery {
     enabled = true
   }
-  
+
   server_side_encryption {
     enabled     = true
     kms_key_arn = aws_kms_key.data.arn
   }
-  
+
   tags = merge(var.tags, { Name = "${local.name_prefix}-${each.value.name}" })
 }
 
@@ -795,21 +795,21 @@ resource "aws_dynamodb_table" "without_range_key" {
   hash_key       = each.value.hash_key
   read_capacity  = each.value.billing_mode == "PROVISIONED" ? coalesce(each.value.read_capacity, 5) : null
   write_capacity = each.value.billing_mode == "PROVISIONED" ? coalesce(each.value.write_capacity, 5) : null
-  
+
   attribute {
     name = each.value.hash_key
     type = "S"
   }
-  
+
   point_in_time_recovery {
     enabled = true
   }
-  
+
   server_side_encryption {
     enabled     = true
     kms_key_arn = aws_kms_key.data.arn
   }
-  
+
   tags = merge(var.tags, { Name = "${local.name_prefix}-${each.value.name}" })
 }
 
@@ -819,7 +819,7 @@ resource "aws_dynamodb_table_item" "sample_with_range" {
   table_name = aws_dynamodb_table.with_range_key[each.key].name
   hash_key   = each.value.hash_key
   range_key  = each.value.range_key
-  
+
   item = jsonencode({
     "${each.value.hash_key}"  = { S = "sample-${each.key}-001" }
     "${each.value.range_key}" = { S = "2006-01-02T15:04:05Z" }
@@ -832,7 +832,7 @@ resource "aws_dynamodb_table_item" "sample_without_range" {
   for_each   = local.tables_without_range_key
   table_name = aws_dynamodb_table.without_range_key[each.key].name
   hash_key   = each.value.hash_key
-  
+
   item = jsonencode({
     "${each.value.hash_key}" = { S = "sample-${each.key}-001" }
     "data"                   = { S = "Sample data for ${each.key}" }
@@ -856,7 +856,7 @@ resource "aws_appautoscaling_policy" "dynamodb_read_with_range" {
   resource_id        = aws_appautoscaling_target.dynamodb_read_with_range[each.key].resource_id
   scalable_dimension = aws_appautoscaling_target.dynamodb_read_with_range[each.key].scalable_dimension
   service_namespace  = aws_appautoscaling_target.dynamodb_read_with_range[each.key].service_namespace
-  
+
   target_tracking_scaling_policy_configuration {
     predefined_metric_specification {
       predefined_metric_type = "DynamoDBReadCapacityUtilization"
@@ -881,7 +881,7 @@ resource "aws_appautoscaling_policy" "dynamodb_write_with_range" {
   resource_id        = aws_appautoscaling_target.dynamodb_write_with_range[each.key].resource_id
   scalable_dimension = aws_appautoscaling_target.dynamodb_write_with_range[each.key].scalable_dimension
   service_namespace  = aws_appautoscaling_target.dynamodb_write_with_range[each.key].service_namespace
-  
+
   target_tracking_scaling_policy_configuration {
     predefined_metric_specification {
       predefined_metric_type = "DynamoDBWriteCapacityUtilization"
@@ -907,7 +907,7 @@ resource "aws_appautoscaling_policy" "dynamodb_read_without_range" {
   resource_id        = aws_appautoscaling_target.dynamodb_read_without_range[each.key].resource_id
   scalable_dimension = aws_appautoscaling_target.dynamodb_read_without_range[each.key].scalable_dimension
   service_namespace  = aws_appautoscaling_target.dynamodb_read_without_range[each.key].service_namespace
-  
+
   target_tracking_scaling_policy_configuration {
     predefined_metric_specification {
       predefined_metric_type = "DynamoDBReadCapacityUtilization"
@@ -932,7 +932,7 @@ resource "aws_appautoscaling_policy" "dynamodb_write_without_range" {
   resource_id        = aws_appautoscaling_target.dynamodb_write_without_range[each.key].resource_id
   scalable_dimension = aws_appautoscaling_target.dynamodb_write_without_range[each.key].scalable_dimension
   service_namespace  = aws_appautoscaling_target.dynamodb_write_without_range[each.key].service_namespace
-  
+
   target_tracking_scaling_policy_configuration {
     predefined_metric_specification {
       predefined_metric_type = "DynamoDBWriteCapacityUtilization"
@@ -1016,18 +1016,18 @@ resource "aws_ssm_parameter" "aurora_endpoint" {
   tags  = merge(var.tags, { Name = "aurora-endpoint" })
 }
 
-resource "aws_ssm_parameter" "prod_data_bucket" {
-  name  = "/${var.environment}/fintech/prod/data-bucket"
+resource "aws_ssm_parameter" "source_data_bucket" {
+  name  = "/${var.environment}/fintech/source/data-bucket"
   type  = "String"
-  value = var.prod_data_bucket
-  tags  = merge(var.tags, { Name = "prod-data-bucket" })
+  value = var.source_data_bucket
+  tags  = merge(var.tags, { Name = "source-data-bucket" })
 }
 
-resource "aws_ssm_parameter" "prod_cluster_id" {
-  name  = "/${var.environment}/fintech/prod/cluster-id"
+resource "aws_ssm_parameter" "source_cluster_id" {
+  name  = "/${var.environment}/fintech/source/cluster-id"
   type  = "String"
-  value = var.prod_cluster_identifier
-  tags  = merge(var.tags, { Name = "prod-cluster-id" })
+  value = var.source_cluster_identifier
+  tags  = merge(var.tags, { Name = "source-cluster-id" })
 }
 
 # ============================================================================
@@ -1142,7 +1142,7 @@ resource "aws_iam_policy" "dynamodb_refresh_handler" {
       {
         Action   = ["sts:AssumeRole"]
         Effect   = "Allow"
-        Resource = "arn:aws:iam::${var.prod_account_id}:role/*-prod-read-role"
+        Resource = "arn:aws:iam::${var.source_account_id}:role/*-source-read-role"
       }
     ]
   })
@@ -1183,7 +1183,7 @@ resource "aws_iam_policy" "aurora_refresh_handler" {
       {
         Action   = ["sts:AssumeRole"]
         Effect   = "Allow"
-        Resource = "arn:aws:iam::${var.prod_account_id}:role/*-prod-read-role"
+        Resource = "arn:aws:iam::${var.source_account_id}:role/*-source-read-role"
       }
     ]
   })
@@ -1202,7 +1202,7 @@ resource "aws_iam_policy" "s3_sync_handler" {
       {
         Action   = ["s3:GetObject", "s3:ListBucket"]
         Effect   = "Allow"
-        Resource = ["arn:aws:s3:::${var.prod_data_bucket}", "arn:aws:s3:::${var.prod_data_bucket}/*"]
+        Resource = ["arn:aws:s3:::${var.source_data_bucket}", "arn:aws:s3:::${var.source_data_bucket}/*"]
       },
       {
         Action   = ["s3:PutObject", "s3:ListBucket"]
@@ -1212,7 +1212,7 @@ resource "aws_iam_policy" "s3_sync_handler" {
       {
         Action   = ["sts:AssumeRole"]
         Effect   = "Allow"
-        Resource = "arn:aws:iam::${var.prod_account_id}:role/*-prod-read-role"
+        Resource = "arn:aws:iam::${var.source_account_id}:role/*-source-read-role"
       }
     ]
   })
@@ -1539,8 +1539,8 @@ resource "aws_lambda_function" "dynamodb_refresh_handler" {
   }
   environment {
     variables = {
-      MASKING_FUNCTION = aws_lambda_function.masking_handler.function_name
-      PROD_ACCOUNT_ID  = var.prod_account_id
+      MASKING_FUNCTION  = aws_lambda_function.masking_handler.function_name
+      SOURCE_ACCOUNT_ID = var.source_account_id
     }
   }
   depends_on = [aws_cloudwatch_log_group.lambda]
@@ -1559,10 +1559,10 @@ cw = boto3.client('cloudwatch')
 def lambda_handler(event, context):
   cluster = event['clusterId']
   env = cluster.split('-')[1]
-  prod_cluster = ssm_client.get_parameter(Name=f'/{env}/fintech/prod/cluster-id')['Parameter']['Value']
-  snaps = rds.describe_db_cluster_snapshots(DBClusterIdentifier=prod_cluster, SnapshotType='automated')
+  source_cluster = ssm_client.get_parameter(Name=f'/{env}/fintech/source/cluster-id')['Parameter']['Value']
+  snaps = rds.describe_db_cluster_snapshots(DBClusterIdentifier=source_cluster, SnapshotType='automated')
   if not snaps['DBClusterSnapshots']:
-    raise Exception(f'No snapshots for {prod_cluster}')
+    raise Exception(f'No snapshots for {source_cluster}')
   src_snap = sorted(snaps['DBClusterSnapshots'], key=lambda x: x['SnapshotCreateTime'], reverse=True)[0]['DBClusterSnapshotIdentifier']
   tgt_snap = f"{cluster}-copy-{int(time.time())}"
   rds.copy_db_cluster_snapshot(SourceDBClusterSnapshotIdentifier=src_snap, TargetDBClusterSnapshotIdentifier=tgt_snap, KmsKeyId=os.environ['KMS_KEY_ID'])
@@ -1597,9 +1597,9 @@ resource "aws_lambda_function" "aurora_refresh_handler" {
   }
   environment {
     variables = {
-      KMS_KEY_ID    = aws_kms_key.data.id
-      SSM_DOC       = aws_ssm_document.aurora_masking.name
-      SSM_ROLE_NAME = aws_iam_role.ssm_automation.name
+      KMS_KEY_ID     = aws_kms_key.data.id
+      SSM_DOC        = aws_ssm_document.aurora_masking.name
+      SSM_ROLE_NAME  = aws_iam_role.ssm_automation.name
       AWS_ACCOUNT_ID = local.account_id
     }
   }
@@ -1773,8 +1773,8 @@ resource "aws_ssm_document" "aurora_masking" {
     description   = "Restore Aurora from snapshot and apply masking"
     assumeRole    = "{{ AutomationAssumeRole }}"
     parameters = {
-      SnapshotId     = { type = "String" }
-      TargetClusterId = { type = "String" }
+      SnapshotId           = { type = "String" }
+      TargetClusterId      = { type = "String" }
       AutomationAssumeRole = { type = "String", default = aws_iam_role.ssm_automation.arn }
     }
     mainSteps = [
@@ -1782,8 +1782,8 @@ resource "aws_ssm_document" "aurora_masking" {
         name   = "RestoreFromSnapshot"
         action = "aws:executeAwsApi"
         inputs = {
-          Service    = "rds"
-          Api        = "RestoreDBClusterFromSnapshot"
+          Service             = "rds"
+          Api                 = "RestoreDBClusterFromSnapshot"
           DBClusterIdentifier = "{{ TargetClusterId }}-temp-${timestamp()}"
           SnapshotIdentifier  = "{{ SnapshotId }}"
           Engine              = var.aurora_engine
@@ -1818,7 +1818,7 @@ resource "aws_sfn_state_machine" "daily_refresh" {
         Parameters = {
           FunctionName = aws_lambda_function.s3_sync_handler.arn
           Payload = {
-            sourceBucket = var.prod_data_bucket
+            sourceBucket = var.source_data_bucket
             targetBucket = aws_s3_bucket.data.id
           }
         }
@@ -1826,11 +1826,11 @@ resource "aws_sfn_state_machine" "daily_refresh" {
         Next       = "DynamoDBRefresh"
       }
       DynamoDBRefresh = {
-        Type = "Map"
+        Type      = "Map"
         ItemsPath = "$.tableList"
         Parameters = {
-          "tableName.$"     = "$$.Map.Item.Value"
-          stagingBucket     = aws_s3_bucket.staging.id
+          "tableName.$" = "$$.Map.Item.Value"
+          stagingBucket = aws_s3_bucket.staging.id
         }
         Iterator = {
           StartAt = "RefreshTable"

@@ -53,12 +53,12 @@ ddb_tables = {
 }
 
 # Aurora
-aurora_engine          = "aurora-postgresql"
-aurora_engine_version  = "14.6"
-aurora_instance_class  = "db.r5.2xlarge"
-aurora_username        = "admin"
-aurora_password        = "ProdPass456!UseSecretsManager"
-aurora_db_name         = "fintech_prod"
+aurora_engine         = "aurora-postgresql"
+aurora_engine_version = "14.6"
+aurora_instance_class = "db.r5.2xlarge"
+aurora_username       = "admin"
+aurora_password       = "ProdPass456!UseSecretsManager"
+aurora_db_name        = "fintech_prod"
 
 # S3 Buckets (must be globally unique)
 artifact_bucket_name = "fintech-prod-artifacts-20241023-unique"
@@ -75,10 +75,10 @@ masking_rules = {
   "routing_number" = "****{{last:4}}"
 }
 
-# Production references (self-reference for prod env)
-prod_account_id         = "987654321098"
-prod_data_bucket        = "fintech-prod-data-20241023-unique"
-prod_cluster_identifier = "fintech-prod-aurora"
+# Source environment references (self-reference for prod env)
+source_account_id         = "987654321098"                      # Same account for prod
+source_data_bucket        = "fintech-prod-data-20241023-unique" # Same bucket for prod
+source_cluster_identifier = "fintech-prod-aurora"               # Same cluster for prod
 
 # Tags
 tags = {

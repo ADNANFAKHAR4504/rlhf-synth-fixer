@@ -68,7 +68,7 @@ describe("Terraform Stack: tap_stack.tf", () => {
       "data_bucket_name",
       "staging_bucket_name",
       "masking_rules",
-      "prod_account_id",
+      "source_account_id",
       "tags",
     ];
 
@@ -470,7 +470,7 @@ describe("Terraform Stack: tap_stack.tf", () => {
 
     test("includes cross-account assume role permissions", () => {
       expect(stackContent).toMatch(/sts:AssumeRole/);
-      expect(stackContent).toMatch(/prod_account_id/);
+      expect(stackContent).toMatch(/source_account_id/);
     });
 
     test("Lambda policies include KMS permissions", () => {
@@ -767,7 +767,7 @@ describe("Terraform Stack: tap_stack.tf", () => {
           Math.max(0, hardcodedAccount.index! - 50),
           hardcodedAccount.index! + 50
         );
-        expect(surroundingContext).toMatch(/(#|\/\/|local\.account_id|var\.prod_account_id)/);
+        expect(surroundingContext).toMatch(/(#|\/\/|local\.account_id|var\.source_account_id)/);
       }
     });
 
@@ -857,8 +857,8 @@ describe("Terraform Stack: tap_stack.tf", () => {
       expect(stackContent).toMatch(/weekly_parity/);
     });
 
-    test("includes prod_account_id for cross-account access", () => {
-      expect(stackContent).toMatch(/variable\s+"prod_account_id"/);
+    test("includes source_account_id for cross-account access", () => {
+      expect(stackContent).toMatch(/variable\s+"source_account_id"/);
     });
 
     test("DynamoDB refresh includes export functionality", () => {
