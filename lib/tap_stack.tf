@@ -138,18 +138,21 @@ variable "masking_rules" {
 }
 
 variable "source_account_id" {
-  description = "Source AWS account ID for data refresh (e.g., production account when running in test)"
+  description = "Source AWS account ID for data refresh (defaults to current account for self-contained operation)"
   type        = string
+  default     = null # Will use current account ID if not specified
 }
 
 variable "source_data_bucket" {
-  description = "Source data bucket name for S3 sync operations"
+  description = "Source data bucket name for S3 sync operations (defaults to this stack's data bucket)"
   type        = string
+  default     = null # Will use this stack's data bucket if not specified
 }
 
 variable "source_cluster_identifier" {
-  description = "Source Aurora cluster identifier for snapshot operations"
+  description = "Source Aurora cluster identifier for snapshot operations (defaults to this stack's cluster)"
   type        = string
+  default     = null # Will use this stack's Aurora cluster if not specified
 }
 
 variable "tags" {
@@ -182,6 +185,12 @@ locals {
   private_subnet_count = length(var.private_subnet_cidrs)
   account_id           = data.aws_caller_identity.current.account_id
   nat_count            = var.enable_nat ? var.nat_gateway_count : 0
+
+  # Computed source values - use provided values or default to self-references
+  # This allows standalone operation or cross-environment refresh
+  effective_source_account_id         = coalesce(var.source_account_id, local.account_id)
+  effective_source_data_bucket        = coalesce(var.source_data_bucket, aws_s3_bucket.data.id)
+  effective_source_cluster_identifier = coalesce(var.source_cluster_identifier, aws_rds_cluster.aurora.cluster_identifier)
 
   # Aurora parameter family based on engine and version
   aurora_family = startswith(var.aurora_engine, "aurora-postgresql") ? "aurora-postgresql14" : "aurora-mysql8.0"
@@ -1019,14 +1028,14 @@ resource "aws_ssm_parameter" "aurora_endpoint" {
 resource "aws_ssm_parameter" "source_data_bucket" {
   name  = "/${var.environment}/fintech/source/data-bucket"
   type  = "String"
-  value = var.source_data_bucket
+  value = local.effective_source_data_bucket
   tags  = merge(var.tags, { Name = "source-data-bucket" })
 }
 
 resource "aws_ssm_parameter" "source_cluster_id" {
   name  = "/${var.environment}/fintech/source/cluster-id"
   type  = "String"
-  value = var.source_cluster_identifier
+  value = local.effective_source_cluster_identifier
   tags  = merge(var.tags, { Name = "source-cluster-id" })
 }
 
@@ -1142,7 +1151,7 @@ resource "aws_iam_policy" "dynamodb_refresh_handler" {
       {
         Action   = ["sts:AssumeRole"]
         Effect   = "Allow"
-        Resource = "arn:aws:iam::${var.source_account_id}:role/*-source-read-role"
+        Resource = "arn:aws:iam::${local.effective_source_account_id}:role/*-source-read-role"
       }
     ]
   })
@@ -1183,7 +1192,7 @@ resource "aws_iam_policy" "aurora_refresh_handler" {
       {
         Action   = ["sts:AssumeRole"]
         Effect   = "Allow"
-        Resource = "arn:aws:iam::${var.source_account_id}:role/*-source-read-role"
+        Resource = "arn:aws:iam::${local.effective_source_account_id}:role/*-source-read-role"
       }
     ]
   })
@@ -1202,7 +1211,7 @@ resource "aws_iam_policy" "s3_sync_handler" {
       {
         Action   = ["s3:GetObject", "s3:ListBucket"]
         Effect   = "Allow"
-        Resource = ["arn:aws:s3:::${var.source_data_bucket}", "arn:aws:s3:::${var.source_data_bucket}/*"]
+        Resource = ["arn:aws:s3:::${local.effective_source_data_bucket}", "arn:aws:s3:::${local.effective_source_data_bucket}/*"]
       },
       {
         Action   = ["s3:PutObject", "s3:ListBucket"]
@@ -1212,7 +1221,7 @@ resource "aws_iam_policy" "s3_sync_handler" {
       {
         Action   = ["sts:AssumeRole"]
         Effect   = "Allow"
-        Resource = "arn:aws:iam::${var.source_account_id}:role/*-source-read-role"
+        Resource = "arn:aws:iam::${local.effective_source_account_id}:role/*-source-read-role"
       }
     ]
   })
@@ -1540,7 +1549,7 @@ resource "aws_lambda_function" "dynamodb_refresh_handler" {
   environment {
     variables = {
       MASKING_FUNCTION  = aws_lambda_function.masking_handler.function_name
-      SOURCE_ACCOUNT_ID = var.source_account_id
+      SOURCE_ACCOUNT_ID = local.effective_source_account_id
     }
   }
   depends_on = [aws_cloudwatch_log_group.lambda]
@@ -1818,7 +1827,7 @@ resource "aws_sfn_state_machine" "daily_refresh" {
         Parameters = {
           FunctionName = aws_lambda_function.s3_sync_handler.arn
           Payload = {
-            sourceBucket = var.source_data_bucket
+            sourceBucket = local.effective_source_data_bucket
             targetBucket = aws_s3_bucket.data.id
           }
         }

@@ -75,10 +75,12 @@ masking_rules = {
   "routing_number" = "****{{last:4}}"
 }
 
-# Source environment references (self-reference for prod env)
-source_account_id         = "987654321098"                      # Same account for prod
-source_data_bucket        = "fintech-prod-data-20241023-unique" # Same bucket for prod
-source_cluster_identifier = "fintech-prod-aurora"               # Same cluster for prod
+# Source environment references (OPTIONAL - for cross-environment data refresh/sync)
+# For production, these are typically not needed (defaults to self-references)
+# Uncomment only if you need to refresh prod from another source (unusual):
+# source_account_id         = "987654321098"                      # Source account ID
+# source_data_bucket        = "fintech-prod-data-20241023-unique" # Source bucket
+# source_cluster_identifier = "fintech-prod-aurora"               # Source cluster
 
 # Tags
 tags = {

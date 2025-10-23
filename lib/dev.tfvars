@@ -61,10 +61,12 @@ masking_rules = {
   "credit_card" = "XXXX-XXXX-XXXX-{{last:4}}"
 }
 
-# Source environment references (for data refresh/sync operations)
-source_account_id         = "123456789012"                      # Account ID of the source environment
-source_data_bucket        = "fintech-prod-data-20241023-unique" # Source bucket to sync from
-source_cluster_identifier = "fintech-prod-aurora"               # Source Aurora cluster for snapshots
+# Source environment references (OPTIONAL - for cross-environment data refresh/sync)
+# If not specified, the stack operates standalone using its own resources
+# Uncomment these to enable data refresh from another environment (e.g., production):
+# source_account_id         = "123456789012"                      # Account ID of source environment
+# source_data_bucket        = "fintech-prod-data-20241023-unique" # Source bucket to sync from
+# source_cluster_identifier = "fintech-prod-aurora"               # Source Aurora cluster for snapshots
 
 # Tags
 tags = {
