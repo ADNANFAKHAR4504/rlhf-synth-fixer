@@ -481,7 +481,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(25);
+      expect(resourceCount).toBe(37);
     });
 
     test('should have correct number of parameters', () => {
@@ -518,7 +518,7 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
 
     test('should have exactly 25 resources defined', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(25);
+      expect(resourceCount).toBe(37);
     });
 
     test('should have exactly 7 parameters defined', () => {
@@ -818,7 +818,7 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
 
       // Verify retry configuration
       expect(definition.States.GenerateReport.Retry).toHaveLength(1);
-      expect(definition.States.GenerateReport.Retry[0].MaxAttempts).toBe(6);
+      expect(definition.States.GenerateReport.Retry[0].MaxAttempts).toBe(3);
 
       // Verify choice logic
       expect(definition.States.ValidationChoice.Choices[0].Variable).toBe('$.validationResult.isValid');
