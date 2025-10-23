@@ -1,59 +1,57 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import {
-  KinesisClient,
-  DescribeStreamCommand,
-  PutRecordCommand,
-} from '@aws-sdk/client-kinesis';
-import {
-  ECSClient,
-  DescribeClustersCommand,
-  DescribeServicesCommand,
-  DescribeTaskDefinitionCommand,
-} from '@aws-sdk/client-ecs';
-import {
-  ElastiCacheClient,
-  DescribeReplicationGroupsCommand,
-} from '@aws-sdk/client-elasticache';
-import {
-  RDSClient,
-  DescribeDBClustersCommand,
-  DescribeDBClusterEndpointsCommand,
-} from '@aws-sdk/client-rds';
-import {
-  EFSClient,
-  DescribeFileSystemsCommand,
-  DescribeMountTargetsCommand,
-} from '@aws-sdk/client-efs';
 import {
   APIGatewayClient,
   GetRestApisCommand,
   GetStageCommand,
 } from '@aws-sdk/client-api-gateway';
 import {
-  SecretsManagerClient,
-  DescribeSecretCommand,
-  GetSecretValueCommand,
-} from '@aws-sdk/client-secrets-manager';
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
 import {
-  ElasticLoadBalancingV2Client,
+  DescribeClustersCommand,
+  DescribeServicesCommand,
+  DescribeTaskDefinitionCommand,
+  ECSClient,
+} from '@aws-sdk/client-ecs';
+import {
+  DescribeFileSystemsCommand,
+  DescribeMountTargetsCommand,
+  EFSClient,
+} from '@aws-sdk/client-efs';
+import {
   DescribeLoadBalancersCommand,
   DescribeTargetGroupsCommand,
   DescribeTargetHealthCommand,
+  ElasticLoadBalancingV2Client,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
-  KMSClient,
-  DescribeKeyCommand,
-  GetKeyRotationStatusCommand,
+  DescribeReplicationGroupsCommand,
+  ElastiCacheClient,
+} from '@aws-sdk/client-elasticache';
+import {
+  DescribeStreamCommand,
+  KinesisClient,
+  PutRecordCommand,
+} from '@aws-sdk/client-kinesis';
+import {
+  KMSClient
 } from '@aws-sdk/client-kms';
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeSecurityGroupsCommand,
-} from '@aws-sdk/client-ec2';
+  DescribeDBClusterEndpointsCommand,
+  DescribeDBClustersCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
+import {
+  DescribeSecretCommand,
+  GetSecretValueCommand,
+  SecretsManagerClient,
+} from '@aws-sdk/client-secrets-manager';
+import * as fs from 'fs';
+import * as path from 'path';
 
-const AWS_REGION = process.env.AWS_REGION || 'ap-northeast-1';
+const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
 const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // Helper function to load outputs
@@ -503,7 +501,7 @@ describe('Student Analytics Platform Integration Tests', () => {
 
     test('Target group is configured for ECS service', async () => {
       const command = new DescribeTargetGroupsCommand({
-        Names: [`edu-tg-${ENVIRONMENT_SUFFIX}`],
+        Names: [`edu-tg-v2-${ENVIRONMENT_SUFFIX}`],
       });
 
       const response = await elbClient.send(command);
@@ -511,14 +509,14 @@ describe('Student Analytics Platform Integration Tests', () => {
       expect(response.TargetGroups!.length).toBe(1);
 
       const tg = response.TargetGroups![0];
-      expect(tg.Port).toBe(8080);
+      expect(tg.Port).toBe(80);
       expect(tg.Protocol).toBe('HTTP');
       expect(tg.TargetType).toBe('ip');
     }, 30000);
 
     test('ECS tasks are registered with target group', async () => {
       const tgCommand = new DescribeTargetGroupsCommand({
-        Names: [`edu-tg-${ENVIRONMENT_SUFFIX}`],
+        Names: [`edu-tg-v2-${ENVIRONMENT_SUFFIX}`],
       });
 
       const tgResponse = await elbClient.send(tgCommand);

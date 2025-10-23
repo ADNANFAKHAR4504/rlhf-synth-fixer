@@ -13,7 +13,6 @@ import { EcsService } from '@cdktf/provider-aws/lib/ecs-service';
 import { EcsTaskDefinition } from '@cdktf/provider-aws/lib/ecs-task-definition';
 import { EfsFileSystem } from '@cdktf/provider-aws/lib/efs-file-system';
 import { EfsMountTarget } from '@cdktf/provider-aws/lib/efs-mount-target';
-import { Eip } from '@cdktf/provider-aws/lib/eip';
 import { ElasticacheReplicationGroup } from '@cdktf/provider-aws/lib/elasticache-replication-group';
 import { ElasticacheSubnetGroup } from '@cdktf/provider-aws/lib/elasticache-subnet-group';
 import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
@@ -28,7 +27,6 @@ import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
 import { Lb } from '@cdktf/provider-aws/lib/lb';
 import { LbListener } from '@cdktf/provider-aws/lib/lb-listener';
 import { LbTargetGroup } from '@cdktf/provider-aws/lib/lb-target-group';
-import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -45,13 +43,11 @@ import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { S3Backend, TerraformStack } from 'cdktf';
+import { TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 
 interface TapStackProps {
   environmentSuffix?: string;
-  stateBucket?: string;
-  stateBucketRegion?: string;
   awsRegion?: string;
   defaultTags?: AwsProviderDefaultTags;
 }
@@ -66,8 +62,6 @@ export class TapStack extends TerraformStack {
     const awsRegion = AWS_REGION_OVERRIDE
       ? AWS_REGION_OVERRIDE
       : props?.awsRegion || 'us-east-1';
-    const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
-    const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states-342597974367';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
     // Configure AWS Provider
@@ -76,16 +70,8 @@ export class TapStack extends TerraformStack {
       defaultTags: defaultTags,
     });
 
-    // Configure Archive Provider for Lambda packages
+    // Configure Archive Provider
     new ArchiveProvider(this, 'archive');
-
-    // Configure S3 Backend
-    new S3Backend(this, {
-      bucket: stateBucket,
-      key: `${environmentSuffix}/${id}.tfstate`,
-      region: stateBucketRegion,
-      encrypt: true,
-    });
 
     // Create VPC for the infrastructure
     const vpc = new Vpc(this, 'edu-vpc', {
@@ -176,52 +162,6 @@ export class TapStack extends TerraformStack {
       routeTableId: publicRouteTable.id,
     });
 
-    // Create EIP for NAT Gateway
-    const natEip = new Eip(this, 'nat-eip', {
-      domain: 'vpc',
-      tags: {
-        Name: `edu-nat-eip-${environmentSuffix}`,
-        Environment: environmentSuffix,
-      },
-    });
-
-    // Create NAT Gateway in public subnet
-    const natGateway = new NatGateway(this, 'nat-gateway', {
-      allocationId: natEip.id,
-      subnetId: publicSubnet1.id,
-      tags: {
-        Name: `edu-nat-gateway-${environmentSuffix}`,
-        Environment: environmentSuffix,
-      },
-    });
-
-    // Create Route Table for Private Subnets
-    const privateRouteTable = new RouteTable(this, 'private-route-table', {
-      vpcId: vpc.id,
-      tags: {
-        Name: `edu-private-rt-${environmentSuffix}`,
-        Environment: environmentSuffix,
-      },
-    });
-
-    // Route private subnet traffic through NAT Gateway
-    new Route(this, 'private-route', {
-      routeTableId: privateRouteTable.id,
-      destinationCidrBlock: '0.0.0.0/0',
-      natGatewayId: natGateway.id,
-    });
-
-    // Associate private subnets with private route table
-    new RouteTableAssociation(this, 'private-rta-1', {
-      subnetId: privateSubnet1.id,
-      routeTableId: privateRouteTable.id,
-    });
-
-    new RouteTableAssociation(this, 'private-rta-2', {
-      subnetId: privateSubnet2.id,
-      routeTableId: privateRouteTable.id,
-    });
-
     // Create KMS Keys for encryption
     const kmsKey = new KmsKey(this, 'edu-kms-key', {
       description: `EduTech encryption key for ${environmentSuffix}`,
@@ -288,8 +228,8 @@ export class TapStack extends TerraformStack {
 
     new SecurityGroupRule(this, 'ecs-ingress-alb', {
       type: 'ingress',
-      fromPort: 80,
-      toPort: 80,
+      fromPort: 8080,
+      toPort: 8080,
       protocol: 'tcp',
       sourceSecurityGroupId: albSecurityGroup.id,
       securityGroupId: ecsSecurityGroup.id,
@@ -600,48 +540,22 @@ export class TapStack extends TerraformStack {
         'arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole',
     });
 
-    // Create Lambda deployment package with inline code
-    const lambdaArchive = new DataArchiveFile(this, 'rotation-lambda-zip', {
+    // Create a simple Lambda function with inline code
+    const rotationLambdaZip = new DataArchiveFile(this, 'rotation-lambda-zip', {
       type: 'zip',
-      outputPath: `/tmp/rotation-lambda-${environmentSuffix}.zip`,
       source: [
         {
-          content: `import json
-import boto3
-import logging
-import os
-
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-
+          content: `
 def lambda_handler(event, context):
-    """
-    AWS Secrets Manager rotation function for RDS credentials
-    """
-    logger.info(f"Rotation event: {json.dumps(event)}")
-    
-    # This is a basic rotation handler
-    # In a production environment, you would implement full rotation logic
-    try:
-        # Basic validation
-        if 'SecretId' not in event:
-            raise ValueError('SecretId not found in event')
-        
-        secret_id = event['SecretId']
-        step = event.get('Step', 'createSecret')
-        
-        logger.info(f"Processing step: {step} for secret: {secret_id}")
-        
-        # For now, return success - implement actual rotation logic as needed
-        return {'message': f'Successfully processed {step} for {secret_id}'}
-        
-    except Exception as e:
-        logger.error(f"Rotation failed: {str(e)}")
-        raise e
+    return {
+        'statusCode': 200,
+        'body': 'Secret rotation handler'
+    }
 `,
           filename: 'lambda_function.py',
         },
       ],
+      outputPath: 'rotation-lambda.zip',
     });
 
     const rotationLambda = new LambdaFunction(this, 'rotation-lambda', {
@@ -659,8 +573,8 @@ def lambda_handler(event, context):
           SECRETS_MANAGER_ENDPOINT: `https://secretsmanager.${awsRegion}.amazonaws.com`,
         },
       },
-      filename: lambdaArchive.outputPath,
-      sourceCodeHash: lambdaArchive.outputBase64Sha256,
+      filename: rotationLambdaZip.outputPath,
+      sourceCodeHash: rotationLambdaZip.outputBase64Sha256,
       tags: {
         Name: `edu-secret-rotation-${environmentSuffix}`,
         Environment: environmentSuffix,
@@ -701,6 +615,7 @@ def lambda_handler(event, context):
     const ecsLogGroup = new CloudwatchLogGroup(this, 'ecs-log-group', {
       name: `/ecs/edu-analytics-${environmentSuffix}`,
       retentionInDays: 7,
+      kmsKeyId: kmsKey.arn,
       tags: {
         Name: `edu-ecs-logs-${environmentSuffix}`,
         Environment: environmentSuffix,
@@ -821,21 +736,14 @@ def lambda_handler(event, context):
       containerDefinitions: JSON.stringify([
         {
           name: 'analytics-processor',
-          image: 'httpd:alpine',
+          image: 'nginx:latest',
           essential: true,
           portMappings: [
             {
-              containerPort: 80,
+              containerPort: 8080,
               protocol: 'tcp',
             },
           ],
-          healthCheck: {
-            command: ['CMD-SHELL', 'curl -f http://localhost/ || exit 1'],
-            interval: 30,
-            timeout: 5,
-            retries: 3,
-            startPeriod: 60,
-          },
           environment: [
             {
               name: 'AWS_REGION',
@@ -906,7 +814,7 @@ def lambda_handler(event, context):
       },
     });
 
-    const targetGroup = new LbTargetGroup(this, 'ecs-target-group-v2', {
+    const targetGroup = new LbTargetGroup(this, 'ecs-target-group', {
       name: `edu-tg-v2-${environmentSuffix}`,
       port: 80,
       protocol: 'HTTP',
@@ -928,12 +836,7 @@ def lambda_handler(event, context):
       },
     });
 
-    // Add lifecycle management to handle replacement properly
-    targetGroup.addOverride('lifecycle', {
-      create_before_destroy: true
-    });
-
-    const albListener = new LbListener(this, 'alb-listener', {
+    new LbListener(this, 'alb-listener', {
       loadBalancerArn: alb.arn,
       port: 80,
       protocol: 'HTTP',
@@ -943,7 +846,6 @@ def lambda_handler(event, context):
           targetGroupArn: targetGroup.arn,
         },
       ],
-      dependsOn: [targetGroup],
       tags: {
         Name: `edu-alb-listener-${environmentSuffix}`,
         Environment: environmentSuffix,
@@ -967,12 +869,11 @@ def lambda_handler(event, context):
         {
           targetGroupArn: targetGroup.arn,
           containerName: 'analytics-processor',
-          containerPort: 80,
+          containerPort: 8080,
         },
       ],
       healthCheckGracePeriodSeconds: 60,
       enableExecuteCommand: true,
-      dependsOn: [targetGroup, albListener],
       tags: {
         Name: `edu-ecs-service-${environmentSuffix}`,
         Environment: environmentSuffix,
@@ -995,6 +896,7 @@ def lambda_handler(event, context):
     const apiLogGroup = new CloudwatchLogGroup(this, 'api-log-group', {
       name: `/aws/apigateway/edu-analytics-${environmentSuffix}`,
       retentionInDays: 7,
+      kmsKeyId: kmsKey.arn,
       tags: {
         Name: `edu-api-logs-${environmentSuffix}`,
         Environment: environmentSuffix,
@@ -1015,19 +917,15 @@ def lambda_handler(event, context):
       authorization: 'NONE',
     });
 
-    const metricsIntegration = new ApiGatewayIntegration(
-      this,
-      'metrics-integration',
-      {
-        restApiId: apiGateway.id,
-        resourceId: metricsResource.id,
-        httpMethod: metricsMethod.httpMethod,
-        type: 'HTTP_PROXY',
-        integrationHttpMethod: 'GET',
-        uri: `http://${alb.dnsName}/metrics`,
-        connectionType: 'INTERNET',
-      }
-    );
+    new ApiGatewayIntegration(this, 'metrics-integration', {
+      restApiId: apiGateway.id,
+      resourceId: metricsResource.id,
+      httpMethod: metricsMethod.httpMethod,
+      type: 'HTTP_PROXY',
+      integrationHttpMethod: 'GET',
+      uri: `http://${alb.dnsName}/metrics`,
+      connectionType: 'INTERNET',
+    });
 
     const studentsResource = new ApiGatewayResource(this, 'students-resource', {
       restApiId: apiGateway.id,
@@ -1042,19 +940,15 @@ def lambda_handler(event, context):
       authorization: 'NONE',
     });
 
-    const studentsIntegration = new ApiGatewayIntegration(
-      this,
-      'students-integration',
-      {
-        restApiId: apiGateway.id,
-        resourceId: studentsResource.id,
-        httpMethod: studentsMethod.httpMethod,
-        type: 'HTTP_PROXY',
-        integrationHttpMethod: 'POST',
-        uri: `http://${alb.dnsName}/students`,
-        connectionType: 'INTERNET',
-      }
-    );
+    new ApiGatewayIntegration(this, 'students-integration', {
+      restApiId: apiGateway.id,
+      resourceId: studentsResource.id,
+      httpMethod: studentsMethod.httpMethod,
+      type: 'HTTP_PROXY',
+      integrationHttpMethod: 'POST',
+      uri: `http://${alb.dnsName}/students`,
+      connectionType: 'INTERNET',
+    });
 
     // API Deployment and Stage
     const apiDeployment = new ApiGatewayDeployment(this, 'api-deployment', {
@@ -1065,7 +959,7 @@ def lambda_handler(event, context):
       lifecycle: {
         createBeforeDestroy: true,
       },
-      dependsOn: [metricsIntegration, studentsIntegration],
+      dependsOn: [metricsMethod, studentsMethod],
     });
 
     new ApiGatewayStage(this, 'api-stage', {

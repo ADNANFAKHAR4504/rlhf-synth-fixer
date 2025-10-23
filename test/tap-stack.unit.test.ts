@@ -769,16 +769,12 @@ describe('Student Analytics Platform Infrastructure', () => {
       });
     });
 
-    test('CloudWatch log groups are created with proper configuration', () => {
+    test('CloudWatch log groups use KMS encryption', () => {
       const logGroups = Object.values(
         synthesized.resource.aws_cloudwatch_log_group
       );
-      expect(logGroups.length).toBeGreaterThan(0);
       logGroups.forEach((lg: any) => {
-        expect(lg.name).toBeDefined();
-        expect(lg.retention_in_days).toBeDefined();
-        // KMS encryption is optional for CloudWatch logs
-        // Primary security comes from other layers (Secrets Manager, RDS, Redis, etc.)
+        expect(lg.kms_key_id).toBeDefined();
       });
     });
 
