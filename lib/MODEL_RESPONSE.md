@@ -1531,7 +1531,6 @@ aws cloudformation create-stack \
 ### 3. Initialize Database
 
 ```bash
-# After stack creation, invoke the DB initialization function
 aws lambda invoke \
   --function-name regulatory-db-init-prod \
   --region us-east-1 \
