@@ -99,10 +99,11 @@ class TapStack(TerraformStack):
         super().__init__(scope, construct_id)
 
         # Extract configuration from kwargs
-        environment_suffix = kwargs.get('environment_suffix', 'dev')
-        aws_region = kwargs.get('aws_region', 'eu-west-2')
-        state_bucket_region = kwargs.get('state_bucket_region', 'eu-west-2')
-        state_bucket = kwargs.get('state_bucket', 'iac-rlhf-tf-states')
+        # Use 'or' to handle empty strings as well as None
+        environment_suffix = kwargs.get('environment_suffix') or 'dev'
+        aws_region = kwargs.get('aws_region') or 'eu-west-2'
+        state_bucket_region = kwargs.get('state_bucket_region') or 'eu-west-2'
+        state_bucket = kwargs.get('state_bucket') or 'iac-rlhf-tf-states'
         default_tags = kwargs.get('default_tags', {})
 
         # Configure AWS Provider

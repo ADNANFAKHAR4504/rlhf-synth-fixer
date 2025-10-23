@@ -7,12 +7,13 @@ from cdktf import App
 from lib.tap_stack import TapStack
 
 # Get environment variables from the environment or use defaults
-environment_suffix = os.getenv("ENVIRONMENT_SUFFIX", "dev")
-state_bucket = os.getenv("TERRAFORM_STATE_BUCKET", "iac-rlhf-tf-states")
-state_bucket_region = os.getenv("TERRAFORM_STATE_BUCKET_REGION", "us-east-1")
-aws_region = os.getenv("AWS_REGION", "us-east-1")
-repository_name = os.getenv("REPOSITORY", "unknown")
-commit_author = os.getenv("COMMIT_AUTHOR", "unknown")
+# Use 'or' to handle empty strings as well as None
+environment_suffix = os.getenv("ENVIRONMENT_SUFFIX") or "dev"
+state_bucket = os.getenv("TERRAFORM_STATE_BUCKET") or "iac-rlhf-tf-states"
+state_bucket_region = os.getenv("TERRAFORM_STATE_BUCKET_REGION") or "us-east-1"
+aws_region = os.getenv("AWS_REGION") or "us-east-1"
+repository_name = os.getenv("REPOSITORY") or "unknown"
+commit_author = os.getenv("COMMIT_AUTHOR") or "unknown"
 
 # Calculate the stack name
 stack_name = f"TapStack{environment_suffix}"
