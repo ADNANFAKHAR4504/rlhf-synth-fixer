@@ -377,7 +377,7 @@ export class TapStack extends pulumi.ComponentResource {
 
   /**
    * Creates target subnets across 2 AZs with proper routing
-   * FIXED: Added replaceOnChanges to force IGW replacement instead of update when vpcId changes
+   * FIXED: Added deleteBeforeReplace and replaceOnChanges to properly handle IGW replacement
    */
   private createTargetSubnets(
     name: string,
@@ -387,8 +387,9 @@ export class TapStack extends pulumi.ComponentResource {
     private: aws.ec2.Subnet[];
     database: aws.ec2.Subnet[];
   } {
-    // Create Internet Gateway with replaceOnChanges to force replacement when vpcId changes
-    // This prevents the "already has an internet gateway attached" error
+    // Create Internet Gateway with proper replacement options
+    // deleteBeforeReplace: ensures the old IGW is deleted before creating new one
+    // replaceOnChanges: forces replacement when vpcId changes
     const igw = new aws.ec2.InternetGateway(
       `${name}-target-igw`,
       {
@@ -398,6 +399,7 @@ export class TapStack extends pulumi.ComponentResource {
       { 
         parent: this, 
         provider: this.targetProvider,
+        deleteBeforeReplace: true,  // CRITICAL: Delete old IGW before creating new one
         replaceOnChanges: ["vpcId"]  // Force replacement if VPC ID changes
       }
     );
