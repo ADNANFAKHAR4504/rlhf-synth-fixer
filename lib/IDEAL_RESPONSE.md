@@ -3,6 +3,11 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure, production-ready AWS infrastructure for financial services application with comprehensive security controls'
 
 Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: Environment suffix for all resources and domain
+    Default: dev
+
   TrustedIPRange:
     Type: String
     Default: "10.0.0.0/8"
@@ -12,6 +17,7 @@ Parameters:
   NotificationEmail:
     Type: String
     Description: Email address for CloudWatch alarm notifications
+    Default: "demo@gmail.com"
     AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     
   DBEngine:
@@ -38,6 +44,52 @@ Parameters:
     Description: Optional suffix to append to resource names for uniqueness. Used for S3 buckets to avoid naming conflicts.
 
 Mappings:
+  # AWS ELB Account IDs by region - needed for ALB access logging
+  RegionToELBAccountId:
+    us-east-1:
+      AccountId: "127311923021"
+    us-east-2:
+      AccountId: "033677994240"
+    us-west-1:
+      AccountId: "027434742980"
+    us-west-2:
+      AccountId: "797873946194"
+    af-south-1:
+      AccountId: "098369216593"
+    ca-central-1:
+      AccountId: "985666609251"
+    eu-central-1:
+      AccountId: "054676820928"
+    eu-west-1:
+      AccountId: "156460612806"
+    eu-west-2:
+      AccountId: "652711504416"
+    eu-west-3:
+      AccountId: "009996457667"
+    eu-north-1:
+      AccountId: "897822967062"
+    eu-south-1:
+      AccountId: "635631232127"
+    ap-east-1:
+      AccountId: "754344448648"
+    ap-northeast-1:
+      AccountId: "582318560864"
+    ap-northeast-2:
+      AccountId: "600734575887"
+    ap-northeast-3:
+      AccountId: "383597477331"
+    ap-southeast-1:
+      AccountId: "114774131450"
+    ap-southeast-2:
+      AccountId: "783225319266"
+    ap-southeast-3:
+      AccountId: "589379963580"
+    ap-south-1:
+      AccountId: "718504428378"
+    me-south-1:
+      AccountId: "076674570225"
+    sa-east-1:
+      AccountId: "507241528517"
   SubnetConfig:
     VPC:
       CIDR: '10.0.0.0/16'
@@ -54,7 +106,7 @@ Mappings:
     DatabaseSubnet2:
       CIDR: '10.0.21.0/24'
 
-      
+
 Resources:
   # KMS Key for encryption
   KMSKey:
@@ -84,7 +136,7 @@ Resources:
             Resource: '*'
             Condition:
               ArnLike:
-                "kms:EncryptionContext:aws:logs:arn": !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                "kms:EncryptionContext:aws:logs:arn": !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*"
           - Sid: Allow EC2 to use the key
             Effect: Allow
             Principal:
@@ -161,7 +213,7 @@ Resources:
         Fn::Join:
           - "-"
           - - "alias/financial-services"
-            - !Ref AWS::StackName
+            - !Ref EnvironmentSuffix
             - !Ref ResourceSuffix
             - !Select [0, !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]]]
       TargetKeyId: !Ref KMSKey
@@ -175,7 +227,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-VPC'
+          Value: !Sub '${EnvironmentSuffix}-VPC'
         - Key: Environment
           Value: Production
 
@@ -185,7 +237,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-IGW'
+          Value: !Sub '${EnvironmentSuffix}-IGW'
         - Key: Environment
           Value: Production
 
@@ -205,7 +257,7 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-PublicSubnet1'
+          Value: !Sub '${EnvironmentSuffix}-PublicSubnet1'
         - Key: Environment
           Value: Production
 
@@ -218,7 +270,7 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-PublicSubnet2'
+          Value: !Sub '${EnvironmentSuffix}-PublicSubnet2'
         - Key: Environment
           Value: Production
 
@@ -231,7 +283,7 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-PrivateSubnet1'
+          Value: !Sub '${EnvironmentSuffix}-PrivateSubnet1'
         - Key: Environment
           Value: Production
 
@@ -243,7 +295,7 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-PrivateSubnet2'
+          Value: !Sub '${EnvironmentSuffix}-PrivateSubnet2'
         - Key: Environment
           Value: Production
 
@@ -256,7 +308,7 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-DatabaseSubnet1'
+          Value: !Sub '${EnvironmentSuffix}-DatabaseSubnet1'
         - Key: Environment
           Value: Production
 
@@ -268,7 +320,7 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-DatabaseSubnet2'
+          Value: !Sub '${EnvironmentSuffix}-DatabaseSubnet2'
         - Key: Environment
           Value: Production
 
@@ -280,7 +332,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-NATEIP1'
+          Value: !Sub '${EnvironmentSuffix}-NATEIP1'
         - Key: Environment
           Value: Production
 
@@ -291,7 +343,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-NATEIP2'
+          Value: !Sub '${EnvironmentSuffix}-NATEIP2'
         - Key: Environment
           Value: Production
 
@@ -303,7 +355,7 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-NATGateway1'
+          Value: !Sub '${EnvironmentSuffix}-NATGateway1'
         - Key: Environment
           Value: Production
 
@@ -314,7 +366,7 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-NATGateway2'
+          Value: !Sub '${EnvironmentSuffix}-NATGateway2'
         - Key: Environment
           Value: Production
 
@@ -325,7 +377,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-PublicRouteTable'
+          Value: !Sub '${EnvironmentSuffix}-PublicRouteTable'
         - Key: Environment
           Value: Production
 
@@ -355,7 +407,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-PrivateRouteTable1'
+          Value: !Sub '${EnvironmentSuffix}-PrivateRouteTable1'
         - Key: Environment
           Value: Production
 
@@ -378,7 +430,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-PrivateRouteTable2'
+          Value: !Sub '${EnvironmentSuffix}-PrivateRouteTable2'
         - Key: Environment
           Value: Production
 
@@ -423,7 +475,7 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-BastionSG'
+          Value: !Sub '${EnvironmentSuffix}-BastionSG'
         - Key: Environment
           Value: Production
 
@@ -450,7 +502,7 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-ApplicationSG'
+          Value: !Sub '${EnvironmentSuffix}-ApplicationSG'
         - Key: Environment
           Value: Production
 
@@ -466,7 +518,7 @@ Resources:
           SourceSecurityGroupId: !Ref ApplicationSecurityGroup
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-DatabaseSG'
+          Value: !Sub '${EnvironmentSuffix}-DatabaseSG'
         - Key: Environment
           Value: Production
 
@@ -489,14 +541,13 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-ALBSG'
+          Value: !Sub '${EnvironmentSuffix}-ALBSG'
         - Key: Environment
           Value: Production
 
   # VPC Flow Logs
   VPCFlowLogRole:
     Type: AWS::IAM::Role
-    DependsOn: KMSKey
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -518,8 +569,8 @@ Resources:
                   - 'logs:DescribeLogGroups'
                   - 'logs:DescribeLogStreams'
                 Resource: 
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/vpc/${AWS::StackName}'
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/vpc/${AWS::StackName}:*'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/vpc/${EnvironmentSuffix}${ResourceSuffix}'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/vpc/${EnvironmentSuffix}${ResourceSuffix}:*'
               - Effect: Allow
                 Action:
                   - 'kms:Encrypt'
@@ -535,14 +586,11 @@ Resources:
   VPCFlowLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/vpc/${AWS::StackName}${ResourceSuffix}'
+      LogGroupName: !Sub '/aws/vpc/${EnvironmentSuffix}${ResourceSuffix}'
       RetentionInDays: 90
 
   VPCFlowLog:
     Type: AWS::EC2::FlowLog
-    DependsOn: 
-      - VPCFlowLogGroup
-      - VPCFlowLogRole
     Properties:
       ResourceType: VPC
       ResourceId: !Ref VPC
@@ -552,7 +600,7 @@ Resources:
       DeliverLogsPermissionArn: !GetAtt VPCFlowLogRole.Arn
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-VPCFlowLog'
+          Value: !Sub '${EnvironmentSuffix}-VPCFlowLog'
         - Key: Environment
           Value: Production
 
@@ -563,7 +611,7 @@ Resources:
       BucketName:
         Fn::Join:
           - "-"
-          - - !Sub '${AWS::StackName}-app'
+          - - !Sub '${EnvironmentSuffix}-app'
             - !Ref AWS::AccountId
             - !Select [0, !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]]]
       BucketEncryption:
@@ -596,7 +644,7 @@ Resources:
       BucketName:
         Fn::Join:
           - "-"
-          - - !Sub '${AWS::StackName}-log'
+          - - !Sub '${EnvironmentSuffix}-log'
             - !Ref AWS::AccountId
             - !Select [0, !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]]]
       BucketEncryption:
@@ -655,14 +703,12 @@ Resources:
           - Sid: ELBLogDeliveryWrite
             Effect: Allow
             Principal:
-              AWS: '*'
+              AWS: !FindInMap [RegionToELBAccountId, !Ref "AWS::Region", AccountId]
             Action: 's3:PutObject'
             Resource: !Sub '${LoggingBucket.Arn}/alb/AWSLogs/${AWS::AccountId}/*'
             Condition:
               StringEquals:
                 's3:x-amz-acl': 'bucket-owner-full-control'
-              ArnLike:
-                aws:SourceArn: !Sub 'arn:aws:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:loadbalancer/*'
             
   BackupReplicaBucket:
     Type: AWS::S3::Bucket
@@ -670,7 +716,7 @@ Resources:
       BucketName:
         Fn::Join:
           - "-"
-          - - !Sub '${AWS::StackName}-bkp-rep'
+          - - !Sub '${EnvironmentSuffix}-bkp-rep'
             - !Ref AWS::AccountId
             - !Select [0, !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]]]
       BucketEncryption:
@@ -691,13 +737,11 @@ Resources:
 
   BackupBucket:
     Type: AWS::S3::Bucket
-    DependsOn:
-      - BackupReplicaBucket
     Properties:
       BucketName:
         Fn::Join:
           - "-"
-          - - !Sub '${AWS::StackName}-bkp'
+          - - !Sub '${EnvironmentSuffix}-bkp'
             - !Ref AWS::AccountId
             - !Select [0, !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]]]
       BucketEncryption:
@@ -741,7 +785,6 @@ Resources:
   # IAM Roles
   ApplicationRole:
     Type: AWS::IAM::Role
-    DependsOn: KMSKey
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -790,6 +833,13 @@ Resources:
                   - 'logs:PutLogEvents'
                   - 'logs:DescribeLogStreams'
                 Resource: '*'
+        - PolicyName: SecretsManagerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref DBSecret
       Tags:
         - Key: Environment
           Value: Production
@@ -797,9 +847,6 @@ Resources:
   # Create instance profile after role to avoid circular dependency
   ApplicationInstanceProfile:
     Type: AWS::IAM::InstanceProfile
-    DependsOn:
-      - ApplicationRole
-      - KMSKey
     Properties:
       Roles:
         - !Ref ApplicationRole
@@ -856,7 +903,7 @@ Resources:
       BucketName:
         Fn::Join:
           - "-"
-          - - !Sub '${AWS::StackName}-ct'
+          - - !Sub '${EnvironmentSuffix}-ct'
             - !Ref AWS::AccountId
             - !Select [0, !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]]]
       BucketEncryption:
@@ -908,7 +955,7 @@ Resources:
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/cloudtrail/${AWS::StackName}-logs'
+      LogGroupName: !Sub '/aws/cloudtrail/${EnvironmentSuffix}-logs'
       RetentionInDays: 365
       KmsKeyId: !GetAtt KMSKey.Arn
   
@@ -937,13 +984,10 @@ Resources:
     Type: AWS::CloudTrail::Trail
     DependsOn:
       - CloudTrailBucketPolicy
-      - ApplicationDataBucket
-      - KMSKey
-      - CloudTrailLogGroup
     Properties:
       CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt CloudTrailLogRole.Arn
-      TrailName: !Sub '${AWS::StackName}-trail${ResourceSuffix}'
+      TrailName: !Sub '${EnvironmentSuffix}-trail${ResourceSuffix}'
       S3BucketName: !Ref CloudTrailBucket
       IncludeGlobalServiceEvents: true
       IsLogging: true
@@ -968,7 +1012,7 @@ Resources:
   AlarmTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub '${AWS::StackName}-alarms${ResourceSuffix}'
+      TopicName: !Sub '${EnvironmentSuffix}-alarms${ResourceSuffix}'
       DisplayName: Financial Services Application Alarms
       KmsMasterKeyId: !Ref KMSKey
       Subscription:
@@ -982,7 +1026,7 @@ Resources:
   HighCPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${AWS::StackName}-HighCPU'
+      AlarmName: !Sub '${EnvironmentSuffix}-HighCPU'
       AlarmDescription: Alert when CPU utilization exceeds 80%
       MetricName: CPUUtilization
       Namespace: AWS/EC2
@@ -1001,7 +1045,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     DependsOn: CloudTrail
     Properties:
-      AlarmName: !Sub '${AWS::StackName}-UnauthorizedAPICalls'
+      AlarmName: !Sub '${EnvironmentSuffix}-UnauthorizedAPICalls'
       AlarmDescription: Alert on unauthorized API calls
       MetricName: UnauthorizedAPICalls
       Namespace: CloudTrailMetrics
@@ -1017,7 +1061,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     DependsOn: CloudTrail
     Properties:
-      AlarmName: !Sub '${AWS::StackName}-RootAccountUsage'
+      AlarmName: !Sub '${EnvironmentSuffix}-RootAccountUsage'
       AlarmDescription: Alert when root account is used
       MetricName: RootAccountUsage
       Namespace: CloudTrailMetrics
@@ -1033,7 +1077,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     DependsOn: CloudTrail
     Properties:
-      AlarmName: !Sub '${AWS::StackName}-S3BucketPolicyChanges'
+      AlarmName: !Sub '${EnvironmentSuffix}-S3BucketPolicyChanges'
       AlarmDescription: Alert on S3 bucket policy changes
       MetricName: S3BucketPolicyChanges
       Namespace: CloudTrailMetrics
@@ -1049,7 +1093,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     DependsOn: CloudTrail
     Properties:
-      AlarmName: !Sub '${AWS::StackName}-SecurityGroupChanges'
+      AlarmName: !Sub '${EnvironmentSuffix}-SecurityGroupChanges'
       AlarmDescription: Alert on security group changes
       MetricName: SecurityGroupChanges
       Namespace: CloudTrailMetrics
@@ -1064,7 +1108,6 @@ Resources:
   # Add all of these Metric Filter resources
   UnauthorizedAPICallsMetricFilter:
     Type: AWS::Logs::MetricFilter
-    DependsOn: CloudTrailLogGroup
     Properties:
       LogGroupName: !Ref CloudTrailLogGroup
       FilterPattern: '{ ($.errorCode = "*UnauthorizedOperation") || ($.errorCode = "AccessDenied*") }'
@@ -1075,7 +1118,6 @@ Resources:
 
   RootAccountUsageMetricFilter:
     Type: AWS::Logs::MetricFilter
-    DependsOn: CloudTrailLogGroup
     Properties:
       LogGroupName: !Ref CloudTrailLogGroup
       FilterPattern: '{ $.userIdentity.type = "Root" && $.userIdentity.invokedBy NOT EXISTS && $.eventType != "AwsServiceEvent" }'
@@ -1086,7 +1128,6 @@ Resources:
 
   S3BucketPolicyChangesMetricFilter:
     Type: AWS::Logs::MetricFilter
-    DependsOn: CloudTrailLogGroup
     Properties:
       LogGroupName: !Ref CloudTrailLogGroup
       FilterPattern: '{ ($.eventSource = "s3.amazonaws.com") && (($.eventName = "PutBucketPolicy") || ($.eventName = "DeleteBucketPolicy")) }'
@@ -1097,7 +1138,6 @@ Resources:
 
   SecurityGroupChangesMetricFilter:
     Type: AWS::Logs::MetricFilter
-    DependsOn: CloudTrailLogGroup
     Properties:
       LogGroupName: !Ref CloudTrailLogGroup
       FilterPattern: '{ ($.eventName = "AuthorizeSecurityGroupIngress") || ($.eventName = "AuthorizeSecurityGroupEgress") || ($.eventName = "RevokeSecurityGroupIngress") || ($.eventName = "RevokeSecurityGroupEgress") || ($.eventName = "CreateSecurityGroup") || ($.eventName = "DeleteSecurityGroup") }'
@@ -1114,7 +1154,7 @@ Resources:
       Name:
         Fn::Join:
           - "-"
-          - - !Sub '${AWS::StackName}-ALB'
+          - - !Sub '${EnvironmentSuffix}-ALB'
             - !Select [0, !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]]]
       Type: application
       Scheme: internet-facing
@@ -1130,6 +1170,12 @@ Resources:
           Value: !Ref LoggingBucket
         - Key: access_logs.s3.prefix
           Value: 'alb'
+        - Key: idle_timeout.timeout_seconds
+          Value: '60'
+        - Key: routing.http.drop_invalid_header_fields.enabled
+          Value: 'true'
+        - Key: deletion_protection.enabled
+          Value: 'false'
       Tags:
         - Key: Environment
           Value: Production
@@ -1140,7 +1186,7 @@ Resources:
       Name:
         Fn::Join:
           - "-"
-          - - !Sub '${AWS::StackName}-TG'
+          - - !Sub '${EnvironmentSuffix}-TG'
             - !Select [0, !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]]]
       Port: 80
       Protocol: HTTP
@@ -1177,11 +1223,11 @@ Resources:
       LaunchTemplateName:
         Fn::Join:
           - "-"
-          - - !Sub '${AWS::StackName}-LaunchTemplate'
+          - - !Sub '${EnvironmentSuffix}-LaunchTemplate'
             - !Ref ResourceSuffix
             - !Select [0, !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]]]
       LaunchTemplateData:
-        ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
         InstanceType: t3.medium
         IamInstanceProfile:
           Arn: !GetAtt ApplicationInstanceProfile.Arn
@@ -1198,22 +1244,129 @@ Resources:
           - ResourceType: instance
             Tags:
               - Key: Name
-                Value: !Sub '${AWS::StackName}-Instance'
+                Value: !Sub '${EnvironmentSuffix}-Instance'
               - Key: Environment
                 Value: Production
           - ResourceType: volume
             Tags:
               - Key: Name
-                Value: !Sub '${AWS::StackName}-Volume'
+                Value: !Sub '${EnvironmentSuffix}-Volume'
               - Key: Environment
                 Value: Production
         UserData:
           Fn::Base64: !Sub |
             #!/bin/bash
-            yum update -y
-            yum install -y amazon-cloudwatch-agent
-            
-            # Configure CloudWatch agent
+            dnf update -y
+            # Install httpd for a simple health check, python3, pip, boto3, pymysql, and the cloudwatch agent
+            dnf install -y httpd python3 python3-pip amazon-cloudwatch-agent
+            pip3 install boto3 pymysql
+
+            # Get resource names
+            RDS_ENDPOINT="${DBInstance.Endpoint.Address}"
+            SECRET_ARN="${DBSecret}"
+            REGION="${AWS::Region}"
+            S3_BUCKET="${ApplicationDataBucket}"
+
+            # Create Python server script
+            cat > /home/ec2-user/server.py << 'EOFPYTHON'
+            #!/usr/bin/env python3
+            import pymysql
+            import json
+            import boto3
+            import ssl
+            from http.server import HTTPServer, BaseHTTPRequestHandler
+            import os
+            import time
+            from datetime import datetime
+
+            def get_db_creds():
+                client = boto3.client('secretsmanager', region_name=os.environ.get('AWS_REGION'))
+                secret_value = client.get_secret_value(SecretId=os.environ.get('SECRET_ARN'))
+                return json.loads(secret_value['SecretString'])
+
+            def test_rds_connection():
+                try:
+                    secret = get_db_creds()
+                    connection = pymysql.connect(
+                        host=os.environ.get('RDS_ENDPOINT'),
+                        user=secret['username'],
+                        password=secret['password'],
+                        connect_timeout=5
+                    )
+                    connection.close()
+                    return {
+                        'status': 'SUCCESS',
+                        'message': 'Connected to RDS successfully'
+                    }
+                except Exception as e:
+                    return {
+                        'status': 'FAILED',
+                        'message': str(e)
+                    }
+
+            def test_s3_connection():
+                try:
+                    s3_client = boto3.client('s3', region_name=os.environ.get('AWS_REGION'))
+                    bucket_name = os.environ.get('S3_BUCKET')
+                    s3_client.head_bucket(Bucket=bucket_name)
+                    return {
+                        'status': 'SUCCESS',
+                        'message': 'Connected to S3 successfully',
+                        'bucket_name': bucket_name
+                    }
+                except Exception as e:
+                    return {
+                        'status': 'FAILED',
+                        'message': str(e),
+                        'bucket_name': os.environ.get('S3_BUCKET')
+                    }
+
+            class RequestHandler(BaseHTTPRequestHandler):
+                def do_GET(self):
+                    if self.path == '/health':
+                        rds_result = test_rds_connection()
+                        s3_result = test_s3_connection()
+                        
+                        all_healthy = (rds_result['status'] == 'SUCCESS' and 
+                                       s3_result['status'] == 'SUCCESS')
+                        
+                        response_code = 200 if all_healthy else 503
+                        response_body = {
+                            'status': 'healthy' if all_healthy else 'unhealthy',
+                            'rds': rds_result['status'].lower(),
+                            's3': s3_result['status'].lower()
+                        }
+                        
+                        self.send_response(response_code)
+                        self.send_header('Content-type', 'application/json')
+                        self.end_headers()
+                        self.wfile.write(json.dumps(response_body).encode())
+                    else:
+                        self.send_response(200)
+                        self.send_header('Content-type', 'text/plain')
+                        self.end_headers()
+                        self.wfile.write(b"Financial Services Application - OK")
+                
+                def log_message(self, format, *args):
+                    pass
+
+            if __name__ == '__main__':
+                http_server = HTTPServer(('0.0.0.0', 80), RequestHandler)
+                print('HTTP Server started on port 80')
+                http_server.serve_forever()
+            EOFPYTHON
+
+            # Set environment variables for the server script
+            export RDS_ENDPOINT="$RDS_ENDPOINT"
+            export SECRET_ARN="$SECRET_ARN"
+            export AWS_REGION="$REGION"
+            export S3_BUCKET="$S3_BUCKET"
+
+            # Make script executable and run
+            chmod +x /home/ec2-user/server.py
+            nohup python3 /home/ec2-user/server.py > /var/log/server.log 2>&1 &
+
+            # Configure CloudWatch agent (existing config)
             cat <<EOF > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
             {
               "metrics": {
@@ -1240,6 +1393,11 @@ Resources:
                         "file_path": "/var/log/messages",
                         "log_group_name": "/aws/ec2/financial-services",
                         "log_stream_name": "{instance_id}/messages"
+                      },
+                      {
+                        "file_path": "/var/log/server.log",
+                        "log_group_name": "/aws/ec2/financial-services",
+                        "log_stream_name": "{instance_id}/server.log"
                       }
                     ]
                   }
@@ -1247,12 +1405,12 @@ Resources:
               }
             }
             EOF
-            
+
             # Start CloudWatch agent
             /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
               -a fetch-config -m ec2 \
               -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
-
+              
   # Auto Scaling Group
   ApplicationAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -1260,7 +1418,7 @@ Resources:
       AutoScalingGroupName:
         Fn::Join:
           - "-"
-          - - !Sub '${AWS::StackName}-ASG'
+          - - !Sub '${EnvironmentSuffix}-ASG'
             - !Ref ResourceSuffix
             - !Select [0, !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]]]
       VPCZoneIdentifier:
@@ -1278,7 +1436,7 @@ Resources:
         - !Ref ALBTargetGroup
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-ASG-Instance'
+          Value: !Sub '${EnvironmentSuffix}-ASG-Instance'
           PropagateAtLaunch: true
         - Key: Environment
           Value: Production
@@ -1291,7 +1449,7 @@ Resources:
       DBSubnetGroupName:
         Fn::Join:
           - "-"
-          - - !Sub '${AWS::StackName}-db-subnet-group'
+          - - !Sub '${EnvironmentSuffix}-db-subnet-group'
             - !Ref ResourceSuffix
             - !Select [0, !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]]]
       DBSubnetGroupDescription: Subnet group for RDS database
@@ -1316,7 +1474,7 @@ Resources:
         RequireEachIncludedType: true
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-db-secret${ResourceSuffix}'
+          Value: !Sub '${EnvironmentSuffix}-db-secret${ResourceSuffix}'
         - Key: Environment
           Value: Production
 
@@ -1325,14 +1483,10 @@ Resources:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
-    DependsOn:
-      - DBSecret
-      - KMSKey
-      - DBSubnetGroup
     Properties:
       DBInstanceIdentifier: !Join 
         - ""
-        - - !Ref AWS::StackName
+        - - !Ref EnvironmentSuffix
           - "db"
           - !Select [0, !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]]]
       DBInstanceClass: db.t3.medium
@@ -1362,12 +1516,11 @@ Resources:
   # Config for compliance monitoring
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
-    DependsOn: ConfigRole
     Properties:
       Name:
         Fn::Join:
           - "-"
-          - - !Sub '${AWS::StackName}-config-recorder'
+          - - !Sub '${EnvironmentSuffix}-config-recorder'
             - !Ref ResourceSuffix
             - !Select [0, !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]]]
       RoleARN: !GetAtt ConfigRole.Arn
@@ -1378,14 +1531,12 @@ Resources:
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
     DependsOn: 
-      - ConfigBucket
       - ConfigBucketPolicy
-      - AlarmTopic
     Properties:
       Name:
         Fn::Join:
           - "-"
-          - - !Sub '${AWS::StackName}-config-delivery'
+          - - !Sub '${EnvironmentSuffix}-config-delivery'
             - !Ref ResourceSuffix
             - !Select [0, !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]]]
       S3BucketName: !Ref ConfigBucket
@@ -1399,7 +1550,7 @@ Resources:
       BucketName:
         Fn::Join:
           - "-"
-          - - !Sub '${AWS::StackName}-cfg'
+          - - !Sub '${EnvironmentSuffix}-cfg'
             - !Ref AWS::AccountId
             - !Select [0, !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]]]
       BucketEncryption:
@@ -1510,41 +1661,41 @@ Outputs:
     Description: VPC ID
     Value: !Ref VPC
     Export:
-      Name: !Sub '${AWS::StackName}-VPC'
+      Name: !Sub '${EnvironmentSuffix}-VPC'
 
   ApplicationLoadBalancerDNS:
     Description: Application Load Balancer DNS Name
     Value: !GetAtt ApplicationLoadBalancer.DNSName
     Export:
-      Name: !Sub '${AWS::StackName}-ALB-DNS'
+      Name: !Sub '${EnvironmentSuffix}-ALB-DNS'
 
   ApplicationDataBucketName:
     Description: Application Data S3 Bucket Name
     Value: !Ref ApplicationDataBucket
     Export:
-      Name: !Sub '${AWS::StackName}-AppBucket'
+      Name: !Sub '${EnvironmentSuffix}-AppBucket'
 
   DBEndpoint:
     Description: Database Endpoint
     Value: !GetAtt DBInstance.Endpoint.Address
     Export:
-      Name: !Sub '${AWS::StackName}-DBEndpoint'
+      Name: !Sub '${EnvironmentSuffix}-DBEndpoint'
 
   KMSKeyId:
     Description: KMS Key ID for encryption
     Value: !Ref KMSKey
     Export:
-      Name: !Sub '${AWS::StackName}-KMSKey'
+      Name: !Sub '${EnvironmentSuffix}-KMSKey'
 
   CloudTrailName:
     Description: CloudTrail Name
     Value: !Ref CloudTrail
     Export:
-      Name: !Sub '${AWS::StackName}-CloudTrail'
+      Name: !Sub '${EnvironmentSuffix}-CloudTrail'
 
   AlarmTopicArn:
     Description: SNS Topic ARN for CloudWatch Alarms
     Value: !Ref AlarmTopic
     Export:
-      Name: !Sub '${AWS::StackName}-AlarmTopic'
+      Name: !Sub '${EnvironmentSuffix}-AlarmTopic'
 ```
