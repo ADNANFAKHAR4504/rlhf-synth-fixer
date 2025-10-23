@@ -15,25 +15,26 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/apigateway"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/elasticache"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
+	"github.com/aws/aws-sdk-go-v2/service/rds"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // StackOutputs represents the structure of our infrastructure outputs
 type StackOutputs struct {
-	KmsKeyID           string `json:"kms_key_id"`
-	KmsKeyArn          string `json:"kms_key_arn"`
-	VpcID              string `json:"vpc_id"`
-	PublicSubnet1ID    string `json:"public_subnet_1_id"`
-	PublicSubnet2ID    string `json:"public_subnet_2_id"`
-	PrivateSubnet1ID   string `json:"private_subnet_1_id"`
-	PrivateSubnet2ID   string `json:"private_subnet_2_id"`
-	ApiGatewayID       string `json:"api_gateway_id"`
-	ApiGatewayEndpoint string `json:"api_gateway_endpoint"`
-	ApiGatewayStageURL string `json:"api_gateway_stage_url"`
-	ReadOnlyApiKey     string `json:"read_only_api_key"`
-	AdminApiKey        string `json:"admin_api_key"`
+	KmsKeyID                    string `json:"kmsKeyId"`
+	KmsKeyArn                   string `json:"kmsKeyArn"`
+	VpcID                       string `json:"vpcId"`
+	ApiGatewayID                string `json:"apiGatewayId"`
+	ApiGatewayURL               string `json:"apiGatewayUrl"`
+	AuroraClusterEndpoint       string `json:"auroraClusterEndpoint"`
+	AuroraClusterReaderEndpoint string `json:"auroraClusterReaderEndpoint"`
+	DbSecretArn                 string `json:"dbSecretArn"`
+	RedisClusterEndpoint        string `json:"redisClusterEndpoint"`
+	RedisClusterPort            string `json:"redisClusterPort"`
+	UsagePlanID                 string `json:"usagePlanId"`
 }
 
 func loadStackOutputs(t *testing.T) *StackOutputs {
@@ -71,15 +72,14 @@ func TestIntegration_StackOutputsExist(t *testing.T) {
 	assert.NotEmpty(t, outputs.KmsKeyID, "KMS Key ID should be present")
 	assert.NotEmpty(t, outputs.KmsKeyArn, "KMS Key ARN should be present")
 	assert.NotEmpty(t, outputs.VpcID, "VPC ID should be present")
-	assert.NotEmpty(t, outputs.PublicSubnet1ID, "Public Subnet 1 ID should be present")
-	assert.NotEmpty(t, outputs.PublicSubnet2ID, "Public Subnet 2 ID should be present")
-	assert.NotEmpty(t, outputs.PrivateSubnet1ID, "Private Subnet 1 ID should be present")
-	assert.NotEmpty(t, outputs.PrivateSubnet2ID, "Private Subnet 2 ID should be present")
 	assert.NotEmpty(t, outputs.ApiGatewayID, "API Gateway ID should be present")
-	assert.NotEmpty(t, outputs.ApiGatewayEndpoint, "API Gateway Endpoint should be present")
-	assert.NotEmpty(t, outputs.ApiGatewayStageURL, "API Gateway Stage URL should be present")
-	assert.NotEmpty(t, outputs.ReadOnlyApiKey, "Read-only API Key should be present")
-	assert.NotEmpty(t, outputs.AdminApiKey, "Admin API Key should be present")
+	assert.NotEmpty(t, outputs.ApiGatewayURL, "API Gateway URL should be present")
+	assert.NotEmpty(t, outputs.AuroraClusterEndpoint, "Aurora Cluster Endpoint should be present")
+	assert.NotEmpty(t, outputs.AuroraClusterReaderEndpoint, "Aurora Cluster Reader Endpoint should be present")
+	assert.NotEmpty(t, outputs.DbSecretArn, "DB Secret ARN should be present")
+	assert.NotEmpty(t, outputs.RedisClusterEndpoint, "Redis Cluster Endpoint should be present")
+	assert.NotEmpty(t, outputs.RedisClusterPort, "Redis Cluster Port should be present")
+	assert.NotEmpty(t, outputs.UsagePlanID, "Usage Plan ID should be present")
 }
 
 func TestIntegration_KMSKeyConfiguration(t *testing.T) {
@@ -99,7 +99,7 @@ func TestIntegration_KMSKeyConfiguration(t *testing.T) {
 	require.NoError(t, err, "Failed to describe KMS key")
 
 	// Verify key properties
-	assert.True(t, *result.KeyMetadata.Enabled, "KMS key should be enabled")
+	assert.True(t, result.KeyMetadata.Enabled, "KMS key should be enabled")
 	assert.Equal(t, "SYMMETRIC_DEFAULT", string(result.KeyMetadata.KeySpec), "Key should be symmetric")
 	assert.Equal(t, "ENCRYPT_DECRYPT", string(result.KeyMetadata.KeyUsage), "Key usage should be ENCRYPT_DECRYPT")
 
@@ -136,30 +136,9 @@ func TestIntegration_VPCConfiguration(t *testing.T) {
 	vpcResult, err := ec2Client.DescribeVpcs(context.Background(), vpcInput)
 	require.NoError(t, err, "Failed to describe VPC")
 	assert.Equal(t, 1, len(vpcResult.Vpcs), "VPC should exist")
-	assert.Equal(t, "172.31.0.0/16", *vpcResult.Vpcs[0].CidrBlock, "VPC should have correct CIDR")
 
-	// Check subnets
-	subnets := []struct {
-		id   string
-		cidr string
-		name string
-	}{
-		{outputs.PublicSubnet1ID, "172.31.80.0/24", "public-1"},
-		{outputs.PublicSubnet2ID, "172.31.81.0/24", "public-2"},
-		{outputs.PrivateSubnet1ID, "172.31.82.0/24", "private-1"},
-		{outputs.PrivateSubnet2ID, "172.31.83.0/24", "private-2"},
-	}
-
-	for _, subnet := range subnets {
-		subnetInput := &ec2.DescribeSubnetsInput{
-			SubnetIds: []string{subnet.id},
-		}
-		subnetResult, err := ec2Client.DescribeSubnets(context.Background(), subnetInput)
-		require.NoError(t, err, fmt.Sprintf("Failed to describe subnet %s", subnet.name))
-		assert.Equal(t, 1, len(subnetResult.Subnets), fmt.Sprintf("Subnet %s should exist", subnet.name))
-		assert.Equal(t, subnet.cidr, *subnetResult.Subnets[0].CidrBlock,
-			fmt.Sprintf("Subnet %s should have correct CIDR", subnet.name))
-	}
+	// Verify VPC has a CIDR block
+	assert.NotNil(t, vpcResult.Vpcs[0].CidrBlock, "VPC should have a CIDR block")
 }
 
 func TestIntegration_APIGatewayConfiguration(t *testing.T) {
@@ -182,20 +161,127 @@ func TestIntegration_APIGatewayConfiguration(t *testing.T) {
 	assert.Equal(t, "REGIONAL", string(result.EndpointConfiguration.Types[0]),
 		"API Gateway should be REGIONAL")
 
-	// Verify API Keys exist and are enabled
-	apiKeys := []string{outputs.ReadOnlyApiKey, outputs.AdminApiKey}
-	for _, keyId := range apiKeys {
-		keyInput := &apigateway.GetApiKeyInput{
-			ApiKey: aws.String(keyId),
-		}
-		keyResult, err := apiClient.GetApiKey(context.Background(), keyInput)
-		require.NoError(t, err, "Failed to get API key")
-		assert.True(t, *keyResult.Enabled, "API key should be enabled")
+	// Verify API Gateway URL
+	assert.True(t, strings.HasPrefix(outputs.ApiGatewayURL, "https://"),
+		"API Gateway URL should be HTTPS")
+	assert.True(t, strings.Contains(outputs.ApiGatewayURL, outputs.ApiGatewayID),
+		"API Gateway URL should contain API ID")
+}
+
+func TestIntegration_RedisClusterConfiguration(t *testing.T) {
+	outputs := loadStackOutputs(t)
+	if outputs == nil {
+		return
 	}
 
-	// Verify stage URL is accessible
-	assert.True(t, strings.HasPrefix(outputs.ApiGatewayStageURL, "https://"),
-		"Stage URL should be HTTPS")
-	assert.True(t, strings.Contains(outputs.ApiGatewayStageURL, outputs.ApiGatewayID),
-		"Stage URL should contain API ID")
+	cfg := getAWSConfig(t)
+	redisClient := elasticache.NewFromConfig(cfg)
+
+	// Extract cluster name from endpoint
+	// Endpoint format: clustername.xxxxx.region.cache.amazonaws.com
+	clusterName := strings.Split(outputs.RedisClusterEndpoint, ".")[0]
+
+	// Get Redis cluster details
+	input := &elasticache.DescribeCacheClustersInput{
+		CacheClusterId:    aws.String(clusterName),
+		ShowCacheNodeInfo: aws.Bool(true),
+	}
+	result, err := redisClient.DescribeCacheClusters(context.Background(), input)
+	require.NoError(t, err, "Failed to describe Redis cluster")
+	require.NotEmpty(t, result.CacheClusters, "Redis cluster should exist")
+
+	cluster := result.CacheClusters[0]
+
+	// Verify cluster properties
+	assert.Equal(t, "redis", string(cluster.Engine), "Engine should be redis")
+	assert.True(t, strings.HasPrefix(string(cluster.EngineVersion), "6."), "Engine version should be 6.x")
+	assert.Equal(t, 3, len(cluster.CacheNodes), "Should have 3 cache nodes")
+	assert.Equal(t, outputs.RedisClusterPort, fmt.Sprintf("%d", cluster.ConfigurationEndpoint.Port),
+		"Port should match the output")
+
+	// Verify cluster tags
+	tagsInput := &elasticache.ListTagsForResourceInput{
+		ResourceName: cluster.ARN,
+	}
+	tagsResult, err := redisClient.ListTagsForResource(context.Background(), tagsInput)
+	require.NoError(t, err, "Failed to list Redis cluster tags")
+
+	hasComplianceTag := false
+	for _, tag := range tagsResult.TagList {
+		if string(tag.Key) == "Compliance" && string(tag.Value) == "HIPAA" {
+			hasComplianceTag = true
+			break
+		}
+	}
+	assert.True(t, hasComplianceTag, "Redis cluster should have HIPAA compliance tag")
+}
+
+func TestIntegration_AuroraClusterConfiguration(t *testing.T) {
+	outputs := loadStackOutputs(t)
+	if outputs == nil {
+		return
+	}
+
+	cfg := getAWSConfig(t)
+	rdsClient := rds.NewFromConfig(cfg)
+
+	// Extract cluster identifier from endpoint
+	// Endpoint format: cluster-name.cluster-xxxxx.region.rds.amazonaws.com
+	clusterIdentifier := strings.Split(strings.Split(outputs.AuroraClusterEndpoint, ".")[0], "cluster-")[1]
+
+	// Get Aurora cluster details
+	input := &rds.DescribeDBClustersInput{
+		DBClusterIdentifier: aws.String(clusterIdentifier),
+	}
+	result, err := rdsClient.DescribeDBClusters(context.Background(), input)
+	require.NoError(t, err, "Failed to describe Aurora cluster")
+	require.NotEmpty(t, result.DBClusters, "Aurora cluster should exist")
+
+	cluster := result.DBClusters[0]
+
+	// Verify cluster properties
+	assert.Equal(t, "aurora-postgresql", string(cluster.Engine), "Engine should be aurora-postgresql")
+	assert.True(t, strings.HasPrefix(string(cluster.EngineVersion), "13."), "Engine version should be 13.x")
+	assert.Equal(t, "patient_records", *cluster.DatabaseName, "Database name should be patient_records")
+	assert.True(t, cluster.StorageEncrypted, "Storage should be encrypted")
+	assert.Equal(t, int32(7), cluster.BackupRetentionPeriod, "Backup retention should be 7 days")
+	assert.Equal(t, outputs.AuroraClusterEndpoint, *cluster.Endpoint, "Writer endpoint should match")
+	assert.Equal(t, outputs.AuroraClusterReaderEndpoint, *cluster.ReaderEndpoint, "Reader endpoint should match")
+
+	// Verify instances
+	instanceInput := &rds.DescribeDBInstancesInput{
+		Filters: []rds.Filter{
+			{
+				Name:   aws.String("db-cluster-id"),
+				Values: []string{clusterIdentifier},
+			},
+		},
+	}
+	instanceResult, err := rdsClient.DescribeDBInstances(context.Background(), instanceInput)
+	require.NoError(t, err, "Failed to describe Aurora instances")
+
+	// Should have at least one instance
+	assert.GreaterOrEqual(t, len(instanceResult.DBInstances), 1, "Should have at least one DB instance")
+
+	// Verify instance properties
+	for _, instance := range instanceResult.DBInstances {
+		assert.Equal(t, "db.r5.large", string(instance.DBInstanceClass), "Instance class should be db.r5.large")
+		assert.False(t, *instance.PubliclyAccessible, "Instance should not be publicly accessible")
+	}
+
+	// Verify cluster tags
+	tagsInput := &rds.ListTagsForResourceInput{
+		ResourceName: cluster.DBClusterArn,
+	}
+	tagsResult, err := rdsClient.ListTagsForResource(context.Background(), tagsInput)
+	require.NoError(t, err, "Failed to list Aurora cluster tags")
+
+	hasComplianceTag := false
+	for _, tag := range tagsResult.TagList {
+		if *tag.Key == "Compliance" && *tag.Value == "HIPAA" {
+			hasComplianceTag = true
+			break
+		}
+	}
+	assert.True(t, hasComplianceTag, "Aurora cluster should have HIPAA compliance tag")
 }

@@ -8,7 +8,9 @@ import (
 	"testing"
 
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/elasticache"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/kms"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/rds"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/resource"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/stretchr/testify/assert"
@@ -123,4 +125,181 @@ func TestCreateSubnets(t *testing.T) {
 	}, pulumi.WithMocks("test-project", "test-stack", &mocks{}))
 
 	assert.NoError(t, err)
+}
+
+func TestCreateRedisCluster(t *testing.T) {
+	tests := []struct {
+		name     string
+		envValue string
+		want     map[string]interface{}
+	}{
+		{
+			name:     "Redis Cluster Configuration",
+			envValue: "test",
+			want: map[string]interface{}{
+				"engine":               "redis",
+				"engineVersion":        "6.x",
+				"nodeType":             "cache.t3.micro",
+				"numCacheNodes":        3,
+				"parameterGroupFamily": "redis6.x",
+				"port":                 6379,
+				"tags": map[string]string{
+					"Name":        "patient-redis-test",
+					"Environment": "test",
+					"Compliance":  "HIPAA",
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+				if tt.envValue != "" {
+					os.Setenv("ENVIRONMENT_SUFFIX", tt.envValue)
+					defer os.Unsetenv("ENVIRONMENT_SUFFIX")
+				}
+
+				// Create Redis parameter group
+				paramGroup, err := elasticache.NewParameterGroup(ctx, "test-redis-params", &elasticache.ParameterGroupArgs{
+					Family: pulumi.String("redis6.x"),
+					Parameters: elasticache.ParameterGroupParameterArray{
+						&elasticache.ParameterGroupParameterArgs{
+							Name:  pulumi.String("maxmemory-policy"),
+							Value: pulumi.String("allkeys-lru"),
+						},
+					},
+				})
+				assert.NoError(t, err)
+				assert.NotNil(t, paramGroup)
+
+				// Create Redis subnet group
+				subnetGroup, err := elasticache.NewSubnetGroup(ctx, "test-redis-subnet", &elasticache.SubnetGroupArgs{
+					SubnetIds: pulumi.StringArray{
+						pulumi.String("subnet-12345"),
+						pulumi.String("subnet-67890"),
+					},
+				})
+				assert.NoError(t, err)
+				assert.NotNil(t, subnetGroup)
+
+				// Create Redis cluster
+				cluster, err := elasticache.NewCluster(ctx, "test-redis", &elasticache.ClusterArgs{
+					Engine:             pulumi.String("redis"),
+					EngineVersion:      pulumi.String("6.x"),
+					NodeType:           pulumi.String("cache.t3.micro"),
+					NumCacheNodes:      pulumi.Int(3),
+					ParameterGroupName: paramGroup.Name,
+					Port:               pulumi.Int(6379),
+					SubnetGroupName:    subnetGroup.Name,
+					SecurityGroupIds:   pulumi.StringArray{pulumi.String("sg-12345")},
+					Tags: pulumi.StringMap{
+						"Name":        pulumi.String("patient-redis-" + tt.envValue),
+						"Environment": pulumi.String(tt.envValue),
+						"Compliance":  pulumi.String("HIPAA"),
+					},
+				})
+
+				assert.NoError(t, err)
+				assert.NotNil(t, cluster)
+				return nil
+			}, pulumi.WithMocks("test-project", "test-stack", &mocks{}))
+
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestCreateAuroraCluster(t *testing.T) {
+	tests := []struct {
+		name     string
+		envValue string
+		want     map[string]interface{}
+	}{
+		{
+			name:     "Aurora Cluster Configuration",
+			envValue: "test",
+			want: map[string]interface{}{
+				"engine":                "aurora-postgresql",
+				"engineVersion":         "13.7",
+				"databaseName":          "patient_records",
+				"masterUsername":        "admin",
+				"instanceClass":         "db.r5.large",
+				"backupRetentionPeriod": 7,
+				"copyTagsToSnapshot":    true,
+				"storageEncrypted":      true,
+				"tags": map[string]string{
+					"Name":        "patient-aurora-test",
+					"Environment": "test",
+					"Compliance":  "HIPAA",
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+				if tt.envValue != "" {
+					os.Setenv("ENVIRONMENT_SUFFIX", tt.envValue)
+					defer os.Unsetenv("ENVIRONMENT_SUFFIX")
+				}
+
+				// Create DB subnet group
+				dbSubnetGroup, err := rds.NewSubnetGroup(ctx, "test-aurora-subnet", &rds.SubnetGroupArgs{
+					SubnetIds: pulumi.StringArray{
+						pulumi.String("subnet-12345"),
+						pulumi.String("subnet-67890"),
+					},
+					Tags: pulumi.StringMap{
+						"Name":        pulumi.String("aurora-subnet-" + tt.envValue),
+						"Environment": pulumi.String(tt.envValue),
+					},
+				})
+				assert.NoError(t, err)
+				assert.NotNil(t, dbSubnetGroup)
+
+				// Create Aurora cluster
+				cluster, err := rds.NewCluster(ctx, "test-aurora", &rds.ClusterArgs{
+					Engine:                pulumi.String("aurora-postgresql"),
+					EngineVersion:         pulumi.String("13.7"),
+					DatabaseName:          pulumi.String("patient_records"),
+					MasterUsername:        pulumi.String("admin"),
+					MasterPassword:        pulumi.String("dummy-password"),
+					DbSubnetGroupName:     dbSubnetGroup.Name,
+					VpcSecurityGroupIds:   pulumi.StringArray{pulumi.String("sg-12345")},
+					BackupRetentionPeriod: pulumi.Int(7),
+					CopyTagsToSnapshot:    pulumi.Bool(true),
+					StorageEncrypted:      pulumi.Bool(true),
+					Tags: pulumi.StringMap{
+						"Name":        pulumi.String("patient-aurora-" + tt.envValue),
+						"Environment": pulumi.String(tt.envValue),
+						"Compliance":  pulumi.String("HIPAA"),
+					},
+				})
+				assert.NoError(t, err)
+				assert.NotNil(t, cluster)
+
+				// Create Aurora instance
+				instance, err := rds.NewClusterInstance(ctx, "test-aurora-instance", &rds.ClusterInstanceArgs{
+					ClusterIdentifier:  cluster.ID(),
+					InstanceClass:      pulumi.String("db.r5.large"),
+					Engine:             pulumi.String("aurora-postgresql"),
+					EngineVersion:      pulumi.String("13.7"),
+					PubliclyAccessible: pulumi.Bool(false),
+					Tags: pulumi.StringMap{
+						"Name":        pulumi.String("patient-aurora-instance-" + tt.envValue),
+						"Environment": pulumi.String(tt.envValue),
+						"Compliance":  pulumi.String("HIPAA"),
+					},
+				})
+				assert.NoError(t, err)
+				assert.NotNil(t, instance)
+
+				return nil
+			}, pulumi.WithMocks("test-project", "test-stack", &mocks{}))
+
+			assert.NoError(t, err)
+		})
+	}
 }
