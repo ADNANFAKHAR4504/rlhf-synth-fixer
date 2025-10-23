@@ -618,9 +618,63 @@
                   "Resource": {
                     "Ref": "AuroraSecret"
                   }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "secretsmanager:GetSecretValue",
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "AuroraCluster",
+                      "MasterUserSecret.SecretArn"
+                    ]
+                  }
                 }
               ]
             }
+          }
+        ]
+      }
+    },
+    "LambdaDBAccessPolicy": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": {
+          "Fn::Sub": "${AWS::StackName}-AuroraDataApiPolicy"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "secretsmanager:GetSecretValue"
+              ],
+              "Resource": [
+                {
+                  "Ref": "AuroraSecret"
+                }
+              ]
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "rds-data:ExecuteStatement",
+                "rds-data:BatchExecuteStatement",
+                "rds-data:BeginTransaction",
+                "rds-data:CommitTransaction",
+                "rds-data:RollbackTransaction"
+              ],
+              "Resource": [
+                {
+                  "Fn::Sub": "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraCluster}"
+                }
+              ]
+            }
+          ]
+        },
+        "Roles": [
+          {
+            "Ref": "LambdaExecutionRole"
           }
         ]
       }
@@ -792,7 +846,10 @@
               "Fn::Sub": "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraCluster}"
             },
             "DB_SECRET_ARN": {
-              "Ref": "AuroraSecret"
+              "Fn::GetAtt": [
+                "AuroraCluster",
+                "MasterUserSecret.SecretArn"
+              ]
             },
             "DB_NAME": "reportingdb"
           }
@@ -1129,9 +1186,12 @@
       }
     },
     "DatabaseSecretArn": {
-      "Description": "ARN of the Secrets Manager secret for the Aurora master user",
+      "Description": "ARN of the cluster-managed secret for the Aurora master user",
       "Value": {
-        "Ref": "AuroraSecret"
+        "Fn::GetAtt": [
+          "AuroraCluster",
+          "MasterUserSecret.SecretArn"
+        ]
       },
       "Export": {
         "Name": {
