@@ -1,6 +1,8 @@
-/* Updated tap-stack.ts — main CDK application file
-   - Fixes circular dependency by moving SNS subscription and remediation env wiring
-     into LambdaStack and creating MessagingStack earlier.
+/* Updated tap-stack.ts — FULLY FIXED VERSION
+   - Fixed DataSync S3 permissions (added s3:ListBucket)
+   - Fixed DataSync agent activation custom resource
+   - Reduced EC2 instance size to M5.LARGE for cost savings
+   - All other stacks remain intact
 */
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -128,7 +130,7 @@ class NetworkStack extends cdk.NestedStack {
       }
     );
 
-    // NEW: Allow HTTP for DataSync agent activation
+    // Allow HTTP for DataSync agent activation
     this.dataSyncSecurityGroup.addIngressRule(
       ec2.Peer.ipv4(this.vpc.vpcCidrBlock),
       ec2.Port.tcp(80),
@@ -153,7 +155,7 @@ class StorageStack extends cdk.NestedStack {
     this.dataBucket = new s3.Bucket(this, 'MigrationDataBucket', {
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
-      eventBridgeEnabled: true, // Enable EventBridge for S3 events
+      eventBridgeEnabled: true,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       removalPolicy:
         props.environmentSuffix === 'prod'
@@ -301,7 +303,7 @@ class GlueStack extends cdk.NestedStack {
   }
 }
 
-// MessagingStack - SNS Topics (no Lambda function dependencies)
+// MessagingStack - SNS Topics
 class MessagingStack extends cdk.NestedStack {
   public readonly validationTopic: sns.Topic;
 
@@ -314,22 +316,20 @@ class MessagingStack extends cdk.NestedStack {
   ) {
     super(scope, id, props);
 
-    // Create SNS topic for validation results (only the topic)
+    // Create SNS topic for validation results
     this.validationTopic = new sns.Topic(this, 'ValidationTopic', {
       topicName: `migration-validation-${props.environmentSuffix}`,
       displayName: 'Migration Validation Results',
     });
 
-    // Grant SNS publish permission to Glue (service principal)
+    // Grant SNS publish permission to Glue
     this.validationTopic.grantPublish(
       new iam.ServicePrincipal('glue.amazonaws.com')
     );
-
-    // Note: Subscriptions to this topic are created in LambdaStack to avoid nested stack cycles.
   }
 }
 
-// LambdaStack - Lambda Functions and subscribe to validationTopic
+// LambdaStack - Lambda Functions
 class LambdaStack extends cdk.NestedStack {
   public readonly glueTriggerFunction: lambda.Function;
   public readonly stepFunctionTriggerFunction: lambda.Function;
@@ -344,7 +344,7 @@ class LambdaStack extends cdk.NestedStack {
       vpc: ec2.Vpc;
       lambdaSecurityGroup: ec2.SecurityGroup;
       environmentSuffix: string;
-      validationTopic?: sns.Topic; // NEW: accept topic to create subscriptions
+      validationTopic?: sns.Topic;
     }
   ) {
     super(scope, id, props);
@@ -511,9 +511,8 @@ def handler(event, context):
       }
     );
 
-    // If a validationTopic is supplied, create subscriptions here (breaks nested-stack cycle)
+    // Subscribe lambdas to validation topic
     if (props.validationTopic) {
-      // Subscribe step function trigger and remediation lambda to validation topic
       props.validationTopic.addSubscription(
         new subscriptions.LambdaSubscription(this.stepFunctionTriggerFunction)
       );
@@ -521,13 +520,11 @@ def handler(event, context):
         new subscriptions.LambdaSubscription(this.remediationFunction)
       );
 
-      // Set environment variable for remediation function
       this.remediationFunction.addEnvironment(
         'ALERT_TOPIC_ARN',
         props.validationTopic.topicArn
       );
 
-      // Grant publish from lambdas (if lambdas will publish) - not necessary for subscription but OK to grant
       props.validationTopic.grantPublish(this.remediationFunction);
       props.validationTopic.grantPublish(this.stepFunctionTriggerFunction);
     }
@@ -718,10 +715,10 @@ class OrchestrationStack extends cdk.NestedStack {
   }
 }
 
-// DataSyncStack - AWS DataSync Configuration (FIXED)
+// DataSyncStack - FULLY FIXED VERSION
 class DataSyncStack extends cdk.NestedStack {
   public readonly dataSyncTask: datasync.CfnTask;
-  public readonly agentArn: string; // NEW: To expose agent ARN
+  public readonly agentArn: string;
 
   constructor(
     scope: Construct,
@@ -735,22 +732,21 @@ class DataSyncStack extends cdk.NestedStack {
   ) {
     super(scope, id, props);
 
-    // NEW: Step 1 - Resolve DataSync AMI via SSM Parameter Store
+    // Step 1 - DataSync AMI
     const dataSyncAmi = ec2.MachineImage.genericLinux({
-      'us-west-2': 'ami-0f508ba5fd9db6606', // aws-datasync-2.0.1761217057.1-x86_64-gp2
+      'us-west-2': 'ami-0f508ba5fd9db6606',
     });
 
-    // NEW: Step 2 - Launch EC2 Instance for DataSync Agent
+    // Step 2 - Launch EC2 Instance (REDUCED SIZE: M5.LARGE instead of M5.XLARGE)
     const agentInstance = new ec2.Instance(this, 'DataSyncAgentEC2', {
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.M5,
-        ec2.InstanceSize.XLARGE
+        ec2.InstanceSize.LARGE // ← CHANGED from XLARGE
       ),
       machineImage: dataSyncAmi,
       vpc: props.vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       securityGroup: props.dataSyncSecurityGroup,
-      // keyName: `migration-keypair-${props.environmentSuffix}`, // REPLACE: Create in AWS Console
       role: new iam.Role(this, 'DataSyncEC2Role', {
         assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
         managedPolicies: [
@@ -758,6 +754,7 @@ class DataSyncStack extends cdk.NestedStack {
         ],
       }),
     });
+
     const userData = ec2.UserData.forLinux({ shebang: '#!/bin/bash' });
     userData.addCommands(
       'yum update -y',
@@ -766,7 +763,7 @@ class DataSyncStack extends cdk.NestedStack {
     );
     agentInstance.addUserData(userData.render());
 
-    // NEW: Step 3 - Custom Resource to Activate DataSync Agent
+    // Step 3 - FIXED Custom Resource Lambda
     const activationFunction = new lambda.Function(
       this,
       'AgentActivatorFunction',
@@ -776,34 +773,109 @@ class DataSyncStack extends cdk.NestedStack {
         code: lambda.Code.fromInline(`
         const { EC2Client, DescribeInstancesCommand } = require('@aws-sdk/client-ec2');
         const { DataSyncClient, CreateAgentCommand } = require('@aws-sdk/client-datasync');
-        const http = require('http');
-        exports.handler = async (event) => {
-          if (event.RequestType === 'Delete') return { PhysicalResourceId: event.PhysicalResourceId };
+        const https = require('https');
+        
+        exports.handler = async (event, context) => {
+          console.log('Event:', JSON.stringify(event));
+          
+          // Handle CloudFormation DELETE
+          if (event.RequestType === 'Delete') {
+            return sendResponse(event, context, 'SUCCESS', { Arn: event.PhysicalResourceId || 'DeletedAgent' });
+          }
+          
           const instanceId = process.env.INSTANCE_ID;
-          const ec2 = new EC2Client({ region: 'us-west-2' });
-          const resp = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }));
-          const privateIp = resp.Reservations[0].Instances[0].PrivateIpAddress;
+          const region = process.env.AWS_REGION || 'us-west-2';
+          
+          try {
+            // Get instance private IP
+            const ec2 = new EC2Client({ region });
+            const resp = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }));
+            const privateIp = resp.Reservations[0].Instances[0].PrivateIpAddress;
+            
+            // Wait for agent to be ready (max 5 attempts, 30 seconds apart)
+            let activationKey = null;
+            for (let i = 0; i < 5; i++) {
+              try {
+                activationKey = await getActivationKey(privateIp);
+                if (activationKey) break;
+              } catch (err) {
+                console.log(\`Attempt \${i + 1} failed: \${err.message}\`);
+                if (i < 4) await sleep(30000);
+              }
+            }
+            
+            if (!activationKey) {
+              throw new Error('Failed to retrieve activation key after 5 attempts');
+            }
+            
+            // Create DataSync agent
+            const datasync = new DataSyncClient({ region });
+            const command = new CreateAgentCommand({
+              ActivationKey: activationKey,
+              AgentName: 'MigrationAgent-${props.environmentSuffix}'
+            });
+            const result = await datasync.send(command);
+            
+            console.log('Agent created:', result.AgentArn);
+            return sendResponse(event, context, 'SUCCESS', { Arn: result.AgentArn }, result.AgentArn);
+            
+          } catch (error) {
+            console.error('Error:', error);
+            return sendResponse(event, context, 'FAILED', {}, null, error.message);
+          }
+        };
+        
+        function getActivationKey(privateIp) {
           return new Promise((resolve, reject) => {
-            http.get(\`http://\${privateIp}/activationkey\`, (res) => {
+            const http = require('http');
+            http.get(\`http://\${privateIp}/activationkey\`, { timeout: 10000 }, (res) => {
               let data = '';
               res.on('data', (chunk) => data += chunk);
-              res.on('end', async () => {
-                const activationKey = data.trim();
-                const client = new DataSyncClient({ region: 'us-west-2' });
-                try {
-                  const command = new CreateAgentCommand({ 
-                    ActivationKey: activationKey, 
-                    AgentName: 'MigrationAgent-${props.environmentSuffix}' 
-                  });
-                  const result = await client.send(command);
-                  resolve({ PhysicalResourceId: result.AgentArn, Data: { Arn: result.AgentArn } });
-                } catch (err) { reject(err); }
-              });
-            }).on('error', reject);
+              res.on('end', () => resolve(data.trim()));
+            }).on('error', reject).on('timeout', () => reject(new Error('Request timeout')));
           });
-        };
+        }
+        
+        function sleep(ms) {
+          return new Promise(resolve => setTimeout(resolve, ms));
+        }
+        
+        async function sendResponse(event, context, status, data, physicalResourceId, reason) {
+          const responseBody = JSON.stringify({
+            Status: status,
+            Reason: reason || 'See CloudWatch logs',
+            PhysicalResourceId: physicalResourceId || context.logStreamName,
+            StackId: event.StackId,
+            RequestId: event.RequestId,
+            LogicalResourceId: event.LogicalResourceId,
+            Data: data
+          });
+          
+          console.log('Response:', responseBody);
+          
+          const parsedUrl = require('url').parse(event.ResponseURL);
+          const options = {
+            hostname: parsedUrl.hostname,
+            port: 443,
+            path: parsedUrl.path,
+            method: 'PUT',
+            headers: {
+              'Content-Type': '',
+              'Content-Length': responseBody.length
+            }
+          };
+          
+          return new Promise((resolve, reject) => {
+            const request = https.request(options, (res) => {
+              resolve();
+            });
+            request.on('error', reject);
+            request.write(responseBody);
+            request.end();
+          });
+        }
       `),
-        timeout: Duration.minutes(5),
+        timeout: Duration.minutes(10),
         environment: { INSTANCE_ID: agentInstance.instanceId },
         vpc: props.vpc,
         vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
@@ -818,45 +890,27 @@ class DataSyncStack extends cdk.NestedStack {
       })
     );
 
-    const activationCustomResource = new cr.AwsCustomResource(
+    // Use proper Custom Resource Provider
+    const provider = new cr.Provider(this, 'DataSyncAgentProvider', {
+      onEventHandler: activationFunction,
+    });
+
+    const agentActivation = new cdk.CustomResource(
       this,
       'DataSyncAgentActivator',
       {
-        onCreate: {
-          service: 'Lambda',
-          action: 'invoke',
-          parameters: { FunctionName: activationFunction.functionName },
-          physicalResourceId: cr.PhysicalResourceId.of('DataSyncAgent'),
+        serviceToken: provider.serviceToken,
+        properties: {
+          InstanceId: agentInstance.instanceId,
+          Timestamp: Date.now(),
         },
-        onUpdate: {
-          service: 'Lambda',
-          action: 'invoke',
-          parameters: { FunctionName: activationFunction.functionName },
-          physicalResourceId: cr.PhysicalResourceId.of('DataSyncAgent'),
-        },
-        onDelete: {
-          service: 'DataSync',
-          action: 'deleteAgent',
-          parameters: {
-            AgentArn: { 'Fn::GetAtt': ['DataSyncAgentActivator', 'Data.Arn'] },
-          },
-          physicalResourceId: cr.PhysicalResourceId.of('DataSyncAgent'),
-        },
-        policy: cr.AwsCustomResourcePolicy.fromStatements([
-          new iam.PolicyStatement({
-            actions: ['lambda:InvokeFunction'],
-            resources: [activationFunction.functionArn],
-          }),
-        ]),
       }
     );
 
-    this.agentArn = activationCustomResource
-      .getResponseField('Data.Arn')
-      .toString();
+    this.agentArn = agentActivation.getAttString('Arn');
 
-    // NEW: Step 4 - Monitor Agent Status
-    new cloudwatch.Alarm(this, 'AgentStatusAlarm', {
+    // Monitor Agent Status
+    const agentAlarm = new cloudwatch.Alarm(this, 'AgentStatusAlarm', {
       metric: new cdk.aws_cloudwatch.Metric({
         namespace: 'AWS/DataSync',
         metricName: 'AgentStatus',
@@ -864,20 +918,50 @@ class DataSyncStack extends cdk.NestedStack {
         statistic: 'Average',
         period: Duration.minutes(5),
       }),
-      threshold: 1, // 1 = ONLINE
+      threshold: 1,
       evaluationPeriods: 3,
       comparisonOperator:
         cdk.aws_cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
       alarmDescription: 'Alarm if DataSync agent is not ONLINE',
     });
+    agentAlarm.node.addDependency(agentActivation);
 
-    // Create DataSync S3 location
+    // FIXED: Create DataSync S3 Role with ALL required permissions
     const s3LocationRole = new iam.Role(this, 'DataSyncS3Role', {
       assumedBy: new iam.ServicePrincipal('datasync.amazonaws.com'),
     });
 
-    props.dataBucket.grantReadWrite(s3LocationRole);
+    // BUCKET-level permissions
+    s3LocationRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          's3:GetBucketLocation',
+          's3:ListBucket', // ← CRITICAL FIX
+          's3:ListBucketMultipartUploads',
+        ],
+        resources: [props.dataBucket.bucketArn],
+      })
+    );
 
+    // OBJECT-level permissions
+    s3LocationRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          's3:AbortMultipartUpload',
+          's3:DeleteObject',
+          's3:GetObject',
+          's3:ListMultipartUploadParts',
+          's3:PutObject',
+          's3:GetObjectTagging',
+          's3:PutObjectTagging',
+        ],
+        resources: [`${props.dataBucket.bucketArn}/*`],
+      })
+    );
+
+    // Create DataSync S3 location
     const s3Location = new datasync.CfnLocationS3(this, 'S3Location', {
       s3BucketArn: props.dataBucket.bucketArn,
       s3Config: {
@@ -885,16 +969,18 @@ class DataSyncStack extends cdk.NestedStack {
       },
       subdirectory: '/datasync/',
     });
+    s3Location.node.addDependency(agentActivation);
 
-    // Create DataSync NFS location (FIXED: Use real agent ARN)
+    // Create DataSync NFS location
     const nfsLocation = new datasync.CfnLocationNFS(this, 'NFSLocation', {
-      serverHostname: '10.0.0.100', // REPLACE: Your NFS server hostname
+      serverHostname: '10.0.0.100', // REPLACE with your NFS server IP
       subdirectory: '/data/',
       onPremConfig: {
-        agentArns: [this.agentArn], // FIXED: Use dynamically generated ARN
+        agentArns: [this.agentArn],
       },
-      mountOptions: { version: 'NFS3' }, // Adjust if needed (NFS4_0, NFS4_1)
+      mountOptions: { version: 'NFS3' },
     });
+    nfsLocation.node.addDependency(agentActivation);
 
     // Create DataSync task
     this.dataSyncTask = new datasync.CfnTask(this, 'DataSyncTask', {
@@ -911,9 +997,10 @@ class DataSyncStack extends cdk.NestedStack {
         scheduleExpression: 'cron(0 2 * * ? *)',
       },
     });
-    this.dataSyncTask.node.addDependency(activationCustomResource);
+    this.dataSyncTask.node.addDependency(s3Location);
+    this.dataSyncTask.node.addDependency(nfsLocation);
 
-    // NEW: Alarm for task failures
+    // Alarm for task failures
     new cloudwatch.Alarm(this, 'DataSyncTaskFailureAlarm', {
       metric: new cdk.aws_cloudwatch.Metric({
         namespace: 'AWS/DataSync',
@@ -996,7 +1083,7 @@ class MonitoringStack extends cdk.NestedStack {
       new targets.LambdaFunction(props.remediationFunction)
     );
 
-    // EventBridge rule for S3 events (for monitoring)
+    // EventBridge rule for S3 events
     const s3EventRule = new events.Rule(this, 'S3EventRule', {
       ruleName: `migration-s3-events-${props.environmentSuffix}`,
       description: 'Monitor S3 events',
@@ -1074,6 +1161,7 @@ class LoggingStack extends cdk.NestedStack {
         ],
       })
     );
+
     // Create log group for centralized logging
     new logs.LogGroup(this, 'CentralLogGroup', {
       retention: logs.RetentionDays.ONE_MONTH,
@@ -1129,13 +1217,13 @@ export class TapStack extends cdk.Stack {
       environmentSuffix,
     });
 
-    // LAYER 5: Messaging (create topic early; no lambda refs)
+    // LAYER 5: Messaging
     const messagingStack = new MessagingStack(this, 'MigrationMessagingStack', {
       ...stackProps,
       environmentSuffix,
     });
 
-    // LAYER 6: DMS (depends on network & db)
+    // LAYER 6: DMS
     const dmsStack = new DMSStack(this, 'MigrationDMSStack', {
       ...stackProps,
       vpc: networkStack.vpc,
@@ -1144,7 +1232,7 @@ export class TapStack extends cdk.Stack {
       environmentSuffix,
     });
 
-    // LAYER 7: Orchestration (needs topic & dms)
+    // LAYER 7: Orchestration
     const orchestrationStack = new OrchestrationStack(
       this,
       'MigrationOrchestrationStack',
@@ -1156,7 +1244,7 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // LAMBDA created after orchestration to allow wiring of STATE_MACHINE_ARN afterwards
+    // LAYER 8: Lambda
     const lambdaStack = new LambdaStack(this, 'MigrationLambdaStack', {
       ...stackProps,
       dataBucket: storageStack.dataBucket,
@@ -1164,10 +1252,10 @@ export class TapStack extends cdk.Stack {
       vpc: networkStack.vpc,
       lambdaSecurityGroup: networkStack.lambdaSecurityGroup,
       environmentSuffix,
-      validationTopic: messagingStack.validationTopic, // NEW: subscribe lambdas to topic inside LambdaStack
+      validationTopic: messagingStack.validationTopic,
     });
 
-    // Wire state machine ARN into lambda (still ok to set after creation)
+    // Wire state machine ARN
     lambdaStack.stepFunctionTriggerFunction.addEnvironment(
       'STATE_MACHINE_ARN',
       orchestrationStack.stateMachine.stateMachineArn
@@ -1180,7 +1268,7 @@ export class TapStack extends cdk.Stack {
       })
     );
 
-    // LAYER 8: DataSync
+    // LAYER 9: DataSync (FIXED)
     const dataSyncStack = new DataSyncStack(this, 'MigrationDataSyncStack', {
       ...stackProps,
       vpc: networkStack.vpc,
@@ -1189,14 +1277,14 @@ export class TapStack extends cdk.Stack {
       environmentSuffix,
     });
 
-    // LAYER 9: Monitoring
+    // LAYER 10: Monitoring
     new MonitoringStack(this, 'MigrationMonitoringStack', {
       ...stackProps,
       remediationFunction: lambdaStack.remediationFunction,
       environmentSuffix,
     });
 
-    // LAYER 10: Logging
+    // LAYER 11: Logging
     const loggingStack = new LoggingStack(this, 'MigrationLoggingStack', {
       ...stackProps,
       vpc: networkStack.vpc,
@@ -1204,7 +1292,7 @@ export class TapStack extends cdk.Stack {
       environmentSuffix,
     });
 
-    // S3 -> Lambda EventBridge rule (main stack) — avoids S3 bucket nested-stack notifications causing cross-nesting references
+    // S3 -> Lambda EventBridge rule
     const s3ToLambdaRule = new events.Rule(this, 'S3ObjectCreatedRule', {
       ruleName: `migration-s3-to-lambda-${environmentSuffix}`,
       description: 'Trigger Glue Lambda when objects are created in S3',
@@ -1241,7 +1329,7 @@ export class TapStack extends cdk.Stack {
     dataSyncStack.addDependency(networkStack);
     dataSyncStack.addDependency(storageStack);
 
-    // Stack outputs (unchanged)
+    // Stack outputs
     new cdk.CfnOutput(this, 'VpcId', {
       value: networkStack.vpc.vpcId,
       description: 'VPC ID',
@@ -1277,7 +1365,6 @@ export class TapStack extends cdk.Stack {
       description: 'OpenSearch Domain Endpoint',
       exportName: `${this.stackName}-OpenSearchDomainEndpoint`,
     });
-
     new cdk.CfnOutput(this, 'EnvironmentSuffix', {
       value: environmentSuffix,
       description: 'Environment suffix for all resources',
