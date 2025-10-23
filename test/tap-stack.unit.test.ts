@@ -481,7 +481,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(38);
+      expect(resourceCount).toBe(41);
     });
 
     test('should have correct number of parameters', () => {
@@ -516,9 +516,9 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
       expect(description).toContain('Secrets Manager');
     });
 
-    test('should have exactly 25 resources defined', () => {
+    test('should have exactly 41 resources defined', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(38);
+      expect(resourceCount).toBe(41);
     });
 
     test('should have exactly 7 parameters defined', () => {
