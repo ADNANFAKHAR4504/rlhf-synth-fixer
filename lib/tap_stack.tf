@@ -322,6 +322,42 @@ resource "aws_kms_key" "main_us_east_1" {
   deletion_window_in_days = 10
   enable_key_rotation     = true
 
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${var.us_east_1_region}.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnLike = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.us_east_1_region}:${data.aws_caller_identity.current.account_id}:log-group:*"
+          }
+        }
+      }
+    ]
+  })
+
   tags = merge(local.common_tags, {
     Name = "${var.app_name}-kms-${var.us_east_1_region}"
   })
@@ -339,6 +375,42 @@ resource "aws_kms_key" "main_us_west_2" {
   description             = "${var.app_name} encryption key for us-west-2"
   deletion_window_in_days = 10
   enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${var.us_west_2_region}.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnLike = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.us_west_2_region}:${data.aws_caller_identity.current.account_id}:log-group:*"
+          }
+        }
+      }
+    ]
+  })
 
   tags = merge(local.common_tags, {
     Name = "${var.app_name}-kms-${var.us_west_2_region}"
@@ -669,7 +741,7 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs_us_east_1" {
   provider          = aws.us_east_1
   name              = "/aws/vpc/${var.app_name}-us-east-1"
   retention_in_days = var.log_retention_days
-  # Use AWS managed logs key by omitting kms_key_id to avoid AccessDenied unless custom key policy is configured
+  kms_key_id        = aws_kms_key.main_us_east_1.arn
 
   tags = merge(local.common_tags, {
     Name = "${var.app_name}-vpc-flow-logs-us-east-1"
@@ -680,7 +752,7 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs_us_west_2" {
   provider          = aws.us_west_2
   name              = "/aws/vpc/${var.app_name}-us-west-2"
   retention_in_days = var.log_retention_days
-  # Use AWS managed logs key by omitting kms_key_id to avoid AccessDenied unless custom key policy is configured
+  kms_key_id        = aws_kms_key.main_us_west_2.arn
 
   tags = merge(local.common_tags, {
     Name = "${var.app_name}-vpc-flow-logs-us-west-2"
