@@ -256,7 +256,7 @@ describe('TapStack CloudFormation Template', () => {
 
       test('should have a policy with correct permissions', () => {
         const policy = template.Resources.LambdaExecutionRole.Properties.Policies[0].PolicyDocument;
-        expect(policy.Statement).toHaveLength(6);
+        expect(policy.Statement).toHaveLength(7);
 
         const logStatement = policy.Statement[0];
         expect(logStatement.Effect).toBe('Allow');
@@ -481,7 +481,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(37);
+      expect(resourceCount).toBe(38);
     });
 
     test('should have correct number of parameters', () => {
@@ -518,7 +518,7 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
 
     test('should have exactly 25 resources defined', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(37);
+      expect(resourceCount).toBe(38);
     });
 
     test('should have exactly 7 parameters defined', () => {
@@ -773,7 +773,9 @@ describe('TapStack CloudFormation Template - Comprehensive Coverage', () => {
       expect(envVars.DB_CLUSTER_ARN).toEqual({
         'Fn::Sub': 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraCluster}'
       });
-      expect(envVars.DB_SECRET_ARN).toEqual({ Ref: 'AuroraSecret' });
+      expect(envVars.DB_SECRET_ARN).toEqual({
+        'Fn::GetAtt': ['AuroraCluster', 'MasterUserSecret.SecretArn']
+      });
       expect(envVars.DB_NAME).toBe('reportingdb');
 
       // Verify code contains delivery logic
