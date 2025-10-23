@@ -810,10 +810,10 @@ class ComputeStack extends Stack {
 
         AutoScalingGroup asg = AutoScalingGroup.Builder.create(this, "AutoScalingGroup")
                 .vpc(vpc)
-                .instanceType(InstanceType.of(InstanceClass.MEMORY6_GRAVITON, InstanceSize.XLARGE4))
+                .instanceType(InstanceType.of(InstanceClass.BURSTABLE3, InstanceSize.LARGE))
                 .machineImage(AmazonLinuxImage.Builder.create()
                         .generation(AmazonLinuxGeneration.AMAZON_LINUX_2023)
-                        .cpuType(AmazonLinuxCpuType.ARM_64)
+                        .cpuType(AmazonLinuxCpuType.X86_64)
                         .build())
                 .minCapacity(minInstances)
                 .maxCapacity(maxInstances)
