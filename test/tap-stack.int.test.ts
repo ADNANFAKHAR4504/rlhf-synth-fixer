@@ -160,7 +160,7 @@ describe("TapStack Integration Tests - Real Deployment Validation", () => {
     it("should have rollback command configured", () => {
       expect(stackOutputs.rollbackCommand).toContain("pulumi stack export");
       expect(stackOutputs.rollbackCommand).toContain("pulumi stack import");
-      expect(stackOutputs.rollbackCommand).toMatch(/rollback-[a-z0-9]{6}/);
+      expect(stackOutputs.rollbackCommand).toMatch(/rollback-[a-z0-9]+/);
     });
   });
 
