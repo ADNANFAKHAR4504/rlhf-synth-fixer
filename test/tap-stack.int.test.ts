@@ -12,7 +12,6 @@ import { TextDecoder } from 'util';
 const loadCfnOutputs = () => {
   let cfnOutputs: any = {};
 
-  // Try to load from cfn-outputs/flat-outputs.json if it exists
   const outputsFilePath = './cfn-outputs/flat-outputs.json';
   if (fs.existsSync(outputsFilePath)) {
     try {
