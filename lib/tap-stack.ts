@@ -58,9 +58,9 @@ export class TapStack extends TerraformStack {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
-    // Force explicit region to ensure consistency in CI/CD
-    const awsRegion = 'eu-central-1'; // Hardcode for deployment stability
-    const stateBucketRegion = props?.stateBucketRegion || 'eu-central-1';
+    // Force explicit region to ensure consistency in CI/CD - switch to us-east-1 for better resource availability
+    const awsRegion = 'us-east-1'; // Changed to us-east-1 for CI/CD deployment
+    const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
     // Add version suffix to force complete resource replacement in CI/CD
@@ -68,7 +68,7 @@ export class TapStack extends TerraformStack {
     // Add timestamp for CI/CD to ensure unique names
     const timestamp = process.env.CI ? Date.now().toString().slice(-8) : '';
     const uniqueSuffix = timestamp ? `-${timestamp}` : '';
-    const drRegion = 'eu-west-1';
+    const drRegion = 'us-west-2'; // Changed DR region to us-west-2 to stay in US
 
     // Configure AWS Provider for primary region
     const primaryProvider = new AwsProvider(this, 'aws', {
@@ -1006,7 +1006,7 @@ export class TapStack extends TerraformStack {
 
     // Create CloudTrail
     const cloudtrail = new Cloudtrail(this, 'cloudtrail', {
-      name: `hipaa-trail-${deployVersion}-${environmentSuffix}`,
+      name: `hipaa-trail-${deployVersion}-${environmentSuffix}${uniqueSuffix}`,
       s3BucketName: cloudtrailBucket.id,
       enableLogFileValidation: true,
       isMultiRegionTrail: true,
@@ -1027,7 +1027,7 @@ export class TapStack extends TerraformStack {
         },
       ],
       tags: {
-        Name: `hipaa-trail-${deployVersion}-${environmentSuffix}`,
+        Name: `hipaa-trail-${deployVersion}-${environmentSuffix}${uniqueSuffix}`,
         Compliance: 'HIPAA',
         Environment: environmentSuffix,
       },
