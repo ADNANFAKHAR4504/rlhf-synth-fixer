@@ -1,4 +1,4 @@
-package lib
+package main
 
 import (
 	"fmt"
@@ -20,7 +20,7 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
 
-func NewTapStack() {
+func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
 		// Get configuration
 		cfg := config.New(ctx, "")
@@ -32,10 +32,44 @@ func NewTapStack() {
 		region := "eu-central-2"
 
 		// Create KMS key for encryption at rest
+		// Add a key policy that explicitly allows CloudWatch Logs service to use the key in this region
+		kmsKeyPolicy := pulumi.Sprintf(`{
+			"Version": "2012-10-17",
+			"Statement": [
+				{
+					"Sid": "Enable IAM User Permissions",
+					"Effect": "Allow",
+					"Principal": {"AWS": "*"},
+					"Action": "kms:*",
+					"Resource": "*"
+				},
+				{
+					"Sid": "AllowCloudWatchLogsUse",
+					"Effect": "Allow",
+					"Principal": {"Service": "logs.amazonaws.com"},
+					"Action": [
+						"kms:Encrypt",
+						"kms:Decrypt",
+						"kms:ReEncrypt*",
+						"kms:GenerateDataKey*",
+						"kms:DescribeKey",
+						"kms:CreateGrant"
+					],
+					"Resource": "*",
+					"Condition": {
+						"StringEquals": {
+							"kms:ViaService": "logs.%s.amazonaws.com"
+						}
+					}
+				}
+			]
+		}`, region)
+
 		kmsKey, err := kms.NewKey(ctx, fmt.Sprintf("transaction-kms-%s", environmentSuffix), &kms.KeyArgs{
 			Description:          pulumi.String("KMS key for PCI-DSS compliant transaction data encryption"),
 			EnableKeyRotation:    pulumi.Bool(true),
 			DeletionWindowInDays: pulumi.Int(10),
+			Policy:               kmsKeyPolicy,
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String(fmt.Sprintf("transaction-kms-%s", environmentSuffix)),
 				"Environment": pulumi.String(environmentSuffix),
