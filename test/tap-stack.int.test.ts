@@ -677,7 +677,7 @@ describe('TapStack Comprehensive End-to-End Integration Test Scenarios', () => {
         entityName: "EnhancedDeliveryFailEntity",
         transactionCount: 100,
         totalValue: 50000.00,
-        forceDeliveryFailure: true  // Special flag to simulate delivery failure
+        forceDeliveryFailure: true
       };
 
       console.log(`Starting enhanced delivery failure test with ID: ${testId}`);
