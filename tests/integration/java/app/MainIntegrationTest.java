@@ -30,7 +30,7 @@ public class MainIntegrationTest {
         // Create stack with production-like configuration
         TapStack stack = new TapStack(app, "TapStackProd", TapStackProps.builder()
                 .environmentSuffix("prod")
-                .build());
+                .build(), null);
 
         // Create template and verify it can be synthesized
         Template template = Template.fromStack(stack);
@@ -57,7 +57,7 @@ public class MainIntegrationTest {
             App app = new App();
             TapStack stack = new TapStack(app, "TapStack" + env, TapStackProps.builder()
                     .environmentSuffix(env)
-                    .build());
+                    .build(), null);
 
             // Verify each environment configuration
             assertThat(stack.getEnvironmentSuffix()).isEqualTo(env);
@@ -80,7 +80,7 @@ public class MainIntegrationTest {
 
         TapStack stack = new TapStack(app, "TapStackIntegration", TapStackProps.builder()
                 .environmentSuffix("integration")
-                .build());
+                .build(), null);
 
         Template template = Template.fromStack(stack);
 

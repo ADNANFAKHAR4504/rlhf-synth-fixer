@@ -715,8 +715,7 @@ public class MainTest {
             "MLStack",
             "test",
             secStack.getKmsKey(),
-            null
-        );
+            null, StackProps.builder().build());
         Template template = Template.fromStack(stack);
 
         // Verify SageMaker Models (2)
@@ -748,8 +747,7 @@ public class MainTest {
             "MLStack",
             "test",
             secStack.getKmsKey(),
-            null
-        );
+            null, StackProps.builder().build());
         
         // Verify endpoint names contain the model identifiers (flexible matching)
         String feedRankingName = stack.getFeedRankingEndpoint().getEndpointName();
@@ -769,7 +767,7 @@ public class MainTest {
         assertThatCode(() -> {
             TapStack stack = new TapStack(app, "TestStack", TapStackProps.builder()
                     .environmentSuffix("test")
-                    .build());
+                    .build(), null);
 
             assertThat(stack.getSecurityStack()).isNotNull();
             assertThat(stack.getNetworkStack()).isNotNull();
@@ -794,7 +792,7 @@ public class MainTest {
                     .minInstances(200)
                     .maxInstances(1000)
                     .auroraReadReplicas(14)
-                    .build());
+                    .build(), null);
 
             assertThat(stack.getEnvironmentSuffix()).isEqualTo("prod");
             assertThat(stack.getComputeStack()).isNotNull();
@@ -810,7 +808,7 @@ public class MainTest {
         assertThatCode(() -> {
             TapStack stack = new TapStack(app, "TestStack", TapStackProps.builder()
                     .environmentSuffix("test")
-                    .build());
+                    .build(), null);
 
             // Verify all stack components exist (outputs reference these)
             assertThat(stack.getComputeStack()).isNotNull();
@@ -846,7 +844,7 @@ public class MainTest {
                                     .region("us-east-1")
                                     .build())
                             .build())
-                    .build());
+                    .build(), null);
 
             assertThat(stack).isNotNull();
             assertThat(stack.getEnvironmentSuffix()).isEqualTo("test");
@@ -861,7 +859,7 @@ public class MainTest {
         assertThatCode(() -> {
             TapStack stack = new TapStack(app, "TestStack", TapStackProps.builder()
                     .environmentSuffix("prod")
-                    .build());
+                    .build(), null);
 
             assertThat(stack).isNotNull();
             assertThat(stack.getEnvironmentSuffix()).isEqualTo("prod");
@@ -879,7 +877,7 @@ public class MainTest {
                     .minInstances(1)
                     .maxInstances(10)
                     .auroraReadReplicas(1)
-                    .build());
+                    .build(), null);
 
             assertThat(stack.getComputeStack()).isNotNull();
             assertThat(stack.getDatabaseStack()).isNotNull();
@@ -897,7 +895,7 @@ public class MainTest {
                     .minInstances(1000)
                     .maxInstances(5000)
                     .auroraReadReplicas(14)
-                    .build());
+                    .build(), null);
 
             assertThat(stack.getComputeStack()).isNotNull();
             assertThat(stack.getDatabaseStack()).isNotNull();
@@ -942,7 +940,7 @@ public class MainTest {
                 App testApp = new App();
                 TapStack stack = new TapStack(testApp, "TestStack" + env, TapStackProps.builder()
                         .environmentSuffix(env)
-                        .build());
+                        .build(), null);
 
                 assertThat(stack.getEnvironmentSuffix()).isEqualTo(env);
                 assertThat(stack.getSecurityStack()).isNotNull();
@@ -965,7 +963,7 @@ public class MainTest {
 
         App app3 = new App();
         SecurityStack secStack2 = new SecurityStack(app3, "SecStack2", "test", null);
-        MLStack mlStack = new MLStack(app3, "MLStack", "test", secStack2.getKmsKey(), null);
+        MLStack mlStack = new MLStack(app3, "MLStack", "test", secStack2.getKmsKey(), null, StackProps.builder().build());
         assertThat(mlStack).isNotNull();
     }
 
@@ -983,7 +981,7 @@ public class MainTest {
                     .stackProps(StackProps.builder()
                             .description("Complex integration test stack")
                             .build())
-                    .build());
+                    .build(), null);
 
             assertThat(stack.getSecurityStack()).isNotNull();
             assertThat(stack.getNetworkStack()).isNotNull();
@@ -1005,7 +1003,7 @@ public class MainTest {
             TapStack stack = new TapStack(app, "TestStack", TapStackProps.builder()
                     .environmentSuffix("test")
                     .stackProps(null)
-                    .build());
+                    .build(), null);
 
             assertThat(stack).isNotNull();
             assertThat(stack.getEnvironmentSuffix()).isEqualTo("test");
@@ -1027,7 +1025,7 @@ public class MainTest {
             TapStack stack = new TapStack(testApp, "TestStack", TapStackProps.builder()
                     .environmentSuffix("test")
                     .auroraReadReplicas(3)
-                    .build());
+                    .build(), null);
 
             // Verify all nested stacks exist (without template synthesis)
             assertThat(stack.getSecurityStack()).isNotNull();
@@ -1153,7 +1151,7 @@ public class MainTest {
             // Test MLStack
             App mlApp = new App();
             SecurityStack mlSecStack = new SecurityStack(mlApp, "SecStack", "test", null);
-            MLStack mlStack = new MLStack(mlApp, "MLStack", "test", mlSecStack.getKmsKey(), null);
+            MLStack mlStack = new MLStack(mlApp, "MLStack", "test", mlSecStack.getKmsKey(), null, StackProps.builder().build());
             Template mlTemplate = Template.fromStack(mlStack);
             mlTemplate.resourceCountIs("AWS::SageMaker::Endpoint", 2);
             

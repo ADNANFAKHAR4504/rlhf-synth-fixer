@@ -3,6 +3,7 @@ package app;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
 
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.CfnOutput;
@@ -709,6 +710,8 @@ class StorageStack extends Stack {
 
 /**
  * Compute Stack with ALB and EC2 Auto Scaling
+ *
+ * (unchanged)
  */
 class ComputeStack extends Stack {
     private final ApplicationLoadBalancer alb;
@@ -1185,6 +1188,12 @@ class RealTimeStack extends Stack {
 
 /**
  * Machine Learning Stack with SageMaker endpoints for feed ranking
+ *
+ * This version:
+ * - accepts modelS3Uri (may be null)
+ * - if modelS3Uri is null, constructs a likely S3 URI using the account token and environmentSuffix:
+ *     s3://social-platform-sagemaker-{account}-{environmentSuffix}/model.tar.gz
+ * - grants the SageMaker role s3:GetObject and s3:ListBucket on the model bucket (and keeps sample bucket ARNs)
  */
 class MLStack extends Stack {
     private final CfnModel feedRankingModel;
@@ -1195,24 +1204,60 @@ class MLStack extends Stack {
     private final CfnEndpoint viralDetectionEndpoint;
 
     MLStack(final Construct scope, final String id, final String environmentSuffix,
-            final Key kmsKey, final StackProps props) {
+            final Key kmsKey, final String modelS3Uri, final StackProps props) {
         super(scope, id, props);
 
-        // Create IAM role for SageMaker
+        // Determine effective model S3 URI. If user supplied modelS3Uri use it,
+        // otherwise build a likely path using the account token and environmentSuffix.
+        final String effectiveModelS3Uri;
+        if (modelS3Uri != null && !modelS3Uri.isEmpty()) {
+            effectiveModelS3Uri = modelS3Uri;
+        } else {
+            // this.getAccount() returns a Token that CDK will resolve at deploy time.
+            effectiveModelS3Uri = "s3://social-platform-sagemaker-" + this.getAccount() + "-" + environmentSuffix + "/model.tar.gz";
+        }
+
+        // Parse bucket name from effectiveModelS3Uri (if the uri was passed in)
+        String bucketFromUri = null;
+        if (effectiveModelS3Uri != null && effectiveModelS3Uri.startsWith("s3://")) {
+            String withoutPrefix = effectiveModelS3Uri.substring("s3://".length());
+            int slashIndex = withoutPrefix.indexOf('/');
+            bucketFromUri = slashIndex == -1 ? withoutPrefix : withoutPrefix.substring(0, slashIndex);
+        }
+
+        // Build S3 ARNs for the inline policy
+        List<String> s3Resources = new ArrayList<>();
+        // keep access to sample bucket as well (harmless)
+        s3Resources.add("arn:aws:s3:::sagemaker-sample-files");
+        s3Resources.add("arn:aws:s3:::sagemaker-sample-files/*");
+        if (bucketFromUri != null && !bucketFromUri.isEmpty()) {
+            s3Resources.add("arn:aws:s3:::" + bucketFromUri);
+            s3Resources.add("arn:aws:s3:::" + bucketFromUri + "/*");
+        }
+
+        // Create IAM role for SageMaker and grant S3 read/list for the bucket(s)
         Role sagemakerRole = Role.Builder.create(this, "SageMakerRole")
                 .assumedBy(new ServicePrincipal("sagemaker.amazonaws.com"))
                 .managedPolicies(Arrays.asList(
                         ManagedPolicy.fromAwsManagedPolicyName("AmazonSageMakerFullAccess")
                 ))
+                .inlinePolicies(Map.of("SageMakerS3Access", PolicyDocument.Builder.create()
+                        .statements(Arrays.asList(
+                                PolicyStatement.Builder.create()
+                                        .effect(Effect.ALLOW)
+                                        .actions(Arrays.asList("s3:GetObject", "s3:ListBucket"))
+                                        .resources(s3Resources)
+                                        .build()
+                        ))
+                        .build()))
                 .build();
 
-        // Create feed ranking model and endpoint
-        this.feedRankingModel = createSageMakerModel("FeedRanking", environmentSuffix, sagemakerRole);
+        // Create models and endpoints using the effectiveModelS3Uri
+        this.feedRankingModel = createSageMakerModel("FeedRanking", environmentSuffix, sagemakerRole, effectiveModelS3Uri);
         this.feedRankingEndpointConfig = createEndpointConfig("FeedRanking", environmentSuffix, feedRankingModel);
         this.feedRankingEndpoint = createEndpoint("FeedRanking", environmentSuffix, feedRankingEndpointConfig);
 
-        // Create viral detection model and endpoint
-        this.viralDetectionModel = createSageMakerModel("ViralDetection", environmentSuffix, sagemakerRole);
+        this.viralDetectionModel = createSageMakerModel("ViralDetection", environmentSuffix, sagemakerRole, effectiveModelS3Uri);
         this.viralDetectionEndpointConfig = createEndpointConfig("ViralDetection", environmentSuffix, viralDetectionModel);
         this.viralDetectionEndpoint = createEndpoint("ViralDetection", environmentSuffix, viralDetectionEndpointConfig);
 
@@ -1221,13 +1266,13 @@ class MLStack extends Stack {
     }
 
     private CfnModel createSageMakerModel(final String modelType, final String environmentSuffix, 
-                                          final Role sagemakerRole) {
+                                          final Role sagemakerRole, final String modelS3Uri) {
         return CfnModel.Builder.create(this, modelType + "Model")
                 .modelName("social-platform-" + environmentSuffix + "-" + modelType.toLowerCase())
                 .executionRoleArn(sagemakerRole.getRoleArn())
                 .primaryContainer(CfnModel.ContainerDefinitionProperty.builder()
                         .image("763104351884.dkr.ecr.us-west-2.amazonaws.com/pytorch-inference:2.0.0-cpu-py310")
-                        .modelDataUrl("s3://sagemaker-sample-files/datasets/tabular/synthetic/model.tar.gz")
+                        .modelDataUrl(modelS3Uri)
                         .environment(Map.of(
                                 "SAGEMAKER_PROGRAM", "inference.py",
                                 "SAGEMAKER_SUBMIT_DIRECTORY", "/opt/ml/model/code"
@@ -1277,6 +1322,8 @@ class MLStack extends Stack {
 
 /**
  * Main TapStack that orchestrates all infrastructure stacks
+ *
+ * TapStack now accepts modelS3Uri and forwards it to the MLStack.
  */
 class TapStack extends Stack {
     private final SecurityStack securityStack;
@@ -1289,7 +1336,7 @@ class TapStack extends Stack {
     private final MLStack mlStack;
     private final String environmentSuffix;
 
-    TapStack(final Construct scope, final String id, final TapStackProps props) {
+    TapStack(final Construct scope, final String id, final TapStackProps props, final String modelS3Uri) {
         super(scope, id, props != null ? props.getStackProps() : null);
 
         this.environmentSuffix = props != null ? props.getEnvironmentSuffix() : "dev";
@@ -1391,12 +1438,13 @@ class TapStack extends Stack {
                         .description("Real-Time Stack for social platform: " + environmentSuffix)
                         .build());
 
-        // Create ML stack
+        // Create ML stack (pass modelS3Uri)
         this.mlStack = new MLStack(
                 this,
                 "ML",
                 environmentSuffix,
                 securityStack.getKmsKey(),
+                modelS3Uri,
                 StackProps.builder()
                         .env(props != null && props.getStackProps() != null ? props.getStackProps().getEnv() : null)
                         .description("Machine Learning Stack for social platform: " + environmentSuffix)
@@ -1527,6 +1575,11 @@ class TapStack extends Stack {
 
 /**
  * Main entry point for the Social Platform CDK Java application
+ *
+ * Usage:
+ * - Optionally set MODEL_S3_URI to a full S3 URI (s3://bucket/key). If set, MLStack will use it.
+ * - If MODEL_S3_URI is not set, MLStack will construct a likely S3 URI using the account token
+ *   and environmentSuffix, e.g. s3://social-platform-sagemaker-<account>-dev/model.tar.gz
  */
 public final class Main {
 
@@ -1548,18 +1601,23 @@ public final class Main {
 
         // Get scaling configuration from environment
         String minInstancesEnv = System.getenv("MIN_INSTANCES");
-        Integer minInstances = (minInstancesEnv != null && !minInstancesEnv.isEmpty()) 
+        Integer minInstances = (minInstancesEnv != null && !minInstancesEnv.isEmpty())
                 ? Integer.parseInt(minInstancesEnv) : 100;
 
         String maxInstancesEnv = System.getenv("MAX_INSTANCES");
-        Integer maxInstances = (maxInstancesEnv != null && !maxInstancesEnv.isEmpty()) 
+        Integer maxInstances = (maxInstancesEnv != null && !maxInstancesEnv.isEmpty())
                 ? Integer.parseInt(maxInstancesEnv) : 800;
 
         String auroraReplicasEnv = System.getenv("AURORA_READ_REPLICAS");
-        Integer auroraReadReplicas = (auroraReplicasEnv != null && !auroraReplicasEnv.isEmpty()) 
+        Integer auroraReadReplicas = (auroraReplicasEnv != null && !auroraReplicasEnv.isEmpty())
                 ? Integer.parseInt(auroraReplicasEnv) : 20;
 
-        // Create the main Social Platform stack
+        // Read optional model S3 URI from env. If you uploaded the model, set:
+        // export MODEL_S3_URI="your model s3 uri in the object. 
+        //example MODEL_S3_URI='s3://social-platform-sagemaker-342597974367-dev/model.tar.gz'"
+        String modelS3Uri = System.getenv("MODEL_S3_URI");
+
+        // Create the main Social Platform stack (pass modelS3Uri)
         new TapStack(app, "TapStack" + environmentSuffix, TapStackProps.builder()
                 .environmentSuffix(environmentSuffix)
                 .minInstances(minInstances)
@@ -1571,7 +1629,7 @@ public final class Main {
                                 .region("us-west-2")
                                 .build())
                         .build())
-                .build());
+                .build(), modelS3Uri);
 
         app.synth();
     }
