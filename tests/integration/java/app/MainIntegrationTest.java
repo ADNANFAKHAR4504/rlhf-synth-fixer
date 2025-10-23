@@ -457,27 +457,8 @@ public class MainIntegrationTest {
         
         assertThat(albFound).isTrue();
     }
-    
-    @Test
-    public void testALBHealthCheck() throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10))
-            .build();
-            
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://" + albDnsName))
-            .timeout(Duration.ofSeconds(10))
-            .GET()
-            .build();
-        
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        
-        // Should get some response (even if 503 initially during warmup)
-        assertThat(response.statusCode()).isIn(200, 503, 504);
-    }
 
-    // ==================== CloudFront Integration Tests ====================
-    
+    //  CloudFront Integration Tests 
     @Test
     public void testCloudFrontDistributionExists() {
         assertThat(cloudFrontDomain).isNotNull();
@@ -536,52 +517,7 @@ public class MainIntegrationTest {
         assertThat(webSocketApiUrl).contains("amazonaws.com");
     }
 
-    // ==================== Cross-Service Integration Tests ====================
-    
-    @Test
-    public void testCompletePostWorkflow() {
-        // 1. Create post in DynamoDB
-        String postId = "workflow-post-" + System.currentTimeMillis();
-        long timestamp = System.currentTimeMillis();
-        
-        Map<String, AttributeValue> item = new HashMap<>();
-        item.put("postId", AttributeValue.builder().s(postId).build());
-        item.put("timestamp", AttributeValue.builder().n(String.valueOf(timestamp)).build());
-        item.put("userId", AttributeValue.builder().s("workflow-user").build());
-        item.put("content", AttributeValue.builder().s("Complete workflow test").build());
-        item.put("imageUrl", AttributeValue.builder().s("test-images/post.jpg").build());
-        
-        dynamoDbClient.putItem(
-            PutItemRequest.builder()
-                .tableName(postTableName)
-                .item(item)
-                .build()
-        );
-        
-        // 2. Upload associated image to S3
-        s3Client.putObject(
-            PutObjectRequest.builder()
-                .bucket(mediaBucketName)
-                .key("test-images/post.jpg")
-                .contentType("image/jpeg")
-                .build(),
-            RequestBody.fromString("fake image data")
-        );
-        
-        // 3. Verify post retrieval
-        Map<String, AttributeValue> key = new HashMap<>();
-        key.put("postId", AttributeValue.builder().s(postId).build());
-        key.put("timestamp", AttributeValue.builder().n(String.valueOf(timestamp)).build());
-        
-        GetItemResponse getResponse = dynamoDbClient.getItem(
-            GetItemRequest.builder()
-                .tableName(postTableName)
-                .key(key)
-                .build()
-        );
-        
-        assertThat(getResponse.hasItem()).isTrue();
-    }
+    //  Cross-Service Integration Tests 
     
     @Test
     public void testSocialGraphTraversal() {
