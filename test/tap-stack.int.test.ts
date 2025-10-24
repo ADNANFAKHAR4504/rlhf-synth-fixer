@@ -656,12 +656,13 @@ describe('IoT Recovery Automation - Integration Tests', () => {
         }
 
         const queueUrl = outputs.SensorDLQUrl;
-        const testMessageBody = JSON.stringify({
+        const testMessage = {
           deviceId: `test-sensor-${Date.now()}`,
           deviceType: 'sensor',
           failureReason: 'integration-test',
           timestamp: Date.now()
-        });
+        };
+        const testMessageBody = JSON.stringify(testMessage);
 
         // Send message
         const sendResponse = await sqsClient.send(
@@ -696,8 +697,8 @@ describe('IoT Recovery Automation - Integration Tests', () => {
 
         // Parse and verify the message content
         const receivedBody = JSON.parse(receivedMessage.Body!);
-        expect(receivedBody.deviceId).toBe('test-device-123');
-        expect(receivedBody.deviceType).toBe('sensor');
+        expect(receivedBody.deviceId).toBe(testMessage.deviceId);
+        expect(receivedBody.deviceType).toBe(testMessage.deviceType);
 
         console.log(`✓ Received test message from sensor DLQ`);
       }, 45000);
@@ -1957,10 +1958,12 @@ describe('IoT Recovery Automation - Integration Tests', () => {
           console.log(`✓ Written ${testDevices.length} test devices to DynamoDB`);
 
           // Verify devices can be queried by deviceType GSI
+          // Extract environment suffix from table name (e.g., iot-device-recovery-dev -> dev)
+          const envSuffix = outputs.DeviceRecoveryTableName?.split('-').pop() || 'dev';
           const gsiQuery = await docClient.send(
             new QueryCommand({
               TableName: outputs.DeviceRecoveryTableName,
-              IndexName: `deviceType-index-${process.env.ENVIRONMENT || 'dev'}`,
+              IndexName: `deviceType-index-${envSuffix}`,
               KeyConditionExpression: 'deviceType = :type',
               ExpressionAttributeValues: {
                 ':type': 'sensor'
