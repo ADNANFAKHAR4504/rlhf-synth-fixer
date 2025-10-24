@@ -800,7 +800,7 @@ class DataSyncStack extends cdk.NestedStack {
       let activationKey = null;
       for (let i = 0; i < 5; i++) {
         try {
-          activationKey = await getActivationKey(privateIp);
+          activationKey = await getActivationKey(privateIp, region);
           if (activationKey) {
             console.log(\`Got activation key on attempt \${i + 1}\`);
             break;
@@ -819,7 +819,7 @@ class DataSyncStack extends cdk.NestedStack {
       const datasync = new DataSyncClient({ region });
       const command = new CreateAgentCommand({
         ActivationKey: activationKey,
-        AgentName: 'MigrationAgent-YOUR_ENV_SUFFIX'  // Replace with actual env suffix
+        AgentName: 'MigrationAgent-\${props.environmentSuffix}'  // Replace with actual env suffix
       });
       const result = await datasync.send(command);
       
@@ -839,10 +839,10 @@ class DataSyncStack extends cdk.NestedStack {
     }
   };
   
-  function getActivationKey(privateIp) {
+  function getActivationKey(privateIp, region) {
     return new Promise((resolve, reject) => {
       const http = require('http');
-      const req = http.get(\`http://\${privateIp}/activationkey\`, { timeout: 10000 }, (res) => {
+      const req = http.get(\`http://\${privateIp}/?activationRegion=\${region}\`, { timeout: 10000 }, (res) => {
         let data = '';
         res.on('data', (chunk) => data += chunk);
         res.on('end', () => {
