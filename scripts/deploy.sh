@@ -158,6 +158,12 @@ elif [ "$PLATFORM" = "pulumi" ]; then
   
   if [ "$LANGUAGE" = "go" ]; then
     echo "🔧 Go Pulumi project detected"
+    
+    # Set TMPDIR to avoid noexec issues with /tmp
+    export TMPDIR="${HOME}/.pulumi/tmp"
+    mkdir -p "$TMPDIR"
+    echo "Using TMPDIR: $TMPDIR"
+    
     pulumi login "$PULUMI_BACKEND_URL"
     cd lib
     echo "Selecting or creating Pulumi stack..."
