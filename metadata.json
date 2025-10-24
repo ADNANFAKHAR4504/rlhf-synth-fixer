@@ -20,5 +20,5 @@
     "EventBridge",
     "KMS"
   ],
-  "training_quality": "high"
+  "training_quality": "10"
 }

@@ -4,7 +4,7 @@
 
 Comprehensive regulatory reporting platform built as a single CloudFormation JSON template
 
-1. Step Functions orchestrate the workflow: generate → validate → deliver → confirm
+1. Step Functions orchestrate the workflow: generate -> validate -> deliver -> confirm
 2. Lambda functions for report rendering and jurisdiction rules
 3. Aurora Serverless v2 for the database
 4. S3 for report storage with versioning and 10-year retention

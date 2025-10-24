@@ -1,5 +1,5 @@
 Build a single-stack JSON (prod, us-east-1) regulatory reporting platform that generates ~2,000 reports/day across jurisdictions. Use only essential services:
-Step Functions to orchestrate: generate → validate → deliver → confirm
+Step Functions to orchestrate: generate -> validate -> deliver -> confirm
 Lambda to render reports & apply rules per jurisdiction
 Aurora Serverless v2 as the central reporting DB
 S3 for storing reports (versioned, 10-year retention)
@@ -16,4 +16,4 @@ Store all reports & confirmations with auditability
 Monthly summary export instead of real-time dashboards
 
 Deliverable
-One JSON IaC stack wiring Step Functions, Lambda, Aurora, S3, SES, EventBridge, CloudWatch, CloudTrail, and KMS — plus simple sample Lambdas for generation, validation, and delivery.
+One JSON IaC stack wiring Step Functions, Lambda, Aurora, S3, SES, EventBridge, CloudWatch, CloudTrail, and KMS - plus simple sample Lambdas for generation, validation, and delivery.
