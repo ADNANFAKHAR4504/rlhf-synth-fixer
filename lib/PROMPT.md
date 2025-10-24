@@ -6,7 +6,7 @@ The system should handle real-time streaming data from patient monitoring device
 
 ## Requirements
 
-The infrastructure needs to be deployed in the eu-west-2 region and must meet HIPAA compliance requirements. All data must be encrypted both when stored and during transmission using AES-256 encryption. The system needs to be highly available with at least 99.99% uptime, which means resources should be deployed across multiple availability zones.
+The infrastructure needs to be deployed in the eu-west-1 region and must meet HIPAA compliance requirements. All data must be encrypted both when stored and during transmission using AES-256 encryption. The system needs to be highly available with at least 99.99% uptime, which means resources should be deployed across multiple availability zones.
 
 ## Core Components
 

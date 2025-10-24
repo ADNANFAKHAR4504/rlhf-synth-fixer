@@ -32,7 +32,7 @@ func main() {
 			}
 		}
 
-		region := "eu-west-2"
+		region := "eu-west-1"
 
 		// Get account ID
 		caller, err := aws.GetCallerIdentity(ctx, nil, nil)
