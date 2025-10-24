@@ -79,7 +79,7 @@ If `tasks.csv` is present:
 
 2. **Get full task details** (if you need all fields):
    ```bash
-   # Get complete task data including background, problem, constraints, etc.
+   # Get complete task data including all available fields
    TASK_DETAILS=$(./.claude/scripts/task-manager.sh get "$TASK_ID")
    
    # Save to temporary file for create-task-files.sh

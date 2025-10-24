@@ -1,0 +1,2999 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Nova Clinical Trial Data Platform - Secure Infrastructure Foundation",
+    "Parameters": {
+        "ProjectName": {
+            "Type": "String",
+            "Default": "nova-clinical",
+            "Description": "Project name for resource naming convention"
+        },
+        "Environment": {
+            "Type": "String",
+            "Default": "prod",
+            "AllowedValues": [
+                "dev",
+                "staging",
+                "prod"
+            ],
+            "Description": "Environment name for resource naming convention"
+        },
+        "NotificationEmail": {
+            "Type": "String",
+            "Default": "admin@nova-clinical.com",
+            "Description": "Email address for budget and operational alerts",
+            "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+        },
+        "NovaBudgetAmount": {
+            "Type": "Number",
+            "Default": 1000,
+            "Description": "Monthly budget amount in USD",
+            "MinValue": 1,
+            "MaxValue": 100000
+        },
+        "EC2ImageId": {
+            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+            "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
+            "Description": "AMI ID for the EC2 instance (uses latest Amazon Linux 2 AMI by default, or specify custom AMI ID)"
+        },
+        "ApiDeploymentVersion": {
+            "Type": "String",
+            "Default": "v3",
+            "Description": "Bump this to force API Gateway deployment replacement when methods change"
+        }
+    },
+    "Conditions": {
+        "IsBudgetsRegion": {
+            "Fn::Equals": [
+                {
+                    "Ref": "AWS::Region"
+                },
+                "us-east-1"
+            ]
+        }
+    },
+    "Resources": {
+        "NovaKMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": "KMS key for Nova Clinical Trial Data Platform encryption",
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow CloudWatch Logs",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "logs.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "ArnEquals": {
+                                    "kms:EncryptionContext:aws:logs:arn": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "Allow S3",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "s3.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow RDS",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "rds.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow SNS",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "sns.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-nova-kms-key"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaKMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/${ProjectName}-${Environment}-nova-key"
+                },
+                "TargetKeyId": {
+                    "Ref": "NovaKMSKey"
+                }
+            }
+        },
+        "NovaVPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": "10.0.0.0/16",
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-vpc"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaPrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "NovaVPC"
+                },
+                "CidrBlock": "10.0.1.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-private-subnet-1"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaPrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "NovaVPC"
+                },
+                "CidrBlock": "10.0.2.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-private-subnet-2"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaInternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-igw"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaInternetGatewayAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "InternetGatewayId": {
+                    "Ref": "NovaInternetGateway"
+                },
+                "VpcId": {
+                    "Ref": "NovaVPC"
+                }
+            }
+        },
+        "NovaPublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "NovaVPC"
+                },
+                "CidrBlock": "10.0.10.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-public-subnet-1"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaPublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "NovaVPC"
+                },
+                "CidrBlock": "10.0.11.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-public-subnet-2"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaPublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "NovaVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-public-rt"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaPublicDefaultRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "NovaInternetGatewayAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "NovaPublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "NovaInternetGateway"
+                }
+            }
+        },
+        "NovaPublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "NovaPublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "NovaPublicSubnet1"
+                }
+            }
+        },
+        "NovaPublicSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "NovaPublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "NovaPublicSubnet2"
+                }
+            }
+        },
+        "NovaPrivateRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "NovaVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-private-rt"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaPrivateSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "NovaPrivateRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "NovaPrivateSubnet1"
+                }
+            }
+        },
+        "NovaPrivateSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "NovaPrivateRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "NovaPrivateSubnet2"
+                }
+            }
+        },
+        "NovaS3VPCEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "NovaVPC"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
+                },
+                "VpcEndpointType": "Gateway",
+                "RouteTableIds": [
+                    {
+                        "Ref": "NovaPrivateRouteTable"
+                    },
+                    {
+                        "Ref": "NovaPublicRouteTable"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": "*",
+                            "Action": [
+                                "s3:GetObject",
+                                "s3:PutObject",
+                                "s3:DeleteObject",
+                                "s3:ListBucket"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "${NovaDataBucket.Arn}"
+                                },
+                                {
+                                    "Fn::Sub": "${NovaDataBucket.Arn}/*"
+                                },
+                                {
+                                    "Fn::Sub": "${NovaLogsBucket.Arn}"
+                                },
+                                {
+                                    "Fn::Sub": "${NovaLogsBucket.Arn}/*"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-s3-vpc-endpoint"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaEC2VPCEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "NovaVPC"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.ec2"
+                },
+                "VpcEndpointType": "Interface",
+                "SubnetIds": [
+                    {
+                        "Ref": "NovaPrivateSubnet1"
+                    },
+                    {
+                        "Ref": "NovaPrivateSubnet2"
+                    }
+                ],
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "NovaAppSecurityGroup"
+                    }
+                ],
+                "PrivateDnsEnabled": true,
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": "*",
+                            "Action": [
+                                "ec2:DescribeInstances",
+                                "ec2:DescribeImages",
+                                "ec2:DescribeSecurityGroups",
+                                "ec2:DescribeSubnets",
+                                "ec2:DescribeVpcs"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-ec2-vpc-endpoint"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaSSMVPCVPCEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "NovaVPC"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.ssm"
+                },
+                "VpcEndpointType": "Interface",
+                "SubnetIds": [
+                    {
+                        "Ref": "NovaPrivateSubnet1"
+                    },
+                    {
+                        "Ref": "NovaPrivateSubnet2"
+                    }
+                ],
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "NovaAppSecurityGroup"
+                    }
+                ],
+                "PrivateDnsEnabled": true,
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": "*",
+                            "Action": [
+                                "ssm:GetParameter",
+                                "ssm:GetParameters",
+                                "ssm:GetParametersByPath",
+                                "ssm:DescribeParameters"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-ssm-vpc-endpoint"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaSSMMessagesVPCEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "NovaVPC"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.ssmmessages"
+                },
+                "VpcEndpointType": "Interface",
+                "SubnetIds": [
+                    {
+                        "Ref": "NovaPrivateSubnet1"
+                    },
+                    {
+                        "Ref": "NovaPrivateSubnet2"
+                    }
+                ],
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "NovaAppSecurityGroup"
+                    }
+                ],
+                "PrivateDnsEnabled": true,
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": "*",
+                            "Action": [
+                                "ssmmessages:CreateControlChannel",
+                                "ssmmessages:CreateDataChannel",
+                                "ssmmessages:OpenControlChannel",
+                                "ssmmessages:OpenDataChannel"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-ssm-messages-vpc-endpoint"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaEC2MessagesVPCEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "NovaVPC"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.ec2messages"
+                },
+                "VpcEndpointType": "Interface",
+                "SubnetIds": [
+                    {
+                        "Ref": "NovaPrivateSubnet1"
+                    },
+                    {
+                        "Ref": "NovaPrivateSubnet2"
+                    }
+                ],
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "NovaAppSecurityGroup"
+                    }
+                ],
+                "PrivateDnsEnabled": true,
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": "*",
+                            "Action": [
+                                "ec2messages:AcknowledgeMessage",
+                                "ec2messages:DeleteMessage",
+                                "ec2messages:FailMessage",
+                                "ec2messages:GetEndpoint",
+                                "ec2messages:GetMessages",
+                                "ec2messages:SendReply"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-ec2-messages-vpc-endpoint"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaKMSVPCEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "NovaVPC"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.kms"
+                },
+                "VpcEndpointType": "Interface",
+                "SubnetIds": [
+                    {
+                        "Ref": "NovaPrivateSubnet1"
+                    },
+                    {
+                        "Ref": "NovaPrivateSubnet2"
+                    }
+                ],
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "NovaAppSecurityGroup"
+                    }
+                ],
+                "PrivateDnsEnabled": true,
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": "*",
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:DescribeKey",
+                                "kms:Encrypt",
+                                "kms:GenerateDataKey",
+                                "kms:ReEncrypt"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*"
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-kms-vpc-endpoint"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaCloudWatchLogsVPCEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "NovaVPC"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.logs"
+                },
+                "VpcEndpointType": "Interface",
+                "SubnetIds": [
+                    {
+                        "Ref": "NovaPrivateSubnet1"
+                    },
+                    {
+                        "Ref": "NovaPrivateSubnet2"
+                    }
+                ],
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "NovaAppSecurityGroup"
+                    }
+                ],
+                "PrivateDnsEnabled": true,
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": "*",
+                            "Action": [
+                                "logs:CreateLogGroup",
+                                "logs:CreateLogStream",
+                                "logs:PutLogEvents",
+                                "logs:DescribeLogGroups",
+                                "logs:DescribeLogStreams"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-cloudwatch-logs-vpc-endpoint"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaDBSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupDescription": "Subnet group for RDS instances",
+                "SubnetIds": [
+                    {
+                        "Ref": "NovaPrivateSubnet1"
+                    },
+                    {
+                        "Ref": "NovaPrivateSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-db-subnet-group"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaDataBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "nova-clinical-${AWS::AccountId}-data-bucket"
+                },
+                "OwnershipControls": {
+                    "Rules": [
+                        {
+                            "ObjectOwnership": "BucketOwnerPreferred"
+                        }
+                    ]
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "NovaKMSKey"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "TransitionToIA",
+                            "Status": "Enabled",
+                            "Transitions": [
+                                {
+                                    "TransitionInDays": 30,
+                                    "StorageClass": "STANDARD_IA"
+                                }
+                            ]
+                        },
+                        {
+                            "Id": "ExpireOldVersions",
+                            "Status": "Enabled",
+                            "NoncurrentVersionTransitions": [
+                                {
+                                    "TransitionInDays": 60,
+                                    "StorageClass": "GLACIER"
+                                }
+                            ],
+                            "NoncurrentVersionExpirationInDays": 90
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-secure-bucket"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaLogsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "nova-clinical-${AWS::AccountId}-logs-bucket"
+                },
+                "OwnershipControls": {
+                    "Rules": [
+                        {
+                            "ObjectOwnership": "BucketOwnerPreferred"
+                        }
+                    ]
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "NovaKMSKey"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-logging-bucket"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaReadOnlyRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "sts:AssumeRole",
+                            "Condition": {
+                                "Bool": {
+                                    "aws:MultiFactorAuthPresent": "true"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/ReadOnlyAccess",
+                    "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "ResourceGroupsReadOnly",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "resource-groups:Get*",
+                                        "resource-groups:List*",
+                                        "resource-groups:Search*",
+                                        "tag:GetResources",
+                                        "tag:GetTagKeys",
+                                        "tag:GetTagValues"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "BudgetsReadAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "budgets:ViewBudget"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "EC2ProcessingAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutObject",
+                                        "s3:GetObject",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${NovaDataBucket.Arn}"
+                                        },
+                                        {
+                                            "Fn::Sub": "${NovaDataBucket.Arn}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Encrypt",
+                                        "kms:Decrypt",
+                                        "kms:ReEncrypt*",
+                                        "kms:GenerateDataKey*",
+                                        "kms:DescribeKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "NovaKMSKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "secretsmanager:GetSecretValue"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "NovaDatabaseSecret"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-readonly-role"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaApiGatewayRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "apigateway.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "SsmSendCommandFromApi",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ssm:SendCommand"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-apigateway-cloudwatch-role"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaApiGateway": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-secure-api"
+                },
+                "Description": "Secure API Gateway with comprehensive logging",
+                "EndpointConfiguration": {
+                    "Types": [
+                        "REGIONAL"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-secure-api"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaApiGatewayLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/apigateway/${ProjectName}-${Environment}"
+                },
+                "RetentionInDays": 30,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-api-gateway-logs"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaApiGatewayAccount": {
+            "Type": "AWS::ApiGateway::Account",
+            "Properties": {
+                "CloudWatchRoleArn": {
+                    "Fn::GetAtt": [
+                        "NovaApiGatewayRole",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "NovaApiGatewayDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": [
+                "NovaApiGatewayMethod",
+                "NovaApiGatewayIngestMethod"
+            ],
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "NovaApiGateway"
+                },
+                "Description": {
+                    "Fn::Sub": "Deployment-${ApiDeploymentVersion}"
+                }
+            }
+        },
+        "NovaApiGatewayStage": {
+            "Type": "AWS::ApiGateway::Stage",
+            "DependsOn": [
+                "NovaApiGatewayAccount"
+            ],
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "NovaApiGateway"
+                },
+                "DeploymentId": {
+                    "Ref": "NovaApiGatewayDeployment"
+                },
+                "StageName": {
+                    "Ref": "Environment"
+                },
+                "MethodSettings": [
+                    {
+                        "ResourcePath": "/*",
+                        "HttpMethod": "*",
+                        "MetricsEnabled": true,
+                        "ThrottlingRateLimit": 1000,
+                        "ThrottlingBurstLimit": 2000
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-api-stage"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaApiGatewayResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "NovaApiGateway"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "NovaApiGateway",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "clinical-data"
+            }
+        },
+        "NovaApiGatewayMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "NovaApiGateway"
+                },
+                "ResourceId": {
+                    "Ref": "NovaApiGatewayResource"
+                },
+                "HttpMethod": "GET",
+                "AuthorizationType": "AWS_IAM",
+                "RequestParameters": {
+                    "method.request.header.Authorization": true
+                },
+                "Integration": {
+                    "Type": "MOCK",
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": 200,
+                            "ResponseTemplates": {
+                                "application/json": "{\n  \"message\": \"Nova Clinical Trial Data Platform API\",\n  \"timestamp\": \"$context.requestTime\",\n  \"requestId\": \"$context.requestId\"\n}\n"
+                            }
+                        }
+                    ],
+                    "RequestTemplates": {
+                        "application/json": "{\n  \"statusCode\": 200\n}\n"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200,
+                        "ResponseModels": {
+                            "application/json": "Empty"
+                        }
+                    }
+                ]
+            }
+        },
+        "NovaApiGatewayIngestMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "NovaApiGateway"
+                },
+                "ResourceId": {
+                    "Ref": "NovaApiGatewayResource"
+                },
+                "HttpMethod": "POST",
+                "AuthorizationType": "AWS_IAM",
+                "ApiKeyRequired": false,
+                "RequestParameters": {
+                    "method.request.header.X-Instance-Id": true
+                },
+                "Integration": {
+                    "Type": "AWS",
+                    "IntegrationHttpMethod": "POST",
+                    "Credentials": {
+                        "Fn::GetAtt": [
+                            "NovaApiGatewayRole",
+                            "Arn"
+                        ]
+                    },
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:ssm:action/SendCommand"
+                    },
+                    "RequestTemplates": {
+                        "application/json": "#set($inputRoot = $input.path('$'))\n{\n  \"DocumentName\": \"AWS-RunShellScript\",\n  \"InstanceIds\": [\"$util.escapeJavaScript($input.params('X-Instance-Id'))\"],\n  \"Parameters\": {\n    \"commands\": [\n      \"set -e\",\n      \"echo '$util.escapeJavaScript($input.body)' > /tmp/payload.json\",\n      \"yum -y install postgresql >/dev/null 2>&1 || true\",\n      \"PATIENT=$(python3 - <<'PY'\\nimport json\\nprint(json.load(open('/tmp/payload.json'))['patientId'])\\nPY\\n)\",\n      \"TRIAL=$(python3 - <<'PY'\\nimport json\\nprint(json.load(open('/tmp/payload.json'))['trialId'])\\nPY\\n)\",\n      \"BUCKET=$util.escapeJavaScript($input.json('$.bucketName'))\",\n      \"KMS_ARN=$util.escapeJavaScript($input.json('$.kmsKeyArn'))\",\n      \"SECRET_ARN=$util.escapeJavaScript($input.json('$.secretArn'))\",\n      \"RDS_ENDPOINT=$util.escapeJavaScript($input.json('$.rdsEndpoint'))\",\n      \"aws s3 cp /tmp/payload.json s3://$BUCKET/ingest/raw/${PATIENT}-${TRIAL}.json --sse aws:kms --sse-kms-key-id $KMS_ARN\",\n      \"SECRET_STR=$(aws secretsmanager get-secret-value --secret-id $SECRET_ARN --query SecretString --output text)\",\n      \"DB_USER=$(python3 - <<'PY'\\nimport json,os\\nprint(json.loads(os.environ['SECRET_STR'])['username'])\\nPY\\n)\",\n      \"DB_PASS=$(python3 - <<'PY'\\nimport json,os\\nprint(json.loads(os.environ['SECRET_STR'])['password'])\\nPY\\n)\",\n      \"export PGPASSWORD=$DB_PASS\",\n      \"psql -h $RDS_ENDPOINT -U $DB_USER -d postgres -c \\\"CREATE TABLE IF NOT EXISTS clinical_metadata(id text primary key, patient_id text, trial_id text);\\\"\",\n      \"psql -h $RDS_ENDPOINT -U $DB_USER -d postgres -c \\\"INSERT INTO clinical_metadata(id, patient_id, trial_id) VALUES ('${PATIENT}-${TRIAL}','${PATIENT}','${TRIAL}') ON CONFLICT (id) DO NOTHING;\\\"\",\n      \"echo processed > /tmp/processed && aws s3 cp /tmp/processed s3://$BUCKET/ingest/processed/${PATIENT}-${TRIAL}.ok --sse aws:kms --sse-kms-key-id $KMS_ARN\"\n    ]\n  }\n}\n"
+                    },
+                    "PassthroughBehavior": "WHEN_NO_MATCH",
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": 200
+                        }
+                    ]
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200
+                    }
+                ]
+            }
+        },
+        "NovaApiGatewayUsagePlan": {
+            "Type": "AWS::ApiGateway::UsagePlan",
+            "DependsOn": "NovaApiGatewayStage",
+            "Properties": {
+                "UsagePlanName": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-usage-plan"
+                },
+                "Description": "Usage plan for Nova Clinical Trial Data Platform API",
+                "ApiStages": [
+                    {
+                        "ApiId": {
+                            "Ref": "NovaApiGateway"
+                        },
+                        "Stage": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ],
+                "Throttle": {
+                    "RateLimit": 1000,
+                    "BurstLimit": 2000
+                },
+                "Quota": {
+                    "Limit": 10000,
+                    "Period": "DAY"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-usage-plan"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaApiGatewayApiKey": {
+            "Type": "AWS::ApiGateway::ApiKey",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-api-key"
+                },
+                "Description": "API Key for Nova Clinical Trial Data Platform",
+                "Enabled": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-api-key"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaApiGatewayUsagePlanKey": {
+            "Type": "AWS::ApiGateway::UsagePlanKey",
+            "Properties": {
+                "KeyId": {
+                    "Ref": "NovaApiGatewayApiKey"
+                },
+                "KeyType": "API_KEY",
+                "UsagePlanId": {
+                    "Ref": "NovaApiGatewayUsagePlan"
+                }
+            }
+        },
+        "NovaMFAPolicy": {
+            "Type": "AWS::IAM::ManagedPolicy",
+            "Properties": {
+                "Description": "Policy that enforces MFA for all IAM users for sensitive operations",
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowViewAccountInfo",
+                            "Effect": "Allow",
+                            "Action": [
+                                "iam:GetAccountPasswordPolicy",
+                                "iam:ListVirtualMFADevices",
+                                "iam:GetAccountSummary"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "AllowManageOwnPasswords",
+                            "Effect": "Allow",
+                            "Action": [
+                                "iam:ChangePassword",
+                                "iam:GetUser"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/*"
+                            }
+                        },
+                        {
+                            "Sid": "AllowManageOwnMFA",
+                            "Effect": "Allow",
+                            "Action": [
+                                "iam:CreateVirtualMFADevice",
+                                "iam:DeleteVirtualMFADevice",
+                                "iam:ListMFADevices",
+                                "iam:EnableMFADevice",
+                                "iam:ResyncMFADevice",
+                                "iam:DeactivateMFADevice"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:mfa/*"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/*"
+                                }
+                            ]
+                        },
+                        {
+                            "Sid": "DenyAllExceptListedWithoutMFA",
+                            "Effect": "Deny",
+                            "NotAction": [
+                                "iam:CreateVirtualMFADevice",
+                                "iam:EnableMFADevice",
+                                "iam:GetUser",
+                                "iam:ListMFADevices",
+                                "iam:ListVirtualMFADevices",
+                                "iam:ResyncMFADevice",
+                                "sts:GetSessionToken"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "BoolIfExists": {
+                                    "aws:MultiFactorAuthPresent": "false"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "NovaDatabaseSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Description": "RDS database password",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{\"username\": \"dbadmin\"}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 32,
+                    "ExcludeCharacters": "\"@/\\\\"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-db-password"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaDatabaseSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for RDS instance",
+                "VpcId": {
+                    "Ref": "NovaVPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 5432,
+                        "ToPort": 5432,
+                        "SourceSecurityGroupId": {
+                            "Ref": "NovaAppSecurityGroup"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-rds-sg"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaDatabase": {
+            "Type": "AWS::RDS::DBInstance",
+            "Properties": {
+                "DBInstanceClass": "db.t3.micro",
+                "Engine": "postgres",
+                "EngineVersion": "15.8",
+                "MasterUsername": {
+                    "Fn::Join": [
+                        "",
+                        [
+                            "{{resolve:secretsmanager:",
+                            {
+                                "Ref": "NovaDatabaseSecret"
+                            },
+                            ":SecretString:username}}"
+                        ]
+                    ]
+                },
+                "MasterUserPassword": {
+                    "Fn::Join": [
+                        "",
+                        [
+                            "{{resolve:secretsmanager:",
+                            {
+                                "Ref": "NovaDatabaseSecret"
+                            },
+                            ":SecretString:password}}"
+                        ]
+                    ]
+                },
+                "AllocatedStorage": 20,
+                "StorageType": "gp2",
+                "StorageEncrypted": true,
+                "KmsKeyId": {
+                    "Ref": "NovaKMSKey"
+                },
+                "DBSubnetGroupName": {
+                    "Ref": "NovaDBSubnetGroup"
+                },
+                "VPCSecurityGroups": [
+                    {
+                        "Ref": "NovaDatabaseSecurityGroup"
+                    }
+                ],
+                "PubliclyAccessible": false,
+                "BackupRetentionPeriod": 35,
+                "MultiAZ": false,
+                "DeletionProtection": false,
+                "EnablePerformanceInsights": true,
+                "PerformanceInsightsRetentionPeriod": 731,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-secure-db"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaConfigRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "ConfigS3KMSAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutObject",
+                                        "s3:GetObject",
+                                        "s3:DeleteObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${NovaConfigBucket}/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${NovaConfigBucket}"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:GenerateDataKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "NovaKMSKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-config-service-role"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaConfigBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "NovaKMSKey"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "ExpireOldConfig",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 365
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-config-bucket"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaConfigBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "NovaConfigBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "ConfigBucketPutPolicy",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": [
+                                "s3:PutObject"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::${NovaConfigBucket}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-server-side-encryption": "aws:kms",
+                                    "s3:x-amz-server-side-encryption-aws-kms-key-id": {
+                                        "Fn::GetAtt": [
+                                            "NovaKMSKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "ConfigBucketGetPolicy",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": [
+                                "s3:GetObject"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::${NovaConfigBucket}/*"
+                            }
+                        },
+                        {
+                            "Sid": "ConfigBucketListPolicy",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": [
+                                "s3:ListBucket"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::${NovaConfigBucket}"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "ConfigDeliveryChannel": {
+            "Type": "AWS::Config::DeliveryChannel",
+            "Properties": {
+                "S3BucketName": {
+                    "Ref": "NovaConfigBucket"
+                },
+                "S3KeyPrefix": "config",
+                "S3KmsKeyArn": {
+                    "Fn::GetAtt": [
+                        "NovaKMSKey",
+                        "Arn"
+                    ]
+                },
+                "ConfigSnapshotDeliveryProperties": {
+                    "DeliveryFrequency": "TwentyFour_Hours"
+                }
+            }
+        },
+        "ConfigRecorder": {
+            "Type": "AWS::Config::ConfigurationRecorder",
+            "Properties": {
+                "RoleARN": {
+                    "Fn::GetAtt": [
+                        "NovaConfigRole",
+                        "Arn"
+                    ]
+                },
+                "RecordingGroup": {
+                    "AllSupported": true,
+                    "IncludeGlobalResourceTypes": true
+                }
+            }
+        },
+        "S3BucketServerSideEncryptionEnabledRule": {
+            "Type": "AWS::Config::ConfigRule",
+            "DependsOn": "ConfigRecorder",
+            "Properties": {
+                "Description": "Checks that S3 buckets have server-side encryption enabled",
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
+                }
+            }
+        },
+        "RDSInstancePublicAccessCheckRule": {
+            "Type": "AWS::Config::ConfigRule",
+            "DependsOn": "ConfigRecorder",
+            "Properties": {
+                "Description": "Checks that RDS instances are not publicly accessible",
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "RDS_INSTANCE_PUBLIC_ACCESS_CHECK"
+                }
+            }
+        },
+        "IAMUserMfaEnabledRule": {
+            "Type": "AWS::Config::ConfigRule",
+            "DependsOn": "ConfigRecorder",
+            "Properties": {
+                "Description": "Checks that IAM users have MFA enabled",
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "IAM_USER_MFA_ENABLED"
+                }
+            }
+        },
+        "NovaLaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
+            "Properties": {
+                "LaunchTemplateName": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-launch-template"
+                },
+                "LaunchTemplateData": {
+                    "ImageId": {
+                        "Ref": "EC2ImageId"
+                    },
+                    "InstanceType": "t3.micro",
+                    "IamInstanceProfile": {
+                        "Name": {
+                            "Ref": "NovaEC2InstanceProfile"
+                        }
+                    },
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "NovaAppSecurityGroup"
+                        }
+                    ],
+                    "BlockDeviceMappings": [
+                        {
+                            "DeviceName": "/dev/xvda",
+                            "Ebs": {
+                                "VolumeSize": 20,
+                                "VolumeType": "gp3",
+                                "Encrypted": true,
+                                "KmsKeyId": {
+                                    "Ref": "NovaKMSKey"
+                                },
+                                "DeleteOnTermination": true
+                            }
+                        }
+                    ],
+                    "MetadataOptions": {
+                        "HttpTokens": "required",
+                        "HttpPutResponseHopLimit": 2,
+                        "HttpEndpoint": "enabled"
+                    },
+                    "UserData": {
+                        "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y aws-cli\n# Configure IMDSv2 session token\nTOKEN=$(curl -X PUT \"http://169.254.169.254/latest/api/token\" -H \"X-aws-ec2-metadata-token-ttl-seconds: 21600\")\n# Use IMDSv2 for all metadata requests\necho \"export AWS_METADATA_TOKEN=$TOKEN\" >> /etc/environment\n# Log successful IMDSv2 configuration\necho \"IMDSv2 configured successfully\" >> /var/log/imdsv2.log\n"
+                    },
+                    "TagSpecifications": [
+                        {
+                            "ResourceType": "instance",
+                            "Tags": [
+                                {
+                                    "Key": "Name",
+                                    "Value": {
+                                        "Fn::Sub": "${ProjectName}-${Environment}-ec2-instance"
+                                    }
+                                },
+                                {
+                                    "Key": "Environment",
+                                    "Value": {
+                                        "Ref": "Environment"
+                                    }
+                                },
+                                {
+                                    "Key": "team",
+                                    "Value": "2"
+                                },
+                                {
+                                    "Key": "iac-rlhf-amazon",
+                                    "Value": "true"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "NovaEC2Instance": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "NovaLaunchTemplate"
+                    },
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "NovaLaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
+                },
+                "SubnetId": {
+                    "Ref": "NovaPrivateSubnet1"
+                }
+            }
+        },
+        "NovaEC2InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "Roles": [
+                    {
+                        "Ref": "NovaReadOnlyRole"
+                    }
+                ]
+            }
+        },
+        "NovaAppSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group with restricted outbound traffic",
+                "VpcId": {
+                    "Ref": "NovaVPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "HTTPS access from anywhere"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "203.0.113.0/24",
+                        "Description": "HTTP outbound to specific IP ranges"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "203.0.113.0/24",
+                        "Description": "HTTPS outbound to specific IP ranges"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-app-sg"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaRestrictedEgressRule": {
+            "Type": "AWS::EC2::SecurityGroupEgress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "NovaAppSecurityGroup"
+                },
+                "IpProtocol": -1,
+                "CidrIp": "203.0.113.0/24",
+                "Description": "Restricted outbound traffic to allowed IP ranges"
+            }
+        },
+        "NovaCloudFrontOAC": {
+            "Type": "AWS::CloudFront::OriginAccessControl",
+            "Properties": {
+                "OriginAccessControlConfig": {
+                    "Name": {
+                        "Fn::Sub": "${ProjectName}-${Environment}-oac-${AWS::StackName}-${AWS::StackName}"
+                    },
+                    "OriginAccessControlOriginType": "s3",
+                    "SigningBehavior": "always",
+                    "SigningProtocol": "sigv4",
+                    "Description": {
+                        "Fn::Sub": "OAC for ${ProjectName}-${Environment}"
+                    }
+                }
+            }
+        },
+        "NovaCloudFront": {
+            "Type": "AWS::CloudFront::Distribution",
+            "Properties": {
+                "DistributionConfig": {
+                    "Comment": {
+                        "Fn::Sub": "${ProjectName}-${Environment} NovaCloudFront Distribution"
+                    },
+                    "DefaultCacheBehavior": {
+                        "TargetOriginId": "S3Origin",
+                        "ViewerProtocolPolicy": "redirect-to-https",
+                        "AllowedMethods": [
+                            "GET",
+                            "HEAD",
+                            "OPTIONS"
+                        ],
+                        "CachedMethods": [
+                            "GET",
+                            "HEAD",
+                            "OPTIONS"
+                        ],
+                        "Compress": true,
+                        "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6"
+                    },
+                    "Origins": [
+                        {
+                            "DomainName": {
+                                "Fn::GetAtt": [
+                                    "NovaDataBucket",
+                                    "RegionalDomainName"
+                                ]
+                            },
+                            "Id": "S3Origin",
+                            "OriginAccessControlId": {
+                                "Fn::GetAtt": [
+                                    "NovaCloudFrontOAC",
+                                    "Id"
+                                ]
+                            },
+                            "S3OriginConfig": {
+                                "OriginAccessIdentity": ""
+                            }
+                        }
+                    ],
+                    "Enabled": true,
+                    "HttpVersion": "http2",
+                    "PriceClass": "PriceClass_100"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-cloudfront"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaWebACL": {
+            "Type": "AWS::WAFv2::WebACL",
+            "Properties": {
+                "Scope": "REGIONAL",
+                "DefaultAction": {
+                    "Allow": {}
+                },
+                "Rules": [
+                    {
+                        "Name": "AWSManagedRulesCommonRuleSet",
+                        "Priority": 1,
+                        "OverrideAction": {
+                            "None": {}
+                        },
+                        "Statement": {
+                            "ManagedRuleGroupStatement": {
+                                "VendorName": "AWS",
+                                "Name": "AWSManagedRulesCommonRuleSet"
+                            }
+                        },
+                        "VisibilityConfig": {
+                            "SampledRequestsEnabled": true,
+                            "CloudWatchMetricsEnabled": true,
+                            "MetricName": "CommonRuleSetMetric"
+                        }
+                    }
+                ],
+                "VisibilityConfig": {
+                    "SampledRequestsEnabled": true,
+                    "CloudWatchMetricsEnabled": true,
+                    "MetricName": {
+                        "Fn::Sub": "${ProjectName}${Environment}NovaWebACL"
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-web-acl"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaDataBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "NovaDataBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowNovaCloudFrontServicePrincipal",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudfront.amazonaws.com"
+                            },
+                            "Action": "s3:GetObject",
+                            "Resource": {
+                                "Fn::Sub": "${NovaDataBucket.Arn}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "AWS:SourceArn": {
+                                        "Fn::Sub": "arn:aws:cloudfront::${AWS::AccountId}:distribution/${NovaCloudFront}"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "NovaBudget": {
+            "Type": "AWS::Budgets::Budget",
+            "Condition": "IsBudgetsRegion",
+            "Properties": {
+                "Budget": {
+                    "BudgetName": {
+                        "Fn::Sub": "${ProjectName}-${Environment}-monthly-budget"
+                    },
+                    "BudgetType": "COST",
+                    "TimeUnit": "MONTHLY",
+                    "BudgetLimit": {
+                        "Amount": {
+                            "Ref": "NovaBudgetAmount"
+                        },
+                        "Unit": "USD"
+                    },
+                    "CostFilters": {
+                        "Service": [
+                            "Amazon Simple Storage Service",
+                            "Amazon Relational Database Service",
+                            "Amazon CloudFront",
+                            "AWS Config",
+                            "Amazon API Gateway"
+                        ]
+                    },
+                    "CostTypes": {
+                        "IncludeCredit": false,
+                        "IncludeDiscount": true,
+                        "IncludeOtherSubscription": true,
+                        "IncludeRecurring": true,
+                        "IncludeRefund": false,
+                        "IncludeSubscription": true,
+                        "IncludeSupport": true,
+                        "IncludeTax": true,
+                        "IncludeUpfront": true,
+                        "UseBlended": false
+                    }
+                },
+                "NotificationsWithSubscribers": [
+                    {
+                        "Notification": {
+                            "NotificationType": "ACTUAL",
+                            "ComparisonOperator": "GREATER_THAN",
+                            "Threshold": 80,
+                            "ThresholdType": "PERCENTAGE"
+                        },
+                        "Subscribers": [
+                            {
+                                "SubscriptionType": "EMAIL",
+                                "Address": {
+                                    "Ref": "NotificationEmail"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "Notification": {
+                            "NotificationType": "FORECASTED",
+                            "ComparisonOperator": "GREATER_THAN",
+                            "Threshold": 100,
+                            "ThresholdType": "PERCENTAGE"
+                        },
+                        "Subscribers": [
+                            {
+                                "SubscriptionType": "EMAIL",
+                                "Address": {
+                                    "Ref": "NotificationEmail"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        "NovaNotificationTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "DisplayName": "AWS Config Rule Notifications",
+                "KmsMasterKeyId": {
+                    "Ref": "NovaKMSKey"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-config-notifications"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaNotificationSubscription": {
+            "Type": "AWS::SNS::Subscription",
+            "Properties": {
+                "Protocol": "email",
+                "TopicArn": {
+                    "Ref": "NovaNotificationTopic"
+                },
+                "Endpoint": {
+                    "Ref": "NotificationEmail"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "NovaKMSKeyId": {
+            "Description": "Nova KMS Key ID for encryption",
+            "Value": {
+                "Ref": "NovaKMSKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-nova-kms-key-id"
+                }
+            }
+        },
+        "NovaKMSKeyArn": {
+            "Description": "Nova KMS Key ARN for encryption",
+            "Value": {
+                "Fn::GetAtt": [
+                    "NovaKMSKey",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-nova-kms-key-arn"
+                }
+            }
+        },
+        "NovaKMSKeyAliasOutput": {
+            "Description": "Nova KMS Key Alias",
+            "Value": {
+                "Ref": "NovaKMSKeyAlias"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-nova-kms-key-alias"
+                }
+            }
+        },
+        "NovaVPCIdOutput": {
+            "Description": "ID of the Nova VPC",
+            "Value": {
+                "Ref": "NovaVPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-vpc-id"
+                }
+            }
+        },
+        "NovaInternetGatewayId": {
+            "Description": "ID of the Nova Internet Gateway",
+            "Value": {
+                "Ref": "NovaInternetGateway"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-igw-id"
+                }
+            }
+        },
+        "NovaPublicSubnet1Id": {
+            "Description": "ID of Nova Public Subnet 1",
+            "Value": {
+                "Ref": "NovaPublicSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-public-subnet-1-id"
+                }
+            }
+        },
+        "NovaPublicSubnet2Id": {
+            "Description": "ID of Nova Public Subnet 2",
+            "Value": {
+                "Ref": "NovaPublicSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-public-subnet-2-id"
+                }
+            }
+        },
+        "NovaPrivateSubnet1Id": {
+            "Description": "ID of Nova Private Subnet 1",
+            "Value": {
+                "Ref": "NovaPrivateSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-private-subnet-1-id"
+                }
+            }
+        },
+        "NovaPrivateSubnet2Id": {
+            "Description": "ID of Nova Private Subnet 2",
+            "Value": {
+                "Ref": "NovaPrivateSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-private-subnet-2-id"
+                }
+            }
+        },
+        "NovaDataBucketName": {
+            "Description": "Name of the Nova data S3 bucket with encryption",
+            "Value": {
+                "Ref": "NovaDataBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-secure-s3-bucket"
+                }
+            }
+        },
+        "NovaReadOnlyRoleArn": {
+            "Description": "ARN of the Nova read-only IAM role",
+            "Value": {
+                "Fn::GetAtt": [
+                    "NovaReadOnlyRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-readonly-role-arn"
+                }
+            }
+        },
+        "RDSEndpoint": {
+            "Description": "Nova database endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "NovaDatabase",
+                    "Endpoint.Address"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-rds-endpoint"
+                }
+            }
+        },
+        "NovaCloudFrontDomainName": {
+            "Description": "Nova CloudFront distribution domain name",
+            "Value": {
+                "Fn::GetAtt": [
+                    "NovaCloudFront",
+                    "DomainName"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-cloudfront-domain"
+                }
+            }
+        },
+        "NovaAppSecurityGroupId": {
+            "Description": "Nova Application Security Group ID",
+            "Value": {
+                "Ref": "NovaAppSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-app-security-group-id"
+                }
+            }
+        },
+        "NovaConfigBucketName": {
+            "Description": "Nova Config bucket name",
+            "Value": {
+                "Ref": "NovaConfigBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-config-s3-bucket"
+                }
+            }
+        },
+        "NovaBudgetName": {
+            "Description": "Nova Budget name for cost tracking",
+            "Value": {
+                "Fn::Sub": "${ProjectName}-${Environment}-monthly-budget"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-budget-name"
+                }
+            }
+        },
+        "NovaMFAPolicyArn": {
+            "Description": "Nova MFA policy ARN",
+            "Value": {
+                "Ref": "NovaMFAPolicy"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-mfa-policy-arn"
+                }
+            }
+        },
+        "NovaLaunchTemplateId": {
+            "Description": "Nova Launch Template ID",
+            "Value": {
+                "Ref": "NovaLaunchTemplate"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-launch-template-id"
+                }
+            }
+        },
+        "NovaLaunchTemplateLatestVersion": {
+            "Description": "Nova Launch Template Latest Version",
+            "Value": {
+                "Fn::GetAtt": [
+                    "NovaLaunchTemplate",
+                    "LatestVersionNumber"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-launch-template-version"
+                }
+            }
+        },
+        "NovaApiGatewayId": {
+            "Description": "Nova API Gateway ID",
+            "Value": {
+                "Ref": "NovaApiGateway"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-api-gateway-id"
+                }
+            }
+        },
+        "NovaApiGatewayUrl": {
+            "Description": "Nova API Gateway URL",
+            "Value": {
+                "Fn::Sub": "https://${NovaApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-api-gateway-url"
+                }
+            }
+        },
+        "NovaApiGatewayLogGroupName": {
+            "Description": "Nova API Gateway CloudWatch Log Group Name",
+            "Value": {
+                "Ref": "NovaApiGatewayLogGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-api-gateway-log-group"
+                }
+            }
+        },
+        "NovaApiGatewayApiKeyId": {
+            "Description": "Nova API Gateway API Key ID",
+            "Value": {
+                "Ref": "NovaApiGatewayApiKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-api-gateway-key-id"
+                }
+            }
+        },
+        "NovaApiGatewayUsagePlanId": {
+            "Description": "Nova API Gateway Usage Plan ID",
+            "Value": {
+                "Ref": "NovaApiGatewayUsagePlan"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-api-gateway-usage-plan-id"
+                }
+            }
+        },
+        "NovaS3VPCEndpointId": {
+            "Description": "Nova S3 VPC Endpoint ID",
+            "Value": {
+                "Ref": "NovaS3VPCEndpoint"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-s3-vpc-endpoint-id"
+                }
+            }
+        },
+        "NovaEC2VPCEndpointId": {
+            "Description": "Nova EC2 VPC Endpoint ID",
+            "Value": {
+                "Ref": "NovaEC2VPCEndpoint"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-ec2-vpc-endpoint-id"
+                }
+            }
+        },
+        "NovaSSMVPCEndpointId": {
+            "Description": "Nova SSM VPC Endpoint ID",
+            "Value": {
+                "Ref": "NovaSSMVPCVPCEndpoint"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-ssm-vpc-endpoint-id"
+                }
+            }
+        },
+        "NovaKMSVPCEndpointId": {
+            "Description": "Nova KMS VPC Endpoint ID",
+            "Value": {
+                "Ref": "NovaKMSVPCEndpoint"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-kms-vpc-endpoint-id"
+                }
+            }
+        },
+        "NovaCloudWatchLogsVPCEndpointId": {
+            "Description": "Nova CloudWatch Logs VPC Endpoint ID",
+            "Value": {
+                "Ref": "NovaCloudWatchLogsVPCEndpoint"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-cloudwatch-logs-vpc-endpoint-id"
+                }
+            }
+        },
+        "NovaEC2InstanceId": {
+            "Description": "Nova EC2 Instance ID",
+            "Value": {
+                "Ref": "NovaEC2Instance"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-ec2-instance-id"
+                }
+            }
+        },
+        "NovaDatabaseSecretArn": {
+            "Description": "Nova Database Secret ARN",
+            "Value": {
+                "Ref": "NovaDatabaseSecret"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-db-secret-arn"
+                }
+            }
+        }
+    }
+}
