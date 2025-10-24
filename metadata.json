@@ -19,5 +19,6 @@
     "CloudWatch",
     "EventBridge",
     "KMS"
-  ]
+  ],
+  "training_quality": "high"
 }
