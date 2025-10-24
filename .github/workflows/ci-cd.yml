@@ -547,8 +547,8 @@ jobs:
             exit 1
           fi
       
-      - name: Verify analysis script exists when Analysis/Monitoring
-        if: ${{ needs.detect-metadata.outputs.subtask == env.IAC_ANALYSIS_CATEGORY }}
+      - name: Verify IaC Program Optimization script exists
+        if: ${{ needs.detect-metadata.outputs.subtask == env.IAC_ANALYSIS_SUBTASK }}
         run: |
           if [ ! -f "lib/analyse.py" ] && [ ! -f "lib/analyse.sh" ]; then
             echo "❌ Expected lib/analyse.py or lib/analyse.sh for IaC Program Optimization task"
