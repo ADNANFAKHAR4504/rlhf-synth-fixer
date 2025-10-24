@@ -127,7 +127,7 @@ export class TapStack extends cdk.Stack {
         BUCKET_NAME: archiveBucket.bucketName,
         ENVIRONMENT: this.environmentSuffix
       },
-      reservedConcurrentExecutions: 1000
+      reservedConcurrentExecutions: 100 // Reduced to avoid account concurrency limits
     });
 
     // Lambda function for Kinesis republishing
@@ -142,7 +142,7 @@ export class TapStack extends cdk.Stack {
         KINESIS_STREAMS: JSON.stringify(kinesisStreams.map(s => s.streamName)),
         ENVIRONMENT: this.environmentSuffix
       },
-      reservedConcurrentExecutions: 1000
+      reservedConcurrentExecutions: 100 // Reduced to avoid account concurrency limits
     });
 
     // Lambda function for DynamoDB validation
