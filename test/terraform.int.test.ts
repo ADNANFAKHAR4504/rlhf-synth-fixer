@@ -8,13 +8,22 @@ const LIB_DIR = path.resolve(__dirname, '../lib');
 
 // Helper function to check if Terraform state exists
 function hasDeployedInfrastructure(): boolean {
+  // In CI, assume infrastructure is deployed (state is in S3 backend)
+  if (process.env.CI || process.env.GITHUB_ACTIONS) {
+    return true;
+  }
+  
   try {
-    const stateFiles = execSync('find . -name "terraform.tfstate" -o -name "*.tfstate"', {
+    // For local testing, check if terraform output works
+    const output = execSync('terraform output -json 2>/dev/null', {
       cwd: LIB_DIR,
-      encoding: 'utf8'
+      encoding: 'utf8',
+      timeout: 5000
     });
-    return stateFiles.trim().length > 0;
+    const outputs = JSON.parse(output);
+    return Object.keys(outputs).length > 0;
   } catch {
+    // If terraform isn't initialized, assume no deployment
     return false;
   }
 }
@@ -22,7 +31,10 @@ function hasDeployedInfrastructure(): boolean {
 // Helper to skip tests if infrastructure not deployed
 function skipIfNotDeployed() {
   if (!hasDeployedInfrastructure()) {
-    console.warn('⚠️  Infrastructure not deployed - skipping integration tests');
+    // Only warn in non-CI environments
+    if (!process.env.CI && !process.env.GITHUB_ACTIONS) {
+      console.warn('⚠️  Infrastructure not deployed - skipping integration tests');
+    }
     return true;
   }
   return false;
