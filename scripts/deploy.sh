@@ -162,15 +162,42 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     cd lib
     echo "Selecting or creating Pulumi stack..."
     pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create
+    
+    # Clear any existing locks before deployment
+    echo "🔓 Clearing any stuck locks..."
+    pulumi cancel --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes 2>/dev/null || echo "No locks to clear or cancel failed"
+    
     echo "Deploying infrastructure ..."
-    pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"
+    if ! pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"; then
+      echo "⚠️ Deployment failed, attempting lock recovery..."
+      pulumi cancel --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes || echo "Lock cancellation failed"
+      echo "🔄 Retrying deployment after lock cancellation..."
+      pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" || {
+        echo "❌ Deployment failed after retry"
+        cd ..
+        exit 1
+      }
+    fi
     cd ..
   else
     echo "🔧 Python Pulumi project detected"
     export PYTHONPATH=.:bin
     pipenv run pulumi-create-stack
+    
+    # Clear any existing locks before deployment
+    echo "🔓 Clearing any stuck locks..."
+    pulumi cancel --yes 2>/dev/null || echo "No locks to clear or cancel failed"
+    
     echo "Deploying infrastructure ..."
-    pipenv run pulumi-deploy
+    if ! pipenv run pulumi-deploy; then
+      echo "⚠️ Deployment failed, attempting lock recovery..."
+      pulumi cancel --yes || echo "Lock cancellation failed"
+      echo "🔄 Retrying deployment after lock cancellation..."
+      pipenv run pulumi-deploy || {
+        echo "❌ Deployment failed after retry"
+        exit 1
+      }
+    fi
   fi
 
 else
