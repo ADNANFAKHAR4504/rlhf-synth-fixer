@@ -127,80 +127,98 @@ Integration tests with 674 lines covering:
 ### 1. Networking Infrastructure (VPC)
 
 VPC Configuration:
-- CIDR: 10.0.0.0/16
-- DNS hostnames and resolution enabled  
-- Multi-AZ deployment for high availability
-- **Region: us-east-1 (standardized for CI/CD consistency)**
+```yaml
+CIDR: 10.0.0.0/16
+DNS: hostnames and resolution enabled  
+Multi-AZ: high availability deployment
+Region: us-east-1 (standardized for CI/CD)
+```
 
 Public Subnets:
-- Two subnets across AZs (us-east-1a, us-east-1b)
-- CIDR: 10.0.1.0/24, 10.0.2.0/24
-- Internet access via Internet Gateway
+```yaml
+Count: 2 subnets across AZs (us-east-1a, us-east-1b)
+CIDR: 10.0.1.0/24, 10.0.2.0/24
+Internet access: via Internet Gateway
+```
 
 Private Subnets:
-- Two subnets across AZs  
-- CIDR: 10.0.11.0/24, 10.0.12.0/24
-- Hosts ECS tasks, RDS, Redis, EFS
+```yaml
+Count: 2 subnets across AZs
+CIDR: 10.0.11.0/24, 10.0.12.0/24
+Purpose: Hosts ECS tasks, RDS, Redis, EFS
+```
 
 ### 2. Security Groups
 
 Five security groups configured:
-- ALB: HTTP/HTTPS access from internet
-- ECS: Port 8080 from ALB
-- RDS: Port 5432 from ECS
-- Redis: Port 6379 from ECS
-- EFS: Port 2049 from ECS
+```yaml
+ALB: HTTP/HTTPS access from internet
+ECS: Port 8080 from ALB
+RDS: Port 5432 from ECS
+Redis: Port 6379 from ECS
+EFS: Port 2049 from ECS
+```
 
 ### 3. Encryption (KMS)
 
 KMS Key Configuration:
-- Automatic key rotation enabled
-- 10-day deletion window
-- Encrypts: Kinesis, Redis, RDS, EFS, Secrets
-- **CloudWatch Logs**: KMS encryption removed for deployment permissions
+```yaml
+Key rotation: automatic, enabled
+Deletion window: 10 days
+Encrypts: Kinesis, Redis, RDS, EFS, Secrets
+CloudWatch Logs: KMS encryption removed (deployment fix)
+```
 
 ### 4. Data Ingestion (Kinesis Data Streams)
 
 Stream Configuration:
-- Name: edu-analytics-stream-{environmentSuffix}
-- Shard count: 2
-- Retention period: 24 hours
-- KMS encryption enabled
-- Enhanced monitoring with shard-level metrics
+```yaml
+Name: edu-analytics-stream-{environmentSuffix}
+Shard count: 2
+Retention period: 24 hours
+KMS encryption: enabled
+Enhanced monitoring: shard-level metrics
+```
 
 Purpose: Ingests real-time student performance data, supporting 5000+ TPS.
 
 ### 5. Caching Layer (ElastiCache Redis)
 
 Cluster Configuration:
-- Engine: Redis 7.1
-- Node type: cache.t4g.micro
-- Replication: 2 cache clusters
-- Multi-AZ with automatic failover
-- Encryption at rest and in transit
+```yaml
+Engine: Redis 7.1
+Node type: cache.t4g.micro
+Replication: 2 cache clusters
+Multi-AZ: automatic failover enabled
+Encryption: at rest and in transit
+```
 
 Purpose: Provides sub-second response times for frequently accessed data.
 
 ### 6. Persistent Storage (RDS Aurora PostgreSQL)
 
 Cluster Configuration:
-- Engine: Aurora PostgreSQL 16.2
-- Mode: Serverless v2
-- Scaling: 0.5 to 2 ACU
-- Database name: eduanalytics
-- Storage encryption with KMS
-- CloudWatch log exports enabled
+```yaml
+Engine: Aurora PostgreSQL 16.2
+Mode: Serverless v2
+Scaling: 0.5 to 2 ACU
+Database name: eduanalytics
+Storage encryption: KMS enabled
+CloudWatch log exports: enabled
+```
 
 Benefits: Automatic scaling, fast provisioning, cost-effective, Multi-AZ HA.
 
 ### 7. Shared Storage (EFS)
 
 File System Configuration:
-- Performance mode: General Purpose
-- Throughput mode: Bursting
-- Encryption at rest with KMS
-- Mount targets in two AZs
-- Lifecycle policy: Transition to IA after 30 days
+```yaml
+Performance mode: General Purpose
+Throughput mode: Bursting
+Encryption: at rest with KMS
+Mount targets: two AZs
+Lifecycle policy: Transition to IA after 30 days
+```
 
 Purpose: Provides shared storage for all ECS tasks.
 
