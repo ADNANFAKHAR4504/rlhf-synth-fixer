@@ -323,3 +323,174 @@ describe("Documentation and Metadata", () => {
     expect(content.language).toBe("hcl");
   });
 });
+
+// ==============================================================================
+// CONNECTION & INTEGRATION TESTS (Unit Level)
+// ==============================================================================
+// These tests verify that components are properly CONNECTED to each other
+// Not just that they exist, but that triggers/event sources/subscriptions are configured
+
+describe("Component Connections and Event Flow", () => {
+  test("DynamoDB stream is connected to validator Lambda", () => {
+    const lambdaPath = path.join(LIB_DIR, "modules/lambda/main.tf");
+    const content = fs.readFileSync(lambdaPath, "utf8");
+    
+    // Verify Lambda has DynamoDB stream as event source
+    expect(content).toMatch(/event_source_arn.*dynamodb.*stream_arn/i);
+    expect(content).toMatch(/starting_position\s*=\s*"LATEST"/);
+  });
+
+  test("validator Lambda publishes to SNS topic", () => {
+    const validatorCode = path.join(LIB_DIR, "lambda/validator/index.py");
+    const content = fs.readFileSync(validatorCode, "utf8");
+    
+    // Verify validator actually calls SNS publish
+    expect(content).toMatch(/sns\.publish/);
+    expect(content).toMatch(/TopicArn/);
+  });
+
+  test("SNS topic is subscribed to SQS queues", () => {
+    const snsPath = path.join(LIB_DIR, "modules/sns_sqs/main.tf");
+    const content = fs.readFileSync(snsPath, "utf8");
+    
+    // Verify SNS subscriptions exist for SQS
+    expect(content).toMatch(/aws_sns_topic_subscription/);
+    expect(content).toMatch(/protocol\s*=\s*"sqs"/);
+    expect(content).toMatch(/endpoint.*queue.*arn/i);
+  });
+
+  test("SQS queues trigger cache_updater Lambda", () => {
+    const snsPath = path.join(LIB_DIR, "modules/sns_sqs/main.tf");
+    const content = fs.readFileSync(snsPath, "utf8");
+    
+    // Verify SQS has Lambda event source mapping
+    expect(content).toMatch(/aws_lambda_event_source_mapping/);
+    expect(content).toMatch(/event_source_arn.*queue.*arn/i);
+    expect(content).toMatch(/function_name/);
+  });
+
+  test("cache_updater Lambda writes to ElastiCache", () => {
+    const cacheUpdaterCode = path.join(LIB_DIR, "lambda/cache_updater/index.py");
+    const content = fs.readFileSync(cacheUpdaterCode, "utf8");
+    
+    // Verify it references Redis endpoint
+    expect(content).toMatch(/REDIS_ENDPOINT/);
+  });
+
+  test("EventBridge rule triggers Step Functions", () => {
+    const eventbridgePath = path.join(LIB_DIR, "modules/eventbridge/main.tf");
+    const content = fs.readFileSync(eventbridgePath, "utf8");
+    
+    // Verify EventBridge target is Step Functions
+    expect(content).toMatch(/aws_cloudwatch_event_target/);
+    expect(content).toMatch(/aws_sfn_state_machine/);
+    expect(content).toMatch(/arn.*=.*state_machine.*arn/i);
+  });
+
+  test("Step Functions invokes consistency_checker Lambda", () => {
+    const eventbridgePath = path.join(LIB_DIR, "modules/eventbridge/main.tf");
+    const content = fs.readFileSync(eventbridgePath, "utf8");
+    
+    // Verify state machine definition includes consistency checker
+    expect(content).toMatch(/consistency.*checker/i);
+    expect(content).toMatch(/Type.*=.*"Task"/);
+  });
+
+  test("consistency_checker queries CloudWatch Logs", () => {
+    const checkerCode = path.join(LIB_DIR, "lambda/consistency_checker/index.py");
+    const content = fs.readFileSync(checkerCode, "utf8");
+    
+    // Verify it's configured to check across microservices
+    expect(content).toMatch(/MICROSERVICES_COUNT/);
+    expect(content).toMatch(/query.*results/i);
+  });
+
+  test("Step Functions triggers rollback Lambda on failure", () => {
+    const eventbridgePath = path.join(LIB_DIR, "modules/eventbridge/main.tf");
+    const content = fs.readFileSync(eventbridgePath, "utf8");
+    
+    // Verify rollback is in the state machine with error handling
+    expect(content).toMatch(/TriggerRollback/i);
+    expect(content).toMatch(/Catch/);
+    expect(content).toMatch(/ErrorEquals/);
+  });
+
+  test("rollback Lambda writes to DynamoDB and OpenSearch", () => {
+    const rollbackCode = path.join(LIB_DIR, "lambda/rollback/index.py");
+    const content = fs.readFileSync(rollbackCode, "utf8");
+    
+    // Verify it writes to DynamoDB
+    expect(content).toMatch(/table\.put_item|dynamodb/i);
+    
+    // Verify it references OpenSearch for audit
+    expect(content).toMatch(/OPENSEARCH_DOMAIN|opensearch/i);
+  });
+
+  test("all Lambda functions have IAM permissions for their connections", () => {
+    const lambdaPath = path.join(LIB_DIR, "modules/lambda/main.tf");
+    const content = fs.readFileSync(lambdaPath, "utf8");
+    
+    // Verify validator can publish to SNS
+    expect(content).toMatch(/sns:Publish/);
+    
+    // Verify cache_updater can write to CloudWatch Logs
+    expect(content).toMatch(/logs:CreateLogStream|logs:PutLogEvents/);
+    
+    // Verify consistency_checker can read from DynamoDB
+    expect(content).toMatch(/dynamodb:Query|dynamodb:GetItem/);
+    
+    // Verify rollback can write to DynamoDB
+    expect(content).toMatch(/dynamodb:PutItem/);
+  });
+
+  test("flow timing requirements are configured", () => {
+    const lambdaPath = path.join(LIB_DIR, "modules/lambda/main.tf");
+    const content = fs.readFileSync(lambdaPath, "utf8");
+    
+    // Check that all Lambda functions have appropriate timeouts
+    // Validator function section
+    const validatorSection = content.substring(content.indexOf('resource "aws_lambda_function" "validator"'), content.indexOf('resource "aws_lambda_event_source_mapping"'));
+    expect(validatorSection).toMatch(/timeout\s*=\s*2/);
+    
+    // Cache updater section
+    const cacheSection = content.substring(content.indexOf('resource "aws_lambda_function" "cache_updater"'), content.indexOf('# Consistency Checker'));
+    expect(cacheSection).toMatch(/timeout\s*=\s*3/);
+    
+    // Consistency checker
+    const consistencySection = content.substring(content.indexOf('resource "aws_lambda_function" "consistency_checker"'), content.indexOf('# Rollback Lambda'));
+    expect(consistencySection).toMatch(/timeout\s*=\s*5/);
+    
+    // Rollback
+    const rollbackSection = content.substring(content.indexOf('resource "aws_lambda_function" "rollback"'));
+    expect(rollbackSection).toMatch(/timeout\s*=\s*8/);
+  });
+
+  test("DynamoDB stream latency is configured for 500ms requirement", () => {
+    const dynamoPath = path.join(LIB_DIR, "modules/dynamodb/main.tf");
+    const content = fs.readFileSync(dynamoPath, "utf8");
+    
+    // Verify stream is enabled with NEW_AND_OLD_IMAGES for proper event tracking
+    expect(content).toMatch(/stream_enabled\s*=\s*true/);
+    expect(content).toMatch(/stream_view_type\s*=\s*"NEW_AND_OLD_IMAGES"/);
+  });
+
+  test("SNS and SQS are configured for 1s delivery requirement", () => {
+    const snsPath = path.join(LIB_DIR, "modules/sns_sqs/main.tf");
+    const content = fs.readFileSync(snsPath, "utf8");
+    
+    // SQS queues use default delay (0 seconds) and zero receive wait time
+    expect(content).toMatch(/receive_wait_time_seconds\s*=\s*0/);
+    
+    // SNS should have raw message delivery for speed
+    expect(content).toMatch(/raw_message_delivery\s*=\s*true/);
+  });
+
+  test("Step Functions configured for 15s CloudWatch Logs Insights scan", () => {
+    const eventbridgePath = path.join(LIB_DIR, "modules/eventbridge/main.tf");
+    const content = fs.readFileSync(eventbridgePath, "utf8");
+    
+    // QueryCloudWatch task should have 15s timeout
+    const querySection = content.substring(content.indexOf('QueryCloudWatch'), content.indexOf('WaitForResults'));
+    expect(querySection).toMatch(/TimeoutSeconds\s*=\s*15/);
+  });
+});

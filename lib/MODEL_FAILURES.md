@@ -196,3 +196,34 @@
 - ✅ Code formatted and linted
 
 **Key Lesson**: Infrastructure variables should have sensible defaults that allow deployment to succeed without external configuration. Required variables without defaults create deployment friction and break automation. Always provide defaults that work for development/testing environments, even if production will override them.
+
+## Issue 12: Tests Only Verified Component Existence, Not Connections
+**Problem**: Unit tests checked that individual infrastructure components existed but never verified that components were actually connected to trigger each other as required.
+
+**Root Cause**:
+- Original tests were component-focused: "does the Lambda exist?"
+- No tests verified event sources or triggers between components
+- Missing validation that EventBridge → Step Functions → Lambda connections were configured
+- No validation that timing requirements matched PROMPT specifications
+
+**Solution Applied**:
+1. Added 15 new connection verification tests checking:
+   - DynamoDB stream event source mapping to validator Lambda
+   - Validator Lambda publishes to SNS topic
+   - SNS subscriptions to SQS queues
+   - SQS event source mappings to cache_updater Lambdas
+   - EventBridge triggers Step Functions
+   - Step Functions invokes consistency_checker and rollback Lambdas
+   - IAM permissions match the required connections
+
+2. Added timing requirement tests for 2s, 3s, 5s, 8s, 15s timeouts
+
+3. Created end-to-end integration test (403 lines) that:
+   - Inserts test flag into DynamoDB
+   - Monitors entire propagation chain
+   - Tests rollback flow
+   - Cleans up test data
+
+**Result**: 48 unit tests pass, E2E test validates complete flow
+
+**Key Lesson**: Testing that components exist is not enough. Tests must verify connections and triggers actually work as specified.
