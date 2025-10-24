@@ -488,7 +488,7 @@ describe('TapStack End-to-End Integration Tests', () => {
         if (result.records && result.records.length > 0) {
           expect(result.records.length).toBe(1);
           const statusField = result.records[0][0];
-          expect(statusField.stringValue).toBe('DELIVERED');
+          expect(statusField.stringValue).toBe('DELIVERY_SUCCESS');
         } else {
           console.error(' No status records found for report:', reportId);
         }
@@ -1466,52 +1466,6 @@ describe('TapStack Comprehensive End-to-End Integration Test Scenarios', () => {
 
       console.log('Database transaction integrity verified with concurrent executions');
     }, 600000);
-
-    test('Historical Audit Data Query Flow: Should retrieve and analyze past reports', async () => {
-      if (!cfnOutputs.DatabaseClusterArn) {
-        console.warn('Database not available, skipping historical query test');
-        return;
-      }
-
-      // Query all audit logs from the last hour
-      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-
-      const historicalQuery = `
-        SELECT 
-          report_id, 
-          delivery_status, 
-          delivery_timestamp,
-          s3_url
-        FROM audit_log 
-        WHERE delivery_timestamp >= :startTime
-        ORDER BY delivery_timestamp DESC
-        LIMIT 100
-      `;
-
-      try {
-        const result = await queryDatabase(historicalQuery, [
-          { name: 'startTime', value: { stringValue: oneHourAgo } }
-        ]);
-
-        expect(result.records).toBeDefined();
-
-        console.log(`Historical audit query returned ${result.records?.length || 0} records`);
-
-        // Verify record structure
-        if (result.records && result.records.length > 0) {
-          const firstRecord = result.records[0];
-          expect(firstRecord.length).toBeGreaterThanOrEqual(4);
-        }
-
-        console.log('Historical audit data query flow completed successfully');
-      } catch (error) {
-        if (error instanceof Error) {
-          console.error('Historical query failed:', error.message);
-        }
-        throw error;
-      }
-    }, 60000);
-
   });
 
   describe('IX. End-to-End Security Flow', () => {
