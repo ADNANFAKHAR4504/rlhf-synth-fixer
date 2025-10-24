@@ -113,15 +113,6 @@ function sandboxDir(): string {
 
 provider "aws" {
   region = var.aws_region
-
-  # Skip credential validation for planning
-  skip_credentials_validation = true
-  skip_requesting_account_id  = true
-  skip_metadata_api_check     = true
-
-  # Use mock credentials for planning
-  access_key = "mock_access_key"
-  secret_key = "mock_secret_key"
 }
 `;
 
@@ -141,6 +132,17 @@ function haveTerraform(): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Check if AWS credentials are available
+ */
+function haveAwsCreds(): boolean {
+  return Boolean(
+    process.env.AWS_ACCESS_KEY_ID ||
+    process.env.AWS_PROFILE ||
+    process.env.AWS_WEB_IDENTITY_TOKEN_FILE
+  );
 }
 
 /**
@@ -246,7 +248,8 @@ function getResourceAddresses(plan: TfPlan): string[] {
 }
 
 /**
- * Load CloudFormation outputs if available
+ * Load Terraform outputs if available
+ * Handles Terraform output format: { "key": { "value": ..., "type": ..., "sensitive": ... } }
  */
 function loadOutputs(): Record<string, any> | null {
   if (!fs.existsSync(outputsJsonPath)) {
@@ -255,7 +258,19 @@ function loadOutputs(): Record<string, any> | null {
   }
   try {
     const raw = fs.readFileSync(outputsJsonPath, "utf8");
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+
+    // Convert Terraform output format to simple key-value pairs
+    const outputs: Record<string, any> = {};
+    for (const [key, output] of Object.entries(parsed)) {
+      if (typeof output === 'object' && output !== null && 'value' in output) {
+        outputs[key] = (output as any).value;
+      } else {
+        outputs[key] = output;
+      }
+    }
+
+    return outputs;
   } catch (error) {
     console.warn(`[outputs] Failed to parse: ${error}`);
     return null;
@@ -268,6 +283,7 @@ function loadOutputs(): Record<string, any> | null {
 
 describe("Terraform Integration Tests - tap_stack", () => {
   const tfOk = haveTerraform();
+  const credsOk = haveAwsCreds();
 
   // Check prerequisites
   if (!tfOk) {
@@ -289,6 +305,14 @@ describe("Terraform Integration Tests - tap_stack", () => {
     it("dev.tfvars and prod.tfvars must exist under lib/", () => {
       expect(fs.existsSync(tfvarsFiles.dev)).toBe(true);
       expect(fs.existsSync(tfvarsFiles.prod)).toBe(true);
+    });
+    return;
+  }
+
+  if (!credsOk) {
+    it("skipped: AWS credentials not detected (plan requires data sources)", () => {
+      console.warn("AWS credentials not found. Set AWS_ACCESS_KEY_ID, AWS_PROFILE, or AWS_WEB_IDENTITY_TOKEN_FILE");
+      expect(credsOk).toBe(true);
     });
     return;
   }
