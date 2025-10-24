@@ -42,7 +42,7 @@
     },
     "BucketNamePrefix": {
       "Type": "String",
-      "Default": "tap-stack",
+      "Default": "TapStackGov",
       "Description": "Prefix for S3 bucket names. Must be lowercase."
     }
   },

@@ -363,7 +363,7 @@ describe('TapStack CloudFormation Template', () => {
       },
       BucketNamePrefix: {
         Type: 'String',
-        Default: 'tap-stack',
+        Default: 'TapStackGov',
         Description: 'Prefix for S3 bucket names. Must be lowercase.',
       },
     };
@@ -867,7 +867,7 @@ describe('TapStack CloudFormation Template', () => {
       test('BucketNamePrefix parameter should have S3 naming rules', () => {
         const param = template.Parameters.BucketNamePrefix;
         expect(param.Type).toBe('String');
-        expect(param.Default).toBe('tap-stack');
+        expect(param.Default).toBe('TapStackGov');
         expect(param.Description).toContain('lowercase');
       });
     });
