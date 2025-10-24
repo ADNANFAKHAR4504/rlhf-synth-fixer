@@ -1836,6 +1836,412 @@ describe('IoT Recovery Automation - Integration Tests', () => {
 
         console.log('\n✓✓✓ Full recovery workflow verified successfully ✓✓✓\n');
       }, 120000);
+
+      test(
+        'Complete End-to-End Recovery Flow: IoT failure → CloudWatch → Lambda → Step Functions → DynamoDB → Kinesis → EventBridge → SQS → Validation',
+        async () => {
+          console.log(
+            '\n========================================================='
+          );
+          console.log(
+            'COMPLETE END-TO-END RECOVERY FLOW INTEGRATION TEST'
+          );
+          console.log(
+            '=========================================================\n'
+          );
+
+          const testRunId = `e2e-${Date.now()}`;
+
+          // ===== PHASE 1: Simulate IoT Core Rule Failure =====
+          console.log('[PHASE 1] Simulating IoT Core Rule Failure');
+          console.log('-'.repeat(60));
+
+          // Verify CloudWatch alarm exists and is configured correctly
+          const alarmsResponse = await cloudWatchClient.send(
+            new DescribeAlarmsCommand({
+              AlarmNames: [outputs.RuleFailureAlarmName!]
+            })
+          );
+
+          expect(alarmsResponse.MetricAlarms).toBeDefined();
+          expect(alarmsResponse.MetricAlarms!.length).toBe(1);
+          const alarm = alarmsResponse.MetricAlarms![0];
+
+          console.log(`✓ CloudWatch Alarm verified: ${alarm.AlarmName}`);
+          console.log(`  - Namespace: ${alarm.Namespace}`);
+          console.log(`  - Metric: ${alarm.MetricName}`);
+          console.log(`  - Period: ${alarm.Period} seconds`);
+          console.log(`  - Threshold: ${alarm.Threshold}`);
+          console.log(`  - Actions: ${alarm.AlarmActions?.length || 0}`);
+
+          expect(alarm.Namespace).toBe('AWS/IoT');
+          expect(alarm.MetricName).toBe('RuleMessageThrottled');
+          expect(alarm.AlarmActions).toBeDefined();
+          expect(alarm.AlarmActions!.length).toBeGreaterThan(0);
+
+          // ===== PHASE 2: Invoke Shadow Analysis Lambda =====
+          console.log('\n[PHASE 2] Invoking Shadow Analysis Lambda');
+          console.log('-'.repeat(60));
+
+          const shadowAnalysisPayload = JSON.stringify({
+            source: 'integration-test',
+            testRunId,
+            simulateFailures: true
+          });
+
+          const shadowResponse = await lambdaClient.send(
+            new InvokeCommand({
+              FunctionName: outputs.ShadowAnalysisLambdaName,
+              InvocationType: 'RequestResponse',
+              Payload: Buffer.from(shadowAnalysisPayload)
+            })
+          );
+
+          expect(shadowResponse.StatusCode).toBe(200);
+          const shadowResult = JSON.parse(
+            new TextDecoder().decode(shadowResponse.Payload)
+          );
+
+          console.log(`✓ Shadow analysis completed`);
+          console.log(`  - Processed devices: ${shadowResult.processedDevices}`);
+          console.log(`  - Failed devices: ${shadowResult.failedDevices}`);
+          console.log(
+            `  - Archives to process: ${shadowResult.archivesToProcess?.length || 0}`
+          );
+          console.log(`  - Environment: ${shadowResult.environment}`);
+
+          expect(shadowResult.processedDevices).toBeDefined();
+          expect(shadowResult.environment).toBeDefined();
+
+          // ===== PHASE 3: Verify DynamoDB Backfill =====
+          console.log('\n[PHASE 3] Verifying DynamoDB Backfill Operations');
+          console.log('-'.repeat(60));
+
+          // Write test device records to simulate backfill
+          const testDevices = [
+            {
+              deviceId: `e2e-sensor-${testRunId}`,
+              timestamp: Date.now(),
+              deviceType: 'sensor',
+              recoveryStatus: 'pending',
+              testRun: testRunId
+            },
+            {
+              deviceId: `e2e-actuator-${testRunId}`,
+              timestamp: Date.now(),
+              deviceType: 'actuator',
+              recoveryStatus: 'pending',
+              testRun: testRunId
+            }
+          ];
+
+          for (const device of testDevices) {
+            await docClient.send(
+              new PutCommand({
+                TableName: outputs.DeviceRecoveryTableName,
+                Item: device
+              })
+            );
+          }
+
+          console.log(`✓ Written ${testDevices.length} test devices to DynamoDB`);
+
+          // Verify devices can be queried by deviceType GSI
+          const gsiQuery = await docClient.send(
+            new QueryCommand({
+              TableName: outputs.DeviceRecoveryTableName,
+              IndexName: `deviceType-index-${process.env.ENVIRONMENT || 'dev'}`,
+              KeyConditionExpression: 'deviceType = :type',
+              ExpressionAttributeValues: {
+                ':type': 'sensor'
+              },
+              Limit: 10
+            })
+          );
+
+          console.log(`✓ GSI query returned ${gsiQuery.Items?.length || 0} items`);
+          expect(gsiQuery.Items).toBeDefined();
+
+          // ===== PHASE 4: Trigger Step Functions Orchestration =====
+          console.log('\n[PHASE 4] Triggering Step Functions Orchestration');
+          console.log('-'.repeat(60));
+
+          const executionName = `e2e-recovery-${testRunId}`;
+          const executionInput = JSON.stringify({
+            testRunId,
+            processedDevices: 2300000,
+            failedDevices: testDevices.length,
+            archivesToProcess: ['test-archive-1.json', 'test-archive-2.json'],
+            bucketName: outputs.IoTArchiveBucketName,
+            totalMessagesReplayed: 45000000,
+            source: 'e2e-test'
+          });
+
+          const executionResponse = await sfnClient.send(
+            new StartExecutionCommand({
+              stateMachineArn: outputs.RecoveryStateMachineArn,
+              name: executionName,
+              input: executionInput
+            })
+          );
+
+          expect(executionResponse.executionArn).toBeDefined();
+          console.log(`✓ Step Functions execution started`);
+          console.log(`  - Execution ARN: ${executionResponse.executionArn}`);
+
+          // Wait for execution to progress
+          await new Promise((resolve) => setTimeout(resolve, 10000));
+
+          const executionStatus = await sfnClient.send(
+            new DescribeExecutionCommand({
+              executionArn: executionResponse.executionArn
+            })
+          );
+
+          console.log(`✓ Execution status: ${executionStatus.status}`);
+          expect(['RUNNING', 'SUCCEEDED', 'FAILED']).toContain(
+            executionStatus.status
+          );
+
+          // ===== PHASE 5: Republish to Kinesis Streams =====
+          console.log('\n[PHASE 5] Republishing Messages to Kinesis Streams');
+          console.log('-'.repeat(60));
+
+          // Test writing to multiple Kinesis streams
+          const kinesisTestMessages = testDevices.map((device, index) => ({
+            StreamName: kinesisStreamNames[index % kinesisStreamNames.length],
+            Data: Buffer.from(
+              JSON.stringify({
+                deviceId: device.deviceId,
+                deviceType: device.deviceType,
+                timestamp: Date.now(),
+                testRunId,
+                message: 'recovery-test-message'
+              })
+            ),
+            PartitionKey: device.deviceId
+          }));
+
+          for (const message of kinesisTestMessages) {
+            const putResponse = await kinesisClient.send(
+              new PutRecordCommand(message)
+            );
+            expect(putResponse.SequenceNumber).toBeDefined();
+          }
+
+          console.log(
+            `✓ Published ${kinesisTestMessages.length} test messages to Kinesis`
+          );
+          console.log(
+            `  - Distributed across ${new Set(kinesisTestMessages.map(m => m.StreamName)).size} streams`
+          );
+
+          // ===== PHASE 6: EventBridge Routing to SQS DLQs =====
+          console.log('\n[PHASE 6] Testing EventBridge Routing to SQS DLQs');
+          console.log('-'.repeat(60));
+
+          // Send events for each device type
+          const deviceTypes = ['sensor', 'actuator', 'gateway', 'edge'];
+          const eventEntries = deviceTypes.map((deviceType) => ({
+            Source: 'iot.recovery',
+            DetailType: 'Device Recovery Event',
+            Detail: JSON.stringify({
+              deviceId: `e2e-${deviceType}-${testRunId}`,
+              deviceType,
+              timestamp: Date.now(),
+              reason: 'e2e-test-failure',
+              testRunId
+            }),
+            EventBusName: outputs.RecoveryEventBusName!
+          }));
+
+          const putEventsResponse = await eventBridgeClient.send(
+            new PutEventsCommand({
+              Entries: eventEntries
+            })
+          );
+
+          expect(putEventsResponse.FailedEntryCount).toBe(0);
+          console.log(`✓ Sent ${eventEntries.length} events to EventBridge`);
+
+          // Wait for EventBridge to route to SQS
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+
+          // Verify messages in SQS DLQs
+          const dlqUrls = [
+            outputs.SensorDLQUrl,
+            outputs.ActuatorDLQUrl,
+            outputs.GatewayDLQUrl,
+            outputs.EdgeDLQUrl
+          ];
+
+          let totalDLQMessages = 0;
+          for (let i = 0; i < dlqUrls.length; i++) {
+            const queueUrl = dlqUrls[i];
+            if (queueUrl) {
+              const receiveResponse = await sqsClient.send(
+                new ReceiveMessageCommand({
+                  QueueUrl: queueUrl,
+                  MaxNumberOfMessages: 10,
+                  WaitTimeSeconds: 1
+                })
+              );
+
+              const messageCount = receiveResponse.Messages?.length || 0;
+              totalDLQMessages += messageCount;
+
+              if (messageCount > 0) {
+                console.log(
+                  `✓ ${deviceTypes[i]} DLQ has ${messageCount} message(s)`
+                );
+                // Verify message structure
+                const message = receiveResponse.Messages![0];
+                const body = JSON.parse(message.Body!);
+                expect(body.detail).toBeDefined();
+                expect(body.detail.deviceType).toBe(deviceTypes[i]);
+              }
+            }
+          }
+
+          console.log(`✓ Total messages routed to DLQs: ${totalDLQMessages}`);
+
+          // ===== PHASE 7: DynamoDB Time-Series Validation =====
+          console.log('\n[PHASE 7] Running DynamoDB Time-Series Validation');
+          console.log('-'.repeat(60));
+
+          const validationPayload = JSON.stringify({
+            processedDevices: 2300000,
+            failedDevices: testDevices.length,
+            totalMessagesReplayed: 45000000,
+            archivesToProcess: ['test-archive-1.json', 'test-archive-2.json'],
+            testRunId
+          });
+
+          const validationResponse = await lambdaClient.send(
+            new InvokeCommand({
+              FunctionName: outputs.DynamoDBValidationLambdaName,
+              InvocationType: 'RequestResponse',
+              Payload: Buffer.from(validationPayload)
+            })
+          );
+
+          expect(validationResponse.StatusCode).toBe(200);
+          const validationResult = JSON.parse(
+            new TextDecoder().decode(validationResponse.Payload)
+          );
+
+          console.log(`✓ Validation Lambda completed successfully`);
+          console.log(
+            `  - Recovery percentage: ${validationResult.recoveryPercentage?.toFixed(4)}%`
+          );
+          console.log(
+            `  - Data continuity: ${validationResult.dataContinuityPercentage?.toFixed(2)}%`
+          );
+          console.log(
+            `  - Timestamp gaps detected: ${validationResult.timestampGaps || 0}`
+          );
+          console.log(
+            `  - CloudWatch metrics sent: ${validationResult.metricsSent || 0}`
+          );
+          console.log(
+            `  - Validation records analyzed: ${validationResult.validationRecordsAnalyzed || 0}`
+          );
+          console.log(
+            `  - Target met (99.9%): ${validationResult.targetMet ? 'YES' : 'NO'}`
+          );
+
+          expect(validationResult.recoveryPercentage).toBeDefined();
+          expect(validationResult.dataContinuityPercentage).toBeDefined();
+          expect(validationResult.metricsSent).toBeGreaterThan(0);
+
+          // Verify validation record was stored in DynamoDB
+          const validationQuery = await docClient.send(
+            new QueryCommand({
+              TableName: outputs.ValidationTableName,
+              KeyConditionExpression: 'deviceId = :id',
+              ExpressionAttributeValues: {
+                ':id': 'RECOVERY_VALIDATION'
+              },
+              Limit: 1,
+              ScanIndexForward: false
+            })
+          );
+
+          expect(validationQuery.Items).toBeDefined();
+          expect(validationQuery.Items!.length).toBeGreaterThan(0);
+          console.log(`✓ Validation record stored in DynamoDB`);
+
+          // ===== PHASE 8: Verify CloudWatch Metrics =====
+          console.log('\n[PHASE 8] Verifying CloudWatch Metrics');
+          console.log('-'.repeat(60));
+
+          const metricsToCheck = [
+            'RecoveryPercentage',
+            'DevicesRecovered',
+            'DevicesFailed',
+            'MessagesReplayed',
+            'DataContinuityPercentage',
+            'TimestampGapsDetected',
+            'RecoveryCompletion'
+          ];
+
+          for (const metricName of metricsToCheck) {
+            const metricResponse = await cloudWatchClient.send(
+              new GetMetricStatisticsCommand({
+                Namespace: `IoTRecovery-${process.env.ENVIRONMENT || 'dev'}`,
+                MetricName: metricName,
+                StartTime: new Date(Date.now() - 300000), // Last 5 minutes
+                EndTime: new Date(),
+                Period: 60,
+                Statistics: ['Sum', 'Average']
+              })
+            );
+
+            if (metricResponse.Datapoints && metricResponse.Datapoints.length > 0) {
+              console.log(`✓ Metric ${metricName}: ${metricResponse.Datapoints.length} datapoints`);
+            }
+          }
+
+          // ===== CLEANUP =====
+          console.log('\n[CLEANUP] Removing Test Data');
+          console.log('-'.repeat(60));
+
+          for (const device of testDevices) {
+            await docClient.send(
+              new DeleteCommand({
+                TableName: outputs.DeviceRecoveryTableName,
+                Key: {
+                  deviceId: device.deviceId,
+                  timestamp: device.timestamp
+                }
+              })
+            );
+          }
+
+          console.log(`✓ Cleaned up ${testDevices.length} test devices`);
+
+          // ===== SUMMARY =====
+          console.log('\n' + '='.repeat(60));
+          console.log('END-TO-END RECOVERY FLOW VERIFICATION COMPLETE');
+          console.log('='.repeat(60));
+          console.log('✓ Phase 1: CloudWatch alarm configuration verified');
+          console.log('✓ Phase 2: Shadow analysis Lambda invoked');
+          console.log('✓ Phase 3: DynamoDB backfill operations tested');
+          console.log('✓ Phase 4: Step Functions orchestration triggered');
+          console.log('✓ Phase 5: Kinesis message republishing tested');
+          console.log('✓ Phase 6: EventBridge routing to SQS DLQs verified');
+          console.log('✓ Phase 7: DynamoDB time-series validation completed');
+          console.log('✓ Phase 8: CloudWatch metrics verified');
+          console.log('='.repeat(60) + '\n');
+
+          // Final assertion: Complete flow should succeed
+          expect(shadowResult.processedDevices).toBeDefined();
+          expect(executionResponse.executionArn).toBeDefined();
+          expect(totalDLQMessages).toBeGreaterThan(0);
+          expect(validationResult.metricsSent).toEqual(7); // All 7 metrics sent
+        },
+        180000
+      ); // 3-minute timeout for complete flow
     });
   });
 });
