@@ -701,16 +701,30 @@ describe('IoT Recovery Automation - Integration Tests', () => {
         const receivedBody = JSON.parse(receivedMessage.Body!);
 
         // The message might be the one we just sent or an existing one
-        // Just verify the structure is correct
-        if (receivedBody.deviceId === testMessage.deviceId) {
+        // Messages can be in direct format or EventBridge format
+        let actualDeviceId: string | undefined;
+        let actualDeviceType: string | undefined;
+
+        if (receivedBody.detail) {
+          // EventBridge wrapped message
+          actualDeviceId = receivedBody.detail.deviceId;
+          actualDeviceType = receivedBody.detail.deviceType;
+        } else {
+          // Direct message
+          actualDeviceId = receivedBody.deviceId;
+          actualDeviceType = receivedBody.deviceType;
+        }
+
+        // Verify we got a valid message structure
+        expect(actualDeviceId || actualDeviceType).toBeDefined();
+
+        if (actualDeviceId === testMessage.deviceId) {
           // This is our test message
-          expect(receivedBody.deviceType).toBe(testMessage.deviceType);
+          expect(actualDeviceType).toBe(testMessage.deviceType);
           console.log(`✓ Received our test message from sensor DLQ`);
         } else {
           // This is an existing message in the queue
-          // Just verify it has the expected structure
-          expect(receivedBody.deviceId || receivedBody.deviceType).toBeDefined();
-          console.log(`✓ Received existing message from sensor DLQ (not our test message)`);
+          console.log(`✓ Received existing message from sensor DLQ (deviceType: ${actualDeviceType})`);
         }
       }, 45000);
     });
