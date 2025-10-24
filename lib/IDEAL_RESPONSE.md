@@ -183,22 +183,22 @@ locals {
   private_subnet_count = length(var.private_subnet_cidrs)
   account_id           = data.aws_caller_identity.current.account_id
   nat_count            = var.enable_nat ? var.nat_gateway_count : 0
-  
+
   # Aurora parameter family based on engine and version
   aurora_family = startswith(var.aurora_engine, "aurora-postgresql") ? "aurora-postgresql14" : "aurora-mysql8.0"
-  
+
   kms_aliases = {
     data = "alias/${local.name_prefix}-data"
     logs = "alias/${local.name_prefix}-logs"
     ssm  = "alias/${local.name_prefix}-ssm"
     s3   = "alias/${local.name_prefix}-s3"
   }
-  
+
   service_kms_aliases = {
     for service in var.service_names :
     service => "alias/app-${service}-${var.environment}"
   }
-  
+
   lambda_functions = {
     masking_handler = {
       name    = "${local.name_prefix}-masking"
@@ -231,12 +231,12 @@ locals {
       timeout = 300
     }
   }
-  
+
   # Separate tables with and without range keys
   tables_with_range_key = {
     for k, v in var.ddb_tables : k => v if v.range_key != null
   }
-  
+
   tables_without_range_key = {
     for k, v in var.ddb_tables : k => v if v.range_key == null
   }
@@ -766,26 +766,26 @@ resource "aws_dynamodb_table" "with_range_key" {
   range_key      = each.value.range_key
   read_capacity  = each.value.billing_mode == "PROVISIONED" ? coalesce(each.value.read_capacity, 5) : null
   write_capacity = each.value.billing_mode == "PROVISIONED" ? coalesce(each.value.write_capacity, 5) : null
-  
+
   attribute {
     name = each.value.hash_key
     type = "S"
   }
-  
+
   attribute {
     name = each.value.range_key
     type = "S"
   }
-  
+
   point_in_time_recovery {
     enabled = true
   }
-  
+
   server_side_encryption {
     enabled     = true
     kms_key_arn = aws_kms_key.data.arn
   }
-  
+
   tags = merge(var.tags, { Name = "${local.name_prefix}-${each.value.name}" })
 }
 
@@ -796,21 +796,21 @@ resource "aws_dynamodb_table" "without_range_key" {
   hash_key       = each.value.hash_key
   read_capacity  = each.value.billing_mode == "PROVISIONED" ? coalesce(each.value.read_capacity, 5) : null
   write_capacity = each.value.billing_mode == "PROVISIONED" ? coalesce(each.value.write_capacity, 5) : null
-  
+
   attribute {
     name = each.value.hash_key
     type = "S"
   }
-  
+
   point_in_time_recovery {
     enabled = true
   }
-  
+
   server_side_encryption {
     enabled     = true
     kms_key_arn = aws_kms_key.data.arn
   }
-  
+
   tags = merge(var.tags, { Name = "${local.name_prefix}-${each.value.name}" })
 }
 
@@ -820,7 +820,7 @@ resource "aws_dynamodb_table_item" "sample_with_range" {
   table_name = aws_dynamodb_table.with_range_key[each.key].name
   hash_key   = each.value.hash_key
   range_key  = each.value.range_key
-  
+
   item = jsonencode({
     "${each.value.hash_key}"  = { S = "sample-${each.key}-001" }
     "${each.value.range_key}" = { S = "2006-01-02T15:04:05Z" }
@@ -833,7 +833,7 @@ resource "aws_dynamodb_table_item" "sample_without_range" {
   for_each   = local.tables_without_range_key
   table_name = aws_dynamodb_table.without_range_key[each.key].name
   hash_key   = each.value.hash_key
-  
+
   item = jsonencode({
     "${each.value.hash_key}" = { S = "sample-${each.key}-001" }
     "data"                   = { S = "Sample data for ${each.key}" }
@@ -857,7 +857,7 @@ resource "aws_appautoscaling_policy" "dynamodb_read_with_range" {
   resource_id        = aws_appautoscaling_target.dynamodb_read_with_range[each.key].resource_id
   scalable_dimension = aws_appautoscaling_target.dynamodb_read_with_range[each.key].scalable_dimension
   service_namespace  = aws_appautoscaling_target.dynamodb_read_with_range[each.key].service_namespace
-  
+
   target_tracking_scaling_policy_configuration {
     predefined_metric_specification {
       predefined_metric_type = "DynamoDBReadCapacityUtilization"
@@ -882,7 +882,7 @@ resource "aws_appautoscaling_policy" "dynamodb_write_with_range" {
   resource_id        = aws_appautoscaling_target.dynamodb_write_with_range[each.key].resource_id
   scalable_dimension = aws_appautoscaling_target.dynamodb_write_with_range[each.key].scalable_dimension
   service_namespace  = aws_appautoscaling_target.dynamodb_write_with_range[each.key].service_namespace
-  
+
   target_tracking_scaling_policy_configuration {
     predefined_metric_specification {
       predefined_metric_type = "DynamoDBWriteCapacityUtilization"
@@ -908,7 +908,7 @@ resource "aws_appautoscaling_policy" "dynamodb_read_without_range" {
   resource_id        = aws_appautoscaling_target.dynamodb_read_without_range[each.key].resource_id
   scalable_dimension = aws_appautoscaling_target.dynamodb_read_without_range[each.key].scalable_dimension
   service_namespace  = aws_appautoscaling_target.dynamodb_read_without_range[each.key].service_namespace
-  
+
   target_tracking_scaling_policy_configuration {
     predefined_metric_specification {
       predefined_metric_type = "DynamoDBReadCapacityUtilization"
@@ -933,7 +933,7 @@ resource "aws_appautoscaling_policy" "dynamodb_write_without_range" {
   resource_id        = aws_appautoscaling_target.dynamodb_write_without_range[each.key].resource_id
   scalable_dimension = aws_appautoscaling_target.dynamodb_write_without_range[each.key].scalable_dimension
   service_namespace  = aws_appautoscaling_target.dynamodb_write_without_range[each.key].service_namespace
-  
+
   target_tracking_scaling_policy_configuration {
     predefined_metric_specification {
       predefined_metric_type = "DynamoDBWriteCapacityUtilization"
@@ -2249,52 +2249,3 @@ tags = {
   DataClass   = "confidential"
 }
 ```
-
-## Usage Instructions
-
-```bash
-# Development
-terraform workspace new dev || terraform workspace select dev
-terraform plan -var-file=dev.tfvars
-terraform apply -var-file=dev.tfvars
-
-# Production
-terraform workspace new prod || terraform workspace select prod
-terraform plan -var-file=prod.tfvars
-terraform apply -var-file=prod.tfvars
-```
-
-## Fixed Issues Summary
-
-All 30 identified issues have been addressed:
-
-1. ✅ Removed duplicate Lambda creation (aws_lambda_function.handlers)
-2. ✅ Fixed SFN IAM policy to reference real Lambda ARNs
-3. ✅ Fixed Step Functions Map with proper Parameters/ItemsPath
-4. ✅ Fixed SFN logging ARN (removed `:*` suffix)
-5. ✅ Split DynamoDB tables with/without range keys
-6. ✅ Fixed DynamoDB table item range_key handling
-7. ✅ Added read_capacity/write_capacity for PROVISIONED tables
-8. ✅ Fixed formatdate to use correct Go time format
-9. ✅ Changed inline SG rules to aws_security_group_rule
-10. ✅ Added ec2messages and ssmmessages VPC endpoints
-11. ✅ Added proper KMS key policies for all services
-12. ✅ Added cross-account IAM policies with sts:AssumeRole
-13. ✅ Fixed prod table name inference logic
-14. ✅ Fixed DDB export manifest handling
-15. ✅ Fixed parity Lambda list_tables logic
-16. ✅ Improved Aurora refresh flow with SSM automation
-17. ✅ Added AutomationAssumeRole to SSM document
-18. ✅ Changed over-permissive IAM to least-privilege
-19. ✅ Removed tags from EventBridge rules (compatibility)
-20. ✅ Added explicit depends_on for Lambda invoke config
-21. ✅ Made S3 bucket names required variables
-22. ✅ Added cross-account S3 sync with KMS handling
-23. ✅ Added CloudWatch Logs KMS policy
-24. ✅ Made Aurora parameter family version-aware
-25. ✅ Added DDB autoscaling for write capacity
-26. ✅ Made SSM param paths environment-specific
-27. ✅ Added VPC endpoints for STS/KMS/States
-28. ✅ Removed unnecessary S3 folder objects
-29. ✅ Added nat_gateway_count variable (default 1)
-30. ✅ Fixed RDS snapshot copy KMS cross-account handling

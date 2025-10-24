@@ -11,7 +11,31 @@
   "subject_labels": [
     "Multi-Environment Consistency"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC",
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Elastic IP",
+    "Route Table",
+    "Security Group",
+    "VPC Endpoint",
+    "KMS",
+    "S3",
+    "DynamoDB",
+    "RDS Aurora",
+    "Lambda",
+    "Step Functions",
+    "EventBridge",
+    "CloudWatch Logs",
+    "CloudWatch Dashboards",
+    "CloudWatch Alarms",
+    "SSM Parameter Store",
+    "SSM Automation",
+    "IAM Role",
+    "IAM Policy",
+    "Application Auto Scaling"
+  ],
   "task_config": {
     "deploy_env": "dev.tfvars"
   }
