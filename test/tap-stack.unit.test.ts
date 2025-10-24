@@ -1033,7 +1033,7 @@ describe('TapStack CloudFormation Template', () => {
 
         // Inline policies
         const policy = role.Properties.Policies[0];
-        expect(policy.PolicyName).toBe('LambdaExecutionPolicy');
+        expect(policy.PolicyName).toBe('ReportingPlatformLambdaPolicy');
         expect(policy.PolicyDocument.Statement).toHaveLength(7);
 
         // CloudWatch Logs
@@ -1089,7 +1089,7 @@ describe('TapStack CloudFormation Template', () => {
       test('KMSKey should have proper key policy and configuration', () => {
         const key = template.Resources.KMSKey;
         expect(key.Type).toBe('AWS::KMS::Key');
-        expect(key.Properties.Description).toBe('KMS key for encrypting S3 buckets, RDS, and Secrets Manager.');
+        expect(key.Properties.Description).toBe('KMS key for regulatory reporting platform encryption (S3, Aurora)');
         expect(key.Properties.KeyUsage).toBe('ENCRYPT_DECRYPT');
         expect(key.Properties.Enabled).toBe(true);
 
