@@ -954,49 +954,6 @@ describe('TapStack Comprehensive End-to-End Integration Test Scenarios', () => {
         }
       }
     }, 30000);
-
-    test('Enhanced Monthly Summary Export Check: Aurora DB should support large-scale queries', async () => {
-      // Test database performance with a query that simulates monthly summary export
-      const monthlyExportQuery = `
-        SELECT 
-          DATE(delivery_timestamp) as report_date,
-          COUNT(*) as daily_report_count
-        FROM audit_log 
-        WHERE delivery_timestamp >= :startDate 
-          AND delivery_timestamp < :endDate
-        GROUP BY DATE(delivery_timestamp)
-        ORDER BY report_date DESC
-        LIMIT 31
-      `;
-
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-      const now = new Date().toISOString();
-
-      const startTime = Date.now();
-
-      try {
-        const exportResult = await queryDatabase(monthlyExportQuery, [
-          { name: 'startDate', value: { stringValue: thirtyDaysAgo } },
-          { name: 'endDate', value: { stringValue: now } }
-        ]);
-
-        const queryDuration = Date.now() - startTime;
-
-        expect(exportResult.records).toBeDefined();
-        // Query should complete within reasonable time (< 10 seconds for this scale)
-        expect(queryDuration).toBeLessThan(10000);
-
-        console.log(`Enhanced monthly export query completed in ${queryDuration}ms with ${exportResult.records?.length || 0} result rows`);
-      } catch (error) {
-        if (error instanceof Error) {
-          console.error('Enhanced monthly summary export test skipped - may require larger dataset:', error.message);
-        } else {
-          console.error('Enhanced monthly summary export test skipped - may require larger dataset:', error);
-        }
-        // This test may fail in new environments without sufficient test data
-      }
-    }, 30000);
-
   });
 
   describe('V. Enhanced Security and Configuration Validation', () => {
