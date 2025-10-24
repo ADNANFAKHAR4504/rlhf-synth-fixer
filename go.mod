@@ -48,11 +48,6 @@ require (
 )
 
 require (
-	github.com/aws/aws-sdk-go-v2/service/ec2 v1.258.0
-	github.com/aws/aws-sdk-go-v2/service/ecs v1.65.3
-	github.com/aws/aws-sdk-go-v2/service/elasticache v1.50.7
-	github.com/aws/aws-sdk-go-v2/service/rds v1.108.4
-	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.39.8
 	github.com/pulumi/pulumi-aws/sdk/v6 v6.83.1
 	github.com/pulumi/pulumi/sdk/v3 v3.175.0
 )
