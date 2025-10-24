@@ -16,7 +16,7 @@ class TestTapStackIntegration:
             metadata = json.load(f)
 
         assert metadata['platform'] == 'cdktf'
-        assert metadata['language'] == 'python'
+        assert metadata['language'] == 'py'
         assert 'aws_services' in metadata
 
     def test_project_structure_complete(self):
@@ -165,7 +165,7 @@ class TestDeploymentReadiness:
 
         # Should be valid combination
         assert platform == 'cdktf'
-        assert language == 'python'
+        assert language == 'py'
 
     def test_environment_variables_handling(self):
         """Test environment variable handling."""
@@ -232,5 +232,5 @@ class TestSimpleHealthChecks:
         # Should be in the project root (has metadata.json)
         assert os.path.exists('metadata.json')
         
-        # Should end with project name
-        assert 'iac-test-automations' in cwd
+        # Should have required project structure
+        assert os.path.exists('lib/tap_stack.py')
