@@ -1,12 +1,12 @@
 # Validation Lambda
 resource "aws_lambda_function" "validator" {
-  filename         = var.validator_package_path
-  function_name    = "${var.name_prefix}-validator"
-  role            = aws_iam_role.validator.arn
-  handler         = "index.handler"
-  runtime         = "python3.11"
-  timeout         = 2
-  memory_size     = 1024
+  filename                       = var.validator_package_path
+  function_name                  = "${var.name_prefix}-validator"
+  role                           = aws_iam_role.validator.arn
+  handler                        = "index.handler"
+  runtime                        = "python3.11"
+  timeout                        = 2
+  memory_size                    = 1024
   reserved_concurrent_executions = 100
 
   vpc_config {
@@ -17,8 +17,8 @@ resource "aws_lambda_function" "validator" {
   environment {
     variables = {
       BUSINESS_RULES_COUNT = var.business_rules_count
-      SNS_TOPIC_ARN       = var.sns_topic_arn
-      ENVIRONMENT         = var.environment
+      SNS_TOPIC_ARN        = var.sns_topic_arn
+      ENVIRONMENT          = var.environment
     }
   }
 
@@ -33,12 +33,12 @@ resource "aws_lambda_event_source_mapping" "dynamodb_stream" {
   event_source_arn  = var.dynamodb_stream_arn
   function_name     = aws_lambda_function.validator.arn
   starting_position = "LATEST"
-  
+
   maximum_batching_window_in_seconds = 0
   parallelization_factor             = 10
-  maximum_retry_attempts              = 2
-  maximum_record_age_in_seconds       = 60
-  
+  maximum_retry_attempts             = 2
+  maximum_record_age_in_seconds      = 60
+
   destination_config {
     on_failure {
       destination_arn = var.dlq_arn
@@ -50,13 +50,13 @@ resource "aws_lambda_event_source_mapping" "dynamodb_stream" {
 resource "aws_lambda_function" "cache_updater" {
   count = var.microservices_count
 
-  filename         = var.cache_updater_package_path
-  function_name    = "${var.name_prefix}-cache-updater-${format("%03d", count.index)}"
-  role            = aws_iam_role.cache_updater.arn
-  handler         = "index.handler"
-  runtime         = "python3.11"
-  timeout         = 3
-  memory_size     = 512
+  filename                       = var.cache_updater_package_path
+  function_name                  = "${var.name_prefix}-cache-updater-${format("%03d", count.index)}"
+  role                           = aws_iam_role.cache_updater.arn
+  handler                        = "index.handler"
+  runtime                        = "python3.11"
+  timeout                        = 3
+  memory_size                    = 512
   reserved_concurrent_executions = 10
 
   vpc_config {
@@ -66,9 +66,9 @@ resource "aws_lambda_function" "cache_updater" {
 
   environment {
     variables = {
-      REDIS_ENDPOINT    = var.redis_endpoint
-      MICROSERVICE_ID   = format("service-%03d", count.index)
-      ENVIRONMENT       = var.environment
+      REDIS_ENDPOINT  = var.redis_endpoint
+      MICROSERVICE_ID = format("service-%03d", count.index)
+      ENVIRONMENT     = var.environment
     }
   }
 
@@ -82,20 +82,20 @@ resource "aws_lambda_function" "cache_updater" {
 
 # Consistency Checker Lambda
 resource "aws_lambda_function" "consistency_checker" {
-  filename         = var.consistency_checker_package_path
-  function_name    = "${var.name_prefix}-consistency-checker"
-  role            = aws_iam_role.consistency_checker.arn
-  handler         = "index.handler"
-  runtime         = "python3.11"
-  timeout         = 5
-  memory_size     = 2048
+  filename                       = var.consistency_checker_package_path
+  function_name                  = "${var.name_prefix}-consistency-checker"
+  role                           = aws_iam_role.consistency_checker.arn
+  handler                        = "index.handler"
+  runtime                        = "python3.11"
+  timeout                        = 5
+  memory_size                    = 2048
   reserved_concurrent_executions = 50
 
   environment {
     variables = {
-      DYNAMODB_TABLE     = var.dynamodb_table_name
+      DYNAMODB_TABLE      = var.dynamodb_table_name
       MICROSERVICES_COUNT = var.microservices_count
-      ENVIRONMENT        = var.environment
+      ENVIRONMENT         = var.environment
     }
   }
 
@@ -104,13 +104,13 @@ resource "aws_lambda_function" "consistency_checker" {
 
 # Rollback Lambda
 resource "aws_lambda_function" "rollback" {
-  filename         = var.rollback_package_path
-  function_name    = "${var.name_prefix}-rollback"
-  role            = aws_iam_role.rollback.arn
-  handler         = "index.handler"
-  runtime         = "python3.11"
-  timeout         = 8
-  memory_size     = 1024
+  filename      = var.rollback_package_path
+  function_name = "${var.name_prefix}-rollback"
+  role          = aws_iam_role.rollback.arn
+  handler       = "index.handler"
+  runtime       = "python3.11"
+  timeout       = 8
+  memory_size   = 1024
 
   environment {
     variables = {

@@ -120,3 +120,35 @@
 **Result**: All Lambda ZIP files created and ready for Terraform deployment
 
 **Key Lesson**: Infrastructure code must include all deployment artifacts, not just configuration. Lambda functions require packaged code before terraform apply can succeed.
+## Issue 10: Duplicate Required Providers Configuration
+**Problem**: Terraform deployment failed with error "Duplicate required providers configuration" because both `main.tf` and `provider.tf` contained `terraform` blocks with `required_providers`.
+
+**Root Cause**:
+- `main.tf` had a `terraform` block (lines 1-14) with `required_providers` for aws (~> 5.0) and random (~> 3.5)
+- `provider.tf` had a duplicate `terraform` block (lines 3-15) with `required_providers` for aws (>= 5.0) and backend "s3" configuration
+- Terraform only allows one `required_providers` configuration per module
+- This caused immediate initialization failure
+
+**Solution Applied**:
+1. Consolidated all provider requirements into `main.tf`:
+   - Kept the `terraform` block in `main.tf` with all `required_providers`
+   - Added `backend "s3" {}` configuration to the main.tf terraform block
+   
+2. Removed duplicate terraform block from `provider.tf`:
+   - Deleted lines 3-15 containing duplicate `terraform` block
+   - Kept only the `provider "aws"` configuration
+
+3. Fixed AWS provider version constraint:
+   - Ran `terraform init -upgrade` to resolve lock file version mismatch
+   - Updated from AWS provider 6.9.0 to 5.100.0 to match ~> 5.0 constraint
+
+4. Fixed ElastiCache deprecated argument:
+   - Removed `auth_token_enabled = true` argument (deprecated in AWS provider 5.x)
+   - Auth is automatically enabled when `auth_token` is provided
+
+**Result**: 
+- Terraform initialization successful
+- Terraform validation passed with only minor warnings
+- All modules loaded correctly
+
+**Key Lesson**: In Terraform, consolidate all provider and backend configuration into a single `terraform` block (typically in main.tf or versions.tf). Never split `required_providers` across multiple files as it causes immediate initialization failure. Provider configurations can be in separate files, but the terraform block must be unique.

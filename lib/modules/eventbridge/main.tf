@@ -38,7 +38,7 @@ resource "aws_sfn_state_machine" "verification" {
           "QueryString"  = "fields @timestamp, service_id, flag_id, flag_value | stats count() by service_id"
         }
         TimeoutSeconds = 15
-        Next = "WaitForResults"
+        Next           = "WaitForResults"
       }
       WaitForResults = {
         Type    = "Wait"
@@ -54,10 +54,10 @@ resource "aws_sfn_state_machine" "verification" {
         Next = "CheckConsistency"
       }
       CheckConsistency = {
-        Type     = "Task"
-        Resource = var.consistency_checker_arn
+        Type           = "Task"
+        Resource       = var.consistency_checker_arn
         TimeoutSeconds = 5
-        Next = "ConsistencyDecision"
+        Next           = "ConsistencyDecision"
         Catch = [{
           ErrorEquals = ["States.ALL"]
           Next        = "TriggerRollback"
@@ -73,10 +73,10 @@ resource "aws_sfn_state_machine" "verification" {
         Default = "Success"
       }
       TriggerRollback = {
-        Type     = "Task"
-        Resource = var.rollback_arn
+        Type           = "Task"
+        Resource       = var.rollback_arn
         TimeoutSeconds = 8
-        Next = "NotifyRollback"
+        Next           = "NotifyRollback"
       }
       NotifyRollback = {
         Type     = "Task"

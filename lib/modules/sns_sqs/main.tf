@@ -1,7 +1,7 @@
 resource "aws_sns_topic" "feature_flags" {
   name              = "${var.name_prefix}-updates"
   kms_master_key_id = var.kms_key_id
-  
+
   delivery_policy = jsonencode({
     "http" : {
       "defaultHealthyRetryPolicy" : {
@@ -22,12 +22,12 @@ resource "aws_sns_topic" "feature_flags" {
 resource "aws_sqs_queue" "microservice" {
   count = var.microservices_count
 
-  name                      = "${var.name_prefix}-queue-${format("%03d", count.index)}"
-  message_retention_seconds = 86400
+  name                       = "${var.name_prefix}-queue-${format("%03d", count.index)}"
+  message_retention_seconds  = 86400
   visibility_timeout_seconds = 30
   receive_wait_time_seconds  = 0
-  
-  kms_master_key_id = var.kms_key_id
+
+  kms_master_key_id                 = var.kms_key_id
   kms_data_key_reuse_period_seconds = 300
 
   redrive_policy = jsonencode({
@@ -54,7 +54,7 @@ resource "aws_sqs_queue" "dlq" {
     var.tags,
     {
       MicroserviceId = format("service-%03d", count.index)
-      Type          = "DLQ"
+      Type           = "DLQ"
     }
   )
 }
@@ -67,7 +67,7 @@ resource "aws_sns_topic_subscription" "sqs" {
   endpoint  = aws_sqs_queue.microservice[count.index].arn
 
   raw_message_delivery = true
-  
+
   filter_policy = jsonencode({
     service_id = [format("service-%03d", count.index), "all"]
   })
@@ -103,7 +103,7 @@ resource "aws_lambda_event_source_mapping" "sqs" {
 
   event_source_arn = aws_sqs_queue.microservice[count.index].arn
   function_name    = var.lambda_functions[count.index]
-  
+
   batch_size                         = 10
   maximum_batching_window_in_seconds = 0
 }

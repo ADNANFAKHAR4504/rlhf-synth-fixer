@@ -73,19 +73,19 @@ locals {
   common_tags = merge(
     var.tags,
     {
-      Environment  = var.environment
-      ManagedBy    = "terraform"
-      Service      = "feature-flags"
-      CostCenter   = var.cost_center
-      Owner        = var.owner
-      CreatedAt    = timestamp()
+      Environment = var.environment
+      ManagedBy   = "terraform"
+      Service     = "feature-flags"
+      CostCenter  = var.cost_center
+      Owner       = var.owner
+      CreatedAt   = timestamp()
     }
   )
-  
-  name_prefix = "${var.environment}-feature-flags"
+
+  name_prefix   = "${var.environment}-feature-flags"
   is_production = var.environment == "prod"
-  
+
   # Ensure we don't exceed AWS limits
   max_sqs_queues_per_region = min(var.microservices_count, 1000)
-  batch_size = 10
+  batch_size                = 10
 }

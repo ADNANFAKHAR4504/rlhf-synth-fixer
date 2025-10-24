@@ -6,7 +6,7 @@ resource "aws_opensearch_domain" "audit" {
     instance_type          = var.instance_type
     instance_count         = var.instance_count
     zone_awareness_enabled = var.enable_multi_az
-    
+
     dynamic "zone_awareness_config" {
       for_each = var.enable_multi_az ? [1] : []
       content {
@@ -38,9 +38,9 @@ resource "aws_opensearch_domain" "audit" {
   }
 
   domain_endpoint_options {
-    enforce_https                   = true
-    tls_security_policy            = "Policy-Min-TLS-1-2-2019-07"
-    custom_endpoint_enabled         = false
+    enforce_https           = true
+    tls_security_policy     = "Policy-Min-TLS-1-2-2019-07"
+    custom_endpoint_enabled = false
   }
 
   advanced_security_options {
