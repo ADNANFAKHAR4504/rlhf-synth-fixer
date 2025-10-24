@@ -405,10 +405,13 @@ func CreateStack(ctx *pulumi.Context) error {
 
 	// Create DB Secret in Secrets Manager
 	dbSecret, err := secretsmanager.NewSecret(ctx, fmt.Sprintf("db-secret-%s", environmentSuffix), &secretsmanager.SecretArgs{
-		Name:        pulumi.String(fmt.Sprintf("rds-credentials-%s", environmentSuffix)),
+		// Make the secret name unique by including the Pulumi stack name to avoid
+		// collisions when secrets with the same base name are scheduled for deletion.
+		Name:        pulumi.String(fmt.Sprintf("rds-credentials-%s-%s", environmentSuffix, ctx.Stack())),
 		Description: pulumi.String("RDS PostgreSQL credentials for IoT manufacturing system"),
 		Tags: pulumi.StringMap{
-			"Name":        pulumi.String(fmt.Sprintf("db-secret-%s", environmentSuffix)),
+			// Keep tags consistent and include stack to help identification
+			"Name":        pulumi.String(fmt.Sprintf("db-secret-%s-%s", environmentSuffix, ctx.Stack())),
 			"Environment": pulumi.String(environmentSuffix),
 		},
 	})
