@@ -686,87 +686,6 @@ resource "aws_security_group" "lambda" {
 # Lambda Functions
 # ----------------------------------------------------------------------------
 
-# Device Verification Lambda Function
-resource "aws_lambda_function" "device_verification" {
-  function_name = "${local.name_prefix}-device-verification"
-  role          = aws_iam_role.lambda_device_verification.arn
-  handler       = "index.handler"
-  runtime       = "nodejs20.x"
-  timeout       = 180
-  memory_size   = 1024
-  
-  environment {
-    variables = {
-      STATE_MACHINE_ARN = aws_sfn_state_machine.recovery_orchestrator.arn
-      SENSOR_COUNT      = var.sensor_count
-      BATCH_SIZE        = "1000"
-    }
-  }
-  
-  vpc_config {
-    subnet_ids         = aws_subnet.private[*].id
-    security_group_ids = [aws_security_group.lambda.id]
-  }
-  
-  # Inline code for device verification
-  filename = "${path.module}/lambda_placeholder.zip"
-  
-  source_code_hash = filebase64sha256("${path.module}/lambda_placeholder.zip")
-  
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-device-verification"
-  })
-  
-  depends_on = [
-    aws_iam_role_policy.lambda_device_verification,
-    aws_iam_role_policy_attachment.lambda_device_verification_vpc
-  ]
-}
-
-# Create placeholder zip file for Lambda
-resource "local_file" "lambda_placeholder" {
-  content  = "exports.handler = async (event) => { return { statusCode: 200 }; };"
-  filename = "${path.module}/lambda_placeholder.zip"
-}
-
-# Data Replay Lambda Function
-resource "aws_lambda_function" "data_replay" {
-  function_name = "${local.name_prefix}-data-replay"
-  role          = aws_iam_role.lambda_data_replay.arn
-  handler       = "index.handler"
-  runtime       = "python3.11"
-  timeout       = 300
-  memory_size   = 2048
-  
-  environment {
-    variables = {
-      DYNAMODB_TABLE = aws_dynamodb_table.buffered_data.name
-      KINESIS_STREAM = aws_kinesis_stream.main.name
-      BATCH_SIZE     = "500"
-    }
-  }
-  
-  vpc_config {
-    subnet_ids         = aws_subnet.private[*].id
-    security_group_ids = [aws_security_group.lambda.id]
-  }
-  
-  # Inline code for data replay
-  filename = "${path.module}/lambda_placeholder.zip"
-  
-  source_code_hash = filebase64sha256("${path.module}/lambda_placeholder.zip")
-  
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-data-replay"
-  })
-  
-  depends_on = [
-    aws_iam_role_policy.lambda_data_replay,
-    aws_iam_role_policy_attachment.lambda_data_replay_vpc
-  ]
-}
-
-# Update Lambda functions with inline code
 resource "aws_lambda_function" "device_verification" {
   function_name = "${local.name_prefix}-device-verification"
   role          = aws_iam_role.lambda_device_verification.arn
@@ -878,6 +797,7 @@ EOT
     aws_iam_role_policy_attachment.lambda_device_verification_vpc
   ]
 }
+
 
 resource "aws_lambda_function" "data_replay" {
   function_name = "${local.name_prefix}-data-replay"
