@@ -221,7 +221,7 @@ describe("Terraform Modules - ElastiCache", () => {
     
     expect(content).toMatch(/at_rest_encryption_enabled\s*=\s*true/);
     expect(content).toMatch(/transit_encryption_enabled\s*=\s*true/);
-    expect(content).toMatch(/auth_token_enabled\s*=\s*true/);
+    expect(content).toMatch(/auth_token\s*=/); // Auth enabled when token is provided (AWS provider 5.x)
   });
 
   test("elasticache module has destroyable lifecycle", () => {

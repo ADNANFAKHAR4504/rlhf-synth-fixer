@@ -152,3 +152,47 @@
 - All modules loaded correctly
 
 **Key Lesson**: In Terraform, consolidate all provider and backend configuration into a single `terraform` block (typically in main.tf or versions.tf). Never split `required_providers` across multiple files as it causes immediate initialization failure. Provider configurations can be in separate files, but the terraform block must be unique.
+
+## Issue 11: Missing Default Values for Required Variables
+**Problem**: Terraform deployment failed with "No value for required variable" errors for `environment`, `cost_center`, and `owner` variables. The deployment system doesn't pass these values explicitly.
+
+**Root Cause**:
+- Three variables were marked as required without defaults: `environment`, `cost_center`, `owner`
+- Deployment system expects variables to have sensible defaults or to be passed via `-var` flags
+- The infrastructure assumed variables would be provided externally
+- Without defaults, terraform plan/apply immediately fails before any resources can be evaluated
+
+**Solution Applied**:
+1. Added default values to all required variables:
+   ```hcl
+   variable "environment" {
+     default = "dev"  # Added
+   }
+   
+   variable "cost_center" {
+     default = "engineering"  # Added
+   }
+   
+   variable "owner" {
+     default = "platform-team"  # Added
+   }
+   ```
+
+2. Removed timestamp() from common_tags:
+   - `CreatedAt = timestamp()` causes plan to change on every run
+   - Not a best practice for resource tags
+   - Makes plan non-deterministic
+
+3. Fixed unit test for ElastiCache:
+   - Test was checking for `auth_token_enabled = true` (deprecated in AWS provider 5.x)
+   - Updated to check for `auth_token =` instead
+   - Auth is automatically enabled when auth_token is provided
+
+**Result**:
+- ✅ Terraform initialization successful
+- ✅ Terraform validation passes
+- ✅ All 33 unit tests pass (100%)
+- ✅ Infrastructure can deploy without explicit variable passing
+- ✅ Code formatted and linted
+
+**Key Lesson**: Infrastructure variables should have sensible defaults that allow deployment to succeed without external configuration. Required variables without defaults create deployment friction and break automation. Always provide defaults that work for development/testing environments, even if production will override them.

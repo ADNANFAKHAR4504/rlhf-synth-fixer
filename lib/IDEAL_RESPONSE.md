@@ -193,6 +193,7 @@ resource "aws_ssm_parameter" "opensearch_password" {
 variable "environment" {
   description = "Environment name (e.g., dev, staging, prod)"
   type        = string
+  default     = "dev"
   validation {
     condition     = can(regex("^[a-z0-9-]+$", var.environment))
     error_message = "Environment must be lowercase alphanumeric with hyphens"
@@ -242,11 +243,13 @@ variable "tags" {
 variable "cost_center" {
   description = "Cost center for billing"
   type        = string
+  default     = "engineering"
 }
 
 variable "owner" {
   description = "Owner of the infrastructure"
   type        = string
+  default     = "platform-team"
 }
 
 variable "retention_days" {
@@ -265,21 +268,20 @@ locals {
   common_tags = merge(
     var.tags,
     {
-      Environment  = var.environment
-      ManagedBy    = "terraform"
-      Service      = "feature-flags"
-      CostCenter   = var.cost_center
-      Owner        = var.owner
-      CreatedAt    = timestamp()
+      Environment = var.environment
+      ManagedBy   = "terraform"
+      Service     = "feature-flags"
+      CostCenter  = var.cost_center
+      Owner       = var.owner
     }
   )
-  
-  name_prefix = "${var.environment}-feature-flags"
+
+  name_prefix   = "${var.environment}-feature-flags"
   is_production = var.environment == "prod"
-  
+
   # Ensure we don't exceed AWS limits
   max_sqs_queues_per_region = min(var.microservices_count, 1000)
-  batch_size = 10
+  batch_size                = 10
 }
 ```
 

@@ -1,6 +1,7 @@
 variable "environment" {
   description = "Environment name (e.g., dev, staging, prod)"
   type        = string
+  default     = "dev"
   validation {
     condition     = can(regex("^[a-z0-9-]+$", var.environment))
     error_message = "Environment must be lowercase alphanumeric with hyphens"
@@ -50,11 +51,13 @@ variable "tags" {
 variable "cost_center" {
   description = "Cost center for billing"
   type        = string
+  default     = "engineering"
 }
 
 variable "owner" {
   description = "Owner of the infrastructure"
   type        = string
+  default     = "platform-team"
 }
 
 variable "retention_days" {
@@ -78,7 +81,6 @@ locals {
       Service     = "feature-flags"
       CostCenter  = var.cost_center
       Owner       = var.owner
-      CreatedAt   = timestamp()
     }
   )
 
