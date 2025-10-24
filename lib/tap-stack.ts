@@ -795,11 +795,15 @@ class DataSyncStack extends cdk.NestedStack {
       const privateIp = resp.Reservations[0].Instances[0].PrivateIpAddress;
       
       console.log('Instance private IP:', privateIp);
+
+      console.log('Waiting 90 seconds for instance to boot...');
+      await sleep(90000); 
       
-      // Wait for agent to be ready (max 5 attempts, 30 seconds apart)
+      // Wait for agent to be ready (max 10 attempts, 45 seconds apart)
       let activationKey = null;
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < 10; i++) {
         try {
+          console.log(\`Activation attempt \${i + 1} of 10...\`);
           activationKey = await getActivationKey(privateIp, region);
           if (activationKey) {
             console.log(\`Got activation key on attempt \${i + 1}\`);
@@ -807,19 +811,22 @@ class DataSyncStack extends cdk.NestedStack {
           }
         } catch (err) {
           console.log(\`Attempt \${i + 1} failed: \${err.message}\`);
-          if (i < 4) await sleep(30000);
+          if (i < 9) {
+            console.log('Waiting 45 seconds before retrying...');
+            await sleep(45000);
+          }
         }
       }
       
       if (!activationKey) {
-        throw new Error('Failed to retrieve activation key after 5 attempts');
+        throw new Error('Failed to retrieve activation key after 10 attempts');
       }
       
       // Create DataSync agent
       const datasync = new DataSyncClient({ region });
       const command = new CreateAgentCommand({
         ActivationKey: activationKey,
-        AgentName: 'MigrationAgent-\${props.environmentSuffix}'  // Replace with actual env suffix
+        AgentName: 'MigrationAgent-\${props.environmentSuffix}'  
       });
       const result = await datasync.send(command);
       
