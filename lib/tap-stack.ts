@@ -375,7 +375,6 @@ class DMSStack extends cdk.NestedStack {
         vpcSecurityGroupIds: [props.dmsSecurityGroup.securityGroupId],
         replicationSubnetGroupIdentifier:
           subnetGroup.replicationSubnetGroupIdentifier,
-        engineVersion: '3.5.2',
         multiAz: false,
       }
     );
