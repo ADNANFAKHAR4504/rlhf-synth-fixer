@@ -397,9 +397,11 @@ func main() {
 			return err
 		}
 
+		// Create DB secret (make name unique per stack to avoid collisions with secrets pending deletion)
+		dbSecretName := fmt.Sprintf("db-credentials-%s-%s", environmentSuffix, ctx.Stack())
 		// Create DB secret
 		dbSecret, err := secretsmanager.NewSecret(ctx, fmt.Sprintf("db-secret-%s", environmentSuffix), &secretsmanager.SecretArgs{
-			Name:        pulumi.String(fmt.Sprintf("db-credentials-%s", environmentSuffix)),
+			Name:        pulumi.String(dbSecretName),
 			Description: pulumi.String("Database credentials for transaction processing"),
 			KmsKeyId:    kmsKey.KeyId,
 			Tags: pulumi.StringMap{
@@ -411,9 +413,13 @@ func main() {
 			return err
 		}
 
+		// Use a non-reserved DB username ("admin" is reserved by some engines)
+		dbUsername := "dbuser"
+		dbPassword := "ChangeMe123!"
+
 		_, err = secretsmanager.NewSecretVersion(ctx, fmt.Sprintf("db-secret-version-%s", environmentSuffix), &secretsmanager.SecretVersionArgs{
 			SecretId:     dbSecret.ID(),
-			SecretString: pulumi.String(`{"username":"admin","password":"ChangeMe123!"}`),
+			SecretString: pulumi.String(fmt.Sprintf(`{"username":"%s","password":"%s"}`, dbUsername, dbPassword)),
 		})
 		if err != nil {
 			return err
@@ -430,8 +436,8 @@ func main() {
 			StorageEncrypted:      pulumi.Bool(true),
 			KmsKeyId:              kmsKey.Arn,
 			DbName:                pulumi.String("transactions"),
-			Username:              pulumi.String("admin"),
-			Password:              pulumi.String("ChangeMe123!"),
+			Username:              pulumi.String(dbUsername),
+			Password:              pulumi.String(dbPassword),
 			VpcSecurityGroupIds:   pulumi.StringArray{rdsSg.ID()},
 			DbSubnetGroupName:     dbSubnetGroup.Name,
 			BackupRetentionPeriod: pulumi.Int(7),
@@ -742,11 +748,11 @@ func main() {
 			return err
 		}
 
-		// Create ALB listener
+		// Create ALB listener (specify port so listener is created and associates TG with ALB)
 		_, err = lb.NewListener(ctx, fmt.Sprintf("transaction-listener-%s", environmentSuffix), &lb.ListenerArgs{
 			LoadBalancerArn: alb.Arn,
-			// 			Port:            pulumi.String("80"),
-			Protocol: pulumi.String("HTTP"),
+			Port:            pulumi.Int(80),
+			Protocol:        pulumi.String("HTTP"),
 			DefaultActions: lb.ListenerDefaultActionArray{
 				&lb.ListenerDefaultActionArgs{
 					Type:           pulumi.String("forward"),
