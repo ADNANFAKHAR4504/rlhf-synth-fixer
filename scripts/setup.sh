@@ -100,28 +100,10 @@ if [ "$PLATFORM" = "cdktf" ] && [ "$LANGUAGE" = "go" ]; then
     exit 1
   fi
 
-  # Enforce single-module layout for CDKTF (go.mod should be at root, not in lib/)
+  # Enforce single-module layout
   if [ -f "lib/go.mod" ] || [ -f "lib/go.sum" ]; then
     echo "⚠️ Found lib/go.mod or lib/go.sum. Removing to avoid multi-module conflicts."
     rm -f lib/go.mod lib/go.sum || true
-  fi
-fi
-
-# Setup Go for Pulumi Go projects
-if [ "$PLATFORM" = "pulumi" ] && [ "$LANGUAGE" = "go" ]; then
-  echo "📦 Verifying Go toolchain for Pulumi Go..."
-  if command -v go >/dev/null 2>&1; then
-    echo "Go: $(go version)"
-  else
-    echo "❌ Go not found in PATH"
-    exit 1
-  fi
-
-  # For Pulumi Go projects, go.mod should be in lib/ (where Pulumi.yaml points to)
-  if [ -f "go.mod" ] && [ ! -f "lib/go.mod" ]; then
-    echo "⚠️ Found go.mod at root but not in lib/. Moving to lib/ for Pulumi Go projects."
-    mv go.mod lib/go.mod || true
-    [ -f "go.sum" ] && mv go.sum lib/go.sum || true
   fi
 fi 
 

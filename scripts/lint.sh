@@ -44,32 +44,15 @@ elif [ "$LANGUAGE" = "go" ]; then
         exit 1
     fi
 
-    # For Pulumi Go projects, go.mod is in lib/ directory
-    if [ "$PLATFORM" = "pulumi" ]; then
-      if [ -d "lib" ]; then
-        cd lib
-        PKGS=$(go list ./... 2>/dev/null || true)
-        if [ -n "$PKGS" ]; then
-            echo "$PKGS" | xargs -r go vet
-        else
-            echo "No Go packages found in lib/ to vet."
-        fi
-        cd ..
-      fi
-    elif [ "$PLATFORM" = "cdk" ]; then
+    PKGS=$(go list ./... | grep -v '/node_modules/' | grep -v '/\.gen/' | grep -E '/(lib|tests)($|/)' || true)
+    if [ "$PLATFORM" = "cdk" ]; then
       PKGS=$(go list ./lib/... ./tests/... 2>/dev/null || true)
-      if [ -n "$PKGS" ]; then
-          echo "$PKGS" | xargs -r go vet
-      else
-          echo "No Go packages found under lib or tests to vet."
-      fi
+    fi
+    
+    if [ -n "$PKGS" ]; then
+        echo "$PKGS" | xargs -r go vet
     else
-      PKGS=$(go list ./... | grep -v '/node_modules/' | grep -v '/\.gen/' | grep -E '/(lib|tests)($|/)' || true)
-      if [ -n "$PKGS" ]; then
-          echo "$PKGS" | xargs -r go vet
-      else
-          echo "No Go packages found under lib or tests to vet."
-      fi
+        echo "No Go packages found under lib or tests to vet."
     fi
 
 elif [ "$LANGUAGE" = "py" ]; then
