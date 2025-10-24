@@ -24,5 +24,11 @@
     "Failure Recovery Automation",
     "Infrastructure Analysis/Monitoring",
     "Security Configuration as Code"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
