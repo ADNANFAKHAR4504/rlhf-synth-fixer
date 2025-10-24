@@ -5,9 +5,8 @@
   "turn_type": "single",
   "po_id": "7933703108",
   "team": "synth",
-  "startedAt": "2025-10-21T14:41:42+05:30",
+  "startedat": "2025-10-21T09:11:42Z",
   "subtask": "Failure Recovery and High Availability",
-  "background": "Infrastructure task for CDKTF",
   "subject_labels": [
     "Failure Recovery Automation",
     "Infrastructure Analysis/Monitoring",
