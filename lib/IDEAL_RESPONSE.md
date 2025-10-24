@@ -241,7 +241,7 @@ ECS Cluster:
 
 Task Definition:
 - Launch type: Fargate
-- CPU: 512, Memory: 1024 MB
+- CPU: `512`, Memory: `1024 MB`
 - Network mode: awsvpc
 - EFS volume mounted at /mnt/efs
 - Secrets from Secrets Manager
@@ -278,7 +278,7 @@ Integration:
 CloudWatch Log Groups:
 - ECS task logs: /ecs/edu-analytics-{environmentSuffix}
 - API Gateway logs: /aws/apigateway/edu-analytics-{environmentSuffix}
-- Retention: 7 days
+- Retention: `7 days`
 - **KMS encryption removed** (fixes deployment permission issues)
 
 ## Security Best Practices
