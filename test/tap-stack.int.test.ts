@@ -2,20 +2,12 @@
 import {
   CloudWatchClient,
   DescribeAlarmsCommand,
-  GetMetricStatisticsCommand,
-  StandardUnit
+  GetMetricStatisticsCommand
 } from '@aws-sdk/client-cloudwatch';
-import { DynamoDBClient, DescribeTableCommand } from '@aws-sdk/client-dynamodb';
+import { DescribeTableCommand, DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
-  DeleteCommand,
-  DynamoDBDocumentClient,
-  GetCommand,
-  PutCommand,
-  QueryCommand
-} from '@aws-sdk/lib-dynamodb';
-import {
-  EventBridgeClient,
   DescribeEventBusCommand,
+  EventBridgeClient,
   ListRulesCommand,
   PutEventsCommand
 } from '@aws-sdk/client-eventbridge';
@@ -33,15 +25,8 @@ import {
   GetBucketVersioningCommand,
   GetPublicAccessBlockCommand,
   HeadBucketCommand,
-  ListObjectsV2Command,
   S3Client
 } from '@aws-sdk/client-s3';
-import {
-  GetQueueAttributesCommand,
-  ReceiveMessageCommand,
-  SendMessageCommand,
-  SQSClient
-} from '@aws-sdk/client-sqs';
 import {
   DescribeExecutionCommand,
   DescribeStateMachineCommand,
@@ -49,6 +34,19 @@ import {
   SFNClient,
   StartExecutionCommand
 } from '@aws-sdk/client-sfn';
+import {
+  GetQueueAttributesCommand,
+  ReceiveMessageCommand,
+  SendMessageCommand,
+  SQSClient
+} from '@aws-sdk/client-sqs';
+import {
+  DeleteCommand,
+  DynamoDBDocumentClient,
+  GetCommand,
+  PutCommand,
+  QueryCommand
+} from '@aws-sdk/lib-dynamodb';
 import fs from 'fs';
 import path from 'path';
 
@@ -122,9 +120,9 @@ beforeAll(() => {
   // Strict preflight checks: ensure AWS credentials
   const hasAwsCreds = Boolean(
     process.env.AWS_ACCESS_KEY_ID ||
-      process.env.AWS_SECRET_ACCESS_KEY ||
-      process.env.AWS_SESSION_TOKEN ||
-      process.env.AWS_PROFILE
+    process.env.AWS_SECRET_ACCESS_KEY ||
+    process.env.AWS_SESSION_TOKEN ||
+    process.env.AWS_PROFILE
   );
   if (!hasAwsCreds) {
     throw new Error(
