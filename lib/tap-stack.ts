@@ -1021,18 +1021,6 @@ function sleep(ms) {
     });
     s3Location.node.addDependency(agentActivation);
 
-    // Create a condition to check if activation succeeded
-    const activationSucceeded = new cdk.CfnCondition(
-      this,
-      'ActivationSucceeded',
-      {
-        expression: cdk.Fn.conditionEquals(
-          agentActivation.getAttString('Success'),
-          'true'
-        ),
-      }
-    );
-
     // Create DataSync NFS location (only if activation succeeded)
     const nfsLocation = new datasync.CfnLocationNFS(this, 'NFSLocation', {
       serverHostname: '10.0.0.100', // REPLACE with your NFS server IP
@@ -1044,9 +1032,6 @@ function sleep(ms) {
     });
     nfsLocation.node.addDependency(agentActivation);
     // Only create NFS location if activation succeeded
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (nfsLocation as { cfnOptions: { condition: any } }).cfnOptions.condition =
-      activationSucceeded;
 
     // Create DataSync task (only if activation succeeded)
     this.dataSyncTask = new datasync.CfnTask(this, 'DataSyncTask', {
@@ -1066,46 +1051,30 @@ function sleep(ms) {
     this.dataSyncTask.node.addDependency(s3Location);
     this.dataSyncTask.node.addDependency(nfsLocation);
     // Only create task if activation succeeded
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (this.dataSyncTask as any).cfnOptions.condition = activationSucceeded;
 
     // Alarm for task failures (only if task was created)
-    const taskFailureAlarm = new cloudwatch.Alarm(
-      this,
-      'DataSyncTaskFailureAlarm',
-      {
-        metric: new cloudwatch.Metric({
-          namespace: 'AWS/DataSync',
-          metricName: 'TaskExecutionFailed',
-          dimensionsMap: { TaskArn: this.dataSyncTask.attrTaskArn },
-          statistic: 'Sum',
-          period: Duration.minutes(5),
-        }),
-        threshold: 1,
-        evaluationPeriods: 1,
-        alarmDescription: 'Alarm when DataSync task fails',
-      }
-    );
+    new cloudwatch.Alarm(this, 'DataSyncTaskFailureAlarm', {
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/DataSync',
+        metricName: 'TaskExecutionFailed',
+        dimensionsMap: { TaskArn: this.dataSyncTask.attrTaskArn },
+        statistic: 'Sum',
+        period: Duration.minutes(5),
+      }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      alarmDescription: 'Alarm when DataSync task fails',
+    });
     // Only create alarm if task was created
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (taskFailureAlarm.node.defaultChild as any).cfnOptions.condition =
-      activationSucceeded;
 
     new cdk.CfnOutput(this, 'DataSyncTaskArn', {
-      value: cdk.Fn.conditionIf(
-        activationSucceeded.logicalId,
-        this.dataSyncTask.attrTaskArn,
-        'Not created - activation failed'
-      ).toString(),
-      description: 'DataSync Task ARN (only created if activation succeeded)',
+      value: this.dataSyncTask.attrTaskArn,
+      description: 'DataSync Task ARN',
     });
 
     new cdk.CfnOutput(this, 'DataSyncSetupInstructions', {
-      value: cdk.Fn.conditionIf(
-        activationSucceeded.logicalId,
-        'DataSync fully configured and ready to use',
-        'DataSync agent activation failed - NFS location and task not created. Check CloudWatch logs and manually activate the agent.'
-      ).toString(),
+      value:
+        'Check DataSyncActivationSuccess output - if false, manual activation required',
       description: 'Setup status and instructions',
     });
   }
