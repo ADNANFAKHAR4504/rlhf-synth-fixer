@@ -693,7 +693,7 @@ describe('IoT Recovery Automation - Integration Tests', () => {
         const receivedMessage = receiveResponse.Messages![0];
         expect(receivedMessage).toBeDefined();
         expect(receivedMessage.Body).toBeDefined();
-        
+
         // Parse and verify the message content
         const receivedBody = JSON.parse(receivedMessage.Body!);
         expect(receivedBody.deviceId).toBe(testMessage.deviceId);
