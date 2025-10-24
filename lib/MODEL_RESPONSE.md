@@ -32,7 +32,7 @@ Create:
 
 # Regulatory Reporting Platform
 
-Here's a complete CloudFormation template for your regulatory reporting platform with embedded Lambda functions and Step Functions workflow.
+Complete CloudFormation template for your regulatory reporting platform with embedded Lambda functions and Step Functions workflow.
 
 ## CloudFormation Template (regulatory-reporting-stack.json)
 
