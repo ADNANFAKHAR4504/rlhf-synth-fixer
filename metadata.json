@@ -1,11 +1,11 @@
 {
   "platform": "cdktf",
-  "language": "python",
+  "language": "py",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "7933703108",
   "team": "synth",
-  "startedat": "2025-10-21T09:11:42Z",
+  "startedAt": "2025-10-21T09:11:42Z",
   "subtask": "Failure Recovery and High Availability",
   "subject_labels": [
     "Failure Recovery Automation",
