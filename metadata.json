@@ -13,5 +13,6 @@
   "aws_services": "DynamoDB, DynamoDB Streams, Lambda, SNS, SQS, ElastiCache (Redis), EventBridge, Step Functions, CloudWatch Logs Insights, OpenSearch",
   "task_config": {
     "deploy_env": "prod.tfvars"
-  }
+  },
+  "training_quality": 10
 }
