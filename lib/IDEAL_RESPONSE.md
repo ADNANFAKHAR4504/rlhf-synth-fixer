@@ -351,10 +351,18 @@ Environment Variables:
 - TERRAFORM_STATE_BUCKET: S3 bucket for state
 
 Deployment Steps:
-1. `cdktf get` - Download provider bindings
-2. `cdktf synth` - Generate Terraform configuration  
-3. `cdktf deploy` - Deploy infrastructure
-4. Verify resources in AWS Console
+```bash
+# 1. Download provider bindings
+cdktf get
+
+# 2. Generate Terraform configuration  
+cdktf synth
+
+# 3. Deploy infrastructure
+cdktf deploy
+
+# 4. Verify resources in AWS Console (manual step)
+```
 
 **CI/CD Integration:**
 ```bash
