@@ -48,6 +48,11 @@ require (
 )
 
 require (
+	github.com/pulumi/pulumi-aws/sdk/v6 v6.83.1
+	github.com/pulumi/pulumi/sdk/v3 v3.175.0
+)
+
+require (
 	dario.cat/mergo v1.0.0 // indirect
 	github.com/BurntSushi/toml v1.2.1 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
