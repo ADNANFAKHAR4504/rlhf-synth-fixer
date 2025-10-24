@@ -219,7 +219,10 @@ resource "aws_iam_role_policy" "lambda_policy" {
           "logs:CreateLogStream",
           "logs:PutLogEvents",
           "xray:PutTraceSegments",
-          "xray:PutTelemetryRecords"
+          "xray:PutTelemetryRecords",
+          "rds-data:ExecuteStatement",
+          "rds-data:BatchExecuteStatement",
+          "secretsmanager:GetSecretValue"
         ]
         Resource = "*"
       }
@@ -347,14 +350,188 @@ resource "aws_elasticache_replication_group" "redis" {
 }
 
 # Lambda Functions
+data "archive_file" "ticket_purchase_zip" {
+  type        = "zip"
+  output_path = "/tmp/ticket_purchase.zip"
+  
+  source {
+    content  = file("${path.module}/ticket_purchase.js")
+    filename = "index.js"
+  }
+}
+
+resource "local_file" "ticket_purchase_code" {
+  filename = "${path.module}/ticket_purchase.js"
+  content  = <<-EOT
+const AWS = require('aws-sdk');
+const Redis = require('ioredis');
+
+const dynamodb = new AWS.DynamoDB.DocumentClient();
+const kinesis = new AWS.Kinesis();
+
+let redis;
+
+exports.ticketPurchaseHandler = async (event) => {
+    const startTime = Date.now();
+    
+    if (!redis) {
+        redis = new Redis.Cluster([{
+            host: process.env.REDIS_ENDPOINT,
+            port: 6379
+        }], {
+            redisOptions: {
+                tls: {}
+            },
+            scaleReads: 'slave',
+            enableOfflineQueue: false
+        });
+    }
+    
+    const body = JSON.parse(event.body);
+    const { eventId, seatId, userId, price } = body;
+    const lockKey = `lock_\${eventId}_\${seatId}`;
+    
+    try {
+        // Acquire distributed lock with automatic expiry (50ms target)
+        const lockId = Date.now().toString();
+        const lockAcquired = await acquireDistributedLock(lockKey, lockId, 5000);
+        
+        if (!lockAcquired) {
+            return {
+                statusCode: 409,
+                body: JSON.stringify({ message: 'Seat already being purchased' })
+            };
+        }
+        
+        // Check seat availability in DynamoDB
+        const seatCheck = await dynamodb.get({
+            TableName: process.env.INVENTORY_TABLE,
+            Key: { event_id: eventId, seat_id: seatId }
+        }).promise();
+        
+        if (seatCheck.Item && seatCheck.Item.status === 'sold') {
+            await releaseDistributedLock(lockKey, lockId);
+            return {
+                statusCode: 409,
+                body: JSON.stringify({ message: 'Seat already sold' })
+            };
+        }
+        
+        // Update DynamoDB with transaction
+        await dynamodb.transactWrite({
+            TransactItems: [
+                {
+                    Update: {
+                        TableName: process.env.INVENTORY_TABLE,
+                        Key: { event_id: eventId, seat_id: seatId },
+                        UpdateExpression: 'SET #status = :sold, user_id = :userId, purchase_time = :time, price = :price',
+                        ConditionExpression: 'attribute_not_exists(#status) OR #status <> :sold',
+                        ExpressionAttributeNames: { '#status': 'status' },
+                        ExpressionAttributeValues: {
+                            ':sold': 'sold',
+                            ':userId': userId,
+                            ':time': new Date().toISOString(),
+                            ':price': price
+                        }
+                    }
+                }
+            ]
+        }).promise();
+        
+        // Update Redis sorted set atomically
+        const pipeline = redis.pipeline();
+        pipeline.zrem(`available_seats:\${eventId}`, seatId);
+        pipeline.zadd(`sold_seats:\${eventId}`, Date.now(), `\${seatId}:\${userId}`);
+        await pipeline.exec();
+        
+        // Stream to Kinesis
+        await kinesis.putRecord({
+            StreamName: process.env.KINESIS_STREAM,
+            Data: JSON.stringify({
+                eventType: 'TICKET_PURCHASED',
+                eventId,
+                seatId,
+                userId,
+                price,
+                timestamp: new Date().toISOString(),
+                processingTime: Date.now() - startTime
+            }),
+            PartitionKey: eventId
+        }).promise();
+        
+        // Release lock
+        await releaseDistributedLock(lockKey, lockId);
+        
+        return {
+            statusCode: 200,
+            body: JSON.stringify({
+                message: 'Ticket purchased successfully',
+                transactionId: lockId,
+                processingTime: Date.now() - startTime
+            })
+        };
+        
+    } catch (error) {
+        console.error('Error processing ticket purchase:', error);
+        return {
+            statusCode: 500,
+            body: JSON.stringify({ message: 'Internal server error' })
+        };
+    }
+};
+
+async function acquireDistributedLock(lockKey, lockId, ttlMs) {
+    const expiryTime = Math.floor((Date.now() + ttlMs) / 1000);
+    
+    try {
+        await dynamodb.put({
+            TableName: process.env.LOCKS_TABLE,
+            Item: {
+                lock_key: lockKey,
+                lock_id: lockId,
+                expiry_time: expiryTime,
+                acquired_at: new Date().toISOString()
+            },
+            ConditionExpression: 'attribute_not_exists(lock_key) OR expiry_time < :now',
+            ExpressionAttributeValues: {
+                ':now': Math.floor(Date.now() / 1000)
+            }
+        }).promise();
+        
+        return true;
+    } catch (error) {
+        if (error.code === 'ConditionalCheckFailedException') {
+            return false;
+        }
+        throw error;
+    }
+}
+
+async function releaseDistributedLock(lockKey, lockId) {
+    try {
+        await dynamodb.delete({
+            TableName: process.env.LOCKS_TABLE,
+            Key: { lock_key: lockKey },
+            ConditionExpression: 'lock_id = :lockId',
+            ExpressionAttributeValues: {
+                ':lockId': lockId
+            }
+        }).promise();
+    } catch (error) {
+        console.warn('Error releasing lock:', error);
+    }
+}
+EOT
+}
+
 resource "aws_lambda_function" "ticket_purchase" {
   provider = aws.primary
   
-  filename         = "lambda_functions.zip"
+  filename         = data.archive_file.ticket_purchase_zip.output_path
   function_name    = "${local.app_name}-ticket-purchase"
   role            = aws_iam_role.lambda_execution_role.arn
   handler         = "index.ticketPurchaseHandler"
-  source_code_hash = filebase64sha256("lambda_functions.zip")
+  source_code_hash = data.archive_file.ticket_purchase_zip.output_base64sha256
   runtime         = "nodejs18.x"
   timeout         = 30
   memory_size     = 3008
@@ -377,16 +554,193 @@ resource "aws_lambda_function" "ticket_purchase" {
   tracing_config {
     mode = "Active"
   }
+  
+  depends_on = [local_file.ticket_purchase_code]
+}
+
+data "archive_file" "inventory_verifier_zip" {
+  type        = "zip"
+  output_path = "/tmp/inventory_verifier.zip"
+  
+  source {
+    content  = file("${path.module}/inventory_verifier.js")
+    filename = "index.js"
+  }
+}
+
+resource "local_file" "inventory_verifier_code" {
+  filename = "${path.module}/inventory_verifier.js"
+  content  = <<-EOT
+const AWS = require('aws-sdk');
+const axios = require('axios');
+
+exports.inventoryVerifierHandler = async (event) => {
+    const startTime = Date.now();
+    const dynamodb = new AWS.DynamoDB.DocumentClient();
+    
+    const regions = [
+        'us-east-1', 'us-west-2', 'eu-west-1', 'ap-southeast-1',
+        'us-east-2', 'us-west-1', 'eu-central-1', 'ap-northeast-1',
+        'ca-central-1', 'sa-east-1', 'ap-south-1', 'eu-north-1'
+    ];
+    
+    try {
+        const action = event.action || 'verify';
+        
+        if (action === 'correct_overselling') {
+            return await correctOverselling(event.data);
+        }
+        
+        // Scan inventory across all regions
+        const inventoryPromises = regions.map(async (region) => {
+            const regionalDDB = new AWS.DynamoDB.DocumentClient({ region });
+            
+            const params = {
+                TableName: process.env.INVENTORY_TABLE,
+                FilterExpression: '#status = :sold',
+                ExpressionAttributeNames: { '#status': 'status' },
+                ExpressionAttributeValues: { ':sold': 'sold' }
+            };
+            
+            const items = [];
+            let lastKey = undefined;
+            
+            do {
+                if (lastKey) {
+                    params.ExclusiveStartKey = lastKey;
+                }
+                
+                const result = await regionalDDB.scan(params).promise();
+                items.push(...result.Items);
+                lastKey = result.LastEvaluatedKey;
+            } while (lastKey);
+            
+            return { region, items };
+        });
+        
+        const regionalInventories = await Promise.all(inventoryPromises);
+        
+        // Compare with PMS (mock API call - replace with actual endpoint)
+        const pmsData = await axios.get('https://pms-api.example.com/inventory', {
+            timeout: 3000
+        });
+        
+        // Detect overselling
+        const overselling = detectOverselling(regionalInventories, pmsData.data);
+        
+        const result = {
+            verification_time: Date.now() - startTime,
+            regions_checked: regions.length,
+            overselling_detected: overselling.length > 0,
+            overselling_details: overselling,
+            timestamp: new Date().toISOString()
+        };
+        
+        return result;
+        
+    } catch (error) {
+        console.error('Error in inventory verification:', error);
+        throw error;
+    }
+};
+
+function detectOverselling(regionalInventories, pmsData) {
+    const overselling = [];
+    const consolidatedInventory = new Map();
+    
+    // Consolidate regional inventories
+    regionalInventories.forEach(({ region, items }) => {
+        items.forEach(item => {
+            const key = `\${item.event_id}:\${item.seat_id}`;
+            if (!consolidatedInventory.has(key)) {
+                consolidatedInventory.set(key, []);
+            }
+            consolidatedInventory.get(key).push({ region, ...item });
+        });
+    });
+    
+    // Check for duplicates and conflicts
+    consolidatedInventory.forEach((sales, key) => {
+        if (sales.length > 1) {
+            overselling.push({
+                type: 'DUPLICATE_SALE',
+                key,
+                count: sales.length,
+                details: sales
+            });
+        }
+    });
+    
+    // Compare with PMS
+    const pmsSet = new Set(pmsData.soldSeats.map(s => `\${s.eventId}:\${s.seatId}`));
+    
+    consolidatedInventory.forEach((sales, key) => {
+        if (!pmsSet.has(key)) {
+            overselling.push({
+                type: 'UNAUTHORIZED_SALE',
+                key,
+                details: sales[0]
+            });
+        }
+    });
+    
+    return overselling;
+}
+
+async function correctOverselling(data) {
+    const dynamodb = new AWS.DynamoDB.DocumentClient();
+    const corrections = [];
+    
+    for (const issue of data.overselling_details) {
+        if (issue.type === 'DUPLICATE_SALE') {
+            // Keep the earliest sale, revert others
+            const sorted = issue.details.sort((a, b) => 
+                new Date(a.purchase_time) - new Date(b.purchase_time)
+            );
+            
+            const toRevert = sorted.slice(1);
+            
+            for (const sale of toRevert) {
+                await dynamodb.update({
+                    TableName: process.env.INVENTORY_TABLE,
+                    Key: {
+                        event_id: sale.event_id,
+                        seat_id: sale.seat_id
+                    },
+                    UpdateExpression: 'SET #status = :available, correction_time = :time',
+                    ExpressionAttributeNames: { '#status': 'status' },
+                    ExpressionAttributeValues: {
+                        ':available': 'available',
+                        ':time': new Date().toISOString()
+                    }
+                }).promise();
+                
+                corrections.push({
+                    type: 'REVERTED_DUPLICATE',
+                    sale,
+                    timestamp: new Date().toISOString()
+                });
+            }
+        }
+    }
+    
+    return {
+        corrections_made: corrections.length,
+        corrections,
+        timestamp: new Date().toISOString()
+    };
+}
+EOT
 }
 
 resource "aws_lambda_function" "inventory_verifier" {
   provider = aws.primary
   
-  filename         = "lambda_functions.zip"
+  filename         = data.archive_file.inventory_verifier_zip.output_path
   function_name    = "${local.app_name}-inventory-verifier"
   role            = aws_iam_role.lambda_execution_role.arn
   handler         = "index.inventoryVerifierHandler"
-  source_code_hash = filebase64sha256("lambda_functions.zip")
+  source_code_hash = data.archive_file.inventory_verifier_zip.output_base64sha256
   runtime         = "nodejs18.x"
   timeout         = 60
   memory_size     = 1024
@@ -396,25 +750,130 @@ resource "aws_lambda_function" "inventory_verifier" {
       INVENTORY_TABLE = aws_dynamodb_table.ticket_inventory.name
     }
   }
+  
+  depends_on = [local_file.inventory_verifier_code]
+}
+
+data "archive_file" "kinesis_processor_zip" {
+  type        = "zip"
+  output_path = "/tmp/kinesis_processor.zip"
+  
+  source {
+    content  = file("${path.module}/kinesis_processor.js")
+    filename = "index.js"
+  }
+}
+
+resource "local_file" "kinesis_processor_code" {
+  filename = "${path.module}/kinesis_processor.js"
+  content  = <<-EOT
+const AWS = require('aws-sdk');
+
+const rdsDataService = new AWS.RDSDataService();
+
+exports.kinesisProcessorHandler = async (event) => {
+    const records = event.Records.map(record => {
+        const payload = Buffer.from(record.kinesis.data, 'base64').toString('utf-8');
+        return JSON.parse(payload);
+    });
+    
+    // Batch insert into Aurora
+    const sqlStatements = records.map(record => ({
+        sql: `INSERT INTO ticket_sales (event_id, seat_id, user_id, price, purchase_time, processing_time) 
+              VALUES (:eventId, :seatId, :userId, :price, :purchaseTime, :processingTime)`,
+        parameters: [
+            { name: 'eventId', value: { stringValue: record.eventId } },
+            { name: 'seatId', value: { stringValue: record.seatId } },
+            { name: 'userId', value: { stringValue: record.userId } },
+            { name: 'price', value: { doubleValue: record.price } },
+            { name: 'purchaseTime', value: { stringValue: record.timestamp } },
+            { name: 'processingTime', value: { longValue: record.processingTime } }
+        ]
+    }));
+    
+    try {
+        // Use RDS Data API for serverless execution
+        await Promise.all(sqlStatements.map(stmt => 
+            rdsDataService.executeStatement({
+                resourceArn: process.env.AURORA_CLUSTER_ARN,
+                secretArn: process.env.AURORA_SECRET_ARN,
+                database: 'analytics',
+                sql: stmt.sql,
+                parameters: stmt.parameters
+            }).promise()
+        ));
+        
+        console.log(`Processed \${records.length} records`);
+        
+        // Update real-time metrics
+        const eventMetrics = {};
+        records.forEach(record => {
+            if (!eventMetrics[record.eventId]) {
+                eventMetrics[record.eventId] = {
+                    count: 0,
+                    revenue: 0,
+                    avgProcessingTime: 0
+                };
+            }
+            eventMetrics[record.eventId].count++;
+            eventMetrics[record.eventId].revenue += record.price;
+            eventMetrics[record.eventId].avgProcessingTime = 
+                (eventMetrics[record.eventId].avgProcessingTime * (eventMetrics[record.eventId].count - 1) + 
+                 record.processingTime) / eventMetrics[record.eventId].count;
+        });
+        
+        // Update aggregated metrics
+        const metricsPromises = Object.entries(eventMetrics).map(([eventId, metrics]) =>
+            rdsDataService.executeStatement({
+                resourceArn: process.env.AURORA_CLUSTER_ARN,
+                secretArn: process.env.AURORA_SECRET_ARN,
+                database: 'analytics',
+                sql: `INSERT INTO event_metrics (event_id, sales_count, total_revenue, avg_processing_time, last_updated)
+                      VALUES (:eventId, :count, :revenue, :avgTime, NOW())
+                      ON DUPLICATE KEY UPDATE
+                      sales_count = sales_count + :count,
+                      total_revenue = total_revenue + :revenue,
+                      avg_processing_time = ((avg_processing_time * sales_count) + (:avgTime * :count)) / (sales_count + :count),
+                      last_updated = NOW()`,
+                parameters: [
+                    { name: 'eventId', value: { stringValue: eventId } },
+                    { name: 'count', value: { longValue: metrics.count } },
+                    { name: 'revenue', value: { doubleValue: metrics.revenue } },
+                    { name: 'avgTime', value: { doubleValue: metrics.avgProcessingTime } }
+                ]
+            }).promise()
+        );
+        
+        await Promise.all(metricsPromises);
+        
+    } catch (error) {
+        console.error('Error processing Kinesis records:', error);
+        throw error;
+    }
+};
+EOT
 }
 
 resource "aws_lambda_function" "kinesis_processor" {
   provider = aws.primary
   
-  filename         = "lambda_functions.zip"
+  filename         = data.archive_file.kinesis_processor_zip.output_path
   function_name    = "${local.app_name}-kinesis-processor"
   role            = aws_iam_role.lambda_execution_role.arn
   handler         = "index.kinesisProcessorHandler"
-  source_code_hash = filebase64sha256("lambda_functions.zip")
+  source_code_hash = data.archive_file.kinesis_processor_zip.output_base64sha256
   runtime         = "nodejs18.x"
   timeout         = 30
   memory_size     = 512
   
   environment {
     variables = {
-      AURORA_ENDPOINT = aws_rds_cluster.analytics.endpoint
+      AURORA_CLUSTER_ARN = aws_rds_cluster.analytics.arn
+      AURORA_SECRET_ARN  = aws_secretsmanager_secret.aurora_credentials.arn
     }
   }
+  
+  depends_on = [local_file.kinesis_processor_code]
 }
 
 # API Gateway
@@ -568,13 +1027,20 @@ resource "aws_rds_cluster" "analytics" {
   
   cluster_identifier      = "${local.app_name}-analytics"
   engine                  = "aurora-postgresql"
+  engine_mode             = "provisioned"
   engine_version          = "15.4"
   database_name           = "analytics"
   master_username         = "admin"
-  master_password         = "ChangeMeInProduction123!"
+  master_password         = random_password.aurora_password.result
   db_subnet_group_name    = aws_db_subnet_group.aurora.name
   vpc_security_group_ids  = [aws_security_group.aurora_sg.id]
   storage_encrypted       = true
+  enable_http_endpoint    = true
+  
+  serverlessv2_scaling_configuration {
+    max_capacity = 16
+    min_capacity = 0.5
+  }
   
   tags = {
     Name = "${local.app_name}-analytics"
@@ -587,9 +1053,35 @@ resource "aws_rds_cluster_instance" "analytics" {
   
   identifier         = "${local.app_name}-analytics-${count.index}"
   cluster_identifier = aws_rds_cluster.analytics.id
-  instance_class     = "db.r6g.large"
+  instance_class     = "db.serverless"
   engine             = aws_rds_cluster.analytics.engine
   engine_version     = aws_rds_cluster.analytics.engine_version
+}
+
+resource "random_password" "aurora_password" {
+  length  = 32
+  special = true
+}
+
+resource "aws_secretsmanager_secret" "aurora_credentials" {
+  provider = aws.primary
+  
+  name = "${local.app_name}-aurora-credentials"
+}
+
+resource "aws_secretsmanager_secret_version" "aurora_credentials" {
+  provider = aws.primary
+  
+  secret_id = aws_secretsmanager_secret.aurora_credentials.id
+  
+  secret_string = jsonencode({
+    username = aws_rds_cluster.analytics.master_username
+    password = random_password.aurora_password.result
+    engine   = "postgres"
+    host     = aws_rds_cluster.analytics.endpoint
+    port     = 5432
+    dbname   = aws_rds_cluster.analytics.database_name
+  })
 }
 
 # Step Functions
