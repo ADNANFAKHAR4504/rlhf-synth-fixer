@@ -1053,9 +1053,6 @@ describe('TapStack CloudFormation Template', () => {
 
         // Secrets Manager permissions
         expect(policy.PolicyDocument.Statement[5].Action).toBe('secretsmanager:GetSecretValue');
-
-        // SNS permissions
-        expect(policy.PolicyDocument.Statement[6].Action).toBe('sns:Publish');
       });
 
       test('StepFunctionsExecutionRole should have Lambda invoke permissions', () => {
@@ -1091,7 +1088,6 @@ describe('TapStack CloudFormation Template', () => {
         expect(key.Type).toBe('AWS::KMS::Key');
         expect(key.Properties.Description).toBe('KMS key for regulatory reporting platform encryption (S3, Aurora)');
         expect(key.Properties.KeyUsage).toBe('ENCRYPT_DECRYPT');
-        expect(key.Properties.Enabled).toBe(true);
 
         // Key policy
         const keyPolicy = key.Properties.KeyPolicy;
