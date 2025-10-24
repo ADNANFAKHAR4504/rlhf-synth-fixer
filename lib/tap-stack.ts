@@ -576,6 +576,8 @@ class DMSStack extends cdk.NestedStack {
       }
     );
 
+    this.replicationInstance.addDependency(subnetGroup);
+
     // Source endpoint (on-premises MySQL - placeholder)
     const sourceEndpoint = new dms.CfnEndpoint(this, 'SourceEndpoint', {
       endpointType: 'source',
