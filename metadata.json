@@ -7,6 +7,7 @@
   "team": "1",
   "startedAt": "2025-10-23T10:18:07.725Z",
   "subtask": "Provisioning of Infrastructure Environments",
+  "task_sub_category": "IaC-Multi-Environment-Management",
   "subject_labels": [
     "Multi-Environment Consistency"
   ],
