@@ -572,7 +572,6 @@ class DMSStack extends cdk.NestedStack {
           subnetGroup.replicationSubnetGroupIdentifier,
         publiclyAccessible: false,
         multiAz: false,
-        engineVersion: '3.5.1',
       }
     );
 
