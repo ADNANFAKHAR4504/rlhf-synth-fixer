@@ -4,7 +4,7 @@
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "stf-378",
-  "team": "1",
+  "team": "stf",
   "startedAt": "2025-10-23T10:18:07.725Z",
   "subtask": "Provisioning of Infrastructure Environments",
   "task_sub_category": "IaC-Multi-Environment-Management",
