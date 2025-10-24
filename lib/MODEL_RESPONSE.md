@@ -299,13 +299,26 @@ Environment Variables:
 - TERRAFORM_STATE_BUCKET: S3 bucket for state
 
 Deployment Steps:
-1. cdktf get - Download provider bindings
-2. cdktf synth - Generate Terraform configuration
-3. cdktf deploy - Deploy infrastructure
-4. Verify resources in AWS Console
+
+```bash
+# 1. Download provider bindings
+cdktf get
+
+# 2. Generate Terraform configuration
+cdktf synth
+
+# 3. Deploy infrastructure
+cdktf deploy
+
+# 4. Verify resources in AWS Console (manual step)
+```
 
 Cleanup:
-- cdktf destroy - Remove all resources
+
+```bash
+# Remove all resources
+cdktf destroy
+```
 
 ## Testing
 
@@ -316,8 +329,11 @@ Test suites included:
 - HA tests: Verify multi-AZ deployment
 
 Run tests:
-- npm run test:unit-cdktf
-- npm run test:integration-cdktf
+
+```bash
+npm run test:unit-cdktf
+npm run test:integration-cdktf
+```
 
 ## Conclusion
 

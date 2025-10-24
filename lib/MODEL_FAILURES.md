@@ -15,7 +15,8 @@ The initial implementation was **90% correct** with solid architecture covering 
 **Issue**: API Gateway deployment failed with "No integration defined for method" errors during CI/CD pipeline.
 
 **Error**:
-```
+
+```plaintext
 Error: creating API Gateway Deployment: BadRequestException: No integration defined for method
 ```
 
@@ -65,7 +66,8 @@ const apiDeployment = new ApiGatewayDeployment(this, 'api-deployment', {
 **Issue**: CloudWatch log group deployment failed with KMS key permission errors during CI/CD.
 
 **Error**:
-```
+
+```plaintext
 Error: creating CloudWatch Log Group: AccessDeniedException: 
 User is not authorized to perform: kms:DescribeKey on resource: 
 arn:aws:kms:us-east-1:xxxxx:key/xxxx-xxxx-xxxx
@@ -110,7 +112,8 @@ const ecsLogGroup = new CloudwatchLogGroup(this, 'ecs-log-group', {
 **Issue**: Repeated CI/CD deployments failed with "already exists" errors for PR environments even after changing regions.
 
 **Error**:
-```
+
+```plaintext
 Error: creating DB Subnet Group: DBSubnetGroupAlreadyExistsFault: 
 DB subnet group 'edu-db-subnet-group-pr4910' already exists.
 ```
@@ -153,7 +156,8 @@ const dbSubnetGroup = new DbSubnetGroup(this, 'edu-db-subnet-group', {
 **Issue**: CI/CD pipeline inconsistency due to mixed region configurations between code and tests.
 
 **Error**:
-```
+
+```plaintext
 Expected: "ap-northeast-1"
 Received: "us-east-1"
 ```

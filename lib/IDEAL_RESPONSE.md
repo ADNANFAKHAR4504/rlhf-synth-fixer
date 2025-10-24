@@ -369,6 +369,7 @@ Environment Variables:
 - TERRAFORM_STATE_BUCKET: S3 bucket for state
 
 Deployment Steps:
+
 ```bash
 # 1. Download provider bindings
 cdktf get
@@ -383,6 +384,7 @@ cdktf deploy
 ```
 
 **CI/CD Integration:**
+
 ```bash
 # Build and test
 npm run build
@@ -405,6 +407,7 @@ Test suites included:
 - HA tests: Verify multi-AZ deployment
 
 Run tests:
+
 ```bash
 npm run test:unit    # All 82 tests pass with 100% coverage
 npm run test:integration  # Integration test suite
