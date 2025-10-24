@@ -383,7 +383,6 @@
               ]
             },
             "Prefix": "firehose/",
-            "ErrorOutputPrefix": "firehose-errors/",
             "BufferingHints": {
               "IntervalInSeconds": 120,
               "SizeInMBs": 128
@@ -408,7 +407,6 @@
               ]
             },
             "Prefix": "backup/",
-            "ErrorOutputPrefix": "backup-errors/",
             "BufferingHints": {
               "IntervalInSeconds": 300,
               "SizeInMBs": 5
