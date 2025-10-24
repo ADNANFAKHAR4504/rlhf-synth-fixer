@@ -1,0 +1,35 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "8876287708",
+  "team": "synth",
+  "startedAt": "2025-10-21T16:38:59+05:30",
+  "subtask": "Application Deployment",
+  "background": "HealthTech Solutions is launching a new healthcare analytics platform that must comply with HIPAA requirements. The platform needs to process and analyze patient data while maintaining strict security standards and optimal performance.",
+  "subject_labels": [
+    "IaC Optimization",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "RDS",
+    "ElastiCache",
+    "Secrets Manager",
+    "ECS Fargate",
+    "KMS",
+    "CloudWatch Logs",
+    "Application Load Balancer",
+    "IAM",
+    "NAT Gateway"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
