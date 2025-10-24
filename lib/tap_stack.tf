@@ -1312,16 +1312,32 @@ resource "aws_iam_policy" "sfn" {
   name = "${local.name_prefix}-sfn"
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Action = ["lambda:InvokeFunction"]
-      Effect = "Allow"
-      Resource = [
-        aws_lambda_function.s3_sync_handler.arn,
-        aws_lambda_function.dynamodb_refresh_handler.arn,
-        aws_lambda_function.aurora_refresh_handler.arn,
-        aws_lambda_function.integration_tests_handler.arn
-      ]
-    }]
+    Statement = [
+      {
+        Action = ["lambda:InvokeFunction"]
+        Effect = "Allow"
+        Resource = [
+          aws_lambda_function.s3_sync_handler.arn,
+          aws_lambda_function.dynamodb_refresh_handler.arn,
+          aws_lambda_function.aurora_refresh_handler.arn,
+          aws_lambda_function.integration_tests_handler.arn
+        ]
+      },
+      {
+        Action = [
+          "logs:CreateLogDelivery",
+          "logs:GetLogDelivery",
+          "logs:UpdateLogDelivery",
+          "logs:DeleteLogDelivery",
+          "logs:ListLogDeliveries",
+          "logs:PutResourcePolicy",
+          "logs:DescribeResourcePolicies",
+          "logs:DescribeLogGroups"
+        ]
+        Effect   = "Allow"
+        Resource = "*"
+      }
+    ]
   })
 }
 
@@ -1814,7 +1830,7 @@ resource "aws_sfn_state_machine" "daily_refresh" {
   name     = "${local.name_prefix}-daily-refresh"
   role_arn = aws_iam_role.sfn.arn
   logging_configuration {
-    log_destination        = aws_cloudwatch_log_group.sfn.arn
+    log_destination        = "${aws_cloudwatch_log_group.sfn.arn}:*"
     include_execution_data = true
     level                  = "ALL"
   }
