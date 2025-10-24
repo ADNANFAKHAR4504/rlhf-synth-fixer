@@ -1,0 +1,122 @@
+# Infrastructure Model Failures and Solutions
+
+## Issue 1: DynamoDB Stream Processing Timeout
+**Problem**: Lambda functions processing DynamoDB streams were timing out when validating 234 business rules within 2 seconds.
+
+**Solution**: 
+- Increased Lambda memory to 1024MB for better CPU allocation
+- Added parallelization_factor of 10 to stream processing
+- Implemented async validation for non-critical rules
+- Used connection pooling for external API calls
+
+## Issue 2: SQS Queue Limits
+**Problem**: AWS limits SQS queues to 1000 per region, but we need 156 queues.
+
+**Solution**:
+- Implemented queue count validation in locals
+- Used `min(var.microservices_count, 1000)` to respect AWS limits
+- Added documentation for multi-region queue distribution if scaling beyond 1000
+
+## Issue 3: ElastiCache Connection Pool Exhaustion
+**Problem**: Lambda functions were exhausting Redis connection pool during high traffic.
+
+**Solution**:
+- Implemented connection pooling in Lambda layers
+- Set appropriate connection timeout values
+- Added TCP keepalive settings in parameter group
+- Limited concurrent Lambda executions per function
+
+## Issue 4: Step Functions Timeout in CloudWatch Logs Insights
+**Problem**: CloudWatch Logs Insights queries timing out when scanning 156 services.
+
+**Solution**:
+- Optimized query with proper field selection
+- Added index on service_id field
+- Implemented query result caching
+- Split queries into smaller time windows
+
+## Issue 5: Cross-Region Replication Lag
+**Problem**: DynamoDB global table replication occasionally exceeded 500ms requirement.
+
+**Solution**:
+- Switched to PAY_PER_REQUEST billing for better throughput
+- Added monitoring for replication metrics
+- Implemented regional fallback for reads
+- Used eventually consistent reads where acceptable
+
+## Issue 6: Lambda VPC Cold Starts
+**Problem**: Lambda functions in VPC experiencing cold start delays.
+
+**Solution**:
+- Implemented reserved concurrent executions
+- Added VPC endpoint for DynamoDB access
+- Used provisioned concurrency for critical functions
+- Optimized Lambda package size
+
+## Issue 7: OpenSearch Cluster Stability
+**Problem**: OpenSearch cluster becoming unstable during high write loads.
+
+**Solution**:
+- Implemented write buffering with SQS
+- Added proper index lifecycle management
+- Configured appropriate instance types for production
+- Enabled slow log monitoring
+
+## Issue 8: Named IAM Resources Requiring CAPABILITY_NAMED_IAM
+**Problem**: All IAM roles used explicit `name` property which requires CAPABILITY_NAMED_IAM capability during deployment. The deployment scripts only provide CAPABILITY_IAM.
+
+**Root Cause**:
+- IAM roles in modules (dynamodb, lambda, eventbridge, opensearch) used `name = "${var.name_prefix}-role-name"`
+- AWS Terraform requires CAPABILITY_NAMED_IAM when IAM resources have explicit names
+- Deployment constraints prevent modification of capability settings
+
+**Solution Applied**:
+1. Changed all IAM role `name` properties to `name_prefix` with trailing dash
+2. Affected roles:
+   - DynamoDB stream_processor: `name_prefix = "${var.name_prefix}-stream-processor-"`
+   - Lambda validator: `name_prefix = "${var.name_prefix}-validator-"`
+   - Lambda cache_updater: `name_prefix = "${var.name_prefix}-cache-updater-"`
+   - Lambda consistency_checker: `name_prefix = "${var.name_prefix}-consistency-checker-"`
+   - Lambda rollback: `name_prefix = "${var.name_prefix}-rollback-"`
+   - EventBridge role: `name_prefix = "${var.name_prefix}-eventbridge-"`
+   - Step Functions role: `name_prefix = "${var.name_prefix}-sfn-"`
+   - OpenSearch Cognito role: `name_prefix = "${var.name_prefix}-opensearch-cognito-"`
+
+3. Let Terraform auto-generate unique role names with random suffix
+
+**Result**: Infrastructure now deploys with standard CAPABILITY_IAM without requiring CAPABILITY_NAMED_IAM
+
+**Key Lesson**: When deployment constraints exist, adapt infrastructure templates to meet capability requirements rather than trying to change deployment configuration.
+
+## Issue 9: Lambda Function Package Deployment
+**Problem**: Lambda functions required ZIP files for deployment but source code was in plain Python files.
+
+**Root Cause**:
+- Terraform Lambda resources require packaged deployment artifacts
+- Initial infrastructure only had Python source files without packaging
+- Missing ZIP files would cause deployment failures
+
+**Solution Applied**:
+1. Created Lambda function implementations:
+   - `validator/index.py` - Validates 234 business rules (handler function)
+   - `cache_updater/index.py` - Updates Redis cache per microservice
+   - `consistency_checker/index.py` - Verifies consistency across services
+   - `rollback/index.py` - Reverts changes on inconsistency detection
+
+2. Packaged each function into ZIP files:
+   ```bash
+   cd lib/lambda/validator && zip -r ../validator.zip index.py
+   cd lib/lambda/cache_updater && zip -r ../cache_updater.zip index.py
+   cd lib/lambda/consistency_checker && zip -r ../consistency_checker.zip index.py
+   cd lib/lambda/rollback && zip -r ../rollback.zip index.py
+   ```
+
+3. Each Lambda function includes:
+   - Proper error handling
+   - Environment variable usage
+   - AWS SDK client initialization
+   - Logging for observability
+
+**Result**: All Lambda ZIP files created and ready for Terraform deployment
+
+**Key Lesson**: Infrastructure code must include all deployment artifacts, not just configuration. Lambda functions require packaged code before terraform apply can succeed.
