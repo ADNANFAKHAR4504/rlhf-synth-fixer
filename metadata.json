@@ -12,7 +12,7 @@
     "Infrastructure Analysis/Monitoring",
     "Security Configuration as Code"
   ],
-  "region": "eu-west-1",
+  "region": "eu-west-2",
   "aws_services": [
     "VPC",
     "EC2",
