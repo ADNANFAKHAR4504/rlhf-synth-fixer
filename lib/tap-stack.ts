@@ -295,5 +295,179 @@ export class TapStack extends cdk.Stack {
         ]
       ]
     });
+
+    // ========== CloudFormation Outputs ==========
+
+    // S3 Outputs
+    new cdk.CfnOutput(this, 'IoTArchiveBucketName', {
+      value: archiveBucket.bucketName,
+      description: 'S3 bucket for archived IoT data',
+      exportName: `IoTArchiveBucket-${this.environmentSuffix}`
+    });
+
+    new cdk.CfnOutput(this, 'IoTArchiveBucketArn', {
+      value: archiveBucket.bucketArn,
+      description: 'ARN of S3 bucket for archived IoT data'
+    });
+
+    // DynamoDB Outputs
+    new cdk.CfnOutput(this, 'DeviceRecoveryTableName', {
+      value: deviceTable.tableName,
+      description: 'DynamoDB table for device recovery state',
+      exportName: `DeviceRecoveryTable-${this.environmentSuffix}`
+    });
+
+    new cdk.CfnOutput(this, 'DeviceRecoveryTableArn', {
+      value: deviceTable.tableArn,
+      description: 'ARN of device recovery table'
+    });
+
+    new cdk.CfnOutput(this, 'ValidationTableName', {
+      value: validationTable.tableName,
+      description: 'DynamoDB table for recovery validation',
+      exportName: `ValidationTable-${this.environmentSuffix}`
+    });
+
+    new cdk.CfnOutput(this, 'ValidationTableArn', {
+      value: validationTable.tableArn,
+      description: 'ARN of validation table'
+    });
+
+    // Kinesis Outputs
+    new cdk.CfnOutput(this, 'KinesisStreamNames', {
+      value: JSON.stringify(kinesisStreams.map(s => s.streamName)),
+      description: 'Names of Kinesis replay streams'
+    });
+
+    new cdk.CfnOutput(this, 'KinesisStreamArns', {
+      value: JSON.stringify(kinesisStreams.map(s => s.streamArn)),
+      description: 'ARNs of Kinesis replay streams'
+    });
+
+    // SQS Outputs
+    new cdk.CfnOutput(this, 'SensorDLQUrl', {
+      value: dlQueues['sensor'].queueUrl,
+      description: 'URL of sensor device DLQ'
+    });
+
+    new cdk.CfnOutput(this, 'ActuatorDLQUrl', {
+      value: dlQueues['actuator'].queueUrl,
+      description: 'URL of actuator device DLQ'
+    });
+
+    new cdk.CfnOutput(this, 'GatewayDLQUrl', {
+      value: dlQueues['gateway'].queueUrl,
+      description: 'URL of gateway device DLQ'
+    });
+
+    new cdk.CfnOutput(this, 'EdgeDLQUrl', {
+      value: dlQueues['edge'].queueUrl,
+      description: 'URL of edge device DLQ'
+    });
+
+    // Lambda Outputs
+    new cdk.CfnOutput(this, 'ShadowAnalysisLambdaName', {
+      value: shadowAnalysisLambda.functionName,
+      description: 'Name of shadow analysis Lambda function',
+      exportName: `ShadowAnalysisLambda-${this.environmentSuffix}`
+    });
+
+    new cdk.CfnOutput(this, 'ShadowAnalysisLambdaArn', {
+      value: shadowAnalysisLambda.functionArn,
+      description: 'ARN of shadow analysis Lambda function'
+    });
+
+    new cdk.CfnOutput(this, 'KinesisRepublishLambdaName', {
+      value: kinesisRepublishLambda.functionName,
+      description: 'Name of Kinesis republish Lambda function',
+      exportName: `KinesisRepublishLambda-${this.environmentSuffix}`
+    });
+
+    new cdk.CfnOutput(this, 'KinesisRepublishLambdaArn', {
+      value: kinesisRepublishLambda.functionArn,
+      description: 'ARN of Kinesis republish Lambda function'
+    });
+
+    new cdk.CfnOutput(this, 'DynamoDBValidationLambdaName', {
+      value: dynamodbValidationLambda.functionName,
+      description: 'Name of DynamoDB validation Lambda function',
+      exportName: `DynamoDBValidationLambda-${this.environmentSuffix}`
+    });
+
+    new cdk.CfnOutput(this, 'DynamoDBValidationLambdaArn', {
+      value: dynamodbValidationLambda.functionArn,
+      description: 'ARN of DynamoDB validation Lambda function'
+    });
+
+    new cdk.CfnOutput(this, 'TriggerStateMachineLambdaName', {
+      value: triggerStateMachineLambda.functionName,
+      description: 'Name of trigger state machine Lambda function'
+    });
+
+    new cdk.CfnOutput(this, 'TriggerStateMachineLambdaArn', {
+      value: triggerStateMachineLambda.functionArn,
+      description: 'ARN of trigger state machine Lambda function'
+    });
+
+    // Step Functions Outputs
+    new cdk.CfnOutput(this, 'RecoveryStateMachineArn', {
+      value: stateMachine.stateMachineArn,
+      description: 'ARN of recovery orchestration state machine',
+      exportName: `RecoveryStateMachine-${this.environmentSuffix}`
+    });
+
+    new cdk.CfnOutput(this, 'RecoveryStateMachineName', {
+      value: stateMachine.stateMachineName,
+      description: 'Name of recovery orchestration state machine'
+    });
+
+    // EventBridge Outputs
+    new cdk.CfnOutput(this, 'RecoveryEventBusName', {
+      value: eventBus.eventBusName,
+      description: 'Name of recovery event bus',
+      exportName: `RecoveryEventBus-${this.environmentSuffix}`
+    });
+
+    new cdk.CfnOutput(this, 'RecoveryEventBusArn', {
+      value: eventBus.eventBusArn,
+      description: 'ARN of recovery event bus'
+    });
+
+    // CloudWatch Outputs
+    new cdk.CfnOutput(this, 'RuleFailureAlarmName', {
+      value: ruleFailureAlarm.alarmName,
+      description: 'Name of IoT rule failure alarm'
+    });
+
+    new cdk.CfnOutput(this, 'RuleFailureAlarmArn', {
+      value: ruleFailureAlarm.alarmArn,
+      description: 'ARN of IoT rule failure alarm'
+    });
+
+    new cdk.CfnOutput(this, 'RecoveryDashboardName', {
+      value: `iot-recovery-monitoring-${this.environmentSuffix}`,
+      description: 'Name of CloudWatch recovery dashboard'
+    });
+
+    // Helper Commands
+    new cdk.CfnOutput(this, 'TestShadowAnalysisCommand', {
+      value: `aws lambda invoke --function-name ${shadowAnalysisLambda.functionName} --payload '{"test": "data"}' response.json`,
+      description: 'Command to test shadow analysis Lambda'
+    });
+
+    new cdk.CfnOutput(this, 'StartRecoveryCommand', {
+      value: `aws stepfunctions start-execution --state-machine-arn ${stateMachine.stateMachineArn} --input '{"triggerSource": "manual"}'`,
+      description: 'Command to manually start recovery process'
+    });
+
+    new cdk.CfnOutput(this, 'ViewLogsCommand', {
+      value: `aws logs tail /aws/lambda/${shadowAnalysisLambda.functionName} --follow`,
+      description: 'Command to view shadow analysis Lambda logs'
+    });
+
+    new cdk.CfnOutput(this, 'CheckSensorDLQCommand', {
+      value: `aws sqs receive-message --queue-url ${dlQueues['sensor'].queueUrl} --max-number-of-messages 10`,
+      description: 'Command to check sensor DLQ messages'
+    });
   }
 }

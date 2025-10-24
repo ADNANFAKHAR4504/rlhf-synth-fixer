@@ -1,8 +1,7 @@
 ## Failure Recovery Automation	
 An IoT platform needs automated recovery when sensor data pipeline failures occur affecting 2.3 million connected devices.	
 Design a recovery connector with the following requirements: 
-- IoT Core rule failures trigger CloudWatch alarms that invoke Lambda functions to analyze IoT shadow states, 
-- which then trigger Step Functions that orchestrate DynamoDB backfill operations from S3 archived data, simultaneously invoking additional Lambda functions to republish messages to Kinesis streams, which trigger EventBridge rules to update SQS dead letter queues, 
+- IoT Core rule failures trigger CloudWatch alarms that invoke Lambda functions to analyze IoT shadow states, which then trigger Step Functions that orchestrate DynamoDB backfill operations from S3 archived data, simultaneously invoking additional Lambda functions to republish messages to Kinesis streams, which trigger EventBridge rules to update SQS dead letter queues, 
 - with final validation Lambda functions querying DynamoDB with time-series range queries to verify data continuity and detect timestamp gaps.
 - CloudWatch must detect rule failures within 15 seconds across 34,000 IoT rules; 
 - Lambda must parse shadow states for 2.3M devices;
