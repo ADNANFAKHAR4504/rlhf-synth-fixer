@@ -10,5 +10,12 @@
   "subject_labels": [
     "Serverless Infrastructure (Functions as Code)"
   ],
-  "aws_services": "API Gateway, Lambda, DynamoDB, ElastiCache, CloudWatch, S3, EventBridge, QuickSight, IAM"
+  "aws_services": "API Gateway, Lambda, DynamoDB, ElastiCache, CloudWatch, S3, EventBridge, QuickSight, IAM",
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rahulladumor",
+  "dockerS3Location": ""
 }
