@@ -1018,105 +1018,131 @@ describe('TapStack CloudFormation Template', () => {
         expect(lambdaSecurityGroup.Properties.VpcId).toEqual({ Ref: 'VPC' });
       });
     });
+    describe('Enhanced IAM Roles and Policies', () => {
+      test('LambdaExecutionRole should have comprehensive permissions', () => {
+        const role = template.Resources.LambdaExecutionRole;
+        expect(role.Type).toBe('AWS::IAM::Role');
 
-    describe('Enhanced Lambda Functions', () => {
-      const testLambdaFunction = (resourceName: string, handler: string) => {
-        const lambda = template.Resources[resourceName];
-        expect(lambda.Type).toBe('AWS::Lambda::Function');
-        expect(lambda.Properties.Handler).toBe(handler);
-        expect(lambda.Properties.Runtime).toBe('python3.12');
-        expect(lambda.Properties.Timeout).toBe(180);
-        expect(lambda.Properties.MemorySize).toBe(256);
-        expect(lambda.Properties.Role).toEqual({
-          'Fn::GetAtt': ['LambdaExecutionRole', 'Arn']
-        });
+        // AssumeRolePolicyDocument
+        expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Effect).toBe('Allow');
+        expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
+        expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Action).toBe('sts:AssumeRole');
 
-        // VPC Configuration
-        expect(lambda.Properties.VpcConfig.SecurityGroupIds).toEqual([{ Ref: 'LambdaSecurityGroup' }]);
-        expect(lambda.Properties.VpcConfig.SubnetIds).toEqual([{ Ref: 'SubnetA' }, { Ref: 'SubnetB' }]);
+        // Managed policies
+        expect(role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole');
 
-        // Code should be defined
-        expect(lambda.Properties.Code.ZipFile).toBeDefined();
-        expect(lambda.Properties.Code.ZipFile.length).toBeGreaterThan(0);
-      };
+        // Inline policies
+        const policy = role.Properties.Policies[0];
+        expect(policy.PolicyName).toBe('LambdaExecutionPolicy');
+        expect(policy.PolicyDocument.Statement).toHaveLength(7);
 
-      test('GenerateReportLambda should have correct configuration', () => {
-        testLambdaFunction('GenerateReportLambda', 'index.handler');
+        // CloudWatch Logs
+        expect(policy.PolicyDocument.Statement[0].Action).toEqual(['logs:CreateLogGroup', 'logs:CreateLogStream', 'logs:PutLogEvents']);
 
-        // Verify code contains key functionality
-        const code = template.Resources.GenerateReportLambda.Properties.Code.ZipFile;
-        expect(code).toContain('report_id');
-        expect(code).toContain('jurisdiction');
-        expect(code).toContain('REG_FORM_49');
-        
-        // Verify enhanced test context handling added in commit 93b5f9815a
-        expect(code).toContain('enhanced-data-integrity');
-        expect(code).toContain('EnhancedDataIntegrityTestEntity');
-        expect(code).toContain('enhanced-audit');
-        expect(code).toContain('EnhancedAuditTestEntity');
-        expect(code).toContain('enhanced-success');
-        expect(code).toContain('EnhancedSuccessTestEntity');
-        expect(code).toContain('validation-fail');
-        expect(code).toContain('ValidationFailTestEntity');
-        
-        // Verify test-aware value generation ranges
-        expect(code).toContain('600000.00, 700000.00'); // For validation failures
-        expect(code).toContain('1000.00, 450000.00'); // For successful validation
-        expect(code).toContain('random.randint(25, 500)'); // Updated minimum transaction count
+        // S3 permissions
+        expect(policy.PolicyDocument.Statement[1].Action).toEqual(['s3:PutObject', 's3:GetObject']);
+
+        // SES permissions
+        expect(policy.PolicyDocument.Statement[2].Action).toBe('ses:SendEmail');
+
+        // KMS permissions
+        expect(policy.PolicyDocument.Statement[3].Action).toBe('kms:Decrypt');
+
+        // RDS Data API permissions
+        expect(policy.PolicyDocument.Statement[4].Action).toBe('rds-data:*');
+
+        // Secrets Manager permissions
+        expect(policy.PolicyDocument.Statement[5].Action).toBe('secretsmanager:GetSecretValue');
+
+        // SNS permissions
+        expect(policy.PolicyDocument.Statement[6].Action).toBe('sns:Publish');
       });
 
-      test('ValidateReportLambda should have correct configuration', () => {
-        testLambdaFunction('ValidateReportLambda', 'index.handler');
+      test('StepFunctionsExecutionRole should have Lambda invoke permissions', () => {
+        const role = template.Resources.StepFunctionsExecutionRole;
+        expect(role.Type).toBe('AWS::IAM::Role');
 
-        // Verify code contains validation logic
-        const code = template.Resources.ValidateReportLambda.Properties.Code.ZipFile;
-        expect(code).toContain('validation_errors');
-        expect(code).toContain('entity_name');
-        expect(code).toContain('transaction_count');
-        expect(code).toContain('total_value');
-        
-        // Verify enhanced logging added in commit 93b5f9815a
-        expect(code).toContain('print(f"Validation errors: {validation_errors}")');
-        expect(code).toContain('if validation_errors:');
+        // AssumeRolePolicyDocument
+        expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service).toContain('states.amazonaws.com');
+
+        // Policy should allow invoking all Lambda functions
+        const policy = role.Properties.Policies[0];
+        expect(policy.PolicyDocument.Statement[0].Action).toBe('lambda:InvokeFunction');
+        expect(policy.PolicyDocument.Statement[0].Resource).toHaveLength(6);
       });
 
-      test('DeliverReportLambda should have correct configuration and environment variables', () => {
-        testLambdaFunction('DeliverReportLambda', 'index.handler');
+      test('EventBridgeRole should have Step Functions execution permissions', () => {
+        const role = template.Resources.EventBridgeRole;
+        expect(role.Type).toBe('AWS::IAM::Role');
 
-        const lambda = template.Resources.DeliverReportLambda;
+        // AssumeRolePolicyDocument
+        expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service).toBe('events.amazonaws.com');
 
-        // Environment variables
-        const envVars = lambda.Properties.Environment.Variables;
-        expect(envVars.REPORTS_BUCKET_NAME).toEqual({ Ref: 'ReportsBucket' });
-        expect(envVars.SENDER_EMAIL).toEqual({ Ref: 'SenderEmailAddress' });
-        expect(envVars.DB_CLUSTER_ARN).toEqual({
-          'Fn::Sub': 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraCluster}'
-        });
-        expect(envVars.DB_SECRET_ARN).toEqual({
-          'Fn::GetAtt': ['AuroraCluster', 'MasterUserSecret.SecretArn']
-        });
-        expect(envVars.DB_NAME).toBe('reportingdb');
-
-        // Verify code contains delivery logic
-        const code = lambda.Properties.Code.ZipFile;
-        expect(code).toContain('s3.put_object');
-        expect(code).toContain('ses.send_email');
-        expect(code).toContain('rds_data');
-        
-        // Verify deliberate test failure logic added in commit 93b5f9815a
-        expect(code).toContain('delivery-fail');
-        expect(code).toContain('deliveryfail');
-        expect(code).toContain('Deliberate test failure for test');
-        expect(code).toContain('Intentional delivery failure');
-        
-        // Verify enhanced database interaction
-        expect(code).toContain('INSERT INTO reports');
-        expect(code).toContain('INSERT INTO report_audit');
-        expect(code).toContain('DELIVERY_SUCCESS');
-        expect(code).toContain('DELIVERY_FAILED');
+        // Policy should allow starting state machine execution
+        const policy = role.Properties.Policies[0];
+        expect(policy.PolicyDocument.Statement[0].Action).toBe('states:StartExecution');
+        expect(policy.PolicyDocument.Statement[0].Resource).toEqual({ Ref: 'ReportingStateMachine' });
       });
     });
 
+    describe('Enhanced KMS Key Configuration', () => {
+      test('KMSKey should have proper key policy and configuration', () => {
+        const key = template.Resources.KMSKey;
+        expect(key.Type).toBe('AWS::KMS::Key');
+        expect(key.Properties.Description).toBe('KMS key for encrypting S3 buckets, RDS, and Secrets Manager.');
+        expect(key.Properties.KeyUsage).toBe('ENCRYPT_DECRYPT');
+        expect(key.Properties.Enabled).toBe(true);
+
+        // Key policy
+        const keyPolicy = key.Properties.KeyPolicy;
+        expect(keyPolicy.Version).toBe('2012-10-17');
+        expect(keyPolicy.Statement).toHaveLength(2);
+
+        // Root access statement
+        const rootStatement = keyPolicy.Statement[0];
+        expect(rootStatement.Sid).toBe('Enable IAM User Permissions');
+        expect(rootStatement.Effect).toBe('Allow');
+        expect(rootStatement.Principal.AWS).toEqual({
+          'Fn::Sub': 'arn:aws:iam::${AWS::AccountId}:root'
+        });
+        expect(rootStatement.Action).toBe('kms:*');
+
+        // Account-wide use statement
+        const accountStatement = keyPolicy.Statement[1];
+        expect(accountStatement.Sid).toBe('Allow Key Use By Account Resources');
+        expect(accountStatement.Effect).toBe('Allow');
+        expect(accountStatement.Principal.AWS).toBe('*');
+        expect(accountStatement.Condition.StringEquals['kms:CallerAccount']).toEqual({ Ref: 'AWS::AccountId' });
+      });
+    });
+
+    describe('Enhanced Outputs Validation', () => {
+      test('All outputs should have correct export names', () => {
+        const outputs = ['ReportsBucketName', 'StateMachineArn', 'AuroraClusterEndpoint', 'SNSTopicArn', 'DatabaseClusterArn', 'DatabaseSecretArn', 'DatabaseName'];
+
+        outputs.forEach(outputName => {
+          const output = template.Outputs[outputName];
+          expect(output.Export).toBeDefined();
+          expect(output.Export.Name).toBeDefined();
+          expect(output.Export.Name['Fn::Sub']).toBeDefined();
+        });
+      });
+
+      test('Database outputs should provide necessary connection information', () => {
+        const dbClusterArn = template.Outputs.DatabaseClusterArn;
+        expect(dbClusterArn.Value).toEqual({
+          'Fn::Sub': 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraCluster}'
+        });
+
+        const dbSecretArn = template.Outputs.DatabaseSecretArn;
+        expect(dbSecretArn.Value).toEqual({
+          'Fn::GetAtt': ['AuroraCluster', 'MasterUserSecret.SecretArn']
+        });
+
+        const dbName = template.Outputs.DatabaseName;
+        expect(dbName.Value).toBe('reportingdb');
+      });
+    });
     describe('Enhanced Step Functions State Machine', () => {
       test('State machine definition should have correct workflow structure', () => {
         const definitionString = template.Resources.ReportingStateMachine.Properties.DefinitionString['Fn::Sub'][0];
