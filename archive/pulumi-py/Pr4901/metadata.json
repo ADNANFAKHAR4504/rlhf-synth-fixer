@@ -1,0 +1,37 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "5962726542",
+  "team": "synth",
+  "startedAt": "2025-10-21T13:25:14.641150+05:30",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "VPC",
+    "RDS Aurora PostgreSQL Serverless v2",
+    "ElastiCache Redis",
+    "ECS Fargate",
+    "EFS",
+    "Secrets Manager",
+    "Lambda",
+    "CloudWatch",
+    "IAM",
+    "Application Load Balancer",
+    "NAT Gateway",
+    "Internet Gateway"
+  ],
+  "training_quality": 8,
+  "task_id": "5962726542",
+  "region": "ca-central-1",
+  "environment_suffix": "dev",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
