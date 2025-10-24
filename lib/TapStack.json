@@ -12,22 +12,10 @@
       "Default": "admin",
       "Description": "Master username for Redshift cluster"
     },
-    "RedshiftMasterUserPassword": {
-      "Type": "String",
-      "NoEcho": true,
-      "MinLength": 8,
-      "Description": "Master password for Redshift cluster"
-    },
     "AuroraMasterUsername": {
       "Type": "String",
       "Default": "admin",
       "Description": "Master username for Aurora cluster"
-    },
-    "AuroraMasterUserPassword": {
-      "Type": "String",
-      "NoEcho": true,
-      "MinLength": 8,
-      "Description": "Master password for Aurora cluster"
     }
   },
   "Resources": {
@@ -172,7 +160,7 @@
           "Ref": "RedshiftMasterUsername"
         },
         "MasterUserPassword": {
-          "Ref": "RedshiftMasterUserPassword"
+          "Fn::Sub": "{{resolve:secretsmanager:${RedshiftSecret}:SecretString:password}}"
         },
         "NodeType": "ra3.4xlarge",
         "ClusterType": "multi-node",
@@ -230,7 +218,7 @@
           "Ref": "AuroraMasterUsername"
         },
         "MasterUserPassword": {
-          "Ref": "AuroraMasterUserPassword"
+          "Fn::Sub": "{{resolve:secretsmanager:${AuroraPasswordSecret}:SecretString:password}}"
         },
         "DBSubnetGroupName": {
           "Ref": "AuroraDBSubnetGroup"
@@ -361,25 +349,21 @@
     },
     "CDRFirehoseStream": {
       "Type": "AWS::KinesisFirehose::DeliveryStream",
-      "DependsOn": [
-        "RedshiftCluster",
-        "CDRArchivalBucket"
-      ],
       "Properties": {
         "DeliveryStreamName": {
           "Fn::Sub": "${EnvironmentName}-cdr-firehose"
         },
         "DeliveryStreamType": "DirectPut",
-        "RedshiftDestinationConfiguration": {
+          "RedshiftDestinationConfiguration": {
           "ClusterJDBCURL": {
             "Fn::Sub": "jdbc:redshift://${RedshiftCluster.Endpoint.Address}:${RedshiftCluster.Endpoint.Port}/cdrwarehouse"
           },
           "Username": {
             "Ref": "RedshiftMasterUsername"
           },
-          "Password": {
-            "Ref": "RedshiftMasterUserPassword"
-          },
+            "Password": {
+              "Fn::Sub": "{{resolve:secretsmanager:${RedshiftSecret}:SecretString:password}}"
+            },
           "RoleARN": {
             "Fn::GetAtt": [
               "FirehoseDeliveryRole",
@@ -415,7 +399,7 @@
           "ProcessingConfiguration": {
             "Enabled": false
           },
-          "S3BackupMode": "FailedDataOnly",
+          "S3BackupMode": "Enabled",
           "S3BackupConfiguration": {
             "BucketARN": {
               "Fn::GetAtt": [
@@ -776,7 +760,7 @@
         },
         "Description": "WorkGroup for CDR data validation queries",
         "WorkGroupConfiguration": {
-          "ResultConfigurationUpdates": {
+          "ResultConfiguration": {
             "OutputLocation": {
               "Fn::Sub": "s3://${CDRArchivalBucket}/athena-results/"
             },
@@ -1192,10 +1176,8 @@
                 "Arn"
               ]
             },
-            "Input": {
-              "Fn::Sub": "{\n  \"batches\": [\n    {\"offset\": 0, \"limit\": 1000000},\n    {\"offset\": 1000000, \"limit\": 1000000},\n    {\"offset\": 2000000, \"limit\": 1000000},\n    {\"offset\": 3000000, \"limit\": 1000000},\n    {\"offset\": 4000000, \"limit\": 1000000},\n    {\"offset\": 5000000, \"limit\": 1000000},\n    {\"offset\": 6000000, \"limit\": 1000000},\n    {\"offset\": 7000000, \"limit\": 1000000},\n    {\"offset\": 8000000, \"limit\": 1000000},\n    {\"offset\": 9000000, \"limit\": 1000000},\n    {\"offset\": 10000000, \"limit\": 1000000},\n    {\"offset\": 11000000, \"limit\": 1000000},\n    {\"offset\": 12000000, \"limit\": 1000000},\n    {\"offset\": 13000000, \"limit\": 1000000},\n    {\"offset\": 14000000, \"limit\": 1000000},\n    {\"offset\": 15000000, \"limit\": 1000000},\n    {\"offset\": 16000000, \"limit\": 1000000},\n    {\"offset\": 17000000, \"limit\": 1000000},\n    {\"offset\": 18000000, \"limit\": 1000000},\n    {\"offset\": 19000000, \"limit\": 1000000},\n    {\"offset\": 20000000, \"limit\": 1000000},\n    {\"offset\": 21000000, \"limit\": 1000000},\n    {\"offset\": 22000000, \"limit\": 1000000},\n    {\"offset\": 23000000, \"limit\": 1000000},\n    {\"offset\": 24000000, \"limit\": 1000000},\n    {\"offset\": 25000000, \"limit\": 1000000},\n    {\"offset\": 26000000, \"limit\": 1000000},\n    {\"offset\": 27000000, \"limit\": 1000000},\n    {\"offset\": 28000000, \"limit\": 1000000},\n    {\"offset\": 29000000, \"limit\": 1000000},\n    {\"offset\": 30000000, \"limit\": 1000000},\n    {\"offset\": 31000000, \"limit\": 1000000},\n    {\"offset\": 32000000, \"limit\": 1000000},\n    {\"offset\": 33000000, \"limit\": 1000000},\n    {\"offset\": 34000000, \"limit\": 1000000},\n    {\"offset\": 35000000, \"limit\": 1000000},\n    {\"offset\": 36000000, \"limit\": 1000000},\n    {\"offset\": 37000000, \"limit\": 1000000},\n    {\"offset\": 38000000, \"limit\": 1000000},\n    {\"offset\": 39000000, \"limit\": 1000000},\n    {\"offset\": 40000000, \"limit\": 1000000},\n    {\"offset\": 41000000, \"limit\": 1000000},\n    {\"offset\": 42000000, \"limit\": 1000000},\n    {\"offset\": 43000000, \"limit\": 1000000},\n    {\"offset\": 44000000, \"limit\": 1000000},\n    {\"offset\": 45000000, \"limit\": 1000000},\n    {\"offset\": 46000000, \"limit\": 1000000},\n    {\"offset\": 47000000, \"limit\": 1000000},\n    {\"offset\": 48000000, \"limit\": 1000000},\n    {\"offset\": 49000000, \"limit\": 1000000},\n    {\"offset\": 50000000, \"limit\": 1000000},\n    {\"offset\": 51000000, \"limit\": 1000000},\n    {\"offset\": 52000000, \"limit\": 1000000},\n    {\"offset\": 53000000, \"limit\": 1000000},\n    {\"offset\": 54000000, \"limit\": 1000000},\n    {\"offset\": 55000000, \"limit\": 1000000},\n    {\"offset\": 56000000, \"limit\": 1000000},\n    {\"offset\": 57000000, \"limit\": 1000000},\n    {\"offset\": 58000000, \"limit\": 1000000},\n    {\"offset\": 59000000, \"limit\": 1000000},\n    {\"offset\": 60000000, \"limit\": 1000000},\n    {\"offset\": 61000000, \"limit\": 1000000},\n    {\"offset\": 62000000, \"limit\": 1000000},\n    {\"offset\": 63000000, \"limit\": 1000000},\n    {\"offset\": 64000000, \"limit\": 1000000},\n    {\"offset\": 65000000, \"limit\": 1000000},\n    {\"offset\": 66000000, \"limit\": 1000000},\n    {\"offset\": 67000000, \"limit\": 1000000}\n  ]\n}"
+            "Input": "{\n  \"batches\": [\n    {\"offset\": 0, \"limit\": 1000000},\n    {\"offset\": 1000000, \"limit\": 1000000},\n    {\"offset\": 2000000, \"limit\": 1000000},\n    {\"offset\": 3000000, \"limit\": 1000000},\n    {\"offset\": 4000000, \"limit\": 1000000},\n    {\"offset\": 5000000, \"limit\": 1000000},\n    {\"offset\": 6000000, \"limit\": 1000000},\n    {\"offset\": 7000000, \"limit\": 1000000},\n    {\"offset\": 8000000, \"limit\": 1000000},\n    {\"offset\": 9000000, \"limit\": 1000000},\n    {\"offset\": 10000000, \"limit\": 1000000},\n    {\"offset\": 11000000, \"limit\": 1000000},\n    {\"offset\": 12000000, \"limit\": 1000000},\n    {\"offset\": 13000000, \"limit\": 1000000},\n    {\"offset\": 14000000, \"limit\": 1000000},\n    {\"offset\": 15000000, \"limit\": 1000000},\n    {\"offset\": 16000000, \"limit\": 1000000},\n    {\"offset\": 17000000, \"limit\": 1000000},\n    {\"offset\": 18000000, \"limit\": 1000000},\n    {\"offset\": 19000000, \"limit\": 1000000},\n    {\"offset\": 20000000, \"limit\": 1000000},\n    {\"offset\": 21000000, \"limit\": 1000000},\n    {\"offset\": 22000000, \"limit\": 1000000},\n    {\"offset\": 23000000, \"limit\": 1000000},\n    {\"offset\": 24000000, \"limit\": 1000000},\n    {\"offset\": 25000000, \"limit\": 1000000},\n    {\"offset\": 26000000, \"limit\": 1000000},\n    {\"offset\": 27000000, \"limit\": 1000000},\n    {\"offset\": 28000000, \"limit\": 1000000},\n    {\"offset\": 29000000, \"limit\": 1000000},\n    {\"offset\": 30000000, \"limit\": 1000000},\n    {\"offset\": 31000000, \"limit\": 1000000},\n    {\"offset\": 32000000, \"limit\": 1000000},\n    {\"offset\": 33000000, \"limit\": 1000000},\n    {\"offset\": 34000000, \"limit\": 1000000},\n    {\"offset\": 35000000, \"limit\": 1000000},\n    {\"offset\": 36000000, \"limit\": 1000000},\n    {\"offset\": 37000000, \"limit\": 1000000},\n    {\"offset\": 38000000, \"limit\": 1000000},\n    {\"offset\": 39000000, \"limit\": 1000000},\n    {\"offset\": 40000000, \"limit\": 1000000},\n    {\"offset\": 41000000, \"limit\": 1000000},\n    {\"offset\": 42000000, \"limit\": 1000000},\n    {\"offset\": 43000000, \"limit\": 1000000},\n    {\"offset\": 44000000, \"limit\": 1000000},\n    {\"offset\": 45000000, \"limit\": 1000000},\n    {\"offset\": 46000000, \"limit\": 1000000},\n    {\"offset\": 47000000, \"limit\": 1000000},\n    {\"offset\": 48000000, \"limit\": 1000000},\n    {\"offset\": 49000000, \"limit\": 1000000},\n    {\"offset\": 50000000, \"limit\": 1000000},\n    {\"offset\": 51000000, \"limit\": 1000000},\n    {\"offset\": 52000000, \"limit\": 1000000},\n    {\"offset\": 53000000, \"limit\": 1000000},\n    {\"offset\": 54000000, \"limit\": 1000000},\n    {\"offset\": 55000000, \"limit\": 1000000},\n    {\"offset\": 56000000, \"limit\": 1000000},\n    {\"offset\": 57000000, \"limit\": 1000000},\n    {\"offset\": 58000000, \"limit\": 1000000},\n    {\"offset\": 59000000, \"limit\": 1000000},\n    {\"offset\": 60000000, \"limit\": 1000000},\n    {\"offset\": 61000000, \"limit\": 1000000},\n    {\"offset\": 62000000, \"limit\": 1000000},\n    {\"offset\": 63000000, \"limit\": 1000000},\n    {\"offset\": 64000000, \"limit\": 1000000},\n    {\"offset\": 65000000, \"limit\": 1000000},\n    {\"offset\": 66000000, \"limit\": 1000000},\n    {\"offset\": 67000000, \"limit\": 1000000}\n  ]\n}"
             }
-          }
         ]
       }
     },
@@ -1242,8 +1224,41 @@
           "Fn::Sub": "${EnvironmentName}-aurora-credentials"
         },
         "Description": "Aurora database credentials",
-        "SecretString": {
-          "Fn::Sub": "{\n  \"username\": \"${AuroraMasterUsername}\",\n  \"password\": \"${AuroraMasterUserPassword}\"\n}"
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\": \"admin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 24,
+          "ExcludeCharacters": "@/\\\\"
+        }
+      }
+    },
+    "RedshiftSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentName}-redshift-credentials"
+        },
+        "Description": "Redshift credentials",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\": \"admin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 30,
+          "ExcludeCharacters": "@/\\\\"
+        }
+      }
+    },
+    "AuroraPasswordSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentName}-aurora-password"
+        },
+        "Description": "Aurora master user password",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\": \"admin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 24,
+          "ExcludeCharacters": "@/\\\\"
         }
       }
     },
