@@ -36,20 +36,18 @@ describe('Stack Structure', () => {
     expect(synthesized).toBeDefined();
   });
 
-  test('TapStack instantiates with default tags', () => {
+  test('TapStack applies default tags when provided', () => {
     app = new App();
     stack = new TapStack(app, 'TestTapStackWithTags', {
       environmentSuffix: 'test',
       defaultTags: {
-        tags: {
-          Environment: 'test',
-          Project: 'manufacturing'
-        }
-      }
+        Environment: 'test',
+        ManagedBy: 'CDKTF',
+      },
     });
     synthesized = Testing.synth(stack);
 
-    // Verify that TapStack instantiates without errors with default tags
+    // Verify that TapStack instantiates without errors with tags
     expect(stack).toBeDefined();
     expect(synthesized).toBeDefined();
   });

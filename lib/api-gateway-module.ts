@@ -30,7 +30,9 @@ export class ApiGatewayModule extends Construct {
     });
 
     // Create VPC Link for private integration
-    new Apigatewayv2VpcLink(this, 'vpc-link', {
+    // Note: VPC Link is created but not yet connected to any integration
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const vpcLink = new Apigatewayv2VpcLink(this, 'vpc-link', {
       name: `manufacturing-vpc-link-${environmentSuffix}`,
       subnetIds: vpcLinkSubnetIds,
       securityGroupIds: [],
