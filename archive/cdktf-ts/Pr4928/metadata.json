@@ -12,5 +12,24 @@
     "Failure Recovery Automation",
     "Security Configuration as Code"
   ],
-  "training_quality": 8.5
+  "training_quality": 8.5,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "KMS",
+    "IAM",
+    "CloudWatch",
+    "CloudTrail",
+    "SNS",
+    "Backup",
+    "SecretsManager"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
