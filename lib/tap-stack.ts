@@ -771,109 +771,100 @@ class DataSyncStack extends cdk.NestedStack {
         runtime: lambda.Runtime.NODEJS_20_X,
         handler: 'index.handler',
         code: lambda.Code.fromInline(`
-        const { EC2Client, DescribeInstancesCommand } = require('@aws-sdk/client-ec2');
-        const { DataSyncClient, CreateAgentCommand } = require('@aws-sdk/client-datasync');
-        const https = require('https');
-        
-        exports.handler = async (event, context) => {
-          console.log('Event:', JSON.stringify(event));
-          
-          // Handle CloudFormation DELETE
-          if (event.RequestType === 'Delete') {
-            return sendResponse(event, context, 'SUCCESS', { Arn: event.PhysicalResourceId || 'DeletedAgent' });
+  const { EC2Client, DescribeInstancesCommand } = require('@aws-sdk/client-ec2');
+  const { DataSyncClient, CreateAgentCommand } = require('@aws-sdk/client-datasync');
+  
+  exports.handler = async (event, context) => {
+    console.log('Event:', JSON.stringify(event));
+    
+    // Handle CloudFormation DELETE
+    if (event.RequestType === 'Delete') {
+      return {
+        PhysicalResourceId: event.PhysicalResourceId || 'DeletedAgent',
+        Data: { Arn: event.PhysicalResourceId || 'DeletedAgent' }
+      };
+    }
+    
+    const instanceId = process.env.INSTANCE_ID;
+    const region = process.env.AWS_REGION || 'us-west-2';
+    
+    try {
+      // Get instance private IP
+      const ec2 = new EC2Client({ region });
+      const resp = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }));
+      const privateIp = resp.Reservations[0].Instances[0].PrivateIpAddress;
+      
+      console.log('Instance private IP:', privateIp);
+      
+      // Wait for agent to be ready (max 5 attempts, 30 seconds apart)
+      let activationKey = null;
+      for (let i = 0; i < 5; i++) {
+        try {
+          activationKey = await getActivationKey(privateIp);
+          if (activationKey) {
+            console.log(\`Got activation key on attempt \${i + 1}\`);
+            break;
           }
-          
-          const instanceId = process.env.INSTANCE_ID;
-          const region = process.env.AWS_REGION || 'us-west-2';
-          
-          try {
-            // Get instance private IP
-            const ec2 = new EC2Client({ region });
-            const resp = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }));
-            const privateIp = resp.Reservations[0].Instances[0].PrivateIpAddress;
-            
-            // Wait for agent to be ready (max 5 attempts, 30 seconds apart)
-            let activationKey = null;
-            for (let i = 0; i < 5; i++) {
-              try {
-                activationKey = await getActivationKey(privateIp);
-                if (activationKey) break;
-              } catch (err) {
-                console.log(\`Attempt \${i + 1} failed: \${err.message}\`);
-                if (i < 4) await sleep(30000);
-              }
-            }
-            
-            if (!activationKey) {
-              throw new Error('Failed to retrieve activation key after 5 attempts');
-            }
-            
-            // Create DataSync agent
-            const datasync = new DataSyncClient({ region });
-            const command = new CreateAgentCommand({
-              ActivationKey: activationKey,
-              AgentName: 'MigrationAgent-${props.environmentSuffix}'
-            });
-            const result = await datasync.send(command);
-            
-            console.log('Agent created:', result.AgentArn);
-            return sendResponse(event, context, 'SUCCESS', { Arn: result.AgentArn }, result.AgentArn);
-            
-          } catch (error) {
-            console.error('Error:', error);
-            return sendResponse(event, context, 'FAILED', {}, null, error.message);
+        } catch (err) {
+          console.log(\`Attempt \${i + 1} failed: \${err.message}\`);
+          if (i < 4) await sleep(30000);
+        }
+      }
+      
+      if (!activationKey) {
+        throw new Error('Failed to retrieve activation key after 5 attempts');
+      }
+      
+      // Create DataSync agent
+      const datasync = new DataSyncClient({ region });
+      const command = new CreateAgentCommand({
+        ActivationKey: activationKey,
+        AgentName: 'MigrationAgent-YOUR_ENV_SUFFIX'  // Replace with actual env suffix
+      });
+      const result = await datasync.send(command);
+      
+      console.log('Agent created successfully:', result.AgentArn);
+      
+      // Return in the format expected by cr.Provider
+      return {
+        PhysicalResourceId: result.AgentArn,
+        Data: { 
+          Arn: result.AgentArn 
+        }
+      };
+      
+    } catch (error) {
+      console.error('Error:', error);
+      throw error; // Let cr.Provider handle the error
+    }
+  };
+  
+  function getActivationKey(privateIp) {
+    return new Promise((resolve, reject) => {
+      const http = require('http');
+      const req = http.get(\`http://\${privateIp}/activationkey\`, { timeout: 10000 }, (res) => {
+        let data = '';
+        res.on('data', (chunk) => data += chunk);
+        res.on('end', () => {
+          const key = data.trim();
+          if (key) {
+            resolve(key);
+          } else {
+            reject(new Error('Empty activation key received'));
           }
-        };
-        
-        function getActivationKey(privateIp) {
-          return new Promise((resolve, reject) => {
-            const http = require('http');
-            http.get(\`http://\${privateIp}/activationkey\`, { timeout: 10000 }, (res) => {
-              let data = '';
-              res.on('data', (chunk) => data += chunk);
-              res.on('end', () => resolve(data.trim()));
-            }).on('error', reject).on('timeout', () => reject(new Error('Request timeout')));
-          });
-        }
-        
-        function sleep(ms) {
-          return new Promise(resolve => setTimeout(resolve, ms));
-        }
-        
-        async function sendResponse(event, context, status, data, physicalResourceId, reason) {
-          const responseBody = JSON.stringify({
-            Status: status,
-            Reason: reason || 'See CloudWatch logs',
-            PhysicalResourceId: physicalResourceId || context.logStreamName,
-            StackId: event.StackId,
-            RequestId: event.RequestId,
-            LogicalResourceId: event.LogicalResourceId,
-            Data: data
-          });
-          
-          console.log('Response:', responseBody);
-          
-          const parsedUrl = require('url').parse(event.ResponseURL);
-          const options = {
-            hostname: parsedUrl.hostname,
-            port: 443,
-            path: parsedUrl.path,
-            method: 'PUT',
-            headers: {
-              'Content-Type': '',
-              'Content-Length': responseBody.length
-            }
-          };
-          
-          return new Promise((resolve, reject) => {
-            const request = https.request(options, (res) => {
-              resolve();
-            });
-            request.on('error', reject);
-            request.write(responseBody);
-            request.end();
-          });
-        }
+        });
+      });
+      req.on('error', reject);
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('Request timeout'));
+      });
+    });
+  }
+  
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
       `),
         timeout: Duration.minutes(10),
         environment: { INSTANCE_ID: agentInstance.instanceId },
