@@ -44,7 +44,7 @@ ddb_tables = {
 aurora_engine         = "aurora-postgresql"
 aurora_engine_version = "14.6"
 aurora_instance_class = "db.t3.medium"
-aurora_username       = "admin"
+aurora_username       = "dbadmin"
 aurora_password       = "DevPass123!ChangeMe"
 aurora_db_name        = "fintech_dev"
 

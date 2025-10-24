@@ -1011,9 +1011,9 @@ resource "aws_rds_cluster_instance" "aurora" {
 
 resource "aws_ssm_parameter" "masking_rules" {
   name        = "/${var.environment}/fintech/masking/rules"
-  description = "Data masking rules for ${var.environment}"
+  description = "Data masking rules for ${var.environment} (base64 encoded to avoid SSM template parsing)"
   type        = "SecureString"
-  value       = jsonencode(var.masking_rules)
+  value       = base64encode(jsonencode(var.masking_rules))
   key_id      = aws_kms_key.ssm.id
   tags        = merge(var.tags, { Name = "masking-rules" })
 }
@@ -1435,7 +1435,7 @@ data "archive_file" "masking_handler" {
   output_path = "${path.module}/masking_handler.zip"
   source {
     content  = <<-EOF
-import json, boto3, re, hashlib
+import json, boto3, re, hashlib, base64
 s3 = boto3.client('s3')
 ssm = boto3.client('ssm')
 cw = boto3.client('cloudwatch')
@@ -1456,7 +1456,8 @@ def mask(data, rules):
   return data
 def lambda_handler(event, context):
   env = context.function_name.split('-')[1]
-  rules = json.loads(ssm.get_parameter(Name=f'/{env}/fintech/masking/rules', WithDecryption=True)['Parameter']['Value'])
+  rules_b64 = ssm.get_parameter(Name=f'/{env}/fintech/masking/rules', WithDecryption=True)['Parameter']['Value']
+  rules = json.loads(base64.b64decode(rules_b64).decode('utf-8'))
   obj = s3.get_object(Bucket=event['sourceBucket'], Key=event['sourceKey'])
   data = json.loads(obj['Body'].read())
   masked = [mask(item.copy(), rules) for item in data] if isinstance(data, list) else mask(data.copy(), rules)
