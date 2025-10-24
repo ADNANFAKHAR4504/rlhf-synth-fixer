@@ -25,7 +25,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.10 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.28.2 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.34.0 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sts v1.38.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.38.0
 	github.com/aws/smithy-go v1.23.1 // indirect
 	github.com/cdklabs/awscdk-asset-awscli-go/awscliv1/v2 v2.2.242 // indirect
 	github.com/cdklabs/awscdk-asset-node-proxy-agent-go/nodeproxyagentv6/v2 v2.1.0 // indirect
@@ -48,11 +48,10 @@ require (
 )
 
 require (
+	github.com/aws/aws-sdk-go-v2/service/apigateway v1.35.7
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.258.0
-	github.com/aws/aws-sdk-go-v2/service/ecs v1.65.3
-	github.com/aws/aws-sdk-go-v2/service/elasticache v1.50.7
+	github.com/aws/aws-sdk-go-v2/service/kms v1.46.1
 	github.com/aws/aws-sdk-go-v2/service/rds v1.108.4
-	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.39.8
 	github.com/pulumi/pulumi-aws/sdk/v6 v6.83.1
 	github.com/pulumi/pulumi/sdk/v3 v3.175.0
 )
@@ -67,10 +66,6 @@ require (
 	github.com/apparentlymart/go-textseg/v13 v13.0.0 // indirect
 	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
-	github.com/aws/aws-sdk-go-v2/service/apigateway v1.35.7 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ec2 v1.258.0 // indirect
-	github.com/aws/aws-sdk-go-v2/service/kms v1.46.1 // indirect
-	github.com/aws/aws-sdk-go-v2/service/rds v1.108.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/charmbracelet/bubbles v0.16.1 // indirect
@@ -114,10 +109,10 @@ require (
 	github.com/pulumi/appdash v0.0.0-20231130102222-75f619a67231 // indirect
 	github.com/pulumi/esc v0.17.0 // indirect
 	github.com/rivo/uniseg v0.4.4 // indirect
+	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06 // indirect
 	github.com/santhosh-tekuri/jsonschema/v5 v5.0.0 // indirect
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
 	github.com/skeema/knownhosts v1.3.0 // indirect
-	github.com/spf13/cast v1.4.1 // indirect
 	github.com/spf13/cobra v1.8.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/texttheater/golang-levenshtein v1.0.1 // indirect
