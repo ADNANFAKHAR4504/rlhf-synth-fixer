@@ -11,7 +11,7 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as rds from 'aws-cdk-lib/aws-rds';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+// import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch'; // Commented out - alarm disabled for now
 import * as dms from 'aws-cdk-lib/aws-dms';
 import * as glue from 'aws-cdk-lib/aws-glue';
 import * as sns from 'aws-cdk-lib/aws-sns';
@@ -1010,7 +1010,7 @@ function sleep(ms) {
       })
     );
 
-    // Create DataSync S3 location
+    // Create DataSync S3 location (ALWAYS CREATED - required for deployment)
     const s3Location = new datasync.CfnLocationS3(this, 'S3Location', {
       s3BucketArn: props.dataBucket.bucketArn,
       s3Config: {
@@ -1020,7 +1020,9 @@ function sleep(ms) {
     });
     s3Location.node.addDependency(agentActivation);
 
-    // Create DataSync NFS location (only if activation succeeded)
+    // COMMENTED OUT: NFS location requires valid agent ARN
+    // Uncomment after successful agent activation
+    /*
     const nfsLocation = new datasync.CfnLocationNFS(this, 'NFSLocation', {
       serverHostname: '10.0.0.100', // REPLACE with your NFS server IP
       subdirectory: '/data/',
@@ -1030,9 +1032,11 @@ function sleep(ms) {
       mountOptions: { version: 'NFS3' },
     });
     nfsLocation.node.addDependency(agentActivation);
-    // Only create NFS location if activation succeeded
+    */
 
-    // Create DataSync task (only if activation succeeded)
+    // COMMENTED OUT: DataSync task requires NFS location
+    // Uncomment after NFS location is created
+    /*
     this.dataSyncTask = new datasync.CfnTask(this, 'DataSyncTask', {
       sourceLocationArn: nfsLocation.attrLocationArn,
       destinationLocationArn: s3Location.attrLocationArn,
@@ -1049,9 +1053,11 @@ function sleep(ms) {
     });
     this.dataSyncTask.node.addDependency(s3Location);
     this.dataSyncTask.node.addDependency(nfsLocation);
-    // Only create task if activation succeeded
+    */
 
-    // Alarm for task failures (only if task was created)
+    // COMMENTED OUT: Alarm requires task to exist
+    // Uncomment after DataSync task is created
+    /*
     new cloudwatch.Alarm(this, 'DataSyncTaskFailureAlarm', {
       metric: new cloudwatch.Metric({
         namespace: 'AWS/DataSync',
@@ -1064,11 +1070,20 @@ function sleep(ms) {
       evaluationPeriods: 1,
       alarmDescription: 'Alarm when DataSync task fails',
     });
-    // Only create alarm if task was created
+    */
 
+    // COMMENTED OUT: Task ARN output (task doesn't exist yet)
+    /*
     new cdk.CfnOutput(this, 'DataSyncTaskArn', {
       value: this.dataSyncTask.attrTaskArn,
       description: 'DataSync Task ARN',
+    });
+    */
+
+    // Output S3 location ARN instead
+    new cdk.CfnOutput(this, 'DataSyncS3LocationArn', {
+      value: s3Location.attrLocationArn,
+      description: 'DataSync S3 Location ARN',
     });
 
     new cdk.CfnOutput(this, 'DataSyncSetupInstructions', {
