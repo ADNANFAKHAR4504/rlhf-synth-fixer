@@ -629,7 +629,7 @@ class OrchestrationStack extends cdk.NestedStack {
       this,
       'StartDMSReplication',
       {
-        service: 'databasemigrationservice',
+        service: 'dms',
         action: 'startReplicationTask',
         parameters: {
           ReplicationTaskArn: props.replicationTask.ref,
@@ -647,7 +647,7 @@ class OrchestrationStack extends cdk.NestedStack {
       this,
       'CheckReplicationStatus',
       {
-        service: 'databasemigrationservice',
+        service: 'dms',
         action: 'describeReplicationTasks',
         parameters: {
           Filters: [
