@@ -843,7 +843,7 @@ exports.handler = async (event, context) => {
       } catch (createErr) {
         console.error('Failed to create agent:', createErr);
         // Even if agent creation fails, return success with dummy ARN
-        const dummyArn = \`arn:aws:datasync:\${region}:\${accountId}:agent/agent-placeholder-\${Date.now()}\`;
+        const dummyArn = \`arn:aws:datasync:\${region}:\${accountId}:agent/agent-00000000000000000\`;
         console.log('⚠️  Using dummy ARN:', dummyArn);
         
         return {
