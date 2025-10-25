@@ -6,7 +6,7 @@
   "po_id": "stf-5035",
   "team": "stf",
   "startedAt": "2025-10-24T15:02:11.127Z",
-  "subtask": "Provisioning of Infrastructure Environments",
+  "subtask": "IaC-Multi-Environment-Management",
   "subject_labels": [
     "Multi-Environment Consistency"
   ],
