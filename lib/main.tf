@@ -83,6 +83,9 @@ module "lambda" {
   cache_updater_package_path       = "${path.module}/lambda/cache_updater.zip"
   consistency_checker_package_path = "${path.module}/lambda/consistency_checker.zip"
   rollback_package_path            = "${path.module}/lambda/rollback.zip"
+  sns_alert_topic_arn              = module.sns_sqs.topic_arn
+  kms_key_arn                      = aws_kms_key.main.arn
+  is_production                    = local.is_production
   tags                             = local.common_tags
 }
 

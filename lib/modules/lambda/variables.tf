@@ -82,3 +82,19 @@ variable "tags" {
   description = "Tags to apply to resources"
   type        = map(string)
 }
+
+variable "sns_alert_topic_arn" {
+  description = "SNS topic ARN for CloudWatch alarms"
+  type        = string
+}
+
+variable "kms_key_arn" {
+  description = "KMS key ARN for log encryption"
+  type        = string
+}
+
+variable "is_production" {
+  description = "Whether this is a production environment"
+  type        = bool
+  default     = false
+}

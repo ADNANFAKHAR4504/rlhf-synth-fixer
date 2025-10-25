@@ -1,3 +1,7 @@
+# Data sources for IAM policy scoping
+data "aws_region" "current" {}
+data "aws_caller_identity" "current" {}
+
 # Validation Lambda
 resource "aws_lambda_function" "validator" {
   filename                       = var.validator_package_path
@@ -154,7 +158,10 @@ resource "aws_iam_role_policy" "validator" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "arn:aws:logs:*:*:*"
+        Resource = [
+          "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.name_prefix}-validator",
+          "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.name_prefix}-validator:*"
+        ]
       },
       {
         Effect = "Allow"
@@ -214,7 +221,10 @@ resource "aws_iam_role_policy" "cache_updater" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "arn:aws:logs:*:*:*"
+        Resource = [
+          "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.name_prefix}-cache-updater-*",
+          "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.name_prefix}-cache-updater-*:*"
+        ]
       },
       {
         Effect = "Allow"
@@ -259,7 +269,10 @@ resource "aws_iam_role_policy" "consistency_checker" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "arn:aws:logs:*:*:*"
+        Resource = [
+          "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.name_prefix}-consistency-checker",
+          "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.name_prefix}-consistency-checker:*"
+        ]
       },
       {
         Effect = "Allow"
@@ -304,7 +317,10 @@ resource "aws_iam_role_policy" "rollback" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "arn:aws:logs:*:*:*"
+        Resource = [
+          "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.name_prefix}-rollback",
+          "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.name_prefix}-rollback:*"
+        ]
       },
       {
         Effect = "Allow"
@@ -324,4 +340,108 @@ resource "aws_iam_role_policy" "rollback" {
       }
     ]
   })
+}
+
+# CloudWatch Log Groups with retention policies
+resource "aws_cloudwatch_log_group" "validator" {
+  name              = "/aws/lambda/${var.name_prefix}-validator"
+  retention_in_days = var.is_production ? 30 : 7
+  kms_key_id        = var.kms_key_arn
+  
+  tags = var.tags
+}
+
+resource "aws_cloudwatch_log_group" "cache_updater" {
+  count = var.microservices_count
+  
+  name              = "/aws/lambda/${var.name_prefix}-cache-updater-${format("%03d", count.index)}"
+  retention_in_days = var.is_production ? 30 : 7
+  kms_key_id        = var.kms_key_arn
+  
+  tags = merge(
+    var.tags,
+    {
+      MicroserviceId = format("service-%03d", count.index)
+    }
+  )
+}
+
+resource "aws_cloudwatch_log_group" "consistency_checker" {
+  name              = "/aws/lambda/${var.name_prefix}-consistency-checker"
+  retention_in_days = var.is_production ? 30 : 7
+  kms_key_id        = var.kms_key_arn
+  
+  tags = var.tags
+}
+
+resource "aws_cloudwatch_log_group" "rollback" {
+  name              = "/aws/lambda/${var.name_prefix}-rollback"
+  retention_in_days = var.is_production ? 30 : 7
+  kms_key_id        = var.kms_key_arn
+  
+  tags = var.tags
+}
+
+# Critical CloudWatch Alarms
+resource "aws_cloudwatch_metric_alarm" "validator_errors" {
+  alarm_name          = "${var.name_prefix}-validator-errors"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "Errors"
+  namespace           = "AWS/Lambda"
+  period              = 60
+  statistic           = "Sum"
+  threshold           = 10
+  treat_missing_data  = "notBreaching"
+  
+  dimensions = {
+    FunctionName = aws_lambda_function.validator.function_name
+  }
+  
+  alarm_description = "Alert when validator Lambda has more than 10 errors in 2 minutes"
+  alarm_actions     = [var.sns_alert_topic_arn]
+  
+  tags = var.tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "validator_throttles" {
+  alarm_name          = "${var.name_prefix}-validator-throttles"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "Throttles"
+  namespace           = "AWS/Lambda"
+  period              = 60
+  statistic           = "Sum"
+  threshold           = 5
+  treat_missing_data  = "notBreaching"
+  
+  dimensions = {
+    FunctionName = aws_lambda_function.validator.function_name
+  }
+  
+  alarm_description = "Alert when validator Lambda is throttled"
+  alarm_actions     = [var.sns_alert_topic_arn]
+  
+  tags = var.tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "consistency_checker_errors" {
+  alarm_name          = "${var.name_prefix}-consistency-checker-errors"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "Errors"
+  namespace           = "AWS/Lambda"
+  period              = 60
+  statistic           = "Sum"
+  threshold           = 5
+  treat_missing_data  = "notBreaching"
+  
+  dimensions = {
+    FunctionName = aws_lambda_function.consistency_checker.function_name
+  }
+  
+  alarm_description = "Alert when consistency checker has errors"
+  alarm_actions     = [var.sns_alert_topic_arn]
+  
+  tags = var.tags
 }
