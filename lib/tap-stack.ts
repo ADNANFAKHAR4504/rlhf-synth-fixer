@@ -698,7 +698,10 @@ class OrchestrationStack extends cdk.NestedStack {
     const logGroup = new logs.LogGroup(this, 'StateMachineLogGroup', {
       logGroupName: `/aws/vendedlogs/states/migration-orchestration-${props.environmentSuffix}`,
       retention: logs.RetentionDays.ONE_MONTH,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy:
+        props.environmentSuffix === 'prod'
+          ? cdk.RemovalPolicy.RETAIN
+          : cdk.RemovalPolicy.DESTROY,
     });
 
     // Create state machine
