@@ -46,6 +46,13 @@ describe('TapStack Terraform Unit Tests (Full Coverage)', () => {
         expect(tfContent).toMatch(new RegExp(`${l}\\s*=`))
       );
     });
+
+    test('common_tags contains all standard tag keys', () => {
+      ['Environment', 'Project', 'ManagedBy', 'Stack', 'CreatedAt'].forEach(t =>
+        expect(tfContent).toMatch(new RegExp(`${t}\\s*=\\s*`))
+      );
+    });
+  });
   // -------------------------
   // Networking Resources
   // -------------------------
