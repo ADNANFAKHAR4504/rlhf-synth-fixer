@@ -83,6 +83,7 @@ export class SecurityEventStack extends cdk.Stack {
     const trail = new cloudtrail.Trail(this, 'PHIAccessTrail', {
       bucket: cloudtrailBucket,
       encryptionKey: undefined, // Use default S3 encryption
+      isMultiRegionTrail: false,
       includeGlobalServiceEvents: false,
       enableFileValidation: true,
     });
@@ -129,12 +130,17 @@ export class SecurityEventStack extends cdk.Stack {
 
     const openSearchDomain = new opensearch.Domain(this, 'SecurityAnalytics', {
       version: opensearch.EngineVersion.OPENSEARCH_2_11,
-      domainName: `phi-security-analytics-${environmentSuffix}`,
+      domainName: `phi-sec-${environmentSuffix}`,
       capacity: {
         masterNodes: 3,
         masterNodeInstanceType: 'r5.large.search',
         dataNodes: 2,
         dataNodeInstanceType: 'r5.xlarge.search',
+        multiAzWithStandbyEnabled: false,
+      },
+      zoneAwareness: {
+        enabled: true,
+        availabilityZoneCount: 2,
       },
       ebs: {
         volumeSize: 100,
@@ -155,7 +161,7 @@ export class SecurityEventStack extends cdk.Stack {
 
     // Validator Lambda
     const validatorLambda = new lambda.Function(this, 'ValidatorFunction', {
-      runtime: lambda.Runtime.NODEJS_18_X,
+      runtime: lambda.Runtime.NODEJS_16_X,
       handler: 'validator.handler',
       code: lambda.Code.fromAsset(path.join(__dirname, 'lambda')),
       environment: {
@@ -172,7 +178,7 @@ export class SecurityEventStack extends cdk.Stack {
 
     // Remediation Lambda
     const remediationLambda = new lambda.Function(this, 'RemediationFunction', {
-      runtime: lambda.Runtime.NODEJS_18_X,
+      runtime: lambda.Runtime.NODEJS_16_X,
       handler: 'remediation.handler',
       code: lambda.Code.fromAsset(path.join(__dirname, 'lambda')),
       timeout: cdk.Duration.minutes(5),
@@ -197,7 +203,7 @@ export class SecurityEventStack extends cdk.Stack {
       this,
       'ReportGeneratorFunction',
       {
-        runtime: lambda.Runtime.NODEJS_18_X,
+        runtime: lambda.Runtime.NODEJS_16_X,
         handler: 'report-generator.handler',
         code: lambda.Code.fromAsset(path.join(__dirname, 'lambda')),
         environment: {
@@ -261,7 +267,7 @@ export class SecurityEventStack extends cdk.Stack {
     // ===== 7. SNS Topic for Alerts =====
 
     const securityAlertTopic = new sns.Topic(this, 'SecurityAlertTopic', {
-      topicName: `phi-security-alerts-${environmentSuffix}`,
+      topicName: `phi-alerts-${environmentSuffix}`,
     });
 
     // Add email subscription (replace with your security team email)
@@ -282,7 +288,7 @@ export class SecurityEventStack extends cdk.Stack {
 
     // Athena workgroup
     const athenaWorkgroup = new athena.CfnWorkGroup(this, 'AuditWorkgroup', {
-      name: `phi-audit-workgroup-${environmentSuffix}`,
+      name: `phi-audit-${environmentSuffix}`,
       workGroupConfiguration: {
         resultConfiguration: {
           outputLocation: `s3://${archiveBucket.bucketName}/athena-results/`,
@@ -329,6 +335,7 @@ export class SecurityEventStack extends cdk.Stack {
         service: 'macie2',
         action: 'createClassificationJob',
         parameters: {
+          ClientToken: stepfunctions.JsonPath.stringAt('$$.Execution.Name'),
           Name: stepfunctions.JsonPath.format(
             'PHI-Classification-{}',
             stepfunctions.JsonPath.stringAt('$$.Execution.Name')
@@ -458,6 +465,81 @@ export class SecurityEventStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'StateMachineArn', {
       value: stateMachine.stateMachineArn,
       description: 'ARN of the incident response workflow',
+    });
+
+    new cdk.CfnOutput(this, 'ArchiveBucketName', {
+      value: archiveBucket.bucketName,
+      description: 'Name of the compliance archive bucket',
+    });
+
+    new cdk.CfnOutput(this, 'CloudTrailBucketName', {
+      value: cloudtrailBucket.bucketName,
+      description: 'Name of the CloudTrail logs bucket',
+    });
+
+    new cdk.CfnOutput(this, 'DynamoDBTableName', {
+      value: authorizationTable.tableName,
+      description: 'Name of the authorization store DynamoDB table',
+    });
+
+    new cdk.CfnOutput(this, 'ValidatorLambdaArn', {
+      value: validatorLambda.functionArn,
+      description: 'ARN of the validator Lambda function',
+    });
+
+    new cdk.CfnOutput(this, 'RemediationLambdaArn', {
+      value: remediationLambda.functionArn,
+      description: 'ARN of the remediation Lambda function',
+    });
+
+    new cdk.CfnOutput(this, 'ReportGeneratorLambdaArn', {
+      value: reportGeneratorLambda.functionArn,
+      description: 'ARN of the report generator Lambda function',
+    });
+
+    new cdk.CfnOutput(this, 'SNSTopicArn', {
+      value: securityAlertTopic.topicArn,
+      description: 'ARN of the security alert SNS topic',
+    });
+
+    new cdk.CfnOutput(this, 'CloudTrailArn', {
+      value: trail.trailArn,
+      description: 'ARN of the CloudTrail trail',
+    });
+
+    new cdk.CfnOutput(this, 'AthenaWorkgroupName', {
+      value: athenaWorkgroup.name!,
+      description: 'Name of the Athena workgroup for audit queries',
+    });
+
+    new cdk.CfnOutput(this, 'GlueDatabaseName', {
+      value: glueDatabase.ref,
+      description: 'Name of the Glue database for CloudTrail logs',
+    });
+
+    new cdk.CfnOutput(this, 'OpenSearchDomainName', {
+      value: openSearchDomain.domainName,
+      description: 'Name of the OpenSearch domain',
+    });
+
+    new cdk.CfnOutput(this, 'OpenSearchDomainArn', {
+      value: openSearchDomain.domainArn,
+      description: 'ARN of the OpenSearch domain',
+    });
+
+    new cdk.CfnOutput(this, 'PHIBucketArn', {
+      value: phiDataBucket.bucketArn,
+      description: 'ARN of the PHI data bucket',
+    });
+
+    new cdk.CfnOutput(this, 'RegionDeployed', {
+      value: this.region,
+      description: 'AWS region where resources are deployed',
+    });
+
+    new cdk.CfnOutput(this, 'EnvironmentSuffix', {
+      value: environmentSuffix,
+      description: 'Environment suffix for this deployment',
     });
   }
 }
