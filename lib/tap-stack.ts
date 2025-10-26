@@ -1453,22 +1453,27 @@ export class TapStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'EnvironmentSuffix', {
       value: environmentSuffix,
       description: 'Environment suffix for all resources',
+      exportName: `${this.stackName}-EnvironmentSuffix`,
     });
     new cdk.CfnOutput(this, 'Region', {
       value: this.region,
       description: 'Deployment region',
+      exportName: `${this.stackName}-Region`,
     });
     new cdk.CfnOutput(this, 'AccountId', {
       value: this.account,
       description: 'AWS Account ID',
+      exportName: `${this.stackName}-AccountId`,
     });
     new cdk.CfnOutput(this, 'PipelineStatus', {
       value: 'DEPLOYED',
       description: 'Migration pipeline deployment status',
+      exportName: `${this.stackName}-PipelineStatus`,
     });
     new cdk.CfnOutput(this, 'StackName', {
       value: this.stackName,
       description: 'CloudFormation Stack Name',
+      exportName: `${this.stackName}-StackName`,
     });
   }
 }
