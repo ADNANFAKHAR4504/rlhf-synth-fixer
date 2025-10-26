@@ -1023,66 +1023,6 @@ function sleep(ms) {
     });
     s3Location.node.addDependency(agentActivation);
 
-    // COMMENTED OUT: NFS location requires valid agent ARN
-    // Uncomment after successful agent activation
-    /*
-    const nfsLocation = new datasync.CfnLocationNFS(this, 'NFSLocation', {
-      serverHostname: '10.0.0.100', // REPLACE with your NFS server IP
-      subdirectory: '/data/',
-      onPremConfig: {
-        agentArns: [this.agentArn],
-      },
-      mountOptions: { version: 'NFS3' },
-    });
-    nfsLocation.node.addDependency(agentActivation);
-    */
-
-    // COMMENTED OUT: DataSync task requires NFS location
-    // Uncomment after NFS location is created
-    /*
-    this.dataSyncTask = new datasync.CfnTask(this, 'DataSyncTask', {
-      sourceLocationArn: nfsLocation.attrLocationArn,
-      destinationLocationArn: s3Location.attrLocationArn,
-      name: `migration-datasync-${props.environmentSuffix}`,
-      options: {
-        verifyMode: 'POINT_IN_TIME_CONSISTENT',
-        overwriteMode: 'ALWAYS',
-        transferMode: 'CHANGED',
-        logLevel: 'TRANSFER',
-      },
-      schedule: {
-        scheduleExpression: 'cron(0 2 * * ? *)',
-      },
-    });
-    this.dataSyncTask.node.addDependency(s3Location);
-    this.dataSyncTask.node.addDependency(nfsLocation);
-    */
-
-    // COMMENTED OUT: Alarm requires task to exist
-    // Uncomment after DataSync task is created
-    /*
-    new cloudwatch.Alarm(this, 'DataSyncTaskFailureAlarm', {
-      metric: new cloudwatch.Metric({
-        namespace: 'AWS/DataSync',
-        metricName: 'TaskExecutionFailed',
-        dimensionsMap: { TaskArn: this.dataSyncTask.attrTaskArn },
-        statistic: 'Sum',
-        period: Duration.minutes(5),
-      }),
-      threshold: 1,
-      evaluationPeriods: 1,
-      alarmDescription: 'Alarm when DataSync task fails',
-    });
-    */
-
-    // COMMENTED OUT: Task ARN output (task doesn't exist yet)
-    /*
-    new cdk.CfnOutput(this, 'DataSyncTaskArn', {
-      value: this.dataSyncTask.attrTaskArn,
-      description: 'DataSync Task ARN',
-    });
-    */
-
     // Output S3 location ARN instead
     new cdk.CfnOutput(this, 'DataSyncS3LocationArn', {
       value: s3Location.attrLocationArn,

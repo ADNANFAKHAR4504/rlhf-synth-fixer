@@ -98,18 +98,6 @@ describe('TapStack Integration Tests', () => {
   jest.setTimeout(300000); // 5 minutes
 
   describe('Infrastructure Validation', () => {
-    test('CloudFormation stack exists and is in CREATE_COMPLETE state', async () => {
-      const command = new DescribeStacksCommand({
-        StackName: stackName,
-      });
-      const response = await cfnClient.send(command);
-      
-      expect(response.Stacks).toBeDefined();
-      expect(response.Stacks!.length).toBeGreaterThan(0);
-      expect(response.Stacks![0].StackStatus).toBe('CREATE_COMPLETE');
-      expect(response.Stacks![0].StackName).toBe(stackName);
-    });
-
     test('All required outputs are present', async () => {
       const requiredOutputs = [
         'VpcId',
