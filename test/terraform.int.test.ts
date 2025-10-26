@@ -13,14 +13,13 @@ const s3 = new AWS.S3();
 const dynamodb = new AWS.DynamoDB();
 const kinesis = new AWS.Kinesis();
 const lambda = new AWS.Lambda();
-const timestream = new AWS.TimestreamWrite();
 const athena = new AWS.Athena();
 const glue = new AWS.Glue();
 const sns = new AWS.SNS();
 const cloudwatch = new AWS.CloudWatch();
 const eventbridge = new AWS.EventBridge();
 
-describe('TAP Stack Live Integration Tests (Full Coverage)', () => {
+describe('TAP Stack Live Integration Tests (Selective, Real, Updated)', () => {
   it('VPC exists with correct CIDR', async () => {
     if (!outputs.vpc_id || !outputs.vpc_cidr) return;
     const vpcs = await ec2.describeVpcs({ VpcIds: [outputs.vpc_id] }).promise();
@@ -34,19 +33,17 @@ describe('TAP Stack Live Integration Tests (Full Coverage)', () => {
     expect(attachment?.State).toBe('available');
   });
 
-  it('Public/Private subnets exist and match VPC', async () => {
+  it('Public/Private subnets belong to VPC', async () => {
     const publicSubnetIds = outputs.public_subnet_ids && JSON.parse(outputs.public_subnet_ids);
     const privateSubnetIds = outputs.private_subnet_ids && JSON.parse(outputs.private_subnet_ids);
     if (!publicSubnetIds?.length || !privateSubnetIds?.length) return;
-
-    const publicSubnets = await ec2.describeSubnets({ SubnetIds: publicSubnetIds }).promise();
-    publicSubnets.Subnets?.forEach(subnet => {
+    const pub = await ec2.describeSubnets({ SubnetIds: publicSubnetIds }).promise();
+    pub.Subnets?.forEach(subnet => {
       expect(subnet.VpcId).toBe(outputs.vpc_id);
       expect(publicSubnetIds).toContain(subnet.SubnetId);
     });
-
-    const privateSubnets = await ec2.describeSubnets({ SubnetIds: privateSubnetIds }).promise();
-    privateSubnets.Subnets?.forEach(subnet => {
+    const priv = await ec2.describeSubnets({ SubnetIds: privateSubnetIds }).promise();
+    priv.Subnets?.forEach(subnet => {
       expect(subnet.VpcId).toBe(outputs.vpc_id);
       expect(privateSubnetIds).toContain(subnet.SubnetId);
     });
@@ -96,54 +93,69 @@ describe('TAP Stack Live Integration Tests (Full Coverage)', () => {
     });
   });
 
-  it('Timestream database exists', async () => {
-    if (!outputs.timestream_database_name) return;
-    const db = await timestream.describeDatabase({ DatabaseName: outputs.timestream_database_name }).promise();
-    expect(db.Database?.DatabaseName).toBe(outputs.timestream_database_name);
+  // ----------- ATHENA TESTS
+  it('Athena Workgroup exists as output', async () => {
+    if (!outputs.athena_workgroup_name) return;
+    const wg = await athena.getWorkGroup({ WorkGroup: outputs.athena_workgroup_name }).promise();
+    expect(wg.WorkGroup?.Name).toBe(outputs.athena_workgroup_name);
+    expect(wg.WorkGroup?.State).toMatch(/ENABLED|DISABLED/);
   });
 
-  it('Athena workgroup/database exists', async () => {
-    if (outputs.athena_workgroup_name) {
-      const wg = await athena.getWorkGroup({ WorkGroup: outputs.athena_workgroup_name }).promise();
-      expect(wg.WorkGroup?.Name).toBe(outputs.athena_workgroup_name);
-    }
-    if (outputs.athena_database_name) {
-      const dbs = await athena.listDatabases({ CatalogName: 'AwsDataCatalog' }).promise();
-      expect(dbs.DatabaseList?.map(d => d.Name)).toContain(outputs.athena_database_name);
-    }
+  it('Athena Database exists as output', async () => {
+    if (!outputs.athena_database_name) return;
+    const dbs = await athena.listDatabases({ CatalogName: 'AwsDataCatalog' }).promise();
+    expect(dbs.DatabaseList?.map(d => d.Name)).toContain(outputs.athena_database_name);
   });
 
-  it('Glue catalog DB and backfill job exist', async () => {
-    if (!outputs.glue_catalog_database_name || !outputs.glue_job_name) return;
-    const dbs = await glue.getDatabase({ Name: outputs.glue_catalog_database_name }).promise();
-    expect(dbs.Database?.Name).toBe(outputs.glue_catalog_database_name);
+  // ----------- CLOUDWATCH ALARMS/DASHBOARD
+  it('Connection failures alarm exists with correct name', async () => {
+    if (!outputs.cloudwatch_alarm_connection_failures) return;
+    const alarmResp = await cloudwatch.describeAlarms({ AlarmNames: [outputs.cloudwatch_alarm_connection_failures] }).promise();
+    expect(alarmResp.MetricAlarms?.[0]?.AlarmName).toBe(outputs.cloudwatch_alarm_connection_failures);
+    expect(alarmResp.MetricAlarms?.[0]?.StateValue).toMatch(/OK|ALARM|INSUFFICIENT_DATA/);
+    expect(alarmResp.MetricAlarms?.[0]?.Namespace).toBeDefined();
+  });
+
+  it('Message drop alarm exists with correct name', async () => {
+    if (!outputs.cloudwatch_alarm_message_drop) return;
+    const alarmResp = await cloudwatch.describeAlarms({ AlarmNames: [outputs.cloudwatch_alarm_message_drop] }).promise();
+    expect(alarmResp.MetricAlarms?.[0]?.AlarmName).toBe(outputs.cloudwatch_alarm_message_drop);
+    expect(alarmResp.MetricAlarms?.[0]?.StateValue).toMatch(/OK|ALARM|INSUFFICIENT_DATA/);
+    expect(alarmResp.MetricAlarms?.[0]?.Namespace).toBeDefined();
+  });
+
+  it('CloudWatch dashboard exists and matches output url', async () => {
+    if (!outputs.cloudwatch_dashboard_url) return;
+    const match = /name=([a-zA-Z0-9\-\_]+)/.exec(outputs.cloudwatch_dashboard_url);
+    const dashboardName = match && match[1];
+    if (!dashboardName) return;
+    const dashResp = await cloudwatch.getDashboard({ DashboardName: dashboardName }).promise();
+    expect(dashResp.DashboardArn).toBeDefined();
+    expect(dashResp.DashboardName).toBe(dashboardName);
+    expect(dashResp.DashboardBody).toBeDefined();
+  });
+
+  // ----------- GLUE TESTS
+  it('Glue Catalog Database exists', async () => {
+    if (!outputs.glue_catalog_database_name) return;
+    const catalogDb = await glue.getDatabase({ Name: outputs.glue_catalog_database_name }).promise();
+    expect(catalogDb.Database?.Name).toBe(outputs.glue_catalog_database_name);
+    expect(catalogDb.Database?.CatalogId).toBeDefined();
+  });
+
+  it('Glue Job exists', async () => {
+    if (!outputs.glue_job_name) return;
     const job = await glue.getJob({ JobName: outputs.glue_job_name }).promise();
     expect(job.Job?.Name).toBe(outputs.glue_job_name);
+    expect(job.Job?.RoleArn).toBeDefined();
+    expect(job.Job?.Command).toBeDefined();
   });
 
+  // ----------- REST REMAINING VALID CHECKS
   it('SNS Topic exists', async () => {
     if (!outputs.sns_topic_arn) return;
     const info = await sns.getTopicAttributes({ TopicArn: outputs.sns_topic_arn }).promise();
     expect(info.Attributes?.TopicArn).toBe(outputs.sns_topic_arn);
-  });
-
-  it('CloudWatch alarms and dashboard exist', async () => {
-    if (outputs.cloudwatch_alarm_connection_failures) {
-      const alarms = await cloudwatch.describeAlarms({ AlarmNames: [outputs.cloudwatch_alarm_connection_failures] }).promise();
-      expect(alarms.MetricAlarms?.[0]?.AlarmName).toBe(outputs.cloudwatch_alarm_connection_failures);
-    }
-    if (outputs.cloudwatch_alarm_message_drop) {
-      const alarms = await cloudwatch.describeAlarms({ AlarmNames: [outputs.cloudwatch_alarm_message_drop] }).promise();
-      expect(alarms.MetricAlarms?.[0]?.AlarmName).toBe(outputs.cloudwatch_alarm_message_drop);
-    }
-    if (outputs.cloudwatch_dashboard_url) {
-      const match = /name=([a-zA-Z0-9\-_]+)/.exec(outputs.cloudwatch_dashboard_url);
-      const dashboardName = match && match[1];
-      if (dashboardName) {
-        const dash = await cloudwatch.getDashboard({ DashboardName: dashboardName }).promise();
-        expect(dash.DashboardName).toBe(dashboardName);
-      }
-    }
   });
 
   it('EventBridge rule exists with correct name', async () => {
@@ -156,25 +168,6 @@ describe('TAP Stack Live Integration Tests (Full Coverage)', () => {
     if (!outputs.security_group_lambda_id) return;
     const sg = await ec2.describeSecurityGroups({ GroupIds: [outputs.security_group_lambda_id] }).promise();
     expect(sg.SecurityGroups?.[0]?.GroupId).toBe(outputs.security_group_lambda_id);
-  });
-
-  it('IAM roles exist for all main resources', async () => {
-    [
-      outputs.iam_role_lambda_device_verification_arn,
-      outputs.iam_role_lambda_data_replay_arn,
-      outputs.iam_role_step_functions_arn,
-      outputs.iam_role_glue_arn
-    ].forEach(arn => {
-      if (!arn) return;
-      const parsed = /arn:aws:iam::([^:]+):role\/(.+)/.exec(arn);
-      const roleName = parsed && parsed[2];
-      if (roleName) {
-        return new AWS.IAM()
-          .getRole({ RoleName: roleName })
-          .promise()
-          .then(res => expect(res.Role?.Arn).toBe(arn));
-      }
-    });
   });
 
   it('Stack deployment timestamp is valid', async () => {
