@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-describe('tap_stack.tf: Full Coverage (Generated)', () => {
+describe('TapStack Terraform Unit Tests (Full Coverage)', () => {
   let tfContent: string;
 
   beforeAll(() => {
@@ -9,47 +9,69 @@ describe('tap_stack.tf: Full Coverage (Generated)', () => {
     tfContent = fs.readFileSync(tfPath, 'utf8');
   });
 
-  // -- Variables --
+  // -------------------------
+  // Variables
+  // -------------------------
   describe('Variables', () => {
-    const expectedVariables = [
-      'region', 'environment', 'projectname', 'sensorcount', 'factorycount', 'sensortypes'
-    ];
-    test('defines all required variables', () => {
+    test('defines all expected variables', () => {
+      const expectedVariables = [
+        'region',
+        'environment',
+        'project_name',
+        'sensor_count',
+        'factory_count',
+        'sensor_types'
+      ];
       expectedVariables.forEach(v =>
         expect(tfContent).toMatch(new RegExp(`variable\\s+"${v}"`))
       );
     });
   });
 
-  // -- Locals --
+  // -------------------------
+  // Locals
+  // -------------------------
   describe('Locals', () => {
-    const expectedLocals = [
-      'suffix', 'commontags', 'nameprefix', 'vpccidr', 'publicsubnetcidrs', 'privatesubnetcidrs', 'azs'
-    ];
-    test('defines all required locals', () => {
+    test('defines all expected locals', () => {
+      const expectedLocals = [
+        'suffix',
+        'common_tags',
+        'name_prefix',
+        'vpc_cidr',
+        'public_subnet_cidrs',
+        'private_subnet_cidrs',
+        'azs'
+      ];
       expectedLocals.forEach(l =>
         expect(tfContent).toMatch(new RegExp(`locals?\\s*{[^}]*${l}[^}]*}`, 's'))
       );
     });
 
-    test('common_tags contains required standard keys', () => {
+    test('common_tags contains all standard tag keys', () => {
       ['Environment', 'Project', 'ManagedBy', 'Stack', 'CreatedAt'].forEach(t =>
         expect(tfContent).toMatch(new RegExp(`${t}\\s*=`))
       );
     });
   });
 
-  // -- Networking --
+  // -------------------------
+  // Networking Resources
+  // -------------------------
   describe('Networking Resources', () => {
-    test('VPC and subnets defined', () => {
+    test('VPC, Internet Gateway, subnets exist', () => {
       expect(tfContent).toMatch(/resource\s+"aws_vpc"\s+"main"/);
+      expect(tfContent).toMatch(/resource\s+"aws_internet_gateway"\s+"main"/);
       expect(tfContent).toMatch(/resource\s+"aws_subnet"\s+"public"/);
       expect(tfContent).toMatch(/resource\s+"aws_subnet"\s+"private"/);
     });
-    test('IGW, EIP, NAT, route tables present', () => {
-      expect(tfContent).toMatch(/resource\s+"aws_internet_gateway"\s+"main"/);
+
+    test('NAT Gateway(s), EIP(s), depend on IGW', () => {
       expect(tfContent).toMatch(/resource\s+"aws_eip"\s+"nat"/);
       expect(tfContent).toMatch(/resource\s+"aws_nat_gateway"\s+"main"/);
+      expect(tfContent).toMatch(/depends_on\s*=\s*\[aws_internet_gateway\.main\]/);
+    });
+
+    test('Route tables and associations exist for subnets', () => {
       expect(tfContent).toMatch(/resource\s+"aws_route_table"\s+"public"/);
       expect(tfContent).toMatch(/resource\s+"aws_route_table"\s+"private"/);
       expect(tfContent).toMatch(/resource\s+"aws_route_table_association"\s+"public"/);
@@ -57,113 +79,113 @@ describe('tap_stack.tf: Full Coverage (Generated)', () => {
     });
   });
 
-  // -- S3 Buckets --
-  describe('S3 Resources', () => {
-    ['datalake', 'athenaresults', 'gluescripts'].forEach(bucket =>
+  // -------------------------
+  // S3 Buckets
+  // -------------------------
+  describe('S3 Buckets', () => {
+    [
+      'data_lake',
+      'athena_results',
+      'glue_scripts'
+    ].forEach(bucket =>
       test(`S3 bucket "${bucket}" exists`, () => {
-        expect(tfContent).toMatch(
-          new RegExp(`resource\\s+"aws_s3_bucket"\\s+"${bucket}"`)
-        );
+        expect(tfContent).toMatch(new RegExp(`resource\\s+"aws_s3_bucket"\\s+"${bucket}"`));
       })
     );
-    ['datalake'].forEach(bucket =>
-      test(`S3 bucket versioning and SSE for "${bucket}"`, () => {
-        expect(tfContent).toMatch(
-          new RegExp(
-            `resource\\s+"aws_s3_bucket_versioning"\\s+"${bucket}"`
-          )
-        );
-        expect(tfContent).toMatch(
-          new RegExp(
-            `resource\\s+"aws_s3_bucket_server_side_encryption_configuration"\\s+"${bucket}"`
-          )
-        );
-      })
-    );
+    test(`S3 bucket versioning for data_lake`, () => {
+      expect(tfContent).toMatch(/resource\s+"aws_s3_bucket_versioning"\s+"data_lake"/);
+    });
+    test(`S3 bucket encryption for data_lake`, () => {
+      expect(tfContent).toMatch(/resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"data_lake"/);
+    });
   });
 
-  // -- DynamoDB, Kinesis, Timestream --
-  describe('Data Ingestion & Persistence', () => {
-    test('DynamoDB, Kinesis, Timestream resources exist', () => {
-      expect(tfContent).toMatch(/resource\s+"aws_dynamodb_table"\s+"buffereddata"/);
+  // -------------------------
+  // Data Ingestion & Persistence
+  // -------------------------
+  describe('Database, Stream, Table Resources', () => {
+    test('DynamoDB, Kinesis, Timestream exist', () => {
+      expect(tfContent).toMatch(/resource\s+"aws_dynamodb_table"\s+"buffered_data"/);
       expect(tfContent).toMatch(/resource\s+"aws_kinesis_stream"\s+"main"/);
       expect(tfContent).toMatch(/resource\s+"aws_timestreamwrite_database"\s+"main"/);
-      expect(tfContent).toMatch(/resource\s+"aws_timestreamwrite_table"\s+"sensordata"/);
+      expect(tfContent).toMatch(/resource\s+"aws_timestreamwrite_table"\s+"sensor_data"/);
     });
-    test('DynamoDB GSI for sensortype', () => {
-      expect(tfContent).toMatch(/globalsecondaryindex[^}]*name\s*=\s*"sensortypeindex"/s);
+    test('DynamoDB GSI for sensor_type', () => {
+      expect(tfContent).toMatch(/global_secondary_index\s*{[^}]*name\s*=\s*"sensor_type_index"/s);
     });
   });
 
-  // -- Lambda Functions --
+  // -------------------------
+  // Lambda Functions & IAM
+  // -------------------------
   describe('Lambdas', () => {
     [
-      { name: 'deviceverification', handler: 'index.handler', runtime: 'nodejs20.x' },
-      { name: 'datareplay', handler: 'index.handler', runtime: 'python3.11' }
-    ].forEach(({ name, handler, runtime }) => {
-      test(`Lambda function "${name}" exists with correct handler/runtime`, () => {
-        expect(tfContent).toMatch(
-          new RegExp(`resource\\s+"aws_lambda_function"\\s+"${name}"`)
-        );
-        expect(tfContent).toMatch(
-          new RegExp(`handler\\s*=\\s*"${handler}"`)
-        );
-        expect(tfContent).toMatch(
-          new RegExp(`runtime\\s*=\\s*"${runtime}"`)
-        );
+      { name: 'device_verification', runtime: 'nodejs20.x', handler: 'index.handler' },
+      { name: 'data_replay', runtime: 'python3.11', handler: 'index.handler' }
+    ].forEach(({ name, runtime, handler }) => {
+      test(`Lambda "${name}" exists with correct properties`, () => {
+        expect(tfContent).toMatch(new RegExp(`resource\\s+"aws_lambda_function"\\s+"${name}"`));
+        expect(tfContent).toMatch(new RegExp(`runtime\\s*=\\s*"${runtime}"`));
+        expect(tfContent).toMatch(new RegExp(`handler\\s*=\\s*"${handler}"`));
       });
-      test(`Lambda IAM role, policy, and VPC attachments for "${name}"`, () => {
-        expect(tfContent).toMatch(
-          new RegExp(`resource\\s+"aws_iam_role"\\s+"lambda${name}"`)
-        );
-        expect(tfContent).toMatch(
-          new RegExp(`resource\\s+"aws_iam_role_policy"\\s+"lambda${name}"`)
-        );
-        expect(tfContent).toMatch(
-          new RegExp(`resource\\s+"aws_iam_role_policy_attachment"\\s+"lambda${name}vpc"`)
-        );
+      test(`IAM role for Lambda "${name}" exists`, () => {
+        expect(tfContent).toMatch(new RegExp(`resource\\s+"aws_iam_role"\\s+"lambda_${name}"`));
+      });
+      test(`IAM policy for Lambda "${name}" exists`, () => {
+        expect(tfContent).toMatch(new RegExp(`resource\\s+"aws_iam_role_policy"\\s+"lambda_${name}"`));
+      });
+      test(`VPC policy attachment for Lambda "${name}" exists`, () => {
+        expect(tfContent).toMatch(new RegExp(`resource\\s+"aws_iam_role_policy_attachment"\\s+"lambda_${name}_vpc"`));
       });
     });
   });
 
-  // -- Step Functions, Glue, IAM Roles --
-  describe('Step Functions & Glue', () => {
-    test('Step Functions state machine IAM role objects exist', () => {
-      expect(tfContent).toMatch(/resource\s+"aws_iam_role"\s+"stepfunctions"/);
-      expect(tfContent).toMatch(/resource\s+"aws_iam_role_policy"\s+"stepfunctions"/);
+  // -------------------------
+  // Step Functions & Glue IAM
+  // -------------------------
+  describe('Step Functions and Glue IAM', () => {
+    test('Step Functions IAM role/policy', () => {
+      expect(tfContent).toMatch(/resource\s+"aws_iam_role"\s+"step_functions"/);
+      expect(tfContent).toMatch(/resource\s+"aws_iam_role_policy"\s+"step_functions"/);
     });
-    test('Glue job IAM role, policy, and attachment', () => {
+    test('Glue IAM role/policy/attachment', () => {
       expect(tfContent).toMatch(/resource\s+"aws_iam_role"\s+"glue"/);
       expect(tfContent).toMatch(/resource\s+"aws_iam_role_policy"\s+"glue"/);
-      expect(tfContent).toMatch(/resource\s+"aws_iam_role_policy_attachment"\s+"glueservice"/);
+      expect(tfContent).toMatch(/resource\s+"aws_iam_role_policy_attachment"\s+"glue_service"/);
     });
   });
 
-  // -- SQS Resources --
-  describe('Queues', () => {
-    test('Sensor SQS queues and DLQs defined per sensor type', () => {
-      expect(tfContent).toMatch(/resource\s+"aws_sqs_queue"\s+"sensorqueues"/);
-      expect(tfContent).toMatch(/resource\s+"aws_sqs_queue"\s+"sensordlq"/);
-      expect(tfContent).toMatch(/resource\s+"aws_sqs_queue_policy"\s+"sensorqueues"/);
+  // -------------------------
+  // SQS Queues
+  // -------------------------
+  describe('SQS Sensor Queues', () => {
+    test('Sensor queue and DLQ', () => {
+      expect(tfContent).toMatch(/resource\s+"aws_sqs_queue"\s+"sensor_queues"/);
+      expect(tfContent).toMatch(/resource\s+"aws_sqs_queue"\s+"sensor_dlq"/);
+      expect(tfContent).toMatch(/resource\s+"aws_sqs_queue_policy"\s+"sensor_queues"/);
     });
   });
 
-  // -- Athena, Glue Catalog --
-  describe('Athena & Glue Catalog', () => {
-    test('Athena workgroup, database, named query exist', () => {
+  // -------------------------
+  // Athena & Glue Catalog
+  // -------------------------
+  describe('Athena & Glue Resources', () => {
+    test('Athena workgroup/database/query', () => {
       expect(tfContent).toMatch(/resource\s+"aws_athena_workgroup"\s+"main"/);
-      expect(tfContent).toMatch(/resource\s+"aws_athena_database"\s+"datalake"/);
-      expect(tfContent).toMatch(/resource\s+"aws_athena_named_query"\s+"gapdetection"/);
+      expect(tfContent).toMatch(/resource\s+"aws_athena_database"\s+"data_lake"/);
+      expect(tfContent).toMatch(/resource\s+"aws_athena_named_query"\s+"gap_detection"/);
     });
-    test('Glue catalog database/table and Glue job are present', () => {
+    test('Glue catalog DB/table/job', () => {
       expect(tfContent).toMatch(/resource\s+"aws_glue_catalog_database"\s+"main"/);
-      expect(tfContent).toMatch(/resource\s+"aws_glue_catalog_table"\s+"sensordata"/);
+      expect(tfContent).toMatch(/resource\s+"aws_glue_catalog_table"\s+"sensor_data"/);
       expect(tfContent).toMatch(/resource\s+"aws_glue_job"\s+"backfill"/);
     });
   });
 
-  // -- Monitoring and Alerting --
-  describe('Monitoring & Alerting', () => {
+  // -------------------------
+  // Monitoring & Alerting
+  // -------------------------
+  describe('CloudWatch & SNS', () => {
     [
       'aws_cloudwatch_metric_alarm',
       'aws_cloudwatch_dashboard',
@@ -174,31 +196,41 @@ describe('tap_stack.tf: Full Coverage (Generated)', () => {
         expect(tfContent).toMatch(new RegExp(`resource\\s+"${resource}"`));
       })
     );
-    test('SNS topic and subscription are present', () => {
+    test('SNS topic/trigger exists', () => {
       expect(tfContent).toMatch(/resource\s+"aws_sns_topic"\s+"alerts"/);
-      expect(tfContent).toMatch(/resource\s+"aws_sns_topic_subscription"/);
+      expect(tfContent).toMatch(/resource\s+"aws_sns_topic_subscription"\s+"lambda_trigger"/);
+    });
+    test('Lambda permission for SNS', () => {
+      expect(tfContent).toMatch(/resource\s+"aws_lambda_permission"\s+"sns_invoke"/);
     });
   });
 
-  // -- Outputs --
+  // -------------------------
+  // Outputs
+  // -------------------------
   describe('Outputs', () => {
-    [
-      'vpcid', 'vpccidr', 'publicsubnetids', 'privatesubnetids',
-      'natgatewayids', 'internetgatewayid', 's3datalakebucket', 's3athenaresultsbucket',
-      's3gluescriptsbucket', 'dynamodbtablename', 'dynamodbtablearn', 'kinesisstreamname',
-      'kinesisstreamarn', 'timestreamdatabasename', 'timestreamtablename',
-      'lambdadeviceverificationarn', 'lambdadeviceverificationname',
-      'lambdadatareplayarn', 'lambdadatareplayname', 'stepfunctionsstatemachinearn',
-      'stepfunctionsstatemachinename', 'snstopicarn', 'cloudwatchalarmconnectionfailures',
-      'cloudwatchalarmmessagedrop', 'cloudwatchdashboardurl', 'eventbridgerulename',
-      'sqsqueueurls', 'gluecatalogdatabasename', 'gluejobname', 'athenaworkgroupname',
-      'athenadatabasename', 'securitygrouplambdaid', 'iamrolelambdadeviceverificationarn',
-      'iamrolelambdadatareplayarn', 'iamrolestepfunctionsarn', 'iamrolegluearn',
-      'stacksuffix', 'environment', 'projectname', 'deploymenttimestamp'
-    ].forEach(output =>
+    const expectedOutputs = [
+      'vpc_id', 'vpc_cidr', 'public_subnet_ids', 'private_subnet_ids',
+      'nat_gateway_ids', 'internet_gateway_id',
+      's3_data_lake_bucket', 's3_athena_results_bucket', 's3_glue_scripts_bucket',
+      'dynamodb_table_name', 'dynamodb_table_arn',
+      'kinesis_stream_name', 'kinesis_stream_arn',
+      'timestream_database_name', 'timestream_table_name',
+      'lambda_device_verification_arn', 'lambda_device_verification_name',
+      'lambda_data_replay_arn', 'lambda_data_replay_name',
+      'step_functions_state_machine_arn', 'step_functions_state_machine_name',
+      'sns_topic_arn', 'cloudwatch_alarm_connection_failures', 'cloudwatch_alarm_message_drop',
+      'cloudwatch_dashboard_url', 'eventbridge_rule_name', 'sqs_queue_urls',
+      'athena_workgroup_name', 'athena_database_name', 'glue_catalog_database_name', 'glue_job_name',
+      'security_group_lambda_id', 'iam_role_lambda_device_verification_arn',
+      'iam_role_lambda_data_replay_arn', 'iam_role_step_functions_arn', 'iam_role_glue_arn',
+      'stack_suffix', 'environment', 'project_name', 'deployment_timestamp'
+    ];
+    expectedOutputs.forEach(output => {
       test(`output "${output}" exists`, () => {
         expect(tfContent).toMatch(new RegExp(`output\\s+"${output}"`));
-      })
-    );
+      });
+    });
   });
 });
+
