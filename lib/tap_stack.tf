@@ -686,50 +686,26 @@ resource "aws_security_group" "lambda" {
 # Lambda Functions
 # ----------------------------------------------------------------------------
 
-resource "aws_lambda_function" "device_verification" {
-  function_name = "${local.name_prefix}-device-verification"
-  role          = aws_iam_role.lambda_device_verification.arn
-  handler       = "index.handler"
-  runtime       = "nodejs20.x"
-  timeout       = 180
-  memory_size   = 1024
-
-  environment {
-    variables = {
-      STATE_MACHINE_ARN = aws_sfn_state_machine.recovery_orchestrator.arn
-      SENSOR_COUNT      = var.sensor_count
-      BATCH_SIZE        = "1000"
-    }
-  }
-
-  vpc_config {
-    subnet_ids         = aws_subnet.private[*].id
-    security_group_ids = [aws_security_group.lambda.id]
-  }
-
-  # Inline JavaScript code as base64-encoded zip_file (Terraform supports string directly, no need to base64 encode yourself)
-  zip_file = <<-EOT
+data "archive_file" "device_verification" {
+  type        = "zip"
+  output_path = "${path.module}/device_verification.zip"
+  source {
+    content  = <<-EOT
 const AWS = require('aws-sdk');
 const iot = new AWS.Iot();
 const iotData = new AWS.IotData({ endpoint: process.env.IOT_ENDPOINT });
 const stepFunctions = new AWS.StepFunctions();
-
 exports.handler = async (event) => {
     console.log('Device verification initiated for event:', JSON.stringify(event));
-
     const batchSize = parseInt(process.env.BATCH_SIZE) || 1000;
     const totalDevices = parseInt(process.env.SENSOR_COUNT) || 156000;
-
     try {
         // Parallel device verification using Promise.all for batching
         const verificationPromises = [];
-
         for (let i = 0; i < totalDevices; i += batchSize) {
             verificationPromises.push(verifyDeviceBatch(i, Math.min(i + batchSize, totalDevices)));
         }
-
         const results = await Promise.all(verificationPromises);
-
         // Aggregate results
         const aggregatedResults = results.reduce((acc, batch) => {
             acc.healthy += batch.healthy;
@@ -737,13 +713,10 @@ exports.handler = async (event) => {
             acc.unknown += batch.unknown;
             return acc;
         }, { healthy: 0, unhealthy: 0, unknown: 0 });
-
         console.log('Verification complete:', aggregatedResults);
-
         // Trigger Step Functions if unhealthy devices detected
         if (aggregatedResults.unhealthy > 0) {
             const stateMachineArn = process.env.STATE_MACHINE_ARN;
-
             await stepFunctions.startExecution({
                 stateMachineArn: stateMachineArn,
                 input: JSON.stringify({
@@ -753,21 +726,17 @@ exports.handler = async (event) => {
                     recoveryNeeded: true
                 })
             }).promise();
-
             console.log('Step Functions execution triggered');
         }
-
         return {
             statusCode: 200,
             body: JSON.stringify(aggregatedResults)
         };
-
     } catch (error) {
         console.error('Error during device verification:', error);
         throw error;
     }
 };
-
 async function verifyDeviceBatch(startIdx, endIdx) {
     // Simulated batch verification - in production, this would query actual IoT shadows
     const batchResults = {
@@ -775,62 +744,61 @@ async function verifyDeviceBatch(startIdx, endIdx) {
         unhealthy: 0,
         unknown: 0
     };
-
     // Simulate async verification with random results
     await new Promise(resolve => setTimeout(resolve, Math.random() * 100));
-
     const batchSize = endIdx - startIdx;
     batchResults.healthy = Math.floor(batchSize * 0.95);
     batchResults.unhealthy = Math.floor(batchSize * 0.03);
     batchResults.unknown = batchSize - batchResults.healthy - batchResults.unhealthy;
-
     return batchResults;
 }
 EOT
+    filename = "index.js"
+  }
+}
 
+resource "aws_lambda_function" "device_verification" {
+  function_name    = "${local.name_prefix}-device-verification"
+  role             = aws_iam_role.lambda_device_verification.arn
+  handler          = "index.handler"
+  runtime          = "nodejs20.x"
+  timeout          = 180
+  memory_size      = 1024
+  filename         = data.archive_file.device_verification.output_path
+  source_code_hash = data.archive_file.device_verification.output_base64sha256
+
+  environment {
+    variables = {
+      STATE_MACHINE_ARN = aws_sfn_state_machine.recovery_orchestrator.arn
+      SENSOR_COUNT      = var.sensor_count
+      BATCH_SIZE        = "1000"
+    }
+  }
+  vpc_config {
+    subnet_ids         = aws_subnet.private[*].id
+    security_group_ids = [aws_security_group.lambda.id]
+  }
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-device-verification"
   })
-
   depends_on = [
     aws_iam_role_policy.lambda_device_verification,
     aws_iam_role_policy_attachment.lambda_device_verification_vpc
   ]
 }
 
-
-resource "aws_lambda_function" "data_replay" {
-  function_name = "${local.name_prefix}-data-replay"
-  role          = aws_iam_role.lambda_data_replay.arn
-  handler       = "index.handler"
-  runtime       = "python3.11"
-  timeout       = 300
-  memory_size   = 2048
-
-  environment {
-    variables = {
-      DYNAMODB_TABLE = aws_dynamodb_table.buffered_data.name
-      KINESIS_STREAM = aws_kinesis_stream.main.name
-      BATCH_SIZE     = "500"
-    }
-  }
-
-  vpc_config {
-    subnet_ids         = aws_subnet.private[*].id
-    security_group_ids = [aws_security_group.lambda.id]
-  }
-
-  # Inline Python code for Lambda handler
-  zip_file = <<-EOT
+data "archive_file" "data_replay" {
+  type        = "zip"
+  output_path = "${path.module}/data_replay.zip"
+  source {
+    content  = <<-EOT
 import json
 import boto3
 import os
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor
-
 dynamodb = boto3.resource('dynamodb')
 kinesis = boto3.client('kinesis')
-
 def handler(event, context):
     print(f"Data replay initiated: {json.dumps(event)}")
     table_name = os.environ['DYNAMODB_TABLE']
@@ -839,7 +807,6 @@ def handler(event, context):
     table = dynamodb.Table(table_name)
     end_time = int(datetime.now().timestamp() * 1000)
     start_time = int((datetime.now() - timedelta(hours=12)).timestamp() * 1000)
-
     try:
         response = table.scan(
             FilterExpression='#ts BETWEEN :start AND :end',
@@ -869,7 +836,6 @@ def handler(event, context):
     except Exception as e:
         print(f"Error during data replay: {str(e)}")
         raise
-
 def send_to_kinesis(stream_name, messages):
     records = []
     for msg in messages:
@@ -888,11 +854,34 @@ def send_to_kinesis(stream_name, messages):
             print(f"Failed to send {response['FailedRecordCount']} records")
     return len(records)
 EOT
+    filename = "index.py"
+  }
+}
 
+resource "aws_lambda_function" "data_replay" {
+  function_name    = "${local.name_prefix}-data-replay"
+  role             = aws_iam_role.lambda_data_replay.arn
+  handler          = "index.handler"
+  runtime          = "python3.11"
+  timeout          = 300
+  memory_size      = 2048
+  filename         = data.archive_file.data_replay.output_path
+  source_code_hash = data.archive_file.data_replay.output_base64sha256
+
+  environment {
+    variables = {
+      DYNAMODB_TABLE = aws_dynamodb_table.buffered_data.name
+      KINESIS_STREAM = aws_kinesis_stream.main.name
+      BATCH_SIZE     = "500"
+    }
+  }
+  vpc_config {
+    subnet_ids         = aws_subnet.private[*].id
+    security_group_ids = [aws_security_group.lambda.id]
+  }
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-data-replay"
   })
-
   depends_on = [
     aws_iam_role_policy.lambda_data_replay,
     aws_iam_role_policy_attachment.lambda_data_replay_vpc
