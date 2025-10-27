@@ -22,7 +22,6 @@ const eventbridge = new AWS.EventBridge();
 let skipCrossServiceTests = false;
 const lambdaName = outputs.lambda_device_verification_name;
 
-// Global handler for unhandled promise rejections related to missing Lambda
 process.on('unhandledRejection', (reason) => {
   if (reason && typeof reason === 'object' && 'code' in reason && reason.code === 'ResourceNotFoundException') {
     console.warn(`[WARN] Suppressed unhandled ResourceNotFoundException: ${reason.message}`);
@@ -68,7 +67,7 @@ describe('TAP Stack Live Integration Tests (Infra/Dependency Aware)', () => {
     if (!outputs.vpc_id || !outputs.vpc_cidr) return;
     const vpcs = await safeAWSCall(ec2.describeVpcs.bind(ec2), { VpcIds: [outputs.vpc_id] });
     if (!vpcs) {
-      console.warn('[SKIP] VPC describe returned null - resource may not exist.');
+      console.warn('[SKIP] VPC describe returned null - resource might not exist.');
       return;
     }
     expect(vpcs.Vpcs?.[0]?.CidrBlock).toBe(outputs.vpc_cidr);
@@ -78,7 +77,7 @@ describe('TAP Stack Live Integration Tests (Infra/Dependency Aware)', () => {
     if (!outputs.internet_gateway_id || !outputs.vpc_id) return;
     const igw = await safeAWSCall(ec2.describeInternetGateways.bind(ec2), { InternetGatewayIds: [outputs.internet_gateway_id] });
     if (!igw) {
-      console.warn('[SKIP] Internet Gateway describe returned null - resource may not exist.');
+      console.warn('[SKIP] Internet Gateway describe returned null.');
       return;
     }
     const attachment = igw.InternetGateways?.[0]?.Attachments?.find(a => a.VpcId === outputs.vpc_id);
@@ -115,12 +114,12 @@ describe('TAP Stack Live Integration Tests (Infra/Dependency Aware)', () => {
     const natGatewayIds = outputs.nat_gateway_ids && JSON.parse(outputs.nat_gateway_ids);
     if (!natGatewayIds?.length) return;
 
-    const natGateways = await safeAWSCall(ec2.describeNatGateways.bind(ec2), { NatGatewayIds: natGatewayIds });
-    if (!natGateways) {
+    const natGat = await safeAWSCall(ec2.describeNatGateways.bind(ec2), { NatGatewayIds: natGatewayIds });
+    if (!natGat) {
       console.warn('[SKIP] NAT Gateways describe returned null.');
       return;
     }
-    natGateways.NatGateways?.forEach(g => expect(g.State).toBe('available'));
+    natGat.NatGateways?.forEach(g => expect(g.State).toBe('available'));
   });
 
   it('S3 buckets exist and are accessible', async () => {
@@ -178,14 +177,14 @@ describe('TAP Stack Live Integration Tests (Infra/Dependency Aware)', () => {
       return;
     }
     if (!outputs.cloudwatch_alarm_connection_failures) return;
-    const alarm = await safeAWSCall(cloudwatch.describeAlarms.bind(cloudwatch), { AlarmNames: [outputs.cloudwatch_alarm_connection_failures] });
-    if (!alarm) {
+    const alarmResp = await safeAWSCall(cloudwatch.describeAlarms.bind(cloudwatch), { AlarmNames: [outputs.cloudwatch_alarm_connection_failures] });
+    if (!alarmResp) {
       console.warn('[SKIP] Connection failures alarm describe returned null.');
       return;
     }
-    expect(alarm.MetricAlarms?.[0]?.AlarmName).toBe(outputs.cloudwatch_alarm_connection_failures);
-    expect(alarm.MetricAlarms?.[0]?.StateValue).toMatch(/OK|ALARM|INSUFFICIENT_DATA/);
-    expect(alarm.MetricAlarms?.[0]?.Namespace).toBeDefined();
+    expect(alarmResp.MetricAlarms?.[0]?.AlarmName).toBe(outputs.cloudwatch_alarm_connection_failures);
+    expect(alarmResp.MetricAlarms?.[0]?.StateValue).toMatch(/OK|ALARM|INSUFFICIENT_DATA/);
+    expect(alarmResp.MetricAlarms?.[0]?.Namespace).toBeDefined();
   });
 
   it('Message drop alarm exists with correct name', async () => {
@@ -194,14 +193,14 @@ describe('TAP Stack Live Integration Tests (Infra/Dependency Aware)', () => {
       return;
     }
     if (!outputs.cloudwatch_alarm_message_drop) return;
-    const alarm = await safeAWSCall(cloudwatch.describeAlarms.bind(cloudwatch), { AlarmNames: [outputs.cloudwatch_alarm_message_drop] });
-    if (!alarm) {
+    const alarmResp = await safeAWSCall(cloudwatch.describeAlarms.bind(cloudwatch), { AlarmNames: [outputs.cloudwatch_alarm_message_drop] });
+    if (!alarmResp) {
       console.warn('[SKIP] Message drop alarm describe returned null.');
       return;
     }
-    expect(alarm.MetricAlarms?.[0]?.AlarmName).toBe(outputs.cloudwatch_alarm_message_drop);
-    expect(alarm.MetricAlarms?.[0]?.StateValue).toMatch(/OK|ALARM|INSUFFICIENT_DATA/);
-    expect(alarm.MetricAlarms?.[0]?.Namespace).toBeDefined();
+    expect(alarmResp.MetricAlarms?.[0]?.AlarmName).toBe(outputs.cloudwatch_alarm_message_drop);
+    expect(alarmResp.MetricAlarms?.[0]?.StateValue).toMatch(/OK|ALARM|INSUFFICIENT_DATA/);
+    expect(alarmResp.MetricAlarms?.[0]?.Namespace).toBeDefined();
   });
 
   it('Glue Catalog Database exists', async () => {
@@ -210,13 +209,13 @@ describe('TAP Stack Live Integration Tests (Infra/Dependency Aware)', () => {
       return;
     }
     if (!outputs.glue_catalog_database_name) return;
-    const db = await safeAWSCall(glue.getDatabase.bind(glue), { Name: outputs.glue_catalog_database_name });
-    if (!db) {
+    const catalogDb = await safeAWSCall(glue.getDatabase.bind(glue), { Name: outputs.glue_catalog_database_name });
+    if (!catalogDb) {
       console.warn('[SKIP] Glue Catalog Database describe returned null.');
       return;
     }
-    expect(db.Database?.Name).toBe(outputs.glue_catalog_database_name);
-    expect(db.Database?.CatalogId).toBeDefined();
+    expect(catalogDb.Database?.Name).toBe(outputs.glue_catalog_database_name);
+    expect(catalogDb.Database?.CatalogId).toBeDefined();
   });
 
   it('SNS Topic exists', async () => {
