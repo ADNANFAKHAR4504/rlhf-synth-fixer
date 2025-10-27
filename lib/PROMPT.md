@@ -13,7 +13,7 @@ What to build
 - Ensure all IAM roles follow least-privilege.
 
 Hard constraints (do not change)
-- Deploy the stack to region us-east-1.
+- Deploy the stack to region us-east-2.
 - Use Lambda for compute and API Gateway for REST endpoints.
 - Use DynamoDB as the primary datastore.
 - Store configuration in SSM Parameter Store where appropriate.
