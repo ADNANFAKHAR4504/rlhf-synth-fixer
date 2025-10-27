@@ -1,4 +1,4 @@
-import * as lib from '../lib/index';
+import * as lib from '../../lib/index.js';
 
 describe('HIPAA Compliant Healthcare Monitoring Infrastructure Template', () => {
   let template: any;
@@ -482,7 +482,7 @@ describe('HIPAA Compliant Healthcare Monitoring Infrastructure Template', () => 
     test('should identify all CloudWatch alarms', () => {
       const alarms = lib.getAlarms(template);
       expect(alarms.length).toBe(4);
-      expect(alarms.some(a => a.name === 'UnauthorizedAccessAlarm')).toBe(true);
+      expect(alarms.some((a: {name: string; metricName: string; threshold: number}) => a.name === 'UnauthorizedAccessAlarm')).toBe(true);
     });
 
     test('should validate all outputs have exports', () => {
