@@ -8,9 +8,6 @@ config:
   db_username:
     description: RDS master username
     default: txadmin
-  db_password:
-    description: RDS master password
-    secret: true
   db_secret_name:
     description: Name of existing Secrets Manager secret for database credentials
     default: rds-credentials-dev
