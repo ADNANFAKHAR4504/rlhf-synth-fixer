@@ -20,19 +20,5 @@
     "AWS SecretsManager",
     "AWS KMS"
   ],
-  "required_configurations": [
-    "High availability RDS setup",
-    "Multi-AZ ElastiCache deployment",
-    "Automated deployment stages",
-    "Database credentials in AWS Secrets Manager",
-    "RDS encryption at rest using AWS KMS",
-    "ElastiCache cluster across multiple availability zones"
-  ],
-  "constraints": [
-    "All resources must be deployed in eu-south-2 region",
-    "All database credentials must be stored in AWS Secrets Manager",
-    "RDS instance must be configured with encryption at rest using AWS KMS",
-    "ElastiCache cluster must be deployed across multiple availability zones"
-  ],
   "training_quality": 9
 }
