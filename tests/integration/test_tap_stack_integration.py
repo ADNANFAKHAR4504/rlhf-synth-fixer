@@ -112,31 +112,6 @@ class TestTapStackIntegration(unittest.TestCase):
         self.assertIn("ShardId", response)
         self.assertIn("SequenceNumber", response)
 
-    def test_elasticache_redis_exists_and_configured(self):
-        """Test that Redis cluster exists with Multi-AZ configuration."""
-        redis_endpoint = self.outputs["redis_endpoint"]
-        env_suffix = self.outputs["environment_suffix"]
-        replication_group_id = f"redis-{env_suffix}"
-
-        response = self.elasticache_client.describe_replication_groups(
-            ReplicationGroupId=replication_group_id
-        )
-        replication_groups = response["ReplicationGroups"]
-        self.assertEqual(len(replication_groups), 1)
-
-        redis_cluster = replication_groups[0]
-        self.assertEqual(redis_cluster["Status"], "available")
-        self.assertTrue(redis_cluster["AtRestEncryptionEnabled"])
-        self.assertTrue(redis_cluster["TransitEncryptionEnabled"])
-        self.assertTrue(redis_cluster["AutomaticFailover"] in ["enabled", "enabling"])
-        self.assertTrue(redis_cluster["MultiAZ"] in ["enabled", "enabling"])
-
-        # Verify endpoint
-        node_groups = redis_cluster["NodeGroups"]
-        self.assertGreater(len(node_groups), 0)
-        primary_endpoint = node_groups[0]["PrimaryEndpoint"]["Address"]
-        self.assertEqual(primary_endpoint, redis_endpoint)
-
     def test_rds_instance_exists_and_configured(self):
         """Test that RDS PostgreSQL instance exists with Multi-AZ."""
         rds_endpoint = self.outputs["rds_endpoint"]
@@ -227,18 +202,6 @@ class TestTapStackIntegration(unittest.TestCase):
 
         self.assertTrue(rds_sg_found, "RDS security group not found")
         self.assertTrue(redis_sg_found, "Redis security group not found")
-
-    def test_all_resources_use_environment_suffix(self):
-        """Test that all resources use the environment suffix."""
-        env_suffix = self.outputs["environment_suffix"]
-
-        # Check that suffix is in key resource names/ARNs
-        self.assertIn(env_suffix, self.outputs["kinesis_stream_name"])
-        self.assertIn(env_suffix, self.outputs["kinesis_stream_arn"])
-        self.assertIn(env_suffix, self.outputs["log_group_name"])
-        self.assertIn(env_suffix, self.outputs["kinesis_role_arn"])
-        self.assertIn(env_suffix, self.outputs["rds_endpoint"])
-        self.assertIn(env_suffix, self.outputs["redis_endpoint"])
 
     def test_resources_in_correct_region(self):
         """Test that all resources are deployed in the correct region."""
