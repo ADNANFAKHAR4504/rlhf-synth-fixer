@@ -1,5 +1,23 @@
 import * as cdk from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
+
+// Prevent the NodejsFunction bundling step from trying to run Docker during unit tests.
+// We replace NodejsFunction with a thin wrapper around aws-lambda.Function that uses an inline code asset.
+jest.mock('aws-cdk-lib/aws-lambda-nodejs', () => {
+  const lambda = require('aws-cdk-lib/aws-lambda');
+  return {
+    NodejsFunction: class NodejsFunction extends lambda.Function {
+      constructor(scope: any, id: string, props: any) {
+        // Force a simple inline handler to avoid bundling/docker in unit tests
+        super(scope, id, {
+          ...props,
+          code: lambda.Code.fromInline('exports.handler = async () => ({ statusCode: 200 })'),
+        });
+      }
+    },
+  };
+});
+
 import { ServerlessInfrastructureStack, branchCoverageHelper, buildSuffix, complexBranch, resolveEnvironmentSuffix } from '../lib/serverless-infrastructure-stack';
 
 // Keep all unit tests in this single file per instructions.

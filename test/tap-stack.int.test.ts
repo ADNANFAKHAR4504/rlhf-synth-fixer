@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
-import { CloudWatchLogsClient, FilterLogEventsCommand } from '@aws-sdk/client-cloudwatch-logs';
+import { CloudWatchLogsClient, FilterLogEventsCommand, DescribeLogStreamsCommand, GetLogEventsCommand } from '@aws-sdk/client-cloudwatch-logs';
 import {
   DynamoDBClient,
   GetItemCommand
@@ -229,6 +229,24 @@ describe('Live integration tests — API -> Lambda -> DynamoDB -> Stream -> SQS 
         try {
           const logsResp = await cloudwatchClient.send(new FilterLogEventsCommand({ logGroupName: apiHandlerLogGroup, limit: 50 }));
           diagnostics.logs = (logsResp.events || []).slice(-20).map((e) => ({ timestamp: e.timestamp, message: e.message }));
+
+          // If FilterLogEvents returned nothing, attempt a fallback: get the most recent log stream and fetch its events.
+          if ((!diagnostics.logs || (diagnostics.logs as any[]).length === 0)) {
+            try {
+              const streamsResp = await cloudwatchClient.send(new DescribeLogStreamsCommand({ logGroupName: apiHandlerLogGroup, orderBy: 'LastEventTime', descending: true, limit: 5 }));
+              const streams = streamsResp.logStreams || [];
+              if (streams.length > 0) {
+                const stream = streams[0];
+                if (stream && stream.logStreamName) {
+                  const eventsResp = await cloudwatchClient.send(new GetLogEventsCommand({ logGroupName: apiHandlerLogGroup, logStreamName: stream.logStreamName, limit: 100 }));
+                  diagnostics.logs = (eventsResp.events || []).slice(-50).map((e) => ({ timestamp: e.timestamp, message: e.message }));
+                }
+              }
+            } catch (inner) {
+              // If fallback fails, record the error and continue — we still want to include invoke payload if present.
+              diagnostics.logsFallbackError = (inner as Error).message;
+            }
+          }
         } catch (e) {
           diagnostics.logsError = (e as Error).message;
         }
