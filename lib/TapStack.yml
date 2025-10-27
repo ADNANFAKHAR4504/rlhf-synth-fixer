@@ -867,13 +867,6 @@ Resources:
           Value: 'true'
 
   # Bastion host in public subnet with encrypted EBS
-  NovaBastionInstanceProfile:
-    Type: 'AWS::IAM::InstanceProfile'
-    Properties:
-      InstanceProfileName: 'nova-prod-bastion-instance-profile'
-      Roles:
-        - !Ref NovaEC2Role
-
   NovaBastionInstance:
     Type: 'AWS::EC2::Instance'
     Properties:
