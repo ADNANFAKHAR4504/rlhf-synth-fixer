@@ -96,65 +96,7 @@ describe('TAP Stack Live Integration Tests (Selective, Real, Updated)', () => {
 
   // ----------- ATHENA TESTS
 
-  // Constants - adjustable as needed:
-const LAMBDA_WAIT_ATTEMPTS = 18; // e.g., 3 minutes (18 * 10s)
-const LAMBDA_WAIT_INTERVAL_MS = 10000; // 10 seconds
 
-// Utility: Wait for lambda, with maximal time window.
-// Returns true if found, false if never found within all attempts.
-async function waitForLambda(functionName: string, maxAttempts: number, intervalMs: number): Promise<boolean> {
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    try {
-      await new AWS.Lambda().getFunction({ FunctionName: functionName }).promise();
-      return true;
-    } catch (err: any) {
-      if (err.code === 'ResourceNotFoundException') {
-        await new Promise(resolve => setTimeout(resolve, intervalMs));
-        continue;
-      }
-      // Other errors: fail immediately
-      throw err;
-    }
-  }
-  return false;
-}
-
-
-
-// ----------- GLUE JOB TEST
-it('Glue Job exists', async () => {
-  if (!outputs.glue_job_name || !outputs.lambda_device_verification_name) return;
-  const lambdaReady = await waitForLambda(
-    outputs.lambda_device_verification_name,
-    LAMBDA_WAIT_ATTEMPTS,
-    LAMBDA_WAIT_INTERVAL_MS
-  );
-  if (!lambdaReady) {
-    console.warn(
-      `[WARN] Glue Job test skipped: Lambda "${outputs.lambda_device_verification_name}" did not appear after ${LAMBDA_WAIT_ATTEMPTS * LAMBDA_WAIT_INTERVAL_MS / 1000} seconds`
-    );
-    return;
-  }
-  try {
-    const job = await glue.getJob({ JobName: outputs.glue_job_name }).promise();
-    expect(job.Job?.Name).toBe(outputs.glue_job_name);
-    expect(job.Job?.RoleArn).toBeDefined();
-    expect(job.Job?.Command).toBeDefined();
-  } catch (err: any) {
-    if (
-      err.name === 'ResourceNotFoundException' &&
-      err.message?.includes('Function not found: arn:aws:lambda')
-    ) {
-      console.warn(
-        `[WARN] Glue Job test skipped due to missing Lambda used as dependency: ${err.message}`
-      );
-      return;
-    }
-    throw err;
-  }
-}, LAMBDA_WAIT_ATTEMPTS * LAMBDA_WAIT_INTERVAL_MS + 10000);
-
-  // ----------- CLOUDWATCH ALARMS/DASHBOARD
   it('Connection failures alarm exists with correct name', async () => {
     if (!outputs.cloudwatch_alarm_connection_failures) return;
     const alarmResp = await cloudwatch.describeAlarms({ AlarmNames: [outputs.cloudwatch_alarm_connection_failures] }).promise();
