@@ -1011,7 +1011,7 @@ Resources:
   NovaRDSInstance:
     Type: 'AWS::RDS::DBInstance'
     Properties:
-      DBInstanceIdentifier: 'nova-prod-patient-database'
+      DBInstanceIdentifier: 'nova-prod-patient-db'
       AllocatedStorage: 100
       DBInstanceClass: 'db.t3.medium'
       Engine: mysql
@@ -1033,7 +1033,7 @@ Resources:
         - slowquery
       Tags:
         - Key: Name
-          Value: 'nova-prod-patient-database'
+          Value: 'nova-prod-patient-db'
         - Key: team
           Value: '2'
         - Key: iac-rlhf-amazon
