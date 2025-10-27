@@ -1,0 +1,657 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "HIPAA-compliant monitoring infrastructure for healthcare patient data processing",
+  "Parameters": {
+    "environmentSuffix": {
+      "Type": "String",
+      "Description": "Environment suffix for resource naming uniqueness",
+      "Default": "dev",
+      "AllowedPattern": "[a-z0-9-]+",
+      "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+    },
+    "AlertEmail": {
+      "Type": "String",
+      "Description": "Email address for compliance and security alerts",
+      "Default": "security@example.com",
+      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+      "ConstraintDescription": "Must be a valid email address"
+    }
+  },
+  "Resources": {
+    "HIPAAEncryptionKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for HIPAA-compliant encryption - ${environmentSuffix}"
+        },
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow CloudWatch Logs",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": {
+                  "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+                }
+              },
+              "Action": [
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:CreateGrant",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "ArnLike": {
+                  "kms:EncryptionContext:aws:logs:arn": {
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*"
+                  }
+                }
+              }
+            },
+            {
+              "Sid": "Allow SNS",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "sns.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+              ],
+              "Resource": "*"
+            }
+          ]
+        },
+        "EnableKeyRotation": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "hipaa-encryption-key-${environmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "environmentSuffix"
+            }
+          },
+          {
+            "Key": "Compliance",
+            "Value": "HIPAA"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "Healthcare Data Encryption"
+          }
+        ]
+      }
+    },
+    "HIPAAEncryptionKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/hipaa-monitoring-${environmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "HIPAAEncryptionKey"
+        }
+      }
+    },
+    "PatientDataLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/healthcare/patient-data-${environmentSuffix}"
+        },
+        "RetentionInDays": 90,
+        "KmsKeyId": {
+          "Fn::GetAtt": [
+            "HIPAAEncryptionKey",
+            "Arn"
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "patient-data-logs-${environmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "environmentSuffix"
+            }
+          },
+          {
+            "Key": "Compliance",
+            "Value": "HIPAA"
+          },
+          {
+            "Key": "DataClassification",
+            "Value": "PHI"
+          }
+        ]
+      }
+    },
+    "SecurityLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/healthcare/security-${environmentSuffix}"
+        },
+        "RetentionInDays": 365,
+        "KmsKeyId": {
+          "Fn::GetAtt": [
+            "HIPAAEncryptionKey",
+            "Arn"
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "security-logs-${environmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "environmentSuffix"
+            }
+          },
+          {
+            "Key": "Compliance",
+            "Value": "HIPAA"
+          },
+          {
+            "Key": "LogType",
+            "Value": "Security"
+          }
+        ]
+      }
+    },
+    "AuditLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/healthcare/audit-${environmentSuffix}"
+        },
+        "RetentionInDays": 2557,
+        "KmsKeyId": {
+          "Fn::GetAtt": [
+            "HIPAAEncryptionKey",
+            "Arn"
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "audit-logs-${environmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "environmentSuffix"
+            }
+          },
+          {
+            "Key": "Compliance",
+            "Value": "HIPAA"
+          },
+          {
+            "Key": "LogType",
+            "Value": "Audit"
+          }
+        ]
+      }
+    },
+    "ComplianceAlertTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "compliance-alerts-${environmentSuffix}"
+        },
+        "DisplayName": "HIPAA Compliance Alerts",
+        "KmsMasterKeyId": {
+          "Ref": "HIPAAEncryptionKey"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "compliance-alerts-${environmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "environmentSuffix"
+            }
+          },
+          {
+            "Key": "Compliance",
+            "Value": "HIPAA"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "Security Alerting"
+          }
+        ]
+      }
+    },
+    "ComplianceAlertSubscription": {
+      "Type": "AWS::SNS::Subscription",
+      "Properties": {
+        "Protocol": "email",
+        "TopicArn": {
+          "Ref": "ComplianceAlertTopic"
+        },
+        "Endpoint": {
+          "Ref": "AlertEmail"
+        }
+      }
+    },
+    "UnauthorizedAccessAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "unauthorized-access-${environmentSuffix}"
+        },
+        "AlarmDescription": "Alert on unauthorized access attempts to patient data",
+        "MetricName": "UnauthorizedAPICallsEventCount",
+        "Namespace": "CloudTrailMetrics",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "ComplianceAlertTopic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "unauthorized-access-alarm-${environmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "environmentSuffix"
+            }
+          },
+          {
+            "Key": "Compliance",
+            "Value": "HIPAA"
+          },
+          {
+            "Key": "Severity",
+            "Value": "Critical"
+          }
+        ]
+      }
+    },
+    "KMSKeyDisabledAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "kms-key-disabled-${environmentSuffix}"
+        },
+        "AlarmDescription": "Alert when KMS key is disabled or scheduled for deletion",
+        "MetricName": "DisableOrScheduleKeyDeletionEventCount",
+        "Namespace": "CloudTrailMetrics",
+        "Statistic": "Sum",
+        "Period": 60,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "ComplianceAlertTopic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "kms-disabled-alarm-${environmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "environmentSuffix"
+            }
+          },
+          {
+            "Key": "Compliance",
+            "Value": "HIPAA"
+          },
+          {
+            "Key": "Severity",
+            "Value": "Critical"
+          }
+        ]
+      }
+    },
+    "SecurityGroupChangesAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "security-group-changes-${environmentSuffix}"
+        },
+        "AlarmDescription": "Alert on security group changes that could affect HIPAA compliance",
+        "MetricName": "SecurityGroupEventCount",
+        "Namespace": "CloudTrailMetrics",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "ComplianceAlertTopic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "sg-changes-alarm-${environmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "environmentSuffix"
+            }
+          },
+          {
+            "Key": "Compliance",
+            "Value": "HIPAA"
+          },
+          {
+            "Key": "Severity",
+            "Value": "High"
+          }
+        ]
+      }
+    },
+    "IAMPolicyChangesAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "iam-policy-changes-${environmentSuffix}"
+        },
+        "AlarmDescription": "Alert on IAM policy changes that could affect access controls",
+        "MetricName": "IAMPolicyEventCount",
+        "Namespace": "CloudTrailMetrics",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "ComplianceAlertTopic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "iam-changes-alarm-${environmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "environmentSuffix"
+            }
+          },
+          {
+            "Key": "Compliance",
+            "Value": "HIPAA"
+          },
+          {
+            "Key": "Severity",
+            "Value": "High"
+          }
+        ]
+      }
+    },
+    "MonitoringRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "healthcare-monitoring-role-${environmentSuffix}"
+        },
+        "Description": "Role for healthcare monitoring services with least privilege access",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "monitoring-role-${environmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "environmentSuffix"
+            }
+          },
+          {
+            "Key": "Compliance",
+            "Value": "HIPAA"
+          }
+        ]
+      }
+    },
+    "MonitoringPolicy": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": {
+          "Fn::Sub": "healthcare-monitoring-policy-${environmentSuffix}"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents",
+                "logs:DescribeLogGroups",
+                "logs:DescribeLogStreams"
+              ],
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "PatientDataLogGroup",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::GetAtt": [
+                    "SecurityLogGroup",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::GetAtt": [
+                    "AuditLogGroup",
+                    "Arn"
+                  ]
+                }
+              ]
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "kms:Decrypt",
+                "kms:DescribeKey",
+                "kms:GenerateDataKey"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "HIPAAEncryptionKey",
+                  "Arn"
+                ]
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "cloudwatch:PutMetricData",
+                "cloudwatch:GetMetricStatistics",
+                "cloudwatch:ListMetrics"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "sns:Publish"
+              ],
+              "Resource": {
+                "Ref": "ComplianceAlertTopic"
+              }
+            }
+          ]
+        },
+        "Roles": [
+          {
+            "Ref": "MonitoringRole"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "KMSKeyId": {
+      "Description": "KMS Key ID for HIPAA encryption",
+      "Value": {
+        "Ref": "HIPAAEncryptionKey"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-KMSKeyId"
+        }
+      }
+    },
+    "KMSKeyArn": {
+      "Description": "KMS Key ARN for HIPAA encryption",
+      "Value": {
+        "Fn::GetAtt": [
+          "HIPAAEncryptionKey",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-KMSKeyArn"
+        }
+      }
+    },
+    "PatientDataLogGroupName": {
+      "Description": "Patient data log group name",
+      "Value": {
+        "Ref": "PatientDataLogGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PatientDataLogGroup"
+        }
+      }
+    },
+    "SecurityLogGroupName": {
+      "Description": "Security log group name",
+      "Value": {
+        "Ref": "SecurityLogGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SecurityLogGroup"
+        }
+      }
+    },
+    "AuditLogGroupName": {
+      "Description": "Audit log group name",
+      "Value": {
+        "Ref": "AuditLogGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-AuditLogGroup"
+        }
+      }
+    },
+    "ComplianceAlertTopicArn": {
+      "Description": "SNS Topic ARN for compliance alerts",
+      "Value": {
+        "Ref": "ComplianceAlertTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-AlertTopic"
+        }
+      }
+    },
+    "MonitoringRoleArn": {
+      "Description": "IAM Role ARN for monitoring services",
+      "Value": {
+        "Fn::GetAtt": [
+          "MonitoringRole",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-MonitoringRole"
+        }
+      }
+    }
+  }
+}
