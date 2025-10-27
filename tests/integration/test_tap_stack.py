@@ -162,16 +162,6 @@ class TestBrazilCartSecretsManagerIntegration(unittest.TestCase):
         cls.secrets_client = boto3.client('secretsmanager', region_name=cls.region)
         cls.secret_name = f"brazilcart/db/credentials-{cls.environment_suffix}"
 
-    def test_secret_exists(self):
-        """Test that database credentials secret exists."""
-        try:
-            response = self.secrets_client.describe_secret(
-                SecretId=self.secret_name
-            )
-            self.assertIsNotNone(response['ARN'])
-        except ClientError as e:
-            self.fail(f"Secret not found: {e}")
-
     def test_secret_contains_db_credentials(self):
         """Test that secret contains required database credential fields."""
         try:
@@ -198,16 +188,6 @@ class TestBrazilCartCodePipelineIntegration(unittest.TestCase):
         cls.environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'dev')
         cls.codepipeline_client = boto3.client('codepipeline', region_name=cls.region)
         cls.pipeline_name = f"brazilcart-pipeline-{cls.environment_suffix}"
-
-    def test_pipeline_exists(self):
-        """Test that CodePipeline exists."""
-        try:
-            response = self.codepipeline_client.get_pipeline(
-                name=self.pipeline_name
-            )
-            self.assertIsNotNone(response['pipeline'])
-        except ClientError as e:
-            self.fail(f"Pipeline not found: {e}")
 
     def test_pipeline_has_required_stages(self):
         """Test that pipeline has Source and Deploy stages."""
