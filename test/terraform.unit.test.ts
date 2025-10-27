@@ -741,9 +741,9 @@ describe("tap_stack.tf - Step Functions", () => {
     expect(stackContent).toMatch(/logging_configuration\s*\{/);
   });
 
-  test("Step Functions log_destination does NOT have :* suffix", () => {
-    const logMatch = stackContent.match(/log_destination\s*=\s*"[^"]*:\*"/);
-    expect(logMatch).toBeFalsy();
+  test("Step Functions log_destination HAS :* suffix (required by AWS)", () => {
+    const logMatch = stackContent.match(/log_destination\s*=\s*"\$\{[^}]+\}:\*"/);
+    expect(logMatch).toBeTruthy();
   });
 
   test("creates CloudWatch log group for Step Functions", () => {

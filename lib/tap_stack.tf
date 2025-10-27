@@ -1556,7 +1556,7 @@ resource "aws_sfn_state_machine" "consistency_checker" {
   })
 
   logging_configuration {
-    log_destination        = aws_cloudwatch_log_group.step_functions.arn
+    log_destination        = "${aws_cloudwatch_log_group.step_functions.arn}:*"
     include_execution_data = true
     level                  = "ERROR"
   }
