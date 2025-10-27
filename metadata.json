@@ -1,5 +1,5 @@
 {
-  "platform": "cloudformation",
+  "platform": "cfn",
   "language": "json",
   "complexity": "hard",
   "team": "synth",
@@ -26,5 +26,4 @@
   "region": "eu-south-2",
   "turn_type": "single",
   "training_quality": 10,
-  "completedAt": "2025-10-28T00:28:03+05:30"
 }
