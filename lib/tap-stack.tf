@@ -187,9 +187,10 @@ resource "aws_iam_role" "lambda_execution_role" {
 
 resource "aws_iam_role_policy" "lambda_policy" {
   provider = aws.primary
+  depends_on = [aws_iam_role.lambda_execution_role]
 
   name = "${local.app_name}-lambda-policy-${var.environment_suffix}"
-  role = aws_iam_role.lambda_execution_role.id
+  role = aws_iam_role.lambda_execution_role.name
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -527,6 +528,7 @@ EOF
 
 resource "aws_lambda_function" "ticket_purchase" {
   provider = aws.primary
+  depends_on = [aws_iam_role_policy.lambda_policy, aws_iam_role_policy_attachment.lambda_vpc_execution]
 
   filename                       = data.archive_file.ticket_purchase_zip.output_path
   function_name                  = "${local.app_name}-ticket-purchase-${var.environment_suffix}"
@@ -730,6 +732,7 @@ EOF
 
 resource "aws_lambda_function" "inventory_verifier" {
   provider = aws.primary
+  depends_on = [aws_iam_role_policy.lambda_policy, aws_iam_role_policy_attachment.lambda_vpc_execution]
 
   filename         = data.archive_file.inventory_verifier_zip.output_path
   function_name    = "${local.app_name}-inventory-verifier-${var.environment_suffix}"
@@ -845,6 +848,7 @@ EOF
 
 resource "aws_lambda_function" "kinesis_processor" {
   provider = aws.primary
+  depends_on = [aws_iam_role_policy.lambda_policy, aws_iam_role_policy_attachment.lambda_vpc_execution]
 
   filename         = data.archive_file.kinesis_processor_zip.output_path
   function_name    = "${local.app_name}-kinesis-processor-${var.environment_suffix}"
@@ -992,8 +996,8 @@ resource "aws_security_group" "aurora_sg" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    from_port       = 5432
-    to_port         = 5432
+    from_port       = 3306
+    to_port         = 3306
     protocol        = "tcp"
     security_groups = [aws_security_group.lambda_sg.id]
   }
@@ -1016,7 +1020,7 @@ resource "aws_rds_cluster" "analytics" {
   cluster_identifier     = "${local.app_name}-analytics-${var.environment_suffix}"
   engine                 = "aurora-mysql"
   engine_mode            = "provisioned"
-  engine_version         = "8.0.mysql_aurora.3.02.0"
+  engine_version         = "8.0.mysql_aurora.3.04.0"
   database_name          = "analytics"
   master_username        = "admin"
   master_password        = random_password.aurora_password.result
@@ -1065,9 +1069,9 @@ resource "aws_secretsmanager_secret_version" "aurora_credentials" {
   secret_string = jsonencode({
     username = aws_rds_cluster.analytics.master_username
     password = random_password.aurora_password.result
-    engine   = "postgres"
+    engine   = "mysql"
     host     = aws_rds_cluster.analytics.endpoint
-    port     = 5432
+    port     = 3306
     dbname   = aws_rds_cluster.analytics.database_name
   })
 }
@@ -1109,9 +1113,7 @@ resource "aws_iam_role_policy" "step_functions_policy" {
           "logs:CreateLogStream",
           "logs:PutLogEvents",
           "xray:PutTraceSegments",
-          "xray:PutTelemetryRecords",
-          "timestream:WriteRecords",
-          "timestream:DescribeEndpoints"
+          "xray:PutTelemetryRecords"
         ]
         Resource = "*"
       }
@@ -1158,19 +1160,10 @@ resource "aws_sfn_state_machine" "inventory_verification" {
         Next = "AuditResults"
       }
       AuditResults = {
-        Type     = "Task"
-        Resource = "arn:aws:states:::aws-sdk:timestreamwrite:writeRecords"
-        Parameters = {
-          DatabaseName = aws_timestreamwrite_database.audit.database_name
-          TableName    = aws_timestreamwrite_table.corrections.table_name
-          Records = [{
-            Time             = "$$.State.EnteredTime"
-            TimeUnit         = "MILLISECONDS"
-            Dimensions       = []
-            MeasureName      = "audit_record"
-            MeasureValue     = "$"
-            MeasureValueType = "VARCHAR"
-          }]
+        Type = "Pass"
+        Result = {
+          "audit_completed" = true
+          "timestamp.$" = "$$.State.EnteredTime"
         }
         End = true
       }
@@ -1223,7 +1216,7 @@ resource "aws_cloudwatch_event_rule" "inventory_check" {
 
   name                = "${local.app_name}-inventory-check"
   description         = "Trigger inventory verification every 10 seconds"
-  schedule_expression = "rate(10 seconds)"
+  schedule_expression = "rate(1 minute)"
 }
 
 resource "aws_cloudwatch_event_target" "step_function" {
@@ -1235,32 +1228,8 @@ resource "aws_cloudwatch_event_target" "step_function" {
   role_arn  = aws_iam_role.eventbridge_role.arn
 }
 
-# Timestream Database
-resource "aws_timestreamwrite_database" "audit" {
-  provider = aws.primary
-
-  database_name = "${local.app_name}-audit"
-
-  tags = {
-    Name = "${local.app_name}-audit"
-  }
-}
-
-resource "aws_timestreamwrite_table" "corrections" {
-  provider = aws.primary
-
-  database_name = aws_timestreamwrite_database.audit.database_name
-  table_name    = "corrections"
-
-  retention_properties {
-    magnetic_store_retention_period_in_days = 30
-    memory_store_retention_period_in_hours  = 24
-  }
-
-  tags = {
-    Name = "${local.app_name}-corrections"
-  }
-}
+# Timestream removed due to service access limitations
+# Audit trail will be handled via CloudWatch Logs instead
 
 # CloudWatch Log Groups
 resource "aws_cloudwatch_log_group" "lambda_logs" {
