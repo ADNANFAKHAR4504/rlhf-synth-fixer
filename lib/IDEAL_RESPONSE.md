@@ -96,6 +96,16 @@ variable "environment" {
   default     = "prod"
 }
 
+variable "environment_suffix" {
+  description = "Environment suffix for resource naming to support multiple deployments"
+  type        = string
+  default     = ""
+  validation {
+    condition     = can(regex("^$|^-[a-z0-9-]+$", var.environment_suffix))
+    error_message = "The environment_suffix must be empty or start with a hyphen followed by lowercase letters, numbers, or hyphens."
+  }
+}
+
 variable "owner" {
   description = "Owner of the resources"
   type        = string
@@ -160,6 +170,9 @@ locals {
     ManagedBy   = "terraform"
   }
 
+  # Name prefix for all resources including environment suffix
+  name_prefix = "${var.project}-${var.environment}${var.environment_suffix}"
+
   # Generate unique S3 bucket name if not provided
   s3_bucket_name = var.s3_bucket_name != "" ? var.s3_bucket_name : "${var.project}-cf-templates-${data.aws_caller_identity.current.account_id}-${var.aws_region}"
 }
@@ -203,25 +216,25 @@ resource "aws_kms_key" "main" {
   enable_key_rotation     = true
 
   tags = merge(local.common_tags, {
-    Name = "${var.project}-${var.environment}-kms-key"
+    Name = "${local.name_prefix}-kms-key"
   })
 }
 
 resource "aws_kms_alias" "main" {
-  name          = "alias/${var.project}-${var.environment}"
+  name          = "alias/${local.name_prefix}"
   target_key_id = aws_kms_key.main.key_id
 }
 
 # AWS Secrets Manager for RDS password
 # Security: Store database credentials securely instead of in code
 resource "aws_secretsmanager_secret" "db_password" {
-  name                    = "${var.project}-${var.environment}-db-password"
+  name                    = "${local.name_prefix}-db-password"
   description             = "RDS MySQL master password for ${var.project}-${var.environment}"
   kms_key_id              = aws_kms_key.main.id
   recovery_window_in_days = 0 # Set to 0 for immediate deletion in test environments
 
   tags = merge(local.common_tags, {
-    Name = "${var.project}-${var.environment}-db-password"
+    Name = "${local.name_prefix}-db-password"
   })
 }
 
@@ -233,7 +246,7 @@ resource "aws_secretsmanager_secret_version" "db_password" {
     engine   = "mysql"
     host     = "" # Will be populated after RDS creation
     port     = 3306
-    dbname   = replace("${var.project}_${var.environment}", "-", "_")
+    dbname   = replace("${var.project}_${var.environment}${var.environment_suffix}", "-", "_")
   })
 
   lifecycle {
@@ -249,7 +262,7 @@ resource "aws_vpc" "main" {
   enable_dns_hostnames = true
 
   tags = merge(local.common_tags, {
-    Name = "${var.project}-${var.environment}-vpc"
+    Name = "${local.name_prefix}-vpc"
   })
 }
 
@@ -258,7 +271,7 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = merge(local.common_tags, {
-    Name = "${var.project}-${var.environment}-igw"
+    Name = "${local.name_prefix}-igw"
   })
 }
 
@@ -270,7 +283,7 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = merge(local.common_tags, {
-    Name = "${var.project}-${var.environment}-public-subnet-1"
+    Name = "${local.name_prefix}-public-subnet-1"
     Type = "public"
   })
 }
@@ -283,7 +296,7 @@ resource "aws_subnet" "private" {
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = merge(local.common_tags, {
-    Name = "${var.project}-${var.environment}-private-subnet-${count.index + 1}"
+    Name = "${local.name_prefix}-private-subnet-${count.index + 1}"
     Type = "private"
   })
 }
@@ -298,7 +311,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${var.project}-${var.environment}-public-rt"
+    Name = "${local.name_prefix}-public-rt"
   })
 }
 
@@ -309,18 +322,18 @@ resource "aws_route_table_association" "public" {
 
 # RDS Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = "${var.project}-${var.environment}-db-subnet-group"
+  name       = "${local.name_prefix}-db-subnet-group"
   subnet_ids = aws_subnet.private[*].id
 
   tags = merge(local.common_tags, {
-    Name = "${var.project}-${var.environment}-db-subnet-group"
+    Name = "${local.name_prefix}-db-subnet-group"
   })
 }
 
 # Security Groups
 # Security: Principle of least privilege - only allow required ports
 resource "aws_security_group" "web" {
-  name        = "${var.project}-${var.environment}-web-sg"
+  name        = "${local.name_prefix}-web-sg"
   description = "Security group for web servers"
   vpc_id      = aws_vpc.main.id
 
@@ -352,12 +365,12 @@ resource "aws_security_group" "web" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${var.project}-${var.environment}-web-sg"
+    Name = "${local.name_prefix}-web-sg"
   })
 }
 
 resource "aws_security_group" "rds" {
-  name        = "${var.project}-${var.environment}-rds-sg"
+  name        = "${local.name_prefix}-rds-sg"
   description = "Security group for RDS database"
   vpc_id      = aws_vpc.main.id
 
@@ -379,14 +392,14 @@ resource "aws_security_group" "rds" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${var.project}-${var.environment}-rds-sg"
+    Name = "${local.name_prefix}-rds-sg"
   })
 }
 
 # IAM Role for EC2 instances
 # Security: Least privilege - only SSM, CloudWatch, and S3 read
 resource "aws_iam_role" "ec2" {
-  name = "${var.project}-${var.environment}-ec2-role"
+  name = "${local.name_prefix}-ec2-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -410,7 +423,7 @@ resource "aws_iam_role_policy_attachment" "ec2_ssm" {
 
 # CloudWatch Logs policy
 resource "aws_iam_role_policy" "ec2_cloudwatch" {
-  name = "${var.project}-${var.environment}-ec2-cloudwatch"
+  name = "${local.name_prefix}-ec2-cloudwatch"
   role = aws_iam_role.ec2.id
 
   policy = jsonencode({
@@ -423,14 +436,14 @@ resource "aws_iam_role_policy" "ec2_cloudwatch" {
         "logs:PutLogEvents",
         "logs:DescribeLogStreams"
       ]
-      Resource = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/ec2/${var.project}-${var.environment}*"
+      Resource = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/ec2/${local.name_prefix}*"
     }]
   })
 }
 
 # S3 read policy for CloudFormation templates
 resource "aws_iam_role_policy" "ec2_s3_read" {
-  name = "${var.project}-${var.environment}-ec2-s3-read"
+  name = "${local.name_prefix}-ec2-s3-read"
   role = aws_iam_role.ec2.id
 
   policy = jsonencode({
@@ -451,7 +464,7 @@ resource "aws_iam_role_policy" "ec2_s3_read" {
 
 # Secrets Manager read policy for database credentials
 resource "aws_iam_role_policy" "ec2_secrets_read" {
-  name = "${var.project}-${var.environment}-ec2-secrets-read"
+  name = "${local.name_prefix}-ec2-secrets-read"
   role = aws_iam_role.ec2.id
 
   policy = jsonencode({
@@ -478,13 +491,13 @@ resource "aws_iam_role_policy" "ec2_secrets_read" {
 }
 
 resource "aws_iam_instance_profile" "ec2" {
-  name = "${var.project}-${var.environment}-ec2-profile"
+  name = "${local.name_prefix}-ec2-profile"
   role = aws_iam_role.ec2.name
 }
 
 # CloudWatch Log Groups
 resource "aws_cloudwatch_log_group" "ec2" {
-  name              = "/aws/ec2/${var.project}-${var.environment}"
+  name              = "/aws/ec2/${local.name_prefix}"
   retention_in_days = 7
   kms_key_id        = aws_kms_key.main.arn
 
@@ -492,7 +505,7 @@ resource "aws_cloudwatch_log_group" "ec2" {
 }
 
 resource "aws_cloudwatch_log_group" "rds" {
-  name              = "/aws/rds/${var.project}-${var.environment}"
+  name              = "/aws/rds/${local.name_prefix}"
   retention_in_days = 7
   kms_key_id        = aws_kms_key.main.arn
 
@@ -501,17 +514,17 @@ resource "aws_cloudwatch_log_group" "rds" {
 
 # SNS Topic for alerts
 resource "aws_sns_topic" "alerts" {
-  name              = "${var.project}-${var.environment}-alerts"
+  name              = "${local.name_prefix}-alerts"
   kms_master_key_id = aws_kms_key.main.id
 
   tags = merge(local.common_tags, {
-    Name = "${var.project}-${var.environment}-alerts"
+    Name = "${local.name_prefix}-alerts"
   })
 }
 
 # EC2 Launch Template
 resource "aws_launch_template" "web" {
-  name_prefix   = "${var.project}-${var.environment}-web-"
+  name_prefix   = "${local.name_prefix}-web-"
   image_id      = data.aws_ami.amazon_linux_2.id
   instance_type = var.instance_type
 
@@ -567,21 +580,21 @@ resource "aws_launch_template" "web" {
     # Start web server
     systemctl start httpd
     systemctl enable httpd
-    echo "<h1>Hello from ${var.project}-${var.environment}</h1>" > /var/www/html/index.html
+    echo "<h1>Hello from ${local.name_prefix}</h1>" > /var/www/html/index.html
   EOF
   )
 
   tag_specifications {
     resource_type = "instance"
     tags = merge(local.common_tags, {
-      Name = "${var.project}-${var.environment}-web-instance"
+      Name = "${local.name_prefix}-web-instance"
     })
   }
 
   tag_specifications {
     resource_type = "volume"
     tags = merge(local.common_tags, {
-      Name = "${var.project}-${var.environment}-web-volume"
+      Name = "${local.name_prefix}-web-volume"
     })
   }
 
@@ -592,7 +605,7 @@ resource "aws_launch_template" "web" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "web" {
-  name                      = "${var.project}-${var.environment}-web-asg"
+  name                      = "${local.name_prefix}-web-asg"
   vpc_zone_identifier       = [aws_subnet.public.id]
   target_group_arns         = [aws_lb_target_group.web.arn]
   min_size                  = var.autoscaling_min_size
@@ -616,7 +629,7 @@ resource "aws_autoscaling_group" "web" {
 
   tag {
     key                 = "Name"
-    value               = "${var.project}-${var.environment}-web-asg"
+    value               = "${local.name_prefix}-web-asg"
     propagate_at_launch = true
   }
 
@@ -632,7 +645,7 @@ resource "aws_autoscaling_group" "web" {
 
 # CloudWatch Alarms
 resource "aws_cloudwatch_metric_alarm" "high_cpu" {
-  alarm_name          = "${var.project}-${var.environment}-high-cpu"
+  alarm_name          = "${local.name_prefix}-high-cpu"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -654,7 +667,7 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "low_cpu" {
-  alarm_name          = "${var.project}-${var.environment}-low-cpu"
+  alarm_name          = "${local.name_prefix}-low-cpu"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -674,7 +687,7 @@ resource "aws_cloudwatch_metric_alarm" "low_cpu" {
 
 # Auto Scaling Policies
 resource "aws_autoscaling_policy" "scale_out" {
-  name                   = "${var.project}-${var.environment}-scale-out"
+  name                   = "${local.name_prefix}-scale-out"
   scaling_adjustment     = 1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
@@ -682,7 +695,7 @@ resource "aws_autoscaling_policy" "scale_out" {
 }
 
 resource "aws_autoscaling_policy" "scale_in" {
-  name                   = "${var.project}-${var.environment}-scale-in"
+  name                   = "${local.name_prefix}-scale-in"
   scaling_adjustment     = -1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
@@ -692,7 +705,7 @@ resource "aws_autoscaling_policy" "scale_in" {
 # RDS Instance
 # Security: Multi-AZ for high availability, encrypted storage, automated backups
 resource "aws_db_instance" "main" {
-  identifier     = "${var.project}-${var.environment}-mysql"
+  identifier     = "${local.name_prefix}-mysql"
   engine         = "mysql"
   engine_version = "8.0"
   instance_class = var.db_instance_class
@@ -702,7 +715,7 @@ resource "aws_db_instance" "main" {
   storage_encrypted     = true
   kms_key_id            = aws_kms_key.main.arn
 
-  db_name  = replace("${var.project}_${var.environment}", "-", "_")
+  db_name  = replace("${var.project}_${var.environment}${var.environment_suffix}", "-", "_")
   username = var.db_username
   password = random_password.db_password.result
 
@@ -726,13 +739,13 @@ resource "aws_db_instance" "main" {
   deletion_protection = false
 
   tags = merge(local.common_tags, {
-    Name = "${var.project}-${var.environment}-mysql"
+    Name = "${local.name_prefix}-mysql"
   })
 }
 
 # RDS Storage Alarm
 resource "aws_cloudwatch_metric_alarm" "rds_storage" {
-  alarm_name          = "${var.project}-${var.environment}-rds-low-storage"
+  alarm_name          = "${local.name_prefix}-rds-low-storage"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = "1"
   metric_name         = "FreeStorageSpace"
@@ -795,13 +808,13 @@ resource "aws_s3_bucket_public_access_block" "cf_templates" {
 # resource "aws_eip" "web" {
 #   domain = "vpc"
 #   tags = merge(local.common_tags, {
-#     Name = "${var.project}-${var.environment}-web-eip"
+#     Name = "${local.name_prefix}-web-eip"
 #   })
 # }
 
 # Application Load Balancer (recommended for production ASG)
 resource "aws_security_group" "alb" {
-  name        = "${var.project}-${var.environment}-alb-sg"
+  name        = "${local.name_prefix}-alb-sg"
   description = "Security group for Application Load Balancer"
   vpc_id      = aws_vpc.main.id
 
@@ -830,12 +843,12 @@ resource "aws_security_group" "alb" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${var.project}-${var.environment}-alb-sg"
+    Name = "${local.name_prefix}-alb-sg"
   })
 }
 
 resource "aws_lb" "web" {
-  name               = "${var.project}-${var.environment}-alb"
+  name               = "${local.name_prefix}-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -846,12 +859,12 @@ resource "aws_lb" "web" {
   enable_cross_zone_load_balancing = true
 
   tags = merge(local.common_tags, {
-    Name = "${var.project}-${var.environment}-alb"
+    Name = "${local.name_prefix}-alb"
   })
 }
 
 resource "aws_lb_target_group" "web" {
-  name     = "${var.project}-${var.environment}-tg"
+  name     = "${local.name_prefix}-tg"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -870,7 +883,7 @@ resource "aws_lb_target_group" "web" {
   deregistration_delay = 30
 
   tags = merge(local.common_tags, {
-    Name = "${var.project}-${var.environment}-tg"
+    Name = "${local.name_prefix}-tg"
   })
 }
 
@@ -971,6 +984,11 @@ output "cloudwatch_log_group_rds" {
   description = "CloudWatch log group for RDS"
   value       = aws_cloudwatch_log_group.rds.name
 }
+
+
+
+
+
 ```
 
 ---
