@@ -1,0 +1,6 @@
+encryptionsalt: v1:uyLTDXUDHQc=:v1:ATYUmja+M3FbmCHj:n/VSPiWsp/VZE6cZLlbdEOKG6UrM+w==
+config:
+  aws:region: ap-northeast-1
+  tap-stack:environmentSuffix: synth9564420345
+  tap-stack:db_password:
+    secure: v1:plnDTmuaWouAApO6:TM0en5frC5w6N1ZNaXp16a0LX8t/N3a/Gi02sg==
