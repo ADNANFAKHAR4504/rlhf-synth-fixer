@@ -10,9 +10,7 @@
     "EnvironmentSuffix": {
       "Type": "String",
       "Default": "dev",
-      "Description": "Environment suffix for resource naming and configuration (e.g., dev, staging, prod)",
-      "AllowedValues": ["dev", "staging", "prod"],
-      "ConstraintDescription": "Must be one of: dev, staging, prod"
+      "Description": "Environment suffix for resource naming and configuration (e.g., dev, staging, prod)"
     },
     "RedshiftMasterUsername": {
       "Type": "String",
