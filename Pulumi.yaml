@@ -1,4 +1,4 @@
-name: tap-stack
+name: TapStack
 runtime: python
 description: Transaction Monitoring System for JapanCart e-commerce platform
 config:
