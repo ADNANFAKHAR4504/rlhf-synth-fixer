@@ -1468,12 +1468,15 @@ resource "aws_cloudwatch_log_resource_policy" "step_functions" {
       }
       Action = [
         "logs:CreateLogStream",
-        "logs:PutLogEvents"
+        "logs:PutLogEvents",
+        "logs:PutResourcePolicy",
+        "logs:DescribeLogGroups",
+        "logs:DescribeLogStreams"
       ]
       Resource = "${aws_cloudwatch_log_group.step_functions.arn}:*"
       Condition = {
-        ArnLike = {
-          "aws:SourceArn" = "arn:${local.partition}:states:${var.aws_region}:${local.account_id}:stateMachine:${local.stack_name}-*"
+        StringEquals = {
+          "aws:SourceAccount" = local.account_id
         }
       }
     }]
@@ -1484,6 +1487,12 @@ resource "aws_sfn_state_machine" "consistency_checker" {
   name     = "${local.stack_name}-consistency-checker"
   role_arn = aws_iam_role.step_functions.arn
   type     = "EXPRESS"
+
+  depends_on = [
+    aws_cloudwatch_log_group.step_functions,
+    aws_cloudwatch_log_resource_policy.step_functions,
+    aws_iam_role_policy.step_functions
+  ]
 
   definition = jsonencode({
     Comment = "Express workflow with guarded 5-second loop for DDB vs Redis consistency checks"
