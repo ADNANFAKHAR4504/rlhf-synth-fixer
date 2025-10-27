@@ -53,7 +53,6 @@ Resources:
   NovaRDSPasswordSecret:
     Type: 'AWS::SecretsManager::Secret'
     Properties:
-      Name: 'nova-prod-database-password'
       Description: 'Master password for RDS database'
       GenerateSecretString:
         SecretStringTemplate: '{"username": "admin"}'
