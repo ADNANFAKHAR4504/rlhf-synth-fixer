@@ -633,10 +633,8 @@ Resources:
 
   RDSDatabase:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot
-    UpdateReplacePolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: !Sub '${EnvironmentName}-db-instance'
+      DBInstanceIdentifier: 'financial-app-db'
       DBName: finsecuredb
       Engine: mysql
       EngineVersion: '8.0.43'
@@ -659,7 +657,7 @@ Resources:
         - general
         - slowquery
       AutoMinorVersionUpgrade: true
-      DeletionProtection: true
+      DeletionProtection: false
       MonitoringInterval: 60
       MonitoringRoleArn: !GetAtt RDSMonitoringRole.Arn
       Tags:
