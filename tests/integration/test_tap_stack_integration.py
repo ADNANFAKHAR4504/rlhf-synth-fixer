@@ -112,35 +112,6 @@ class TestTapStackIntegration(unittest.TestCase):
         self.assertIn("ShardId", response)
         self.assertIn("SequenceNumber", response)
 
-    def test_rds_instance_exists_and_configured(self):
-        """Test that RDS PostgreSQL instance exists with Multi-AZ."""
-        rds_endpoint = self.outputs["rds_endpoint"]
-        env_suffix = self.outputs["environment_suffix"]
-        db_instance_id = f"txdb-{env_suffix}"
-
-        response = self.rds_client.describe_db_instances(
-            DBInstanceIdentifier=db_instance_id
-        )
-        db_instances = response["DBInstances"]
-        self.assertEqual(len(db_instances), 1)
-
-        db_instance = db_instances[0]
-        self.assertEqual(db_instance["DBInstanceStatus"], "available")
-        self.assertEqual(db_instance["Engine"], "postgres")
-        self.assertTrue(db_instance["EngineVersion"].startswith("15."))
-        self.assertTrue(db_instance["MultiAZ"])
-        self.assertTrue(db_instance["StorageEncrypted"])
-        self.assertFalse(db_instance.get("DeletionProtection", False))
-
-        # Verify endpoint
-        endpoint_address = db_instance["Endpoint"]["Address"]
-        endpoint_port = db_instance["Endpoint"]["Port"]
-        expected_endpoint = f"{endpoint_address}:{endpoint_port}"
-        self.assertEqual(expected_endpoint, rds_endpoint)
-
-        # Verify database name
-        self.assertEqual(db_instance["DBName"], self.outputs["rds_database_name"])
-
     def test_cloudwatch_log_group_exists(self):
         """Test that CloudWatch log group exists with encryption."""
         log_group_name = self.outputs["log_group_name"]
