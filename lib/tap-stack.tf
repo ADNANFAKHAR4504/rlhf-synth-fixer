@@ -388,7 +388,7 @@ exports.ticketPurchaseHandler = async (event) => {
     
     const body = JSON.parse(event.body);
     const { eventId, seatId, userId, price } = body;
-    const lockKey = `lock_\${eventId}_\${seatId}`;
+    const lockKey = `lock_$${eventId}_$${seatId}`;
     
     try {
         // Acquire distributed lock with automatic expiry (50ms target)
@@ -439,8 +439,8 @@ exports.ticketPurchaseHandler = async (event) => {
         
         // Update Redis sorted set atomically
         const pipeline = redis.pipeline();
-        pipeline.zrem(`available_seats:\${eventId}`, seatId);
-        pipeline.zadd(`sold_seats:\${eventId}`, Date.now(), `\${seatId}:\${userId}`);
+        pipeline.zrem(`available_seats:$${eventId}`, seatId);
+        pipeline.zadd(`sold_seats:$${eventId}`, Date.now(), `$${seatId}:$${userId}`);
         await pipeline.exec();
         
         // Stream to Kinesis
@@ -644,7 +644,7 @@ function detectOverselling(regionalInventories, pmsData) {
     // Consolidate regional inventories
     regionalInventories.forEach(({ region, items }) => {
         items.forEach(item => {
-            const key = `\${item.event_id}:\${item.seat_id}`;
+            const key = `$${item.event_id}:$${item.seat_id}`;
             if (!consolidatedInventory.has(key)) {
                 consolidatedInventory.set(key, []);
             }
@@ -665,7 +665,7 @@ function detectOverselling(regionalInventories, pmsData) {
     });
     
     // Compare with PMS
-    const pmsSet = new Set(pmsData.soldSeats.map(s => `\${s.eventId}:\${s.seatId}`));
+    const pmsSet = new Set(pmsData.soldSeats.map(s => `$${s.eventId}:$${s.seatId}`));
     
     consolidatedInventory.forEach((sales, key) => {
         if (!pmsSet.has(key)) {
@@ -790,7 +790,7 @@ exports.kinesisProcessorHandler = async (event) => {
             }).promise()
         ));
         
-        console.log(`Processed \${records.length} records`);
+        console.log(`Processed $${records.length} records`);
         
         // Update real-time metrics
         const eventMetrics = {};
