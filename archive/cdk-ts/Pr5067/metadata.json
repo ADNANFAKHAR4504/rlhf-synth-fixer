@@ -1,0 +1,38 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "5000",
+  "team": "stf",
+  "startedAt": "2025-10-22T22:57:31.662Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "aws_services": [
+    "datasync",
+    "s3",
+    "lambda",
+    "glue",
+    "sns",
+    "stepfunctions",
+    "dms",
+    "aurora",
+    "eventbridge",
+    "opensearch",
+    "vpc",
+    "iam",
+    "ec2",
+    "logs",
+    "cloudwatch",
+    "sqs"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "okorie-turing",
+  "dockerS3Location": ""
+}
