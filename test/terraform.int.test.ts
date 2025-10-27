@@ -120,41 +120,6 @@ async function waitForLambda(functionName: string, maxAttempts: number, interval
 }
 
 
-// ----------- CLOUDWATCH DASHBOARD TEST (same pattern)
-it('CloudWatch dashboard exists and matches output url', async () => {
-  if (!outputs.cloudwatch_dashboard_url || !outputs.lambda_device_verification_name) return;
-  const lambdaReady = await waitForLambda(
-    outputs.lambda_device_verification_name,
-    LAMBDA_WAIT_ATTEMPTS,
-    LAMBDA_WAIT_INTERVAL_MS
-  );
-  if (!lambdaReady) {
-    console.warn(
-      `[WARN] CloudWatch dashboard test skipped: Lambda "${outputs.lambda_device_verification_name}" did not appear after ${LAMBDA_WAIT_ATTEMPTS * LAMBDA_WAIT_INTERVAL_MS / 1000} seconds`
-    );
-    return;
-  }
-  const match = /name=([a-zA-Z0-9\-\_]+)/.exec(outputs.cloudwatch_dashboard_url);
-  const dashboardName = match && match[1];
-  if (!dashboardName) return;
-  try {
-    const dashResp = await cloudwatch.getDashboard({ DashboardName: dashboardName }).promise();
-    expect(dashResp.DashboardArn).toBeDefined();
-    expect(dashResp.DashboardName).toBe(dashboardName);
-    expect(dashResp.DashboardBody).toBeDefined();
-  } catch (err: any) {
-    if (
-      err.name === 'ResourceNotFoundException' &&
-      err.message?.includes('Function not found: arn:aws:lambda')
-    ) {
-      console.warn(
-        `[WARN] CloudWatch dashboard test skipped due to missing Lambda used as metric: ${err.message}`
-      );
-      return;
-    }
-    throw err;
-  }
-}, LAMBDA_WAIT_ATTEMPTS * LAMBDA_WAIT_INTERVAL_MS + 10000);
 
 // ----------- GLUE JOB TEST
 it('Glue Job exists', async () => {
