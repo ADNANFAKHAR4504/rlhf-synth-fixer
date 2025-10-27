@@ -100,6 +100,13 @@ class TapStack(pulumi.ComponentResource):
                 "to_port": 5432,
                 "cidr_blocks": ["10.0.0.0/16"]
             }],
+            egress=[{
+                "protocol": "tcp",
+                "from_port": 443,
+                "to_port": 443,
+                "cidr_blocks": ["10.0.0.0/16"],
+                "description": "Allow HTTPS within VPC for AWS service communication"
+            }],
             tags={**self.tags, "Name": f"brazilcart-rds-sg-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
@@ -115,6 +122,13 @@ class TapStack(pulumi.ComponentResource):
                 "to_port": 6379,
                 "cidr_blocks": ["10.0.0.0/16"]
             }],
+            egress=[{
+                "protocol": "tcp",
+                "from_port": 443,
+                "to_port": 443,
+                "cidr_blocks": ["10.0.0.0/16"],
+                "description": "Allow HTTPS within VPC for AWS service communication"
+            }],
             tags={**self.tags, "Name": f"brazilcart-cache-sg-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
@@ -127,10 +141,12 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Create random password
-        import random
+        # Create random password using cryptographically secure generator
+        import secrets
         import string
-        password = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
+        # Generate secure password with uppercase, lowercase, digits, and special chars
+        alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+        password = ''.join(secrets.choice(alphabet) for _ in range(20))
 
         db_password_version = aws.secretsmanager.SecretVersion(
             f"brazilcart-db-password-version-{self.environment_suffix}",
@@ -204,10 +220,62 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Create S3 bucket for CodePipeline artifacts
+        # Create S3 bucket for CodePipeline artifacts with security hardening
         artifact_bucket = aws.s3.Bucket(
             f"brazilcart-artifacts-{self.environment_suffix}",
             tags={**self.tags, "Name": f"brazilcart-artifacts-{self.environment_suffix}"},
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Enable versioning on S3 bucket
+        bucket_versioning = aws.s3.BucketVersioningV2(
+            f"brazilcart-artifacts-versioning-{self.environment_suffix}",
+            bucket=artifact_bucket.id,
+            versioning_configuration={
+                "status": "Enabled"
+            },
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Enable server-side encryption with KMS
+        bucket_encryption = aws.s3.BucketServerSideEncryptionConfigurationV2(
+            f"brazilcart-artifacts-encryption-{self.environment_suffix}",
+            bucket=artifact_bucket.id,
+            rules=[{
+                "apply_server_side_encryption_by_default": {
+                    "sse_algorithm": "aws:kms",
+                    "kms_master_key_id": kms_key.id
+                },
+                "bucket_key_enabled": True
+            }],
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Block all public access
+        bucket_public_access_block = aws.s3.BucketPublicAccessBlock(
+            f"brazilcart-artifacts-public-access-{self.environment_suffix}",
+            bucket=artifact_bucket.id,
+            block_public_acls=True,
+            block_public_policy=True,
+            ignore_public_acls=True,
+            restrict_public_buckets=True,
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Add lifecycle policy to expire old artifacts
+        bucket_lifecycle = aws.s3.BucketLifecycleConfigurationV2(
+            f"brazilcart-artifacts-lifecycle-{self.environment_suffix}",
+            bucket=artifact_bucket.id,
+            rules=[{
+                "id": "expire-old-artifacts",
+                "status": "Enabled",
+                "expiration": {
+                    "days": 30
+                },
+                "noncurrent_version_expiration": {
+                    "noncurrent_days": 7
+                }
+            }],
             opts=ResourceOptions(parent=self)
         )
 
