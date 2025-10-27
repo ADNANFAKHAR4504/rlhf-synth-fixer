@@ -68,7 +68,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: 'false'
+          download-artifacts: "false"
 
       - name: Validate commit message
         run: npx commitlint --from=HEAD~1 --to=HEAD
@@ -547,8 +547,8 @@ jobs:
     name: Cleanup (Destroy Resources)
     runs-on: ubuntu-24.04
     needs: [detect-metadata, integration-tests-live]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
-    environment: stage
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.integration-tests-live.result == 'success' }}
+    environment: qa
 
     steps:
       - name: Checkout code
@@ -903,7 +903,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: 'false'
+          download-artifacts: "false"
 
       - name: Run semantic-release
         run: npm run release
