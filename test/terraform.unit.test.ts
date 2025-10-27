@@ -84,10 +84,10 @@ describe("provider.tf - Terraform Configuration", () => {
 });
 
 describe("tap_stack.tf - Required Variables", () => {
-  test("declares aws_region variable WITHOUT default", () => {
+  test("declares aws_region variable with default 'us-east-1'", () => {
     const awsRegionMatch = stackContent.match(/variable\s+"aws_region"\s*\{[\s\S]*?\n\}/);
     expect(awsRegionMatch).toBeTruthy();
-    expect(awsRegionMatch![0]).not.toMatch(/default\s*=/);
+    expect(awsRegionMatch![0]).toMatch(/default\s*=\s*"us-east-1"/);
   });
 
   test("declares project_name with default 'player-consistency'", () => {
