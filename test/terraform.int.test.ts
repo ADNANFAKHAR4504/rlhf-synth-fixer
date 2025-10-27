@@ -8,7 +8,7 @@ import AWS from 'aws-sdk';
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 
-const OUTPUT_FILE = path.resolve(__dirname, '../cfn-outputs/flat-outputs.json');
+const OUTPUT_FILE = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
 
 // Mock Redis if not available
 interface MockRedisClient {
@@ -18,6 +18,11 @@ interface MockRedisClient {
   zrem: (key: string, ...members: string[]) => Promise<number>;
   del: (...keys: string[]) => Promise<number>;
   quit: () => Promise<void>;
+}
+
+// Helper function to convert snake_case to PascalCase
+function toPascalCase(str: string): string {
+  return str.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join('');
 }
 
 describe('Ticketing Marketplace Infrastructure Integration Tests', () => {
@@ -37,7 +42,16 @@ describe('Ticketing Marketplace Infrastructure Integration Tests', () => {
   beforeAll(async () => {
     // Load deployment outputs
     if (fs.existsSync(OUTPUT_FILE)) {
-      outputs = JSON.parse(fs.readFileSync(OUTPUT_FILE, 'utf8'));
+      const rawOutputs = JSON.parse(fs.readFileSync(OUTPUT_FILE, 'utf8'));
+      
+      // Convert snake_case keys to PascalCase for compatibility
+      outputs = {};
+      for (const [key, value] of Object.entries(rawOutputs)) {
+        const pascalKey = toPascalCase(key);
+        outputs[pascalKey] = value;
+      }
+      
+      console.log('Loaded outputs:', Object.keys(outputs));
     } else {
       throw new Error(`Deployment outputs not found at ${OUTPUT_FILE}. Run deployment first.`);
     }
@@ -547,7 +561,6 @@ describe('Ticketing Marketplace Infrastructure Integration Tests', () => {
     describe('DynamoDB + Lambda Integration', () => {
       test('distributed lock mechanism prevents race conditions', async () => {
         const lockKey = `test-lock-${uuidv4()}`;
-        const functionName = outputs.TicketPurchaseLambdaArn.split(':').pop();
 
         // Acquire lock directly
         const lockId = Date.now().toString();
@@ -907,7 +920,6 @@ describe('Ticketing Marketplace Infrastructure Integration Tests', () => {
 
         expect(purchaseResponse.status).toBe(200);
         expect(purchaseResponse.data.transactionId).toBeDefined();
-        const transactionId = purchaseResponse.data.transactionId;
 
         // 4. Verify DynamoDB was updated
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -1116,7 +1128,6 @@ describe('Ticketing Marketplace Infrastructure Integration Tests', () => {
       test('inventory verifier detects and corrects overselling', async () => {
         const eventId = `oversell-${uuidv4()}`;
         const seatId = 'OS-A1';
-        const region1 = outputs.Region;
         const region2 = 'us-west-2';
 
         // Simulate overselling by creating duplicate sales in different regions
@@ -1413,8 +1424,6 @@ describe('Ticketing Marketplace Infrastructure Integration Tests', () => {
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
 
-        const startTime = Date.now();
-        
         try {
           const response = await axios.post(
             `${outputs.ApiGatewayUrl}/tickets`,
