@@ -5,6 +5,7 @@
   "Parameters": {
     "SourceDatabaseEndpoint": {
       "Type": "String",
+      "Default": "cassandra.example.com",
       "Description": "Cassandra source database endpoint"
     },
     "SourceDatabasePort": {
