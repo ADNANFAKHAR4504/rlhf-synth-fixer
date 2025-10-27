@@ -13,12 +13,12 @@ on:
   workflow_dispatch:
     inputs:
       environment_suffix:
-        description: 'Environment suffix for resource naming (e.g., pr123, dev, test)'
+        description: "Environment suffix for resource naming (e.g., pr123, dev, test)"
         required: false
-        default: 'manual'
+        default: "manual"
         type: string
       skip_cleanup:
-        description: 'Skip cleanup/destroy step after deployment'
+        description: "Skip cleanup/destroy step after deployment"
         required: false
         default: false
         type: boolean
@@ -45,7 +45,7 @@ env:
   CURRENT_ACCOUNT_ID: ${{ vars.ACCOUNT_ID }}
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  MODEL_S3_URI: 's3://social-platform-sagemaker-342597974367-dev/model.tar.gz'
+  MODEL_S3_URI: "s3://social-platform-sagemaker-342597974367-dev/model.tar.gz"
   # Go caching optimization
   GOCACHE: ${{ github.workspace }}/.cache/go-build
   GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
@@ -80,7 +80,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: 'false'
+          download-artifacts: "false"
 
       - name: Validate commit message
         run: npx commitlint --last
@@ -510,8 +510,8 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          allowed_tools: 'Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite'
-          trigger_phrase: ''
+          allowed_tools: "Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite"
+          trigger_phrase: ""
           custom_instructions: |
             CRITICAL: you MUST validate the latest PROMPT file format, and add a github comment if it appears to be AI-generated rather than human-written:
             1. Identify all the PROMPT file (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.) - always use the highest numbered one
@@ -559,7 +559,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [detect-metadata, integration-tests-live]
     if: ${{ ((github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch' && !inputs.skip_cleanup)) && !contains(github.event.head_commit.message, '[skip-jobs]') }}
-    environment: stage
+    environment: qa
 
     steps:
       - name: Checkout code
@@ -914,7 +914,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: 'false'
+          download-artifacts: "false"
 
       - name: Run semantic-release
         run: npm run release
