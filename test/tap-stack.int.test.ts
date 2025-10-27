@@ -1,21 +1,20 @@
+import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
-import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 
+import { CloudWatchLogsClient, FilterLogEventsCommand } from '@aws-sdk/client-cloudwatch-logs';
 import {
   DynamoDBClient,
-  GetItemCommand,
-  DeleteItemCommand,
+  GetItemCommand
 } from '@aws-sdk/client-dynamodb';
+import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import {
-  SQSClient,
-  ReceiveMessageCommand,
   PurgeQueueCommand,
+  ReceiveMessageCommand,
+  SQSClient,
 } from '@aws-sdk/client-sqs';
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
-import { CloudWatchLogsClient, FilterLogEventsCommand } from '@aws-sdk/client-cloudwatch-logs';
-import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 
 // Integration E2E test (live). Requirements:
 // - Use real deployment outputs from cfn-outputs/flat-outputs.json
@@ -119,6 +118,21 @@ describe('Live integration tests — API -> Lambda -> DynamoDB -> Stream -> SQS 
     const payload = { testId, message: 'integration-test' };
     let itemId: string | undefined;
 
+    // helper: retry an async fn with backoff
+    const retry = async <T>(fn: () => Promise<T>, attempts = 3, delayMs = 1000): Promise<T> => {
+      let lastErr: any;
+      for (let i = 0; i < attempts; i++) {
+        try {
+          return await fn();
+        } catch (e) {
+          lastErr = e;
+          // exponential backoff
+          await new Promise((r) => setTimeout(r, delayMs * Math.pow(2, i)));
+        }
+      }
+      throw lastErr;
+    };
+
     // Purge queue to ensure clean slate (best-effort)
     try {
       await sqsClient.send(new PurgeQueueCommand({ QueueUrl: queueUrl }));
@@ -130,7 +144,13 @@ describe('Live integration tests — API -> Lambda -> DynamoDB -> Stream -> SQS 
 
     // POST to API — build URL robustly (single slash) to avoid accidental double/concatenation issues
     const postUrl = apiEndpoint.endsWith('/') ? apiEndpoint : `${apiEndpoint}/`;
-    const res = await axios.post(`${postUrl}items`, payload, { validateStatus: () => true, timeout: 20000 });
+    let res;
+    try {
+      res = await retry(() => axios.post(`${postUrl}items`, payload, { validateStatus: () => true, timeout: 20000 }), 3, 1000);
+    } catch (err) {
+      // network level failure after retries
+      throw new Error(`POST to ${postUrl}items failed after retries: ${(err as Error).message}`);
+    }
 
     // If the API returns success for POST, proceed to the full flow (create item -> check DynamoDB -> stream -> SQS)
     if ([200, 201, 202].includes(res.status)) {
@@ -180,7 +200,13 @@ describe('Live integration tests — API -> Lambda -> DynamoDB -> Stream -> SQS 
       // eslint-disable-next-line no-console
       console.warn('POST to /items did not create an item — falling back to GET to validate API list behaviour', res.status);
       const getUrl = apiEndpoint.endsWith('/') ? apiEndpoint : `${apiEndpoint}/`;
-      const getRes = await axios.get(`${getUrl}items`, { validateStatus: () => true, timeout: 20000 });
+      let getRes;
+      try {
+        getRes = await retry(() => axios.get(`${getUrl}items`, { validateStatus: () => true, timeout: 20000 }), 3, 1000);
+      } catch (err) {
+        // network level failure after retries
+        throw new Error(`GET ${getUrl}items failed after retries: ${(err as Error).message}`);
+      }
 
       if (getRes.status === 200) {
         const list = getRes.data?.items || getRes.data;
@@ -189,7 +215,7 @@ describe('Live integration tests — API -> Lambda -> DynamoDB -> Stream -> SQS 
         return;
       }
 
-      // GET also failed — collect diagnostics (POST + GET responses, CloudWatch logs, optional Lambda invoke)
+      // GET also returned non-200 after retries — collect diagnostics (POST + GET responses, CloudWatch logs, optional Lambda invoke)
       const diagnostics: Record<string, unknown> = {
         post: { status: res.status, headers: res.headers, body: res.data },
         get: { status: getRes.status, headers: getRes.headers, body: getRes.data },
@@ -219,6 +245,21 @@ describe('Live integration tests — API -> Lambda -> DynamoDB -> Stream -> SQS 
         } catch (e) {
           diagnostics.invokeError = (e as Error).message;
         }
+      }
+
+      // If CloudWatch logs or invoke payload show a missing-module/import error, provide a clear remediation
+      const logsArr: string[] = [];
+      if (Array.isArray(diagnostics.logs)) {
+        for (const ev of diagnostics.logs as any[]) {
+          if (ev && ev.message) logsArr.push(String(ev.message));
+        }
+      }
+      const invokePayloadStr = typeof diagnostics.invoke === 'object' && (diagnostics.invoke as any).Payload ? String((diagnostics.invoke as any).Payload) : '';
+      const combined = (logsArr.join('\n') + '\n' + invokePayloadStr).toLowerCase();
+      if (combined.includes('cannot find module') || combined.includes('importmoduleerror') || combined.includes("error: cannot find module 'aws-sdk'")) {
+        const guidance = `Lambda runtime import error detected (missing dependency). Redeploy the updated stack that bundles dependencies or include 'aws-sdk' in the Lambda package. Suggested commands:\n
+  npm ci\n  ENVIRONMENT_SUFFIX=<your-suffix> npx cdk deploy --context environmentSuffix=<your-suffix> --require-approval never\n\nAfter deploy, refresh cfn-outputs and re-run integration tests.\n\nDiagnostics (trimmed):\n${JSON.stringify(diagnostics, null, 2)}`;
+        throw new Error(guidance);
       }
 
       throw new Error(`API POST and GET failed — diagnostics:\n${JSON.stringify(diagnostics, null, 2)}`);
