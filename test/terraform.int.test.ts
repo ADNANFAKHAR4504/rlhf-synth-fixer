@@ -177,10 +177,14 @@ describe('TAP Stack Live Integration Tests (Infra/Dependency Aware)', () => {
 });
 
   it('Security group for Lambda exists', async () => {
-    if (!outputs.security_group_lambda_id) return;
-    const sg = await ec2.describeSecurityGroups({ GroupIds: [outputs.security_group_lambda_id] }).promise();
-    expect(sg.SecurityGroups?.[0]?.GroupId).toBe(outputs.security_group_lambda_id);
-  });
+  if (skipCrossServiceTests) {
+    console.warn('Security group for Lambda test skipped: Lambda dependency missing.');
+    return;
+  }
+  if (!outputs.security_group_lambda_id) return;
+  const sg = await ec2.describeSecurityGroups({ GroupIds: [outputs.security_group_lambda_id] }).promise();
+  expect(sg.SecurityGroups?.[0]?.GroupId).toBe(outputs.security_group_lambda_id);
+});
 
   it('Stack deployment timestamp is valid', async () => {
     expect(outputs.deployment_timestamp).toMatch(/20[2-3][0-9]-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/);
