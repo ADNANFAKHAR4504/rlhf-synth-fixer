@@ -575,7 +575,6 @@ Resources:
   NovaEC2InstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
-      InstanceProfileName: 'nova-prod-ec2-instance-profile'
       Roles:
         - !Ref NovaEC2Role
 
