@@ -23,7 +23,7 @@ variable "environment" {
 variable "aws_region" {
   type        = string
   description = "AWS region for deployment"
-  default = "us-east-1"
+  default     = "us-east-1"
 }
 
 variable "owner" {
@@ -1495,8 +1495,6 @@ resource "aws_sfn_state_machine" "consistency_checker" {
       CheckLoop = {
         Type = "Choice"
         Choices = [{
-          Variable            = "$.iterationCount"
-          NumericLessThan     = 10
           Variable            = "$.iterationCount"
           NumericLessThanPath = "$.maxIterations"
           Next                = "CheckConsistency"
