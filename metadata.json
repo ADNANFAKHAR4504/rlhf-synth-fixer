@@ -9,9 +9,5 @@
   "subtask": "Failure Recovery and High Availability",
   "subject_labels": ["Cloud Environment Setup", "Failure Recovery Automation", "IaC Optimization", "Infrastructure Analysis/Monitoring", "Security Configuration as Code"],
   "aws_services": ["API Gateway", "ElastiCache", "Kinesis", "Secrets Manager", "KMS", "VPC", "EC2 Security Groups", "CloudWatch", "IAM"],
-  "resource_count": 23,
-  "deployment_status": "blocked",
-  "deployment_blocker": "Circular dependency in CloudFormation template between RedisReplicationGroup, CacheSecurityGroup, and APIGatewaySecurityGroup",
-  "validation_checkpoint": "G",
   "training_quality": 9
 }
