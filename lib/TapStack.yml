@@ -370,7 +370,9 @@ Resources:
 
   DatabaseSecretRotationSchedule:
     Type: AWS::SecretsManager::RotationSchedule
-    DependsOn: AuroraDBCluster
+    DependsOn:
+      - AuroraDBCluster
+      - DatabaseSecretRotationLambdaPermission
     Properties:
       SecretId: !Ref DatabaseSecret
       RotationRules:
@@ -393,6 +395,7 @@ Resources:
 
   APIKeySecretRotationSchedule:
     Type: AWS::SecretsManager::RotationSchedule
+    DependsOn: APIKeySecretRotationLambdaPermission
     Properties:
       SecretId: !Ref APIKeySecret
       RotationRules:
@@ -486,12 +489,21 @@ Resources:
                   'body': json.dumps('Secret rotation completed')
               }
 
-  SecretRotationLambdaPermission:
+  DatabaseSecretRotationLambdaPermission:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref SecretRotationLambda
       Action: 'lambda:InvokeFunction'
       Principal: 'secretsmanager.amazonaws.com'
+      SourceArn: !Ref DatabaseSecret
+
+  APIKeySecretRotationLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SecretRotationLambda
+      Action: 'lambda:InvokeFunction'
+      Principal: 'secretsmanager.amazonaws.com'
+      SourceArn: !Ref APIKeySecret
 
   # ==================== RDS Aurora Cluster ====================
 
