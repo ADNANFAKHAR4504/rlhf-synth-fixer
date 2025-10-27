@@ -6,13 +6,19 @@ import fs from "fs";
 import path from "path";
 
 const STACK_REL = "../lib/tap_stack.tf";
+const PROVIDER_REL = "../lib/provider.tf";
 const stackPath = path.resolve(__dirname, STACK_REL);
+const providerPath = path.resolve(__dirname, PROVIDER_REL);
 
 let stackContent: string;
+let providerContent: string;
 
 beforeAll(() => {
   if (fs.existsSync(stackPath)) {
     stackContent = fs.readFileSync(stackPath, "utf8");
+  }
+  if (fs.existsSync(providerPath)) {
+    providerContent = fs.readFileSync(providerPath, "utf8");
   }
 });
 
@@ -45,22 +51,35 @@ describe("tap_stack.tf - File Structure & Format", () => {
 });
 
 describe("tap_stack.tf - Terraform Block", () => {
+  test("does NOT contain terraform block (separated in provider.tf)", () => {
+    expect(stackContent).not.toMatch(/terraform\s*\{[\s\S]*?required_providers/);
+    expect(stackContent).not.toMatch(/backend\s+"s3"/);
+  });
+});
+
+describe("provider.tf - Terraform Configuration", () => {
+  test("provider.tf file exists", () => {
+    expect(fs.existsSync(providerPath)).toBe(true);
+  });
+
   test("contains terraform block with required_version", () => {
-    expect(stackContent).toMatch(/terraform\s*\{/);
-    expect(stackContent).toMatch(/required_version\s*=/);
+    expect(providerContent).toMatch(/terraform\s*\{/);
+    expect(providerContent).toMatch(/required_version\s*=/);
   });
 
-  test("declares required_providers with version constraints", () => {
-    expect(stackContent).toMatch(/required_providers\s*\{/);
-    expect(stackContent).toMatch(/aws\s*=\s*\{[\s\S]*?version\s*=/);
+  test("declares required_providers with aws, random, and archive", () => {
+    expect(providerContent).toMatch(/required_providers\s*\{/);
+    expect(providerContent).toMatch(/aws\s*=\s*\{[\s\S]*?source\s*=\s*"hashicorp\/aws"/);
+    expect(providerContent).toMatch(/random\s*=\s*\{[\s\S]*?source\s*=\s*"hashicorp\/random"/);
+    expect(providerContent).toMatch(/archive\s*=\s*\{[\s\S]*?source\s*=\s*"hashicorp\/archive"/);
   });
 
-  test("includes random provider for password generation", () => {
-    expect(stackContent).toMatch(/random\s*=\s*\{[\s\S]*?source\s*=\s*"hashicorp\/random"/);
+  test("has S3 backend configuration", () => {
+    expect(providerContent).toMatch(/backend\s+"s3"/);
   });
 
-  test("includes archive provider for Lambda packaging", () => {
-    expect(stackContent).toMatch(/archive\s*=\s*\{[\s\S]*?source\s*=\s*"hashicorp\/archive"/);
+  test("has AWS provider block", () => {
+    expect(providerContent).toMatch(/provider\s+"aws"\s*\{/);
   });
 });
 
