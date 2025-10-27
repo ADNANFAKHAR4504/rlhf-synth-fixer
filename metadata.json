@@ -1,5 +1,5 @@
 {
-  "platform": "cloudformation",
+  "platform": "cfn",
   "language": "json",
   "complexity": "medium",
   "turn_type": "single",
@@ -20,6 +20,5 @@
     "IAM"
   ],
   "region": "eu-west-2",
-  "training_quality": 9,
-  "review_notes": "Excellent training value: 2 critical deployment-blocking errors fixed (invalid IAM service principal, invalid log retention enum). Sound architecture with implementation flaws. HIPAA-compliant monitoring infrastructure with comprehensive security controls."
+  "training_quality": 9
 }
