@@ -25,5 +25,5 @@
   ],
   "region": "eu-south-2",
   "turn_type": "single",
-  "training_quality": 10,
+  "training_quality": 10
 }
