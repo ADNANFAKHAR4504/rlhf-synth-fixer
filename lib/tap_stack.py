@@ -1,5 +1,6 @@
 """Main stack for the transaction monitoring system."""
 import json
+import os
 import pulumi
 import pulumi_aws as aws
 from typing import Optional
@@ -327,10 +328,21 @@ class TapStack:
         Create RDS PostgreSQL instance with Multi-AZ.
         Stores all transactions permanently for compliance.
         """
-        # Get master credentials from config or use defaults
-        master_username = self.config.get("db_username") or "txadmin"
-        if self.config.get_secret("db_password"):
-            master_password = self.config.require_secret("db_password")
+        # Get master credentials from config, environment variables, or use defaults
+        master_username = (
+            self.config.get("db_username") or
+            os.environ.get("TF_VAR_db_username") or
+            "txadmin"
+        )
+
+        # Try to get password from Pulumi config first, then env var, then default
+        password_from_config = self.config.get_secret("db_password")
+        password_from_env = os.environ.get("TF_VAR_db_password")
+
+        if password_from_config:
+            master_password = password_from_config
+        elif password_from_env:
+            master_password = pulumi.Output.secret(password_from_env)
         else:
             master_password = pulumi.Output.secret("ChangeMe123!")
 

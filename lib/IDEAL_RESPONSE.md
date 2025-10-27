@@ -22,8 +22,10 @@ The system implements a complete transaction monitoring pipeline with:
 ```python
 """Main stack for the transaction monitoring system."""
 import json
+import os
 import pulumi
 import pulumi_aws as aws
+from typing import Optional
 
 
 class TapStack:
@@ -344,10 +346,21 @@ class TapStack:
         Stores all transactions permanently for compliance.
         Uses PostgreSQL 15.7 (available in ap-northeast-1).
         """
-        # Get master credentials from config
-        master_username = self.config.get("db_username") or "txadmin"
-        if self.config.get_secret("db_password"):
-            master_password = self.config.require_secret("db_password")
+        # Get master credentials from config, environment variables, or use defaults
+        master_username = (
+            self.config.get("db_username") or
+            os.environ.get("TF_VAR_db_username") or
+            "txadmin"
+        )
+
+        # Try to get password from Pulumi config first, then env var, then default
+        password_from_config = self.config.get_secret("db_password")
+        password_from_env = os.environ.get("TF_VAR_db_password")
+
+        if password_from_config:
+            master_password = password_from_config
+        elif password_from_env:
+            master_password = pulumi.Output.secret(password_from_env)
         else:
             master_password = pulumi.Output.secret("ChangeMe123!")
 
@@ -532,27 +545,36 @@ pulumi-aws>=6.0.0,<7.0.0
 
 ## Critical Fixes Applied
 
-### 1. KMS Key Policy for CloudWatch Logs (CRITICAL)
+### 1. Database Credentials Configuration (CRITICAL)
+**Problem**: Pulumi config validation failed when `db_password` not explicitly set in stack config, causing deployment to fail with "Stack 'TapStackpr5136' is missing configuration value 'db_password'" error
+**Solution**:
+- Changed from `config.require_secret("db_password")` to `config.get_secret("db_password")` to make it optional
+- Added fallback to `TF_VAR_db_password` environment variable (set by deploy.sh script)
+- Added `import os` to support environment variable reading
+- Maintains security by wrapping env var value in `pulumi.Output.secret()`
+**Impact**: Stack deploys successfully using credentials from environment variables or Pulumi config
+
+### 2. KMS Key Policy for CloudWatch Logs (CRITICAL)
 **Problem**: KMS key did not have policy allowing CloudWatch Logs service to use it
 **Solution**: Added comprehensive key policy with CloudWatch Logs service principal and encryption context condition
 **Impact**: CloudWatch Log Group creation now succeeds
 
-### 2. PostgreSQL Version Compatibility (HIGH)
+### 3. PostgreSQL Version Compatibility (HIGH)
 **Problem**: PostgreSQL 15.5 not available in ap-northeast-1 region
 **Solution**: Updated to PostgreSQL 15.7 (verified available version)
 **Impact**: RDS instance deploys successfully
 
-### 3. Pulumi.yaml Configuration (MEDIUM)
+### 4. Pulumi.yaml Configuration (MEDIUM)
 **Problem**: aws:region in config used 'default' instead of 'value', causing parse errors
 **Solution**: Removed aws:region from Pulumi.yaml (set via pulumi config set)
 **Impact**: Stack initialization works correctly
 
-### 4. Type Hint Compatibility (LOW)
+### 5. Type Hint Compatibility (LOW)
 **Problem**: GetSecretOutput type hint caused import error
 **Solution**: Removed invalid type hint from _fetch_db_secret method
 **Impact**: Code executes without errors
 
-### 5. ElastiCache Auth Token Parameter (LOW)
+### 6. ElastiCache Auth Token Parameter (LOW)
 **Problem**: auth_token_enabled parameter not supported in Pulumi AWS provider
 **Solution**: Removed unsupported parameter
 **Impact**: Redis cluster deploys successfully
