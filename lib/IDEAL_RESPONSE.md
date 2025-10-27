@@ -56,8 +56,6 @@ The complete CloudFormation template (lib/TapStack.yml) is 1483 lines and includ
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production-ready scalable web application infrastructure with ALB, Auto Scaling, RDS, S3, CloudFront, and CI/CD pipeline'
-AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Production-ready scalable web application infrastructure with ALB, Auto Scaling, RDS, S3, CloudFront, and CI/CD pipeline'
 
 Parameters:
   ProjectName:
@@ -830,8 +828,8 @@ Resources:
         - !Ref RDSSecurityGroup
       MultiAZ: true
       BackupRetentionPeriod: 7
-      PreferredBackupWindow: "03:00-04:00"
-      PreferredMaintenanceWindow: "sun:04:00-sun:05:00"
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
       EnableCloudwatchLogsExports:
         - error
         - general
@@ -1538,9 +1536,7 @@ Outputs:
 
 ## AWS_REGION File
 
-```
-ap-south-1
-```
+- ap-south-1
 
 ## Key Implementation Features
 
