@@ -1429,12 +1429,19 @@ resource "aws_iam_role_policy" "step_functions" {
           "logs:UpdateLogDelivery",
           "logs:DeleteLogDelivery",
           "logs:ListLogDeliveries",
-          "logs:PutLogEvents",
           "logs:PutResourcePolicy",
           "logs:DescribeResourcePolicies",
           "logs:DescribeLogGroups"
         ]
         Resource = "arn:${local.partition}:logs:${var.aws_region}:${local.account_id}:*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "${aws_cloudwatch_log_group.step_functions.arn}:*"
       }
     ]
   })
@@ -1446,6 +1453,31 @@ resource "aws_cloudwatch_log_group" "step_functions" {
   # Note: KMS encryption for log groups must be set after creation
   # kms_key_id        = aws_kms_key.main.arn
   tags = local.common_tags
+}
+
+# CloudWatch Logs resource policy to allow Step Functions to write logs
+resource "aws_cloudwatch_log_resource_policy" "step_functions" {
+  policy_name = "${local.stack_name}-step-functions-logs"
+
+  policy_document = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "states.amazonaws.com"
+      }
+      Action = [
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ]
+      Resource = "${aws_cloudwatch_log_group.step_functions.arn}:*"
+      Condition = {
+        ArnLike = {
+          "aws:SourceArn" = "arn:${local.partition}:states:${var.aws_region}:${local.account_id}:stateMachine:${local.stack_name}-*"
+        }
+      }
+    }]
+  })
 }
 
 resource "aws_sfn_state_machine" "consistency_checker" {
