@@ -9,6 +9,8 @@ import sys
 import unittest
 from unittest.mock import MagicMock, Mock, patch
 
+import pulumi
+
 # Add lib to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'lib'))
 
@@ -83,8 +85,8 @@ class TestIAMStack(unittest.TestCase):
     @patch('infrastructure.iam.aws.iam.Role')
     def test_iam_stack_initialization(self, mock_role, mock_attachment, mock_profile, mock_policy):
         """Test IAM stack creates all required resources."""
-        from infrastructure.iam import IAMStack
         import pulumi
+        from infrastructure.iam import IAMStack
         config = InfraConfig()
         mock_provider = MagicMock()
         
@@ -114,9 +116,9 @@ class TestIAMStack(unittest.TestCase):
     @patch('infrastructure.iam.aws.iam.Role')
     def test_iam_s3_policy_attachment(self, mock_role, mock_attachment, mock_profile, mock_policy):
         """Test S3 policy attachment with bucket ARN."""
+        import pulumi
         from infrastructure.iam import IAMStack
         from pulumi import Output
-        import pulumi
         config = InfraConfig()
         mock_provider = MagicMock()
         
@@ -144,8 +146,8 @@ class TestIAMStack(unittest.TestCase):
     @patch('infrastructure.iam.aws.iam.Role')
     def test_iam_getters(self, mock_role, mock_attachment, mock_profile):
         """Test IAM stack getter methods."""
-        from infrastructure.iam import IAMStack
         import pulumi
+        from infrastructure.iam import IAMStack
         config = InfraConfig()
         mock_provider = MagicMock()
         
@@ -180,8 +182,8 @@ class TestStorageStack(unittest.TestCase):
     def test_storage_buckets_created(self, mock_bucket, mock_public, mock_encrypt,
                                      mock_version, mock_lifecycle, mock_logging):
         """Test S3 buckets created with proper configuration."""
-        from infrastructure.storage import StorageStack
         import pulumi
+        from infrastructure.storage import StorageStack
         config = InfraConfig()
         mock_provider = MagicMock()
         
@@ -204,8 +206,8 @@ class TestStorageStack(unittest.TestCase):
     @patch('infrastructure.storage.aws.s3.Bucket')
     def test_storage_getters(self, mock_bucket):
         """Test storage stack getter methods."""
-        from infrastructure.storage import StorageStack
         import pulumi
+        from infrastructure.storage import StorageStack
         config = InfraConfig()
         mock_provider = MagicMock()
         
@@ -235,8 +237,8 @@ class TestNetworkingStack(unittest.TestCase):
     def test_networking_resources_created(self, mock_azs, mock_vpc, mock_igw,
                                           mock_subnet, mock_rt, mock_rta):
         """Test VPC and networking resources created."""
-        from infrastructure.networking import NetworkingStack
         import pulumi
+        from infrastructure.networking import NetworkingStack
         config = InfraConfig()
         mock_provider = MagicMock()
         
@@ -274,8 +276,8 @@ class TestNetworkingStack(unittest.TestCase):
     @patch('infrastructure.networking.aws.get_availability_zones')
     def test_networking_getters(self, mock_azs, mock_vpc):
         """Test networking stack getter methods."""
-        from infrastructure.networking import NetworkingStack
         import pulumi
+        from infrastructure.networking import NetworkingStack
         config = InfraConfig()
         mock_provider = MagicMock()
         
@@ -344,9 +346,9 @@ class TestComputeStack(unittest.TestCase):
     def test_compute_resources_created(self, mock_ami, mock_kms, mock_lt, mock_asg,
                                       mock_policy, mock_alarm):
         """Test compute resources created."""
+        import pulumi
         from infrastructure.compute import ComputeStack
         from pulumi import Output
-        import pulumi
         config = InfraConfig()
         mock_provider = MagicMock()
         subnet_ids = Output.from_input(['subnet-1', 'subnet-2'])
@@ -390,7 +392,7 @@ class TestComputeStack(unittest.TestCase):
         """Test compute stack getter methods."""
         from infrastructure.compute import ComputeStack
         from pulumi import Output
-import pulumi
+        
         config = InfraConfig()
         mock_provider = MagicMock()
         subnet_ids = Output.from_input(['subnet-1'])
