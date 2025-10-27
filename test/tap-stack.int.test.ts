@@ -2,6 +2,7 @@ import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import dns from 'dns/promises';
 
 import { CloudWatchLogsClient, FilterLogEventsCommand, DescribeLogStreamsCommand, GetLogEventsCommand } from '@aws-sdk/client-cloudwatch-logs';
 import {
@@ -148,8 +149,56 @@ describe('Live integration tests — API -> Lambda -> DynamoDB -> Stream -> SQS 
     try {
       res = await retry(() => axios.post(`${postUrl}items`, payload, { validateStatus: () => true, timeout: 20000 }), 3, 1000);
     } catch (err) {
-      // network level failure after retries
-      throw new Error(`POST to ${postUrl}items failed after retries: ${(err as Error).message}`);
+      // network level failure after retries — gather richer diagnostics instead of throwing immediately.
+      const postErrMsg = (err as Error).message;
+
+      const diagnostics: Record<string, unknown> = {
+        postError: postErrMsg,
+      };
+
+      // Attempt DNS resolution for the API host to provide a clearer reason for ENOTFOUND or routing issues
+      try {
+        const u = new URL(postUrl);
+        const host = u.host;
+        try {
+          const addresses = await dns.lookup(host, { all: true });
+          diagnostics.dns = { host, addresses };
+        } catch (dnsErr) {
+          diagnostics.dnsError = (dnsErr as Error).message;
+        }
+      } catch (urlErr) {
+        diagnostics.urlError = (urlErr as Error).message;
+      }
+
+      // Try to fetch CloudWatch logs and invoke the Lambda directly if names are available in outputs
+      const apiHandlerLogGroup = (outputs['ApiHandlerLogGroupName'] as string) || (outputs['ApiGatewayLogGroupName'] as string);
+      const apiHandlerFunction = (outputs['ApiHandlerFunctionName'] as string) || (outputs['StreamProcessorFunctionName'] as string);
+
+      if (apiHandlerLogGroup) {
+        try {
+          const logsResp = await cloudwatchClient.send(new FilterLogEventsCommand({ logGroupName: apiHandlerLogGroup, limit: 50 }));
+          diagnostics.logs = (logsResp.events || []).slice(-20).map((e) => ({ timestamp: e.timestamp, message: e.message }));
+        } catch (e) {
+          diagnostics.logsError = (e as Error).message;
+        }
+      }
+
+      if (apiHandlerFunction) {
+        try {
+          const invokeResp = await lambdaClient.send(new InvokeCommand({ FunctionName: apiHandlerFunction, Payload: Buffer.from(JSON.stringify({ body: JSON.stringify(payload) })), LogType: 'Tail' }));
+          diagnostics.invoke = {
+            StatusCode: invokeResp.StatusCode,
+            FunctionError: invokeResp.FunctionError,
+            Payload: invokeResp.Payload ? new TextDecoder().decode(invokeResp.Payload) : undefined,
+            LogResult: invokeResp.LogResult,
+            LogResultDecoded: invokeResp.LogResult ? Buffer.from(invokeResp.LogResult as string, 'base64').toString('utf8') : undefined,
+          };
+        } catch (e) {
+          diagnostics.invokeError = (e as Error).message;
+        }
+      }
+
+      throw new Error(`POST to ${postUrl}items failed after retries: ${postErrMsg}\nDiagnostics:\n${JSON.stringify(diagnostics, null, 2)}`);
     }
 
     // If the API returns success for POST, proceed to the full flow (create item -> check DynamoDB -> stream -> SQS)
@@ -254,11 +303,14 @@ describe('Live integration tests — API -> Lambda -> DynamoDB -> Stream -> SQS 
 
       if (apiHandlerFunction) {
         try {
-          const invokeResp = await lambdaClient.send(new InvokeCommand({ FunctionName: apiHandlerFunction, Payload: Buffer.from(JSON.stringify({ body: JSON.stringify(payload) })) }));
+          // Invoke with LogType='Tail' to capture the function's last 4KB of logs in the response.
+          const invokeResp = await lambdaClient.send(new InvokeCommand({ FunctionName: apiHandlerFunction, Payload: Buffer.from(JSON.stringify({ body: JSON.stringify(payload) })), LogType: 'Tail' }));
           diagnostics.invoke = {
             StatusCode: invokeResp.StatusCode,
             FunctionError: invokeResp.FunctionError,
             Payload: invokeResp.Payload ? new TextDecoder().decode(invokeResp.Payload) : undefined,
+            LogResult: invokeResp.LogResult,
+            LogResultDecoded: invokeResp.LogResult ? Buffer.from(invokeResp.LogResult as string, 'base64').toString('utf8') : undefined,
           };
         } catch (e) {
           diagnostics.invokeError = (e as Error).message;
