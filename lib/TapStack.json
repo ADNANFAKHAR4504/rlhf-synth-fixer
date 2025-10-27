@@ -645,7 +645,7 @@
           "DeleteBehavior": "LOG"
         },
         "RecrawlPolicy": {
-          "RecrawlBehavior": "CRAWL_NEW_FOLDERS_ONLY"
+          "RecrawlBehavior": "CRAWL_EVERYTHING"
         }
       }
     },
