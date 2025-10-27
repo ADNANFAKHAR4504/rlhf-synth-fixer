@@ -17,3 +17,18 @@ output "rollback_arn" {
   description = "Rollback Lambda ARN"
   value       = aws_lambda_function.rollback.arn
 }
+
+output "validator_function_name" {
+  description = "Validator Lambda function name"
+  value       = aws_lambda_function.validator.function_name
+}
+
+output "consistency_checker_function_name" {
+  description = "Consistency checker Lambda function name"
+  value       = aws_lambda_function.consistency_checker.function_name
+}
+
+output "rollback_function_name" {
+  description = "Rollback Lambda function name"
+  value       = aws_lambda_function.rollback.function_name
+}

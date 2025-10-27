@@ -42,3 +42,23 @@ output "kms_key_arn" {
   description = "KMS key ARN"
   value       = aws_kms_key.main.arn
 }
+
+output "validator_lambda_name" {
+  description = "Validator Lambda function name"
+  value       = module.lambda.validator_function_name
+}
+
+output "consistency_checker_lambda_name" {
+  description = "Consistency checker Lambda function name"
+  value       = module.lambda.consistency_checker_function_name
+}
+
+output "rollback_lambda_name" {
+  description = "Rollback Lambda function name"
+  value       = module.lambda.rollback_function_name
+}
+
+output "step_function_arn" {
+  description = "Step Functions state machine ARN"
+  value       = module.eventbridge.state_machine_arn
+}

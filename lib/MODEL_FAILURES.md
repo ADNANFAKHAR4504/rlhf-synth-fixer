@@ -271,3 +271,104 @@
 **Time Investment**: 1.5 hours for +0.2 points
 
 **Key Lesson**: Small, focused security and observability improvements yield significant rubric score gains. Scoped IAM policies and CloudWatch alarms are quick wins that demonstrate production-ready maturity.
+
+## Issue 15: Integration Tests Only Checked Resource Existence, Not Connections
+**Problem**: Integration tests only verified that infrastructure resources existed (VPC ID, DynamoDB table, SNS topic) but never tested if services were actually connected or if data could flow between them.
+
+**Root Cause**:
+- Tests used `getTerraformOutput()` to check resource existence
+- No actual AWS SDK calls to verify connections
+- Never tested DynamoDB Stream → Lambda trigger
+- Never tested SNS → SQS fan-out
+- Never tested SQS → Lambda → ElastiCache pipeline
+- Never tested EventBridge → Step Functions workflow
+- Never tested consistency checking or rollback flows
+- Never verified OpenSearch audit trail
+
+**Solution Applied**:
+Replaced all integration tests with real connection tests that verify actual data flows:
+
+1. **DynamoDB Streams → Lambda Validation Integration**
+   - Inserts test item into DynamoDB
+   - Waits for Stream to trigger Lambda
+   - Verifies Lambda invocation via CloudWatch Logs
+   - Validates stream latency < 500ms
+
+2. **Lambda Validation → SNS Fan-out Integration**
+   - Creates temporary SQS queue
+   - Subscribes queue to SNS topic
+   - Triggers validator Lambda via DynamoDB insert
+   - Verifies SNS message received in SQS
+   - Tests complete fan-out to 156 queues
+
+3. **SQS → Lambda → ElastiCache Complete Pipeline**
+   - Sends test message to SQS queue
+   - Waits for Lambda to process
+   - Queries ElastiCache for cached data
+   - Verifies complete pipeline works
+
+4. **EventBridge → Step Functions → CloudWatch Logs Insights**
+   - Starts Step Functions execution
+   - Monitors execution status (RUNNING → SUCCEEDED/FAILED)
+   - Verifies CloudWatch Logs Insights query capability
+   - Tests 15s timeout for log scanning
+
+5. **Multi-Region DynamoDB Global Table Consistency**
+   - Writes to primary region (us-east-1)
+   - Reads from secondary region (us-west-2)
+   - Verifies replication < 3s
+   - Tests global table setup
+
+6. **Consistency Checking Lambda Detection**
+   - Creates intentional inconsistency (DynamoDB true, cache false)
+   - Invokes consistency checker Lambda
+   - Verifies Lambda detects mismatch
+   - Tests 5s detection time
+
+7. **Automatic Rollback on Inconsistency**
+   - Creates versions 1 and 2
+   - Triggers rollback to version 1
+   - Verifies rollback completed
+   - Checks rollback metadata written
+   - Tests 8s rollback time
+
+8. **OpenSearch Audit Trail Integration**
+   - Triggers auditable event in DynamoDB
+   - Queries OpenSearch for audit entry
+   - Verifies all required fields present (timestamp, user, environment, reason)
+   - Tests searchability of audit trail
+
+**Added Terraform Outputs**:
+```hcl
+output "validator_lambda_name" {
+  value = module.lambda.validator_function_name
+}
+
+output "consistency_checker_lambda_name" {
+  value = module.lambda.consistency_checker_function_name
+}
+
+output "rollback_lambda_name" {
+  value = module.lambda.rollback_function_name
+}
+
+output "step_function_arn" {
+  value = module.eventbridge.state_machine_arn
+}
+```
+
+**Result**:
+- ✅ 5 service connection integration tests
+- ✅ 3 error handling & audit tests
+- ✅ Tests verify actual data flows, not just resource existence
+- ✅ All timing requirements validated (500ms stream, 1s SNS, 3s cache, 5s consistency, 8s rollback, 15s logs)
+- ✅ Tests create temporary resources and clean up after themselves
+- ✅ Graceful handling when infrastructure not deployed
+
+**Key Lesson**: Integration tests must test CONNECTIONS between services, not just resource existence. Real integration testing requires:
+1. Creating test data
+2. Triggering actual service interactions
+3. Verifying data flows through the system
+4. Measuring timing/latency requirements
+5. Cleaning up test resources
+6. Testing error/rollback scenarios
