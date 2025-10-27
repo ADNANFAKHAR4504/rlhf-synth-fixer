@@ -1,47 +1,46 @@
 // HIPAA Compliance and Remediation Engine Integration Tests
 // These tests validate the deployed infrastructure with live AWS resources
 // Configuration - These are coming from cfn-outputs after cdk deploy
-import fs from 'fs';
-import {
-  S3Client,
-  PutObjectCommand,
-  GetObjectCommand,
-  ListObjectsV2Command,
-} from '@aws-sdk/client-s3';
-import {
-  DynamoDBClient,
-  PutItemCommand,
-  GetItemCommand,
-  DeleteItemCommand,
-} from '@aws-sdk/client-dynamodb';
-import {
-  LambdaClient,
-  InvokeCommand,
-  GetFunctionCommand,
-} from '@aws-sdk/client-lambda';
-import {
-  SFNClient,
-  DescribeStateMachineCommand,
-  ListExecutionsCommand,
-  DescribeExecutionCommand,
-} from '@aws-sdk/client-sfn';
-import {
-  CloudTrailClient,
-  LookupEventsCommand,
-  GetTrailCommand,
-} from '@aws-sdk/client-cloudtrail';
-import {
-  FirehoseClient,
-  DescribeDeliveryStreamCommand,
-} from '@aws-sdk/client-firehose';
-import {
-  SNSClient,
-  GetTopicAttributesCommand,
-} from '@aws-sdk/client-sns';
 import {
   AthenaClient,
   GetWorkGroupCommand,
 } from '@aws-sdk/client-athena';
+import {
+  CloudTrailClient,
+  GetTrailCommand,
+  LookupEventsCommand,
+} from '@aws-sdk/client-cloudtrail';
+import {
+  DeleteItemCommand,
+  DynamoDBClient,
+  GetItemCommand,
+  PutItemCommand,
+} from '@aws-sdk/client-dynamodb';
+import {
+  DescribeDeliveryStreamCommand,
+  FirehoseClient,
+} from '@aws-sdk/client-firehose';
+import {
+  GetFunctionCommand,
+  InvokeCommand,
+  LambdaClient,
+} from '@aws-sdk/client-lambda';
+import {
+  GetObjectCommand,
+  ListObjectsV2Command,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import {
+  DescribeStateMachineCommand,
+  ListExecutionsCommand,
+  SFNClient
+} from '@aws-sdk/client-sfn';
+import {
+  GetTopicAttributesCommand,
+  SNSClient,
+} from '@aws-sdk/client-sns';
+import fs from 'fs';
 
 // Load outputs from deployment
 const outputs = JSON.parse(
@@ -150,7 +149,7 @@ describe('HIPAA Compliance and Remediation Engine - Integration Tests', () => {
         expect(response.Configuration?.FunctionName).toContain(
           'ValidatorFunction'
         );
-        expect(response.Configuration?.Runtime).toBe('nodejs16.x');
+        expect(response.Configuration?.Runtime).toBe('nodejs20.x');
         expect(response.Configuration?.Environment?.Variables).toHaveProperty(
           'AUTHORIZATION_TABLE'
         );
@@ -901,7 +900,7 @@ describe('HIPAA Compliance and Remediation Engine - Integration Tests', () => {
           expect(macieState.Parameters).toBeDefined();
           expect(
             macieState.Parameters.ClientToken ||
-              JSON.stringify(macieState).includes('ClientToken')
+            JSON.stringify(macieState).includes('ClientToken')
           ).toBeTruthy();
         }
       },
@@ -932,7 +931,7 @@ describe('HIPAA Compliance and Remediation Engine - Integration Tests', () => {
         // Verify SNS publish action exists in Step Functions
         expect(
           definitionString.includes('sns:Publish') ||
-            definitionString.includes(outputs.SNSTopicArn)
+          definitionString.includes(outputs.SNSTopicArn)
         ).toBe(true);
       },
       STANDARD_TIMEOUT
