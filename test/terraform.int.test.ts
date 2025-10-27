@@ -130,18 +130,105 @@ describe('TAP Stack Live Integration Tests (Selective, Real, Updated)', () => {
 
 
 // Glue Job test (skip if not found)
-it('Glue Job exists', async () => {
-  if (!outputs.glue_job_name) return;
-  try {
-    const job = await glue.getJob({ JobName: outputs.glue_job_name }).promise();
-    expect(job.Job?.Name).toBe(outputs.glue_job_name);
-    expect(job.Job?.RoleArn).toBeDefined();
-    expect(job.Job?.Command).toBeDefined();
-  } catch (err) {
-    console.warn('[WARN] Glue Job not found:', outputs.glue_job_name);
-    return;
+//it('Glue Job exists', async () => {
+//  if (!outputs.glue_job_name) return;
+//  try {
+//    const job = await glue.getJob({ JobName: outputs.glue_job_name }).promise();
+//    expect(job.Job?.Name).toBe(outputs.glue_job_name);
+//    expect(job.Job?.RoleArn).toBeDefined();
+//    expect(job.Job?.Command).toBeDefined();
+//  } catch (err) {
+//    console.warn('[WARN] Glue Job not found:', outputs.glue_job_name);
+//    return;
+//  }
+//});
+async function waitForLambda(functionName: string, maxAttempts = 10, intervalMs = 15000) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      await new AWS.Lambda().getFunction({ FunctionName: functionName }).promise();
+      return true;
+    } catch (err: any) {
+      if (err.code === 'ResourceNotFoundException') {
+        // Wait and retry
+        await new Promise(resolve => setTimeout(resolve, intervalMs));
+        continue;
+      }
+      throw err;
+    }
   }
+  throw new Error(`Lambda function not available after waiting: ${functionName}`);
+}
+
+it('Athena Database exists as output', async () => {
+  if (!outputs.athena_database_name || !outputs.lambda_device_verification_name) return;
+  // Wait for Lambda to exist to avoid Athena cross-reference error
+  await waitForLambda(outputs.lambda_device_verification_name, 10, 15000);
+
+  const dbs = await athena.listDatabases({ CatalogName: 'AwsDataCatalog' }).promise();
+  expect(dbs.DatabaseList?.map(d => d.Name)).toContain(outputs.athena_database_name);
 });
+
+
+async function waitForLambda(functionName: string, maxAttempts = 10, intervalMs = 15000) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      await new AWS.Lambda().getFunction({ FunctionName: functionName }).promise();
+      return true;
+    } catch (err: any) {
+      if (err.code === 'ResourceNotFoundException') {
+        // Wait and retry
+        await new Promise(resolve => setTimeout(resolve, intervalMs));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error(`Lambda function not available after waiting: ${functionName}`);
+}
+
+// Update your dashboard test:
+it('CloudWatch dashboard exists and matches output url', async () => {
+  if (!outputs.cloudwatch_dashboard_url || !outputs.lambda_device_verification_name) return;
+  // Wait for Lambda to exist to avoid cross-service reference failure
+  await waitForLambda(outputs.lambda_device_verification_name, 10, 15000);
+
+  const match = /name=([a-zA-Z0-9\-\_]+)/.exec(outputs.cloudwatch_dashboard_url);
+  const dashboardName = match && match[1];
+  if (!dashboardName) return;
+  const dashResp = await cloudwatch.getDashboard({ DashboardName: dashboardName }).promise();
+  expect(dashResp.DashboardArn).toBeDefined();
+  expect(dashResp.DashboardName).toBe(dashboardName);
+  expect(dashResp.DashboardBody).toBeDefined();
+});
+
+
+async function waitForLambda(functionName: string, maxAttempts = 10, intervalMs = 15000) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      await new AWS.Lambda().getFunction({ FunctionName: functionName }).promise();
+      return true;
+    } catch (err: any) {
+      if (err.code === 'ResourceNotFoundException') {
+        await new Promise(resolve => setTimeout(resolve, intervalMs));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error(`Lambda function not available after waiting: ${functionName}`);
+}
+
+it('Glue Job exists', async () => {
+  if (!outputs.glue_job_name || !outputs.lambda_device_verification_name) return;
+  // Wait for Lambda to exist to avoid cross-service reference issue
+  await waitForLambda(outputs.lambda_device_verification_name, 10, 15000);
+
+  const job = await glue.getJob({ JobName: outputs.glue_job_name }).promise();
+  expect(job.Job?.Name).toBe(outputs.glue_job_name);
+  expect(job.Job?.RoleArn).toBeDefined();
+  expect(job.Job?.Command).toBeDefined();
+});
+
 
   // ----------- CLOUDWATCH ALARMS/DASHBOARD
   it('Connection failures alarm exists with correct name', async () => {
