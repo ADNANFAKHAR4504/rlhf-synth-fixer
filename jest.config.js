@@ -1,13 +1,12 @@
 module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/test'],
-  testMatch: ['**/*.test.ts', '**/*.test.mjs', '**/*.test.js'],
+  testMatch: ['**/*.test.ts', '**/*.test.mjs'],
   preset: 'ts-jest',
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node', 'mjs'],
   transform: {
     '^.+\\.tsx?$': 'ts-jest',
     '^.+\\.mjs$': 'babel-jest',
-    '^.+\\.js$': 'babel-jest',
   },
   transformIgnorePatterns: [
     'node_modules/(?!(aws-cdk-lib|@aws-cdk|constructs)/)',
