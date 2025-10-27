@@ -14,5 +14,11 @@
   "task_config": {
     "deploy_env": "prod.tfvars"
   },
-  "training_quality": 10
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rahulladumor",
+  "dockerS3Location": ""
 }
