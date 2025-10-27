@@ -1428,18 +1428,25 @@ resource "aws_iam_role_policy" "step_functions" {
           "logs:GetLogDelivery",
           "logs:UpdateLogDelivery",
           "logs:DeleteLogDelivery",
-          "logs:ListLogDeliveries",
+          "logs:ListLogDeliveries"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
           "logs:PutResourcePolicy",
           "logs:DescribeResourcePolicies",
           "logs:DescribeLogGroups"
         ]
-        Resource = "arn:${local.partition}:logs:${var.aws_region}:${local.account_id}:*"
+        Resource = "*"
       },
       {
         Effect = "Allow"
         Action = [
           "logs:CreateLogStream",
-          "logs:PutLogEvents"
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams"
         ]
         Resource = "${aws_cloudwatch_log_group.step_functions.arn}:*"
       }
