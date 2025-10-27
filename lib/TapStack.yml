@@ -1123,7 +1123,6 @@ Resources:
   NovaSecurityNotificationsTopic:
     Type: 'AWS::SNS::Topic'
     Properties:
-      TopicName: 'nova-prod-security-alerts'
       DisplayName: 'Security Alerts for Healthcare Portal'
       KmsMasterKeyId: !Ref NovaEncryptionKey
       Subscription:
