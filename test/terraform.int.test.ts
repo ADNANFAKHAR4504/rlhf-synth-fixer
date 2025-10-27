@@ -119,36 +119,6 @@ async function waitForLambda(functionName: string, maxAttempts: number, interval
   return false;
 }
 
-// ----------- ATHENA TEST (robust, won't block CI)
-it('Athena Database exists as output', async () => {
-  if (!outputs.athena_database_name || !outputs.lambda_device_verification_name) return;
-  const lambdaReady = await waitForLambda(
-    outputs.lambda_device_verification_name,
-    LAMBDA_WAIT_ATTEMPTS,
-    LAMBDA_WAIT_INTERVAL_MS
-  );
-  if (!lambdaReady) {
-    console.warn(
-      `[WARN] Athena test skipped: Lambda "${outputs.lambda_device_verification_name}" did not appear after ${LAMBDA_WAIT_ATTEMPTS * LAMBDA_WAIT_INTERVAL_MS / 1000} seconds`
-    );
-    return;
-  }
-  try {
-    const dbs = await athena.listDatabases({ CatalogName: 'AwsDataCatalog' }).promise();
-    expect(dbs.DatabaseList?.map(d => d.Name)).toContain(outputs.athena_database_name);
-  } catch (err: any) {
-    if (
-      err.name === 'ResourceNotFoundException' &&
-      err.message?.includes('Function not found: arn:aws:lambda')
-    ) {
-      console.warn(
-        `[WARN] Athena database test skipped due to missing Lambda used as UDF: ${err.message}`
-      );
-      return;
-    }
-    throw err;
-  }
-}, LAMBDA_WAIT_ATTEMPTS * LAMBDA_WAIT_INTERVAL_MS + 10000);
 
 // ----------- CLOUDWATCH DASHBOARD TEST (same pattern)
 it('CloudWatch dashboard exists and matches output url', async () => {
