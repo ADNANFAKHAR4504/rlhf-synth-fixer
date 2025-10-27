@@ -634,6 +634,8 @@ Resources:
   RDSDatabase:
     Type: AWS::RDS::DBInstance
     Properties:
+      DBInstanceIdentifier: finsecure
+      DBName: finsecure
       Engine: mysql
       EngineVersion: '8.0.43'
       DBInstanceClass: db.t3.medium
