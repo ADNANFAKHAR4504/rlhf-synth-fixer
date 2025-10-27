@@ -77,7 +77,9 @@ async function processRecord(record: KinesisStreamRecord): Promise<void> {
 }
 
 // Exported for testing purposes
-export async function checkVelocityFraud(transaction: Transaction): Promise<boolean> {
+export async function checkVelocityFraud(
+  transaction: Transaction
+): Promise<boolean> {
   console.log('Checking velocity fraud for customer:', transaction.customerId);
   // In production, this would query Redis for velocity checks
   // For now, return false (no fraud detected)

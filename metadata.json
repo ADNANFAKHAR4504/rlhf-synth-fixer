@@ -10,5 +10,22 @@
   "subject_labels": [
     "Security Configuration as Code"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC"
+  "aws_services": [
+    "Kinesis",
+    "Lambda",
+    "ElastiCache Redis",
+    "DynamoDB",
+    "S3",
+    "Step Functions",
+    "Athena",
+    "Neptune",
+    "Aurora RDS",
+    "API Gateway",
+    "OpenSearch Serverless",
+    "VPC",
+    "CloudWatch Logs",
+    "Security Hub",
+    "IAM"
+  ],
+  "training_quality": 10
 }

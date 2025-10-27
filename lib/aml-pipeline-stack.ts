@@ -674,7 +674,8 @@ export class AmlPipelineStack extends cdk.Stack {
     // Warm Path Outputs
     new cdk.CfnOutput(this, `StepFunctionArn-${suffix}`, {
       value: completeWorkflow.stateMachineArn,
-      description: 'Step Functions state machine ARN for investigation workflow',
+      description:
+        'Step Functions state machine ARN for investigation workflow',
       exportName: `aml-stepfunction-arn-${suffix}`,
     });
 
@@ -783,7 +784,8 @@ export class AmlPipelineStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, `OpenSearchCollectionEndpoint-${suffix}`, {
       value: opensearchCollection.attrCollectionEndpoint,
-      description: 'OpenSearch Serverless collection endpoint for evidence archival',
+      description:
+        'OpenSearch Serverless collection endpoint for evidence archival',
       exportName: `aml-opensearch-endpoint-${suffix}`,
     });
 
