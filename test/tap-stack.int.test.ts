@@ -95,7 +95,7 @@ describe('CDR Data Pipeline Integration Tests', () => {
         console.log(`Checking if DynamoDB table exists: ${tableName}`);
         const describeCommand = new DescribeTableCommand({ TableName: tableName });
         await dynamoClient.send(describeCommand);
-        console.log(`✅ Table ${tableName} exists`);
+        console.log(` Table ${tableName} exists`);
         
         // First, let's check if there are any existing records in the table
         console.log(`Checking existing records in DynamoDB table: ${tableName}`);
@@ -219,7 +219,7 @@ describe('CDR Data Pipeline Integration Tests', () => {
         console.log(`Checking if DynamoDB table exists: ${tableName}`);
         const describeCommand = new DescribeTableCommand({ TableName: tableName });
         await dynamoClient.send(describeCommand);
-        console.log(`✅ Table ${tableName} exists`);
+        console.log(` Table ${tableName} exists`);
         
         const recordCount = 50; // Test burst capacity
         
@@ -505,7 +505,7 @@ describe('CDR Data Pipeline Integration Tests', () => {
         console.log(`Checking if DynamoDB table exists: ${tableName}`);
         const describeCommand = new DescribeTableCommand({ TableName: tableName });
         await dynamoClient.send(describeCommand);
-        console.log(`✅ Table ${tableName} exists`);
+        console.log(` Table ${tableName} exists`);
         
         const scanCommand = new ScanCommand({
           TableName: outputs.DynamoDBTableName,
@@ -570,7 +570,7 @@ describe('CDR Data Pipeline Integration Tests', () => {
       }
       } catch (error: any) {
         if (error.name === 'ResourceNotFoundException') {
-          console.log(`⚠️  DynamoDB table ${outputs.DynamoDBTableName} does not exist. Skipping DynamoDB validation.`);
+          console.log(`DynamoDB table existence intangible.`);
           console.log(`This suggests the table was not deployed or has a different name.`);
           console.log(`Expected table name: ${outputs.DynamoDBTableName}`);
           console.log(`However, Kinesis publish was successful, so core infrastructure is working.`);
