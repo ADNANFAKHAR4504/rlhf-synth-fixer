@@ -1,0 +1,21 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "B85318",
+  "team": "1",
+  "startedAt": "2025-10-21T11:59:23.255Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "training_quality": 9,
+  "aws_services": "VPC, Subnets, Internet Gateway, Route Table, Security Group, Transit Gateway, ECS Fargate, Application Load Balancer, Target Group, ALB Listener, Aurora Cluster, DB Subnet Group, Secrets Manager, Route53, Route53 Health Check, CloudWatch Alarm, KMS",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "akshat-jain355",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,25 @@
+{
+  "transactionId": "txn_2024_001234",
+  "customerId": "cust_john_doe_789",
+  "amount": 1250,
+  "currency": "USD",
+  "merchantId": "merch_amazon_456",
+  "merchantName": "Amazon.com",
+  "merchantCategory": "RETAIL_ONLINE",
+  "sourceCountry": "US",
+  "destinationCountry": "US",
+  "ipAddress": "203.0.113.45",
+  "deviceId": "device_iphone_123",
+  "deviceFingerprint": "fp_abc123def456",
+  "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15",
+  "paymentMethod": "CREDIT_CARD",
+  "cardLast4": "4242",
+  "cardBin": "424242",
+  "timestamp": 1697500800000,
+  "transactionType": "PURCHASE",
+  "metadata": {
+    "orderNumber": "ORD-2024-001234",
+    "shippingMethod": "STANDARD",
+    "isRecurring": "false"
+  }
+}
