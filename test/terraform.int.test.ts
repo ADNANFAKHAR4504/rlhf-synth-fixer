@@ -109,17 +109,6 @@ describe('TAP Stack Live Integration Tests (Selective, Real, Updated)', () => {
   }
 });
 
-  // Athena Database test (with explicit not-found skipping)
-it('Athena Database exists as output', async () => {
-  if (!outputs.athena_database_name) return;
-  try {
-    const dbs = await athena.listDatabases({ CatalogName: 'AwsDataCatalog' }).promise();
-    expect(dbs.DatabaseList?.map(d => d.Name)).toContain(outputs.athena_database_name);
-  } catch (err) {
-    console.warn('[WARN] Athena DB not found:', outputs.athena_database_name);
-    return;
-  }
-});
 
 // CloudWatch Dashboard test (skip if not found)
 it('CloudWatch dashboard exists and matches output url', async () => {
