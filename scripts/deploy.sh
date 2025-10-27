@@ -162,40 +162,41 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     cd lib
     echo "Selecting or creating Pulumi stack..."
     pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create
+    
+    # Clear any existing locks before deployment
+    echo "🔓 Clearing any stuck locks..."
+    pulumi cancel --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes 2>/dev/null || echo "No locks to clear or cancel failed"
+    
     echo "Deploying infrastructure ..."
-    
-    # Try deployment with automatic lock handling
     if ! pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"; then
-      echo "⚠️ Deployment failed, checking for lock issues..."
-      
-      # Check if it's a lock error
-      if pulumi stack --show-ids 2>&1 | grep -q "locked"; then
-        echo "🔓 Detected stuck lock. Attempting to cancel lock..."
-        pulumi cancel --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes || echo "Cancel lock failed"
-        echo "🔄 Retrying deployment after lock cancellation..."
-        pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" || echo "Deployment still failed after lock cancellation"
-      else
-        echo "❌ Deployment failed but no lock issue detected. Manual intervention may be required."
+      echo "⚠️ Deployment failed, attempting lock recovery..."
+      pulumi cancel --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes || echo "Lock cancellation failed"
+      echo "🔄 Retrying deployment after lock cancellation..."
+      pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" || {
+        echo "❌ Deployment failed after retry"
+        cd ..
         exit 1
-      fi
+      }
     fi
-    
     cd ..
   else
     echo "🔧 Python Pulumi project detected"
     export PYTHONPATH=.:bin
     pipenv run pulumi-create-stack
-    echo "Deploying infrastructure ..."
     
-    # Try deployment with automatic lock handling
+    # Clear any existing locks before deployment
+    echo "🔓 Clearing any stuck locks..."
+    pulumi cancel --yes 2>/dev/null || echo "No locks to clear or cancel failed"
+    
+    echo "Deploying infrastructure ..."
     if ! pipenv run pulumi-deploy; then
-      echo "⚠️ Deployment failed, checking for lock issues..."
-      
-      # Attempt to cancel any stuck locks
-      echo "🔓 Attempting to cancel stuck lock..."
-      pulumi cancel --yes || echo "Cancel lock failed"
+      echo "⚠️ Deployment failed, attempting lock recovery..."
+      pulumi cancel --yes || echo "Lock cancellation failed"
       echo "🔄 Retrying deployment after lock cancellation..."
-      pipenv run pulumi-deploy || echo "Deployment still failed after lock cancellation"
+      pipenv run pulumi-deploy || {
+        echo "❌ Deployment failed after retry"
+        exit 1
+      }
     fi
   fi
 
