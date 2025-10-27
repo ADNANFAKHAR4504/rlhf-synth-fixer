@@ -1020,7 +1020,7 @@ resource "aws_rds_cluster" "analytics" {
   cluster_identifier     = "${local.app_name}-analytics-${var.environment_suffix}"
   engine                 = "aurora-mysql"
   engine_mode            = "provisioned"
-  engine_version         = "8.0.mysql_aurora.3.04.0"
+  engine_version         = "8.0.mysql_aurora.3.10.1"
   database_name          = "analytics"
   master_username        = "admin"
   master_password        = random_password.aurora_password.result
