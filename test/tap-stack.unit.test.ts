@@ -445,7 +445,7 @@ describe('CDR Data Pipeline CloudFormation Template', () => {
 
     test('should have appropriate number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(3);
+      expect(parameterCount).toBe(4);
     });
 
     test('should have comprehensive outputs', () => {
@@ -460,17 +460,17 @@ describe('CDR Data Pipeline CloudFormation Template', () => {
       
       // Check stream naming
       expect(resources.CDRKinesisStream.Properties.Name).toEqual({
-        'Fn::Sub': '${EnvironmentName}-cdr-ingestion-stream'
+        'Fn::Sub': '${EnvironmentName}-cdr-ingestion-stream-${EnvironmentSuffix}'
       });
       
       // Check bucket naming  
       expect(resources.CDRArchivalBucket.Properties.BucketName).toEqual({
-        'Fn::Sub': '${EnvironmentName}-cdr-archive-${AWS::AccountId}'
+        'Fn::Sub': '${EnvironmentName}-cdr-archive-${EnvironmentSuffix}-${AWS::AccountId}'
       });
       
       // Check table naming
       expect(resources.CDRDynamoDBTable.Properties.TableName).toEqual({
-        'Fn::Sub': '${EnvironmentName}-cdr-realtime-lookup'
+        'Fn::Sub': '${EnvironmentName}-cdr-realtime-lookup-${EnvironmentSuffix}'
       });
     });
 
