@@ -105,6 +105,15 @@ elif [ "$PLATFORM" = "tf" ]; then
   
   cd lib
   
+  # Determine var-file to use based on metadata.json
+  VAR_FILE=""
+  if [ "$(jq -r '.task_sub_category // ""' ../metadata.json)" = "IaC-Multi-Environment-Management" ]; then
+    DEPLOY_ENV_FILE=$(jq -r '.task_config.deploy_env // ""' ../metadata.json)
+    if [ -n "$DEPLOY_ENV_FILE" ]; then
+      VAR_FILE="-var-file=${DEPLOY_ENV_FILE}"
+      echo "Using var-file from metadata: ${DEPLOY_ENV_FILE}"
+    fi
+  fi
 
   # Always remove any stale Terraform plan to avoid cross-run reuse
   rm -f tfplan
@@ -113,29 +122,29 @@ elif [ "$PLATFORM" = "tf" ]; then
   if [ -f "tfplan" ]; then
     echo "✅ Terraform plan file found, proceeding with deployment..."
     # Try to deploy with the plan file
-    if ! npm run tf:deploy; then
+    if ! terraform apply -auto-approve -lock=true -lock-timeout=300s -input=false $VAR_FILE tfplan; then
       echo "⚠️ Deployment with plan file failed, checking for state lock issues..."
       
       # Extract lock ID from error output if present
-      LOCK_ID=$(terraform apply -auto-approve -lock=true -lock-timeout=10s -input=false tfplan 2>&1 | grep -oE 'ID:\s+[0-9a-f-]{36}' | cut -d' ' -f2 || echo "")
+      LOCK_ID=$(terraform apply -auto-approve -lock=true -lock-timeout=10s -input=false $VAR_FILE tfplan 2>&1 | grep -oE 'ID:\s+[0-9a-f-]{36}' | cut -d' ' -f2 || echo "")
       
       if [ -n "$LOCK_ID" ]; then
         echo "🔓 Detected stuck lock ID: $LOCK_ID. Attempting to force unlock..."
         terraform force-unlock -force "$LOCK_ID" || echo "Force unlock failed"
         echo "🔄 Retrying deployment after unlock..."
-        npm run tf:deploy || echo "Deployment still failed after unlock attempt"
+        terraform apply -auto-approve -lock=true -lock-timeout=300s -input=false $VAR_FILE tfplan || echo "Deployment still failed after unlock attempt"
       else
         echo "❌ Deployment failed but no lock ID detected. Manual intervention may be required."
       fi
     fi
   else
     echo "⚠️ Terraform plan file not found, creating new plan and deploying..."
-    terraform plan -lock-timeout=120s -lock=false -input=false -out=tfplan || echo "Plan creation failed, attempting direct apply..."
+    terraform plan -lock-timeout=120s -lock=false -input=false $VAR_FILE -out=tfplan || echo "Plan creation failed, attempting direct apply..."
     
     # Try direct apply with lock timeout, and handle lock issues
-    if ! terraform apply -auto-approve -lock=true -lock-timeout=300s -input=false tfplan; then
+    if ! terraform apply -auto-approve -lock=true -lock-timeout=300s -input=false $VAR_FILE tfplan; then
       echo "⚠️ Direct apply with plan failed, trying without plan..."
-      if ! terraform apply -auto-approve -lock=true -lock-timeout=300s -input=false; then
+      if ! terraform apply -auto-approve -lock=true -lock-timeout=300s -input=false $VAR_FILE; then
         echo "❌ All deployment attempts failed. Check for state lock issues."
         # List any potential locks
         terraform show -json 2>&1 | grep -i lock || echo "No lock information available"
@@ -162,40 +171,41 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     cd lib
     echo "Selecting or creating Pulumi stack..."
     pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create
+    
+    # Clear any existing locks before deployment
+    echo "🔓 Clearing any stuck locks..."
+    pulumi cancel --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes 2>/dev/null || echo "No locks to clear or cancel failed"
+    
     echo "Deploying infrastructure ..."
-    
-    # Try deployment with automatic lock handling
     if ! pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"; then
-      echo "⚠️ Deployment failed, checking for lock issues..."
-      
-      # Check if it's a lock error
-      if pulumi stack --show-ids 2>&1 | grep -q "locked"; then
-        echo "🔓 Detected stuck lock. Attempting to cancel lock..."
-        pulumi cancel --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes || echo "Cancel lock failed"
-        echo "🔄 Retrying deployment after lock cancellation..."
-        pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" || echo "Deployment still failed after lock cancellation"
-      else
-        echo "❌ Deployment failed but no lock issue detected. Manual intervention may be required."
+      echo "⚠️ Deployment failed, attempting lock recovery..."
+      pulumi cancel --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes || echo "Lock cancellation failed"
+      echo "🔄 Retrying deployment after lock cancellation..."
+      pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" || {
+        echo "❌ Deployment failed after retry"
+        cd ..
         exit 1
-      fi
+      }
     fi
-    
     cd ..
   else
     echo "🔧 Python Pulumi project detected"
     export PYTHONPATH=.:bin
     pipenv run pulumi-create-stack
-    echo "Deploying infrastructure ..."
     
-    # Try deployment with automatic lock handling
+    # Clear any existing locks before deployment
+    echo "🔓 Clearing any stuck locks..."
+    pulumi cancel --yes 2>/dev/null || echo "No locks to clear or cancel failed"
+    
+    echo "Deploying infrastructure ..."
     if ! pipenv run pulumi-deploy; then
-      echo "⚠️ Deployment failed, checking for lock issues..."
-      
-      # Attempt to cancel any stuck locks
-      echo "🔓 Attempting to cancel stuck lock..."
-      pulumi cancel --yes || echo "Cancel lock failed"
+      echo "⚠️ Deployment failed, attempting lock recovery..."
+      pulumi cancel --yes || echo "Lock cancellation failed"
       echo "🔄 Retrying deployment after lock cancellation..."
-      pipenv run pulumi-deploy || echo "Deployment still failed after lock cancellation"
+      pipenv run pulumi-deploy || {
+        echo "❌ Deployment failed after retry"
+        exit 1
+      }
     fi
   fi
 
