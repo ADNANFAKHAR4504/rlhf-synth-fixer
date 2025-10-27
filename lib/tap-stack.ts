@@ -16,13 +16,12 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-    // Instantiate the AML Pipeline Stack
+    // Instantiate the AML Pipeline Stack as a nested stack
     new AmlPipelineStack(this, `AmlPipeline-${environmentSuffix}`, {
       sagemakerEndpointName: 'aml-anomaly-detection-endpoint',
       verifiedPermissionsPolicyStoreId: 'ps-12345678',
       dataBucketName: 'aml-transaction-data-lake',
       environmentSuffix: environmentSuffix,
-      ...props,
     });
   }
 }

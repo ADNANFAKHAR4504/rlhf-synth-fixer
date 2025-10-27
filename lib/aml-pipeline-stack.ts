@@ -19,14 +19,14 @@ import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Construct } from 'constructs';
 import * as path from 'path';
 
-export interface AmlPipelineStackProps extends cdk.StackProps {
+export interface AmlPipelineStackProps extends cdk.NestedStackProps {
   sagemakerEndpointName: string;
   verifiedPermissionsPolicyStoreId: string;
   dataBucketName: string;
   environmentSuffix: string;
 }
 
-export class AmlPipelineStack extends cdk.Stack {
+export class AmlPipelineStack extends cdk.NestedStack {
   public readonly transactionStream: kinesis.Stream;
   public readonly vpc: ec2.Vpc;
 
