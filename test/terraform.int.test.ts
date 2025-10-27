@@ -780,4 +780,389 @@ describe("Terraform Integration Tests - tap_stack", () => {
       });
     });
   });
+
+  // ============================================================================
+  // S3 BUCKET FUNCTIONALITY TESTS
+  // ============================================================================
+
+  describe("S3 Bucket Functionality Tests", () => {
+    const outputs = loadOutputs();
+
+    /**
+     * Check if AWS CLI is installed
+     */
+    function haveAwsCli(): boolean {
+      try {
+        execFileSync("aws", ["--version"], { stdio: "ignore" });
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    /**
+     * Run AWS CLI command
+     */
+    function runAwsCli(args: string[]): string {
+      console.log(`[aws-cli] exec: aws ${args.join(" ")}`);
+      try {
+        const result = execFileSync("aws", args, {
+          stdio: ["ignore", "pipe", "pipe"],
+          encoding: "utf8",
+        });
+        return result.toString();
+      } catch (error: any) {
+        console.error(`[aws-cli] error: ${error.message}`);
+        if (error.stdout) console.error(`[aws-cli] stdout: ${error.stdout}`);
+        if (error.stderr) console.error(`[aws-cli] stderr: ${error.stderr}`);
+        throw error;
+      }
+    }
+
+    /**
+     * Generate fun test content
+     */
+    function generateFunContent(): { filename: string; content: string }[] {
+      return [
+        {
+          filename: "hello-terraform-🚀.txt",
+          content: "Infrastructure as Code is awesome! 🎉\nTerraform + AWS = ❤️",
+        },
+        {
+          filename: "test-emojis-😎.json",
+          content: JSON.stringify({
+            message: "Testing S3 with emojis! 🪣",
+            emojis: ["🚀", "🎯", "🏗️", "☁️", "🔧"],
+            timestamp: new Date().toISOString(),
+            fun_fact: "S3 stands for Simple Storage Service 📦",
+          }, null, 2),
+        },
+        {
+          filename: "ascii-art.txt",
+          content: `
+ _____                    __                     
+|_   _|__ _ __ _ __ __ _ / _| ___  _ __ _ __ ___  
+  | |/ _ \\ '__| '__/ _\` | |_ / _ \\| '__| '_ \` _ \\ 
+  | |  __/ |  | | | (_| |  _| (_) | |  | | | | | |
+  |_|\\___|_|  |_|  \\__,_|_|  \\___/|_|  |_| |_| |_|
+                                                   
+        🏗️  Infrastructure as Code  🏗️`,
+        },
+        {
+          filename: `test-${Date.now()}-random.txt`,
+          content: `Random test file created at ${new Date().toLocaleString()}
+Random number: ${Math.floor(Math.random() * 1000)}
+Random joke: Why did the developer go broke? Because he used up all his cache! 💸`,
+        },
+      ];
+    }
+
+    // Skip if AWS CLI not available
+    const awsCliOk = haveAwsCli();
+    if (!awsCliOk) {
+      it("skipped: AWS CLI not installed", () => {
+        console.warn("AWS CLI is not installed. Install from https://aws.amazon.com/cli/");
+        expect(awsCliOk).toBe(true);
+      });
+      return;
+    }
+
+    // Skip if no outputs available
+    if (!outputs || !outputs.s3_buckets) {
+      it("skipped: S3 bucket outputs not available", () => {
+        console.warn("S3 bucket outputs not found. Deploy infrastructure first.");
+        expect(outputs).toBeDefined();
+        expect(outputs?.s3_buckets).toBeDefined();
+      });
+      return;
+    }
+
+    const testPrefix = `integration-test-${Date.now()}`;
+    const uploadedFiles: { bucket: string; key: string }[] = [];
+
+    afterAll(async () => {
+      // Cleanup all uploaded files
+      console.log(`[cleanup] Removing ${uploadedFiles.length} test files`);
+      for (const file of uploadedFiles) {
+        try {
+          runAwsCli(["s3", "rm", `s3://${file.bucket}/${file.key}`]);
+          console.log(`[cleanup] Deleted: s3://${file.bucket}/${file.key}`);
+        } catch (error) {
+          console.error(`[cleanup] Failed to delete ${file.key}:`, error);
+        }
+      }
+    });
+
+    it("can list S3 buckets and verify they exist", () => {
+      const result = runAwsCli(["s3", "ls", "--output", "json"]);
+      const buckets = JSON.parse(result);
+
+      expect(Array.isArray(buckets)).toBe(true);
+      expect(buckets.length).toBeGreaterThan(0);
+
+      // Verify our buckets exist
+      const bucketNames = buckets.map((b: any) => b.Name);
+      console.log(`[test] Found ${buckets.length} S3 buckets`);
+
+      // Check if at least one of our buckets exists
+      const ourBuckets = Object.values(outputs.s3_buckets);
+      const foundBuckets = ourBuckets.filter((name) => bucketNames.includes(name));
+      expect(foundBuckets.length).toBeGreaterThan(0);
+    });
+
+    it("can upload fun test files to S3 bucket (PutObject)", () => {
+      const bucketName = outputs.s3_buckets.staging || outputs.s3_buckets.data || Object.values(outputs.s3_buckets)[0];
+      const testFiles = generateFunContent();
+
+      console.log(`[test] Using bucket: ${bucketName}`);
+      console.log(`[test] Uploading ${testFiles.length} fun test files`);
+
+      testFiles.forEach((file) => {
+        const key = `${testPrefix}/${file.filename}`;
+        const tempPath = path.join(os.tmpdir(), file.filename);
+
+        // Write content to temp file
+        fs.writeFileSync(tempPath, file.content, "utf8");
+
+        try {
+          // Upload to S3
+          runAwsCli([
+            "s3",
+            "cp",
+            tempPath,
+            `s3://${bucketName}/${key}`,
+            "--content-type",
+            file.filename.endsWith(".json") ? "application/json" : "text/plain",
+          ]);
+
+          uploadedFiles.push({ bucket: bucketName, key });
+          console.log(`[test] ✅ Uploaded: ${file.filename} (${file.content.length} bytes)`);
+
+          // Verify upload
+          const headResult = runAwsCli([
+            "s3api",
+            "head-object",
+            "--bucket",
+            bucketName,
+            "--key",
+            key,
+            "--output",
+            "json",
+          ]);
+          const metadata = JSON.parse(headResult);
+          expect(metadata.ContentLength).toBe(file.content.length);
+        } finally {
+          // Cleanup temp file
+          fs.unlinkSync(tempPath);
+        }
+      });
+
+      expect(uploadedFiles.length).toBe(testFiles.length);
+    });
+
+    it("can list uploaded objects with prefix", () => {
+      const bucketName = uploadedFiles[0]?.bucket;
+      if (!bucketName) {
+        console.warn("No files uploaded, skipping list test");
+        return;
+      }
+
+      const result = runAwsCli([
+        "s3api",
+        "list-objects-v2",
+        "--bucket",
+        bucketName,
+        "--prefix",
+        testPrefix,
+        "--output",
+        "json",
+      ]);
+
+      const response = JSON.parse(result);
+      expect(response.Contents).toBeDefined();
+      expect(Array.isArray(response.Contents)).toBe(true);
+      expect(response.Contents.length).toBe(uploadedFiles.length);
+
+      console.log(`[test] Found ${response.Contents.length} objects with prefix '${testPrefix}'`);
+      response.Contents.forEach((obj: any) => {
+        console.log(`[test] 📄 ${obj.Key} (${obj.Size} bytes, modified: ${obj.LastModified})`);
+      });
+    });
+
+    it("can download and verify uploaded content", () => {
+      const bucketName = uploadedFiles[0]?.bucket;
+      if (!bucketName || uploadedFiles.length === 0) {
+        console.warn("No files uploaded, skipping download test");
+        return;
+      }
+
+      // Test downloading the emoji JSON file
+      const emojiFile = uploadedFiles.find((f) => f.key.includes("emojis"));
+      if (!emojiFile) {
+        console.warn("Emoji file not found, skipping download test");
+        return;
+      }
+
+      const downloadPath = path.join(os.tmpdir(), "downloaded-test.json");
+
+      try {
+        runAwsCli([
+          "s3",
+          "cp",
+          `s3://${emojiFile.bucket}/${emojiFile.key}`,
+          downloadPath,
+        ]);
+
+        const downloadedContent = fs.readFileSync(downloadPath, "utf8");
+        const parsed = JSON.parse(downloadedContent);
+
+        expect(parsed.message).toBe("Testing S3 with emojis! 🪣");
+        expect(Array.isArray(parsed.emojis)).toBe(true);
+        expect(parsed.emojis).toContain("🚀");
+        console.log(`[test] ✅ Downloaded and verified emoji content: ${parsed.message}`);
+      } finally {
+        if (fs.existsSync(downloadPath)) {
+          fs.unlinkSync(downloadPath);
+        }
+      }
+    });
+
+    it("can copy objects between locations", () => {
+      const bucketName = uploadedFiles[0]?.bucket;
+      if (!bucketName || uploadedFiles.length === 0) {
+        console.warn("No files uploaded, skipping copy test");
+        return;
+      }
+
+      const sourceFile = uploadedFiles[0];
+      const copyKey = `${testPrefix}-copy/${path.basename(sourceFile.key)}`;
+
+      runAwsCli([
+        "s3",
+        "cp",
+        `s3://${sourceFile.bucket}/${sourceFile.key}`,
+        `s3://${bucketName}/${copyKey}`,
+      ]);
+
+      uploadedFiles.push({ bucket: bucketName, key: copyKey });
+      console.log(`[test] ✅ Copied object to: ${copyKey}`);
+
+      // Verify copy
+      const headResult = runAwsCli([
+        "s3api",
+        "head-object",
+        "--bucket",
+        bucketName,
+        "--key",
+        copyKey,
+        "--output",
+        "json",
+      ]);
+      expect(JSON.parse(headResult)).toBeDefined();
+    });
+
+    it("can delete objects (DeleteObject)", () => {
+      const bucketName = uploadedFiles[0]?.bucket;
+      if (!bucketName || uploadedFiles.length === 0) {
+        console.warn("No files uploaded, skipping delete test");
+        return;
+      }
+
+      // Delete the first uploaded file
+      const fileToDelete = uploadedFiles[0];
+
+      runAwsCli([
+        "s3",
+        "rm",
+        `s3://${fileToDelete.bucket}/${fileToDelete.key}`,
+      ]);
+
+      console.log(`[test] ✅ Deleted: ${fileToDelete.key}`);
+
+      // Verify deletion by trying to head the object (should fail)
+      let objectExists = true;
+      try {
+        runAwsCli([
+          "s3api",
+          "head-object",
+          "--bucket",
+          fileToDelete.bucket,
+          "--key",
+          fileToDelete.key,
+          "--output",
+          "json",
+        ]);
+      } catch {
+        objectExists = false;
+      }
+
+      expect(objectExists).toBe(false);
+
+      // Remove from cleanup list since we already deleted it
+      uploadedFiles.shift();
+    });
+
+    it("can perform batch operations with fun progress", () => {
+      const bucketName = outputs.s3_buckets.staging || outputs.s3_buckets.data || Object.values(outputs.s3_buckets)[0];
+      const batchFiles = [
+        { name: "batch-1-🎯.txt", content: "Target acquired!" },
+        { name: "batch-2-🎮.txt", content: "Game on!" },
+        { name: "batch-3-🏆.txt", content: "Victory!" },
+      ];
+
+      console.log(`[test] Starting batch upload with progress...`);
+
+      batchFiles.forEach((file, index) => {
+        const key = `${testPrefix}/batch/${file.name}`;
+        const tempPath = path.join(os.tmpdir(), file.name);
+
+        fs.writeFileSync(tempPath, file.content, "utf8");
+
+        try {
+          runAwsCli([
+            "s3",
+            "cp",
+            tempPath,
+            `s3://${bucketName}/${key}`,
+            "--no-progress",
+          ]);
+
+          uploadedFiles.push({ bucket: bucketName, key });
+
+          const progress = ((index + 1) / batchFiles.length * 100).toFixed(0);
+          const progressBar = "█".repeat(Math.floor((index + 1) / batchFiles.length * 20));
+          const remaining = "░".repeat(20 - progressBar.length);
+
+          console.log(`[test] Upload Progress: ${progressBar}${remaining} ${progress}% - ${file.name}`);
+        } finally {
+          fs.unlinkSync(tempPath);
+        }
+      });
+
+      expect(uploadedFiles.length).toBeGreaterThanOrEqual(batchFiles.length);
+      console.log(`[test] 🎉 Batch upload complete!`);
+    });
+
+    it("can test S3 presigned URL generation", () => {
+      const bucketName = uploadedFiles[0]?.bucket;
+      if (!bucketName || uploadedFiles.length === 0) {
+        console.warn("No files uploaded, skipping presigned URL test");
+        return;
+      }
+
+      const fileForUrl = uploadedFiles[uploadedFiles.length - 1];
+
+      const presignResult = runAwsCli([
+        "s3",
+        "presign",
+        `s3://${fileForUrl.bucket}/${fileForUrl.key}`,
+        "--expires-in",
+        "300", // 5 minutes
+      ]);
+
+      expect(presignResult).toContain("https://");
+      expect(presignResult).toContain("X-Amz-Expires=300");
+      console.log(`[test] ✅ Generated presigned URL (valid for 5 minutes)`);
+    });
+  });
 });
