@@ -25,5 +25,5 @@
     "CloudWatch Logs",
     "Macie"
   ],
-  "training_quality": 10
+  "training_quality": 8
 }
