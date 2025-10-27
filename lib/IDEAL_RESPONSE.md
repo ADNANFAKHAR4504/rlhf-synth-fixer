@@ -119,6 +119,13 @@ class TapStack(pulumi.ComponentResource):
                 "to_port": 5432,
                 "cidr_blocks": ["10.0.0.0/16"]
             }],
+            egress=[{
+                "protocol": "tcp",
+                "from_port": 443,
+                "to_port": 443,
+                "cidr_blocks": ["10.0.0.0/16"],
+                "description": "Allow HTTPS within VPC for AWS service communication"
+            }],
             tags={**self.tags, "Name": f"brazilcart-rds-sg-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
@@ -134,6 +141,13 @@ class TapStack(pulumi.ComponentResource):
                 "to_port": 6379,
                 "cidr_blocks": ["10.0.0.0/16"]
             }],
+            egress=[{
+                "protocol": "tcp",
+                "from_port": 443,
+                "to_port": 443,
+                "cidr_blocks": ["10.0.0.0/16"],
+                "description": "Allow HTTPS within VPC for AWS service communication"
+            }],
             tags={**self.tags, "Name": f"brazilcart-cache-sg-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
@@ -146,10 +160,12 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Create random password
-        import random
+        # Create random password using cryptographically secure generator
+        import secrets
         import string
-        password = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
+        # Generate secure password with uppercase, lowercase, digits, and special chars
+        alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+        password = ''.join(secrets.choice(alphabet) for _ in range(20))
 
         db_password_version = aws.secretsmanager.SecretVersion(
             f"brazilcart-db-password-version-{self.environment_suffix}",
@@ -223,10 +239,62 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Create S3 bucket for CodePipeline artifacts
+        # Create S3 bucket for CodePipeline artifacts with security hardening
         artifact_bucket = aws.s3.Bucket(
             f"brazilcart-artifacts-{self.environment_suffix}",
             tags={**self.tags, "Name": f"brazilcart-artifacts-{self.environment_suffix}"},
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Enable versioning on S3 bucket
+        bucket_versioning = aws.s3.BucketVersioningV2(
+            f"brazilcart-artifacts-versioning-{self.environment_suffix}",
+            bucket=artifact_bucket.id,
+            versioning_configuration={
+                "status": "Enabled"
+            },
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Enable server-side encryption with KMS
+        bucket_encryption = aws.s3.BucketServerSideEncryptionConfigurationV2(
+            f"brazilcart-artifacts-encryption-{self.environment_suffix}",
+            bucket=artifact_bucket.id,
+            rules=[{
+                "apply_server_side_encryption_by_default": {
+                    "sse_algorithm": "aws:kms",
+                    "kms_master_key_id": kms_key.id
+                },
+                "bucket_key_enabled": True
+            }],
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Block all public access
+        bucket_public_access_block = aws.s3.BucketPublicAccessBlock(
+            f"brazilcart-artifacts-public-access-{self.environment_suffix}",
+            bucket=artifact_bucket.id,
+            block_public_acls=True,
+            block_public_policy=True,
+            ignore_public_acls=True,
+            restrict_public_buckets=True,
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Add lifecycle policy to expire old artifacts
+        bucket_lifecycle = aws.s3.BucketLifecycleConfigurationV2(
+            f"brazilcart-artifacts-lifecycle-{self.environment_suffix}",
+            bucket=artifact_bucket.id,
+            rules=[{
+                "id": "expire-old-artifacts",
+                "status": "Enabled",
+                "expiration": {
+                    "days": 30
+                },
+                "noncurrent_version_expiration": {
+                    "noncurrent_days": 7
+                }
+            }],
             opts=ResourceOptions(parent=self)
         )
 
@@ -354,7 +422,8 @@ eu-south-2
 
 **Database Credentials**
 - Username: brazilcart_admin
-- Password: 16-character random string (generated at deployment time)
+- Password: 20-character cryptographically secure random string with special characters
+- Generated using Python's `secrets` module (not `random.choices()`)
 - Stored in AWS Secrets Manager
 
 ### Cache Infrastructure
@@ -375,8 +444,13 @@ eu-south-2
 - Scoped to environment suffix
 
 **Security Groups**
-- RDS Security Group: Port 5432 from VPC CIDR only
-- ElastiCache Security Group: Port 6379 from VPC CIDR only
+- RDS Security Group:
+  - Ingress: Port 5432 from VPC CIDR (10.0.0.0/16) only
+  - Egress: Port 443 to VPC CIDR for AWS service communication
+- ElastiCache Security Group:
+  - Ingress: Port 6379 from VPC CIDR (10.0.0.0/16) only
+  - Egress: Port 443 to VPC CIDR for AWS service communication
+- Explicit egress rules follow least privilege principle
 - No public internet access
 
 **Secrets Management**
@@ -392,10 +466,13 @@ eu-south-2
 - Artifact storage in dedicated S3 bucket
 - IAM role with S3 access permissions
 
-**S3 Bucket**
+**S3 Bucket (Security Hardened)**
 - Artifact storage for CodePipeline
 - Tagged with environment suffix
-- No public access configured
+- Versioning enabled for artifact recovery
+- KMS encryption (aws:kms) with bucket key enabled
+- All public access blocked (ACLs and policies)
+- Lifecycle policy: 30 days for current versions, 7 days for non-current versions
 
 ## Resource Naming Convention
 
@@ -419,35 +496,35 @@ The stack exports the following outputs:
 - `kms_key_id`: KMS key ID
 - `db_secret_arn`: Secrets Manager ARN for database credentials
 
-## Known Limitations
+## Security Improvements
 
-### Security Considerations
+### Fixed Security Issues
 
-**Insecure Password Generation**
-- Uses Python's `random.choices()` which is not cryptographically secure
-- Generated password is directly embedded in code
-- Not suitable for production use
+**Secure Password Generation (FIXED)**
+- ✅ Now uses Python's `secrets` module for cryptographically secure password generation
+- ✅ Password length increased from 16 to 20 characters
+- ✅ Added special characters to password alphabet (!@#$%^&*)
+- ✅ Password stored securely in AWS Secrets Manager
 
-**Recommended Fix**: Use AWS Secrets Manager automatic password rotation or Pulumi's random provider with cryptographic randomness.
+**S3 Bucket Security Hardening (FIXED)**
+- ✅ Versioning enabled for artifact recovery
+- ✅ KMS encryption configured for data at rest
+- ✅ All public access blocked (ACLs and policies)
+- ✅ Lifecycle policy implemented (30 days for current versions, 7 days for non-current)
 
-### High Availability
+**Security Group Egress Rules (FIXED)**
+- ✅ Explicit egress rules added to RDS security group (HTTPS within VPC)
+- ✅ Explicit egress rules added to ElastiCache security group (HTTPS within VPC)
+- ✅ Follows principle of least privilege for outbound traffic
 
-**Limited Subnet Coverage**
+### Remaining Limitations
+
+**High Availability**
 - Only 2 subnets across 2 availability zones
 - Does not meet 3-AZ high availability best practices
 - Single subnet failure reduces redundancy
 
 **Recommended Fix**: Add a third subnet in availability zone 'c' for better fault tolerance.
-
-### S3 Bucket Security
-
-**Missing Bucket Configuration**
-- No versioning enabled
-- No encryption configuration
-- No public access block
-- No lifecycle policies
-
-**Recommended Fix**: Add S3 bucket encryption, versioning, and public access blocking.
 
 ### CodePipeline Source
 
