@@ -9,6 +9,7 @@ import pulumi
 import pulumi_aws as aws
 from pulumi import ResourceOptions, Output
 import json
+import os
 
 
 class TapStackArgs:
@@ -28,6 +29,11 @@ class TapStack(pulumi.ComponentResource):
 
         self.environment_suffix = args.environment_suffix
         self.tags = args.tags
+
+        # Read AWS region from file
+        region_file = os.path.join(os.path.dirname(__file__), 'AWS_REGION')
+        with open(region_file, 'r') as f:
+            aws_region = f.read().strip()
 
         # Create KMS key for encryption
         kms_key = aws.kms.Key(
@@ -53,7 +59,7 @@ class TapStack(pulumi.ComponentResource):
             f"brazilcart-subnet-a-{self.environment_suffix}",
             vpc_id=vpc.id,
             cidr_block="10.0.1.0/24",
-            availability_zone="eu-south-2a",
+            availability_zone=f"{aws_region}a",
             tags={**self.tags, "Name": f"brazilcart-subnet-a-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
@@ -62,7 +68,7 @@ class TapStack(pulumi.ComponentResource):
             f"brazilcart-subnet-b-{self.environment_suffix}",
             vpc_id=vpc.id,
             cidr_block="10.0.2.0/24",
-            availability_zone="eu-south-2b",
+            availability_zone=f"{aws_region}b",
             tags={**self.tags, "Name": f"brazilcart-subnet-b-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
