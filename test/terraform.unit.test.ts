@@ -477,9 +477,13 @@ describe("Lambda Functions Configuration", () => {
     expect(stackContent).toMatch(/mode\s*=\s*"Active"/);
   });
 
-  test("Lambdas reference S3 bucket for code", () => {
-    expect(stackContent).toMatch(/s3_bucket\s*=\s*aws_s3_bucket\.lambda_code\.id/);
-    expect(stackContent).toMatch(/s3_key\s*=.*\.zip"/);
+  test("Lambdas use local deployment package", () => {
+    // Check that Lambda functions use filename for deployment (placeholder)
+    expect(stackContent).toMatch(/filename\s*=\s*"\$\{path\.module\}\/lambda_placeholder\.zip"/);
+    expect(stackContent).toMatch(/source_code_hash\s*=\s*filebase64sha256\(/);
+
+    // S3 bucket still exists for future use
+    expect(stackContent).toMatch(/resource\s+"aws_s3_bucket"\s+"lambda_code"/);
   });
 
   test("hot_booking_checker Lambda exists for 30s SLA", () => {

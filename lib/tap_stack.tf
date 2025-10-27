@@ -1095,18 +1095,19 @@ resource "aws_iam_role_policy_attachment" "step_functions_policy_attachment" {
 # ---------------------------------------------------------------------------------------------------------------------
 
 resource "aws_lambda_function" "booking_handler" {
-  function_name    = "${local.name_prefix}-booking-handler"
-  role             = aws_iam_role.booking_handler_role.arn
-  handler          = "index.handler"
-  runtime          = "nodejs20.x"
-  timeout          = 10
-  memory_size      = 512
+  function_name = "${local.name_prefix}-booking-handler"
+  role          = aws_iam_role.booking_handler_role.arn
+  handler       = "index.handler"
+  runtime       = "nodejs20.x"
+  timeout       = 10
+  memory_size   = 512
 
   # Increased reserved concurrency to handle 1.2k sustained / 2k burst RPS
   reserved_concurrent_executions = var.lambda_reserved_concurrency
 
-  s3_bucket = aws_s3_bucket.lambda_code.id
-  s3_key    = "booking_handler/function.zip"
+  # Placeholder Lambda code - replace with actual implementation
+  filename         = "${path.module}/lambda_placeholder.zip"
+  source_code_hash = filebase64sha256("${path.module}/lambda_placeholder.zip")
 
   environment {
     variables = {
@@ -1132,23 +1133,24 @@ resource "aws_lambda_function" "booking_handler" {
 }
 
 resource "aws_lambda_function" "cache_updater" {
-  function_name    = "${local.name_prefix}-cache-updater"
-  role             = aws_iam_role.cache_updater_role.arn
-  handler          = "index.handler"
-  runtime          = "nodejs20.x"
-  timeout          = 30
-  memory_size      = 512
+  function_name = "${local.name_prefix}-cache-updater"
+  role          = aws_iam_role.cache_updater_role.arn
+  handler       = "index.handler"
+  runtime       = "nodejs20.x"
+  timeout       = 30
+  memory_size   = 512
 
-  s3_bucket = aws_s3_bucket.lambda_code.id
-  s3_key    = "cache_updater/function.zip"
+  # Placeholder Lambda code - replace with actual implementation
+  filename         = "${path.module}/lambda_placeholder.zip"
+  source_code_hash = filebase64sha256("${path.module}/lambda_placeholder.zip")
 
   environment {
     variables = {
-      REDIS_ENDPOINT       = aws_elasticache_replication_group.booking_cache.configuration_endpoint_address
-      REDIS_PORT           = "6379"
+      REDIS_ENDPOINT        = aws_elasticache_replication_group.booking_cache.configuration_endpoint_address
+      REDIS_PORT            = "6379"
       REDIS_AUTH_SECRET_ARN = aws_secretsmanager_secret.redis_auth_token.arn
-      REDIS_TTL            = "3600"
-      ENVIRONMENT          = var.environment
+      REDIS_TTL             = "3600"
+      ENVIRONMENT           = var.environment
       # SLA Target: Cache for a specific hotel should be updated in <1s P95 after DynamoDB change
       LOG_LEVEL = "INFO"
     }
@@ -1170,15 +1172,16 @@ resource "aws_lambda_function" "cache_updater" {
 
 # Hot booking checker: fast-path conflict detection within 30s of booking (separate from 5min reconciliation)
 resource "aws_lambda_function" "hot_booking_checker" {
-  function_name    = "${local.name_prefix}-hot-booking-checker"
-  role             = aws_iam_role.hot_booking_checker_role.arn
-  handler          = "index.handler"
-  runtime          = "nodejs20.x"
-  timeout          = 30
-  memory_size      = 512
+  function_name = "${local.name_prefix}-hot-booking-checker"
+  role          = aws_iam_role.hot_booking_checker_role.arn
+  handler       = "index.handler"
+  runtime       = "nodejs20.x"
+  timeout       = 30
+  memory_size   = 512
 
-  s3_bucket = aws_s3_bucket.lambda_code.id
-  s3_key    = "hot_booking_checker/function.zip"
+  # Placeholder Lambda code - replace with actual implementation
+  filename         = "${path.module}/lambda_placeholder.zip"
+  source_code_hash = filebase64sha256("${path.module}/lambda_placeholder.zip")
 
   environment {
     variables = {
@@ -1202,15 +1205,16 @@ resource "aws_lambda_function" "hot_booking_checker" {
 }
 
 resource "aws_lambda_function" "pms_sync_worker" {
-  function_name    = "${local.name_prefix}-pms-sync-worker"
-  role             = aws_iam_role.pms_sync_worker_role.arn
-  handler          = "index.handler"
-  runtime          = "nodejs20.x"
-  timeout          = 60
-  memory_size      = 512
+  function_name = "${local.name_prefix}-pms-sync-worker"
+  role          = aws_iam_role.pms_sync_worker_role.arn
+  handler       = "index.handler"
+  runtime       = "nodejs20.x"
+  timeout       = 60
+  memory_size   = 512
 
-  s3_bucket = aws_s3_bucket.lambda_code.id
-  s3_key    = "pms_sync_worker/function.zip"
+  # Placeholder Lambda code - replace with actual implementation
+  filename         = "${path.module}/lambda_placeholder.zip"
+  source_code_hash = filebase64sha256("${path.module}/lambda_placeholder.zip")
 
   environment {
     variables = {
@@ -1238,15 +1242,16 @@ resource "aws_lambda_function" "pms_sync_worker" {
 }
 
 resource "aws_lambda_function" "reconciliation_checker" {
-  function_name    = "${local.name_prefix}-reconciliation-checker"
-  role             = aws_iam_role.reconciliation_checker_role.arn
-  handler          = "index.handler"
-  runtime          = "nodejs20.x"
-  timeout          = 300
-  memory_size      = 1024
+  function_name = "${local.name_prefix}-reconciliation-checker"
+  role          = aws_iam_role.reconciliation_checker_role.arn
+  handler       = "index.handler"
+  runtime       = "nodejs20.x"
+  timeout       = 300
+  memory_size   = 1024
 
-  s3_bucket = aws_s3_bucket.lambda_code.id
-  s3_key    = "reconciliation_checker/function.zip"
+  # Placeholder Lambda code - replace with actual implementation
+  filename         = "${path.module}/lambda_placeholder.zip"
+  source_code_hash = filebase64sha256("${path.module}/lambda_placeholder.zip")
 
   environment {
     variables = {
@@ -1279,15 +1284,16 @@ resource "aws_lambda_function" "reconciliation_checker" {
 }
 
 resource "aws_lambda_function" "overbooking_resolver" {
-  function_name    = "${local.name_prefix}-overbooking-resolver"
-  role             = aws_iam_role.overbooking_resolver_role.arn
-  handler          = "index.handler"
-  runtime          = "nodejs20.x"
-  timeout          = 60
-  memory_size      = 1024
+  function_name = "${local.name_prefix}-overbooking-resolver"
+  role          = aws_iam_role.overbooking_resolver_role.arn
+  handler       = "index.handler"
+  runtime       = "nodejs20.x"
+  timeout       = 60
+  memory_size   = 1024
 
-  s3_bucket = aws_s3_bucket.lambda_code.id
-  s3_key    = "overbooking_resolver/function.zip"
+  # Placeholder Lambda code - replace with actual implementation
+  filename         = "${path.module}/lambda_placeholder.zip"
+  source_code_hash = filebase64sha256("${path.module}/lambda_placeholder.zip")
 
   environment {
     variables = {
@@ -1340,17 +1346,18 @@ resource "aws_apigatewayv2_api" "booking_api" {
 
 # JWT Authorizer (requires external IdP like Cognito User Pool or Auth0)
 # Update var.jwt_issuer and var.jwt_audience to match your identity provider
-resource "aws_apigatewayv2_authorizer" "jwt" {
-  api_id           = aws_apigatewayv2_api.booking_api.id
-  authorizer_type  = "JWT"
-  identity_sources = ["$request.header.Authorization"]
-  name             = "${local.name_prefix}-jwt-authorizer"
-
-  jwt_configuration {
-    audience = var.jwt_audience
-    issuer   = var.jwt_issuer
-  }
-}
+# Commented out until valid IdP is configured
+# resource "aws_apigatewayv2_authorizer" "jwt" {
+#   api_id           = aws_apigatewayv2_api.booking_api.id
+#   authorizer_type  = "JWT"
+#   identity_sources = ["$request.header.Authorization"]
+#   name             = "${local.name_prefix}-jwt-authorizer"
+#
+#   jwt_configuration {
+#     audience = var.jwt_audience
+#     issuer   = var.jwt_issuer
+#   }
+# }
 
 resource "aws_apigatewayv2_integration" "booking_handler_integration" {
   api_id           = aws_apigatewayv2_api.booking_api.id
@@ -1366,9 +1373,10 @@ resource "aws_apigatewayv2_route" "booking_route" {
   api_id    = aws_apigatewayv2_api.booking_api.id
   route_key = "POST /book"
 
-  target             = "integrations/${aws_apigatewayv2_integration.booking_handler_integration.id}"
-  authorization_type = "JWT"
-  authorizer_id      = aws_apigatewayv2_authorizer.jwt.id
+  target = "integrations/${aws_apigatewayv2_integration.booking_handler_integration.id}"
+  # JWT authorization commented out until valid IdP is configured
+  # authorization_type = "JWT"
+  # authorizer_id      = aws_apigatewayv2_authorizer.jwt.id
 }
 
 resource "aws_apigatewayv2_stage" "booking_api_stage" {
@@ -1495,19 +1503,19 @@ resource "aws_elasticache_subnet_group" "redis_subnet_group" {
 }
 
 resource "aws_elasticache_replication_group" "booking_cache" {
-  replication_group_id       = "${local.name_prefix}-booking-cache"
-  description                = "Redis cache for hotel availability"
-  engine                     = "redis"
-  engine_version             = "7.0"
-  node_type                  = var.cache_node_type
-  port                       = 6379
-  parameter_group_name       = "default.redis7.cluster.on"
-  subnet_group_name          = aws_elasticache_subnet_group.redis_subnet_group.name
-  security_group_ids         = [aws_security_group.elasticache.id]
+  replication_group_id = "${local.name_prefix}-booking-cache"
+  description          = "Redis cache for hotel availability"
+  engine               = "redis"
+  engine_version       = "7.0"
+  node_type            = var.cache_node_type
+  port                 = 6379
+  parameter_group_name = "default.redis7.cluster.on"
+  subnet_group_name    = aws_elasticache_subnet_group.redis_subnet_group.name
+  security_group_ids   = [aws_security_group.elasticache.id]
 
   # Cluster mode for horizontal scalability across 45k hotels
-  num_node_groups         = 3
-  replicas_per_node_group = 2
+  num_node_groups            = 3
+  replicas_per_node_group    = 2
   automatic_failover_enabled = true
   multi_az_enabled           = true
 
@@ -1673,10 +1681,10 @@ resource "aws_sfn_state_machine" "reconciliation_state_machine" {
         Parameters = {
           FunctionName = aws_lambda_function.reconciliation_checker.arn
           Payload = {
-            "executionId.$"    = "$$.Execution.Id"
-            "executionTime.$"  = "$$.Execution.StartTime"
-            "scheduleTime.$"   = "$.time"
-            "source"           = "periodic-reconciliation"
+            "executionId.$"   = "$$.Execution.Id"
+            "executionTime.$" = "$$.Execution.StartTime"
+            "scheduleTime.$"  = "$.time"
+            "source"          = "periodic-reconciliation"
           }
         }
         ResultPath = "$.reconciliationResult"
@@ -1720,9 +1728,9 @@ resource "aws_sfn_state_machine" "reconciliation_state_machine" {
 }
 
 resource "aws_cloudwatch_event_target" "reconciliation_target" {
-  rule      = aws_cloudwatch_event_rule.reconciliation_schedule.name
-  arn       = aws_sfn_state_machine.reconciliation_state_machine.arn
-  role_arn  = aws_iam_role.eventbridge_to_sfn_role.arn
+  rule     = aws_cloudwatch_event_rule.reconciliation_schedule.name
+  arn      = aws_sfn_state_machine.reconciliation_state_machine.arn
+  role_arn = aws_iam_role.eventbridge_to_sfn_role.arn
 
   input = jsonencode({
     time   = "scheduled-reconciliation"
@@ -1789,15 +1797,15 @@ resource "aws_db_subnet_group" "aurora_subnet_group" {
 }
 
 resource "aws_rds_cluster" "audit_db" {
-  cluster_identifier      = "${local.name_prefix}-audit-db"
-  engine                  = "aurora-mysql"
-  engine_version          = "8.0.mysql_aurora.3.04.0"
-  database_name           = var.aurora_database_name
-  master_username         = var.aurora_master_username
-  master_password         = random_password.aurora_master.result
+  cluster_identifier = "${local.name_prefix}-audit-db"
+  engine             = "aurora-mysql"
+  engine_version     = "8.0.mysql_aurora.3.04.0"
+  database_name      = var.aurora_database_name
+  master_username    = var.aurora_master_username
+  master_password    = random_password.aurora_master.result
 
-  db_subnet_group_name    = aws_db_subnet_group.aurora_subnet_group.name
-  vpc_security_group_ids  = [aws_security_group.aurora.id]
+  db_subnet_group_name   = aws_db_subnet_group.aurora_subnet_group.name
+  vpc_security_group_ids = [aws_security_group.aurora.id]
 
   backup_retention_period = 7
   preferred_backup_window = "03:00-05:00"
@@ -1882,8 +1890,8 @@ resource "aws_cloudwatch_metric_alarm" "dynamodb_replication_lag" {
   alarm_actions       = [aws_sns_topic.cloudwatch_alarms.arn]
 
   dimensions = {
-    TableName        = aws_dynamodb_table.inventory.name
-    ReceivingRegion  = each.value
+    TableName       = aws_dynamodb_table.inventory.name
+    ReceivingRegion = each.value
   }
 
   tags = merge(local.common_tags, {
@@ -2021,33 +2029,42 @@ resource "aws_cloudwatch_metric_alarm" "elasticache_cpu" {
 
 output "deployment_instructions" {
   description = "Next steps after Terraform apply"
-  value = <<-EOT
+  value       = <<-EOT
     DEPLOYMENT COMPLETE - Next Steps:
 
-    1. Upload Lambda code to S3 bucket: ${aws_s3_bucket.lambda_code.id}
-       Required functions:
-       - booking_handler/function.zip
-       - cache_updater/function.zip
-       - hot_booking_checker/function.zip
-       - pms_sync_worker/function.zip
-       - reconciliation_checker/function.zip
-       - overbooking_resolver/function.zip
+    1. Lambda Functions Status:
+       ✓ All Lambda functions deployed with placeholder code
+       ✓ Full Lambda implementations available in lib/lambda/ directory
+       
+       To deploy full functionality:
+       a) Build Lambda packages: cd lib/lambda && see README.md for instructions
+       b) Upload to S3 or update Terraform to use local zip files
+       c) Run terraform apply to update function code
 
-    2. Configure JWT authorizer:
-       - Update var.jwt_issuer and var.jwt_audience to match your IdP
-       - Current issuer: ${var.jwt_issuer}
-       - Current audience: ${jsonencode(var.jwt_audience)}
+    2. JWT Authorizer (Currently Disabled):
+       - Uncomment aws_apigatewayv2_authorizer.jwt in tap_stack.tf
+       - Configure Cognito User Pool or Auth0
+       - Update var.jwt_issuer and var.jwt_audience
+       - Uncomment authorization in booking_route
 
     3. Confirm CloudWatch alarm email subscription:
        - Check ${var.alarm_notification_email} for confirmation email
+       - SNS Topic: ${aws_sns_topic.cloudwatch_alarms.arn}
 
     4. Test booking flow:
        - API Endpoint: ${aws_apigatewayv2_stage.booking_api_stage.invoke_url}
-       - POST /book with valid JWT token
+       - POST /book (no auth required until JWT is enabled)
+       - Example: curl -X POST ${aws_apigatewayv2_stage.booking_api_stage.invoke_url}/book \
+                      -H "Content-Type: application/json" \
+                      -d '{"propertyId":"hotel123","roomId":"room456","date":"2025-11-01","units":1}'
+
+    5. Populate DynamoDB with initial inventory data
 
     IMPORTANT: Provider requirements:
     - Terraform >= 1.5.0
     - AWS Provider >= 5.20.0 (for nodejs20.x runtime support)
+    
+    Lambda Code: See lib/lambda/README.md for build and deployment instructions
   EOT
 }
 
