@@ -634,8 +634,6 @@ Resources:
   RDSDatabase:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceIdentifier: 'financial-app-db'
-      DBName: finsecuredb
       Engine: mysql
       EngineVersion: '8.0.43'
       DBInstanceClass: db.t3.medium
