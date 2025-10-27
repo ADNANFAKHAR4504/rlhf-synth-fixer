@@ -2,6 +2,7 @@ import * as path from 'path';
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -126,13 +127,11 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
 
     // Create Lambda function from local asset (separate folder under lib)
     const lambdaFunctionName = `api-handler${suffix}`;
-    const apiHandler = new lambda.Function(this, 'ApiHandler', {
+    const apiHandler = new NodejsFunction(this, 'ApiHandler', {
       functionName: lambdaFunctionName,
       runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'index.handler',
-      code: lambda.Code.fromAsset(
-        path.join(__dirname, 'lambda', 'api-handler')
-      ),
+      entry: path.join(__dirname, 'lambda', 'api-handler', 'index.js'),
+      handler: 'handler',
       environment: {
         TABLE_NAME: dynamoTable.tableName,
         API_KEY_PARAM: apiKeyParam.parameterName,
@@ -146,6 +145,12 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
       deadLetterQueueEnabled: true,
       maxEventAge: cdk.Duration.hours(1),
       retryAttempts: 2,
+      bundling: {
+        minify: false,
+        sourceMap: false,
+        externalModules: [],
+        nodeModules: ['aws-sdk', 'aws-xray-sdk-core'],
+      },
     });
 
     // Stream processor Lambda: reads DynamoDB stream records and forwards messages to SQS

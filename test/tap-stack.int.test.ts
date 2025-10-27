@@ -14,6 +14,8 @@ import {
   PurgeQueueCommand,
 } from '@aws-sdk/client-sqs';
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { CloudWatchLogsClient, FilterLogEventsCommand } from '@aws-sdk/client-cloudwatch-logs';
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 
 // Integration E2E test (live). Requirements:
 // - Use real deployment outputs from cfn-outputs/flat-outputs.json
@@ -32,6 +34,8 @@ describe('Live integration tests — API -> Lambda -> DynamoDB -> Stream -> SQS 
   let dynamodbClient: DynamoDBClient;
   let sqsClient: SQSClient;
   let s3Client: S3Client;
+  let cloudwatchClient: CloudWatchLogsClient;
+  let lambdaClient: LambdaClient;
 
   beforeAll(() => {
     if (!fs.existsSync(outputsPath)) {
@@ -49,6 +53,8 @@ describe('Live integration tests — API -> Lambda -> DynamoDB -> Stream -> SQS 
     dynamodbClient = new DynamoDBClient({ region });
     sqsClient = new SQSClient({ region });
     s3Client = new S3Client({ region });
+    cloudwatchClient = new CloudWatchLogsClient({ region });
+    lambdaClient = new LambdaClient({ region });
   });
 
   test('POST to API creates item; DynamoDB contains item; stream triggers SQS', async () => {
@@ -175,12 +181,47 @@ describe('Live integration tests — API -> Lambda -> DynamoDB -> Stream -> SQS 
       console.warn('POST to /items did not create an item — falling back to GET to validate API list behaviour', res.status);
       const getUrl = apiEndpoint.endsWith('/') ? apiEndpoint : `${apiEndpoint}/`;
       const getRes = await axios.get(`${getUrl}items`, { validateStatus: () => true, timeout: 20000 });
-      expect(getRes.status).toBe(200);
-      const list = getRes.data?.items || getRes.data;
-      expect(Array.isArray(list)).toBe(true);
 
-      // Skip DynamoDB/stream/SQS checks in fallback mode — we validated the API surface instead.
-      return;
+      if (getRes.status === 200) {
+        const list = getRes.data?.items || getRes.data;
+        expect(Array.isArray(list)).toBe(true);
+        // Skip DynamoDB/stream/SQS checks in fallback mode — we validated the API surface instead.
+        return;
+      }
+
+      // GET also failed — collect diagnostics (POST + GET responses, CloudWatch logs, optional Lambda invoke)
+      const diagnostics: Record<string, unknown> = {
+        post: { status: res.status, headers: res.headers, body: res.data },
+        get: { status: getRes.status, headers: getRes.headers, body: getRes.data },
+      };
+
+      // Try to read ApiHandler log group and function name from outputs to fetch logs and invoke
+      const apiHandlerLogGroup = (outputs['ApiHandlerLogGroupName'] as string) || (outputs['ApiGatewayLogGroupName'] as string);
+      const apiHandlerFunction = (outputs['ApiHandlerFunctionName'] as string) || (outputs['StreamProcessorFunctionName'] as string);
+
+      if (apiHandlerLogGroup) {
+        try {
+          const logsResp = await cloudwatchClient.send(new FilterLogEventsCommand({ logGroupName: apiHandlerLogGroup, limit: 50 }));
+          diagnostics.logs = (logsResp.events || []).slice(-20).map((e) => ({ timestamp: e.timestamp, message: e.message }));
+        } catch (e) {
+          diagnostics.logsError = (e as Error).message;
+        }
+      }
+
+      if (apiHandlerFunction) {
+        try {
+          const invokeResp = await lambdaClient.send(new InvokeCommand({ FunctionName: apiHandlerFunction, Payload: Buffer.from(JSON.stringify({ body: JSON.stringify(payload) })) }));
+          diagnostics.invoke = {
+            StatusCode: invokeResp.StatusCode,
+            FunctionError: invokeResp.FunctionError,
+            Payload: invokeResp.Payload ? new TextDecoder().decode(invokeResp.Payload) : undefined,
+          };
+        } catch (e) {
+          diagnostics.invokeError = (e as Error).message;
+        }
+      }
+
+      throw new Error(`API POST and GET failed — diagnostics:\n${JSON.stringify(diagnostics, null, 2)}`);
     }
 
     // If we have a bucket name and an itemId, try writing and reading a small object
