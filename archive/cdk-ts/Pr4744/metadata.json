@@ -1,0 +1,31 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349754",
+  "team": "3",
+  "startedAt": "2025-10-17T09:48:23.877Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "S3",
+    "KMS",
+    "VPC",
+    "EC2",
+    "RDS",
+    "Lambda",
+    "CloudWatch Logs",
+    "IAM"
+  ],
+  "background": "Update AWS CDK TypeScript Stack for Secure Web Application Infrastructure with encryption, logging, high availability, and least privilege IAM",
+  "training_quality": 6,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-creator",
+  "dockerS3Location": ""
+}

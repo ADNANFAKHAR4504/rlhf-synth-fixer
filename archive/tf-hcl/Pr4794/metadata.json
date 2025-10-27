@@ -1,0 +1,22 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350197",
+  "team": "4",
+  "training_quality": 9,
+  "background": "Enterprise-grade secure AWS infrastructure with comprehensive security controls including KMS encryption, VPC isolation, CloudTrail auditing, AWS Config compliance monitoring, WAF protection, and multi-AZ high availability. Implements defense-in-depth security with encrypted storage, least privilege IAM, CloudFront CDN, and complete infrastructure as code using single-file Terraform configuration.",
+  "startedAt": "2025-10-18T14:23:01.873Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": "S3 Bucket, VPC, IAM, CloudWatch, RDS, ALB, CloudFront, Lambda, CloudTrail, EC2",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}
