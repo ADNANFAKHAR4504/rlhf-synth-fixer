@@ -1,5 +1,26 @@
 // tap_stack.tf
 
+terraform {
+  required_version = ">= 1.4.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.0"
+    }
+  }
+
+  # Partial backend config: values are injected at `terraform init` time
+  backend "s3" {}
+}
 
 # Data sources
 data "aws_caller_identity" "current" {}
@@ -24,7 +45,6 @@ variable "environment" {
 variable "aws_region" {
   type        = string
   description = "AWS region for deployment"
-  default = "us-east-1"
 }
 
 variable "owner" {
@@ -490,17 +510,18 @@ resource "aws_vpc_endpoint" "kms" {
   })
 }
 
-resource "aws_vpc_endpoint" "timestream" {
-  vpc_id              = aws_vpc.main.id
-  service_name        = "com.amazonaws.${var.aws_region}.timestream.ingest-cell1"
-  vpc_endpoint_type   = "Interface"
-  subnet_ids          = aws_subnet.private[*].id
-  security_group_ids  = [aws_security_group.vpc_endpoints.id]
-  private_dns_enabled = true
-  tags = merge(local.common_tags, {
-    Name = "${local.stack_name}-timestream-endpoint"
-  })
-}
+# Note: Timestream VPC endpoint not available in us-east-1
+# resource "aws_vpc_endpoint" "timestream" {
+#   vpc_id              = aws_vpc.main.id
+#   service_name        = "com.amazonaws.${var.aws_region}.timestream.ingest-cell1"
+#   vpc_endpoint_type   = "Interface"
+#   subnet_ids          = aws_subnet.private[*].id
+#   security_group_ids  = [aws_security_group.vpc_endpoints.id]
+#   private_dns_enabled = true
+#   tags = merge(local.common_tags, {
+#     Name = "${local.stack_name}-timestream-endpoint"
+#   })
+# }
 
 # Kinesis Data Stream (ON_DEMAND omits shard_count, PROVISIONED sets it)
 resource "aws_kinesis_stream" "player_state_on_demand" {
@@ -533,7 +554,7 @@ resource "aws_kinesis_stream" "player_state_provisioned" {
 }
 
 locals {
-  kinesis_stream_arn = var.use_kinesis_on_demand ? aws_kinesis_stream.player_state_on_demand[0].arn : aws_kinesis_stream.player_state_provisioned[0].arn
+  kinesis_stream_arn  = var.use_kinesis_on_demand ? aws_kinesis_stream.player_state_on_demand[0].arn : aws_kinesis_stream.player_state_provisioned[0].arn
   kinesis_stream_name = var.use_kinesis_on_demand ? aws_kinesis_stream.player_state_on_demand[0].name : aws_kinesis_stream.player_state_provisioned[0].name
 }
 
@@ -570,7 +591,7 @@ resource "aws_dynamodb_table" "player_state" {
   dynamic "replica" {
     for_each = var.replica_regions
     content {
-      region_name = replica.value
+      region_name    = replica.value
       propagate_tags = true
     }
   }
@@ -649,11 +670,11 @@ resource "aws_sqs_queue_policy" "graph_updates" {
 
 # SNS to SQS subscriptions with raw message delivery
 resource "aws_sns_topic_subscription" "sns_to_sqs" {
-  count                  = length(var.consumer_groups)
-  topic_arn              = aws_sns_topic.player_updates.arn
-  protocol               = "sqs"
-  endpoint               = aws_sqs_queue.graph_updates[count.index].arn
-  raw_message_delivery   = true
+  count                = length(var.consumer_groups)
+  topic_arn            = aws_sns_topic.player_updates.arn
+  protocol             = "sqs"
+  endpoint             = aws_sqs_queue.graph_updates[count.index].arn
+  raw_message_delivery = true
 }
 
 # ElastiCache Redis Cluster
@@ -683,8 +704,9 @@ resource "aws_elasticache_parameter_group" "redis" {
 resource "aws_cloudwatch_log_group" "redis" {
   name              = "/aws/elasticache/${local.stack_name}-redis"
   retention_in_days = 7
-  kms_key_id        = aws_kms_key.main.arn
-  tags              = local.common_tags
+  # Note: KMS encryption for log groups must be set after creation
+  # kms_key_id        = aws_kms_key.main.arn
+  tags = local.common_tags
 }
 
 resource "aws_elasticache_replication_group" "redis" {
@@ -752,11 +774,11 @@ resource "aws_neptune_cluster" "main" {
   neptune_cluster_parameter_group_name = aws_neptune_cluster_parameter_group.main.name
   vpc_security_group_ids               = [aws_security_group.neptune.id]
 
-  storage_encrypted                  = true
-  kms_key_arn                        = aws_kms_key.main.arn
+  storage_encrypted                   = true
+  kms_key_arn                         = aws_kms_key.main.arn
   iam_database_authentication_enabled = true
-  backup_retention_period            = 7
-  preferred_backup_window            = "03:00-04:00"
+  backup_retention_period             = 7
+  preferred_backup_window             = "03:00-04:00"
 
   enable_cloudwatch_logs_exports = ["audit"]
 
@@ -772,22 +794,29 @@ resource "aws_neptune_cluster_instance" "main" {
 }
 
 # Timestream for audit logging
-resource "aws_timestreamwrite_database" "audit" {
-  database_name = replace("${local.stack_name}-audit", "-", "_")
-  kms_key_id    = aws_kms_key.main.arn
-  tags          = local.common_tags
-}
+# Note: Account does not have Timestream access - contact AWS support to enable
+# resource "aws_timestreamwrite_database" "audit" {
+#   database_name = replace("${local.stack_name}-audit", "-", "_")
+#   kms_key_id    = aws_kms_key.main.arn
+#   tags          = local.common_tags
+# }
 
-resource "aws_timestreamwrite_table" "state_transitions" {
-  database_name = aws_timestreamwrite_database.audit.database_name
-  table_name    = "state_transitions"
+# resource "aws_timestreamwrite_table" "state_transitions" {
+#   database_name = aws_timestreamwrite_database.audit.database_name
+#   table_name    = "state_transitions"
+#   
+#   retention_properties {
+#     magnetic_store_retention_period_in_days = 365
+#     memory_store_retention_period_in_hours  = 24
+#   }
+#   
+#   tags = local.common_tags
+# }
 
-  retention_properties {
-    magnetic_store_retention_period_in_days = 365
-    memory_store_retention_period_in_hours  = 24
-  }
-
-  tags = local.common_tags
+# Placeholder outputs for Timestream (commented until service is enabled)
+locals {
+  timestream_database = "player_consistency_prod_audit"
+  timestream_table    = "state_transitions"
 }
 
 # Lambda placeholder code - Node.js
@@ -865,7 +894,10 @@ resource "aws_iam_role_policy" "kinesis_lambda" {
         Action = [
           "sqs:SendMessage"
         ]
-        Resource = aws_sqs_queue.crdt_resolver.arn
+        Resource = [
+          aws_sqs_queue.crdt_resolver.arn,
+          aws_sqs_queue.dlq.arn
+        ]
       },
       {
         Effect = "Allow"
@@ -994,17 +1026,18 @@ resource "aws_iam_role_policy" "ddb_streams_lambda" {
         ]
         Resource = aws_sns_topic.player_updates.arn
       },
-      {
-        Effect = "Allow"
-        Action = [
-          "timestream:WriteRecords",
-          "timestream:DescribeEndpoints"
-        ]
-        Resource = [
-          aws_timestreamwrite_database.audit.arn,
-          "${aws_timestreamwrite_database.audit.arn}/*"
-        ]
-      },
+      # Note: Timestream permissions commented out until service is enabled
+      # {
+      #   Effect = "Allow"
+      #   Action = [
+      #     "timestream:WriteRecords",
+      #     "timestream:DescribeEndpoints"
+      #   ]
+      #   Resource = [
+      #     "arn:${local.partition}:timestream:${var.aws_region}:${local.account_id}:database/${local.timestream_database}",
+      #     "arn:${local.partition}:timestream:${var.aws_region}:${local.account_id}:database/${local.timestream_database}/*"
+      #   ]
+      # },
       {
         Effect = "Allow"
         Action = [
@@ -1045,8 +1078,8 @@ resource "aws_lambda_function" "ddb_to_redis" {
       REDIS_ENDPOINT      = aws_elasticache_replication_group.redis.configuration_endpoint_address
       REDIS_AUTH_TOKEN    = random_password.redis_auth.result
       SNS_TOPIC_ARN       = aws_sns_topic.player_updates.arn
-      TIMESTREAM_DATABASE = aws_timestreamwrite_database.audit.database_name
-      TIMESTREAM_TABLE    = aws_timestreamwrite_table.state_transitions.table_name
+      TIMESTREAM_DATABASE = local.timestream_database
+      TIMESTREAM_TABLE    = local.timestream_table
     }
   }
 
@@ -1310,17 +1343,18 @@ resource "aws_iam_role_policy" "consistency_lambda" {
         ]
         Resource = aws_dynamodb_table.player_state.arn
       },
-      {
-        Effect = "Allow"
-        Action = [
-          "timestream:WriteRecords",
-          "timestream:DescribeEndpoints"
-        ]
-        Resource = [
-          aws_timestreamwrite_database.audit.arn,
-          "${aws_timestreamwrite_database.audit.arn}/*"
-        ]
-      },
+      # Note: Timestream permissions commented out until service is enabled
+      # {
+      #   Effect = "Allow"
+      #   Action = [
+      #     "timestream:WriteRecords",
+      #     "timestream:DescribeEndpoints"
+      #   ]
+      #   Resource = [
+      #     "arn:${local.partition}:timestream:${var.aws_region}:${local.account_id}:database/${local.timestream_database}",
+      #     "arn:${local.partition}:timestream:${var.aws_region}:${local.account_id}:database/${local.timestream_database}/*"
+      #   ]
+      # },
       {
         Effect = "Allow"
         Action = [
@@ -1361,8 +1395,8 @@ resource "aws_lambda_function" "consistency_checker" {
       REDIS_ENDPOINT      = aws_elasticache_replication_group.redis.configuration_endpoint_address
       REDIS_AUTH_TOKEN    = random_password.redis_auth.result
       SAMPLE_SIZE         = tostring(var.verification_sample_size)
-      TIMESTREAM_DATABASE = aws_timestreamwrite_database.audit.database_name
-      TIMESTREAM_TABLE    = aws_timestreamwrite_table.state_transitions.table_name
+      TIMESTREAM_DATABASE = local.timestream_database
+      TIMESTREAM_TABLE    = local.timestream_table
     }
   }
 
@@ -1430,8 +1464,9 @@ resource "aws_iam_role_policy" "step_functions" {
 resource "aws_cloudwatch_log_group" "step_functions" {
   name              = "/aws/states/${local.stack_name}-consistency"
   retention_in_days = 7
-  kms_key_id        = aws_kms_key.main.arn
-  tags              = local.common_tags
+  # Note: KMS encryption for log groups must be set after creation
+  # kms_key_id        = aws_kms_key.main.arn
+  tags = local.common_tags
 }
 
 resource "aws_sfn_state_machine" "consistency_checker" {
@@ -1444,21 +1479,21 @@ resource "aws_sfn_state_machine" "consistency_checker" {
     StartAt = "InitCounter"
     States = {
       InitCounter = {
-        Type = "Pass"
-        Result = 0
+        Type       = "Pass"
+        Result     = 0
         ResultPath = "$.iterationCount"
-        Next = "CheckConsistency"
+        Next       = "CheckConsistency"
       }
       CheckConsistency = {
-        Type     = "Task"
-        Resource = aws_lambda_function.consistency_checker.arn
+        Type       = "Task"
+        Resource   = aws_lambda_function.consistency_checker.arn
         ResultPath = "$.checkResult"
-        Next     = "IncrementCounter"
+        Next       = "IncrementCounter"
         Retry = [{
-          ErrorEquals = ["States.TaskFailed"]
+          ErrorEquals     = ["States.TaskFailed"]
           IntervalSeconds = 2
-          MaxAttempts = 2
-          BackoffRate = 2.0
+          MaxAttempts     = 2
+          BackoffRate     = 2.0
         }]
         Catch = [{
           ErrorEquals = ["States.ALL"]
@@ -1469,7 +1504,7 @@ resource "aws_sfn_state_machine" "consistency_checker" {
         Type = "Pass"
         Parameters = {
           "iterationCount.$" = "States.MathAdd($.iterationCount, 1)"
-          "maxIterations.$" = "$.maxIterations"
+          "maxIterations.$"  = "$.maxIterations"
         }
         Next = "Wait5Seconds"
       }
@@ -1481,11 +1516,11 @@ resource "aws_sfn_state_machine" "consistency_checker" {
       CheckLoop = {
         Type = "Choice"
         Choices = [{
-          Variable      = "$.iterationCount"
-          NumericLessThan = 10
-          Variable = "$.iterationCount"
+          Variable            = "$.iterationCount"
+          NumericLessThan     = 10
+          Variable            = "$.iterationCount"
           NumericLessThanPath = "$.maxIterations"
-          Next          = "CheckConsistency"
+          Next                = "CheckConsistency"
         }]
         Default = "End"
       }
@@ -1551,7 +1586,7 @@ resource "aws_cloudwatch_event_target" "step_functions" {
   role_arn  = aws_iam_role.eventbridge.arn
 
   input = jsonencode({
-    maxIterations = 10
+    maxIterations  = 10
     iterationCount = 0
   })
 }
@@ -1734,13 +1769,13 @@ output "step_functions_arn" {
 }
 
 output "timestream_database" {
-  value       = aws_timestreamwrite_database.audit.database_name
-  description = "Timestream database for audit logging"
+  value       = local.timestream_database
+  description = "Timestream database for audit logging (placeholder - service not enabled)"
 }
 
 output "timestream_table" {
-  value       = aws_timestreamwrite_table.state_transitions.table_name
-  description = "Timestream table for state transitions"
+  value       = local.timestream_table
+  description = "Timestream table for state transitions (placeholder - service not enabled)"
 }
 
 output "vpc_id" {
