@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349046",
+  "team": "6",
+  "startedAt": "2025-10-20T12:56:29.892Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "CloudFront",
+    "IAM",
+    "KMS",
+    "SecretsManager",
+    "CloudTrail",
+    "Config",
+    "AutoScaling",
+    "ElasticLoadBalancingV2"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "anukkrit149",
+  "dockerS3Location": ""
+}

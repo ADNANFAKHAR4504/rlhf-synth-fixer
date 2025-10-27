@@ -4,15 +4,13 @@ go 1.23.12
 
 require (
 	github.com/aws/aws-cdk-go/awscdk/v2 v2.212.0
-	github.com/aws/aws-sdk-go-v2 v1.38.3
+	github.com/aws/aws-sdk-go-v2 v1.39.4
 	github.com/aws/aws-sdk-go-v2/config v1.31.3
 	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.65.0
 	github.com/aws/constructs-go/constructs/v10 v10.4.2
 	github.com/aws/jsii-runtime-go v1.113.0
 	github.com/cdklabs/cloud-assembly-schema-go/awscdkcloudassemblyschema/v48 v48.3.0 // indirect
 	github.com/hashicorp/terraform-cdk-go/cdktf v0.21.0
-	github.com/pulumi/pulumi-aws/sdk/v6 v6.83.0
-	github.com/pulumi/pulumi/sdk/v3 v3.191.0
 	github.com/stretchr/testify v1.11.1
 )
 
@@ -20,15 +18,15 @@ require (
 	github.com/Masterminds/semver/v3 v3.4.0 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.18.7 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.4 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.6 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.6 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.11 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.11 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.3 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.1 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.2 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.11 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.28.2 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.34.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.38.0 // indirect
-	github.com/aws/smithy-go v1.23.0 // indirect
+	github.com/aws/smithy-go v1.23.1 // indirect
 	github.com/cdklabs/awscdk-asset-awscli-go/awscliv1/v2 v2.2.242 // indirect
 	github.com/cdklabs/awscdk-asset-node-proxy-agent-go/nodeproxyagentv6/v2 v2.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -47,7 +45,17 @@ require (
 	golang.org/x/sys v0.34.0 // indirect
 	golang.org/x/tools v0.35.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	lukechampine.com/frand v1.5.1 // indirect
+)
+
+require (
+	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.51.4
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.258.1
+	github.com/aws/aws-sdk-go-v2/service/ecs v1.65.4
+	github.com/aws/aws-sdk-go-v2/service/kinesis v1.40.8
+	github.com/aws/aws-sdk-go-v2/service/rds v1.108.5
+	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.39.9
+	github.com/pulumi/pulumi-aws/sdk/v6 v6.83.1
+	github.com/pulumi/pulumi/sdk/v3 v3.175.0
 )
 
 require (
@@ -55,10 +63,12 @@ require (
 	github.com/BurntSushi/toml v1.2.1 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/ProtonMail/go-crypto v1.1.3 // indirect
+	github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da // indirect
 	github.com/agext/levenshtein v1.2.3 // indirect
 	github.com/apparentlymart/go-textseg/v13 v13.0.0 // indirect
 	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.2 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/charmbracelet/bubbles v0.16.1 // indirect
@@ -70,6 +80,7 @@ require (
 	github.com/cyphar/filepath-securejoin v0.3.6 // indirect
 	github.com/djherbis/times v1.5.0 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
+	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.6.1 // indirect
 	github.com/go-git/go-git/v5 v5.13.1 // indirect
@@ -82,6 +93,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/hcl/v2 v2.22.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/iwdgo/sigintwindows v0.2.2 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
@@ -93,6 +105,7 @@ require (
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/muesli/reflow v0.3.0 // indirect
 	github.com/muesli/termenv v0.15.2 // indirect
+	github.com/nxadm/tail v1.4.11 // indirect
 	github.com/opentracing/basictracer-go v1.1.0 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/pgavlin/fx v0.1.6 // indirect
@@ -106,6 +119,7 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v5 v5.0.0 // indirect
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
 	github.com/skeema/knownhosts v1.3.0 // indirect
+	github.com/spf13/cast v1.4.1 // indirect
 	github.com/spf13/cobra v1.8.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/texttheater/golang-levenshtein v1.0.1 // indirect
@@ -122,5 +136,7 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250115164207-1a7da9e5054f // indirect
 	google.golang.org/grpc v1.71.1 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
+	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
+	lukechampine.com/frand v1.4.2 // indirect
 )

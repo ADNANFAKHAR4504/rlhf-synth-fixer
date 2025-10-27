@@ -1,0 +1,36 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "4847268018",
+  "team": "synth",
+  "startedAt": "2025-10-17T22:04:30Z",
+  "subtask": "Failure Recovery and High Availability",
+  "background": "RetailCo is launching a new e-commerce platform that needs to process and store credit card transactions. They require a PCI-DSS compliant infrastructure that securely handles payment data while maintaining audit logs for compliance reporting.",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Failure Recovery Automation",
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2 (Subnets, NAT Gateway, Internet Gateway)",
+    "KMS",
+    "RDS PostgreSQL",
+    "Secrets Manager",
+    "ElastiCache Redis",
+    "ECS Fargate",
+    "Application Load Balancer",
+    "IAM",
+    "CloudWatch Logs",
+    "Lambda"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

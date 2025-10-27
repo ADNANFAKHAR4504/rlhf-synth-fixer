@@ -1,0 +1,35 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000688",
+  "team": "4",
+  "startedAt": "2025-10-16T23:53:39.254Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "ALB",
+    "RDS Aurora",
+    "CloudWatch",
+    "IAM",
+    "KMS",
+    "Secrets Manager",
+    "SSM Parameter Store",
+    "SNS",
+    "NAT Gateway"
+  ],
+  "training_quality": "9",
+  "background": "AWS Cloud Environment Setup - Pulumi Python",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "emmanuel-turing",
+  "dockerS3Location": ""
+}

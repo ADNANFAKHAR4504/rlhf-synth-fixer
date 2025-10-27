@@ -11,6 +11,17 @@ on:
     branches: [main]
     types: [opened, synchronize, reopened, closed]
   workflow_dispatch:
+    inputs:
+      environment_suffix:
+        description: 'Environment suffix for resource naming (e.g., pr123, dev, test)'
+        required: false
+        default: 'manual'
+        type: string
+      skip_cleanup:
+        description: 'Skip cleanup/destroy step after deployment'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -18,9 +29,9 @@ permissions:
 env:
   NODE_VERSION: "22.17.0"
   GO_VERSION: "1.23.12"
-  # Use PR number for resource isolation, fallback to 'dev' for main branch
+  # Use PR number for resource isolation, manual input, or fallback to 'dev' for main branch
   # Prefix with 'pr' to ensure AWS resource names start with a letter
-  ENVIRONMENT_SUFFIX: ${{ github.event.number && format('pr{0}', github.event.number) || 'dev' }}
+  ENVIRONMENT_SUFFIX: ${{ github.event.inputs.environment_suffix || (github.event.number && format('pr{0}', github.event.number)) || 'dev' }}
   S3_RELEASE_BUCKET_NAME: "iac-rlhf-aws-release-342597974367-us-east-1"
   TERRAFORM_STATE_BUCKET: "iac-rlhf-tf-states-342597974367"
   TERRAFORM_STATE_BUCKET_REGION: "us-east-1"
@@ -34,6 +45,7 @@ env:
   CURRENT_ACCOUNT_ID: ${{ vars.ACCOUNT_ID }}
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  MODEL_S3_URI: 's3://social-platform-sagemaker-342597974367-dev/model.tar.gz'
   # Go caching optimization
   GOCACHE: ${{ github.workspace }}/.cache/go-build
   GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
@@ -42,7 +54,7 @@ jobs:
   detect-metadata:
     name: Detect Project Files
     runs-on: ubuntu-24.04
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     outputs:
       platform: ${{ steps.metadata.outputs.platform }}
       language: ${{ steps.metadata.outputs.language }}
@@ -71,13 +83,13 @@ jobs:
           download-artifacts: 'false'
 
       - name: Validate commit message
-        run: npx commitlint --from=HEAD~1 --to=HEAD
+        run: npx commitlint --last
 
   build:
     name: Build
     runs-on: ubuntu-24.04
     needs: detect-metadata
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: dev
 
     steps:
@@ -100,7 +112,7 @@ jobs:
     name: Synth
     runs-on: ubuntu-24.04
     needs: [detect-metadata, build]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch' }}
     environment: dev
     permissions:
       contents: read
@@ -234,7 +246,7 @@ jobs:
     name: Deploy
     runs-on: ubuntu-24.04
     needs: [detect-metadata, synth]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: dev
 
     steps:
@@ -298,7 +310,7 @@ jobs:
     name: Lint
     runs-on: ubuntu-24.04
     needs: [detect-metadata, build]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: qa
     outputs:
       platform: ${{ needs.detect-metadata.outputs.platform }}
@@ -325,7 +337,7 @@ jobs:
     name: Unit Testing
     runs-on: ubuntu-24.04
     needs: [detect-metadata, lint]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: qa
 
     steps:
@@ -418,7 +430,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [detect-metadata, lint, unit-tests, deploy]
     environment: qa
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
 
     steps:
       - name: Checkout code
@@ -494,12 +506,13 @@ jobs:
           fi
 
       - name: Run Claude PR Review Action
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@beta
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          trigger_phrase: ""
-          prompt: |
+          allowed_tools: 'Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite'
+          trigger_phrase: ''
+          custom_instructions: |
             CRITICAL: you MUST validate the latest PROMPT file format, and add a github comment if it appears to be AI-generated rather than human-written:
             1. Identify all the PROMPT file (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.) - always use the highest numbered one
             2. Read the PROMPT files
@@ -533,8 +546,6 @@ jobs:
             This validation is mandatory and must be completed before any other review activities.
 
             Once the above is done Follow instructions in .claude/agents/iac-code-reviewer.md
-          claude_args: |
-            --allowedTools Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite
 
       - name: Upload updated metadata.json
         uses: actions/upload-artifact@v4
@@ -547,7 +558,7 @@ jobs:
     name: Cleanup (Destroy Resources)
     runs-on: ubuntu-24.04
     needs: [detect-metadata, integration-tests-live]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ ((github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch' && !inputs.skip_cleanup)) && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: stage
 
     steps:
@@ -584,7 +595,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [detect-metadata, cleanup]
     environment: release
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     permissions:
       contents: write
 

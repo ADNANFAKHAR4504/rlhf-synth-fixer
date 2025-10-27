@@ -1,0 +1,13 @@
+{
+  "language": "typescript",
+  "app": "npx ts-node bin/tap.ts",
+  "projectId": "healthcare-disaster-recovery",
+  "terraformProviders": [
+    "hashicorp/aws@~> 5.0"
+  ],
+  "terraformModules": [],
+  "context": {
+    "excludeStackIdFromLogicalIds": "true",
+    "allowSepCharsInLogicalIds": "true"
+  }
+}

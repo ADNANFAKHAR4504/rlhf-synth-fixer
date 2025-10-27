@@ -1,0 +1,39 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350228",
+  "team": "4",
+  "startedAt": "2025-10-17T12:17:36.404Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC (Virtual Private Cloud)",
+    "EC2 (Subnets, Security Groups, Internet Gateway, NAT Gateway, Elastic IP, VPN Gateway, Customer Gateway, VPN Connection)",
+    "IAM (Roles, Policies, Instance Profiles)",
+    "CloudWatch (Log Groups, Metric Filters, Alarms)",
+    "CloudWatch Logs (VPC Flow Logs)",
+    "VPC Flow Logs"
+  ],
+  "training_quality": 8,
+  "background": "This project implements a production-ready AWS network infrastructure using Terraform. The solution creates a secure, highly available, multi-AZ VPC with public and private subnets, NAT Gateways, Internet Gateway, security groups, IAM roles, VPC Flow Logs, CloudWatch monitoring, and VPN Gateway. The infrastructure emphasizes security best practices including network segmentation, least-privilege access, comprehensive monitoring, and zero hardcoded credentials. All 135 automated tests (107 unit + 28 integration) pass successfully, validating the infrastructure's correctness and compliance with AWS best practices.",
+  "testDependencies": {
+    "jest": "^29.7.0",
+    "@types/jest": "^29.5.12",
+    "ts-jest": "^29.1.2",
+    "@aws-sdk/client-ec2": "^3.521.0",
+    "@aws-sdk/client-iam": "^3.521.0",
+    "@aws-sdk/client-cloudwatch": "^3.521.0",
+    "@aws-sdk/client-cloudwatch-logs": "^3.521.0",
+    "typescript": "^5.3.3"
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

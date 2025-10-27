@@ -1,0 +1,40 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000668",
+  "team": "1",
+  "startedAt": "2025-10-19T08:05:15.389Z",
+  "subtask": "IaC Program Optimization",
+  "background": "Secure AWS environment with VPC, ALB HTTPS, S3, IAM, and CloudTrail for critical application",
+  "subject_labels": [
+    "IaC Optimization"
+  ],
+  "aws_services": [
+    "VPC",
+    "Public Subnet",
+    "Private Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Elastic IP",
+    "Route Table",
+    "Route",
+    "Security Group",
+    "Application Load Balancer",
+    "HTTPS Listener",
+    "Target Group",
+    "S3 Bucket",
+    "S3 Bucket Policy",
+    "IAM Role",
+    "IAM Policy",
+    "CloudTrail"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
+}

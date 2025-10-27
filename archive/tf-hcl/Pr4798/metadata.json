@@ -1,0 +1,32 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "4797",
+  "team": "5",
+  "startedAt": "2025-10-19T01:54:48.424Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "S3",
+    "KMS",
+    "IAM",
+    "CloudTrail",
+    "Lambda",
+    "EventBridge",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "SNS"
+  ],
+  "training_quality": 10,
+  "background": "Legal document storage system with S3 versioning, lifecycle management, Object Lock compliance, audit logging, automated compliance checking, cross-region replication, transfer acceleration, and AWS Backup integration for 15,000 daily documents with 7-year retention requirements. Implements comprehensive monitoring, encryption, IAM roles, Lambda automation, and end-to-end workflows with disaster recovery capabilities.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raaj1021",
+  "dockerS3Location": ""
+}
