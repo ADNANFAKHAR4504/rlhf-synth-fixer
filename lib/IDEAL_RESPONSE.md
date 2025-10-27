@@ -5,7 +5,7 @@ This document contains the complete infrastructure code for the BrazilCart e-com
 ## File: lib/AWS_REGION
 
 ```
-eu-south-2
+eu-west-1
 ```
 
 ## File: lib/TapStack.yaml

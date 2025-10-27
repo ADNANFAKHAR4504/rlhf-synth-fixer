@@ -1,6 +1,6 @@
 # CloudFormation Solution for Containerized LMS Infrastructure
 
-This solution implements a production-ready Learning Management System infrastructure using CloudFormation with YAML for the ap-southeast-1 region.
+This solution implements a production-ready Learning Management System infrastructure using CloudFormation with YAML for the eu-west-1 region.
 
 ## Architecture Overview
 

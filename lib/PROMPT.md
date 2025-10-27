@@ -10,7 +10,7 @@ This is a critical project for the Singapore education sector. The system will b
 
 ## What we need to build
 
-Create a containerized Learning Management System infrastructure using **CloudFormation with YAML** for EduTech Singapore's educational platform in the ap-southeast-1 region.
+Create a containerized Learning Management System infrastructure using **CloudFormation with YAML** for EduTech Singapore's educational platform in the eu-west-1 region.
 
 ### Core Requirements
 
@@ -65,7 +65,7 @@ Create a containerized Learning Management System infrastructure using **CloudFo
 - Use **NAT Gateway** for secure outbound connectivity
 - Resource names must include **environmentSuffix** parameter for uniqueness
 - Follow naming convention: resource-type-environmentSuffix
-- Deploy to **ap-southeast-1** region
+- Deploy to **eu-west-1** region
 
 ### Constraints
 

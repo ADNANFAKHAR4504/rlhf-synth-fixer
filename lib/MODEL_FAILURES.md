@@ -45,7 +45,7 @@ us-east-1b, us-east-1c, us-east-1d, us-east-1e, us-east-1f.
 **Step 1: Created AWS_REGION configuration file (lib/AWS_REGION):**
 
 ```
-eu-south-2
+eu-west-1
 ```
 
 **Step 2: Updated tap_stack.py to read region dynamically:**
@@ -210,7 +210,7 @@ The infrastructure code needed to read AWS region configuration, but no standard
 
 **Created lib/AWS_REGION file:**
 ```
-eu-south-2
+eu-west-1
 ```
 
 **Benefits:**
