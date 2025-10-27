@@ -222,6 +222,12 @@ resource "aws_iam_role_policy" "lambda_policy" {
           "elasticache:*",
           "kinesis:PutRecord",
           "kinesis:PutRecords",
+          "kinesis:GetRecords",
+          "kinesis:GetShardIterator",
+          "kinesis:DescribeStream",
+          "kinesis:DescribeStreamSummary",
+          "kinesis:ListShards",
+          "kinesis:ListStreams",
           "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents",
@@ -538,7 +544,7 @@ resource "aws_lambda_function" "ticket_purchase" {
   runtime                        = "nodejs18.x"
   timeout                        = 30
   memory_size                    = 3008
-  reserved_concurrent_executions = 2000
+  reserved_concurrent_executions = 100
 
   environment {
     variables = {
