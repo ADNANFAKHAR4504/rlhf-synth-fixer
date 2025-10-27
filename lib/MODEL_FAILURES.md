@@ -189,11 +189,11 @@
    - Auth is automatically enabled when auth_token is provided
 
 **Result**:
-- ✅ Terraform initialization successful
-- ✅ Terraform validation passes
-- ✅ All 33 unit tests pass (100%)
-- ✅ Infrastructure can deploy without explicit variable passing
-- ✅ Code formatted and linted
+-  Terraform initialization successful
+-  Terraform validation passes
+-  All 33 unit tests pass (100%)
+-  Infrastructure can deploy without explicit variable passing
+-  Code formatted and linted
 
 **Key Lesson**: Infrastructure variables should have sensible defaults that allow deployment to succeed without external configuration. Required variables without defaults create deployment friction and break automation. Always provide defaults that work for development/testing environments, even if production will override them.
 
@@ -261,12 +261,12 @@
    - All alarms publish to SNS for notifications
 
 **Result**:
-- ✅ Security score: 4.0 → 4.5 (+0.10 weighted)
-- ✅ Cost score: 3.0 → 3.5 (+0.05 weighted)
-- ✅ Observability score: 4.0 → 5.0 (+0.10 weighted)
-- ✅ Overall score: 4.1 → 4.3 (82% → 86%)
-- ✅ All 48 unit tests pass
-- ✅ Terraform validates successfully
+-  Security score: 4.0 → 4.5 (+0.10 weighted)
+-  Cost score: 3.0 → 3.5 (+0.05 weighted)
+-  Observability score: 4.0 → 5.0 (+0.10 weighted)
+-  Overall score: 4.1 → 4.3 (82% → 86%)
+-  All 48 unit tests pass
+-  Terraform validates successfully
 
 **Time Investment**: 1.5 hours for +0.2 points
 
@@ -358,12 +358,12 @@ output "step_function_arn" {
 ```
 
 **Result**:
-- ✅ 5 service connection integration tests
-- ✅ 3 error handling & audit tests
-- ✅ Tests verify actual data flows, not just resource existence
-- ✅ All timing requirements validated (500ms stream, 1s SNS, 3s cache, 5s consistency, 8s rollback, 15s logs)
-- ✅ Tests create temporary resources and clean up after themselves
-- ✅ Graceful handling when infrastructure not deployed
+-  5 service connection integration tests
+-  3 error handling & audit tests
+-  Tests verify actual data flows, not just resource existence
+-  All timing requirements validated (500ms stream, 1s SNS, 3s cache, 5s consistency, 8s rollback, 15s logs)
+-  Tests create temporary resources and clean up after themselves
+-  Graceful handling when infrastructure not deployed
 
 **Key Lesson**: Integration tests must test CONNECTIONS between services, not just resource existence. Real integration testing requires:
 1. Creating test data
