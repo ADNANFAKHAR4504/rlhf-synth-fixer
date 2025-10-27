@@ -105,6 +105,15 @@ elif [ "$PLATFORM" = "tf" ]; then
   
   cd lib
   
+  # Determine var-file to use based on metadata.json
+  VAR_FILE=""
+  if [ "$(jq -r '.task_sub_category // ""' ../metadata.json)" = "IaC-Multi-Environment-Management" ]; then
+    DEPLOY_ENV_FILE=$(jq -r '.task_config.deploy_env // ""' ../metadata.json)
+    if [ -n "$DEPLOY_ENV_FILE" ]; then
+      VAR_FILE="-var-file=${DEPLOY_ENV_FILE}"
+      echo "Using var-file from metadata: ${DEPLOY_ENV_FILE}"
+    fi
+  fi
 
   # Always remove any stale Terraform plan to avoid cross-run reuse
   rm -f tfplan
@@ -113,29 +122,29 @@ elif [ "$PLATFORM" = "tf" ]; then
   if [ -f "tfplan" ]; then
     echo "✅ Terraform plan file found, proceeding with deployment..."
     # Try to deploy with the plan file
-    if ! npm run tf:deploy; then
+    if ! terraform apply -auto-approve -lock=true -lock-timeout=300s -input=false $VAR_FILE tfplan; then
       echo "⚠️ Deployment with plan file failed, checking for state lock issues..."
       
       # Extract lock ID from error output if present
-      LOCK_ID=$(terraform apply -auto-approve -lock=true -lock-timeout=10s -input=false tfplan 2>&1 | grep -oE 'ID:\s+[0-9a-f-]{36}' | cut -d' ' -f2 || echo "")
+      LOCK_ID=$(terraform apply -auto-approve -lock=true -lock-timeout=10s -input=false $VAR_FILE tfplan 2>&1 | grep -oE 'ID:\s+[0-9a-f-]{36}' | cut -d' ' -f2 || echo "")
       
       if [ -n "$LOCK_ID" ]; then
         echo "🔓 Detected stuck lock ID: $LOCK_ID. Attempting to force unlock..."
         terraform force-unlock -force "$LOCK_ID" || echo "Force unlock failed"
         echo "🔄 Retrying deployment after unlock..."
-        npm run tf:deploy || echo "Deployment still failed after unlock attempt"
+        terraform apply -auto-approve -lock=true -lock-timeout=300s -input=false $VAR_FILE tfplan || echo "Deployment still failed after unlock attempt"
       else
         echo "❌ Deployment failed but no lock ID detected. Manual intervention may be required."
       fi
     fi
   else
     echo "⚠️ Terraform plan file not found, creating new plan and deploying..."
-    terraform plan -lock-timeout=120s -lock=false -input=false -out=tfplan || echo "Plan creation failed, attempting direct apply..."
+    terraform plan -lock-timeout=120s -lock=false -input=false $VAR_FILE -out=tfplan || echo "Plan creation failed, attempting direct apply..."
     
     # Try direct apply with lock timeout, and handle lock issues
-    if ! terraform apply -auto-approve -lock=true -lock-timeout=300s -input=false tfplan; then
+    if ! terraform apply -auto-approve -lock=true -lock-timeout=300s -input=false $VAR_FILE tfplan; then
       echo "⚠️ Direct apply with plan failed, trying without plan..."
-      if ! terraform apply -auto-approve -lock=true -lock-timeout=300s -input=false; then
+      if ! terraform apply -auto-approve -lock=true -lock-timeout=300s -input=false $VAR_FILE; then
         echo "❌ All deployment attempts failed. Check for state lock issues."
         # List any potential locks
         terraform show -json 2>&1 | grep -i lock || echo "No lock information available"
