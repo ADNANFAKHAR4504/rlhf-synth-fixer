@@ -39,11 +39,14 @@ import * as stepfunctions from 'aws-cdk-lib/aws-stepfunctions';
 import * as stepfunctionsTasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as athena from 'aws-cdk-lib/aws-athena';
 import * as glue from 'aws-cdk-lib/aws-glue';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import { Construct } from 'constructs';
 import * as path from 'path';
 
@@ -188,11 +191,32 @@ export class SecurityEventStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // ===== 5. Lambda Functions =====
+    // ===== 5. Lambda Functions with Dead Letter Queues =====
+
+    // DLQ for Validator Lambda
+    const validatorDLQ = new sqs.Queue(this, 'ValidatorDLQ', {
+      queueName: `validator-dlq-${environmentSuffix}`,
+      retentionPeriod: cdk.Duration.days(14),
+      encryption: sqs.QueueEncryption.SQS_MANAGED,
+    });
+
+    // DLQ for Remediation Lambda
+    const remediationDLQ = new sqs.Queue(this, 'RemediationDLQ', {
+      queueName: `remediation-dlq-${environmentSuffix}`,
+      retentionPeriod: cdk.Duration.days(14),
+      encryption: sqs.QueueEncryption.SQS_MANAGED,
+    });
+
+    // DLQ for Report Generator Lambda
+    const reportDLQ = new sqs.Queue(this, 'ReportDLQ', {
+      queueName: `report-dlq-${environmentSuffix}`,
+      retentionPeriod: cdk.Duration.days(14),
+      encryption: sqs.QueueEncryption.SQS_MANAGED,
+    });
 
     // Validator Lambda
     const validatorLambda = new lambda.Function(this, 'ValidatorFunction', {
-      runtime: lambda.Runtime.NODEJS_16_X,
+      runtime: lambda.Runtime.NODEJS_20_X,
       handler: 'validator.handler',
       code: lambda.Code.fromAsset(path.join(__dirname, 'lambda')),
       environment: {
@@ -202,6 +226,9 @@ export class SecurityEventStack extends cdk.Stack {
       timeout: cdk.Duration.minutes(5),
       memorySize: 1024,
       tracing: lambda.Tracing.ACTIVE,
+      insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_229_0,
+      deadLetterQueue: validatorDLQ,
+      deadLetterQueueEnabled: true,
     });
 
     // Grant permissions to validator
@@ -209,12 +236,15 @@ export class SecurityEventStack extends cdk.Stack {
 
     // Remediation Lambda
     const remediationLambda = new lambda.Function(this, 'RemediationFunction', {
-      runtime: lambda.Runtime.NODEJS_16_X,
+      runtime: lambda.Runtime.NODEJS_20_X,
       handler: 'remediation.handler',
       code: lambda.Code.fromAsset(path.join(__dirname, 'lambda')),
       timeout: cdk.Duration.minutes(5),
       memorySize: 512,
       tracing: lambda.Tracing.ACTIVE,
+      insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_229_0,
+      deadLetterQueue: remediationDLQ,
+      deadLetterQueueEnabled: true,
     });
 
     // Grant IAM permissions to remediation Lambda
@@ -234,7 +264,7 @@ export class SecurityEventStack extends cdk.Stack {
       this,
       'ReportGeneratorFunction',
       {
-        runtime: lambda.Runtime.NODEJS_16_X,
+        runtime: lambda.Runtime.NODEJS_20_X,
         handler: 'report-generator.handler',
         code: lambda.Code.fromAsset(path.join(__dirname, 'lambda')),
         environment: {
@@ -243,6 +273,9 @@ export class SecurityEventStack extends cdk.Stack {
         timeout: cdk.Duration.minutes(5),
         memorySize: 512,
         tracing: lambda.Tracing.ACTIVE,
+        insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_229_0,
+        deadLetterQueue: reportDLQ,
+        deadLetterQueueEnabled: true,
       }
     );
 
@@ -332,7 +365,7 @@ export class SecurityEventStack extends cdk.Stack {
 
     // ===== 9. Step Functions Workflow =====
 
-    // Task 1: Athena Query
+    // Task 1: Athena Query with retry policy
     const athenaQueryTask = new stepfunctionsTasks.AthenaStartQueryExecution(
       this,
       'DeepAuditQuery',
@@ -356,9 +389,14 @@ export class SecurityEventStack extends cdk.Stack {
         },
         integrationPattern: stepfunctions.IntegrationPattern.RUN_JOB,
       }
-    );
+    ).addRetry({
+      errors: ['States.TaskFailed', 'States.Timeout'],
+      interval: cdk.Duration.seconds(2),
+      maxAttempts: 3,
+      backoffRate: 2.0,
+    });
 
-    // Task 2: Macie Classification Job
+    // Task 2: Macie Classification Job with retry policy
     const macieJobTask = new stepfunctionsTasks.CallAwsService(
       this,
       'DataClassification',
@@ -383,7 +421,12 @@ export class SecurityEventStack extends cdk.Stack {
         },
         iamResources: ['*'],
       }
-    );
+    ).addRetry({
+      errors: ['States.TaskFailed', 'Macie2.ThrottlingException'],
+      interval: cdk.Duration.seconds(3),
+      maxAttempts: 3,
+      backoffRate: 2.5,
+    });
 
     // Task 3: SNS Alert
     const snsAlertTask = new stepfunctionsTasks.SnsPublish(
@@ -393,7 +436,7 @@ export class SecurityEventStack extends cdk.Stack {
         topic: securityAlertTopic,
         message: stepfunctions.TaskInput.fromObject({
           default: stepfunctions.JsonPath.format(
-            'CRITICAL: Unauthorized PHI access detected!\\nUser: {}\\nResource: {}\\nTime: {}\\nAction: IMMEDIATE REMEDIATION INITIATED',
+            'CRITICAL: Unauthorized PHI access detected!\nUser: {}\nResource: {}\nTime: {}\nAction: IMMEDIATE REMEDIATION INITIATED',
             stepfunctions.JsonPath.stringAt('$.userId'),
             stepfunctions.JsonPath.stringAt('$.objectKey'),
             stepfunctions.JsonPath.stringAt('$.timestamp')
@@ -403,7 +446,7 @@ export class SecurityEventStack extends cdk.Stack {
       }
     );
 
-    // Task 4: Remediation
+    // Task 4: Remediation with retry policy
     const remediationTask = new stepfunctionsTasks.LambdaInvoke(
       this,
       'RemediateAccess',
@@ -412,9 +455,18 @@ export class SecurityEventStack extends cdk.Stack {
         payload: stepfunctions.TaskInput.fromJsonPathAt('$'),
         resultPath: '$.remediationResult',
       }
-    );
+    ).addRetry({
+      errors: [
+        'States.TaskFailed',
+        'Lambda.ServiceException',
+        'Lambda.TooManyRequestsException',
+      ],
+      interval: cdk.Duration.seconds(1),
+      maxAttempts: 3,
+      backoffRate: 2.0,
+    });
 
-    // Task 5: Generate Report
+    // Task 5: Generate Report with retry policy
     const reportTask = new stepfunctionsTasks.LambdaInvoke(
       this,
       'GenerateIncidentReport',
@@ -423,7 +475,12 @@ export class SecurityEventStack extends cdk.Stack {
         payload: stepfunctions.TaskInput.fromJsonPathAt('$'),
         resultPath: '$.reportResult',
       }
-    );
+    ).addRetry({
+      errors: ['States.TaskFailed', 'Lambda.ServiceException'],
+      interval: cdk.Duration.seconds(2),
+      maxAttempts: 3,
+      backoffRate: 2.0,
+    });
 
     // Build the parallel execution
     const parallelTasks = new stepfunctions.Parallel(
@@ -457,6 +514,7 @@ export class SecurityEventStack extends cdk.Stack {
     );
 
     // Grant Step Functions permissions
+    athenaWorkgroup.node.defaultChild?.node.addDependency(stateMachine);
     archiveBucket.grantReadWrite(stateMachine);
     cloudtrailBucket.grantRead(stateMachine);
 
@@ -467,6 +525,243 @@ export class SecurityEventStack extends cdk.Stack {
     );
     stateMachine.grantStartExecution(validatorLambda);
 
+    // ===== 10. CloudWatch Dashboards and Alarms =====
+
+    // Create comprehensive monitoring dashboard
+    const dashboard = new cloudwatch.Dashboard(
+      this,
+      'HIPAAComplianceDashboard',
+      {
+        dashboardName: `hipaa-compliance-${environmentSuffix}`,
+      }
+    );
+
+    // Add Step Functions metrics
+    dashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: 'Step Functions Executions',
+        left: [
+          stateMachine.metricStarted({
+            statistic: 'Sum',
+            period: cdk.Duration.minutes(5),
+          }),
+          stateMachine.metricSucceeded({
+            statistic: 'Sum',
+            period: cdk.Duration.minutes(5),
+          }),
+          stateMachine.metricFailed({
+            statistic: 'Sum',
+            period: cdk.Duration.minutes(5),
+          }),
+        ],
+        width: 12,
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'Step Functions Execution Duration',
+        left: [
+          stateMachine.metric('ExecutionTime', {
+            statistic: 'Average',
+            period: cdk.Duration.minutes(5),
+          }),
+        ],
+        width: 12,
+      })
+    );
+
+    // Add Lambda metrics
+    dashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: 'Lambda Errors',
+        left: [
+          validatorLambda.metricErrors({
+            statistic: 'Sum',
+            period: cdk.Duration.minutes(5),
+          }),
+          remediationLambda.metricErrors({
+            statistic: 'Sum',
+            period: cdk.Duration.minutes(5),
+          }),
+          reportGeneratorLambda.metricErrors({
+            statistic: 'Sum',
+            period: cdk.Duration.minutes(5),
+          }),
+        ],
+        width: 12,
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'Lambda Duration',
+        left: [
+          validatorLambda.metricDuration({
+            statistic: 'Average',
+            period: cdk.Duration.minutes(5),
+          }),
+          remediationLambda.metricDuration({
+            statistic: 'Average',
+            period: cdk.Duration.minutes(5),
+          }),
+          reportGeneratorLambda.metricDuration({
+            statistic: 'Average',
+            period: cdk.Duration.minutes(5),
+          }),
+        ],
+        width: 12,
+      })
+    );
+
+    // Add DLQ metrics
+    dashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: 'Dead Letter Queue Messages',
+        left: [
+          validatorDLQ.metricApproximateNumberOfMessagesVisible(),
+          remediationDLQ.metricApproximateNumberOfMessagesVisible(),
+          reportDLQ.metricApproximateNumberOfMessagesVisible(),
+        ],
+        width: 12,
+      }),
+      new cloudwatch.SingleValueWidget({
+        title: 'OpenSearch Cluster Health',
+        metrics: [
+          new cloudwatch.Metric({
+            namespace: 'AWS/ES',
+            metricName: 'ClusterStatus.red',
+            dimensionsMap: {
+              DomainName: openSearchDomain.domainName,
+              ClientId: this.account,
+            },
+            statistic: 'Maximum',
+          }),
+        ],
+        width: 12,
+      })
+    );
+
+    // CloudWatch Alarms
+
+    // Alarm for Step Functions failures
+    const stateMachineFailureAlarm = new cloudwatch.Alarm(
+      this,
+      'StateMachineFailureAlarm',
+      {
+        metric: stateMachine.metricFailed({
+          statistic: 'Sum',
+          period: cdk.Duration.minutes(5),
+        }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        alarmDescription: 'Alert when incident response workflow fails',
+        actionsEnabled: true,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }
+    );
+    stateMachineFailureAlarm.addAlarmAction(
+      new cloudwatch_actions.SnsAction(securityAlertTopic)
+    );
+
+    // Alarm for Lambda errors
+    const validatorErrorAlarm = new cloudwatch.Alarm(
+      this,
+      'ValidatorLambdaErrorAlarm',
+      {
+        metric: validatorLambda.metricErrors({
+          statistic: 'Sum',
+          period: cdk.Duration.minutes(5),
+        }),
+        threshold: 5,
+        evaluationPeriods: 2,
+        alarmDescription: 'Alert when validator Lambda has high error rate',
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }
+    );
+    validatorErrorAlarm.addAlarmAction(
+      new cloudwatch_actions.SnsAction(securityAlertTopic)
+    );
+
+    // Alarm for Firehose delivery failures
+    const firehoseFailureAlarm = new cloudwatch.Alarm(
+      this,
+      'FirehoseDeliveryFailureAlarm',
+      {
+        metric: new cloudwatch.Metric({
+          namespace: 'AWS/Firehose',
+          metricName: 'DeliveryToS3.DataFreshness',
+          dimensionsMap: {
+            DeliveryStreamName: deliveryStream.ref,
+          },
+          statistic: 'Maximum',
+          period: cdk.Duration.minutes(5),
+        }),
+        threshold: 900, // 15 minutes
+        evaluationPeriods: 1,
+        alarmDescription: 'Alert when Firehose delivery is delayed',
+        treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+      }
+    );
+    firehoseFailureAlarm.addAlarmAction(
+      new cloudwatch_actions.SnsAction(securityAlertTopic)
+    );
+
+    // Alarm for OpenSearch cluster red status
+    const openSearchRedAlarm = new cloudwatch.Alarm(
+      this,
+      'OpenSearchRedAlarm',
+      {
+        metric: new cloudwatch.Metric({
+          namespace: 'AWS/ES',
+          metricName: 'ClusterStatus.red',
+          dimensionsMap: {
+            DomainName: openSearchDomain.domainName,
+            ClientId: this.account,
+          },
+          statistic: 'Maximum',
+          period: cdk.Duration.minutes(1),
+        }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        alarmDescription: 'Alert when OpenSearch cluster status is red',
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }
+    );
+    openSearchRedAlarm.addAlarmAction(
+      new cloudwatch_actions.SnsAction(securityAlertTopic)
+    );
+
+    // Alarm for DynamoDB throttling
+    const dynamoThrottleAlarm = new cloudwatch.Alarm(
+      this,
+      'DynamoDBThrottleAlarm',
+      {
+        metric: new cloudwatch.Metric({
+          namespace: 'AWS/DynamoDB',
+          metricName: 'UserErrors',
+          dimensionsMap: {
+            TableName: authorizationTable.tableName,
+          },
+          statistic: 'Sum',
+          period: cdk.Duration.minutes(5),
+        }),
+        threshold: 10,
+        evaluationPeriods: 2,
+        alarmDescription: 'Alert when DynamoDB table is throttling requests',
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }
+    );
+    dynamoThrottleAlarm.addAlarmAction(
+      new cloudwatch_actions.SnsAction(securityAlertTopic)
+    );
+
+    // Alarm for DLQ messages
+    const dlqAlarm = new cloudwatch.Alarm(this, 'DeadLetterQueueAlarm', {
+      metric: validatorDLQ.metricApproximateNumberOfMessagesVisible(),
+      threshold: 1,
+      evaluationPeriods: 1,
+      alarmDescription: 'Alert when messages appear in Dead Letter Queue',
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    dlqAlarm.addAlarmAction(
+      new cloudwatch_actions.SnsAction(securityAlertTopic)
+    );
+
     // ===== Output Important Values =====
 
     new cdk.CfnOutput(this, 'PHIBucketName', {
@@ -474,9 +769,19 @@ export class SecurityEventStack extends cdk.Stack {
       description: 'Name of the PHI data bucket',
     });
 
-    new cdk.CfnOutput(this, 'PHIBucketArn', {
-      value: phiDataBucket.bucketArn,
-      description: 'ARN of the PHI data bucket',
+    new cdk.CfnOutput(this, 'FirehoseStreamName', {
+      value: deliveryStream.ref,
+      description: 'Name of the Kinesis Firehose delivery stream',
+    });
+
+    new cdk.CfnOutput(this, 'OpenSearchDomainEndpoint', {
+      value: openSearchDomain.domainEndpoint,
+      description: 'OpenSearch domain endpoint for security dashboards',
+    });
+
+    new cdk.CfnOutput(this, 'StateMachineArn', {
+      value: stateMachine.stateMachineArn,
+      description: 'ARN of the incident response workflow',
     });
 
     new cdk.CfnOutput(this, 'ArchiveBucketName', {
@@ -487,11 +792,6 @@ export class SecurityEventStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'CloudTrailBucketName', {
       value: cloudtrailBucket.bucketName,
       description: 'Name of the CloudTrail logs bucket',
-    });
-
-    new cdk.CfnOutput(this, 'CloudTrailArn', {
-      value: trail.trailArn,
-      description: 'ARN of the CloudTrail trail',
     });
 
     new cdk.CfnOutput(this, 'DynamoDBTableName', {
@@ -514,39 +814,14 @@ export class SecurityEventStack extends cdk.Stack {
       description: 'ARN of the report generator Lambda function',
     });
 
-    new cdk.CfnOutput(this, 'FirehoseStreamName', {
-      value: deliveryStream.ref,
-      description: 'Name of the Kinesis Firehose delivery stream',
-    });
-
-    new cdk.CfnOutput(this, 'OpenSearchDomainName', {
-      value: openSearchDomain.domainName,
-      description: 'Name of the OpenSearch domain',
-    });
-
-    new cdk.CfnOutput(this, 'OpenSearchDomainEndpoint', {
-      value: openSearchDomain.domainEndpoint,
-      description: 'OpenSearch domain endpoint for security dashboards',
-    });
-
-    new cdk.CfnOutput(this, 'OpenSearchDomainArn', {
-      value: openSearchDomain.domainArn,
-      description: 'ARN of the OpenSearch domain',
-    });
-
     new cdk.CfnOutput(this, 'SNSTopicArn', {
       value: securityAlertTopic.topicArn,
       description: 'ARN of the security alert SNS topic',
     });
 
-    new cdk.CfnOutput(this, 'StateMachineArn', {
-      value: stateMachine.stateMachineArn,
-      description: 'ARN of the incident response workflow',
-    });
-
-    new cdk.CfnOutput(this, 'GlueDatabaseName', {
-      value: glueDatabase.ref,
-      description: 'Name of the Glue database for CloudTrail logs',
+    new cdk.CfnOutput(this, 'CloudTrailArn', {
+      value: trail.trailArn,
+      description: 'ARN of the CloudTrail trail',
     });
 
     new cdk.CfnOutput(this, 'AthenaWorkgroupName', {
@@ -554,14 +829,59 @@ export class SecurityEventStack extends cdk.Stack {
       description: 'Name of the Athena workgroup for audit queries',
     });
 
-    new cdk.CfnOutput(this, 'EnvironmentSuffix', {
-      value: environmentSuffix,
-      description: 'Environment suffix for this deployment',
+    new cdk.CfnOutput(this, 'GlueDatabaseName', {
+      value: glueDatabase.ref,
+      description: 'Name of the Glue database for CloudTrail logs',
+    });
+
+    new cdk.CfnOutput(this, 'OpenSearchDomainName', {
+      value: openSearchDomain.domainName,
+      description: 'Name of the OpenSearch domain',
+    });
+
+    new cdk.CfnOutput(this, 'OpenSearchDomainArn', {
+      value: openSearchDomain.domainArn,
+      description: 'ARN of the OpenSearch domain',
+    });
+
+    new cdk.CfnOutput(this, 'PHIBucketArn', {
+      value: phiDataBucket.bucketArn,
+      description: 'ARN of the PHI data bucket',
     });
 
     new cdk.CfnOutput(this, 'RegionDeployed', {
       value: this.region,
       description: 'AWS region where resources are deployed',
+    });
+
+    new cdk.CfnOutput(this, 'EnvironmentSuffix', {
+      value: environmentSuffix,
+      description: 'Environment suffix for this deployment',
+    });
+
+    new cdk.CfnOutput(this, 'ValidatorDLQUrl', {
+      value: validatorDLQ.queueUrl,
+      description: 'URL of the validator Lambda dead letter queue',
+    });
+
+    new cdk.CfnOutput(this, 'RemediationDLQUrl', {
+      value: remediationDLQ.queueUrl,
+      description: 'URL of the remediation Lambda dead letter queue',
+    });
+
+    new cdk.CfnOutput(this, 'ReportDLQUrl', {
+      value: reportDLQ.queueUrl,
+      description: 'URL of the report generator Lambda dead letter queue',
+    });
+
+    new cdk.CfnOutput(this, 'CloudWatchDashboardName', {
+      value: dashboard.dashboardName,
+      description: 'Name of the CloudWatch monitoring dashboard',
+    });
+
+    new cdk.CfnOutput(this, 'CloudWatchDashboardURL', {
+      value: `https://console.aws.amazon.com/cloudwatch/home?region=${this.region}#dashboards:name=${dashboard.dashboardName}`,
+      description: 'URL to access the CloudWatch monitoring dashboard',
     });
   }
 }

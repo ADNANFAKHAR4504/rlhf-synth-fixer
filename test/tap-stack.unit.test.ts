@@ -184,7 +184,7 @@ describe('SecurityEventStack', () => {
   describe('Lambda Functions', () => {
     test('creates validator Lambda function', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
-        Runtime: 'nodejs16.x',
+        Runtime: 'nodejs20.x',
         Handler: 'validator.handler',
         Timeout: 300,
         MemorySize: 1024,
@@ -196,7 +196,7 @@ describe('SecurityEventStack', () => {
 
     test('creates remediation Lambda function', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
-        Runtime: 'nodejs16.x',
+        Runtime: 'nodejs20.x',
         Handler: 'remediation.handler',
         Timeout: 300,
         MemorySize: 512,
@@ -208,7 +208,7 @@ describe('SecurityEventStack', () => {
 
     test('creates report generator Lambda function', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
-        Runtime: 'nodejs16.x',
+        Runtime: 'nodejs20.x',
         Handler: 'report-generator.handler',
         Timeout: 300,
         MemorySize: 512,
@@ -222,11 +222,11 @@ describe('SecurityEventStack', () => {
       // Filter out CDK custom resource lambdas (which use nodejs22.x)
       const lambdas = template.findResources('AWS::Lambda::Function');
       const userLambdas = Object.values(lambdas).filter(
-        lambda => lambda.Properties.Runtime === 'nodejs16.x'
+        lambda => lambda.Properties.Runtime === 'nodejs20.x'
       );
       expect(userLambdas.length).toBeGreaterThanOrEqual(3);
       userLambdas.forEach(lambda => {
-        expect(lambda.Properties.Runtime).toBe('nodejs16.x');
+        expect(lambda.Properties.Runtime).toBe('nodejs20.x');
       });
     });
 
@@ -571,7 +571,7 @@ describe('SecurityEventStack', () => {
       // CDK may create additional custom resource lambdas
       const lambdas = template.findResources('AWS::Lambda::Function');
       const userLambdas = Object.values(lambdas).filter(
-        lambda => lambda.Properties.Runtime === 'nodejs16.x'
+        lambda => lambda.Properties.Runtime === 'nodejs20.x'
       );
       expect(userLambdas.length).toBeGreaterThanOrEqual(3);
     });

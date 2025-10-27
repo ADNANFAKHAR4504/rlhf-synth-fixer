@@ -1,588 +1,377 @@
-# Model Response Failures Analysis
+# Model Response Failure Analysis
 
 ## Overview
 
-This document analyzes the shortcomings and failures in the MODEL_RESPONSE.md implementation compared to the requirements specified in PROMPT.md and the corrected solution in IDEAL_RESPONSE.md.
+This document analyzes the gaps between the model-generated CDK implementation (MODEL_RESPONSE.md) and the correct implementation (IDEAL_RESPONSE.md) for the HIPAA compliance and remediation engine.
+
+The model response provided a functional baseline but missed several production-ready features, operational best practices, and deployment flexibility requirements.
 
 ---
 
-## Critical Failures
+## Critical Missing Features
 
-### 1. Lambda Code Location Path Error
+### 1. No Dead Letter Queues for Lambda Functions
 
-**Failure:** Incorrect file path reference for Lambda function code assets.
+**Issue**: The model response doesn't include DLQs for any of the three Lambda functions.
 
-**MODEL_RESPONSE:**
+**Impact**: Failed Lambda invocations are lost without any way to investigate or retry them. In a security-critical HIPAA system, losing unauthorized access events is unacceptable.
+
+**What was missing**:
+- No SQS DLQ definitions for validator, remediation, or report generator Lambdas
+- No `deadLetterQueue` or `deadLetterQueueEnabled` properties on Lambda functions
+- No monitoring/alarming on DLQ message counts
+
+**Required fix**:
 ```typescript
-code: lambda.Code.fromAsset(path.join(__dirname, '../lambda'))
+const validatorDLQ = new sqs.Queue(this, 'ValidatorDLQ', {
+  queueName: `validator-dlq-${environmentSuffix}`,
+  retentionPeriod: cdk.Duration.days(14),
+});
+
+const validatorLambda = new lambda.Function(this, 'ValidatorFunction', {
+  // ... other props
+  deadLetterQueue: validatorDLQ,
+  deadLetterQueueEnabled: true,
+});
 ```
 
-**IDEAL_RESPONSE:**
+### 2. Missing Environment Suffix Support
+
+**Issue**: The model hardcoded resource names without environment suffixes, making it impossible to deploy multiple environments (dev, staging, prod) in the same account.
+
+**Impact**: Cannot run integration tests or maintain separate environments. Resource name conflicts would occur on second deployment.
+
+**What was missing**:
+- No `environmentSuffix` parameter in stack props
+- Resource names like `phi-data-bucket-${this.account}` instead of including environment suffix
+- No way to distinguish resources across environments
+
+**Required fix**:
 ```typescript
-code: lambda.Code.fromAsset(path.join(__dirname, 'lambda'))
+interface SecurityEventStackProps extends cdk.StackProps {
+  environmentSuffix?: string;
+}
+
+const phiDataBucket = new s3.Bucket(this, 'PHIDataBucket', {
+  bucketName: `phi-data-bucket-${this.account}-${this.region}-${environmentSuffix}`,
+});
 ```
 
-**Impact:** Lambda functions will fail to deploy because the code directory does not exist at the specified path. The model placed Lambda code in `lambda/` (project root) instead of `lib/lambda/` where the CDK stack expects it.
+### 3. No Comprehensive CloudWatch Monitoring
 
-**Root Cause:** Misunderstanding of CDK project structure and relative path resolution from `lib/security_event.ts`.
+**Issue**: The model included one basic alarm but no dashboard or comprehensive monitoring setup.
+
+**Impact**: Operations team has no visibility into system health. Cannot detect performance degradation, delivery delays, or component failures until alerts fire.
+
+**What was missing**:
+- No CloudWatch Dashboard definition
+- No metrics widgets for Step Functions, Lambda, DLQs
+- No OpenSearch cluster health monitoring
+- Missing alarms for:
+  - Firehose delivery delays
+  - Lambda error rates
+  - DynamoDB throttling
+  - OpenSearch cluster red status
+  - DLQ message accumulation
+
+**Required additions**: Full dashboard with 6+ widgets tracking execution metrics, error rates, duration trends, and DLQ depths.
 
 ---
 
-### 2. DynamoDB Point-in-Time Recovery Property Name
+## Operational Readiness Gaps
 
-**Failure:** Using deprecated DynamoDB table property.
+### 4. No Retry Policies on Step Functions Tasks
 
-**MODEL_RESPONSE:**
+**Issue**: Step Functions tasks lack retry configuration for transient failures.
+
+**Impact**: Temporary API throttling or network issues cause incident response workflows to fail completely instead of retrying.
+
+**What was missing**:
 ```typescript
-pointInTimeRecovery: true,
+// Model response had no retry configuration on any tasks
+athenaQueryTask // No .addRetry()
+macieJobTask    // No .addRetry()
+remediationTask // No .addRetry()
+reportTask      // No .addRetry()
 ```
 
-**IDEAL_RESPONSE:**
+**Required fix**: Add retry policies with exponential backoff:
+```typescript
+.addRetry({
+  errors: ['States.TaskFailed', 'States.Timeout'],
+  interval: cdk.Duration.seconds(2),
+  maxAttempts: 3,
+  backoffRate: 2.0,
+})
+```
+
+### 5. Outdated Lambda Runtime
+
+**Issue**: Model used Node.js 18 runtime instead of Node.js 20.
+
+**Impact**: Missing performance improvements and newer API features. Node 18 will reach end-of-life sooner.
+
+**Fix**: Use `lambda.Runtime.NODEJS_20_X`
+
+### 6. No Lambda Insights Enabled
+
+**Issue**: Lambda functions missing CloudWatch Lambda Insights configuration.
+
+**Impact**: Limited visibility into Lambda performance metrics, cold starts, memory usage patterns.
+
+**Required addition**:
+```typescript
+insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_229_0,
+```
+
+---
+
+## Configuration and Deployment Issues
+
+### 7. Inappropriate Removal Policies
+
+**Issue**: Model used `RETAIN` for many resources including PHI bucket, archive bucket, and OpenSearch.
+
+**Impact**: Cannot cleanly tear down test environments. Resources accumulate across test runs, incurring costs and requiring manual cleanup.
+
+**What was wrong**:
+- PHI data bucket: `RETAIN` (should be `DESTROY` for testing)
+- Archive bucket: `RETAIN` (should be `DESTROY` for testing)
+- OpenSearch: `RETAIN` (should be `DESTROY` for testing)
+
+**Note**: Production deployments should use RETAIN, but the implementation should support flexible configuration.
+
+### 8. Deprecated Athena Configuration
+
+**Issue**: Used `resultConfigurationUpdates` instead of `resultConfiguration`.
+
+**Impact**: Uses deprecated API that may not be supported in future CDK versions.
+
+**Wrong**:
+```typescript
+workGroupConfiguration: {
+  resultConfigurationUpdates: { // Deprecated
+    outputLocation: ...
+  }
+}
+```
+
+**Correct**:
+```typescript
+workGroupConfiguration: {
+  resultConfiguration: {
+    outputLocation: ...
+  }
+}
+```
+
+### 9. Incomplete Step Functions Logging
+
+**Issue**: Missing `includeExecutionData: true` in Step Functions log configuration.
+
+**Impact**: Logs don't include execution input/output data, making debugging unauthorized access incidents much harder.
+
+**Required fix**:
+```typescript
+logs: {
+  destination: new logs.LogGroup(...),
+  level: stepfunctions.LogLevel.ALL,
+  includeExecutionData: true, // Missing in model response
+}
+```
+
+---
+
+## Resource Configuration Deficiencies
+
+### 10. Incomplete OpenSearch Configuration
+
+**Issue**: Model response missing zone awareness and other availability configurations.
+
+**What was missing**:
+- No `zoneAwareness` configuration
+- `multiAzWithStandbyEnabled` not explicitly set
+- Missing proper multi-AZ setup
+
+**Impact**: Reduced availability for security monitoring dashboards during AZ failures.
+
+**Required addition**:
+```typescript
+zoneAwareness: {
+  enabled: true,
+  availabilityZoneCount: 2,
+},
+multiAzWithStandbyEnabled: false,
+```
+
+### 11. Wrong DynamoDB Property Name
+
+**Issue**: Used `pointInTimeRecovery: true` instead of proper property structure.
+
+**Wrong**:
+```typescript
+pointInTimeRecovery: true, // Not the correct CDK property
+```
+
+**Correct**:
 ```typescript
 pointInTimeRecoverySpecification: {
   pointInTimeRecoveryEnabled: true,
 },
 ```
 
-**Impact:** Stack deployment will fail with TypeScript compilation error or CloudFormation template generation error.
+### 12. Overly Complex SNS Encryption
 
-**Root Cause:** Using outdated or incorrect CDK API documentation.
+**Issue**: Model used complex SNS key alias lookup that's unnecessary.
 
----
-
-### 3. Athena Workgroup Configuration Error
-
-**Failure:** Using wrong property name for Athena workgroup result configuration.
-
-**MODEL_RESPONSE:**
+**What was done**:
 ```typescript
-workGroupConfiguration: {
-  resultConfigurationUpdates: {
-    outputLocation: `s3://${archiveBucket.bucketName}/athena-results/`,
+masterKey: sns.Alias.fromAliasName(this, 'aws-managed-key', 'alias/aws/sns'),
 ```
 
-**IDEAL_RESPONSE:**
+**Impact**: Adds complexity without benefit. Default AWS-managed encryption works fine.
+
+**Better approach**: Omit masterKey or use simpler configuration.
+
+### 13. Overly Complex Macie Scoping
+
+**Issue**: Model included complex scoping configuration in Macie job that wasn't required.
+
+**What was included**:
 ```typescript
-workGroupConfiguration: {
-  resultConfiguration: {
-    outputLocation: `s3://${archiveBucket.bucketName}/athena-results/`,
-```
-
-**Impact:** Athena workgroup creation will fail. The property `resultConfigurationUpdates` is for update operations, not creation.
-
-**Root Cause:** Confusion between CloudFormation create vs. update properties.
-
----
-
-### 4. OpenSearch Domain Name Length Violation
-
-**Failure:** OpenSearch domain name exceeds AWS character limits.
-
-**MODEL_RESPONSE:**
-```typescript
-domainName: 'phi-security-analytics',
-```
-
-**IDEAL_RESPONSE:**
-```typescript
-domainName: `phi-sec-${environmentSuffix}`,
-```
-
-**Impact:** Domain name may exceed 28-character limit when combined with AWS-generated suffixes, causing deployment failure. Additionally, hardcoded name prevents multiple environment deployments.
-
-**Root Cause:** Not accounting for AWS OpenSearch domain naming constraints and lack of environment parameterization.
-
----
-
-### 5. OpenSearch Multi-AZ Configuration Missing
-
-**Failure:** Incomplete OpenSearch capacity and zone awareness configuration.
-
-**MODEL_RESPONSE:**
-```typescript
-capacity: {
-  masterNodes: 3,
-  masterNodeInstanceType: 'r5.large.search',
-  dataNodes: 2,
-  dataNodeInstanceType: 'r5.xlarge.search',
+Scoping: {
+  Includes: {
+    And: [
+      {
+        SimpleScopeTerm: {
+          Key: 'OBJECT_KEY',
+          Values: [stepfunctions.JsonPath.stringAt('$.objectKey')],
+        },
+      },
+    ],
+  },
 },
 ```
 
-**IDEAL_RESPONSE:**
-```typescript
-capacity: {
-  masterNodes: 3,
-  masterNodeInstanceType: 'r5.large.search',
-  dataNodes: 2,
-  dataNodeInstanceType: 'r5.xlarge.search',
-  multiAzWithStandbyEnabled: false,
-},
-zoneAwareness: {
-  enabled: true,
-  availabilityZoneCount: 2,
-},
-```
+**Impact**: More complex than needed. The basic bucket definition is sufficient for the requirement.
 
-**Impact:** Suboptimal availability configuration. Missing explicit zone awareness settings could lead to deployment errors or single-AZ deployment.
-
-**Root Cause:** Incomplete OpenSearch domain configuration understanding.
+**Simpler approach**: Remove scoping, let Macie scan the entire bucket definition.
 
 ---
 
-### 6. Kinesis Firehose Dual Delivery Architecture Flaw
+## Missing Outputs and Documentation
 
-**Failure:** Attempting to configure both OpenSearch and S3 destinations at the same configuration level, which is architecturally incorrect.
+### 14. Insufficient Stack Outputs
 
-**MODEL_RESPONSE:**
-```typescript
-extendedS3DestinationConfiguration: { ... },
-opensearchDestinationConfiguration: { ... },
-```
+**Issue**: Model provided only 4 outputs. Ideal response has 20+ outputs.
 
-**IDEAL_RESPONSE:**
-Only includes `extendedS3DestinationConfiguration` without the OpenSearch destination at the same level.
+**What was missing**:
+- Archive bucket name
+- CloudTrail bucket name
+- DynamoDB table name
+- All Lambda ARNs
+- SNS topic ARN
+- CloudTrail ARN
+- Athena workgroup name
+- Glue database name
+- Full OpenSearch details (name, ARN)
+- All DLQ URLs
+- Dashboard name and URL
+- Region and environment info
 
-**Impact:** According to the requirement "This Firehose stream must do two things simultaneously: Long-Term Archive AND Real-Time Analytics," the model's approach is fundamentally flawed. A Kinesis Firehose stream cannot have both destinations configured this way in the CfnDeliveryStream. The correct approach requires either:
-- Two separate Firehose streams, or
-- S3 as primary with OpenSearch via EventBridge/Lambda trigger
+**Impact**: Operations and integration testing require these values. Without outputs, teams must manually find ARNs in console or use AWS CLI queries.
 
-**Root Cause:** Misunderstanding of Kinesis Firehose architectural limitations and AWS service constraints.
+### 15. Missing Props Interface in Main Stack
 
----
+**Issue**: TapStack in MODEL_RESPONSE doesn't accept or pass through environmentSuffix.
 
-### 7. Missing Environment Suffix Throughout
-
-**Failure:** Hardcoded resource names without environment parameterization.
-
-**MODEL_RESPONSE:**
-```typescript
-bucketName: `phi-data-bucket-${this.account}-${this.region}`,
-tableName: 'phi-authorization-store',
-topicName: 'phi-security-alerts',
-```
-
-**IDEAL_RESPONSE:**
-```typescript
-bucketName: `phi-data-bucket-${this.account}-${this.region}-${environmentSuffix}`,
-tableName: `phi-authorization-store-${environmentSuffix}`,
-topicName: `phi-alerts-${environmentSuffix}`,
-```
-
-**Impact:** Cannot deploy multiple environments (dev, staging, prod) simultaneously due to resource name conflicts. Critical failure for testing and CI/CD pipelines.
-
-**Root Cause:** Not following the requirement to support environment-based deployments and not learning from archived projects.
-
----
-
-### 8. Step Functions Logging Configuration Incomplete
-
-**Failure:** Missing execution data logging flag.
-
-**MODEL_RESPONSE:**
-```typescript
-logs: {
-  destination: new logs.LogGroup(this, 'StepFunctionsLogs', {
-    retention: logs.RetentionDays.ONE_YEAR,
-  }),
-  level: stepfunctions.LogLevel.ALL,
-},
-```
-
-**IDEAL_RESPONSE:**
-```typescript
-logs: {
-  destination: new logs.LogGroup(this, 'StepFunctionsLogs', {
-    retention: logs.RetentionDays.ONE_YEAR,
-  }),
-  level: stepfunctions.LogLevel.ALL,
-  includeExecutionData: true,
-},
-```
-
-**Impact:** Step Functions execution data (input/output of each state) won't be logged, making debugging unauthorized access incidents much harder. This violates HIPAA audit trail requirements.
-
-**Root Cause:** Incomplete understanding of Step Functions logging capabilities.
-
----
-
-### 9. Stack Instantiation Error
-
-**Failure:** Incorrect stack instantiation pattern in tap-stack.ts.
-
-**MODEL_RESPONSE:**
+**What was wrong**:
 ```typescript
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
-    super(scope, id, props);
-
-    new SecurityEventStack(this, 'SecurityEventStack', {
-      env: {
-        account: this.account,
-        region: this.region,
-      },
+    // No way to pass environmentSuffix
+  }
+}
 ```
 
-**IDEAL_RESPONSE:**
-```typescript
-export class TapStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: TapStackProps) {
-    super(scope, id, props);
+**Impact**: Cannot configure environment from deployment scripts. Breaks CI/CD integration.
 
-    const environmentSuffix = props?.environmentSuffix ||
-      this.node.tryGetContext('environmentSuffix') || 'dev';
-
-    new SecurityEventStack(this, 'SecurityEventStack', {
-      environmentSuffix: environmentSuffix,
-      env: props?.env,
-```
-
-**Impact:** The model creates a nested stack (SecurityEventStack inside TapStack) instead of keeping them separate. This is against the prompt requirement: "Implement using AWS CDK TypeScript with separate modular stack file security_event.ts in lib/ for all components, instantiated in lib/tap-stack.ts."
-
-The prompt asks for the stack to be instantiated, not nested. Additionally, missing environment suffix handling prevents multi-environment deployments.
-
-**Root Cause:** Misinterpreting the instantiation requirement and not implementing proper props interface.
+**Required fix**: Create TapStackProps interface extending StackProps with environmentSuffix.
 
 ---
 
-### 10. Missing Critical CloudFormation Outputs
+## Alarm and Monitoring Gaps
 
-**Failure:** Incomplete set of CloudFormation outputs for resource identification.
+### 16. No Alarm Actions Configured
 
-**MODEL_RESPONSE:**
-Only outputs 4 resources:
-- PHIBucketName
-- FirehoseStreamName
-- OpenSearchDomainEndpoint
-- StateMachineArn
+**Issue**: The one alarm in MODEL_RESPONSE doesn't trigger any notifications.
 
-**IDEAL_RESPONSE:**
-Outputs 17 resources including:
-- All bucket names and ARNs
-- Lambda function ARNs
-- DynamoDB table name
-- SNS topic ARN
-- CloudTrail ARN
-- Glue database name
-- Athena workgroup name
-- Environment and region metadata
-
-**Impact:** Testing, integration, and operational monitoring become extremely difficult without output values. The requirements state this is for production HIPAA compliance - comprehensive outputs are mandatory for audit trails and incident response.
-
-**Root Cause:** Not considering operational and testing requirements.
-
----
-
-### 11. CloudTrail Multi-Region Configuration Missing
-
-**Failure:** Missing explicit multi-region trail configuration.
-
-**MODEL_RESPONSE:**
-```typescript
-const trail = new cloudtrail.Trail(this, 'PHIAccessTrail', {
-  bucket: cloudtrailBucket,
-  encryptionKey: undefined,
-  includeGlobalServiceEvents: false,
-  enableFileValidation: true,
-});
-```
-
-**IDEAL_RESPONSE:**
-```typescript
-const trail = new cloudtrail.Trail(this, 'PHIAccessTrail', {
-  bucket: cloudtrailBucket,
-  encryptionKey: undefined,
-  isMultiRegionTrail: false,
-  includeGlobalServiceEvents: false,
-  enableFileValidation: true,
-});
-```
-
-**Impact:** Ambiguous configuration. While `false` might be the default, for a production HIPAA compliance system, explicit configuration is mandatory to prevent unintended multi-region trail costs and complexity.
-
-**Root Cause:** Not being explicit about important security configurations.
-
----
-
-### 12. Macie Job Configuration Errors
-
-**Failure:** Missing required parameters and incorrect scoping configuration.
-
-**MODEL_RESPONSE:**
-```typescript
-const macieJobTask = new stepfunctionsTasks.CallAwsService(
-  this,
-  'DataClassification',
-  {
-    service: 'macie2',
-    action: 'createClassificationJob',
-    parameters: {
-      Name: stepfunctions.JsonPath.format(
-        'PHI-Classification-{}',
-        stepfunctions.JsonPath.stringAt('$$.Execution.Name')
-      ),
-      JobType: 'ONE_TIME',
-      S3JobDefinition: {
-        BucketDefinitions: [
-          {
-            AccountId: this.account,
-            Buckets: [phiDataBucket.bucketName],
-          },
-        ],
-        Scoping: {
-          Includes: {
-            And: [
-              {
-                SimpleScopeTerm: {
-                  Key: 'OBJECT_KEY',
-                  Values: [stepfunctions.JsonPath.stringAt('$.objectKey')],
-                },
-              },
-            ],
-          },
-        },
-      },
-    },
-```
-
-**IDEAL_RESPONSE:**
-```typescript
-const macieJobTask = new stepfunctionsTasks.CallAwsService(
-  this,
-  'DataClassification',
-  {
-    service: 'macie2',
-    action: 'createClassificationJob',
-    parameters: {
-      ClientToken: stepfunctions.JsonPath.stringAt('$$.Execution.Name'),
-      Name: stepfunctions.JsonPath.format(
-        'PHI-Classification-{}',
-        stepfunctions.JsonPath.stringAt('$$.Execution.Name')
-      ),
-      JobType: 'ONE_TIME',
-      S3JobDefinition: {
-        BucketDefinitions: [
-          {
-            AccountId: this.account,
-            Buckets: [phiDataBucket.bucketName],
-          },
-        ],
-      },
-    },
-```
-
-**Impact:**
-1. Missing `ClientToken` for idempotency, which could cause duplicate Macie jobs during Step Functions retries.
-2. The complex scoping configuration with `SimpleScopeTerm` and dynamic `objectKey` value will likely fail because Step Functions cannot inject JsonPath values into deeply nested AWS API parameters.
-
-**Root Cause:** Not understanding Macie API requirements and Step Functions parameter resolution limitations.
-
----
-
-### 13. Inconsistent Removal Policies
-
-**Failure:** Mixed removal policies that don't align with testing requirements.
-
-**MODEL_RESPONSE:**
-- Archive bucket: `removalPolicy: cdk.RemovalPolicy.RETAIN`
-- PHI bucket: `removalPolicy: cdk.RemovalPolicy.RETAIN`
-- CloudTrail bucket: `removalPolicy: cdk.RemovalPolicy.RETAIN`
-
-**IDEAL_RESPONSE:**
-All buckets have:
-- `removalPolicy: cdk.RemovalPolicy.DESTROY`
-- `autoDeleteObjects: true`
-
-**Impact:** For testing and CI/CD environments, RETAIN policies prevent stack cleanup and cause resource accumulation. The requirements mention this is for "prod environment" but testing infrastructure must be deployable and destroyable.
-
-**Root Cause:** Not considering the full deployment lifecycle and testing requirements.
-
----
-
-### 14. Incorrect Step Functions Dependency Management
-
-**Failure:** Creating incorrect and potentially circular dependency.
-
-**MODEL_RESPONSE:**
-```typescript
-athenaWorkgroup.node.defaultChild?.node.addDependency(stateMachine);
-```
-
-**IDEAL_RESPONSE:**
-This line is removed entirely.
-
-**Impact:** This creates a backward dependency where the Athena workgroup depends on the Step Functions state machine, but the state machine uses the workgroup. This is logically incorrect and could cause deployment issues. The optional chaining (`?.`) suggests the model wasn't even confident this would work.
-
-**Root Cause:** Misunderstanding CloudFormation dependency management.
-
----
-
-### 15. Unnecessary CloudWatch Alarm
-
-**Failure:** Creating a CloudWatch alarm that wasn't requested and is incorrectly configured.
-
-**MODEL_RESPONSE:**
+**What was missing**:
 ```typescript
 new cdk.aws_cloudwatch.Alarm(this, 'UnauthorizedAccessAlarm', {
-  metric: stateMachine.metric('ExecutionsFailed'),
-  threshold: 1,
-  evaluationPeriods: 1,
-  treatMissingData: cdk.aws_cloudwatch.TreatMissingData.NOT_BREACHING,
+  // ... alarm config
+  // No .addAlarmAction() call
 });
 ```
 
-**IDEAL_RESPONSE:**
-No alarm creation.
+**Impact**: Alarm fires but nobody gets notified. Defeats the purpose of alarming.
 
-**Impact:**
-1. Not required by the prompt.
-2. Alarm monitors ExecutionsFailed, but unauthorized access triggers ExecutionsStarted (the workflow is supposed to execute successfully).
-3. Alarm has no action configured (no SNS topic), making it useless.
-4. Creates alert fatigue and operational confusion.
-
-**Root Cause:** Adding features not requested and misunderstanding what constitutes an "alert-worthy" event.
-
----
-
-### 16. OpenSearch EBS Configuration Overcomplicated
-
-**Failure:** Unnecessarily explicit encryption configuration.
-
-**MODEL_RESPONSE:**
+**Required fix**: Connect all alarms to SNS topic:
 ```typescript
-ebs: {
-  volumeSize: 100,
-  volumeType: cdk.aws_ec2.EbsDeviceVolumeType.GP3,
-  encrypted: true,
-},
+alarm.addAlarmAction(new cloudwatch_actions.SnsAction(securityAlertTopic));
 ```
 
-**IDEAL_RESPONSE:**
-```typescript
-ebs: {
-  volumeSize: 100,
-  volumeType: cdk.aws_ec2.EbsDeviceVolumeType.GP3,
-},
-```
+### 17. Missing Critical Alarms
 
-**Impact:** Minor. The `encrypted: true` is redundant because OpenSearch with `encryptionAtRest: { enabled: true }` already encrypts EBS volumes. Including both creates confusion about which setting takes precedence.
+**What alarm coverage was missing**:
+- Validator Lambda error rate alarm
+- Firehose delivery delay alarm (data freshness)
+- OpenSearch cluster red status alarm
+- DynamoDB throttling alarm
+- DLQ message accumulation alarm
 
-**Root Cause:** Not understanding the relationship between OpenSearch encryption settings and underlying EBS encryption.
-
----
-
-### 17. SNS Topic Encryption Overcomplicated
-
-**Failure:** Overly complex and unnecessary encryption key configuration.
-
-**MODEL_RESPONSE:**
-```typescript
-const securityAlertTopic = new sns.Topic(this, 'SecurityAlertTopic', {
-  topicName: 'phi-security-alerts',
-  masterKey: sns.Alias.fromAliasName(
-    this,
-    'aws-managed-key',
-    'alias/aws/sns'
-  ),
-});
-```
-
-**IDEAL_RESPONSE:**
-```typescript
-const securityAlertTopic = new sns.Topic(this, 'SecurityAlertTopic', {
-  topicName: `phi-alerts-${environmentSuffix}`,
-});
-```
-
-**Impact:** The explicit AWS-managed key reference is redundant and adds unnecessary complexity. SNS topics use AWS-managed encryption by default. The additional construct ID 'aws-managed-key' could cause construct ID conflicts in complex stacks.
-
-**Root Cause:** Over-engineering a simple configuration.
-
----
-
-### 18. Archive Bucket Object Lock Configuration Missing Compliance Mode
-
-**Failure:** Using GOVERNANCE mode instead of COMPLIANCE mode for HIPAA requirements.
-
-**MODEL_RESPONSE:**
-```typescript
-objectLockRetention: s3.ObjectLockRetention.governance({
-  duration: cdk.Duration.days(2555), // 7 years for HIPAA
-}),
-```
-
-**IDEAL_RESPONSE:**
-```typescript
-objectLockEnabled: true,
-```
-Then in Lambda:
-```javascript
-ObjectLockMode: 'GOVERNANCE',
-ObjectLockRetainUntilDate: new Date(Date.now() + 7 * 365 * 24 * 60 * 60 * 1000),
-```
-
-**Impact:**
-1. Setting bucket-default object lock at 7 years for ALL objects is wrong - regular access logs don't need 7-year retention, only incident reports do.
-2. GOVERNANCE mode allows privileged users to delete objects, which may not meet HIPAA "tamper-proof" requirements mentioned in the prompt.
-3. The IDEAL response correctly moves this to the report generator Lambda where only incident reports get object lock.
-
-**Root Cause:** Misunderstanding Object Lock scope and compliance requirements.
-
----
-
-### 19. Access Logs Bucket Lifecycle Policy Too Aggressive
-
-**Failure:** Deleting access logs after only 7 days.
-
-**MODEL_RESPONSE:**
-```typescript
-const accessLogsBucket = new s3.Bucket(this, 'AccessLogsBucket', {
-  bucketName: `phi-access-logs-${this.account}-${this.region}`,
-  encryption: s3.BucketEncryption.S3_MANAGED,
-  lifecycleRules: [
-    {
-      id: 'delete-old-logs',
-      expiration: cdk.Duration.days(7),
-      enabled: true,
-    },
-  ],
-```
-
-**IDEAL_RESPONSE:**
-The access logs bucket is removed entirely.
-
-**Impact:** The prompt states logs must be delivered to the archive bucket for long-term storage. Having an intermediate access logs bucket that deletes after 7 days creates a gap in the audit trail and violates HIPAA requirements. The IDEAL response removes this unnecessary bucket.
-
-**Root Cause:** Creating unnecessary intermediate storage and not understanding the data flow requirements.
+**Impact**: System degradation goes undetected until complete failure.
 
 ---
 
 ## Summary Statistics
 
-- **Critical Failures**: 10 (would prevent deployment or cause runtime failures)
-- **Architectural Failures**: 4 (fundamentally wrong design decisions)
-- **Configuration Errors**: 5 (incorrect property values or settings)
-- **Missing Requirements**: 3 (features explicitly requested but not implemented correctly)
-- **Over-engineering**: 3 (unnecessary complexity added)
+| Category | Model Response | Ideal Response | Gap |
+|----------|---------------|----------------|-----|
+| Lambda DLQs | 0 | 3 | Missing all |
+| CloudWatch Alarms | 1 | 6 | Missing 5 critical alarms |
+| Dashboard Widgets | 0 | 6 | No visibility |
+| Stack Outputs | 4 | 20+ | Missing 75% |
+| Retry Policies | 0 | 4 tasks | No resilience |
+| Environment Flexibility | No | Yes | Cannot deploy multiple envs |
 
-## Key Patterns of Failure
+---
 
-1. **Incomplete AWS Service Understanding**: Multiple failures related to service-specific constraints (OpenSearch naming, Kinesis Firehose limitations, Macie API requirements).
+## Root Cause Analysis
 
-2. **Lack of Environment Parameterization**: Pervasive hardcoding of resource names without environment suffix support.
+The model response demonstrates understanding of core AWS service integration but falls short in:
 
-3. **Path and Reference Errors**: Fundamental mistakes in file system paths and CDK project structure.
+1. **Production Readiness**: Missing operational essentials like DLQs, retry logic, comprehensive monitoring
+2. **Multi-Environment Support**: No parameterization for environment-specific deployments
+3. **Observability**: Minimal CloudWatch integration, missing dashboards and critical alarms
+4. **Error Handling**: No dead letter queues, no retry policies, insufficient logging
+5. **Operational Excellence**: Missing outputs needed for integration and troubleshooting
 
-4. **Over-engineering vs. Under-engineering**: Both adding unnecessary features (CloudWatch alarm) and missing critical configurations (comprehensive outputs).
+The implementation would deploy and technically function but would fail in production operations and testing scenarios.
 
-5. **Compliance Requirement Gaps**: Not fully understanding HIPAA requirements for audit trails, logging, and tamper-proof storage.
+---
 
-6. **Testing and Operational Concerns Ignored**: Removal policies and output configurations don't support testing and operational use cases.
+## Recommendations for Model Improvement
 
-## Recommendations for Model Training
+When generating production IaC, the model should:
 
-1. Emphasize AWS service-specific constraints and limits in training data.
-2. Include more examples of multi-environment CDK deployments with proper parameterization.
-3. Strengthen understanding of CDK project structure and relative path resolution.
-4. Include compliance-focused examples (HIPAA, SOC2, PCI-DSS) to understand audit and tamper-proof requirements.
-5. Train on operational concerns: outputs, removal policies, testing considerations.
-6. Improve understanding of when to add features vs. strictly following requirements.
+1. Always include DLQs for async Lambda invocations
+2. Parameterize resource names with environment identifiers
+3. Create comprehensive CloudWatch dashboards by default for multi-component systems
+4. Add retry policies to Step Functions tasks
+5. Use latest stable runtime versions
+6. Enable CloudWatch Insights for Lambda
+7. Provide extensive stack outputs covering all major resource identifiers
+8. Connect alarms to notification channels
+9. Use appropriate removal policies for environment type
+10. Consider deployment lifecycle (dev/staging/prod) in design
