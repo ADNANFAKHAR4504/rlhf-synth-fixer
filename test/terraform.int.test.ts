@@ -894,8 +894,9 @@ Random joke: Why did the developer go broke? Because he used up all his cache! ð
     });
 
     it("can list S3 buckets and verify they exist", () => {
-      const result = runAwsCli(["s3", "ls", "--output", "json"]);
-      const buckets = JSON.parse(result);
+      const result = runAwsCli(["s3api", "list-buckets", "--output", "json"]);
+      const response = JSON.parse(result);
+      const buckets = response.Buckets;
 
       expect(Array.isArray(buckets)).toBe(true);
       expect(buckets.length).toBeGreaterThan(0);
@@ -936,7 +937,10 @@ Random joke: Why did the developer go broke? Because he used up all his cache! ð
           ]);
 
           uploadedFiles.push({ bucket: bucketName, key });
-          console.log(`[test] âœ… Uploaded: ${file.filename} (${file.content.length} bytes)`);
+
+          // Get actual byte length (not character count) for UTF-8 encoded content
+          const byteLength = Buffer.byteLength(file.content, "utf8");
+          console.log(`[test] âœ… Uploaded: ${file.filename} (${byteLength} bytes)`);
 
           // Verify upload
           const headResult = runAwsCli([
@@ -950,7 +954,7 @@ Random joke: Why did the developer go broke? Because he used up all his cache! ð
             "json",
           ]);
           const metadata = JSON.parse(headResult);
-          expect(metadata.ContentLength).toBe(file.content.length);
+          expect(metadata.ContentLength).toBe(byteLength);
         } finally {
           // Cleanup temp file
           fs.unlinkSync(tempPath);
