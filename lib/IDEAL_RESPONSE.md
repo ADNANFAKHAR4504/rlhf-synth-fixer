@@ -8,6 +8,11 @@
       "Default": "production",
       "Description": "Environment name for the deployment"
     },
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming and configuration (e.g., dev, staging, prod)"
+    },
     "RedshiftMasterUsername": {
       "Type": "String",
       "Default": "admin",
@@ -24,7 +29,7 @@
       "Type": "AWS::Kinesis::Stream",
       "Properties": {
         "Name": {
-          "Fn::Sub": "${EnvironmentName}-cdr-ingestion-stream"
+          "Fn::Sub": "cdr-ingestion-stream-${EnvironmentSuffix}"
         },
         "ShardCount": 30,
         "RetentionPeriodHours": 24,
@@ -45,7 +50,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "${EnvironmentName}-cdr-archive-${AWS::AccountId}"
+          "Fn::Sub": "cdr-archive-${EnvironmentSuffix}-${AWS::AccountId}"
         },
         "VersioningConfiguration": {
           "Status": "Enabled"
@@ -89,7 +94,7 @@
       "Type": "AWS::DynamoDB::Table",
       "Properties": {
         "TableName": {
-          "Fn::Sub": "${EnvironmentName}-cdr-realtime-lookup"
+          "Fn::Sub": "cdr-realtime-lookup-${EnvironmentSuffix}"
         },
         "BillingMode": "PAY_PER_REQUEST",
         "AttributeDefinitions": [
@@ -154,7 +159,7 @@
       "Type": "AWS::Redshift::Cluster",
       "Properties": {
         "ClusterIdentifier": {
-          "Fn::Sub": "${EnvironmentName}-cdr-redshift"
+          "Fn::Sub": "cdr-redshift-${EnvironmentSuffix}"
         },
         "DBName": "cdrwarehouse",
         "MasterUsername": {
@@ -352,7 +357,7 @@
       "Type": "AWS::KinesisFirehose::DeliveryStream",
       "Properties": {
         "DeliveryStreamName": {
-          "Fn::Sub": "${EnvironmentName}-cdr-firehose"
+          "Fn::Sub": "${EnvironmentName}-cdr-firehose-${EnvironmentSuffix}"
         },
         "DeliveryStreamType": "DirectPut",
           "RedshiftDestinationConfiguration": {
@@ -498,7 +503,7 @@
       "Type": "AWS::Lambda::Function",
       "Properties": {
         "FunctionName": {
-          "Fn::Sub": "${EnvironmentName}-cdr-transform"
+          "Fn::Sub": "${EnvironmentName}-cdr-transform-${EnvironmentSuffix}"
         },
         "Runtime": "python3.11",
         "Handler": "index.lambda_handler",
@@ -641,7 +646,7 @@
           "DeleteBehavior": "LOG"
         },
         "RecrawlPolicy": {
-          "RecrawlBehavior": "CRAWL_NEW_FOLDERS_ONLY"
+          "RecrawlBehavior": "CRAWL_EVERYTHING"
         }
       }
     },
