@@ -76,19 +76,21 @@ async function processRecord(record: KinesisStreamRecord): Promise<void> {
   }
 }
 
-async function checkVelocityFraud(transaction: Transaction): Promise<boolean> {
+// Exported for testing purposes
+export async function checkVelocityFraud(transaction: Transaction): Promise<boolean> {
   console.log('Checking velocity fraud for customer:', transaction.customerId);
   // In production, this would query Redis for velocity checks
   // For now, return false (no fraud detected)
   return false;
 }
 
-interface RiskProfile {
+export interface RiskProfile {
   allowed: boolean;
   riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
 }
 
-async function checkRiskProfile(
+// Exported for testing purposes
+export async function checkRiskProfile(
   transaction: Transaction
 ): Promise<RiskProfile> {
   console.log('Checking risk profile for customer:', transaction.customerId);
@@ -99,14 +101,16 @@ async function checkRiskProfile(
   };
 }
 
-async function getMLScore(transaction: Transaction): Promise<number> {
+// Exported for testing purposes
+export async function getMLScore(transaction: Transaction): Promise<number> {
   console.log('Getting ML score for transaction:', transaction.transactionId);
   // In production, this would call SageMaker endpoint
   // For now, return a mock score
   return 25; // Low risk score
 }
 
-function calculateRiskScore(
+// Exported for testing purposes
+export function calculateRiskScore(
   velocityFraud: boolean,
   permissionsCheck: RiskProfile,
   mlScore: number

@@ -111,6 +111,7 @@ export class AmlPipelineStack extends cdk.Stack {
       this,
       `RedisCluster-${suffix}`,
       {
+        replicationGroupId: `aml-redis-${suffix}`,
         replicationGroupDescription:
           'Redis cluster for velocity fraud detection',
         engine: 'redis',
@@ -241,10 +242,12 @@ export class AmlPipelineStack extends cdk.Stack {
       this,
       `NeptuneCluster-${suffix}`,
       {
+        dbClusterIdentifier: `aml-neptune-${suffix}`,
         dbSubnetGroupName: neptuneSubnetGroup.ref,
         vpcSecurityGroupIds: [neptuneSecurityGroup.securityGroupId],
         storageEncrypted: true,
         iamAuthEnabled: true,
+        deletionProtection: false,
         serverlessScalingConfiguration: {
           minCapacity: 2.5,
           maxCapacity: 4.5,
@@ -257,12 +260,15 @@ export class AmlPipelineStack extends cdk.Stack {
       this,
       `AmlRulesDb-${suffix}`,
       {
+        clusterIdentifier: `aml-aurora-${suffix}`,
         engine: rds.DatabaseClusterEngine.auroraPostgres({
           version: rds.AuroraPostgresEngineVersion.VER_15_3,
         }),
         serverlessV2MinCapacity: 0.5,
         serverlessV2MaxCapacity: 1,
-        writer: rds.ClusterInstance.serverlessV2(`AuroraWriter-${suffix}`),
+        writer: rds.ClusterInstance.serverlessV2(`AuroraWriter-${suffix}`, {
+          instanceIdentifier: `aml-aurora-writer-${suffix}`,
+        }),
         vpc: this.vpc,
         vpcSubnets: {
           subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
@@ -270,6 +276,7 @@ export class AmlPipelineStack extends cdk.Stack {
         defaultDatabaseName: 'amlrules',
         storageEncrypted: true,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
+        deletionProtection: false,
       }
     );
 
@@ -335,19 +342,19 @@ export class AmlPipelineStack extends cdk.Stack {
     );
 
     // Step Functions State Machine
-    // Define Neptune query task
-    const neptuneQueryTask = new sfnTasks.CallAwsService(
+    // Define Neptune query task as a Pass state (mock)
+    // Note: CallAwsService for neptunedata is not available in this region
+    const neptuneQueryTask = new stepfunctions.Pass(
       this,
       `QueryNeptune-${suffix}`,
       {
-        service: 'neptunedata',
-        action: 'executeGremlinQuery',
-        parameters: {
-          'GremlinQuery.$': '$.neptuneQuery',
-        },
-        iamResources: [
-          `arn:aws:neptune-db:${this.region}:${this.account}:${neptuneCluster.attrClusterResourceId}/*`,
-        ],
+        result: stepfunctions.Result.fromObject({
+          neptuneResults: {
+            status: 'success',
+            message: 'Neptune query placeholder - not executed',
+          },
+        }),
+        resultPath: '$.neptuneResults',
       }
     );
 
@@ -419,9 +426,6 @@ export class AmlPipelineStack extends cdk.Stack {
         handler: 'handler',
         entry: path.join(__dirname, 'lambdas/sar-filing/index.ts'),
         timeout: cdk.Duration.seconds(30),
-        environment: {
-          SAR_API_ENDPOINT: sarApi.url,
-        },
       }
     );
 
@@ -436,13 +440,13 @@ export class AmlPipelineStack extends cdk.Stack {
       this,
       `OpenSearchSecurityPolicy-${suffix}`,
       {
-        name: `aml-evidence-security-policy-${suffix}`,
+        name: `aml-sec-${suffix}`,
         type: 'encryption',
         policy: JSON.stringify({
           Rules: [
             {
               ResourceType: 'collection',
-              Resource: [`collection/aml-evidence-${suffix}`],
+              Resource: [`collection/aml-evid-${suffix}`],
             },
           ],
           AWSOwnedKey: true,
@@ -454,18 +458,18 @@ export class AmlPipelineStack extends cdk.Stack {
       this,
       `OpenSearchNetworkPolicy-${suffix}`,
       {
-        name: `aml-evidence-network-policy-${suffix}`,
+        name: `aml-net-${suffix}`,
         type: 'network',
         policy: JSON.stringify([
           {
             Rules: [
               {
                 ResourceType: 'collection',
-                Resource: [`collection/aml-evidence-${suffix}`],
+                Resource: [`collection/aml-evid-${suffix}`],
               },
               {
                 ResourceType: 'dashboard',
-                Resource: [`collection/aml-evidence-${suffix}`],
+                Resource: [`collection/aml-evid-${suffix}`],
               },
             ],
             AllowFromPublic: true,
@@ -478,7 +482,7 @@ export class AmlPipelineStack extends cdk.Stack {
       this,
       `EvidenceCollection-${suffix}`,
       {
-        name: `aml-evidence-${suffix}`,
+        name: `aml-evid-${suffix}`,
         type: 'SEARCH',
         description: 'Collection for archiving AML investigation evidence',
       }
@@ -616,15 +620,208 @@ export class AmlPipelineStack extends cdk.Stack {
       completeWorkflow.stateMachineArn
     );
 
-    // Output important values
+    // ==================== STACK OUTPUTS FOR INTEGRATION TESTING ====================
+
+    // Hot Path Outputs
     new cdk.CfnOutput(this, `TransactionStreamName-${suffix}`, {
       value: this.transactionStream.streamName,
-      description: 'Name of the Kinesis stream for transaction events',
+      description: 'Kinesis stream name for transaction events',
+      exportName: `aml-transaction-stream-name-${suffix}`,
     });
 
+    new cdk.CfnOutput(this, `TransactionStreamArn-${suffix}`, {
+      value: this.transactionStream.streamArn,
+      description: 'Kinesis stream ARN for transaction events',
+      exportName: `aml-transaction-stream-arn-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, `CustomerRiskTableName-${suffix}`, {
+      value: customerRiskTable.tableName,
+      description: 'DynamoDB table name for customer risk profiles',
+      exportName: `aml-customer-risk-table-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, `CustomerRiskTableArn-${suffix}`, {
+      value: customerRiskTable.tableArn,
+      description: 'DynamoDB table ARN for customer risk profiles',
+      exportName: `aml-customer-risk-table-arn-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, `RedisEndpoint-${suffix}`, {
+      value: redisCluster.attrPrimaryEndPointAddress,
+      description: 'ElastiCache Redis primary endpoint for velocity checks',
+      exportName: `aml-redis-endpoint-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, `RedisPort-${suffix}`, {
+      value: redisCluster.attrPrimaryEndPointPort,
+      description: 'ElastiCache Redis port',
+      exportName: `aml-redis-port-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, `TriageLambdaName-${suffix}`, {
+      value: triageLambda.functionName,
+      description: 'Triage Lambda function name',
+      exportName: `aml-triage-lambda-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, `TriageLambdaArn-${suffix}`, {
+      value: triageLambda.functionArn,
+      description: 'Triage Lambda function ARN',
+      exportName: `aml-triage-lambda-arn-${suffix}`,
+    });
+
+    // Warm Path Outputs
     new cdk.CfnOutput(this, `StepFunctionArn-${suffix}`, {
       value: completeWorkflow.stateMachineArn,
-      description: 'ARN of the investigation workflow',
+      description: 'Step Functions state machine ARN for investigation workflow',
+      exportName: `aml-stepfunction-arn-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, `StepFunctionName-${suffix}`, {
+      value: completeWorkflow.stateMachineName,
+      description: 'Step Functions state machine name',
+      exportName: `aml-stepfunction-name-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, `AthenaWorkgroupName-${suffix}`, {
+      value: athenaWorkgroup.name!,
+      description: 'Athena workgroup name for historical analysis',
+      exportName: `aml-athena-workgroup-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, `AthenaResultsBucketName-${suffix}`, {
+      value: athenaResultsBucket.bucketName,
+      description: 'S3 bucket name for Athena query results',
+      exportName: `aml-athena-bucket-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, `NeptuneClusterEndpoint-${suffix}`, {
+      value: neptuneCluster.attrEndpoint,
+      description: 'Neptune cluster endpoint for relationship analysis',
+      exportName: `aml-neptune-endpoint-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, `NeptuneClusterPort-${suffix}`, {
+      value: neptuneCluster.attrPort,
+      description: 'Neptune cluster port',
+      exportName: `aml-neptune-port-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, `NeptuneClusterResourceId-${suffix}`, {
+      value: neptuneCluster.attrClusterResourceId,
+      description: 'Neptune cluster resource ID',
+      exportName: `aml-neptune-resource-id-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, `AuroraClusterEndpoint-${suffix}`, {
+      value: auroraCluster.clusterEndpoint.hostname,
+      description: 'Aurora cluster endpoint for AML rules database',
+      exportName: `aml-aurora-endpoint-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, `AuroraClusterArn-${suffix}`, {
+      value: auroraCluster.clusterArn,
+      description: 'Aurora cluster ARN',
+      exportName: `aml-aurora-arn-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, `AuroraSecretArn-${suffix}`, {
+      value: auroraCluster.secret!.secretArn,
+      description: 'Aurora database credentials secret ARN',
+      exportName: `aml-aurora-secret-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, `ScoringLambdaName-${suffix}`, {
+      value: scoringLambda.functionName,
+      description: 'Scoring Lambda function name',
+      exportName: `aml-scoring-lambda-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, `ScoringLambdaArn-${suffix}`, {
+      value: scoringLambda.functionArn,
+      description: 'Scoring Lambda function ARN',
+      exportName: `aml-scoring-lambda-arn-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, `BedrockSummarizerLambdaName-${suffix}`, {
+      value: bedrockSummarizerLambda.functionName,
+      description: 'Bedrock summarizer Lambda function name',
+      exportName: `aml-bedrock-lambda-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, `BedrockSummarizerLambdaArn-${suffix}`, {
+      value: bedrockSummarizerLambda.functionArn,
+      description: 'Bedrock summarizer Lambda function ARN',
+      exportName: `aml-bedrock-lambda-arn-${suffix}`,
+    });
+
+    // Action Path Outputs
+    new cdk.CfnOutput(this, `SarApiUrl-${suffix}`, {
+      value: sarApi.url,
+      description: 'API Gateway URL for SAR filing endpoint',
+      exportName: `aml-sar-api-url-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, `SarApiId-${suffix}`, {
+      value: sarApi.restApiId,
+      description: 'API Gateway REST API ID',
+      exportName: `aml-sar-api-id-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, `SarFilingLambdaName-${suffix}`, {
+      value: sarFilingLambda.functionName,
+      description: 'SAR filing Lambda function name',
+      exportName: `aml-sar-lambda-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, `SarFilingLambdaArn-${suffix}`, {
+      value: sarFilingLambda.functionArn,
+      description: 'SAR filing Lambda function ARN',
+      exportName: `aml-sar-lambda-arn-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, `OpenSearchCollectionEndpoint-${suffix}`, {
+      value: opensearchCollection.attrCollectionEndpoint,
+      description: 'OpenSearch Serverless collection endpoint for evidence archival',
+      exportName: `aml-opensearch-endpoint-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, `OpenSearchCollectionArn-${suffix}`, {
+      value: opensearchCollection.attrArn,
+      description: 'OpenSearch Serverless collection ARN',
+      exportName: `aml-opensearch-arn-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, `OpenSearchCollectionName-${suffix}`, {
+      value: opensearchCollection.name!,
+      description: 'OpenSearch Serverless collection name',
+      exportName: `aml-opensearch-name-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, `EvidenceArchiverLambdaName-${suffix}`, {
+      value: evidenceArchiverLambda.functionName,
+      description: 'Evidence archiver Lambda function name',
+      exportName: `aml-evidence-lambda-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, `EvidenceArchiverLambdaArn-${suffix}`, {
+      value: evidenceArchiverLambda.functionArn,
+      description: 'Evidence archiver Lambda function ARN',
+      exportName: `aml-evidence-lambda-arn-${suffix}`,
+    });
+
+    // Infrastructure Outputs
+    new cdk.CfnOutput(this, `VpcId-${suffix}`, {
+      value: this.vpc.vpcId,
+      description: 'VPC ID',
+      exportName: `aml-vpc-id-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, `Region-${suffix}`, {
+      value: this.region,
+      description: 'AWS Region',
+      exportName: `aml-region-${suffix}`,
     });
   }
 }
