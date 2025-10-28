@@ -7,7 +7,10 @@ describe('TapStack Unit Tests', () => {
 
   beforeAll(() => {
     const app = Testing.app({ stackTraces: false });
-    const stack = new TapStack(app, 'MultiRegionDrStack');
+    // --- FIX: Pass mock props to the stack constructor ---
+    const stack = new TapStack(app, 'MultiRegionDrStack', {
+      environmentSuffix: 'unit-test',
+    });
     synthesized = JSON.parse(Testing.synth(stack));
   });
 

@@ -3,8 +3,7 @@ import { Construct } from 'constructs';
 import { TerraformStack, TerraformOutput, Fn } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { RandomProvider } from '@cdktf/provider-random/lib/provider';
-import { Password } from '@cdktf/provider-random/lib/password'; // Correct import path
-
+import { Password } from '@cdktf/provider-random/lib/password';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
@@ -50,7 +49,7 @@ class RegionalInfra extends Construct {
       providerAlias: AwsProvider;
       region: string;
       vpcCidr: string;
-      randomSuffix: string;
+      environmentSuffix: string;
       createDatabase: boolean;
       kmsKey?: KmsKey;
       dbUsername: string;
@@ -64,7 +63,7 @@ class RegionalInfra extends Construct {
       providerAlias,
       region,
       vpcCidr,
-      randomSuffix,
+      environmentSuffix,
       createDatabase,
       kmsKey,
       dbUsername,
@@ -83,7 +82,7 @@ class RegionalInfra extends Construct {
       cidrBlock: vpcCidr,
       enableDnsHostnames: true,
       enableDnsSupport: true,
-      tags: { ...tags, Name: `vpc-${region}-${randomSuffix}` },
+      tags: { ...tags, Name: `vpc-${region}-${environmentSuffix}` },
     });
 
     // Public subnets (for ALB and NAT GW)
@@ -93,7 +92,7 @@ class RegionalInfra extends Construct {
       cidrBlock: Fn.cidrsubnet(vpcCidr, 8, 1),
       availabilityZone: Fn.element(azs.names, 0),
       mapPublicIpOnLaunch: true,
-      tags: { ...tags, Name: `pub-a-${region}-${randomSuffix}` },
+      tags: { ...tags, Name: `pub-a-${region}-${environmentSuffix}` },
     });
     const subnetPubB = new Subnet(this, `${id}-subnet-pub-b`, {
       provider: providerAlias,
@@ -101,7 +100,7 @@ class RegionalInfra extends Construct {
       cidrBlock: Fn.cidrsubnet(vpcCidr, 8, 2),
       availabilityZone: Fn.element(azs.names, 1),
       mapPublicIpOnLaunch: true,
-      tags: { ...tags, Name: `pub-b-${region}-${randomSuffix}` },
+      tags: { ...tags, Name: `pub-b-${region}-${environmentSuffix}` },
     });
 
     // Private subnets (for ASG and DB)
@@ -110,16 +109,17 @@ class RegionalInfra extends Construct {
       vpcId: this.vpc.id,
       cidrBlock: Fn.cidrsubnet(vpcCidr, 8, 3),
       availabilityZone: Fn.element(azs.names, 0),
-      tags: { ...tags, Name: `priv-a-${region}-${randomSuffix}` },
+      tags: { ...tags, Name: `priv-a-${region}-${environmentSuffix}` },
     });
     const subnetPrivB = new Subnet(this, `${id}-subnet-priv-b`, {
       provider: providerAlias,
       vpcId: this.vpc.id,
       cidrBlock: Fn.cidrsubnet(vpcCidr, 8, 4),
       availabilityZone: Fn.element(azs.names, 1),
-      tags: { ...tags, Name: `priv-b-${region}-${randomSuffix}` },
+      tags: { ...tags, Name: `priv-b-${region}-${environmentSuffix}` },
     });
 
+    // ... (igw, natGw, route tables are unchanged) ...
     // Internet gateway
     const igw = new InternetGateway(this, `${id}-igw`, {
       provider: providerAlias,
@@ -176,7 +176,8 @@ class RegionalInfra extends Construct {
     // Security Groups
     const albSg = new SecurityGroup(this, `${id}-alb-sg`, {
       provider: providerAlias,
-      name: `alb-sg-${randomSuffix}-${region}`,
+      // --- FIX: Use environmentSuffix ---
+      name: `alb-sg-${environmentSuffix}-${region}`,
       vpcId: this.vpc.id,
       ingress: [
         {
@@ -193,7 +194,8 @@ class RegionalInfra extends Construct {
     });
     const asgSg = new SecurityGroup(this, `${id}-asg-sg`, {
       provider: providerAlias,
-      name: `asg-sg-${randomSuffix}-${region}`,
+      // --- FIX: Use environmentSuffix ---
+      name: `asg-sg-${environmentSuffix}-${region}`,
       vpcId: this.vpc.id,
       ingress: [
         {
@@ -209,6 +211,7 @@ class RegionalInfra extends Construct {
       tags: { ...tags },
     });
 
+    // ... (ami unchanged) ...
     // Simple AMI selection
     const ami = new DataAwsAmi(this, `${id}-ami`, {
       provider: providerAlias,
@@ -223,7 +226,8 @@ class RegionalInfra extends Construct {
     // Simple Launch Template + ASG (for demonstration — t3.micro)
     const role = new IamRole(this, `${id}-ec2-role`, {
       provider: providerAlias,
-      name: `${id}-ec2-role-${randomSuffix}`,
+      // --- FIX: Use environmentSuffix ---
+      name: `${id}-ec2-role-${environmentSuffix}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -242,7 +246,8 @@ class RegionalInfra extends Construct {
       `${id}-instance-profile`,
       {
         provider: providerAlias,
-        name: `${id}-instance-profile-${randomSuffix}`,
+        // --- FIX: Use environmentSuffix ---
+        name: `${id}-instance-profile-${environmentSuffix}`,
         role: role.name,
       }
     );
@@ -257,7 +262,8 @@ echo 'OK from ${region}' > /var/www/html/index.html
 
     const lt = new LaunchTemplate(this, `${id}-lt`, {
       provider: providerAlias,
-      name: `${id}-lt-${randomSuffix}`,
+      // --- FIX: Use environmentSuffix ---
+      name: `${id}-lt-${environmentSuffix}`,
       imageId: ami.id,
       instanceType: 't3.micro',
       userData: Fn.base64encode(userData),
@@ -270,7 +276,8 @@ echo 'OK from ${region}' > /var/www/html/index.html
 
     const asg = new AutoscalingGroup(this, `${id}-asg`, {
       provider: providerAlias,
-      name: `${id}-asg-${randomSuffix}`,
+      // --- FIX: Use environmentSuffix ---
+      name: `${id}-asg-${environmentSuffix}`,
       minSize: 1,
       maxSize: 2,
       desiredCapacity: 1,
@@ -281,7 +288,8 @@ echo 'OK from ${region}' > /var/www/html/index.html
       tag: [
         {
           key: 'Name',
-          value: `${id}-asg-${randomSuffix}`,
+          // --- FIX: Use environmentSuffix ---
+          value: `${id}-asg-${environmentSuffix}`,
           propagateAtLaunch: true,
         },
         ...Object.keys(tags).map(k => ({
@@ -295,7 +303,8 @@ echo 'OK from ${region}' > /var/www/html/index.html
     // ALB + target group + listener
     const alb = new Lb(this, `${id}-alb`, {
       provider: providerAlias,
-      name: `${id}-alb-${randomSuffix}`,
+      // --- FIX: Use environmentSuffix ---
+      name: `${id}-alb-${environmentSuffix}`,
       internal: false,
       loadBalancerType: 'application',
       securityGroups: [albSg.id],
@@ -304,7 +313,8 @@ echo 'OK from ${region}' > /var/www/html/index.html
     });
     const tg = new LbTargetGroup(this, `${id}-tg`, {
       provider: providerAlias,
-      name: `${id}-tg-${randomSuffix}`,
+      // --- FIX: Use environmentSuffix ---
+      name: `${id}-tg-${environmentSuffix}`,
       port: 80,
       protocol: 'HTTP',
       vpcId: this.vpc.id,
@@ -331,7 +341,8 @@ echo 'OK from ${region}' > /var/www/html/index.html
       // DB Security Group
       const dbSg = new SecurityGroup(this, `${id}-db-sg`, {
         provider: providerAlias,
-        name: `db-sg-${randomSuffix}-${region}`,
+        // --- FIX: Use environmentSuffix ---
+        name: `db-sg-${environmentSuffix}-${region}`,
         vpcId: this.vpc.id,
         ingress: [
           {
@@ -347,14 +358,16 @@ echo 'OK from ${region}' > /var/www/html/index.html
       // DB subnet group
       const dbSubnetGroup = new DbSubnetGroup(this, `${id}-db-subnet-group`, {
         provider: providerAlias,
-        name: `${id.toLowerCase()}-db-subnet-${randomSuffix}`,
+        // --- FIX: Use environmentSuffix ---
+        name: `${id.toLowerCase()}-db-subnet-${environmentSuffix}`,
         subnetIds: [subnetPrivA.id, subnetPrivB.id], // Use private subnets
         tags: { ...tags },
       });
 
       this.dbCluster = new RdsCluster(this, `${id}-rds-cluster`, {
         provider: providerAlias,
-        clusterIdentifier: `${id.toLowerCase()}-cluster-${randomSuffix}`,
+        // --- FIX: Use environmentSuffix ---
+        clusterIdentifier: `${id.toLowerCase()}-cluster-${environmentSuffix}`,
         engine: 'aurora-postgresql',
         engineVersion: '13.9',
         databaseName: 'appdb',
@@ -389,12 +402,18 @@ echo 'OK from ${region}' > /var/www/html/index.html
   }
 }
 
+// --- FIX: Add props interface ---
+export interface TapStackProps {
+  environmentSuffix: string;
+}
+
 export class TapStack extends TerraformStack {
-  constructor(scope: Construct, id: string) {
+  // --- FIX: Add props to constructor ---
+  constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id);
 
-    // Random suffix and tags
-    const randomSuffix = Fn.substr(Fn.uuid(), 0, 8);
+    // --- FIX: Use environmentSuffix from props instead of random ---
+    const environmentSuffix = props.environmentSuffix;
     const tags = { Project: 'iac-rlhf-amazon' };
     const dbUser = 'dbadmin';
 
@@ -420,13 +439,15 @@ export class TapStack extends TerraformStack {
     // KMS keys for encryption in both regions
     const primaryKms = new KmsKey(this, 'primary_kms', {
       provider: primaryProvider,
-      description: `primary-kms-${randomSuffix}`,
+      // --- FIX: Use environmentSuffix ---
+      description: `primary-kms-${environmentSuffix}`,
       enableKeyRotation: true,
       tags,
     });
     const drKms = new KmsKey(this, 'dr_kms', {
       provider: drProvider,
-      description: `dr-kms-${randomSuffix}`,
+      // --- FIX: Use environmentSuffix ---
+      description: `dr-kms-${environmentSuffix}`,
       enableKeyRotation: true,
       tags,
     });
@@ -434,7 +455,8 @@ export class TapStack extends TerraformStack {
     // Secrets in primary region (stores username/password JSON)
     const secret = new SecretsmanagerSecret(this, 'db_secret', {
       provider: primaryProvider,
-      name: `db-secret-${randomSuffix}`,
+      // --- FIX: Use environmentSuffix ---
+      name: `db-secret-${environmentSuffix}`,
       kmsKeyId: primaryKms.id,
       tags,
     });
@@ -452,7 +474,8 @@ export class TapStack extends TerraformStack {
       providerAlias: primaryProvider,
       region: 'us-east-1',
       vpcCidr: '10.10.0.0/16',
-      randomSuffix,
+      // --- FIX: Pass environmentSuffix ---
+      environmentSuffix: environmentSuffix,
       createDatabase: true,
       kmsKey: primaryKms,
       dbUsername: dbUser,
@@ -464,7 +487,8 @@ export class TapStack extends TerraformStack {
       providerAlias: drProvider,
       region: 'us-west-2',
       vpcCidr: '10.20.0.0/16',
-      randomSuffix,
+      // --- FIX: Pass environmentSuffix ---
+      environmentSuffix: environmentSuffix,
       createDatabase: true,
       kmsKey: drKms,
       dbUsername: dbUser,
@@ -473,7 +497,8 @@ export class TapStack extends TerraformStack {
     });
 
     // Route53 global DNS zone
-    const domainName = `trading-${randomSuffix}.internal-test.com`;
+    // --- FIX: Use environmentSuffix ---
+    const domainName = `trading-${environmentSuffix}.internal-test.com`;
     const zone = new Route53Zone(this, 'zone', {
       provider: primaryProvider,
       name: domainName,
@@ -514,7 +539,8 @@ export class TapStack extends TerraformStack {
     // CloudWatch alarm watching the Route53 healthcheck metric as an example (placeholder)
     new CloudwatchMetricAlarm(this, 'primary_hc_alarm', {
       provider: primaryProvider,
-      alarmName: `primary-healthcheck-alarm-${randomSuffix}`,
+      // --- FIX: Use environmentSuffix ---
+      alarmName: `primary-healthcheck-alarm-${environmentSuffix}`,
       alarmDescription:
         'Primary region healthcheck alarm — can trigger DR orchestration',
       comparisonOperator: 'LessThanThreshold',
