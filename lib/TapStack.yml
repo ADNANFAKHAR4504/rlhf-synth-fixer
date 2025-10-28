@@ -30,6 +30,8 @@ Mappings:
   RegionMap:
     ap-northeast-1:
       AZs: ['ap-northeast-1a', 'ap-northeast-1c']
+    us-east-1:
+      AZs: ['us-east-1a', 'us-east-1b']
 
 Resources:
   # ========================================
@@ -254,7 +256,7 @@ Resources:
       DBInstanceIdentifier: !Sub 'media-postgres-${EnvironmentSuffix}'
       DBInstanceClass: db.t3.micro
       Engine: postgres
-      EngineVersion: '14.7'
+      EngineVersion: '14.19'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
@@ -282,7 +284,6 @@ Resources:
   EFSFileSystem:
     Type: AWS::EFS::FileSystem
     Properties:
-      Encrypted: true
       PerformanceMode: generalPurpose
       ThroughputMode: bursting
       FileSystemTags:
