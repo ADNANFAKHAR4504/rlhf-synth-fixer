@@ -31,7 +31,7 @@ class TestTapStack(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up AWS clients and stack outputs once for all tests"""
-        cls.region = 'us-west-2'
+        cls.region = 'us-east-1'
         
         # Initialize AWS clients
         cls.lambda_client = boto3.client('lambda', region_name=cls.region)
