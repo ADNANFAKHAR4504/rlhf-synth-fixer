@@ -569,11 +569,17 @@ Resources:
                 Action:
                   - 's3:GetObject'
                   - 's3:PutObject'
-                Resource: !Sub '${NovaAppDataBucket.Arn}/*'
+                Resource: 
+                  - !Sub '${NovaAppDataBucket.Arn}/*'
+                  - !Sub '${NovaPatientDocumentsBucket.Arn}/*'
               - Effect: Allow
                 Action:
                   - 'kms:Decrypt'
                   - 'kms:GenerateDataKey'
+                Resource: !GetAtt NovaEncryptionKey.Arn
+              - Effect: Allow
+                Action:
+                  - 'kms:Encrypt'
                 Resource: !GetAtt NovaEncryptionKey.Arn
               - Effect: Allow
                 Action:

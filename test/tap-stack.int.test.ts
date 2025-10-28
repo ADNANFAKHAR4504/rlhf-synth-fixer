@@ -218,7 +218,7 @@ describe('TapStack End-to-End Infrastructure Tests', () => {
   });
 
   test('CloudTrail is multi-region and log file validation is enabled', async () => {
-    const trails = await cloudtrail.send(new DescribeTrailsCommand({ includeShadowTrails: false }));
+    const trails = await cloudtrail.send(new DescribeTrailsCommand({ includeShadowTrails: true }));
     const trail = (trails.trailList || []).find((t) => t.TrailARN === cloudTrailArn);
     expect(trail?.IsMultiRegionTrail).toBe(true);
     expect(trail?.LogFileValidationEnabled).toBe(true);
@@ -410,7 +410,7 @@ describe('TapStack End-to-End Infrastructure Tests', () => {
       expect((dbInstance?.KmsKeyId || '').includes(kmsKeyId)).toBe(true);
 
       // CloudTrail logs all API calls to immutable S3 bucket
-      const trails = await cloudtrail.send(new DescribeTrailsCommand({ includeShadowTrails: false }));
+      const trails = await cloudtrail.send(new DescribeTrailsCommand({ includeShadowTrails: true }));
       const trail = (trails.trailList || []).find((t) => t.TrailARN === cloudTrailArn);
       expect(trail?.IsMultiRegionTrail).toBe(true);
       expect(trail?.LogFileValidationEnabled).toBe(true);
