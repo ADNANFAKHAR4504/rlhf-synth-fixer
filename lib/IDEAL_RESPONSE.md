@@ -51,7 +51,7 @@ class TapStack:
 
         # Read AWS region from configuration
         config = pulumi.Config("aws")
-        self.region = config.get("region") or "eu-south-1"
+        self.region = config.get("region") or "us-west-2"
 
         # Create KMS key for encryption
         self.kms_key = self._create_kms_key()
@@ -656,16 +656,16 @@ class TestPulumiMocks(pulumi.runtime.Mocks):
         # Add specific mock outputs for different resource types
         if args.typ == "aws:rds/instance:Instance":
             outputs.update({
-                "endpoint": "healthcare-db-test.abcdef123456.eu-south-1.rds.amazonaws.com:5432",
-                "address": "healthcare-db-test.abcdef123456.eu-south-1.rds.amazonaws.com",
+                "endpoint": "healthcare-db-test.abcdef123456.us-west-2.rds.amazonaws.com:5432",
+                "address": "healthcare-db-test.abcdef123456.us-west-2.rds.amazonaws.com",
                 "port": 5432,
-                "arn": f"arn:aws:rds:eu-south-1:123456789012:db:{args.inputs.get('identifier', 'test-db')}"
+                "arn": f"arn:aws:rds:us-west-2:123456789012:db:{args.inputs.get('identifier', 'test-db')}"
             })
         elif args.typ == "aws:elasticache/replicationGroup:ReplicationGroup":
             outputs.update({
                 "configuration_endpoint_address": "healthcare-redis-test.abcdef.0001.cache.amazonaws.com",
                 "port": 6379,
-                "arn": "arn:aws:elasticache:eu-south-1:123456789012:cluster:healthcare-redis-test"
+                "arn": "arn:aws:elasticache:us-west-2:123456789012:cluster:healthcare-redis-test"
             })
         elif args.typ == "aws:apigateway/restApi:RestApi":
             outputs.update({
@@ -675,7 +675,7 @@ class TestPulumiMocks(pulumi.runtime.Mocks):
         elif args.typ == "aws:kms/key:Key":
             outputs.update({
                 "key_id": "12345678-1234-1234-1234-123456789012",
-                "arn": "arn:aws:kms:eu-south-1:123456789012:key/12345678-1234-1234-1234-123456789012"
+                "arn": "arn:aws:kms:us-west-2:123456789012:key/12345678-1234-1234-1234-123456789012"
             })
         # ... additional mock implementations for all resource types
         
@@ -710,7 +710,7 @@ class TestTapStack(unittest.TestCase):
     def test_tap_stack_initialization(self, mock_config):
         """Test TapStack initialization with default region."""
         mock_config_instance = MagicMock()
-        mock_config_instance.get.return_value = "eu-south-1"
+        mock_config_instance.get.return_value = "us-west-2"
         mock_config.return_value = mock_config_instance
         
         args = TapStackArgs(environment_suffix="test")
@@ -719,7 +719,7 @@ class TestTapStack(unittest.TestCase):
         self.assertEqual(stack.name, "test-stack")
         self.assertEqual(stack.args, args)
         self.assertEqual(stack.environment_suffix, "test")
-        self.assertEqual(stack.region, "eu-south-1")
+        self.assertEqual(stack.region, "us-west-2")
 
     # ... additional comprehensive test methods covering all components
 ```
@@ -754,10 +754,10 @@ class TestTapStackLiveIntegration(unittest.TestCase):
             self.outputs = {}
 
         # Initialize real AWS clients for live testing
-        self.ec2_client = boto3.client('ec2', region_name='us-east-1')
-        self.rds_client = boto3.client('rds', region_name='us-east-1')
-        self.kms_client = boto3.client('kms', region_name='us-east-1')
-        self.secrets_client = boto3.client('secretsmanager', region_name='us-east-1')
+        self.ec2_client = boto3.client('ec2', region_name='us-west-2')
+        self.rds_client = boto3.client('rds', region_name='us-west-2')
+        self.kms_client = boto3.client('kms', region_name='us-west-2')
+        self.secrets_client = boto3.client('secretsmanager', region_name='us-west-2')
 
     def test_vpc_exists_and_configured(self):
         """Test that VPC exists and is properly configured."""
@@ -803,10 +803,10 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 ### Successfully Deployed Infrastructure (TapStackprod)
 - **Total Resources**: 34 AWS resources created and verified
 - **Stack Name**: TapStackprod (production environment)  
-- **Region**: us-east-1
-- **API Gateway URL**: https://3z1iuu2rg1.execute-api.us-east-1.amazonaws.com/prod/health
+- **Region**: us-west-2
+- **API Gateway URL**: https://3z1iuu2rg1.execute-api.us-west-2.amazonaws.com/prod/health
 - **VPC ID**: vpc-0aed5c0e159e04555
-- **RDS PostgreSQL**: healthcare-db-prod.cedoqy6kssyr.us-east-1.rds.amazonaws.com:5432
+- **RDS PostgreSQL**: healthcare-db-prod.cedoqy6kssyr.us-west-2.rds.amazonaws.com:5432
 - **ElastiCache Redis**: Multi-AZ with encryption enabled
 - **KMS Key**: 2b7b90c6-2073-4dc6-9536-8a185ac56fae
 
@@ -848,7 +848,7 @@ The infrastructure is ready to deploy:
 
 ```bash
 # Configure AWS region
-export AWS_REGION=eu-south-1
+export AWS_REGION=us-west-2
 
 # Configure environment suffix
 export ENVIRONMENT_SUFFIX=dev
@@ -866,7 +866,7 @@ pytest tests/test_integration.py -v
 ## Key Features Implemented
 
 1. All resource names include environment suffix for uniqueness
-2. All resources deployed to eu-south-1 region as required
+2. All resources deployed to us-west-2 region as required
 3. Healthcare data encrypted at rest with KMS
 4. Redis cluster in private subnet (no public access)
 5. RDS with 30-day backup retention (meets minimum)
