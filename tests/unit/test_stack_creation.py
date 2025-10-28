@@ -8,6 +8,7 @@ Tests actual stack instantiation and resource creation
 import unittest
 from unittest.mock import patch, MagicMock, Mock
 import sys
+from types import SimpleNamespace
 
 
 class MockOutput:
@@ -30,19 +31,112 @@ class MockOutput:
 class TestVPCStackCreation(unittest.TestCase):
     """Test VPCStack actual creation with mocked AWS resources"""
 
-    def test_vpc_stack_creates_vpc_disabled(self):
-        """Test VPCStack creates VPC - currently disabled due to Pulumi mocking complexity"""
-        # This test is disabled because Pulumi's Resource dependencies (depends_on)
-        # are difficult to mock properly. The actual stack creation is tested via
-        # deployment and integration tests.
-        self.assertTrue(True)
+    def _configure_vpc_mocks(self, mock_aws):
+        """Configure AWS mocks to return deterministic resources."""
+        mock_aws.get_availability_zones.return_value = SimpleNamespace(
+            names=['eu-west-1a', 'eu-west-1b']
+        )
 
-    def test_vpc_stack_exports_outputs_disabled(self):
-        """Test VPCStack exports outputs - currently disabled due to Pulumi mocking complexity"""
-        # This test is disabled because Pulumi's Resource dependencies (depends_on)
-        # are difficult to mock properly. The actual stack outputs are tested via
-        # deployment and integration tests.
-        self.assertTrue(True)
+        vpc_resource = MagicMock()
+        vpc_resource.id = 'vpc-123'
+        mock_aws.ec2.Vpc.return_value = vpc_resource
+
+        igw_resource = MagicMock()
+        igw_resource.id = 'igw-123'
+        mock_aws.ec2.InternetGateway.return_value = igw_resource
+
+        eip_resource = MagicMock()
+        eip_resource.id = 'eip-123'
+        mock_aws.ec2.Eip.return_value = eip_resource
+
+        nat_resource = MagicMock()
+        nat_resource.id = 'nat-123'
+        mock_aws.ec2.NatGateway.return_value = nat_resource
+
+        created_subnet_ids = {'public': [], 'private': []}
+        subnet_counters = {'public': 0, 'private': 0}
+
+        def subnet_side_effect(*args, **kwargs):
+            subnet_type = kwargs['tags']['Type']
+            index = subnet_counters[subnet_type]
+            subnet_counters[subnet_type] += 1
+            subnet_id = f"{subnet_type}-subnet-{index}"
+            created_subnet_ids[subnet_type].append(subnet_id)
+
+            subnet = MagicMock()
+            subnet.id = subnet_id
+            return subnet
+
+        mock_aws.ec2.Subnet.side_effect = subnet_side_effect
+
+        route_tables = iter([
+            MagicMock(id='public-rt-123'),
+            MagicMock(id='private-rt-123')
+        ])
+        mock_aws.ec2.RouteTable.side_effect = lambda *args, **kwargs: next(route_tables)
+
+        return created_subnet_ids
+
+    def test_vpc_stack_creates_core_networking(self):
+        """Instantiate VPCStack and assert networking resources wire up correctly."""
+        from lib.vpc_stack import VPCStack, VPCStackArgs
+
+        with patch('pulumi.ComponentResource.__init__') as mock_init, \
+             patch('pulumi.ComponentResource.register_outputs') as mock_register, \
+             patch('lib.vpc_stack.ResourceOptions') as mock_resource_options, \
+             patch('lib.vpc_stack.aws') as mock_aws:
+            mock_init.return_value = None
+            mock_register.return_value = None
+            mock_resource_options.return_value = None
+
+            created_subnet_ids = self._configure_vpc_mocks(mock_aws)
+
+            args = VPCStackArgs(
+                environment_suffix='test',
+                tags={'Environment': 'test'}
+            )
+            stack = VPCStack('test-vpc', args)
+
+            self.assertEqual(mock_aws.ec2.Vpc.call_count, 1)
+            self.assertEqual(mock_aws.ec2.Subnet.call_count, 4)
+            self.assertEqual(stack.vpc_id, 'vpc-123')
+            self.assertEqual(stack.public_subnet_ids, created_subnet_ids['public'])
+            self.assertEqual(stack.private_subnet_ids, created_subnet_ids['private'])
+
+            nat_kwargs = mock_aws.ec2.NatGateway.call_args.kwargs
+            self.assertEqual(nat_kwargs['subnet_id'], created_subnet_ids['public'][0])
+            self.assertEqual(mock_aws.ec2.RouteTableAssociation.call_count, 4)
+
+    def test_vpc_stack_registers_outputs(self):
+        """Verify register_outputs is invoked with the expected payload."""
+        from lib.vpc_stack import VPCStack, VPCStackArgs
+
+        with patch('pulumi.ComponentResource.__init__') as mock_init, \
+             patch('pulumi.ComponentResource.register_outputs') as mock_register, \
+             patch('lib.vpc_stack.ResourceOptions') as mock_resource_options, \
+             patch('lib.vpc_stack.aws') as mock_aws:
+            mock_init.return_value = None
+            mock_resource_options.return_value = None
+
+            created_subnet_ids = self._configure_vpc_mocks(mock_aws)
+
+            args = VPCStackArgs(
+                environment_suffix='qa',
+                tags={'Environment': 'qa'}
+            )
+            VPCStack('qa-vpc', args)
+
+            mock_register.assert_called_once()
+            registered_outputs = mock_register.call_args[0][0]
+            self.assertEqual(registered_outputs['vpc_id'], 'vpc-123')
+            self.assertEqual(
+                registered_outputs['public_subnet_ids'],
+                created_subnet_ids['public']
+            )
+            self.assertEqual(
+                registered_outputs['private_subnet_ids'],
+                created_subnet_ids['private']
+            )
 
 
 class TestRedisStackCreation(unittest.TestCase):
