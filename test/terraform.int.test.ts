@@ -90,9 +90,24 @@ describe('Zero-Trust Architecture - E2E Integration Tests', () => {
   let region: string;
 
   beforeAll(() => {
-    outputs = loadOutputs();
-    region = outputs.region || 'us-east-1';
-
+    const rawOutputs = loadOutputs();
+    
+    // Terraform outputs are nested by key, extract values properly
+    outputs = {};
+    region = 'us-east-1';
+    
+    // Parse nested structure from terraform output -json format
+    for (const [key, value] of Object.entries(rawOutputs)) {
+      if (value && typeof value === 'object' && 'value' in value) {
+        outputs[key] = (value as any).value;
+      } else {
+        outputs[key] = value;
+      }
+    }
+    
+    // Extract region from outputs or use default
+    region = (outputs.region as string) || 'us-east-1';
+    
     console.log('✅ Using real deployment outputs for integration tests');
     console.log(`   Region: ${region}`);
     console.log(`   VPC ID: ${outputs.vpc_id}`);
