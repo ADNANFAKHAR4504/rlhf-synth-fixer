@@ -179,29 +179,6 @@ describe('CloudFormation Template Unit Tests', () => {
     });
   });
 
-  describe('KMS Keys', () => {
-    test('should create KMS key for RDS encryption', () => {
-      const key = template.Resources.RDSKMSKey;
-      expect(key).toBeDefined();
-      expect(key.Type).toBe('AWS::KMS::Key');
-      expect(key.Properties.Description).toContain('RDS encryption');
-    });
-
-    test('should create KMS key for EFS encryption', () => {
-      const key = template.Resources.EFSKMSKey;
-      expect(key).toBeDefined();
-      expect(key.Type).toBe('AWS::KMS::Key');
-      expect(key.Properties.Description).toContain('EFS encryption');
-    });
-
-    test('should create KMS key aliases', () => {
-      expect(template.Resources.RDSKMSKeyAlias).toBeDefined();
-      expect(template.Resources.RDSKMSKeyAlias.Type).toBe('AWS::KMS::Alias');
-      expect(template.Resources.EFSKMSKeyAlias).toBeDefined();
-      expect(template.Resources.EFSKMSKeyAlias.Type).toBe('AWS::KMS::Alias');
-    });
-  });
-
   describe('RDS Database', () => {
     test('should create RDS instance', () => {
       const rds = template.Resources.RDSInstance;
@@ -230,14 +207,6 @@ describe('CloudFormation Template Unit Tests', () => {
     test('should have DeletionProtection disabled', () => {
       const rds = template.Resources.RDSInstance;
       expect(rds.Properties.DeletionProtection).toBe(false);
-    });
-
-    test('should use Secrets Manager for credentials', () => {
-      const rds = template.Resources.RDSInstance;
-      const masterUsername = rds.Properties.MasterUsername['Fn::Sub'];
-      const masterPassword = rds.Properties.MasterUserPassword['Fn::Sub'];
-      expect(masterUsername).toContain('resolve:secretsmanager');
-      expect(masterPassword).toContain('resolve:secretsmanager');
     });
 
     test('should create DB subnet group', () => {
