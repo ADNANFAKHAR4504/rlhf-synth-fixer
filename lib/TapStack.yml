@@ -1232,7 +1232,6 @@ Resources:
   NovaSecurityGroupChangeRule:
     Type: 'AWS::Events::Rule'
     Properties:
-      Name: 'nova-prod-sg-change-detection'
       Description: 'Detect security group changes for compliance'
       EventPattern:
         source:
