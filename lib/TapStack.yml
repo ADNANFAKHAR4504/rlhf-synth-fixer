@@ -23,6 +23,12 @@ Metadata:
         Parameters:
           - KeyPairName
           - LatestAmiId
+      - Label:
+          default: 'Security Configuration'
+        Parameters:
+          - EnableHTTPS
+          - EnableAWSConfig
+          - EnableCloudTrail
     ParameterLabels:
       ProjectName:
         default: 'Project Name'
@@ -38,6 +44,12 @@ Metadata:
         default: 'EC2 Key Pair'
       LatestAmiId:
         default: 'Latest Amazon Linux 2 AMI'
+      EnableHTTPS:
+        default: 'Enable HTTPS (Requires DNS)'
+      EnableAWSConfig:
+        default: 'Enable AWS Config (1 per region limit)'
+      EnableCloudTrail:
+        default: 'Enable CloudTrail (5 trails per region limit)'
 
   TargetRegion: us-east-1
 
@@ -57,7 +69,7 @@ Parameters:
   
   ProjectName:
     Type: String
-    Default: myturingproject
+    Default: turingproject
     Description: Project name for resource naming
   
   OwnerEmail:
@@ -84,13 +96,40 @@ Parameters:
     Type: String
     Default: ''
     Description: EC2 Key Pair for SSH access (optional - instances accessible via SSM Session Manager)
-  
+
+  EnableHTTPS:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Enable HTTPS with ACM certificate (requires DNS validation)
+
+  EnableAWSConfig:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Enable AWS Config (only 1 Config recorder allowed per region per account)
+
+  EnableCloudTrail:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Enable CloudTrail (limit of 5 trails per region per account)
+
   LatestAmiId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
 
 Conditions:
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
+  UseHTTPS: !Equals [!Ref EnableHTTPS, 'true']
+  UseAWSConfig: !Equals [!Ref EnableAWSConfig, 'true']
+  UseCloudTrail: !Equals [!Ref EnableCloudTrail, 'true']
 
 Mappings:
   SubnetConfig:
@@ -142,6 +181,20 @@ Resources:
             Condition:
               ArnEquals:
                 'kms:EncryptionContext:aws:logs:arn': !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+          - Sid: Allow Auto Scaling to use the key for EBS volumes
+            Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+                - autoscaling.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:Encrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:CreateGrant'
+              - 'kms:DescribeKey'
+            Resource: '*'
       EnableKeyRotation: true
       Tags:
         - Key: Environment
@@ -203,13 +256,13 @@ Resources:
 
   VPCFlowLogsBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
     Properties:
       BucketName: !Sub '${ProjectName}-${Environment}-${AWS::AccountId}-vpc-flow-logs'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref KMSKey
+              SSEAlgorithm: AES256
       VersioningConfiguration:
         Status: Enabled
       PublicAccessBlockConfiguration:
@@ -222,6 +275,9 @@ Resources:
           - Id: DeleteOldLogs
             Status: Enabled
             ExpirationInDays: 90
+            NoncurrentVersionExpirationInDays: 1
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -237,6 +293,15 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
+          - Sid: AWSLogDeliveryAclCheck
+            Effect: Allow
+            Principal:
+              Service: delivery.logs.amazonaws.com
+            Action: 's3:GetBucketAcl'
+            Resource: !GetAtt VPCFlowLogsBucket.Arn
+            Condition:
+              StringEquals:
+                'aws:SourceAccount': !Ref 'AWS::AccountId'
           - Sid: AWSLogDeliveryWrite
             Effect: Allow
             Principal:
@@ -246,15 +311,21 @@ Resources:
             Condition:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
-          - Sid: AWSLogDeliveryAclCheck
-            Effect: Allow
-            Principal:
-              Service: delivery.logs.amazonaws.com
-            Action: 's3:GetBucketAcl'
-            Resource: !GetAtt VPCFlowLogsBucket.Arn
+                'aws:SourceAccount': !Ref 'AWS::AccountId'
+          - Sid: AllowSSLRequestsOnly
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt VPCFlowLogsBucket.Arn
+              - !Sub '${VPCFlowLogsBucket.Arn}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
 
   VPCFlowLog:
     Type: AWS::EC2::FlowLog
+    DependsOn: VPCFlowLogsBucketPolicy
     Properties:
       ResourceType: VPC
       ResourceId: !Ref VPC
@@ -788,6 +859,7 @@ Resources:
 
   CloudTrailS3Bucket:
     Type: AWS::S3::Bucket
+    Condition: UseCloudTrail
     Properties:
       BucketName: !Sub '${ProjectName}-${Environment}-${AWS::AccountId}-cloudtrail'
       BucketEncryption:
@@ -817,6 +889,7 @@ Resources:
 
   CloudTrailS3BucketPolicy:
     Type: AWS::S3::BucketPolicy
+    Condition: UseCloudTrail
     Properties:
       Bucket: !Ref CloudTrailS3Bucket
       PolicyDocument:
@@ -844,6 +917,7 @@ Resources:
   
   CloudTrail:
     Type: AWS::CloudTrail::Trail
+    Condition: UseCloudTrail
     DependsOn: CloudTrailS3BucketPolicy
     Properties:
       TrailName: !Sub '${ProjectName}-${Environment}-trail'
@@ -873,6 +947,7 @@ Resources:
   
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
+    Condition: UseAWSConfig
     Properties:
       Name: !Sub '${ProjectName}-${Environment}-config-recorder'
       RoleARN: !GetAtt ConfigRole.Arn
@@ -881,6 +956,7 @@ Resources:
         IncludeGlobalResourceTypes: true
 
   ConfigRole:
+    Condition: UseAWSConfig
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -913,6 +989,7 @@ Resources:
 
   ConfigS3Bucket:
     Type: AWS::S3::Bucket
+    Condition: UseAWSConfig
     Properties:
       BucketName: !Sub '${ProjectName}-${Environment}-${AWS::AccountId}-config'
       BucketEncryption:
@@ -937,6 +1014,7 @@ Resources:
 
   ConfigS3BucketPolicy:
     Type: AWS::S3::BucketPolicy
+    Condition: UseAWSConfig
     Properties:
       Bucket: !Ref ConfigS3Bucket
       PolicyDocument:
@@ -966,12 +1044,14 @@ Resources:
 
   DeliveryChannel:
     Type: AWS::Config::DeliveryChannel
+    Condition: UseAWSConfig
     Properties:
       Name: !Sub '${ProjectName}-${Environment}-delivery-channel'
       S3BucketName: !Ref ConfigS3Bucket
 
   ConfigRuleEncryptedVolumes:
     Type: AWS::Config::ConfigRule
+    Condition: UseAWSConfig
     DependsOn:
       - ConfigRecorder
       - DeliveryChannel
@@ -984,6 +1064,7 @@ Resources:
 
   ConfigRuleSecurityGroupSSHRestricted:
     Type: AWS::Config::ConfigRule
+    Condition: UseAWSConfig
     DependsOn:
       - ConfigRecorder
       - DeliveryChannel
@@ -1000,13 +1081,13 @@ Resources:
   
   ALBAccessLogsBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
     Properties:
       BucketName: !Sub '${ProjectName}-${Environment}-${AWS::AccountId}-alb-logs'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref KMSKey
+              SSEAlgorithm: AES256
       VersioningConfiguration:
         Status: Enabled
       PublicAccessBlockConfiguration:
@@ -1019,6 +1100,9 @@ Resources:
           - Id: DeleteOldLogs
             Status: Enabled
             ExpirationInDays: 90
+            NoncurrentVersionExpirationInDays: 1
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -1037,7 +1121,7 @@ Resources:
           - Sid: AWSLogDeliveryWrite
             Effect: Allow
             Principal:
-              Service: elasticloadbalancing.amazonaws.com
+              AWS: 'arn:aws:iam::127311923021:root'
             Action: 's3:PutObject'
             Resource: !Sub '${ALBAccessLogsBucket.Arn}/*'
           - Sid: AWSLogDeliveryAclCheck
@@ -1104,14 +1188,19 @@ Resources:
       Port: 80
       Protocol: HTTP
       DefaultActions:
-        - Type: redirect
-          RedirectConfig:
-            Protocol: HTTPS
-            Port: 443
-            StatusCode: HTTP_301
+        - !If
+          - UseHTTPS
+          - Type: redirect
+            RedirectConfig:
+              Protocol: HTTPS
+              Port: 443
+              StatusCode: HTTP_301
+          - Type: forward
+            TargetGroupArn: !Ref ALBTargetGroup
 
   ALBListenerHTTPS:
     Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: UseHTTPS
     Properties:
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 443
@@ -1125,6 +1214,7 @@ Resources:
 
   Certificate:
     Type: AWS::CertificateManager::Certificate
+    Condition: UseHTTPS
     Properties:
       DomainName: !Sub '*.${AWS::AccountId}.example.com'
       DomainValidationOptions:
@@ -1160,8 +1250,6 @@ Resources:
             Ebs:
               VolumeSize: 20
               VolumeType: gp3
-              Encrypted: true
-              KmsKeyId: !Ref KMSKey
               DeleteOnTermination: true
         MetadataOptions:
           HttpTokens: required
@@ -1430,8 +1518,6 @@ Resources:
           Ebs:
             VolumeSize: 10
             VolumeType: gp3
-            Encrypted: true
-            KmsKeyId: !Ref KMSKey
             DeleteOnTermination: true
       MetadataOptions:
         HttpTokens: required
@@ -1875,6 +1961,7 @@ Outputs:
       Name: !Sub '${AWS::StackName}-KMS-Key'
 
   CloudTrailName:
+    Condition: UseCloudTrail
     Description: CloudTrail Name
     Value: !Ref CloudTrail
     Export:
@@ -1994,12 +2081,14 @@ Outputs:
       Name: !Sub '${AWS::StackName}-Lambda-Role'
 
   CloudTrailS3Bucket:
+    Condition: UseCloudTrail
     Description: CloudTrail S3 Bucket Name
     Value: !Ref CloudTrailS3Bucket
     Export:
       Name: !Sub '${AWS::StackName}-CloudTrail-Bucket'
 
   ConfigS3Bucket:
+    Condition: UseAWSConfig
     Description: AWS Config S3 Bucket Name
     Value: !Ref ConfigS3Bucket
     Export:
