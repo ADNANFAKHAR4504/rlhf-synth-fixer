@@ -854,7 +854,7 @@
             "DependsOn": "LogBucketPolicy",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-alb"
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-alb"
                 },
                 "Type": "application",
                 "Scheme": "internet-facing",
@@ -891,7 +891,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-alb"
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-alb"
                         }
                     }
                 ]
@@ -901,7 +901,7 @@
             "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-tg"
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-tg"
                 },
                 "Port": 80,
                 "Protocol": "HTTP",
@@ -920,7 +920,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-tg"
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-tg"
                         }
                     }
                 ]
@@ -1281,7 +1281,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-alb-dns"
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-alb-dns"
                 }
             }
         },
@@ -1458,7 +1458,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-alb-sg-id"
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-alb-sg-id"
                 }
             }
         },
@@ -1533,7 +1533,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-alb-id"
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-alb-id"
                 }
             }
         },
@@ -1544,7 +1544,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-alb-arn"
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-alb-arn"
                 }
             }
         },
@@ -1555,7 +1555,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-target-group-arn"
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-target-group-arn"
                 }
             }
         },
@@ -1566,7 +1566,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-alb-listener-arn"
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-alb-listener-arn"
                 }
             }
         },
