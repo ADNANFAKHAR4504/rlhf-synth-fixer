@@ -403,7 +403,7 @@ class TapStack(pulumi.ComponentResource):
             f"fastcart-rds-{self.environment_suffix}",
             identifier=f"fastcart-rds-{self.environment_suffix}",
             engine="postgres",
-            engine_version="15.4",
+            engine_version="16.9",
             instance_class="db.t3.micro",
             allocated_storage=20,
             storage_type="gp2",
