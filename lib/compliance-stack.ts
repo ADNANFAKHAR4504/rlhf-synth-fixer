@@ -532,3 +532,7 @@ export class ComplianceConstruct extends Construct {
     });
   }
 }
+
+// Backwards-compatible alias: some callers may still import `ComplianceStack`.
+// Keep this alias so older imports don't break after converting the Stack -> Construct.
+export { ComplianceConstruct as ComplianceStack };
