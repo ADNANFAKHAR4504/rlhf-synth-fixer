@@ -23,7 +23,13 @@ This document analyzes the failures encountered during the development and testi
 - **Root Cause**: 'cassandra' is not a supported DMS engine type
 - **Resolution**: Changed to 'mysql' engine with proper authentication parameters
 
-### 4. Infrastructure Provisioning Failures
+### 4. DMS VPC Service Role Missing
+- **Error**: IAM Role arn:aws:iam::account:role/dms-vpc-role is not configured properly
+- **Impact**: DMS replication subnet group creation failed, blocking database migration setup
+- **Root Cause**: Missing required service-linked IAM role for DMS to access VPC resources
+- **Resolution**: Added DMSVPCRole with AmazonDMSVPCManagementRole policy and proper dependency chain
+
+### 5. Configuration Management Failures
 
 #### EnvironmentSuffix Parameter Validation Error
 - **Error**: ValidationError when calling CreateChangeSet - Parameter EnvironmentSuffix failed to satisfy constraint: Must be one of: dev, staging, prod
