@@ -1,8 +1,10 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-
-// ? Import your stacks here
-// import { MyStack } from './my-stack';
+import { NetworkingStack } from './networking-stack';
+import { DatabaseStack } from './database-stack';
+import { CacheStack } from './cache-stack';
+import { ComputeStack } from './compute-stack';
+import { ApiStack } from './api-stack';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -12,15 +14,44 @@ export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
 
-    // Get environment suffix from props, context, or use 'dev' as default
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const environmentSuffix =
       props?.environmentSuffix ||
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-    // ? Add your stack instantiations here
-    // ! Do NOT create resources directly in this stack.
-    // ! Instead, create separate stacks for each resource type.
+    // Networking infrastructure
+    const networkingStack = new NetworkingStack(this, 'NetworkingStack', {
+      environmentSuffix,
+    });
+
+    // Database infrastructure
+    const databaseStack = new DatabaseStack(this, 'DatabaseStack', {
+      vpc: networkingStack.vpc,
+      databaseSecurityGroup: networkingStack.databaseSecurityGroup,
+      environmentSuffix,
+    });
+
+    // Cache infrastructure
+    const cacheStack = new CacheStack(this, 'CacheStack', {
+      vpc: networkingStack.vpc,
+      cacheSecurityGroup: networkingStack.cacheSecurityGroup,
+      environmentSuffix,
+    });
+
+    // Compute infrastructure
+    const computeStack = new ComputeStack(this, 'ComputeStack', {
+      vpc: networkingStack.vpc,
+      ecsSecurityGroup: networkingStack.ecsSecurityGroup,
+      albSecurityGroup: networkingStack.albSecurityGroup,
+      databaseSecret: databaseStack.databaseSecret,
+      redisEndpoint: cacheStack.redisEndpoint,
+      environmentSuffix,
+    });
+
+    // API Gateway infrastructure
+    new ApiStack(this, 'ApiStack', {
+      loadBalancer: computeStack.loadBalancer,
+      environmentSuffix,
+    });
   }
 }
