@@ -720,7 +720,6 @@
         "Role": {"Fn::GetAtt": ["LambdaExecutionRole", "Arn"]},
         "MemorySize": 3008,
         "Timeout": 300,
-        "ReservedConcurrentExecutions": 2000,
         "Environment": {
           "Variables": {
             "NEPTUNE_ENDPOINT": {"Fn::GetAtt": ["NeptuneDBCluster", "Endpoint"]},
