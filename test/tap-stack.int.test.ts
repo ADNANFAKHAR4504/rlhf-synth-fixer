@@ -343,7 +343,7 @@ describe('TapStack End-to-End Infrastructure Tests', () => {
         `export AWS_DEFAULT_REGION=${detectedRegion}`,
         `echo "Mock PDF content for patient record" > /tmp/test_record.pdf`,
         `aws s3 cp /tmp/test_record.pdf s3://${patientDocsBucket}/${s3TestKey} --sse aws:kms --sse-kms-key-id ${kmsKeyId}`,
-        `aws s3 head s3://${patientDocsBucket}/${s3TestKey} && echo "S3_UPLOADED" || (echo "S3_FAILED" && exit 1)`
+        `aws s3api head-object --bucket ${patientDocsBucket} --key ${s3TestKey} && echo "S3_UPLOADED" || (echo "S3_FAILED" && exit 1)`
       ];
       
       const s3Result = await sendSsmShell(instanceId, s3UploadTest, 300);
@@ -464,7 +464,7 @@ describe('TapStack End-to-End Infrastructure Tests', () => {
         
         // Step 4: Verify both data sources are accessible
         'grep -q "patient_name" /tmp/patient_data.txt && echo "DB_ACCESS_OK" || echo "DB_ACCESS_FAIL"',
-        `aws s3 head s3://${patientDocsBucket}/$S3_KEY && echo "S3_ACCESS_OK" || echo "S3_ACCESS_FAIL"`,
+        `aws s3api head-object --bucket ${patientDocsBucket} --key $S3_KEY && echo "S3_ACCESS_OK" || echo "S3_ACCESS_FAIL"`,
         
         // Step 5: Simulate combining data for patient portal
         'echo "WORKFLOW_COMPLETE: Patient record successfully retrieved from both RDS and S3"'
