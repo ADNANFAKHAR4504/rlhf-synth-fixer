@@ -669,8 +669,6 @@ resource "aws_db_instance" "primary" {
   monitoring_interval             = 60
   monitoring_role_arn            = aws_iam_role.rds_monitoring.arn
   
-  # Enable automated backups for read replica
-  apply_immediately = false
   
   tags = merge(local.primary_tags, {
     Name = "rds-primary-${local.resource_suffix}"
