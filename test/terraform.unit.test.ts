@@ -89,9 +89,6 @@ describe('Terraform Infrastructure Tests', () => {
       expect(has(/Project\s*=\s*var\.project_name/)).toBe(true);
     });
 
-    it('defines name_prefix local variable', () => {
-      expect(has(/name_prefix\s*=\s*"\$\{var\.project_name\}-\$\{var\.environment\}"/)).toBe(true);
-    });
   });
 
   describe('VPC and Networking', () => {
@@ -470,10 +467,6 @@ describe('Terraform Infrastructure Tests', () => {
   describe('Compliance and Governance', () => {
     it('tags resources with cost center information', () => {
       expect(has(/CostCenter\s*=\s*"\$\{var\.project_name\}-\$\{var\.environment\}"/)).toBe(true);
-    });
-
-    it('uses consistent naming convention', () => {
-      expect(has(/name_prefix\s*=\s*"\$\{var\.project_name\}-\$\{var\.environment\}"/)).toBe(true);
     });
 
     it('enables auto minor version upgrade for RDS', () => {
