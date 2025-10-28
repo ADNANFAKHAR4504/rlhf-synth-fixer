@@ -538,21 +538,21 @@ export class ContainerServiceModule extends Construct {
       protocol: 'HTTP',
       defaultAction: config.certificateArn
         ? [
-          {
-            type: 'redirect',
-            redirect: {
-              port: '443',
-              protocol: 'HTTPS',
-              statusCode: 'HTTP_301',
+            {
+              type: 'redirect',
+              redirect: {
+                port: '443',
+                protocol: 'HTTPS',
+                statusCode: 'HTTP_301',
+              },
             },
-          },
-        ]
+          ]
         : [
-          {
-            type: 'forward',
-            targetGroupArn: this.targetGroup.arn,
-          },
-        ],
+            {
+              type: 'forward',
+              targetGroupArn: this.targetGroup.arn,
+            },
+          ],
     });
 
     // HTTPS Listener (if certificate provided)
