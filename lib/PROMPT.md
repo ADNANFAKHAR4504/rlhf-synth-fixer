@@ -39,7 +39,7 @@ We’ll keep everything in **us-east-1** for this stack and ensure that IAM role
 The end goal for NOVA is to output:
 - A complete architecture plan that stitches together these AWS services as part of an automated recovery connector
 - And a **Terraform file (`tap_stack.tf`)** that launches the full production infrastructure (VPC, subnets, networking, and all required service scaffolding) in **us-east-1**
-
+- Also the suffix is not required with all the resources so use it wherever specifically needed.
 This should feel like something a real senior DevOps engineer would craft by hand — optimized, readable, production-ready, and secure by default. Terraform syntax should be clean, consistent, and modular in logic even though we’re keeping everything in one file.
 
 Let’s make the recovery pipeline both autonomous and resilient — fully AWS-native, tightly integrated, and deployable with a single Terraform apply.
