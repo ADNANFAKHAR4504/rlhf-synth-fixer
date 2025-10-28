@@ -33,6 +33,9 @@ from pulumi_aws import (
     ec2, ecs, rds, elasticache, kinesis, kms, cloudwatch,
     iam, secretsmanager, ecr, efs
 )
+from pulumi_random import RandomPassword
+
+CREDENTIAL_CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$%&()*+,-.:;<=>?[]^_{|}~"
 
 
 class TapStackArgs:
@@ -393,6 +396,18 @@ class TapStack(pulumi.ComponentResource):
         # ========================================
         # Secrets Manager for Database Credentials
         # ========================================
+        self.db_password = RandomPassword(
+            f"fastcart-db-password-{self.environment_suffix}",
+            length=30,
+            override_characters=CREDENTIAL_CHARSET,
+            min_upper=4,
+            min_lower=4,
+            min_numeric=4,
+            special=True,
+            min_special=2
+        )
+        db_password_value = pulumi.Output.secret(self.db_password.result)
+
         self.db_password_secret = secretsmanager.Secret(
             f"fastcart-db-password-{self.environment_suffix}",
             name=f"fastcart-db-password-{self.environment_suffix}",
@@ -403,17 +418,21 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
+        db_secret_payload = pulumi.Output.all(db_password_value).apply(
+            lambda args: json.dumps({
+                "username": "fastcart_admin",
+                "password": args[0],
+                "engine": "postgres",
+                "port": 5432,
+                "dbname": "ordersdb"
+            })
+        )
+
         # Store database credentials
         self.db_password_version = secretsmanager.SecretVersion(
             f"fastcart-db-password-version-{self.environment_suffix}",
             secret_id=self.db_password_secret.id,
-            secret_string=json.dumps({
-                "username": "fastcart_admin",
-                "password": "FastCart2024SecurePassword!",
-                "engine": "postgres",
-                "port": 5432,
-                "dbname": "ordersdb"
-            }),
+            secret_string=db_secret_payload,
             opts=ResourceOptions(parent=self.db_password_secret)
         )
 
@@ -444,7 +463,7 @@ class TapStack(pulumi.ComponentResource):
             kms_key_id=self.kms_key.arn,
             db_name="ordersdb",
             username="fastcart_admin",
-            password="FastCart2024SecurePassword!",
+            password=db_password_value,
             db_subnet_group_name=self.db_subnet_group.name,
             vpc_security_group_ids=[self.rds_sg.id],
             publicly_accessible=False,
@@ -461,6 +480,42 @@ class TapStack(pulumi.ComponentResource):
         # ========================================
         # ElastiCache Redis Cluster
         # ========================================
+        self.redis_auth_token = RandomPassword(
+            f"fastcart-redis-auth-{self.environment_suffix}",
+            length=48,
+            override_characters=CREDENTIAL_CHARSET,
+            min_upper=4,
+            min_lower=4,
+            min_numeric=4,
+            special=True,
+            min_special=2
+        )
+        redis_auth_value = pulumi.Output.secret(self.redis_auth_token.result)
+
+        self.redis_auth_secret = secretsmanager.Secret(
+            f"fastcart-redis-auth-secret-{self.environment_suffix}",
+            name=f"fastcart-redis-auth-{self.environment_suffix}",
+            description="Redis authentication token for FastCart order processing",
+            kms_key_id=self.kms_key.id,
+            recovery_window_in_days=0,
+            tags=common_tags,
+            opts=ResourceOptions(parent=self)
+        )
+
+        redis_secret_payload = pulumi.Output.all(redis_auth_value).apply(
+            lambda args: json.dumps({
+                "auth_token": args[0],
+                "port": 6379
+            })
+        )
+
+        self.redis_auth_secret_version = secretsmanager.SecretVersion(
+            f"fastcart-redis-auth-secret-version-{self.environment_suffix}",
+            secret_id=self.redis_auth_secret.id,
+            secret_string=redis_secret_payload,
+            opts=ResourceOptions(parent=self.redis_auth_secret)
+        )
+
         # ElastiCache subnet group
         self.redis_subnet_group = elasticache.SubnetGroup(
             f"fastcart-redis-subnet-group-{self.environment_suffix}",
@@ -485,7 +540,7 @@ class TapStack(pulumi.ComponentResource):
             security_group_ids=[self.redis_sg.id],
             at_rest_encryption_enabled=True,
             transit_encryption_enabled=True,
-            auth_token="FastCartRedisAuth2024SecureToken!ABC",
+            auth_token=redis_auth_value,
             kms_key_id=self.kms_key.arn,
             automatic_failover_enabled=True,
             multi_az_enabled=True,
@@ -882,6 +937,9 @@ class TapStack(pulumi.ComponentResource):
             'db_secret_id': self.db_password_secret.id,
             'db_secret_arn': self.db_password_secret.arn,
             'db_secret_version_id': self.db_password_version.id,
+            'redis_secret_id': self.redis_auth_secret.id,
+            'redis_secret_arn': self.redis_auth_secret.arn,
+            'redis_secret_version_id': self.redis_auth_secret_version.id,
             'db_subnet_group_name': self.db_subnet_group.name,
             'rds_instance_id': self.rds_instance.id,
             'rds_instance_arn': self.rds_instance.arn,
