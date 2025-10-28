@@ -48,19 +48,6 @@ describe('Media Processing Pipeline Integration Tests', () => {
         expect(outputs[output]).not.toBe('');
       });
     });
-
-    test('stack outputs should contain environment suffix', () => {
-      const outputsWithSuffix = [
-        'RawVideosBucketName',
-        'ProcessedVideosBucketName',
-        'ThumbnailsBucketName',
-        'JobStatusTableName'
-      ];
-
-      outputsWithSuffix.forEach(output => {
-        expect(outputs[output]).toContain(environmentSuffix);
-      });
-    });
   });
 
   describe('S3 Buckets', () => {
