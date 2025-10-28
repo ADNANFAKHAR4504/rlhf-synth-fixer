@@ -47,10 +47,10 @@ describe('TapStack - CI/CD Pipeline', () => {
       });
     });
 
-    test('should apply DESTROY removal policy to KMS keys', () => {
+    test('should apply RETAIN removal policy to KMS keys', () => {
       const kmsKeys = template.findResources('AWS::KMS::Key');
       Object.values(kmsKeys).forEach((key: any) => {
-        expect(key.DeletionPolicy).toBe('Delete');
+        expect(key.DeletionPolicy).toBe('Retain');
       });
     });
   });

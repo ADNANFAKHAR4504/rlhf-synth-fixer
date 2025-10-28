@@ -33,21 +33,21 @@ export class TapStack extends cdk.Stack {
       enableKeyRotation: true,
       alias: `tap-pipeline-key-${environmentSuffix}`,
       description: 'KMS key for pipeline artifacts',
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
     const stagingKmsKey = new kms.Key(this, 'StagingKmsKey', {
       enableKeyRotation: true,
       alias: `tap-staging-key-${environmentSuffix}`,
       description: 'KMS key for staging environment',
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
     const productionKmsKey = new kms.Key(this, 'ProductionKmsKey', {
       enableKeyRotation: true,
       alias: `tap-production-key-${environmentSuffix}`,
       description: 'KMS key for production environment',
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
     // 🔹 S3 Buckets for artifacts
@@ -77,6 +77,13 @@ export class TapStack extends cdk.Stack {
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: stagingKmsKey,
       versioned: true,
+      lifecycleRules: [
+        {
+          id: 'retain-5-versions',
+          noncurrentVersionsToRetain: 5,
+          noncurrentVersionExpiration: cdk.Duration.days(30),
+        },
+      ],
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       enforceSSL: true,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -87,6 +94,13 @@ export class TapStack extends cdk.Stack {
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: productionKmsKey,
       versioned: true,
+      lifecycleRules: [
+        {
+          id: 'retain-5-versions',
+          noncurrentVersionsToRetain: 5,
+          noncurrentVersionExpiration: cdk.Duration.days(30),
+        },
+      ],
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       enforceSSL: true,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,

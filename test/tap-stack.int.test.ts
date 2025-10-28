@@ -7,6 +7,7 @@ import {
   GetBucketEncryptionCommand,
   GetBucketVersioningCommand,
   GetBucketPolicyCommand,
+  GetBucketLifecycleConfigurationCommand,
   ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
 import {
@@ -193,6 +194,28 @@ describe('TapStack Integration Tests', () => {
           });
           const response = await s3Client.send(command);
           expect(response.Status).toBe('Enabled');
+        }
+      }
+    });
+
+    test('should have lifecycle rules configured on all buckets', async () => {
+      const buckets = [
+        stackOutputs.SourceBucketName,
+        stackOutputs.StagingBucketName,
+        stackOutputs.ProductionBucketName,
+      ];
+
+      for (const bucketName of buckets) {
+        if (bucketName) {
+          const command = new GetBucketLifecycleConfigurationCommand({
+            Bucket: bucketName,
+          });
+          const response = await s3Client.send(command);
+          expect(response.Rules).toBeDefined();
+          expect(response.Rules).toHaveLength(1);
+          expect(response.Rules?.[0].ID).toBe('retain-5-versions');
+          expect(response.Rules?.[0].NoncurrentVersionExpiration?.NoncurrentDays).toBe(30);
+          expect(response.Rules?.[0].NoncurrentVersionExpiration?.NoncurrentDays).toBe(30);
         }
       }
     });
