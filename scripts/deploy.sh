@@ -162,14 +162,6 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     exit 1
   fi
   
-  # Run cleanup script before deployment to remove any failed resources
-  echo "🧹 Running pre-deployment cleanup..."
-  if [ -f "./scripts/cleanup-failed-resources.sh" ]; then
-    ./scripts/cleanup-failed-resources.sh
-  else
-    echo "⚠️ Cleanup script not found, proceeding without cleanup"
-  fi
-  
   echo "Using environment suffix: $ENVIRONMENT_SUFFIX"
   echo "Selecting or creating Pulumi stack Using ENVIRONMENT_SUFFIX=$ENVIRONMENT_SUFFIX"
   
