@@ -1,6 +1,6 @@
 {
   "platform": "cdk",
-  "language": "Go",
+  "language": "go",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "9614802552",
