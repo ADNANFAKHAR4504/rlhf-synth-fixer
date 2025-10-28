@@ -644,3 +644,92 @@ ValidationException
 **Root Cause:** Model included DataResources with incorrectly formatted S3 ARN using wildcard notation that CloudTrail doesn't support. The ideal implementation removes the DataResources section entirely since management events (IncludeManagementEvents: true) are sufficient for security baseline monitoring without data events, and adds EnvironmentSuffix to TrailName for multi-environment support.
 
 ---
+
+### 8. Invalid IP Address Condition Operator in S3 Bucket Policy
+
+**Model Response:**
+```json
+"PrivateS3BucketPolicy": {
+  "Type": "AWS::S3::BucketPolicy",
+  "Properties": {
+    "Bucket": { "Ref": "PrivateS3Bucket" },
+    "PolicyDocument": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "RestrictToCIDR",
+          "Effect": "Deny",
+          "Principal": "*",
+          "Action": "s3:*",
+          "Resource": [
+            { "Fn::GetAtt": ["PrivateS3Bucket", "Arn"] },
+            { "Fn::Sub": "${PrivateS3Bucket.Arn}/*" }
+          ],
+          "Condition": {
+            "IpAddressNotEquals": {
+              "aws:SourceIp": { "Ref": "S3RestrictedCIDR" }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+**Actual Fix (IDEAL_RESPONSE):**
+```json
+"SecureDataBucketPolicy": {
+  "Type": "AWS::S3::BucketPolicy",
+  "Properties": {
+    "Bucket": { "Ref": "SecureDataBucket" },
+    "PolicyDocument": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "DenyInsecureTransport",
+          "Effect": "Deny",
+          "Principal": "*",
+          "Action": "s3:*",
+          "Resource": [
+            { "Fn::GetAtt": ["SecureDataBucket", "Arn"] },
+            { "Fn::Sub": "${SecureDataBucket.Arn}/*" }
+          ],
+          "Condition": {
+            "Bool": {
+              "aws:SecureTransport": "false"
+            }
+          }
+        },
+        {
+          "Sid": "RestrictAccessToCIDR",
+          "Effect": "Deny",
+          "Principal": "*",
+          "Action": "s3:*",
+          "Resource": [
+            { "Fn::GetAtt": ["SecureDataBucket", "Arn"] },
+            { "Fn::Sub": "${SecureDataBucket.Arn}/*" }
+          ],
+          "Condition": {
+            "NotIpAddress": {
+              "aws:SourceIp": { "Ref": "AllowedIPRange" }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+**Deployment Error:**
+```
+Invalid condition operator: IpAddressNotEquals
+ValidationException: Value 'IpAddressNotEquals' at 'policyDocument.statement.1.member.condition.key' failed to satisfy constraint: Member must satisfy enum value set: [StringEquals, StringNotEquals, StringLike, StringNotLike, DateEquals, DateNotEquals, DateLessThan, DateLessThanEquals, DateGreaterThan, DateGreaterThanEquals, NumericEquals, NumericNotEquals, NumericLessThan, NumericLessThanEquals, NumericGreaterThan, NumericGreaterThanEquals, Bool, BinaryEquals, IpAddress, NotIpAddress, ArnEquals, ArnLike, ArnNotEquals, ArnNotLike, Null]
+```
+
+**Failure Impact:** PrivateS3BucketPolicy uses non-existent IAM condition operator "IpAddressNotEquals" causing CloudFormation validation failure during stack deployment. S3 bucket policy cannot be created, leaving the secure data bucket without IP-based access restrictions. The valid condition operators for IP address checks are "IpAddress" and "NotIpAddress" only.
+
+**Root Cause:** Model used invalid condition operator "IpAddressNotEquals" which doesn't exist in AWS IAM policy condition operators. The ideal implementation uses correct condition operator "NotIpAddress" for denying access from IP addresses outside the allowed range, and adds additional "DenyInsecureTransport" statement to enforce HTTPS-only access for comprehensive security.
+
+---
