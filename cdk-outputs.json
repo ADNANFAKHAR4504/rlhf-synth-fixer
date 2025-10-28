@@ -1,10 +1,7 @@
 {
-  "TapStackdev": {
-    "WebSocketApiUrl": "wss://03h9lq9axh.execute-api.us-east-1.amazonaws.com/dev",
-    "NotificationQueueUrl": "https://sqs.us-east-1.amazonaws.com/342597974367/shipment-notifications-dev",
-    "ShipmentTrackingApiEndpoint25635AAF": "https://mgw2p2brz9.execute-api.us-east-1.amazonaws.com/dev/",
-    "ShipmentsTableName": "shipments-dev",
-    "NotificationTopicArn": "arn:aws:sns:us-east-1:342597974367:shipment-notifications-dev",
-    "RestApiUrl": "https://mgw2p2brz9.execute-api.us-east-1.amazonaws.com/dev/"
+  "TapStack-synth5886432376": {
+    "StreamName": "inventory-updates-synth5886432376",
+    "DbEndpoint": "tapstack-synth5886432376-catalogdbsynth58864323762-8ck07woktu3e.covy6ema0nuv.us-east-1.rds.amazonaws.com",
+    "ArchiveBucketName": "catalog-archive-synth5886432376"
   }
 }
