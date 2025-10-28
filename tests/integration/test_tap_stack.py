@@ -112,16 +112,16 @@ def wait_for_ssm_command(command_id: str, instance_id: str, timeout: int = 120) 
     raise TimeoutError(f"SSM command {command_id} timed out after {timeout} seconds")
 
 
-def wait_for_instances_ready(asg_name: str, timeout: int = 300) -> bool:
+def wait_for_instances_healthy(asg_name: str, timeout: int = 180) -> bool:
     """
-    Wait for ASG instances to be healthy and SSM-ready with detailed logging.
+    Wait for ASG instances to become healthy.
     
     Args:
         asg_name: Name of the Auto Scaling Group
         timeout: Maximum time to wait in seconds
         
     Returns:
-        True if instances are ready, False otherwise
+        True if instances are healthy, False otherwise
     """
     start_time = time.time()
     attempt = 0
@@ -154,23 +154,8 @@ def wait_for_instances_ready(asg_name: str, timeout: int = 300) -> bool:
             print(f"  ASG Status: {healthy_count}/{desired} healthy, {in_service_count}/{desired} in-service (attempt {attempt + 1})")
             
             if healthy_count >= desired and in_service_count >= desired and desired > 0:
-                instance_ids = [i['InstanceId'] for i in instances]
-                
-                ssm_response = ssm_client.describe_instance_information(
-                    Filters=[
-                        {
-                            'Key': 'InstanceIds',
-                            'Values': instance_ids
-                        }
-                    ]
-                )
-                
-                ssm_ready_count = len(ssm_response.get('InstanceInformationList', []))
-                print(f"  SSM Status: {ssm_ready_count}/{len(instance_ids)} instances registered")
-                
-                if ssm_ready_count >= desired:
-                    print(f"  All instances ready! ({ssm_ready_count} instances)")
-                    return True
+                print(f"  All instances healthy! ({healthy_count} instances)")
+                return True
             
             time.sleep(10)
             attempt += 1
@@ -180,7 +165,7 @@ def wait_for_instances_ready(asg_name: str, timeout: int = 300) -> bool:
             time.sleep(10)
             attempt += 1
     
-    print(f"  Timeout: Instances not ready after {timeout} seconds")
+    print(f"  ERROR: Instances not healthy after {timeout} seconds")
     return False
 
 
@@ -204,9 +189,7 @@ class TestServiceLevelS3Operations(unittest.TestCase):
         VERIFY: Content matches
         """
         bucket_name = OUTPUTS.get('main_bucket_name')
-        if not bucket_name:
-            print("INFO: main_bucket_name not found in outputs, gracefully skipping test")
-            return
+        self.assertIsNotNone(bucket_name, "main_bucket_name not found in outputs")
         
         test_key = f'service-test/test-{int(time.time())}.txt'
         test_content = f'Service-level test at {datetime.now(timezone.utc).isoformat()}'
@@ -236,9 +219,7 @@ class TestServiceLevelS3Operations(unittest.TestCase):
         VERIFY: Multiple versions exist
         """
         bucket_name = OUTPUTS.get('main_bucket_name')
-        if not bucket_name:
-            print("INFO: main_bucket_name not found in outputs, gracefully skipping test")
-            return
+        self.assertIsNotNone(bucket_name, "main_bucket_name not found in outputs")
         
         versioning = s3_client.get_bucket_versioning(Bucket=bucket_name)
         if versioning.get('Status') != 'Enabled':
@@ -284,9 +265,7 @@ class TestServiceLevelS3Operations(unittest.TestCase):
         VERIFY: Object is encrypted with AES256
         """
         bucket_name = OUTPUTS.get('main_bucket_name')
-        if not bucket_name:
-            print("INFO: main_bucket_name not found in outputs, gracefully skipping test")
-            return
+        self.assertIsNotNone(bucket_name, "main_bucket_name not found in outputs")
         
         test_key = f'service-test/encrypted-{int(time.time())}.txt'
         test_content = 'Encryption test content'
@@ -326,42 +305,55 @@ class TestServiceLevelSSMOperations(unittest.TestCase):
         VERIFY: Command executes successfully
         """
         asg_name = OUTPUTS.get('asg_name')
-        if not asg_name:
-            print("INFO: asg_name not found in outputs, gracefully skipping test")
-            return
+        self.assertIsNotNone(asg_name, "asg_name not found in outputs")
         
-        print(f"\nWaiting for ASG instances to be ready...")
-        if not wait_for_instances_ready(asg_name, timeout=300):
-            print("INFO: Instances not ready within timeout, gracefully skipping test")
-            return
+        print(f"\nWaiting for ASG instances to be healthy...")
+        self.assertTrue(
+            wait_for_instances_healthy(asg_name, timeout=180),
+            f"Instances in ASG '{asg_name}' did not become healthy within timeout"
+        )
         
         asg_response = autoscaling_client.describe_auto_scaling_groups(
             AutoScalingGroupNames=[asg_name]
         )
         instances = asg_response['AutoScalingGroups'][0].get('Instances', [])
-        
-        if not instances:
-            print("INFO: No instances in ASG, gracefully skipping test")
-            return
+        self.assertTrue(instances, "No instances found in ASG")
         
         instance_id = instances[0]['InstanceId']
         print(f"Testing SSM command on instance: {instance_id}")
         
-        command_response = ssm_client.send_command(
-            InstanceIds=[instance_id],
-            DocumentName='AWS-RunShellScript',
-            Parameters={
-                'commands': [
-                    'echo "SSM Service Test"',
-                    'date',
-                    'echo "TEST_MARKER_SUCCESS"'
-                ]
-            },
-            Comment='Service-level SSM test'
-        )
+        # Retry logic for SSM agent registration
+        max_retries = 3
+        retry_delay = 30
+        command_id = None
         
-        command_id = command_response['Command']['CommandId']
-        print(f"Command ID: {command_id}")
+        for attempt in range(max_retries):
+            try:
+                command_response = ssm_client.send_command(
+                    InstanceIds=[instance_id],
+                    DocumentName='AWS-RunShellScript',
+                    Parameters={
+                        'commands': [
+                            'echo "SSM Service Test"',
+                            'date',
+                            'echo "TEST_MARKER_SUCCESS"'
+                        ]
+                    },
+                    Comment='Service-level SSM test'
+                )
+                
+                command_id = command_response['Command']['CommandId']
+                print(f"Command ID: {command_id}")
+                break
+                
+            except ClientError as e:
+                if attempt < max_retries - 1 and 'InvalidInstanceId' in str(e):
+                    print(f"  SSM agent not ready yet (attempt {attempt + 1}/{max_retries}), waiting {retry_delay}s...")
+                    time.sleep(retry_delay)
+                else:
+                    raise
+        
+        self.assertIsNotNone(command_id, "Failed to send SSM command after retries")
         
         result = wait_for_ssm_command(command_id, instance_id, timeout=120)
         
@@ -521,24 +513,20 @@ class TestCrossServiceEC2ToS3(unittest.TestCase):
         """
         asg_name = OUTPUTS.get('asg_name')
         bucket_name = OUTPUTS.get('main_bucket_name')
+        self.assertIsNotNone(asg_name, "asg_name not found in outputs")
+        self.assertIsNotNone(bucket_name, "main_bucket_name not found in outputs")
         
-        if not asg_name or not bucket_name:
-            print("INFO: Required outputs not found, gracefully skipping test")
-            return
-        
-        print(f"\nWaiting for ASG instances to be ready...")
-        if not wait_for_instances_ready(asg_name, timeout=300):
-            print("INFO: Instances not ready within timeout, gracefully skipping test")
-            return
+        print(f"\nWaiting for ASG instances to be healthy...")
+        self.assertTrue(
+            wait_for_instances_healthy(asg_name, timeout=180),
+            f"Instances in ASG '{asg_name}' did not become healthy within timeout"
+        )
         
         asg_response = autoscaling_client.describe_auto_scaling_groups(
             AutoScalingGroupNames=[asg_name]
         )
         instances = asg_response['AutoScalingGroups'][0].get('Instances', [])
-        
-        if not instances:
-            print("INFO: No instances in ASG, gracefully skipping test")
-            return
+        self.assertTrue(instances, "No instances found in ASG")
         
         instance_id = instances[0]['InstanceId']
         test_key = f'cross-service-test/ec2-to-s3-{int(time.time())}.txt'
@@ -546,20 +534,37 @@ class TestCrossServiceEC2ToS3(unittest.TestCase):
         
         print(f"EC2 instance {instance_id} writing to S3: s3://{bucket_name}/{test_key}")
         
-        command_response = ssm_client.send_command(
-            InstanceIds=[instance_id],
-            DocumentName='AWS-RunShellScript',
-            Parameters={
-                'commands': [
-                    f'echo "{test_content}" | aws s3 cp - s3://{bucket_name}/{test_key}',
-                    'echo "S3_WRITE_COMPLETE"'
-                ]
-            },
-            Comment='Cross-service test: EC2 -> S3'
-        )
+        # Retry logic for SSM agent registration
+        max_retries = 3
+        retry_delay = 30
+        command_id = None
         
-        command_id = command_response['Command']['CommandId']
-        print(f"Command ID: {command_id}")
+        for attempt in range(max_retries):
+            try:
+                command_response = ssm_client.send_command(
+                    InstanceIds=[instance_id],
+                    DocumentName='AWS-RunShellScript',
+                    Parameters={
+                        'commands': [
+                            f'echo "{test_content}" | aws s3 cp - s3://{bucket_name}/{test_key}',
+                            'echo "S3_WRITE_COMPLETE"'
+                        ]
+                    },
+                    Comment='Cross-service test: EC2 -> S3'
+                )
+                
+                command_id = command_response['Command']['CommandId']
+                print(f"Command ID: {command_id}")
+                break
+                
+            except ClientError as e:
+                if attempt < max_retries - 1 and 'InvalidInstanceId' in str(e):
+                    print(f"  SSM agent not ready yet (attempt {attempt + 1}/{max_retries}), waiting {retry_delay}s...")
+                    time.sleep(retry_delay)
+                else:
+                    raise
+        
+        self.assertIsNotNone(command_id, "Failed to send SSM command after retries")
         
         result = wait_for_ssm_command(command_id, instance_id, timeout=120)
         
@@ -617,17 +622,13 @@ class TestCrossServiceASGToCloudWatch(unittest.TestCase):
         VERIFY: CloudWatch has ASG metrics
         """
         asg_name = OUTPUTS.get('asg_name')
-        if not asg_name:
-            print("INFO: asg_name not found in outputs, gracefully skipping test")
-            return
+        self.assertIsNotNone(asg_name, "asg_name not found in outputs")
         
         asg_response = autoscaling_client.describe_auto_scaling_groups(
             AutoScalingGroupNames=[asg_name]
         )
         
-        if not asg_response['AutoScalingGroups']:
-            print("INFO: ASG not found, gracefully skipping test")
-            return
+        self.assertTrue(asg_response['AutoScalingGroups'], f"ASG '{asg_name}' not found")
         
         asg = asg_response['AutoScalingGroups'][0]
         current_capacity = asg['DesiredCapacity']
@@ -673,23 +674,19 @@ class TestCrossServiceEC2ToCloudWatch(unittest.TestCase):
         VERIFY: Metric appears in CloudWatch
         """
         asg_name = OUTPUTS.get('asg_name')
-        if not asg_name:
-            print("INFO: asg_name not found in outputs, gracefully skipping test")
-            return
+        self.assertIsNotNone(asg_name, "asg_name not found in outputs")
         
-        print(f"\nWaiting for ASG instances to be ready...")
-        if not wait_for_instances_ready(asg_name, timeout=300):
-            print("INFO: Instances not ready within timeout, gracefully skipping test")
-            return
+        print(f"\nWaiting for ASG instances to be healthy...")
+        self.assertTrue(
+            wait_for_instances_healthy(asg_name, timeout=180),
+            f"Instances in ASG '{asg_name}' did not become healthy within timeout"
+        )
         
         asg_response = autoscaling_client.describe_auto_scaling_groups(
             AutoScalingGroupNames=[asg_name]
         )
         instances = asg_response['AutoScalingGroups'][0].get('Instances', [])
-        
-        if not instances:
-            print("INFO: No instances in ASG, gracefully skipping test")
-            return
+        self.assertTrue(instances, "No instances found in ASG")
         
         instance_id = instances[0]['InstanceId']
         metric_name = f'EC2CustomMetric-{int(time.time())}'
@@ -697,20 +694,37 @@ class TestCrossServiceEC2ToCloudWatch(unittest.TestCase):
         
         print(f"EC2 instance {instance_id} publishing metric to CloudWatch: {metric_name}")
         
-        command_response = ssm_client.send_command(
-            InstanceIds=[instance_id],
-            DocumentName='AWS-RunShellScript',
-            Parameters={
-                'commands': [
-                    f'aws cloudwatch put-metric-data --namespace {namespace} --metric-name {metric_name} --value 100 --region {PRIMARY_REGION}',
-                    'echo "METRIC_PUBLISHED"'
-                ]
-            },
-            Comment='Cross-service test: EC2 -> CloudWatch'
-        )
+        # Retry logic for SSM agent registration
+        max_retries = 3
+        retry_delay = 30
+        command_id = None
         
-        command_id = command_response['Command']['CommandId']
-        print(f"Command ID: {command_id}")
+        for attempt in range(max_retries):
+            try:
+                command_response = ssm_client.send_command(
+                    InstanceIds=[instance_id],
+                    DocumentName='AWS-RunShellScript',
+                    Parameters={
+                        'commands': [
+                            f'aws cloudwatch put-metric-data --namespace {namespace} --metric-name {metric_name} --value 100 --region {PRIMARY_REGION}',
+                            'echo "METRIC_PUBLISHED"'
+                        ]
+                    },
+                    Comment='Cross-service test: EC2 -> CloudWatch'
+                )
+                
+                command_id = command_response['Command']['CommandId']
+                print(f"Command ID: {command_id}")
+                break
+                
+            except ClientError as e:
+                if attempt < max_retries - 1 and 'InvalidInstanceId' in str(e):
+                    print(f"  SSM agent not ready yet (attempt {attempt + 1}/{max_retries}), waiting {retry_delay}s...")
+                    time.sleep(retry_delay)
+                else:
+                    raise
+        
+        self.assertIsNotNone(command_id, "Failed to send SSM command after retries")
         
         result = wait_for_ssm_command(command_id, instance_id, timeout=120)
         
@@ -783,24 +797,20 @@ class TestE2EEC2SSMToS3ToCloudWatch(unittest.TestCase):
         """
         asg_name = OUTPUTS.get('asg_name')
         bucket_name = OUTPUTS.get('main_bucket_name')
+        self.assertIsNotNone(asg_name, "asg_name not found in outputs")
+        self.assertIsNotNone(bucket_name, "main_bucket_name not found in outputs")
         
-        if not asg_name or not bucket_name:
-            print("INFO: Required outputs not found, gracefully skipping test")
-            return
-        
-        print(f"\nWaiting for ASG instances to be ready...")
-        if not wait_for_instances_ready(asg_name, timeout=300):
-            print("INFO: Instances not ready within timeout, gracefully skipping test")
-            return
+        print(f"\nWaiting for ASG instances to be healthy...")
+        self.assertTrue(
+            wait_for_instances_healthy(asg_name, timeout=180),
+            f"Instances in ASG '{asg_name}' did not become healthy within timeout"
+        )
         
         asg_response = autoscaling_client.describe_auto_scaling_groups(
             AutoScalingGroupNames=[asg_name]
         )
         instances = asg_response['AutoScalingGroups'][0].get('Instances', [])
-        
-        if not instances:
-            print("INFO: No instances in ASG, gracefully skipping test")
-            return
+        self.assertTrue(instances, "No instances found in ASG")
         
         instance_id = instances[0]['InstanceId']
         print(f"\n{'='*70}")
@@ -821,44 +831,61 @@ class TestE2EEC2SSMToS3ToCloudWatch(unittest.TestCase):
   "workflow_status": "success"
 }'''
         
-        command_response = ssm_client.send_command(
-            InstanceIds=[instance_id],
-            DocumentName='AWS-RunShellScript',
-            Parameters={
-                'commands': [
-                    '#!/bin/bash',
-                    'set -e',
-                    '',
-                    'echo "E2E Workflow Started"',
-                    '',
-                    'echo "Step 1: Retrieving EC2 metadata..."',
-                    'INSTANCE_ID=$(ec2-metadata --instance-id | cut -d " " -f 2)',
-                    'INSTANCE_TYPE=$(ec2-metadata --instance-type | cut -d " " -f 2)',
-                    'AZ=$(ec2-metadata --availability-zone | cut -d " " -f 2)',
-                    'echo "Instance: $INSTANCE_ID, Type: $INSTANCE_TYPE, AZ: $AZ"',
-                    '',
-                    'echo "Step 2: Creating JSON payload..."',
-                    'TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")',
-                    f'cat > /tmp/e2e-data.json << "EOF"\n{json_template}\nEOF',
-                    'sed -i "s/TIMESTAMP_PLACEHOLDER/$TIMESTAMP/g" /tmp/e2e-data.json',
-                    'sed -i "s/INSTANCE_ID_PLACEHOLDER/$INSTANCE_ID/g" /tmp/e2e-data.json',
-                    'sed -i "s/INSTANCE_TYPE_PLACEHOLDER/$INSTANCE_TYPE/g" /tmp/e2e-data.json',
-                    'sed -i "s/AZ_PLACEHOLDER/$AZ/g" /tmp/e2e-data.json',
-                    '',
-                    'echo "Step 3: Writing to S3..."',
-                    f'aws s3 cp /tmp/e2e-data.json s3://{bucket_name}/{test_key}',
-                    'echo "S3 write completed"',
-                    '',
-                    'echo "Step 4: Generating CloudWatch log marker..."',
-                    'echo "E2E_WORKFLOW_COMPLETE: All steps executed successfully"',
-                    'echo "Timestamp: $TIMESTAMP"'
-                ]
-            },
-            Comment='E2E integration test: Complete workflow'
-        )
+        # Retry logic for SSM agent registration
+        max_retries = 3
+        retry_delay = 30
+        command_id = None
         
-        command_id = command_response['Command']['CommandId']
-        print(f"  Command ID: {command_id}")
+        for attempt in range(max_retries):
+            try:
+                command_response = ssm_client.send_command(
+                    InstanceIds=[instance_id],
+                    DocumentName='AWS-RunShellScript',
+                    Parameters={
+                        'commands': [
+                            '#!/bin/bash',
+                            'set -e',
+                            '',
+                            'echo "E2E Workflow Started"',
+                            '',
+                            'echo "Step 1: Retrieving EC2 metadata..."',
+                            'INSTANCE_ID=$(ec2-metadata --instance-id | cut -d " " -f 2)',
+                            'INSTANCE_TYPE=$(ec2-metadata --instance-type | cut -d " " -f 2)',
+                            'AZ=$(ec2-metadata --availability-zone | cut -d " " -f 2)',
+                            'echo "Instance: $INSTANCE_ID, Type: $INSTANCE_TYPE, AZ: $AZ"',
+                            '',
+                            'echo "Step 2: Creating JSON payload..."',
+                            'TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")',
+                            f'cat > /tmp/e2e-data.json << "EOF"\n{json_template}\nEOF',
+                            'sed -i "s/TIMESTAMP_PLACEHOLDER/$TIMESTAMP/g" /tmp/e2e-data.json',
+                            'sed -i "s/INSTANCE_ID_PLACEHOLDER/$INSTANCE_ID/g" /tmp/e2e-data.json',
+                            'sed -i "s/INSTANCE_TYPE_PLACEHOLDER/$INSTANCE_TYPE/g" /tmp/e2e-data.json',
+                            'sed -i "s/AZ_PLACEHOLDER/$AZ/g" /tmp/e2e-data.json',
+                            '',
+                            'echo "Step 3: Writing to S3..."',
+                            f'aws s3 cp /tmp/e2e-data.json s3://{bucket_name}/{test_key}',
+                            'echo "S3 write completed"',
+                            '',
+                            'echo "Step 4: Generating CloudWatch log marker..."',
+                            'echo "E2E_WORKFLOW_COMPLETE: All steps executed successfully"',
+                            'echo "Timestamp: $TIMESTAMP"'
+                        ]
+                    },
+                    Comment='E2E integration test: Complete workflow'
+                )
+                
+                command_id = command_response['Command']['CommandId']
+                print(f"  Command ID: {command_id}")
+                break
+                
+            except ClientError as e:
+                if attempt < max_retries - 1 and 'InvalidInstanceId' in str(e):
+                    print(f"  SSM agent not ready yet (attempt {attempt + 1}/{max_retries}), waiting {retry_delay}s...")
+                    time.sleep(retry_delay)
+                else:
+                    raise
+        
+        self.assertIsNotNone(command_id, "Failed to send SSM command after retries")
         print(f"\nSTEP 2: Waiting for EC2 to complete workflow...")
         
         result = wait_for_ssm_command(command_id, instance_id, timeout=120)
@@ -985,9 +1012,7 @@ class TestE2EAutoScalingWorkflow(unittest.TestCase):
         VERIFY: ASG is healthy, metrics are published, alarms are configured
         """
         asg_name = OUTPUTS.get('asg_name')
-        if not asg_name:
-            print("INFO: asg_name not found in outputs, gracefully skipping test")
-            return
+        self.assertIsNotNone(asg_name, "asg_name not found in outputs")
         
         print(f"\n{'='*70}")
         print(f"E2E Test: ASG -> CloudWatch Metrics -> Alarms")
@@ -998,9 +1023,7 @@ class TestE2EAutoScalingWorkflow(unittest.TestCase):
             AutoScalingGroupNames=[asg_name]
         )
         
-        if not asg_response['AutoScalingGroups']:
-            print("INFO: ASG not found, gracefully skipping test")
-            return
+        self.assertTrue(asg_response['AutoScalingGroups'], f"ASG '{asg_name}' not found")
         
         asg = asg_response['AutoScalingGroups'][0]
         
