@@ -21,6 +21,12 @@ variable "project_name" {
   default     = "webapp"
 }
 
+variable "environmentSuffix" {
+  description = "Environment suffix for resource naming"
+  type        = string
+  default     = "webapp-production"
+}
+
 variable "vpc_cidr" {
   description = "CIDR block for VPC"
   type        = string
@@ -108,7 +114,7 @@ locals {
   private_subnet_cidrs = ["10.0.10.0/24", "10.0.11.0/24"]
   database_subnet_cidrs = ["10.0.20.0/24", "10.0.21.0/24"]
 
-  name_prefix = "${var.project_name}-${var.environment}"
+  name_prefix = var.environmentSuffix
 }
 
 
