@@ -1,4 +1,4 @@
-# Ideal Response - Complete Terraform AWS Infrastructure
+﻿# Ideal Response - Complete Terraform AWS Infrastructure
 
 ## Overview
 
@@ -78,7 +78,12 @@ This document contains the **ideal, production-ready Terraform configuration** t
 
 ## Complete Terraform Code
 
-### File: tap_stack.tf# tap_stack.tf - Secure AWS Infrastructure with Terraform
+
+## Complete Terraform Code
+
+### File: tap_stack.tf
+```hcl
+# tap_stack.tf - Secure AWS Infrastructure with Terraform
 # Implements AWS Well-Architected Security Pillar best practices
 # All resources in a single file as per requirements
 
@@ -208,12 +213,12 @@ resource "aws_vpc" "main" {
 
 # VPC Flow Logs
 resource "aws_cloudwatch_log_group" "flow_log" {
-  name              = "/aws/vpc/flow-logs"
+  name              = "/aws/vpc/flow-logs-${var.environment_suffix}"
   retention_in_days = 90
   kms_key_id        = aws_kms_key.master.arn
 
   tags = {
-    Name        = "vpc-flow-logs"
+    Name        = "vpc-flow-logs-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -454,10 +459,10 @@ resource "aws_network_acl" "main" {
 
 # S3 Bucket for Logs
 resource "aws_s3_bucket" "logs" {
-  bucket = "secure-logs-${data.aws_caller_identity.current.account_id}-${var.aws_region}"
+  bucket = "secure-logs-${data.aws_caller_identity.current.account_id}-${var.aws_region}-${var.environment_suffix}"
 
   tags = {
-    Name        = "logs-bucket"
+    Name        = "logs-bucket-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -592,7 +597,7 @@ resource "aws_s3_bucket_policy" "logs" {
 
 # CloudTrail
 resource "aws_cloudtrail" "main" {
-  name                          = "main-trail"
+  name                          = "main-trail-${var.environment_suffix}"
   s3_bucket_name                = aws_s3_bucket.logs.id
   include_global_service_events = true
   is_multi_region_trail         = true
@@ -621,7 +626,7 @@ resource "aws_cloudtrail" "main" {
 
 # Security Groups
 resource "aws_security_group" "alb" {
-  name        = "alb-security-group"
+  name        = "alb-security-group-${var.environment_suffix}"
   description = "Security group for Application Load Balancer"
   vpc_id      = aws_vpc.main.id
 
@@ -654,7 +659,7 @@ resource "aws_security_group" "alb" {
   }
 
   tags = {
-    Name        = "alb-sg"
+    Name        = "alb-sg-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -662,7 +667,7 @@ resource "aws_security_group" "alb" {
 }
 
 resource "aws_security_group" "ec2" {
-  name        = "ec2-security-group"
+  name        = "ec2-security-group-${var.environment_suffix}"
   description = "Security group for EC2 instances"
   vpc_id      = aws_vpc.main.id
 
@@ -695,7 +700,7 @@ resource "aws_security_group" "ec2" {
   }
 
   tags = {
-    Name        = "ec2-sg"
+    Name        = "ec2-sg-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -703,7 +708,7 @@ resource "aws_security_group" "ec2" {
 }
 
 resource "aws_security_group" "rds" {
-  name        = "rds-security-group"
+  name        = "rds-security-group-${var.environment_suffix}"
   description = "Security group for RDS database"
   vpc_id      = aws_vpc.main.id
 
@@ -728,7 +733,7 @@ resource "aws_security_group" "rds" {
   }
 
   tags = {
-    Name        = "rds-sg"
+    Name        = "rds-sg-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -860,11 +865,11 @@ resource "random_password" "rds_password" {
 }
 
 resource "aws_secretsmanager_secret" "rds_password" {
-  name       = "rds-master-password-${random_id.suffix.hex}"
+  name       = "rds-master-password-${var.environment_suffix}-${random_id.suffix.hex}"
   kms_key_id = aws_kms_key.master.id
 
   tags = {
-    Name        = "rds-password"
+    Name        = "rds-password-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -912,7 +917,7 @@ resource "aws_db_parameter_group" "main" {
 }
 
 resource "aws_db_instance" "main" {
-  identifier     = "main-database"
+  identifier     = "main-database-${var.environment_suffix}"
   engine         = "mysql"
   engine_version = "8.0.35"
   instance_class = "db.t3.micro"
@@ -973,7 +978,7 @@ resource "aws_acm_certificate" "main" {
 
 # Application Load Balancer
 resource "aws_lb" "main" {
-  name               = "main-alb"
+  name               = "main-alb-${var.environment_suffix}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -1075,7 +1080,7 @@ data "aws_ami" "amazon_linux_2" {
 }
 
 resource "aws_launch_template" "main" {
-  name_prefix   = "main-lt-"
+  name_prefix   = "main-lt-${var.environment_suffix}-"
   image_id      = data.aws_ami.amazon_linux_2.id
   instance_type = "t3.micro"
 
@@ -1136,7 +1141,7 @@ resource "aws_launch_template" "main" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name                      = "main-asg"
+  name                      = "main-asg-${var.environment_suffix}"
   vpc_zone_identifier       = aws_subnet.private[*].id
   target_group_arns         = [aws_lb_target_group.main.arn]
   health_check_type         = "ELB"
@@ -1268,12 +1273,12 @@ resource "aws_cloudwatch_metric_alarm" "rds_cpu" {
 
 # CloudWatch Log Group for CloudTrail
 resource "aws_cloudwatch_log_group" "cloudtrail" {
-  name              = "/aws/cloudtrail/main"
+  name              = "/aws/cloudtrail/main-${var.environment_suffix}"
   retention_in_days = 90
   kms_key_id        = aws_kms_key.master.arn
 
   tags = {
-    Name        = "cloudtrail-logs"
+    Name        = "cloudtrail-logs-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -1315,11 +1320,11 @@ resource "aws_cloudwatch_metric_alarm" "root_account_usage" {
 
 # SNS Topic for Alerts
 resource "aws_sns_topic" "alerts" {
-  name              = "security-alerts"
+  name              = "security-alerts-${var.environment_suffix}"
   kms_master_key_id = aws_kms_key.master.id
 
   tags = {
-    Name        = "security-alerts"
+    Name        = "security-alerts-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -1501,7 +1506,7 @@ resource "aws_config_config_rule" "cloudtrail_enabled" {
 
 # WAFv2 Web ACL
 resource "aws_wafv2_web_acl" "main" {
-  name  = "main-waf-acl"
+  name  = "main-waf-acl-${var.environment_suffix}"
   scope = "REGIONAL"
 
   default_action {
@@ -1692,12 +1697,12 @@ resource "aws_ssm_document" "session_manager_prefs" {
 }
 
 resource "aws_cloudwatch_log_group" "session_manager" {
-  name              = "/aws/ssm/session-manager"
+  name              = "/aws/ssm/session-manager-${var.environment_suffix}"
   retention_in_days = 90
   kms_key_id        = aws_kms_key.master.arn
 
   tags = {
-    Name        = "session-manager-logs"
+    Name        = "session-manager-logs-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -1864,3 +1869,4 @@ output "launch_template_id" {
   description = "Launch Template ID"
   value       = aws_launch_template.main.id
 }
+```

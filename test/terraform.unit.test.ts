@@ -636,4 +636,70 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(tapStackContent).toMatch(/data\s+"aws_ami"\s+"amazon_linux_2"/);
     });
   });
+
+  describe('Network ACLs', () => {
+    test('creates Network ACL resource', () => {
+      expect(tapStackContent).toMatch(/resource\s+"aws_network_acl"\s+"main"/);
+    });
+
+    test('Network ACL has ingress rules', () => {
+      const naclSection = tapStackContent.match(/resource\s+"aws_network_acl"\s+"main"\s*{[\s\S]*?(?=\nresource|$)/);
+      expect(naclSection).not.toBeNull();
+      expect(naclSection![0]).toMatch(/ingress\s*{/);
+    });
+
+    test('Network ACL has egress rules', () => {
+      const naclSection = tapStackContent.match(/resource\s+"aws_network_acl"\s+"main"\s*{[\s\S]*?(?=\nresource|$)/);
+      expect(naclSection).not.toBeNull();
+      expect(naclSection![0]).toMatch(/egress\s*{/);
+    });
+
+    test('Network ACL is associated with VPC', () => {
+      const naclSection = tapStackContent.match(/resource\s+"aws_network_acl"\s+"main"\s*{[\s\S]*?(?=\nresource|$)/);
+      expect(naclSection).not.toBeNull();
+      expect(naclSection![0]).toMatch(/vpc_id\s*=\s*aws_vpc\.main\.id/);
+    });
+  });
+
+  describe('CloudTrail Enhanced', () => {
+    test('CloudTrail uses KMS encryption', () => {
+      const cloudtrailSection = tapStackContent.match(/resource\s+"aws_cloudtrail"\s+"main"\s*{[\s\S]*?(?=\nresource|$)/);
+      expect(cloudtrailSection).not.toBeNull();
+      expect(cloudtrailSection![0]).toMatch(/kms_key_id/);
+    });
+
+    test('CloudTrail has proper tags', () => {
+      const cloudtrailSection = tapStackContent.match(/resource\s+"aws_cloudtrail"\s+"main"\s*{[\s\S]*?(?=\n\nresource|$)/);
+      expect(cloudtrailSection).not.toBeNull();
+      expect(cloudtrailSection![0]).toMatch(/tags\s*=\s*{/);
+    });
+  });
+
+  describe('AWS Config', () => {
+    test('Config uses S3 bucket for delivery', () => {
+      const configDeliverySection = tapStackContent.match(/resource\s+"aws_config_delivery_channel"[\s\S]*?(?=\nresource|$)/);
+      expect(configDeliverySection).not.toBeNull();
+      expect(configDeliverySection![0]).toMatch(/s3_bucket_name/);
+    });
+
+    test('Config has proper IAM role', () => {
+      expect(tapStackContent).toMatch(/resource\s+"aws_iam_role"\s+"config"/);
+      const configRecorderSection = tapStackContent.match(/resource\s+"aws_config_configuration_recorder"[\s\S]*?(?=\nresource|$)/);
+      expect(configRecorderSection).not.toBeNull();
+      expect(configRecorderSection![0]).toMatch(/role_arn/);
+    });
+  });
+
+  describe('SSM Session Manager', () => {
+    test('SSM uses CloudWatch log group', () => {
+      expect(tapStackContent).toMatch(/resource\s+"aws_cloudwatch_log_group"\s+"session_manager"/);
+      expect(tapStackContent).toMatch(/\/aws\/ssm\/session-manager/);
+    });
+
+    test('SSM document has proper configuration', () => {
+      const ssmDocSection = tapStackContent.match(/resource\s+"aws_ssm_document"[\s\S]*?(?=\nresource|$)/);
+      expect(ssmDocSection).not.toBeNull();
+      expect(ssmDocSection![0]).toMatch(/document_type/);
+    });
+  });
 });
