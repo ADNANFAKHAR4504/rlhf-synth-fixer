@@ -1,6 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import * as codecommit from 'aws-cdk-lib/aws-codecommit';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
 import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';
 import * as codebuild from 'aws-cdk-lib/aws-codebuild';
@@ -209,9 +208,7 @@ export class TapStack extends cdk.Stack {
             }),
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                'iam:PassRole',
-              ],
+              actions: ['iam:PassRole'],
               resources: [codeBuildRole.roleArn],
             }),
             new iam.PolicyStatement({
@@ -231,9 +228,7 @@ export class TapStack extends cdk.Stack {
             }),
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                'sns:Publish',
-              ],
+              actions: ['sns:Publish'],
               resources: [
                 pipelineNotificationTopic.topicArn,
                 stagingApprovalTopic.topicArn,
@@ -242,16 +237,12 @@ export class TapStack extends cdk.Stack {
             }),
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                'lambda:InvokeFunction',
-              ],
+              actions: ['lambda:InvokeFunction'],
               resources: ['*'],
             }),
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                'secretsmanager:GetSecretValue',
-              ],
+              actions: ['secretsmanager:GetSecretValue'],
               resources: [
                 `arn:aws:secretsmanager:${this.region}:${this.account}:secret:*`,
               ],

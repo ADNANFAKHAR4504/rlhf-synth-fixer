@@ -1,55 +1,55 @@
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
-import { 
-  S3Client, 
-  HeadBucketCommand, 
+import {
+  S3Client,
+  HeadBucketCommand,
   GetBucketEncryptionCommand,
   GetBucketVersioningCommand,
   GetBucketPolicyCommand,
-  ListObjectsV2Command
+  ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
-import { 
-  CodePipelineClient, 
+import {
+  CodePipelineClient,
   GetPipelineCommand,
-  ListPipelinesCommand 
+  ListPipelinesCommand,
 } from '@aws-sdk/client-codepipeline';
-import { 
-  CodeBuildClient, 
+import {
+  CodeBuildClient,
   ListProjectsCommand,
-  BatchGetProjectsCommand 
+  BatchGetProjectsCommand,
 } from '@aws-sdk/client-codebuild';
-import { 
-  SNSClient, 
+import {
+  SNSClient,
   ListTopicsCommand,
-  GetTopicAttributesCommand 
+  GetTopicAttributesCommand,
 } from '@aws-sdk/client-sns';
-import { 
-  LambdaClient, 
+import {
+  LambdaClient,
   ListFunctionsCommand,
-  GetFunctionCommand 
+  GetFunctionCommand,
 } from '@aws-sdk/client-lambda';
-import { 
-  CloudWatchClient, 
-  DescribeAlarmsCommand 
+import {
+  CloudWatchClient,
+  DescribeAlarmsCommand,
 } from '@aws-sdk/client-cloudwatch';
-import { 
-  EventBridgeClient, 
-  ListRulesCommand 
+import {
+  EventBridgeClient,
+  ListRulesCommand,
 } from '@aws-sdk/client-eventbridge';
-import { 
-  KMSClient, 
+import {
+  KMSClient,
   ListAliasesCommand,
-  DescribeKeyCommand 
+  DescribeKeyCommand,
 } from '@aws-sdk/client-kms';
-import { 
-  IAMClient, 
+import {
+  IAMClient,
   ListRolesCommand,
-  GetRoleCommand 
+  GetRoleCommand,
 } from '@aws-sdk/client-iam';
-import { 
-  CloudWatchLogsClient, 
-  DescribeLogGroupsCommand 
+import {
+  CloudWatchLogsClient,
+  DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
@@ -105,7 +105,9 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('should have correct pipeline name format', () => {
-      expect(stackOutputs.PipelineName).toMatch(/^tap-microservices-pipeline-pr5222$/);
+      expect(stackOutputs.PipelineName).toMatch(
+        /^tap-microservices-pipeline-pr5222$/
+      );
     });
 
     test('should have correct SNS topic ARN format', () => {
@@ -115,9 +117,15 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('should have correct S3 bucket name formats', () => {
-      expect(stackOutputs.SourceBucketName).toMatch(/^tap-pipeline-artifacts-pr5222-\d+-us-east-1$/);
-      expect(stackOutputs.StagingBucketName).toMatch(/^tap-staging-pr5222-\d+-us-east-1$/);
-      expect(stackOutputs.ProductionBucketName).toMatch(/^tap-production-pr5222-\d+-us-east-1$/);
+      expect(stackOutputs.SourceBucketName).toMatch(
+        /^tap-pipeline-artifacts-pr5222-\d+-us-east-1$/
+      );
+      expect(stackOutputs.StagingBucketName).toMatch(
+        /^tap-staging-pr5222-\d+-us-east-1$/
+      );
+      expect(stackOutputs.ProductionBucketName).toMatch(
+        /^tap-production-pr5222-\d+-us-east-1$/
+      );
     });
   });
 
@@ -125,7 +133,7 @@ describe('TapStack Integration Tests', () => {
     test('should have accessible source bucket', async () => {
       const bucketName = stackOutputs.SourceBucketName;
       expect(bucketName).toBeDefined();
-      
+
       const command = new HeadBucketCommand({ Bucket: bucketName });
       await expect(s3Client.send(command)).resolves.not.toThrow();
     });
@@ -133,7 +141,7 @@ describe('TapStack Integration Tests', () => {
     test('should have accessible staging bucket', async () => {
       const bucketName = stackOutputs.StagingBucketName;
       expect(bucketName).toBeDefined();
-      
+
       const command = new HeadBucketCommand({ Bucket: bucketName });
       await expect(s3Client.send(command)).resolves.not.toThrow();
     });
@@ -141,7 +149,7 @@ describe('TapStack Integration Tests', () => {
     test('should have accessible production bucket', async () => {
       const bucketName = stackOutputs.ProductionBucketName;
       expect(bucketName).toBeDefined();
-      
+
       const command = new HeadBucketCommand({ Bucket: bucketName });
       await expect(s3Client.send(command)).resolves.not.toThrow();
     });
@@ -150,16 +158,23 @@ describe('TapStack Integration Tests', () => {
       const buckets = [
         stackOutputs.SourceBucketName,
         stackOutputs.StagingBucketName,
-        stackOutputs.ProductionBucketName
+        stackOutputs.ProductionBucketName,
       ];
 
       for (const bucketName of buckets) {
         if (bucketName) {
-          const command = new GetBucketEncryptionCommand({ Bucket: bucketName });
+          const command = new GetBucketEncryptionCommand({
+            Bucket: bucketName,
+          });
           const response = await s3Client.send(command);
           expect(response.ServerSideEncryptionConfiguration).toBeDefined();
-          expect(response.ServerSideEncryptionConfiguration?.Rules).toHaveLength(1);
-          expect(response.ServerSideEncryptionConfiguration?.Rules?.[0].ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
+          expect(
+            response.ServerSideEncryptionConfiguration?.Rules
+          ).toHaveLength(1);
+          expect(
+            response.ServerSideEncryptionConfiguration?.Rules?.[0]
+              .ApplyServerSideEncryptionByDefault?.SSEAlgorithm
+          ).toBe('aws:kms');
         }
       }
     });
@@ -168,12 +183,14 @@ describe('TapStack Integration Tests', () => {
       const buckets = [
         stackOutputs.SourceBucketName,
         stackOutputs.StagingBucketName,
-        stackOutputs.ProductionBucketName
+        stackOutputs.ProductionBucketName,
       ];
 
       for (const bucketName of buckets) {
         if (bucketName) {
-          const command = new GetBucketVersioningCommand({ Bucket: bucketName });
+          const command = new GetBucketVersioningCommand({
+            Bucket: bucketName,
+          });
           const response = await s3Client.send(command);
           expect(response.Status).toBe('Enabled');
         }
@@ -184,7 +201,7 @@ describe('TapStack Integration Tests', () => {
       const buckets = [
         stackOutputs.SourceBucketName,
         stackOutputs.StagingBucketName,
-        stackOutputs.ProductionBucketName
+        stackOutputs.ProductionBucketName,
       ];
 
       for (const bucketName of buckets) {
@@ -192,7 +209,7 @@ describe('TapStack Integration Tests', () => {
           const command = new GetBucketPolicyCommand({ Bucket: bucketName });
           const response = await s3Client.send(command);
           expect(response.Policy).toBeDefined();
-          
+
           const policy = JSON.parse(response.Policy!);
           expect(policy.Statement).toBeDefined();
           expect(Array.isArray(policy.Statement)).toBe(true);
@@ -208,7 +225,7 @@ describe('TapStack Integration Tests', () => {
 
       const command = new GetPipelineCommand({ name: pipelineName });
       const response = await codePipelineClient.send(command);
-      
+
       expect(response.pipeline).toBeDefined();
       expect(response.pipeline?.name).toBe(pipelineName);
       expect(response.pipeline?.stages).toBeDefined();
@@ -219,8 +236,9 @@ describe('TapStack Integration Tests', () => {
       const pipelineName = stackOutputs.PipelineName;
       const command = new GetPipelineCommand({ name: pipelineName });
       const response = await codePipelineClient.send(command);
-      
-      const stageNames = response.pipeline?.stages?.map(stage => stage.name) || [];
+
+      const stageNames =
+        response.pipeline?.stages?.map(stage => stage.name) || [];
       expect(stageNames).toContain('Source');
       expect(stageNames).toContain('Build');
       expect(stageNames).toContain('Test');
@@ -232,7 +250,7 @@ describe('TapStack Integration Tests', () => {
     test('should list pipeline in CodePipeline service', async () => {
       const command = new ListPipelinesCommand({});
       const response = await codePipelineClient.send(command);
-      
+
       const pipelineNames = response.pipelines?.map(p => p.name) || [];
       expect(pipelineNames).toContain(stackOutputs.PipelineName);
     });
@@ -242,11 +260,13 @@ describe('TapStack Integration Tests', () => {
     test('should have all CodeBuild projects', async () => {
       const command = new ListProjectsCommand({});
       const response = await codeBuildClient.send(command);
-      
+
       const projectNames = response.projects || [];
       expect(projectNames).toContain(`tap-build-${environmentSuffix}`);
       expect(projectNames).toContain(`tap-unit-test-${environmentSuffix}`);
-      expect(projectNames).toContain(`tap-integration-test-${environmentSuffix}`);
+      expect(projectNames).toContain(
+        `tap-integration-test-${environmentSuffix}`
+      );
       expect(projectNames).toContain(`tap-security-scan-${environmentSuffix}`);
     });
 
@@ -254,7 +274,7 @@ describe('TapStack Integration Tests', () => {
       const projectName = `tap-build-${environmentSuffix}`;
       const command = new BatchGetProjectsCommand({ names: [projectName] });
       const response = await codeBuildClient.send(command);
-      
+
       expect(response.projects).toHaveLength(1);
       expect(response.projects?.[0]?.name).toBe(projectName);
       expect(response.projects?.[0]?.serviceRole).toBeDefined();
@@ -265,30 +285,36 @@ describe('TapStack Integration Tests', () => {
       const projectName = `tap-unit-test-${environmentSuffix}`;
       const command = new BatchGetProjectsCommand({ names: [projectName] });
       const response = await codeBuildClient.send(command);
-      
+
       expect(response.projects).toHaveLength(1);
       expect(response.projects?.[0]?.name).toBe(projectName);
-      expect(response.projects?.[0]?.environment?.computeType).toBe('BUILD_GENERAL1_SMALL');
+      expect(response.projects?.[0]?.environment?.computeType).toBe(
+        'BUILD_GENERAL1_SMALL'
+      );
     });
 
     test('should have accessible integration test project', async () => {
       const projectName = `tap-integration-test-${environmentSuffix}`;
       const command = new BatchGetProjectsCommand({ names: [projectName] });
       const response = await codeBuildClient.send(command);
-      
+
       expect(response.projects).toHaveLength(1);
       expect(response.projects?.[0]?.name).toBe(projectName);
-      expect(response.projects?.[0]?.environment?.image).toBe('aws/codebuild/standard:7.0');
+      expect(response.projects?.[0]?.environment?.image).toBe(
+        'aws/codebuild/standard:7.0'
+      );
     });
 
     test('should have accessible security scan project', async () => {
       const projectName = `tap-security-scan-${environmentSuffix}`;
       const command = new BatchGetProjectsCommand({ names: [projectName] });
       const response = await codeBuildClient.send(command);
-      
+
       expect(response.projects).toHaveLength(1);
       expect(response.projects?.[0]?.name).toBe(projectName);
-      expect(response.projects?.[0]?.environment?.image).toBe('aws/codebuild/standard:7.0');
+      expect(response.projects?.[0]?.environment?.image).toBe(
+        'aws/codebuild/standard:7.0'
+      );
     });
   });
 
@@ -299,7 +325,7 @@ describe('TapStack Integration Tests', () => {
 
       const command = new GetTopicAttributesCommand({ TopicArn: topicArn });
       const response = await snsClient.send(command);
-      
+
       expect(response.Attributes).toBeDefined();
       expect(response.Attributes?.TopicArn).toBe(topicArn);
     });
@@ -307,13 +333,17 @@ describe('TapStack Integration Tests', () => {
     test('should list all SNS topics', async () => {
       const command = new ListTopicsCommand({});
       const response = await snsClient.send(command);
-      
+
       const topicArns = response.Topics?.map(t => t.TopicArn) || [];
       expect(topicArns).toContain(stackOutputs.PipelineNotificationTopicArn);
-      
+
       // Check for staging and production approval topics
-      const stagingTopic = topicArns.find(arn => arn?.includes('staging-approval'));
-      const productionTopic = topicArns.find(arn => arn?.includes('production-approval'));
+      const stagingTopic = topicArns.find(arn =>
+        arn?.includes('staging-approval')
+      );
+      const productionTopic = topicArns.find(arn =>
+        arn?.includes('production-approval')
+      );
       expect(stagingTopic).toBeDefined();
       expect(productionTopic).toBeDefined();
     });
@@ -324,7 +354,7 @@ describe('TapStack Integration Tests', () => {
       const functionName = `tap-security-scan-analysis-${environmentSuffix}`;
       const command = new GetFunctionCommand({ FunctionName: functionName });
       const response = await lambdaClient.send(command);
-      
+
       expect(response.Configuration).toBeDefined();
       expect(response.Configuration?.FunctionName).toBe(functionName);
       expect(response.Configuration?.Runtime).toBe('nodejs18.x');
@@ -335,34 +365,44 @@ describe('TapStack Integration Tests', () => {
     test('should list Lambda function in service', async () => {
       const command = new ListFunctionsCommand({});
       const response = await lambdaClient.send(command);
-      
+
       const functionNames = response.Functions?.map(f => f.FunctionName) || [];
-      expect(functionNames).toContain(`tap-security-scan-analysis-${environmentSuffix}`);
+      expect(functionNames).toContain(
+        `tap-security-scan-analysis-${environmentSuffix}`
+      );
     });
   });
 
   describe('CloudWatch Alarms Integration', () => {
     test('should have pipeline failure alarm', async () => {
       const command = new DescribeAlarmsCommand({
-        AlarmNames: [`tap-pipeline-failure-${environmentSuffix}`]
+        AlarmNames: [`tap-pipeline-failure-${environmentSuffix}`],
       });
       const response = await cloudWatchClient.send(command);
-      
+
       expect(response.MetricAlarms).toHaveLength(1);
-      expect(response.MetricAlarms?.[0]?.AlarmName).toBe(`tap-pipeline-failure-${environmentSuffix}`);
-      expect(response.MetricAlarms?.[0]?.MetricName).toBe('PipelineExecutionFailed');
+      expect(response.MetricAlarms?.[0]?.AlarmName).toBe(
+        `tap-pipeline-failure-${environmentSuffix}`
+      );
+      expect(response.MetricAlarms?.[0]?.MetricName).toBe(
+        'PipelineExecutionFailed'
+      );
       expect(response.MetricAlarms?.[0]?.Namespace).toBe('AWS/CodePipeline');
     });
 
     test('should have pipeline stuck alarm', async () => {
       const command = new DescribeAlarmsCommand({
-        AlarmNames: [`tap-pipeline-stuck-${environmentSuffix}`]
+        AlarmNames: [`tap-pipeline-stuck-${environmentSuffix}`],
       });
       const response = await cloudWatchClient.send(command);
-      
+
       expect(response.MetricAlarms).toHaveLength(1);
-      expect(response.MetricAlarms?.[0]?.AlarmName).toBe(`tap-pipeline-stuck-${environmentSuffix}`);
-      expect(response.MetricAlarms?.[0]?.MetricName).toBe('PipelineExecutionDuration');
+      expect(response.MetricAlarms?.[0]?.AlarmName).toBe(
+        `tap-pipeline-stuck-${environmentSuffix}`
+      );
+      expect(response.MetricAlarms?.[0]?.MetricName).toBe(
+        'PipelineExecutionDuration'
+      );
       expect(response.MetricAlarms?.[0]?.Namespace).toBe('AWS/CodePipeline');
     });
   });
@@ -371,13 +411,14 @@ describe('TapStack Integration Tests', () => {
     test('should have pipeline state change rule', async () => {
       const command = new ListRulesCommand({});
       const response = await eventBridgeClient.send(command);
-      
+
       const ruleNames = response.Rules?.map(r => r.Name) || [];
       // Look for any rule that might be related to our pipeline
-      const pipelineRule = ruleNames.find(name => 
-        name?.includes('pipeline') || 
-        name?.includes('TapStack') ||
-        name?.includes(environmentSuffix)
+      const pipelineRule = ruleNames.find(
+        name =>
+          name?.includes('pipeline') ||
+          name?.includes('TapStack') ||
+          name?.includes(environmentSuffix)
       );
       expect(pipelineRule).toBeDefined();
     });
@@ -389,13 +430,13 @@ describe('TapStack Integration Tests', () => {
       const aliases = [
         `alias/tap-pipeline-key-${environmentSuffix}`,
         `alias/tap-staging-key-${environmentSuffix}`,
-        `alias/tap-production-key-${environmentSuffix}`
+        `alias/tap-production-key-${environmentSuffix}`,
       ];
 
       for (const aliasName of aliases) {
         const command = new DescribeKeyCommand({ KeyId: aliasName });
         const response = await kmsClient.send(command);
-        
+
         expect(response.KeyMetadata).toBeDefined();
         expect(response.KeyMetadata?.KeyId).toBeDefined();
         expect(response.KeyMetadata?.KeyUsage).toBe('ENCRYPT_DECRYPT');
@@ -406,13 +447,13 @@ describe('TapStack Integration Tests', () => {
       const aliases = [
         `alias/tap-pipeline-key-${environmentSuffix}`,
         `alias/tap-staging-key-${environmentSuffix}`,
-        `alias/tap-production-key-${environmentSuffix}`
+        `alias/tap-production-key-${environmentSuffix}`,
       ];
 
       for (const aliasName of aliases) {
         const command = new DescribeKeyCommand({ KeyId: aliasName });
         const response = await kmsClient.send(command);
-        
+
         expect(response.KeyMetadata).toBeDefined();
         expect(response.KeyMetadata?.KeyId).toBeDefined();
         expect(response.KeyMetadata?.KeyUsage).toBe('ENCRYPT_DECRYPT');
@@ -426,7 +467,7 @@ describe('TapStack Integration Tests', () => {
       const roleName = `TapStack${environmentSuffix}-CodeBuildRole728CBADE-2m7Mqqd1UQbA`;
       const command = new GetRoleCommand({ RoleName: roleName });
       const response = await iamClient.send(command);
-      
+
       expect(response.Role).toBeDefined();
       expect(response.Role?.RoleName).toBe(roleName);
       expect(response.Role?.AssumeRolePolicyDocument).toBeDefined();
@@ -437,7 +478,7 @@ describe('TapStack Integration Tests', () => {
       const roleName = `TapStack${environmentSuffix}-CodePipelineRoleB31C27BE-Ainqfbi4wH0j`;
       const command = new GetRoleCommand({ RoleName: roleName });
       const response = await iamClient.send(command);
-      
+
       expect(response.Role).toBeDefined();
       expect(response.Role?.RoleName).toBe(roleName);
       expect(response.Role?.AssumeRolePolicyDocument).toBeDefined();
@@ -448,7 +489,7 @@ describe('TapStack Integration Tests', () => {
       const roleName = `TapStack${environmentSuffix}-SecurityScanLambdaRole49DAE542-Lgt9i9OPOmhp`;
       const command = new GetRoleCommand({ RoleName: roleName });
       const response = await iamClient.send(command);
-      
+
       expect(response.Role).toBeDefined();
       expect(response.Role?.RoleName).toBe(roleName);
       expect(response.Role?.AssumeRolePolicyDocument).toBeDefined();
@@ -458,25 +499,36 @@ describe('TapStack Integration Tests', () => {
   describe('CloudWatch Log Groups Integration', () => {
     test('should have log groups for all services', async () => {
       const command = new DescribeLogGroupsCommand({
-        logGroupNamePrefix: `/aws/codebuild/tap-`
+        logGroupNamePrefix: `/aws/codebuild/tap-`,
       });
       const response = await cloudWatchLogsClient.send(command);
-      
-      const logGroupNames = response.logGroups?.map(lg => lg.logGroupName) || [];
-      expect(logGroupNames).toContain(`/aws/codebuild/tap-build-${environmentSuffix}`);
-      expect(logGroupNames).toContain(`/aws/codebuild/tap-unit-test-${environmentSuffix}`);
-      expect(logGroupNames).toContain(`/aws/codebuild/tap-integration-test-${environmentSuffix}`);
-      expect(logGroupNames).toContain(`/aws/codebuild/tap-security-scan-${environmentSuffix}`);
+
+      const logGroupNames =
+        response.logGroups?.map(lg => lg.logGroupName) || [];
+      expect(logGroupNames).toContain(
+        `/aws/codebuild/tap-build-${environmentSuffix}`
+      );
+      expect(logGroupNames).toContain(
+        `/aws/codebuild/tap-unit-test-${environmentSuffix}`
+      );
+      expect(logGroupNames).toContain(
+        `/aws/codebuild/tap-integration-test-${environmentSuffix}`
+      );
+      expect(logGroupNames).toContain(
+        `/aws/codebuild/tap-security-scan-${environmentSuffix}`
+      );
     });
 
     test('should have Lambda log group', async () => {
       const command = new DescribeLogGroupsCommand({
-        logGroupNamePrefix: `/aws/lambda/tap-security-scan-analysis-${environmentSuffix}`
+        logGroupNamePrefix: `/aws/lambda/tap-security-scan-analysis-${environmentSuffix}`,
       });
       const response = await cloudWatchLogsClient.send(command);
-      
+
       expect(response.logGroups).toHaveLength(1);
-      expect(response.logGroups?.[0]?.logGroupName).toBe(`/aws/lambda/tap-security-scan-analysis-${environmentSuffix}`);
+      expect(response.logGroups?.[0]?.logGroupName).toBe(
+        `/aws/lambda/tap-security-scan-analysis-${environmentSuffix}`
+      );
     });
   });
 
@@ -484,7 +536,9 @@ describe('TapStack Integration Tests', () => {
     test('should have consistent environment suffix in all resource names', () => {
       // Check that all stack outputs contain the environment suffix
       expect(stackOutputs.PipelineName).toContain(environmentSuffix);
-      expect(stackOutputs.PipelineNotificationTopicArn).toContain(environmentSuffix);
+      expect(stackOutputs.PipelineNotificationTopicArn).toContain(
+        environmentSuffix
+      );
       expect(stackOutputs.SourceBucketName).toContain(environmentSuffix);
       expect(stackOutputs.StagingBucketName).toContain(environmentSuffix);
       expect(stackOutputs.ProductionBucketName).toContain(environmentSuffix);
@@ -492,17 +546,25 @@ describe('TapStack Integration Tests', () => {
 
     test('should have proper resource naming patterns', () => {
       // Pipeline name pattern
-      expect(stackOutputs.PipelineName).toMatch(/^tap-microservices-pipeline-\w+$/);
-      
+      expect(stackOutputs.PipelineName).toMatch(
+        /^tap-microservices-pipeline-\w+$/
+      );
+
       // SNS topic ARN pattern
       expect(stackOutputs.PipelineNotificationTopicArn).toMatch(
         /^arn:aws:sns:us-east-1:\d+:tap-pipeline-notifications-\w+$/
       );
-      
+
       // S3 bucket name patterns
-      expect(stackOutputs.SourceBucketName).toMatch(/^tap-pipeline-artifacts-\w+-\d+-us-east-1$/);
-      expect(stackOutputs.StagingBucketName).toMatch(/^tap-staging-\w+-\d+-us-east-1$/);
-      expect(stackOutputs.ProductionBucketName).toMatch(/^tap-production-\w+-\d+-us-east-1$/);
+      expect(stackOutputs.SourceBucketName).toMatch(
+        /^tap-pipeline-artifacts-\w+-\d+-us-east-1$/
+      );
+      expect(stackOutputs.StagingBucketName).toMatch(
+        /^tap-staging-\w+-\d+-us-east-1$/
+      );
+      expect(stackOutputs.ProductionBucketName).toMatch(
+        /^tap-production-\w+-\d+-us-east-1$/
+      );
     });
   });
 
@@ -511,17 +573,22 @@ describe('TapStack Integration Tests', () => {
       const buckets = [
         stackOutputs.SourceBucketName,
         stackOutputs.StagingBucketName,
-        stackOutputs.ProductionBucketName
+        stackOutputs.ProductionBucketName,
       ];
 
       for (const bucketName of buckets) {
         if (bucketName) {
-          const command = new GetBucketEncryptionCommand({ Bucket: bucketName });
+          const command = new GetBucketEncryptionCommand({
+            Bucket: bucketName,
+          });
           const response = await s3Client.send(command);
-          
+
           expect(response.ServerSideEncryptionConfiguration).toBeDefined();
-          const encryptionRule = response.ServerSideEncryptionConfiguration?.Rules?.[0];
-          expect(encryptionRule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
+          const encryptionRule =
+            response.ServerSideEncryptionConfiguration?.Rules?.[0];
+          expect(
+            encryptionRule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm
+          ).toBe('aws:kms');
         }
       }
     });
@@ -530,16 +597,18 @@ describe('TapStack Integration Tests', () => {
       const roles = [
         `TapStack${environmentSuffix}-CodeBuildRole728CBADE-2m7Mqqd1UQbA`,
         `TapStack${environmentSuffix}-CodePipelineRoleB31C27BE-Ainqfbi4wH0j`,
-        `TapStack${environmentSuffix}-SecurityScanLambdaRole49DAE542-Lgt9i9OPOmhp`
+        `TapStack${environmentSuffix}-SecurityScanLambdaRole49DAE542-Lgt9i9OPOmhp`,
       ];
 
       for (const roleName of roles) {
         const command = new GetRoleCommand({ RoleName: roleName });
         const response = await iamClient.send(command);
-        
+
         expect(response.Role?.AssumeRolePolicyDocument).toBeDefined();
         // The policy document might be URL encoded, so decode it first
-        const policyDoc = decodeURIComponent(response.Role!.AssumeRolePolicyDocument!);
+        const policyDoc = decodeURIComponent(
+          response.Role!.AssumeRolePolicyDocument!
+        );
         const trustPolicy = JSON.parse(policyDoc);
         expect(trustPolicy.Statement).toBeDefined();
         expect(Array.isArray(trustPolicy.Statement)).toBe(true);
@@ -552,14 +621,14 @@ describe('TapStack Integration Tests', () => {
       const pipelineName = stackOutputs.PipelineName;
       const command = new GetPipelineCommand({ name: pipelineName });
       const response = await codePipelineClient.send(command);
-      
+
       const pipeline = response.pipeline;
       expect(pipeline).toBeDefined();
-      
+
       // Verify all required stages exist
       const stageNames = pipeline?.stages?.map(stage => stage.name) || [];
       expect(stageNames).toHaveLength(6);
-      
+
       // Verify each stage has actions
       for (const stage of pipeline?.stages || []) {
         expect(stage.actions).toBeDefined();
@@ -572,11 +641,13 @@ describe('TapStack Integration Tests', () => {
       const pipelineName = stackOutputs.PipelineName;
       const command = new GetPipelineCommand({ name: pipelineName });
       const response = await codePipelineClient.send(command);
-      
+
       const pipeline = response.pipeline;
       expect(pipeline?.artifactStore).toBeDefined();
       expect(pipeline?.artifactStore?.type).toBe('S3');
-      expect(pipeline?.artifactStore?.location).toBe(stackOutputs.SourceBucketName);
+      expect(pipeline?.artifactStore?.location).toBe(
+        stackOutputs.SourceBucketName
+      );
     });
   });
 });

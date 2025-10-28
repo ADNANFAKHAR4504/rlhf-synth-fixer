@@ -130,7 +130,7 @@ describe('TapStack - CI/CD Pipeline', () => {
     test('should use S3 as source instead of CodeCommit', () => {
       // Verify that no CodeCommit repository is created
       template.resourceCountIs('AWS::CodeCommit::Repository', 0);
-      
+
       // Verify pipeline exists
       template.resourceCountIs('AWS::CodePipeline::Pipeline', 1);
     });
@@ -168,12 +168,13 @@ describe('TapStack - CI/CD Pipeline', () => {
     test('should create CodePipeline role with correct permissions', () => {
       // Check that CodePipeline role exists with inline policies
       template.resourceCountIs('AWS::IAM::Role', 13);
-      
+
       // Verify that at least one role has the CodePipeline service principal
       const roles = template.findResources('AWS::IAM::Role');
       const codePipelineRole = Object.values(roles).find((role: any) =>
-        role.Properties?.AssumeRolePolicyDocument?.Statement?.some((stmt: any) =>
-          stmt.Principal?.Service === 'codepipeline.amazonaws.com'
+        role.Properties?.AssumeRolePolicyDocument?.Statement?.some(
+          (stmt: any) =>
+            stmt.Principal?.Service === 'codepipeline.amazonaws.com'
         )
       );
       expect(codePipelineRole).toBeDefined();
@@ -258,7 +259,9 @@ describe('TapStack - CI/CD Pipeline', () => {
     });
 
     test('should apply DESTROY removal policy to CodeBuild projects', () => {
-      const codeBuildProjects = template.findResources('AWS::CodeBuild::Project');
+      const codeBuildProjects = template.findResources(
+        'AWS::CodeBuild::Project'
+      );
       Object.values(codeBuildProjects).forEach((project: any) => {
         expect(project.DeletionPolicy).toBe('Delete');
       });
@@ -307,7 +310,9 @@ describe('TapStack - CI/CD Pipeline', () => {
     });
 
     test('should apply DESTROY removal policy to CodePipeline', () => {
-      const codePipelines = template.findResources('AWS::CodePipeline::Pipeline');
+      const codePipelines = template.findResources(
+        'AWS::CodePipeline::Pipeline'
+      );
       Object.values(codePipelines).forEach((pipeline: any) => {
         expect(pipeline.DeletionPolicy).toBe('Delete');
       });
@@ -439,21 +444,30 @@ describe('TapStack - CI/CD Pipeline', () => {
     test('should use environment suffix in resource names', () => {
       const templateJson = template.toJSON();
       const resources = templateJson.Resources;
-      
+
       // Check that environment suffix is used in key resource names
-      const resourceNames = Object.values(resources).map((resource: any) => resource.Properties?.Name || resource.Properties?.FunctionName || resource.Properties?.TopicName || resource.Properties?.RepositoryName);
-      
-      const namesWithSuffix = resourceNames.filter((name: any) => 
-        typeof name === 'string' && name.includes(environmentSuffix)
+      const resourceNames = Object.values(resources).map(
+        (resource: any) =>
+          resource.Properties?.Name ||
+          resource.Properties?.FunctionName ||
+          resource.Properties?.TopicName ||
+          resource.Properties?.RepositoryName
       );
-      
+
+      const namesWithSuffix = resourceNames.filter(
+        (name: any) =>
+          typeof name === 'string' && name.includes(environmentSuffix)
+      );
+
       expect(namesWithSuffix.length).toBeGreaterThan(0);
     });
 
     test('should handle different environment suffix sources', () => {
       // Test with props environmentSuffix
       const app1 = new cdk.App();
-      const stack1 = new TapStack(app1, 'TestStack1', { environmentSuffix: 'test1' });
+      const stack1 = new TapStack(app1, 'TestStack1', {
+        environmentSuffix: 'test1',
+      });
       const template1 = Template.fromStack(stack1);
       template1.resourceCountIs('AWS::S3::Bucket', 3);
 
@@ -501,7 +515,11 @@ describe('TapStack - CI/CD Pipeline', () => {
       const s3Buckets = template.findResources('AWS::S3::Bucket');
       Object.values(s3Buckets).forEach((bucket: any) => {
         expect(bucket.Properties.BucketEncryption).toBeDefined();
-        expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+        expect(
+          bucket.Properties.BucketEncryption
+            .ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault
+            .SSEAlgorithm
+        ).toBe('aws:kms');
       });
     });
 
@@ -509,10 +527,18 @@ describe('TapStack - CI/CD Pipeline', () => {
       const s3Buckets = template.findResources('AWS::S3::Bucket');
       Object.values(s3Buckets).forEach((bucket: any) => {
         expect(bucket.Properties.PublicAccessBlockConfiguration).toBeDefined();
-        expect(bucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
-        expect(bucket.Properties.PublicAccessBlockConfiguration.BlockPublicPolicy).toBe(true);
-        expect(bucket.Properties.PublicAccessBlockConfiguration.IgnorePublicAcls).toBe(true);
-        expect(bucket.Properties.PublicAccessBlockConfiguration.RestrictPublicBuckets).toBe(true);
+        expect(
+          bucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls
+        ).toBe(true);
+        expect(
+          bucket.Properties.PublicAccessBlockConfiguration.BlockPublicPolicy
+        ).toBe(true);
+        expect(
+          bucket.Properties.PublicAccessBlockConfiguration.IgnorePublicAcls
+        ).toBe(true);
+        expect(
+          bucket.Properties.PublicAccessBlockConfiguration.RestrictPublicBuckets
+        ).toBe(true);
       });
     });
 
