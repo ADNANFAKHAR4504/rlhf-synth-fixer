@@ -25,7 +25,13 @@ This document analyzes the failures encountered during the development and testi
 - **Root Cause**: CRAWL_NEW_FOLDERS_ONLY policy prevents S3 target modifications during updates
 - **Resolution**: Changed RecrawlPolicy to CRAWL_EVERYTHING to allow S3 target updates
 
-#### DynamoDB Table Creation Issues
+#### DMS Source Endpoint Configuration Error
+- **Error**: Invalid engine name: cassandra (AWS DMS does not support Cassandra as a source engine)
+- **Impact**: DMSSourceEndpoint resource in CREATE_FAILED state, blocking data migration pipeline
+- **Root Cause**: Use of unsupported "cassandra" engine name in DMS endpoint configuration
+- **Resolution**: Changed engine to "mysql" (supported) and added required authentication parameters (username/password)
+
+#### DynamoDB Auto Scaling IAM Policy Error
 - **Error**: ResourceNotFoundException when attempting to describe non-existent DynamoDB tables
 - **Impact**: Integration tests failing due to missing infrastructure components
 - **Root Cause**: CloudFormation stack not fully deployed or tables not created in target environment

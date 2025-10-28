@@ -5,13 +5,24 @@
   "Parameters": {
     "SourceDatabaseEndpoint": {
       "Type": "String",
-      "Default": "cassandra.example.com",
-      "Description": "Cassandra source database endpoint"
+      "Default": "mysql.example.com",
+      "Description": "MySQL source database endpoint"
     },
     "SourceDatabasePort": {
       "Type": "Number",
-      "Default": 9042,
-      "Description": "Cassandra database port"
+      "Default": 3306,
+      "Description": "MySQL database port"
+    },
+    "SourceDatabaseUsername": {
+      "Type": "String",
+      "Default": "admin",
+      "Description": "MySQL database username"
+    },
+    "SourceDatabasePassword": {
+      "Type": "String",
+      "NoEcho": true,
+      "Default": "TempPassword123!",
+      "Description": "MySQL database password"
     },
     "NeptuneDBInstanceClass": {
       "Type": "String",
@@ -1008,11 +1019,13 @@
     "DMSSourceEndpoint": {
       "Type": "AWS::DMS::Endpoint",
       "Properties": {
-        "EndpointIdentifier": "cassandra-source-endpoint",
+        "EndpointIdentifier": "mysql-source-endpoint",
         "EndpointType": "source",
-        "EngineName": "cassandra",
+        "EngineName": "mysql",
         "ServerName": {"Ref": "SourceDatabaseEndpoint"},
         "Port": {"Ref": "SourceDatabasePort"},
+        "Username": {"Ref": "SourceDatabaseUsername"},
+        "Password": {"Ref": "SourceDatabasePassword"},
         "Tags": [
           {
             "Key": "Purpose",
