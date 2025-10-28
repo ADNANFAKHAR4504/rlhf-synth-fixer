@@ -402,7 +402,7 @@ export class S3Module extends Construct {
 
     // S3 Bucket for assets and artifacts
     this.bucket = new aws.s3Bucket.S3Bucket(this, 'assets-bucket', {
-      bucket: `multi-tier-assets-bucket}`,
+      bucket: 'multi-tier-assets-bucket',
       tags: {
         Environment: 'Production',
         Project: 'MultiTierWebApp',
