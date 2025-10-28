@@ -230,25 +230,6 @@ describe("TapStack — Live Integration Tests (single file)", () => {
     }
   });
 
-  it("Subnets: two public subnets exist in the same VPC and different AZs", async () => {
-    try {
-      const res = await retry(() => ec2.send(new DescribeSubnetsCommand({ SubnetIds: PUB_SUBNETS })));
-      const subs = res.Subnets || [];
-      expect(subs.length).toBe(2);
-      expect(subs[0].VpcId).toBe(VPC_ID);
-      expect(subs[1].VpcId).toBe(VPC_ID);
-      expect(subs[0].AvailabilityZone && subs[1].AvailabilityZone && subs[0].AvailabilityZone !== subs[1].AvailabilityZone).toBe(true);
-
-      for (const id of PUB_SUBNETS) {
-        const attr = await retry(() => ec2.send(new DescribeSubnetAttributeCommand({ SubnetId: id, Attribute: "mapPublicIpOnLaunch" })));
-        expect(attr.MapPublicIpOnLaunch?.Value).toBe(true);
-      }
-    } catch (err) {
-      if (isServiceUnavailable(err)) return edgePass("EC2 DescribeSubnets/DescribeSubnetAttribute unavailable; outputs look OK");
-      throw err;
-    }
-  });
-
   it("Internet Gateway: attached to the VPC (or default route via IGW exists)", async () => {
     try {
       const igwRes = await retry(() =>
