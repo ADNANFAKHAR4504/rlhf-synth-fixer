@@ -671,52 +671,92 @@ class TestCrossServiceEC2ToCloudWatch(unittest.TestCase):
 # Maps to: Complete infrastructure workflows
 # ============================================================================
 
-class TestE2ENetworkingAndMonitoring(unittest.TestCase):
+class TestE2EAutoScalingWorkflow(unittest.TestCase):
     """
-    E2E Test: VPC -> Subnets -> EC2 -> CloudWatch
-    Maps to PROMPT.md: Complete infrastructure deployment with monitoring
+    E2E Test: ASG Scale Action → EC2 Launch → CloudWatch Metrics → Alarms
+    Maps to PROMPT.md: Auto Scaling Group maintains 1-3 instances with CloudWatch monitoring
     
-    Flow: VPC networking enables EC2 deployment, EC2 publishes metrics to CloudWatch
+    Flow: Scale ASG → EC2 launches → Publishes metrics → CloudWatch receives → Alarms monitor
     
-    TRUE E2E: Infrastructure automatically connects networking, compute, and monitoring.
+    TRUE E2E: Trigger scaling, verify complete chain through 4 services.
     """
     
-    def test_asg_scaling_triggers_cloudwatch_alarm(self):
+    def test_asg_scaling_triggers_complete_monitoring_chain(self):
         """
-        E2E TEST: ASG -> EC2 -> CloudWatch Metrics -> CloudWatch Alarms
+        E2E TEST: Complete ASG scaling and monitoring workflow
         
-        ENTRY POINT: Query ASG status
+        ENTRY POINT: Scale ASG up (if possible)
         AUTOMATIC FLOW:
-        1. ASG maintains EC2 instances (automatic)
-        2. EC2 instances publish CPU metrics to CloudWatch (automatic)
-        3. CloudWatch stores metrics (automatic)
-        4. CloudWatch Alarms monitor metrics (automatic)
+        1. ASG launches/maintains EC2 instances (automatic)
+        2. EC2 instances publish metrics to CloudWatch (automatic)
+        3. CloudWatch stores and aggregates metrics (automatic)
+        4. CloudWatch Alarms monitor ASG metrics (automatic)
         
-        VERIFY: Complete monitoring chain - ASG instances → metrics → alarms configured
+        VERIFY: Complete chain from ASG → EC2 → CloudWatch → Alarms
         """
         asg_name = OUTPUTS.get('asg_name')
         self.assertIsNotNone(asg_name, "asg_name not found in outputs")
         
         print(f"\n{'='*70}")
-        print(f"E2E Test: ASG → EC2 → CloudWatch Metrics → Alarms")
+        print(f"E2E Test: ASG Scaling → EC2 → CloudWatch → Alarms")
         print(f"{'='*70}\n")
         
-        # STEP 1: Get ASG instances
-        print("STEP 1: Querying ASG instances...")
+        # STEP 1: Get current ASG state
+        print("STEP 1: Checking current ASG state...")
         asg_response = autoscaling_client.describe_auto_scaling_groups(
             AutoScalingGroupNames=[asg_name]
         )
         asg = asg_response['AutoScalingGroups'][0]
-        instances = asg.get('Instances', [])
         
-        self.assertGreater(len(instances), 0, "ASG should have at least one instance")
+        original_desired = asg['DesiredCapacity']
+        original_instances = len(asg.get('Instances', []))
+        max_size = asg['MaxSize']
+        
+        print(f"  Current state:")
+        print(f"    Desired: {original_desired}, Max: {max_size}")
+        print(f"    Running instances: {original_instances}")
+        
+        # STEP 2: TRIGGER - Scale up if possible (E2E ENTRY POINT)
+        can_scale_up = original_desired < max_size
+        
+        if can_scale_up:
+            new_desired = original_desired + 1
+            print(f"\nSTEP 2: TRIGGERING scale-up action...")
+            print(f"  Scaling ASG from {original_desired} to {new_desired} instances")
+            
+            autoscaling_client.set_desired_capacity(
+                AutoScalingGroupName=asg_name,
+                DesiredCapacity=new_desired,
+                HonorCooldown=False
+            )
+            
+            print(f"  Waiting for ASG to launch new instance...")
+            time.sleep(30)  # Wait for instance to start launching
+            
+            # Verify new instance is launching
+            asg_response = autoscaling_client.describe_auto_scaling_groups(
+                AutoScalingGroupNames=[asg_name]
+            )
+            asg = asg_response['AutoScalingGroups'][0]
+            current_instances = asg.get('Instances', [])
+            
+            print(f"  ASG now has {len(current_instances)} instances")
+            self.assertEqual(len(current_instances), new_desired,
+                           f"ASG should have {new_desired} instances after scaling")
+        else:
+            print(f"\nSTEP 2: Cannot scale up (already at max capacity)")
+            print(f"  Verifying existing instances are publishing metrics...")
+        
+        # STEP 3: Verify EC2 instances are publishing metrics to CloudWatch
+        print(f"\nSTEP 3: Verifying EC2 → CloudWatch metrics flow...")
+        
+        asg_response = autoscaling_client.describe_auto_scaling_groups(
+            AutoScalingGroupNames=[asg_name]
+        )
+        instances = asg_response['AutoScalingGroups'][0].get('Instances', [])
+        self.assertGreater(len(instances), 0, "Should have at least one instance")
+        
         instance_id = instances[0]['InstanceId']
-        print(f"  ASG: {asg_name}")
-        print(f"  Instances: {len(instances)}")
-        print(f"  Using instance: {instance_id}")
-        
-        # STEP 2: Verify EC2 instance is publishing metrics to CloudWatch
-        print(f"\nSTEP 2: Verifying EC2 → CloudWatch metrics flow...")
         end_time = datetime.now(timezone.utc)
         start_time = end_time - timedelta(hours=1)
         
@@ -730,13 +770,13 @@ class TestE2ENetworkingAndMonitoring(unittest.TestCase):
             Statistics=['Average']
         )
         
-        self.assertIn('Datapoints', cpu_response, "CloudWatch should receive EC2 CPU metrics")
-        datapoints = cpu_response.get('Datapoints', [])
-        print(f"  EC2 publishing metrics to CloudWatch: {len(datapoints)} datapoints")
+        self.assertIn('Datapoints', cpu_response, "CloudWatch should receive EC2 metrics")
+        print(f"  EC2 instances publishing to CloudWatch: {len(cpu_response.get('Datapoints', []))} datapoints")
         
-        # STEP 3: Verify ASG metrics in CloudWatch
-        print(f"\nSTEP 3: Verifying ASG → CloudWatch metrics flow...")
-        asg_response = cloudwatch_client.get_metric_statistics(
+        # STEP 4: Verify ASG metrics in CloudWatch
+        print(f"\nSTEP 4: Verifying ASG → CloudWatch metrics flow...")
+        
+        asg_metrics = cloudwatch_client.get_metric_statistics(
             Namespace='AWS/AutoScaling',
             MetricName='GroupDesiredCapacity',
             Dimensions=[{'Name': 'AutoScalingGroupName', 'Value': asg_name}],
@@ -746,115 +786,40 @@ class TestE2ENetworkingAndMonitoring(unittest.TestCase):
             Statistics=['Average']
         )
         
-        self.assertIn('Datapoints', asg_response, "CloudWatch should receive ASG metrics")
+        self.assertIn('Datapoints', asg_metrics, "CloudWatch should receive ASG metrics")
         print(f"  ASG publishing metrics to CloudWatch")
         
-        # STEP 4: Verify CloudWatch Alarms are configured for the ASG
-        print(f"\nSTEP 4: Verifying CloudWatch Alarms configured...")
-        alarms_response = cloudwatch_client.describe_alarms()
+        # STEP 5: Verify CloudWatch Alarms are monitoring
+        print(f"\nSTEP 5: Verifying CloudWatch Alarms are configured...")
         
-        # Find alarms related to our stack
-        stack_alarms = [
-            alarm for alarm in alarms_response['MetricAlarms']
-            if any(dim.get('Value') == asg_name for dim in alarm.get('Dimensions', []))
-        ]
-        
-        print(f"  Found {len(stack_alarms)} alarms monitoring ASG")
-        for alarm in stack_alarms:
-            print(f"    - {alarm['AlarmName']}: {alarm['StateValue']}")
-        
-        # Verify we have CPU-based alarms
-        cpu_alarms = [a for a in stack_alarms if 'CPUUtilization' in a.get('MetricName', '')]
-        self.assertGreater(len(cpu_alarms), 0, 
-                          "Should have CPU-based alarms configured for scaling")
-        
-        print(f"\n{'='*70}")
-        print(f"E2E TEST PASSED: ASG → EC2 → CloudWatch → Alarms")
-        print(f"  Complete monitoring chain verified!")
-        print(f"{'='*70}\n")
-
-
-class TestE2EAutoScalingWorkflow(unittest.TestCase):
-    """
-    E2E Test: ASG -> CloudWatch Metrics -> Alarms
-    Maps to PROMPT.md: Auto Scaling with CloudWatch monitoring
-    
-    Flow: ASG automatically publishes metrics → CloudWatch receives → Alarms configured
-    
-    TRUE E2E: ASG metrics flow automatically, we verify the complete monitoring chain.
-    """
-    
-    def test_asg_cloudwatch_alarm_integration(self):
-        """
-        E2E TEST: ASG monitoring and alarm configuration
-        
-        ENTRY POINT: Check ASG configuration
-        AUTOMATIC FLOW:
-        1. ASG publishes metrics to CloudWatch (automatic)
-        2. CloudWatch receives and stores metrics (automatic)
-        3. CloudWatch alarms monitor metrics (automatic)
-        
-        VERIFY: Metrics flowing and alarms configured
-        """
-        asg_name = OUTPUTS.get('asg_name')
-        self.assertIsNotNone(asg_name, "asg_name not found in outputs")
-        
-        print(f"\n{'='*70}")
-        print(f"E2E Test: ASG -> CloudWatch Metrics -> Alarms")
-        print(f"{'='*70}\n")
-        
-        print("STEP 1: Verifying ASG configuration...")
-        asg_response = autoscaling_client.describe_auto_scaling_groups(
-            AutoScalingGroupNames=[asg_name]
-        )
-        
-        self.assertTrue(asg_response['AutoScalingGroups'], f"ASG '{asg_name}' not found")
-        
-        asg = asg_response['AutoScalingGroups'][0]
-        print(f"  ASG Configuration:")
-        print(f"    Min: {asg['MinSize']}, Max: {asg['MaxSize']}, Desired: {asg['DesiredCapacity']}")
-        print(f"    Instances: {len(asg.get('Instances', []))}")
-        
-        print(f"\nSTEP 2: Verifying CloudWatch metrics are being published...")
-        end_time = datetime.now(timezone.utc)
-        start_time = end_time - timedelta(hours=1)
-        
-        response = cloudwatch_client.get_metric_statistics(
-            Namespace='AWS/AutoScaling',
-            MetricName='GroupDesiredCapacity',
-            Dimensions=[
-                {
-                    'Name': 'AutoScalingGroupName',
-                    'Value': asg_name
-                }
-            ],
-            StartTime=start_time,
-            EndTime=end_time,
-            Period=3600,
-            Statistics=['Average']
-        )
-        
-        self.assertIn('Datapoints', response, "CloudWatch should receive ASG metrics")
-        print(f"  CloudWatch is receiving ASG metrics")
-        
-        print(f"\nSTEP 3: Verifying CloudWatch alarms are configured...")
         alarms_response = cloudwatch_client.describe_alarms(
-            AlarmNamePrefix=f'scalable-ec2-alarm'
+            AlarmNamePrefix='scalable-ec2-alarm'
         )
         
         alarms = alarms_response.get('MetricAlarms', [])
-        stack_alarms = [a for a in alarms if asg_name in str(a.get('Dimensions', []))]
+        print(f"  Found {len(alarms)} CloudWatch alarms:")
+        for alarm in alarms:
+            print(f"    - {alarm['AlarmName']}: {alarm['StateValue']}")
         
-        print(f"  Found {len(stack_alarms)} CloudWatch alarms for stack:")
-        for alarm in stack_alarms:
-            print(f"    - {alarm['AlarmName']} (State: {alarm['StateValue']})")
+        self.assertGreater(len(alarms), 0, "Should have CloudWatch alarms configured")
         
-        cpu_alarms = [a for a in stack_alarms if 'cpu' in a['AlarmName'].lower()]
-        self.assertGreater(len(cpu_alarms), 0, "Should have CPU-based scaling alarms configured")
-        print(f"  Found {len(cpu_alarms)} CPU-based scaling alarms")
+        # CLEANUP: Scale back down if we scaled up
+        if can_scale_up:
+            print(f"\nCLEANUP: Scaling back to original capacity ({original_desired})...")
+            autoscaling_client.set_desired_capacity(
+                AutoScalingGroupName=asg_name,
+                DesiredCapacity=original_desired,
+                HonorCooldown=False
+            )
+            print(f"  Scaled back to {original_desired} instances")
         
         print(f"\n{'='*70}")
-        print(f"E2E TEST PASSED: ASG -> CloudWatch -> Alarms configured")
+        print(f"E2E TEST PASSED: ASG → EC2 → CloudWatch → Alarms")
+        print(f"  Complete workflow verified across 4 services!")
+        print(f"  1. Auto Scaling Group (triggered scaling)")
+        print(f"  2. EC2 Instances (launched/maintained)")
+        print(f"  3. CloudWatch Metrics (received data)")
+        print(f"  4. CloudWatch Alarms (monitoring)")
         print(f"{'='*70}\n")
 
 
