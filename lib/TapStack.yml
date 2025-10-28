@@ -132,6 +132,25 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
+  # Security Group for API Gateway VPC Link
+  APIGatewaySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'api-gateway-sg-${EnvironmentSuffix}'
+      GroupDescription: Security group for API Gateway VPC access
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 6379
+          ToPort: 6379
+          DestinationSecurityGroupId: !Ref CacheSecurityGroup
+          Description: Allow outbound to Redis
+      Tags:
+        - Key: Name
+          Value: !Sub 'api-gateway-sg-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
   # Security Group for ElastiCache
   CacheSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -152,25 +171,6 @@ Resources:
           Value: !Ref EnvironmentSuffix
         - Key: Compliance
           Value: FedRAMP-Moderate
-
-  # Security Group for API Gateway VPC Link
-  APIGatewaySecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupName: !Sub 'api-gateway-sg-${EnvironmentSuffix}'
-      GroupDescription: Security group for API Gateway VPC access
-      VpcId: !Ref VPC
-      SecurityGroupEgress:
-        - IpProtocol: tcp
-          FromPort: 6379
-          ToPort: 6379
-          DestinationSecurityGroupId: !Ref CacheSecurityGroup
-          Description: Allow outbound to Redis
-      Tags:
-        - Key: Name
-          Value: !Sub 'api-gateway-sg-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
 
   # ElastiCache Redis Cluster
   RedisReplicationGroup:
@@ -230,7 +230,7 @@ Resources:
       KmsKeyId: !Ref EncryptionKey
       GenerateSecretString:
         SecretStringTemplate: '{"username": "api-user"}'
-        GenerateStringKey: "api_key"
+        GenerateStringKey: 'api_key'
         PasswordLength: 32
         ExcludeCharacters: '"@/\'
       Tags:
@@ -371,8 +371,6 @@ Resources:
       Description: !Sub 'Production stage with FedRAMP compliance - ${EnvironmentSuffix}'
       CacheClusterEnabled: true
       CacheClusterSize: '0.5'
-      CacheTtlInSeconds: 3600
-      CacheDataEncrypted: true
       TracingEnabled: true
       MethodSettings:
         - ResourcePath: '/*'
@@ -399,8 +397,6 @@ Resources:
   # API Gateway Usage Plan for throttling
   UsagePlan:
     Type: AWS::ApiGateway::UsagePlan
-    DependsOn:
-      - APIStage
     Properties:
       UsagePlanName: !Sub 'fedramp-usage-plan-${EnvironmentSuffix}'
       Description: !Sub 'Usage plan with 1000 requests per minute throttling - ${EnvironmentSuffix}'
@@ -419,8 +415,6 @@ Resources:
   # API Key
   APIKey:
     Type: AWS::ApiGateway::ApiKey
-    DependsOn:
-      - APIStage
     Properties:
       Name: !Sub 'fedramp-api-key-${EnvironmentSuffix}'
       Description: !Sub 'API key for government data access - ${EnvironmentSuffix}'
