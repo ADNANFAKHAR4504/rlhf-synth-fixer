@@ -64,5 +64,10 @@
     "us-east-2a",
     "us-east-2b",
     "us-east-2c"
+  ],
+  "availability-zones:account=149536495831:region=ap-south-1": [
+    "ap-south-1a",
+    "ap-south-1b",
+    "ap-south-1c"
   ]
 }
