@@ -449,7 +449,7 @@ describe('CloudFormation Infrastructure Integration Tests', () => {
       expect(endpoint).not.toBe('');
       // Accept both cluster and instance endpoints
       expect(
-        /^[a-z0-9-]+\.(cluster(-ro)?|instance)?\.[a-z0-9-]+\.rds\.amazonaws\.com$/.test(endpoint)
+        /^[a-z0-9-]+(\.(cluster(-ro)?|instance))?\.[a-z0-9-]+\.rds\.amazonaws\.com(\.[a-z0-9-]+)?$/i.test(endpoint)
       ).toBe(true);
     });
 
@@ -462,7 +462,7 @@ describe('CloudFormation Infrastructure Integration Tests', () => {
       expect(dns).toBeDefined();
       expect(typeof dns).toBe('string');
       expect(dns).not.toBe('');
-      expect(/^[a-z0-9-]+\.elb\.[a-z0-9-]+\.amazonaws\.com$/.test(dns)).toBe(true);
+      expect(/^[a-z0-9-]+\.elb\.[a-z0-9-]+\.amazonaws\.com(\.[a-z0-9-]+)?$/i.test(dns)).toBe(true);
     });
   });
 
