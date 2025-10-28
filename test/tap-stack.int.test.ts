@@ -1,7 +1,7 @@
-import * as fs from 'fs';
-import * as path from 'path';
 import axios from 'axios';
 import { exec } from 'child_process';
+import * as fs from 'fs';
+import * as path from 'path';
 import { promisify } from 'util';
 
 const execAsync = promisify(exec);
@@ -10,13 +10,19 @@ const execAsync = promisify(exec);
 const outputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
 const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
 
-const region = outputs.Region || process.env.AWS_REGION || 'us-east-1';
-const environmentSuffix = outputs.EnvironmentSuffix || 'dev';
-const apiEndpoint = outputs.ApiEndpoint;
-const dynamoDBTableName = outputs.DynamoDBTableName;
-const snsTopicArn = outputs.SNSTopicArn;
+function getOutputs() {
+  const region = outputs.Region || process.env.AWS_REGION || 'us-east-1';
+  const environmentSuffix = outputs.EnvironmentSuffix || 'dev';
+  const apiEndpoint = outputs[`ApiEndpoint${environmentSuffix}`] || outputs.ApiEndpoint;
+  const dynamoDBTableName = outputs[`DynamoDBTableName${environmentSuffix}`] || outputs.DynamoDBTableName;
+  const snsTopicArn = outputs[`SNSTopicArn${environmentSuffix}`] || outputs.SNSTopicArn;
+
+  return { region, environmentSuffix, apiEndpoint, dynamoDBTableName, snsTopicArn };
+}
 
 describe('TapStack Integration Tests - Live Resources', () => {
+  const { region, environmentSuffix, apiEndpoint, dynamoDBTableName, snsTopicArn } = getOutputs();
+
   // Generate unique test IDs for test isolation
   const testRunId = Date.now();
   const testPaymentId = `test-payment-${testRunId}`;
@@ -279,6 +285,5 @@ describe('TapStack Integration Tests - Live Resources', () => {
   afterAll(async () => {
     // Note: In production, you might want to clean up test data
     // For this integration test, we leave the data for verification
-    console.log('Integration tests completed successfully');
   });
 });
