@@ -407,7 +407,7 @@ class TapStack:
         return subnet_group
 
     def _create_redis_cluster(self) -> aws.elasticache.ReplicationGroup:
-        """Create ElastiCache Redis cluster with encryption."""
+        """Create ElastiCache Redis cluster with encryption - optimized for eu-west-1."""
         cluster = aws.elasticache.ReplicationGroup(
             f"healthcare-redis-{self.environment_suffix}",
             replication_group_id=f"healthcare-redis-{self.environment_suffix}"[:40],
