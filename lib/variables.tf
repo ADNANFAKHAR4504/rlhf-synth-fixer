@@ -134,7 +134,7 @@ variable "enable_guardduty" {
 variable "enable_security_hub" {
   description = "Enable AWS Security Hub for centralized security management"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "enable_cloudtrail" {

@@ -406,6 +406,7 @@ resource "aws_networkfirewall_rule_group" "stateful" {
 
   rule_group {
     rules_source {
+      # Use stateful rules source only
       stateful_rule {
         action = "DROP"
         header {
@@ -420,12 +421,6 @@ resource "aws_networkfirewall_rule_group" "stateful" {
           keyword  = "sid"
           settings = ["1"]
         }
-      }
-
-      rules_source_list {
-        generated_rules_type = "DENYLIST"
-        target_types         = ["TLS_SNI", "HTTP_HOST"]
-        targets              = ["malicious-site.com", ".malware-domain.com"]
       }
     }
   }
