@@ -257,8 +257,8 @@
         ],
         "BillingMode": "PROVISIONED",
         "ProvisionedThroughput": {
-          "ReadCapacityUnits": 70000,
-          "WriteCapacityUnits": 70000
+          "ReadCapacityUnits": 20000,
+          "WriteCapacityUnits": 20000
         },
         "StreamSpecification": {
           "StreamViewType": "NEW_AND_OLD_IMAGES"
@@ -319,11 +319,23 @@
     "DynamoDBWriteCapacityScalableTarget": {
       "Type": "AWS::ApplicationAutoScaling::ScalableTarget",
       "Properties": {
-        "MaxCapacity": 140000,
-        "MinCapacity": 70000,
+        "MaxCapacity": 40000,
+        "MinCapacity": 20000,
         "ResourceId": {"Fn::Sub": "table/${DynamoDBTable}"},
         "RoleARN": {"Fn::GetAtt": ["DynamoDBAutoScalingRole", "Arn"]},
         "ScalableDimension": "dynamodb:table:WriteCapacityUnits",
+        "ServiceNamespace": "dynamodb"
+      }
+    },
+    
+    "DynamoDBReadCapacityScalableTarget": {
+      "Type": "AWS::ApplicationAutoScaling::ScalableTarget",
+      "Properties": {
+        "MaxCapacity": 40000,
+        "MinCapacity": 20000,
+        "ResourceId": {"Fn::Sub": "table/${DynamoDBTable}"},
+        "RoleARN": {"Fn::GetAtt": ["DynamoDBAutoScalingRole", "Arn"]},
+        "ScalableDimension": "dynamodb:table:ReadCapacityUnits",
         "ServiceNamespace": "dynamodb"
       }
     },
@@ -338,6 +350,21 @@
           "TargetValue": 70.0,
           "PredefinedMetricSpecification": {
             "PredefinedMetricType": "DynamoDBWriteCapacityUtilization"
+          }
+        }
+      }
+    },
+    
+    "DynamoDBReadScalingPolicy": {
+      "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
+      "Properties": {
+        "PolicyName": "DynamoDBReadAutoScalingPolicy",
+        "PolicyType": "TargetTrackingScaling",
+        "ScalingTargetId": {"Ref": "DynamoDBReadCapacityScalableTarget"},
+        "TargetTrackingScalingPolicyConfiguration": {
+          "TargetValue": 70.0,
+          "PredefinedMetricSpecification": {
+            "PredefinedMetricType": "DynamoDBReadCapacityUtilization"
           }
         }
       }
