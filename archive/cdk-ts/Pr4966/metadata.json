@@ -17,5 +17,12 @@
     "Secrets Manager",
     "CloudWatch",
     "IAM"
-  ]
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "santhosh-swe",
+  "dockerS3Location": ""
 }
