@@ -1075,10 +1075,10 @@ class TestE2EAutoScalingWorkflow(unittest.TestCase):
             if len(cpu_alarms) > 0:
                 print(f"  Found {len(cpu_alarms)} CPU-based scaling alarms")
         else:
-            print(f"  Note: No CloudWatch alarms found yet (may still be provisioning)")
+            print(f"  Note: No CloudWatch alarms found yet (may still be provisioning)!")
         
         print(f"\n{'='*70}")
-        print(f"E2E TEST PASSED: ASG -> CloudWatch -> Alarms configured")
+        print(f"E2E TEST PASSED: ASG -> CloudWatch -> Alarms configured.")
         print(f"{'='*70}\n")
 
 
