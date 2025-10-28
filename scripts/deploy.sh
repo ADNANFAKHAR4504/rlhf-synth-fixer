@@ -86,10 +86,42 @@ elif [ "$PLATFORM" = "cdktf" ]; then
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
   echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
+
+  # Check stack status and delete if in ROLLBACK_COMPLETE state
+  STACK_NAME="TapStack${ENVIRONMENT_SUFFIX:-dev}"
+  STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+
+  if [ "$STACK_STATUS" = "ROLLBACK_COMPLETE" ]; then
+    echo "⚠️ Stack is in ROLLBACK_COMPLETE state. Deleting stack before redeployment..."
+    aws cloudformation delete-stack --stack-name "$STACK_NAME"
+    echo "⏳ Waiting for stack deletion to complete..."
+    aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" || {
+      echo "❌ Stack deletion failed or timed out"
+      exit 1
+    }
+    echo "✅ Stack deleted successfully"
+  fi
+
   npm run cfn:deploy-yaml
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
   echo "✅ CloudFormation JSON project detected, deploying with AWS CLI..."
+
+  # Check stack status and delete if in ROLLBACK_COMPLETE state
+  STACK_NAME="TapStack${ENVIRONMENT_SUFFIX:-dev}"
+  STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+
+  if [ "$STACK_STATUS" = "ROLLBACK_COMPLETE" ]; then
+    echo "⚠️ Stack is in ROLLBACK_COMPLETE state. Deleting stack before redeployment..."
+    aws cloudformation delete-stack --stack-name "$STACK_NAME"
+    echo "⏳ Waiting for stack deletion to complete..."
+    aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" || {
+      echo "❌ Stack deletion failed or timed out"
+      exit 1
+    }
+    echo "✅ Stack deleted successfully"
+  fi
+
   npm run cfn:deploy-json
 
 elif [ "$PLATFORM" = "tf" ]; then
