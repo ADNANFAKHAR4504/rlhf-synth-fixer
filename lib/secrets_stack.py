@@ -53,10 +53,16 @@ class SecretsStack(NestedStack):
             removal_policy=RemovalPolicy.DESTROY,
         )
 
+        # Keep the hosted rotation Lambda name within AWS' 64 character limit
+        base_rotation_name = f"dr-db-rotation-{environment_suffix}"
+        rotation_function_name = base_rotation_name[:64]
+
         # Enable automated rotation every 30 days using the AWS hosted rotation Lambda
         self.rotation_schedule = self.db_secret.add_rotation_schedule(
             f"DBSecretRotation-{environment_suffix}",
-            hosted_rotation=secretsmanager.HostedRotation.postgre_sql_single_user(),
+            hosted_rotation=secretsmanager.HostedRotation.postgre_sql_single_user(
+                function_name=rotation_function_name,
+            ),
             automatically_after=Duration.days(30),
         )
 
