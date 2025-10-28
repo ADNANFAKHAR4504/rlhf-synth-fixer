@@ -478,7 +478,7 @@
           "VolumeType": "gp3",
           "VolumeSize": 1000,
           "Iops": 16000,
-          "Throughput": 1000
+          "Throughput": 500
         },
         "VPCOptions": {
           "SubnetIds": [

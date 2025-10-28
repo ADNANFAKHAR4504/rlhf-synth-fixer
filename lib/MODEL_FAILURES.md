@@ -23,7 +23,19 @@ This document analyzes the failures encountered during the development and testi
 - **Root Cause**: 'cassandra' is not a supported DMS engine type
 - **Resolution**: Changed to 'mysql' engine with proper authentication parameters
 
-### 4. DMS VPC Service Role Missing
+### 4. OpenSearch Domain EBS Configuration
+- **Error**: Throughput must be between 250 and 593 (received 1000)
+- **Impact**: OpenSearch domain creation failed, blocking search indexing capabilities
+- **Root Cause**: EBS gp3 throughput value exceeded AWS service limits
+- **Resolution**: Reduced throughput from 1000 to 500 (within valid range of 250-593)
+
+### 5. DMS VPC Role Missing
+- **Error**: IAM Role dms-vpc-role is not configured properly
+- **Impact**: DMS subnet group creation failed, preventing database migration setup
+- **Root Cause**: Required DMS VPC service role not present in account
+- **Resolution**: Added DMSVPCRole with AmazonDMSVPCManagementRole managed policy
+
+### 6. Infrastructure Provisioning Failures
 - **Error**: IAM Role arn:aws:iam::account:role/dms-vpc-role is not configured properly
 - **Impact**: DMS replication subnet group creation failed, blocking database migration setup
 - **Root Cause**: Missing required service-linked IAM role for DMS to access VPC resources
