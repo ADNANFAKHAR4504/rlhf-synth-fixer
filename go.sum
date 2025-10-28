@@ -2,8 +2,6 @@ github.com/Masterminds/semver/v3 v3.4.0 h1:Zog+i5UMtVoCU8oKka5P7i9q9HgrJeGzI9SA1
 github.com/Masterminds/semver/v3 v3.4.0/go.mod h1:4V+yj/TJE1HU9XfppCwVMZq3I84lprf4nC11bSS5beM=
 github.com/aws/aws-cdk-go/awscdk/v2 v2.204.0 h1:AJVkWUMwTnVVTDsvtLUx60mLieeFy7coKceyS8ZlFpc=
 github.com/aws/aws-cdk-go/awscdk/v2 v2.204.0/go.mod h1:cx5A9p1ru79f3I3MqBp5qlJiJsL65ccPYzzjpHA0kpY=
-github.com/aws/aws-cdk-go/awscdk/v2 v2.221.0 h1:GNE6jBSThSYI8mka7NmsO3PVv7DizoHTbYgsmm+nNy4=
-github.com/aws/aws-cdk-go/awscdk/v2 v2.221.0/go.mod h1:VpcNBiOjmCsaIKdpIRrFdkEf6fUr1nXdbPzWdAF0sGU=
 github.com/aws/aws-sdk-go-v2 v1.39.4 h1:qTsQKcdQPHnfGYBBs+Btl8QwxJeoWcOcPcixK90mRhg=
 github.com/aws/aws-sdk-go-v2 v1.39.4/go.mod h1:yWSxrnioGUZ4WVv9TgMrNUeLV3PFESn/v+6T/Su8gnM=
 github.com/aws/aws-sdk-go-v2/config v1.31.15 h1:gE3M4xuNXfC/9bG4hyowGm/35uQTi7bUKeYs5e/6uvU=
@@ -42,8 +40,6 @@ github.com/cdklabs/awscdk-asset-node-proxy-agent-go/nodeproxyagentv6/v2 v2.1.0 h
 github.com/cdklabs/awscdk-asset-node-proxy-agent-go/nodeproxyagentv6/v2 v2.1.0/go.mod h1:JY4UnvNa1YDGQ4H5wohXTHl6YVY3uCDUWl4JYUrQfb8=
 github.com/cdklabs/cloud-assembly-schema-go/awscdkcloudassemblyschema/v45 v45.0.0 h1:qk0ZOTaKQxFqUwpke8bCfsWvPSs6wth+KQ9+aITt7Gg=
 github.com/cdklabs/cloud-assembly-schema-go/awscdkcloudassemblyschema/v45 v45.0.0/go.mod h1:HQLZo+YhqrT439d+7LrIhlM/oYzY+EVNlAuRd20m1kg=
-github.com/cdklabs/cloud-assembly-schema-go/awscdkcloudassemblyschema/v48 v48.6.0 h1:SPHeyuUpzOIlOLoN3+GmXP9mnp1dg/vBQjMGcvjbUJY=
-github.com/cdklabs/cloud-assembly-schema-go/awscdkcloudassemblyschema/v48 v48.6.0/go.mod h1:tU0qCwP3c5tGsT86aKrvjkd6i72pAJnIhcZfcsJfpKY=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/fatih/color v1.18.0 h1:S8gINlzdQ840/4pfAwic/ZE0djQEH3wM94VfqLTZcOM=

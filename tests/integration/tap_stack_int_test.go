@@ -3,15 +3,13 @@
 package lib_test
 
 import (
-	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/TuringGpt/iac-test-automations/lib"
 	"github.com/aws/aws-cdk-go/awscdk/v2"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/jsii-runtime-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,72 +23,60 @@ func TestTapStackIntegration(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	t.Run("can deploy and destroy stack successfully", func(t *testing.T) {
+	// This integration test synthesizes the CDK app to a temporary directory
+	// and asserts that the generated CloudFormation template contains
+	// resources and names matching the environment suffix.
+	t.Run("synthesizes stack and template contains expected resource names", func(t *testing.T) {
 		// ARRANGE
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-		defer cancel()
+		tempDir, err := os.MkdirTemp("", "cdk-synth-*")
+		require.NoError(t, err)
+		defer os.RemoveAll(tempDir)
 
-		cfg, err := config.LoadDefaultConfig(ctx)
-		require.NoError(t, err, "Failed to load AWS config")
-
-		cfnClient := cloudformation.NewFromConfig(cfg)
-		stackName := "TapStackIntegrationTest"
-
-		// Clean up any existing stack
-		defer func() {
-			_, _ = cfnClient.DeleteStack(ctx, &cloudformation.DeleteStackInput{
-				StackName: aws.String(stackName),
-			})
-		}()
-
-		// ACT
-		app := awscdk.NewApp(nil)
-		stack := lib.NewTapStack(app, jsii.String(stackName), &lib.TapStackProps{
-			StackProps:        &awscdk.StackProps{},
-			EnvironmentSuffix: jsii.String("inttest"),
-		})
-
-		// ASSERT
-		assert.NotNil(t, stack)
-		assert.Equal(t, "inttest", *stack.EnvironmentSuffix)
-
-		// Note: Actual deployment testing would require CDK CLI or programmatic deployment
-		// This is a placeholder for more comprehensive integration testing
-		t.Log("Stack created successfully in memory. Full deployment testing requires CDK CLI integration.")
-	})
-
-	t.Run("stack resources are created with correct naming", func(t *testing.T) {
-		// ARRANGE
-		app := awscdk.NewApp(nil)
 		envSuffix := "integration"
 
-		// ACT
+		// Create app that writes to the temporary outdir
+		app := awscdk.NewApp(&awscdk.AppProps{
+			Outdir: jsii.String(tempDir),
+		})
+
+		// Prepare a minimal lambda asset directory so CDK asset resolution succeeds
+		assetDir := filepath.Join(tempDir, "lambda-asset")
+		require.NoError(t, os.MkdirAll(assetDir, 0o755))
+
+		// Create minimal handler files referenced by the stack (order_processor and api_handler)
+		err = os.WriteFile(filepath.Join(assetDir, "order_processor.py"), []byte("def handler(event, context):\n    return {'statusCode':200}"), 0o644)
+		require.NoError(t, err)
+		err = os.WriteFile(filepath.Join(assetDir, "api_handler.py"), []byte("def handler(event, context):\n    return {'statusCode':200}"), 0o644)
+		require.NoError(t, err)
+
+		// ACT: create the stack which will be synthesized to `tempDir`
 		stack := lib.NewTapStack(app, jsii.String("TapStackResourceTest"), &lib.TapStackProps{
 			StackProps:        &awscdk.StackProps{},
 			EnvironmentSuffix: jsii.String(envSuffix),
+			LambdaAssetPath:   jsii.String(assetDir),
 		})
+		require.NotNil(t, stack)
 
-		// ASSERT
-		assert.NotNil(t, stack)
-		assert.Equal(t, envSuffix, *stack.EnvironmentSuffix)
+		// Synthesize the app (writes the template to tempDir)
+		_ = app.Synth(nil)
 
-		// Add more specific resource assertions here when resources are actually created
-		// For example:
-		// - Verify S3 bucket naming conventions
-		// - Check that all resources have proper tags
-		// - Validate resource configurations
-	})
+		// The synthesized template file name follows the pattern: <StackId>.template.json
+		templatePath := filepath.Join(tempDir, "TapStackResourceTest.template.json")
+		_, err = os.Stat(templatePath)
+		require.NoError(t, err, fmt.Sprintf("expected synthesized template at %s", templatePath))
 
-	t.Run("Write Integration Tests", func(t *testing.T) {
-		// ARRANGE & ASSERT
-		t.Skip("Integration test for TapStack should be implemented here.")
+		// Read template and assert expected resource names / patterns
+		b, err := os.ReadFile(templatePath)
+		require.NoError(t, err)
+		content := string(b)
+
+		// Verify known resource name patterns from the stack implementation
+		assert.Contains(t, content, fmt.Sprintf("orders-table-%s", envSuffix))
+		assert.Contains(t, content, fmt.Sprintf("order-queue-%s", envSuffix))
+		assert.Contains(t, content, fmt.Sprintf("orders-api-%s", envSuffix))
+
+		t.Logf("Synthesized template located at %s", templatePath)
 	})
 }
 
-// Helper function to wait for stack deployment completion
-func waitForStackCompletion(ctx context.Context, cfnClient *cloudformation.Client, stackName string) error {
-	waiter := cloudformation.NewStackCreateCompleteWaiter(cfnClient)
-	return waiter.Wait(ctx, &cloudformation.DescribeStacksInput{
-		StackName: aws.String(stackName),
-	}, 10*time.Minute)
-}
+// No remote deploy in this test; synth verification only.

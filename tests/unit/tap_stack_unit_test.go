@@ -1,7 +1,9 @@
 package lib_test
 
 import (
+	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/TuringGpt/iac-test-automations/lib"
@@ -21,7 +23,32 @@ func TestTapStack_Simple(t *testing.T) {
 	// Resolve the lambda asset directory to an absolute path to avoid
 	// asset resolution issues when running tests from different CWDs.
 	// tests/unit -> ../../lib/lambda resolves to repo-root/lib/lambda
-	absLambdaPath, _ := filepath.Abs("../../lib/lambda")
+	// Resolve the lambda asset directory to an absolute path relative to
+	// this test file. Using the test file's location avoids depending on
+	// the current working directory when tests are run from different
+	// places (CI, other packages, etc.).
+	// Find the nearest lib/lambda directory walking up from the test file
+	_, thisFile, _, _ := runtime.Caller(0)
+	dir := filepath.Dir(thisFile)
+	var absLambdaPath string
+	found := false
+	for i := 0; i < 8; i++ {
+		candidate := filepath.Join(dir, "lib", "lambda")
+		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+			absLambdaPath, _ = filepath.Abs(candidate)
+			found = true
+			break
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	if !found {
+		// fallback to a relative path from the test file
+		absLambdaPath, _ = filepath.Abs(filepath.Join(filepath.Dir(thisFile), "..", "..", "lib", "lambda"))
+	}
 	stack := lib.NewTapStack(app, jsii.String("TapStackTest"), &lib.TapStackProps{
 		StackProps:        &awscdk.StackProps{},
 		EnvironmentSuffix: jsii.String(envSuffix),
