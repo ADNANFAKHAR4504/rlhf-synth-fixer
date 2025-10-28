@@ -18,7 +18,7 @@ TapStack(
     f"TapStack-{environment_suffix}",
     env=cdk.Environment(
         account=os.getenv("CDK_DEFAULT_ACCOUNT"),
-        region="sa-east-1",
+        region=os.getenv("AWS_REGION"),
     ),
     description=f"HIPAA-compliant medical imaging pipeline infrastructure ({environment_suffix})",
 )
