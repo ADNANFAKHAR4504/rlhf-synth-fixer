@@ -44,7 +44,7 @@ class TapStack:
 
         # Read AWS region from configuration
         config = pulumi.Config("aws")
-        self.region = config.get("region") or "us-west-2"
+        self.region = config.get("region") or "eu-west-1"
 
         # Create KMS key for encryption
         self.kms_key = self._create_kms_key()

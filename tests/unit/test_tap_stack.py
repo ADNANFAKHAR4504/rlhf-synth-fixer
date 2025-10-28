@@ -35,7 +35,7 @@ def get_current_aws_region():
         pass
     
     # Default fallback
-    return "us-west-2"
+    return "eu-west-1"
 
 
 class TestPulumiMocks(pulumi.runtime.Mocks):
@@ -191,7 +191,7 @@ class TestTapStack(unittest.TestCase):
         stack = TapStack("dev-stack", args)
         
         # Verify default region is used
-        self.assertEqual(stack.region, "us-west-2")
+        self.assertEqual(stack.region, "eu-west-1")
 
     @patch('pulumi.Config')
     def test_kms_key_creation(self, mock_config):
@@ -361,7 +361,7 @@ class TestTapStack(unittest.TestCase):
             args = TapStackArgs(environment_suffix="region-test")
             stack = TapStack("region-test-stack", args)
             
-            expected_region = region if region is not None else "us-west-2"
+            expected_region = region if region is not None else "eu-west-1"
             self.assertEqual(stack.region, expected_region)
 
 
