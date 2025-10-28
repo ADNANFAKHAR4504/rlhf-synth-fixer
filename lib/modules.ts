@@ -38,13 +38,17 @@ export class NetworkingConstruct extends Construct {
     });
 
     // Create Internet Gateway
-    this.internetGateway = new aws.internetGateway.InternetGateway(this, 'igw', {
-      vpcId: this.vpc.id,
-      tags: {
-        ...config.tags,
-        Name: `${config.projectName}-igw-${config.environment}`,
-      },
-    });
+    this.internetGateway = new aws.internetGateway.InternetGateway(
+      this,
+      'igw',
+      {
+        vpcId: this.vpc.id,
+        tags: {
+          ...config.tags,
+          Name: `${config.projectName}-igw-${config.environment}`,
+        },
+      }
+    );
 
     // Create public subnets
     this.publicSubnets = config.publicSubnetCidrs.map((cidr, index) => {
@@ -103,13 +107,17 @@ export class NetworkingConstruct extends Construct {
       },
     });
 
-    const privateRouteTable = new aws.routeTable.RouteTable(this, 'private-rt', {
-      vpcId: this.vpc.id,
-      tags: {
-        ...config.tags,
-        Name: `${config.projectName}-private-rt-${config.environment}`,
-      },
-    });
+    const privateRouteTable = new aws.routeTable.RouteTable(
+      this,
+      'private-rt',
+      {
+        vpcId: this.vpc.id,
+        tags: {
+          ...config.tags,
+          Name: `${config.projectName}-private-rt-${config.environment}`,
+        },
+      }
+    );
 
     // Add routes
     new aws.route.Route(this, 'public-route', {
@@ -126,17 +134,25 @@ export class NetworkingConstruct extends Construct {
 
     // Associate route tables with subnets
     this.publicSubnets.forEach((subnet, index) => {
-      new aws.routeTableAssociation.RouteTableAssociation(this, `public-rta-${index}`, {
-        subnetId: subnet.id,
-        routeTableId: publicRouteTable.id,
-      });
+      new aws.routeTableAssociation.RouteTableAssociation(
+        this,
+        `public-rta-${index}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: publicRouteTable.id,
+        }
+      );
     });
 
     this.privateSubnets.forEach((subnet, index) => {
-      new aws.routeTableAssociation.RouteTableAssociation(this, `private-rta-${index}`, {
-        subnetId: subnet.id,
-        routeTableId: privateRouteTable.id,
-      });
+      new aws.routeTableAssociation.RouteTableAssociation(
+        this,
+        `private-rta-${index}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: privateRouteTable.id,
+        }
+      );
     });
   }
 }
@@ -154,71 +170,83 @@ export class SecurityGroupsConstruct extends Construct {
     super(scope, id);
 
     // ALB Security Group
-    this.albSecurityGroup = new aws.securityGroup.SecurityGroup(this, 'alb-sg', {
-      name: `${config.projectName}-alb-sg-${config.environment}`,
-      description: 'Security group for Application Load Balancer',
-      vpcId: config.vpcId,
-      ingress: [
-        {
-          protocol: 'tcp',
-          fromPort: 443,
-          toPort: 443,
-          cidrBlocks: ['0.0.0.0/0'],
-          description: 'HTTPS from internet',
+    this.albSecurityGroup = new aws.securityGroup.SecurityGroup(
+      this,
+      'alb-sg',
+      {
+        name: `${config.projectName}-alb-sg-${config.environment}`,
+        description: 'Security group for Application Load Balancer',
+        vpcId: config.vpcId,
+        ingress: [
+          {
+            protocol: 'tcp',
+            fromPort: 443,
+            toPort: 443,
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'HTTPS from internet',
+          },
+          {
+            protocol: 'tcp',
+            fromPort: 80,
+            toPort: 80,
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'HTTP from internet',
+          },
+        ],
+        egress: [
+          {
+            protocol: '-1',
+            fromPort: 0,
+            toPort: 0,
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'Allow all outbound',
+          },
+        ],
+        tags: {
+          ...config.tags,
+          Name: `${config.projectName}-alb-sg-${config.environment}`,
         },
-        {
-          protocol: 'tcp',
-          fromPort: 80,
-          toPort: 80,
-          cidrBlocks: ['0.0.0.0/0'],
-          description: 'HTTP from internet',
-        },
-      ],
-      egress: [
-        {
-          protocol: '-1',
-          fromPort: 0,
-          toPort: 0,
-          cidrBlocks: ['0.0.0.0/0'],
-          description: 'Allow all outbound',
-        },
-      ],
-      tags: {
-        ...config.tags,
-        Name: `${config.projectName}-alb-sg-${config.environment}`,
-      },
-    });
+      }
+    );
 
     // App Security Group
-    this.appSecurityGroup = new aws.securityGroup.SecurityGroup(this, 'app-sg', {
-      name: `${config.projectName}-app-sg-${config.environment}`,
-      description: 'Security group for application servers',
-      vpcId: config.vpcId,
-      egress: [
-        {
-          protocol: '-1',
-          fromPort: 0,
-          toPort: 0,
-          cidrBlocks: ['0.0.0.0/0'],
-          description: 'Allow all outbound',
+    this.appSecurityGroup = new aws.securityGroup.SecurityGroup(
+      this,
+      'app-sg',
+      {
+        name: `${config.projectName}-app-sg-${config.environment}`,
+        description: 'Security group for application servers',
+        vpcId: config.vpcId,
+        egress: [
+          {
+            protocol: '-1',
+            fromPort: 0,
+            toPort: 0,
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'Allow all outbound',
+          },
+        ],
+        tags: {
+          ...config.tags,
+          Name: `${config.projectName}-app-sg-${config.environment}`,
         },
-      ],
-      tags: {
-        ...config.tags,
-        Name: `${config.projectName}-app-sg-${config.environment}`,
-      },
-    });
+      }
+    );
 
     // RDS Security Group
-    this.rdsSecurityGroup = new aws.securityGroup.SecurityGroup(this, 'rds-sg', {
-      name: `${config.projectName}-rds-sg-${config.environment}`,
-      description: 'Security group for RDS database',
-      vpcId: config.vpcId,
-      tags: {
-        ...config.tags,
-        Name: `${config.projectName}-rds-sg-${config.environment}`,
-      },
-    });
+    this.rdsSecurityGroup = new aws.securityGroup.SecurityGroup(
+      this,
+      'rds-sg',
+      {
+        name: `${config.projectName}-rds-sg-${config.environment}`,
+        description: 'Security group for RDS database',
+        vpcId: config.vpcId,
+        tags: {
+          ...config.tags,
+          Name: `${config.projectName}-rds-sg-${config.environment}`,
+        },
+      }
+    );
 
     // Add ingress rules after creation to handle references
     new aws.securityGroupRule.SecurityGroupRule(this, 'app-from-alb', {
@@ -262,48 +290,58 @@ export class DatabaseConstruct extends Construct {
     super(scope, id);
 
     // Create DB subnet group
-    const dbSubnetGroup = new aws.dbSubnetGroup.DbSubnetGroup(this, 'db-subnet-group', {
-      name: `${config.projectName}-db-subnet-${config.environment}`,
-      subnetIds: config.subnetIds,
-      tags: {
-        ...config.tags,
-        Name: `${config.projectName}-db-subnet-${config.environment}`,
-      },
-    });
+    const dbSubnetGroup = new aws.dbSubnetGroup.DbSubnetGroup(
+      this,
+      'db-subnet-group',
+      {
+        name: `${config.projectName}-db-subnet-${config.environment}`,
+        subnetIds: config.subnetIds,
+        tags: {
+          ...config.tags,
+          Name: `${config.projectName}-db-subnet-${config.environment}`,
+        },
+      }
+    );
 
     // Generate random password
-    const password = new aws.dataAwsSecretsmanagerRandomPassword.DataAwsSecretsmanagerRandomPassword(
-      this,
-      'db-password',
-      {
-        passwordLength: 32,
-        includeSpace: false,
-        requireEachIncludedType: true,
-      }
-    );
+    const password =
+      new aws.dataAwsSecretsmanagerRandomPassword.DataAwsSecretsmanagerRandomPassword(
+        this,
+        'db-password',
+        {
+          passwordLength: 32,
+          includeSpace: false,
+          requireEachIncludedType: true,
+        }
+      );
 
     // Store credentials in Secrets Manager
-    this.dbSecret = new aws.secretsmanagerSecret.SecretsmanagerSecret(this, 'db-secret', {
-      name: `${config.projectName}-db-credentials-${config.environment}`,
-      description: 'RDS PostgreSQL database credentials',
-      tags: config.tags,
-    });
-
-    this.dbSecretVersion = new aws.secretsmanagerSecretVersion.SecretsmanagerSecretVersion(
+    this.dbSecret = new aws.secretsmanagerSecret.SecretsmanagerSecret(
       this,
-      'db-secret-version',
+      'db-secret',
       {
-        secretId: this.dbSecret.id,
-        secretString: Fn.jsonencode({
-          username: 'dbadmin',
-          password: password.randomPassword,
-          engine: 'postgres',
-          host: Fn.lookupNested(this.dbInstance, ['address']),
-          port: 5432,
-          dbname: config.dbName,
-        }),
+        name: `${config.projectName}-db-credentials-${config.environment}`,
+        description: 'RDS PostgreSQL database credentials',
+        tags: config.tags,
       }
     );
+
+    this.dbSecretVersion =
+      new aws.secretsmanagerSecretVersion.SecretsmanagerSecretVersion(
+        this,
+        'db-secret-version',
+        {
+          secretId: this.dbSecret.id,
+          secretString: Fn.jsonencode({
+            username: 'dbadmin',
+            password: password.randomPassword,
+            engine: 'postgres',
+            host: Fn.lookupNested(this.dbInstance, ['address']),
+            port: 5432,
+            dbname: config.dbName,
+          }),
+        }
+      );
 
     // Create RDS instance
     this.dbInstance = new aws.dbInstance.DbInstance(this, 'db', {
@@ -325,9 +363,10 @@ export class DatabaseConstruct extends Construct {
       autoMinorVersionUpgrade: true,
       deletionProtection: config.environment === 'production',
       skipFinalSnapshot: config.environment !== 'production',
-      finalSnapshotIdentifier: config.environment === 'production' 
-        ? `${config.projectName}-db-final-${config.environment}-${Date.now()}`
-        : undefined,
+      finalSnapshotIdentifier:
+        config.environment === 'production'
+          ? `${config.projectName}-db-final-${config.environment}-${Date.now()}`
+          : undefined,
       tags: {
         ...config.tags,
         Name: `${config.projectName}-db-${config.environment}`,
@@ -394,7 +433,7 @@ export class LoadBalancerConstruct extends Construct {
         interval: 30,
         matcher: '200',
       },
-      deregistrationDelay: "30",
+      deregistrationDelay: '30',
       stickiness: {
         type: 'lb_cookie',
         enabled: true,
@@ -426,20 +465,24 @@ export class LoadBalancerConstruct extends Construct {
       });
 
       // HTTPS Listener
-      this.httpsListener = new aws.lbListener.LbListener(this, 'https-listener', {
-        loadBalancerArn: this.alb.arn,
-        port: 443,
-        protocol: 'HTTPS',
-        certificateArn: config.certificateArn,
-        sslPolicy: 'ELBSecurityPolicy-TLS13-1-2-2021-06',
-        defaultAction: [
-          {
-            type: 'forward',
-            targetGroupArn: this.targetGroup.arn,
-          },
-        ],
-        tags: config.tags,
-      });
+      this.httpsListener = new aws.lbListener.LbListener(
+        this,
+        'https-listener',
+        {
+          loadBalancerArn: this.alb.arn,
+          port: 443,
+          protocol: 'HTTPS',
+          certificateArn: config.certificateArn,
+          sslPolicy: 'ELBSecurityPolicy-TLS13-1-2-2021-06',
+          defaultAction: [
+            {
+              type: 'forward',
+              targetGroupArn: this.targetGroup.arn,
+            },
+          ],
+          tags: config.tags,
+        }
+      );
     } else {
       this.httpListener = new aws.lbListener.LbListener(this, 'http-listener', {
         loadBalancerArn: this.alb.arn,
@@ -516,15 +559,23 @@ export class ComputeConstruct extends Construct {
     });
 
     // Attach policies for Secrets Manager and CloudWatch
-    new aws.iamRolePolicyAttachment.IamRolePolicyAttachment(this, 'ssm-policy', {
-      role: instanceRole.name,
-      policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
-    });
+    new aws.iamRolePolicyAttachment.IamRolePolicyAttachment(
+      this,
+      'ssm-policy',
+      {
+        role: instanceRole.name,
+        policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
+      }
+    );
 
-    new aws.iamRolePolicyAttachment.IamRolePolicyAttachment(this, 'cloudwatch-policy', {
-      role: instanceRole.name,
-      policyArn: 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy',
-    });
+    new aws.iamRolePolicyAttachment.IamRolePolicyAttachment(
+      this,
+      'cloudwatch-policy',
+      {
+        role: instanceRole.name,
+        policyArn: 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy',
+      }
+    );
 
     // Custom policy for Secrets Manager
     const secretsPolicy = new aws.iamPolicy.IamPolicy(this, 'secrets-policy', {
@@ -544,16 +595,24 @@ export class ComputeConstruct extends Construct {
       }),
     });
 
-    new aws.iamRolePolicyAttachment.IamRolePolicyAttachment(this, 'secrets-policy-attachment', {
-      role: instanceRole.name,
-      policyArn: secretsPolicy.arn,
-    });
+    new aws.iamRolePolicyAttachment.IamRolePolicyAttachment(
+      this,
+      'secrets-policy-attachment',
+      {
+        role: instanceRole.name,
+        policyArn: secretsPolicy.arn,
+      }
+    );
 
-    const instanceProfile = new aws.iamInstanceProfile.IamInstanceProfile(this, 'instance-profile', {
-      name: `${config.projectName}-instance-profile-${config.environment}`,
-      role: instanceRole.name,
-      tags: config.tags,
-    });
+    const instanceProfile = new aws.iamInstanceProfile.IamInstanceProfile(
+      this,
+      'instance-profile',
+      {
+        name: `${config.projectName}-instance-profile-${config.environment}`,
+        role: instanceRole.name,
+        tags: config.tags,
+      }
+    );
 
     // Build user data script using Fn.join to avoid escaping issues
     const userData = Fn.base64encode(
@@ -624,9 +683,15 @@ NODEAPP
         'SyslogIdentifier=node-app\n',
         Fn.rawString('Environment="NODE_ENV=production"\n'),
         Fn.rawString('Environment="PORT=3000"\n'),
-        'Environment="DB_SECRET_ARN=', config.dbSecretArn, '"\n',
-        'Environment="ENVIRONMENT=', config.environment, '"\n',
-        'Environment="REGION=', config.region, '"\n\n',
+        'Environment="DB_SECRET_ARN=',
+        config.dbSecretArn,
+        '"\n',
+        'Environment="ENVIRONMENT=',
+        config.environment,
+        '"\n',
+        'Environment="REGION=',
+        config.region,
+        '"\n\n',
         '[Install]\n',
         'WantedBy=multi-user.target\n',
         'SYSTEMD\n\n',
@@ -645,7 +710,11 @@ NODEAPP
         '        "collect_list": [\n',
         '          {\n',
         '            "file_path": "/var/log/messages",\n',
-        '            "log_group_name": "/aws/ec2/', config.projectName, '-', config.environment, '",\n',
+        '            "log_group_name": "/aws/ec2/',
+        config.projectName,
+        '-',
+        config.environment,
+        '",\n',
         '            "log_stream_name": "{instance_id}/system"\n',
         '          }\n',
         '        ]\n',
@@ -700,45 +769,36 @@ NODEAPP
     });
 
     // Create Auto Scaling Group
-    this.autoScalingGroup = new aws.autoscalingGroup.AutoscalingGroup(this, 'asg', {
-      name: `${config.projectName}-asg-${config.environment}`,
-      minSize: config.minSize,
-      maxSize: config.maxSize,
-      desiredCapacity: config.desiredCapacity,
-      vpcZoneIdentifier: config.subnetIds,
-      targetGroupArns: [config.targetGroupArn],
-      healthCheckType: 'ELB',
-      healthCheckGracePeriod: 300,
-      launchTemplate: {
-        id: this.launchTemplate.id,
-        version: '$Latest',
-      },
-      tag: Object.entries(config.tags).map(([key, value]) => ({
-        key,
-        value,
-        propagateAtLaunch: true,
-      })),
-      enabledMetrics: [
-        'GroupMinSize',
-        'GroupMaxSize',
-        'GroupDesiredCapacity',
-        'GroupInServiceInstances',
-        'GroupTotalInstances',
-      ],
-    });
-
-    // Auto Scaling Policies
-    const targetTrackingPolicy = new aws.autoscalingPolicy.AutoscalingPolicy(this, 'target-tracking', {
-      name: `${config.projectName}-target-tracking-${config.environment}`,
-      autoscalingGroupName: this.autoScalingGroup.name,
-      policyType: 'TargetTrackingScaling',
-      targetTrackingConfiguration: {
-        targetValue: 70,
-        predefinedMetricSpecification: {
-          predefinedMetricType: 'ASGAverageCPUUtilization',
+    this.autoScalingGroup = new aws.autoscalingGroup.AutoscalingGroup(
+      this,
+      'asg',
+      {
+        name: `${config.projectName}-asg-${config.environment}`,
+        minSize: config.minSize,
+        maxSize: config.maxSize,
+        desiredCapacity: config.desiredCapacity,
+        vpcZoneIdentifier: config.subnetIds,
+        targetGroupArns: [config.targetGroupArn],
+        healthCheckType: 'ELB',
+        healthCheckGracePeriod: 300,
+        launchTemplate: {
+          id: this.launchTemplate.id,
+          version: '$Latest',
         },
-      },
-    });
+        tag: Object.entries(config.tags).map(([key, value]) => ({
+          key,
+          value,
+          propagateAtLaunch: true,
+        })),
+        enabledMetrics: [
+          'GroupMinSize',
+          'GroupMaxSize',
+          'GroupDesiredCapacity',
+          'GroupInServiceInstances',
+          'GroupTotalInstances',
+        ],
+      }
+    );
 
     // Create initial EC2 instances for immediate deployment
     this.instances = [];
