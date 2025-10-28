@@ -789,7 +789,7 @@ Resources:
       TargetType: ip
       VpcId: !Ref VPC
       HealthCheckEnabled: true
-      HealthCheckPath: /health
+      HealthCheckPath: /
       HealthCheckPort: traffic-port
       HealthCheckProtocol: HTTP
       HealthCheckIntervalSeconds: 30
@@ -1050,7 +1050,7 @@ Outputs:
 - Auto Scaling configured for CPU and memory metrics (2-20 instances)
 - Task definition with 1 vCPU and 2GB memory
 - Application Load Balancer for traffic distribution
-- Target group health checks on port 80
+- Target group health checks on root path
 
 ### Database
 - Aurora MySQL cluster with 2 instances (db.r5.large)
