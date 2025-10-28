@@ -63,9 +63,18 @@ class TestTapStackIntegration(unittest.TestCase):
         # Verify VPC state
         assert vpc['State'] == 'available'
 
-        # Verify DNS support
-        assert vpc.get('EnableDnsSupport', False) is True
-        assert vpc.get('EnableDnsHostnames', False) is True
+        # Verify DNS support via explicit attribute lookups (describe_vpcs omits these fields)
+        dns_support = self.ec2_client.describe_vpc_attribute(
+            VpcId=vpc_id,
+            Attribute='enableDnsSupport',
+        )
+        assert dns_support['EnableDnsSupport']['Value'] is True
+
+        dns_hostnames = self.ec2_client.describe_vpc_attribute(
+            VpcId=vpc_id,
+            Attribute='enableDnsHostnames',
+        )
+        assert dns_hostnames['EnableDnsHostnames']['Value'] is True
 
     @mark.it("VPC has subnets across multiple availability zones")
     def test_vpc_multi_az_subnets(self):
