@@ -514,12 +514,40 @@
             "FromPort": 443,
             "ToPort": 443,
             "SourceSecurityGroupId": {"Ref": "LambdaSecurityGroup"}
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "10.0.0.0/16"
           }
         ],
         "Tags": [
           {
             "Key": "Name",
             "Value": "OpenSearchSecurityGroup"
+          }
+        ]
+      }
+    },
+    
+    "FirehoseSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for Kinesis Firehose",
+        "VpcId": {"Ref": "VPC"},
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "10.0.0.0/16"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "FirehoseSecurityGroup"
           }
         ]
       }
@@ -551,7 +579,13 @@
                   "Action": [
                     "es:*",
                     "s3:*",
-                    "logs:*"
+                    "logs:*",
+                    "ec2:CreateNetworkInterface",
+                    "ec2:DeleteNetworkInterface",
+                    "ec2:DescribeNetworkInterfaces",
+                    "ec2:DescribeSecurityGroups",
+                    "ec2:DescribeSubnets",
+                    "ec2:DescribeVpcs"
                   ],
                   "Resource": "*"
                 }
@@ -582,6 +616,16 @@
           "BufferingHints": {
             "IntervalInSeconds": 60,
             "SizeInMBs": 5
+          },
+          "VpcConfiguration": {
+            "SubnetIds": [
+              {"Ref": "PrivateSubnet1"},
+              {"Ref": "PrivateSubnet2"}
+            ],
+            "SecurityGroupIds": [
+              {"Ref": "FirehoseSecurityGroup"}
+            ],
+            "RoleARN": {"Fn::GetAtt": ["KinesisFirehoseRole", "Arn"]}
           },
           "S3Configuration": {
             "BucketARN": {"Fn::GetAtt": ["KinesisFirehoseBackupBucket", "Arn"]},
