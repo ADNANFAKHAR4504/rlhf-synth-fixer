@@ -817,8 +817,9 @@ export class TapStack extends pulumi.ComponentResource {
         ami: aws.ec2.getAmiOutput({
           filters: [
             { name: "name", values: ["al2023-ami-*-x86_64"] },
-            { name: "owner-alias", values: ["amazon"] }
+            { name: "state", values: ["available"] }
           ],
+          owners: ["amazon"],
           mostRecent: true,
         }, { provider: this.targetProvider }).id,
           instanceType: this.config.ec2Config.instanceType,
