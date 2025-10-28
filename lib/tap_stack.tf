@@ -104,7 +104,9 @@ locals {
 
 resource "random_password" "db_password" {
   length  = 16
-  override_characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!#$%^&*()-_=+{}[]:;,.<>?"  
+  special = true
+  # AWS RDS allowed special characters only
+  override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 
 # ============================================================================
