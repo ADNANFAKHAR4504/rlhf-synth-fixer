@@ -326,7 +326,7 @@ export class DatabaseConstruct extends Construct {
       }
     );
 
-    // Create RDS instance
+    // Create RDS instance FIRST (before secret version)
     this.dbInstance = new aws.dbInstance.DbInstance(this, 'db', {
       identifier: `${config.projectName}-db-${config.environment}`,
       engine: 'postgres',
@@ -356,7 +356,7 @@ export class DatabaseConstruct extends Construct {
       },
     });
 
-    // Create secret version after DB instance is created
+    // Now create secret version AFTER database instance exists
     this.dbSecretVersion =
       new aws.secretsmanagerSecretVersion.SecretsmanagerSecretVersion(
         this,
@@ -367,7 +367,7 @@ export class DatabaseConstruct extends Construct {
             username: 'dbadmin',
             password: password.randomPassword,
             engine: 'postgres',
-            host: this.dbInstance.address,
+            host: this.dbInstance.address, // Now this.dbInstance exists
             port: 5432,
             dbname: config.dbName,
           }),
@@ -614,119 +614,121 @@ export class ComputeConstruct extends Construct {
       }
     );
 
-    // Build user data script using Fn.join to avoid escaping issues
-    const userData = Fn.base64encode(
-      Fn.join('', [
-        '#!/bin/bash\n',
-        'set -e\n\n',
-        '# Update system\n',
-        'yum update -y\n\n',
-        '# Install Node.js 20\n',
-        'curl -sL https://rpm.nodesource.com/setup_20.x | bash -\n',
-        'yum install -y nodejs\n\n',
-        '# Install CloudWatch agent\n',
-        'wget https://amazoncloudwatch-agent.s3.amazonaws.com/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm\n',
-        'rpm -U ./amazon-cloudwatch-agent.rpm\n\n',
-        '# Install PostgreSQL client\n',
-        'yum install -y postgresql15\n\n',
-        '# Create app directory\n',
-        'mkdir -p /opt/app\n',
-        'cd /opt/app\n\n',
-        '# Create a sample Node.js application\n',
-        Fn.rawString(`cat > app.js <<'NODEAPP'
-const express = require('express');
-const app = express();
-const port = process.env.PORT || 3000;
+    // Build user data script
+    const userDataScript = `#!/bin/bash
+    set -e
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.status(200).json({
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    environment: process.env.ENVIRONMENT || 'unknown'
-  });
-});
+    # Update system
+    yum update -y
 
-// Root endpoint
-app.get('/', (req, res) => {
-  res.json({
-    message: 'E-commerce API',
-    version: '1.0.0',
-    environment: process.env.ENVIRONMENT || 'unknown'
-  });
-});
+    # Install Node.js 20
+    curl -sL https://rpm.nodesource.com/setup_20.x | bash -
+    yum install -y nodejs
 
-// Start server
-app.listen(port, () => {
-  console.log('Server running on port ' + port);
-});
-NODEAPP
-`),
-        '\n# Install Express\n',
-        'npm init -y\n',
-        'npm install express\n\n',
-        '# Create systemd service\n',
-        'cat > /etc/systemd/system/node-app.service <<SYSTEMD\n',
-        '[Unit]\n',
-        'Description=Node.js Application\n',
-        'After=network.target\n\n',
-        '[Service]\n',
-        'Type=simple\n',
-        'User=ec2-user\n',
-        'WorkingDirectory=/opt/app\n',
-        'ExecStart=/usr/bin/node app.js\n',
-        'Restart=always\n',
-        'RestartSec=10\n',
-        'StandardOutput=syslog\n',
-        'StandardError=syslog\n',
-        'SyslogIdentifier=node-app\n',
-        Fn.rawString('Environment="NODE_ENV=production"\n'),
-        Fn.rawString('Environment="PORT=3000"\n'),
-        'Environment="DB_SECRET_ARN=',
-        config.dbSecretArn,
-        '"\n',
-        'Environment="ENVIRONMENT=',
-        config.environment,
-        '"\n',
-        'Environment="REGION=',
-        config.region,
-        '"\n\n',
-        '[Install]\n',
-        'WantedBy=multi-user.target\n',
-        'SYSTEMD\n\n',
-        '# Set permissions\n',
-        'chown -R ec2-user:ec2-user /opt/app\n\n',
-        '# Start and enable service\n',
-        'systemctl daemon-reload\n',
-        'systemctl enable node-app\n',
-        'systemctl start node-app\n\n',
-        '# Configure CloudWatch logs\n',
-        'cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<CWCONFIG\n',
-        '{\n',
-        '  "logs": {\n',
-        '    "logs_collected": {\n',
-        '      "files": {\n',
-        '        "collect_list": [\n',
-        '          {\n',
-        '            "file_path": "/var/log/messages",\n',
-        '            "log_group_name": "/aws/ec2/',
-        config.projectName,
-        '-',
-        config.environment,
-        '",\n',
-        '            "log_stream_name": "{instance_id}/system"\n',
-        '          }\n',
-        '        ]\n',
-        '      }\n',
-        '    }\n',
-        '  }\n',
-        '}\n',
-        'CWCONFIG\n\n',
-        '# Start CloudWatch agent\n',
-        '/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a query -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s\n',
-      ])
-    );
+    # Install CloudWatch agent
+    wget https://amazoncloudwatch-agent.s3.amazonaws.com/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+    rpm -U ./amazon-cloudwatch-agent.rpm
+
+    # Install PostgreSQL client
+    yum install -y postgresql15
+
+    # Create app directory
+    mkdir -p /opt/app
+    cd /opt/app
+
+    # Create a sample Node.js application
+    cat > app.js <<'NODEAPP'
+    const express = require('express');
+    const app = express();
+    const port = process.env.PORT || 3000;
+
+    // Health check endpoint
+    app.get('/api/health', (req, res) => {
+    res.status(200).json({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        environment: process.env.ENVIRONMENT || 'unknown'
+    });
+    });
+
+    // Root endpoint
+    app.get('/', (req, res) => {
+    res.json({
+        message: 'E-commerce API',
+        version: '1.0.0',
+        environment: process.env.ENVIRONMENT || 'unknown'
+    });
+    });
+
+    // Start server
+    app.listen(port, () => {
+    console.log('Server running on port ' + port);
+    });
+    NODEAPP
+
+    # Install Express
+    npm init -y
+    npm install express
+
+    # Create systemd service
+    cat > /etc/systemd/system/node-app.service <<SYSTEMD
+    [Unit]
+    Description=Node.js Application
+    After=network.target
+
+    [Service]
+    Type=simple
+    User=ec2-user
+    WorkingDirectory=/opt/app
+    ExecStart=/usr/bin/node app.js
+    Restart=always
+    RestartSec=10
+    StandardOutput=syslog
+    StandardError=syslog
+    SyslogIdentifier=node-app
+    Environment="NODE_ENV=production"
+    Environment="PORT=3000"
+    Environment="DB_SECRET_ARN=${config.dbSecretArn}"
+    Environment="ENVIRONMENT=${config.environment}"
+    Environment="REGION=${config.region}"
+
+    [Install]
+    WantedBy=multi-user.target
+    SYSTEMD
+
+    # Set permissions
+    chown -R ec2-user:ec2-user /opt/app
+
+    # Start and enable service
+    systemctl daemon-reload
+    systemctl enable node-app
+    systemctl start node-app
+
+    # Configure CloudWatch logs
+    cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<CWCONFIG
+    {
+    "logs": {
+        "logs_collected": {
+        "files": {
+            "collect_list": [
+            {
+                "file_path": "/var/log/messages",
+                "log_group_name": "/aws/ec2/${config.projectName}-${config.environment}",
+                "log_stream_name": "{instance_id}/system"
+            }
+            ]
+        }
+        }
+    }
+    }
+    CWCONFIG
+
+    # Start CloudWatch agent
+    /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a query -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+    `;
+
+    const userData = Fn.base64encode(userDataScript);
 
     // Create Launch Template
     this.launchTemplate = new aws.launchTemplate.LaunchTemplate(this, 'lt', {
