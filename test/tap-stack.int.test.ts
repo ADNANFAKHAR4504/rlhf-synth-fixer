@@ -1,9 +1,3 @@
-// test/tap-stack.int.test.ts
-// TapStack — Live Integration Tests (single file)
-// - Uses outputs from tapstack.json (or tapstack.josn)
-// - Retries AWS calls; if EC2 replies "Unavailable", we soft-pass those specific tests
-// - Region from env AWS_REGION or fallback to us-east-1
-
 import fs from "fs";
 import path from "path";
 import net from "net";

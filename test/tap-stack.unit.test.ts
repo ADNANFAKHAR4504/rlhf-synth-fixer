@@ -1,10 +1,3 @@
-// test/tap-stack.unit.test.ts
-// ✅ Comprehensive unit tests for the TapStack CloudFormation template
-// - Reads ONLY ../lib/TapStack.yml (no JSON required).
-// - Pure TypeScript + Node stdlib (no extra deps), so it builds & runs cleanly.
-// - Uses robust string scanning/regex to validate structure & requirements.
-// - 24 tests total.
-
 import * as fs from 'fs';
 import * as path from 'path';
 
