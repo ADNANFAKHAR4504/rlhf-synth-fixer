@@ -14,6 +14,7 @@ const TF_FILES = [
   'vpc.tf',
   'security-groups.tf',
   'kms.tf',
+  'secrets.tf',
   'cloudwatch.tf',
   'eventbridge.tf',
   's3.tf',
@@ -68,9 +69,15 @@ describe('Terraform Aurora Serverless Infrastructure - Unit Tests', () => {
       expect(variablesContent).toMatch(/variable\s+"environment"\s*{/);
     });
 
-    test('sensitive variables are marked as sensitive', () => {
-      expect(variablesContent).toMatch(/variable\s+"master_password"[\s\S]*?sensitive\s*=\s*true/);
-      expect(variablesContent).toMatch(/variable\s+"master_username"[\s\S]*?sensitive\s*=\s*true/);
+    test('secrets.tf exists for Secrets Manager integration', () => {
+      const secretsExists = fs.existsSync(path.join(LIB_DIR, 'secrets.tf'));
+      expect(secretsExists).toBe(true);
+    });
+    
+    test('Aurora cluster uses Secrets Manager for credentials', () => {
+      const mainContent = fs.readFileSync(path.join(LIB_DIR, 'main.tf'), 'utf8');
+      expect(mainContent).toMatch(/manage_master_user_password\s*=\s*true/);
+      expect(mainContent).toMatch(/master_user_secret_kms_key_id\s*=\s*aws_kms_key\.aurora\.key_id/);
     });
 
     test('Aurora MySQL version is specified', () => {
