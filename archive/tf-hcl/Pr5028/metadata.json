@@ -10,7 +10,7 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-    "aws_services": [
+  "aws_services": [
     "dynamodb",
     "api-gateway",
     "lambda",
@@ -20,5 +20,11 @@
     "subnet"
   ],
   "training_quality": 9,
-  "background": "Serverless App Infrastructure"
+  "background": "Serverless App Infrastructure",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "ayushj1-turing",
+  "dockerS3Location": ""
 }
