@@ -46,16 +46,12 @@ resource "aws_rds_cluster" "aurora_serverless" {
   engine_version  = var.aurora_mysql_version
   database_name   = var.database_name
   master_username = "admin"
-  master_password = "TempPassword123!" # Initial password, Secrets Manager will manage password rotation
-
+  
   # Use AWS Secrets Manager for secure credential management
   # RDS will automatically create and manage the secret with naming convention: rds-db-credentials/cluster-<cluster-identifier>/<random-suffix>
+  # When manage_master_user_password is true, you CANNOT specify master_password
   manage_master_user_password   = true
   master_user_secret_kms_key_id = aws_kms_key.aurora.key_id
-
-  lifecycle {
-    ignore_changes = [master_password]
-  }
 
   # Networking
   db_subnet_group_name   = aws_db_subnet_group.aurora.name
@@ -70,6 +66,9 @@ resource "aws_rds_cluster" "aurora_serverless" {
   preferred_backup_window      = var.backup_window
   preferred_maintenance_window = var.maintenance_window
   copy_tags_to_snapshot        = true
+
+  # Initial backup configuration - Secrets Manager will manage the password
+  final_snapshot_identifier = "${var.project_name}-${var.environment_suffix}-final-snapshot"
 
   # High availability
   availability_zones = data.aws_availability_zones.available.names
