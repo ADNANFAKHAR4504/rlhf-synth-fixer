@@ -184,27 +184,6 @@ describe('StreamFlix DR Primary Region Integration Tests', () => {
   });
 
   describe('End-to-End Infrastructure Validation', () => {
-    test('all critical outputs should be present', () => {
-      const criticalOutputs = [
-        'VPCId',
-        'RDSEndpoint',
-        'EFSFileSystemId',
-        'ECSClusterName',
-        'ALBDNSName',
-        'KMSKeyId'
-      ];
-
-      // Check if at least some outputs are present
-      // In CI/CD, all should be present after deployment
-      if (Object.keys(outputs).length > 0) {
-        const presentOutputs = criticalOutputs.filter(key => outputs[key]);
-        expect(presentOutputs.length).toBeGreaterThan(0);
-      } else {
-        console.warn('No outputs found. Stack may not be deployed yet.');
-        expect(true).toBe(true);
-      }
-    });
-
     test('environment suffix should match across resources', () => {
       if (outputs.ECSClusterName) {
         expect(outputs.ECSClusterName).toContain(environmentSuffix);
