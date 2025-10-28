@@ -1,4 +1,4 @@
-import * as lib from '../../lib/index.js';
+import * as lib from '../../lib/index';
 
 describe('HIPAA Compliant Healthcare Monitoring Infrastructure Template', () => {
   let template: any;
