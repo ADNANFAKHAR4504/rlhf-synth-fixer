@@ -176,6 +176,34 @@ describe('TapStack Unit Tests', () => {
       });
     });
 
+    test('should have CorrelationIdIndex GSI', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        GlobalSecondaryIndexes: Match.arrayWith([
+          {
+            IndexName: 'CorrelationIdIndex',
+            KeySchema: [
+              { AttributeName: 'correlationId', KeyType: 'HASH' },
+              { AttributeName: 'timestamp', KeyType: 'RANGE' }
+            ],
+            Projection: {
+              ProjectionType: 'ALL'
+            }
+          }
+        ])
+      });
+    });
+
+    test('should have DynamoDB attribute definitions for GSIs', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        AttributeDefinitions: Match.arrayWith([
+          { AttributeName: 'requestId', AttributeType: 'S' },
+          { AttributeName: 'timestamp', AttributeType: 'S' },
+          { AttributeName: 'modelVersion', AttributeType: 'S' },
+          { AttributeName: 'correlationId', AttributeType: 'S' }
+        ])
+      });
+    });
+
     test('should have point-in-time recovery enabled', () => {
       template.hasResourceProperties('AWS::DynamoDB::Table', {
         PointInTimeRecoverySpecification: {
@@ -576,6 +604,207 @@ describe('TapStack Unit Tests', () => {
         r.Properties?.Code?.ZipFile?.includes('already subscribed')
       );
       expect(securityHubFunctions.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('API Gateway Request Validation and CORS', () => {
+    test('should create request validator', () => {
+      template.hasResourceProperties('AWS::ApiGateway::RequestValidator', {
+        ValidateRequestBody: true,
+        ValidateRequestParameters: true
+      });
+    });
+
+    test('should create request model for predictions', () => {
+      template.hasResourceProperties('AWS::ApiGateway::Model', {
+        ContentType: 'application/json',
+        Name: 'PredictionRequest'
+      });
+    });
+
+    test('should configure CORS with proper headers', () => {
+      template.hasResourceProperties('AWS::ApiGateway::RestApi', {
+        Body: Match.objectLike({
+          'x-amazon-apigateway-cors': Match.objectLike({
+            allowHeaders: Match.arrayWith(['Content-Type', 'X-Api-Key', 'X-Request-ID'])
+          })
+        })
+      });
+    });
+
+    test('POST method should use request validator', () => {
+      template.hasResourceProperties('AWS::ApiGateway::Method', {
+        HttpMethod: 'POST',
+        RequestValidatorId: Match.anyValue()
+      });
+    });
+  });
+
+  describe('Lambda Structured Logging and Correlation IDs', () => {
+    test('Lambda should support correlation ID tracking', () => {
+      const resources = template.findResources('AWS::Lambda::Function');
+      const lambdaFunctions = Object.values(resources).filter(r => 
+        r.Properties?.Code?.ZipFile?.includes('correlationId')
+      );
+      expect(lambdaFunctions.length).toBeGreaterThan(0);
+    });
+
+    test('Lambda should use structured logging', () => {
+      const resources = template.findResources('AWS::Lambda::Function');
+      const lambdaFunctions = Object.values(resources).filter(r => 
+        r.Properties?.Code?.ZipFile?.includes('JSON.stringify') &&
+        r.Properties?.Code?.ZipFile?.includes('level')
+      );
+      expect(lambdaFunctions.length).toBeGreaterThan(0);
+    });
+
+    test('Lambda should log request processing stages', () => {
+      const resources = template.findResources('AWS::Lambda::Function');
+      const lambdaFunctions = Object.values(resources).filter(r => 
+        r.Properties?.Code?.ZipFile?.includes('Processing fraud detection request') &&
+        r.Properties?.Code?.ZipFile?.includes('Request processed successfully')
+      );
+      expect(lambdaFunctions.length).toBeGreaterThan(0);
+    });
+
+    test('Lambda error responses should include correlation ID', () => {
+      const resources = template.findResources('AWS::Lambda::Function');
+      const lambdaFunctions = Object.values(resources).filter(r => 
+        r.Properties?.Code?.ZipFile?.includes('X-Correlation-ID')
+      );
+      expect(lambdaFunctions.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('DynamoDB Correlation ID Index', () => {
+    test('should have CorrelationIdIndex GSI', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        GlobalSecondaryIndexes: Match.arrayWith([
+          {
+            IndexName: 'CorrelationIdIndex',
+            KeySchema: [
+              { AttributeName: 'correlationId', KeyType: 'HASH' },
+              { AttributeName: 'timestamp', KeyType: 'RANGE' }
+            ],
+            Projection: {
+              ProjectionType: 'ALL'
+            }
+          }
+        ])
+      });
+    });
+
+    test('should have DynamoDB streams enabled', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        StreamSpecification: {
+          StreamViewType: 'NEW_AND_OLD_IMAGES'
+        }
+      });
+    });
+  });
+
+  describe('Resource Naming with Environment Suffix', () => {
+    test('ECR repository should include environmentSuffix', () => {
+      template.hasResourceProperties('AWS::ECR::Repository', {
+        RepositoryName: `fraud-detection-${environmentSuffix}`
+      });
+    });
+
+    test('S3 bucket should include environmentSuffix', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: Match.stringLikeRegexp(`fraud-model-artifacts-${environmentSuffix}-.*`)
+      });
+    });
+
+    test('DynamoDB table should include environmentSuffix', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: `fraud-predictions-${environmentSuffix}`
+      });
+    });
+
+    test('SNS topic should include environmentSuffix', () => {
+      template.hasResourceProperties('AWS::SNS::Topic', {
+        TopicName: `fraud-alerts-${environmentSuffix}`
+      });
+    });
+
+    test('SageMaker model should include environmentSuffix', () => {
+      template.hasResourceProperties('AWS::SageMaker::Model', {
+        ModelName: `fraud-model-${environmentSuffix}`
+      });
+    });
+
+    test('SageMaker endpoint should include environmentSuffix', () => {
+      template.hasResourceProperties('AWS::SageMaker::Endpoint', {
+        EndpointName: `fraud-endpoint-${environmentSuffix}`
+      });
+    });
+
+    test('API Gateway should include environmentSuffix', () => {
+      template.hasResourceProperties('AWS::ApiGateway::RestApi', {
+        Name: `fraud-detection-api-${environmentSuffix}`
+      });
+    });
+  });
+
+  describe('CloudWatch Custom Metrics', () => {
+    test('Lambda should emit FeatureMagnitude metric', () => {
+      const resources = template.findResources('AWS::Lambda::Function');
+      const lambdaFunctions = Object.values(resources).filter(r => 
+        r.Properties?.Code?.ZipFile?.includes('FeatureMagnitude')
+      );
+      expect(lambdaFunctions.length).toBeGreaterThan(0);
+    });
+
+    test('Lambda should emit AnomalyDetections metric', () => {
+      const resources = template.findResources('AWS::Lambda::Function');
+      const lambdaFunctions = Object.values(resources).filter(r => 
+        r.Properties?.Code?.ZipFile?.includes('AnomalyDetections')
+      );
+      expect(lambdaFunctions.length).toBeGreaterThan(0);
+    });
+
+    test('Lambda should emit HighRiskPredictions metric', () => {
+      const resources = template.findResources('AWS::Lambda::Function');
+      const lambdaFunctions = Object.values(resources).filter(r => 
+        r.Properties?.Code?.ZipFile?.includes('HighRiskPredictions')
+      );
+      expect(lambdaFunctions.length).toBeGreaterThan(0);
+    });
+
+    test('Lambda should emit error metrics on failure', () => {
+      const resources = template.findResources('AWS::Lambda::Function');
+      const lambdaFunctions = Object.values(resources).filter(r => 
+        r.Properties?.Code?.ZipFile?.includes('ProcessingErrors') &&
+        r.Properties?.Code?.ZipFile?.includes('ErrorRate')
+      );
+      expect(lambdaFunctions.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Environment Tags', () => {
+    test('SageMaker model should have Environment tag', () => {
+      template.hasResourceProperties('AWS::SageMaker::Model', {
+        Tags: Match.arrayWith([
+          Match.objectLike({ Key: 'Environment', Value: environmentSuffix })
+        ])
+      });
+    });
+
+    test('SageMaker endpoint should have Environment tag', () => {
+      template.hasResourceProperties('AWS::SageMaker::Endpoint', {
+        Tags: Match.arrayWith([
+          Match.objectLike({ Key: 'Environment', Value: environmentSuffix })
+        ])
+      });
+    });
+
+    test('SageMaker endpoint config should have Environment tag', () => {
+      template.hasResourceProperties('AWS::SageMaker::EndpointConfig', {
+        Tags: Match.arrayWith([
+          Match.objectLike({ Key: 'Environment', Value: environmentSuffix })
+        ])
+      });
     });
   });
 });
