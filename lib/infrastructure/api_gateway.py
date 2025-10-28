@@ -5,9 +5,9 @@ This module creates API Gateway REST API with proper Lambda integration,
 request validation, and throttling.
 
 Addresses Model Failures:
-- Failure 1: API Gateway → Lambda integration URI format
-- Failure 2: API Gateway invoke permission source_arn format
-- Failure 9: API deployment and stage permission dependencies
+- API Gateway → Lambda integration URI format
+- API Gateway invoke permission source_arn format
+- API deployment and stage permission dependencies
 """
 
 import pulumi

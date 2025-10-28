@@ -492,6 +492,35 @@ class TestSQSServiceLevel(BaseIntegrationTest):
         
         queue_url = OUTPUTS['failed_validations_queue_url']
         
+        # Purge any existing messages from previous tests
+        try:
+            print(f"[INFO] Attempting to purge queue: {queue_url}")
+            sqs_client.purge_queue(QueueUrl=queue_url)
+            print("[INFO] Queue purge initiated, waiting 65 seconds...")
+            time.sleep(65)  # AWS requires 60+ seconds between purges
+            print("[INFO] Queue purge complete")
+        except Exception as e:
+            print(f"[WARN] Queue purge failed: {e}. Falling back to manual drain...")
+            # If purge fails (e.g., too soon after last purge), drain manually
+            messages_drained = 0
+            for i in range(20):
+                resp = sqs_client.receive_message(
+                    QueueUrl=queue_url,
+                    MaxNumberOfMessages=10,
+                    WaitTimeSeconds=1
+                )
+                if 'Messages' not in resp:
+                    print(f"[INFO] No more messages found after {i} iterations. Drained {messages_drained} messages.")
+                    break
+                batch_size = len(resp['Messages'])
+                messages_drained += batch_size
+                print(f"[INFO] Draining batch {i+1}: {batch_size} messages")
+                for msg in resp['Messages']:
+                    sqs_client.delete_message(
+                        QueueUrl=queue_url,
+                        ReceiptHandle=msg['ReceiptHandle']
+                    )
+        
         # Send a test message
         test_message = {
             'validation_id': f"test-val-{uuid.uuid4()}",
@@ -500,23 +529,35 @@ class TestSQSServiceLevel(BaseIntegrationTest):
             'timestamp': int(time.time())
         }
         
+        print(f"[INFO] Sending test message: {test_message['validation_id']}")
         sqs_client.send_message(
             QueueUrl=queue_url,
             MessageBody=json.dumps(test_message)
         )
+        print("[INFO] Test message sent successfully")
         
         # Receive the message
+        print("[INFO] Attempting to receive message from queue...")
         response = sqs_client.receive_message(
             QueueUrl=queue_url,
             MaxNumberOfMessages=1,
             WaitTimeSeconds=10
         )
         
-        self.assertIn('Messages', response)
+        self.assertIn('Messages', response, "No messages received from queue")
         self.assertGreaterEqual(len(response['Messages']), 1)
         
         message = response['Messages'][0]
         body = json.loads(message['Body'])
+        
+        print(f"[INFO] Received message with validation_id: {body.get('validation_id', 'MISSING')}")
+        print(f"[INFO] Expected validation_id: {test_message['validation_id']}")
+        
+        if body['validation_id'] != test_message['validation_id']:
+            print(f"[ERROR] Validation ID mismatch!")
+            print(f"[ERROR] Expected: {test_message['validation_id']}")
+            print(f"[ERROR] Received: {body['validation_id']}")
+            print(f"[ERROR] Full message body: {json.dumps(body, indent=2)}")
         
         self.assertEqual(body['validation_id'], test_message['validation_id'])
         self.assertEqual(body['transaction_id'], test_message['transaction_id'])
@@ -531,7 +572,7 @@ class TestSQSServiceLevel(BaseIntegrationTest):
         """
         Test DLQ receives messages after exceeding max receive count of 3.
         
-        ACTION: Send message, receive it 3 times without deleting, verify it moves to DLQ.
+        ACTION: Send message, receive it 4+ times without deleting, verify it moves to DLQ.
         
         Maps to prompt: SQS dead-letter queues with maximum receive count of 3.
         """
@@ -540,41 +581,63 @@ class TestSQSServiceLevel(BaseIntegrationTest):
         queue_url = OUTPUTS['fraud_validator_queue_url']
         dlq_url = OUTPUTS['fraud_validator_dlq_url']
         
+        print(f"[INFO] Testing DLQ routing for queue: {queue_url}")
+        print(f"[INFO] DLQ URL: {dlq_url}")
+        
         # Send a test message
         test_message = {
             'test_id': f"dlq-test-{uuid.uuid4()}",
             'timestamp': int(time.time())
         }
         
+        print(f"[INFO] Sending test message with ID: {test_message['test_id']}")
         sqs_client.send_message(
             QueueUrl=queue_url,
             MessageBody=json.dumps(test_message)
         )
+        print("[INFO] Test message sent to main queue")
         
-        # Receive the message 3 times without deleting (simulating failures)
-        receipt_handle = None
-        for i in range(3):
+        # Receive the message 4 times without deleting (exceeds maxReceiveCount of 3)
+        # Use longer visibility timeout to ensure message becomes visible again
+        receive_count = 0
+        for i in range(4):
+            print(f"[INFO] Receive attempt {i+1}/4...")
             response = sqs_client.receive_message(
                 QueueUrl=queue_url,
                 MaxNumberOfMessages=1,
-                VisibilityTimeout=1,
-                WaitTimeSeconds=5
+                VisibilityTimeout=2,  # Short visibility timeout
+                WaitTimeSeconds=10
             )
             
             if 'Messages' in response and len(response['Messages']) > 0:
-                receipt_handle = response['Messages'][0]['ReceiptHandle']
+                receive_count += 1
+                msg_body = json.loads(response['Messages'][0]['Body'])
+                print(f"[INFO] Received message (count: {receive_count}): {msg_body.get('test_id', 'UNKNOWN')}")
                 # Don't delete - simulate processing failure
-                time.sleep(2)  # Wait for visibility timeout
+                # Wait for visibility timeout to expire so message becomes available again
+                print("[INFO] Waiting 3 seconds for visibility timeout to expire...")
+                time.sleep(3)
+            else:
+                print(f"[WARN] No message received on attempt {i+1}")
         
-        # Wait for message to be moved to DLQ
-        time.sleep(10)
+        print(f"[INFO] Total successful receives: {receive_count}/4")
+        print("[INFO] Waiting 15 seconds for AWS to move message to DLQ...")
+        time.sleep(15)
         
         # Verify message is now in DLQ
+        print("[INFO] Checking DLQ for message...")
         dlq_response = sqs_client.receive_message(
             QueueUrl=dlq_url,
             MaxNumberOfMessages=1,
             WaitTimeSeconds=10
         )
+        
+        if 'Messages' not in dlq_response:
+            print("[ERROR] No messages found in DLQ!")
+            print(f"[ERROR] DLQ response: {dlq_response}")
+            print(f"[ERROR] Expected message with test_id: {test_message['test_id']}")
+        else:
+            print(f"[INFO] Found {len(dlq_response['Messages'])} message(s) in DLQ")
         
         self.assertIn('Messages', dlq_response, "Message not found in DLQ after max retries")
         self.assertGreaterEqual(len(dlq_response['Messages']), 1)
@@ -1034,6 +1097,10 @@ class TestEndToEndWorkflows(BaseIntegrationTest):
         
         # TRIGGER: POST multiple transactions to API Gateway (ONLY manual triggers)
         # Post multiple to increase chance of fraud detection (random > 0.85)
+        print("[INFO] Starting E2E test: API -> fraud detection -> failed queue")
+        print(f"[INFO] API endpoint: {endpoint}")
+        print(f"[INFO] Failed validations queue: {failed_queue_url}")
+        
         transaction_ids = []
         for i in range(15):
             transaction_id = f"e2e-fraud-{uuid.uuid4()}"
@@ -1054,39 +1121,99 @@ class TestEndToEndWorkflows(BaseIntegrationTest):
             self.assertEqual(response.status_code, 200)
             time.sleep(0.5)  # Small delay between requests
         
+        print(f"[INFO] Posted {len(transaction_ids)} transactions to API Gateway")
+        print("[INFO] Transaction IDs:", transaction_ids[:3], "... (showing first 3)")
+        
         # Wait for complete pipeline execution (all automatic)
         # transaction-receiver -> EventBridge -> fraud-validator -> DynamoDB + SQS
+        print("[INFO] Waiting 25 seconds for complete pipeline execution...")
         time.sleep(25)
         
         # VERIFY END POINT: Check for failed validation in SQS queue (final destination)
+        # Poll queue multiple times to find a message from OUR transactions
+        print("[INFO] Polling failed-validations queue for our test messages...")
         fraud_detected = False
         attempts = 0
-        max_attempts = 5
+        max_attempts = 10
+        messages_from_other_tests = 0
         
         while not fraud_detected and attempts < max_attempts:
-            message = wait_for_sqs_message(failed_queue_url, max_wait=10)
+            attempts += 1
+            print(f"[INFO] Polling attempt {attempts}/{max_attempts}...")
             
-            if message:
-                fraud_detected = True
-                
-                # Verify message structure
-                self.assertIn('validation_id', message, "Message missing validation_id")
-                self.assertIn('transaction_id', message, "Message missing transaction_id")
-                self.assertIn('fraud_score', message, "Message missing fraud_score")
-                
-                # Verify fraud score is above threshold
-                fraud_score = message['fraud_score']
-                self.assertGreater(fraud_score, 0.85, 
-                    "Fraud score should be > 0.85 for failed validations")
-                
-                # Verify transaction_id is one we sent
-                self.assertIn(message['transaction_id'], transaction_ids,
-                    "Received validation for unknown transaction")
-                
+            # Receive multiple messages to filter for our test
+            response = sqs_client.receive_message(
+                QueueUrl=failed_queue_url,
+                MaxNumberOfMessages=10,
+                WaitTimeSeconds=5
+            )
+            
+            if 'Messages' in response:
+                print(f"[INFO] Received {len(response['Messages'])} message(s) from queue")
+                for msg in response['Messages']:
+                    try:
+                        message = json.loads(msg['Body'])
+                        txn_id = message.get('transaction_id', 'MISSING')
+                        
+                        # Check if this message is from our test
+                        if txn_id.startswith('e2e-fraud-'):
+                            print(f"[INFO] Found matching message! Transaction ID: {txn_id}")
+                            fraud_detected = True
+                            
+                            # Verify message structure
+                            self.assertIn('validation_id', message, "Message missing validation_id")
+                            self.assertIn('transaction_id', message, "Message missing transaction_id")
+                            self.assertIn('fraud_score', message, "Message missing fraud_score")
+                            
+                            # Verify fraud score is above threshold
+                            fraud_score = message['fraud_score']
+                            print(f"[INFO] Fraud score: {fraud_score}")
+                            self.assertGreater(fraud_score, 0.85, 
+                                "Fraud score should be > 0.85 for failed validations")
+                            
+                            # Verify transaction_id is one we sent
+                            if txn_id not in transaction_ids:
+                                print(f"[ERROR] Transaction ID {txn_id} not in our list!")
+                                print(f"[ERROR] Our transaction IDs: {transaction_ids[:5]}... (showing first 5)")
+                            
+                            self.assertIn(message['transaction_id'], transaction_ids,
+                                "Received validation for unknown transaction")
+                            
+                            # Clean up this message
+                            sqs_client.delete_message(
+                                QueueUrl=failed_queue_url,
+                                ReceiptHandle=msg['ReceiptHandle']
+                            )
+                            break
+                        else:
+                            # Delete messages from other tests
+                            messages_from_other_tests += 1
+                            print(f"[WARN] Deleting message from other test: {txn_id}")
+                            sqs_client.delete_message(
+                                QueueUrl=failed_queue_url,
+                                ReceiptHandle=msg['ReceiptHandle']
+                            )
+                    except (json.JSONDecodeError, KeyError) as e:
+                        # Delete malformed messages
+                        print(f"[WARN] Deleting malformed message: {e}")
+                        sqs_client.delete_message(
+                            QueueUrl=failed_queue_url,
+                            ReceiptHandle=msg['ReceiptHandle']
+                        )
+            else:
+                print("[INFO] No messages in queue")
+            
+            if fraud_detected:
                 break
             
-            attempts += 1
-            time.sleep(3)
+            print("[INFO] Waiting 5 seconds before next poll...")
+            time.sleep(5)
+        
+        print(f"[INFO] Deleted {messages_from_other_tests} message(s) from other tests")
+        
+        if not fraud_detected:
+            print("[ERROR] No fraud detected after all polling attempts!")
+            print(f"[ERROR] Polled {attempts} times, found {messages_from_other_tests} messages from other tests")
         
         # With 15 transactions, at least one should be detected as fraud (probability ~78%)
         self.assertTrue(fraud_detected, 

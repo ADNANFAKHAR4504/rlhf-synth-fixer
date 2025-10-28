@@ -4,8 +4,8 @@ SQS module for the serverless transaction pipeline.
 This module creates SQS queues with proper dead-letter queue configuration.
 
 Addresses Model Failures:
-- Failure 3: SQS redrive / DLQ configuration
-- Failure 7: SQS target wiring for failed-validations
+- SQS redrive / DLQ configuration
+- SQS target wiring for failed-validations
 """
 
 import json
