@@ -404,9 +404,19 @@ Parameters:
   ProjectName:
     Type: String
     Description: Name of the project
-    Default: microservices-app
+    Default: ms-app
     MinLength: 1
     MaxLength: 50
+
+  EnvironmentType:
+    Type: String
+    Description: Environment type for resource configuration (determines compute size, retention, etc.)
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    ConstraintDescription: 'Must be dev, staging, or prod'
 
   EnvironmentSuffix:
     Type: String
@@ -453,8 +463,8 @@ Parameters:
 # Conditions
 # ===========================
 Conditions:
-  IsProduction: !Equals [!Ref EnvironmentSuffix, 'prod']
-  IsStaging: !Equals [!Ref EnvironmentSuffix, 'staging']
+  IsProduction: !Equals [!Ref EnvironmentType, 'prod']
+  IsStaging: !Equals [!Ref EnvironmentType, 'staging']
   RequiresApproval: !Or [!Condition IsProduction, !Condition IsStaging]
   UseGitHub: !Equals [!Ref UseGitHubSource, 'true']
 
@@ -899,7 +909,7 @@ Resources:
             ExpirationInDays:
               !FindInMap [
                 EnvironmentConfig,
-                !Ref EnvironmentSuffix,
+                !Ref EnvironmentType,
                 LifecycleExpirationDays,
               ]
             NoncurrentVersionExpirationInDays: 7
@@ -950,7 +960,7 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/codebuild/${ProjectName}-${EnvironmentSuffix}'
       RetentionInDays:
-        !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, RetentionDays]
+        !FindInMap [EnvironmentConfig, !Ref EnvironmentType, RetentionDays]
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-codebuild-logs-${EnvironmentSuffix}'
@@ -968,7 +978,7 @@ Resources:
     Properties:
       LogGroupName: !Sub '/ecs/${ProjectName}-${EnvironmentSuffix}'
       RetentionInDays:
-        !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, RetentionDays]
+        !FindInMap [EnvironmentConfig, !Ref EnvironmentType, RetentionDays]
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-ecs-logs-${EnvironmentSuffix}'
@@ -1466,7 +1476,7 @@ Resources:
       Cluster: !Ref ECSCluster
       TaskDefinition: !Ref ECSTaskDefinition
       DesiredCount:
-        !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, DesiredCount]
+        !FindInMap [EnvironmentConfig, !Ref EnvironmentType, DesiredCount]
       LaunchType: FARGATE
       NetworkConfiguration:
         AwsvpcConfiguration:
@@ -1505,11 +1515,7 @@ Resources:
       Environment:
         Type: LINUX_CONTAINER
         ComputeType:
-          !FindInMap [
-            EnvironmentConfig,
-            !Ref EnvironmentSuffix,
-            BuildComputeType,
-          ]
+          !FindInMap [EnvironmentConfig, !Ref EnvironmentType, BuildComputeType]
         Image: aws/codebuild/standard:5.0
         PrivilegedMode: true
         EnvironmentVariables:

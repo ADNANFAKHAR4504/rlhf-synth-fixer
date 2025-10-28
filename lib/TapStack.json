@@ -5,9 +5,20 @@
         "ProjectName": {
             "Type": "String",
             "Description": "Name of the project",
-            "Default": "microservices-app",
+            "Default": "ms-app",
             "MinLength": 1,
             "MaxLength": 50
+        },
+        "EnvironmentType": {
+            "Type": "String",
+            "Description": "Environment type for resource configuration (determines compute size, retention, etc.)",
+            "Default": "dev",
+            "AllowedValues": [
+                "dev",
+                "staging",
+                "prod"
+            ],
+            "ConstraintDescription": "Must be dev, staging, or prod"
         },
         "EnvironmentSuffix": {
             "Type": "String",
@@ -56,7 +67,7 @@
         "IsProduction": {
             "Fn::Equals": [
                 {
-                    "Ref": "EnvironmentSuffix"
+                    "Ref": "EnvironmentType"
                 },
                 "prod"
             ]
@@ -64,7 +75,7 @@
         "IsStaging": {
             "Fn::Equals": [
                 {
-                    "Ref": "EnvironmentSuffix"
+                    "Ref": "EnvironmentType"
                 },
                 "staging"
             ]
@@ -892,7 +903,7 @@
                                 "Fn::FindInMap": [
                                     "EnvironmentConfig",
                                     {
-                                        "Ref": "EnvironmentSuffix"
+                                        "Ref": "EnvironmentType"
                                     },
                                     "LifecycleExpirationDays"
                                 ]
@@ -985,7 +996,7 @@
                     "Fn::FindInMap": [
                         "EnvironmentConfig",
                         {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentType"
                         },
                         "RetentionDays"
                     ]
@@ -1026,7 +1037,7 @@
                     "Fn::FindInMap": [
                         "EnvironmentConfig",
                         {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentType"
                         },
                         "RetentionDays"
                     ]
@@ -1983,7 +1994,7 @@
                     "Fn::FindInMap": [
                         "EnvironmentConfig",
                         {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentType"
                         },
                         "DesiredCount"
                     ]
@@ -2066,7 +2077,7 @@
                         "Fn::FindInMap": [
                             "EnvironmentConfig",
                             {
-                                "Ref": "EnvironmentSuffix"
+                                "Ref": "EnvironmentType"
                             },
                             "BuildComputeType"
                         ]

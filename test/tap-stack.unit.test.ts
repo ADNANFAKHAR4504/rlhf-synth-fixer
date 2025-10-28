@@ -81,7 +81,7 @@ describe('TapStack CloudFormation Template', () => {
     test('ProjectName parameter should have correct properties', () => {
       const param = template.Parameters.ProjectName;
       expect(param.Type).toBe('String');
-      expect(param.Default).toBe('microservices-app');
+      expect(param.Default).toBe('ms-app');
       expect(param.MinLength).toBe(1);
       expect(param.MaxLength).toBe(50);
     });
@@ -127,14 +127,14 @@ describe('TapStack CloudFormation Template', () => {
     test('IsProduction condition should check for prod environment', () => {
       const condition = template.Conditions.IsProduction;
       expect(condition).toHaveProperty('Fn::Equals');
-      expect(condition['Fn::Equals']).toContainEqual({ Ref: 'EnvironmentSuffix' });
+      expect(condition['Fn::Equals']).toContainEqual({ Ref: 'EnvironmentType' });
       expect(condition['Fn::Equals']).toContainEqual('prod');
     });
 
     test('IsStaging condition should check for staging environment', () => {
       const condition = template.Conditions.IsStaging;
       expect(condition).toHaveProperty('Fn::Equals');
-      expect(condition['Fn::Equals']).toContainEqual({ Ref: 'EnvironmentSuffix' });
+      expect(condition['Fn::Equals']).toContainEqual({ Ref: 'EnvironmentType' });
       expect(condition['Fn::Equals']).toContainEqual('staging');
     });
 
