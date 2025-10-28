@@ -24,7 +24,7 @@
     "cloudwatch",
     "secretsmanager"
   ],
-  "region": "ap-northeast-1",
+  "region": "eu-west-3",
   "turn_type": "single",
   "training_quality": 10,
   "qa_phase_completed": true,
