@@ -44,6 +44,14 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
+        # Create KMS key alias for easier management
+        kms_alias = aws.kms.Alias(
+            f"brazilcart-kms-alias-{self.environment_suffix}",
+            name=f"alias/brazilcart-{self.environment_suffix}",
+            target_key_id=kms_key.id,
+            opts=ResourceOptions(parent=self)
+        )
+
         # Create VPC for resources
         vpc = aws.ec2.Vpc(
             f"brazilcart-vpc-{self.environment_suffix}",

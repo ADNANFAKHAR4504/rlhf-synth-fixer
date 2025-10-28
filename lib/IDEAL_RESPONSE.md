@@ -63,6 +63,14 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
+        # Create KMS key alias for easier management
+        kms_alias = aws.kms.Alias(
+            f"brazilcart-kms-alias-{self.environment_suffix}",
+            name=f"alias/brazilcart-{self.environment_suffix}",
+            target_key_id=kms_key.id,
+            opts=ResourceOptions(parent=self)
+        )
+
         # Create VPC for resources
         vpc = aws.ec2.Vpc(
             f"brazilcart-vpc-{self.environment_suffix}",
@@ -440,7 +448,8 @@ eu-south-2
 
 **KMS Encryption**
 - Automatic key rotation enabled
-- Used for RDS storage encryption
+- Used for RDS storage encryption and S3 bucket encryption
+- KMS key alias created for easier management (alias/brazilcart-{environment_suffix})
 - Scoped to environment suffix
 
 **Security Groups**
@@ -501,21 +510,26 @@ The stack exports the following outputs:
 ### Fixed Security Issues
 
 **Secure Password Generation (FIXED)**
-- ✅ Now uses Python's `secrets` module for cryptographically secure password generation
-- ✅ Password length increased from 16 to 20 characters
-- ✅ Added special characters to password alphabet (!@#$%^&*)
-- ✅ Password stored securely in AWS Secrets Manager
+- Now uses Python's `secrets` module for cryptographically secure password generation
+- Password length increased from 16 to 20 characters
+- Added special characters to password alphabet (!@#$%^&*)
+- Password stored securely in AWS Secrets Manager
 
 **S3 Bucket Security Hardening (FIXED)**
-- ✅ Versioning enabled for artifact recovery
-- ✅ KMS encryption configured for data at rest
-- ✅ All public access blocked (ACLs and policies)
-- ✅ Lifecycle policy implemented (30 days for current versions, 7 days for non-current)
+- Versioning enabled for artifact recovery
+- KMS encryption configured for data at rest
+- All public access blocked (ACLs and policies)
+- Lifecycle policy implemented (30 days for current versions, 7 days for non-current)
 
 **Security Group Egress Rules (FIXED)**
-- ✅ Explicit egress rules added to RDS security group (HTTPS within VPC)
-- ✅ Explicit egress rules added to ElastiCache security group (HTTPS within VPC)
-- ✅ Follows principle of least privilege for outbound traffic
+- Explicit egress rules added to RDS security group (HTTPS within VPC)
+- Explicit egress rules added to ElastiCache security group (HTTPS within VPC)
+- Follows principle of least privilege for outbound traffic
+
+**KMS Key Management (FIXED)**
+- KMS key alias created for easier key identification and management
+- Alias format: alias/brazilcart-{environment_suffix}
+- Enables human-readable key references in AWS console and CLI
 
 ### Remaining Limitations
 
