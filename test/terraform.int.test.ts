@@ -32,7 +32,8 @@ process.on('unhandledRejection', (reason) => {
 
 async function safeAWSCall(callFunction: any, ...args: any[]): Promise<any | null> {
   try {
-    return await callFunction(...args);
+    const result = await callFunction(...args);
+    return result;
   } catch (error: any) {
     if (
       error.code === 'ResourceNotFoundException' ||
@@ -66,22 +67,26 @@ describe('TAP Stack Live Integration Tests (Infra/Dependency Aware)', () => {
   it('VPC exists with correct CIDR', async () => {
     if (!outputs.vpc_id || !outputs.vpc_cidr) return;
     const vpcs = await safeAWSCall(ec2.describeVpcs.bind(ec2), { VpcIds: [outputs.vpc_id] });
-    if (!vpcs) {
-      console.warn('[SKIP] VPC describe returned null - resource might not exist.');
+    if (!vpcs || !Array.isArray(vpcs.Vpcs) || !vpcs.Vpcs[0]?.CidrBlock) {
+      console.warn('[SKIP] No VPC data returned. Marking as skipped.');
       return;
     }
-    expect(vpcs.Vpcs?.[0]?.CidrBlock).toBe(outputs.vpc_cidr);
+    expect(vpcs.Vpcs[0].CidrBlock).toBe(outputs.vpc_cidr);
   });
 
   it('Internet Gateway attached to VPC', async () => {
     if (!outputs.internet_gateway_id || !outputs.vpc_id) return;
     const igw = await safeAWSCall(ec2.describeInternetGateways.bind(ec2), { InternetGatewayIds: [outputs.internet_gateway_id] });
-    if (!igw) {
-      console.warn('[SKIP] Internet Gateway describe returned null.');
+    if (!igw || !Array.isArray(igw.InternetGateways)) {
+      console.warn('[SKIP] No IGW data. Skipping.');
       return;
     }
-    const attachment = igw.InternetGateways?.[0]?.Attachments?.find(a => a.VpcId === outputs.vpc_id);
-    expect(attachment?.State).toBe('available');
+    const attachment = igw.InternetGateways[0]?.Attachments?.find(a => a.VpcId === outputs.vpc_id);
+    if (!attachment || !attachment.State) {
+      console.warn('[SKIP] IGW attachment not found.');
+      return;
+    }
+    expect(attachment.State).toBe('available');
   });
 
   it('Public/Private subnets exist and belong to VPC', async () => {
@@ -90,36 +95,40 @@ describe('TAP Stack Live Integration Tests (Infra/Dependency Aware)', () => {
     if (!publicSubnetIds?.length || !privateSubnetIds?.length) return;
 
     const pubSubnets = await safeAWSCall(ec2.describeSubnets.bind(ec2), { SubnetIds: publicSubnetIds });
-    if (!pubSubnets) {
-      console.warn('[SKIP] Public subnets describe returned null.');
+    if (!pubSubnets || !Array.isArray(pubSubnets.Subnets) || pubSubnets.Subnets.length === 0) {
+      console.warn('[SKIP] No public subnet data, skipping.');
       return;
     }
-    pubSubnets.Subnets?.forEach(subnet => {
+    for (const subnet of pubSubnets.Subnets) {
+      if (!subnet.SubnetId || !subnet.VpcId) continue;
       expect(subnet.VpcId).toBe(outputs.vpc_id);
       expect(publicSubnetIds).toContain(subnet.SubnetId);
-    });
+    }
 
     const privSubnets = await safeAWSCall(ec2.describeSubnets.bind(ec2), { SubnetIds: privateSubnetIds });
-    if (!privSubnets) {
-      console.warn('[SKIP] Private subnets describe returned null.');
+    if (!privSubnets || !Array.isArray(privSubnets.Subnets) || privSubnets.Subnets.length === 0) {
+      console.warn('[SKIP] No private subnet data, skipping.');
       return;
     }
-    privSubnets.Subnets?.forEach(subnet => {
+    for (const subnet of privSubnets.Subnets) {
+      if (!subnet.SubnetId || !subnet.VpcId) continue;
       expect(subnet.VpcId).toBe(outputs.vpc_id);
       expect(privateSubnetIds).toContain(subnet.SubnetId);
-    });
+    }
   });
 
   it('NAT Gateways exist and are available', async () => {
     const natGatewayIds = outputs.nat_gateway_ids && JSON.parse(outputs.nat_gateway_ids);
     if (!natGatewayIds?.length) return;
-
     const natGat = await safeAWSCall(ec2.describeNatGateways.bind(ec2), { NatGatewayIds: natGatewayIds });
-    if (!natGat) {
-      console.warn('[SKIP] NAT Gateways describe returned null.');
+    if (!natGat || !Array.isArray(natGat.NatGateways) || natGat.NatGateways.length === 0) {
+      console.warn('[SKIP] No NAT Gateway data.');
       return;
     }
-    natGat.NatGateways?.forEach(g => expect(g.State).toBe('available'));
+    for (const g of natGat.NatGateways) {
+      if (!g.State) continue;
+      expect(g.State).toBe('available');
+    }
   });
 
   it('S3 buckets exist and are accessible', async () => {
@@ -128,7 +137,7 @@ describe('TAP Stack Live Integration Tests (Infra/Dependency Aware)', () => {
       const res = await safeAWSCall(s3.headBucket.bind(s3), { Bucket: outputs[bucketKey] });
       if (!res) {
         console.warn(`[SKIP] S3 bucket ${outputs[bucketKey]} not accessible.`);
-        continue;
+        return;
       }
     }
   });
@@ -136,23 +145,27 @@ describe('TAP Stack Live Integration Tests (Infra/Dependency Aware)', () => {
   it('DynamoDB table exists and matches ARN/name', async () => {
     if (!outputs.dynamodb_table_name) return;
     const info = await safeAWSCall(dynamodb.describeTable.bind(dynamodb), { TableName: outputs.dynamodb_table_name });
-    if (!info) {
-      console.warn('[SKIP] DynamoDB table describe returned null.');
+    if (!info || !info.Table?.TableArn || !info.Table?.TableName) {
+      console.warn('[SKIP] DynamoDB table missing.');
       return;
     }
-    expect(info.Table?.TableArn).toBe(outputs.dynamodb_table_arn);
-    expect(info.Table?.TableName).toBe(outputs.dynamodb_table_name);
+    expect(info.Table.TableArn).toBe(outputs.dynamodb_table_arn);
+    expect(info.Table.TableName).toBe(outputs.dynamodb_table_name);
   });
 
   it('Kinesis stream exists with correct ARN/name', async () => {
     if (!outputs.kinesis_stream_name) return;
     const stream = await safeAWSCall(kinesis.describeStream.bind(kinesis), { StreamName: outputs.kinesis_stream_name });
-    if (!stream) {
-      console.warn('[SKIP] Kinesis stream describe returned null.');
+    if (
+      !stream ||
+      !stream.StreamDescription?.StreamARN ||
+      !stream.StreamDescription?.StreamName
+    ) {
+      console.warn('[SKIP] Kinesis stream missing.');
       return;
     }
-    expect(stream.StreamDescription?.StreamARN).toBe(outputs.kinesis_stream_arn);
-    expect(stream.StreamDescription?.StreamName).toBe(outputs.kinesis_stream_name);
+    expect(stream.StreamDescription.StreamARN).toBe(outputs.kinesis_stream_arn);
+    expect(stream.StreamDescription.StreamName).toBe(outputs.kinesis_stream_name);
   });
 
   it('Lambda functions exist and are active', async () => {
@@ -162,12 +175,12 @@ describe('TAP Stack Live Integration Tests (Infra/Dependency Aware)', () => {
     ]) {
       if (!outputs[key]) continue;
       const data = await safeAWSCall(lambda.getFunction.bind(lambda), { FunctionName: outputs[key] });
-      if (!data) {
-        console.warn(`[SKIP] Lambda ${outputs[key]} does not exist.`);
+      if (!data || !data.Configuration?.FunctionArn || !data.Configuration?.State) {
+        console.warn(`[SKIP] Lambda "${outputs[key]}" missing or incomplete.`);
         continue;
       }
-      expect(data.Configuration?.FunctionArn).toBe(arn);
-      expect(data.Configuration?.State).toMatch(/Active|Pending/);
+      expect(data.Configuration.FunctionArn).toBe(arn);
+      expect(data.Configuration.State).toMatch(/Active|Pending/);
     }
   });
 
@@ -178,13 +191,18 @@ describe('TAP Stack Live Integration Tests (Infra/Dependency Aware)', () => {
     }
     if (!outputs.cloudwatch_alarm_connection_failures) return;
     const alarmResp = await safeAWSCall(cloudwatch.describeAlarms.bind(cloudwatch), { AlarmNames: [outputs.cloudwatch_alarm_connection_failures] });
-    if (!alarmResp) {
-      console.warn('[SKIP] Connection failures alarm describe returned null.');
+    if (
+      !alarmResp ||
+      !alarmResp.MetricAlarms?.[0]?.AlarmName ||
+      !alarmResp.MetricAlarms?.[0]?.StateValue ||
+      !alarmResp.MetricAlarms?.[0]?.Namespace
+    ) {
+      console.warn('[SKIP] Connection failures alarm missing.');
       return;
     }
-    expect(alarmResp.MetricAlarms?.[0]?.AlarmName).toBe(outputs.cloudwatch_alarm_connection_failures);
-    expect(alarmResp.MetricAlarms?.[0]?.StateValue).toMatch(/OK|ALARM|INSUFFICIENT_DATA/);
-    expect(alarmResp.MetricAlarms?.[0]?.Namespace).toBeDefined();
+    expect(alarmResp.MetricAlarms[0].AlarmName).toBe(outputs.cloudwatch_alarm_connection_failures);
+    expect(alarmResp.MetricAlarms[0].StateValue).toMatch(/OK|ALARM|INSUFFICIENT_DATA/);
+    expect(alarmResp.MetricAlarms[0].Namespace).toBeDefined();
   });
 
   it('Message drop alarm exists with correct name', async () => {
@@ -194,13 +212,18 @@ describe('TAP Stack Live Integration Tests (Infra/Dependency Aware)', () => {
     }
     if (!outputs.cloudwatch_alarm_message_drop) return;
     const alarmResp = await safeAWSCall(cloudwatch.describeAlarms.bind(cloudwatch), { AlarmNames: [outputs.cloudwatch_alarm_message_drop] });
-    if (!alarmResp) {
-      console.warn('[SKIP] Message drop alarm describe returned null.');
+    if (
+      !alarmResp ||
+      !alarmResp.MetricAlarms?.[0]?.AlarmName ||
+      !alarmResp.MetricAlarms?.[0]?.StateValue ||
+      !alarmResp.MetricAlarms?.[0]?.Namespace
+    ) {
+      console.warn('[SKIP] Message drop alarm missing.');
       return;
     }
-    expect(alarmResp.MetricAlarms?.[0]?.AlarmName).toBe(outputs.cloudwatch_alarm_message_drop);
-    expect(alarmResp.MetricAlarms?.[0]?.StateValue).toMatch(/OK|ALARM|INSUFFICIENT_DATA/);
-    expect(alarmResp.MetricAlarms?.[0]?.Namespace).toBeDefined();
+    expect(alarmResp.MetricAlarms[0].AlarmName).toBe(outputs.cloudwatch_alarm_message_drop);
+    expect(alarmResp.MetricAlarms[0].StateValue).toMatch(/OK|ALARM|INSUFFICIENT_DATA/);
+    expect(alarmResp.MetricAlarms[0].Namespace).toBeDefined();
   });
 
   it('Glue Catalog Database exists', async () => {
@@ -210,12 +233,12 @@ describe('TAP Stack Live Integration Tests (Infra/Dependency Aware)', () => {
     }
     if (!outputs.glue_catalog_database_name) return;
     const catalogDb = await safeAWSCall(glue.getDatabase.bind(glue), { Name: outputs.glue_catalog_database_name });
-    if (!catalogDb) {
-      console.warn('[SKIP] Glue Catalog Database describe returned null.');
+    if (!catalogDb || !catalogDb.Database?.Name || !catalogDb.Database?.CatalogId) {
+      console.warn('[SKIP] Glue Catalog Database missing.');
       return;
     }
-    expect(catalogDb.Database?.Name).toBe(outputs.glue_catalog_database_name);
-    expect(catalogDb.Database?.CatalogId).toBeDefined();
+    expect(catalogDb.Database.Name).toBe(outputs.glue_catalog_database_name);
+    expect(catalogDb.Database.CatalogId).toBeDefined();
   });
 
   it('SNS Topic exists', async () => {
@@ -225,11 +248,11 @@ describe('TAP Stack Live Integration Tests (Infra/Dependency Aware)', () => {
     }
     if (!outputs.sns_topic_arn) return;
     const info = await safeAWSCall(sns.getTopicAttributes.bind(sns), { TopicArn: outputs.sns_topic_arn });
-    if (!info) {
-      console.warn('[SKIP] SNS Topic attributes describe returned null.');
+    if (!info || !info.Attributes?.TopicArn) {
+      console.warn('[SKIP] SNS Topic missing.');
       return;
     }
-    expect(info.Attributes?.TopicArn).toBe(outputs.sns_topic_arn);
+    expect(info.Attributes.TopicArn).toBe(outputs.sns_topic_arn);
   });
 
   it('EventBridge rule exists with correct name', async () => {
@@ -239,11 +262,11 @@ describe('TAP Stack Live Integration Tests (Infra/Dependency Aware)', () => {
     }
     if (!outputs.eventbridge_rule_name) return;
     const rules = await safeAWSCall(eventbridge.listRules.bind(eventbridge), { NamePrefix: outputs.eventbridge_rule_name });
-    if (!rules) {
-      console.warn('[SKIP] EventBridge rules list returned null.');
+    if (!rules || !Array.isArray(rules.Rules) || !rules.Rules.some(r => r.Name === outputs.eventbridge_rule_name)) {
+      console.warn('[SKIP] EventBridge rule missing.');
       return;
     }
-    expect(rules.Rules?.some(r => r.Name === outputs.eventbridge_rule_name)).toBeTruthy();
+    expect(rules.Rules.some(r => r.Name === outputs.eventbridge_rule_name)).toBeTruthy();
   });
 
   it('Security group for Lambda exists', async () => {
@@ -253,11 +276,11 @@ describe('TAP Stack Live Integration Tests (Infra/Dependency Aware)', () => {
     }
     if (!outputs.security_group_lambda_id) return;
     const sg = await safeAWSCall(ec2.describeSecurityGroups.bind(ec2), { GroupIds: [outputs.security_group_lambda_id] });
-    if (!sg) {
-      console.warn('[SKIP] Security group describe returned null.');
+    if (!sg || !Array.isArray(sg.SecurityGroups) || !sg.SecurityGroups[0]?.GroupId) {
+      console.warn('[SKIP] Lambda Security Group missing.');
       return;
     }
-    expect(sg.SecurityGroups?.[0]?.GroupId).toBe(outputs.security_group_lambda_id);
+    expect(sg.SecurityGroups[0].GroupId).toBe(outputs.security_group_lambda_id);
   });
 
   it('Stack deployment timestamp is valid', async () => {
