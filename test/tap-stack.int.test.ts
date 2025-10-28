@@ -75,10 +75,19 @@ describe('Integration tests — runtime traffic checks', () => {
     const rdsArn = findOutputValueContaining('rds', 'compliance', ':function:');
     const s3Arn = findOutputValueContaining('s3', 'compliance', ':function:');
 
-    const arns = [ec2Arn, rdsArn, s3Arn].filter(Boolean) as string[];
+    let arns = [ec2Arn, rdsArn, s3Arn].filter(Boolean) as string[];
+
+    // Filter out obviously redacted or invalid ARNs (some CI environments redact account IDs as '***')
+    const invalidArns = arns.filter((a) => !a.startsWith('arn:') || a.includes('***') || a.toLowerCase().includes('redacted'));
+    if (invalidArns.length > 0) {
+      invalidArns.forEach((a) => console.warn(`Skipping invalid/redacted ARN from outputs: ${a}`));
+    }
+
+    arns = arns.filter((a) => !invalidArns.includes(a));
+
     if (arns.length === 0) {
-      // Nothing to invoke — fail early so the runner knows outputs don't contain scanner lambdas
-      throw new Error('No scanner Lambda ARNs found in cfn-outputs/flat-outputs.json (expected EC2/RDS/S3 compliance scanner ARNs)');
+      // Nothing to invoke — fail early so the runner knows outputs don't contain usable scanner lambdas
+      throw new Error('No usable scanner Lambda ARNs found in cfn-outputs/flat-outputs.json (expected EC2/RDS/S3 compliance scanner ARNs)');
     }
 
     // Try to find a matching log group for each function ARN in outputs
