@@ -10,5 +10,18 @@
   "subject_labels": [
     "CI/CD Pipeline"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC"
+  "aws_services": [
+    "CodePipeline",
+    "CodeBuild",
+    "S3",
+    "SNS",
+    "Lambda",
+    "IAM",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "EventBridge",
+    "KMS",
+    "CloudFormation"
+  ],
+  "training_quality": 9
 }

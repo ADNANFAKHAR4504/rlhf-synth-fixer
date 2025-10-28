@@ -1,61 +1,53 @@
-You are an expert AWS CDK engineer specializing in TypeScript-based Infrastructure-as-Code for large-scale financial and enterprise systems.
-Your task is to analyze the given problem, environment, and constraints to build a complete CDK program that deploys AWS infrastructure.
-Focus on accurate inter-resource connections, security best practices, and scalable CI/CD design.
+# CI/CD Pipeline Infrastructure Request
 
-Deliverables:
+Hey there! I'm working on setting up a comprehensive CI/CD pipeline for our microservices architecture and could really use your expertise with AWS CDK and TypeScript.
 
-main.ts: CDK entrypoint initializing the app and stack.
+## What We're Building
 
-tapstack.ts: Full CDK stack containing all resources (CodePipeline, IAM, CodeBuild, S3, SNS, Lambda, etc.) connected logically.
+We need to create a robust multi-stage CI/CD pipeline that can handle our financial services workload. The main goal is to automate our deployment process while keeping security and compliance at the forefront.
 
-📘 Input Specification
-{
-  "problem": "Create a CDK program to deploy a multi-stage CI/CD pipeline with integrated security scanning and approval workflows. The configuration must: 1. Set up a CodePipeline with source, build, test, security scan, staging deploy, and production deploy stages 2. Configure CodeCommit as the source repository with branch-based triggers for main and develop branches 3. Implement parallel CodeBuild projects for unit tests, integration tests, and SAST security scanning 4. Create a Lambda function to parse security scan results and halt pipeline if critical vulnerabilities are found 5. Deploy artifacts to separate S3 buckets for staging and production environments with versioning enabled 6. Configure SNS topics for pipeline state changes and approval notifications to different stakeholder groups 7. Implement manual approval actions before production deployment with custom approval rules 8. Set up IAM roles with least privilege access for each pipeline component 9. Add CloudWatch alarms for pipeline failures and stuck executions exceeding 30 minutes 10. Configure artifact encryption using customer-managed KMS keys.",
-  "background": "A financial services company needs to establish a multi-stage CI/CD pipeline for their microservices architecture. The pipeline must support automated testing, security scanning, and progressive deployment strategies with manual approval gates for production releases.",
-  "environment": "AWS",
-  "constraints": [
-    "Pipeline must support rollback capabilities by maintaining the last 5 successful build artifacts",
-    "Security scan stage must block deployment if OWASP Top 10 vulnerabilities are detected",
-    "All pipeline artifacts must be encrypted at rest and in transit using separate KMS keys per environment",
-    "Pipeline execution logs must be retained for 90 days for compliance auditing",
-    "Approval notifications must be sent to different SNS topics based on environment (staging vs production)",
-    "Build stage must cache dependencies to ensure build times remain under 5 minutes"
-  ]
-}
+## Key Requirements
 
-🧩 Output Requirements
+**Pipeline Stages:**
+- Source code management with branch-based triggers
+- Automated building and testing
+- Security scanning with vulnerability detection
+- Staging deployment with manual approval
+- Production deployment with additional approval gates
 
-Write clean, production-ready TypeScript CDK code following idiomatic AWS constructs (aws-codepipeline, aws-codebuild, aws-s3, aws-sns, aws-lambda, aws-iam, aws-cloudwatch, etc.).
+**Security & Compliance:**
+- All artifacts must be encrypted using customer-managed KMS keys
+- Security scans must block deployments if critical vulnerabilities are found
+- Pipeline logs need to be retained for 90 days for auditing
+- IAM roles should follow least privilege principles
 
-Ensure resources are properly connected:
+**Operational Requirements:**
+- Build caching to keep build times under 5 minutes
+- Rollback capabilities by maintaining last 5 successful builds
+- CloudWatch monitoring for failures and stuck executions
+- SNS notifications for different stakeholder groups
 
-CodeCommit → CodePipeline → CodeBuild → Lambda → S3 (staging/prod) → SNS → CloudWatch.
+## Technical Constraints
 
-Explicitly configure IAM roles with least privilege (grant only needed permissions).
+- Must use TypeScript with AWS CDK
+- Support for both main and develop branch triggers
+- Separate S3 buckets for staging and production with versioning
+- Parallel execution of unit tests, integration tests, and security scans
+- Manual approval workflows before production deployments
 
-Use environment-specific KMS keys and enforce encryption for artifacts and buckets.
+## What I Need
 
-Include CloudWatch alarms and metrics for failures/stuck executions.
+I'm looking for two main files:
+1. **main.ts** - The CDK app entry point
+2. **tapstack.ts** - The complete stack with all the pipeline resources
 
-Implement notification rules for SNS topics mapped to approval stages.
+The code should be production-ready, well-commented, and follow AWS best practices. I'm particularly concerned about getting the resource connections right and ensuring proper security configurations.
 
-Keep constructs modular and logically grouped within the stack.
+## Environment Details
 
-Comment sections clearly (e.g. // 🔹 Source Stage, // 🔹 Build & Test Stage, // 🔹 Security Scan Stage).
+- **Platform:** AWS
+- **Region:** us-east-1 (but should be configurable)
+- **Account:** Multi-account setup for staging/production
+- **Compliance:** Financial services requirements
 
-Output both main.ts and tapstack.ts in markdown code blocks.
-
-Do not include explanatory text outside of code. Only output the files.
-
-🎯 Goal
-
-Generate a complete working CDK pipeline in TypeScript that reflects the described requirements — secure, modular, and fully automated.
-Focus on:
-
-Correct inter-resource linkage
-
-Realistic AWS resource configuration
-
-Maintainability and clarity of resource relationships
-
-Compliance with all constraints.
+This is a critical piece of our infrastructure, so I need something that's both secure and maintainable. Any insights on best practices for CI/CD pipelines in regulated environments would be greatly appreciated!

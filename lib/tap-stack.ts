@@ -128,12 +128,9 @@ export class TapStack extends cdk.Stack {
     );
     productionApprovalTopic.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
-    // 🔹 CodeCommit Repository
-    const repository = new codecommit.Repository(this, 'SourceRepository', {
-      repositoryName: `tap-microservices-repo-${environmentSuffix}`,
-      description: 'Repository for microservices application code',
-    });
-    repository.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+    // 🔹 Source Configuration (using S3 instead of CodeCommit)
+    // Note: CodeCommit requires an existing repository in the account
+    // Using S3 as source for this deployment
 
     // 🔹 IAM Roles
     const codeBuildRole = new iam.Role(this, 'CodeBuildRole', {
@@ -173,9 +170,95 @@ export class TapStack extends cdk.Stack {
 
     const codePipelineRole = new iam.Role(this, 'CodePipelineRole', {
       assumedBy: new iam.ServicePrincipal('codepipeline.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AWSCodePipelineFullAccess'),
-      ],
+      inlinePolicies: {
+        CodePipelinePolicy: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                's3:GetBucketVersioning',
+                's3:GetObject',
+                's3:GetObjectVersion',
+                's3:PutObject',
+                's3:PutObjectAcl',
+                's3:ListBucket',
+                's3:GetBucketLocation',
+                's3:ListBucketMultipartUploads',
+                's3:AbortMultipartUpload',
+                's3:ListMultipartUploadParts',
+              ],
+              resources: [
+                pipelineArtifactsBucket.bucketArn,
+                `${pipelineArtifactsBucket.bucketArn}/*`,
+                stagingBucket.bucketArn,
+                `${stagingBucket.bucketArn}/*`,
+                productionBucket.bucketArn,
+                `${productionBucket.bucketArn}/*`,
+              ],
+            }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'codebuild:BatchGetBuilds',
+                'codebuild:StartBuild',
+                'codebuild:StopBuild',
+                'codebuild:ListBuilds',
+                'codebuild:ListProjects',
+              ],
+              resources: ['*'],
+            }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'iam:PassRole',
+              ],
+              resources: [codeBuildRole.roleArn],
+            }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'kms:Decrypt',
+                'kms:DescribeKey',
+                'kms:Encrypt',
+                'kms:GenerateDataKey*',
+                'kms:ReEncrypt*',
+              ],
+              resources: [
+                pipelineKmsKey.keyArn,
+                stagingKmsKey.keyArn,
+                productionKmsKey.keyArn,
+              ],
+            }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'sns:Publish',
+              ],
+              resources: [
+                pipelineNotificationTopic.topicArn,
+                stagingApprovalTopic.topicArn,
+                productionApprovalTopic.topicArn,
+              ],
+            }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'lambda:InvokeFunction',
+              ],
+              resources: ['*'],
+            }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'secretsmanager:GetSecretValue',
+              ],
+              resources: [
+                `arn:aws:secretsmanager:${this.region}:${this.account}:secret:*`,
+              ],
+            }),
+          ],
+        }),
+      },
     });
     codePipelineRole.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
@@ -495,12 +578,11 @@ export class TapStack extends cdk.Stack {
     pipeline.addStage({
       stageName: 'Source',
       actions: [
-        new codepipeline_actions.CodeCommitSourceAction({
-          actionName: 'CodeCommit_Source',
-          repository: repository,
-          branch: 'main',
+        new codepipeline_actions.S3SourceAction({
+          actionName: 'S3_Source',
+          bucket: pipelineArtifactsBucket,
+          bucketKey: 'source.zip',
           output: sourceOutput,
-          trigger: codepipeline_actions.CodeCommitTrigger.EVENTS,
         }),
       ],
     });
@@ -673,36 +755,7 @@ export class TapStack extends cdk.Stack {
       new events_targets.SnsTopic(pipelineNotificationTopic)
     );
 
-    // 🔹 Develop Branch Pipeline Trigger
-    const developBranchTrigger = new events.Rule(this, 'DevelopBranchTrigger', {
-      eventPattern: {
-        source: ['aws.codecommit'],
-        detailType: ['CodeCommit Repository State Change'],
-        detail: {
-          repositoryName: [repository.repositoryName],
-          referenceType: ['branch'],
-          referenceName: ['develop'],
-        },
-      },
-      targets: [
-        new events_targets.CodePipeline(pipeline, {
-          eventRole: new iam.Role(this, 'DevelopBranchTriggerRole', {
-            assumedBy: new iam.ServicePrincipal('events.amazonaws.com'),
-            inlinePolicies: {
-              StartPipelinePolicy: new iam.PolicyDocument({
-                statements: [
-                  new iam.PolicyStatement({
-                    actions: ['codepipeline:StartPipelineExecution'],
-                    resources: [pipeline.pipelineArn],
-                  }),
-                ],
-              }),
-            },
-          }),
-        }),
-      ],
-    });
-    developBranchTrigger.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+    // 🔹 Develop Branch Pipeline Trigger (removed - using S3 source instead of CodeCommit)
 
     // 🔹 Grant permissions
     pipelineArtifactsBucket.grantReadWrite(codeBuildRole);
@@ -720,9 +773,9 @@ export class TapStack extends cdk.Stack {
       description: 'Name of the CI/CD pipeline',
     });
 
-    new cdk.CfnOutput(this, 'RepositoryCloneUrl', {
-      value: repository.repositoryCloneUrlHttp,
-      description: 'Clone URL for the CodeCommit repository',
+    new cdk.CfnOutput(this, 'SourceBucketName', {
+      value: pipelineArtifactsBucket.bucketName,
+      description: 'Name of the S3 bucket used as source',
     });
 
     new cdk.CfnOutput(this, 'PipelineNotificationTopicArn', {

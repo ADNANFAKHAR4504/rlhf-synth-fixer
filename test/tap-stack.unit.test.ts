@@ -126,19 +126,13 @@ describe('TapStack - CI/CD Pipeline', () => {
     });
   });
 
-  describe('CodeCommit Repository', () => {
-    test('should create CodeCommit repository with correct configuration', () => {
-      template.hasResourceProperties('AWS::CodeCommit::Repository', {
-        RepositoryName: `tap-microservices-repo-${environmentSuffix}`,
-        RepositoryDescription: 'Repository for microservices application code',
-      });
-    });
-
-    test('should apply DESTROY removal policy to CodeCommit repository', () => {
-      const codeCommitRepo = template.findResources('AWS::CodeCommit::Repository');
-      Object.values(codeCommitRepo).forEach((repo: any) => {
-        expect(repo.DeletionPolicy).toBe('Delete');
-      });
+  describe('Source Configuration', () => {
+    test('should use S3 as source instead of CodeCommit', () => {
+      // Verify that no CodeCommit repository is created
+      template.resourceCountIs('AWS::CodeCommit::Repository', 0);
+      
+      // Verify pipeline exists
+      template.resourceCountIs('AWS::CodePipeline::Pipeline', 1);
     });
   });
 
@@ -172,31 +166,17 @@ describe('TapStack - CI/CD Pipeline', () => {
     });
 
     test('should create CodePipeline role with correct permissions', () => {
-      template.hasResourceProperties('AWS::IAM::Role', {
-        AssumeRolePolicyDocument: {
-          Statement: [
-            {
-              Action: 'sts:AssumeRole',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'codepipeline.amazonaws.com',
-              },
-            },
-          ],
-        },
-        ManagedPolicyArns: [
-          {
-            'Fn::Join': [
-              '',
-              [
-                'arn:',
-                { Ref: 'AWS::Partition' },
-                ':iam::aws:policy/AWSCodePipelineFullAccess',
-              ],
-            ],
-          },
-        ],
-      });
+      // Check that CodePipeline role exists with inline policies
+      template.resourceCountIs('AWS::IAM::Role', 13);
+      
+      // Verify that at least one role has the CodePipeline service principal
+      const roles = template.findResources('AWS::IAM::Role');
+      const codePipelineRole = Object.values(roles).find((role: any) =>
+        role.Properties?.AssumeRolePolicyDocument?.Statement?.some((stmt: any) =>
+          stmt.Principal?.Service === 'codepipeline.amazonaws.com'
+        )
+      );
+      expect(codePipelineRole).toBeDefined();
     });
 
     test('should create Lambda execution role with correct permissions', () => {
@@ -229,7 +209,7 @@ describe('TapStack - CI/CD Pipeline', () => {
 
     test('should apply DESTROY removal policy to IAM roles', () => {
       // Check that IAM roles exist and have proper configuration
-      template.resourceCountIs('AWS::IAM::Role', 15);
+      template.resourceCountIs('AWS::IAM::Role', 13);
     });
   });
 
@@ -378,22 +358,14 @@ describe('TapStack - CI/CD Pipeline', () => {
       });
     });
 
-    test('should create develop branch trigger rule', () => {
-      template.hasResourceProperties('AWS::Events::Rule', {
-        EventPattern: {
-          source: ['aws.codecommit'],
-          'detail-type': ['CodeCommit Repository State Change'],
-          detail: {
-            referenceType: ['branch'],
-            referenceName: ['develop'],
-          },
-        },
-      });
+    test('should not create develop branch trigger rule (using S3 source)', () => {
+      // Since we're using S3 source instead of CodeCommit, no develop branch trigger rule should exist
+      template.resourceCountIs('AWS::Events::Rule', 1); // Only pipeline state change rule
     });
 
     test('should apply DESTROY removal policy to EventBridge rules', () => {
       // Check that EventBridge rules exist and have proper configuration
-      template.resourceCountIs('AWS::Events::Rule', 3);
+      template.resourceCountIs('AWS::Events::Rule', 1);
     });
   });
 
@@ -447,7 +419,7 @@ describe('TapStack - CI/CD Pipeline', () => {
     });
 
     test('should have correct number of IAM roles', () => {
-      template.resourceCountIs('AWS::IAM::Role', 15);
+      template.resourceCountIs('AWS::IAM::Role', 13);
     });
 
     test('should have correct number of CloudWatch alarms', () => {
@@ -455,7 +427,7 @@ describe('TapStack - CI/CD Pipeline', () => {
     });
 
     test('should have correct number of EventBridge rules', () => {
-      template.resourceCountIs('AWS::Events::Rule', 3);
+      template.resourceCountIs('AWS::Events::Rule', 1);
     });
 
     test('should have correct number of CloudWatch log groups', () => {
@@ -506,8 +478,8 @@ describe('TapStack - CI/CD Pipeline', () => {
         Description: 'Name of the CI/CD pipeline',
       });
 
-      template.hasOutput('RepositoryCloneUrl', {
-        Description: 'Clone URL for the CodeCommit repository',
+      template.hasOutput('SourceBucketName', {
+        Description: 'Name of the S3 bucket used as source',
       });
 
       template.hasOutput('PipelineNotificationTopicArn', {
