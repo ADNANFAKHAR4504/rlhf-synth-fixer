@@ -1,0 +1,14 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349011",
+  "team": "3",
+  "startedAt": "2025-10-28T10:04:01.426Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "VPC, Subnet, RouteTable, Route, SubnetRouteTableAssociation, InternetGateway, VPCGatewayAttachment, NatGateway, EIP, VPCEndpoint, Bucket, BucketPolicy, DynamoDBTable, ScalableTarget, ScalingPolicy, KMSKey, IAMRole, IAMPolicy, LambdaFunction, LambdaPermission, LogGroup, RestApi, ApiResource, ApiMethod, ApiDeployment, ApiStage, SNSTopic, SNSSubscription, CloudWatchAlarm, CognitoUserPool, CognitoUserPoolClient, CognitoIdentityPool, CloudWatchDashboard"
+}
