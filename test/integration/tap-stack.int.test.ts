@@ -21,30 +21,13 @@ function loadOutputs(): StackOutputs {
   return {};
 }
 
-describe('BrazilCart Infrastructure Integration Tests', () => {
+describe('LMS Infrastructure Integration Tests', () => {
   let outputs: StackOutputs;
   let environmentSuffix: string;
 
   beforeAll(() => {
     outputs = loadOutputs();
-    environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr5128';
-  });
-
-  describe('Stack Outputs', () => {
-    test('should have outputs available', () => {
-      expect(outputs).toBeDefined();
-      expect(typeof outputs).toBe('object');
-    });
-
-    test('should have VPC ID in outputs', () => {
-      if (Object.keys(outputs).length > 0) {
-        // Check if VPC ID exists in any form
-        const hasVpcOutput = Object.keys(outputs).some(key =>
-          key.toLowerCase().includes('vpc')
-        );
-        expect(hasVpcOutput || Object.keys(outputs).length === 0).toBeTruthy();
-      }
-    });
+    environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr5140';
   });
 
   describe('Environment Configuration', () => {
@@ -54,16 +37,16 @@ describe('BrazilCart Infrastructure Integration Tests', () => {
     });
 
     test('should have AWS region configured', () => {
-      const awsRegion = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION;
-      expect(awsRegion || 'us-east-1').toBeDefined();
+      const awsRegion = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
+      expect(awsRegion).toBeDefined();
+      expect(awsRegion.length).toBeGreaterThan(0);
     });
   });
 
-  describe('Output File Structure', () => {
-    test('outputs file path should be configured', () => {
-      expect(FLAT_OUTPUTS_PATH).toBeDefined();
-      expect(FLAT_OUTPUTS_PATH).toContain('cfn-outputs');
-      expect(FLAT_OUTPUTS_PATH).toContain('flat-outputs.json');
+  describe('Template File', () => {
+    test('should have CloudFormation template', () => {
+      const templatePath = path.join(__dirname, '..', '..', 'lib', 'TapStack.yml');
+      expect(fs.existsSync(templatePath)).toBe(true);
     });
   });
 });
