@@ -1,0 +1,14 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "6024",
+  "team": "1",
+  "startedAt": "2025-10-28T01:48:09.678Z",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "IaC Diagnosis/Edits"
+  ],
+  "aws_services": "ssm, kms ,s3, lambda, iam, cloudwatch, EC2"
+}
