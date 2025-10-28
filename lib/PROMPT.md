@@ -10,7 +10,7 @@ Create a containerized environment for a SaaS healthcare analytics platform usin
 
 ## Requirements
 
-The infrastructure should be deployed in sa-east-1 (São Paulo) region and include:
+The infrastructure should be deployed in eu-west-1 region and include:
 - ECS Fargate cluster for containerized applications
 - ElastiCache Redis cluster for session management
 - ECS Task Definitions with appropriate security configurations
