@@ -1033,7 +1033,6 @@ Resources:
   NovaRDSInstance:
     Type: 'AWS::RDS::DBInstance'
     Properties:
-      DBInstanceIdentifier: !Sub 'nova-prod-patient-database-${AWS::Region}'
       AllocatedStorage: 100
       DBInstanceClass: 'db.t3.medium'
       Engine: mysql
