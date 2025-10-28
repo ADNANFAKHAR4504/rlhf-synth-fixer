@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -54,6 +54,21 @@ describe('TapStack', () => {
       });
     });
 
+    test('should configure Aurora Serverless v2 capacity', () => {
+      template.hasResourceProperties('AWS::RDS::DBCluster', {
+        ServerlessV2ScalingConfiguration: {
+          MinCapacity: 2,
+          MaxCapacity: 4,
+        },
+      });
+    });
+
+    test('should configure backup retention', () => {
+      template.hasResourceProperties('AWS::RDS::DBCluster', {
+        BackupRetentionPeriod: 14,
+      });
+    });
+
     test('should create database instances', () => {
       // Writer and reader instances
       template.resourceCountIs('AWS::RDS::DBInstance', 2);
@@ -66,6 +81,25 @@ describe('TapStack', () => {
     test('should create DB subnet group', () => {
       template.resourceCountIs('AWS::RDS::DBSubnetGroup', 1);
     });
+
+    test('should output database capacity configuration', () => {
+      const outputs = template.toJSON().Outputs;
+      const capacityOutput = Object.keys(outputs).find(key =>
+        key.includes('DatabaseCapacity')
+      );
+      expect(capacityOutput).toBeDefined();
+      expect(outputs[capacityOutput!].Value).toContain('Min: 2 ACU');
+      expect(outputs[capacityOutput!].Value).toContain('Max: 4 ACU');
+    });
+
+    test('should output backup retention configuration', () => {
+      const outputs = template.toJSON().Outputs;
+      const backupOutput = Object.keys(outputs).find(key =>
+        key.includes('DatabaseBackupRetention')
+      );
+      expect(backupOutput).toBeDefined();
+      expect(outputs[backupOutput!].Value).toContain('14 days');
+    });
   });
 
   describe('Cache Stack', () => {
@@ -74,6 +108,14 @@ describe('TapStack', () => {
         Engine: 'redis',
         AtRestEncryptionEnabled: true,
         TransitEncryptionEnabled: true,
+      });
+    });
+
+    test('should create Redis cluster with 3 nodes', () => {
+      template.hasResourceProperties('AWS::ElastiCache::ReplicationGroup', {
+        NumCacheClusters: 3,
+        AutomaticFailoverEnabled: true,
+        MultiAZEnabled: true,
       });
     });
 
@@ -96,9 +138,9 @@ describe('TapStack', () => {
       });
     });
 
-    test('should create ECS service with desired count of 2', () => {
+    test('should create ECS service with desired count of 3', () => {
       template.hasResourceProperties('AWS::ECS::Service', {
-        DesiredCount: 2,
+        DesiredCount: 3,
         LaunchType: 'FARGATE',
       });
     });
