@@ -484,7 +484,6 @@ Resources:
   NovaCloudTrailBucket:
     Type: 'AWS::S3::Bucket'
     Properties:
-      BucketName: !Sub 'nova-prod-audit-logs-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
