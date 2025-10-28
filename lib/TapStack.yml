@@ -452,7 +452,6 @@ Resources:
   NovaPatientDocumentsBucket:
     Type: 'AWS::S3::Bucket'
     Properties:
-      BucketName: !Sub 'nova-prod-patient-documents-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
