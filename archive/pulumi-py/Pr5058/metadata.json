@@ -11,5 +11,12 @@
   "subject_labels": [
     "IaC Optimization"
   ],
-  "aws_services": "S3 Bucket, Lambda, API Gateway, DynamoDB, DynamoDB Streams, SNS, CloudWatch LogGroup, CloudWatch Alarms, IAM Roles, IAM Policies"
+  "aws_services": "S3 Bucket, Lambda, API Gateway, DynamoDB, DynamoDB Streams, SNS, CloudWatch LogGroup, CloudWatch Alarms, IAM Roles, IAM Policies",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
 }
