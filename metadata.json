@@ -1,0 +1,28 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000212",
+  "team": "1",
+  "startedAt": "2025-10-28T14:58:12.378Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "CloudFront",
+    "IAM",
+    "KMS",
+    "SecretsManager",
+    "CloudTrail",
+    "Config",
+    "AutoScaling",
+    "ElasticLoadBalancingV2"
+  ],
+  "training_quality": "high"
+}
