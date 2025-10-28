@@ -783,6 +783,7 @@ Resources:
       VpcId: !Ref VPC
       HealthCheckEnabled: true
       HealthCheckPath: /health
+      HealthCheckPort: traffic-port
       HealthCheckProtocol: HTTP
       HealthCheckIntervalSeconds: 30
       HealthCheckTimeoutSeconds: 5
