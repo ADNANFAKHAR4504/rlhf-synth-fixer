@@ -18,5 +18,11 @@
     "IAM"
   ],
   "training_quality": 8,
-  "background": "Serverless Infrastructure with AWS CloudFormation (JSON) - File Upload Application"
+  "background": "Serverless Infrastructure with AWS CloudFormation (JSON) - File Upload Application",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "santhosh-swe",
+  "dockerS3Location": ""
 }
