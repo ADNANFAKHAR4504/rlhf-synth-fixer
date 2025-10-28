@@ -569,7 +569,7 @@ resource "aws_db_subnet_group" "secondary" {
 resource "aws_db_parameter_group" "primary" {
   provider    = aws.us_east_1
   name        = "pg-primary-${local.resource_suffix}"
-  family      = "postgres15"
+  family      = "postgres17"
   description = "PostgreSQL parameter group for primary database"
   
   parameter {
@@ -601,7 +601,7 @@ resource "aws_db_parameter_group" "primary" {
 resource "aws_db_parameter_group" "secondary" {
   provider    = aws.us_west_2
   name        = "pg-secondary-${local.resource_suffix}"
-  family      = "postgres15"
+  family      = "postgres17"
   description = "PostgreSQL parameter group for secondary database"
   
   parameter {
