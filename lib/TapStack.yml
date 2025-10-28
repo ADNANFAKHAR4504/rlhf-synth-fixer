@@ -139,12 +139,6 @@ Resources:
       GroupName: !Sub 'api-gateway-sg-${EnvironmentSuffix}'
       GroupDescription: Security group for API Gateway VPC access
       VpcId: !Ref VPC
-      SecurityGroupEgress:
-        - IpProtocol: tcp
-          FromPort: 6379
-          ToPort: 6379
-          DestinationSecurityGroupId: !Ref CacheSecurityGroup
-          Description: Allow outbound to Redis
       Tags:
         - Key: Name
           Value: !Sub 'api-gateway-sg-${EnvironmentSuffix}'
@@ -158,19 +152,33 @@ Resources:
       GroupName: !Sub 'cache-sg-${EnvironmentSuffix}'
       GroupDescription: Security group for ElastiCache Redis cluster
       VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 6379
-          ToPort: 6379
-          SourceSecurityGroupId: !Ref APIGatewaySecurityGroup
-          Description: Allow Redis traffic from API Gateway
       Tags:
         - Key: Name
           Value: !Sub 'cache-sg-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
-        - Key: Compliance
-          Value: FedRAMP-Moderate
+
+  # Security Group Ingress Rule - Allow API Gateway to access Cache
+  CacheSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref CacheSecurityGroup
+      IpProtocol: tcp
+      FromPort: 6379
+      ToPort: 6379
+      SourceSecurityGroupId: !Ref APIGatewaySecurityGroup
+      Description: Allow Redis traffic from API Gateway
+
+  # Security Group Egress Rule - Allow API Gateway to connect to Cache
+  APIGatewaySecurityGroupEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref APIGatewaySecurityGroup
+      IpProtocol: tcp
+      FromPort: 6379
+      ToPort: 6379
+      DestinationSecurityGroupId: !Ref CacheSecurityGroup
+      Description: Allow outbound to Redis
 
   # ElastiCache Redis Cluster
   RedisReplicationGroup:
