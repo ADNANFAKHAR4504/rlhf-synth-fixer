@@ -78,6 +78,10 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Conditions).toBeDefined();
       expect(template.Conditions.UseRedisAuth).toBeDefined();
     });
+
+    test('should have UseRDSSecrets condition', () => {
+      expect(template.Conditions.UseRDSSecrets).toBeDefined();
+    });
   });
 
   describe('Resources', () => {
@@ -193,10 +197,13 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have required parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBeGreaterThanOrEqual(3); // EnvironmentSuffix, VpcCidr, and EnableRedisAuth
+      expect(parameterCount).toBeGreaterThanOrEqual(5); // EnvironmentSuffix, VpcCidr, EnableRedisAuth, EnableRDSSecrets, DefaultDBUsername, DefaultDBPassword
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
       expect(template.Parameters.VpcCidr).toBeDefined();
       expect(template.Parameters.EnableRedisAuth).toBeDefined();
+      expect(template.Parameters.EnableRDSSecrets).toBeDefined();
+      expect(template.Parameters.DefaultDBUsername).toBeDefined();
+      expect(template.Parameters.DefaultDBPassword).toBeDefined();
     });
 
     test('should have comprehensive outputs', () => {

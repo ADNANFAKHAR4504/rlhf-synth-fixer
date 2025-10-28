@@ -32,8 +32,35 @@ Parameters:
     AllowedValues: ['true', 'false']
     Description: 'Enable Redis authentication (requires secrets manager)'
 
+  EnableRDSSecrets:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: 'Use Secrets Manager for RDS credentials (requires secrets)'
+
+  DefaultDBUsername:
+    Type: String
+    Default: 'mediauser'
+    Description: 'Default database username when not using secrets manager'
+    NoEcho: false
+
+  DefaultDBPassword:
+    Type: String
+    Default: 'TempPassword123!'
+    Description: 'Default database password when not using secrets manager'
+    NoEcho: true
+
+  TimestampSuffix:
+    Type: String
+    Default: ''
+    Description: 'Optional timestamp suffix for unique resource naming (format: YYYYMMDD-HHMMSS)'
+    AllowedPattern: '^$|^[0-9]{8}-[0-9]{6}$'
+    ConstraintDescription: 'Must be empty or in format YYYYMMDD-HHMMSS (e.g., 20251028-112030)'
+
 Conditions:
   UseRedisAuth: !Equals [!Ref EnableRedisAuth, 'true']
+  UseRDSSecrets: !Equals [!Ref EnableRDSSecrets, 'true']
+  HasTimestamp: !Not [!Equals [!Ref TimestampSuffix, '']]
 
 Mappings:
   RegionMap:
@@ -262,7 +289,10 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      DBInstanceIdentifier: !Sub 'media-postgres-${EnvironmentSuffix}'
+      DBInstanceIdentifier: !If
+        - HasTimestamp
+        - !Sub 'media-postgres-${EnvironmentSuffix}-${TimestampSuffix}'
+        - !Sub 'media-postgres-${EnvironmentSuffix}'
       DBInstanceClass: db.t3.micro
       Engine: postgres
       EngineVersion: '14.19'
@@ -271,8 +301,14 @@ Resources:
       StorageEncrypted: true
       MultiAZ: true
       DBName: mediadb
-      MasterUsername: !Sub '{{resolve:secretsmanager:media-db-credentials-${EnvironmentSuffix}:SecretString:username}}'
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:media-db-credentials-${EnvironmentSuffix}:SecretString:password}}'
+      MasterUsername: !If 
+        - UseRDSSecrets
+        - !Sub '{{resolve:secretsmanager:media-db-credentials-${EnvironmentSuffix}:SecretString:username}}'
+        - !Ref DefaultDBUsername
+      MasterUserPassword: !If 
+        - UseRDSSecrets
+        - !Sub '{{resolve:secretsmanager:media-db-credentials-${EnvironmentSuffix}:SecretString:password}}'
+        - !Ref DefaultDBPassword
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
@@ -334,7 +370,10 @@ Resources:
   ElastiCacheReplicationGroup:
     Type: AWS::ElastiCache::ReplicationGroup
     Properties:
-      ReplicationGroupId: !Sub 'media-redis-${EnvironmentSuffix}'
+      ReplicationGroupId: !If
+        - HasTimestamp
+        - !Sub 'media-redis-${EnvironmentSuffix}-${TimestampSuffix}'
+        - !Sub 'media-redis-${EnvironmentSuffix}'
       ReplicationGroupDescription: 'Redis cluster for media content metadata caching'
       Engine: redis
       EngineVersion: '7.0'
@@ -412,7 +451,10 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      BucketName: !Sub 'media-artifacts-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketName: !If
+        - HasTimestamp
+        - !Sub 'media-artifacts-${EnvironmentSuffix}-${AWS::AccountId}-${TimestampSuffix}'
+        - !Sub 'media-artifacts-${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -529,7 +571,10 @@ Resources:
   MediaPipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
-      Name: !Sub 'media-pipeline-${EnvironmentSuffix}'
+      Name: !If
+        - HasTimestamp
+        - !Sub 'media-pipeline-${EnvironmentSuffix}-${TimestampSuffix}'
+        - !Sub 'media-pipeline-${EnvironmentSuffix}'
       RoleArn: !GetAtt CodePipelineRole.Arn
       ArtifactStore:
         Type: S3

@@ -44,6 +44,34 @@
                 "false"
             ],
             "Description": "Enable Redis authentication (requires secrets manager)"
+        },
+        "EnableRDSSecrets": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Use Secrets Manager for RDS credentials (requires secrets)"
+        },
+        "DefaultDBUsername": {
+            "Type": "String",
+            "Default": "mediauser",
+            "Description": "Default database username when not using secrets manager",
+            "NoEcho": false
+        },
+        "DefaultDBPassword": {
+            "Type": "String",
+            "Default": "TempPassword123!",
+            "Description": "Default database password when not using secrets manager",
+            "NoEcho": true
+        },
+        "TimestampSuffix": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional timestamp suffix for unique resource naming (format: YYYYMMDD-HHMMSS)",
+            "AllowedPattern": "^$|^[0-9]{8}-[0-9]{6}$",
+            "ConstraintDescription": "Must be empty or in format YYYYMMDD-HHMMSS (e.g., 20251028-112030)"
         }
     },
     "Conditions": {
@@ -53,6 +81,26 @@
                     "Ref": "EnableRedisAuth"
                 },
                 "true"
+            ]
+        },
+        "UseRDSSecrets": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableRDSSecrets"
+                },
+                "true"
+            ]
+        },
+        "HasTimestamp": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "TimestampSuffix"
+                        },
+                        ""
+                    ]
+                }
             ]
         }
     },
@@ -552,7 +600,15 @@
             "UpdateReplacePolicy": "Delete",
             "Properties": {
                 "DBInstanceIdentifier": {
-                    "Fn::Sub": "media-postgres-${EnvironmentSuffix}"
+                    "Fn::If": [
+                        "HasTimestamp",
+                        {
+                            "Fn::Sub": "media-postgres-${EnvironmentSuffix}-${TimestampSuffix}"
+                        },
+                        {
+                            "Fn::Sub": "media-postgres-${EnvironmentSuffix}"
+                        }
+                    ]
                 },
                 "DBInstanceClass": "db.t3.micro",
                 "Engine": "postgres",
@@ -563,10 +619,26 @@
                 "MultiAZ": true,
                 "DBName": "mediadb",
                 "MasterUsername": {
-                    "Fn::Sub": "{{resolve:secretsmanager:media-db-credentials-${EnvironmentSuffix}:SecretString:username}}"
+                    "Fn::If": [
+                        "UseRDSSecrets",
+                        {
+                            "Fn::Sub": "{{resolve:secretsmanager:media-db-credentials-${EnvironmentSuffix}:SecretString:username}}"
+                        },
+                        {
+                            "Ref": "DefaultDBUsername"
+                        }
+                    ]
                 },
                 "MasterUserPassword": {
-                    "Fn::Sub": "{{resolve:secretsmanager:media-db-credentials-${EnvironmentSuffix}:SecretString:password}}"
+                    "Fn::If": [
+                        "UseRDSSecrets",
+                        {
+                            "Fn::Sub": "{{resolve:secretsmanager:media-db-credentials-${EnvironmentSuffix}:SecretString:password}}"
+                        },
+                        {
+                            "Ref": "DefaultDBPassword"
+                        }
+                    ]
                 },
                 "VPCSecurityGroups": [
                     {
@@ -669,7 +741,15 @@
             "Type": "AWS::ElastiCache::ReplicationGroup",
             "Properties": {
                 "ReplicationGroupId": {
-                    "Fn::Sub": "media-redis-${EnvironmentSuffix}"
+                    "Fn::If": [
+                        "HasTimestamp",
+                        {
+                            "Fn::Sub": "media-redis-${EnvironmentSuffix}-${TimestampSuffix}"
+                        },
+                        {
+                            "Fn::Sub": "media-redis-${EnvironmentSuffix}"
+                        }
+                    ]
                 },
                 "ReplicationGroupDescription": "Redis cluster for media content metadata caching",
                 "Engine": "redis",
@@ -793,7 +873,15 @@
             "UpdateReplacePolicy": "Delete",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "media-artifacts-${EnvironmentSuffix}-${AWS::AccountId}"
+                    "Fn::If": [
+                        "HasTimestamp",
+                        {
+                            "Fn::Sub": "media-artifacts-${EnvironmentSuffix}-${AWS::AccountId}-${TimestampSuffix}"
+                        },
+                        {
+                            "Fn::Sub": "media-artifacts-${EnvironmentSuffix}-${AWS::AccountId}"
+                        }
+                    ]
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -995,7 +1083,15 @@
             "Type": "AWS::CodePipeline::Pipeline",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "media-pipeline-${EnvironmentSuffix}"
+                    "Fn::If": [
+                        "HasTimestamp",
+                        {
+                            "Fn::Sub": "media-pipeline-${EnvironmentSuffix}-${TimestampSuffix}"
+                        },
+                        {
+                            "Fn::Sub": "media-pipeline-${EnvironmentSuffix}"
+                        }
+                    ]
                 },
                 "RoleArn": {
                     "Fn::GetAtt": [
