@@ -14,11 +14,10 @@ locals {
 
   # Database parameter group settings optimized for gaming workloads
   db_parameters = {
-    max_connections                = "16000" # High connection count for concurrent players
-    innodb_buffer_pool_size        = "{DBInstanceClassMemory*3/4}"
-    innodb_flush_log_at_trx_commit = "2" # Balance between performance and durability
-    slow_query_log                 = "1"
-    long_query_time                = "0.5"
+    max_connections         = "16000" # High connection count for concurrent players
+    innodb_buffer_pool_size = "{DBInstanceClassMemory*3/4}"
+    slow_query_log          = "1"
+    long_query_time         = "0.5"
   }
 }
 

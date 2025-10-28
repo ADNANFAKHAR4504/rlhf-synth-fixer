@@ -83,9 +83,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "aurora_backups" {
       noncurrent_days = 30
     }
 
-    # Transition old versions to cheaper storage
+    # Transition old versions to cheaper storage (minimum 30 days for STANDARD_IA)
     noncurrent_version_transition {
-      noncurrent_days = 7
+      noncurrent_days = 30
       storage_class   = "STANDARD_IA"
     }
   }
