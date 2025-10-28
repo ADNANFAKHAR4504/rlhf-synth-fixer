@@ -133,7 +133,7 @@ export class ComputeStack extends Construct {
     this.service = new ecs.FargateService(this, 'FargateService', {
       cluster: this.cluster,
       taskDefinition: taskDefinition,
-      desiredCount: 2,
+      desiredCount: 3,
       securityGroups: [props.ecsSecurityGroup],
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,

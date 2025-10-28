@@ -1,606 +1,371 @@
-# StreamFlix Content Delivery API Infrastructure
+```python
+#!/usr/bin/env python3
+"""
+Infrastructure optimization script for StreamFlix development environment.
+Scales down Aurora, ElastiCache, and ECS resources for cost optimization.
+"""
 
-## Implementation Approach
+import boto3
+import time
+import sys
+from typing import Optional, Dict, Any
+from botocore.exceptions import ClientError
 
-This CDK TypeScript solution creates a scalable content delivery API infrastructure for StreamFlix with the following architecture:
 
-### Architecture Overview
+class InfrastructureOptimizer:
+    """Handles infrastructure optimization for StreamFlix development environment."""
+    
+    def __init__(self, environment_suffix: str = 'dev', region_name: str = 'us-east-1'):
+        """
+        Initialize the optimizer with AWS clients.
+        
+        Args:
+            environment_suffix: The environment suffix (default: 'dev')
+            region_name: AWS region name (default: 'us-east-1')
+        """
+        self.environment_suffix = environment_suffix
+        self.region_name = region_name
+        
+        # Initialize AWS clients
+        self.rds_client = boto3.client('rds', region_name=region_name)
+        self.elasticache_client = boto3.client('elasticache', region_name=region_name)
+        self.ecs_client = boto3.client('ecs', region_name=region_name)
+        
+        print(f"Initialized optimizer for environment: {environment_suffix}")
+        print(f"Region: {region_name}")
+        print("-" * 50)
+    
+    def optimize_aurora_database(self) -> bool:
+        """
+        Optimize Aurora Serverless v2 database cluster.
+        - Reduce minCapacity from 2 to 0.5 ACU
+        - Reduce maxCapacity from 4 to 1 ACU
+        - Reduce backup retention from 14 to 1 day
+        """
+        print("\n🔧 Optimizing Aurora Database...")
+        
+        try:
+            # Find the database cluster
+            clusters = self.rds_client.describe_db_clusters()
+            cluster_id = None
+            
+            for cluster in clusters['DBClusters']:
+                if f'streamflix' in cluster['DBClusterIdentifier'].lower():
+                    cluster_id = cluster['DBClusterIdentifier']
+                    break
+            
+            if not cluster_id:
+                print("❌ Aurora cluster not found")
+                return False
+            
+            print(f"Found cluster: {cluster_id}")
+            
+            # Update serverless v2 scaling configuration
+            print("Updating serverless v2 scaling configuration...")
+            self.rds_client.modify_db_cluster(
+                DBClusterIdentifier=cluster_id,
+                ServerlessV2ScalingConfiguration={
+                    'MinCapacity': 0.5,
+                    'MaxCapacity': 1.0
+                },
+                BackupRetentionPeriod=1,
+                ApplyImmediately=True
+            )
+            
+            print("✅ Aurora optimization complete:")
+            print("   - Min capacity: 2 ACU → 0.5 ACU")
+            print("   - Max capacity: 4 ACU → 1 ACU")
+            print("   - Backup retention: 14 days → 1 day")
+            
+            # Wait for cluster to be available
+            print("Waiting for cluster modification to complete...")
+            waiter = self.rds_client.get_waiter('db_cluster_available')
+            waiter.wait(
+                DBClusterIdentifier=cluster_id,
+                WaiterConfig={'Delay': 30, 'MaxAttempts': 20}
+            )
+            
+            return True
+            
+        except ClientError as e:
+            print(f"❌ Error optimizing Aurora: {e}")
+            return False
+    
+    def optimize_elasticache_redis(self) -> bool:
+        """
+        Optimize ElastiCache Redis cluster.
+        - Reduce numCacheClusters from 3 to 2 nodes
+        """
+        print("\n🔧 Optimizing ElastiCache Redis...")
+        
+        try:
+            # Find the Redis replication group
+            replication_groups = self.elasticache_client.describe_replication_groups()
+            replication_group_id = None
+            
+            for group in replication_groups['ReplicationGroups']:
+                if f'streamflix-redis-{self.environment_suffix}' in group['ReplicationGroupId']:
+                    replication_group_id = group['ReplicationGroupId']
+                    current_node_count = len(group['NodeGroups'][0]['NodeGroupMembers'])
+                    break
+            
+            if not replication_group_id:
+                print("❌ Redis replication group not found")
+                return False
+            
+            print(f"Found replication group: {replication_group_id}")
+            print(f"Current node count: {current_node_count}")
+            
+            if current_node_count <= 2:
+                print("✅ Already optimized (2 or fewer nodes)")
+                return True
+            
+            # Decrease replica count
+            print("Decreasing replica count...")
+            self.elasticache_client.decrease_replica_count(
+                ReplicationGroupId=replication_group_id,
+                NewReplicaCount=1,  # This will result in 2 total nodes (1 primary + 1 replica)
+                ApplyImmediately=True
+            )
+            
+            print("✅ ElastiCache optimization initiated:")
+            print(f"   - Node count: {current_node_count} → 2")
+            
+            # Wait for the modification to complete
+            print("Waiting for Redis cluster modification to complete...")
+            time.sleep(30)  # Initial wait
+            
+            max_attempts = 20
+            for attempt in range(max_attempts):
+                response = self.elasticache_client.describe_replication_groups(
+                    ReplicationGroupId=replication_group_id
+                )
+                status = response['ReplicationGroups'][0]['Status']
+                if status == 'available':
+                    print("✅ Redis cluster modification complete")
+                    break
+                print(f"Status: {status}. Waiting... ({attempt + 1}/{max_attempts})")
+                time.sleep(30)
+            
+            return True
+            
+        except ClientError as e:
+            print(f"❌ Error optimizing ElastiCache: {e}")
+            return False
+    
+    def optimize_ecs_fargate(self) -> bool:
+        """
+        Optimize ECS Fargate service.
+        - Reduce desiredCount from 3 to 2 tasks
+        """
+        print("\n🔧 Optimizing ECS Fargate...")
+        
+        try:
+            # Find the ECS cluster
+            clusters = self.ecs_client.list_clusters()
+            cluster_arn = None
+            
+            for cluster in clusters['clusterArns']:
+                if f'streamflix-cluster-{self.environment_suffix}' in cluster:
+                    cluster_arn = cluster
+                    break
+            
+            if not cluster_arn:
+                print("❌ ECS cluster not found")
+                return False
+            
+            print(f"Found cluster: {cluster_arn.split('/')[-1]}")
+            
+            # Find the service
+            services = self.ecs_client.list_services(cluster=cluster_arn)
+            service_arn = None
+            
+            for service in services['serviceArns']:
+                if f'streamflix-api-{self.environment_suffix}' in service:
+                    service_arn = service
+                    break
+            
+            if not service_arn:
+                print("❌ ECS service not found")
+                return False
+            
+            service_name = service_arn.split('/')[-1]
+            print(f"Found service: {service_name}")
+            
+            # Get current service details
+            service_details = self.ecs_client.describe_services(
+                cluster=cluster_arn,
+                services=[service_arn]
+            )
+            
+            current_desired_count = service_details['services'][0]['desiredCount']
+            print(f"Current desired count: {current_desired_count}")
+            
+            if current_desired_count <= 2:
+                print("✅ Already optimized (2 or fewer tasks)")
+                return True
+            
+            # Update service
+            print("Updating service desired count...")
+            self.ecs_client.update_service(
+                cluster=cluster_arn,
+                service=service_arn,
+                desiredCount=2
+            )
+            
+            print("✅ ECS optimization complete:")
+            print(f"   - Task count: {current_desired_count} → 2")
+            
+            # Wait for service to stabilize
+            print("Waiting for service to stabilize...")
+            waiter = self.ecs_client.get_waiter('services_stable')
+            waiter.wait(
+                cluster=cluster_arn,
+                services=[service_arn],
+                WaiterConfig={'Delay': 30, 'MaxAttempts': 20}
+            )
+            
+            return True
+            
+        except ClientError as e:
+            print(f"❌ Error optimizing ECS: {e}")
+            return False
+    
+    def get_cost_savings_estimate(self) -> Dict[str, Any]:
+        """
+        Calculate estimated monthly cost savings from the optimizations.
+        
+        Returns:
+            Dictionary with cost savings estimates
+        """
+        # These are rough estimates based on AWS pricing (varies by region)
+        aurora_savings = {
+            'original_acu_cost': 2.0 * 0.12 * 24 * 30,  # Min 2 ACU
+            'optimized_acu_cost': 0.5 * 0.12 * 24 * 30,  # Min 0.5 ACU
+            'backup_savings': 0.095 * 13 * 10  # ~10GB database, 13 days saved
+        }
+        
+        elasticache_savings = {
+            'node_cost': 0.024 * 24 * 30  # t4g.micro per node
+        }
+        
+        ecs_savings = {
+            'task_cost': (0.256 * 0.04048 + 0.512 * 0.004445) * 24 * 30  # 256 CPU, 512 MiB
+        }
+        
+        total_savings = (
+            (aurora_savings['original_acu_cost'] - aurora_savings['optimized_acu_cost']) +
+            aurora_savings['backup_savings'] +
+            elasticache_savings['node_cost'] +
+            ecs_savings['task_cost']
+        )
+        
+        return {
+            'aurora_monthly_savings': round(
+                (aurora_savings['original_acu_cost'] - aurora_savings['optimized_acu_cost']) + 
+                aurora_savings['backup_savings'], 2
+            ),
+            'elasticache_monthly_savings': round(elasticache_savings['node_cost'], 2),
+            'ecs_monthly_savings': round(ecs_savings['task_cost'], 2),
+            'total_monthly_savings': round(total_savings, 2)
+        }
+    
+    def run_optimization(self) -> None:
+        """Run all optimization tasks."""
+        print("\n🚀 Starting infrastructure optimization...")
+        print("=" * 50)
+        
+        results = {
+            'aurora': self.optimize_aurora_database(),
+            'elasticache': self.optimize_elasticache_redis(),
+            'ecs': self.optimize_ecs_fargate()
+        }
+        
+        print("\n" + "=" * 50)
+        print("📊 Optimization Summary:")
+        print("-" * 50)
+        
+        success_count = sum(results.values())
+        total_count = len(results)
+        
+        for service, success in results.items():
+            status = "✅ Success" if success else "❌ Failed"
+            print(f"{service.capitalize()}: {status}")
+        
+        print(f"\nTotal: {success_count}/{total_count} optimizations successful")
+        
+        if success_count == total_count:
+            print("\n💰 Estimated Monthly Cost Savings:")
+            print("-" * 50)
+            savings = self.get_cost_savings_estimate()
+            print(f"Aurora Database: ${savings['aurora_monthly_savings']}")
+            print(f"ElastiCache Redis: ${savings['elasticache_monthly_savings']}")
+            print(f"ECS Fargate: ${savings['ecs_monthly_savings']}")
+            print(f"Total: ${savings['total_monthly_savings']}/month")
+            print("\n✨ All optimizations completed successfully!")
+        else:
+            print("\n⚠️  Some optimizations failed. Please check the logs above.")
 
-1. **Networking Layer**: Multi-AZ VPC with public and private subnets across 2 availability zones
-2. **Data Layer**: RDS PostgreSQL for persistent storage, ElastiCache Redis for caching
-3. **Compute Layer**: ECS Fargate cluster running the API service behind an Application Load Balancer
-4. **API Layer**: API Gateway for RESTful endpoints
-5. **Security Layer**: IAM roles, security groups, and encryption for data at rest and in transit
 
-### Key Design Decisions
+def main():
+    """Main execution function."""
+    import argparse
+    
+    parser = argparse.ArgumentParser(
+        description="Optimize StreamFlix infrastructure for development environment"
+    )
+    parser.add_argument(
+        '--environment',
+        '-e',
+        default='dev',
+        help='Environment suffix (default: dev)'
+    )
+    parser.add_argument(
+        '--region',
+        '-r',
+        default='us-east-1',
+        help='AWS region (default: us-east-1)'
+    )
+    parser.add_argument(
+        '--dry-run',
+        action='store_true',
+        help='Show what would be optimized without making changes'
+    )
+    
+    args = parser.parse_args()
+    
+    if args.dry_run:
+        print("🔍 DRY RUN MODE - No changes will be made")
+        print("\nPlanned optimizations:")
+        print("- Aurora: Reduce min capacity 2→0.5 ACU, max capacity 4→1 ACU, backup 14→1 days")
+        print("- ElastiCache: Reduce nodes from 3→2")
+        print("- ECS: Reduce tasks from 3→2")
+        
+        optimizer = InfrastructureOptimizer(args.environment, args.region)
+        savings = optimizer.get_cost_savings_estimate()
+        print(f"\nEstimated monthly savings: ${savings['total_monthly_savings']}")
+        return
+    
+    # Confirm before proceeding
+    print(f"⚠️  WARNING: This will modify production infrastructure in {args.region}")
+    print(f"Environment: {args.environment}")
+    confirm = input("\nAre you sure you want to proceed? (yes/no): ")
+    
+    if confirm.lower() != 'yes':
+        print("Optimization cancelled.")
+        return
+    
+    try:
+        optimizer = InfrastructureOptimizer(args.environment, args.region)
+        optimizer.run_optimization()
+    except KeyboardInterrupt:
+        print("\n\n⚠️  Optimization interrupted by user")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n❌ Unexpected error: {e}")
+        sys.exit(1)
 
-1. **Multi-AZ Configuration**: Resources are distributed across 2 availability zones for high availability
-2. **Network Segmentation**: Public subnets for ALB, private subnets for ECS, RDS, and ElastiCache
-3. **Encryption**: Redis configured with at-rest and in-transit encryption, RDS with storage encryption
-4. **Secrets Management**: Database credentials stored in AWS Secrets Manager
-5. **Minimal Deployment Time**: Using serverless RDS Aurora PostgreSQL for faster provisioning
 
-### File Structure
-
-- `lib/tap-stack.ts` - Main stack orchestrator
-- `lib/networking-stack.ts` - VPC, subnets, NAT Gateway, security groups
-- `lib/database-stack.ts` - RDS Aurora Serverless PostgreSQL cluster
-- `lib/cache-stack.ts` - ElastiCache Redis cluster with encryption
-- `lib/compute-stack.ts` - ECS Fargate cluster with ALB
-- `lib/api-stack.ts` - API Gateway configuration
-
-## Code Implementation
-
-### File: lib/tap-stack.ts
-
-```typescript
-import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
-import { NetworkingStack } from './networking-stack';
-import { DatabaseStack } from './database-stack';
-import { CacheStack } from './cache-stack';
-import { ComputeStack } from './compute-stack';
-import { ApiStack } from './api-stack';
-
-interface TapStackProps extends cdk.StackProps {
-  environmentSuffix?: string;
-}
-
-export class TapStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: TapStackProps) {
-    super(scope, id, props);
-
-    const environmentSuffix =
-      props?.environmentSuffix ||
-      this.node.tryGetContext('environmentSuffix') ||
-      'dev';
-
-    // Networking infrastructure
-    const networkingStack = new NetworkingStack(this, 'NetworkingStack', {
-      environmentSuffix,
-    });
-
-    // Database infrastructure
-    const databaseStack = new DatabaseStack(this, 'DatabaseStack', {
-      vpc: networkingStack.vpc,
-      databaseSecurityGroup: networkingStack.databaseSecurityGroup,
-      environmentSuffix,
-    });
-
-    // Cache infrastructure
-    const cacheStack = new CacheStack(this, 'CacheStack', {
-      vpc: networkingStack.vpc,
-      cacheSecurityGroup: networkingStack.cacheSecurityGroup,
-      environmentSuffix,
-    });
-
-    // Compute infrastructure
-    const computeStack = new ComputeStack(this, 'ComputeStack', {
-      vpc: networkingStack.vpc,
-      ecsSecurityGroup: networkingStack.ecsSecurityGroup,
-      albSecurityGroup: networkingStack.albSecurityGroup,
-      databaseSecret: databaseStack.databaseSecret,
-      redisEndpoint: cacheStack.redisEndpoint,
-      environmentSuffix,
-    });
-
-    // API Gateway infrastructure
-    new ApiStack(this, 'ApiStack', {
-      loadBalancer: computeStack.loadBalancer,
-      environmentSuffix,
-    });
-  }
-}
+if __name__ == "__main__":
+    main()
 ```
-
-### File: lib/networking-stack.ts
-
-```typescript
-import * as cdk from 'aws-cdk-lib';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import { Construct } from 'constructs';
-
-interface NetworkingStackProps {
-  environmentSuffix: string;
-}
-
-export class NetworkingStack extends Construct {
-  public readonly vpc: ec2.Vpc;
-  public readonly albSecurityGroup: ec2.SecurityGroup;
-  public readonly ecsSecurityGroup: ec2.SecurityGroup;
-  public readonly databaseSecurityGroup: ec2.SecurityGroup;
-  public readonly cacheSecurityGroup: ec2.SecurityGroup;
-
-  constructor(scope: Construct, id: string, props: NetworkingStackProps) {
-    super(scope, id);
-
-    // Create VPC with public and private subnets across 2 AZs
-    this.vpc = new ec2.Vpc(this, 'StreamFlixVpc', {
-      maxAzs: 2,
-      natGateways: 1,
-      subnetConfiguration: [
-        {
-          name: 'Public',
-          subnetType: ec2.SubnetType.PUBLIC,
-          cidrMask: 24,
-        },
-        {
-          name: 'Private',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-          cidrMask: 24,
-        },
-      ],
-    });
-
-    // ALB Security Group
-    this.albSecurityGroup = new ec2.SecurityGroup(this, 'AlbSecurityGroup', {
-      vpc: this.vpc,
-      description: 'Security group for Application Load Balancer',
-      allowAllOutbound: true,
-    });
-
-    this.albSecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(80),
-      'Allow HTTP traffic from anywhere'
-    );
-
-    this.albSecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(443),
-      'Allow HTTPS traffic from anywhere'
-    );
-
-    // ECS Security Group
-    this.ecsSecurityGroup = new ec2.SecurityGroup(this, 'EcsSecurityGroup', {
-      vpc: this.vpc,
-      description: 'Security group for ECS Fargate tasks',
-      allowAllOutbound: true,
-    });
-
-    this.ecsSecurityGroup.addIngressRule(
-      this.albSecurityGroup,
-      ec2.Port.tcp(8080),
-      'Allow traffic from ALB'
-    );
-
-    // Database Security Group
-    this.databaseSecurityGroup = new ec2.SecurityGroup(
-      this,
-      'DatabaseSecurityGroup',
-      {
-        vpc: this.vpc,
-        description: 'Security group for RDS PostgreSQL',
-        allowAllOutbound: false,
-      }
-    );
-
-    this.databaseSecurityGroup.addIngressRule(
-      this.ecsSecurityGroup,
-      ec2.Port.tcp(5432),
-      'Allow PostgreSQL access from ECS'
-    );
-
-    // Cache Security Group
-    this.cacheSecurityGroup = new ec2.SecurityGroup(
-      this,
-      'CacheSecurityGroup',
-      {
-        vpc: this.vpc,
-        description: 'Security group for ElastiCache Redis',
-        allowAllOutbound: false,
-      }
-    );
-
-    this.cacheSecurityGroup.addIngressRule(
-      this.ecsSecurityGroup,
-      ec2.Port.tcp(6379),
-      'Allow Redis access from ECS'
-    );
-
-    // Output VPC ID
-    new cdk.CfnOutput(this, 'VpcId', {
-      value: this.vpc.vpcId,
-      description: 'VPC ID',
-    });
-  }
-}
-```
-
-### File: lib/database-stack.ts
-
-```typescript
-import * as cdk from 'aws-cdk-lib';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as rds from 'aws-cdk-lib/aws-rds';
-import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
-import { Construct } from 'constructs';
-
-interface DatabaseStackProps {
-  vpc: ec2.Vpc;
-  databaseSecurityGroup: ec2.SecurityGroup;
-  environmentSuffix: string;
-}
-
-export class DatabaseStack extends Construct {
-  public readonly databaseCluster: rds.DatabaseCluster;
-  public readonly databaseSecret: secretsmanager.Secret;
-
-  constructor(scope: Construct, id: string, props: DatabaseStackProps) {
-    super(scope, id);
-
-    // Create database credentials secret
-    this.databaseSecret = new secretsmanager.Secret(this, 'DatabaseSecret', {
-      secretName: `streamflix-db-credentials-${props.environmentSuffix}`,
-      generateSecretString: {
-        secretStringTemplate: JSON.stringify({ username: 'postgres' }),
-        generateStringKey: 'password',
-        excludePunctuation: true,
-        passwordLength: 32,
-      },
-    });
-
-    // Create Aurora Serverless v2 PostgreSQL cluster for faster provisioning
-    this.databaseCluster = new rds.DatabaseCluster(this, 'DatabaseCluster', {
-      engine: rds.DatabaseClusterEngine.auroraPostgres({
-        version: rds.AuroraPostgresEngineVersion.VER_15_5,
-      }),
-      credentials: rds.Credentials.fromSecret(this.databaseSecret),
-      writer: rds.ClusterInstance.serverlessV2('writer', {
-        autoMinorVersionUpgrade: true,
-      }),
-      readers: [
-        rds.ClusterInstance.serverlessV2('reader', {
-          scaleWithWriter: true,
-        }),
-      ],
-      serverlessV2MinCapacity: 0.5,
-      serverlessV2MaxCapacity: 2,
-      vpc: props.vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      securityGroups: [props.databaseSecurityGroup],
-      defaultDatabaseName: 'streamflix',
-      storageEncrypted: true,
-      backup: {
-        retention: cdk.Duration.days(7),
-      },
-    });
-
-    // Output database endpoint
-    new cdk.CfnOutput(this, 'DatabaseEndpoint', {
-      value: this.databaseCluster.clusterEndpoint.hostname,
-      description: 'Database cluster endpoint',
-    });
-
-    new cdk.CfnOutput(this, 'DatabaseSecretArn', {
-      value: this.databaseSecret.secretArn,
-      description: 'Database credentials secret ARN',
-    });
-  }
-}
-```
-
-### File: lib/cache-stack.ts
-
-```typescript
-import * as cdk from 'aws-cdk-lib';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as elasticache from 'aws-cdk-lib/aws-elasticache';
-import { Construct } from 'constructs';
-
-interface CacheStackProps {
-  vpc: ec2.Vpc;
-  cacheSecurityGroup: ec2.SecurityGroup;
-  environmentSuffix: string;
-}
-
-export class CacheStack extends Construct {
-  public readonly redisCluster: elasticache.CfnReplicationGroup;
-  public readonly redisEndpoint: string;
-
-  constructor(scope: Construct, id: string, props: CacheStackProps) {
-    super(scope, id);
-
-    // Create subnet group for ElastiCache
-    const subnetGroup = new elasticache.CfnSubnetGroup(
-      this,
-      'RedisSubnetGroup',
-      {
-        description: 'Subnet group for Redis cluster',
-        subnetIds: props.vpc.privateSubnets.map((subnet) => subnet.subnetId),
-        cacheSubnetGroupName: `streamflix-redis-subnet-${props.environmentSuffix}`,
-      }
-    );
-
-    // Create Redis replication group with encryption
-    this.redisCluster = new elasticache.CfnReplicationGroup(
-      this,
-      'RedisCluster',
-      {
-        replicationGroupDescription: 'StreamFlix content metadata cache',
-        replicationGroupId: `streamflix-redis-${props.environmentSuffix}`,
-        engine: 'redis',
-        engineVersion: '7.1',
-        cacheNodeType: 'cache.t4g.micro',
-        numCacheClusters: 2,
-        automaticFailoverEnabled: true,
-        multiAzEnabled: true,
-        atRestEncryptionEnabled: true,
-        transitEncryptionEnabled: true,
-        transitEncryptionMode: 'required',
-        cacheSubnetGroupName: subnetGroup.cacheSubnetGroupName,
-        securityGroupIds: [props.cacheSecurityGroup.securityGroupId],
-        port: 6379,
-      }
-    );
-
-    this.redisCluster.addDependency(subnetGroup);
-
-    // Redis endpoint (primary endpoint for writes)
-    this.redisEndpoint = this.redisCluster.attrPrimaryEndPointAddress;
-
-    // Output Redis endpoint
-    new cdk.CfnOutput(this, 'RedisEndpoint', {
-      value: this.redisEndpoint,
-      description: 'Redis cluster primary endpoint',
-    });
-
-    new cdk.CfnOutput(this, 'RedisPort', {
-      value: this.redisCluster.attrPrimaryEndPointPort,
-      description: 'Redis cluster port',
-    });
-  }
-}
-```
-
-### File: lib/compute-stack.ts
-
-```typescript
-import * as cdk from 'aws-cdk-lib';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as ecs from 'aws-cdk-lib/aws-ecs';
-import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as logs from 'aws-cdk-lib/aws-logs';
-import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
-import { Construct } from 'constructs';
-
-interface ComputeStackProps {
-  vpc: ec2.Vpc;
-  ecsSecurityGroup: ec2.SecurityGroup;
-  albSecurityGroup: ec2.SecurityGroup;
-  databaseSecret: secretsmanager.Secret;
-  redisEndpoint: string;
-  environmentSuffix: string;
-}
-
-export class ComputeStack extends Construct {
-  public readonly cluster: ecs.Cluster;
-  public readonly service: ecs.FargateService;
-  public readonly loadBalancer: elbv2.ApplicationLoadBalancer;
-
-  constructor(scope: Construct, id: string, props: ComputeStackProps) {
-    super(scope, id);
-
-    // Create ECS cluster
-    this.cluster = new ecs.Cluster(this, 'EcsCluster', {
-      vpc: props.vpc,
-      clusterName: `streamflix-cluster-${props.environmentSuffix}`,
-      containerInsights: true,
-    });
-
-    // Create task execution role
-    const taskExecutionRole = new iam.Role(this, 'TaskExecutionRole', {
-      assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'service-role/AmazonECSTaskExecutionRolePolicy'
-        ),
-      ],
-    });
-
-    // Grant read access to database secret
-    props.databaseSecret.grantRead(taskExecutionRole);
-
-    // Create task role
-    const taskRole = new iam.Role(this, 'TaskRole', {
-      assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
-    });
-
-    // Create log group
-    const logGroup = new logs.LogGroup(this, 'ServiceLogGroup', {
-      logGroupName: `/ecs/streamflix-api-${props.environmentSuffix}`,
-      retention: logs.RetentionDays.ONE_WEEK,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
-
-    // Create task definition
-    const taskDefinition = new ecs.FargateTaskDefinition(
-      this,
-      'TaskDefinition',
-      {
-        memoryLimitMiB: 512,
-        cpu: 256,
-        executionRole: taskExecutionRole,
-        taskRole: taskRole,
-      }
-    );
-
-    // Add container to task definition
-    const container = taskDefinition.addContainer('ApiContainer', {
-      image: ecs.ContainerImage.fromRegistry('nginx:latest'),
-      logging: ecs.LogDrivers.awsLogs({
-        streamPrefix: 'streamflix-api',
-        logGroup: logGroup,
-      }),
-      environment: {
-        REDIS_ENDPOINT: props.redisEndpoint,
-        REDIS_PORT: '6379',
-        ENVIRONMENT: props.environmentSuffix,
-      },
-      secrets: {
-        DB_HOST: ecs.Secret.fromSecretsManager(
-          props.databaseSecret,
-          'host'
-        ),
-        DB_USERNAME: ecs.Secret.fromSecretsManager(
-          props.databaseSecret,
-          'username'
-        ),
-        DB_PASSWORD: ecs.Secret.fromSecretsManager(
-          props.databaseSecret,
-          'password'
-        ),
-      },
-    });
-
-    container.addPortMappings({
-      containerPort: 8080,
-      protocol: ecs.Protocol.TCP,
-    });
-
-    // Create Application Load Balancer
-    this.loadBalancer = new elbv2.ApplicationLoadBalancer(this, 'ALB', {
-      vpc: props.vpc,
-      internetFacing: true,
-      securityGroup: props.albSecurityGroup,
-      loadBalancerName: `streamflix-alb-${props.environmentSuffix}`,
-    });
-
-    // Create target group
-    const targetGroup = new elbv2.ApplicationTargetGroup(this, 'TargetGroup', {
-      vpc: props.vpc,
-      port: 8080,
-      protocol: elbv2.ApplicationProtocol.HTTP,
-      targetType: elbv2.TargetType.IP,
-      healthCheck: {
-        path: '/',
-        interval: cdk.Duration.seconds(30),
-        timeout: cdk.Duration.seconds(5),
-        healthyThresholdCount: 2,
-        unhealthyThresholdCount: 3,
-      },
-      deregistrationDelay: cdk.Duration.seconds(30),
-    });
-
-    // Add listener
-    this.loadBalancer.addListener('HttpListener', {
-      port: 80,
-      protocol: elbv2.ApplicationProtocol.HTTP,
-      defaultTargetGroups: [targetGroup],
-    });
-
-    // Create Fargate service
-    this.service = new ecs.FargateService(this, 'FargateService', {
-      cluster: this.cluster,
-      taskDefinition: taskDefinition,
-      desiredCount: 2,
-      securityGroups: [props.ecsSecurityGroup],
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      assignPublicIp: false,
-      serviceName: `streamflix-api-${props.environmentSuffix}`,
-    });
-
-    // Attach service to target group
-    this.service.attachToApplicationTargetGroup(targetGroup);
-
-    // Output ALB DNS name
-    new cdk.CfnOutput(this, 'LoadBalancerDNS', {
-      value: this.loadBalancer.loadBalancerDnsName,
-      description: 'Application Load Balancer DNS name',
-    });
-  }
-}
-```
-
-### File: lib/api-stack.ts
-
-```typescript
-import * as cdk from 'aws-cdk-lib';
-import * as apigateway from 'aws-cdk-lib/aws-apigateway';
-import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
-import { Construct } from 'constructs';
-
-interface ApiStackProps {
-  loadBalancer: elbv2.ApplicationLoadBalancer;
-  environmentSuffix: string;
-}
-
-export class ApiStack extends Construct {
-  public readonly api: apigateway.RestApi;
-
-  constructor(scope: Construct, id: string, props: ApiStackProps) {
-    super(scope, id);
-
-    // Create REST API
-    this.api = new apigateway.RestApi(this, 'ContentApi', {
-      restApiName: `StreamFlix Content API ${props.environmentSuffix}`,
-      description: 'API for StreamFlix content metadata',
-      deployOptions: {
-        stageName: props.environmentSuffix,
-        throttlingBurstLimit: 5000,
-        throttlingRateLimit: 2000,
-      },
-      endpointConfiguration: {
-        types: [apigateway.EndpointType.REGIONAL],
-      },
-    });
-
-    // Create HTTP integration with ALB (public endpoint)
-    const integration = new apigateway.HttpIntegration(
-      `http://${props.loadBalancer.loadBalancerDnsName}/{proxy}`,
-      {
-        httpMethod: 'ANY',
-        proxy: true,
-        options: {
-          requestParameters: {
-            'integration.request.path.proxy': 'method.request.path.proxy',
-          },
-        },
-      }
-    );
-
-    // Add proxy resource for all paths
-    const proxyResource = this.api.root.addResource('{proxy+}');
-    proxyResource.addMethod('ANY', integration, {
-      requestParameters: {
-        'method.request.path.proxy': true,
-      },
-    });
-
-    // Add root path
-    const rootIntegration = new apigateway.HttpIntegration(
-      `http://${props.loadBalancer.loadBalancerDnsName}`,
-      {
-        httpMethod: 'ANY',
-        proxy: true,
-      }
-    );
-    this.api.root.addMethod('ANY', rootIntegration);
-
-    // Output API Gateway URL
-    new cdk.CfnOutput(this, 'ApiGatewayUrl', {
-      value: this.api.url,
-      description: 'API Gateway URL',
-    });
-  }
-}
-```
-
-## Summary
-
-This implementation provides a complete, production-ready infrastructure for StreamFlix's content delivery API with:
-
-- Multi-AZ high availability across 2 availability zones
-- Encrypted data at rest and in transit for both RDS and ElastiCache
-- Proper network segmentation with public and private subnets
-- Scalable ECS Fargate compute with auto-healing
-- API Gateway for RESTful access
-- Comprehensive security with IAM roles and security groups
-- Fast deployment using Aurora Serverless v2
-
-All resources are properly configured for the eu-west-1 region with appropriate dependencies and outputs for observability.

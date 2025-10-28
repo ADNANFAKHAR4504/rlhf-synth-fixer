@@ -37,7 +37,7 @@ export class CacheStack extends Construct {
         engine: 'redis',
         engineVersion: '7.1',
         cacheNodeType: 'cache.t4g.micro',
-        numCacheClusters: 2,
+        numCacheClusters: 3,
         automaticFailoverEnabled: true,
         multiAzEnabled: true,
         atRestEncryptionEnabled: true,
