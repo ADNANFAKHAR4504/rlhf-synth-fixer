@@ -64,7 +64,7 @@ variable "secret_arn" {
 variable "aurora_mysql_version" {
   description = "Aurora MySQL engine version (latest stable for Serverless v2)"
   type        = string
-  default     = "8.0.mysql_aurora.3.06.0"
+  default     = "8.0"
 }
 
 variable "aurora_instance_count" {
