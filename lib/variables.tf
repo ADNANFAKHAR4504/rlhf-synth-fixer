@@ -3,6 +3,7 @@
 variable "environment_suffix" {
   description = "Unique suffix for resource names (e.g., pr123, synth456)"
   type        = string
+  default     = "test" # Default for local testing
 }
 
 variable "environment" {
@@ -57,6 +58,7 @@ variable "master_username" {
 variable "master_password" {
   description = "Master password for Aurora cluster"
   type        = string
+  default     = "TempPassword123!" # Default for local testing - override in production
   sensitive   = true
 }
 
