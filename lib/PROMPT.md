@@ -1,82 +1,108 @@
-CDK Java Implementation Requirements
+# CDK Java IAC Diagnosis/Edits
 
-## What I Need
+Hello, I need a CDK Java code that satisfies all the below requirements. Here's what it should include.
 
-I need you to generate a complete CDK Java application that follows AWS best practices. The code should be production-ready and pass all compliance checks.
+## Stack Structure
 
-## Core Requirements
+Single unified stack called TapStack, no separate network/data/compute stacks. Everything lives in one place to avoid circular dependencies.
 
-### Security - IAM Policies
-- Use least-privilege IAM policies everywhere
-- No wildcard permissions unless absolutely necessary
-- Scope actions and resources as tightly as possible
-- If you must use wildcards, explain why in comments
+## What Gets Created
 
-### Fix Circular Dependencies
-- Make sure there are no circular dependencies between stacks
-- Use these approaches:
-  - Split resources into separate stacks when it makes sense
-  - Use addDependency() to set explicit dependencies
-  - Pass values between stacks using CloudFormation outputs
-  - Store shared config in SSM Parameter Store
+VPC Setup
+- CIDR block 10.0.0.0/16 with 2 availability zones
+- Public and private subnets (24-bit mask)
+- 1 NAT Gateway for cost savings
+- VPC endpoints for S3 and DynamoDB to reduce NAT costs
 
-### Keep Resources Stable
-- Use stable logical IDs so resources don't get replaced unexpectedly
-- Don't use random or dynamic values in resource names
-- Make sure re-deploying doesn't recreate existing resources
+Security Group
+- For Lambda functions
+- Allows HTTPS (443) from within VPC
+- Outbound allows all
 
-### Add CDK Nag
-- Include cdk-nag compliance checking
-- Suppress findings only when really needed
-- Add clear justifications for any suppressions
-- Goal is zero high/medium findings
+S3 Bucket
+- Named like tap-data-bucket-{env}-{account}
+- S3-managed encryption, versioning enabled
+- Lifecycle rules: transition to IA after 90 days, delete old versions after 30 days
+- Block all public access
+- Retention policy to keep bucket on stack deletion
 
-## What to Build
+Lambda Function
+- Python 3.11 runtime
+- Runs in private subnets with VPC config
+- 256MB memory, 30 second timeout
+- Inline code that lists objects from input/ prefix in S3
+- Environment variables for BUCKET_NAME and ENVIRONMENT
 
-Create a multi-stack application with:
+CloudWatch Logs
+- Log group at /aws/lambda/tap-processor-{env}
+- 1 week retention
+- Gets destroyed with stack
 
-**Network Stack**
-- VPC with public and private subnets
-- Security groups with minimal rules
-- VPC endpoints for S3 and DynamoDB
+IAM Role
+- Least privilege policies, everything scoped to specific resources
+- S3: GetObject/GetObjectVersion on input/*, PutObject on output/*
+- S3: ListBucket with condition for input/* and output/* prefixes
+- CloudWatch: CreateLogStream and PutLogEvents on specific log group
+- SSM: GetParameter on /tap/{env}/* path
+- VPC execution: network interface permissions (uses wildcard because ENIs are dynamic)
 
-**Data Stack**
-- S3 bucket with encryption and versioning
-- Proper bucket policies
+## Cross-Stack Sharing
 
-**Compute Stack**
-- Lambda function that can read/write to the S3 bucket
-- IAM role with only the permissions it needs
+SSM Parameters
+- /tap/{env}/vpc-id
+- /tap/{env}/data-bucket-name
+- /tap/{env}/data-bucket-arn
 
-**Cross-Stack References**
-- Show how to properly share resources between stacks
-- Use outputs and imports correctly
+CloudFormation Outputs
+- VPC ID, Security Group ID, Bucket Name/ARN, Function ARN
+- All exported with environment suffix in the name
 
-## Include These Files
+## Environment Support
 
-- CdkApp.java (main entry point)
-- All stack classes (NetworkStack, DataStack, ComputeStack)
-- pom.xml with required dependencies
-- Show how to integrate cdk-nag
+Uses environmentSuffix from CDK context or defaults to "dev". Pass it like:
+```
+cdk deploy -c environmentSuffix=prod
+```
 
-## Expected Results
+Gets account and region from CDK_DEFAULT_ACCOUNT and CDK_DEFAULT_REGION environment variables.
 
-When I run this code:
-```bash
-cdk synth
-Should complete with no errors
-bashcdk deploy --all
-Should deploy everything successfully
-bashcdk deploy --all
-Running deploy again should show "No changes" - nothing gets replaced
-The cdk-nag checks should pass with zero high/medium severity findings (except properly suppressed ones).
-Testing
-The code should allow me to:
+## CDK Nag Integration
 
-Deploy successfully on first try
-Re-deploy without replacing any resources
-Test that the Lambda can actually access S3 as intended
-See that IAM permissions are properly scoped
+Aspects.of(app).add(new AwsSolutionsChecks()) runs on the whole app.
 
-Just give me complete, working code that I can deploy right away.
-RetryClaude does not have the ability to run the code it generates yet.
+Suppressions with justifications:
+- VPC Flow Logs disabled for dev cost savings
+- S3 SSL enforcement handled via IAM not bucket policy
+- Security group outbound all needed for VPC endpoints
+- IAM wildcard for CloudWatch log streams (required) and VPC ENIs (dynamic resources)
+- S3 access logging not needed for this use case
+- Python 3.11 is current runtime
+
+## File Structure
+
+Just need:
+- Main.java with TapStack class and TapStackProps class all in one file
+- Main class with main() method
+- build.gradle with dependencies for CDK, S3, Lambda, EC2, IAM, Logs, SSM, and cdk-nag
+
+## How It Should Work
+
+Run cdk synth - should complete with CDK Nag checks passing (with suppressions)
+Run cdk deploy --all - deploys everything
+Run cdk deploy --all again - should show no changes, nothing gets replaced
+
+Resource names use stable patterns so redeployment doesn't recreate stuff. Bucket name includes account ID for global uniqueness.
+
+Lambda has actual working Python code that connects to S3, not just a placeholder. It lists files from the input/ prefix and returns them in a JSON response.
+
+## Important Notes
+
+Everything uses least privilege. Wildcards only where absolutely necessary (log streams, VPC ENIs) with comments explaining why.
+
+All resources have proper logical IDs that don't change between deployments.
+
+The inline policies are scoped tight - S3 permissions split between read (input/*) and write (output/*) paths.
+
+VPC execution policy needs wildcards because Lambda creates network interfaces dynamically - can't know the resource IDs ahead of time.
+
+Just give me code that works out of the box without modifications.
