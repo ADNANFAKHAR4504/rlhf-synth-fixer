@@ -465,7 +465,6 @@ export class LoadBalancerConstruct extends Construct {
         tags: config.tags,
       });
 
-      // HTTPS Listener
       this.httpsListener = new aws.lbListener.LbListener(
         this,
         'https-listener',
