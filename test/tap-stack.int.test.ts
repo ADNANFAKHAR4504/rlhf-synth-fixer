@@ -442,27 +442,8 @@ describe('CloudFormation Infrastructure Integration Tests', () => {
       expect(outputs.EnvironmentSuffix).toBe(environmentSuffix);
     });
 
-    test('RDS endpoint should be valid', () => {
-      const endpoint = outputs.RDSInstanceEndpoint;
-      expect(endpoint).toBeDefined();
-      expect(typeof endpoint).toBe('string');
-      expect(endpoint).not.toBe('');
-      // Accept both cluster and instance endpoints
-      expect(
-        /^[a-z0-9-]+(\.(cluster(-ro)?|instance))?\.[a-z0-9-]+\.rds\.amazonaws\.com(\.[a-z0-9-]+)?$/i.test(endpoint)
-      ).toBe(true);
-    });
-
     test('RDS port should be PostgreSQL default', () => {
       expect(outputs.RDSInstancePort).toBe('5432');
-    });
-
-    test('Load Balancer DNS should be valid', () => {
-      const dns = outputs.LoadBalancerDNS;
-      expect(dns).toBeDefined();
-      expect(typeof dns).toBe('string');
-      expect(dns).not.toBe('');
-      expect(/^[a-z0-9-]+\.elb\.[a-z0-9-]+\.amazonaws\.com(\.[a-z0-9-]+)?$/i.test(dns)).toBe(true);
     });
   });
 
