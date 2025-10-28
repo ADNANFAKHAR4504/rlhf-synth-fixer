@@ -393,7 +393,7 @@ Resources:
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentName}-EC2-Instance-Role'
+      RoleName: !Sub '${EnvironmentName}-EC2-Instance-Role-${AWS::Region}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -452,7 +452,7 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentName}-Lambda-Execution-Role'
+      RoleName: !Sub '${EnvironmentName}-Lambda-Execution-Role-${AWS::Region}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -634,7 +634,7 @@ Resources:
   RDSDatabase:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceIdentifier: finsecure
+      DBInstanceIdentifier: !Sub 'finsecure-${AWS::Region}'
       DBName: appdb
       Engine: mysql
       EngineVersion: '8.0.43'
@@ -942,7 +942,7 @@ Resources:
   AuditLambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${EnvironmentName}-audit-processor'
+      FunctionName: !Sub '${EnvironmentName}-audit-processor-${AWS::Region}'
       Runtime: python3.9
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -1043,7 +1043,7 @@ Resources:
   LambdaKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/${EnvironmentName}-lambda-key'
+      AliasName: !Sub 'alias/${EnvironmentName}-lambda-key-${AWS::Region}'
       TargetKeyId: !Ref LambdaKMSKey
 
   # ============================================
@@ -1148,7 +1148,7 @@ Resources:
     Type: AWS::CloudTrail::Trail
     DependsOn: CloudTrailBucketPolicy
     Properties:
-      TrailName: !Sub '${EnvironmentName}-trail'
+      TrailName: !Sub '${EnvironmentName}-trail-${AWS::Region}'
       S3BucketName: !Ref CloudTrailBucket
       IncludeGlobalServiceEvents: true
       IsLogging: true
@@ -1205,7 +1205,7 @@ Resources:
   CloudTrailKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/${EnvironmentName}-cloudtrail-key'
+      AliasName: !Sub 'alias/${EnvironmentName}-cloudtrail-key-${AWS::Region}'
       TargetKeyId: !Ref CloudTrailKMSKey
 
   ConfigRecorder:
@@ -1284,7 +1284,7 @@ Resources:
   ConfigRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentName}-config-role'
+      RoleName: !Sub '${EnvironmentName}-config-role-${AWS::Region}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -1402,7 +1402,7 @@ Resources:
   NotificationTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub '${EnvironmentName}-notifications'
+      TopicName: !Sub '${EnvironmentName}-notifications-${AWS::Region}'
       KmsMasterKeyId: !Ref NotificationKMSKey
       Tags:
         - Key: Name
@@ -1439,7 +1439,7 @@ Resources:
   NotificationKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/${EnvironmentName}-sns-key'
+      AliasName: !Sub 'alias/${EnvironmentName}-sns-key-${AWS::Region}'
       TargetKeyId: !Ref NotificationKMSKey
 
   # ============================================
