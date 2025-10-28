@@ -575,5 +575,38 @@ describe('HIPAA Compliant Healthcare Monitoring Infrastructure Template', () => 
       expect(template.Outputs.CloudTrailBucketName).toBeDefined();
       expect(template.Outputs.CloudTrailLogGroupName).toBeDefined();
     });
+
+    test('should handle template without CloudTrail resources', () => {
+      const emptyTemplate = { Resources: {} };
+      const validation = lib.validateCloudTrailCompliance(emptyTemplate);
+
+      expect(validation.hasTrail).toBe(false);
+      expect(validation.isMultiRegion).toBe(false);
+      expect(validation.hasLogFileValidation).toBe(false);
+      expect(validation.hasEncryptedBucket).toBe(false);
+      expect(validation.hasCloudWatchIntegration).toBe(false);
+    });
+
+    test('should handle template with missing CloudTrail bucket', () => {
+      const partialTemplate = {
+        Resources: {
+          HIPAACloudTrail: { Type: 'AWS::CloudTrail::Trail' }
+        }
+      };
+      const validation = lib.validateCloudTrailCompliance(partialTemplate);
+
+      expect(validation.hasTrail).toBe(false);
+    });
+
+    test('should handle template with missing CloudTrail trail', () => {
+      const partialTemplate = {
+        Resources: {
+          CloudTrailBucket: { Type: 'AWS::S3::Bucket' }
+        }
+      };
+      const validation = lib.validateCloudTrailCompliance(partialTemplate);
+
+      expect(validation.hasTrail).toBe(false);
+    });
   });
 });
