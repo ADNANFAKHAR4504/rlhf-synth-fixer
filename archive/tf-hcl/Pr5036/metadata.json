@@ -11,6 +11,19 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": ["VPC", "EC2","Application Load Balancer", "Security Groups", "CloudWatch", "IAM"],
-  "training_quality": 9
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Application Load Balancer",
+    "Security Groups",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
 }
