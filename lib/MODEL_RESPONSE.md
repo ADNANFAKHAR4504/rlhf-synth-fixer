@@ -891,10 +891,10 @@ __version__ = '1.0.0'
 
 1. Ensure AWS CDK is installed: `npm install -g aws-cdk`
 2. Install Python dependencies: `pip install -r requirements.txt`
-3. Configure AWS credentials and region: `export AWS_REGION=ap-east-1`
+3. Configure AWS credentials and region: `export AWS_REGION=eu-west-1`
 4. Set environment suffix: `cdk deploy --context environmentSuffix=dev`
 5. Review and approve security changes
-6. Deploy: The stack will create all resources in ap-east-1
+6. Deploy: The stack will create all resources in eu-west-1
 
 ### Testing
 
