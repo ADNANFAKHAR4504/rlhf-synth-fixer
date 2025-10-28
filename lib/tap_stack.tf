@@ -61,7 +61,7 @@ variable "booking_api_rate_limit_rps" {
 variable "lambda_reserved_concurrency" {
   description = "Reserved concurrent executions for booking_handler Lambda"
   type        = number
-  default     = 1000
+  default     = 100
 }
 
 variable "alarm_notification_email" {
@@ -644,6 +644,13 @@ resource "aws_iam_policy" "cache_updater_policy" {
       {
         Effect = "Allow"
         Action = [
+          "sqs:SendMessage"
+        ]
+        Resource = aws_sqs_queue.cache_updater_dlq.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
           "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents"
@@ -1102,7 +1109,9 @@ resource "aws_lambda_function" "booking_handler" {
   timeout       = 10
   memory_size   = 512
 
-  # Increased reserved concurrency to handle 1.2k sustained / 2k burst RPS
+  # Reserved concurrency isolates this function from other Lambda executions
+  # Default 100 - increase based on actual load and account limits
+  # Note: AWS requires at least 100 unreserved concurrent executions per account
   reserved_concurrent_executions = var.lambda_reserved_concurrency
 
   # Placeholder Lambda code - replace with actual implementation
