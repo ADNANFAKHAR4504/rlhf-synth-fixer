@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { App } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const app = new App();
 
@@ -9,7 +11,21 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const stateBucket = process.env.TERRAFORM_STATE_BUCKET || 'iac-rlhf-tf-states';
 const stateBucketRegion =
   process.env.TERRAFORM_STATE_BUCKET_REGION || 'us-east-1';
-const awsRegion = process.env.AWS_REGION || 'us-east-1';
+
+// Read AWS_REGION from file if it exists and no env var is set, otherwise use default
+let awsRegion = process.env.AWS_REGION;
+if (!awsRegion) {
+  try {
+    const regionPath = path.join(process.cwd(), 'lib', 'AWS_REGION');
+    if (fs.existsSync(regionPath)) {
+      awsRegion = fs.readFileSync(regionPath, 'utf8').trim();
+    } else {
+      awsRegion = 'us-east-1';
+    }
+  } catch (error) {
+    awsRegion = 'us-east-1';
+  }
+}
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 

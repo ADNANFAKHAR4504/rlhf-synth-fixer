@@ -4,6 +4,8 @@ import {
 } from '@cdktf/provider-aws/lib/provider';
 import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
 import { Construct } from 'constructs';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // ? Import your stacks here
 import * as aws from '@cdktf/provider-aws';
@@ -37,9 +39,21 @@ export class TapStack extends TerraformStack {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
+    
+    // Read AWS_REGION from file if it exists, otherwise use default
+    let defaultRegion = 'us-east-1';
+    try {
+      const regionPath = path.join(process.cwd(), 'lib', 'AWS_REGION');
+      if (fs.existsSync(regionPath)) {
+        defaultRegion = fs.readFileSync(regionPath, 'utf8').trim();
+      }
+    } catch (error) {
+      // Use default region if file reading fails
+    }
+    
     const awsRegion = AWS_REGION_OVERRIDE
       ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'us-east-1';
+      : props?.awsRegion || defaultRegion;
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
 

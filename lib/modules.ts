@@ -468,6 +468,20 @@ export class S3Module extends Construct {
               },
               Action: 's3:PutObject',
               Resource: `${this.bucket.arn}/alb-logs/*`,
+              Condition: {
+                StringEquals: {
+                  's3:x-amz-acl': 'bucket-owner-full-control',
+                },
+              },
+            },
+            {
+              Sid: 'ALBAccessLogAclCheck',
+              Effect: 'Allow',
+              Principal: {
+                AWS: `arn:aws:iam::${albServiceAccount}:root`,
+              },
+              Action: 's3:GetBucketAcl',
+              Resource: this.bucket.arn,
             },
             {
               Sid: 'AWSLogDeliveryWrite',
@@ -479,7 +493,7 @@ export class S3Module extends Construct {
               Resource: `${this.bucket.arn}/alb-logs/*`,
               Condition: {
                 StringEquals: {
-                  's3:x-acl': 'bucket-owner-full-control',
+                  's3:x-amz-acl': 'bucket-owner-full-control',
                 },
               },
             },
