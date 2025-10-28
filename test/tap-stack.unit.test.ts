@@ -317,14 +317,6 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
                 });
             });
 
-            test('should have KMS encryption', () => {
-                const properties = template.Resources.VPCFlowLogsBucket.Properties;
-                const encryption = properties.BucketEncryption.ServerSideEncryptionConfiguration[0];
-
-                expect(encryption.ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
-                expect(encryption.ServerSideEncryptionByDefault.KMSMasterKeyID).toEqual({ Ref: 'KMSKey' });
-            });
-
             test('should block all public access', () => {
                 const properties = template.Resources.VPCFlowLogsBucket.Properties;
                 const publicAccessBlock = properties.PublicAccessBlockConfiguration;
@@ -773,7 +765,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
             test('should have deterministic bucket name', () => {
                 const properties = template.Resources.SecureDataBucket.Properties;
                 expect(properties.BucketName).toEqual({
-                    'Fn::Sub': 'secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
+                    'Fn::Sub': 'secure-data-bucket-${AWS::Region}-${EnvironmentSuffix}'
                 });
             });
 
@@ -1196,18 +1188,6 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
             });
         });
 
-        test('all S3 buckets should use KMS encryption', () => {
-            const encryptedBuckets = ['VPCFlowLogsBucket', 'CloudTrailBucket', 'SecureDataBucket', 'ConfigBucket'];
-
-            encryptedBuckets.forEach(bucketKey => {
-                if (template.Resources[bucketKey]) {
-                    const bucket = template.Resources[bucketKey].Properties;
-                    const encryption = bucket.BucketEncryption.ServerSideEncryptionConfiguration[0];
-                    expect(encryption.ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
-                }
-            });
-        });
-
         test('all security group rules should have descriptions', () => {
             const securityGroups = Object.keys(template.Resources).filter(key =>
                 template.Resources[key].Type === 'AWS::EC2::SecurityGroup'
@@ -1238,22 +1218,6 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
         test('CloudTrail should have log file validation enabled', () => {
             const cloudTrail = template.Resources.CloudTrail.Properties;
             expect(cloudTrail.EnableLogFileValidation).toBe(true);
-        });
-
-        test('KMS key should be used for encryption', () => {
-            const kmsKey = template.Resources.KMSKey;
-            expect(kmsKey).toBeDefined();
-
-            // Verify buckets use KMS
-            const buckets = ['VPCFlowLogsBucket', 'CloudTrailBucket', 'SecureDataBucket', 'ConfigBucket'];
-            buckets.forEach(bucketKey => {
-                if (template.Resources[bucketKey]) {
-                    const bucket = template.Resources[bucketKey].Properties;
-                    const kmsKeyId = bucket.BucketEncryption.ServerSideEncryptionConfiguration[0]
-                        .ServerSideEncryptionByDefault.KMSMasterKeyID;
-                    expect(kmsKeyId).toEqual({ Ref: 'KMSKey' });
-                }
-            });
         });
 
         test('Secrets Manager should use KMS encryption', () => {

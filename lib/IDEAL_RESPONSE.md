@@ -77,12 +77,7 @@
                 "kms:Decrypt",
                 "kms:GenerateDataKey"
               ],
-              "Resource": "*",
-              "Condition": {
-                "StringEquals": {
-                  "aws:SourceAccount": { "Ref": "AWS::AccountId" }
-                }
-              }
+              "Resource": "*"
             }
           ]
         }
@@ -179,8 +174,7 @@
           "ServerSideEncryptionConfiguration": [
             {
               "ServerSideEncryptionByDefault": {
-                "SSEAlgorithm": "aws:kms",
-                "KMSMasterKeyID": { "Ref": "KMSKey" }
+                "SSEAlgorithm": "AES256"
               }
             }
           ]
@@ -223,11 +217,7 @@
               "Resource": { "Fn::Sub": "${VPCFlowLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*" },
               "Condition": {
                 "StringEquals": {
-                  "s3:x-amz-acl": "bucket-owner-full-control",
-                  "aws:SourceAccount": { "Ref": "AWS::AccountId" }
-                },
-                "ArnLike": {
-                  "aws:SourceArn": { "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*" }
+                  "s3:x-amz-acl": "bucket-owner-full-control"
                 }
               }
             },
@@ -238,13 +228,19 @@
                 "Service": "delivery.logs.amazonaws.com"
               },
               "Action": "s3:GetBucketAcl",
+              "Resource": { "Fn::GetAtt": ["VPCFlowLogsBucket", "Arn"] }
+            },
+            {
+              "Sid": "AWSLogDeliveryListBucket",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "delivery.logs.amazonaws.com"
+              },
+              "Action": "s3:ListBucket",
               "Resource": { "Fn::GetAtt": ["VPCFlowLogsBucket", "Arn"] },
               "Condition": {
-                "StringEquals": {
-                  "aws:SourceAccount": { "Ref": "AWS::AccountId" }
-                },
-                "ArnLike": {
-                  "aws:SourceArn": { "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*" }
+                "StringLike": {
+                  "s3:prefix": { "Fn::Sub": "AWSLogs/${AWS::AccountId}/*" }
                 }
               }
             }
@@ -461,7 +457,7 @@
     "SecureDataBucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
-        "BucketName": { "Fn::Sub": "secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}" },
+        "BucketName": { "Fn::Sub": "secure-data-bucket-${AWS::Region}-${EnvironmentSuffix}" },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
             {
