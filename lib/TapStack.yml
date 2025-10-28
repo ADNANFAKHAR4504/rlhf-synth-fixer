@@ -270,8 +270,8 @@ Resources:
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 8080
-          ToPort: 8080
+          FromPort: 80
+          ToPort: 80
           SourceSecurityGroupId: !Ref ALBSecurityGroup
           Description: 'Allow traffic from ALB'
       Tags:
@@ -725,7 +725,7 @@ Resources:
         - Name: lms-app
           Image: !Ref ContainerImage
           PortMappings:
-            - ContainerPort: 8080
+            - ContainerPort: 80
               Protocol: tcp
           Environment:
             - Name: REDIS_ENDPOINT
@@ -777,7 +777,7 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Name: !Sub 'lms-tg-${EnvironmentSuffix}'
-      Port: 8080
+      Port: 80
       Protocol: HTTP
       TargetType: ip
       VpcId: !Ref VPC
@@ -821,7 +821,7 @@ Resources:
             - !Ref ECSSecurityGroup
       LoadBalancers:
         - ContainerName: lms-app
-          ContainerPort: 8080
+          ContainerPort: 80
           TargetGroupArn: !Ref ALBTargetGroup
       HealthCheckGracePeriodSeconds: 60
       Tags:
