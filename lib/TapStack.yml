@@ -635,7 +635,7 @@ Resources:
     Type: AWS::RDS::DBInstance
     Properties:
       DBInstanceIdentifier: !Sub 'finsecure-${AWS::Region}'
-      DBName: appdb
+      DBName: appdb123
       Engine: mysql
       EngineVersion: '8.0.43'
       DBInstanceClass: db.t3.medium
