@@ -29,5 +29,11 @@
     "AWS Organizations"
   ],
   "training_quality": 9,
-  "background": "Financial services zero-trust security architecture requiring comprehensive network segmentation, threat detection, automated incident response, and banking compliance across AWS infrastructure with VPC isolation, Transit Gateway routing, Network Firewall inspection, GuardDuty monitoring, and least-privilege IAM controls"
+  "background": "Financial services zero-trust security architecture requiring comprehensive network segmentation, threat detection, automated incident response, and banking compliance across AWS infrastructure with VPC isolation, Transit Gateway routing, Network Firewall inspection, GuardDuty monitoring, and least-privilege IAM controls",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "devang-devops",
+  "dockerS3Location": ""
 }
