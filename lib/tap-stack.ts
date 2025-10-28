@@ -109,9 +109,6 @@ export class TapStack extends cdk.Stack {
         runtime: lambda.Runtime.NODEJS_18_X,
         code: lambda.Code.fromInline(`
 const AWS = require('aws-sdk');
-
-// Configure AWS SDK with region
-AWS.config.update({ region: process.env.AWS_REGION || 'us-east-1' });
 const dynamoDB = new AWS.DynamoDB.DocumentClient();
 
 exports.handler = async (event) => {
@@ -307,10 +304,16 @@ exports.handler = async (event) => {
         };
     }
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Lambda function error:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Event that caused error:', JSON.stringify(event, null, 2));
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Internal server error' }),
+      body: JSON.stringify({
+        error: 'Internal server error',
+        message: error.message,
+        type: error.name
+      }),
     };
   }
 };
