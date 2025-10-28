@@ -4,8 +4,9 @@ Description: 'TapStack - Complete serverless environment for JSON processing wit
 Parameters:
   ENVIRONMENTSUFFIX:
     Type: String
-    AllowedValues: [dev, staging, prod]
     Description: Environment suffix for resource naming
+    AllowedValues: [dev, staging, prod]
+    Default: dev
   VpcCidr:
     Type: String
     Default: 10.0.0.0/16
@@ -66,7 +67,9 @@ Parameters:
     MaxValue: 90
   DeveloperAlertEmail:
     Type: String
+    Description: Email address for developer alerts
     AllowedPattern: ^[^\s@]+@[^\s@]+\.[^\s@]+$
+    Default: alerts@example.com
   ApiStageName:
     Type: String
     Default: v1
@@ -92,7 +95,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - {Key: Name, Value: !Sub 'TapStack-VPC-${ENVIRONMENTSUFFIX}'}
-        - {Key: Project, Value: TapStack} 
+        - {Key: Project, Value: TapStack}
         - {Key: Environment, Value: !Ref ENVIRONMENTSUFFIX}
         - {Key: Owner, Value: PlatformTeam}
         - {Key: CostCenter, Value: DP-001}
@@ -642,10 +645,6 @@ Resources:
           table = dynamodb.Table(os.environ['TABLE_NAME'])
           def handler(event, context):
               print(f"Received event: {json.dumps(event)}")
-              # Supports S3 EventBridge events
-              for detail in event.get('detail', {}).get('object', []):
-                  pass
-              # Fallback for direct S3 event shape if ever used
               records = event.get('Records', [])
               if records:
                   s3 = boto3.client('s3')
@@ -719,7 +718,7 @@ Resources:
         - {Key: Owner, Value: PlatformTeam}
         - {Key: CostCenter, Value: DP-001}
 
-  # EventBridge rule to trigger TransformFunction on S3 Object Created (breaks S3-Lambda circular dep)
+  # EventBridge rule for S3 Object Created -> Lambda (avoids S3/Lambda circular deps)
   S3ObjectCreatedRule:
     Type: AWS::Events::Rule
     Properties:
