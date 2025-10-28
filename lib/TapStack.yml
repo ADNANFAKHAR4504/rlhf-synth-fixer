@@ -393,7 +393,9 @@ Resources:
   IngestBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'ingestbucket-${ENVIRONMENTSUFFIX}-${AWS::AccountId}'
+      BucketName: !Sub
+        - 'ingestbucket-${ENVIRONMENTSUFFIX}-${AWS::AccountId}-${AWS::Region}-${ShortId}'
+        - { ShortId: !Select [0, !Split ['-', !Select [2, !Split ['/', !Ref "AWS::StackId"]]]] }
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}
@@ -443,7 +445,9 @@ Resources:
   ArtifactsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'artifactsbucket-${ENVIRONMENTSUFFIX}-${AWS::AccountId}'
+      BucketName: !Sub
+        - 'artifactsbucket-${ENVIRONMENTSUFFIX}-${AWS::AccountId}-${AWS::Region}-${ShortId}'
+        - { ShortId: !Select [0, !Split ['-', !Select [2, !Split ['/', !Ref "AWS::StackId"]]]] }
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}
