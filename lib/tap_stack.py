@@ -62,12 +62,18 @@ class TapStack(pulumi.ComponentResource):
         self.environment_suffix = args.environment_suffix
 
         # Common tags for all resources
-        region = os.getenv('AWS_REGION', 'eu-central-1')
+        region_env = os.getenv('AWS_REGION')
+        if region_env:
+            from types import SimpleNamespace
+            region = SimpleNamespace(name=region_env)
+        else:
+            region = aws.get_region()
+
         common_tags = {
             'Environment': self.environment_suffix,
             'Application': 'FastCartOrderProcessing',
             'ManagedBy': 'Pulumi',
-            'Region': region
+            'Region': region.name
         }
 
         # Get current AWS account ID and region for KMS policy

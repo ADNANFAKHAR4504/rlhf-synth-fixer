@@ -37,17 +37,21 @@ class TestTapStackIntegration(unittest.TestCase):
         with open(outputs_file, 'r') as f:
             cls.outputs = json.load(f)
 
-        # Initialize AWS clients
+        # Initialize AWS clients (skip when credentials not available)
         cls.region = 'eu-central-1'
-        cls.ec2 = boto3.client('ec2', region_name=cls.region)
-        cls.ecs = boto3.client('ecs', region_name=cls.region)
-        cls.rds = boto3.client('rds', region_name=cls.region)
-        cls.elasticache = boto3.client('elasticache', region_name=cls.region)
-        cls.kinesis = boto3.client('kinesis', region_name=cls.region)
-        cls.kms = boto3.client('kms', region_name=cls.region)
-        cls.secretsmanager = boto3.client('secretsmanager', region_name=cls.region)
-        cls.ecr = boto3.client('ecr', region_name=cls.region)
-        cls.cloudwatch = boto3.client('cloudwatch', region_name=cls.region)
+        session = boto3.Session(region_name=cls.region)
+        if session.get_credentials() is None:
+            raise unittest.SkipTest("AWS credentials not configured; skipping integration tests.")
+
+        cls.ec2 = session.client('ec2')
+        cls.ecs = session.client('ecs')
+        cls.rds = session.client('rds')
+        cls.elasticache = session.client('elasticache')
+        cls.kinesis = session.client('kinesis')
+        cls.kms = session.client('kms')
+        cls.secretsmanager = session.client('secretsmanager')
+        cls.ecr = session.client('ecr')
+        cls.cloudwatch = session.client('cloudwatch')
 
     def test_vpc_exists(self):
         """Test that VPC exists and is properly configured."""
