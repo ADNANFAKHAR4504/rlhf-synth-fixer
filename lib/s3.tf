@@ -138,8 +138,9 @@ resource "aws_s3_bucket_versioning" "financial_data" {
   bucket = aws_s3_bucket.financial_data.id
 
   versioning_configuration {
-    status     = "Enabled"
-    mfa_delete = var.enable_mfa_delete ? "Enabled" : "Disabled"
+    status = "Enabled"
+    # MFA Delete cannot be enabled via Terraform - must be enabled manually using AWS CLI with MFA token:
+    # aws s3api put-bucket-versioning --bucket BUCKET_NAME --versioning-configuration Status=Enabled,MFADelete=Enabled --mfa "SERIAL_NUMBER MFA_CODE"
   }
 }
 

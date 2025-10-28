@@ -188,3 +188,9 @@ output "environment_suffix" {
   description = "Environment suffix used for resource naming"
   value       = local.name_suffix
 }
+
+# Post-Deployment Manual Steps
+output "mfa_delete_command" {
+  description = "Command to enable MFA delete on S3 bucket (requires root account credentials with MFA)"
+  value       = "aws s3api put-bucket-versioning --bucket ${aws_s3_bucket.financial_data.id} --versioning-configuration Status=Enabled,MFADelete=Enabled --mfa 'arn:aws:iam::${local.account_id}:mfa/root-account-mfa-device MFA_TOKEN_CODE'"
+}

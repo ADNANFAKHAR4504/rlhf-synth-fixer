@@ -229,7 +229,7 @@ variable "financial_data_bucket_name" {
 }
 
 variable "enable_mfa_delete" {
-  description = "Require MFA for S3 object deletion operations"
+  description = "Require MFA for S3 object deletion operations (must be enabled manually via AWS CLI with MFA token after deployment)"
   type        = bool
-  default     = true
+  default     = false
 }

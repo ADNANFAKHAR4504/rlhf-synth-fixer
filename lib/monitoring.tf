@@ -230,7 +230,7 @@ resource "aws_cloudwatch_log_metric_filter" "unauthorized_api_calls" {
   count = var.enable_iam_monitoring ? 1 : 0
 
   name           = "${local.name_prefix}-unauthorized-api-calls-${local.name_suffix}"
-  log_group_name = local.cloudtrail_log_group
+  log_group_name = aws_cloudwatch_log_group.iam_events[0].name
   pattern        = "{ ($.errorCode = \"*UnauthorizedOperation\") || ($.errorCode = \"AccessDenied*\") }"
 
   metric_transformation {
@@ -238,6 +238,8 @@ resource "aws_cloudwatch_log_metric_filter" "unauthorized_api_calls" {
     namespace = "${var.project_name}/Security"
     value     = "1"
   }
+
+  depends_on = [aws_cloudwatch_log_group.iam_events]
 }
 
 resource "aws_cloudwatch_metric_alarm" "unauthorized_api_calls" {
@@ -263,7 +265,7 @@ resource "aws_cloudwatch_log_metric_filter" "no_mfa_console_login" {
   count = var.enable_iam_monitoring ? 1 : 0
 
   name           = "${local.name_prefix}-no-mfa-console-login-${local.name_suffix}"
-  log_group_name = local.cloudtrail_log_group
+  log_group_name = aws_cloudwatch_log_group.iam_events[0].name
   pattern        = "{ ($.eventName = \"ConsoleLogin\") && ($.additionalEventData.MFAUsed != \"Yes\") }"
 
   metric_transformation {
@@ -271,6 +273,8 @@ resource "aws_cloudwatch_log_metric_filter" "no_mfa_console_login" {
     namespace = "${var.project_name}/Security"
     value     = "1"
   }
+
+  depends_on = [aws_cloudwatch_log_group.iam_events]
 }
 
 resource "aws_cloudwatch_metric_alarm" "no_mfa_console_login" {
