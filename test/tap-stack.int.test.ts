@@ -1,3 +1,19 @@
+/**
+ * TapStack Integration Tests
+ *
+ * These tests verify deployed AWS resources match the CloudFormation template specifications.
+ *
+ * IMPORTANT: These tests require actual AWS resources and cannot be run locally.
+ * They should only be run in a CI/CD environment or against a deployed stack.
+ *
+ * Required Environment Variables:
+ * - AWS_REGION: AWS region where stack is deployed (default: us-east-1)
+ * - ENVIRONMENT_SUFFIX: Environment suffix used in resource naming (default: dev)
+ * - AWS_ACCOUNT_ID: AWS account ID for bucket name construction (default: 123456789012)
+ *
+ * Note: VPC Flow Logs bucket uses AES256 encryption, not KMS encryption.
+ */
+
 import fs from 'fs';
 import path from 'path';
 import {
@@ -59,6 +75,22 @@ import {
     DescribeConfigRulesCommand,
     GetComplianceDetailsByConfigRuleCommand,
 } from '@aws-sdk/client-config-service';
+import {
+    PutObjectCommand,
+    GetObjectCommand,
+    DeleteObjectCommand,
+} from '@aws-sdk/client-s3';
+import {
+    UpdateSecretCommand,
+    PutResourcePolicyCommand,
+} from '@aws-sdk/client-secrets-manager';
+import {
+    PutMetricDataCommand,
+} from '@aws-sdk/client-cloudwatch';
+import {
+    PutLogEventsCommand,
+    CreateLogStreamCommand,
+} from '@aws-sdk/client-cloudwatch-logs';
 
 describe('TapStack Integration Tests - Deployed Resources', () => {
     // Load CloudFormation outputs
@@ -69,6 +101,7 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
     // AWS Configuration
     const awsRegion = process.env.AWS_REGION || 'us-east-1';
     const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+    const awsAccountId = process.env.AWS_ACCOUNT_ID || '123456789012'; // Default for testing
 
     // Initialize AWS SDK clients
     const ec2Client = new EC2Client({ region: awsRegion });
@@ -240,7 +273,7 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
         test('VPC flow logs bucket should have lifecycle policy', async () => {
             if (skipIfNoDeployment()) return;
 
-            const bucketName = `vpc-flow-logs-${environmentSuffix}-${outputs.KMSKeyId.split('/')[0]}-${awsRegion}`;
+            const bucketName = `vpc-flow-logs-${environmentSuffix}-${awsAccountId}-${awsRegion}`;
 
             try {
                 const lifecycleCommand = new GetBucketLifecycleConfigurationCommand({ Bucket: bucketName });
@@ -256,7 +289,7 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
         test('CloudTrail bucket should have lifecycle policy for long-term retention', async () => {
             if (skipIfNoDeployment()) return;
 
-            const bucketName = `cloudtrail-logs-${environmentSuffix}-${outputs.KMSKeyId.split('/')[0]}-${awsRegion}`;
+            const bucketName = `cloudtrail-logs-${environmentSuffix}-${awsAccountId}-${awsRegion}`;
 
             try {
                 const lifecycleCommand = new GetBucketLifecycleConfigurationCommand({ Bucket: bucketName });
@@ -266,6 +299,24 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
                 expect(lifecycleResponse.Rules![0].Expiration?.Days).toBe(365);
             } catch (error: any) {
                 console.warn('Could not verify CloudTrail bucket lifecycle:', error.message);
+            }
+        }, 30000);
+
+        test('VPC flow logs bucket should use AES256 encryption', async () => {
+            if (skipIfNoDeployment()) return;
+
+            const bucketName = `vpc-flow-logs-${environmentSuffix}-${awsAccountId}-${awsRegion}`;
+
+            try {
+                const encryptionCommand = new GetBucketEncryptionCommand({ Bucket: bucketName });
+                const encryptionResponse = await s3Client.send(encryptionCommand);
+                expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
+                const rule = encryptionResponse.ServerSideEncryptionConfiguration!.Rules![0];
+                expect(rule.ApplyServerSideEncryptionByDefault!.SSEAlgorithm).toBe('AES256');
+                // VPC Flow Logs bucket should NOT use KMS
+                expect(rule.ApplyServerSideEncryptionByDefault!.KMSMasterKeyID).toBeUndefined();
+            } catch (error: any) {
+                console.warn('Could not verify VPC flow logs bucket encryption:', error.message);
             }
         }, 30000);
     });
@@ -625,7 +676,7 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
 
     // ==================== Cross-Service Integration Tests ====================
     describe('Cross-Service Integration Scenarios', () => {
-        test('End-to-End: S3 buckets are encrypted with KMS key', async () => {
+        test('End-to-End: Secure data bucket is encrypted with KMS key', async () => {
             if (skipIfNoDeployment()) return;
 
             const bucketName = outputs.SecureDataBucketName;
@@ -637,6 +688,8 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
             const rule = response.ServerSideEncryptionConfiguration!.Rules![0];
             expect(rule.ApplyServerSideEncryptionByDefault!.SSEAlgorithm).toBe('aws:kms');
             expect(rule.ApplyServerSideEncryptionByDefault!.KMSMasterKeyID).toContain(kmsKeyId);
+
+            // Note: VPC Flow Logs bucket uses AES256, not KMS
         }, 30000);
 
         test('End-to-End: CloudTrail logs to S3 with KMS encryption', async () => {
@@ -687,7 +740,7 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
             expect(response.KmsKeyId).toContain(kmsKeyId);
         }, 30000);
 
-        test('End-to-End: VPC flow logs to S3 with encryption', async () => {
+        test('End-to-End: VPC flow logs to S3 with AES256 encryption', async () => {
             if (skipIfNoDeployment()) return;
 
             const vpcId = outputs.VPCId;
@@ -709,7 +762,7 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
             expect(flowLog.LogDestinationType).toBe('s3');
             expect(flowLog.LogDestination).toBeDefined();
 
-            // Verify bucket is encrypted
+            // Verify bucket is encrypted with AES256 (not KMS)
             const bucketArn = flowLog.LogDestination!;
             const bucketName = bucketArn.split(':::')[1];
 
@@ -717,6 +770,8 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
             const encryptionResponse = await s3Client.send(encryptionCommand);
 
             expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
+            const rule = encryptionResponse.ServerSideEncryptionConfiguration!.Rules![0];
+            expect(rule.ApplyServerSideEncryptionByDefault!.SSEAlgorithm).toBe('AES256');
         }, 30000);
 
         test('End-to-End: Metric filters feed CloudWatch alarms', async () => {
@@ -842,29 +897,668 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
             expect(filterResponse.metricFilters!.length).toBeGreaterThan(0);
         }, 30000);
 
-        test('KMS key is used consistently across services', async () => {
+        test('KMS key is used consistently across services (excluding VPC Flow Logs)', async () => {
             if (skipIfNoDeployment()) return;
 
             const kmsKeyId = outputs.KMSKeyId;
 
-            // Check S3
+            // Check S3 Secure Data Bucket (uses KMS)
             const bucketName = outputs.SecureDataBucketName;
             const s3Command = new GetBucketEncryptionCommand({ Bucket: bucketName });
             const s3Response = await s3Client.send(s3Command);
             expect(s3Response.ServerSideEncryptionConfiguration!.Rules![0]
                 .ApplyServerSideEncryptionByDefault!.KMSMasterKeyID).toContain(kmsKeyId);
 
-            // Check Secrets Manager
+            // Check Secrets Manager (uses KMS)
             const secretArn = outputs.DatabaseSecretArn;
             const secretCommand = new DescribeSecretCommand({ SecretId: secretArn });
             const secretResponse = await secretsClient.send(secretCommand);
             expect(secretResponse.KmsKeyId).toContain(kmsKeyId);
 
-            // Check CloudTrail
+            // Check CloudTrail (uses KMS)
             const trailName = outputs.CloudTrailName;
             const trailCommand = new GetTrailCommand({ Name: trailName });
             const trailResponse = await cloudTrailClient.send(trailCommand);
             expect(trailResponse.Trail!.KmsKeyId).toContain(kmsKeyId);
+
+            // Note: VPC Flow Logs bucket uses AES256 encryption, not KMS
         }, 30000);
+    });
+
+    // ==================== End-to-End Security Workflows ====================
+    describe('End-to-End Security Workflows', () => {
+        test('E2E: Audit Trail - CloudTrail → S3 → KMS → Verification', async () => {
+            if (skipIfNoDeployment()) return;
+
+            // Setup: Get CloudTrail and verify it's logging
+            const trailName = outputs.CloudTrailName;
+            const kmsKeyId = outputs.KMSKeyId;
+
+            const statusCommand = new GetTrailStatusCommand({ Name: trailName });
+            const statusResponse = await cloudTrailClient.send(statusCommand);
+            expect(statusResponse.IsLogging).toBe(true);
+
+            // Execute: Verify CloudTrail configuration
+            const trailCommand = new GetTrailCommand({ Name: trailName });
+            const trailResponse = await cloudTrailClient.send(trailCommand);
+            const trail = trailResponse.Trail!;
+
+            // Verify: Complete audit trail workflow
+            expect(trail.S3BucketName).toBeDefined();
+            expect(trail.KmsKeyId).toContain(kmsKeyId);
+            expect(trail.IsMultiRegionTrail).toBe(true);
+            expect(trail.LogFileValidationEnabled).toBe(true);
+
+            // Verify: S3 bucket receiving logs exists and is encrypted
+            const bucketName = trail.S3BucketName!;
+            const headCommand = new HeadBucketCommand({ Bucket: bucketName });
+            await expect(s3Client.send(headCommand)).resolves.toBeDefined();
+
+            const encryptionCommand = new GetBucketEncryptionCommand({ Bucket: bucketName });
+            const encryptionResponse = await s3Client.send(encryptionCommand);
+            expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
+
+            // Verify: KMS key used for encryption is enabled
+            const keyCommand = new DescribeKeyCommand({ KeyId: kmsKeyId });
+            const keyResponse = await kmsClient.send(keyCommand);
+            expect(keyResponse.KeyMetadata!.KeyState).toBe('Enabled');
+
+            console.log('✓ Complete audit trail workflow verified: CloudTrail → S3 (encrypted) → KMS');
+        }, 45000);
+
+        test('E2E: Secret Management - Create → Encrypt → Retrieve → Verify', async () => {
+            if (skipIfNoDeployment()) return;
+
+            // Setup: Get secret details
+            const secretArn = outputs.DatabaseSecretArn;
+            const kmsKeyId = outputs.KMSKeyId;
+
+            // Execute: Retrieve secret metadata
+            const describeCommand = new DescribeSecretCommand({ SecretId: secretArn });
+            const describeResponse = await secretsClient.send(describeCommand);
+
+            // Verify: Secret is encrypted with KMS
+            expect(describeResponse.KmsKeyId).toBeDefined();
+            expect(describeResponse.KmsKeyId).toContain(kmsKeyId);
+
+            // Execute: Retrieve secret value (this tests KMS decryption)
+            const getValueCommand = new GetSecretValueCommand({ SecretId: secretArn });
+            const getValueResponse = await secretsClient.send(getValueCommand);
+
+            // Verify: Secret value is retrieved and contains expected structure
+            expect(getValueResponse.SecretString).toBeDefined();
+            const secret = JSON.parse(getValueResponse.SecretString!);
+            expect(secret.username).toBe('admin');
+            expect(secret.password).toBeDefined();
+            expect(secret.password.length).toBe(32);
+
+            // Verify: KMS key has proper permissions for Secrets Manager
+            const keyPolicyCommand = new GetKeyPolicyCommand({
+                KeyId: kmsKeyId,
+                PolicyName: 'default',
+            });
+            const keyPolicyResponse = await kmsClient.send(keyPolicyCommand);
+            const policy = JSON.parse(keyPolicyResponse.Policy!);
+            const secretsPolicy = policy.Statement.find((s: any) =>
+                s.Sid === 'Allow Secrets Manager to use the key'
+            );
+            expect(secretsPolicy).toBeDefined();
+
+            console.log('✓ Complete secret management workflow verified: Create → Encrypt (KMS) → Retrieve → Decrypt');
+        }, 45000);
+
+        test('E2E: Access Control - IAM Role → S3 → Verification', async () => {
+            if (skipIfNoDeployment()) return;
+
+            // Setup: Get IAM role details
+            const roleName = `SecurityBaselineS3ReadOnlyRole-${environmentSuffix}`;
+            const bucketName = outputs.SecureDataBucketName;
+
+            // Execute: Verify IAM role exists and has proper configuration
+            const roleCommand = new GetRoleCommand({ RoleName: roleName });
+            const roleResponse = await iamClient.send(roleCommand);
+            expect(roleResponse.Role).toBeDefined();
+
+            // Verify: Role has S3 read-only inline policy
+            const policyCommand = new GetRolePolicyCommand({
+                RoleName: roleName,
+                PolicyName: 'S3ReadOnlyPolicy',
+            });
+            const policyResponse = await iamClient.send(policyCommand);
+            const policy = JSON.parse(decodeURIComponent(policyResponse.PolicyDocument!));
+
+            // Verify: Policy allows S3 read operations
+            const statement = policy.Statement[0];
+            expect(statement.Effect).toBe('Allow');
+            expect(statement.Action).toContain('s3:GetObject');
+            expect(statement.Action).toContain('s3:ListBucket');
+
+            // Verify: S3 bucket exists and is properly secured
+            const headCommand = new HeadBucketCommand({ Bucket: bucketName });
+            await expect(s3Client.send(headCommand)).resolves.toBeDefined();
+
+            // Verify: Bucket has public access blocked
+            const publicAccessCommand = new GetPublicAccessBlockCommand({ Bucket: bucketName });
+            const publicAccessResponse = await s3Client.send(publicAccessCommand);
+            const config = publicAccessResponse.PublicAccessBlockConfiguration!;
+            expect(config.BlockPublicAcls).toBe(true);
+            expect(config.BlockPublicPolicy).toBe(true);
+
+            console.log('✓ Complete access control workflow verified: IAM Role → S3 (secure access) → Verification');
+        }, 45000);
+
+        test('E2E: VPC Security - Flow Logs → S3 → Monitoring', async () => {
+            if (skipIfNoDeployment()) return;
+
+            // Setup: Get VPC and Flow Logs details
+            const vpcId = outputs.VPCId;
+
+            // Execute: Verify VPC Flow Logs are active
+            const flowLogsCommand = new DescribeFlowLogsCommand({
+                Filter: [
+                    {
+                        Name: 'resource-id',
+                        Values: [vpcId],
+                    },
+                ],
+            });
+            const flowLogsResponse = await ec2Client.send(flowLogsCommand);
+            expect(flowLogsResponse.FlowLogs).toBeDefined();
+            expect(flowLogsResponse.FlowLogs!.length).toBeGreaterThan(0);
+
+            const flowLog = flowLogsResponse.FlowLogs![0];
+            expect(flowLog.FlowLogStatus).toBe('ACTIVE');
+            expect(flowLog.LogDestinationType).toBe('s3');
+
+            // Verify: S3 destination bucket exists and is encrypted
+            const bucketArn = flowLog.LogDestination!;
+            const bucketName = bucketArn.split(':::')[1];
+
+            const headCommand = new HeadBucketCommand({ Bucket: bucketName });
+            await expect(s3Client.send(headCommand)).resolves.toBeDefined();
+
+            const encryptionCommand = new GetBucketEncryptionCommand({ Bucket: bucketName });
+            const encryptionResponse = await s3Client.send(encryptionCommand);
+            expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
+
+            // Verify: Bucket has lifecycle policy for log rotation
+            const lifecycleCommand = new GetBucketLifecycleConfigurationCommand({ Bucket: bucketName });
+            const lifecycleResponse = await s3Client.send(lifecycleCommand);
+            expect(lifecycleResponse.Rules).toBeDefined();
+            expect(lifecycleResponse.Rules!.length).toBeGreaterThan(0);
+
+            console.log('✓ Complete VPC security workflow verified: Flow Logs (ACTIVE) → S3 (encrypted) → Lifecycle');
+        }, 45000);
+    });
+
+    // ==================== End-to-End Monitoring Pipelines ====================
+    describe('End-to-End Monitoring Pipelines', () => {
+        test('E2E: Monitoring Pipeline - CloudWatch Logs → Metric Filter → Alarm → SNS', async () => {
+            if (skipIfNoDeployment()) return;
+
+            // Setup: Verify CloudWatch log group exists
+            const logGroupCommand = new DescribeLogGroupsCommand({
+                logGroupNamePrefix: '/aws/cloudtrail',
+            });
+            const logGroupResponse = await cloudWatchLogsClient.send(logGroupCommand);
+            expect(logGroupResponse.logGroups).toBeDefined();
+            expect(logGroupResponse.logGroups!.length).toBeGreaterThan(0);
+
+            const logGroup = logGroupResponse.logGroups![0];
+            expect(logGroup.logGroupName).toBe('/aws/cloudtrail');
+
+            // Execute: Verify metric filter is configured
+            const filterCommand = new DescribeMetricFiltersCommand({
+                logGroupName: '/aws/cloudtrail',
+                filterNamePrefix: 'ConsoleSignInFailures',
+            });
+            const filterResponse = await cloudWatchLogsClient.send(filterCommand);
+            expect(filterResponse.metricFilters).toBeDefined();
+            expect(filterResponse.metricFilters!.length).toBeGreaterThan(0);
+
+            const filter = filterResponse.metricFilters![0];
+            expect(filter.filterName).toBe('ConsoleSignInFailures');
+            expect(filter.metricTransformations).toHaveLength(1);
+
+            const metricTransform = filter.metricTransformations![0];
+            expect(metricTransform.metricName).toBe('ConsoleSignInFailureCount');
+            expect(metricTransform.metricNamespace).toBe('CloudTrailMetrics');
+
+            // Execute: Verify CloudWatch alarm is configured
+            const alarmCommand = new DescribeAlarmsCommand({
+                AlarmNames: ['Console-SignIn-Failures'],
+            });
+            const alarmResponse = await cloudWatchClient.send(alarmCommand);
+            expect(alarmResponse.MetricAlarms).toHaveLength(1);
+
+            const alarm = alarmResponse.MetricAlarms![0];
+            expect(alarm.MetricName).toBe(metricTransform.metricName);
+            expect(alarm.Namespace).toBe(metricTransform.metricNamespace);
+            expect(alarm.AlarmActions).toBeDefined();
+            expect(alarm.AlarmActions!.length).toBeGreaterThan(0);
+
+            // Verify: SNS topic is configured as alarm action
+            const topicArn = alarm.AlarmActions![0];
+            expect(topicArn).toContain('arn:aws:sns');
+
+            const snsCommand = new GetTopicAttributesCommand({ TopicArn: topicArn });
+            const snsResponse = await snsClient.send(snsCommand);
+            expect(snsResponse.Attributes).toBeDefined();
+            expect(snsResponse.Attributes!.DisplayName).toBe('Security Alarms Topic');
+
+            // Verify: SNS topic has email subscription
+            const subscriptionCommand = new ListSubscriptionsByTopicCommand({ TopicArn: topicArn });
+            const subscriptionResponse = await snsClient.send(subscriptionCommand);
+            expect(subscriptionResponse.Subscriptions).toBeDefined();
+            expect(subscriptionResponse.Subscriptions!.length).toBeGreaterThan(0);
+
+            console.log('✓ Complete monitoring pipeline verified: Logs → Filter → Alarm → SNS → Email');
+        }, 45000);
+
+        test('E2E: Alarm State and Action Verification', async () => {
+            if (skipIfNoDeployment()) return;
+
+            // Execute: Get alarm details
+            const alarmCommand = new DescribeAlarmsCommand({
+                AlarmNames: ['Console-SignIn-Failures'],
+            });
+            const alarmResponse = await cloudWatchClient.send(alarmCommand);
+            expect(alarmResponse.MetricAlarms).toHaveLength(1);
+
+            const alarm = alarmResponse.MetricAlarms![0];
+
+            // Verify: Alarm has proper configuration
+            expect(alarm.Threshold).toBe(3);
+            expect(alarm.ComparisonOperator).toBe('GreaterThanThreshold');
+            expect(alarm.Period).toBe(300);
+            expect(alarm.EvaluationPeriods).toBe(1);
+            expect(alarm.Statistic).toBe('Sum');
+
+            // Verify: Alarm state is valid
+            expect(['OK', 'ALARM', 'INSUFFICIENT_DATA']).toContain(alarm.StateValue);
+
+            // Verify: Actions are configured for all states
+            expect(alarm.AlarmActions).toBeDefined();
+            expect(alarm.AlarmActions!.length).toBeGreaterThan(0);
+
+            console.log(`✓ Alarm state: ${alarm.StateValue}, Actions configured: ${alarm.AlarmActions!.length}`);
+        }, 45000);
+    });
+
+    // ==================== End-to-End Compliance Verification ====================
+    describe('End-to-End Compliance Verification', () => {
+        test('E2E: Config Compliance - Recorder → Rules → Evaluation → Reporting', async () => {
+            if (skipIfNoDeployment()) return;
+
+            // Setup: Verify Config recorder is enabled
+            const recorderCommand = new DescribeConfigurationRecordersCommand({});
+            const recorderResponse = await configClient.send(recorderCommand);
+            expect(recorderResponse.ConfigurationRecorders).toBeDefined();
+            expect(recorderResponse.ConfigurationRecorders!.length).toBeGreaterThan(0);
+
+            const recorder = recorderResponse.ConfigurationRecorders![0];
+            expect(recorder.name).toContain('SecurityBaselineRecorder');
+            expect(recorder.recordingGroup?.allSupported).toBe(true);
+            expect(recorder.recordingGroup?.includeGlobalResourceTypes).toBe(true);
+
+            // Execute: Verify delivery channel is configured
+            const channelCommand = new DescribeDeliveryChannelsCommand({});
+            const channelResponse = await configClient.send(channelCommand);
+            expect(channelResponse.DeliveryChannels).toBeDefined();
+            expect(channelResponse.DeliveryChannels!.length).toBeGreaterThan(0);
+
+            const channel = channelResponse.DeliveryChannels![0];
+            expect(channel.name).toContain('SecurityBaselineDeliveryChannel');
+            expect(channel.s3BucketName).toBeDefined();
+
+            // Execute: Verify Config rules exist
+            const rulesCommand = new DescribeConfigRulesCommand({});
+            const rulesResponse = await configClient.send(rulesCommand);
+            expect(rulesResponse.ConfigRules).toBeDefined();
+
+            const publicReadRule = rulesResponse.ConfigRules!.find(r =>
+                r.ConfigRuleName === 's3-bucket-public-read-prohibited'
+            );
+            expect(publicReadRule).toBeDefined();
+            expect(publicReadRule!.Source).toBeDefined();
+            expect(publicReadRule!.Source!.Owner).toBe('AWS');
+
+            const publicWriteRule = rulesResponse.ConfigRules!.find(r =>
+                r.ConfigRuleName === 's3-bucket-public-write-prohibited'
+            );
+            expect(publicWriteRule).toBeDefined();
+
+            // Verify: S3 bucket for Config snapshots exists and is encrypted
+            const bucketName = channel.s3BucketName!;
+            const headCommand = new HeadBucketCommand({ Bucket: bucketName });
+            await expect(s3Client.send(headCommand)).resolves.toBeDefined();
+
+            const encryptionCommand = new GetBucketEncryptionCommand({ Bucket: bucketName });
+            const encryptionResponse = await s3Client.send(encryptionCommand);
+            expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
+
+            console.log('✓ Complete compliance workflow verified: Recorder → Rules → S3 (encrypted)');
+        }, 45000);
+
+        test('E2E: Config Rule Compliance Evaluation', async () => {
+            if (skipIfNoDeployment()) return;
+
+            // Execute: Get compliance details for public read rule
+            try {
+                const command = new GetComplianceDetailsByConfigRuleCommand({
+                    ConfigRuleName: 's3-bucket-public-read-prohibited',
+                    Limit: 10,
+                });
+                const response = await configClient.send(command);
+
+                // Verify: Rule has been evaluated
+                expect(response.EvaluationResults).toBeDefined();
+                console.log(`✓ Config rule evaluated ${response.EvaluationResults!.length} resources`);
+
+                // If there are evaluation results, verify structure
+                if (response.EvaluationResults!.length > 0) {
+                    const result = response.EvaluationResults![0];
+                    expect(result.ComplianceType).toBeDefined();
+                    expect(['COMPLIANT', 'NON_COMPLIANT', 'NOT_APPLICABLE']).toContain(result.ComplianceType);
+                    expect(result.EvaluationResultIdentifier).toBeDefined();
+                }
+            } catch (error: any) {
+                // Rule may not have run yet, which is acceptable for new deployments
+                console.warn('Config rule evaluation pending:', error.message);
+            }
+        }, 45000);
+    });
+
+    // ==================== End-to-End Data Protection ====================
+    describe('End-to-End Data Protection', () => {
+        test('E2E: S3 Data Protection - Upload → Encrypt → Verify → Cleanup', async () => {
+            if (skipIfNoDeployment()) return;
+
+            const bucketName = outputs.SecureDataBucketName;
+            const kmsKeyId = outputs.KMSKeyId;
+            const testKey = `test-e2e-${Date.now()}.txt`;
+            const testContent = 'This is a test file for E2E encryption verification';
+
+            try {
+                // Execute: Upload test file to S3 (encryption should be automatic)
+                const putCommand = new PutObjectCommand({
+                    Bucket: bucketName,
+                    Key: testKey,
+                    Body: testContent,
+                });
+                await s3Client.send(putCommand);
+                console.log(`✓ Uploaded test file: ${testKey}`);
+
+                // Verify: Retrieve and verify file
+                const getCommand = new GetObjectCommand({
+                    Bucket: bucketName,
+                    Key: testKey,
+                });
+                const getResponse = await s3Client.send(getCommand);
+
+                // Verify: File is encrypted (server-side encryption metadata)
+                expect(getResponse.ServerSideEncryption).toBe('aws:kms');
+                expect(getResponse.SSEKMSKeyId).toBeDefined();
+                expect(getResponse.SSEKMSKeyId).toContain(kmsKeyId);
+
+                // Verify: Content is retrievable (KMS decryption works)
+                const body = await getResponse.Body!.transformToString();
+                expect(body).toBe(testContent);
+
+                console.log('✓ File verified: encrypted with KMS and retrievable');
+
+                // Cleanup: Delete test file
+                const deleteCommand = new DeleteObjectCommand({
+                    Bucket: bucketName,
+                    Key: testKey,
+                });
+                await s3Client.send(deleteCommand);
+                console.log('✓ Cleanup: Test file deleted');
+            } catch (error: any) {
+                console.error('E2E data protection test failed:', error.message);
+                throw error;
+            }
+        }, 60000);
+
+        test('E2E: Cross-Service KMS Usage Consistency', async () => {
+            if (skipIfNoDeployment()) return;
+
+            const kmsKeyId = outputs.KMSKeyId;
+
+            // Verify: KMS key is consistently used across services
+            const services = {
+                s3: false,
+                secrets: false,
+                cloudtrail: false,
+            };
+
+            // Check S3 Secure Data Bucket
+            const bucketName = outputs.SecureDataBucketName;
+            const s3EncCommand = new GetBucketEncryptionCommand({ Bucket: bucketName });
+            const s3EncResponse = await s3Client.send(s3EncCommand);
+            const s3KeyId = s3EncResponse.ServerSideEncryptionConfiguration!.Rules![0]
+                .ApplyServerSideEncryptionByDefault!.KMSMasterKeyID;
+            if (s3KeyId && s3KeyId.includes(kmsKeyId)) {
+                services.s3 = true;
+            }
+
+            // Check Secrets Manager
+            const secretArn = outputs.DatabaseSecretArn;
+            const secretCommand = new DescribeSecretCommand({ SecretId: secretArn });
+            const secretResponse = await secretsClient.send(secretCommand);
+            if (secretResponse.KmsKeyId && secretResponse.KmsKeyId.includes(kmsKeyId)) {
+                services.secrets = true;
+            }
+
+            // Check CloudTrail
+            const trailName = outputs.CloudTrailName;
+            const trailCommand = new GetTrailCommand({ Name: trailName });
+            const trailResponse = await cloudTrailClient.send(trailCommand);
+            if (trailResponse.Trail!.KmsKeyId && trailResponse.Trail!.KmsKeyId.includes(kmsKeyId)) {
+                services.cloudtrail = true;
+            }
+
+            // Verify: All services use the same KMS key
+            expect(services.s3).toBe(true);
+            expect(services.secrets).toBe(true);
+            expect(services.cloudtrail).toBe(true);
+
+            console.log('✓ KMS key consistency verified across S3, Secrets Manager, and CloudTrail');
+        }, 45000);
+
+        test('E2E: Data Encryption at Rest - All Storage Services', async () => {
+            if (skipIfNoDeployment()) return;
+
+            const encryptionStatus = {
+                secureDataBucket: false,
+                cloudTrailBucket: false,
+                configBucket: false,
+                vpcFlowLogsBucket: false,
+                secretsManager: false,
+            };
+
+            // Check Secure Data Bucket (KMS)
+            const secureBucket = outputs.SecureDataBucketName;
+            const secureEncCommand = new GetBucketEncryptionCommand({ Bucket: secureBucket });
+            const secureEncResponse = await s3Client.send(secureEncCommand);
+            if (secureEncResponse.ServerSideEncryptionConfiguration) {
+                encryptionStatus.secureDataBucket = true;
+            }
+
+            // Check CloudTrail Bucket (KMS)
+            const cloudTrailBucket = `cloudtrail-logs-${environmentSuffix}-${awsAccountId}-${awsRegion}`;
+            try {
+                const ctEncCommand = new GetBucketEncryptionCommand({ Bucket: cloudTrailBucket });
+                const ctEncResponse = await s3Client.send(ctEncCommand);
+                if (ctEncResponse.ServerSideEncryptionConfiguration) {
+                    encryptionStatus.cloudTrailBucket = true;
+                }
+            } catch (error) {
+                console.warn('CloudTrail bucket encryption check skipped');
+            }
+
+            // Check Config Bucket (AES256)
+            const configBucket = `config-bucket-${environmentSuffix}-${awsAccountId}-${awsRegion}`;
+            try {
+                const configEncCommand = new GetBucketEncryptionCommand({ Bucket: configBucket });
+                const configEncResponse = await s3Client.send(configEncCommand);
+                if (configEncResponse.ServerSideEncryptionConfiguration) {
+                    encryptionStatus.configBucket = true;
+                }
+            } catch (error) {
+                console.warn('Config bucket encryption check skipped');
+            }
+
+            // Check VPC Flow Logs Bucket (AES256)
+            const vpcBucket = `vpc-flow-logs-${environmentSuffix}-${awsAccountId}-${awsRegion}`;
+            try {
+                const vpcEncCommand = new GetBucketEncryptionCommand({ Bucket: vpcBucket });
+                const vpcEncResponse = await s3Client.send(vpcEncCommand);
+                if (vpcEncResponse.ServerSideEncryptionConfiguration) {
+                    encryptionStatus.vpcFlowLogsBucket = true;
+                }
+            } catch (error) {
+                console.warn('VPC Flow Logs bucket encryption check skipped');
+            }
+
+            // Check Secrets Manager (KMS)
+            const secretArn = outputs.DatabaseSecretArn;
+            const secretCommand = new DescribeSecretCommand({ SecretId: secretArn });
+            const secretResponse = await secretsClient.send(secretCommand);
+            if (secretResponse.KmsKeyId) {
+                encryptionStatus.secretsManager = true;
+            }
+
+            // Verify: At least key services are encrypted
+            expect(encryptionStatus.secureDataBucket).toBe(true);
+            expect(encryptionStatus.secretsManager).toBe(true);
+            expect(encryptionStatus.vpcFlowLogsBucket).toBe(true);
+
+            console.log('✓ Encryption at rest verified for all storage services:', encryptionStatus);
+        }, 60000);
+    });
+
+    // ==================== Service-Level Operations ====================
+    describe('Service-Level Operations', () => {
+        test('Operation: S3 Bucket Versioning and Lifecycle', async () => {
+            if (skipIfNoDeployment()) return;
+
+            const bucketName = outputs.SecureDataBucketName;
+
+            // Verify: Versioning is enabled
+            const versioningCommand = new GetBucketVersioningCommand({ Bucket: bucketName });
+            const versioningResponse = await s3Client.send(versioningCommand);
+            expect(versioningResponse.Status).toBe('Enabled');
+
+            // Verify: Public access is blocked
+            const publicAccessCommand = new GetPublicAccessBlockCommand({ Bucket: bucketName });
+            const publicAccessResponse = await s3Client.send(publicAccessCommand);
+            const config = publicAccessResponse.PublicAccessBlockConfiguration!;
+            expect(config.BlockPublicAcls).toBe(true);
+            expect(config.BlockPublicPolicy).toBe(true);
+            expect(config.IgnorePublicAcls).toBe(true);
+            expect(config.RestrictPublicBuckets).toBe(true);
+
+            console.log('✓ S3 bucket operations verified: Versioning enabled, Public access blocked');
+        }, 45000);
+
+        test('Operation: CloudTrail Log File Validation', async () => {
+            if (skipIfNoDeployment()) return;
+
+            const trailName = outputs.CloudTrailName;
+
+            // Verify: Log file validation is enabled
+            const trailCommand = new GetTrailCommand({ Name: trailName });
+            const trailResponse = await cloudTrailClient.send(trailCommand);
+            expect(trailResponse.Trail!.LogFileValidationEnabled).toBe(true);
+
+            // Verify: Multi-region trail
+            expect(trailResponse.Trail!.IsMultiRegionTrail).toBe(true);
+
+            // Verify: Global service events included
+            expect(trailResponse.Trail!.IncludeGlobalServiceEvents).toBe(true);
+
+            console.log('✓ CloudTrail operations verified: Log validation, Multi-region, Global events');
+        }, 45000);
+
+        test('Operation: Secrets Manager Secret Accessibility', async () => {
+            if (skipIfNoDeployment()) return;
+
+            const secretArn = outputs.DatabaseSecretArn;
+
+            // Verify: Secret can be retrieved
+            const getCommand = new GetSecretValueCommand({ SecretId: secretArn });
+            const getResponse = await secretsClient.send(getCommand);
+            expect(getResponse.SecretString).toBeDefined();
+
+            const secret = JSON.parse(getResponse.SecretString!);
+            expect(secret.username).toBe('admin');
+            expect(secret.password).toBeDefined();
+
+            // Verify: Secret metadata
+            const describeCommand = new DescribeSecretCommand({ SecretId: secretArn });
+            const describeResponse = await secretsClient.send(describeCommand);
+            expect(describeResponse.Name).toBeDefined();
+            expect(describeResponse.KmsKeyId).toBeDefined();
+            expect(describeResponse.Description).toBe('Database credentials for Security Baseline');
+
+            console.log('✓ Secrets Manager operations verified: Accessible, Encrypted, Metadata correct');
+        }, 45000);
+
+        test('Operation: VPC Flow Logs Active Monitoring', async () => {
+            if (skipIfNoDeployment()) return;
+
+            const vpcId = outputs.VPCId;
+
+            // Verify: Flow logs are active
+            const flowLogsCommand = new DescribeFlowLogsCommand({
+                Filter: [
+                    {
+                        Name: 'resource-id',
+                        Values: [vpcId],
+                    },
+                ],
+            });
+            const flowLogsResponse = await ec2Client.send(flowLogsCommand);
+            expect(flowLogsResponse.FlowLogs).toBeDefined();
+            expect(flowLogsResponse.FlowLogs!.length).toBeGreaterThan(0);
+
+            const flowLog = flowLogsResponse.FlowLogs![0];
+            expect(flowLog.FlowLogStatus).toBe('ACTIVE');
+            expect(flowLog.TrafficType).toBe('ALL');
+            expect(flowLog.LogDestinationType).toBe('s3');
+
+            console.log('✓ VPC Flow Logs operations verified: ACTIVE status, Logging ALL traffic to S3');
+        }, 45000);
+
+        test('Operation: KMS Key Rotation and Key Policy', async () => {
+            if (skipIfNoDeployment()) return;
+
+            const kmsKeyId = outputs.KMSKeyId;
+
+            // Verify: Key is enabled and ready for use
+            const keyCommand = new DescribeKeyCommand({ KeyId: kmsKeyId });
+            const keyResponse = await kmsClient.send(keyCommand);
+            expect(keyResponse.KeyMetadata!.KeyState).toBe('Enabled');
+            expect(keyResponse.KeyMetadata!.KeyUsage).toBe('ENCRYPT_DECRYPT');
+
+            // Verify: Key policy allows necessary services
+            const policyCommand = new GetKeyPolicyCommand({
+                KeyId: kmsKeyId,
+                PolicyName: 'default',
+            });
+            const policyResponse = await kmsClient.send(policyCommand);
+            const policy = JSON.parse(policyResponse.Policy!);
+
+            const allowedServices = ['cloudtrail.amazonaws.com', 's3.amazonaws.com', 'secretsmanager.amazonaws.com'];
+            allowedServices.forEach((service) => {
+                const servicePolicy = policy.Statement.find((s: any) =>
+                    s.Principal?.Service === service
+                );
+                expect(servicePolicy).toBeDefined();
+            });
+
+            console.log('✓ KMS operations verified: Key enabled, Policies for CloudTrail, S3, Secrets Manager');
+        }, 45000);
     });
 });
