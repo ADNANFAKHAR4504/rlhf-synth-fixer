@@ -1,4 +1,4 @@
- Critical Failure — Security Group Naming Convention
+1. Critical Failure — Security Group Naming Convention
 Root Cause
 
 Terraform security group resources in your tap_stack.tf used a name starting with "sg-"
@@ -45,4 +45,38 @@ Ref: https://paladincloud.io/aws-security-risks/aws-security-group-naming-conven
 │ 
 ╵
 Error: Terraform exited with code 1.
+```
+
+2. Medium Failure: Model used wrong DB Engine version for the postgres DB
+
+means that the PostgreSQL version 15.4 you’re trying to use in your aws_db_instance block is not available in the selected AWS region (us-east-1 or us-west-2) or for that specific instance class (db.r6g.xlarge).
+
+Why this happens
+
+RDS PostgreSQL versions vary by:
+
+Region
+
+Instance class (e.g., Graviton vs x86)
+
+Engine type (postgres)
+
+AWS sometimes retires patch versions (like 15.4) or limits availability for certain classes.
+
+Fix - Apply the available version
+
+Ref - https://docs.aws.amazon.com/AmazonRDS/latest/PostgreSQLReleaseNotes/postgresql-versions.html
+```
+
+╷
+│ Error: creating RDS DB Instance (rds-primary-drsh): operation error RDS: CreateDBInstance, https response error StatusCode: 400, RequestID: b63e3918-c173-4d4f-9846-b7c7c93539f1, api error InvalidParameterCombination: Cannot find version 15.4 for postgres
+│ 
+│   with aws_db_instance.primary,
+│   on tap_stack.tf line 635, in resource "aws_db_instance" "primary":
+│  635: resource "aws_db_instance" "primary" {
+│ 
+╵
+Error: Terraform exited with code 1.
+⚠️Direct apply with plan failed, trying without plan...
+
 ```

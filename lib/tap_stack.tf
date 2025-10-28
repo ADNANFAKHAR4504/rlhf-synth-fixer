@@ -639,7 +639,7 @@ resource "aws_db_instance" "primary" {
   storage_type            = "gp3"
   storage_encrypted       = true
   engine                  = "postgres"
-  engine_version          = "15.4"
+  engine_version          = "17.6"
   instance_class          = "db.r6g.xlarge"
   db_name                 = "financedb"
   username                = var.db_username
