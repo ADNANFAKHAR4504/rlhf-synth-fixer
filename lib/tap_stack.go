@@ -157,7 +157,9 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 
 	processedBucket.GrantRead(originAccessIdentity.GrantPrincipal(), nil)
 
-	// CloudFront distribution
+	// CloudFront distribution (logging disabled to avoid ACL permission issues)
+	// CloudFront standard logging requires ACLs which conflicts with modern S3 security best practices
+	// For production, consider using CloudFront real-time logs to Kinesis or CloudWatch instead
 	distribution := awscloudfront.NewDistribution(stack, jsii.String("Distribution"), &awscloudfront.DistributionProps{
 		Comment: jsii.String(fmt.Sprintf("Media delivery CDN %s", *environmentSuffix)),
 		DefaultBehavior: &awscloudfront.BehaviorOptions{
@@ -167,9 +169,10 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 			ViewerProtocolPolicy: awscloudfront.ViewerProtocolPolicy_REDIRECT_TO_HTTPS,
 			CachePolicy:          awscloudfront.CachePolicy_CACHING_OPTIMIZED(),
 		},
-		PriceClass:    awscloudfront.PriceClass_PRICE_CLASS_100,
-		HttpVersion:   awscloudfront.HttpVersion_HTTP2_AND_3,
-		EnableLogging: jsii.Bool(true),
+		PriceClass:  awscloudfront.PriceClass_PRICE_CLASS_100,
+		HttpVersion: awscloudfront.HttpVersion_HTTP2_AND_3,
+		// Disable standard logging to avoid ACL permission issues
+		EnableLogging: jsii.Bool(false),
 	})
 
 	// Stack outputs

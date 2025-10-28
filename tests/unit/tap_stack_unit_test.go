@@ -1,18 +1,18 @@
 package unit
 
 import (
-	"testing"
-	"tap/lib"
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/assertions"
 	"github.com/aws/jsii-runtime-go"
+	"tap/lib"
+	"testing"
 )
 
 // Test stack creation with environment suffix
 func TestTapStackCreation(t *testing.T) {
 	app := awscdk.NewApp(nil)
 	stack := lib.NewTapStack(app, "TestStack", &lib.TapStackProps{
-		StackProps: awscdk.StackProps{Env: &awscdk.Environment{Region: jsii.String("eu-south-1")}},
+		StackProps:        awscdk.StackProps{Env: &awscdk.Environment{Region: jsii.String("eu-south-1")}},
 		EnvironmentSuffix: jsii.String("test"),
 	})
 	template := assertions.Template_FromStack(stack, nil)
@@ -41,7 +41,7 @@ func TestTapStackDefaultSuffix(t *testing.T) {
 func TestS3BucketsConfiguration(t *testing.T) {
 	app := awscdk.NewApp(nil)
 	stack := lib.NewTapStack(app, "TestStack", &lib.TapStackProps{
-		StackProps: awscdk.StackProps{Env: &awscdk.Environment{Region: jsii.String("eu-south-1")}},
+		StackProps:        awscdk.StackProps{Env: &awscdk.Environment{Region: jsii.String("eu-south-1")}},
 		EnvironmentSuffix: jsii.String("test"),
 	})
 	template := assertions.Template_FromStack(stack, nil)
@@ -52,9 +52,9 @@ func TestS3BucketsConfiguration(t *testing.T) {
 			},
 		},
 		"PublicAccessBlockConfiguration": map[string]interface{}{
-			"BlockPublicAcls": true,
-			"BlockPublicPolicy": true,
-			"IgnorePublicAcls": true,
+			"BlockPublicAcls":       true,
+			"BlockPublicPolicy":     true,
+			"IgnorePublicAcls":      true,
 			"RestrictPublicBuckets": true,
 		},
 	})
@@ -64,7 +64,7 @@ func TestS3BucketsConfiguration(t *testing.T) {
 func TestDynamoDBTableConfiguration(t *testing.T) {
 	app := awscdk.NewApp(nil)
 	stack := lib.NewTapStack(app, "TestStack", &lib.TapStackProps{
-		StackProps: awscdk.StackProps{Env: &awscdk.Environment{Region: jsii.String("eu-south-1")}},
+		StackProps:        awscdk.StackProps{Env: &awscdk.Environment{Region: jsii.String("eu-south-1")}},
 		EnvironmentSuffix: jsii.String("test"),
 	})
 	template := assertions.Template_FromStack(stack, nil)
@@ -80,7 +80,7 @@ func TestDynamoDBTableConfiguration(t *testing.T) {
 func TestLambdaFunctions(t *testing.T) {
 	app := awscdk.NewApp(nil)
 	stack := lib.NewTapStack(app, "TestStack", &lib.TapStackProps{
-		StackProps: awscdk.StackProps{Env: &awscdk.Environment{Region: jsii.String("eu-south-1")}},
+		StackProps:        awscdk.StackProps{Env: &awscdk.Environment{Region: jsii.String("eu-south-1")}},
 		EnvironmentSuffix: jsii.String("test"),
 	})
 	template := assertions.Template_FromStack(stack, nil)
@@ -94,7 +94,7 @@ func TestLambdaFunctions(t *testing.T) {
 func TestIAMRoles(t *testing.T) {
 	app := awscdk.NewApp(nil)
 	stack := lib.NewTapStack(app, "TestStack", &lib.TapStackProps{
-		StackProps: awscdk.StackProps{Env: &awscdk.Environment{Region: jsii.String("eu-south-1")}},
+		StackProps:        awscdk.StackProps{Env: &awscdk.Environment{Region: jsii.String("eu-south-1")}},
 		EnvironmentSuffix: jsii.String("test"),
 	})
 	template := assertions.Template_FromStack(stack, nil)
@@ -114,7 +114,7 @@ func TestIAMRoles(t *testing.T) {
 func TestSNSTopic(t *testing.T) {
 	app := awscdk.NewApp(nil)
 	stack := lib.NewTapStack(app, "TestStack", &lib.TapStackProps{
-		StackProps: awscdk.StackProps{Env: &awscdk.Environment{Region: jsii.String("eu-south-1")}},
+		StackProps:        awscdk.StackProps{Env: &awscdk.Environment{Region: jsii.String("eu-south-1")}},
 		EnvironmentSuffix: jsii.String("test"),
 	})
 	template := assertions.Template_FromStack(stack, nil)
@@ -127,15 +127,15 @@ func TestSNSTopic(t *testing.T) {
 func TestCloudFrontDistribution(t *testing.T) {
 	app := awscdk.NewApp(nil)
 	stack := lib.NewTapStack(app, "TestStack", &lib.TapStackProps{
-		StackProps: awscdk.StackProps{Env: &awscdk.Environment{Region: jsii.String("eu-south-1")}},
+		StackProps:        awscdk.StackProps{Env: &awscdk.Environment{Region: jsii.String("eu-south-1")}},
 		EnvironmentSuffix: jsii.String("test"),
 	})
 	template := assertions.Template_FromStack(stack, nil)
 	template.HasResourceProperties(jsii.String("AWS::CloudFront::Distribution"), map[string]interface{}{
 		"DistributionConfig": map[string]interface{}{
-			"Enabled": true,
+			"Enabled":     true,
 			"HttpVersion": "http2and3",
-			"PriceClass": "PriceClass_100",
+			"PriceClass":  "PriceClass_100",
 		},
 	})
 }
@@ -145,7 +145,7 @@ func TestGetTranscodeLambdaCode(t *testing.T) {
 	// This indirectly tests the getTranscodeLambdaCode function by checking Lambda code in template
 	app := awscdk.NewApp(nil)
 	stack := lib.NewTapStack(app, "TestStack", &lib.TapStackProps{
-		StackProps: awscdk.StackProps{Env: &awscdk.Environment{Region: jsii.String("eu-south-1")}},
+		StackProps:        awscdk.StackProps{Env: &awscdk.Environment{Region: jsii.String("eu-south-1")}},
 		EnvironmentSuffix: jsii.String("test"),
 	})
 	template := assertions.Template_FromStack(stack, nil)
@@ -161,7 +161,7 @@ func TestGetTranscodeLambdaCode(t *testing.T) {
 func TestStackOutputs(t *testing.T) {
 	app := awscdk.NewApp(nil)
 	stack := lib.NewTapStack(app, "TestStack", &lib.TapStackProps{
-		StackProps: awscdk.StackProps{Env: &awscdk.Environment{Region: jsii.String("eu-south-1")}},
+		StackProps:        awscdk.StackProps{Env: &awscdk.Environment{Region: jsii.String("eu-south-1")}},
 		EnvironmentSuffix: jsii.String("test"),
 	})
 	template := assertions.Template_FromStack(stack, nil)
