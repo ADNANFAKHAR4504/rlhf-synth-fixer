@@ -13,13 +13,14 @@ from aws_cdk import (
     aws_kms as kms,
     aws_iam as iam,
     CfnOutput,
+    NestedStack,
     RemovalPolicy,
     Duration,
 )
 from constructs import Construct
 
 
-class SecretsStack(Construct):
+class SecretsStack(NestedStack):
     """
     Creates and manages Secrets Manager secret for database credentials
     """
@@ -52,11 +53,15 @@ class SecretsStack(Construct):
             removal_policy=RemovalPolicy.DESTROY,
         )
 
-        # Note: Automatic rotation via Lambda is not configured as
-        # Serverless Application Repository is not available in eu-central-2.
-        # For production deployments in this region, implement a custom rotation
-        # Lambda function or use AWS Lambda Rotation functions in supported regions.
-        # The secret is ready to accept rotation when the infrastructure is available.
+        # Enable automated rotation every 30 days using the AWS hosted rotation Lambda
+        self.rotation_schedule = self.db_secret.add_rotation_schedule(
+            f"DBSecretRotation-{environment_suffix}",
+            hosted_rotation=secretsmanager.HostedRotation.postgre_sql_single_user(),
+            automatically_after=Duration.days(30),
+        )
+
+        # The hosted rotation Lambda runs out-of-the-box. For stricter environments
+        # (e.g., private subnets) provide VPC configuration to the hosted rotation.
 
         # Create IAM policy for secret access
         self.secret_read_policy = iam.ManagedPolicy(

@@ -12,12 +12,13 @@ from aws_cdk import (
     aws_ec2 as ec2,
     aws_logs as logs,
     CfnOutput,
+    NestedStack,
     RemovalPolicy,
 )
 from constructs import Construct
 
 
-class VPCStack(Construct):
+class VPCStack(NestedStack):
     """
     Creates a Multi-AZ VPC for disaster recovery infrastructure
     """

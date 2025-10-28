@@ -61,7 +61,8 @@ class TestTapStack(unittest.TestCase):  # pylint: disable=too-many-public-method
         template.resource_count_is("AWS::EC2::VPC", 1)
 
         # Verify subnets across multiple AZs
-        template.resource_count_is("AWS::EC2::Subnet", Match.any_value())
+        subnets = template.find_resources("AWS::EC2::Subnet")
+        assert len(subnets) >= 6, "Should create subnets across multiple AZs"
 
         # Verify VPC has DNS enabled
         template.has_resource_properties("AWS::EC2::VPC", {

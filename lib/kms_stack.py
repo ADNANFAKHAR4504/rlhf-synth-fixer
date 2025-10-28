@@ -12,13 +12,14 @@ from aws_cdk import (
     aws_kms as kms,
     aws_iam as iam,
     CfnOutput,
+    NestedStack,
     RemovalPolicy,
     Duration,
 )
 from constructs import Construct
 
 
-class KMSStack(Construct):
+class KMSStack(NestedStack):
     """
     Creates KMS keys for encrypting various AWS resources
     """

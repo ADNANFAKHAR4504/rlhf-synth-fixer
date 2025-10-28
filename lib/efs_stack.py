@@ -16,13 +16,14 @@ from aws_cdk import (
     aws_backup as backup,
     aws_events as events,
     CfnOutput,
+    NestedStack,
     RemovalPolicy,
     Duration,
 )
 from constructs import Construct
 
 
-class EFSStack(Construct):
+class EFSStack(NestedStack):
     """
     Creates an EFS file system for storing transaction logs
     """

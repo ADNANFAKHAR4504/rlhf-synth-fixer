@@ -21,13 +21,14 @@ from aws_cdk import (
     aws_sns as sns,
     aws_logs as logs,
     CfnOutput,
+    NestedStack,
     RemovalPolicy,
     Duration,
 )
 from constructs import Construct
 
 
-class RDSStack(Construct):
+class RDSStack(NestedStack):
     """
     Creates a Multi-AZ RDS database instance with disaster recovery capabilities
     """
@@ -64,7 +65,7 @@ class RDSStack(Construct):
             self,
             f"DBParameterGroup-{environment_suffix}",
             engine=rds.DatabaseInstanceEngine.postgres(
-                version=rds.PostgresEngineVersion.VER_15_4
+                version=rds.PostgresEngineVersion.VER_15_14
             ),
             description=f"Parameter group for FedRAMP compliance - {environment_suffix}",
             parameters={
@@ -82,7 +83,7 @@ class RDSStack(Construct):
             self,
             f"DBOptionGroup-{environment_suffix}",
             engine=rds.DatabaseInstanceEngine.postgres(
-                version=rds.PostgresEngineVersion.VER_15_4
+                version=rds.PostgresEngineVersion.VER_15_14
             ),
             description=f"Option group for PostgreSQL - {environment_suffix}",
             configurations=[],  # PostgreSQL doesn't require specific options
@@ -93,7 +94,7 @@ class RDSStack(Construct):
             self,
             f"DisasterRecoveryDB-{environment_suffix}",
             engine=rds.DatabaseInstanceEngine.postgres(
-                version=rds.PostgresEngineVersion.VER_15_4
+                version=rds.PostgresEngineVersion.VER_15_14
             ),
             instance_type=ec2.InstanceType.of(
                 ec2.InstanceClass.BURSTABLE3,
@@ -102,7 +103,10 @@ class RDSStack(Construct):
             vpc=vpc,
             subnet_group=subnet_group,
             security_groups=[security_group],
-            credentials=rds.Credentials.from_secret(db_secret),
+            credentials=rds.Credentials.from_password(
+                username="dbadmin",
+                password=db_secret.secret_value_from_json("password"),
+            ),
             database_name="citizendb",
             allocated_storage=100,
             max_allocated_storage=200,
@@ -126,6 +130,14 @@ class RDSStack(Construct):
             performance_insight_retention=rds.PerformanceInsightRetention.DEFAULT,
             monitoring_interval=Duration.seconds(60),
             publicly_accessible=False,
+        )
+
+        # Attach the existing secret to the database instance for rotation support
+        secretsmanager.SecretTargetAttachment(
+            self,
+            f"DBSecretAttachment-{environment_suffix}",
+            secret=db_secret,
+            target=self.database,
         )
 
         # Note: Automatic secret rotation via add_rotation_single_user() requires
