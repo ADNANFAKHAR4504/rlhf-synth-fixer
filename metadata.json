@@ -43,8 +43,5 @@
     "AWS::ApplicationAutoScaling::ScalingPolicy"
   ],
   "region": "eu-south-1",
-  "training_quality": 10,
-  "review_notes": "Exceptional training value: Critical Secrets Manager dynamic reference syntax failure (common CloudFormation mistake) and regional PostgreSQL version availability error. Complex multi-service healthcare CI/CD infrastructure (29 AWS services) with comprehensive security (KMS, VPC Flow Logs, Multi-AZ, network isolation). 4 deployment failures providing high-quality error signals. 100% service coverage, excellent EnvironmentSuffix usage.",
-  "ready_for_pr": true,
-  "code_review_completed_at": "2025-10-28T13:15:00+05:30"
+  "training_quality": 10
 }
