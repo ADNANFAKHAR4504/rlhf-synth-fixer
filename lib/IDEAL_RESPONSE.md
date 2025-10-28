@@ -78,6 +78,9 @@ export class TapStack extends pulumi.ComponentResource {
     const enableAuditLogging = args.enableAuditLogging ?? true;
     const firmName = args.firmName || 'morrison-associates';
 
+    // Generate unique suffix to avoid naming conflicts in CI/CD
+    const uniqueSuffix = Math.random().toString(36).substring(2, 8);
+
     const tags = pulumi.output(args.tags || {}).apply(t => ({
       ...t,
       Environment: environmentSuffix,
@@ -123,7 +126,7 @@ export class TapStack extends pulumi.ComponentResource {
     new aws.kms.Alias(
       `${name}-documents-kms-alias`,
       {
-        name: `alias/${firmName}-documents-${environmentSuffix}`,
+        name: `alias/${firmName}-documents-${environmentSuffix}-${uniqueSuffix}`,
         targetKeyId: documentKmsKey.keyId,
       },
       { parent: this }
@@ -480,7 +483,7 @@ export class TapStack extends pulumi.ComponentResource {
       cloudTrail = new aws.cloudtrail.Trail(
         `${name}-cloudtrail`,
         {
-          name: `${firmName}-document-audit-${environmentSuffix}`,
+          name: `${firmName}-document-audit-${environmentSuffix}-${uniqueSuffix}`,
           s3BucketName: auditLogsBucket.id,
           includeGlobalServiceEvents: true,
           isMultiRegionTrail: true,
@@ -651,4 +654,5 @@ export class TapStack extends pulumi.ComponentResource {
     });
   }
 }
+
 ```
