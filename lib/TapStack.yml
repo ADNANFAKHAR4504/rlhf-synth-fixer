@@ -125,7 +125,6 @@ Resources:
       SubnetIds:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
-      CacheSubnetGroupName: !Sub 'cache-subnet-group-${EnvironmentSuffix}'
       Tags:
         - Key: Name
           Value: !Sub 'cache-subnet-group-${EnvironmentSuffix}'
@@ -136,7 +135,6 @@ Resources:
   APIGatewaySecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub 'api-gateway-sg-${EnvironmentSuffix}'
       GroupDescription: Security group for API Gateway VPC access
       VpcId: !Ref VPC
       Tags:
@@ -149,7 +147,6 @@ Resources:
   CacheSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub 'cache-sg-${EnvironmentSuffix}'
       GroupDescription: Security group for ElastiCache Redis cluster
       VpcId: !Ref VPC
       Tags:
@@ -184,7 +181,6 @@ Resources:
   RedisReplicationGroup:
     Type: AWS::ElastiCache::ReplicationGroup
     Properties:
-      ReplicationGroupId: !Sub 'redis-cluster-${EnvironmentSuffix}'
       ReplicationGroupDescription: !Sub 'Redis cluster for API caching - ${EnvironmentSuffix}'
       Engine: redis
       EngineVersion: '7.0'
@@ -261,7 +257,6 @@ Resources:
   APIGatewayLoggingRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'api-gateway-logging-role-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -503,13 +498,13 @@ Outputs:
 
   RedisEndpoint:
     Description: Redis cluster endpoint
-    Value: !GetAtt RedisReplicationGroup.PrimaryEndPoint.Address
+    Value: !GetAtt RedisReplicationGroup.PrimaryEndpoint.Address
     Export:
       Name: !Sub '${AWS::StackName}-Redis-Endpoint'
 
   RedisPort:
     Description: Redis cluster port
-    Value: !GetAtt RedisReplicationGroup.PrimaryEndPoint.Port
+    Value: !GetAtt RedisReplicationGroup.PrimaryEndpoint.Port
     Export:
       Name: !Sub '${AWS::StackName}-Redis-Port'
 
