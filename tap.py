@@ -15,7 +15,7 @@ config = Config()
 
 # Get environment suffix from CI, config or fallback to 'dev'
 environment_suffix = os.getenv('ENVIRONMENT_SUFFIX') or config.get('env') or 'dev'
-region = config.get('region') or 'eu-south-2'
+region = os.getenv('AWS_REGION')
 
 repository_name = os.getenv('REPOSITORY', 'unknown')
 commit_author = os.getenv('COMMIT_AUTHOR', 'unknown')

@@ -39,7 +39,7 @@ class TapStackArgs:
     Args:
         environment_suffix (Optional[str]): Suffix for identifying deployment environment
         tags (Optional[dict]): Default tags to apply to resources
-        region (Optional[str]): AWS region for deployment (default: eu-south-2)
+        region (Optional[str]): AWS region for deployment (default: eu-west-1)
     """
 
     def __init__(
@@ -50,7 +50,7 @@ class TapStackArgs:
     ):
         self.environment_suffix = environment_suffix or 'dev'
         self.tags = tags or {}
-        self.region = region or 'eu-south-2'
+        self.region = region or 'eu-west-1'
 
 
 class TapStack(pulumi.ComponentResource):
@@ -204,7 +204,7 @@ class VPCStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Get availability zones for eu-south-2
+        # Get availability zones for eu-west-1
         azs = aws.get_availability_zones(state='available')
 
         # Create public subnets (2 AZs)
@@ -735,7 +735,7 @@ class ECSStack(pulumi.ComponentResource):
                         'logDriver': 'awslogs',
                         'options': {
                             'awslogs-group': args_list[3],
-                            'awslogs-region': 'eu-south-2',
+                            'awslogs-region': 'eu-west-1',
                             'awslogs-stream-prefix': 'ecs'
                         }
                     }
@@ -790,7 +790,7 @@ __all__ = [
 ```python
 """
 Pulumi program entry point for Healthcare Analytics Platform
-Deploys infrastructure to eu-south-2 region
+Deploys infrastructure to eu-west-1 region
 """
 
 import pulumi
@@ -799,9 +799,9 @@ from lib.tap_stack import TapStack, TapStackArgs
 # Get configuration
 config = pulumi.Config()
 environment_suffix = config.get('environment_suffix') or pulumi.get_stack()
-region = config.get('region') or 'eu-south-2'
+region = config.get('region') or 'eu-west-1'
 
-# Set provider for eu-south-2 region
+# Set provider for eu-west-1 region
 provider = pulumi.providers.Aws('provider', region=region)
 
 # Create main stack
@@ -884,4 +884,4 @@ All resources include environmentSuffix for uniqueness:
 
 ### Deployment Region
 
-All resources deployed to **eu-south-2** (Milan) as per mandatory constraint.
+All resources deployed to **eu-west-1** (Ireland) as per mandatory constraint.

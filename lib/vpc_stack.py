@@ -64,7 +64,7 @@ class VPCStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Get availability zones for eu-south-2
+        # Get availability zones for eu-west-1
         azs = aws.get_availability_zones(state='available')
 
         # Create public subnets (2 AZs)

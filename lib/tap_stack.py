@@ -22,7 +22,7 @@ class TapStackArgs:
     Args:
         environment_suffix (Optional[str]): Suffix for identifying deployment environment
         tags (Optional[dict]): Default tags to apply to resources
-        region (Optional[str]): AWS region for deployment (default: eu-south-2)
+        region (Optional[str]): AWS region for deployment (default: eu-west-1)
     """
 
     def __init__(
@@ -33,7 +33,7 @@ class TapStackArgs:
     ):
         self.environment_suffix = environment_suffix or 'dev'
         self.tags = tags or {}
-        self.region = region or 'eu-south-2'
+        self.region = region or 'eu-west-1'
 
 
 class TapStack(pulumi.ComponentResource):

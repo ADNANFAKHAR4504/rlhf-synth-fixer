@@ -26,7 +26,7 @@ class TestTapStackArgs(unittest.TestCase):
 
         self.assertEqual(args.environment_suffix, 'dev')
         self.assertEqual(args.tags, {})
-        self.assertEqual(args.region, 'eu-south-2')
+        self.assertEqual(args.region, 'eu-west-1')
 
     def test_custom_values(self):
         """Test TapStackArgs with custom values"""
@@ -53,12 +53,12 @@ class TestTapStackArgs(unittest.TestCase):
         args = TapStackArgs(environment_suffix='custom-env')
         self.assertEqual(args.environment_suffix, 'custom-env')
 
-    def test_region_default_eu_south_2(self):
-        """Test TapStackArgs defaults to eu-south-2 region"""
+    def test_region_default_eu_west_1(self):
+        """Test TapStackArgs defaults to eu-west-1 region"""
         from lib.tap_stack import TapStackArgs
 
         args = TapStackArgs()
-        self.assertEqual(args.region, 'eu-south-2')
+        self.assertEqual(args.region, 'eu-west-1')
 
     def test_empty_tags_default(self):
         """Test TapStackArgs defaults to empty tags dict"""

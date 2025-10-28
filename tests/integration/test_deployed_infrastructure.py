@@ -35,7 +35,7 @@ class TestDeployedInfrastructure(unittest.TestCase):
             cls.outputs = json.load(f)
 
         # Get region from outputs or default
-        cls.region = cls.outputs.get('region', 'eu-south-2')
+        cls.region = cls.outputs.get('region', 'eu-west-1')
 
         # Initialize AWS clients
         cls.ec2_client = boto3.client('ec2', region_name=cls.region)
@@ -268,11 +268,11 @@ class TestDeployedInfrastructure(unittest.TestCase):
         # Port should be 6379 (standard Redis port)
         self.assertEqual(int(redis_port), 6379)
 
-    def test_region_is_eu_south_2(self):
-        """Test infrastructure deployed in eu-south-2 as required"""
+    def test_region_is_eu_west_1(self):
+        """Test infrastructure deployed in eu-west-1 as required"""
         region = self.outputs.get('region')
         self.assertIsNotNone(region, "Region not found in outputs")
-        self.assertEqual(region, 'eu-south-2', "Infrastructure must be in eu-south-2")
+        self.assertEqual(region, 'eu-west-1', "Infrastructure must be in eu-west-1")
 
     def test_ecs_task_has_redis_connection(self):
         """Test ECS task definition references Redis endpoint"""

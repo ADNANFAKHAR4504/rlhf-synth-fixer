@@ -218,7 +218,7 @@ class TestTapStackCreation(unittest.TestCase):
 
         args = TapStackArgs(
             environment_suffix='test',
-            region='eu-south-2'
+            region='eu-west-1'
         )
 
         stack = TapStack('test-tap-stack', args)

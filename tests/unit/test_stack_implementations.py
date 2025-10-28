@@ -288,11 +288,11 @@ class TestTapStackIntegration(unittest.TestCase):
         self.assertIn('CustomKey', args.tags)
 
     def test_tap_stack_region_configuration(self):
-        """Test TapStack uses eu-south-2 region by default"""
+        """Test TapStack uses eu-west-1 region by default"""
         from lib.tap_stack import TapStackArgs
 
         args = TapStackArgs()
-        self.assertEqual(args.region, 'eu-south-2')
+        self.assertEqual(args.region, 'eu-west-1')
 
     def test_resource_naming_consistency(self):
         """Test all resources use consistent naming with environment suffix"""
@@ -338,11 +338,11 @@ class TestComplianceRequirements(unittest.TestCase):
     """Test compliance with PROMPT requirements"""
 
     def test_region_requirement(self):
-        """Test deployment region is eu-south-2 as required"""
+        """Test deployment region is eu-west-1 as required"""
         from lib.tap_stack import TapStackArgs
 
         args = TapStackArgs()
-        self.assertEqual(args.region, 'eu-south-2')
+        self.assertEqual(args.region, 'eu-west-1')
 
     def test_redis_tls_requirement(self):
         """Test Redis TLS encryption as required by PROMPT"""

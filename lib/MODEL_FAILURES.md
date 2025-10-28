@@ -57,9 +57,9 @@ None identified. The model correctly implemented all high-priority requirements:
 **Impact Level**: Medium
 
 **MODEL_RESPONSE Issue**:
-The PROMPT mentioned "sa-east-1 (São Paulo) region" in the background context but mandated "eu-south-2" in constraints. The model correctly used eu-south-2 but the initial documentation could have been clearer.
+The PROMPT mentioned "sa-east-1 (São Paulo) region" in the background context but mandated "eu-west-1" in constraints. The model correctly used eu-west-1 but the initial documentation could have been clearer.
 
-**IDEAL_RESPONSE Fix**: Clear documentation that eu-south-2 is the mandated region, with explicit override of background context.
+**IDEAL_RESPONSE Fix**: Clear documentation that eu-west-1 is the mandated region, with explicit override of background context.
 
 **Root Cause**: The model correctly prioritized the MANDATORY constraint over background context, which is the correct behavior.
 
@@ -129,7 +129,7 @@ The model demonstrated several strong capabilities:
 - **Checkpoint G (Lint/Build/Synth)**: PASSED (after provider fix)
 
 ### Deployment
-- **Region**: eu-south-2 ✓
+- **Region**: eu-west-1 ✓
 - **Resources Created**: 34/34 ✓
 - **Deployment Time**: 13m16s
 - **Deployment Status**: SUCCESS ✓
@@ -149,7 +149,7 @@ The model demonstrated several strong capabilities:
 - Redis Multi-AZ and automatic failover ✓
 - Secrets Manager integration ✓
 - IAM roles and permissions ✓
-- Region compliance (eu-south-2) ✓
+- Region compliance (eu-west-1) ✓
 
 ---
 

@@ -242,7 +242,7 @@ class ECSStack(pulumi.ComponentResource):
                         'logDriver': 'awslogs',
                         'options': {
                             'awslogs-group': args_list[3],
-                            'awslogs-region': 'eu-south-2',
+                            'awslogs-region': 'eu-west-1',
                             'awslogs-stream-prefix': 'ecs'
                         }
                     }

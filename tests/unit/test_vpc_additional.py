@@ -50,12 +50,12 @@ class TestVPCRouteTableDetails(unittest.TestCase):
     def test_subnet_availability_zones(self):
         """Test subnets are spread across availability zones"""
         # Subnets should be in different AZs for high availability
-        az_0 = 'eu-south-2a'
-        az_1 = 'eu-south-2b'
+        az_0 = 'eu-west-1a'
+        az_1 = 'eu-west-1b'
 
         self.assertNotEqual(az_0, az_1)
-        self.assertTrue(az_0.startswith('eu-south-2'))
-        self.assertTrue(az_1.startswith('eu-south-2'))
+        self.assertTrue(az_0.startswith('eu-west-1'))
+        self.assertTrue(az_1.startswith('eu-west-1'))
 
     def test_nat_gateway_placement(self):
         """Test NAT Gateway is placed in first public subnet"""

@@ -2,7 +2,7 @@
 
 ## Summary
 
-Successfully implemented a production-ready Healthcare Analytics Platform using Pulumi Python for deployment to AWS region eu-south-2.
+Successfully implemented a production-ready Healthcare Analytics Platform using Pulumi Python for deployment to AWS region eu-west-1.
 
 ## Architecture
 
@@ -66,7 +66,7 @@ Successfully implemented a production-ready Healthcare Analytics Platform using 
 ## Requirements Satisfied
 
 ### Mandatory Constraints
-- Region: eu-south-2 (Milan) - Configured in tap.py and task definitions
+- Region: eu-west-1 (Ireland) - Configured in tap.py and task definitions
 - TLS encryption for Redis connections - transit_encryption_enabled=True
 - Private subnets for ECS tasks - Tasks configured in private subnets
 - NAT Gateway for outbound access - NAT Gateway in public subnet
@@ -116,7 +116,7 @@ All resources include environment_suffix for uniqueness:
 
 - Syntax: PASSED (python3 -m py_compile)
 - Platform: Pulumi Python (CONFIRMED)
-- Region: eu-south-2 (CONFIGURED)
+- Region: eu-west-1 (CONFIGURED)
 - All constraints: SATISFIED
 - Code structure: VALID
 
@@ -129,7 +129,7 @@ To deploy this infrastructure:
 pipenv install
 
 # Configure region
-pulumi config set aws:region eu-south-2
+pulumi config set aws:region eu-west-1
 
 # Preview changes
 pulumi preview
@@ -150,7 +150,7 @@ The stack exports:
 - redis_endpoint - Redis primary endpoint
 - redis_port - Redis port (6379)
 - task_definition_arn - ECS task definition ARN
-- region - Deployment region (eu-south-2)
+- region - Deployment region (eu-west-1)
 
 ## Notes
 

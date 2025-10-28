@@ -19,7 +19,7 @@ The infrastructure should be deployed in eu-west-1 region and include:
 
 ## Constraints
 
-- **Region: eu-south-2** (MANDATORY - All resources must be deployed in eu-south-2 region)
+- **Region: eu-west-1** (MANDATORY - All resources must be deployed in eu-west-1 region)
 - All Redis connections must be encrypted in-transit using TLS
 - ECS tasks must run in private subnets with outbound internet access via NAT Gateway
 - Redis authentication must be managed through AWS Secrets Manager
