@@ -692,6 +692,8 @@ describe('TapStack CloudFormation Template', () => {
                 'S3BucketName',
                 'RDSEndpoint',
                 'DBSecretArn',
+                'CloudTrailBucketName',
+                'CloudFrontDistributionId',
             ];
 
             expectedOutputs.forEach(outputName => {
@@ -740,8 +742,26 @@ describe('TapStack CloudFormation Template', () => {
             expect(output.Value).toEqual({ Ref: 'DBSecret' });
         });
 
-        test('should have exactly 5 outputs', () => {
-            expect(Object.keys(template.Outputs)).toHaveLength(5);
+        test('CloudTrailBucketName output should be correct', () => {
+            const output = template.Outputs.CloudTrailBucketName;
+            expect(output.Description).toBe('Name of the CloudTrail S3 bucket');
+            expect(output.Value).toEqual({ Ref: 'CloudTrailBucket' });
+            expect(output.Export.Name).toEqual({
+                'Fn::Sub': '${AWS::StackName}-CloudTrail-Bucket',
+            });
+        });
+
+        test('CloudFrontDistributionId output should be correct', () => {
+            const output = template.Outputs.CloudFrontDistributionId;
+            expect(output.Description).toBe('CloudFront Distribution ID');
+            expect(output.Value).toEqual({ Ref: 'CloudFrontDistribution' });
+            expect(output.Export.Name).toEqual({
+                'Fn::Sub': '${AWS::StackName}-CloudFront-ID',
+            });
+        });
+
+        test('should have exactly 7 outputs', () => {
+            expect(Object.keys(template.Outputs)).toHaveLength(7);
         });
     });
 

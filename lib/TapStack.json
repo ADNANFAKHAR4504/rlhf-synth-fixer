@@ -920,6 +920,20 @@
       "Export": {
         "Name": {"Fn::Sub": "${AWS::StackName}-DB-Secret"}
       }
+    },
+    "CloudTrailBucketName": {
+      "Description": "Name of the CloudTrail S3 bucket",
+      "Value": {"Ref": "CloudTrailBucket"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-CloudTrail-Bucket"}
+      }
+    },
+    "CloudFrontDistributionId": {
+      "Description": "CloudFront Distribution ID",
+      "Value": {"Ref": "CloudFrontDistribution"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-CloudFront-ID"}
+      }
     }
   }
 }
