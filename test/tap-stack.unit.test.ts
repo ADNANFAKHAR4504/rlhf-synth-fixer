@@ -773,7 +773,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
             test('should have deterministic bucket name', () => {
                 const properties = template.Resources.SecureDataBucket.Properties;
                 expect(properties.BucketName).toEqual({
-                    'Fn::Sub': 'secure-data-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
+                    'Fn::Sub': 'secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
                 });
             });
 

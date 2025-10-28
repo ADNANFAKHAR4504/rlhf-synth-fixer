@@ -461,7 +461,7 @@
     "SecureDataBucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
-        "BucketName": { "Fn::Sub": "secure-data-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}" },
+        "BucketName": { "Fn::Sub": "secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}" },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
             {
@@ -517,7 +517,7 @@
                 { "Fn::Sub": "${SecureDataBucket.Arn}/*" }
               ],
               "Condition": {
-                "IpAddressIfExists": {
+                "NotIpAddress": {
                   "aws:SourceIp": { "Ref": "AllowedIPRange" }
                 }
               }
