@@ -1,0 +1,14 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000249",
+  "team": "3",
+  "startedAt": "2025-10-28T16:40:51.281Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "Vpc, InternetGateway, VpcGatewayAttachment, PublicSubnetA, PublicSubnetB, PublicSubnetC, PrivateSubnetA, PrivateSubnetB, PrivateSubnetC, DbSubnetA, DbSubnetB, DbSubnetC, NatEipA, NatEipB, NatEipC, NatGatewayA, NatGatewayB, NatGatewayC, PublicRTA, PublicRouteA0, PublicAtoSubnetA, PublicRTB, PublicRouteB0, PublicBtoSubnetB, PublicRTC, PublicRouteC0, PublicCtoSubnetC, PrivateRTA, PrivateRouteA0, PrivateAtoSubnetA, PrivateRTB, PrivateRouteB0, PrivateBtoSubnetB, PrivateRTC, PrivateRouteC0, PrivateCtoSubnetC, DbRTA, DbAtoSubnetA, DbRTB, DbBtoSubnetB, DbRTC, DbCtoSubnetC, DbNacl, DbNaclInDenySshPubA, DbNaclInDenySshPubB, DbNaclInDenySshPubC, DbNaclInAllowVpcAll, DbNaclOutAllowVpcAll, DbNaclAssocA, DbNaclAssocB, DbNaclAssocC, S3Endpoint, DynamoDbEndpoint, FlowLogsLogGroup, FlowLogsRole, VpcFlowLogs"
+}
