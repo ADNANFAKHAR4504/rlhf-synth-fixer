@@ -81,10 +81,19 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
+        subnet_c = aws.ec2.Subnet(
+            f"brazilcart-subnet-c-{self.environment_suffix}",
+            vpc_id=vpc.id,
+            cidr_block="10.0.3.0/24",
+            availability_zone=f"{aws_region}c",
+            tags={**self.tags, "Name": f"brazilcart-subnet-c-{self.environment_suffix}"},
+            opts=ResourceOptions(parent=self)
+        )
+
         # Create DB subnet group
         db_subnet_group = aws.rds.SubnetGroup(
             f"brazilcart-db-subnet-{self.environment_suffix}",
-            subnet_ids=[subnet_a.id, subnet_b.id],
+            subnet_ids=[subnet_a.id, subnet_b.id, subnet_c.id],
             tags={**self.tags, "Name": f"brazilcart-db-subnet-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
@@ -92,7 +101,7 @@ class TapStack(pulumi.ComponentResource):
         # Create ElastiCache subnet group
         cache_subnet_group = aws.elasticache.SubnetGroup(
             f"brazilcart-cache-subnet-{self.environment_suffix}",
-            subnet_ids=[subnet_a.id, subnet_b.id],
+            subnet_ids=[subnet_a.id, subnet_b.id, subnet_c.id],
             description="Subnet group for BrazilCart ElastiCache",
             opts=ResourceOptions(parent=self)
         )
@@ -187,6 +196,37 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
+        # Create RDS parameter group for performance optimization
+        rds_parameter_group = aws.rds.ParameterGroup(
+            f"brazilcart-db-params-{self.environment_suffix}",
+            family="postgres15",
+            description="Optimized parameters for BrazilCart PostgreSQL",
+            parameters=[
+                {
+                    "name": "shared_buffers",
+                    "value": "{DBInstanceClassMemory/32768}"
+                },
+                {
+                    "name": "max_connections",
+                    "value": "100"
+                },
+                {
+                    "name": "work_mem",
+                    "value": "4096"
+                },
+                {
+                    "name": "maintenance_work_mem",
+                    "value": "65536"
+                },
+                {
+                    "name": "effective_cache_size",
+                    "value": "{DBInstanceClassMemory/16384}"
+                }
+            ],
+            tags={**self.tags, "Name": f"brazilcart-db-params-{self.environment_suffix}"},
+            opts=ResourceOptions(parent=self)
+        )
+
         # Create RDS instance
         rds_instance = aws.rds.Instance(
             f"brazilcart-db-{self.environment_suffix}",
@@ -201,11 +241,35 @@ class TapStack(pulumi.ComponentResource):
             username="brazilcart_admin",
             password=password,
             multi_az=True,
+            parameter_group_name=rds_parameter_group.name,
             db_subnet_group_name=db_subnet_group.name,
             vpc_security_group_ids=[rds_sg.id],
             skip_final_snapshot=True,
             backup_retention_period=7,
             tags={**self.tags, "Name": f"brazilcart-db-{self.environment_suffix}"},
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Create ElastiCache parameter group for performance optimization
+        cache_parameter_group = aws.elasticache.ParameterGroup(
+            f"brazilcart-cache-params-{self.environment_suffix}",
+            family="redis7",
+            description="Optimized parameters for BrazilCart Redis",
+            parameters=[
+                {
+                    "name": "maxmemory-policy",
+                    "value": "allkeys-lru"
+                },
+                {
+                    "name": "timeout",
+                    "value": "300"
+                },
+                {
+                    "name": "tcp-keepalive",
+                    "value": "300"
+                }
+            ],
+            tags={**self.tags, "Name": f"brazilcart-cache-params-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
 
@@ -220,11 +284,82 @@ class TapStack(pulumi.ComponentResource):
             num_cache_clusters=2,
             automatic_failover_enabled=True,
             multi_az_enabled=True,
+            parameter_group_name=cache_parameter_group.name,
             subnet_group_name=cache_subnet_group.name,
             security_group_ids=[cache_sg.id],
             at_rest_encryption_enabled=True,
             transit_encryption_enabled=True,
             tags={**self.tags, "Name": f"brazilcart-cache-{self.environment_suffix}"},
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Create CloudWatch alarms for RDS monitoring
+        rds_cpu_alarm = aws.cloudwatch.MetricAlarm(
+            f"brazilcart-rds-cpu-alarm-{self.environment_suffix}",
+            comparison_operator="GreaterThanThreshold",
+            evaluation_periods=2,
+            metric_name="CPUUtilization",
+            namespace="AWS/RDS",
+            period=300,
+            statistic="Average",
+            threshold=80.0,
+            alarm_description="Alert when RDS CPU exceeds 80%",
+            dimensions={
+                "DBInstanceIdentifier": rds_instance.identifier
+            },
+            tags={**self.tags, "Name": f"brazilcart-rds-cpu-alarm-{self.environment_suffix}"},
+            opts=ResourceOptions(parent=self)
+        )
+
+        rds_connections_alarm = aws.cloudwatch.MetricAlarm(
+            f"brazilcart-rds-connections-alarm-{self.environment_suffix}",
+            comparison_operator="GreaterThanThreshold",
+            evaluation_periods=2,
+            metric_name="DatabaseConnections",
+            namespace="AWS/RDS",
+            period=300,
+            statistic="Average",
+            threshold=80.0,
+            alarm_description="Alert when RDS connections exceed 80",
+            dimensions={
+                "DBInstanceIdentifier": rds_instance.identifier
+            },
+            tags={**self.tags, "Name": f"brazilcart-rds-connections-alarm-{self.environment_suffix}"},
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Create CloudWatch alarms for ElastiCache monitoring
+        cache_cpu_alarm = aws.cloudwatch.MetricAlarm(
+            f"brazilcart-cache-cpu-alarm-{self.environment_suffix}",
+            comparison_operator="GreaterThanThreshold",
+            evaluation_periods=2,
+            metric_name="CPUUtilization",
+            namespace="AWS/ElastiCache",
+            period=300,
+            statistic="Average",
+            threshold=75.0,
+            alarm_description="Alert when ElastiCache CPU exceeds 75%",
+            dimensions={
+                "ReplicationGroupId": elasticache_cluster.replication_group_id
+            },
+            tags={**self.tags, "Name": f"brazilcart-cache-cpu-alarm-{self.environment_suffix}"},
+            opts=ResourceOptions(parent=self)
+        )
+
+        cache_evictions_alarm = aws.cloudwatch.MetricAlarm(
+            f"brazilcart-cache-evictions-alarm-{self.environment_suffix}",
+            comparison_operator="GreaterThanThreshold",
+            evaluation_periods=2,
+            metric_name="Evictions",
+            namespace="AWS/ElastiCache",
+            period=300,
+            statistic="Average",
+            threshold=1000.0,
+            alarm_description="Alert when ElastiCache evictions exceed 1000",
+            dimensions={
+                "ReplicationGroupId": elasticache_cluster.replication_group_id
+            },
+            tags={**self.tags, "Name": f"brazilcart-cache-evictions-alarm-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
 
@@ -308,16 +443,114 @@ class TapStack(pulumi.ComponentResource):
             role=codepipeline_role.id,
             policy=artifact_bucket.arn.apply(lambda arn: json.dumps({
                 "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:GetObject",
+                            "s3:PutObject",
+                            "s3:GetBucketLocation"
+                        ],
+                        "Resource": [f"{arn}/*", arn]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "codebuild:BatchGetBuilds",
+                            "codebuild:StartBuild"
+                        ],
+                        "Resource": "*"
+                    }
+                ]
+            })),
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Create IAM role for CodeBuild
+        codebuild_role = aws.iam.Role(
+            f"brazilcart-codebuild-role-{self.environment_suffix}",
+            assume_role_policy=json.dumps({
+                "Version": "2012-10-17",
                 "Statement": [{
                     "Effect": "Allow",
-                    "Action": [
-                        "s3:GetObject",
-                        "s3:PutObject",
-                        "s3:GetBucketLocation"
-                    ],
-                    "Resource": [f"{arn}/*", arn]
+                    "Principal": {"Service": "codebuild.amazonaws.com"},
+                    "Action": "sts:AssumeRole"
                 }]
+            }),
+            tags=self.tags,
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Attach policy to CodeBuild role
+        codebuild_policy = aws.iam.RolePolicy(
+            f"brazilcart-codebuild-policy-{self.environment_suffix}",
+            role=codebuild_role.id,
+            policy=artifact_bucket.arn.apply(lambda arn: json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:GetObject",
+                            "s3:PutObject",
+                            "s3:GetBucketLocation"
+                        ],
+                        "Resource": [f"{arn}/*", arn]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "logs:CreateLogGroup",
+                            "logs:CreateLogStream",
+                            "logs:PutLogEvents"
+                        ],
+                        "Resource": "arn:aws:logs:*:*:*"
+                    }
+                ]
             })),
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Create CodeBuild project
+        codebuild_project = aws.codebuild.Project(
+            f"brazilcart-build-{self.environment_suffix}",
+            service_role=codebuild_role.arn,
+            artifacts={
+                "type": "CODEPIPELINE"
+            },
+            environment={
+                "compute_type": "BUILD_GENERAL1_SMALL",
+                "image": "aws/codebuild/standard:7.0",
+                "type": "LINUX_CONTAINER",
+                "environment_variables": [{
+                    "name": "ENVIRONMENT_SUFFIX",
+                    "value": self.environment_suffix
+                }]
+            },
+            source={
+                "type": "CODEPIPELINE",
+                "buildspec": json.dumps({
+                    "version": "0.2",
+                    "phases": {
+                        "install": {
+                            "commands": [
+                                "echo Installing dependencies..."
+                            ]
+                        },
+                        "build": {
+                            "commands": [
+                                "echo Build started on `date`",
+                                "echo Building application...",
+                                "echo Build completed on `date`"
+                            ]
+                        }
+                    },
+                    "artifacts": {
+                        "files": ["**/*"]
+                    }
+                })
+            },
+            tags={**self.tags, "Name": f"brazilcart-build-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
 
@@ -346,6 +579,21 @@ class TapStack(pulumi.ComponentResource):
                     }]
                 },
                 {
+                    "name": "Build",
+                    "actions": [{
+                        "name": "Build",
+                        "category": "Build",
+                        "owner": "AWS",
+                        "provider": "CodeBuild",
+                        "version": "1",
+                        "input_artifacts": ["source_output"],
+                        "output_artifacts": ["build_output"],
+                        "configuration": {
+                            "ProjectName": codebuild_project.name
+                        }
+                    }]
+                },
+                {
                     "name": "Deploy",
                     "actions": [{
                         "name": "Deploy",
@@ -353,7 +601,7 @@ class TapStack(pulumi.ComponentResource):
                         "owner": "AWS",
                         "provider": "S3",
                         "version": "1",
-                        "input_artifacts": ["source_output"],
+                        "input_artifacts": ["build_output"],
                         "configuration": {
                             "BucketName": artifact_bucket.bucket,
                             "Extract": "true"
