@@ -326,23 +326,6 @@ export class DatabaseConstruct extends Construct {
       }
     );
 
-    this.dbSecretVersion =
-      new aws.secretsmanagerSecretVersion.SecretsmanagerSecretVersion(
-        this,
-        'db-secret-version',
-        {
-          secretId: this.dbSecret.id,
-          secretString: Fn.jsonencode({
-            username: 'dbadmin',
-            password: password.randomPassword,
-            engine: 'postgres',
-            host: Fn.lookupNested(this.dbInstance, ['address']),
-            port: 5432,
-            dbname: config.dbName,
-          }),
-        }
-      );
-
     // Create RDS instance
     this.dbInstance = new aws.dbInstance.DbInstance(this, 'db', {
       identifier: `${config.projectName}-db-${config.environment}`,
@@ -372,6 +355,24 @@ export class DatabaseConstruct extends Construct {
         Name: `${config.projectName}-db-${config.environment}`,
       },
     });
+
+    // Create secret version after DB instance is created
+    this.dbSecretVersion =
+      new aws.secretsmanagerSecretVersion.SecretsmanagerSecretVersion(
+        this,
+        'db-secret-version',
+        {
+          secretId: this.dbSecret.id,
+          secretString: Fn.jsonencode({
+            username: 'dbadmin',
+            password: password.randomPassword,
+            engine: 'postgres',
+            host: this.dbInstance.address,
+            port: 5432,
+            dbname: config.dbName,
+          }),
+        }
+      );
 
     this.connectionString = Fn.join('', [
       'postgresql://dbadmin:',
