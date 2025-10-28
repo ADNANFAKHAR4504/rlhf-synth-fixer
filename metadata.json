@@ -1,5 +1,5 @@
 {
-  "platform": "CDK",
+  "platform": "cdk",
   "language": "go",
   "complexity": "hard",
   "turn_type": "single",
