@@ -10,5 +10,12 @@
   "subject_labels": [
     "Security Configuration as Code"
   ],
-  "aws_services": "VPC, Subnet, EC2, S3, IAM, Lambda, CloudWatch Alarms"
+  "aws_services": "VPC, Subnet, EC2, S3, IAM, Lambda, CloudWatch Alarms",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
 }
