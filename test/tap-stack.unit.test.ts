@@ -327,5 +327,50 @@ describe('TapStack', () => {
         Name: `tap-api-${environmentSuffix}`,
       });
     });
+
+    test('should use environment suffix from props when provided', () => {
+      const customSuffix = 'staging';
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestTapStack', { environmentSuffix: customSuffix });
+      const template = Template.fromStack(stack);
+
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: `tap-api-items-${customSuffix}`,
+      });
+
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        FunctionName: `tap-api-function-${customSuffix}`,
+      });
+    });
+
+    test('should use environment suffix from context when props not provided', () => {
+      const customSuffix = 'production';
+      const app = new cdk.App();
+      app.node.setContext('environmentSuffix', customSuffix);
+      const stack = new TapStack(app, 'TestTapStack');
+      const template = Template.fromStack(stack);
+
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: `tap-api-items-${customSuffix}`,
+      });
+
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        FunctionName: `tap-api-function-${customSuffix}`,
+      });
+    });
+
+    test('should default to "dev" when no environment suffix provided', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestTapStack');
+      const template = Template.fromStack(stack);
+
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: 'tap-api-items-dev',
+      });
+
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        FunctionName: 'tap-api-function-dev',
+      });
+    });
   });
 });
