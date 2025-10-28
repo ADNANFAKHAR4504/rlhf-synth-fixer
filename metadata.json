@@ -1,0 +1,26 @@
+{
+  "platform": "cdk",
+  "language": "go",
+  "complexity": "medium",
+  "team": "synth",
+  "startedAt": "2025-10-28T14:15:25+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Cloud Environment Setup"
+  ],
+  "po_id": "7289639585",
+  "aws_services": [
+    "s3",
+    "lambda",
+    "dynamodb",
+    "sns",
+    "cloudfront",
+    "iam",
+    "mediaconvert",
+    "cloudwatch"
+  ],
+  "region": "eu-south-1",
+  "turn_type": "single",
+  "training_quality": 10
+}
