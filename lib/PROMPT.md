@@ -21,7 +21,7 @@ A fully deployed compliance scanning system that automatically evaluates infrast
 A financial services company needs automated infrastructure compliance scanning to ensure their AWS resources meet regulatory requirements. The solution must detect configuration drift, validate tagging standards, and report violations in real-time.
 
 **Environment:**  
-- Multi-region deployment across `us-east-1` and `us-east-2` for global compliance coverage.
+- Multi-region deployment across ` ` and ` ` for global compliance coverage.
 - Uses Lambda for serverless compute, CloudWatch for metrics and dashboards, SNS for alerting, and S3 for audit trail storage.
 - Requires CDK 2.x with TypeScript, Node.js 18.x, AWS CLI configured with appropriate permissions.
 - Lambda functions deployed in VPC private subnets with VPC endpoints for AWS service access.
