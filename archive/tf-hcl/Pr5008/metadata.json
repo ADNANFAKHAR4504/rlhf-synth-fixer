@@ -1,0 +1,22 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350194",
+  "team": "4",
+  "startedAt": "2025-10-21T13:31:18.638Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "VPC, EC2, RDS, IAM, ALB, CloudWatch, S3 Bucket",
+  "training_quality": 9,
+  "background": "Production-ready secure AWS infrastructure with VPC, Auto Scaling EC2 instances, Multi-AZ RDS MySQL, Application Load Balancer, and comprehensive monitoring. Implements AWS Secrets Manager for credential management, KMS encryption for data at rest, CloudWatch alarms for auto-scaling and resource monitoring, and follows security best practices including least privilege IAM roles, private subnets for databases, and no hardcoded credentials. Includes 107 unit tests and 34 integration tests for comprehensive validation.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}
