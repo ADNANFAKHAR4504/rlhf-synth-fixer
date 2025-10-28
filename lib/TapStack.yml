@@ -498,13 +498,13 @@ Outputs:
 
   RedisEndpoint:
     Description: Redis cluster endpoint
-    Value: !GetAtt RedisReplicationGroup.PrimaryEndpoint.Address
+    Value: !GetAtt RedisReplicationGroup.PrimaryEndPoint.Address
     Export:
       Name: !Sub '${AWS::StackName}-Redis-Endpoint'
 
   RedisPort:
     Description: Redis cluster port
-    Value: !GetAtt RedisReplicationGroup.PrimaryEndpoint.Port
+    Value: !GetAtt RedisReplicationGroup.PrimaryEndPoint.Port
     Export:
       Name: !Sub '${AWS::StackName}-Redis-Port'
 
