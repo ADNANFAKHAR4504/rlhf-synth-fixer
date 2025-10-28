@@ -78,15 +78,15 @@ resource "aws_s3_bucket_lifecycle_configuration" "aurora_backups" {
     id     = "old-version-cleanup"
     status = "Enabled"
 
-    # Remove old versions after 30 days
-    noncurrent_version_expiration {
-      noncurrent_days = 30
-    }
-
     # Transition old versions to cheaper storage (minimum 30 days for STANDARD_IA)
     noncurrent_version_transition {
       noncurrent_days = 30
       storage_class   = "STANDARD_IA"
+    }
+
+    # Remove old versions after 60 days (must be greater than transition days)
+    noncurrent_version_expiration {
+      noncurrent_days = 60
     }
   }
 }
