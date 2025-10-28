@@ -267,7 +267,9 @@ export class ComplianceStack extends cdk.Stack {
       `ComplianceLambdaLayer${nameSuffix}`,
       {
         layerVersionName: `compliance-scanner-layer${nameSuffix}`,
-        code: lambda.Code.fromInline('exports.handler = async () => {};'),
+        // Use an asset-based layer (must not be inline). The folder `lib/lambda_layer`
+        // contains the nodejs/ tree expected by Lambda for Node.js layers.
+        code: lambda.Code.fromAsset(path.join(__dirname, 'lambda_layer')),
         compatibleRuntimes: [lambda.Runtime.NODEJS_18_X],
         description: 'Lambda layer for compliance scanner functions',
       }
