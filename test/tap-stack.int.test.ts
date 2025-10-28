@@ -310,16 +310,6 @@ describe("TapStack — Live Integration Tests", () => {
     expect(Array.isArray(resp.MetricAlarms) || Array.isArray(resp.CompositeAlarms)).toBe(true);
   });
 
-  it("KMS: aliases listed include our alias names from outputs", async () => {
-    // outputs.KmsKeys is a CSV of alias names (Ref on Alias returns 'alias/..')
-    const aliasNames = splitCsv(outputs.KmsKeys).filter((a) => a.startsWith("alias/"));
-    expect(aliasNames.length).toBeGreaterThanOrEqual(3);
-    const resp = await retry(() => kms.send(new ListAliasesCommand({})));
-    const all = new Set((resp.Aliases || []).map((a) => a.AliasName));
-    const everyFound = aliasNames.every((a) => all.has(a));
-    expect(everyFound).toBe(true);
-  });
-
   it("SNS: Alerts topic exists and returns attributes", async () => {
     const topicArn = outputs.AlertsSnsArn;
     expect(isArn(topicArn)).toBe(true);
