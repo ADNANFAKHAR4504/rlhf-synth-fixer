@@ -35,3 +35,7 @@ stack = TapStack(
     name="pulumi-infra",
     args=TapStackArgs(environment_suffix=environment_suffix),
 )
+
+if hasattr(stack, "outputs"):
+    for output_name, output_value in stack.outputs.items():
+        pulumi.export(output_name, output_value)

@@ -6,8 +6,9 @@ an e-commerce platform using Kinesis, ECS Fargate, RDS PostgreSQL, and ElastiCac
 All resources are deployed in eu-central-1 with encryption and security best practices.
 """
 
-from typing import Optional
 import json
+from pathlib import Path
+from typing import Optional
 import pulumi
 from pulumi import ResourceOptions, Output
 import pulumi_aws as aws
@@ -23,9 +24,15 @@ class TapStackArgs:
 
     Args:
         environment_suffix: Unique suffix for resource naming and isolation
+        availability_zones: Optional override for availability zones (used in tests)
     """
-    def __init__(self, environment_suffix: Optional[str] = None):
+    def __init__(
+        self,
+        environment_suffix: Optional[str] = None,
+        availability_zones: Optional[list[str]] = None
+    ):
         self.environment_suffix = environment_suffix or 'dev'
+        self.availability_zones = availability_zones
 
 
 class TapStack(pulumi.ComponentResource):
@@ -154,14 +161,16 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # Get available AZs dynamically
-        available_azs = aws.get_availability_zones(state="available")
+        az_names = args.availability_zones or aws.get_availability_zones(
+            state="available"
+        ).names
 
         # Public Subnets for NAT Gateway
         self.public_subnet_1 = ec2.Subnet(
             f"fastcart-public-subnet-1-{self.environment_suffix}",
             vpc_id=self.vpc.id,
             cidr_block="10.0.1.0/24",
-            availability_zone=available_azs.names[0],
+            availability_zone=az_names[0],
             map_public_ip_on_launch=True,
             tags={**common_tags, 'Name': f'fastcart-public-1-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self.vpc)
@@ -171,7 +180,7 @@ class TapStack(pulumi.ComponentResource):
             f"fastcart-public-subnet-2-{self.environment_suffix}",
             vpc_id=self.vpc.id,
             cidr_block="10.0.2.0/24",
-            availability_zone=available_azs.names[1],
+            availability_zone=az_names[1],
             map_public_ip_on_launch=True,
             tags={**common_tags, 'Name': f'fastcart-public-2-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self.vpc)
@@ -182,7 +191,7 @@ class TapStack(pulumi.ComponentResource):
             f"fastcart-private-subnet-1-{self.environment_suffix}",
             vpc_id=self.vpc.id,
             cidr_block="10.0.11.0/24",
-            availability_zone=available_azs.names[0],
+            availability_zone=az_names[0],
             tags={**common_tags, 'Name': f'fastcart-private-1-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self.vpc)
         )
@@ -191,7 +200,7 @@ class TapStack(pulumi.ComponentResource):
             f"fastcart-private-subnet-2-{self.environment_suffix}",
             vpc_id=self.vpc.id,
             cidr_block="10.0.12.0/24",
-            availability_zone=available_azs.names[1],
+            availability_zone=az_names[1],
             tags={**common_tags, 'Name': f'fastcart-private-2-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self.vpc)
         )
@@ -495,6 +504,7 @@ class TapStack(pulumi.ComponentResource):
             f"fastcart-ecs-logs-{self.environment_suffix}",
             name=f"/ecs/fastcart-order-processor-{self.environment_suffix}",
             retention_in_days=7,
+            kms_key_id=self.kms_key.arn,
             tags=common_tags,
             opts=ResourceOptions(parent=self)
         )
@@ -800,21 +810,110 @@ class TapStack(pulumi.ComponentResource):
         # ========================================
         # Outputs
         # ========================================
-        self.register_outputs({
-            'vpc_id': self.vpc.id,
-            'ecs_cluster_arn': self.ecs_cluster.arn,
-            'kinesis_stream_name': self.kinesis_stream.name,
-            'kinesis_stream_arn': self.kinesis_stream.arn,
-            'rds_endpoint': self.rds_instance.endpoint,
-            'rds_instance_id': self.rds_instance.id,
-            'redis_endpoint': self.redis_cluster.configuration_endpoint_address,
-            'redis_port': Output.from_input(6379),
-            'ecr_repository_url': self.ecr_repository.repository_url,
+        public_subnet_ids = pulumi.Output.all(
+            self.public_subnet_1.id,
+            self.public_subnet_2.id
+        ).apply(list)
+
+        public_subnet_arns = pulumi.Output.all(
+            self.public_subnet_1.arn,
+            self.public_subnet_2.arn
+        ).apply(list)
+
+        private_subnet_ids = pulumi.Output.all(
+            self.private_subnet_1.id,
+            self.private_subnet_2.id
+        ).apply(list)
+
+        private_subnet_arns = pulumi.Output.all(
+            self.private_subnet_1.arn,
+            self.private_subnet_2.arn
+        ).apply(list)
+
+        stack_outputs = {
+            'environment_suffix': self.environment_suffix,
+            'availability_zones': az_names,
             'kms_key_id': self.kms_key.id,
             'kms_key_arn': self.kms_key.arn,
-            'log_group_name': self.log_group.name,
+            'kms_alias_name': self.kms_alias.name,
+            'kms_alias_arn': self.kms_alias.arn,
+            'vpc_id': self.vpc.id,
+            'vpc_arn': self.vpc.arn,
+            'vpc_cidr': self.vpc.cidr_block,
+            'internet_gateway_id': self.igw.id,
+            'nat_gateway_id': self.nat_gateway.id,
+            'nat_eip_allocation_id': self.nat_eip.id,
+            'nat_eip_public_ip': self.nat_eip.public_ip,
+            'public_subnet_ids': public_subnet_ids,
+            'public_subnet_arns': public_subnet_arns,
+            'private_subnet_ids': private_subnet_ids,
+            'private_subnet_arns': private_subnet_arns,
+            'public_route_table_id': self.public_route_table.id,
+            'private_route_table_id': self.private_route_table.id,
+            'public_route_id': self.public_route.id,
+            'private_route_id': self.private_route.id,
+            'ecs_security_group_id': self.ecs_sg.id,
+            'rds_security_group_id': self.rds_sg.id,
+            'redis_security_group_id': self.redis_sg.id,
+            'db_secret_id': self.db_password_secret.id,
             'db_secret_arn': self.db_password_secret.arn,
+            'db_secret_version_id': self.db_password_version.id,
+            'db_subnet_group_name': self.db_subnet_group.name,
+            'rds_instance_id': self.rds_instance.id,
+            'rds_instance_arn': self.rds_instance.arn,
+            'rds_endpoint': self.rds_instance.endpoint,
+            'rds_address': self.rds_instance.address,
+            'redis_subnet_group_name': self.redis_subnet_group.name,
+            'redis_replication_group_id': self.redis_cluster.replication_group_id,
+            'redis_endpoint': self.redis_cluster.configuration_endpoint_address,
+            'redis_configuration_endpoint': self.redis_cluster.configuration_endpoint_address,
+            'redis_primary_endpoint': self.redis_cluster.primary_endpoint_address,
+            'redis_port': Output.from_input(6379),
+            'redis_auth_token_enabled': Output.from_input(True),
+            'kinesis_stream_name': self.kinesis_stream.name,
+            'kinesis_stream_arn': self.kinesis_stream.arn,
+            'kinesis_stream_shard_count': self.kinesis_stream.shard_count,
+            'kinesis_stream_retention_period': self.kinesis_stream.retention_period,
+            'log_group_name': self.log_group.name,
+            'log_group_arn': self.log_group.arn,
+            'log_group_kms_key': self.log_group.kms_key_id,
+            'log_group_retention_days': self.log_group.retention_in_days,
+            'ecs_execution_role_name': self.ecs_execution_role.name,
+            'ecs_execution_role_arn': self.ecs_execution_role.arn,
+            'ecs_task_role_name': self.ecs_task_role.name,
+            'ecs_task_role_arn': self.ecs_task_role.arn,
+            'ecs_cluster_name': self.ecs_cluster.name,
+            'ecs_cluster_arn': self.ecs_cluster.arn,
             'ecs_service_name': self.ecs_service.name,
-            'private_subnet_ids': [self.private_subnet_1.id, self.private_subnet_2.id],
-            'public_subnet_ids': [self.public_subnet_1.id, self.public_subnet_2.id]
-        })
+            'ecs_service_id': self.ecs_service.id,
+            'ecs_service_cluster_arn': self.ecs_service.cluster,
+            'ecs_service_desired_count': self.ecs_service.desired_count,
+            'task_definition_arn': self.task_definition.arn,
+            'task_definition_family': self.task_definition.family,
+            'ecr_repository_url': self.ecr_repository.repository_url,
+            'ecr_repository_arn': self.ecr_repository.arn,
+            'ecr_repository_name': self.ecr_repository.name,
+            'kinesis_iterator_age_alarm_name': self.kinesis_iterator_age_alarm.name,
+            'kinesis_iterator_age_alarm_arn': self.kinesis_iterator_age_alarm.arn,
+            'rds_cpu_alarm_name': self.rds_cpu_alarm.name,
+            'rds_cpu_alarm_arn': self.rds_cpu_alarm.arn,
+            'flat_outputs_path': "cfn-outputs/flat-outputs.json"
+        }
+
+        self.outputs = {
+            key: Output.from_input(value)
+            for key, value in stack_outputs.items()
+        }
+
+        def _write_flat_outputs(resolved_outputs):
+            output_dir = Path("cfn-outputs")
+            output_dir.mkdir(parents=True, exist_ok=True)
+            output_file = output_dir / "flat-outputs.json"
+            output_file.write_text(
+                json.dumps(resolved_outputs, indent=2, sort_keys=True)
+            )
+            return resolved_outputs
+
+        pulumi.Output.all(**self.outputs).apply(_write_flat_outputs)
+
+        self.register_outputs(self.outputs)

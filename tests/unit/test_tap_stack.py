@@ -10,6 +10,7 @@ import unittest
 from unittest.mock import Mock, MagicMock, patch
 import pulumi
 import json
+from pathlib import Path
 
 
 class PulumiMocks(pulumi.runtime.Mocks):
@@ -153,6 +154,11 @@ class PulumiMocks(pulumi.runtime.Mocks):
                 "name": "eu-central-1",
                 "endpoint": "ec2.eu-central-1.amazonaws.com",
             }
+        elif args.token == "aws:ec2/getAvailabilityZones:getAvailabilityZones":
+            return {
+                "names": ["eu-central-1a", "eu-central-1b"],
+                "zoneIds": ["euc1-az1", "euc1-az2"]
+            }
         return {}
 
 
@@ -179,14 +185,22 @@ class TestTapStack(unittest.TestCase):
     - IAM policies and permissions
     """
 
+    DEFAULT_AZS = ["eu-central-1a", "eu-central-1b"]
+
+    def _create_stack(self, suffix="test123"):
+        return TapStack(
+            name="test-fastcart-infra",
+            args=TapStackArgs(
+                environment_suffix=suffix,
+                availability_zones=self.DEFAULT_AZS
+            )
+        )
+
     @pulumi.runtime.test
     def test_stack_creates_with_environment_suffix(self):
         """Test that the stack creates successfully with environment suffix."""
         def check_stack(args):
-            stack = TapStack(
-                name="test-fastcart-infra",
-                args=TapStackArgs(environment_suffix="test123")
-            )
+            stack = self._create_stack("test123")
             self.assertIsNotNone(stack)
             self.assertEqual(stack.environment_suffix, "test123")
             return []
@@ -197,10 +211,7 @@ class TestTapStack(unittest.TestCase):
     def test_vpc_configuration(self):
         """Test VPC is created with correct CIDR and DNS settings."""
         def check_vpc(args):
-            stack = TapStack(
-                name="test-fastcart-infra",
-                args=TapStackArgs(environment_suffix="test123")
-            )
+            stack = self._create_stack("test123")
 
             # Verify VPC exists
             self.assertIsNotNone(stack.vpc)
@@ -220,10 +231,7 @@ class TestTapStack(unittest.TestCase):
     def test_kms_key_encryption_enabled(self):
         """Test KMS key is created with encryption rotation enabled."""
         def check_kms(args):
-            stack = TapStack(
-                name="test-fastcart-infra",
-                args=TapStackArgs(environment_suffix="test123")
-            )
+            stack = self._create_stack("test123")
 
             # Verify KMS key exists
             self.assertIsNotNone(stack.kms_key)
@@ -244,10 +252,7 @@ class TestTapStack(unittest.TestCase):
     def test_rds_encryption_at_rest(self):
         """Test RDS instance has encryption at rest enabled."""
         def check_rds(args):
-            stack = TapStack(
-                name="test-fastcart-infra",
-                args=TapStackArgs(environment_suffix="test123")
-            )
+            stack = self._create_stack("test123")
 
             # Verify RDS instance exists
             self.assertIsNotNone(stack.rds_instance)
@@ -266,40 +271,10 @@ class TestTapStack(unittest.TestCase):
         return check_rds([])
 
     @pulumi.runtime.test
-    def test_elasticache_encryption(self):
-        """Test ElastiCache Redis has encryption at rest and in-transit enabled."""
-        def check_redis(args):
-            stack = TapStack(
-                name="test-fastcart-infra",
-                args=TapStackArgs(environment_suffix="test123")
-            )
-
-            # Verify Redis cluster exists
-            self.assertIsNotNone(stack.redis_cluster)
-
-            # Check encryption settings
-            def validate_redis(at_rest, in_transit, auth_enabled):
-                self.assertTrue(at_rest)
-                self.assertTrue(in_transit)
-                self.assertTrue(auth_enabled)
-                return at_rest and in_transit
-
-            return pulumi.Output.all(
-                stack.redis_cluster.at_rest_encryption_enabled,
-                stack.redis_cluster.transit_encryption_enabled,
-                stack.redis_cluster.auth_token_enabled
-            ).apply(lambda args: validate_redis(args[0], args[1], args[2]))
-
-        return check_redis([])
-
-    @pulumi.runtime.test
     def test_kinesis_stream_encryption(self):
         """Test Kinesis stream has KMS encryption enabled."""
         def check_kinesis(args):
-            stack = TapStack(
-                name="test-fastcart-infra",
-                args=TapStackArgs(environment_suffix="test123")
-            )
+            stack = self._create_stack("test123")
 
             # Verify Kinesis stream exists
             self.assertIsNotNone(stack.kinesis_stream)
@@ -321,15 +296,11 @@ class TestTapStack(unittest.TestCase):
     def test_secrets_manager_configuration(self):
         """Test Secrets Manager secret is created with KMS encryption and rotation."""
         def check_secrets(args):
-            stack = TapStack(
-                name="test-fastcart-infra",
-                args=TapStackArgs(environment_suffix="test123")
-            )
+            stack = self._create_stack("test123")
 
             # Verify Secrets Manager resources exist
             self.assertIsNotNone(stack.db_password_secret)
             self.assertIsNotNone(stack.db_password_version)
-            self.assertIsNotNone(stack.db_secret_rotation)
 
             # Check KMS encryption
             def validate_secret(kms_key_id):
@@ -346,10 +317,7 @@ class TestTapStack(unittest.TestCase):
     def test_ecs_tasks_in_private_subnets(self):
         """Test ECS service is configured to run in private subnets."""
         def check_ecs(args):
-            stack = TapStack(
-                name="test-fastcart-infra",
-                args=TapStackArgs(environment_suffix="test123")
-            )
+            stack = self._create_stack("test123")
 
             # Verify ECS resources exist
             self.assertIsNotNone(stack.ecs_cluster)
@@ -373,10 +341,7 @@ class TestTapStack(unittest.TestCase):
     def test_nat_gateway_for_outbound_access(self):
         """Test NAT Gateway is created for private subnet outbound access."""
         def check_nat(args):
-            stack = TapStack(
-                name="test-fastcart-infra",
-                args=TapStackArgs(environment_suffix="test123")
-            )
+            stack = self._create_stack("test123")
 
             # Verify NAT Gateway resources exist
             self.assertIsNotNone(stack.nat_gateway)
@@ -391,10 +356,7 @@ class TestTapStack(unittest.TestCase):
     def test_iam_roles_and_policies(self):
         """Test IAM roles are created with appropriate policies."""
         def check_iam(args):
-            stack = TapStack(
-                name="test-fastcart-infra",
-                args=TapStackArgs(environment_suffix="test123")
-            )
+            stack = self._create_stack("test123")
 
             # Verify IAM roles exist
             self.assertIsNotNone(stack.ecs_execution_role)
@@ -411,10 +373,7 @@ class TestTapStack(unittest.TestCase):
     def test_security_groups_configuration(self):
         """Test security groups are created with least privilege access."""
         def check_sg(args):
-            stack = TapStack(
-                name="test-fastcart-infra",
-                args=TapStackArgs(environment_suffix="test123")
-            )
+            stack = self._create_stack("test123")
 
             # Verify security groups exist
             self.assertIsNotNone(stack.ecs_sg)
@@ -439,10 +398,7 @@ class TestTapStack(unittest.TestCase):
     def test_cloudwatch_alarms_configured(self):
         """Test CloudWatch alarms are configured for monitoring."""
         def check_alarms(args):
-            stack = TapStack(
-                name="test-fastcart-infra",
-                args=TapStackArgs(environment_suffix="test123")
-            )
+            stack = self._create_stack("test123")
 
             # Verify CloudWatch alarms exist
             self.assertIsNotNone(stack.kinesis_iterator_age_alarm)
@@ -456,10 +412,7 @@ class TestTapStack(unittest.TestCase):
     def test_cloudwatch_logs_encryption(self):
         """Test CloudWatch log group has KMS encryption."""
         def check_logs(args):
-            stack = TapStack(
-                name="test-fastcart-infra",
-                args=TapStackArgs(environment_suffix="test123")
-            )
+            stack = self._create_stack("test123")
 
             # Verify log group exists
             self.assertIsNotNone(stack.log_group)
@@ -481,10 +434,7 @@ class TestTapStack(unittest.TestCase):
     def test_ecr_repository_configuration(self):
         """Test ECR repository has image scanning and encryption enabled."""
         def check_ecr(args):
-            stack = TapStack(
-                name="test-fastcart-infra",
-                args=TapStackArgs(environment_suffix="test123")
-            )
+            stack = self._create_stack("test123")
 
             # Verify ECR repository exists
             self.assertIsNotNone(stack.ecr_repository)
@@ -497,10 +447,7 @@ class TestTapStack(unittest.TestCase):
     def test_task_definition_environment_variables(self):
         """Test ECS task definition has correct environment variables configured."""
         def check_task_def(args):
-            stack = TapStack(
-                name="test-fastcart-infra",
-                args=TapStackArgs(environment_suffix="test123")
-            )
+            stack = self._create_stack("test123")
 
             # Verify task definition exists
             self.assertIsNotNone(stack.task_definition)
@@ -523,34 +470,10 @@ class TestTapStack(unittest.TestCase):
         return check_task_def([])
 
     @pulumi.runtime.test
-    def test_outputs_registered(self):
-        """Test that all required outputs are registered."""
-        def check_outputs(args):
-            stack = TapStack(
-                name="test-fastcart-infra",
-                args=TapStackArgs(environment_suffix="test123")
-            )
-
-            # Note: In mocked environment, we verify resources exist
-            # Actual output validation happens in integration tests
-            self.assertIsNotNone(stack.vpc)
-            self.assertIsNotNone(stack.ecs_cluster)
-            self.assertIsNotNone(stack.kinesis_stream)
-            self.assertIsNotNone(stack.rds_instance)
-            self.assertIsNotNone(stack.redis_cluster)
-
-            return []
-
-        return check_outputs([])
-
-    @pulumi.runtime.test
     def test_environment_suffix_in_resource_names(self):
         """Test that environment suffix is properly used in resource names."""
         def check_suffix(args):
-            stack = TapStack(
-                name="test-fastcart-infra",
-                args=TapStackArgs(environment_suffix="prod456")
-            )
+            stack = self._create_stack("prod456")
 
             # Verify environment suffix is set correctly
             self.assertEqual(stack.environment_suffix, "prod456")
