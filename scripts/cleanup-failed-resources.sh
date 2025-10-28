@@ -37,19 +37,16 @@ cleanup_elasticache() {
     REDIS_NAME="healthcare-redis-${ENVIRONMENT_SUFFIX}"
     
     # Check if the replication group exists and its status
-    if aws elasticache describe-replication-groups \
+    STATUS=$(aws elasticache describe-replication-groups \
         --region "${AWS_REGION}" \
         --replication-group-id "${REDIS_NAME}" \
         --query 'ReplicationGroups[0].ReplicationGroupStatus' \
-        --output text >/dev/null 2>&1; then
+        --output text 2>/dev/null || echo "not-found")
+    
+    if [ "$STATUS" != "not-found" ] && [ "$STATUS" != "None" ]; then
+        echo -e "${YELLOW}🔍 Found ElastiCache replication group: ${REDIS_NAME} (Status: ${STATUS})${NC}"
         
-        STATUS=$(aws elasticache describe-replication-groups \
-            --region "${AWS_REGION}" \
-            --replication-group-id "${REDIS_NAME}" \
-            --query 'ReplicationGroups[0].ReplicationGroupStatus' \
-            --output text 2>/dev/null || echo "not-found")
-        
-        if [ "$STATUS" = "create-failed" ] || [ "$STATUS" = "deleting" ] || [ "$STATUS" = "deletion-failed" ]; then
+        if [ "$STATUS" = "create-failed" ] || [ "$STATUS" = "deleting" ] || [ "$STATUS" = "deletion-failed" ] || [ "$STATUS" = "modifying" ] || [ "$STATUS" = "snapshotting" ]; then
             echo -e "${RED}⚠️  Found failed ElastiCache replication group: ${REDIS_NAME} (Status: ${STATUS})${NC}"
             echo -e "${YELLOW}🗑️  Attempting to delete failed replication group...${NC}"
             
@@ -86,10 +83,53 @@ cleanup_elasticache() {
                 exit 1
             fi
         else
-            echo -e "${GREEN}✅ ElastiCache replication group is in acceptable state: ${STATUS}${NC}"
+            echo -e "${YELLOW}⚠️  ElastiCache replication group found in state: ${STATUS}${NC}"
+            echo -e "${YELLOW}🗑️  Attempting precautionary deletion for clean deployment...${NC}"
+            
+            # Attempt to delete the replication group to ensure clean state
+            if aws elasticache delete-replication-group \
+                --region "${AWS_REGION}" \
+                --replication-group-id "${REDIS_NAME}" \
+                --no-retain-primary-cluster 2>/dev/null; then
+                
+                echo -e "${YELLOW}⏳ Waiting for replication group deletion to complete...${NC}"
+                
+                # Wait for deletion to complete (max 10 minutes)
+                COUNTER=0
+                MAX_ATTEMPTS=60
+                while [ $COUNTER -lt $MAX_ATTEMPTS ]; do
+                    if ! aws elasticache describe-replication-groups \
+                        --region "${AWS_REGION}" \
+                        --replication-group-id "${REDIS_NAME}" >/dev/null 2>&1; then
+                        echo -e "${GREEN}✅ ElastiCache replication group deleted successfully${NC}"
+                        break
+                    fi
+                    
+                    echo -e "${YELLOW}⏳ Still deleting... (${COUNTER}/${MAX_ATTEMPTS})${NC}"
+                    sleep 10
+                    COUNTER=$((COUNTER + 1))
+                done
+                
+                if [ $COUNTER -eq $MAX_ATTEMPTS ]; then
+                    echo -e "${RED}❌ Timeout waiting for replication group deletion${NC}"
+                    echo -e "${YELLOW}⚠️  Continuing deployment despite cleanup timeout...${NC}"
+                fi
+            else
+                echo -e "${YELLOW}⚠️  Could not delete replication group (may be protected or in transition)${NC}"
+                echo -e "${YELLOW}⚠️  Continuing deployment...${NC}"
+            fi
         fi
-    else
+    elif [ "$STATUS" = "not-found" ]; then
         echo -e "${GREEN}✅ No ElastiCache replication group found (clean state)${NC}"
+    else
+        echo -e "${YELLOW}⚠️  ElastiCache status query returned: ${STATUS}${NC}"
+        echo -e "${YELLOW}🗑️  Attempting to delete any existing replication group...${NC}"
+        
+        # Try to delete regardless of status detection issues
+        aws elasticache delete-replication-group \
+            --region "${AWS_REGION}" \
+            --replication-group-id "${REDIS_NAME}" \
+            --no-retain-primary-cluster 2>/dev/null || echo -e "${YELLOW}⚠️  No replication group to delete or deletion failed${NC}"
     fi
 }
 
@@ -201,6 +241,28 @@ cleanup_pulumi_locks() {
     echo -e "${GREEN}✅ Pulumi lock cleanup completed${NC}"
 }
 
+# Function to cleanup problematic Pulumi state resources
+cleanup_pulumi_state() {
+    echo -e "${YELLOW}🔍 Checking for problematic Pulumi state resources...${NC}"
+    
+    STACK_NAME="TapStack${ENVIRONMENT_SUFFIX}"
+    REDIS_URN="urn:pulumi:${STACK_NAME}::TapStack::aws:elasticache/replicationGroup:ReplicationGroup::healthcare-redis-${ENVIRONMENT_SUFFIX}"
+    
+    echo -e "${YELLOW}🗑️  Attempting to remove failed ElastiCache resource from Pulumi state...${NC}"
+    
+    # Check if stack exists and try to remove the problematic resource
+    if pulumi stack ls --json 2>/dev/null | grep -q "\"name\":\"${STACK_NAME}\""; then
+        echo -e "${YELLOW}📋 Stack ${STACK_NAME} found, attempting state cleanup...${NC}"
+        
+        # Try to remove the problematic ElastiCache resource from state
+        pulumi state delete "${REDIS_URN}" --stack "${STACK_NAME}" --yes 2>/dev/null && \
+            echo -e "${GREEN}✅ Removed problematic ElastiCache resource from Pulumi state${NC}" || \
+            echo -e "${YELLOW}⚠️  Could not remove ElastiCache resource from state (may not exist)${NC}"
+    else
+        echo -e "${GREEN}✅ No existing stack found (clean state)${NC}"
+    fi
+}
+
 # Main cleanup execution
 main() {
     echo -e "${YELLOW}🚀 Starting comprehensive cleanup process...${NC}"
@@ -210,6 +272,9 @@ main() {
     
     # Cleanup Pulumi locks first
     cleanup_pulumi_locks
+    
+    # Cleanup problematic Pulumi state
+    cleanup_pulumi_state
     
     # Cleanup failed AWS resources
     cleanup_elasticache
