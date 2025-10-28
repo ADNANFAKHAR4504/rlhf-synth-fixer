@@ -2791,6 +2791,7 @@ import unittest
 from unittest.mock import patch, MagicMock, Mock
 
 import aws_cdk as cdk
+from aws_cdk import aws_lambda as lambda_
 from aws_cdk.assertions import Template, Match
 from pytest import mark
 
@@ -2814,6 +2815,22 @@ from lib.tap_stack import (
 )
 
 
+def create_mock_nodejs_function(*args, **kwargs):
+    """Create a mock Lambda function that is JSII-compatible"""
+    # Instead of mocking NodejsFunction, create a regular Python Lambda Function
+    # This avoids JSII type issues
+    # Filter out NodejsFunction-specific kwargs that don't work with Lambda.Function
+    filtered_kwargs = {k: v for k, v in kwargs.items() if k not in ['entry', 'bundling', 'runtime', 'handler']}
+    return lambda_.Function(
+        args[0],  # scope
+        args[1],  # id
+        runtime=lambda_.Runtime.NODEJS_22_X,
+        handler="index.handler",
+        code=lambda_.Code.from_inline("exports.handler = async () => ({ statusCode: 200 });"),
+        **filtered_kwargs
+    )
+
+
 @mark.describe("TapStack")
 class TestTapStack(unittest.TestCase):
     """Test cases for the TapStack CDK stack"""
@@ -2826,11 +2843,7 @@ class TestTapStack(unittest.TestCase):
     @mark.it("creates stack with default environment suffix")
     def test_creates_stack_with_default_suffix(self):
         """Test that stack creates with default 'dev' suffix"""
-        with patch('aws_cdk.aws_lambda_nodejs.NodejsFunction') as mock_nodejs:
-            mock_fn = Mock()
-            mock_fn.function_name = 'test-function'
-            mock_nodejs.return_value = mock_fn
-
+        with patch('aws_cdk.aws_lambda_nodejs.NodejsFunction', side_effect=create_mock_nodejs_function):
             stack = TapStack(
                 self.app,
                 "TapStackTest",
@@ -2897,6 +2910,11 @@ class TestTapStack(unittest.TestCase):
             assert "ALBDNSName" in outputs
             assert "MainBucketName" in outputs
             assert "NotificationTopicArn" in outputs
+            assert "SecurityAlertTopicArn" in outputs
+            assert "KMSKeyArn" in outputs
+            assert "LogBucketName" in outputs
+            assert "IAMRoleArn" in outputs
+            assert "AppSecurityGroupId" in outputs
 
     @mark.it("applies correct tags to stack")
     def test_applies_correct_tags(self):
