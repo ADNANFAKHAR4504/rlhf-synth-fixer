@@ -826,9 +826,6 @@
         "NovaPatientDocumentsBucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "nova-prod-patient-documents-${AWS::AccountId}"
-                },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
                         {
@@ -882,9 +879,6 @@
         "NovaCloudTrailBucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "nova-prod-audit-logs-${AWS::AccountId}"
-                },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
                         {
@@ -1078,7 +1072,9 @@
         "NovaAppLaunchTemplate": {
             "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
-                "LaunchTemplateName": "nova-prod-app-lt",
+                "LaunchTemplateName": {
+                    "Fn::Sub": "nova-prod-app-lt-${AWS::Region}"
+                },
                 "LaunchTemplateData": {
                     "IamInstanceProfile": {
                         "Name": {
@@ -1098,15 +1094,12 @@
                             "Ebs": {
                                 "VolumeSize": 20,
                                 "VolumeType": "gp3",
-                                "Encrypted": true,
-                                "KmsKeyId": {
-                                    "Ref": "NovaEncryptionKey"
-                                }
+                                "Encrypted": true
                             }
                         }
                     ],
                     "UserData": {
-                        "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\necho \"<h1>Nova Healthcare Portal - Instance $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</h1>\" > /var/www/html/index.html\n# Health check endpoint\necho \"OK\" > /var/www/html/health\n"
+                        "Fn::Base64": "#!/bin/bash\n# Quick setup for health checks\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\n\n# Create health check endpoint immediately\necho \"OK\" > /var/www/html/health\necho \"<h1>Nova Healthcare Portal</h1>\" > /var/www/html/index.html\n\n# Update packages in background (non-blocking)\nnohup yum update -y &\n"
                     },
                     "TagSpecifications": [
                         {
@@ -1199,7 +1192,9 @@
         "NovaApplicationLoadBalancer": {
             "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
             "Properties": {
-                "Name": "nova-prod-alb",
+                "Name": {
+                    "Fn::Sub": "nova-prod-alb-${AWS::Region}"
+                },
                 "Type": "application",
                 "Scheme": "internet-facing",
                 "SecurityGroups": [
@@ -1248,7 +1243,9 @@
         "NovaALBTargetGroup": {
             "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
             "Properties": {
-                "Name": "nova-prod-app-tg",
+                "Name": {
+                    "Fn::Sub": "nova-prod-app-tg-${AWS::Region}"
+                },
                 "TargetType": "instance",
                 "Protocol": "HTTP",
                 "Port": 80,
@@ -1259,6 +1256,10 @@
                 "HealthCheckProtocol": "HTTP",
                 "HealthCheckPort": "80",
                 "HealthCheckPath": "/health",
+                "HealthCheckIntervalSeconds": 15,
+                "HealthCheckTimeoutSeconds": 5,
+                "HealthyThresholdCount": 2,
+                "UnhealthyThresholdCount": 3,
                 "Matcher": {
                     "HttpCode": "200-399"
                 },
@@ -1410,7 +1411,9 @@
                 "VisibilityConfig": {
                     "SampledRequestsEnabled": true,
                     "CloudWatchMetricsEnabled": true,
-                    "MetricName": "nova-prod-waf-metric"
+                    "MetricName": {
+                        "Fn::Sub": "nova-prod-waf-metric-${AWS::Region}"
+                    }
                 },
                 "Tags": [
                     {
@@ -1499,7 +1502,9 @@
         "NovaBastionSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupName": "nova-prod-bastion-sg",
+                "GroupName": {
+                    "Fn::Sub": "nova-prod-bastion-sg-${AWS::Region}"
+                },
                 "GroupDescription": "Security group for bastion host - SSH from trusted IP only",
                 "VpcId": {
                     "Ref": "NovaVPC"
@@ -1560,10 +1565,7 @@
                         "Ebs": {
                             "VolumeSize": 8,
                             "VolumeType": "gp3",
-                            "Encrypted": true,
-                            "KmsKeyId": {
-                                "Ref": "NovaEncryptionKey"
-                            }
+                            "Encrypted": true
                         }
                     }
                 ],
@@ -1586,7 +1588,9 @@
         "NovaALBSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupName": "nova-prod-alb-sg",
+                "GroupName": {
+                    "Fn::Sub": "nova-prod-alb-sg-${AWS::Region}"
+                },
                 "GroupDescription": "Security group for Application Load Balancer",
                 "VpcId": {
                     "Ref": "NovaVPC"
@@ -1646,7 +1650,9 @@
         "NovaApplicationSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupName": "nova-prod-application-sg",
+                "GroupName": {
+                    "Fn::Sub": "nova-prod-application-sg-${AWS::Region}"
+                },
                 "GroupDescription": "Security group for application instances",
                 "VpcId": {
                     "Ref": "NovaVPC"
@@ -1722,7 +1728,9 @@
         "NovaDatabaseSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupName": "nova-prod-database-sg",
+                "GroupName": {
+                    "Fn::Sub": "nova-prod-database-sg-${AWS::Region}"
+                },
                 "GroupDescription": "Security group for RDS database",
                 "VpcId": {
                     "Ref": "NovaVPC"
@@ -1785,9 +1793,6 @@
         "NovaRDSInstance": {
             "Type": "AWS::RDS::DBInstance",
             "Properties": {
-                "DBInstanceIdentifier": {
-                    "Fn::Sub": "nova-prod-patient-database-${AWS::Region}"
-                },
                 "AllocatedStorage": 100,
                 "DBInstanceClass": "db.t3.medium",
                 "Engine": "mysql",
@@ -2006,7 +2011,9 @@
             "Type": "AWS::CloudTrail::Trail",
             "DependsOn": "NovaCloudTrailBucketPolicy",
             "Properties": {
-                "TrailName": "nova-prod-cloudtrail",
+                "TrailName": {
+                    "Fn::Sub": "nova-prod-cloudtrail-${AWS::Region}"
+                },
                 "S3BucketName": {
                     "Ref": "NovaCloudTrailBucket"
                 },
@@ -2118,7 +2125,6 @@
         "NovaSecurityGroupChangeRule": {
             "Type": "AWS::Events::Rule",
             "Properties": {
-                "Name": "nova-prod-sg-change-detection",
                 "Description": "Detect security group changes for compliance",
                 "EventPattern": {
                     "source": [

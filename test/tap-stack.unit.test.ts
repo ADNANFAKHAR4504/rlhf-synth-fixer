@@ -180,9 +180,11 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
 
     test('RDS secret should have proper configuration', () => {
       const secret = template.Resources.NovaRDSPasswordSecret;
-      expect(secret.Properties.Name).toBe('nova-prod-database-password');
+      // Name property was removed to avoid naming conflicts - CloudFormation generates unique names
       expect(secret.Properties.GenerateSecretString).toBeDefined();
       expect(secret.Properties.GenerateSecretString.PasswordLength).toBe(32);
+      expect(secret.Properties.GenerateSecretString.SecretStringTemplate).toBe('{"username": "admin"}');
+      expect(secret.Properties.GenerateSecretString.GenerateStringKey).toBe('password');
     });
   });
 

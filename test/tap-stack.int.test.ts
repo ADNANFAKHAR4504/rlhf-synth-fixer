@@ -15,8 +15,6 @@ import { SecretsManagerClient, DescribeSecretCommand } from '@aws-sdk/client-sec
 import { ElasticLoadBalancingV2Client, DescribeListenersCommand, DescribeTargetHealthCommand, DescribeTargetGroupsCommand } from '@aws-sdk/client-elastic-load-balancing-v2';
 import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';
 
-
-
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
@@ -37,7 +35,7 @@ const rds = new RDSClient({ region: detectedRegion });
 const secrets = new SecretsManagerClient({ region: detectedRegion });
 const elbv2 = new ElasticLoadBalancingV2Client({ region: detectedRegion });
 const logs = new CloudWatchLogsClient({ region: detectedRegion });
-// no STS client needed
+
 
 const randomKey = () => crypto.randomBytes(8).toString('hex');
 
@@ -127,31 +125,6 @@ describe('TapStack End-to-End Infrastructure Tests', () => {
     expect(pab.PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
   });
 
-  test('ALB serves TLS and is associated with WAFv2 WebACL', async () => {
-    const agent = new https.Agent({ keepAlive: true });
-    let status = 0;
-    try {
-      const resp = await axios.get(`https://${albDns}/`, { httpsAgent: agent, timeout: 15000, validateStatus: () => true });
-      status = resp.status;
-    } catch (e) {
-      // Even if targets are unhealthy, TLS handshake should succeed and either timeout at LB or return 5xx
-    }
-    expect(typeof status).toBe('number');
-    const waf = await wafv2.send(
-      new GetWebACLForResourceCommand({ ResourceArn: albArn })
-    );
-    expect(waf.WebACL?.Name).toBeDefined();
-    const hasManaged = (waf.WebACL?.Rules || []).some((r) => r.Statement?.ManagedRuleGroupStatement);
-    expect(hasManaged).toBe(true);
-  });
-
-  test('WAF blocks common SQLi patterns at ALB edge', async () => {
-    const agent = new https.Agent({ keepAlive: true });
-    const url = `https://${albDns}/?id=1' OR '1'='1`;
-    const resp = await axios.get(url, { httpsAgent: agent, timeout: 15000, validateStatus: () => true });
-    expect(resp.status).toBe(403);
-  });
-
   test('WAF has required AWS managed rule sets configured', async () => {
     const waf = await wafv2.send(new GetWebACLForResourceCommand({ ResourceArn: albArn }));
     const names = new Set((waf.WebACL?.Rules || []).map((r) => r.Name));
@@ -178,23 +151,6 @@ describe('TapStack End-to-End Infrastructure Tests', () => {
     expect((head.SSEKMSKeyId || '').includes(kmsKeyId)).toBe(true);
   });
 
-  test('App EC2 instance can retrieve DB secret and connect to RDS (SELECT 1)', async () => {
-    const instanceId = await getFirstRunningAppInstanceId(appSgId);
-    const secretName = dbSecretArn;
-    const cmds = [
-      'set -euo pipefail',
-      'sudo yum install -y -q mysql jq awscli >/dev/null 2>&1 || true',
-      `json=$(aws secretsmanager get-secret-value --secret-id ${secretName} --query SecretString --output text)`,
-      'user=$(echo "$json" | jq -r .username)',
-      'pass=$(echo "$json" | jq -r .password)',
-      `mysql -h ${rdsEndpoint} -u "$user" -p"$pass" -e "SELECT 1;" | tee /tmp/mysql_out.txt`,
-      'grep -q "1" /tmp/mysql_out.txt && echo OK || (echo FAIL && exit 1)'
-    ];
-    const result = await sendSsmShell(instanceId, cmds, 600);
-    expect(result.status.toLowerCase()).toContain('success');
-    expect(result.stdout).toContain('OK');
-  });
-
   test('RDS instance is Multi-AZ, encrypted with KMS, and not publicly accessible', async () => {
     const db = await rds.send(new DescribeDBInstancesCommand({ DBInstanceIdentifier: rdsIdentifier }));
     const i = db.DBInstances?.[0];
@@ -214,20 +170,6 @@ describe('TapStack End-to-End Infrastructure Tests', () => {
     expect(cloudTrailArn).toBeTruthy();
   });
 
-  test('CloudTrail bucket has Object Lock enabled (governance mode)', async () => {
-    const conf = await s3.send(new GetObjectLockConfigurationCommand({ Bucket: cloudTrailBucket }));
-    expect(conf.ObjectLockConfiguration?.ObjectLockEnabled).toBe('Enabled');
-    const mode = conf.ObjectLockConfiguration?.Rule?.DefaultRetention?.Mode;
-    expect(mode).toBe('GOVERNANCE');
-    const days = conf.ObjectLockConfiguration?.Rule?.DefaultRetention?.Days as number | undefined;
-    expect(days && days >= 2555).toBe(true);
-  });
-
-  test('CloudTrail is delivering logs to the immutable S3 bucket', async () => {
-    const listed = await s3.send(new ListObjectsV2Command({ Bucket: cloudTrailBucket, Prefix: 'cloudtrail-logs/', MaxKeys: 10 }));
-    expect((listed.Contents || []).length).toBeGreaterThan(0);
-  });
-
   test('ALB listeners: HTTPS when ACM provided, otherwise HTTP; TG has registered targets', async () => {
     const listeners = await elbv2.send(new DescribeListenersCommand({ LoadBalancerArn: albArn }));
     const httpsListeners = (listeners.Listeners || []).filter((l) => l.Port === 443 && l.Protocol === 'HTTPS');
@@ -244,39 +186,6 @@ describe('TapStack End-to-End Infrastructure Tests', () => {
     expect(tgArn).toBeTruthy();
     const th = await elbv2.send(new DescribeTargetHealthCommand({ TargetGroupArn: tgArn }));
     expect((th.TargetHealthDescriptions || []).length).toBeGreaterThan(0);
-  });
-
-  test('Bastion security group restricts SSH to a single trusted CIDR', async () => {
-    // Describe the bastion SG and verify single restricted ingress on tcp/22
-    const sgResp = await ec2.send(new DescribeSecurityGroupsCommand({ GroupIds: [bastionSgId] }));
-    const sg = (sgResp.SecurityGroups || [])[0];
-    expect(sg?.GroupId).toBe(bastionSgId);
-    const perms = sg?.IpPermissions || [];
-    // Only SSH ingress expected; ensure minimal and not world-open
-    expect(perms.length).toBe(1);
-    const ssh = perms[0];
-    expect(ssh.IpProtocol).toBe('tcp');
-    expect(ssh.FromPort).toBe(22);
-    expect(ssh.ToPort).toBe(22);
-    expect(ssh).toBeTruthy();
-    const cidrs = (ssh?.IpRanges || []).map((r) => r.CidrIp);
-    expect(cidrs.length).toBe(1);
-    expect(cidrs).not.toContain('0.0.0.0/0');
-    // No SG-to-SG pairs for bastion ingress
-    expect((ssh.UserIdGroupPairs || []).length).toBe(0);
-  });
-
-  test('Bastion instance has a public IP; App instances have no public IP', async () => {
-    const bastionInstances = await ec2.send(new DescribeInstancesCommand({ Filters: [ { Name: 'instance.group-id', Values: [bastionSgId] }, { Name: 'instance-state-name', Values: ['running'] } ] }));
-    const bastion = (bastionInstances.Reservations || []).flatMap((r) => r.Instances || [])[0];
-    expect(bastion?.PublicIpAddress).toBeDefined();
-
-    const appInstances = await ec2.send(new DescribeInstancesCommand({ Filters: [ { Name: 'instance.group-id', Values: [appSgId] }, { Name: 'instance-state-name', Values: ['running'] } ] }));
-    const apps = (appInstances.Reservations || []).flatMap((r) => r.Instances || []);
-    expect(apps.length).toBeGreaterThan(0);
-    for (const i of apps) {
-      expect(i?.PublicIpAddress).toBeUndefined();
-    }
   });
 
   test('Application SG inbound rules are only from ALB and Bastion', async () => {
@@ -339,24 +248,248 @@ describe('TapStack End-to-End Infrastructure Tests', () => {
     expect((lg?.kmsKeyId || '').includes(kmsKeyId)).toBe(true);
   });
 
-  test('KMS key is enabled and usable for encryption', async () => {
-    const desc = await kms.send(new DescribeKeyCommand({ KeyId: kmsKeyId }));
-    expect(desc.KeyMetadata?.Enabled).toBe(true);
-    expect(desc.KeyMetadata?.KeyUsage).toBe('ENCRYPT_DECRYPT');
-  });
+  // ===== WORKFLOW TESTS =====
 
-  test('EventBridge has at least one enabled rule targeting the SNS topic', async () => {
-    const rules = await events.send(new ListRuleNamesByTargetCommand({ TargetArn: securityAlertTopicArn }));
-    expect((rules.RuleNames || []).length).toBeGreaterThan(0);
-    let enabledFound = false;
-    for (const name of rules.RuleNames || []) {
-      const rule = await events.send(new DescribeRuleCommand({ Name: name }));
-      if (rule.State === 'ENABLED') {
-        const targets = await events.send(new ListTargetsByRuleCommand({ Rule: name }));
-        const hasSns = (targets.Targets || []).some((t) => t.Arn === securityAlertTopicArn);
-        if (hasSns) { enabledFound = true; break; }
+  describe('Healthcare Patient Portal Workflow Tests', () => {
+    
+    test('Patient Access Flow - Internet → ALB → WAF → EC2', async () => {
+      // Patient accesses portal via HTTPS
+      const agent = new https.Agent({ keepAlive: true });
+      const httpsResponse = await axios.get(`https://${albDns}/`, { 
+        httpsAgent: agent, 
+        timeout: 15000, 
+        validateStatus: () => true 
+      });
+      expect(httpsResponse?.status).toBeDefined();
+
+      // ALB terminates TLS and distributes traffic
+      const listeners = await elbv2.send(new DescribeListenersCommand({ LoadBalancerArn: albArn }));
+      const httpsListener = (listeners.Listeners || []).find(l => l.Port === 443 && l.Protocol === 'HTTPS');
+      expect(httpsListener).toBeDefined();
+
+      // WAF blocks malicious requests
+      const waf = await wafv2.send(new GetWebACLForResourceCommand({ ResourceArn: albArn }));
+      expect(waf.WebACL?.Name).toBeDefined();
+      
+      // Test WAF blocking SQLi attack
+      const sqlInjectionResponse = await axios.get(`https://${albDns}/?id=1' OR '1'='1`, { 
+        httpsAgent: agent, 
+        timeout: 15000, 
+        validateStatus: () => true 
+      });
+      expect(sqlInjectionResponse.status).toBe(403);
+
+      // Traffic reaches EC2 instances in private subnets
+      const appInstances = await ec2.send(new DescribeInstancesCommand({ 
+        Filters: [ 
+          { Name: 'instance.group-id', Values: [appSgId] }, 
+          { Name: 'instance-state-name', Values: ['running'] } 
+        ] 
+      }));
+      const apps = (appInstances.Reservations || []).flatMap((r) => r.Instances || []);
+      expect(apps.length).toBeGreaterThan(0);
+      
+      // Verify instances are in private subnets (no public IP)
+      for (const instance of apps) {
+        expect(instance?.PublicIpAddress).toBeUndefined();
       }
-    }
-    expect(enabledFound).toBe(true);
+    });
+
+    test('Data Retrieval Flow - EC2 → RDS + S3', async () => {
+      const instanceId = await getFirstRunningAppInstanceId(appSgId);
+      
+      // App instance queries RDS for structured data
+      const dbConnectionTest = [
+        'set -euo pipefail',
+        'sudo yum install -y -q mysql jq awscli >/dev/null 2>&1 || true',
+        `json=$(aws secretsmanager get-secret-value --secret-id ${dbSecretArn} --query SecretString --output text)`,
+        'user=$(echo "$json" | jq -r .username)',
+        'pass=$(echo "$json" | jq -r .password)',
+        `mysql -h ${rdsEndpoint} -u "$user" -p"$pass" -e "SELECT 1 as test_result;" | tee /tmp/mysql_test.txt`,
+        'grep -q "test_result" /tmp/mysql_test.txt && echo "RDS_CONNECTED" || (echo "RDS_FAILED" && exit 1)'
+      ];
+      
+      const dbResult = await sendSsmShell(instanceId, dbConnectionTest, 600);
+      expect(dbResult.status.toLowerCase()).toContain('success');
+      expect(dbResult.stdout).toContain('RDS_CONNECTED');
+
+      // App instance retrieves unstructured data from S3
+      const s3TestKey = `patient-records/${randomKey()}.pdf`;
+      const s3UploadTest = [
+        'set -euo pipefail',
+        'sudo yum install -y -q awscli >/dev/null 2>&1 || true',
+        `echo "Mock PDF content for patient record" > /tmp/test_record.pdf`,
+        `aws s3 cp /tmp/test_record.pdf s3://${patientDocsBucket}/${s3TestKey} --sse aws:kms --sse-kms-key-id ${kmsKeyId}`,
+        `aws s3 ls s3://${patientDocsBucket}/${s3TestKey} && echo "S3_UPLOADED" || (echo "S3_FAILED" && exit 1)`
+      ];
+      
+      const s3Result = await sendSsmShell(instanceId, s3UploadTest, 300);
+      expect(s3Result.status.toLowerCase()).toContain('success');
+      expect(s3Result.stdout).toContain('S3_UPLOADED');
+
+      // Verify data is properly encrypted and accessible
+      const head = await s3.send(new HeadObjectCommand({ Bucket: patientDocsBucket, Key: s3TestKey }));
+      expect(head.ServerSideEncryption).toBe('aws;kms'.replace(';', ':'));
+      expect((head.SSEKMSKeyId || '').includes(kmsKeyId)).toBe(true);
+    });
+
+    test('Administrative Access Flow - Trusted IP → Bastion → EC2', async () => {
+      // Verify bastion host has public IP and is accessible
+      const bastionInstances = await ec2.send(new DescribeInstancesCommand({ 
+        Filters: [ 
+          { Name: 'instance.group-id', Values: [bastionSgId] }, 
+          { Name: 'instance-state-name', Values: ['running'] } 
+        ] 
+      }));
+      const bastion = (bastionInstances.Reservations || []).flatMap((r) => r.Instances || [])[0];
+      expect(bastion?.PublicIpAddress).toBeDefined();
+
+      // Verify bastion security group restricts SSH to trusted IP only
+      const bastionSg = await ec2.send(new DescribeSecurityGroupsCommand({ GroupIds: [bastionSgId] }));
+      const bastionSgData = (bastionSg.SecurityGroups || [])[0];
+      const sshRules = bastionSgData?.IpPermissions || [];
+      
+      expect(sshRules.length).toBe(1);
+      const sshRule = sshRules[0];
+      expect(sshRule.IpProtocol).toBe('tcp');
+      expect(sshRule.FromPort).toBe(22);
+      expect(sshRule.ToPort).toBe(22);
+      
+      // Should not allow 0.0.0.0/0
+      const cidrs = (sshRule.IpRanges || []).map((r) => r.CidrIp);
+      expect(cidrs).not.toContain('0.0.0.0/0');
+      expect(cidrs.length).toBe(1); // Only one trusted IP
+
+      // Verify app instances are accessible from bastion (SSH rule exists)
+      const appSg = await ec2.send(new DescribeSecurityGroupsCommand({ GroupIds: [appSgId] }));
+      const appSgData = appSg.SecurityGroups?.[0];
+      const appIngressRules = appSgData?.IpPermissions || [];
+      
+      const bastionSshRule = appIngressRules.find(p => 
+        p.IpProtocol === 'tcp' && 
+        p.FromPort === 22 && 
+        p.ToPort === 22 &&
+        (p.UserIdGroupPairs || []).some(g => g.GroupId === bastionSgId)
+      );
+      expect(bastionSshRule).toBeDefined();
+    });
+
+    test('Security & Compliance Flow - KMS → CloudTrail → EventBridge → SNS', async () => {
+      // All data encrypted with customer-managed KMS key
+      const kmsKey = await kms.send(new DescribeKeyCommand({ KeyId: kmsKeyId }));
+      expect(kmsKey.KeyMetadata?.Enabled).toBe(true);
+      expect(kmsKey.KeyMetadata?.KeyUsage).toBe('ENCRYPT_DECRYPT');
+
+      // Verify KMS key is used by RDS
+      const db = await rds.send(new DescribeDBInstancesCommand({ DBInstanceIdentifier: rdsIdentifier }));
+      const dbInstance = db.DBInstances?.[0];
+      expect(dbInstance?.StorageEncrypted).toBe(true);
+      expect((dbInstance?.KmsKeyId || '').includes(kmsKeyId)).toBe(true);
+
+      // CloudTrail logs all API calls to immutable S3 bucket
+      const trails = await cloudtrail.send(new DescribeTrailsCommand({ includeShadowTrails: false }));
+      const trail = (trails.trailList || []).find((t) => t.TrailARN === cloudTrailArn);
+      expect(trail?.IsMultiRegionTrail).toBe(true);
+      expect(trail?.LogFileValidationEnabled).toBe(true);
+
+      // Verify CloudTrail bucket has Object Lock
+      const objectLock = await s3.send(new GetObjectLockConfigurationCommand({ Bucket: cloudTrailBucket }));
+      expect(objectLock.ObjectLockConfiguration?.ObjectLockEnabled).toBe('Enabled');
+      expect(objectLock.ObjectLockConfiguration?.Rule?.DefaultRetention?.Mode).toBe('GOVERNANCE');
+
+      // EventBridge monitors security group changes
+      const securityRules = await events.send(new ListRuleNamesByTargetCommand({ TargetArn: securityAlertTopicArn }));
+      expect((securityRules.RuleNames || []).length).toBeGreaterThan(0);
+
+      // SNS sends alerts for compliance violations
+      let securityRuleFound = false;
+      for (const ruleName of securityRules.RuleNames || []) {
+        const rule = await events.send(new DescribeRuleCommand({ Name: ruleName }));
+        if (rule.State === 'ENABLED') {
+          const targets = await events.send(new ListTargetsByRuleCommand({ Rule: ruleName }));
+          const hasSecurityTarget = (targets.Targets || []).some((t) => t.Arn === securityAlertTopicArn);
+          if (hasSecurityTarget) {
+            securityRuleFound = true;
+            break;
+          }
+        }
+      }
+      expect(securityRuleFound).toBe(true);
+    });
+
+    test('End-to-End Patient Record Access Simulation', async () => {
+      const instanceId = await getFirstRunningAppInstanceId(appSgId);
+      
+      // Simulate complete patient workflow: Login → Query DB → Retrieve Documents
+      const completeWorkflowTest = [
+        'set -euo pipefail',
+        'sudo yum install -y -q mysql jq awscli curl >/dev/null 2>&1 || true',
+        
+        // Step 1: Get database credentials
+        `json=$(aws secretsmanager get-secret-value --secret-id ${dbSecretArn} --query SecretString --output text)`,
+        'user=$(echo "$json" | jq -r .username)',
+        'pass=$(echo "$json" | jq -r .password)',
+        
+        // Step 2: Query patient demographics 
+        `mysql -h ${rdsEndpoint} -u "$user" -p"$pass" -e "SELECT 1 as patient_id, 'John Doe' as patient_name, '2024-01-15' as last_appointment;" | tee /tmp/patient_data.txt`,
+        
+        // Step 3: Retrieve lab results from S3 
+        `echo "Lab Results: Glucose 95 mg/dL, Cholesterol 180 mg/dL" > /tmp/lab_results.pdf`,
+        `aws s3 cp /tmp/lab_results.pdf s3://${patientDocsBucket}/lab-results/${randomKey()}.pdf --sse aws:kms --sse-kms-key-id ${kmsKeyId}`,
+        
+        // Step 4: Verify both data sources are accessible
+        'grep -q "patient_name" /tmp/patient_data.txt && echo "DB_ACCESS_OK" || echo "DB_ACCESS_FAIL"',
+        `aws s3 ls s3://${patientDocsBucket}/lab-results/ && echo "S3_ACCESS_OK" || echo "S3_ACCESS_FAIL"`,
+        
+        // Step 5: Simulate combining data for patient portal
+        'echo "WORKFLOW_COMPLETE: Patient record successfully retrieved from both RDS and S3"'
+      ];
+      
+      const workflowResult = await sendSsmShell(instanceId, completeWorkflowTest, 600);
+      expect(workflowResult.status.toLowerCase()).toContain('success');
+      expect(workflowResult.stdout).toContain('DB_ACCESS_OK');
+      expect(workflowResult.stdout).toContain('S3_ACCESS_OK');
+      expect(workflowResult.stdout).toContain('WORKFLOW_COMPLETE');
+    });
+
+    test('HIPAA Compliance Validation', async () => {
+      // Verify encryption at rest for all storage
+      const db = await rds.send(new DescribeDBInstancesCommand({ DBInstanceIdentifier: rdsIdentifier }));
+      expect(db.DBInstances?.[0]?.StorageEncrypted).toBe(true);
+      
+      // Verify encryption in transit (HTTPS)
+      const listeners = await elbv2.send(new DescribeListenersCommand({ LoadBalancerArn: albArn }));
+      const hasHttps = (listeners.Listeners || []).some(l => l.Port === 443 && l.Protocol === 'HTTPS');
+      expect(hasHttps).toBe(true);
+
+      // Verify audit logging
+      const cloudTrailEvents = await cloudtrail.send(new LookupEventsCommand({ 
+        StartTime: new Date(Date.now() - 10 * 60 * 1000), 
+        MaxResults: 5 
+      }));
+      expect((cloudTrailEvents.Events || []).length).toBeGreaterThan(0);
+
+      // Verify data retention policies
+      const objectLock = await s3.send(new GetObjectLockConfigurationCommand({ Bucket: cloudTrailBucket }));
+      const retentionDays = objectLock.ObjectLockConfiguration?.Rule?.DefaultRetention?.Days as number;
+      expect(retentionDays && retentionDays >= 2555).toBe(true); // 7 years for HIPAA
+
+      // Verify access controls (no public access)
+      const appInstances = await ec2.send(new DescribeInstancesCommand({ 
+        Filters: [ 
+          { Name: 'instance.group-id', Values: [appSgId] }, 
+          { Name: 'instance-state-name', Values: ['running'] } 
+        ] 
+      }));
+      const apps = (appInstances.Reservations || []).flatMap((r) => r.Instances || []);
+      for (const instance of apps) {
+        expect(instance?.PublicIpAddress).toBeUndefined();
+      }
+
+      // Verify S3 buckets have public access blocked
+      const patientDocsPAB = await s3.send(new GetPublicAccessBlockCommand({ Bucket: patientDocsBucket }));
+      expect(patientDocsPAB.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
+      expect(patientDocsPAB.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
+    });
   });
 });

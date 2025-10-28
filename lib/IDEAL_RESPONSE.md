@@ -1,8 +1,4 @@
 ```yml
-# patient-portal-secure-foundation.yaml
-# CloudFormation template for HIPAA-compliant Healthcare Patient Portal infrastructure
-# All resources follow nova-prod-* naming convention for production environment
-
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure foundation for Healthcare Patient Portal with HIPAA compliance'
 
@@ -54,7 +50,6 @@ Resources:
   NovaRDSPasswordSecret:
     Type: 'AWS::SecretsManager::Secret'
     Properties:
-      Name: 'nova-prod-database-password'
       Description: 'Master password for RDS database'
       GenerateSecretString:
         SecretStringTemplate: '{"username": "admin"}'
@@ -93,6 +88,20 @@ Resources:
               - 'kms:GenerateDataKey*'
               - 'kms:DescribeKey'
             Resource: '*'
+          - Sid: Allow EC2 to use key for EBS encryption
+            Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action:
+              - 'kms:CreateGrant'
+              - 'kms:Decrypt'
+              - 'kms:DescribeKey'
+              - 'kms:GenerateDataKey*'
+              - 'kms:ReEncrypt*'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'kms:ViaService': !Sub 'ec2.${AWS::Region}.amazonaws.com'
           - Sid: Allow CloudWatch Logs to encrypt logs
             Effect: Allow
             Principal:
@@ -440,7 +449,6 @@ Resources:
   NovaPatientDocumentsBucket:
     Type: 'AWS::S3::Bucket'
     Properties:
-      BucketName: !Sub 'nova-prod-patient-documents-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -472,7 +480,6 @@ Resources:
   NovaCloudTrailBucket:
     Type: 'AWS::S3::Bucket'
     Properties:
-      BucketName: !Sub 'nova-prod-audit-logs-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -577,7 +584,6 @@ Resources:
   NovaEC2InstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
-      InstanceProfileName: 'nova-prod-ec2-instance-profile'
       Roles:
         - !Ref NovaEC2Role
 
@@ -585,7 +591,7 @@ Resources:
   NovaAppLaunchTemplate:
     Type: 'AWS::EC2::LaunchTemplate'
     Properties:
-      LaunchTemplateName: 'nova-prod-app-lt'
+      LaunchTemplateName: !Sub 'nova-prod-app-lt-${AWS::Region}'
       LaunchTemplateData:
         IamInstanceProfile:
           Name: !Ref NovaEC2InstanceProfile
@@ -599,7 +605,20 @@ Resources:
               VolumeSize: 20
               VolumeType: gp3
               Encrypted: true
-              KmsKeyId: !Ref NovaEncryptionKey
+        UserData:
+          Fn::Base64: |
+            #!/bin/bash
+            # Quick setup for health checks
+            yum install -y httpd
+            systemctl start httpd
+            systemctl enable httpd
+            
+            # Create health check endpoint immediately
+            echo "OK" > /var/www/html/health
+            echo "<h1>Nova Healthcare Portal</h1>" > /var/www/html/index.html
+            
+            # Update packages in background (non-blocking)
+            nohup yum update -y &
         TagSpecifications:
           - ResourceType: instance
             Tags:
@@ -648,7 +667,7 @@ Resources:
   NovaApplicationLoadBalancer:
     Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
     Properties:
-      Name: 'nova-prod-alb'
+      Name: !Sub 'nova-prod-alb-${AWS::Region}'
       Type: application
       Scheme: internet-facing
       SecurityGroups:
@@ -674,7 +693,7 @@ Resources:
   NovaALBTargetGroup:
     Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
     Properties:
-      Name: 'nova-prod-app-tg'
+      Name: !Sub 'nova-prod-app-tg-${AWS::Region}'
       TargetType: instance
       Protocol: HTTP
       Port: 80
@@ -682,7 +701,11 @@ Resources:
       HealthCheckEnabled: true
       HealthCheckProtocol: HTTP
       HealthCheckPort: '80'
-      HealthCheckPath: '/'
+      HealthCheckPath: '/health'
+      HealthCheckIntervalSeconds: 15
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
       Matcher:
         HttpCode: '200-399'
       Tags:
@@ -738,7 +761,6 @@ Resources:
   NovaWAFWebACL:
     Type: 'AWS::WAFv2::WebACL'
     Properties:
-      Name: !Sub 'nova-prod-waf-acl-${AWS::StackName}-${AWS::AccountId}'
       Scope: REGIONAL
       DefaultAction:
         Allow: {}
@@ -782,7 +804,7 @@ Resources:
       VisibilityConfig:
         SampledRequestsEnabled: true
         CloudWatchMetricsEnabled: true
-        MetricName: 'nova-prod-waf-metric'
+        MetricName: !Sub 'nova-prod-waf-metric-${AWS::Region}'
       Tags:
         - Key: Name
           Value: 'nova-prod-waf-acl'
@@ -843,7 +865,7 @@ Resources:
   NovaBastionSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupName: 'nova-prod-bastion-sg'
+      GroupName: !Sub 'nova-prod-bastion-sg-${AWS::Region}'
       GroupDescription: 'Security group for bastion host - SSH from trusted IP only'
       VpcId: !Ref NovaVPC
       SecurityGroupIngress:
@@ -852,6 +874,10 @@ Resources:
           ToPort: 22
           CidrIp: !Ref TrustedIP
           Description: 'SSH from trusted IP'
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: '0.0.0.0/0'
+          Description: 'All outbound traffic'
       Tags:
         - Key: Name
           Value: 'nova-prod-bastion-sg'
@@ -861,13 +887,6 @@ Resources:
           Value: 'true'
 
   # Bastion host in public subnet with encrypted EBS
-  NovaBastionInstanceProfile:
-    Type: 'AWS::IAM::InstanceProfile'
-    Properties:
-      InstanceProfileName: 'nova-prod-bastion-instance-profile'
-      Roles:
-        - !Ref NovaEC2Role
-
   NovaBastionInstance:
     Type: 'AWS::EC2::Instance'
     Properties:
@@ -883,7 +902,6 @@ Resources:
             VolumeSize: 8
             VolumeType: gp3
             Encrypted: true
-            KmsKeyId: !Ref NovaEncryptionKey
       Tags:
         - Key: Name
           Value: 'nova-prod-bastion'
@@ -895,7 +913,7 @@ Resources:
   NovaALBSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupName: 'nova-prod-alb-sg'
+      GroupName: !Sub 'nova-prod-alb-sg-${AWS::Region}'
       GroupDescription: 'Security group for Application Load Balancer'
       VpcId: !Ref NovaVPC
       SecurityGroupIngress:
@@ -909,6 +927,17 @@ Resources:
           ToPort: 80
           CidrIp: '0.0.0.0/0'
           Description: 'HTTP for redirect/health checks if needed'
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          DestinationSecurityGroupId: !Ref NovaApplicationSecurityGroup
+          Description: 'HTTP to application instances'
+        - IpProtocol: tcp
+          FromPort: 1024
+          ToPort: 65535
+          DestinationSecurityGroupId: !Ref NovaApplicationSecurityGroup
+          Description: 'Ephemeral ports for health checks'
       Tags:
         - Key: Name
           Value: 'nova-prod-alb-sg'
@@ -920,9 +949,13 @@ Resources:
   NovaApplicationSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupName: 'nova-prod-application-sg'
+      GroupName: !Sub 'nova-prod-application-sg-${AWS::Region}'
       GroupDescription: 'Security group for application instances'
       VpcId: !Ref NovaVPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: '0.0.0.0/0'
+          Description: 'All outbound traffic'
       Tags:
         - Key: Name
           Value: 'nova-prod-application-sg'
@@ -964,7 +997,7 @@ Resources:
   NovaDatabaseSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupName: 'nova-prod-database-sg'
+      GroupName: !Sub 'nova-prod-database-sg-${AWS::Region}'
       GroupDescription: 'Security group for RDS database'
       VpcId: !Ref NovaVPC
       SecurityGroupIngress:
@@ -1001,7 +1034,6 @@ Resources:
   NovaRDSInstance:
     Type: 'AWS::RDS::DBInstance'
     Properties:
-      DBInstanceIdentifier: 'nova-prod-patient-database'
       AllocatedStorage: 100
       DBInstanceClass: 'db.t3.medium'
       Engine: mysql
@@ -1023,7 +1055,7 @@ Resources:
         - slowquery
       Tags:
         - Key: Name
-          Value: 'nova-prod-patient-database'
+          Value: !Sub 'nova-prod-patient-database-${AWS::Region}'
         - Key: team
           Value: '2'
         - Key: iac-rlhf-amazon
@@ -1111,7 +1143,6 @@ Resources:
   NovaSecurityNotificationsTopic:
     Type: 'AWS::SNS::Topic'
     Properties:
-      TopicName: 'nova-prod-security-alerts'
       DisplayName: 'Security Alerts for Healthcare Portal'
       KmsMasterKeyId: !Ref NovaEncryptionKey
       Subscription:
@@ -1130,7 +1161,7 @@ Resources:
     Type: 'AWS::CloudTrail::Trail'
     DependsOn: NovaCloudTrailBucketPolicy
     Properties:
-      TrailName: 'nova-prod-cloudtrail'
+      TrailName: !Sub 'nova-prod-cloudtrail-${AWS::Region}'
       S3BucketName: !Ref NovaCloudTrailBucket
       S3KeyPrefix: 'cloudtrail-logs'
       IncludeGlobalServiceEvents: true
@@ -1198,7 +1229,6 @@ Resources:
   NovaSecurityGroupChangeRule:
     Type: 'AWS::Events::Rule'
     Properties:
-      Name: 'nova-prod-sg-change-detection'
       Description: 'Detect security group changes for compliance'
       EventPattern:
         source:
