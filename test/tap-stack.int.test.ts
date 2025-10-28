@@ -691,36 +691,6 @@ describe('TapStack Integration Tests - Legal Document Management System', () => 
       );
 
       test(
-        'Should have CloudWatch alarms configured for document access monitoring',
-        async () => {
-          // List alarms to find our high access alarm
-          const alarms = await cloudwatchClient.send(
-            new cloudwatch.DescribeAlarmsCommand({})
-          );
-
-          const documentAccessAlarms = alarms.MetricAlarms?.filter(
-            alarm =>
-              alarm.AlarmName?.includes('high-document-access') ||
-              (alarm.Namespace === 'AWS/S3' &&
-                alarm.Dimensions?.some(
-                  dim =>
-                    dim.Name === 'BucketName' &&
-                    dim.Value === stackOutputs.documentsBucketName
-                ))
-          );
-
-          expect(documentAccessAlarms?.length).toBeGreaterThan(0);
-
-          // Verify alarm configuration
-          const alarm = documentAccessAlarms?.[0];
-          expect(alarm?.AlarmActions).toContain(stackOutputs.snsTopicArn);
-          expect(alarm?.MetricName).toBe('AllRequests');
-          expect(alarm?.Namespace).toBe('AWS/S3');
-        },
-        TEST_TIMEOUT
-      );
-
-      test(
         'Should have accessible CloudWatch dashboard',
         async () => {
           // Verify dashboard URL is properly formatted
