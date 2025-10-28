@@ -108,6 +108,9 @@ export class TapStack extends cdk.Stack {
         functionName: `tap-api-function-${environmentSuffix}`,
         runtime: lambda.Runtime.NODEJS_18_X,
         code: lambda.Code.fromInline(`
+const AWS = require('aws-sdk');
+const dynamoDB = new AWS.DynamoDB.DocumentClient();
+
 exports.handler = async (event) => {
   const { httpMethod, path, body, pathParameters, queryStringParameters } = event;
   const tableName = process.env.TABLE_NAME;
@@ -117,7 +120,14 @@ exports.handler = async (event) => {
     // Parse request body for POST/PUT
     let requestBody = {};
     if (body) {
-      requestBody = JSON.parse(body);
+      try {
+        requestBody = JSON.parse(body);
+      } catch (parseError) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({ error: 'Invalid JSON in request body' }),
+        };
+      }
     }
 
     // Basic CRUD operations
@@ -125,26 +135,69 @@ exports.handler = async (event) => {
       case 'GET':
         if (pathParameters && pathParameters.id) {
           // Get single item
+          const params = {
+            TableName: tableName,
+            Key: { id: pathParameters.id }
+          };
+
+          const result = await dynamoDB.get(params).promise();
+
+          if (!result.Item) {
+            return {
+              statusCode: 404,
+              body: JSON.stringify({ error: 'Item not found' }),
+            };
+          }
+
           return {
             statusCode: 200,
-            body: JSON.stringify({ message: 'Get item', id: pathParameters.id }),
+            body: JSON.stringify(result.Item),
           };
         } else {
-          // List all items
+          // List all items (simple scan for now)
+          const params = {
+            TableName: tableName,
+            Limit: 50
+          };
+
+          const result = await dynamoDB.scan(params).promise();
+
           return {
             statusCode: 200,
-            body: JSON.stringify({ message: 'List items' }),
+            body: JSON.stringify({
+              items: result.Items || [],
+              count: result.Count || 0
+            }),
           };
         }
 
       case 'POST':
+        // Validate required fields
+        if (!requestBody.name) {
+          return {
+            statusCode: 400,
+            body: JSON.stringify({ error: 'Name field is required' }),
+          };
+        }
+
         // Create new item
+        const itemId = 'item-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        const newItem = {
+          id: itemId,
+          name: requestBody.name,
+          description: requestBody.description || '',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+
+        await dynamoDB.put({
+          TableName: tableName,
+          Item: newItem
+        }).promise();
+
         return {
           statusCode: 201,
-          body: JSON.stringify({
-            message: 'Item created',
-            data: requestBody,
-          }),
+          body: JSON.stringify(newItem),
         };
 
       case 'PUT':
@@ -155,13 +208,38 @@ exports.handler = async (event) => {
             body: JSON.stringify({ error: 'Item ID required for update' }),
           };
         }
+
+        // First check if item exists
+        const getParams = {
+          TableName: tableName,
+          Key: { id: pathParameters.id }
+        };
+
+        const existingItem = await dynamoDB.get(getParams).promise();
+
+        if (!existingItem.Item) {
+          return {
+            statusCode: 404,
+            body: JSON.stringify({ error: 'Item not found' }),
+          };
+        }
+
+        // Update the item
+        const updatedItem = {
+          ...existingItem.Item,
+          ...requestBody,
+          id: pathParameters.id, // Ensure ID doesn't change
+          updatedAt: new Date().toISOString(),
+        };
+
+        await dynamoDB.put({
+          TableName: tableName,
+          Item: updatedItem
+        }).promise();
+
         return {
           statusCode: 200,
-          body: JSON.stringify({
-            message: 'Item updated',
-            id: pathParameters.id,
-            data: requestBody,
-          }),
+          body: JSON.stringify(updatedItem),
         };
 
       case 'DELETE':
@@ -172,11 +250,33 @@ exports.handler = async (event) => {
             body: JSON.stringify({ error: 'Item ID required for deletion' }),
           };
         }
+
+        // Check if item exists before deleting
+        const deleteGetParams = {
+          TableName: tableName,
+          Key: { id: pathParameters.id }
+        };
+
+        const itemToDelete = await dynamoDB.get(deleteGetParams).promise();
+
+        if (!itemToDelete.Item) {
+          return {
+            statusCode: 404,
+            body: JSON.stringify({ error: 'Item not found' }),
+          };
+        }
+
+        await dynamoDB.delete({
+          TableName: tableName,
+          Key: { id: pathParameters.id },
+          ReturnValues: 'ALL_OLD'
+        }).promise();
+
         return {
           statusCode: 200,
           body: JSON.stringify({
-            message: 'Item deleted',
-            id: pathParameters.id,
+            message: 'Item deleted successfully',
+            id: pathParameters.id
           }),
         };
 
