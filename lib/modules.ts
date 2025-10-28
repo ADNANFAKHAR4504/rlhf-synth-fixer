@@ -392,7 +392,11 @@ export class S3Module extends Construct {
   public readonly bucket: aws.s3Bucket.S3Bucket;
   public readonly bucketPublicAccess: aws.s3BucketPublicAccessBlock.S3BucketPublicAccessBlock;
 
-  constructor(scope: Construct, id: string) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props: { awsRegion: string; accountId: string }
+  ) {
     super(scope, id);
 
     // S3 Bucket for assets and artifacts
@@ -443,12 +447,47 @@ export class S3Module extends Construct {
         }
       );
 
-    // Bucket policy for least privilege
+    // Get ALB service account for the region
+    const albServiceAccount = this.getAlbServiceAccount(props.awsRegion);
+
+    // Bucket policy for ALB access logs and security
     new aws.s3BucketPolicy.S3BucketPolicy(this, 'bucket-policy', {
       bucket: this.bucket.id,
       policy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
+          {
+            Sid: 'ALBAccessLogWrite',
+            Effect: 'Allow',
+            Principal: {
+              AWS: `arn:aws:iam::${albServiceAccount}:root`,
+            },
+            Action: 's3:PutObject',
+            Resource: `${this.bucket.arn}/alb-logs/*`,
+          },
+          {
+            Sid: 'AWSLogDeliveryWrite',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'delivery.logs.amazonaws.com',
+            },
+            Action: 's3:PutObject',
+            Resource: `${this.bucket.arn}/alb-logs/*`,
+            Condition: {
+              StringEquals: {
+                's3:x-acl': 'bucket-owner-full-control',
+              },
+            },
+          },
+          {
+            Sid: 'AWSLogDeliveryAclCheck',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'delivery.logs.amazonaws.com',
+            },
+            Action: 's3:GetBucketAcl',
+            Resource: this.bucket.arn,
+          },
           {
             Sid: 'DenyInsecureConnections',
             Effect: 'Deny',
@@ -463,7 +502,37 @@ export class S3Module extends Construct {
           },
         ],
       }),
+      dependsOn: [this.bucketPublicAccess],
     });
+  }
+
+  // Helper function to get ALB service account ID for different regions
+  private getAlbServiceAccount(region: string): string {
+    const albServiceAccounts: { [key: string]: string } = {
+      'us-east-1': '127311923021',
+      'us-east-2': '033677994240',
+      'us-west-1': '027434742980',
+      'us-west-2': '797873946194',
+      'af-south-1': '098369216593',
+      'ca-central-1': '985666609251',
+      'eu-central-1': '054676820928',
+      'eu-west-1': '156460612806',
+      'eu-west-2': '652711504416',
+      'eu-south-1': '635631232127',
+      'eu-west-3': '009996457667',
+      'eu-north-1': '897822967062',
+      'ap-east-1': '754344448648',
+      'ap-northeast-1': '582318560864',
+      'ap-northeast-2': '600734575887',
+      'ap-northeast-3': '383597477331',
+      'ap-southeast-1': '114774131450',
+      'ap-southeast-2': '783225319266',
+      'ap-south-1': '718504428378',
+      'me-south-1': '076674570225',
+      'sa-east-1': '507241528517',
+    };
+
+    return albServiceAccounts[region] || '797873946194'; // Default to us-west-2
   }
 }
 
@@ -606,7 +675,7 @@ export class AlbModule extends Construct {
       description: 'All outbound traffic',
     });
 
-    // Application Load Balancer with access logs configured
+    // Application Load Balancer
     this.alb = new aws.lb.Lb(this, 'alb', {
       name: 'multi-tier-alb',
       loadBalancerType: 'application',
@@ -649,7 +718,7 @@ export class AlbModule extends Construct {
       },
     });
 
-    // HTTP Listener
+    // HTTP Listener - This associates the target group with the ALB
     this.listener = new aws.lbListener.LbListener(this, 'http-listener', {
       loadBalancerArn: this.alb.arn,
       port: 80,
@@ -689,19 +758,20 @@ export class EcsModule extends Construct {
       taskRole: aws.iamRole.IamRole;
       executionRole: aws.iamRole.IamRole;
       instanceProfile: aws.iamInstanceProfile.IamInstanceProfile;
+      listener: aws.lbListener.LbListener; // Add listener as dependency
       awsRegion: string;
     }
   ) {
     super(scope, id);
 
-    // Get latest Amazon Linux 2 AMI
+    // Get ECS-optimized AMI
     const ami = new aws.dataAwsAmi.DataAwsAmi(this, 'ami', {
       mostRecent: true,
       owners: ['amazon'],
       filter: [
         {
           name: 'name',
-          values: ['amzn2-ami-hvm-*-x86_64-gp2'],
+          values: ['amzn2-ami-ecs-hvm-*-x86_64-ebs'],
         },
         {
           name: 'virtualization-type',
@@ -784,11 +854,7 @@ export class EcsModule extends Construct {
         ],
         userData: btoa(`#!/bin/bash
 echo ECS_CLUSTER=${this.cluster.name} >> /etc/ecs/ecs.config
-echo ECS_BACKEND_HOST= >> /etc/ecs/ecs.config
-echo ECS_ENABLE_CONTAINER_METADATA=true >> /etc/ecs/ecs.config
-yum install -y ecs-init
-service docker start
-start ecs`),
+echo ECS_ENABLE_CONTAINER_METADATA=true >> /etc/ecs/ecs.config`),
         tagSpecifications: [
           {
             resourceType: 'instance',
@@ -877,6 +943,16 @@ start ecs`),
       }
     );
 
+    // Create CloudWatch Log Group for ECS (create before task definition)
+    new aws.cloudwatchLogGroup.CloudwatchLogGroup(this, 'ecs-log-group', {
+      name: '/ecs/multi-tier-app',
+      retentionInDays: 7,
+      tags: {
+        Environment: 'Production',
+        Project: 'MultiTierWebApp',
+      },
+    });
+
     // Task Definition
     this.taskDefinition = new aws.ecsTaskDefinition.EcsTaskDefinition(
       this,
@@ -919,17 +995,7 @@ start ecs`),
       }
     );
 
-    // Create CloudWatch Log Group for ECS
-    new aws.cloudwatchLogGroup.CloudwatchLogGroup(this, 'ecs-log-group', {
-      name: '/ecs/multi-tier-app',
-      retentionInDays: 7,
-      tags: {
-        Environment: 'Production',
-        Project: 'MultiTierWebApp',
-      },
-    });
-
-    // ECS Service
+    // ECS Service - depends on listener to ensure target group is associated with ALB
     this.service = new aws.ecsService.EcsService(this, 'service', {
       name: 'multi-tier-service',
       cluster: this.cluster.id,
@@ -946,6 +1012,7 @@ start ecs`),
       healthCheckGracePeriodSeconds: 60,
       deploymentMinimumHealthyPercent: 50,
       deploymentMaximumPercent: 200,
+      dependsOn: [props.listener], // Ensure listener exists before service
       tags: {
         Environment: 'Production',
         Project: 'MultiTierWebApp',
@@ -1021,6 +1088,7 @@ export class CicdModule extends Construct {
       ecsCluster: aws.ecsCluster.EcsCluster;
       ecsService: aws.ecsService.EcsService;
       awsRegion: string;
+      accountId: string;
     }
   ) {
     super(scope, id);
@@ -1058,7 +1126,7 @@ export class CicdModule extends Construct {
             },
             {
               name: 'AWS_ACCOUNT_ID',
-              value: '123456789012', // Replace with actual account ID
+              value: props.accountId,
             },
             {
               name: 'IMAGE_TAG',

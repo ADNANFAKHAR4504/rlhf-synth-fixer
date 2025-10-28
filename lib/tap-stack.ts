@@ -6,6 +6,7 @@ import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
 import { Construct } from 'constructs';
 
 // ? Import your stacks here
+import * as aws from '@cdktf/provider-aws';
 import {
   VpcModule,
   IamModule,
@@ -69,6 +70,12 @@ export class TapStack extends TerraformStack {
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
     // ? Add your stack instantiations here
+    // Get AWS Account ID using data source
+    const callerIdentity = new aws.dataAwsCallerIdentity.DataAwsCallerIdentity(
+      this,
+      'caller-identity'
+    );
+    const accountId = callerIdentity.accountId;
     // ==================== Module Instantiation ====================
 
     // 1. VPC Module - Foundation for all networking
@@ -78,7 +85,10 @@ export class TapStack extends TerraformStack {
     const iamModule = new IamModule(this, 'iam');
 
     // 3. S3 Module - Storage for assets and artifacts
-    const s3Module = new S3Module(this, 's3');
+    const s3Module = new S3Module(this, 's3', {
+      awsRegion,
+      accountId: accountId,
+    });
 
     // 4. ALB Module - Application Load Balancer
     const albModule = new AlbModule(this, 'alb', {
@@ -87,7 +97,7 @@ export class TapStack extends TerraformStack {
       logsBucket: s3Module.bucket,
     });
 
-    // 5. ECS Module - Container orchestration
+    // 5. ECS Module - Container orchestration (pass listener as dependency)
     const ecsModule = new EcsModule(this, 'ecs', {
       vpc: vpcModule.vpc,
       publicSubnets: vpcModule.publicSubnets,
@@ -96,6 +106,7 @@ export class TapStack extends TerraformStack {
       taskRole: iamModule.ecsTaskRole,
       executionRole: iamModule.ecsExecutionRole,
       instanceProfile: iamModule.ecsInstanceProfile,
+      listener: albModule.listener, // Pass listener to ensure proper dependency
       awsRegion,
     });
 
@@ -114,6 +125,7 @@ export class TapStack extends TerraformStack {
       ecsCluster: ecsModule.cluster,
       ecsService: ecsModule.service,
       awsRegion,
+      accountId: accountId,
     });
 
     // 8. Monitoring Module - CloudWatch monitoring and alerts
