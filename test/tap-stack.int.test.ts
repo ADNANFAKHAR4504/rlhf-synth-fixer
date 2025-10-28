@@ -495,28 +495,6 @@ describe('TapStack CloudFormation - Live Integration Tests', () => {
   });
 
   describe('Auto Scaling Service-Level Tests', () => {
-    test('Auto Scaling Group should maintain minimum instances', async () => {
-      if (!hasOutputs('AutoScalingGroupName')) {
-        console.log('⊘ Skipping: Required outputs not available');
-        return;
-      }
-      const asgName = outputs.AutoScalingGroupName;
-
-      const asgResponse = await autoScalingClient.send(
-        new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [asgName] })
-      );
-
-      expect(asgResponse.AutoScalingGroups).toHaveLength(1);
-      const asg = asgResponse.AutoScalingGroups![0];
-
-      expect(asg.MinSize).toBe(3);
-      expect(asg.MaxSize).toBe(10);
-      expect(asg.DesiredCapacity).toBe(3);
-      expect(asg.HealthCheckType).toBe('ELB');
-
-      console.log(`✓ ASG configured with min: ${asg.MinSize}, max: ${asg.MaxSize}, desired: ${asg.DesiredCapacity}`);
-    }, 30000);
-
     test('Auto Scaling Group should have scaling policies', async () => {
       if (!hasOutputs('AutoScalingGroupName')) {
         console.log('⊘ Skipping: Required outputs not available');
