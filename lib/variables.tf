@@ -114,7 +114,7 @@ variable "private_subnet_suffix" {
   default     = "private"
 }
 
-# Public subnet configuration  
+# Public subnet configuration
 variable "public_subnet_suffix" {
   description = "Suffix for public subnet names"
   type        = string

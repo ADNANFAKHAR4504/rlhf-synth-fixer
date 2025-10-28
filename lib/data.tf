@@ -10,10 +10,10 @@ data "aws_caller_identity" "current" {}
 # Filter to get only available AZs and select exactly 3
 data "aws_availability_zones" "available" {
   state = "available"
-  
+
   # Exclude any AZs that might have limited instance types
   exclude_names = []
-  
+
   filter {
     name   = "opt-in-status"
     values = ["opt-in-not-required"]
@@ -24,7 +24,7 @@ data "aws_availability_zones" "available" {
 locals {
   # Select exactly 3 AZs from available ones
   selected_azs = slice(data.aws_availability_zones.available.names, 0, var.availability_zones_count)
-  
+
   # Validation: ensure we have enough AZs
   az_validation = length(data.aws_availability_zones.available.names) >= var.availability_zones_count ? true : tobool("Region ${var.aws_region} does not have enough availability zones. Required: ${var.availability_zones_count}, Available: ${length(data.aws_availability_zones.available.names)}")
 }
