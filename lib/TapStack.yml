@@ -613,13 +613,17 @@ Resources:
         UserData:
           Fn::Base64: |
             #!/bin/bash
-            yum update -y
+            # Quick setup for health checks
             yum install -y httpd
             systemctl start httpd
             systemctl enable httpd
-            echo "<h1>Nova Healthcare Portal - Instance $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</h1>" > /var/www/html/index.html
-            # Health check endpoint
+            
+            # Create health check endpoint immediately
             echo "OK" > /var/www/html/health
+            echo "<h1>Nova Healthcare Portal</h1>" > /var/www/html/index.html
+            
+            # Update packages in background (non-blocking)
+            nohup yum update -y &
         TagSpecifications:
           - ResourceType: instance
             Tags:
@@ -703,6 +707,10 @@ Resources:
       HealthCheckProtocol: HTTP
       HealthCheckPort: '80'
       HealthCheckPath: '/health'
+      HealthCheckIntervalSeconds: 15
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
       Matcher:
         HttpCode: '200-399'
       Tags:
