@@ -1,7 +1,7 @@
 """Unit tests for TapStack CDK infrastructure"""
 import os
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, Mock
 
 import aws_cdk as cdk
 from aws_cdk.assertions import Template, Match
@@ -39,77 +39,110 @@ class TestTapStack(unittest.TestCase):
     @mark.it("creates stack with default environment suffix")
     def test_creates_stack_with_default_suffix(self):
         """Test that stack creates with default 'dev' suffix"""
-        stack = TapStack(
-            self.app,
-            "TapStackTest",
-            env=self.env,
-        )
-        assert hasattr(stack, 'networking')
-        assert hasattr(stack, 'storage')
-        assert hasattr(stack, 'serverless')
-        assert hasattr(stack, 'compute')
+        with patch('aws_cdk.aws_lambda_nodejs.NodejsFunction') as mock_nodejs:
+            mock_fn = Mock()
+            mock_fn.function_name = 'test-function'
+            mock_nodejs.return_value = mock_fn
+
+            stack = TapStack(
+                self.app,
+                "TapStackTest",
+                env=self.env,
+            )
+            assert hasattr(stack, 'networking')
+            assert hasattr(stack, 'storage')
+            assert hasattr(stack, 'serverless')
+            assert hasattr(stack, 'compute')
 
     @mark.it("creates stack with custom environment suffix")
     def test_creates_stack_with_custom_suffix(self):
         """Test stack creation with custom environment suffix"""
-        stack = TapStack(
-            self.app,
-            "TapStackProd",
-            TapStackProps(environment_suffix="prod"),
-            env=self.env,
-        )
-        assert stack is not None
+        with patch('aws_cdk.aws_lambda_nodejs.NodejsFunction') as mock_nodejs:
+            mock_fn = Mock()
+            mock_fn.function_name = 'test-function'
+            mock_nodejs.return_value = mock_fn
+
+            stack = TapStack(
+                self.app,
+                "TapStackProd",
+                TapStackProps(environment_suffix="prod"),
+                env=self.env,
+            )
+            assert stack is not None
 
     @mark.it("creates required nested stacks")
     def test_creates_nested_stacks(self):
         """Test that all required nested stacks are created"""
-        stack = TapStack(self.app, "TapStackTest", env=self.env)
+        with patch('aws_cdk.aws_lambda_nodejs.NodejsFunction') as mock_nodejs:
+            mock_fn = Mock()
+            mock_fn.function_name = 'test-function'
+            mock_nodejs.return_value = mock_fn
 
-        # Verify nested stacks exist
-        assert hasattr(stack, 'networking')
-        assert hasattr(stack, 'storage')
-        assert hasattr(stack, 'serverless')
-        assert hasattr(stack, 'compute')
+            stack = TapStack(self.app, "TapStackTest", env=self.env)
+
+            # Verify nested stacks exist
+            assert hasattr(stack, 'networking')
+            assert hasattr(stack, 'storage')
+            assert hasattr(stack, 'serverless')
+            assert hasattr(stack, 'compute')
 
     @mark.it("creates stack outputs")
     def test_creates_stack_outputs(self):
         """Test that stack creates required outputs"""
-        stack = TapStack(self.app, "TapStackTest", env=self.env)
+        # Patch NodejsFunction before creating stack
+        with patch('aws_cdk.aws_lambda_nodejs.NodejsFunction') as mock_nodejs:
+            # Create mock function
+            mock_fn = Mock()
+            mock_fn.function_name = 'test-function'
+            mock_fn.function_arn = 'arn:aws:lambda:us-east-1:123456789012:function:test-function'
+            mock_nodejs.return_value = mock_fn
 
-        # Check that outputs are created
-        synth = self.app.synth()
-        stack_artifact = synth.get_stack_by_name(stack.stack_name)
-        template_dict = stack_artifact.template
+            stack = TapStack(self.app, "TapStackTest", env=self.env)
 
-        assert "Outputs" in template_dict
-        outputs = template_dict["Outputs"]
-        assert "VPCId" in outputs
-        assert "ALBDNSName" in outputs
-        assert "MainBucketName" in outputs
-        assert "NotificationTopicArn" in outputs
+            # Check that outputs are created
+            synth = self.app.synth()
+            stack_artifact = synth.get_stack_by_name(stack.stack_name)
+            template_dict = stack_artifact.template
+
+            assert "Outputs" in template_dict
+            outputs = template_dict["Outputs"]
+            assert "VPCId" in outputs
+            assert "ALBDNSName" in outputs
+            assert "MainBucketName" in outputs
+            assert "NotificationTopicArn" in outputs
 
     @mark.it("applies correct tags to stack")
     def test_applies_correct_tags(self):
         """Test that correct tags are applied to the stack"""
-        stack = TapStack(
-            self.app,
-            "TapStackTest",
-            TapStackProps(environment_suffix="test"),
-            env=self.env,
-        )
+        with patch('aws_cdk.aws_lambda_nodejs.NodejsFunction') as mock_nodejs:
+            mock_fn = Mock()
+            mock_fn.function_name = 'test-function'
+            mock_nodejs.return_value = mock_fn
 
-        # Check tags on stack
-        tags = stack.tags.tag_values()
-        assert "iac-rlhf-amazon" in tags
-        assert "Environment" in tags
-        assert "ManagedBy" in tags
+            stack = TapStack(
+                self.app,
+                "TapStackTest",
+                TapStackProps(environment_suffix="test"),
+                env=self.env,
+            )
+
+            # Check tags on stack
+            tags = stack.tags.tag_values()
+            assert "iac-rlhf-amazon" in tags
+            assert "Environment" in tags
+            assert "ManagedBy" in tags
 
     @mark.it("uses context for environment suffix")
     def test_uses_context_for_env_suffix(self):
         """Test environment suffix from context"""
-        app = cdk.App(context={"environmentSuffix": "staging"})
-        stack = TapStack(app, "TapStackStaging", env=self.env)
-        assert stack is not None
+        with patch('aws_cdk.aws_lambda_nodejs.NodejsFunction') as mock_nodejs:
+            mock_fn = Mock()
+            mock_fn.function_name = 'test-function'
+            mock_nodejs.return_value = mock_fn
+
+            app = cdk.App(context={"environmentSuffix": "staging"})
+            stack = TapStack(app, "TapStackStaging", env=self.env)
+            assert stack is not None
 
 
 @mark.describe("NetworkingStack")
@@ -456,58 +489,78 @@ class TestServerlessStack(unittest.TestCase):
     @mark.it("creates SNS topics for notifications")
     def test_creates_sns_topics(self):
         """Test SNS topic creation"""
-        serverless = ServerlessStack(
-            self.parent_stack,
-            "ServerlessTest",
-            environment_suffix="test",
-            region="us-east-1",
-            main_bucket=self.mock_bucket,
-        )
+        with patch('aws_cdk.aws_lambda_nodejs.NodejsFunction') as mock_nodejs:
+            mock_fn = Mock()
+            mock_fn.function_name = 'test-function'
+            mock_nodejs.return_value = mock_fn
 
-        assert serverless.notification_topic is not None
-        assert serverless.alert_topic is not None
+            serverless = ServerlessStack(
+                self.parent_stack,
+                "ServerlessTest",
+                environment_suffix="test",
+                region="us-east-1",
+                main_bucket=self.mock_bucket,
+            )
+
+            assert serverless.notification_topic is not None
+            assert serverless.alert_topic is not None
 
     @mark.it("creates Lambda IAM role with proper permissions")
     def test_creates_lambda_iam_role(self):
         """Test Lambda IAM role creation with proper permissions"""
-        serverless = ServerlessStack(
-            self.parent_stack,
-            "ServerlessTest",
-            environment_suffix="test",
-            region="us-east-1",
-            main_bucket=self.mock_bucket,
-        )
+        with patch('aws_cdk.aws_lambda_nodejs.NodejsFunction') as mock_nodejs:
+            mock_fn = Mock()
+            mock_fn.function_name = 'test-function'
+            mock_nodejs.return_value = mock_fn
 
-        assert serverless.lambda_role is not None
+            serverless = ServerlessStack(
+                self.parent_stack,
+                "ServerlessTest",
+                environment_suffix="test",
+                region="us-east-1",
+                main_bucket=self.mock_bucket,
+            )
+
+            assert serverless.lambda_role is not None
 
     @mark.it("exposes Lambda functions")
     def test_exposes_lambda_functions(self):
         """Test that Lambda functions are accessible"""
-        serverless = ServerlessStack(
-            self.parent_stack,
-            "ServerlessTest",
-            environment_suffix="test",
-            region="us-east-1",
-            main_bucket=self.mock_bucket,
-        )
+        with patch('aws_cdk.aws_lambda_nodejs.NodejsFunction') as mock_nodejs:
+            mock_fn = Mock()
+            mock_fn.function_name = 'test-function'
+            mock_nodejs.return_value = mock_fn
 
-        assert serverless.s3_processing_function is not None
-        assert serverless.alarm_function is not None
-        assert serverless.config_function is not None
+            serverless = ServerlessStack(
+                self.parent_stack,
+                "ServerlessTest",
+                environment_suffix="test",
+                region="us-east-1",
+                main_bucket=self.mock_bucket,
+            )
+
+            assert serverless.s3_processing_function is not None
+            assert serverless.alarm_function is not None
+            assert serverless.config_function is not None
 
     @mark.it("adds email subscription when provided")
     def test_adds_email_subscription(self):
         """Test email subscription to SNS topic"""
-        serverless = ServerlessStack(
-            self.parent_stack,
-            "ServerlessTest",
-            environment_suffix="test",
-            region="us-east-1",
-            main_bucket=self.mock_bucket,
-            notification_email="test@example.com",
-        )
+        with patch('aws_cdk.aws_lambda_nodejs.NodejsFunction') as mock_nodejs:
+            mock_fn = Mock()
+            mock_fn.function_name = 'test-function'
+            mock_nodejs.return_value = mock_fn
 
-        assert serverless.notification_topic is not None
+            serverless = ServerlessStack(
+                self.parent_stack,
+                "ServerlessTest",
+                environment_suffix="test",
+                region="us-east-1",
+                main_bucket=self.mock_bucket,
+                notification_email="test@example.com",
+            )
+
+            assert serverless.notification_topic is not None
 
 
 @mark.describe("ComputeStack")

@@ -1496,6 +1496,41 @@ class TapStack(cdk.Stack):
             description="SNS topic ARN for notifications",
         )
 
+        CfnOutput(
+            self,
+            "SecurityAlertTopicArn",
+            value=self.serverless.alert_topic.topic_arn,
+            description="SNS topic ARN for security alerts",
+        )
+
+        CfnOutput(
+            self,
+            "KMSKeyArn",
+            value=self.storage.kms_key.key_arn,
+            description="KMS key ARN for encryption",
+        )
+
+        CfnOutput(
+            self,
+            "LogBucketName",
+            value=self.storage.log_bucket.bucket_name,
+            description="S3 bucket for logs",
+        )
+
+        CfnOutput(
+            self,
+            "IAMRoleArn",
+            value=self.compute.instance_role.role_arn,
+            description="IAM role ARN for EC2 instances",
+        )
+
+        CfnOutput(
+            self,
+            "AppSecurityGroupId",
+            value=self.networking.app_security_group.security_group_id,
+            description="Application security group ID",
+        )
+
         # COMMENTED OUT - DNS stack temporarily disabled
         # if domain_name and hasattr(self.dns, "hosted_zone"):
         #     CfnOutput(

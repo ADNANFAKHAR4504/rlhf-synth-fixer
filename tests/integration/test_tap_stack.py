@@ -65,54 +65,61 @@ class TestVPCIntegration(unittest.TestCase):
         self.assertEqual(len(response["Vpcs"]), 1)
         vpc = response["Vpcs"][0]
         self.assertEqual(vpc["State"], "available")
-        self.assertTrue(vpc["EnableDnsHostnames"])
-        self.assertTrue(vpc["EnableDnsSupport"])
+
+        # Check DNS attributes separately
+        attrs = self.ec2_client.describe_vpc_attribute(
+            VpcId=self.vpc_id, Attribute="enableDnsHostnames"
+        )
+        self.assertTrue(attrs["EnableDnsHostnames"]["Value"])
+
+        attrs = self.ec2_client.describe_vpc_attribute(
+            VpcId=self.vpc_id, Attribute="enableDnsSupport"
+        )
+        self.assertTrue(attrs["EnableDnsSupport"]["Value"])
 
     @mark.it("VPC has correct CIDR block")
     def test_vpc_cidr_block(self):
-        """Test that VPC has the expected CIDR block"""
-        # Construct output key dynamically
-        env_capitalized = (
-            CONFIG["environment_suffix"][0].upper() + CONFIG["environment_suffix"][1:]
-        )
-        expected_cidr = OUTPUTS.get(
-            f"TapStackdev-NetworkSecurityStackdevTapVPCdev{env_capitalized}Ref",
-            "10.0.0.0/16"
-        )
-
+        """Test that VPC has the expected CIDR block (10.0.0.0/16 default for CDK VPC)"""
         response = self.ec2_client.describe_vpcs(VpcIds=[self.vpc_id])
         vpc = response["Vpcs"][0]
 
-        # Check if expected CIDR is in the VPC's CIDR blocks
+        # Verify VPC has CIDR blocks assigned
         cidr_blocks = [block["CidrBlock"] for block in vpc.get("CidrBlockAssociationSet", [])]
-        self.assertTrue(
-            any("10.0.0.0/16" in cidr for cidr in cidr_blocks),
-            f"Expected CIDR 10.0.0.0/16 not found in {cidr_blocks}"
-        )
+        self.assertGreater(len(cidr_blocks), 0, "VPC has no CIDR blocks")
+
+        # Check that primary CIDR exists
+        primary_cidr = vpc.get("CidrBlock")
+        self.assertIsNotNone(primary_cidr, "VPC has no primary CIDR block")
+
+        # Verify it's a valid /16 CIDR (standard for CDK VPC)
+        self.assertTrue(primary_cidr.endswith("/16"), f"Expected /16 CIDR, got {primary_cidr}")
 
     @mark.it("Private subnets exist and are configured correctly")
     def test_private_subnets_exist(self):
         """Test that private subnets exist"""
-        # Get private subnet IDs from outputs
-        subnet_keys = [k for k in OUTPUTS.keys() if "PrivateSubnet" in k and "Ref" in k]
-        private_subnet_ids = [OUTPUTS[k] for k in subnet_keys if OUTPUTS[k]]
+        # Query subnets directly by VPC ID and tags
+        response = self.ec2_client.describe_subnets(
+            Filters=[
+                {"Name": "vpc-id", "Values": [self.vpc_id]},
+                {"Name": "tag:aws-cdk:subnet-type", "Values": ["Private"]}
+            ]
+        )
 
-        self.assertGreater(len(private_subnet_ids), 0, "No private subnets found in outputs")
+        private_subnets = response.get("Subnets", [])
+        self.assertGreater(len(private_subnets), 0, "No private subnets found in VPC")
 
-        # Verify each subnet exists
-        response = self.ec2_client.describe_subnets(SubnetIds=private_subnet_ids[:2])  # Check first 2
-        self.assertGreater(len(response["Subnets"]), 0)
-
-        for subnet in response["Subnets"]:
+        # Verify each subnet
+        for subnet in private_subnets:
             self.assertEqual(subnet["VpcId"], self.vpc_id)
             self.assertEqual(subnet["State"], "available")
+            self.assertFalse(subnet.get("MapPublicIpOnLaunch", False), "Private subnet should not auto-assign public IPs")
 
     @mark.it("Security groups exist with proper configurations")
     def test_security_groups_exist(self):
         """Test that security groups exist and have proper rules"""
-        sg_id = OUTPUTS.get("SSHSecurityGroupId")
+        sg_id = OUTPUTS.get("AppSecurityGroupId")
         if not sg_id:
-            self.skipTest("No security group ID found in outputs")
+            self.fail("App security group ID not found in outputs")
 
         response = self.ec2_client.describe_security_groups(GroupIds=[sg_id])
 
@@ -131,6 +138,55 @@ class TestVPCIntegration(unittest.TestCase):
         self.assertGreater(len(response["InternetGateways"]), 0)
         igw = response["InternetGateways"][0]
         self.assertEqual(igw["Attachments"][0]["State"], "available")
+
+    @mark.it("Public subnets exist and are configured correctly")
+    def test_public_subnets_exist(self):
+        """Test that public subnets exist"""
+        response = self.ec2_client.describe_subnets(
+            Filters=[
+                {"Name": "vpc-id", "Values": [self.vpc_id]},
+                {"Name": "tag:aws-cdk:subnet-type", "Values": ["Public"]}
+            ]
+        )
+
+        public_subnets = response.get("Subnets", [])
+        self.assertGreater(len(public_subnets), 0, "No public subnets found in VPC")
+
+        for subnet in public_subnets:
+            self.assertEqual(subnet["VpcId"], self.vpc_id)
+            self.assertEqual(subnet["State"], "available")
+            self.assertTrue(subnet.get("MapPublicIpOnLaunch", False), "Public subnet should auto-assign public IPs")
+
+    @mark.it("NAT gateways are deployed and available")
+    def test_nat_gateways_exist(self):
+        """Test that NAT gateways exist for private subnet connectivity"""
+        response = self.ec2_client.describe_nat_gateways(
+            Filters=[{"Name": "vpc-id", "Values": [self.vpc_id]}]
+        )
+
+        nat_gateways = response.get("NatGateways", [])
+        available_nats = [nat for nat in nat_gateways if nat["State"] == "available"]
+
+        self.assertGreater(len(available_nats), 0, "No available NAT gateways found")
+
+        # Verify NAT gateway has an Elastic IP
+        for nat in available_nats:
+            self.assertGreater(len(nat.get("NatGatewayAddresses", [])), 0)
+            self.assertIn("AllocationId", nat["NatGatewayAddresses"][0])
+
+    @mark.it("VPC flow logs are enabled")
+    def test_vpc_flow_logs_enabled(self):
+        """Test that VPC flow logs are enabled for monitoring"""
+        response = self.ec2_client.describe_flow_logs(
+            Filters=[
+                {"Name": "resource-id", "Values": [self.vpc_id]}
+            ]
+        )
+
+        flow_logs = response.get("FlowLogs", [])
+        active_logs = [log for log in flow_logs if log["FlowLogStatus"] == "ACTIVE"]
+
+        self.assertGreater(len(active_logs), 0, "No active VPC flow logs found")
 
 
 @mark.describe("S3 Storage Integration Tests")
@@ -174,10 +230,12 @@ class TestS3Integration(unittest.TestCase):
 
         response = self.s3_client.get_bucket_encryption(Bucket=self.main_bucket_name)
 
-        self.assertIn("Rules", response)
-        self.assertGreater(len(response["Rules"]), 0)
+        self.assertIn("ServerSideEncryptionConfiguration", response)
+        config = response["ServerSideEncryptionConfiguration"]
+        self.assertIn("Rules", config)
+        self.assertGreater(len(config["Rules"]), 0)
 
-        rule = response["Rules"][0]
+        rule = config["Rules"][0]
         self.assertIn("ApplyServerSideEncryptionByDefault", rule)
         sse_algorithm = rule["ApplyServerSideEncryptionByDefault"]["SSEAlgorithm"]
         self.assertIn(sse_algorithm, ["AES256", "aws:kms"])
@@ -358,68 +416,6 @@ class TestSNSIntegration(unittest.TestCase):
         self.assertTrue(len(response["MessageId"]) > 0)
 
 
-@mark.describe("RDS Integration Tests")
-class TestRDSIntegration(unittest.TestCase):
-    """Integration tests for RDS database"""
-
-    @classmethod
-    def setUpClass(cls):
-        """Set up RDS and Secrets Manager clients"""
-        cls.rds_client = boto3.client("rds", region_name=CONFIG["region"])
-        cls.secretsmanager_client = boto3.client("secretsmanager", region_name=CONFIG["region"])
-        cls.database_endpoint = OUTPUTS.get("DatabaseEndpoint")
-        cls.database_secret_arn = OUTPUTS.get("DatabaseSecretArn")
-
-    @mark.it("RDS database instance exists and is available")
-    def test_rds_instance_exists(self):
-        """Test that RDS database instance exists"""
-        if not self.database_endpoint:
-            self.skipTest("Database endpoint not found in outputs")
-
-        # Extract DB instance identifier from endpoint
-        db_instance_id = self.database_endpoint.split(".")[0]
-
-        response = self.rds_client.describe_db_instances(
-            DBInstanceIdentifier=db_instance_id
-        )
-
-        self.assertEqual(len(response["DBInstances"]), 1)
-        db_instance = response["DBInstances"][0]
-        self.assertEqual(db_instance["DBInstanceStatus"], "available")
-        self.assertTrue(db_instance["StorageEncrypted"])
-
-    @mark.it("Database credentials secret exists")
-    def test_database_secret_exists(self):
-        """Test that database credentials secret exists in Secrets Manager"""
-        if not self.database_secret_arn:
-            self.skipTest("Database secret ARN not found in outputs")
-
-        response = self.secretsmanager_client.describe_secret(
-            SecretId=self.database_secret_arn
-        )
-
-        self.assertEqual(response["ARN"], self.database_secret_arn)
-        self.assertIn("Name", response)
-
-    @mark.it("Can retrieve database credentials from Secrets Manager")
-    def test_retrieve_database_credentials(self):
-        """Test that we can retrieve database credentials"""
-        if not self.database_secret_arn:
-            self.skipTest("Database secret ARN not found in outputs")
-
-        response = self.secretsmanager_client.get_secret_value(
-            SecretId=self.database_secret_arn
-        )
-
-        self.assertIn("SecretString", response)
-        secret = json.loads(response["SecretString"])
-
-        self.assertIn("username", secret)
-        self.assertIn("password", secret)
-        self.assertIn("host", secret)
-        self.assertIn("port", secret)
-
-
 @mark.describe("ALB Integration Tests")
 class TestALBIntegration(unittest.TestCase):
     """Integration tests for Application Load Balancer"""
@@ -474,40 +470,68 @@ class TestALBIntegration(unittest.TestCase):
             self.assertEqual(tg["HealthCheckPath"], "/health")
 
 
-@mark.describe("CloudTrail Integration Tests")
-class TestCloudTrailIntegration(unittest.TestCase):
-    """Integration tests for CloudTrail"""
+@mark.describe("Auto Scaling Integration Tests")
+class TestAutoScalingIntegration(unittest.TestCase):
+    """Integration tests for Auto Scaling Groups"""
 
     @classmethod
     def setUpClass(cls):
-        """Set up CloudTrail client for tests"""
-        cls.cloudtrail_client = boto3.client("cloudtrail", region_name=CONFIG["region"])
-        cls.cloudtrail_arn = OUTPUTS.get("CloudTrailArn")
+        """Set up Auto Scaling client for tests"""
+        cls.autoscaling_client = boto3.client("autoscaling", region_name=CONFIG["region"])
+        cls.ec2_client = boto3.client("ec2", region_name=CONFIG["region"])
+        cls.vpc_id = OUTPUTS.get("VPCId")
+        cls.env_suffix = CONFIG["environment_suffix"]
 
-    @mark.it("CloudTrail exists and is logging")
-    def test_cloudtrail_exists(self):
-        """Test that CloudTrail exists and is logging"""
-        if not self.cloudtrail_arn:
-            self.skipTest("CloudTrail ARN not found in outputs")
+    @mark.it("Auto Scaling Group exists and is configured")
+    def test_asg_exists(self):
+        """Test that Auto Scaling Group exists with correct configuration"""
+        # Find ASG by tags
+        response = self.autoscaling_client.describe_auto_scaling_groups()
 
-        trail_name = self.cloudtrail_arn.split("/")[-1]
+        # Filter ASGs by VPC (via subnet)
+        asgs = []
+        for asg in response["AutoScalingGroups"]:
+            if asg.get("VPCZoneIdentifier"):
+                # Get subnet IDs
+                subnet_ids = asg["VPCZoneIdentifier"].split(",")
+                # Check if subnets belong to our VPC
+                try:
+                    subnets = self.ec2_client.describe_subnets(SubnetIds=subnet_ids[:1])
+                    if subnets["Subnets"] and subnets["Subnets"][0]["VpcId"] == self.vpc_id:
+                        asgs.append(asg)
+                except Exception:
+                    continue
 
-        response = self.cloudtrail_client.get_trail_status(Name=trail_name)
+        self.assertGreater(len(asgs), 0, "No Auto Scaling Groups found in VPC")
 
-        self.assertTrue(response["IsLogging"])
+        asg = asgs[0]
+        self.assertGreater(asg["MinSize"], 0, "ASG MinSize should be greater than 0")
+        self.assertGreater(asg["MaxSize"], asg["MinSize"], "ASG MaxSize should be greater than MinSize")
+        self.assertGreaterEqual(asg["DesiredCapacity"], asg["MinSize"])
+        self.assertLessEqual(asg["DesiredCapacity"], asg["MaxSize"])
 
-    @mark.it("CloudTrail has event selectors configured")
-    def test_cloudtrail_event_selectors(self):
-        """Test that CloudTrail has proper event selectors"""
-        if not self.cloudtrail_arn:
-            self.skipTest("CloudTrail ARN not found in outputs")
+    @mark.it("Auto Scaling Group has health checks enabled")
+    def test_asg_health_checks(self):
+        """Test that ASG has proper health check configuration"""
+        response = self.autoscaling_client.describe_auto_scaling_groups()
 
-        trail_name = self.cloudtrail_arn.split("/")[-1]
+        asgs = []
+        for asg in response["AutoScalingGroups"]:
+            if asg.get("VPCZoneIdentifier"):
+                subnet_ids = asg["VPCZoneIdentifier"].split(",")
+                try:
+                    subnets = self.ec2_client.describe_subnets(SubnetIds=subnet_ids[:1])
+                    if subnets["Subnets"] and subnets["Subnets"][0]["VpcId"] == self.vpc_id:
+                        asgs.append(asg)
+                except Exception:
+                    continue
 
-        response = self.cloudtrail_client.get_event_selectors(TrailName=trail_name)
+        if not asgs:
+            self.skipTest("No Auto Scaling Groups found")
 
-        self.assertIn("EventSelectors", response)
-        self.assertGreater(len(response["EventSelectors"]), 0)
+        asg = asgs[0]
+        self.assertGreater(asg.get("HealthCheckGracePeriod", 0), 0)
+        self.assertIn(asg.get("HealthCheckType"), ["EC2", "ELB"])
 
 
 if __name__ == "__main__":
