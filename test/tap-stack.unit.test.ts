@@ -47,10 +47,10 @@ describe('TapStack - CI/CD Pipeline', () => {
       });
     });
 
-    test('should apply RETAIN removal policy to KMS keys', () => {
+    test('should apply DESTROY removal policy to KMS keys', () => {
       const kmsKeys = template.findResources('AWS::KMS::Key');
       Object.values(kmsKeys).forEach((key: any) => {
-        expect(key.DeletionPolicy).toBe('Retain');
+        expect(key.DeletionPolicy).toBe('Delete');
       });
     });
   });
@@ -95,10 +95,10 @@ describe('TapStack - CI/CD Pipeline', () => {
       });
     });
 
-    test('should apply RETAIN removal policy to S3 buckets', () => {
+    test('should apply DESTROY removal policy to S3 buckets', () => {
       const s3Buckets = template.findResources('AWS::S3::Bucket');
       Object.values(s3Buckets).forEach((bucket: any) => {
-        expect(bucket.DeletionPolicy).toBe('Retain');
+        expect(bucket.DeletionPolicy).toBe('Delete');
       });
     });
   });

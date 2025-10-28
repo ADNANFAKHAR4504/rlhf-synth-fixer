@@ -463,36 +463,66 @@ describe('TapStack Integration Tests', () => {
 
   describe('IAM Roles Integration', () => {
     test('should have CodeBuild role', async () => {
-      // Use the actual role name from CloudFormation
-      const roleName = `TapStack${environmentSuffix}-CodeBuildRole728CBADE-2m7Mqqd1UQbA`;
-      const command = new GetRoleCommand({ RoleName: roleName });
-      const response = await iamClient.send(command);
+      // Get all roles with pagination
+      let allRoles: any[] = [];
+      let marker: string | undefined;
+      
+      do {
+        const listCommand = new ListRolesCommand({ Marker: marker });
+        const listResponse = await iamClient.send(listCommand);
+        allRoles = allRoles.concat(listResponse.Roles || []);
+        marker = listResponse.Marker;
+      } while (marker);
 
-      expect(response.Role).toBeDefined();
-      expect(response.Role?.RoleName).toBe(roleName);
-      expect(response.Role?.AssumeRolePolicyDocument).toBeDefined();
+      const codeBuildRole = allRoles.find(role => 
+        role.RoleName?.startsWith(`TapStack${environmentSuffix}-CodeBuildRole`)
+      );
+      
+      expect(codeBuildRole).toBeDefined();
+      expect(codeBuildRole?.RoleName).toContain(`TapStack${environmentSuffix}-CodeBuildRole`);
+      expect(codeBuildRole?.AssumeRolePolicyDocument).toBeDefined();
     });
 
     test('should have CodePipeline role', async () => {
-      // Use the actual role name from CloudFormation
-      const roleName = `TapStack${environmentSuffix}-CodePipelineRoleB31C27BE-Ainqfbi4wH0j`;
-      const command = new GetRoleCommand({ RoleName: roleName });
-      const response = await iamClient.send(command);
+      // Get all roles with pagination
+      let allRoles: any[] = [];
+      let marker: string | undefined;
+      
+      do {
+        const listCommand = new ListRolesCommand({ Marker: marker });
+        const listResponse = await iamClient.send(listCommand);
+        allRoles = allRoles.concat(listResponse.Roles || []);
+        marker = listResponse.Marker;
+      } while (marker);
 
-      expect(response.Role).toBeDefined();
-      expect(response.Role?.RoleName).toBe(roleName);
-      expect(response.Role?.AssumeRolePolicyDocument).toBeDefined();
+      const codePipelineRole = allRoles.find(role => 
+        role.RoleName?.startsWith(`TapStack${environmentSuffix}-CodePipelineRole`)
+      );
+      
+      expect(codePipelineRole).toBeDefined();
+      expect(codePipelineRole?.RoleName).toContain(`TapStack${environmentSuffix}-CodePipelineRole`);
+      expect(codePipelineRole?.AssumeRolePolicyDocument).toBeDefined();
     });
 
     test('should have Lambda execution role', async () => {
-      // Use the actual role name from CloudFormation
-      const roleName = `TapStack${environmentSuffix}-SecurityScanLambdaRole49DAE542-Lgt9i9OPOmhp`;
-      const command = new GetRoleCommand({ RoleName: roleName });
-      const response = await iamClient.send(command);
+      // Get all roles with pagination
+      let allRoles: any[] = [];
+      let marker: string | undefined;
+      
+      do {
+        const listCommand = new ListRolesCommand({ Marker: marker });
+        const listResponse = await iamClient.send(listCommand);
+        allRoles = allRoles.concat(listResponse.Roles || []);
+        marker = listResponse.Marker;
+      } while (marker);
 
-      expect(response.Role).toBeDefined();
-      expect(response.Role?.RoleName).toBe(roleName);
-      expect(response.Role?.AssumeRolePolicyDocument).toBeDefined();
+      const lambdaRole = allRoles.find(role => 
+        role.RoleName?.startsWith(`TapStack${environmentSuffix}-SecurityScanLambdaRole`)
+      );
+      
+      expect(lambdaRole).toBeDefined();
+      expect(lambdaRole?.RoleName).toContain(`TapStack${environmentSuffix}-SecurityScanLambdaRole`);
+      expect(lambdaRole?.AssumeRolePolicyDocument).toBeDefined();
     });
   });
 
@@ -594,14 +624,28 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('should have proper IAM role trust relationships', async () => {
-      const roles = [
-        `TapStack${environmentSuffix}-CodeBuildRole728CBADE-2m7Mqqd1UQbA`,
-        `TapStack${environmentSuffix}-CodePipelineRoleB31C27BE-Ainqfbi4wH0j`,
-        `TapStack${environmentSuffix}-SecurityScanLambdaRole49DAE542-Lgt9i9OPOmhp`,
-      ];
+      // Get all roles with pagination
+      let allRoles: any[] = [];
+      let marker: string | undefined;
+      
+      do {
+        const listCommand = new ListRolesCommand({ Marker: marker });
+        const listResponse = await iamClient.send(listCommand);
+        allRoles = allRoles.concat(listResponse.Roles || []);
+        marker = listResponse.Marker;
+      } while (marker);
 
-      for (const roleName of roles) {
-        const command = new GetRoleCommand({ RoleName: roleName });
+      const roles = allRoles.filter(role => 
+        role.RoleName?.startsWith(`TapStack${environmentSuffix}-`) &&
+        (role.RoleName?.includes('CodeBuildRole') ||
+         role.RoleName?.includes('CodePipelineRole') ||
+         role.RoleName?.includes('SecurityScanLambdaRole'))
+      );
+
+      expect(roles.length).toBeGreaterThan(0);
+
+      for (const role of roles) {
+        const command = new GetRoleCommand({ RoleName: role.RoleName! });
         const response = await iamClient.send(command);
 
         expect(response.Role?.AssumeRolePolicyDocument).toBeDefined();

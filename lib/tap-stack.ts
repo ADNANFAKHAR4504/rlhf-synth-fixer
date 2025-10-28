@@ -33,21 +33,21 @@ export class TapStack extends cdk.Stack {
       enableKeyRotation: true,
       alias: `tap-pipeline-key-${environmentSuffix}`,
       description: 'KMS key for pipeline artifacts',
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     const stagingKmsKey = new kms.Key(this, 'StagingKmsKey', {
       enableKeyRotation: true,
       alias: `tap-staging-key-${environmentSuffix}`,
       description: 'KMS key for staging environment',
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     const productionKmsKey = new kms.Key(this, 'ProductionKmsKey', {
       enableKeyRotation: true,
       alias: `tap-production-key-${environmentSuffix}`,
       description: 'KMS key for production environment',
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // 🔹 S3 Buckets for artifacts
@@ -66,7 +66,7 @@ export class TapStack extends cdk.Stack {
             noncurrentVersionExpiration: cdk.Duration.days(30),
           },
         ],
-        removalPolicy: cdk.RemovalPolicy.RETAIN,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
         enforceSSL: true,
         blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       }
@@ -77,7 +77,7 @@ export class TapStack extends cdk.Stack {
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: stagingKmsKey,
       versioned: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
       enforceSSL: true,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
     });
@@ -87,7 +87,7 @@ export class TapStack extends cdk.Stack {
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: productionKmsKey,
       versioned: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
       enforceSSL: true,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
     });
@@ -98,18 +98,14 @@ export class TapStack extends cdk.Stack {
       'PipelineNotificationTopic',
       {
         topicName: `tap-pipeline-notifications-${environmentSuffix}`,
-        masterKey: kms.Alias.fromAliasName(this, 'SnsKey', 'alias/aws/sns'),
+        masterKey: pipelineKmsKey,
       }
     );
     pipelineNotificationTopic.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
     const stagingApprovalTopic = new sns.Topic(this, 'StagingApprovalTopic', {
       topicName: `tap-staging-approval-${environmentSuffix}`,
-      masterKey: kms.Alias.fromAliasName(
-        this,
-        'StagingSnsKey',
-        'alias/aws/sns'
-      ),
+      masterKey: stagingKmsKey,
     });
     stagingApprovalTopic.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
@@ -118,11 +114,7 @@ export class TapStack extends cdk.Stack {
       'ProductionApprovalTopic',
       {
         topicName: `tap-production-approval-${environmentSuffix}`,
-        masterKey: kms.Alias.fromAliasName(
-          this,
-          'ProductionSnsKey',
-          'alias/aws/sns'
-        ),
+        masterKey: productionKmsKey,
       }
     );
     productionApprovalTopic.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
