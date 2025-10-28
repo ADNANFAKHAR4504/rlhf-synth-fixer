@@ -9,6 +9,12 @@ variable "aws_region" {
   default     = "us-west-2"
 }
 
+variable "environment_suffix" {
+  description = "Unique suffix for resource names to prevent collisions across deployments"
+  type        = string
+  default     = "main"
+}
+
 variable "vpc_cidr" {
   description = "CIDR block for VPC"
   type        = string
@@ -94,7 +100,7 @@ resource "aws_kms_key" "master" {
   })
 
   tags = {
-    Name        = "master-kms-key"
+    Name        = "master-kms-key-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -102,7 +108,7 @@ resource "aws_kms_key" "master" {
 }
 
 resource "aws_kms_alias" "master" {
-  name          = "alias/master-key"
+  name          = "alias/master-key-${var.environment_suffix}"
   target_key_id = aws_kms_key.master.key_id
 }
 
@@ -113,7 +119,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = {
-    Name        = "main-vpc"
+    Name        = "main-vpc-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"

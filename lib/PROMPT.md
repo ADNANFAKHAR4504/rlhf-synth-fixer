@@ -1,121 +1,104 @@
-You are required to design and implement a secure AWS infrastructure using Terraform (Infrastructure as Code).
-The Terraform configuration must automate the setup of multiple AWS security and compliance services while following AWS Well-Architected Security Pillar best practices.
+Hey team,
 
-The infrastructure spans multiple regions within a single AWS account and converts the default VPC into a customized, secure VPC environment.
+We need to build out a production-ready AWS infrastructure using Terraform. The goal is to get all our security and compliance requirements covered - encryption, logging, monitoring, threat detection, the works. Everything should follow AWS Well-Architected Security Pillar best practices.
 
-Naming conventions should follow this format:
-company-resource-environment (e.g., acme-s3-prod).
+## What We're Building
 
-Core Implementation Requirements
+Deploy this in a single AWS account but span multiple availability zones for high availability. Put everything in one file called `tap_stack.tf` to keep things simple and manageable.
 
-Using Terraform, implement the following security and infrastructure resources in a single Terraform file (main.tf):
+Use this naming pattern: `{resource-type}-${var.environment_suffix}` so we can deploy dev, staging, and prod environments in parallel without conflicts. For example: `master-kms-key-main` or `main-vpc-dev`.
 
-S3 Buckets
+## Core Infrastructure
 
-Create S3 buckets with default encryption enabled (SSE-S3 or KMS).
+**Encryption & Key Management**
+- Master KMS key with automatic annual rotation and 30-day deletion window
+- Use the key for CloudWatch Logs, CloudTrail, S3, RDS, and Secrets Manager
 
-Enforce block public access for all buckets.
+**Networking (10.0.0.0/16 VPC across 2 AZs)**
+- 2 public subnets (10.0.0.0/24, 10.0.1.0/24) for load balancers
+- 2 private subnets (10.0.10.0/24, 10.0.11.0/24) for application servers
+- 2 database subnets (10.0.20.0/24, 10.0.21.0/24) for RDS
+- Internet Gateway, 2 NAT Gateways with Elastic IPs
+- VPC Flow Logs with CloudWatch and KMS encryption
 
-Enable versioning.
+**Security Groups**
+- ALB: ports 80, 443 from internet
+- EC2: ports 80, 443 from ALB only
+- RDS: port 3306 from EC2 only (no public access)
 
-IAM Policies and Roles
+**Storage & Logging**
+- Central S3 bucket for logs with versioning, KMS encryption, public access blocked
+- Lifecycle policies: Glacier after 90 days, delete after 365 days
+- CloudTrail multi-region with log validation and CloudWatch integration
 
-Create a custom IAM policy that provides read-only access to S3 and EC2.
+**Database**
+- RDS MySQL 8.0.35 Multi-AZ, db.t3.micro, 20GB GP3
+- KMS encrypted, not publicly accessible
+- Password in Secrets Manager (use random_password with 32 chars)
+- Performance Insights, 7-day automated backups, CloudWatch log exports
+- Parameter group with require_secure_transport
 
-Enforce multi-factor authentication (MFA) for all IAM users.
+**IAM & Access**
+- EC2 role: SSM, Secrets Manager, CloudWatch access
+- VPC Flow Logs role, AWS Config role
+- MFA enforcement policy for console access
 
-Create IAM roles and attach least-privilege permissions to Lambda and EC2.
+**Certificates & Load Balancing**
+- ACM certificate with DNS validation and wildcard support
+- ALB in public subnets with HTTPS (TLS 1.3), HTTP to HTTPS redirect
+- Access logs to S3
 
-VPC Configuration
+**Compute**
+- Launch template: Amazon Linux 2, t3.micro, encrypted EBS, IMDSv2 required
+- Auto Scaling Group in private subnets (min 2, max 10 instances)
+- Scaling policies for CPU thresholds (scale up > 80%, scale down < 20%)
 
-Create a custom VPC with:
+**Monitoring**
+- CloudWatch log groups with 90-day retention and KMS encryption
+- Alarms for high CPU, low CPU, RDS CPU, and root account usage
+- SNS topic for security alerts with KMS encryption and email subscription
 
-2 public and 2 private subnets.
+**Web Security**
+- WAFv2 Web ACL with rate limiting (2000 requests per 5 minutes)
+- AWS managed rule sets attached to ALB
+- CloudFront distribution with ALB origin, HTTPS redirect, TLS 1.2 minimum
 
-Internet Gateway and NAT Gateway for outbound traffic.
+**Compliance & Threat Detection**
+- AWS Config with these rules: S3 encryption, S3 no public read, RDS encryption, MFA enabled, CloudTrail enabled
+- GuardDuty with S3 monitoring, Kubernetes logs, malware protection
+- SSM Session Manager with encrypted sessions logged to CloudWatch and S3
 
-Route tables properly associated.
+## Variables
 
-Restrict EC2 public access only via Security Groups.
+Define these with sensible defaults:
+- `aws_region` (default: us-west-2)
+- `environment_suffix` (default: main)
+- `vpc_cidr` (default: 10.0.0.0/16)
+- `domain_name` (default: example.com)
+- `alert_email` (default: security@example.com)
 
-EC2 Instances
+## Outputs
 
-Launch EC2 instances within private subnets.
+Export these for downstream usage:
+- VPC ID and all subnet IDs
+- ALB DNS name and ARN
+- CloudFront domain and distribution ID
+- RDS endpoint (mark as sensitive) and ARN
+- S3 log bucket name
+- KMS key ID and ARN
+- SNS topic ARN
+- GuardDuty detector ID
+- WAF ACL ID
+- Auto Scaling Group name
+- Launch template ID
 
-Attach IAM roles with least privilege.
+## Technical Requirements
 
-Ensure SSH access restricted to specific IPs (via Security Group rules).
+- Single file: `tap_stack.tf` (no external modules)
+- Terraform >= 1.4.0, AWS provider >= 5.0, random provider >= 3.0
+- No hardcoded secrets anywhere
+- All resources must be destroyable (no prevent_destroy lifecycle)
+- Must pass `terraform validate` and `terraform fmt`
+- Tag everything: Name, CostCenter, Environment, ManagedBy
 
-RDS Instance
-
-Deploy an RDS instance inside the private subnet.
-
-Disable public accessibility.
-
-Enforce encryption at rest (KMS) and in transit (SSL).
-
-AWS Config
-
-Enable AWS Config to monitor configuration changes.
-
-Store Config data in a secure S3 bucket.
-
-AWS CloudTrail
-
-Enable CloudTrail to log all account API activity.
-
-Store logs in an encrypted S3 bucket.
-
-CloudWatch Alarms
-
-Create CloudWatch Alarms for unauthorized API attempts.
-
-Use SNS for alert notifications.
-
-KMS Key Management
-
-Create and manage KMS CMK keys.
-
-Enable automatic annual key rotation.
-
-Amazon GuardDuty
-
-Enable GuardDuty across all available regions for intelligent threat detection.
-
-Lambda Function Security
-
-Create a sample Lambda function.
-
-Ensure least privilege IAM policy.
-
-Enable environment variable encryption with KMS.
-
-Constraints
-
-All resources must be provisioned using Terraform AWS Provider.
-
-The solution must be contained entirely in a single file (main.tf) — no external modules.
-
-Use descriptive naming conventions: acme-[resource]-prod.
-
-Ensure that all encryption keys, logs, and buckets comply with encryption at rest and in transit.
-
-Use tags across all resources for Environment, Owner, and Project.
-
-The configuration should pass terraform validate and terraform fmt.
-
-Expected Output
-
-A complete Terraform configuration file (main.tf) that includes:
-
-All resources configured as per requirements above.
-
-Clearly separated Terraform blocks (provider, variables, VPC, IAM, RDS, Config, CloudTrail, CloudWatch, KMS, GuardDuty, Lambda).
-
-Inline comments explaining key security features (e.g., encryption, MFA, IAM policy scopes).
-
-Output Instructions
-Generate a single-file Terraform configuration (main.tf) implementing all requirements above.
-Ensure the output is formatted as valid Terraform HCL code 
-Include comments throughout explaining key security best practices.
-Do not summarize or break into sections — produce one full Terraform file as the output.
+Let me know if you have questions. This should give us a solid, secure foundation that meets all our compliance requirements.

@@ -33,6 +33,10 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(tapStackContent).toMatch(/variable\s+"aws_region"/);
     });
 
+    test('declares environment_suffix variable', () => {
+      expect(tapStackContent).toMatch(/variable\s+"environment_suffix"/);
+    });
+
     test('declares vpc_cidr variable', () => {
       expect(tapStackContent).toMatch(/variable\s+"vpc_cidr"/);
     });
@@ -47,6 +51,12 @@ describe('Terraform Infrastructure Unit Tests', () => {
 
     test('aws_region defaults to us-west-2', () => {
       expect(tapStackContent).toMatch(/default\s*=\s*"us-west-2"/);
+    });
+
+    test('environment_suffix is used in resource names', () => {
+      const suffixUsage = tapStackContent.match(/\$\{var\.environment_suffix\}/g);
+      expect(suffixUsage).not.toBeNull();
+      expect(suffixUsage!.length).toBeGreaterThanOrEqual(2);
     });
   });
 
