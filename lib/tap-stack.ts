@@ -102,7 +102,12 @@ interface TapStackProps extends cdk.StackProps {
  * Helper construct for creating CloudWatch Log Groups with consistent encryption and retention
  */
 class SecureLogGroup extends logs.LogGroup {
-  constructor(scope: Construct, id: string, kmsKey: kms.IKey, retentionDays: number) {
+  constructor(
+    scope: Construct,
+    id: string,
+    kmsKey: kms.IKey,
+    retentionDays: number
+  ) {
     super(scope, id, {
       logGroupName: `/aws/${id.toLowerCase()}`,
       retention: retentionDays as logs.RetentionDays,
@@ -123,7 +128,8 @@ export class TapStack extends cdk.Stack {
     // PARAMETERS & DEFAULTS
     // ============================================================================
 
-    const environmentSuffix = props?.environmentSuffix ||
+    const environmentSuffix =
+      props?.environmentSuffix ||
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
@@ -131,7 +137,8 @@ export class TapStack extends cdk.Stack {
     const complianceLevel = props?.complianceLevel || 'PCI-DSS';
     const dataClassification = props?.dataClassification || 'Sensitive';
     const alertEmail = props?.alertEmail || 'security-team@example.com';
-    const secretsRotationSchedule = props?.secretsRotationSchedule || 'rate(30 days)';
+    const secretsRotationSchedule =
+      props?.secretsRotationSchedule || 'rate(30 days)';
     const enableVpcEndpoints = props?.enableVpcEndpoints ?? false;
     const logRetentionDays = props?.logRetentionDays || 365;
     const auditLogRetentionDays = props?.auditLogRetentionDays || 2555; // 7 years
@@ -157,49 +164,55 @@ export class TapStack extends cdk.Stack {
       // Use existing KMS key if provided
       kmsKey = kms.Key.fromKeyArn(this, 'ImportedKmsKey', props.kmsKeyArn);
       // Ensure CloudWatch Logs in this account/region can use the imported key
-      kmsKey.addToResourcePolicy(new iam.PolicyStatement({
-        sid: 'Allow CloudWatch Logs',
-        principals: [new iam.ServicePrincipal(`logs.${region}.amazonaws.com`)],
-        actions: [
-          'kms:Encrypt',
-          'kms:Decrypt',
-          'kms:ReEncrypt*',
-          'kms:GenerateDataKey*',
-          'kms:CreateGrant',
-          'kms:DescribeKey',
-        ],
-        resources: ['*'],
-        conditions: {
-          ArnLike: {
-            'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${region}:${this.account}:*`,
+      kmsKey.addToResourcePolicy(
+        new iam.PolicyStatement({
+          sid: 'Allow CloudWatch Logs',
+          principals: [
+            new iam.ServicePrincipal(`logs.${region}.amazonaws.com`),
+          ],
+          actions: [
+            'kms:Encrypt',
+            'kms:Decrypt',
+            'kms:ReEncrypt*',
+            'kms:GenerateDataKey*',
+            'kms:CreateGrant',
+            'kms:DescribeKey',
+          ],
+          resources: ['*'],
+          conditions: {
+            ArnLike: {
+              'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${region}:${this.account}:*`,
+            },
           },
-        },
-      }));
+        })
+      );
 
       // CloudTrail needs broad KMS permissions for validation and encryption
-      kmsKey.addToResourcePolicy(new iam.PolicyStatement({
-        sid: 'Allow CloudTrail',
-        principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
-        actions: [
-          'kms:DescribeKey',
-          'kms:GenerateDataKey*',
-          'kms:Decrypt',
-          'kms:ReEncrypt*',
-        ],
-        resources: ['*'],
-      }));
+      kmsKey.addToResourcePolicy(
+        new iam.PolicyStatement({
+          sid: 'Allow CloudTrail',
+          principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
+          actions: [
+            'kms:DescribeKey',
+            'kms:GenerateDataKey*',
+            'kms:Decrypt',
+            'kms:ReEncrypt*',
+          ],
+          resources: ['*'],
+        })
+      );
 
       // Ensure Secrets Manager can use the imported key
-      kmsKey.addToResourcePolicy(new iam.PolicyStatement({
-        sid: 'Allow Secrets Manager',
-        principals: [new iam.ServicePrincipal('secretsmanager.amazonaws.com')],
-        actions: [
-          'kms:Decrypt',
-          'kms:DescribeKey',
-          'kms:GenerateDataKey',
-        ],
-        resources: ['*'],
-      }));
+      kmsKey.addToResourcePolicy(
+        new iam.PolicyStatement({
+          sid: 'Allow Secrets Manager',
+          principals: [
+            new iam.ServicePrincipal('secretsmanager.amazonaws.com'),
+          ],
+          actions: ['kms:Decrypt', 'kms:DescribeKey', 'kms:GenerateDataKey'],
+          resources: ['*'],
+        })
+      );
     } else {
       // Create new customer-managed KMS key
       kmsKey = new kms.Key(this, `KmsKey-${region}-${environmentSuffix}`, {
@@ -210,64 +223,72 @@ export class TapStack extends cdk.Stack {
         alias: `alias/tap-master-${region}-${environmentSuffix}`,
       });
 
-      // Restrict key policy to specific principals and AWS services  
+      // Restrict key policy to specific principals and AWS services
       // CloudWatch Logs policy - FIXED: Using broader condition to allow log group creation
-      kmsKey.addToResourcePolicy(new iam.PolicyStatement({
-        sid: 'Allow CloudWatch Logs',
-        principals: [new iam.ServicePrincipal(`logs.${region}.amazonaws.com`)],
-        actions: [
-          'kms:Encrypt',
-          'kms:Decrypt',
-          'kms:ReEncrypt*',
-          'kms:GenerateDataKey*',
-          'kms:CreateGrant',
-          'kms:DescribeKey',
-        ],
-        resources: ['*'],
-        conditions: {
-          ArnLike: {
-            'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${region}:${this.account}:*`,
+      kmsKey.addToResourcePolicy(
+        new iam.PolicyStatement({
+          sid: 'Allow CloudWatch Logs',
+          principals: [
+            new iam.ServicePrincipal(`logs.${region}.amazonaws.com`),
+          ],
+          actions: [
+            'kms:Encrypt',
+            'kms:Decrypt',
+            'kms:ReEncrypt*',
+            'kms:GenerateDataKey*',
+            'kms:CreateGrant',
+            'kms:DescribeKey',
+          ],
+          resources: ['*'],
+          conditions: {
+            ArnLike: {
+              'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${region}:${this.account}:*`,
+            },
           },
-        },
-      }));
+        })
+      );
 
-      kmsKey.addToResourcePolicy(new iam.PolicyStatement({
-        sid: 'Allow Secrets Manager',
-        principals: [new iam.ServicePrincipal('secretsmanager.amazonaws.com')],
-        actions: [
-          'kms:Decrypt',
-          'kms:DescribeKey',
-          'kms:GenerateDataKey',
-        ],
-        resources: ['*'],
-      }));
+      kmsKey.addToResourcePolicy(
+        new iam.PolicyStatement({
+          sid: 'Allow Secrets Manager',
+          principals: [
+            new iam.ServicePrincipal('secretsmanager.amazonaws.com'),
+          ],
+          actions: ['kms:Decrypt', 'kms:DescribeKey', 'kms:GenerateDataKey'],
+          resources: ['*'],
+        })
+      );
 
       // CloudTrail needs broad KMS permissions for validation and encryption
-      kmsKey.addToResourcePolicy(new iam.PolicyStatement({
-        sid: 'Allow CloudTrail',
-        principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
-        actions: [
-          'kms:DescribeKey',
-          'kms:GenerateDataKey*',
-          'kms:Decrypt',
-          'kms:ReEncrypt*',
-        ],
-        resources: ['*'],
-      }));
+      kmsKey.addToResourcePolicy(
+        new iam.PolicyStatement({
+          sid: 'Allow CloudTrail',
+          principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
+          actions: [
+            'kms:DescribeKey',
+            'kms:GenerateDataKey*',
+            'kms:Decrypt',
+            'kms:ReEncrypt*',
+          ],
+          resources: ['*'],
+        })
+      );
 
       // Explicit deny for all other principals
-      kmsKey.addToResourcePolicy(new iam.PolicyStatement({
-        sid: 'Deny usage from unauthorized principals',
-        effect: iam.Effect.DENY,
-        principals: [new iam.AnyPrincipal()],
-        actions: ['kms:*'],
-        resources: ['*'],
-        conditions: {
-          StringNotEquals: {
-            'kms:CallerAccount': this.account,
+      kmsKey.addToResourcePolicy(
+        new iam.PolicyStatement({
+          sid: 'Deny usage from unauthorized principals',
+          effect: iam.Effect.DENY,
+          principals: [new iam.AnyPrincipal()],
+          actions: ['kms:*'],
+          resources: ['*'],
+          conditions: {
+            StringNotEquals: {
+              'kms:CallerAccount': this.account,
+            },
           },
-        },
-      }));
+        })
+      );
 
       // Output for reference
       new cdk.CfnOutput(this, 'KmsKeyAliasName', {
@@ -285,32 +306,38 @@ export class TapStack extends cdk.Stack {
     // DEDICATED KMS KEY FOR CLOUDWATCH LOGS (avoids external key policy issues)
     // ==========================================================================
 
-    const logsKmsKey = new kms.Key(this, `LogsKmsKey-${region}-${environmentSuffix}`, {
-      description: `Customer-managed key for CloudWatch Logs in ${environmentSuffix} environment`,
-      enableKeyRotation: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
-      pendingWindow: cdk.Duration.days(30),
-      alias: `alias/tap-logs-${region}-${environmentSuffix}`,
-    });
+    const logsKmsKey = new kms.Key(
+      this,
+      `LogsKmsKey-${region}-${environmentSuffix}`,
+      {
+        description: `Customer-managed key for CloudWatch Logs in ${environmentSuffix} environment`,
+        enableKeyRotation: true,
+        removalPolicy: cdk.RemovalPolicy.RETAIN,
+        pendingWindow: cdk.Duration.days(30),
+        alias: `alias/tap-logs-${region}-${environmentSuffix}`,
+      }
+    );
 
-    logsKmsKey.addToResourcePolicy(new iam.PolicyStatement({
-      sid: 'Allow CloudWatch Logs',
-      principals: [new iam.ServicePrincipal(`logs.${region}.amazonaws.com`)],
-      actions: [
-        'kms:Encrypt',
-        'kms:Decrypt',
-        'kms:ReEncrypt*',
-        'kms:GenerateDataKey*',
-        'kms:CreateGrant',
-        'kms:DescribeKey',
-      ],
-      resources: ['*'],
-      conditions: {
-        ArnLike: {
-          'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${region}:${this.account}:*`,
+    logsKmsKey.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'Allow CloudWatch Logs',
+        principals: [new iam.ServicePrincipal(`logs.${region}.amazonaws.com`)],
+        actions: [
+          'kms:Encrypt',
+          'kms:Decrypt',
+          'kms:ReEncrypt*',
+          'kms:GenerateDataKey*',
+          'kms:CreateGrant',
+          'kms:DescribeKey',
+        ],
+        resources: ['*'],
+        conditions: {
+          ArnLike: {
+            'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${region}:${this.account}:*`,
+          },
         },
-      },
-    }));
+      })
+    );
 
     Object.entries(mandatoryTags).forEach(([key, value]) => {
       cdk.Tags.of(logsKmsKey).add(key, value);
@@ -974,7 +1001,8 @@ def handler(event, context):
     // Permission Boundary ARN
     new cdk.CfnOutput(this, 'PermissionBoundaryArn', {
       value: permissionBoundary.managedPolicyArn,
-      description: 'ARN of the permission boundary policy - apply to all developer roles',
+      description:
+        'ARN of the permission boundary policy - apply to all developer roles',
       exportName: `tap-permission-boundary-${region}-${environmentSuffix}`,
     });
 
@@ -1051,33 +1079,33 @@ def handler(event, context):
     /*
      * DEPLOYMENT SUMMARY
      * ==================
-     * 
+     *
      * This stack implements a comprehensive security baseline for PCI-DSS compliance:
-     * 
+     *
      * 1. KMS Encryption
      *    - Customer-managed key with automatic rotation
      *    - FIXED: Broader condition for CloudWatch Logs to prevent creation failures
      *    - Restricted key policy with explicit service principals
      *    - Used for: CloudWatch Logs, Secrets Manager, S3, CloudTrail
-     * 
+     *
      * 2. IAM Security
      *    - Permission boundary preventing privilege escalation
      *    - Example developer roles (read-only and limited write)
      *    - Explicit deny statements for sensitive operations
      *    - All roles bounded by permission boundary
-     * 
+     *
      * 3. Secrets Management
      *    - Auto-rotating secrets with 30-day schedule
      *    - Rotation Lambda in isolated VPC (no internet access)
      *    - KMS-encrypted secrets
      *    - Comprehensive rotation handler stub
-     * 
+     *
      * 4. Audit & Compliance
      *    - Multi-region CloudTrail with log file validation
      *    - S3 audit logs with lifecycle management (7 year retention)
      *    - CloudWatch Logs with 365-day retention
      *    - All logs encrypted with KMS
-     * 
+     *
      * 5. Security Monitoring
      *    - CloudWatch Alarms for suspicious activities:
      *      * Console sign-in failures
@@ -1086,21 +1114,21 @@ def handler(event, context):
      *      * Unusual KMS usage
      *      * Root account usage
      *    - SNS alerts sent to security team
-     * 
+     *
      * 6. Network Security
      *    - Isolated VPC with private subnets only
      *    - No internet gateway (completely air-gapped by default)
      *    - Optional VPC endpoints for AWS service access
      *    - Lambdas deployed in secure network configuration
-     * 
+     *
      * DEPLOYMENT INSTRUCTIONS
      * =======================
-     * 
+     *
      * Development:
      * ```
      * cdk deploy --context environmentSuffix=dev
      * ```
-     * 
+     *
      * Production:
      * ```
      * cdk deploy \
@@ -1109,40 +1137,40 @@ def handler(event, context):
      *   --parameters enableVpcEndpoints=true \
      *   --parameters teamName=platform
      * ```
-     * 
+     *
      * CUSTOMIZATION POINTS
      * ====================
-     * 
+     *
      * 1. Use existing VPC:
      *    Set useExistingVpc=true and provide vpcId and privateSubnetIds
-     * 
+     *
      * 2. Use existing KMS key:
      *    Provide kmsKeyArn in props
-     * 
+     *
      * 3. Adjust rotation schedule:
      *    Change secretsRotationSchedule parameter
-     * 
+     *
      * 4. Enable VPC endpoints:
      *    Set enableVpcEndpoints=true for production (avoids NAT costs)
-     * 
+     *
      * 5. Custom retention periods:
      *    Adjust logRetentionDays and auditLogRetentionDays
-     * 
+     *
      * KEY FIX IN THIS VERSION
      * =======================
-     * 
+     *
      * The CloudWatch Logs KMS key policy condition has been changed from:
      *   'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${region}:${this.account}:log-group:*`
-     * 
+     *
      * To:
      *   'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${region}:${this.account}:*`
-     * 
-     * This broader pattern allows log groups to be created successfully while still 
+     *
+     * This broader pattern allows log groups to be created successfully while still
      * maintaining security by restricting to your AWS account and region.
-     * 
+     *
      * SECURITY NOTES
      * ==============
-     * 
+     *
      * - All resources include mandatory compliance tags
      * - Permission boundaries prevent privilege escalation
      * - Lambdas have no internet access by default
@@ -1150,28 +1178,28 @@ def handler(event, context):
      * - Comprehensive audit trail with long retention
      * - Real-time security monitoring with automated alerts
      * - Least-privilege IAM policies with explicit denies
-     * 
+     *
      * NEXT STEPS
      * ==========
-     * 
+     *
      * 1. Complete the rotation Lambda implementation:
      *    - Add database connection logic
      *    - Implement actual password rotation
      *    - Add comprehensive error handling
-     * 
+     *
      * 2. Integrate with identity provider:
      *    - Configure SAML/OIDC for developer access
      *    - Implement role assumption workflows
-     * 
+     *
      * 3. Add additional monitoring:
      *    - GuardDuty for threat detection
      *    - AWS Config for compliance checks
      *    - Security Hub for centralized findings
-     * 
+     *
      * 4. Implement backup strategy:
      *    - AWS Backup for secrets and configurations
      *    - Cross-region replication for disaster recovery
-     * 
+     *
      * 5. Configure log forwarding:
      *    - Integrate with SIEM for centralized logging
      *    - Set up log analysis and anomaly detection
