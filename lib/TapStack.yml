@@ -26,6 +26,15 @@ Parameters:
     Default: '10.0.0.0/16'
     Description: 'CIDR block for the VPC'
 
+  EnableRedisAuth:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: 'Enable Redis authentication (requires secrets manager)'
+
+Conditions:
+  UseRedisAuth: !Equals [!Ref EnableRedisAuth, 'true']
+
 Mappings:
   RegionMap:
     ap-northeast-1:
@@ -334,8 +343,11 @@ Resources:
       MultiAZEnabled: true
       AutomaticFailoverEnabled: true
       AtRestEncryptionEnabled: true
-      TransitEncryptionEnabled: true
-      AuthToken: !Sub '{{resolve:secretsmanager:media-redis-auth-${EnvironmentSuffix}}}'
+      TransitEncryptionEnabled: !Ref EnableRedisAuth
+      AuthToken: !If 
+        - UseRedisAuth
+        - !Sub '{{resolve:secretsmanager:media-redis-auth-${EnvironmentSuffix}}}'
+        - !Ref AWS::NoValue
       SecurityGroupIds:
         - !Ref ElastiCacheSecurityGroup
       CacheSubnetGroupName: !Ref ElastiCacheSubnetGroup

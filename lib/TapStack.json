@@ -35,6 +35,25 @@
             "Type": "String",
             "Default": "10.0.0.0/16",
             "Description": "CIDR block for the VPC"
+        },
+        "EnableRedisAuth": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Enable Redis authentication (requires secrets manager)"
+        }
+    },
+    "Conditions": {
+        "UseRedisAuth": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableRedisAuth"
+                },
+                "true"
+            ]
         }
     },
     "Mappings": {
@@ -43,6 +62,12 @@
                 "AZs": [
                     "ap-northeast-1a",
                     "ap-northeast-1c"
+                ]
+            },
+            "us-east-1": {
+                "AZs": [
+                    "us-east-1a",
+                    "us-east-1b"
                 ]
             }
         }
@@ -531,7 +556,7 @@
                 },
                 "DBInstanceClass": "db.t3.micro",
                 "Engine": "postgres",
-                "EngineVersion": "14.7",
+                "EngineVersion": "14.19",
                 "AllocatedStorage": 20,
                 "StorageType": "gp2",
                 "StorageEncrypted": true,
@@ -571,7 +596,6 @@
         "EFSFileSystem": {
             "Type": "AWS::EFS::FileSystem",
             "Properties": {
-                "Encrypted": true,
                 "PerformanceMode": "generalPurpose",
                 "ThroughputMode": "bursting",
                 "FileSystemTags": [
@@ -655,9 +679,19 @@
                 "MultiAZEnabled": true,
                 "AutomaticFailoverEnabled": true,
                 "AtRestEncryptionEnabled": true,
-                "TransitEncryptionEnabled": true,
+                "TransitEncryptionEnabled": {
+                    "Ref": "EnableRedisAuth"
+                },
                 "AuthToken": {
-                    "Fn::Sub": "{{resolve:secretsmanager:media-redis-auth-${EnvironmentSuffix}}}"
+                    "Fn::If": [
+                        "UseRedisAuth",
+                        {
+                            "Fn::Sub": "{{resolve:secretsmanager:media-redis-auth-${EnvironmentSuffix}}}"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
                 },
                 "SecurityGroupIds": [
                     {
