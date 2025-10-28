@@ -182,7 +182,8 @@ class TapStack(pulumi.ComponentResource):
         import secrets
         import string
         # Generate secure password with uppercase, lowercase, digits, and special chars
-        alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+        # RDS password requirements: only printable ASCII except '/', '@', '"', ' '
+        alphabet = string.ascii_letters + string.digits + "!#$%^&*"
         password = ''.join(secrets.choice(alphabet) for _ in range(20))
 
         db_password_version = aws.secretsmanager.SecretVersion(
