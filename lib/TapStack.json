@@ -1022,9 +1022,14 @@
                                         "s3:GetObject",
                                         "s3:PutObject"
                                     ],
-                                    "Resource": {
-                                        "Fn::Sub": "${NovaAppDataBucket.Arn}/*"
-                                    }
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${NovaAppDataBucket.Arn}/*"
+                                        },
+                                        {
+                                            "Fn::Sub": "${NovaPatientDocumentsBucket.Arn}/*"
+                                        }
+                                    ]
                                 },
                                 {
                                     "Effect": "Allow",
@@ -1037,6 +1042,27 @@
                                             "NovaEncryptionKey",
                                             "Arn"
                                         ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Encrypt"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "NovaEncryptionKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "secretsmanager:GetSecretValue"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "NovaRDSPasswordSecret"
                                     }
                                 }
                             ]
@@ -1072,9 +1098,7 @@
         "NovaAppLaunchTemplate": {
             "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
-                "LaunchTemplateName": {
-                    "Fn::Sub": "nova-prod-app-lt-${AWS::Region}"
-                },
+                "LaunchTemplateName": "nova-prod-patient-app-lt",
                 "LaunchTemplateData": {
                     "IamInstanceProfile": {
                         "Name": {
@@ -1192,9 +1216,7 @@
         "NovaApplicationLoadBalancer": {
             "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
             "Properties": {
-                "Name": {
-                    "Fn::Sub": "nova-prod-alb-${AWS::Region}"
-                },
+                "Name": "nova-prod-patient-alb",
                 "Type": "application",
                 "Scheme": "internet-facing",
                 "SecurityGroups": [
@@ -1243,9 +1265,7 @@
         "NovaALBTargetGroup": {
             "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
             "Properties": {
-                "Name": {
-                    "Fn::Sub": "nova-prod-app-tg-${AWS::Region}"
-                },
+                "Name": "nova-prod-patient-app-tg",
                 "TargetType": "instance",
                 "Protocol": "HTTP",
                 "Port": 80,
@@ -1411,9 +1431,7 @@
                 "VisibilityConfig": {
                     "SampledRequestsEnabled": true,
                     "CloudWatchMetricsEnabled": true,
-                    "MetricName": {
-                        "Fn::Sub": "nova-prod-waf-metric-${AWS::Region}"
-                    }
+                    "MetricName": "nova-prod-patient-waf-metric"
                 },
                 "Tags": [
                     {
@@ -1502,9 +1520,7 @@
         "NovaBastionSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupName": {
-                    "Fn::Sub": "nova-prod-bastion-sg-${AWS::Region}"
-                },
+                "GroupName": "nova-prod-patient-bastion-sg",
                 "GroupDescription": "Security group for bastion host - SSH from trusted IP only",
                 "VpcId": {
                     "Ref": "NovaVPC"
@@ -1588,9 +1604,7 @@
         "NovaALBSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupName": {
-                    "Fn::Sub": "nova-prod-alb-sg-${AWS::Region}"
-                },
+                "GroupName": "nova-prod-patient-alb-sg",
                 "GroupDescription": "Security group for Application Load Balancer",
                 "VpcId": {
                     "Ref": "NovaVPC"
@@ -1650,9 +1664,7 @@
         "NovaApplicationSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupName": {
-                    "Fn::Sub": "nova-prod-application-sg-${AWS::Region}"
-                },
+                "GroupName": "nova-prod-patient-application-sg",
                 "GroupDescription": "Security group for application instances",
                 "VpcId": {
                     "Ref": "NovaVPC"
@@ -1728,9 +1740,7 @@
         "NovaDatabaseSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupName": {
-                    "Fn::Sub": "nova-prod-database-sg-${AWS::Region}"
-                },
+                "GroupName": "nova-prod-patient-database-sg",
                 "GroupDescription": "Security group for RDS database",
                 "VpcId": {
                     "Ref": "NovaVPC"
@@ -2011,9 +2021,7 @@
             "Type": "AWS::CloudTrail::Trail",
             "DependsOn": "NovaCloudTrailBucketPolicy",
             "Properties": {
-                "TrailName": {
-                    "Fn::Sub": "nova-prod-cloudtrail-${AWS::Region}"
-                },
+                "TrailName": "nova-prod-patient-cloudtrail",
                 "S3BucketName": {
                     "Ref": "NovaCloudTrailBucket"
                 },

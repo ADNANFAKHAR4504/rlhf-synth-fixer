@@ -1,4 +1,8 @@
 ```yml
+# patient-portal-secure-foundation.yaml
+# CloudFormation template for HIPAA-compliant Healthcare Patient Portal infrastructure
+# All resources follow nova-prod-* naming convention for production environment
+
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure foundation for Healthcare Patient Portal with HIPAA compliance'
 
@@ -566,12 +570,22 @@ Resources:
                 Action:
                   - 's3:GetObject'
                   - 's3:PutObject'
-                Resource: !Sub '${NovaAppDataBucket.Arn}/*'
+                Resource: 
+                  - !Sub '${NovaAppDataBucket.Arn}/*'
+                  - !Sub '${NovaPatientDocumentsBucket.Arn}/*'
               - Effect: Allow
                 Action:
                   - 'kms:Decrypt'
                   - 'kms:GenerateDataKey'
                 Resource: !GetAtt NovaEncryptionKey.Arn
+              - Effect: Allow
+                Action:
+                  - 'kms:Encrypt'
+                Resource: !GetAtt NovaEncryptionKey.Arn
+              - Effect: Allow
+                Action:
+                  - 'secretsmanager:GetSecretValue'
+                Resource: !Ref NovaRDSPasswordSecret
       Tags:
         - Key: Name
           Value: 'nova-prod-ec2-role'
@@ -591,7 +605,7 @@ Resources:
   NovaAppLaunchTemplate:
     Type: 'AWS::EC2::LaunchTemplate'
     Properties:
-      LaunchTemplateName: !Sub 'nova-prod-app-lt-${AWS::Region}'
+      LaunchTemplateName: 'nova-prod-patient-app-lt'
       LaunchTemplateData:
         IamInstanceProfile:
           Name: !Ref NovaEC2InstanceProfile
@@ -667,7 +681,7 @@ Resources:
   NovaApplicationLoadBalancer:
     Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
     Properties:
-      Name: !Sub 'nova-prod-alb-${AWS::Region}'
+      Name: 'nova-prod-patient-alb'
       Type: application
       Scheme: internet-facing
       SecurityGroups:
@@ -693,7 +707,7 @@ Resources:
   NovaALBTargetGroup:
     Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
     Properties:
-      Name: !Sub 'nova-prod-app-tg-${AWS::Region}'
+      Name: 'nova-prod-patient-app-tg'
       TargetType: instance
       Protocol: HTTP
       Port: 80
@@ -804,7 +818,7 @@ Resources:
       VisibilityConfig:
         SampledRequestsEnabled: true
         CloudWatchMetricsEnabled: true
-        MetricName: !Sub 'nova-prod-waf-metric-${AWS::Region}'
+        MetricName: 'nova-prod-patient-waf-metric'
       Tags:
         - Key: Name
           Value: 'nova-prod-waf-acl'
@@ -865,7 +879,7 @@ Resources:
   NovaBastionSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupName: !Sub 'nova-prod-bastion-sg-${AWS::Region}'
+      GroupName: 'nova-prod-patient-bastion-sg'
       GroupDescription: 'Security group for bastion host - SSH from trusted IP only'
       VpcId: !Ref NovaVPC
       SecurityGroupIngress:
@@ -913,7 +927,7 @@ Resources:
   NovaALBSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupName: !Sub 'nova-prod-alb-sg-${AWS::Region}'
+      GroupName: 'nova-prod-patient-alb-sg'
       GroupDescription: 'Security group for Application Load Balancer'
       VpcId: !Ref NovaVPC
       SecurityGroupIngress:
@@ -949,7 +963,7 @@ Resources:
   NovaApplicationSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupName: !Sub 'nova-prod-application-sg-${AWS::Region}'
+      GroupName: 'nova-prod-patient-application-sg'
       GroupDescription: 'Security group for application instances'
       VpcId: !Ref NovaVPC
       SecurityGroupEgress:
@@ -997,7 +1011,7 @@ Resources:
   NovaDatabaseSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupName: !Sub 'nova-prod-database-sg-${AWS::Region}'
+      GroupName: 'nova-prod-patient-database-sg'
       GroupDescription: 'Security group for RDS database'
       VpcId: !Ref NovaVPC
       SecurityGroupIngress:
@@ -1161,7 +1175,7 @@ Resources:
     Type: 'AWS::CloudTrail::Trail'
     DependsOn: NovaCloudTrailBucketPolicy
     Properties:
-      TrailName: !Sub 'nova-prod-cloudtrail-${AWS::Region}'
+      TrailName: 'nova-prod-patient-cloudtrail'
       S3BucketName: !Ref NovaCloudTrailBucket
       S3KeyPrefix: 'cloudtrail-logs'
       IncludeGlobalServiceEvents: true
