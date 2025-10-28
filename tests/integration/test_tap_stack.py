@@ -41,12 +41,23 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
     def setUp(self):
         """Set up integration test with live stack outputs."""
-        # Load stack outputs first
-        outputs_file = "pulumi-outputs.json"
-        if os.path.exists(outputs_file):
-            with open(outputs_file, 'r', encoding='utf-8') as f:
+        # Load stack outputs first - try CI/CD generated files first, then fallback to pulumi-outputs.json
+        self.outputs = {}
+        
+        # Try CI/CD generated outputs first (preferred in CI/CD environment)
+        ci_outputs_file = "cfn-outputs/flat-outputs.json"
+        legacy_outputs_file = "pulumi-outputs.json"
+        
+        if os.path.exists(ci_outputs_file):
+            print(f"Loading outputs from CI/CD generated file: {ci_outputs_file}")
+            with open(ci_outputs_file, 'r', encoding='utf-8') as f:
+                self.outputs = json.load(f)
+        elif os.path.exists(legacy_outputs_file):
+            print(f"Loading outputs from legacy file: {legacy_outputs_file}")
+            with open(legacy_outputs_file, 'r', encoding='utf-8') as f:
                 self.outputs = json.load(f)
         else:
+            print(f"No outputs file found. Checked: {ci_outputs_file}, {legacy_outputs_file}")
             self.outputs = {}
 
         # Extract region from resource ARNs in outputs (more reliable than env vars)
