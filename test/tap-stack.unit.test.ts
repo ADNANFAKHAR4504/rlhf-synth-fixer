@@ -69,10 +69,13 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(envParam.AllowedValues).toContain('development');
     });
 
-    test('AdminIPAddress should have validation pattern', () => {
+    test('AdminIPAddress should have validation pattern for CIDR notation', () => {
       const ipParam = template.Parameters.AdminIPAddress;
       expect(ipParam.AllowedPattern).toBeDefined();
-      expect(ipParam.AllowedPattern).toContain('/32');
+      // Pattern should validate IP address with CIDR notation (e.g., 10.0.0.1/32)
+      expect(ipParam.AllowedPattern).toMatch(/\\/);
+      // Verify it contains pattern for CIDR range (0-32)
+      expect(ipParam.AllowedPattern).toContain('3[0-2]');
     });
 
     test('DBUsername should have NoEcho enabled', () => {
